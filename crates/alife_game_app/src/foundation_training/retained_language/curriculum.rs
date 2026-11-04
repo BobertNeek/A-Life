@@ -1,11 +1,15 @@
 //! Opt-in continuation of this pilot's own disposable founders, never a live save.
 use super::*;
+mod action_gate;
 mod payload_stage;
+pub use action_gate::continue_action_gated_language;
 pub use payload_stage::{refine_language_payload, refine_language_shared_gates};
 
 #[derive(Clone, Copy, Serialize, Deserialize)]
 pub(super) struct AssessmentPlan {
     recovery_sleep: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    collect_utterance_timing: bool,
 }
 
 #[derive(Clone, Serialize)]
@@ -165,7 +169,7 @@ fn collect(
             let (mut pending, mut narration_left, mut request_done) =
                 (None::<CompletedActivity>, 0usize, false);
             for tick in 0..config.decisions {
-                if tick < 16 && !request_done && tick % 2 == 0 {
+                if arm != Arm::NoSpeech && tick < 16 && !request_done && tick % 2 == 0 {
                     let crossed = arm == Arm::Shuffled && (layout / 2 + round).is_multiple_of(2);
                     let index = requested.index() ^ usize::from(crossed);
                     let position = speech_position(host.world())?;
@@ -315,10 +319,11 @@ pub(super) fn evaluate(
                 mut acquisitions,
                 mut utterances,
                 mut correct_utterances,
+                mut unsolicited_utterances,
                 mut opportunities,
                 mut failures,
                 mut decisions,
-            ) = (0, 0, 0, 0, 0, 0, 0, 0);
+            ) = (0, 0, 0, 0, 0, 0, 0, 0, 0);
             let mut initial_visible = Value::Null;
             for tick in 0..config.decisions {
                 if tick < 16 && first.is_none() && tick % 2 == 0 {
@@ -362,6 +367,7 @@ pub(super) fn evaluate(
                         })
                         .collect::<Vec<_>>();
                     utterances += emitted.len();
+                    unsolicited_utterances += usize::from(target.token.is_none()) * emitted.len();
                     correct_utterances += emitted
                         .iter()
                         .filter(|u| {
@@ -400,7 +406,15 @@ pub(super) fn evaluate(
             {
                 return Err("curriculum assessment lacks visible targets/distractor".into());
             }
-            results.push(json!({"arm":arm,"layout":if layout==0{"relocated_contact"}else{"relocated_near"},"recovery_sleep":sleep,"sleep_trigger":if sleep{Some("RecoveryProtocol")}else{None},"sleeping_ticks":sleeping,"sleep_consolidations":consolidations,"paired_initial_private_sha256":base_private,"requested":requested,"first_completed_activity":first,"first_completion_matches_request":requested.zip(first).map(|(g,f)|g.index()==f.index()),"native_decisions":decisions,"initial_visible":initial_visible,"teacher_present":false,"prior_enabled":false,"consumptions":meals,"nourished_meals":nourished,"toy_acquisitions":acquisitions,"utterances":utterances,"correct_grounded_utterances":correct_utterances,"grounded_utterance_opportunities":opportunities,"joint_failures":failures}));
+            results.push(json!({"arm":arm,"layout":if layout==0{"relocated_contact"}else{"relocated_near"},"recovery_sleep":sleep,"sleep_trigger":if sleep{Some("RecoveryProtocol")}else{None},"sleeping_ticks":sleeping,"sleep_consolidations":consolidations,"paired_initial_private_sha256":base_private,"requested":requested,"first_completed_activity":first,"first_completion_matches_request":requested.zip(first).map(|(g,f)|g.index()==f.index()),"native_decisions":decisions,"initial_visible":initial_visible,"teacher_present":false,"prior_enabled":false,"consumptions":meals,"nourished_meals":nourished,"toy_acquisitions":acquisitions,"utterances":utterances,"correct_grounded_utterances":correct_utterances,"unsolicited_utterances":unsolicited_utterances,"grounded_utterance_opportunities":opportunities,"joint_failures":failures}));
+            if !plan.collect_utterance_timing {
+                results
+                    .last_mut()
+                    .unwrap()
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("unsolicited_utterances");
+            }
         }
     }
     Ok(results)
@@ -525,7 +539,8 @@ fn continue_curriculum(
                 config,
                 arm,
                 AssessmentPlan {
-                    recovery_sleep: true
+                    recovery_sleep: true,
+                    collect_utterance_timing: false,
                 },
                 &mut baseline_trace
             )?);
@@ -579,6 +594,7 @@ fn continue_curriculum(
                 arm,
                 curriculum: Some(AssessmentPlan {
                     recovery_sleep: true,
+                    collect_utterance_timing: false,
                 }),
             },
             next_gradient.ok_or("no native update")?,
@@ -623,7 +639,7 @@ mod tests {
         assert_eq!(episodes.len(), 8);
         assert!(receipt["teacher_heard_frames"].as_u64().unwrap() > 0);
         assert!(receipt["action_label_rows"].as_u64().unwrap() > 0);
-        for pair in episodes.chunks_exact(2) {
+        for pair in episodes.as_chunks::<2>().0 {
             let left = &pair[0].rows[0];
             let right = &pair[1].rows[0];
             assert_eq!(left.initial, right.initial);

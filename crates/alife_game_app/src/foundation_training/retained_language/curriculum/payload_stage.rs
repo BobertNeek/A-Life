@@ -251,6 +251,7 @@ fn refine(
                 arm,
                 curriculum: Some(AssessmentPlan {
                     recovery_sleep: true,
+                    collect_utterance_timing: false,
                 }),
             },
             next.ok_or("no payload update")?,

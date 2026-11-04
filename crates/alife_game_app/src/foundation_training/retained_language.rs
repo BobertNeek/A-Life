@@ -16,9 +16,11 @@ use std::{fs, io::Write, process::Command};
 mod curriculum;
 #[cfg(test)]
 mod provider_probe;
+#[cfg(test)]
+mod speech_gate_probe;
 pub use curriculum::{
-    continue_embodied_language_curriculum, continue_language_curriculum, refine_language_payload,
-    refine_language_shared_gates,
+    continue_action_gated_language, continue_embodied_language_curriculum,
+    continue_language_curriculum, refine_language_payload, refine_language_shared_gates,
 };
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]

@@ -1,0 +1,2226 @@
+{
+  "arms": [
+    {
+      "arm": "grounded",
+      "direct_presence_weight_interventions": [
+        {
+          "kind": "previous_balanced_presence_direction",
+          "no_optimizer_commit_or_behavior_claim": true,
+          "positive_loss_after": 0.10906179209265392,
+          "positive_loss_before": 0.10683743667253771,
+          "presence_weight_l2_perturbation": 0.01
+        },
+        {
+          "kind": "positive_presence_direction",
+          "no_optimizer_commit_or_behavior_claim": true,
+          "positive_loss_after": 0.1046607546574507,
+          "positive_loss_before": 0.10683743667253771,
+          "presence_weight_l2_perturbation": 0.01
+        }
+      ],
+      "gradient_norms": {
+        "action_recurrent": 0.07821909166061235,
+        "action_speech_decoder": 0.0,
+        "positive_presence_decoder": 0.22749504542514845,
+        "positive_recurrent": 0.023344819042225566,
+        "positive_speech_decoder": 0.41546169378694864,
+        "quiet_presence_decoder": 2.774526070053913,
+        "quiet_recurrent": 0.32082604593784403,
+        "quiet_speech_decoder": 3.633083518676265
+      },
+      "initial": {
+        "captured_feature_presence_range": [
+          -0.177371084690094,
+          -0.09969767183065414
+        ],
+        "collected_quiet_selected_vocalize": 85,
+        "collected_selected_vocalize": 97,
+        "full_replay_presence_range": [
+          -0.177371084690094,
+          -0.09969767183065414
+        ],
+        "one_step_presence_range": [
+          -0.177371084690094,
+          -0.09969767183065414
+        ],
+        "positive_rows": 30,
+        "rows": [
+          {
+            "captured_feature_readout": [
+              -0.13429203629493713,
+              0.2783361077308655
+            ],
+            "full_replay": [
+              -0.13429203629493713,
+              0.2783361077308655
+            ],
+            "one_step_replay": [
+              -0.13429203629493713,
+              0.2783361077308655
+            ],
+            "positive_token": 9,
+            "selected_vocalize": false,
+            "tick": 472
+          },
+          {
+            "captured_feature_readout": [
+              -0.10819727182388306,
+              0.2893388867378235
+            ],
+            "full_replay": [
+              -0.10819727182388306,
+              0.2893388867378235
+            ],
+            "one_step_replay": [
+              -0.10819727182388306,
+              0.2893388867378235
+            ],
+            "positive_token": 9,
+            "selected_vocalize": false,
+            "tick": 473
+          },
+          {
+            "captured_feature_readout": [
+              -0.10269643366336823,
+              0.29158997535705566
+            ],
+            "full_replay": [
+              -0.10269643366336823,
+              0.29158997535705566
+            ],
+            "one_step_replay": [
+              -0.10269643366336823,
+              0.29158997535705566
+            ],
+            "positive_token": 9,
+            "selected_vocalize": false,
+            "tick": 474
+          },
+          {
+            "captured_feature_readout": [
+              -0.11153896898031235,
+              0.29242581129074097
+            ],
+            "full_replay": [
+              -0.11153896898031235,
+              0.29242581129074097
+            ],
+            "one_step_replay": [
+              -0.11153896898031235,
+              0.29242581129074097
+            ],
+            "positive_token": 9,
+            "selected_vocalize": false,
+            "tick": 482
+          },
+          {
+            "captured_feature_readout": [
+              -0.10400014370679855,
+              0.2918890416622162
+            ],
+            "full_replay": [
+              -0.10400014370679855,
+              0.2918890416622162
+            ],
+            "one_step_replay": [
+              -0.10400014370679855,
+              0.2918890416622162
+            ],
+            "positive_token": 9,
+            "selected_vocalize": false,
+            "tick": 483
+          },
+          {
+            "captured_feature_readout": [
+              -0.10262119770050049,
+              0.29172059893608093
+            ],
+            "full_replay": [
+              -0.10262119770050049,
+              0.29172059893608093
+            ],
+            "one_step_replay": [
+              -0.10262119770050049,
+              0.29172059893608093
+            ],
+            "positive_token": 9,
+            "selected_vocalize": true,
+            "tick": 484
+          },
+          {
+            "captured_feature_readout": [
+              -0.1523147076368332,
+              0.2942182421684265
+            ],
+            "full_replay": [
+              -0.1523147076368332,
+              0.2942182421684265
+            ],
+            "one_step_replay": [
+              -0.1523147076368332,
+              0.2942182421684265
+            ],
+            "positive_token": 8,
+            "selected_vocalize": true,
+            "tick": 464
+          },
+          {
+            "captured_feature_readout": [
+              -0.15484410524368286,
+              0.2931126356124878
+            ],
+            "full_replay": [
+              -0.15484410524368286,
+              0.2931126356124878
+            ],
+            "one_step_replay": [
+              -0.15484410524368286,
+              0.2931126356124878
+            ],
+            "positive_token": 8,
+            "selected_vocalize": false,
+            "tick": 465
+          },
+          {
+            "captured_feature_readout": [
+              -0.1552155464887619,
+              0.29261571168899536
+            ],
+            "full_replay": [
+              -0.1552155464887619,
+              0.29261571168899536
+            ],
+            "one_step_replay": [
+              -0.1552155464887619,
+              0.29261571168899536
+            ],
+            "positive_token": 8,
+            "selected_vocalize": false,
+            "tick": 466
+          },
+          {
+            "captured_feature_readout": [
+              -0.11129385232925415,
+              0.2898925840854645
+            ],
+            "full_replay": [
+              -0.11129385232925415,
+              0.2898925840854645
+            ],
+            "one_step_replay": [
+              -0.11129385232925415,
+              0.2898925840854645
+            ],
+            "positive_token": 9,
+            "selected_vocalize": false,
+            "tick": 484
+          },
+          {
+            "captured_feature_readout": [
+              -0.14676089584827423,
+              0.2916373312473297
+            ],
+            "full_replay": [
+              -0.14676089584827423,
+              0.2916373312473297
+            ],
+            "one_step_replay": [
+              -0.14676089584827423,
+              0.2916373312473297
+            ],
+            "positive_token": 9,
+            "selected_vocalize": true,
+            "tick": 485
+          },
+          {
+            "captured_feature_readout": [
+              -0.149720698595047,
+              0.29179155826568604
+            ],
+            "full_replay": [
+              -0.149720698595047,
+              0.29179155826568604
+            ],
+            "one_step_replay": [
+              -0.149720698595047,
+              0.29179155826568604
+            ],
+            "positive_token": 9,
+            "selected_vocalize": false,
+            "tick": 486
+          },
+          {
+            "captured_feature_readout": [
+              -0.17019924521446228,
+              0.2870206832885742
+            ],
+            "full_replay": [
+              -0.17019924521446228,
+              0.2870206832885742
+            ],
+            "one_step_replay": [
+              -0.17019924521446228,
+              0.2870206832885742
+            ],
+            "positive_token": 8,
+            "selected_vocalize": true,
+            "tick": 472
+          },
+          {
+            "captured_feature_readout": [
+              -0.15280306339263916,
+              0.29146701097488403
+            ],
+            "full_replay": [
+              -0.15280306339263916,
+              0.29146701097488403
+            ],
+            "one_step_replay": [
+              -0.15280306339263916,
+              0.29146701097488403
+            ],
+            "positive_token": 8,
+            "selected_vocalize": true,
+            "tick": 473
+          },
+          {
+            "captured_feature_readout": [
+              -0.15091966092586517,
+              0.2918089032173157
+            ],
+            "full_replay": [
+              -0.15091966092586517,
+              0.2918089032173157
+            ],
+            "one_step_replay": [
+              -0.15091966092586517,
+              0.2918089032173157
+            ],
+            "positive_token": 8,
+            "selected_vocalize": true,
+            "tick": 474
+          },
+          {
+            "captured_feature_readout": [
+              -0.11080359667539597,
+              0.2900983691215515
+            ],
+            "full_replay": [
+              -0.11080359667539597,
+              0.2900983691215515
+            ],
+            "one_step_replay": [
+              -0.11080359667539597,
+              0.2900983691215515
+            ],
+            "positive_token": 9,
+            "selected_vocalize": false,
+            "tick": 484
+          },
+          {
+            "captured_feature_readout": [
+              -0.14629031717777252,
+              0.2918347120285034
+            ],
+            "full_replay": [
+              -0.14629031717777252,
+              0.2918347120285034
+            ],
+            "one_step_replay": [
+              -0.14629031717777252,
+              0.2918347120285034
+            ],
+            "positive_token": 9,
+            "selected_vocalize": true,
+            "tick": 485
+          },
+          {
+            "captured_feature_readout": [
+              -0.14926856756210327,
+              0.2919810116291046
+            ],
+            "full_replay": [
+              -0.14926856756210327,
+              0.2919810116291046
+            ],
+            "one_step_replay": [
+              -0.14926856756210327,
+              0.2919810116291046
+            ],
+            "positive_token": 9,
+            "selected_vocalize": false,
+            "tick": 486
+          },
+          {
+            "captured_feature_readout": [
+              -0.1349252462387085,
+              0.2780589163303375
+            ],
+            "full_replay": [
+              -0.1349252462387085,
+              0.2780589163303375
+            ],
+            "one_step_replay": [
+              -0.1349252462387085,
+              0.2780589163303375
+            ],
+            "positive_token": 9,
+            "selected_vocalize": false,
+            "tick": 472
+          },
+          {
+            "captured_feature_readout": [
+              -0.10881027579307556,
+              0.28907281160354614
+            ],
+            "full_replay": [
+              -0.10881027579307556,
+              0.28907281160354614
+            ],
+            "one_step_replay": [
+              -0.10881027579307556,
+              0.28907281160354614
+            ],
+            "positive_token": 9,
+            "selected_vocalize": true,
+            "tick": 473
+          },
+          {
+            "captured_feature_readout": [
+              -0.10329703986644745,
+              0.2913306951522827
+            ],
+            "full_replay": [
+              -0.10329703986644745,
+              0.2913306951522827
+            ],
+            "one_step_replay": [
+              -0.10329703986644745,
+              0.2913306951522827
+            ],
+            "positive_token": 9,
+            "selected_vocalize": false,
+            "tick": 474
+          },
+          {
+            "captured_feature_readout": [
+              -0.13463041186332703,
+              0.2953404188156128
+            ],
+            "full_replay": [
+              -0.13463041186332703,
+              0.2953404188156128
+            ],
+            "one_step_replay": [
+              -0.13463041186332703,
+              0.2953404188156128
+            ],
+            "positive_token": 9,
+            "selected_vocalize": false,
+            "tick": 462
+          },
+          {
+            "captured_feature_readout": [
+              -0.1407131552696228,
+              0.29821258783340454
+            ],
+            "full_replay": [
+              -0.1407131552696228,
+              0.29821258783340454
+            ],
+            "one_step_replay": [
+              -0.1407131552696228,
+              0.29821258783340454
+            ],
+            "positive_token": 9,
+            "selected_vocalize": false,
+            "tick": 463
+          },
+          {
+            "captured_feature_readout": [
+              -0.10793820023536682,
+              0.29533621668815613
+            ],
+            "full_replay": [
+              -0.10793820023536682,
+              0.29533621668815613
+            ],
+            "one_step_replay": [
+              -0.10793820023536682,
+              0.29533621668815613
+            ],
+            "positive_token": 9,
+            "selected_vocalize": true,
+            "tick": 464
+          },
+          {
+            "captured_feature_readout": [
+              -0.177371084690094,
+              0.2813222408294678
+            ],
+            "full_replay": [
+              -0.177371084690094,
+              0.2813222408294678
+            ],
+            "one_step_replay": [
+              -0.177371084690094,
+              0.2813222408294678
+            ],
+            "positive_token": 9,
+            "selected_vocalize": true,
+            "tick": 472
+          },
+          {
+            "captured_feature_readout": [
+              -0.15054190158843994,
+              0.2922520041465759
+            ],
+            "full_replay": [
+              -0.15054190158843994,
+              0.2922520041465759
+            ],
+            "one_step_replay": [
+              -0.15054190158843994,
+              0.2922520041465759
+            ],
+            "positive_token": 9,
+            "selected_vocalize": true,
+            "tick": 473
+          },
+          {
+            "captured_feature_readout": [
+              -0.14495566487312317,
+              0.29448094964027405
+            ],
+            "full_replay": [
+              -0.14495566487312317,
+              0.29448094964027405
+            ],
+            "one_step_replay": [
+              -0.14495566487312317,
+              0.29448094964027405
+            ],
+            "positive_token": 9,
+            "selected_vocalize": false,
+            "tick": 474
+          },
+          {
+            "captured_feature_readout": [
+              -0.13472998142242432,
+              0.29549404978752136
+            ],
+            "full_replay": [
+              -0.13472998142242432,
+              0.29549404978752136
+            ],
+            "one_step_replay": [
+              -0.13472998142242432,
+              0.29549404978752136
+            ],
+            "positive_token": 9,
+            "selected_vocalize": false,
+            "tick": 462
+          },
+          {
+            "captured_feature_readout": [
+              -0.10405156761407852,
+              0.2963773310184479
+            ],
+            "full_replay": [
+              -0.10405156761407852,
+              0.2963773310184479
+            ],
+            "one_step_replay": [
+              -0.10405156761407852,
+              0.2963773310184479
+            ],
+            "positive_token": 9,
+            "selected_vocalize": false,
+            "tick": 463
+          },
+          {
+            "captured_feature_readout": [
+              -0.09969767183065414,
+              0.2948000133037567
+            ],
+            "full_replay": [
+              -0.09969767183065414,
+              0.2948000133037567
+            ],
+            "one_step_replay": [
+              -0.09969767183065414,
+              0.2948000133037567
+            ],
+            "positive_token": 9,
+            "selected_vocalize": true,
+            "tick": 464
+          }
+        ],
+        "vocal_conditional_mask_enabled_rows": 0
+      },
+      "initial_actor_sha256": "1e9c6bdeb18aa1a96113e47ba0affb9881dd6a61bab30704bb27ef0f0f2806d5",
+      "presence_finite_difference": {
+        "actual_positive_labels_only": true,
+        "central_finite_difference": 0.0594650336609621,
+        "coordinate": 28240,
+        "epsilon": 0.0010000000474974513,
+        "native_analytic_gradient": 0.05946437269449234
+      },
+      "presence_gradient_interaction": {
+        "coordinate_count": 32,
+        "negative_value_means_previous_gate_descent_increases_positive_loss_locally": true,
+        "positive_dot_previous_09_01_gate_gradient": -0.01619851712763655,
+        "positive_quiet_cosine": -0.9945819851952248,
+        "positive_quiet_dot": -0.6277711325132787
+      },
+      "trained": {
+        "captured_feature_presence_range": [
+          -0.19536088407039642,
+          -0.11589327454566956
+        ],
+        "collected_quiet_selected_vocalize": 85,
+        "collected_selected_vocalize": 97,
+        "full_replay_presence_range": [
+          -0.25309985876083374,
+          -0.16552191972732544
+        ],
+        "one_step_presence_range": [
+          -0.23482470214366913,
+          -0.15193293988704681
+        ],
+        "positive_rows": 30,
+        "rows": [
+          {
+            "captured_feature_readout": [
+              -0.15112531185150146,
+              0.2178809493780136
+            ],
+            "full_replay": [
+              -0.20561330020427704,
+              0.24358437955379486
+            ],
+            "one_step_replay": [
+              -0.18753480911254883,
+              0.23592814803123474
+            ],
+            "positive_token": 9,
+            "selected_vocalize": false,
+            "tick": 472
+          },
+          {
+            "captured_feature_readout": [
+              -0.12446095794439316,
+              0.22777874767780304
+            ],
+            "full_replay": [
+              -0.17508354783058167,
+              0.2522987425327301
+            ],
+            "one_step_replay": [
+              -0.16048061847686768,
+              0.24622002243995667
+            ],
+            "positive_token": 9,
+            "selected_vocalize": false,
+            "tick": 473
+          },
+          {
+            "captured_feature_readout": [
+              -0.11884105950593948,
+              0.22979776561260223
+            ],
+            "full_replay": [
+              -0.16789177060127258,
+              0.2539305090904236
+            ],
+            "one_step_replay": [
+              -0.15477189421653748,
+              0.2483310103416443
+            ],
+            "positive_token": 9,
+            "selected_vocalize": false,
+            "tick": 474
+          },
+          {
+            "captured_feature_readout": [
+              -0.12791842222213745,
+              0.2310435175895691
+            ],
+            "full_replay": [
+              -0.17691989243030548,
+              0.2550643980503082
+            ],
+            "one_step_replay": [
+              -0.16281157732009888,
+              0.24949920177459717
+            ],
+            "positive_token": 9,
+            "selected_vocalize": false,
+            "tick": 482
+          },
+          {
+            "captured_feature_readout": [
+              -0.12017197161912918,
+              0.23015598952770233
+            ],
+            "full_replay": [
+              -0.168592631816864,
+              0.2541278600692749
+            ],
+            "one_step_replay": [
+              -0.1558610051870346,
+              0.24870142340660095
+            ],
+            "positive_token": 9,
+            "selected_vocalize": false,
+            "tick": 483
+          },
+          {
+            "captured_feature_readout": [
+              -0.1187526285648346,
+              0.22991979122161865
+            ],
+            "full_replay": [
+              -0.1671251654624939,
+              0.2538908123970032
+            ],
+            "one_step_replay": [
+              -0.1546248197555542,
+              0.24848616123199463
+            ],
+            "positive_token": 9,
+            "selected_vocalize": true,
+            "tick": 484
+          },
+          {
+            "captured_feature_readout": [
+              -0.16968795657157898,
+              0.23478920757770538
+            ],
+            "full_replay": [
+              -0.2288573682308197,
+              0.2608998417854309
+            ],
+            "one_step_replay": [
+              -0.21565860509872437,
+              0.2555735111236572
+            ],
+            "positive_token": 8,
+            "selected_vocalize": true,
+            "tick": 464
+          },
+          {
+            "captured_feature_readout": [
+              -0.17201614379882812,
+              0.2334020733833313
+            ],
+            "full_replay": [
+              -0.22733047604560852,
+              0.2588249146938324
+            ],
+            "one_step_replay": [
+              -0.21722660958766937,
+              0.2549212574958801
+            ],
+            "positive_token": 8,
+            "selected_vocalize": false,
+            "tick": 465
+          },
+          {
+            "captured_feature_readout": [
+              -0.1723499596118927,
+              0.2328391969203949
+            ],
+            "full_replay": [
+              -0.22677800059318542,
+              0.25807619094848633
+            ],
+            "one_step_replay": [
+              -0.21746376156806946,
+              0.25436151027679443
+            ],
+            "positive_token": 8,
+            "selected_vocalize": false,
+            "tick": 466
+          },
+          {
+            "captured_feature_readout": [
+              -0.12724599242210388,
+              0.22812266647815704
+            ],
+            "full_replay": [
+              -0.17506664991378784,
+              0.252046674489975
+            ],
+            "one_step_replay": [
+              -0.1660769283771515,
+              0.24862176179885864
+            ],
+            "positive_token": 9,
+            "selected_vocalize": false,
+            "tick": 484
+          },
+          {
+            "captured_feature_readout": [
+              -0.16367532312870026,
+              0.23148410022258759
+            ],
+            "full_replay": [
+              -0.21509459614753723,
+              0.2557600140571594
+            ],
+            "one_step_replay": [
+              -0.2073475867509842,
+              0.25246238708496094
+            ],
+            "positive_token": 9,
+            "selected_vocalize": true,
+            "tick": 485
+          },
+          {
+            "captured_feature_readout": [
+              -0.16672317683696747,
+              0.23178066313266754
+            ],
+            "full_replay": [
+              -0.21874220669269562,
+              0.2561306953430176
+            ],
+            "one_step_replay": [
+              -0.21029481291770935,
+              0.2527562975883484
+            ],
+            "positive_token": 9,
+            "selected_vocalize": false,
+            "tick": 486
+          },
+          {
+            "captured_feature_readout": [
+              -0.1876211315393448,
+              0.2278808355331421
+            ],
+            "full_replay": [
+              -0.24502688646316528,
+              0.25358524918556213
+            ],
+            "one_step_replay": [
+              -0.23193666338920593,
+              0.24876976013183594
+            ],
+            "positive_token": 8,
+            "selected_vocalize": true,
+            "tick": 472
+          },
+          {
+            "captured_feature_readout": [
+              -0.1698547601699829,
+              0.23159213364124298
+            ],
+            "full_replay": [
+              -0.22346946597099304,
+              0.2563306391239166
+            ],
+            "one_step_replay": [
+              -0.21365578472614288,
+              0.2526066303253174
+            ],
+            "positive_token": 8,
+            "selected_vocalize": true,
+            "tick": 473
+          },
+          {
+            "captured_feature_readout": [
+              -0.1679261177778244,
+              0.23184065520763397
+            ],
+            "full_replay": [
+              -0.22062760591506958,
+              0.2563445568084717
+            ],
+            "one_step_replay": [
+              -0.2116423100233078,
+              0.2528659403324127
+            ],
+            "positive_token": 8,
+            "selected_vocalize": true,
+            "tick": 474
+          },
+          {
+            "captured_feature_readout": [
+              -0.12674985826015472,
+              0.2283094972372055
+            ],
+            "full_replay": [
+              -0.17457684874534607,
+              0.25223106145858765
+            ],
+            "one_step_replay": [
+              -0.16558752954006195,
+              0.2488059401512146
+            ],
+            "positive_token": 9,
+            "selected_vocalize": false,
+            "tick": 484
+          },
+          {
+            "captured_feature_readout": [
+              -0.16319924592971802,
+              0.23166334629058838
+            ],
+            "full_replay": [
+              -0.21462450921535492,
+              0.2559370994567871
+            ],
+            "one_step_replay": [
+              -0.20687822997570038,
+              0.2526394724845886
+            ],
+            "positive_token": 9,
+            "selected_vocalize": true,
+            "tick": 485
+          },
+          {
+            "captured_feature_readout": [
+              -0.1662658154964447,
+              0.2319526970386505
+            ],
+            "full_replay": [
+              -0.21829067170619965,
+              0.25630074739456177
+            ],
+            "one_step_replay": [
+              -0.2098442018032074,
+              0.2529260218143463
+            ],
+            "positive_token": 9,
+            "selected_vocalize": false,
+            "tick": 486
+          },
+          {
+            "captured_feature_readout": [
+              -0.15176525712013245,
+              0.21762825548648834
+            ],
+            "full_replay": [
+              -0.20620177686214447,
+              0.2433246523141861
+            ],
+            "one_step_replay": [
+              -0.18815436959266663,
+              0.23567381501197815
+            ],
+            "positive_token": 9,
+            "selected_vocalize": false,
+            "tick": 472
+          },
+          {
+            "captured_feature_readout": [
+              -0.12508048117160797,
+              0.22753635048866272
+            ],
+            "full_replay": [
+              -0.17566341161727905,
+              0.25205230712890625
+            ],
+            "one_step_replay": [
+              -0.16108211874961853,
+              0.24597705900669098
+            ],
+            "positive_token": 9,
+            "selected_vocalize": true,
+            "tick": 473
+          },
+          {
+            "captured_feature_readout": [
+              -0.11944826692342758,
+              0.22956189513206482
+            ],
+            "full_replay": [
+              -0.16846805810928345,
+              0.25369200110435486
+            ],
+            "one_step_replay": [
+              -0.15536311268806458,
+              0.2480948120355606
+            ],
+            "positive_token": 9,
+            "selected_vocalize": false,
+            "tick": 474
+          },
+          {
+            "captured_feature_readout": [
+              -0.15195058286190033,
+              0.23651976883411407
+            ],
+            "full_replay": [
+              -0.21456488966941833,
+              0.2641180753707886
+            ],
+            "one_step_replay": [
+              -0.18811947107315063,
+              0.25488758087158203
+            ],
+            "positive_token": 9,
+            "selected_vocalize": false,
+            "tick": 462
+          },
+          {
+            "captured_feature_readout": [
+              -0.1581237018108368,
+              0.2389218807220459
+            ],
+            "full_replay": [
+              -0.21525104343891144,
+              0.2648193836212158
+            ],
+            "one_step_replay": [
+              -0.19869843125343323,
+              0.25797462463378906
+            ],
+            "positive_token": 9,
+            "selected_vocalize": false,
+            "tick": 463
+          },
+          {
+            "captured_feature_readout": [
+              -0.12437622249126434,
+              0.2341669797897339
+            ],
+            "full_replay": [
+              -0.1750948280096054,
+              0.25896310806274414
+            ],
+            "one_step_replay": [
+              -0.15988630056381226,
+              0.25277552008628845
+            ],
+            "positive_token": 9,
+            "selected_vocalize": true,
+            "tick": 464
+          },
+          {
+            "captured_feature_readout": [
+              -0.19536088407039642,
+              0.22284874320030212
+            ],
+            "full_replay": [
+              -0.25309985876083374,
+              0.24868863821029663
+            ],
+            "one_step_replay": [
+              -0.23482470214366913,
+              0.24104729294776917
+            ],
+            "positive_token": 9,
+            "selected_vocalize": true,
+            "tick": 472
+          },
+          {
+            "captured_feature_readout": [
+              -0.16794118285179138,
+              0.23263823986053467
+            ],
+            "full_replay": [
+              -0.22163301706314087,
+              0.2572994828224182
+            ],
+            "one_step_replay": [
+              -0.20695894956588745,
+              0.25122928619384766
+            ],
+            "positive_token": 9,
+            "selected_vocalize": true,
+            "tick": 473
+          },
+          {
+            "captured_feature_readout": [
+              -0.16223353147506714,
+              0.23463040590286255
+            ],
+            "full_replay": [
+              -0.21431143581867218,
+              0.2589096128940582
+            ],
+            "one_step_replay": [
+              -0.2011423408985138,
+              0.25331026315689087
+            ],
+            "positive_token": 9,
+            "selected_vocalize": false,
+            "tick": 474
+          },
+          {
+            "captured_feature_readout": [
+              -0.15206199884414673,
+              0.23669302463531494
+            ],
+            "full_replay": [
+              -0.21471315622329712,
+              0.2642994523048401
+            ],
+            "one_step_replay": [
+              -0.1880803406238556,
+              0.25502634048461914
+            ],
+            "positive_token": 9,
+            "selected_vocalize": false,
+            "tick": 462
+          },
+          {
+            "captured_feature_readout": [
+              -0.12046708911657333,
+              0.23541630804538727
+            ],
+            "full_replay": [
+              -0.1737985461950302,
+              0.26093119382858276
+            ],
+            "one_step_replay": [
+              -0.15661799907684326,
+              0.2540225684642792
+            ],
+            "positive_token": 9,
+            "selected_vocalize": false,
+            "tick": 463
+          },
+          {
+            "captured_feature_readout": [
+              -0.11589327454566956,
+              0.2332417368888855
+            ],
+            "full_replay": [
+              -0.16552191972732544,
+              0.2578824460506439
+            ],
+            "one_step_replay": [
+              -0.15193293988704681,
+              0.2518623471260071
+            ],
+            "positive_token": 9,
+            "selected_vocalize": true,
+            "tick": 464
+          }
+        ],
+        "vocal_conditional_mask_enabled_rows": 0
+      }
+    },
+    {
+      "arm": "shuffled",
+      "direct_presence_weight_interventions": [
+        {
+          "kind": "previous_balanced_presence_direction",
+          "no_optimizer_commit_or_behavior_claim": true,
+          "positive_loss_after": 0.12109747317476115,
+          "positive_loss_before": 0.11895460523119207,
+          "presence_weight_l2_perturbation": 0.01
+        },
+        {
+          "kind": "positive_presence_direction",
+          "no_optimizer_commit_or_behavior_claim": true,
+          "positive_loss_after": 0.1168499158194582,
+          "positive_loss_before": 0.11895460523119207,
+          "presence_weight_l2_perturbation": 0.01
+        }
+      ],
+      "gradient_norms": {
+        "action_recurrent": 0.12501183445996142,
+        "action_speech_decoder": 0.0,
+        "positive_presence_decoder": 0.22053427378334647,
+        "positive_recurrent": 0.035167601435888735,
+        "positive_speech_decoder": 0.41478462206225775,
+        "quiet_presence_decoder": 2.769770472032883,
+        "quiet_recurrent": 0.3462427844348485,
+        "quiet_speech_decoder": 3.6101636851714174
+      },
+      "initial": {
+        "captured_feature_presence_range": [
+          -0.16930365562438965,
+          -0.09589095413684845
+        ],
+        "collected_quiet_selected_vocalize": 100,
+        "collected_selected_vocalize": 121,
+        "full_replay_presence_range": [
+          -0.16930365562438965,
+          -0.09589095413684845
+        ],
+        "one_step_presence_range": [
+          -0.16930365562438965,
+          -0.09589095413684845
+        ],
+        "positive_rows": 30,
+        "rows": [
+          {
+            "captured_feature_readout": [
+              -0.16929638385772705,
+              0.30076807737350464
+            ],
+            "full_replay": [
+              -0.16929638385772705,
+              0.30076807737350464
+            ],
+            "one_step_replay": [
+              -0.16929638385772705,
+              0.30076807737350464
+            ],
+            "positive_token": 8,
+            "selected_vocalize": true,
+            "tick": 466
+          },
+          {
+            "captured_feature_readout": [
+              -0.15395241975784302,
+              0.30359765887260437
+            ],
+            "full_replay": [
+              -0.15395241975784302,
+              0.30359765887260437
+            ],
+            "one_step_replay": [
+              -0.15395241975784302,
+              0.30359765887260437
+            ],
+            "positive_token": 8,
+            "selected_vocalize": true,
+            "tick": 467
+          },
+          {
+            "captured_feature_readout": [
+              -0.15122130513191223,
+              0.30366653203964233
+            ],
+            "full_replay": [
+              -0.15122130513191223,
+              0.30366653203964233
+            ],
+            "one_step_replay": [
+              -0.15122130513191223,
+              0.30366653203964233
+            ],
+            "positive_token": 8,
+            "selected_vocalize": true,
+            "tick": 468
+          },
+          {
+            "captured_feature_readout": [
+              -0.16886386275291443,
+              0.2955310642719269
+            ],
+            "full_replay": [
+              -0.16886386275291443,
+              0.2955310642719269
+            ],
+            "one_step_replay": [
+              -0.16886386275291443,
+              0.2955310642719269
+            ],
+            "positive_token": 8,
+            "selected_vocalize": true,
+            "tick": 472
+          },
+          {
+            "captured_feature_readout": [
+              -0.14952228963375092,
+              0.3026820123195648
+            ],
+            "full_replay": [
+              -0.14952228963375092,
+              0.3026820123195648
+            ],
+            "one_step_replay": [
+              -0.14952228963375092,
+              0.3026820123195648
+            ],
+            "positive_token": 8,
+            "selected_vocalize": true,
+            "tick": 473
+          },
+          {
+            "captured_feature_readout": [
+              -0.14682680368423462,
+              0.3035184442996979
+            ],
+            "full_replay": [
+              -0.14682680368423462,
+              0.3035184442996979
+            ],
+            "one_step_replay": [
+              -0.14682680368423462,
+              0.3035184442996979
+            ],
+            "positive_token": 8,
+            "selected_vocalize": true,
+            "tick": 474
+          },
+          {
+            "captured_feature_readout": [
+              -0.16930365562438965,
+              0.3006014823913574
+            ],
+            "full_replay": [
+              -0.16930365562438965,
+              0.3006014823913574
+            ],
+            "one_step_replay": [
+              -0.16930365562438965,
+              0.3006014823913574
+            ],
+            "positive_token": 8,
+            "selected_vocalize": true,
+            "tick": 468
+          },
+          {
+            "captured_feature_readout": [
+              -0.15379413962364197,
+              0.3036048114299774
+            ],
+            "full_replay": [
+              -0.15379413962364197,
+              0.3036048114299774
+            ],
+            "one_step_replay": [
+              -0.15379413962364197,
+              0.3036048114299774
+            ],
+            "positive_token": 8,
+            "selected_vocalize": true,
+            "tick": 469
+          },
+          {
+            "captured_feature_readout": [
+              -0.1509719043970108,
+              0.30375936627388
+            ],
+            "full_replay": [
+              -0.1509719043970108,
+              0.30375936627388
+            ],
+            "one_step_replay": [
+              -0.1509719043970108,
+              0.30375936627388
+            ],
+            "positive_token": 8,
+            "selected_vocalize": false,
+            "tick": 470
+          },
+          {
+            "captured_feature_readout": [
+              -0.10476710647344589,
+              0.30152034759521484
+            ],
+            "full_replay": [
+              -0.10476710647344589,
+              0.30152034759521484
+            ],
+            "one_step_replay": [
+              -0.10476710647344589,
+              0.30152034759521484
+            ],
+            "positive_token": 9,
+            "selected_vocalize": false,
+            "tick": 484
+          },
+          {
+            "captured_feature_readout": [
+              -0.14124798774719238,
+              0.3033670485019684
+            ],
+            "full_replay": [
+              -0.14124798774719238,
+              0.3033670485019684
+            ],
+            "one_step_replay": [
+              -0.14124798774719238,
+              0.3033670485019684
+            ],
+            "positive_token": 9,
+            "selected_vocalize": true,
+            "tick": 485
+          },
+          {
+            "captured_feature_readout": [
+              -0.14399266242980957,
+              0.3035893440246582
+            ],
+            "full_replay": [
+              -0.14399266242980957,
+              0.3035893440246582
+            ],
+            "one_step_replay": [
+              -0.14399266242980957,
+              0.3035893440246582
+            ],
+            "positive_token": 9,
+            "selected_vocalize": true,
+            "tick": 486
+          },
+          {
+            "captured_feature_readout": [
+              -0.1692441999912262,
+              0.2959902584552765
+            ],
+            "full_replay": [
+              -0.1692441999912262,
+              0.2959902584552765
+            ],
+            "one_step_replay": [
+              -0.1692441999912262,
+              0.2959902584552765
+            ],
+            "positive_token": 8,
+            "selected_vocalize": true,
+            "tick": 472
+          },
+          {
+            "captured_feature_readout": [
+              -0.15009480714797974,
+              0.30287107825279236
+            ],
+            "full_replay": [
+              -0.15009480714797974,
+              0.30287107825279236
+            ],
+            "one_step_replay": [
+              -0.15009480714797974,
+              0.30287107825279236
+            ],
+            "positive_token": 8,
+            "selected_vocalize": true,
+            "tick": 473
+          },
+          {
+            "captured_feature_readout": [
+              -0.14719551801681519,
+              0.3036651015281677
+            ],
+            "full_replay": [
+              -0.14719551801681519,
+              0.3036651015281677
+            ],
+            "one_step_replay": [
+              -0.14719551801681519,
+              0.3036651015281677
+            ],
+            "positive_token": 8,
+            "selected_vocalize": true,
+            "tick": 474
+          },
+          {
+            "captured_feature_readout": [
+              -0.10442502051591873,
+              0.30158567428588867
+            ],
+            "full_replay": [
+              -0.10442502051591873,
+              0.30158567428588867
+            ],
+            "one_step_replay": [
+              -0.10442502051591873,
+              0.30158567428588867
+            ],
+            "positive_token": 9,
+            "selected_vocalize": false,
+            "tick": 484
+          },
+          {
+            "captured_feature_readout": [
+              -0.14087799191474915,
+              0.30344870686531067
+            ],
+            "full_replay": [
+              -0.14087799191474915,
+              0.30344870686531067
+            ],
+            "one_step_replay": [
+              -0.14087799191474915,
+              0.30344870686531067
+            ],
+            "positive_token": 9,
+            "selected_vocalize": true,
+            "tick": 485
+          },
+          {
+            "captured_feature_readout": [
+              -0.14364740252494812,
+              0.30367863178253174
+            ],
+            "full_replay": [
+              -0.14364740252494812,
+              0.30367863178253174
+            ],
+            "one_step_replay": [
+              -0.14364740252494812,
+              0.30367863178253174
+            ],
+            "positive_token": 9,
+            "selected_vocalize": true,
+            "tick": 486
+          },
+          {
+            "captured_feature_readout": [
+              -0.13290497660636902,
+              0.28882166743278503
+            ],
+            "full_replay": [
+              -0.13290497660636902,
+              0.28882166743278503
+            ],
+            "one_step_replay": [
+              -0.13290497660636902,
+              0.28882166743278503
+            ],
+            "positive_token": 9,
+            "selected_vocalize": true,
+            "tick": 472
+          },
+          {
+            "captured_feature_readout": [
+              -0.10521654784679413,
+              0.29987001419067383
+            ],
+            "full_replay": [
+              -0.10521654784679413,
+              0.29987001419067383
+            ],
+            "one_step_replay": [
+              -0.10521654784679413,
+              0.29987001419067383
+            ],
+            "positive_token": 9,
+            "selected_vocalize": true,
+            "tick": 473
+          },
+          {
+            "captured_feature_readout": [
+              -0.09935668110847473,
+              0.30209672451019287
+            ],
+            "full_replay": [
+              -0.09935668110847473,
+              0.30209672451019287
+            ],
+            "one_step_replay": [
+              -0.09935668110847473,
+              0.30209672451019287
+            ],
+            "positive_token": 9,
+            "selected_vocalize": false,
+            "tick": 474
+          },
+          {
+            "captured_feature_readout": [
+              -0.14139163494110107,
+              0.2984292805194855
+            ],
+            "full_replay": [
+              -0.14139163494110107,
+              0.2984292805194855
+            ],
+            "one_step_replay": [
+              -0.14139163494110107,
+              0.2984292805194855
+            ],
+            "positive_token": 9,
+            "selected_vocalize": true,
+            "tick": 464
+          },
+          {
+            "captured_feature_readout": [
+              -0.1046459749341011,
+              0.3033442497253418
+            ],
+            "full_replay": [
+              -0.1046459749341011,
+              0.3033442497253418
+            ],
+            "one_step_replay": [
+              -0.1046459749341011,
+              0.3033442497253418
+            ],
+            "positive_token": 9,
+            "selected_vocalize": true,
+            "tick": 465
+          },
+          {
+            "captured_feature_readout": [
+              -0.09778677672147751,
+              0.30368128418922424
+            ],
+            "full_replay": [
+              -0.09778677672147751,
+              0.30368128418922424
+            ],
+            "one_step_replay": [
+              -0.09778677672147751,
+              0.30368128418922424
+            ],
+            "positive_token": 9,
+            "selected_vocalize": false,
+            "tick": 466
+          },
+          {
+            "captured_feature_readout": [
+              -0.13235537707805634,
+              0.2890351414680481
+            ],
+            "full_replay": [
+              -0.13235537707805634,
+              0.2890351414680481
+            ],
+            "one_step_replay": [
+              -0.13235537707805634,
+              0.2890351414680481
+            ],
+            "positive_token": 9,
+            "selected_vocalize": false,
+            "tick": 472
+          },
+          {
+            "captured_feature_readout": [
+              -0.10485367476940155,
+              0.3000156879425049
+            ],
+            "full_replay": [
+              -0.10485367476940155,
+              0.3000156879425049
+            ],
+            "one_step_replay": [
+              -0.10485367476940155,
+              0.3000156879425049
+            ],
+            "positive_token": 9,
+            "selected_vocalize": false,
+            "tick": 473
+          },
+          {
+            "captured_feature_readout": [
+              -0.09916422516107559,
+              0.3021749258041382
+            ],
+            "full_replay": [
+              -0.09916422516107559,
+              0.3021749258041382
+            ],
+            "one_step_replay": [
+              -0.09916422516107559,
+              0.3021749258041382
+            ],
+            "positive_token": 9,
+            "selected_vocalize": false,
+            "tick": 474
+          },
+          {
+            "captured_feature_readout": [
+              -0.13766604661941528,
+              0.3053210973739624
+            ],
+            "full_replay": [
+              -0.13766604661941528,
+              0.3053210973739624
+            ],
+            "one_step_replay": [
+              -0.13766604661941528,
+              0.3053210973739624
+            ],
+            "positive_token": 9,
+            "selected_vocalize": false,
+            "tick": 462
+          },
+          {
+            "captured_feature_readout": [
+              -0.1017003133893013,
+              0.30687686800956726
+            ],
+            "full_replay": [
+              -0.1017003133893013,
+              0.30687686800956726
+            ],
+            "one_step_replay": [
+              -0.1017003133893013,
+              0.30687686800956726
+            ],
+            "positive_token": 9,
+            "selected_vocalize": true,
+            "tick": 463
+          },
+          {
+            "captured_feature_readout": [
+              -0.09589095413684845,
+              0.30553898215293884
+            ],
+            "full_replay": [
+              -0.09589095413684845,
+              0.30553898215293884
+            ],
+            "one_step_replay": [
+              -0.09589095413684845,
+              0.30553898215293884
+            ],
+            "positive_token": 9,
+            "selected_vocalize": true,
+            "tick": 464
+          }
+        ],
+        "vocal_conditional_mask_enabled_rows": 0
+      },
+      "initial_actor_sha256": "e7d267656a6855e9ec116074ea749dea7ce79c44d15a61e50cffea6049773d09",
+      "presence_finite_difference": {
+        "actual_positive_labels_only": true,
+        "central_finite_difference": 0.061089502606886906,
+        "coordinate": 28240,
+        "epsilon": 0.0010000000474974513,
+        "native_analytic_gradient": 0.061090290546417236
+      },
+      "presence_gradient_interaction": {
+        "coordinate_count": 32,
+        "negative_value_means_previous_gate_descent_increases_positive_loss_locally": true,
+        "positive_dot_previous_09_01_gate_gradient": -0.016875031693445626,
+        "positive_quiet_cosine": -0.9928610017501747,
+        "positive_quiet_dot": -0.6064686101527884
+      },
+      "trained": {
+        "captured_feature_presence_range": [
+          -0.1802656650543213,
+          -0.10630237311124802
+        ],
+        "collected_quiet_selected_vocalize": 100,
+        "collected_selected_vocalize": 121,
+        "full_replay_presence_range": [
+          -0.2591573894023895,
+          -0.17353281378746033
+        ],
+        "one_step_presence_range": [
+          -0.23891060054302216,
+          -0.1527632623910904
+        ],
+        "positive_rows": 30,
+        "rows": [
+          {
+            "captured_feature_readout": [
+              -0.1802656650543213,
+              0.21508577466011047
+            ],
+            "full_replay": [
+              -0.2591573894023895,
+              0.2405576854944229
+            ],
+            "one_step_replay": [
+              -0.23891060054302216,
+              0.23478011786937714
+            ],
+            "positive_token": 8,
+            "selected_vocalize": true,
+            "tick": 466
+          },
+          {
+            "captured_feature_readout": [
+              -0.164621964097023,
+              0.21716545522212982
+            ],
+            "full_replay": [
+              -0.23836767673492432,
+              0.24128606915473938
+            ],
+            "one_step_replay": [
+              -0.2227315902709961,
+              0.2368341088294983
+            ],
+            "positive_token": 8,
+            "selected_vocalize": true,
+            "tick": 467
+          },
+          {
+            "captured_feature_readout": [
+              -0.16182059049606323,
+              0.21708856523036957
+            ],
+            "full_replay": [
+              -0.2336912900209427,
+              0.24065770208835602
+            ],
+            "one_step_replay": [
+              -0.21944141387939453,
+              0.23662617802619934
+            ],
+            "positive_token": 8,
+            "selected_vocalize": true,
+            "tick": 468
+          },
+          {
+            "captured_feature_readout": [
+              -0.17979580163955688,
+              0.20982231199741364
+            ],
+            "full_replay": [
+              -0.2571480870246887,
+              0.2347034215927124
+            ],
+            "one_step_replay": [
+              -0.23722192645072937,
+              0.2289004921913147
+            ],
+            "positive_token": 8,
+            "selected_vocalize": true,
+            "tick": 472
+          },
+          {
+            "captured_feature_readout": [
+              -0.16009077429771423,
+              0.2160457819700241
+            ],
+            "full_replay": [
+              -0.23178794980049133,
+              0.23938551545143127
+            ],
+            "one_step_replay": [
+              -0.21663658320903778,
+              0.23518650233745575
+            ],
+            "positive_token": 8,
+            "selected_vocalize": true,
+            "tick": 473
+          },
+          {
+            "captured_feature_readout": [
+              -0.15734648704528809,
+              0.21675199270248413
+            ],
+            "full_replay": [
+              -0.22738394141197205,
+              0.2396455705165863
+            ],
+            "one_step_replay": [
+              -0.21371819078922272,
+              0.23588670790195465
+            ],
+            "positive_token": 8,
+            "selected_vocalize": true,
+            "tick": 474
+          },
+          {
+            "captured_feature_readout": [
+              -0.18025799095630646,
+              0.2148790806531906
+            ],
+            "full_replay": [
+              -0.258614182472229,
+              0.24009962379932404
+            ],
+            "one_step_replay": [
+              -0.23870928585529327,
+              0.2345113456249237
+            ],
+            "positive_token": 8,
+            "selected_vocalize": true,
+            "tick": 468
+          },
+          {
+            "captured_feature_readout": [
+              -0.16445499658584595,
+              0.21714751422405243
+            ],
+            "full_replay": [
+              -0.2380308210849762,
+              0.24114660918712616
+            ],
+            "one_step_replay": [
+              -0.22246649861335754,
+              0.23677919805049896
+            ],
+            "positive_token": 8,
+            "selected_vocalize": true,
+            "tick": 469
+          },
+          {
+            "captured_feature_readout": [
+              -0.16156578063964844,
+              0.2171611189842224
+            ],
+            "full_replay": [
+              -0.23339572548866272,
+              0.2406652867794037
+            ],
+            "one_step_replay": [
+              -0.21913868188858032,
+              0.23667719960212708
+            ],
+            "positive_token": 8,
+            "selected_vocalize": false,
+            "tick": 470
+          },
+          {
+            "captured_feature_readout": [
+              -0.11476942896842957,
+              0.2128886729478836
+            ],
+            "full_replay": [
+              -0.1775951236486435,
+              0.2348380833864212
+            ],
+            "one_step_replay": [
+              -0.16445207595825195,
+              0.23127058148384094
+            ],
+            "positive_token": 9,
+            "selected_vocalize": false,
+            "tick": 484
+          },
+          {
+            "captured_feature_readout": [
+              -0.15168750286102295,
+              0.21635302901268005
+            ],
+            "full_replay": [
+              -0.2188221514225006,
+              0.2386932671070099
+            ],
+            "one_step_replay": [
+              -0.20734301209449768,
+              0.2353016883134842
+            ],
+            "positive_token": 9,
+            "selected_vocalize": true,
+            "tick": 485
+          },
+          {
+            "captured_feature_readout": [
+              -0.15446698665618896,
+              0.21670293807983398
+            ],
+            "full_replay": [
+              -0.2220524549484253,
+              0.2390805035829544
+            ],
+            "one_step_replay": [
+              -0.2098299264907837,
+              0.23560743033885956
+            ],
+            "positive_token": 9,
+            "selected_vocalize": true,
+            "tick": 486
+          },
+          {
+            "captured_feature_readout": [
+              -0.1801866739988327,
+              0.21029089391231537
+            ],
+            "full_replay": [
+              -0.25821924209594727,
+              0.23538397252559662
+            ],
+            "one_step_replay": [
+              -0.23797746002674103,
+              0.22949084639549255
+            ],
+            "positive_token": 8,
+            "selected_vocalize": true,
+            "tick": 472
+          },
+          {
+            "captured_feature_readout": [
+              -0.16067183017730713,
+              0.2162533700466156
+            ],
+            "full_replay": [
+              -0.23282869160175323,
+              0.23973830044269562
+            ],
+            "one_step_replay": [
+              -0.21746644377708435,
+              0.23547223210334778
+            ],
+            "positive_token": 8,
+            "selected_vocalize": true,
+            "tick": 473
+          },
+          {
+            "captured_feature_readout": [
+              -0.15771803259849548,
+              0.216908797621727
+            ],
+            "full_replay": [
+              -0.22805815935134888,
+              0.239898219704628
+            ],
+            "one_step_replay": [
+              -0.21425849199295044,
+              0.23609578609466553
+            ],
+            "positive_token": 8,
+            "selected_vocalize": true,
+            "tick": 474
+          },
+          {
+            "captured_feature_readout": [
+              -0.11441775411367416,
+              0.21293744444847107
+            ],
+            "full_replay": [
+              -0.17699240148067474,
+              0.2348419725894928
+            ],
+            "one_step_replay": [
+              -0.16396519541740417,
+              0.2312888652086258
+            ],
+            "positive_token": 9,
+            "selected_vocalize": false,
+            "tick": 484
+          },
+          {
+            "captured_feature_readout": [
+              -0.151307612657547,
+              0.21641692519187927
+            ],
+            "full_replay": [
+              -0.21816858649253845,
+              0.23870959877967834
+            ],
+            "one_step_replay": [
+              -0.20682187378406525,
+              0.23533378541469574
+            ],
+            "positive_token": 9,
+            "selected_vocalize": true,
+            "tick": 485
+          },
+          {
+            "captured_feature_readout": [
+              -0.15411320328712463,
+              0.21677586436271667
+            ],
+            "full_replay": [
+              -0.2214549481868744,
+              0.23911191523075104
+            ],
+            "one_step_replay": [
+              -0.2093663066625595,
+              0.23565417528152466
+            ],
+            "positive_token": 9,
+            "selected_vocalize": true,
+            "tick": 486
+          },
+          {
+            "captured_feature_readout": [
+              -0.14388230443000793,
+              0.20193129777908325
+            ],
+            "full_replay": [
+              -0.2165701985359192,
+              0.22657960653305054
+            ],
+            "one_step_replay": [
+              -0.19018305838108063,
+              0.2182822823524475
+            ],
+            "positive_token": 9,
+            "selected_vocalize": true,
+            "tick": 472
+          },
+          {
+            "captured_feature_readout": [
+              -0.11567357182502747,
+              0.21165288984775543
+            ],
+            "full_replay": [
+              -0.1831505447626114,
+              0.23475103080272675
+            ],
+            "one_step_replay": [
+              -0.16161879897117615,
+              0.22822682559490204
+            ],
+            "positive_token": 9,
+            "selected_vocalize": true,
+            "tick": 473
+          },
+          {
+            "captured_feature_readout": [
+              -0.10970089584589005,
+              0.21359530091285706
+            ],
+            "full_replay": [
+              -0.17483942210674286,
+              0.2360553741455078
+            ],
+            "one_step_replay": [
+              -0.15555793046951294,
+              0.23022179305553436
+            ],
+            "positive_token": 9,
+            "selected_vocalize": false,
+            "tick": 474
+          },
+          {
+            "captured_feature_readout": [
+              -0.15250477194786072,
+              0.21217194199562073
+            ],
+            "full_replay": [
+              -0.22943110764026642,
+              0.23808063566684723
+            ],
+            "one_step_replay": [
+              -0.19762985408306122,
+              0.22871683537960052
+            ],
+            "positive_token": 9,
+            "selected_vocalize": true,
+            "tick": 464
+          },
+          {
+            "captured_feature_readout": [
+              -0.11515670269727707,
+              0.21528151631355286
+            ],
+            "full_replay": [
+              -0.1838754117488861,
+              0.23906154930591583
+            ],
+            "one_step_replay": [
+              -0.16106846928596497,
+              0.23198717832565308
+            ],
+            "positive_token": 9,
+            "selected_vocalize": true,
+            "tick": 465
+          },
+          {
+            "captured_feature_readout": [
+              -0.10815264284610748,
+              0.2152099907398224
+            ],
+            "full_replay": [
+              -0.1736825555562973,
+              0.2380625605583191
+            ],
+            "one_step_replay": [
+              -0.1541905254125595,
+              0.23193123936653137
+            ],
+            "positive_token": 9,
+            "selected_vocalize": false,
+            "tick": 466
+          },
+          {
+            "captured_feature_readout": [
+              -0.14332681894302368,
+              0.20211996138095856
+            ],
+            "full_replay": [
+              -0.21587708592414856,
+              0.22673428058624268
+            ],
+            "one_step_replay": [
+              -0.1896187961101532,
+              0.2184680998325348
+            ],
+            "positive_token": 9,
+            "selected_vocalize": false,
+            "tick": 472
+          },
+          {
+            "captured_feature_readout": [
+              -0.11530673503875732,
+              0.21178214251995087
+            ],
+            "full_replay": [
+              -0.18271946907043457,
+              0.2348652184009552
+            ],
+            "one_step_replay": [
+              -0.16124731302261353,
+              0.22835424542427063
+            ],
+            "positive_token": 9,
+            "selected_vocalize": false,
+            "tick": 473
+          },
+          {
+            "captured_feature_readout": [
+              -0.10950680822134018,
+              0.21366479992866516
+            ],
+            "full_replay": [
+              -0.17461107671260834,
+              0.2361176460981369
+            ],
+            "one_step_replay": [
+              -0.15535935759544373,
+              0.23028938472270966
+            ],
+            "positive_token": 9,
+            "selected_vocalize": false,
+            "tick": 474
+          },
+          {
+            "captured_feature_readout": [
+              -0.14900246262550354,
+              0.22018903493881226
+            ],
+            "full_replay": [
+              -0.2335522323846817,
+              0.2483954131603241
+            ],
+            "one_step_replay": [
+              -0.19512811303138733,
+              0.2369087189435959
+            ],
+            "positive_token": 9,
+            "selected_vocalize": false,
+            "tick": 462
+          },
+          {
+            "captured_feature_readout": [
+              -0.11230581998825073,
+              0.21926745772361755
+            ],
+            "full_replay": [
+              -0.18472322821617126,
+              0.24424968659877777
+            ],
+            "one_step_replay": [
+              -0.1588287353515625,
+              0.2361154407262802
+            ],
+            "positive_token": 9,
+            "selected_vocalize": true,
+            "tick": 463
+          },
+          {
+            "captured_feature_readout": [
+              -0.10630237311124802,
+              0.21725144982337952
+            ],
+            "full_replay": [
+              -0.17353281378746033,
+              0.24072639644145966
+            ],
+            "one_step_replay": [
+              -0.1527632623910904,
+              0.23408663272857666
+            ],
+            "positive_token": 9,
+            "selected_vocalize": true,
+            "tick": 464
+          }
+        ],
+        "vocal_conditional_mask_enabled_rows": 0
+      }
+    }
+  ],
+  "kind": "actual-v2-native-gate-gradient-diagnostic",
+  "not_behavior_or_learning_claim": true,
+  "measurement_provenance": {
+    "implementation_commit": "1034536ff3b999266fff24b6cc0a504e75e314e1",
+    "diagnostic_test_binary_sha256": "8dabd4c4b6f6341a39f1c21e23c511f05ed86966e2262691f7f5d221b67942db",
+    "native_test_seconds": 29.77,
+    "real_experience_source": "v7 764e1e540ee23136f138b5c50ea6c6c8398cc6b7",
+    "initial_actor_matches_measured_v7_fork": true
+  },
+  "interpretation_limits": [
+    "Captured-feature readouts under the trained actor reuse old activations; only initial source readouts are actual observed source outputs.",
+    "Full and one-step replay rebuild native recurrent activations; the recorded initial case matches actual source presence bit-for-bit.",
+    "Weight interventions use disposable diagnostic copies, no optimizer commit and no world behavior claim. They test local positive-loss direction, not Adam trajectory or comprehension."
+  ]
+}
