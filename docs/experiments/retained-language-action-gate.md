@@ -154,3 +154,7 @@ authentication, model-access, usage or network causes. No further inference,
 credential change, route change or guard bypass was attempted. A working
 authorized bounded Luna execution, or an authorized compatible local model/server,
 is still required for genuine SLM delivery. All measured teaching here is scripted.
+
+The [three-command timing follow-up](retained-language-factorial-grounding.md)
+separates noun/action contrasts, fixes native-action teaching and preserves all
+three measured variants, including their remaining negative language results.
