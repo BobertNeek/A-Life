@@ -36,6 +36,7 @@ NATIVE_INITIALIZATION_NEXT = 'resident-initialization.next'
 SIDECARS = (REQUEST, LOG + '.stdout.log', LOG + '.stderr.log',
             STATE + '.tmp', REQUEST + '.tmp', STATE)
 MAX_LOG_BYTES = 8 * 1024 * 1024
+FAILURE_STDERR_BYTES = 16 * 1024
 HELPERS = ('run_continuous_care.py', 'run_current_care.py', 'current_checkpoint_store.py',
            'run_mixed_care_serial.py', 'care_host.py',
            'grab_food_seed_reservations.py', 'summarize_ppo_diagnostics.py', 'care_night_window.py')
@@ -247,6 +248,33 @@ def sidecar_identity(path):
     return {**fields(after), 'sha256': digest}
 
 
+def failure_stderr_excerpt(lane, expected):
+    """Failure-only bounded diagnostic, bound to the log retired by this receipt."""
+    if expected is None:
+        return {'available': False}
+    import base64
+
+    path = lane / (LOG + '.stderr.log')
+    require(sidecar_identity(path) == expected, 'failure stderr changed before capture')
+    with path.open('rb') as stream:
+        if expected['bytes'] <= FAILURE_STDERR_BYTES:
+            prefix, suffix = stream.read(FAILURE_STDERR_BYTES), b''
+        else:
+            prefix = stream.read(FAILURE_STDERR_BYTES // 2)
+            stream.seek(-FAILURE_STDERR_BYTES // 2, os.SEEK_END)
+            suffix = stream.read(FAILURE_STDERR_BYTES // 2)
+    require(sidecar_identity(path) == expected, 'failure stderr changed during capture')
+    omitted = expected['bytes'] - len(prefix) - len(suffix)
+    return {'available': True, 'source': path.name, 'sha256': expected['sha256'],
+            'bytes': expected['bytes'], 'captured_bytes': len(prefix) + len(suffix),
+            'omitted_bytes': omitted,
+            'prefix_base64': base64.b64encode(prefix).decode('ascii'),
+            'suffix_base64': base64.b64encode(suffix).decode('ascii'),
+            'text': prefix.decode('utf-8', errors='replace') +
+                (f'\n[... {omitted} stderr bytes omitted ...]\n' if omitted else '') +
+                suffix.decode('utf-8', errors='replace')}
+
+
 def committed_retirement(lane, state=None):
     path = lane / RECEIPT
     if not path.exists():
@@ -445,6 +473,9 @@ def finish(lane, state, validate):
             if e['kind'] == 'continuous-terminal-v1'), None),
         'seed_admission': state.get('seed_admission'),
         'native_exit_code': state.get('native_exit_code'),
+        # A recovered snapshot proves retained state, not how its writer exited.
+        # In particular, loss of the supervisor can leave no observed exit code.
+        'native_exit_observed': state.get('native_exit_code') is not None,
         'recovery': recovery, 'cleanup': cleanup,
         'one_fresh_world': mode == 'fresh_world' and not recovery.get('initialization_aborted', False),
         'same_individual_across_sessions': progress is not None if mode == 'same_individual' else False,
@@ -463,6 +494,9 @@ def finish(lane, state, validate):
             'owner/request changed before committing retirement')
     receipt['retirement'] = {'schema': 1, 'kind': 'finite-continuous-retirement-v1',
         'owner': deepcopy(state), 'sidecars': {name: sidecar_identity(lane / name) for name in SIDECARS}}
+    if state.get('native_exit_error') is not None or state.get('native_exit_code') != 0:
+        receipt['native_failure_stderr'] = failure_stderr_excerpt(
+            lane, receipt['retirement']['sidecars'][LOG + '.stderr.log'])
     cp.write_json(lane / RECEIPT, receipt)
     return retire_sidecars(lane, receipt, validate)
 

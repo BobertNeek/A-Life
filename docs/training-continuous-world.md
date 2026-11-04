@@ -199,6 +199,12 @@ guard observations, with possible between-observation overshoot). After admitted
 publication, Native cleanup removes the run, and the host clears those sidecars.
 One bounded `last-continuous-session.json` remains with compact outcomes and
 identities; no episode archive or additional learned checkpoint is retained.
+On a recorded child error, nonzero exit, or reconciliation without an observed
+exit code, the receipt also preserves at most 16 KiB of native stderr (the start
+and end for longer logs), its full-file digest, omitted-byte count and exact
+captured bytes. `native_exit_observed=false` means the exit status is unknown;
+neither successful snapshot recovery nor stderr establishes a termination cause.
+Successful observed exits do not capture this additional diagnostic.
 That receipt also commits the stopped owner and exact identity/digest of each
 temporary sidecar before removal. Retirement checks the admitted published
 current under its writer lease, validates every surviving sidecar, and removes
@@ -210,6 +216,16 @@ cleanup. A changed owner from the same committed session is a conflict, even if
 the remaining logs are readable. A genuinely new admission records a fresh
 session ID and the exact previous-receipt digest, allowing the prior completed
 receipt to coexist without granting it authority over the new session's files.
+
+After an unexplained stop, keep the same owner lane and exact pinned source,
+helpers, executable hashes and backend/prior environment. Confirm the writer has
+stopped, then use `--reconcile --run` before any new session. Preserve the compact
+receipt before the next session replaces it. Record any available outer
+supervisor exit status and Windows termination evidence separately; an absent
+status stays unknown. Do not delete the owner state or relaunch an uncertain
+worker. Shorter snapshot intervals can bound lost recent work, but increase
+save I/O; measure the tradeoff rather than changing the default automatically.
+
 Pending Native `resident-retirement.bin` or `resident-retirement.next` is finished by Native
 before Python Store admission while the stopped run owner is still available;
 an old final receipt cannot retire a different Native run.
