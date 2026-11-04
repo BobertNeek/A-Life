@@ -1,10 +1,13 @@
 # Disposable scenario batch handoff (opt-in)
 
-**Fresh-founder dispatch is blocked by default.** The existing native `--fixture`
-constructor performs offline training, so it does not satisfy this task's
-assessment-only requirement. No training opt-in or retained-source workaround is
-provided. A verified construction-only native backend is still required before
-this can become an unattended end-to-end assessment loop.
+**Initialization requires the explicit native zero-update constructor.** The
+controller invokes only `train_cpu_care --initialize-founder --output NEW_SOURCE
+--seed SEED`, checks its exact zero-step/zero-update receipt, checkpoint optimizer
+steps, six-file inventory and `native_cpu_untrained_founder` provenance. Older
+binaries, malformed responses, changed evidence or any nonzero update fail closed
+with no fallback. `--fixture` training and retained-source imports are prohibited.
+Native constructor/admission tests have passed; Python command integration is
+mock-tested here. A new end-to-end native assessment smoke is still pending.
 
 `scripts/care_scenario_batches.py` is a durable local handoff protocol for an
 **already running, authorized agent**. It does not invoke Codex, a model API,
@@ -14,9 +17,9 @@ invocation is not implemented or proven. This is not a scheduler, unattended
 training runner, or a learning/capability claim.
 
 The base seam invokes only completed-archive validation. The optional fixed
-dispatcher is designed to use a construction-only fresh founder and run reserved
-discovery assessments with pinned native binaries. Its initializer currently
-fails before native execution because that backend is unavailable. No credentials are read or
+dispatcher uses the explicit construction-only fresh-founder entrypoint and
+reserved discovery assessments with pinned native binaries. Constructor errors
+preserve the durable claim and partial output; they never trigger a fallback. No credentials are read or
 copied. No retained source input is accepted by the dispatcher. No retained
 creature is selected, updated or promoted; no pool, holdout or reference trial
 or training round is dispatched.
@@ -98,13 +101,14 @@ is claimed until the actual controller integration has been tested.
 4. Initialize the fixed dispatcher once, after ledger initialization and before
    any dispatch. All paths are host/controller inputs, never designer inputs:
    `python3 scripts/care_scenario_dispatch.py --run-root NEW_RUN_ROOT init --ledger-root ROOT --care-binary CARE --native-evaluator NATIVE --founder-seed FOUNDER_SEED`
-   This currently fails closed before any native command or founder claim.
-   There is no supported construction-only native source initializer. The
-   mocked contract requires an exclusive founder claim before initialization,
-   with source inventory, executable pins and ledger-plan binding sealed. It
-   cannot accept a retained source or opt in to training.
-5. Future supported-constructor contract, currently exercised only with mocks:
-   for each accepted proposal, the outer controller would run:
+   A durable, exclusive founder claim precedes the single constructor command.
+   The constructor must report zero world steps, training rows, optimizer updates
+   and optimizer steps, with no teacher or semantic prior. Its source inventory,
+   executable pins, construction receipt and ledger binding are sealed. The
+   source must have exactly six native files, zero checkpoint optimizer steps
+   and explicit untrained provenance. No retained source or training opt-in is
+   accepted; unsupported binaries fail without retry.
+5. For each accepted proposal, the outer trusted controller runs:
    `python3 scripts/care_scenario_dispatch.py --run-root RUN_ROOT run`
    It durably claims `dispatched` before starting any new assessment, then runs
    only reserved discovery trials and feeds their complete archives to `assess`.
@@ -125,8 +129,8 @@ is claimed until the actual controller integration has been tested.
    as training progress. Candidate training selections are recorded but not run.
 
 The batch handoff contract does not require per-batch user interaction when
-the task has authority and valid inputs, but fresh initialization is currently
-blocked and the complete autonomous loop is not qualified. This seam neither grants authority nor
+the task has authority and valid inputs. The complete autonomous designer loop
+is not qualified by constructor tests or mocked dispatcher tests. This seam neither grants authority nor
 ensures an agent remains alive to continue.
 
 ## Durability and interrupted work
@@ -189,8 +193,9 @@ The constructor used for that smoke was **not training-free**: its source receip
 records **2 actor optimizer updates and 2 value optimizer updates**, starting
 from zero. Earlier prototype `training_enabled=false` initialization receipts
 were therefore incorrect. The three later assessment receipts do correctly
-record zero optimizer updates. The original evidence is preserved with a separate
-correction; the initializer is now disabled rather than repeating that behavior.
+record zero optimizer updates. Original evidence is preserved with a separate
+correction. That fixture path was removed; initialization now requires the
+separately implemented explicit construction-only entrypoint.
 
 This smoke verifies frozen assessment/receipt flow from that disposable trained
 fixture, not a no-training source constructor, native learning improvement, or

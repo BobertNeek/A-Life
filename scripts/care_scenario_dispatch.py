@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Private, one-shot native dispatcher for disposable scenario discovery only.
 
-`init` is unavailable until a qualified construction-only native founder backend
-exists. The old --fixture path trains and is deliberately not supported. `run`
+`init` uses only the native --initialize-founder construction-only entrypoint.
+The old --fixture path trains and is deliberately not supported. `run`
 requires a sealed zero-update construction identity, durably claims one proposed
 batch, and evaluates only reserved discovery seeds. Never resumes uncertain
 work, trains, uses pool/holdout/reference seeds, or invokes a model or shell.
@@ -38,31 +38,62 @@ MANIFEST_FIELDS = {
 }
 
 
-class ConstructionOnlyUnavailable(ValueError):
-    pass
-
-
 def construction_only_backend():
-    """Fail closed: no supported native zero-update founder exporter exists.
+    """Select the fixed native zero-update constructor; never fall back to training."""
+    return native_construction
 
-    This internal seam is mocked in lifecycle tests only. No environment
-    variable, CLI switch, training fixture fallback, or source import enables it.
-    A future implementation must construct and natively seal a founder without
-    stepping a world, running PPO/Adam, or inventing training provenance.
-    """
-    raise ConstructionOnlyUnavailable('a qualified construction-only native founder backend is unavailable')
+
+def native_construction(source, founder_seed, binary, evidence, guard):
+    """One bounded fixed-argv constructor call after the durable founder claim."""
+    root = evidence.parent
+    guard.check()
+    manifest = batches.read_record(root / 'run-manifest.json')
+    require(manifest['construction_mode'] == CONSTRUCTION_MODE and
+            manifest['care_binary'] == str(binary) and manifest['source_root'] == str(source) and
+            manifest['founder_seed'] == founder_seed and evidence == root / 'founder-construction',
+            'constructor differs from claimed run')
+    require(not source.exists(), 'founder output exists; never replay construction')
+    argv = [str(binary), '--initialize-founder', '--output', str(source), '--seed', str(founder_seed)]
+    command_path = evidence / 'command.json'
+    batches.write_new(command_path, {'argv': argv, 'cwd': str(root),
+        'timeout_seconds': COMMAND_TIMEOUT, 'output_bytes': MAX_COMMAND_BYTES, 'semantic_prior': 'off'})
+    guard.freeze_file(command_path)
+    batches.fsync_dir(evidence)
+    try:
+        with (evidence / 'stdout.json').open('xb') as stdout, (evidence / 'stderr.log').open('xb') as stderr:
+            try:
+                code = _bounded_process(argv, root, stdout, stderr)
+            finally:
+                for stream in (stdout, stderr):
+                    stream.flush(); os.fsync(stream.fileno())
+        batches.write_new(evidence / 'exit.json', {'exit_code': code, 'retry_allowed': False})
+        require(code == 0, 'construction-only native command failed; no fallback or retry')
+        return batches.read_record(evidence / 'stdout.json')
+    finally:
+        batches.fsync_dir(evidence)
+        guard.check()
 
 
 def verify_construction(source, founder_seed, receipt):
+    require(set(p.name for p in source.iterdir()) == EVALUATION_SOURCE_FILES,
+            'construction-only source must contain exactly six standard files')
     zero_fields = {'world_steps', 'training_rows', 'actor_optimizer_updates',
                    'value_optimizer_updates', 'actor_optimizer_step', 'value_optimizer_step'}
     require(isinstance(receipt, dict) and set(receipt) == zero_fields | {
                 'mode', 'founder_seed', 'source_sha256', 'teacher_present', 'semantic_prior_enabled'}
-            and receipt['mode'] == CONSTRUCTION_MODE and receipt['founder_seed'] == founder_seed
+            and receipt['mode'] == CONSTRUCTION_MODE and type(receipt['founder_seed']) is int
+            and receipt['founder_seed'] == founder_seed
             and all(type(receipt[key]) is int and receipt[key] == 0 for key in zero_fields)
             and receipt['teacher_present'] is False and receipt['semantic_prior_enabled'] is False
             and receipt['source_sha256'] == evaluation_source_pins(source),
             'founder construction must prove no world steps or offline updates')
+    source_receipt = batches.read_record(source / 'cpu-cycle.json')
+    require(source_receipt.get('mode') == 'native_cpu_untrained_founder' and
+            source_receipt.get('initialization') == CONSTRUCTION_MODE and
+            type(source_receipt.get('seed')) is int and source_receipt['seed'] == founder_seed and
+            all(type(source_receipt.get(key)) is int and source_receipt[key] == 0 for key in zero_fields) and
+            source_receipt.get('training_enabled') is False and source_receipt.get('teacher_present') is False and
+            source_receipt.get('semantic_prior_enabled') is False, 'source lacks construction-only provenance')
     actor = batches.read_record(source / 'actor-checkpoint.json')
     value = batches.read_record(source / 'value-checkpoint.json')
     require(type(actor.get('optimizer_step')) is int and actor['optimizer_step'] == 0
@@ -78,6 +109,7 @@ def construct_founder(backend, source, founder_seed, binary, evidence, guard):
     batches.write_new(evidence / 'request.json', {'mode': CONSTRUCTION_MODE, 'source': str(source),
                                                'founder_seed': founder_seed, 'binary': str(binary)})
     batches.fsync_dir(evidence)
+    guard.freeze_file(evidence / 'request.json')
     outcome = {'status': 'uncertain', 'retry_allowed': False}
     try:
         receipt = backend(source, founder_seed, binary, evidence, guard)
@@ -309,7 +341,7 @@ def initialize(run_root, ledger_root, care_binary, evaluator, founder_seed):
     require(all(record['kind'] in {'plan', 'prepared', 'proposed'} for record in records),
             'cannot initialize after any dispatch')
     plan = records[0]['payload']
-    require(integer(founder_seed, 1, 2**64-1) and founder_seed in plan['excluded_seeds'],
+    require(integer(founder_seed, 1, 2**64-2) and founder_seed in plan['excluded_seeds'],
             'explicit founder seed must be in plan excluded_seeds')
     pins = {str(path): file_pin(path) for path in (care, evaluator)}
     require(pins[str(evaluator)]['sha256'] == plan['native_evaluator_sha256'],
@@ -519,10 +551,6 @@ def main(argv=None):
     try:
         result = initialize(args.run_root, args.ledger_root, args.care_binary,
                             args.native_evaluator, args.founder_seed) if args.command == 'init' else run(args.run_root)
-    except ConstructionOnlyUnavailable:
-        print('Initialization unavailable: no qualified construction-only native founder backend. '
-              'No founder, claim, output directory, or native command was created.', file=sys.stderr)
-        return 1
     except (OSError, ValueError, TypeError, KeyError, RecursionError, subprocess.SubprocessError):
         print('Disposable dispatch stopped. Preserve all evidence; do not retry uncertain native work.', file=sys.stderr)
         return 1

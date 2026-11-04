@@ -57,10 +57,16 @@ class DispatcherTests(unittest.TestCase):
         self.assertEqual(founder_seed, 1000)
         self.assertEqual(binary, self.care)
         source.mkdir()
-        for name in dispatch.EVALUATION_SOURCE_FILES | {'compiler-inputs.json'}:
+        for name in dispatch.EVALUATION_SOURCE_FILES:
             (source / name).write_bytes(('mock-construction:' + name).encode())
         for name in ('actor-checkpoint.json', 'value-checkpoint.json'):
             (source / name).write_bytes(batches.encode({'optimizer_step': 0}))
+        (source / 'cpu-cycle.json').write_bytes(batches.encode({
+            'mode': 'native_cpu_untrained_founder', 'initialization': dispatch.CONSTRUCTION_MODE,
+            'seed': founder_seed, 'world_steps': 0, 'training_rows': 0,
+            'actor_optimizer_updates': 0, 'value_optimizer_updates': 0,
+            'actor_optimizer_step': 0, 'value_optimizer_step': 0,
+            'training_enabled': False, 'teacher_present': False, 'semantic_prior_enabled': False}))
         return {'mode': dispatch.CONSTRUCTION_MODE, 'founder_seed': founder_seed,
                 'source_sha256': dispatch.evaluation_source_pins(source),
                 'world_steps': 0, 'training_rows': 0, 'actor_optimizer_updates': 0,
@@ -190,7 +196,6 @@ class DispatcherTests(unittest.TestCase):
     def test_complete_six_file_source_without_optional_compiler(self):
         def without_compiler(source, founder_seed, binary, evidence, guard):
             result = self.construct(source, founder_seed, binary, evidence, guard)
-            (source / 'compiler-inputs.json').unlink()
             result['source_sha256'] = dispatch.evaluation_source_pins(source)
             return result
         with patch.object(dispatch, 'construction_only_backend', return_value=without_compiler):
@@ -278,23 +283,99 @@ class DispatcherTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'fresh disposable'):
             dispatch.initialize(self.run_root, self.ledger, self.care, self.evaluator, 1000)
 
-    def test_default_init_is_unavailable_without_any_side_effect(self):
-        before = dispatch.tree_pin(self.ledger)
-        with patch.object(dispatch, '_bounded_process') as native, patch.object(dispatch.subprocess, 'Popen') as popen, patch.object(batches, 'claim_founder') as claim:
-            with self.assertRaises(dispatch.ConstructionOnlyUnavailable):
+    def native_constructor(self, argv, cwd, stdout, stderr):
+        self.assertEqual(argv, [str(self.care), '--initialize-founder', '--output',
+                               str(self.run_root / 'initial-source'), '--seed', '1000'])
+        self.assertEqual(cwd, self.run_root)
+        self.assertTrue((self.ledger / 'founder-claim.json').is_file())
+        receipt = self.construct(self.run_root / 'initial-source', 1000, self.care,
+                                 self.run_root / 'founder-construction', None)
+        stdout.write(batches.encode(receipt))
+        return 0
+
+    def test_default_init_uses_only_fixed_zero_update_constructor(self):
+        with patch.object(dispatch, '_bounded_process', side_effect=self.native_constructor) as native:
+            result = dispatch.initialize(self.run_root, self.ledger, self.care, self.evaluator, 1000)
+            self.assertEqual(native.call_count, 1)
+        self.assertEqual(result['status'], 'initialized')
+        self.assertFalse(result['training_enabled'])
+        dispatch.load_run(self.run_root)
+        command = batches.read_record(self.run_root / 'founder-construction' / 'command.json')
+        self.assertNotIn('--fixture', command['argv'])
+        self.assertNotIn('--decisions', command['argv'])
+        with patch.object(dispatch, '_bounded_process') as native:
+            with self.assertRaises(ValueError):
                 dispatch.initialize(self.run_root, self.ledger, self.care, self.evaluator, 1000)
-            native.assert_not_called(); popen.assert_not_called(); claim.assert_not_called()
-        self.assertFalse(self.run_root.exists())
-        self.assertEqual(dispatch.tree_pin(self.ledger), before)
+            native.assert_not_called()
+
+    def test_unsupported_constructor_preserves_claim_without_fallback(self):
+        with patch.object(dispatch, '_bounded_process', return_value=2) as native:
+            with self.assertRaisesRegex(ValueError, 'no fallback or retry'):
+                dispatch.initialize(self.run_root, self.ledger, self.care, self.evaluator, 1000)
+            self.assertEqual(native.call_count, 1)
+        self.assertTrue((self.ledger / 'founder-claim.json').exists())
+        self.assertFalse((self.run_root / 'initialized.json').exists())
+        with patch.object(dispatch, '_bounded_process') as native:
+            with self.assertRaises(FileExistsError):
+                dispatch.initialize(self.base / 'other-run', self.ledger, self.care, self.evaluator, 1000)
+            native.assert_not_called()
+
+    def test_native_constructor_timeout_is_not_retried(self):
+        with patch.object(dispatch, '_bounded_process', side_effect=subprocess.TimeoutExpired(['constructor'], 60)) as native:
+            with self.assertRaises(subprocess.TimeoutExpired):
+                dispatch.initialize(self.run_root, self.ledger, self.care, self.evaluator, 1000)
+            self.assertEqual(native.call_count, 1)
+        self.assertTrue((self.ledger / 'founder-claim.json').exists())
+        self.assertFalse((self.run_root / 'initialized.json').exists())
+
+    def test_constructor_stdout_must_be_strict_json(self):
+        def malformed(argv, cwd, stdout, stderr):
+            stdout.write(b'{"mode":"x","mode":"y"}')
+            return 0
+        with patch.object(dispatch, '_bounded_process', side_effect=malformed):
+            with self.assertRaises(ValueError):
+                dispatch.initialize(self.run_root, self.ledger, self.care, self.evaluator, 1000)
+        self.assertFalse((self.run_root / 'initialized.json').exists())
+
+    def test_native_constructor_rejects_extra_source_files(self):
+        def extra(argv, cwd, stdout, stderr):
+            code = self.native_constructor(argv, cwd, stdout, stderr)
+            (self.run_root / 'initial-source' / 'compiler-inputs.json').write_text('{}')
+            return code
+        with patch.object(dispatch, '_bounded_process', side_effect=extra):
+            with self.assertRaisesRegex(ValueError, 'exactly six'):
+                dispatch.initialize(self.run_root, self.ledger, self.care, self.evaluator, 1000)
+        self.assertFalse((self.run_root / 'initialized.json').exists())
+
+    def test_native_constructor_binary_mutation_fails_guard(self):
+        def mutate(argv, cwd, stdout, stderr):
+            code = self.native_constructor(argv, cwd, stdout, stderr)
+            self.care.write_bytes(b'changed executable')
+            return code
+        with patch.object(dispatch, '_bounded_process', side_effect=mutate):
+            with self.assertRaisesRegex(ValueError, 'changed'):
+                dispatch.initialize(self.run_root, self.ledger, self.care, self.evaluator, 1000)
+        self.assertFalse((self.run_root / 'initialized.json').exists())
+
+    def test_source_provenance_must_also_be_construction_only(self):
+        def not_untrained(source, founder_seed, binary, evidence, guard):
+            result = self.construct(source, founder_seed, binary, evidence, guard)
+            cycle = batches.read_record(source / 'cpu-cycle.json')
+            cycle['mode'] = 'native_cpu_fresh_cohort'
+            (source / 'cpu-cycle.json').write_bytes(batches.encode(cycle))
+            result['source_sha256'] = dispatch.evaluation_source_pins(source)
+            return result
+        with patch.object(dispatch, 'construction_only_backend', return_value=not_untrained):
+            with self.assertRaisesRegex(ValueError, 'construction-only provenance'):
+                dispatch.initialize(self.run_root, self.ledger, self.care, self.evaluator, 1000)
+        self.assertFalse((self.run_root / 'initialized.json').exists())
 
     def test_default_cli_has_no_training_override(self):
         before = dispatch.tree_pin(self.ledger)
         arguments = ['--run-root', str(self.run_root), 'init', '--ledger-root', str(self.ledger),
                      '--care-binary', str(self.care), '--native-evaluator', str(self.evaluator),
                      '--founder-seed', '1000']
-        with patch.object(dispatch, '_bounded_process') as native, patch('sys.stderr', new=io.StringIO()) as stderr:
-            self.assertEqual(dispatch.main(arguments), 1)
-            self.assertIn('construction-only native founder backend', stderr.getvalue())
+        with patch.object(dispatch, '_bounded_process') as native, patch('sys.stderr', new=io.StringIO()):
             for option in ('--fixture', '--allow-training', '--unsafe-training'):
                 with self.assertRaises(SystemExit): dispatch.main(arguments + [option])
             native.assert_not_called()

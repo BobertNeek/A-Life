@@ -51,7 +51,8 @@ fn construct(seed: u64, asset: &FoundationWeightAsset) -> Result<FoundationTrain
         &phenotype,
         &(0..phenotype.synapses().len() as u32).collect::<Vec<_>>(),
     )?;
-    let trainer = CpuFoundationTrainer::new(phenotype, asset.clone(), mask, AdamWConfig::default())?;
+    let trainer =
+        CpuFoundationTrainer::new(phenotype, asset.clone(), mask, AdamWConfig::default())?;
     let value = PpoValueHeadCheckpoint {
         feature_count: trainer.phenotype().neuron_count(),
         optimizer_step: 0,
@@ -165,15 +166,15 @@ pub fn initialize_cpu_untrained_founder(
         return Err("untrained founder output must not contain parent traversal".into());
     }
     for ancestor in output.ancestors() {
-        if fs::symlink_metadata(ancestor)
-            .is_ok_and(|metadata| metadata.file_type().is_symlink())
-        {
+        if fs::symlink_metadata(ancestor).is_ok_and(|metadata| metadata.file_type().is_symlink()) {
             return Err("untrained founder output must not traverse a symlink".into());
         }
     }
     let output = resolve_isolated_training_output(output, std::iter::empty::<&Path>())?;
     if fs::symlink_metadata(&output).is_ok() {
-        return Err("untrained founder requires a fresh output; existing evidence is never replaced".into());
+        return Err(
+            "untrained founder requires a fresh output; existing evidence is never replaced".into(),
+        );
     }
     let handoff = construct(seed, &asset)?;
     let mut files = BTreeMap::from([
@@ -207,7 +208,10 @@ pub fn initialize_cpu_untrained_founder(
     for (name, bytes) in &files {
         write_new(&output.join(name), bytes)?;
     }
-    write_new(&output.join("cpu-cycle.json"), &serde_json::to_vec(&sealed)?)?;
+    write_new(
+        &output.join("cpu-cycle.json"),
+        &serde_json::to_vec(&sealed)?,
+    )?;
     super::collector_output::sync_directory_ancestry(&output)?;
     let source = super::read_cpu_founder_source(&output)?;
     let source_sha256 = source
@@ -215,8 +219,10 @@ pub fn initialize_cpu_untrained_founder(
         .iter()
         .map(|(name, bytes)| (name.clone(), sha256(bytes)))
         .collect::<BTreeMap<_, _>>();
-    Ok(json!({"mode":"construction_only_zero_updates_v1","source_sha256":source_sha256,
+    Ok(
+        json!({"mode":"construction_only_zero_updates_v1","source_sha256":source_sha256,
         "founder_seed":seed,"world_steps":0,"training_rows":0,
         "actor_optimizer_updates":0,"value_optimizer_updates":0,"actor_optimizer_step":0,"value_optimizer_step":0,
-        "teacher_present":false,"semantic_prior_enabled":false}))
+        "teacher_present":false,"semantic_prior_enabled":false}),
+    )
 }

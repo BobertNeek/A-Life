@@ -186,11 +186,15 @@ pub fn read_cpu_founder_source(directory: &Path) -> Result<CpuNativeFounderSourc
         let names = fs::read_dir(&root)?
             .map(|entry| Ok(entry?.file_name().to_string_lossy().into_owned()))
             .collect::<io::Result<BTreeSet<_>>>()?;
-        let expected = STANDARD.into_iter().map(str::to_owned).collect::<BTreeSet<_>>();
+        let expected = STANDARD
+            .into_iter()
+            .map(str::to_owned)
+            .collect::<BTreeSet<_>>();
         if names != expected {
-            return Err(
-                invalid("untrained founder requires exactly its six standard source files").into(),
-            );
+            return Err(invalid(
+                "untrained founder requires exactly its six standard source files",
+            )
+            .into());
         }
     }
     let actor: FoundationTrainerCheckpoint =
