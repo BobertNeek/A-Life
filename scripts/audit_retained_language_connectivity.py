@@ -35,6 +35,8 @@ def audit(directory):
 
     p = read("phenotype.json")
     a, b = read("eat-rows.json"), read("get-rows.json")
+    if any(row["replay_tick"]["structural_synapses"] for row in a + b):
+        raise ValueError("this compiled-graph assay requires no additional structural edges")
     ae, be = read("eat-evaluation.json"), read("get-evaluation.json")
     interventions = read("diagnostic-interventions.json")
     regions = p["lobe_layout"]["regions"]
@@ -86,11 +88,16 @@ def audit(directory):
         "experimental_language_input": p.get("experimental_language_input"),
         "changed_input_neurons": changed,
         "all_compiled_routes_enabled": all(a[0]["replay_tick"]["enabled_routes"]),
+        "additional_structural_edges": 0,
         "first_tick_non_input_replay_context_exact": {
             key: a[0]["replay_tick"][key] == b[0]["replay_tick"][key]
             for key in a[0]["replay_tick"] if key != "encoded_inputs"
         },
         "first_tick_motor_masks": a[0]["action"]["motor_masks"],
+        "first_tick_native_masks_exact": {
+            key: a[0]["action"][key] == b[0]["action"][key]
+            for key in ("candidate_count", "representative_mask", "motor_masks", "forced_slots")
+        },
         "reachability_groups": [dict(json.loads(k), input_neurons=v) for k, v in reachability.items()],
         "actual_word_comparison": {
             "first_tick_logits": difference(ae["logits"][0], be["logits"][0]),

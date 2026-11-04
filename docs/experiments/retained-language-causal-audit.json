@@ -97,6 +97,7 @@
         "max_absolute_difference": 0.1415414810180664
       }
     },
+    "additional_structural_edges": 0,
     "all_compiled_routes_enabled": true,
     "changed_input_neurons": [
       643,
@@ -172,6 +173,12 @@
       0,
       0
     ],
+    "first_tick_native_masks_exact": {
+      "candidate_count": true,
+      "forced_slots": true,
+      "motor_masks": true,
+      "representative_mask": true
+    },
     "first_tick_non_input_replay_context_exact": {
       "candidates": true,
       "effective_weight_offsets": true,
@@ -380,6 +387,7 @@
         "max_absolute_difference": 0.0
       }
     },
+    "additional_structural_edges": 0,
     "all_compiled_routes_enabled": true,
     "changed_input_neurons": [
       643,
@@ -425,6 +433,12 @@
       0,
       0
     ],
+    "first_tick_native_masks_exact": {
+      "candidate_count": true,
+      "forced_slots": true,
+      "motor_masks": true,
+      "representative_mask": true
+    },
     "first_tick_non_input_replay_context_exact": {
       "candidates": true,
       "effective_weight_offsets": true,
