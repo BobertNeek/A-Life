@@ -33,7 +33,7 @@ original file's raw-byte hash, not its reserialized typed representation):
   "seed_history": "ABSOLUTE_PRIVATE_ASSESSMENT_DECLARATION",
   "output": "ABSENT_ABSOLUTE_PRIVATE_OUTPUT",
   "founder_seed": 539363617,
-  "seed": 202611044001,
+  "seed": 202611044101,
   "decisions": 128,
   "temperature": 1.0,
   "lesson": "obstacle_navigation",
@@ -51,9 +51,13 @@ The separate assessment declaration is not a fabricated historical ledger:
   "source_current_sha256": "RAW_CURRENT_SHA256",
   "historical_freshness": "unknown",
   "excluded_ranges": [[1, 100]],
-  "assessment_seeds": [202611044001, 202611044002, 202611044003, 202611044004, 202611044005, 202611044006]
+  "assessment_seeds": [202611044101, 202611044102, 202611044103, 202611044104, 202611044105, 202611044106]
 }
 ```
+
+The numerical case seeds above are examples for qualification. Check them against
+both parents' complete known exclusions; do not claim global novelty or substitute
+them into an existing assessment receipt or archived score comparison.
 
 **Replace the example exclusion range with the complete declared union of both
 parents' known consumed, reserved, interrupted and assessment exclusions.** It
@@ -116,3 +120,51 @@ or adopt a candidate on unmatched or missing skill coverage.
 
 Source artifact hashes are recorded in
 [`fixtures/current-cpu-assessment-source-sha256.json`](fixtures/current-cpu-assessment-source-sha256.json).
+
+## Actual-parent full-state parity
+
+The full control accepts the **same standalone Current**, seed declaration and
+case controls as the bare entry point. It restores the actual saved actor and
+critic checkpoints with their full Adam state, applies only the checked actor
+binding metadata for the explicitly new body, then holds both heads read-only.
+The critic is carried unchanged and unused for action inference. Original weights,
+moments, per-coordinate integer ages, global steps, configuration and stage mask
+are preserved. The original private life and sampler remain in the immutable
+source Current; they are not translated into this fresh CPU life.
+
+Prepare two requests differing **only in their absent output directories**. Keep
+an immutable copy of the exact executable used by these receipts before rebuilding.
+
+```text
+evaluate_cpu_current --spec PRIVATE_BARE_REQUEST.json
+evaluate_cpu_current --full-spec PRIVATE_FULL_REQUEST.json
+evaluate_cpu_current --verify PRIVATE_BARE_OUTPUT
+evaluate_cpu_current --verify PRIVATE_FULL_OUTPUT
+evaluate_cpu_current --parity PRIVATE_BARE_OUTPUT PRIVATE_FULL_OUTPUT
+```
+
+`--parity` fails with a nonzero status unless it verifies one bare Current receipt
+and one full Current receipt, the exact same Current source/request controls,
+identical executable and native initial controls, byte-identical actual first
+inputs and action traces, and byte-identical complete fresh private checkpoints.
+Both paths also cold restore/recapture their private checkpoints through native
+validation. The full receipt additionally binds `current-full-actor-preservation.json`:
+actual full actor hashes before/after collection must equal the source actor after
+only its permitted phenotype/source binding changes; the actual carried critic
+must equal its saved checkpoint before/after. No trained head payload is written
+into the assessment output and no training-source receipt is fabricated.
+
+This is a policy-head/full-optimizer parity control in new CPU lives. It is not a
+saved GPU individual-to-CPU private-state conversion, GPU numerical parity proof,
+or proof that all of the saved individual's personal skills are in its founder.
+Run it against the actual immutable PC copy before interpreting comparative scores.
+A native CPU directory and a cloud checkpoint transfer are unnecessary for this
+Current-parent control. Different source, case, binary or dose is rejected, as are
+restarts and altered preservation evidence. Failed prefixes remain preserved.
+
+The strict seed gate remains unchanged: if a standard comparison seed was already
+used for a historical assessment, keep that exclusion. Either use new paired cases
+for both policies or establish an explicit separately recorded reassessment scope;
+do not omit historical assessment seeds from the complete exclusion union or
+claim they are fresh. Consumed/reserved/interrupted and unclassified Current
+exclusions may never be recast as assessment-only to force admission.

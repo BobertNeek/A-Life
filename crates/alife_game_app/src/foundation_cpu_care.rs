@@ -121,6 +121,7 @@ fn prepare_care_episode(request: CpuCareRequest) -> Result<(CpuContinuationConfi
         explicit_deterministic_prior: false,
         assessment: false,
         founder_only: false,
+        frozen_actor_control: false,
     };
     Ok((config, episode))
 }
@@ -155,6 +156,7 @@ struct CareEpisode {
     explicit_deterministic_prior: bool,
     assessment: bool,
     founder_only: bool,
+    frozen_actor_control: bool,
 }
 
 impl CareEpisode {
@@ -461,7 +463,11 @@ impl CareEpisode {
             metadata["persistent_learning"] = json!("fresh-private-life-with-ordinary-biology-waking-learning-and-sleep; frozen-founder-and-full-optimizers");
         }
         if self.founder_only {
-            metadata["persistent_learning"] = json!("fresh-private-life; native waking plasticity and sleep; immutable founder; no offline actor/critic optimizer exists");
+            metadata["persistent_learning"] = if self.frozen_actor_control {
+                json!("fresh-private-life; native waking plasticity and sleep; actual saved actor, critic and full Adam carried read-only; critic unused for inference")
+            } else {
+                json!("fresh-private-life; native waking plasticity and sleep; immutable founder; no offline actor/critic optimizer exists")
+            };
             metadata
                 .as_object_mut()
                 .ok_or("invalid episode metadata")?

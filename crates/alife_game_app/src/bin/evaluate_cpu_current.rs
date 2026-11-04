@@ -2,12 +2,15 @@
 use std::{fs, path::Path};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
-const USAGE: &str = "evaluate_cpu_current --spec CURRENT_REQUEST | --founder-spec NATIVE_CPU_REQUEST | --verify OUTPUT | --compare LEFT RIGHT";
+const USAGE: &str = "evaluate_cpu_current --spec CURRENT_REQUEST | --full-spec CURRENT_REQUEST | --founder-spec NATIVE_CPU_REQUEST | --verify OUTPUT | --compare LEFT RIGHT | --parity BARE FULL";
 
 fn execute(args: &[String]) -> Result<serde_json::Value> {
     match args {
         [flag, path] if flag == "--spec" => {
             alife_game_app::evaluate_cpu_current(serde_json::from_slice(&fs::read(path)?)?)
+        }
+        [flag, path] if flag == "--full-spec" => {
+            alife_game_app::evaluate_cpu_current_full(serde_json::from_slice(&fs::read(path)?)?)
         }
         [flag, path] if flag == "--founder-spec" => {
             alife_game_app::evaluate_cpu_founder(serde_json::from_slice(&fs::read(path)?)?)
@@ -17,6 +20,9 @@ fn execute(args: &[String]) -> Result<serde_json::Value> {
         }
         [flag, left, right] if flag == "--compare" => {
             alife_game_app::compare_cpu_fresh_assessments(Path::new(left), Path::new(right))
+        }
+        [flag, left, right] if flag == "--parity" => {
+            alife_game_app::verify_cpu_current_parity(Path::new(left), Path::new(right))
         }
         _ => Err(USAGE.into()),
     }

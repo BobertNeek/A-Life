@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "kind": "source-only-current-cpu-assessment-adapter",
-  "base_source_commit": "a7ef22b7f61a553e41b412af6ff2ca750992d147",
+  "base_source_commit": "8b84ae606b3cbf959cc276132a7aee14c1928356",
   "includes_trained_or_private_artifacts": false,
   "production_comparator_sha256": "8eb59d011a67bc6c3068b1de1889065f7d37edbcc3b70a7c3979a63d641b9141",
   "files": {
@@ -10,24 +10,24 @@
       "sha256": "4716a22b7b89aec4e55b3ebc79d8ded988bf11633c1d110367858c4afaafd76c"
     },
     "crates/alife_game_app/src/bin/evaluate_cpu_current.rs": {
-      "bytes": 1536,
-      "sha256": "108c65f65f1b8d788ed60af6780abcdd95991a49fd7025d21cf2f782ca2cadb3"
+      "bytes": 1899,
+      "sha256": "432d584a78525cea694f289501fc4bb000fc6ea35abdf1a008066d4c78233401"
     },
     "crates/alife_game_app/src/foundation_cpu_care.rs": {
-      "bytes": 44227,
-      "sha256": "e48a693a399c0fce06a747d6aaf8bf78e211e7698bfbf7db7a869a5c8e7fd81a"
+      "bytes": 44547,
+      "sha256": "4923a33da06a7e5086cb85a7334816e3e4e088c9064949099a42a56152ba1e83"
     },
     "crates/alife_game_app/src/foundation_cpu_care/founder_evaluation.rs": {
-      "bytes": 20810,
-      "sha256": "e93f586fdc72169349c11f05803f6b24ca1d7d9b2c447bd6b15f158455c73655"
+      "bytes": 21742,
+      "sha256": "7f50a81e1de2479744a3077849884581d690c70b9f15dcccec3542106a6ff51e"
     },
     "crates/alife_game_app/src/foundation_cpu_care/current_evaluation.rs": {
-      "bytes": 13426,
-      "sha256": "23a54bfc288e29aee272b1f3712a0f1c67d3c917c219d076670f81aa7da88ebf"
+      "bytes": 20287,
+      "sha256": "ea93e92321fcf9f77e6e6b6e256e9aa36f285c1a8dc72d796c5ae451c4960437"
     },
     "crates/alife_game_app/src/foundation_cpu_care/current_evaluation/tests.rs": {
-      "bytes": 12666,
-      "sha256": "e2d237f92678d77ee752557ad69db7f74ba2b61cfa475ed72209cda7190a79f1"
+      "bytes": 15544,
+      "sha256": "9183598ee508e0a5b1fc22062560d5cec1ee4f4e582a5603075f6c0476450e7b"
     },
     "crates/alife_training/src/cpu/mod.rs": {
       "bytes": 13444,
@@ -38,8 +38,8 @@
       "sha256": "6ca287b9f2e3868ba8202501385f3c68821cf553f85e22b9893e513218286fc6"
     },
     "docs/current-cpu-assessment.md": {
-      "bytes": 6577,
-      "sha256": "1a7007b9bfa4acf247a03e6e67f2adcb11691223f6e456ffd5614cb15ce14f2a"
+      "bytes": 9782,
+      "sha256": "ca71490f6a4c5cbc782757f1eda327774dbac719a9c7b4ba8638b354187bf6bb"
     },
     "docs/cpu-care-comparison-handoff.md": {
       "bytes": 12900,

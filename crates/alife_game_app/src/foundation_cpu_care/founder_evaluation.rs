@@ -237,6 +237,29 @@ pub(super) fn collect_founder_assessment(
     pins: &BTreeMap<PathBuf, String>,
     result_context: Option<&Value>,
 ) -> Result<Value> {
+    Ok(collect_founder_assessment_with_policy(
+        request,
+        asset_bytes,
+        founder_seed,
+        anchor_policy_version,
+        pins,
+        result_context,
+        |phenotype, asset| Ok(CpuInferenceFounder::new(phenotype, asset)?),
+    )?
+    .0)
+}
+
+/// The same native life may use a real saved full actor as a read-only parity
+/// control. Returning the policy lets the caller prove full Adam stayed exact.
+pub(super) fn collect_founder_assessment_with_policy<F: CpuFounderPolicy>(
+    request: &CpuFounderEvaluationRequest,
+    asset_bytes: Vec<u8>,
+    founder_seed: u64,
+    anchor_policy_version: u64,
+    pins: &BTreeMap<PathBuf, String>,
+    result_context: Option<&Value>,
+    make_policy: impl FnOnce(alife_core::BrainPhenotype, alife_core::FoundationWeightAsset) -> Result<F>,
+) -> Result<(Value, F)> {
     let asset = alife_core::FoundationWeightAsset::decode_canonical(&asset_bytes)?;
     let (_, mut episode) = prepare_care_episode(CpuCareRequest {
         previous: Some(request.seed_anchor.clone()),
@@ -252,9 +275,10 @@ pub(super) fn collect_founder_assessment(
         fixture: false,
     })?;
     let (game, phenotype, inputs) = compile_cpu_founder_game(request.seed, founder_seed, &asset)?;
-    let founder = CpuInferenceFounder::new(phenotype, asset)?;
+    let founder = make_policy(phenotype, asset)?;
     episode.assessment = true;
     episode.founder_only = true;
+    episode.frozen_actor_control = result_context.is_some_and(|v| v["full_actor_control"] == true);
     episode.validate_founder_policy(&founder)?;
     // Same shared setup, captured before native private-state admission. The
     // comparison projection is the existing fresh-founder world contract.
@@ -382,7 +406,7 @@ pub(super) fn collect_founder_assessment(
     // reserializing it is not a canonical raw-evidence digest contract.
     write(request.output.join("founder-result.json"), &result)?;
     write(request.output.join("founder-comparison.json"), &comparison)?;
-    Ok(result)
+    Ok((result, founder))
 }
 
 #[cfg(test)]

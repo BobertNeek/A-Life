@@ -186,6 +186,36 @@ fn current_adapter_preserves_real_fixture_heads_private_state_and_matches_native
         let result = evaluate_cpu_current(request.clone()).unwrap();
         assert_eq!(result["same_individual_restore"], false);
         assert_eq!(result["offline_optimizer_constructed"], false);
+        let mut full_request = request.clone();
+        full_request.output = f.root.join(format!("current-full-{seed}"));
+        let full_result = evaluate_cpu_current_full(full_request.clone()).unwrap();
+        assert_eq!(full_result["offline_optimizer_constructed"], true);
+        assert_eq!(full_result["critic_constructed"], true);
+        assert_eq!(
+            verify_cpu_current_parity(&request.output, &full_request.output).unwrap()
+                ["parity_verified"],
+            true
+        );
+        assert!(verify_cpu_current_parity(&request.output, &request.output).is_err());
+        let full_proof: Value = read_json(&full_request.output.join(FULL_PROOF)).unwrap();
+        assert_eq!(
+            full_proof["source_actor_sha256"],
+            hash_value(&before.handoff.actor).unwrap()
+        );
+        assert_eq!(
+            full_proof["source_value_sha256"],
+            hash_value(&before.handoff.value).unwrap()
+        );
+        assert_eq!(
+            full_proof["rebound_actor_before_sha256"],
+            full_proof["rebound_actor_after_sha256"]
+        );
+        assert_eq!(full_proof["actor_optimizer_updates"], 0);
+        assert_eq!(full_proof["value_optimizer_updates"], 0);
+        let full_inventory = inventory(&full_request.output).unwrap();
+        assert!(evaluate_cpu_current_full(full_request.clone()).is_err());
+        assert_eq!(inventory(&full_request.output).unwrap(), full_inventory);
+
         let full = f.root.join(format!("native-full-{seed}"));
         evaluate_cpu_care(CpuCareEvaluationRequest {
             previous: f.source.clone(),
@@ -307,4 +337,41 @@ fn synthetic_current_gpu_origin_is_retained_without_claiming_gpu_execution() {
     assert_eq!(source.proof["source_continuation"], "FreshCohort");
     assert_eq!(source.proof["private_life_transferred"], false);
     assert!(!request.output.exists());
+}
+
+#[test]
+fn current_full_state_parity_needs_no_native_directory_and_rejects_changed_case_or_proof() {
+    let f = Fixture::new();
+    let original = fs::read(&f.current).unwrap();
+    // Disposable fixture only: the self-contained Current is now the sole
+    // policy/Adam/private source; no fake CPU source receipt is constructed.
+    fs::remove_dir_all(&f.source).unwrap();
+    let bare = f.request(
+        0xa511,
+        FoundationTeacherLesson::Feeding,
+        FoundationFoodNeedCondition::OrdinaryHealthyAgingV1,
+    );
+    let mut full = bare.clone();
+    full.output = f.root.join("standalone-full");
+    evaluate_cpu_current(bare.clone()).unwrap();
+    evaluate_cpu_current_full(full.clone()).unwrap();
+    assert_eq!(
+        verify_cpu_current_parity(&bare.output, &full.output).unwrap()["parity_verified"],
+        true
+    );
+    let mut other = f.request(
+        0xa512,
+        FoundationTeacherLesson::Feeding,
+        FoundationFoodNeedCondition::OrdinaryHealthyAgingV1,
+    );
+    other.output = f.root.join("different-full-case");
+    evaluate_cpu_current_full(other.clone()).unwrap();
+    assert!(verify_cpu_current_parity(&bare.output, &other.output).is_err());
+    fs::write(
+        full.output.join(FULL_PROOF),
+        b"changed disposable full-state proof",
+    )
+    .unwrap();
+    assert!(verify_cpu_current_evaluation(&full.output).is_err());
+    assert_eq!(fs::read(&f.current).unwrap(), original);
 }

@@ -1,13 +1,18 @@
 //! Read-only Current admission into a new native CPU assessment life. A Current
 //! is never relabeled as a CPU training receipt or a restored CPU individual.
 use super::evaluation::{file_hash, hash_value, inventory, read_json, verify_pins};
-use super::founder_evaluation::{collect_founder_assessment, verify_founder_artifacts, write};
+use super::founder_evaluation::{
+    collect_founder_assessment, collect_founder_assessment_with_policy, verify_founder_artifacts,
+    write,
+};
 use super::*;
 use alife_training::{CheckpointSeedsV1, CurrentTrainingCheckpointV1};
 use serde::{Deserialize, Serialize};
 use std::{fs, path::Path};
 
 const MODE: &str = "current-to-native-cpu-fresh-founder-assessment";
+const FULL_MODE: &str = "current-to-native-cpu-frozen-full-actor-assessment";
+const FULL_PROOF: &str = "current-full-actor-preservation.json";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -117,6 +122,7 @@ struct AdmittedCurrent {
     asset_sha256: String,
     policy_version: u64,
     proof: Value,
+    handoff: alife_training::FoundationTrainingHandoffV1,
 }
 fn admit_current(request: &CpuCurrentEvaluationRequest) -> Result<AdmittedCurrent> {
     if request.seed == 0
@@ -173,10 +179,47 @@ fn admit_current(request: &CpuCurrentEvaluationRequest) -> Result<AdmittedCurren
         asset_sha256,
         policy_version: source.policy_version,
         proof,
+        handoff: current.handoff,
     })
 }
 
-pub fn evaluate_cpu_current(mut request: CpuCurrentEvaluationRequest) -> Result<Value> {
+pub fn evaluate_cpu_current(request: CpuCurrentEvaluationRequest) -> Result<Value> {
+    evaluate_current(request, false)
+}
+
+/// Fresh-life parity control with the actual saved actor and full Adam. Neither
+/// source private life nor critic state is transplanted or modified.
+pub fn evaluate_cpu_current_full(request: CpuCurrentEvaluationRequest) -> Result<Value> {
+    evaluate_current(request, true)
+}
+
+fn full_actor_proof(
+    admitted: &AdmittedCurrent,
+    request: &CpuCurrentEvaluationRequest,
+) -> Result<Value> {
+    let mut source = admitted.handoff.clone().admit()?;
+    let (game, next, _) =
+        compile_cpu_founder_game(request.seed, request.founder_seed, &source.foundation)?;
+    drop(game);
+    validate_cpu_founder_rebinding(&source.phenotype, &source.actor, &next, &source.foundation)?;
+    let source_actor_sha256 = hash_value(&source.actor)?;
+    source.actor.phenotype_hash = next.phenotype_hash();
+    source.actor.source_foundation_digest = source.foundation.digest();
+    Ok(
+        json!({"schema_version":1,"kind":"actual-current-frozen-full-actor-control",
+        "source_actor_sha256":source_actor_sha256,
+        "rebound_actor_before_sha256":hash_value(&source.actor)?,
+        "rebound_actor_after_sha256":hash_value(&source.actor)?,
+        "source_value_sha256":hash_value(&source.value)?,
+        "source_private_life_sha256":admitted.proof["source_private_life_sha256"],
+        "allowed_rebinding_metadata_fields":["phenotype_hash","source_foundation_digest"],
+        "preserved_fields":["weights","first_moment","second_moment","update_ages","optimizer_step","config","stage_mask"],
+        "actor_optimizer_updates":0,"value_optimizer_updates":0,
+        "critic_checkpoint_preserved_and_unused":true,"same_individual_restore":false}),
+    )
+}
+
+fn evaluate_current(mut request: CpuCurrentEvaluationRequest, full: bool) -> Result<Value> {
     // Check before canonicalization too; do not quietly dereference a source symlink.
     file_hash(&request.current)?;
     request.current = request.current.canonicalize()?;
@@ -213,18 +256,59 @@ pub fn evaluate_cpu_current(mut request: CpuCurrentEvaluationRequest) -> Result<
         food_need_condition: request.food_need_condition,
         known_exclusions: true,
     };
-    let context = json!({"mode":MODE,"source_kind":"native-current",
+    let mode = if full { FULL_MODE } else { MODE };
+    let context = json!({"mode":mode,"source_kind":"native-current",
         "source_current_sha256":request.expected_current_sha256,"source_state_preserved":true,
         "private_life_transferred":false,"sampler_transferred":false,
+        "full_actor_control":full,"offline_optimizer_constructed":full,"critic_constructed":full,
         "seed_anchor_scope":"exact admitted Current policy head and declared exclusions; explicitly new prepared life, no personal continuation"});
-    let result = collect_founder_assessment(
-        &controls,
-        admitted.asset_bytes,
-        request.founder_seed,
-        admitted.policy_version,
-        &pins,
-        Some(&context),
-    )?;
+    let result = if full {
+        let expected = full_actor_proof(&admitted, &request)?;
+        let source = admitted.handoff.clone().admit()?;
+        let value = CpuValueHead::from_checkpoint(source.value.clone())?;
+        if hash_value(&value.checkpoint())? != expected["source_value_sha256"] {
+            return Err("full Current critic failed exact saved-state restoration".into());
+        }
+        let mut actual_before = None;
+        let (result, trainer) = collect_founder_assessment_with_policy(
+            &controls,
+            admitted.asset_bytes.clone(),
+            request.founder_seed,
+            admitted.policy_version,
+            &pins,
+            Some(&context),
+            |next, asset| {
+                let mut trainer = CpuFoundationTrainer::from_checkpoint(
+                    source.phenotype,
+                    source.foundation,
+                    source.actor,
+                )?;
+                trainer.rebind_for_next_cohort(next, asset)?;
+                actual_before = Some(hash_value(&trainer.checkpoint())?);
+                Ok(trainer)
+            },
+        )?;
+        if actual_before.as_deref() != expected["rebound_actor_before_sha256"].as_str()
+            || hash_value(&trainer.checkpoint())? != expected["rebound_actor_after_sha256"]
+            || hash_value(&value.checkpoint())? != expected["source_value_sha256"]
+        {
+            return Err(
+                "full Current actor or Adam changed during fresh assessment; retain private prefix"
+                    .into(),
+            );
+        }
+        write(request.output.join(FULL_PROOF), &expected)?;
+        result
+    } else {
+        collect_founder_assessment(
+            &controls,
+            admitted.asset_bytes.clone(),
+            request.founder_seed,
+            admitted.policy_version,
+            &pins,
+            Some(&context),
+        )?
+    };
     write(
         request.output.join("current-assessment-source.json"),
         &admitted.proof,
@@ -232,7 +316,7 @@ pub fn evaluate_cpu_current(mut request: CpuCurrentEvaluationRequest) -> Result<
     verify_pins(&pins)?;
     let mut receipt = CurrentReceipt {
         schema_version: 1,
-        mode: MODE.into(),
+        mode: mode.into(),
         request: request.clone(),
         asset_sha256: admitted.asset_sha256,
         input_sha256: pins,
@@ -248,7 +332,7 @@ pub fn evaluate_cpu_current(mut request: CpuCurrentEvaluationRequest) -> Result<
 pub fn verify_cpu_current_evaluation(root: &Path) -> Result<Value> {
     let receipt: CurrentReceipt = read_json(&root.join(CPU_CARE_EVALUATION_FILE))?;
     if receipt.schema_version != 1
-        || receipt.mode != MODE
+        || !matches!(receipt.mode.as_str(), MODE | FULL_MODE)
         || receipt.request.output != root.canonicalize()?
         || receipt.payload_sha256 != receipt.digest()?
         || receipt.artifacts != inventory(root)?
@@ -263,9 +347,9 @@ pub fn verify_cpu_current_evaluation(root: &Path) -> Result<Value> {
     {
         return Err("Current assessment differs from exact native source admission".into());
     }
-    let verified = verify_founder_artifacts(root, &receipt.asset_sha256)?;
+    let mut verified = verify_founder_artifacts(root, &receipt.asset_sha256)?;
     let result = &verified["result"];
-    if result["mode"] != MODE
+    if result["mode"] != receipt.mode
         || result["source_current_sha256"] != receipt.request.expected_current_sha256
         || result["same_individual_restore"] != false
         || result["private_life_transferred"] != false
@@ -275,6 +359,20 @@ pub fn verify_cpu_current_evaluation(root: &Path) -> Result<Value> {
         || result["bootstrap_decisions"] != 1
     {
         return Err("Current assessment scope or dose changed".into());
+    }
+    if receipt.mode == FULL_MODE {
+        if result["full_actor_control"] != true
+            || result["offline_optimizer_constructed"] != true
+            || result["critic_constructed"] != true
+            || fs::read(root.join(FULL_PROOF))?
+                != serde_json::to_vec(&full_actor_proof(&admitted, &receipt.request)?)?
+        {
+            return Err("full Current control lost its exact actor/Adam preservation proof".into());
+        }
+        verified["offline_optimizer_constructed"] = json!(true);
+        verified["verification_offline_optimizer_constructed"] = json!(false);
+    } else if root.join(FULL_PROOF).exists() || result["offline_optimizer_constructed"] != false {
+        return Err("bare Current assessment claims a full actor or optimizer".into());
     }
     let trace: Value = read_json(&root.join("care-trace.json"))?;
     let rows = trace["rows"]
@@ -300,7 +398,7 @@ pub fn verify_cpu_current_evaluation(root: &Path) -> Result<Value> {
 pub fn verify_cpu_fresh_assessment(root: &Path) -> Result<Value> {
     let header: Value = read_json(&root.join(CPU_CARE_EVALUATION_FILE))?;
     match header["mode"].as_str() {
-        Some(MODE) => verify_cpu_current_evaluation(root),
+        Some(MODE | FULL_MODE) => verify_cpu_current_evaluation(root),
         Some("native-cpu-founder-inference-assessment") => verify_cpu_founder_evaluation(root),
         _ => Err("unsupported fresh CPU assessment receipt domain".into()),
     }
@@ -311,6 +409,49 @@ pub fn compare_cpu_fresh_assessments(left: &Path, right: &Path) -> Result<Value>
     Ok(json!({"matched":left["comparison"] == right["comparison"],
         "scope":"fresh native CPU world/body and first actual neural inputs; later states are outcomes",
         "left":left,"right":right,"automatic_adoption":false}))
+}
+
+/// Parent full/bare parity is stricter than between-policy comparison: actions
+/// and the entire new private life must also match exactly. No source is moved.
+pub fn verify_cpu_current_parity(left: &Path, right: &Path) -> Result<Value> {
+    let left_verified = verify_cpu_current_evaluation(left)?;
+    let right_verified = verify_cpu_current_evaluation(right)?;
+    let mut a: CurrentReceipt = read_json(&left.join(CPU_CARE_EVALUATION_FILE))?;
+    let b: CurrentReceipt = read_json(&right.join(CPU_CARE_EVALUATION_FILE))?;
+    if !matches!(
+        (a.mode.as_str(), b.mode.as_str()),
+        (MODE, FULL_MODE) | (FULL_MODE, MODE)
+    ) {
+        return Err(
+            "Current parity requires one actual full-actor control and one bare assessment".into(),
+        );
+    }
+    a.request.output = b.request.output.clone();
+    if hash_value(&a.request)? != hash_value(&b.request)?
+        || left_verified["comparison"] != right_verified["comparison"]
+    {
+        return Err(
+            "Current parity source, request, binary or native initial controls differ".into(),
+        );
+    }
+    for name in ["first-input.json", "care-trace.json"] {
+        if fs::read(left.join(name))? != fs::read(right.join(name))? {
+            return Err("Current full/bare actual inputs or actions differ".into());
+        }
+    }
+    if read_cpu_private_checkpoint_bytes(left, 64 * 1024 * 1024)?
+        != read_cpu_private_checkpoint_bytes(right, 64 * 1024 * 1024)?
+    {
+        return Err("Current full/bare complete private checkpoints differ".into());
+    }
+    Ok(
+        json!({"parity_verified":true,"source_current_sha256":a.request.expected_current_sha256,
+        "full_actor_and_adam_preserved":true,"source_private_life_preserved":true,
+        "actual_inputs_and_actions_exact":true,"new_private_checkpoint_exact":true,
+        "native_initial_controls_and_executable_exact":true,"same_individual_restore":false,
+        "scope":"actual saved policy head in matched new CPU lives; not saved GPU private-life or cross-platform restoration",
+        "automatic_adoption":false}),
+    )
 }
 
 #[cfg(test)]
