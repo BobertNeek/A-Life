@@ -70,7 +70,7 @@ fn balanced_gradient(
     weighted_gradient(actor, episodes, [0.5, 0.5])
 }
 
-fn weighted_gradient(
+pub(super) fn weighted_gradient(
     actor: &CpuFoundationTrainer,
     episodes: &[Episode],
     class_budget: [f32; 2],

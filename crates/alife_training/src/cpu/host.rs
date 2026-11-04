@@ -1349,11 +1349,12 @@ pub(super) fn validate_record_founder(
             .phenotype()
             .development_state_at(record.biochemistry().tick)?,
     )?;
-    let (compiled, _) = if p.experimental_language_input().is_some() {
-        PhenotypeCompiler::compile_experimental_n2048_language_candidate(
+    let (compiled, _) = if let Some(profile) = p.experimental_language_input() {
+        PhenotypeCompiler::compile_experimental_n2048_language_profile(
             genome.clone(),
             development,
             founder.source_foundation.clone(),
+            profile,
         )?
     } else {
         PhenotypeCompiler::compile_n2048_foundation_candidate(

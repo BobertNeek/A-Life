@@ -411,6 +411,21 @@ pub fn continue_language_curriculum(
     output: &Path,
     config: LanguagePilotConfig,
 ) -> Result<Value> {
+    continue_curriculum(source, output, config, false)
+}
+pub fn continue_embodied_language_curriculum(
+    source: &Path,
+    output: &Path,
+    config: LanguagePilotConfig,
+) -> Result<Value> {
+    continue_curriculum(source, output, config, true)
+}
+fn continue_curriculum(
+    source: &Path,
+    output: &Path,
+    config: LanguagePilotConfig,
+    embodied: bool,
+) -> Result<Value> {
     if !config.experimental_word_bridge
         || !(1..=2).contains(&config.rounds)
         || !(1..=64).contains(&config.epochs)
@@ -422,7 +437,12 @@ pub fn continue_language_curriculum(
         );
     }
     let previous: Value = serde_json::from_slice(&fs::read(source.join("results.json"))?)?;
-    if previous["kind"] != "experimental-retained-grounded-language-v3"
+    let expected_kind = if embodied {
+        "experimental-shared-speech-gates-v6"
+    } else {
+        "experimental-retained-grounded-language-v3"
+    };
+    if previous["kind"] != expected_kind
         || previous["config"]["seed"] != config.seed
         || previous["config"]["experimental_word_bridge"] != true
     {
@@ -465,6 +485,52 @@ pub fn continue_language_curriculum(
         let source_actor = identity(&actor.checkpoint())?;
         let source_private = identity(&retained.checkpoint(&actor)?)?;
         let start_step = actor.optimizer_step();
+        let mut baseline = Value::Null;
+        let mut fork_initial = Value::Null;
+        if embodied {
+            let (fork, _) = actor.fork_embodied_language_input_experiment(&recovery.inputs)?;
+            actor = fork;
+            let ids = actor
+                .phenotype()
+                .synapses()
+                .iter()
+                .enumerate()
+                .filter_map(|(i, s)| match s.kind() {
+                    CompiledSynapseKind::Recurrent => Some(i as u32),
+                    CompiledSynapseKind::Decoder(c)
+                        if matches!(
+                            c.head(),
+                            DecoderHeadKind::ActionCandidate | DecoderHeadKind::SpeechPayload
+                        ) =>
+                    {
+                        Some(i as u32)
+                    }
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            actor.set_stage_mask(StageTrainableMask::from_synapse_indices(
+                actor.phenotype(),
+                &ids,
+            )?)?;
+            fork_initial = json!({"new_founder":true,"source_private_migrated":false,"actor_sha256":identity(&actor.checkpoint())?,"profile":actor.phenotype().experimental_language_input()});
+            eprintln!("embodied speech {arm:?}: untreated new-profile baseline");
+            let file = fs::OpenOptions::new()
+                .create_new(true)
+                .write(true)
+                .open(output.join(format!("baseline-{arm:?}.jsonl.zst")))?;
+            let mut baseline_trace = zstd::stream::write::Encoder::new(file, 3)?;
+            baseline = json!(evaluate(
+                &actor,
+                &asset,
+                config,
+                arm,
+                AssessmentPlan {
+                    recovery_sleep: true
+                },
+                &mut baseline_trace
+            )?);
+            baseline_trace.finish()?;
+        }
         let (mut collections, mut updates, mut next_gradient) = (Vec::new(), Vec::new(), None);
         for round in 0..config.rounds {
             eprintln!("grounded curriculum {arm:?} round {round}: paired native collection");
@@ -480,7 +546,21 @@ pub fn continue_language_curriculum(
             eprintln!("collection receipt {receipt}");
             collections.push(receipt);
             for epoch in 0..config.epochs {
-                let (gradient, objective) = gradients(&actor, &episodes)?;
+                let (gradient, objective) = if embodied {
+                    let (mut action, action_objective) =
+                        gradients_with_speech(&actor, &episodes, false)?;
+                    let (speech, speech_objective) =
+                        payload_stage::weighted_gradient(&actor, &episodes, [0.9, 0.1])?;
+                    for (dst, src) in action.iter_mut().zip(speech) {
+                        *dst += src;
+                    }
+                    (
+                        action,
+                        json!({"action":action_objective,"speech":speech_objective}),
+                    )
+                } else {
+                    gradients(&actor, &episodes)?
+                };
                 let before = actor.checkpoint();
                 let norm = actor.apply_gradients(&gradient)?;
                 preserve_frozen(&before, &actor.checkpoint())?;
@@ -505,10 +585,10 @@ pub fn continue_language_curriculum(
         )?;
         let evaluation =
             continuity["native_private_and_optimizer_hashes"]["assessment"]["evaluation"].clone();
-        arms.push(json!({"arm":arm,"source_actor_sha256":source_actor,"source_private_sha256":source_private,"source_step":start_step,"actor_step":actor.optimizer_step(),"actor_sha256":identity(&actor.checkpoint())?,"collections":collections,"updates":updates,"evaluation":evaluation,"continuity":continuity}));
+        arms.push(json!({"arm":arm,"source_actor_sha256":source_actor,"source_private_sha256":source_private,"source_step":start_step,"actor_step":actor.optimizer_step(),"actor_sha256":identity(&actor.checkpoint())?,"new_profile_fork":fork_initial,"untreated_profile_baseline":baseline,"collections":collections,"updates":updates,"evaluation":evaluation,"continuity":continuity}));
     }
     traces.finish()?;
-    let report = json!({"kind":"experimental-request-contingent-language-v4","execution_domain":"native-cpu","config":config,"source_report_sha256":identity(&previous)?,"teacher_translation_deliveries":translations,"semantic_prior_enabled":false,"arms":arms,"elapsed_seconds":started.elapsed().as_secs_f64(),"limitations":["Scripted teacher unless verified optional provider receipts exist.","Continues both previously measured treatment histories; fresh cohorts preserve the actual native actor/Adam state, not same-individual online training.","Only audible requests or genuine completed-activity narration have action labels. Quiet behavior remains unconstrained.","Narration labels actual completed activity, including nonrequested activity; this is separate from request compliance.","Contact-first lessons and relocated contact/near assessment; no new far-navigation claim.","Sleep assessment uses explicit native RecoveryProtocol sleep, not spontaneous natural sleep.","Conditional recurrent replay retains recorded fast/lifetime offsets and memory context."]});
+    let report = json!({"kind":if embodied{"experimental-embodied-speech-input-v7"}else{"experimental-request-contingent-language-v4"},"execution_domain":"native-cpu","config":config,"source_report_sha256":identity(&previous)?,"teacher_translation_deliveries":translations,"semantic_prior_enabled":false,"arms":arms,"elapsed_seconds":started.elapsed().as_secs_f64(),"limitations":["Scripted teacher unless verified optional provider receipts exist.","Continues both previously measured treatment histories; fresh cohorts preserve the actual native actor/Adam state, not same-individual online training.","Only audible requests or genuine completed-activity narration have action labels. Quiet behavior remains unconstrained.","Narration labels actual completed activity, including nonrequested activity; this is separate from request compliance.","Contact-first lessons and relocated contact/near assessment; no new far-navigation claim.","Sleep assessment uses explicit native RecoveryProtocol sleep, not spontaneous natural sleep.","Conditional recurrent replay retains recorded fast/lifetime offsets and memory context."]});
     write_json(&output.join("results.json"), &report)?;
     Ok(report)
 }

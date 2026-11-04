@@ -2,6 +2,7 @@
 //! Teacher labels only enter detached native BPTT. Every collected transition,
 //! reward, motor bundle and speech emission comes from the canonical CPU host.
 use super::*;
+use alife_core::phenotype::ExperimentalLanguageInputV1;
 use alife_core::*;
 use alife_semantic::{BoundedSpeechTranslator, TranslationAssistance};
 use alife_training::{
@@ -16,7 +17,8 @@ mod curriculum;
 #[cfg(test)]
 mod provider_probe;
 pub use curriculum::{
-    continue_language_curriculum, refine_language_payload, refine_language_shared_gates,
+    continue_embodied_language_curriculum, continue_language_curriculum, refine_language_payload,
+    refine_language_shared_gates,
 };
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -150,6 +152,17 @@ fn compile_profile(
     asset: &FoundationWeightAsset,
     bridge: bool,
 ) -> Result<(BrainPhenotype, PhenotypeCompilerInputs)> {
+    compile_input_profile(
+        seed,
+        asset,
+        bridge.then_some(ExperimentalLanguageInputV1::TwoTokenReadoutBroadcastV1),
+    )
+}
+fn compile_input_profile(
+    seed: u64,
+    asset: &FoundationWeightAsset,
+    profile: Option<ExperimentalLanguageInputV1>,
+) -> Result<(BrainPhenotype, PhenotypeCompilerInputs)> {
     let initial = game(seed, seed, asset)?;
     let record = initial
         .world
@@ -164,12 +177,13 @@ fn compile_profile(
         &capacity,
         &record.phenotype().development_state_at(Tick::ZERO)?,
     )?;
-    if bridge {
+    if let Some(profile) = profile {
         Ok(
-            PhenotypeCompiler::compile_experimental_n2048_language_candidate(
+            PhenotypeCompiler::compile_experimental_n2048_language_profile(
                 genome,
                 development,
                 asset.clone(),
+                profile,
             )?,
         )
     } else {
@@ -560,6 +574,13 @@ fn sequence(
 }
 
 fn gradients(actor: &CpuFoundationTrainer, episodes: &[Episode]) -> Result<(Vec<f32>, Value)> {
+    gradients_with_speech(actor, episodes, true)
+}
+fn gradients_with_speech(
+    actor: &CpuFoundationTrainer,
+    episodes: &[Episode],
+    supervise_speech: bool,
+) -> Result<(Vec<f32>, Value)> {
     let mut sum = vec![0.; actor.weights().len()];
     let mut loss = 0.0f64;
     let mut windows = 0;
@@ -604,7 +625,11 @@ fn gradients(actor: &CpuFoundationTrainer, episodes: &[Episode]) -> Result<(Vec<
                 );
             }
             let mut speech = vec![None; start];
-            speech.extend_from_slice(&episode.speech[start..end]);
+            if supervise_speech {
+                speech.extend_from_slice(&episode.speech[start..end]);
+            } else {
+                speech.resize(end, None);
+            }
             let probe = actor.probe_replay_gradients_with_speech(&sequence, &adjoints, &speech)?;
             let scale = (end - start) as f32 / episode.rows.len() as f32 / episodes.len() as f32;
             for (dst, src) in sum.iter_mut().zip(probe.gradients) {
@@ -706,10 +731,10 @@ fn preserve_frozen(
 fn export(actor: &mut CpuFoundationTrainer, seed: u64) -> Result<FoundationWeightAsset> {
     let before = actor.checkpoint();
     let asset = actor.export_candidate(TrainingStageManifest::new(1, 1, 1))?;
-    let (p, _) = compile_profile(
+    let (p, _) = compile_input_profile(
         seed,
         &asset,
-        actor.phenotype().experimental_language_input().is_some(),
+        actor.phenotype().experimental_language_input(),
     )?;
     actor.rebind_for_next_cohort(p, asset.clone())?;
     let after = actor.checkpoint();
@@ -1150,11 +1175,8 @@ fn exact_reload_plan(
     for _ in 0..4 {
         host.step(actor, 1.)?;
     }
-    let (_, inputs) = compile_profile(
-        seed,
-        asset,
-        actor.phenotype().experimental_language_input().is_some(),
-    )?;
+    let (_, inputs) =
+        compile_input_profile(seed, asset, actor.phenotype().experimental_language_input())?;
     let recovery = Recovery {
         kind: "disposable-retained-language-pilot-v1".into(),
         inputs,
@@ -1293,6 +1315,103 @@ pub fn run_retained_language_pilot(output: &Path, config: LanguagePilotConfig) -
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn embodied_profile_forks_new_founder_without_resetting_optimizer_or_migrating_private_life() {
+        let seed = 847_501;
+        let asset = initial_n2048_care_asset(seed).unwrap();
+        let legacy = new_actor_profile(seed, &asset, false).unwrap();
+        let mut actor = new_actor_profile(seed, &asset, true).unwrap();
+        assert_eq!(
+            identity(legacy.phenotype()).unwrap(),
+            "7b7aca53bb50bdefd162c0b88ea990026004192fec2d85848c2fde16ecf9a308"
+        );
+        assert_eq!(
+            identity(actor.phenotype()).unwrap(),
+            "a57d7dbbdaa174d3c02988822c4a549616d2fae387adc69b51d4698a26fea054"
+        );
+        let (_, ordinary_inputs) = compile_profile(seed, &asset, false).unwrap();
+        assert!(legacy
+            .fork_embodied_language_input_experiment(&ordinary_inputs)
+            .is_err());
+        let (mut subject, scene) = host(seed, seed, &asset, &actor, 0, false).unwrap();
+        let id = subject.world().organism_entity_ids()[0].0;
+        let pos = speech_position(subject.world()).unwrap();
+        subject
+            .world_mut()
+            .emit_player_tokens(
+                Some(id),
+                pos,
+                vec![
+                    LanguageTokenId::new(8).unwrap(),
+                    LanguageTokenId::new(1).unwrap(),
+                ],
+            )
+            .unwrap();
+        let row = subject.step(&actor, 1.).unwrap().decisions.remove(0);
+        let label = action_label(&row, Goal::EatFood, scene, false).unwrap();
+        let episode = Episode {
+            speech: vec![Some(ReplaySpeechTarget {
+                token: None,
+                continuation: [0; 5],
+                act: SpeechActKind::Declare,
+                weight: 0.25,
+            })],
+            labels: vec![label],
+            rows: vec![row],
+        };
+        let (gradient, _) = gradients(&actor, &[episode]).unwrap();
+        actor.apply_gradients(&gradient).unwrap();
+        let asset = export(&mut actor, seed).unwrap();
+        let (_, inputs) = compile_profile(seed, &asset, true).unwrap();
+        let (resident, _) = host(seed, seed, &asset, &actor, 0, false).unwrap();
+        let private = resident.checkpoint(&actor).unwrap();
+        let source = actor.checkpoint();
+        let source_hash = identity(&source).unwrap();
+        let (fork, new_inputs) = actor
+            .fork_embodied_language_input_experiment(&inputs)
+            .unwrap();
+        assert_eq!(identity(&actor.checkpoint()).unwrap(), source_hash);
+        let copied = fork.checkpoint();
+        assert_eq!(copied.weights, source.weights);
+        assert_eq!(copied.first_moment, source.first_moment);
+        assert_eq!(copied.second_moment, source.second_moment);
+        assert_eq!(copied.update_ages, source.update_ages);
+        assert_eq!(copied.optimizer_step, source.optimizer_step);
+        assert_eq!(copied.stage_mask, source.stage_mask);
+        assert!(source.update_ages.iter().any(|a| *a > 0));
+        assert_eq!(fork.phenotype().synapses(), actor.phenotype().synapses());
+        assert_ne!(
+            fork.phenotype().phenotype_hash(),
+            actor.phenotype().phenotype_hash()
+        );
+        assert_eq!(
+            new_inputs.experimental_language_input(),
+            Some(ExperimentalLanguageInputV1::TwoTokenAndEmbodiedSpeechV2)
+        );
+        assert_eq!(
+            fork.phenotype().sensor_encoder().assignments().len(),
+            actor.phenotype().sensor_encoder().assignments().len() + 30
+        );
+        for (group, index) in [
+            (SensorEncoderSourceGroup::SensoryChannel, 34),
+            (SensorEncoderSourceGroup::SensoryChannel, 37),
+            (SensorEncoderSourceGroup::Homeostasis, 0),
+        ] {
+            assert!(fork
+                .phenotype()
+                .sensor_encoder()
+                .assignments()
+                .iter()
+                .any(|a| a.source_group() == group
+                    && a.source_index() == index
+                    && (1856..1888).contains(&a.target_neuron())));
+        }
+        assert!(CpuCanonicalHost::from_checkpoint(private.clone(), &fork).is_err());
+        assert!(CpuCanonicalHost::from_checkpoint(private, &actor).is_ok());
+        let (fresh, _) = host(seed, seed, &asset, &fork, 0, false).unwrap();
+        assert!(CpuCanonicalHost::from_checkpoint(fresh.checkpoint(&fork).unwrap(), &fork).is_ok());
+    }
 
     #[test]
     #[ignore = "explicit native causal capture; requires a new audit output directory"]

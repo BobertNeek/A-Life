@@ -20,6 +20,19 @@ impl PhenotypeCompiler {
         development: DevelopmentState,
         asset: FoundationWeightAsset,
     ) -> Result<(BrainPhenotype, PhenotypeCompilerInputs), ScaffoldContractError> {
+        Self::compile_experimental_n2048_language_profile(
+            genome,
+            development,
+            asset,
+            super::ExperimentalLanguageInputV1::TwoTokenReadoutBroadcastV1,
+        )
+    }
+    pub fn compile_experimental_n2048_language_profile(
+        genome: BrainGenome,
+        development: DevelopmentState,
+        asset: FoundationWeightAsset,
+        profile: super::ExperimentalLanguageInputV1,
+    ) -> Result<(BrainPhenotype, PhenotypeCompilerInputs), ScaffoldContractError> {
         let capacity = BrainCapacityClass::n2048();
         let inputs = PhenotypeCompilerInputs::try_new_with_n2048_candidate(
             genome,
@@ -28,9 +41,7 @@ impl PhenotypeCompiler {
             asset.manifest().sensor_profile(),
             asset,
         )?
-        .with_experimental_language_input(
-            super::ExperimentalLanguageInputV1::TwoTokenReadoutBroadcastV1,
-        )?;
+        .with_experimental_language_input(profile)?;
         let phenotype = Self::compile_validated(&inputs, &capacity)?;
         Ok((phenotype, inputs))
     }

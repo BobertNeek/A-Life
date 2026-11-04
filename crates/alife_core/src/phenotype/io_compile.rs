@@ -58,6 +58,28 @@ pub(super) fn compile_encoder_for_inputs(
             1.0,
         ));
     }
+    if inputs.experimental_language_input()
+        == Some(super::ExperimentalLanguageInputV1::TwoTokenAndEmbodiedSpeechV2)
+    {
+        // Raw native bodily senses, not event labels or word meanings. This
+        // gives speech the holding/taste/need signals missing from sparse support.
+        for offset in 0..30_u32 {
+            let (group, index) = if offset < 8 {
+                (SensorEncoderSourceGroup::SensoryChannel, 32 + offset as u16)
+            } else {
+                (SensorEncoderSourceGroup::Homeostasis, (offset - 8) as u16)
+            };
+            assignments.push(SensorEncoderAssignment::new(
+                group,
+                index,
+                motor.start + 128 + offset,
+                0.5,
+                0.,
+                -1.,
+                1.,
+            ));
+        }
+    }
     assignments.sort_by_key(|a| (a.target_neuron(), a.source_group().raw(), a.source_index()));
     SensorEncoderPlan::try_new(inputs.sensor_profile(), assignments)
 }
