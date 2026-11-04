@@ -206,8 +206,10 @@ BATTERY_DIRECTORY NEW_OUTPUT`, then run `python3 scripts/audit_retained_bridge.p
 NEW_OUTPUT` (NumPy required), followed by the motor example with
 `BATTERY_DIRECTORY NEW_OUTPUT`.
 
-The bridge restores six saved decisions from each of the held and ordinarily
-aged feeding cases. It records actual candidate identities, features, recurrent
+The bridge reexecutes six decisions from each saved initial held and ordinarily
+aged feeding case. Use the battery's exact source/executable semantics: a newer
+world or candidate-enumeration contract can legitimately change its trace and is
+not evidence of a decoder fault. It records actual candidate identities, features, recurrent
 state, mutable offsets, logits and temperature-1 training-sampler state. Replay
 controls remove the acquired edge, then remove both acquired edges and dendrites;
 both retain base somatic weights and the same input state. These controls measure

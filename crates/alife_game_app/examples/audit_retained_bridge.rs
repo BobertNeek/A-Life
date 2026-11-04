@@ -35,6 +35,9 @@ fn main() -> Result<()> {
     if !(a.len() == 4 || a.len() == 5 && a[4] == "--offline-wgsl") {
         return Err("CURRENT EXPECTED_SHA BATTERY_DIRECTORY NEW_OUTPUT [--offline-wgsl]".into());
     }
+    if a.len() == 5 && !cfg!(feature = "gpu-tests") {
+        return Err("--offline-wgsl requires the explicit gpu-tests build feature".into());
+    }
     let source_path = Path::new(&a[0]);
     let bytes = fs::read(source_path)?;
     if format!("{:x}", Sha256::digest(&bytes)) != a[1] {
@@ -189,6 +192,7 @@ fn main() -> Result<()> {
                         row.sampling_counter.ok_or("sampling counter absent")?,
                         1.,
                     )?;
+                    #[allow(unused_mut)]
                     let mut record = json!({"variant":variant,"sequence":q,"cpu":evaluation(&cpu),"cpu_sample":sample});
                     #[cfg(feature = "gpu-tests")]
                     if let Some(gpu) = gpu.as_mut() {
@@ -248,6 +252,7 @@ fn main() -> Result<()> {
     q.initial.activations = (0..p.neuron_count())
         .map(|i| 0.03 + (i % 11) as f32 * 0.007)
         .collect();
+    #[allow(unused_mut)]
     let mut synthetic = json!({"scope":"arithmetic qualification only; artificial inputs are not scored trials","sequence":q,"cpu":evaluation(&founder.evaluate_replay(&q)?)});
     #[cfg(feature = "gpu-tests")]
     if let Some(gpu) = gpu.as_mut() {
