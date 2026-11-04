@@ -100,7 +100,14 @@ fn instruction_choice(
     s: Scene,
     requested: Lesson,
     grasp_legal: bool,
+    requested_held: bool,
 ) -> Option<&ActionCandidate> {
+    if requested != Lesson::EatFood && requested_held {
+        return frame
+            .candidates()
+            .iter()
+            .find(|c| c.family == CandidateActionFamily::Idle);
+    }
     if grasp_legal {
         let primitive = if requested == Lesson::EatFood {
             HeadlessActionIds::EAT
@@ -129,6 +136,7 @@ fn action_target(
     narrate: bool,
     heard: bool,
     grasp_legal: bool,
+    requested_held: bool,
 ) -> Result<ImitationTarget> {
     if row.action.motor_masks[3] != 0 {
         return Err("factorial experiment requires representative-only vocal arbitration".into());
@@ -140,7 +148,7 @@ fn action_target(
             .iter()
             .find(|c| c.kind == ActionKind::Vocalize)
     } else if heard {
-        instruction_choice(frame, s, requested, grasp_legal)
+        instruction_choice(frame, s, requested, grasp_legal, requested_held)
     } else {
         None
     };
@@ -218,6 +226,7 @@ fn collect_factorial(
                 }
                 let legal_grasp = h.world().can_grab_target(id, requested.target(s));
                 let before = owners(h.world(), s);
+                let requested_held = before[usize::from(requested == Lesson::GetToy)] == Some(id);
                 let step = h.step(actor, 1.)?;
                 let after = owners(h.world(), s);
                 for row in step.decisions {
@@ -231,8 +240,15 @@ fn collect_factorial(
                         .any(|t| t.source_kind == UtteranceSourceKind::Teacher);
                     heard += usize::from(is_heard);
                     let speech = narration(f, pending.as_ref(), left);
-                    let label =
-                        action_target(&row, s, requested, speech.is_some(), is_heard, legal_grasp)?;
+                    let label = action_target(
+                        &row,
+                        s,
+                        requested,
+                        speech.is_some(),
+                        is_heard,
+                        legal_grasp,
+                        requested_held,
+                    )?;
                     if speech.is_some() {
                         positive += 1;
                         left -= 1;
@@ -594,7 +610,7 @@ pub fn continue_factorial_grounded_language(
         arms.push(json!({"arm":arm,"common_source_actor_sha256":initial,"source_private_sha256":source_private,"source_step":start,"actor_step":actor.optimizer_step(),"actor_sha256":identity(&actor.checkpoint())?,"collections":collections,"updates":updates,"evaluation":evaluation,"continuity":continuity}));
     }
     trace.finish()?;
-    let report = json!({"kind":"experimental-factorial-legal-action-v10","execution_domain":"native-cpu","config":c,"source_report_sha256":identity(&old)?,"lessons":Lesson::ALL,"training_distances":[0.36,0.44],"native_grasp_legality_for_teaching":true,"common_baseline":baseline,"semantic_prior_enabled":false,"teacher":"scripted ordinary spatial speech","arms":arms,"elapsed_seconds":started.elapsed().as_secs_f64(),"limitations":["One common retained V8 history and seed; NoSpeech removes incremental teacher requests, not prior learning or truthful offline activity labels.","Training and assessment both stop request speech after any genuine completed activity; narration keeps the original three eligible quiet-row criterion.","GetFood ownership distinguishes noun choice from GetToy and action choice from EatFood. Missing physical activity classes receive no invented payload labels.","First-event discrimination is reported separately from eventual requested completion: grabbing food can be a legitimate prefix to eating food.","Native actor/Adam continuation across fresh cohorts; exact private/cold/sleep recovery is measured, not same-individual live optimizer rebase.","Induced RecoveryProtocol sleep, relocated contact/near fixtures and visible distractor; no spontaneous sleep or far-navigation claim.","Multiple targeted curriculum changes; no equal-dose old-objective arm, no real SLM delivery claim."]});
+    let report = json!({"kind":"experimental-factorial-hold-aware-v11","execution_domain":"native-cpu","config":c,"source_report_sha256":identity(&old)?,"lessons":Lesson::ALL,"training_distances":[0.36,0.44],"native_grasp_legality_for_teaching":true,"common_baseline":baseline,"semantic_prior_enabled":false,"teacher":"scripted ordinary spatial speech","arms":arms,"elapsed_seconds":started.elapsed().as_secs_f64(),"limitations":["One common retained V8 history and seed; NoSpeech removes incremental teacher requests, not prior learning or truthful offline activity labels.","Training and assessment both stop request speech after any genuine completed activity; narration keeps the original three eligible quiet-row criterion.","GetFood ownership distinguishes noun choice from GetToy and action choice from EatFood. Missing physical activity classes receive no invented payload labels.","First-event discrimination is reported separately from eventual requested completion: grabbing food can be a legitimate prefix to eating food.","Native actor/Adam continuation across fresh cohorts; exact private/cold/sleep recovery is measured, not same-individual live optimizer rebase.","Induced RecoveryProtocol sleep, relocated contact/near fixtures and visible distractor; no spontaneous sleep or far-navigation claim.","Multiple targeted curriculum changes; no equal-dose old-objective arm, no real SLM delivery claim."]});
     write_json(&output.join("results.json"), &report)?;
     Ok(report)
 }
@@ -629,7 +645,7 @@ mod tests {
         assert!(h.world().can_grab_target(id, s.food));
         let legacy = vocabulary_reception_choice(&frame, Some(9), Some(s.food), None).unwrap();
         assert_eq!(legacy.action_id, HeadlessActionIds::APPROACH);
-        let chosen = instruction_choice(&frame, s, Lesson::GetFood, true).unwrap();
+        let chosen = instruction_choice(&frame, s, Lesson::GetFood, true, false).unwrap();
         assert_eq!(chosen.action_id, HeadlessActionIds::GRAB);
         assert_eq!(chosen.target.entity, Some(s.food));
         let cmd = chosen.to_command(id, Confidence::new(1.).unwrap()).unwrap();
@@ -644,6 +660,31 @@ mod tests {
         );
         assert_eq!(h.world().entity(s.food).unwrap().carried_by, Some(id));
         assert!(receipt.biology_after.body.energy <= bio.body.energy);
+        assert!(h.world().can_grab_target(id, s.food)); // native same-target Grab releases
+        assert!(!h.world().can_grab_target(id, s.toy)); // other object cannot occupy the grip
+        h.world_mut().try_advance_tick().unwrap();
+        let tick = h.world().tick();
+        let after = *h
+            .world()
+            .organism_registry()
+            .get(id)
+            .unwrap()
+            .biochemistry();
+        let f = h
+            .world_mut()
+            .perception_frame(
+                id,
+                tick,
+                actor.phenotype().sensor_profile(),
+                after.homeostasis,
+            )
+            .unwrap();
+        assert_eq!(
+            instruction_choice(&f, s, Lesson::GetFood, true, true)
+                .unwrap()
+                .kind,
+            ActionKind::Idle
+        );
         assert_ne!(Lesson::GetFood.words(), Lesson::GetToy.words());
         assert_eq!(Lesson::GetFood.words()[0], Lesson::GetToy.words()[0]);
     }
