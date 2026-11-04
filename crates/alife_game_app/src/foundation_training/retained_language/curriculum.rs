@@ -639,7 +639,7 @@ mod tests {
         assert_eq!(episodes.len(), 8);
         assert!(receipt["teacher_heard_frames"].as_u64().unwrap() > 0);
         assert!(receipt["action_label_rows"].as_u64().unwrap() > 0);
-        for pair in episodes.chunks_exact(2) {
+        for pair in episodes.as_chunks::<2>().0 {
             let left = &pair[0].rows[0];
             let right = &pair[1].rows[0];
             assert_eq!(left.initial, right.initial);

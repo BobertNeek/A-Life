@@ -148,6 +148,41 @@ fn speech_gradient(
     }
     Ok(g)
 }
+fn positive_loss(actor: &CpuFoundationTrainer, episodes: &[Episode]) -> Result<f64> {
+    let mass = episodes
+        .iter()
+        .flat_map(|e| e.speech.iter().flatten())
+        .filter(|t| t.token.is_some())
+        .map(|t| t.weight * t.len() as f32)
+        .sum::<f32>();
+    let mut loss = 0.;
+    for e in episodes {
+        let q = sequence(actor, e, e.rows.len(), 0);
+        let targets = e
+            .speech
+            .iter()
+            .map(|t| t.filter(|t| t.token.is_some()))
+            .collect::<Vec<_>>();
+        let amount = targets
+            .iter()
+            .flatten()
+            .map(|t| t.weight * t.len() as f32)
+            .sum::<f32>();
+        if amount == 0. {
+            continue;
+        }
+        let zero = q
+            .ticks
+            .iter()
+            .map(|t| vec![0.; t.candidates.len()])
+            .collect::<Vec<_>>();
+        loss += actor
+            .probe_replay_gradients_with_speech(&q, &zero, &targets)?
+            .objective
+            * f64::from(amount / mass);
+    }
+    Ok(loss)
+}
 fn gate_finite_difference(
     actor: &CpuFoundationTrainer,
     asset: &FoundationWeightAsset,
@@ -263,7 +298,50 @@ fn diagnose_actual_v2_gate_targets_and_native_gradients() {
                 .sum::<f64>()
                 .sqrt()
         };
-        arms.push(json!({"arm":arm,"initial_actor_sha256":identity(&initial.checkpoint()).unwrap(),"presence_finite_difference":gate_finite_difference(&initial,&asset,&e).unwrap(),"initial":measurements(&initial,&e).unwrap(),"trained":measurements(&final_actor,&e).unwrap(),"gradient_norms":{"positive_speech_decoder":norm(&pos,Some(DecoderHeadKind::SpeechPayload),false),"quiet_speech_decoder":norm(&quiet,Some(DecoderHeadKind::SpeechPayload),false),"positive_recurrent":norm(&pos,None,false),"quiet_recurrent":norm(&quiet,None,false),"action_recurrent":norm(&action,None,false),"action_speech_decoder":norm(&action,Some(DecoderHeadKind::SpeechPayload),false),"positive_presence_decoder":norm(&pos,Some(DecoderHeadKind::SpeechPayload),true),"quiet_presence_decoder":norm(&quiet,Some(DecoderHeadKind::SpeechPayload),true)}}));
+        let presence_target = initial.phenotype().candidate_decoder().motor_start() + 176;
+        let presence_ids=initial.phenotype().synapses().iter().enumerate().filter(|(_,s)|matches!(s.kind(),CompiledSynapseKind::Decoder(c)if c.head()==DecoderHeadKind::SpeechPayload)&&s.target()==presence_target).map(|(i,_)|i).collect::<Vec<_>>();
+        let dot = presence_ids
+            .iter()
+            .map(|&i| f64::from(pos[i]) * f64::from(quiet[i]))
+            .sum::<f64>();
+        let squared = presence_ids
+            .iter()
+            .map(|&i| f64::from(pos[i]).powi(2))
+            .sum::<f64>();
+        let quiet_squared = presence_ids
+            .iter()
+            .map(|&i| f64::from(quiet[i]).powi(2))
+            .sum::<f64>();
+        let baseline_positive_loss = positive_loss(&initial, &e).unwrap();
+        let mut interventions = vec![];
+        for (name, direction) in [
+            (
+                "previous_balanced_presence_direction",
+                presence_ids
+                    .iter()
+                    .map(|&i| 0.9 * pos[i] + 0.1 * quiet[i])
+                    .collect::<Vec<_>>(),
+            ),
+            (
+                "positive_presence_direction",
+                presence_ids.iter().map(|&i| pos[i]).collect::<Vec<_>>(),
+            ),
+        ] {
+            let norm = direction.iter().map(|x| x * x).sum::<f32>().sqrt();
+            let mut cp = initial.checkpoint();
+            for (&id, g) in presence_ids.iter().zip(direction) {
+                cp.weights[id] -= 0.01 * g / norm;
+            }
+            let perturbed = CpuFoundationTrainer::from_checkpoint(
+                initial.phenotype().clone(),
+                asset.clone(),
+                cp,
+            )
+            .unwrap();
+            interventions.push(json!({"kind":name,"presence_weight_l2_perturbation":0.01,"positive_loss_before":baseline_positive_loss,"positive_loss_after":positive_loss(&perturbed,&e).unwrap(),"no_optimizer_commit_or_behavior_claim":true}));
+        }
+        let gate_direction = json!({"positive_quiet_dot":dot,"positive_quiet_cosine":dot/(squared*quiet_squared).sqrt(),"positive_dot_previous_09_01_gate_gradient":0.9*squared+0.1*dot,"negative_value_means_previous_gate_descent_increases_positive_loss_locally":true,"coordinate_count":presence_ids.len()});
+        arms.push(json!({"arm":arm,"initial_actor_sha256":identity(&initial.checkpoint()).unwrap(),"presence_gradient_interaction":gate_direction,"direct_presence_weight_interventions":interventions,"presence_finite_difference":gate_finite_difference(&initial,&asset,&e).unwrap(),"initial":measurements(&initial,&e).unwrap(),"trained":measurements(&final_actor,&e).unwrap(),"gradient_norms":{"positive_speech_decoder":norm(&pos,Some(DecoderHeadKind::SpeechPayload),false),"quiet_speech_decoder":norm(&quiet,Some(DecoderHeadKind::SpeechPayload),false),"positive_recurrent":norm(&pos,None,false),"quiet_recurrent":norm(&quiet,None,false),"action_recurrent":norm(&action,None,false),"action_speech_decoder":norm(&action,Some(DecoderHeadKind::SpeechPayload),false),"positive_presence_decoder":norm(&pos,Some(DecoderHeadKind::SpeechPayload),true),"quiet_presence_decoder":norm(&quiet,Some(DecoderHeadKind::SpeechPayload),true)}}));
     }
     write_json(&dir.join("gate-diagnostic.json"),&json!({"kind":"actual-v2-native-gate-gradient-diagnostic","not_behavior_or_learning_claim":true,"arms":arms})).unwrap();
 }
