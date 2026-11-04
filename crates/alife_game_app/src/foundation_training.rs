@@ -32,8 +32,9 @@ mod comparison_identity;
 mod retained_language;
 #[cfg(feature = "cpu-training")]
 pub use retained_language::{
-    continue_action_gated_language, continue_embodied_language_curriculum,
-    continue_factorial_grounded_language, continue_language_curriculum, refine_language_payload,
+    continue_action_gated_language, continue_contrastive_grounded_language,
+    continue_embodied_language_curriculum, continue_factorial_grounded_language,
+    continue_focused_grounded_language, continue_language_curriculum, refine_language_payload,
     refine_language_shared_gates, reload_language_pilot_child, run_retained_language_pilot,
     LanguagePilotConfig,
 };
