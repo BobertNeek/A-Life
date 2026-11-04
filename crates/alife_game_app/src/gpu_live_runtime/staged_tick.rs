@@ -546,13 +546,14 @@ impl GpuLiveBrainRuntime {
                     .neural_receptors
                     .effects_for(&resident.phenotype, &neural_receptors)?;
                 preparation_stage = "grounded draft";
-                let draft = self.world.perception_frame_draft_indexed(
-                    OrganismId(raw),
-                    tick_before,
-                    self.sensor_profile,
-                    resident.homeostasis,
-                    &perception_index,
-                )?;
+                let (draft, candidate_binding) =
+                    self.world.perception_frame_draft_indexed_with_bindings(
+                        OrganismId(raw),
+                        tick_before,
+                        self.sensor_profile,
+                        resident.homeostasis,
+                        &perception_index,
+                    )?;
                 // This is the owner's hint snapshot boundary for this attempt.
                 // Poll once in roster order, freeze the returned context in the
                 // owned draft, and leave replies arriving after this point for
@@ -571,6 +572,7 @@ impl GpuLiveBrainRuntime {
                         approximate_cache: (!audited_cognition)
                             .then(|| resident.approximate_cache.clone()),
                         draft,
+                        candidate_binding,
                         sequence_id: ExperienceSequenceId(resident.next_sequence),
                         homeostasis: resident.homeostasis,
                         hysteresis: resident.attention_hysteresis,

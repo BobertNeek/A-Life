@@ -5,8 +5,8 @@ use std::collections::BTreeSet;
 use alife_core::{
     ActionCandidate, ActionId, ActionKind, ActionTarget, AffordanceBits, CandidateActionFamily,
     CandidateFeatureVector, CandidateObservationRef, Confidence, DurationTicks, NormalizedScalar,
-    ScaffoldContractError, SensorProfile, Validate, Vec3f, CANDIDATE_FEATURE_COUNT,
-    MAX_ACTION_CANDIDATES,
+    PerceptionFrameDraft, ScaffoldContractError, SensorProfile, TrackedObjectId, Validate, Vec3f,
+    WorldEntityId, CANDIDATE_FEATURE_COUNT, MAX_ACTION_CANDIDATES,
 };
 
 use crate::{
@@ -70,6 +70,55 @@ const OBJECT_ACTIONS: [(ActionId, ActionKind, CandidateActionFamily, f32); 6] = 
 const MAX_CANDIDATE_OBJECTS: usize = (MAX_ACTION_CANDIDATES - INTRINSIC_CANDIDATE_COUNT) / 6;
 const KNOWN_AFFORDANCE_MASK: u32 = (1 << CANDIDATE_FEATURE_AFFORDANCE_COUNT) - 1;
 
+/// Transient world-owned target transport from the exact observed snapshot.
+/// Kept outside the sensory/checkpoint ABI and never resolved through tracking
+/// history or a later world lookup during cognition preparation.
+#[derive(Debug, Clone, PartialEq)]
+pub struct GroundedCandidateBinding {
+    grounded: GroundedSensingFrame,
+    profile: SensorProfile,
+    active_contact: Option<WorldEntityId>,
+}
+
+impl GroundedCandidateBinding {
+    pub(crate) fn new(
+        grounded: GroundedSensingFrame,
+        profile: SensorProfile,
+        active_contact: Option<WorldEntityId>,
+    ) -> Self {
+        Self {
+            grounded,
+            profile,
+            active_contact,
+        }
+    }
+
+    pub fn candidates_for_focus(
+        &self,
+        draft: &PerceptionFrameDraft,
+        focal_object: Option<TrackedObjectId>,
+    ) -> Result<Vec<ActionCandidate>, ScaffoldContractError> {
+        // Semantic context/remembered novelty may be attached after capture;
+        // observed bodies, slots and original opportunities must still match.
+        if draft.organism_id() != self.grounded.sensory().organism_id
+            || draft.tick() != self.grounded.sensory().tick
+            || draft.sensor_profile() != self.profile
+            || draft.body() != self.grounded.body()
+            || draft.grounded_object_slots() != self.grounded.slots()
+            || draft.candidates()
+                != enumerate_grounded_candidates(&self.grounded, self.profile, self.active_contact)?
+        {
+            return Err(ScaffoldContractError::InvalidPerceptionFrame);
+        }
+        enumerate_grounded_candidates_with_focus(
+            &self.grounded,
+            self.profile,
+            self.active_contact,
+            focal_object,
+        )
+    }
+}
+
 pub fn enumerate_privileged_candidates(
     report: &HeadlessSensoryReport,
     profile: SensorProfile,
@@ -125,6 +174,17 @@ pub fn enumerate_grounded_candidates(
     grounded: &GroundedSensingFrame,
     profile: SensorProfile,
     active_contact: Option<alife_core::WorldEntityId>,
+) -> Result<Vec<ActionCandidate>, ScaffoldContractError> {
+    enumerate_grounded_candidates_with_focus(grounded, profile, active_contact, None)
+}
+
+/// Reserve current observed contact and primary focal objects within the same
+/// object budget. Identity alone cannot introduce an unobserved target.
+pub fn enumerate_grounded_candidates_with_focus(
+    grounded: &GroundedSensingFrame,
+    profile: SensorProfile,
+    active_contact: Option<WorldEntityId>,
+    focal_object: Option<TrackedObjectId>,
 ) -> Result<Vec<ActionCandidate>, ScaffoldContractError> {
     if !matches!(
         profile,
@@ -228,15 +288,31 @@ pub fn enumerate_grounded_candidates(
     }
 
     let mut selected = (0..grounded.slots().len().min(object_limit)).collect::<Vec<_>>();
-    if let Some(index) = grounded
+    let contact_index = grounded
         .transports()
         .iter()
         .position(|transport| Some(transport.transport_entity) == active_contact)
-        .filter(|index| grounded.slots()[*index].contact > 0.0)
-    {
+        .filter(|index| grounded.slots()[*index].contact > 0.0);
+    if let Some(index) = contact_index {
         if !selected.contains(&index) {
             if let Some(last) = selected.last_mut() {
                 *last = index;
+            }
+        }
+    }
+    if let Some(index) = grounded
+        .slots()
+        .iter()
+        .position(|slot| Some(slot.tracked_object_id) == focal_object)
+    {
+        if !selected.contains(&index) {
+            // Contact retains its reservation when focus competes for capacity.
+            if let Some(replaced) = selected
+                .iter_mut()
+                .rev()
+                .find(|i| Some(**i) != contact_index)
+            {
+                *replaced = index;
             }
         }
     }

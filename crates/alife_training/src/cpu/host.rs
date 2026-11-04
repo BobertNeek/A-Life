@@ -852,12 +852,13 @@ impl CpuCanonicalHost {
                 &receptors,
                 &NeuralReceptorPhenotype::compile(p)?,
             )?;
-            let draft = perception_world.perception_frame_draft(
-                id,
-                tick,
-                p.sensor_profile(),
-                record.biochemistry().homeostasis,
-            )?;
+            let (draft, candidate_binding) = perception_world
+                .perception_frame_draft_with_bindings(
+                    id,
+                    tick,
+                    p.sensor_profile(),
+                    record.biochemistry().homeostasis,
+                )?;
             let ordinary = draft.clone().with_semantic_context(None)?;
             let draft = prepare(draft, sequence)?;
             if draft.clone().with_semantic_context(None)? != ordinary {
@@ -868,6 +869,7 @@ impl CpuCanonicalHost {
             let preparation = prepare_canonical_frame(
                 &CanonicalPreparationInput {
                     draft,
+                    candidate_binding,
                     sequence_id: sequence,
                     homeostasis: record.biochemistry().homeostasis,
                     hysteresis: r.hysteresis,

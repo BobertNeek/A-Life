@@ -30,7 +30,8 @@ use alife_core::{
 };
 
 use crate::candidate_enumerator::{
-    enumerate_grounded_candidates, enumerate_privileged_candidates, HEADLESS_VISION_RADIUS,
+    enumerate_grounded_candidates, enumerate_privileged_candidates, GroundedCandidateBinding,
+    HEADLESS_VISION_RADIUS,
 };
 use crate::ecology::{
     deterministic_zone_position, EcologyConfig, EcologyMetrics, EcologySensorySummary,
@@ -3581,7 +3582,8 @@ impl HeadlessWorld {
         profile: SensorProfile,
         homeostasis: HomeostaticSnapshot,
     ) -> Result<PerceptionFrameDraft, ScaffoldContractError> {
-        self.perception_frame_draft_with_index(organism_id, tick, profile, homeostasis, None)
+        self.perception_frame_draft_with_bindings(organism_id, tick, profile, homeostasis)
+            .map(|(draft, _)| draft)
     }
 
     pub fn perception_frame_draft_indexed(
@@ -3592,6 +3594,38 @@ impl HeadlessWorld {
         homeostasis: HomeostaticSnapshot,
         index: &HeadlessPerceptionBatchIndex,
     ) -> Result<PerceptionFrameDraft, ScaffoldContractError> {
+        self.perception_frame_draft_indexed_with_bindings(
+            organism_id,
+            tick,
+            profile,
+            homeostasis,
+            index,
+        )
+        .map(|(draft, _)| draft)
+    }
+
+    /// Capture optional world-owned transport for subsequent focal reservation.
+    /// Both values come from one visibility-filtered, calibrated observation.
+    pub fn perception_frame_draft_with_bindings(
+        &mut self,
+        organism_id: OrganismId,
+        tick: Tick,
+        profile: SensorProfile,
+        homeostasis: HomeostaticSnapshot,
+    ) -> Result<(PerceptionFrameDraft, Option<GroundedCandidateBinding>), ScaffoldContractError>
+    {
+        self.perception_frame_draft_with_index(organism_id, tick, profile, homeostasis, None)
+    }
+
+    pub fn perception_frame_draft_indexed_with_bindings(
+        &mut self,
+        organism_id: OrganismId,
+        tick: Tick,
+        profile: SensorProfile,
+        homeostasis: HomeostaticSnapshot,
+        index: &HeadlessPerceptionBatchIndex,
+    ) -> Result<(PerceptionFrameDraft, Option<GroundedCandidateBinding>), ScaffoldContractError>
+    {
         self.perception_frame_draft_with_index(organism_id, tick, profile, homeostasis, Some(index))
     }
 
@@ -3602,7 +3636,8 @@ impl HeadlessWorld {
         profile: SensorProfile,
         homeostasis: HomeostaticSnapshot,
         index: Option<&HeadlessPerceptionBatchIndex>,
-    ) -> Result<PerceptionFrameDraft, ScaffoldContractError> {
+    ) -> Result<(PerceptionFrameDraft, Option<GroundedCandidateBinding>), ScaffoldContractError>
+    {
         homeostasis
             .validate_contract()
             .map_err(|_| ScaffoldContractError::InvalidPerceptionFrame)?;
@@ -3635,6 +3670,7 @@ impl HeadlessWorld {
                     provenance,
                     Vec::new(),
                 )
+                .map(|draft| (draft, None))
             }
             SensorProfile::GroundedObjectSlotsV1 | SensorProfile::GroundedTerrainVisionV1 => {
                 let terrain_vision = profile == SensorProfile::GroundedTerrainVisionV1;
@@ -3693,6 +3729,8 @@ impl HeadlessWorld {
                             .map(|(_, transport)| transport.transport_entity)
                     });
                 let candidates = enumerate_grounded_candidates(&grounded, profile, active_contact)?;
+                let binding =
+                    GroundedCandidateBinding::new(grounded.clone(), profile, active_contact);
                 let (mut sensory, body, slots, transports) = grounded.into_parts();
                 // Bind only already observed bodies to personal recognition.
                 // Physical identity is not a friendly label or learned affinity.
@@ -3796,6 +3834,7 @@ impl HeadlessWorld {
                     provenance,
                     slots,
                 )
+                .map(|draft| (draft, Some(binding)))
             }
         }
     }
