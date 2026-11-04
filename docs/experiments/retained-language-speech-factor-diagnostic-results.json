@@ -1,0 +1,3571 @@
+{
+  "kind": "source-safe-native-speech-factor-diagnostic-summary",
+  "execution_domain": "native-cpu",
+  "provenance": {
+    "source_head": "99e97e142bc5928cf3dd33b26658f55509e51700",
+    "test_binary_sha256": "e96aeea1efecb3477e0603a195b12ad8f4c84911f76e34350ae04a0aff7de1b5",
+    "raw_result_sha256": "3eb7e4f350d964a724c665e635c9a6c3661e8fc8d1fb41db2ea1cc0b6d86f07d",
+    "native_elapsed_seconds": 26.88333828,
+    "source_run": "/workspace/language-event-confirmed-v17-run",
+    "output": "/workspace/language-speech-factor-run/results.json",
+    "exact_repeat_native_rows_and_original_measurements": true,
+    "command": "cargo --config profile.test.package.alife_training.opt-level=2 test -p alife_game_app --features cpu-training --lib diagnose_native_cue_payload_and_voice_factors -- --ignored --nocapture"
+  },
+  "diagnostic_native_seconds": 26.88333828,
+  "distinct_native_decisions": 256,
+  "regenerated_rows_all_match_existing_v17": true,
+  "fresh_process_repeat_verification": {
+    "source_head": "5d4b0545df904ca9c8ba9825571abdf8bc672bca",
+    "binary_sha256": "47673e49f1b2705fa626f2638e5d0c15a46d779b37dd2d33c7d848b4a580085b",
+    "command": [
+      "/workspace/embodied-speech/target/debug/deps/alife_game_app-48eb3e07a78705a3",
+      "diagnose_native_cue_payload_and_voice_factors",
+      "--ignored",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "wall_seconds": 27.536521431000438,
+    "all_native_rows_and_factor_measurements_exact": true,
+    "native_seconds": 27.391548039
+  },
+  "source_actor_hashes": [
+    {
+      "actor_sha256": "b6db7efd85f893f8bb4c0a149e2005561441bb95c9f4782e03235540bac80fa0",
+      "arm": "untreated",
+      "source_actor_private_and_optimizer_files_unmodified": true
+    },
+    {
+      "actor_sha256": "279c0e27033c7937d4531beb5caf7f01205a54ea04868f8f81214b6375a4c2dd",
+      "arm": "grounded",
+      "source_actor_private_and_optimizer_files_unmodified": true
+    },
+    {
+      "actor_sha256": "41b5f45347f39c368dc388c0a8a631b56a55d3748c3183a320b4cbe025b62e5a",
+      "arm": "shuffled",
+      "source_actor_private_and_optimizer_files_unmodified": true
+    },
+    {
+      "actor_sha256": "e688a59ef5898fd5f0481bf4a410d35407fa93745285d0676b3396c9dbabf899",
+      "arm": "no_speech",
+      "source_actor_private_and_optimizer_files_unmodified": true
+    }
+  ],
+  "actors": [
+    {
+      "arm": "untreated",
+      "native_decisions": 64,
+      "confirmed_opportunities": 17,
+      "conditional_payload_correct": 0,
+      "native_vocal_choice_selected": 1,
+      "correct_payload_eligible_but_no_vocal_choice": 0,
+      "correct_payload_cooldown_blocked": 0,
+      "correct_payload_actually_spoken": 0,
+      "word_bits_wrong": 17,
+      "presence_wrong": 17,
+      "stop_wrong": 4,
+      "declare_act_wrong": 0,
+      "word_bit_error_histogram": {
+        "2": 8,
+        "1": 9
+      },
+      "native_single_example_shadow_updates": 5,
+      "shadow_loss_decreases": 5,
+      "shadow_gradient_dot_displacement_negative": 5,
+      "median_shadow_loss_ratio": 0.8487541744631789,
+      "cue_bank_swaps": [
+        {
+          "arm": "untreated",
+          "case": 0,
+          "cue_bank_swap_first_two_output_delta_l2": 2.755586179766453,
+          "cue_bank_swap_only_conditional_replay_not_world_transition": true,
+          "cue_bank_swap_word_bit_outputs_delta_l2": 1.6657331155466775,
+          "encoded_direct_bank_delta_l2": 4.43415561982592,
+          "matched_initial_private_neural_state": true,
+          "natural_first_two_output_delta_l2": 2.755586179766453,
+          "natural_speech_source_delta_l2": 2.028457983248022,
+          "parent_private_sha256": "1cb9b779a4f461e89673ba443f936e5bf9e02866575ca6ca0d1066d26569172b",
+          "request_a": "EatFood",
+          "request_b": "GetFood"
+        },
+        {
+          "arm": "untreated",
+          "case": 0,
+          "cue_bank_swap_first_two_output_delta_l2": 2.2033942224223155,
+          "cue_bank_swap_only_conditional_replay_not_world_transition": true,
+          "cue_bank_swap_word_bit_outputs_delta_l2": 1.070347766795197,
+          "encoded_direct_bank_delta_l2": 6.295199510814667,
+          "matched_initial_private_neural_state": true,
+          "natural_first_two_output_delta_l2": 2.2033942224223155,
+          "natural_speech_source_delta_l2": 2.7730068711825266,
+          "parent_private_sha256": "1cb9b779a4f461e89673ba443f936e5bf9e02866575ca6ca0d1066d26569172b",
+          "request_a": "GetFood",
+          "request_b": "GetToy"
+        },
+        {
+          "arm": "untreated",
+          "case": 0,
+          "cue_bank_swap_first_two_output_delta_l2": 5.954594664335808,
+          "cue_bank_swap_only_conditional_replay_not_world_transition": true,
+          "cue_bank_swap_word_bit_outputs_delta_l2": 1.7374164997482402,
+          "encoded_direct_bank_delta_l2": 8.898544490859775,
+          "matched_initial_private_neural_state": true,
+          "natural_first_two_output_delta_l2": 5.954594664335808,
+          "natural_speech_source_delta_l2": 4.07621025852567,
+          "parent_private_sha256": "1cb9b779a4f461e89673ba443f936e5bf9e02866575ca6ca0d1066d26569172b",
+          "request_a": "GetFood",
+          "request_b": null
+        },
+        {
+          "arm": "untreated",
+          "case": 2,
+          "cue_bank_swap_first_two_output_delta_l2": 2.792523719399273,
+          "cue_bank_swap_only_conditional_replay_not_world_transition": true,
+          "cue_bank_swap_word_bit_outputs_delta_l2": 1.692231136738612,
+          "encoded_direct_bank_delta_l2": 4.532861923051408,
+          "matched_initial_private_neural_state": true,
+          "natural_first_two_output_delta_l2": 2.792523719399273,
+          "natural_speech_source_delta_l2": 2.0416684731527024,
+          "parent_private_sha256": "593cb0518432f1252307a6ae961835c3d0c6a2aa0df6ac46b6f6e7bd13c6bd63",
+          "request_a": "EatFood",
+          "request_b": "GetFood"
+        },
+        {
+          "arm": "untreated",
+          "case": 2,
+          "cue_bank_swap_first_two_output_delta_l2": 2.2599966486330163,
+          "cue_bank_swap_only_conditional_replay_not_world_transition": true,
+          "cue_bank_swap_word_bit_outputs_delta_l2": 1.097790065687906,
+          "encoded_direct_bank_delta_l2": 6.456799397137714,
+          "matched_initial_private_neural_state": true,
+          "natural_first_two_output_delta_l2": 2.2599966486330163,
+          "natural_speech_source_delta_l2": 2.844190659978146,
+          "parent_private_sha256": "593cb0518432f1252307a6ae961835c3d0c6a2aa0df6ac46b6f6e7bd13c6bd63",
+          "request_a": "GetFood",
+          "request_b": "GetToy"
+        },
+        {
+          "arm": "untreated",
+          "case": 2,
+          "cue_bank_swap_first_two_output_delta_l2": 6.1470370932049185,
+          "cue_bank_swap_only_conditional_replay_not_world_transition": true,
+          "cue_bank_swap_word_bit_outputs_delta_l2": 1.7844913179455164,
+          "encoded_direct_bank_delta_l2": 9.123438275534367,
+          "matched_initial_private_neural_state": true,
+          "natural_first_two_output_delta_l2": 6.1470370932049185,
+          "natural_speech_source_delta_l2": 4.1816455347547965,
+          "parent_private_sha256": "593cb0518432f1252307a6ae961835c3d0c6a2aa0df6ac46b6f6e7bd13c6bd63",
+          "request_a": "GetFood",
+          "request_b": null
+        }
+      ],
+      "confirmed_opportunity_details": [
+        {
+          "case": 0,
+          "world_seed": 2404507,
+          "requested": "EatFood",
+          "tick_after_cue": 2,
+          "native_row_sha256": "466415d09be642ddb130677e1175f90a14b7fbaaa74e8791e4245b4be2bd5e55",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.05886541786201532,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": null,
+          "conditional_payload_correct": false,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              0,
+              0
+            ],
+            "presence_correct_for_two_words": false,
+            "presence_raw": [
+              -1.0302093029022217,
+              -0.8789862990379333
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.40407806634902954,
+              0.4068949520587921
+            ],
+            "word_bit_errors_of_16": 2,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "case": 0,
+          "world_seed": 2404507,
+          "requested": "EatFood",
+          "tick_after_cue": 3,
+          "native_row_sha256": "d6dd0224ccb401476eed032d18cc70f55abd94c3bb2b11bbcc6be4372c674f3a",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.06136078594390785,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": null,
+          "conditional_payload_correct": false,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              0,
+              0
+            ],
+            "presence_correct_for_two_words": false,
+            "presence_raw": [
+              -1.1420793533325195,
+              -0.9438925981521606
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.39543354511260986,
+              0.43265193700790405
+            ],
+            "word_bit_errors_of_16": 2,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "case": 0,
+          "world_seed": 2404507,
+          "requested": "EatFood",
+          "tick_after_cue": 4,
+          "native_row_sha256": "d0c25fa5762e35998d49a73829988c22359a0dc3ce329600ef6a3fffd1ce04e1",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.06278457555334387,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": null,
+          "conditional_payload_correct": false,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              0,
+              0
+            ],
+            "presence_correct_for_two_words": false,
+            "presence_raw": [
+              -1.1580982208251953,
+              -0.9386228322982788
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.410929411649704,
+              0.4323576092720032
+            ],
+            "word_bit_errors_of_16": 2,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "case": 0,
+          "world_seed": 2404507,
+          "requested": "GetFood",
+          "tick_after_cue": 1,
+          "native_row_sha256": "e1c005eb5fc0bda190f2923a0647f8cb447426f283e8b57ddcd00150ad9f6f57",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.005519373684393834,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": null,
+          "conditional_payload_correct": false,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              8,
+              0
+            ],
+            "presence_correct_for_two_words": false,
+            "presence_raw": [
+              -0.5977986454963684,
+              -0.48228317499160767
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.166019469499588,
+              0.6435886025428772
+            ],
+            "word_bit_errors_of_16": 2,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "case": 0,
+          "world_seed": 2404507,
+          "requested": "GetFood",
+          "tick_after_cue": 2,
+          "native_row_sha256": "945298eb793963baf6f7bef4552099298d0ec621acb4686f96be99e03a7ade8d",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.00572527768381192,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": null,
+          "conditional_payload_correct": false,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              8,
+              0
+            ],
+            "presence_correct_for_two_words": false,
+            "presence_raw": [
+              -0.689234733581543,
+              -0.4772410988807678
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.22167541086673737,
+              0.6575980186462402
+            ],
+            "word_bit_errors_of_16": 2,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "case": 0,
+          "world_seed": 2404507,
+          "requested": "GetFood",
+          "tick_after_cue": 3,
+          "native_row_sha256": "6c0fe906f627af62db098fad97d83ebd28c32c073cc47e4a522e1b0e0ee7ef81",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.00660543847594866,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": null,
+          "conditional_payload_correct": false,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              8,
+              0
+            ],
+            "presence_correct_for_two_words": false,
+            "presence_raw": [
+              -0.7218062281608582,
+              -0.46571916341781616
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.2572987675666809,
+              0.6634693145751953
+            ],
+            "word_bit_errors_of_16": 2,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "case": 0,
+          "world_seed": 2404507,
+          "requested": "GetToy",
+          "tick_after_cue": 1,
+          "native_row_sha256": "d4e9ae3a73b6dffc0d5dc06eee685b4748abd763a41ada2e7c7fa6ad2dab1d8b",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.057407474855981105,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": null,
+          "conditional_payload_correct": false,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              9,
+              0
+            ],
+            "presence_correct_for_two_words": false,
+            "presence_raw": [
+              -0.544346034526825,
+              -0.5863295793533325
+            ],
+            "stop_correct_for_two_words": false,
+            "stop_raw": [
+              0.0360608845949173,
+              0.7070124745368958
+            ],
+            "word_bit_errors_of_16": 1,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "case": 0,
+          "world_seed": 2404507,
+          "requested": "GetToy",
+          "tick_after_cue": 2,
+          "native_row_sha256": "855fb10f8a67cf989aced40617cc13ccf4d7f0c236e6af05d331288a1d498bc6",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.06555051682630982,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": null,
+          "conditional_payload_correct": false,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              9,
+              0
+            ],
+            "presence_correct_for_two_words": false,
+            "presence_raw": [
+              -0.6255080699920654,
+              -0.59312903881073
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.0014386177062988281,
+              0.727118194103241
+            ],
+            "word_bit_errors_of_16": 1,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "case": 0,
+          "world_seed": 2404507,
+          "requested": "GetToy",
+          "tick_after_cue": 3,
+          "native_row_sha256": "b4c06b46cded7cae29b7cca2e0f50b7ab703794e63b3fed328fa5ec0f913fc37",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.07163215337838146,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": null,
+          "conditional_payload_correct": false,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              9,
+              0
+            ],
+            "presence_correct_for_two_words": false,
+            "presence_raw": [
+              -0.6645399332046509,
+              -0.5865769386291504
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.032975658774375916,
+              0.7346017360687256
+            ],
+            "word_bit_errors_of_16": 1,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "case": 2,
+          "world_seed": 2608889,
+          "requested": "EatFood",
+          "tick_after_cue": 6,
+          "native_row_sha256": "6eeb798eb42c844f7b5f5fed0b91233f0e15529406cc95894e0cf7aa623f55ef",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.08199076516537275,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": null,
+          "conditional_payload_correct": false,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              0,
+              0
+            ],
+            "presence_correct_for_two_words": false,
+            "presence_raw": [
+              -1.1171590089797974,
+              -0.8828284740447998
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.4863545894622803,
+              0.3580761253833771
+            ],
+            "word_bit_errors_of_16": 2,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "case": 2,
+          "world_seed": 2608889,
+          "requested": "EatFood",
+          "tick_after_cue": 7,
+          "native_row_sha256": "d417ad544ad845d2a083ad138ab1c49514fa66afa5ddb56fc37aa7092baef42b",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.07289066241605113,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": null,
+          "conditional_payload_correct": false,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              0,
+              0
+            ],
+            "presence_correct_for_two_words": false,
+            "presence_raw": [
+              -1.2065426111221313,
+              -0.9638493061065674
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.4325210452079773,
+              0.38847383856773376
+            ],
+            "word_bit_errors_of_16": 2,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "case": 2,
+          "world_seed": 2608889,
+          "requested": "GetToy",
+          "tick_after_cue": 1,
+          "native_row_sha256": "6d2e128601406090eb40aa4213e2338b9a20a5c75313e49acd21e126eb849d47",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.055960918983175116,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": null,
+          "conditional_payload_correct": false,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              9,
+              0
+            ],
+            "presence_correct_for_two_words": false,
+            "presence_raw": [
+              -0.5847489237785339,
+              -0.6240989565849304
+            ],
+            "stop_correct_for_two_words": false,
+            "stop_raw": [
+              0.03894957900047302,
+              0.6757527589797974
+            ],
+            "word_bit_errors_of_16": 1,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "case": 2,
+          "world_seed": 2608889,
+          "requested": "GetToy",
+          "tick_after_cue": 2,
+          "native_row_sha256": "eece3a25bc98f22845b8056fed6e5a77d63f081704f32a1deba7031bba0bc4f7",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.06837604307865197,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": null,
+          "conditional_payload_correct": false,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              9,
+              0
+            ],
+            "presence_correct_for_two_words": false,
+            "presence_raw": [
+              -0.702366292476654,
+              -0.6739453077316284
+            ],
+            "stop_correct_for_two_words": false,
+            "stop_raw": [
+              0.05476467311382294,
+              0.7345359325408936
+            ],
+            "word_bit_errors_of_16": 1,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "case": 2,
+          "world_seed": 2608889,
+          "requested": "GetToy",
+          "tick_after_cue": 3,
+          "native_row_sha256": "69897da6de768ff11469f311f24d0f0e0c53618a39fbd77c5cad12d454de9e10",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.07114482503660927,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": null,
+          "conditional_payload_correct": false,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              9,
+              0
+            ],
+            "presence_correct_for_two_words": false,
+            "presence_raw": [
+              -0.7698180675506592,
+              -0.6978110074996948
+            ],
+            "stop_correct_for_two_words": false,
+            "stop_raw": [
+              0.03444965183734894,
+              0.7385993003845215
+            ],
+            "word_bit_errors_of_16": 1,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "case": 2,
+          "world_seed": 2608889,
+          "requested": "GetToy",
+          "tick_after_cue": 4,
+          "native_row_sha256": "d1f3f035589444e101d3ff836cd0eda2bc588a50a0c65c29248f7db0cb2a62e6",
+          "native_vocal_choice_selected": true,
+          "selected_vocal_channel": true,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.08002156936237322,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": null,
+          "conditional_payload_correct": false,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              9,
+              0
+            ],
+            "presence_correct_for_two_words": false,
+            "presence_raw": [
+              -0.6911338567733765,
+              -0.587238609790802
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.06300891935825348,
+              0.7075387239456177
+            ],
+            "word_bit_errors_of_16": 1,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "case": 2,
+          "world_seed": 2608889,
+          "requested": "GetToy",
+          "tick_after_cue": 5,
+          "native_row_sha256": "71d5c7b0b89ff6ff1f4e2f2c7f05a33ec23ef4028e1395b1dcdabdd5ee89806c",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.0788786518168363,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": null,
+          "conditional_payload_correct": false,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              9,
+              0
+            ],
+            "presence_correct_for_two_words": false,
+            "presence_raw": [
+              -0.7042278051376343,
+              -0.5839795470237732
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.07266676425933838,
+              0.7072038650512695
+            ],
+            "word_bit_errors_of_16": 1,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "case": 2,
+          "world_seed": 2608889,
+          "requested": "GetToy",
+          "tick_after_cue": 6,
+          "native_row_sha256": "4617f758d3d2907d63ae2837820d5e171c4ef5876024de06e19b6b7dd260a465",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.07568256867203171,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": null,
+          "conditional_payload_correct": false,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              9,
+              0
+            ],
+            "presence_correct_for_two_words": false,
+            "presence_raw": [
+              -0.7160582542419434,
+              -0.584829568862915
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.0775844007730484,
+              0.7057992219924927
+            ],
+            "word_bit_errors_of_16": 1,
+            "word_bits_correct": false
+          }
+        }
+      ],
+      "shadow_step_details": [
+        {
+          "actual_target": {
+            "act": "Declare",
+            "continuation": [
+              1,
+              0,
+              0,
+              0,
+              0
+            ],
+            "token": 8,
+            "weight": 1.0
+          },
+          "arm": "untreated",
+          "case": 0,
+          "frozen_weights_moments_ages_exact": true,
+          "gradient_dot_native_adam_displacement": -0.14225412978807236,
+          "native_gradient_norm": 4.116205215454102,
+          "native_loss_after_one_shadow_adam_step": 0.919575192987657,
+          "native_loss_before": 1.0554074470236283,
+          "no_world_action_or_learning_claim_from_shadow_step": true,
+          "requested": "EatFood",
+          "shadow_step": 369,
+          "source_step": 368,
+          "tick_after_cue": 2,
+          "bits_before": 2,
+          "bits_after": 2,
+          "conditional_factors_after": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              0,
+              0
+            ],
+            "presence_correct_for_two_words": false,
+            "presence_raw": [
+              -0.9733625054359436,
+              -0.8455235958099365
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.40881678462028503,
+              0.40568268299102783
+            ],
+            "word_bit_errors_of_16": 2,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "actual_target": {
+            "act": "Declare",
+            "continuation": [
+              1,
+              0,
+              0,
+              0,
+              0
+            ],
+            "token": 9,
+            "weight": 1.0
+          },
+          "arm": "untreated",
+          "case": 0,
+          "frozen_weights_moments_ages_exact": true,
+          "gradient_dot_native_adam_displacement": -0.07621830530019472,
+          "native_gradient_norm": 2.5402891635894775,
+          "native_loss_after_one_shadow_adam_step": 0.3521101741899447,
+          "native_loss_before": 0.4233790016553517,
+          "no_world_action_or_learning_claim_from_shadow_step": true,
+          "requested": "GetFood",
+          "shadow_step": 369,
+          "source_step": 368,
+          "tick_after_cue": 1,
+          "bits_before": 2,
+          "bits_after": 2,
+          "conditional_factors_after": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              8,
+              0
+            ],
+            "presence_correct_for_two_words": false,
+            "presence_raw": [
+              -0.532764196395874,
+              -0.4445822834968567
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.18007613718509674,
+              0.6376979351043701
+            ],
+            "word_bit_errors_of_16": 2,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "actual_target": {
+            "act": "Declare",
+            "continuation": [
+              2,
+              0,
+              0,
+              0,
+              0
+            ],
+            "token": 9,
+            "weight": 1.0
+          },
+          "arm": "untreated",
+          "case": 0,
+          "frozen_weights_moments_ages_exact": true,
+          "gradient_dot_native_adam_displacement": -0.04995630478713376,
+          "native_gradient_norm": 1.9171180725097656,
+          "native_loss_after_one_shadow_adam_step": 0.24900825958832845,
+          "native_loss_before": 0.2949917456960391,
+          "no_world_action_or_learning_claim_from_shadow_step": true,
+          "requested": "GetToy",
+          "shadow_step": 369,
+          "source_step": 368,
+          "tick_after_cue": 1,
+          "bits_before": 1,
+          "bits_after": 1,
+          "conditional_factors_after": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              9,
+              0
+            ],
+            "presence_correct_for_two_words": false,
+            "presence_raw": [
+              -0.4627962112426758,
+              -0.538199782371521
+            ],
+            "stop_correct_for_two_words": false,
+            "stop_raw": [
+              0.011562734842300415,
+              0.6959829926490784
+            ],
+            "word_bit_errors_of_16": 1,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "actual_target": {
+            "act": "Declare",
+            "continuation": [
+              1,
+              0,
+              0,
+              0,
+              0
+            ],
+            "token": 8,
+            "weight": 1.0
+          },
+          "arm": "untreated",
+          "case": 2,
+          "frozen_weights_moments_ages_exact": true,
+          "gradient_dot_native_adam_displacement": -0.15949767522704952,
+          "native_gradient_norm": 4.620016098022461,
+          "native_loss_after_one_shadow_adam_step": 1.040379088956203,
+          "native_loss_before": 1.192863109205392,
+          "no_world_action_or_learning_claim_from_shadow_step": true,
+          "requested": "EatFood",
+          "shadow_step": 369,
+          "source_step": 368,
+          "tick_after_cue": 6,
+          "bits_before": 2,
+          "bits_after": 2,
+          "conditional_factors_after": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              0,
+              0
+            ],
+            "presence_correct_for_two_words": false,
+            "presence_raw": [
+              -1.0596556663513184,
+              -0.8500027656555176
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.4896729588508606,
+              0.35763099789619446
+            ],
+            "word_bit_errors_of_16": 2,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "actual_target": {
+            "act": "Declare",
+            "continuation": [
+              2,
+              0,
+              0,
+              0,
+              0
+            ],
+            "token": 9,
+            "weight": 1.0
+          },
+          "arm": "untreated",
+          "case": 2,
+          "frozen_weights_moments_ages_exact": true,
+          "gradient_dot_native_adam_displacement": -0.05031710441871055,
+          "native_gradient_norm": 1.938036561012268,
+          "native_loss_after_one_shadow_adam_step": 0.26086341786101225,
+          "native_loss_before": 0.30734861248370704,
+          "no_world_action_or_learning_claim_from_shadow_step": true,
+          "requested": "GetToy",
+          "shadow_step": 369,
+          "source_step": 368,
+          "tick_after_cue": 1,
+          "bits_before": 1,
+          "bits_after": 1,
+          "conditional_factors_after": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              9,
+              0
+            ],
+            "presence_correct_for_two_words": false,
+            "presence_raw": [
+              -0.5040143728256226,
+              -0.576225996017456
+            ],
+            "stop_correct_for_two_words": false,
+            "stop_raw": [
+              0.015683919191360474,
+              0.6654047966003418
+            ],
+            "word_bit_errors_of_16": 1,
+            "word_bits_correct": false
+          }
+        }
+      ]
+    },
+    {
+      "arm": "grounded",
+      "native_decisions": 64,
+      "confirmed_opportunities": 14,
+      "conditional_payload_correct": 8,
+      "native_vocal_choice_selected": 2,
+      "correct_payload_eligible_but_no_vocal_choice": 5,
+      "correct_payload_cooldown_blocked": 2,
+      "correct_payload_actually_spoken": 1,
+      "word_bits_wrong": 6,
+      "presence_wrong": 0,
+      "stop_wrong": 0,
+      "declare_act_wrong": 0,
+      "word_bit_error_histogram": {
+        "0": 8,
+        "1": 6
+      },
+      "native_single_example_shadow_updates": 5,
+      "shadow_loss_decreases": 5,
+      "shadow_gradient_dot_displacement_negative": 5,
+      "median_shadow_loss_ratio": 0.8695443654222698,
+      "cue_bank_swaps": [
+        {
+          "arm": "grounded",
+          "case": 0,
+          "cue_bank_swap_first_two_output_delta_l2": 2.366159759896249,
+          "cue_bank_swap_only_conditional_replay_not_world_transition": true,
+          "cue_bank_swap_word_bit_outputs_delta_l2": 0.7960677269046612,
+          "encoded_direct_bank_delta_l2": 4.445629743476057,
+          "matched_initial_private_neural_state": true,
+          "natural_first_two_output_delta_l2": 2.366159759896249,
+          "natural_speech_source_delta_l2": 2.031901443539912,
+          "parent_private_sha256": "5ffedd398df920febfccade9c9d616a9dc095c5de7f2aebec5fd1f471f95e497",
+          "request_a": "EatFood",
+          "request_b": "GetFood"
+        },
+        {
+          "arm": "grounded",
+          "case": 0,
+          "cue_bank_swap_first_two_output_delta_l2": 2.4628243913833616,
+          "cue_bank_swap_only_conditional_replay_not_world_transition": true,
+          "cue_bank_swap_word_bit_outputs_delta_l2": 1.1781582277959153,
+          "encoded_direct_bank_delta_l2": 6.31271357398148,
+          "matched_initial_private_neural_state": true,
+          "natural_first_two_output_delta_l2": 2.4628243913833616,
+          "natural_speech_source_delta_l2": 2.7807217700055022,
+          "parent_private_sha256": "5ffedd398df920febfccade9c9d616a9dc095c5de7f2aebec5fd1f471f95e497",
+          "request_a": "GetFood",
+          "request_b": "GetToy"
+        },
+        {
+          "arm": "grounded",
+          "case": 0,
+          "cue_bank_swap_first_two_output_delta_l2": 6.441395750046361,
+          "cue_bank_swap_only_conditional_replay_not_world_transition": true,
+          "cue_bank_swap_word_bit_outputs_delta_l2": 1.573267810204636,
+          "encoded_direct_bank_delta_l2": 8.92309563302623,
+          "matched_initial_private_neural_state": true,
+          "natural_first_two_output_delta_l2": 6.441395750046361,
+          "natural_speech_source_delta_l2": 4.087576585480638,
+          "parent_private_sha256": "5ffedd398df920febfccade9c9d616a9dc095c5de7f2aebec5fd1f471f95e497",
+          "request_a": "GetFood",
+          "request_b": null
+        },
+        {
+          "arm": "grounded",
+          "case": 2,
+          "cue_bank_swap_first_two_output_delta_l2": 2.3964580288211965,
+          "cue_bank_swap_only_conditional_replay_not_world_transition": true,
+          "cue_bank_swap_word_bit_outputs_delta_l2": 0.809217524690612,
+          "encoded_direct_bank_delta_l2": 4.552547733763743,
+          "matched_initial_private_neural_state": true,
+          "natural_first_two_output_delta_l2": 2.3964580288211965,
+          "natural_speech_source_delta_l2": 2.0475529359104554,
+          "parent_private_sha256": "52897fb552a9637a79693997b5a9f4727fe8e459bcceec522063d1a548578969",
+          "request_a": "EatFood",
+          "request_b": "GetFood"
+        },
+        {
+          "arm": "grounded",
+          "case": 2,
+          "cue_bank_swap_first_two_output_delta_l2": 2.5771350993255355,
+          "cue_bank_swap_only_conditional_replay_not_world_transition": true,
+          "cue_bank_swap_word_bit_outputs_delta_l2": 1.2483091371911912,
+          "encoded_direct_bank_delta_l2": 6.486824190863877,
+          "matched_initial_private_neural_state": true,
+          "natural_first_two_output_delta_l2": 2.5771350993255355,
+          "natural_speech_source_delta_l2": 2.857416641843744,
+          "parent_private_sha256": "52897fb552a9637a79693997b5a9f4727fe8e459bcceec522063d1a548578969",
+          "request_a": "GetFood",
+          "request_b": "GetToy"
+        },
+        {
+          "arm": "grounded",
+          "case": 2,
+          "cue_bank_swap_first_two_output_delta_l2": 6.6968628030268995,
+          "cue_bank_swap_only_conditional_replay_not_world_transition": true,
+          "cue_bank_swap_word_bit_outputs_delta_l2": 1.6020838846258205,
+          "encoded_direct_bank_delta_l2": 9.165545757502437,
+          "matched_initial_private_neural_state": true,
+          "natural_first_two_output_delta_l2": 6.6968628030268995,
+          "natural_speech_source_delta_l2": 4.201201719331496,
+          "parent_private_sha256": "52897fb552a9637a79693997b5a9f4727fe8e459bcceec522063d1a548578969",
+          "request_a": "GetFood",
+          "request_b": null
+        }
+      ],
+      "confirmed_opportunity_details": [
+        {
+          "case": 0,
+          "world_seed": 2404507,
+          "requested": "EatFood",
+          "tick_after_cue": 2,
+          "native_row_sha256": "794f4394400fd57738c59cdaad481b2c07f65a4ae333a32b92710646e9bf8df4",
+          "native_vocal_choice_selected": true,
+          "selected_vocal_channel": true,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.18107860113821958,
+          "actual_utterance_tokens": [
+            [
+              8,
+              1
+            ]
+          ],
+          "conditional_payload_if_vocal_diagnostic_only": {
+            "confidence": 0.5647059082984924,
+            "speech_act": "Declare",
+            "tokens": [
+              8,
+              1
+            ]
+          },
+          "conditional_payload_correct": true,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              8,
+              1
+            ],
+            "presence_correct_for_two_words": true,
+            "presence_raw": [
+              0.803054690361023,
+              0.7191725373268127
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.9572997093200684,
+              0.6497786045074463
+            ],
+            "word_bit_errors_of_16": 0,
+            "word_bits_correct": true
+          }
+        },
+        {
+          "case": 0,
+          "world_seed": 2404507,
+          "requested": "EatFood",
+          "tick_after_cue": 3,
+          "native_row_sha256": "683821b4965bba137ae1c1b40b23f5d16b31ac63addb51baa787a8148a2e4a65",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": true,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.19559816207532627,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": {
+            "confidence": 0.5764706134796143,
+            "speech_act": "Declare",
+            "tokens": [
+              8,
+              1
+            ]
+          },
+          "conditional_payload_correct": true,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              8,
+              1
+            ],
+            "presence_correct_for_two_words": true,
+            "presence_raw": [
+              0.7637537121772766,
+              0.7107422947883606
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.9704035520553589,
+              0.6806143522262573
+            ],
+            "word_bit_errors_of_16": 0,
+            "word_bits_correct": true
+          }
+        },
+        {
+          "case": 0,
+          "world_seed": 2404507,
+          "requested": "EatFood",
+          "tick_after_cue": 4,
+          "native_row_sha256": "c14db843bf303e152dc5d1406e8bee330d979597702c51537d290472feaecb82",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": true,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.19901014506312664,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": {
+            "confidence": 0.5764706134796143,
+            "speech_act": "Declare",
+            "tokens": [
+              8,
+              1
+            ]
+          },
+          "conditional_payload_correct": true,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              8,
+              1
+            ],
+            "presence_correct_for_two_words": true,
+            "presence_raw": [
+              0.7722460031509399,
+              0.7265263795852661
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.9980729222297668,
+              0.6856269240379333
+            ],
+            "word_bit_errors_of_16": 0,
+            "word_bits_correct": true
+          }
+        },
+        {
+          "case": 0,
+          "world_seed": 2404507,
+          "requested": "GetFood",
+          "tick_after_cue": 1,
+          "native_row_sha256": "99c2540d6266c869c7e6aeffc1ae67bf80ef5f79638562928c9615c82456f1c0",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.03721806778436132,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": {
+            "confidence": 0.7176470756530762,
+            "speech_act": "Declare",
+            "tokens": [
+              9,
+              1
+            ]
+          },
+          "conditional_payload_correct": true,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              9,
+              1
+            ],
+            "presence_correct_for_two_words": true,
+            "presence_raw": [
+              1.2049609422683716,
+              1.0532318353652954
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.7598487138748169,
+              0.8672268390655518
+            ],
+            "word_bit_errors_of_16": 0,
+            "word_bits_correct": true
+          }
+        },
+        {
+          "case": 0,
+          "world_seed": 2404507,
+          "requested": "GetFood",
+          "tick_after_cue": 2,
+          "native_row_sha256": "88a416871c74b21441d864a7bc98639b4d8bc224d51517ac20f32a4e468ab3f6",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.0514203945565539,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": {
+            "confidence": 0.729411780834198,
+            "speech_act": "Declare",
+            "tokens": [
+              9,
+              1
+            ]
+          },
+          "conditional_payload_correct": true,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              9,
+              1
+            ],
+            "presence_correct_for_two_words": true,
+            "presence_raw": [
+              1.2418053150177002,
+              1.1233563423156738
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.8695685267448425,
+              0.8974270820617676
+            ],
+            "word_bit_errors_of_16": 0,
+            "word_bits_correct": true
+          }
+        },
+        {
+          "case": 0,
+          "world_seed": 2404507,
+          "requested": "GetFood",
+          "tick_after_cue": 3,
+          "native_row_sha256": "090a3f0fe94ca4af00a3b384c92c88436c907283a5f7d598e1d09a67ec8cdac2",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.06740303685824166,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": {
+            "confidence": 0.729411780834198,
+            "speech_act": "Declare",
+            "tokens": [
+              9,
+              1
+            ]
+          },
+          "conditional_payload_correct": true,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              9,
+              1
+            ],
+            "presence_correct_for_two_words": true,
+            "presence_raw": [
+              1.2734375,
+              1.165804386138916
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.9342320561408997,
+              0.9147341847419739
+            ],
+            "word_bit_errors_of_16": 0,
+            "word_bits_correct": true
+          }
+        },
+        {
+          "case": 0,
+          "world_seed": 2404507,
+          "requested": "GetToy",
+          "tick_after_cue": 1,
+          "native_row_sha256": "fcc3bb07a9e619ee7d87135a388bc0f26f5f2e637d5053097c5f88e6a8988b6f",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.18949945551962627,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": {
+            "confidence": 0.6431372761726379,
+            "speech_act": "Declare",
+            "tokens": [
+              9,
+              3
+            ]
+          },
+          "conditional_payload_correct": false,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              9,
+              3
+            ],
+            "presence_correct_for_two_words": true,
+            "presence_raw": [
+              1.0975661277770996,
+              0.8122071027755737
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.6435419321060181,
+              0.8651787042617798
+            ],
+            "word_bit_errors_of_16": 1,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "case": 0,
+          "world_seed": 2404507,
+          "requested": "GetToy",
+          "tick_after_cue": 2,
+          "native_row_sha256": "b56f2aae348a18f72440e7dd300326f74a22ac075064e096295617fc5fe3d857",
+          "native_vocal_choice_selected": true,
+          "selected_vocal_channel": true,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.2375253082000907,
+          "actual_utterance_tokens": [
+            [
+              9,
+              3
+            ]
+          ],
+          "conditional_payload_if_vocal_diagnostic_only": {
+            "confidence": 0.6431372761726379,
+            "speech_act": "Declare",
+            "tokens": [
+              9,
+              3
+            ]
+          },
+          "conditional_payload_correct": false,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              9,
+              3
+            ],
+            "presence_correct_for_two_words": true,
+            "presence_raw": [
+              1.1266241073608398,
+              0.8540346026420593
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.7427847385406494,
+              0.8948360085487366
+            ],
+            "word_bit_errors_of_16": 1,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "case": 0,
+          "world_seed": 2404507,
+          "requested": "GetToy",
+          "tick_after_cue": 3,
+          "native_row_sha256": "2449ec30fc6011d901b082e885224cddc9dcfd6a9c485464fff1e17ef2d1b88c",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": true,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.269020288663402,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": {
+            "confidence": 0.6470588445663452,
+            "speech_act": "Declare",
+            "tokens": [
+              9,
+              3
+            ]
+          },
+          "conditional_payload_correct": false,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              9,
+              3
+            ],
+            "presence_correct_for_two_words": true,
+            "presence_raw": [
+              1.148491621017456,
+              0.8878962397575378
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.8054232597351074,
+              0.910476565361023
+            ],
+            "word_bit_errors_of_16": 1,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "case": 2,
+          "world_seed": 2608889,
+          "requested": "EatFood",
+          "tick_after_cue": 6,
+          "native_row_sha256": "a33106c2abfe10ffea5decb5abde54228a5c2f0fe886e8acf08d0c3c0cbd9c44",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.22369098751262365,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": {
+            "confidence": 0.5372549295425415,
+            "speech_act": "Declare",
+            "tokens": [
+              8,
+              1
+            ]
+          },
+          "conditional_payload_correct": true,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              8,
+              1
+            ],
+            "presence_correct_for_two_words": true,
+            "presence_raw": [
+              0.8047597408294678,
+              0.7621304392814636
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -1.0813642740249634,
+              0.606350839138031
+            ],
+            "word_bit_errors_of_16": 0,
+            "word_bits_correct": true
+          }
+        },
+        {
+          "case": 2,
+          "world_seed": 2608889,
+          "requested": "EatFood",
+          "tick_after_cue": 7,
+          "native_row_sha256": "4f1c6abd8a3966471a042e7f02857084fa1694478675db92fc72297eecb80005",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.20551794027883294,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": {
+            "confidence": 0.5568627715110779,
+            "speech_act": "Declare",
+            "tokens": [
+              8,
+              1
+            ]
+          },
+          "conditional_payload_correct": true,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              8,
+              1
+            ],
+            "presence_correct_for_two_words": true,
+            "presence_raw": [
+              0.7348641157150269,
+              0.7140753269195557
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -1.0256153345108032,
+              0.6306399703025818
+            ],
+            "word_bit_errors_of_16": 0,
+            "word_bits_correct": true
+          }
+        },
+        {
+          "case": 2,
+          "world_seed": 2608889,
+          "requested": "GetToy",
+          "tick_after_cue": 1,
+          "native_row_sha256": "7158c46ba4956bc09ede3784804824ec6829c3ccfde16fe4802ea279f9f5fb1c",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.19345740712487602,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": {
+            "confidence": 0.6274510025978088,
+            "speech_act": "Declare",
+            "tokens": [
+              9,
+              3
+            ]
+          },
+          "conditional_payload_correct": false,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              9,
+              3
+            ],
+            "presence_correct_for_two_words": true,
+            "presence_raw": [
+              1.0379302501678467,
+              0.7701141238212585
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.6361950039863586,
+              0.8232274651527405
+            ],
+            "word_bit_errors_of_16": 1,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "case": 2,
+          "world_seed": 2608889,
+          "requested": "GetToy",
+          "tick_after_cue": 2,
+          "native_row_sha256": "9bf13ba1a63a31503f95d9f8cbb1294353120ec4439c8977adb45b56cd9700c2",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.24583903720723807,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": {
+            "confidence": 0.6274510025978088,
+            "speech_act": "Declare",
+            "tokens": [
+              9,
+              3
+            ]
+          },
+          "conditional_payload_correct": false,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              9,
+              3
+            ],
+            "presence_correct_for_two_words": true,
+            "presence_raw": [
+              1.0646374225616455,
+              0.8119896650314331
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.7430753707885742,
+              0.849835991859436
+            ],
+            "word_bit_errors_of_16": 1,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "case": 2,
+          "world_seed": 2608889,
+          "requested": "GetToy",
+          "tick_after_cue": 3,
+          "native_row_sha256": "d997add8a52ed4c13510851bb49c9c2dd1d511748398cf7d6c0e7cb74a756780",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.28337191542361617,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": {
+            "confidence": 0.6352941393852234,
+            "speech_act": "Declare",
+            "tokens": [
+              9,
+              3
+            ]
+          },
+          "conditional_payload_correct": false,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              9,
+              3
+            ],
+            "presence_correct_for_two_words": true,
+            "presence_raw": [
+              1.1174627542495728,
+              0.8696439266204834
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.8119396567344666,
+              0.8735365271568298
+            ],
+            "word_bit_errors_of_16": 1,
+            "word_bits_correct": false
+          }
+        }
+      ],
+      "shadow_step_details": [
+        {
+          "actual_target": {
+            "act": "Declare",
+            "continuation": [
+              1,
+              0,
+              0,
+              0,
+              0
+            ],
+            "token": 8,
+            "weight": 1.0
+          },
+          "arm": "grounded",
+          "case": 0,
+          "frozen_weights_moments_ages_exact": true,
+          "gradient_dot_native_adam_displacement": -0.006601014806776381,
+          "native_gradient_norm": 0.5865193009376526,
+          "native_loss_after_one_shadow_adam_step": 0.03266003572853649,
+          "native_loss_before": 0.037559941766371015,
+          "no_world_action_or_learning_claim_from_shadow_step": true,
+          "requested": "EatFood",
+          "shadow_step": 401,
+          "source_step": 400,
+          "tick_after_cue": 2,
+          "bits_before": 0,
+          "bits_after": 0,
+          "conditional_factors_after": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              8,
+              1
+            ],
+            "presence_correct_for_two_words": true,
+            "presence_raw": [
+              0.8623837232589722,
+              0.7692789435386658
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.9574878215789795,
+              0.659881591796875
+            ],
+            "word_bit_errors_of_16": 0,
+            "word_bits_correct": true
+          }
+        },
+        {
+          "actual_target": {
+            "act": "Declare",
+            "continuation": [
+              1,
+              0,
+              0,
+              0,
+              0
+            ],
+            "token": 9,
+            "weight": 1.0
+          },
+          "arm": "grounded",
+          "case": 0,
+          "frozen_weights_moments_ages_exact": true,
+          "gradient_dot_native_adam_displacement": -0.011875853616130711,
+          "native_gradient_norm": 0.8856692314147949,
+          "native_loss_after_one_shadow_adam_step": 0.040595435478224244,
+          "native_loss_before": 0.050845715910991136,
+          "no_world_action_or_learning_claim_from_shadow_step": true,
+          "requested": "GetFood",
+          "shadow_step": 401,
+          "source_step": 400,
+          "tick_after_cue": 1,
+          "bits_before": 0,
+          "bits_after": 0,
+          "conditional_factors_after": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              9,
+              1
+            ],
+            "presence_correct_for_two_words": true,
+            "presence_raw": [
+              1.228782296180725,
+              1.0769214630126953
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.7806066870689392,
+              0.8697150349617004
+            ],
+            "word_bit_errors_of_16": 0,
+            "word_bits_correct": true
+          }
+        },
+        {
+          "actual_target": {
+            "act": "Declare",
+            "continuation": [
+              2,
+              0,
+              0,
+              0,
+              0
+            ],
+            "token": 9,
+            "weight": 1.0
+          },
+          "arm": "grounded",
+          "case": 0,
+          "frozen_weights_moments_ages_exact": true,
+          "gradient_dot_native_adam_displacement": -0.004266133479006573,
+          "native_gradient_norm": 0.4528348445892334,
+          "native_loss_after_one_shadow_adam_step": 0.051396686007172405,
+          "native_loss_before": 0.05491618830020734,
+          "no_world_action_or_learning_claim_from_shadow_step": true,
+          "requested": "GetToy",
+          "shadow_step": 401,
+          "source_step": 400,
+          "tick_after_cue": 1,
+          "bits_before": 1,
+          "bits_after": 1,
+          "conditional_factors_after": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              9,
+              3
+            ],
+            "presence_correct_for_two_words": true,
+            "presence_raw": [
+              1.1305190324783325,
+              0.862331211566925
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.6741408705711365,
+              0.8584888577461243
+            ],
+            "word_bit_errors_of_16": 1,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "actual_target": {
+            "act": "Declare",
+            "continuation": [
+              1,
+              0,
+              0,
+              0,
+              0
+            ],
+            "token": 8,
+            "weight": 1.0
+          },
+          "arm": "grounded",
+          "case": 2,
+          "frozen_weights_moments_ages_exact": true,
+          "gradient_dot_native_adam_displacement": -0.011255690943024787,
+          "native_gradient_norm": 0.7745440602302551,
+          "native_loss_after_one_shadow_adam_step": 0.04215801430215387,
+          "native_loss_before": 0.05113411396426653,
+          "no_world_action_or_learning_claim_from_shadow_step": true,
+          "requested": "EatFood",
+          "shadow_step": 401,
+          "source_step": 400,
+          "tick_after_cue": 6,
+          "bits_before": 0,
+          "bits_after": 0,
+          "conditional_factors_after": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              8,
+              1
+            ],
+            "presence_correct_for_two_words": true,
+            "presence_raw": [
+              0.8650535941123962,
+              0.8107696771621704
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -1.0713356733322144,
+              0.6253250241279602
+            ],
+            "word_bit_errors_of_16": 0,
+            "word_bits_correct": true
+          }
+        },
+        {
+          "actual_target": {
+            "act": "Declare",
+            "continuation": [
+              2,
+              0,
+              0,
+              0,
+              0
+            ],
+            "token": 9,
+            "weight": 1.0
+          },
+          "arm": "grounded",
+          "case": 2,
+          "frozen_weights_moments_ages_exact": true,
+          "gradient_dot_native_adam_displacement": -0.00427679335119538,
+          "native_gradient_norm": 0.42211270332336426,
+          "native_loss_after_one_shadow_adam_step": 0.048609842920929604,
+          "native_loss_before": 0.052108917231153046,
+          "no_world_action_or_learning_claim_from_shadow_step": true,
+          "requested": "GetToy",
+          "shadow_step": 401,
+          "source_step": 400,
+          "tick_after_cue": 1,
+          "bits_before": 1,
+          "bits_after": 1,
+          "conditional_factors_after": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              9,
+              3
+            ],
+            "presence_correct_for_two_words": true,
+            "presence_raw": [
+              1.0755475759506226,
+              0.824943482875824
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.6657453775405884,
+              0.816431999206543
+            ],
+            "word_bit_errors_of_16": 1,
+            "word_bits_correct": false
+          }
+        }
+      ]
+    },
+    {
+      "arm": "shuffled",
+      "native_decisions": 64,
+      "confirmed_opportunities": 9,
+      "conditional_payload_correct": 1,
+      "native_vocal_choice_selected": 1,
+      "correct_payload_eligible_but_no_vocal_choice": 1,
+      "correct_payload_cooldown_blocked": 0,
+      "correct_payload_actually_spoken": 0,
+      "word_bits_wrong": 8,
+      "presence_wrong": 0,
+      "stop_wrong": 0,
+      "declare_act_wrong": 0,
+      "word_bit_error_histogram": {
+        "1": 2,
+        "0": 1,
+        "2": 6
+      },
+      "native_single_example_shadow_updates": 4,
+      "shadow_loss_decreases": 4,
+      "shadow_gradient_dot_displacement_negative": 4,
+      "median_shadow_loss_ratio": 0.7819075549783757,
+      "cue_bank_swaps": [
+        {
+          "arm": "shuffled",
+          "case": 0,
+          "cue_bank_swap_first_two_output_delta_l2": 2.6412680444306584,
+          "cue_bank_swap_only_conditional_replay_not_world_transition": true,
+          "cue_bank_swap_word_bit_outputs_delta_l2": 0.8038550073568191,
+          "encoded_direct_bank_delta_l2": 4.428559190976063,
+          "matched_initial_private_neural_state": true,
+          "natural_first_two_output_delta_l2": 2.6412680444306584,
+          "natural_speech_source_delta_l2": 2.026779193176539,
+          "parent_private_sha256": "bf6a2571a5e87621cc137f84277870082d3a6e0dc92021e987a7a501173606d2",
+          "request_a": "EatFood",
+          "request_b": "GetFood"
+        },
+        {
+          "arm": "shuffled",
+          "case": 0,
+          "cue_bank_swap_first_two_output_delta_l2": 2.4652064041737667,
+          "cue_bank_swap_only_conditional_replay_not_world_transition": true,
+          "cue_bank_swap_word_bit_outputs_delta_l2": 1.0177089536908097,
+          "encoded_direct_bank_delta_l2": 6.286656233755387,
+          "matched_initial_private_neural_state": true,
+          "natural_first_two_output_delta_l2": 2.4652064041737667,
+          "natural_speech_source_delta_l2": 2.7692435032389002,
+          "parent_private_sha256": "bf6a2571a5e87621cc137f84277870082d3a6e0dc92021e987a7a501173606d2",
+          "request_a": "GetFood",
+          "request_b": "GetToy"
+        },
+        {
+          "arm": "shuffled",
+          "case": 0,
+          "cue_bank_swap_first_two_output_delta_l2": 6.846567934674726,
+          "cue_bank_swap_only_conditional_replay_not_world_transition": true,
+          "cue_bank_swap_word_bit_outputs_delta_l2": 1.2373193426103495,
+          "encoded_direct_bank_delta_l2": 8.886568922538379,
+          "matched_initial_private_neural_state": true,
+          "natural_first_two_output_delta_l2": 6.846567934674726,
+          "natural_speech_source_delta_l2": 4.070666569039699,
+          "parent_private_sha256": "bf6a2571a5e87621cc137f84277870082d3a6e0dc92021e987a7a501173606d2",
+          "request_a": "GetFood",
+          "request_b": null
+        },
+        {
+          "arm": "shuffled",
+          "case": 2,
+          "cue_bank_swap_first_two_output_delta_l2": 2.675566550587081,
+          "cue_bank_swap_only_conditional_replay_not_world_transition": true,
+          "cue_bank_swap_word_bit_outputs_delta_l2": 0.824796240850944,
+          "encoded_direct_bank_delta_l2": 4.528058511870063,
+          "matched_initial_private_neural_state": true,
+          "natural_first_two_output_delta_l2": 2.675566550587081,
+          "natural_speech_source_delta_l2": 2.0402337662284205,
+          "parent_private_sha256": "1c0ef0cf9b937b5dc1d5ba20d40e4a7852170f4612de8a0f6253cafc882145fb",
+          "request_a": "EatFood",
+          "request_b": "GetFood"
+        },
+        {
+          "arm": "shuffled",
+          "case": 2,
+          "cue_bank_swap_first_two_output_delta_l2": 2.5728856100292035,
+          "cue_bank_swap_only_conditional_replay_not_world_transition": true,
+          "cue_bank_swap_word_bit_outputs_delta_l2": 1.0775731934350357,
+          "encoded_direct_bank_delta_l2": 6.4494721937965265,
+          "matched_initial_private_neural_state": true,
+          "natural_first_two_output_delta_l2": 2.5728856100292035,
+          "natural_speech_source_delta_l2": 2.840963308834745,
+          "parent_private_sha256": "1c0ef0cf9b937b5dc1d5ba20d40e4a7852170f4612de8a0f6253cafc882145fb",
+          "request_a": "GetFood",
+          "request_b": "GetToy"
+        },
+        {
+          "arm": "shuffled",
+          "case": 2,
+          "cue_bank_swap_first_two_output_delta_l2": 7.108235398940726,
+          "cue_bank_swap_only_conditional_replay_not_world_transition": true,
+          "cue_bank_swap_word_bit_outputs_delta_l2": 1.2683087498436862,
+          "encoded_direct_bank_delta_l2": 9.113162816196601,
+          "matched_initial_private_neural_state": true,
+          "natural_first_two_output_delta_l2": 7.108235398940726,
+          "natural_speech_source_delta_l2": 4.17687355093535,
+          "parent_private_sha256": "1c0ef0cf9b937b5dc1d5ba20d40e4a7852170f4612de8a0f6253cafc882145fb",
+          "request_a": "GetFood",
+          "request_b": null
+        }
+      ],
+      "confirmed_opportunity_details": [
+        {
+          "case": 0,
+          "world_seed": 2404507,
+          "requested": "EatFood",
+          "tick_after_cue": 2,
+          "native_row_sha256": "b2fdacc3120ea5fd7b79e908f16e13ab6ebb744b0895afeee2d0885cebc8feba",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.08683918488478444,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": {
+            "confidence": 0.6745098233222961,
+            "speech_act": "Declare",
+            "tokens": [
+              9,
+              1
+            ]
+          },
+          "conditional_payload_correct": false,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              9,
+              1
+            ],
+            "presence_correct_for_two_words": true,
+            "presence_raw": [
+              0.9270653128623962,
+              0.7376005053520203
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.824587345123291,
+              0.5720922350883484
+            ],
+            "word_bit_errors_of_16": 1,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "case": 0,
+          "world_seed": 2404507,
+          "requested": "EatFood",
+          "tick_after_cue": 3,
+          "native_row_sha256": "b7b9c175972ca10090c41e810f884aa2755fff0d822ddf466d6cf5916e547609",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.10421430265679159,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": {
+            "confidence": 0.6941176652908325,
+            "speech_act": "Declare",
+            "tokens": [
+              9,
+              1
+            ]
+          },
+          "conditional_payload_correct": false,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              9,
+              1
+            ],
+            "presence_correct_for_two_words": true,
+            "presence_raw": [
+              0.8951563239097595,
+              0.7379552125930786
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.8287943005561829,
+              0.5997306108474731
+            ],
+            "word_bit_errors_of_16": 1,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "case": 0,
+          "world_seed": 2404507,
+          "requested": "GetFood",
+          "tick_after_cue": 1,
+          "native_row_sha256": "26fe82bc2104d88c2b882fe88e82cccf7111b12f3a4a2a4e103768fdd4fae496",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 7.198380762475385e-06,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": {
+            "confidence": 0.6313725709915161,
+            "speech_act": "Declare",
+            "tokens": [
+              9,
+              1
+            ]
+          },
+          "conditional_payload_correct": true,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              9,
+              1
+            ],
+            "presence_correct_for_two_words": true,
+            "presence_raw": [
+              1.124307632446289,
+              0.8310096263885498
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.5937045216560364,
+              0.821069061756134
+            ],
+            "word_bit_errors_of_16": 0,
+            "word_bits_correct": true
+          }
+        },
+        {
+          "case": 0,
+          "world_seed": 2404507,
+          "requested": "GetToy",
+          "tick_after_cue": 1,
+          "native_row_sha256": "89888135680ca9ad40f4bcbfe8674ea997f6f2acbd4cff4e78bff94049207ddd",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.14800358080616718,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": {
+            "confidence": 0.4627451002597809,
+            "speech_act": "Declare",
+            "tokens": [
+              9,
+              1
+            ]
+          },
+          "conditional_payload_correct": false,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              9,
+              1
+            ],
+            "presence_correct_for_two_words": true,
+            "presence_raw": [
+              0.8952335119247437,
+              0.45225805044174194
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.3785514235496521,
+              0.8615466356277466
+            ],
+            "word_bit_errors_of_16": 2,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "case": 0,
+          "world_seed": 2404507,
+          "requested": "GetToy",
+          "tick_after_cue": 2,
+          "native_row_sha256": "18234dd5063450c1ff6ec810bcce5b3dd04faec658cbc5d629afef494c7b8440",
+          "native_vocal_choice_selected": true,
+          "selected_vocal_channel": true,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.17659412211947126,
+          "actual_utterance_tokens": [
+            [
+              9,
+              1
+            ]
+          ],
+          "conditional_payload_if_vocal_diagnostic_only": {
+            "confidence": 0.45098039507865906,
+            "speech_act": "Declare",
+            "tokens": [
+              9,
+              1
+            ]
+          },
+          "conditional_payload_correct": false,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              9,
+              1
+            ],
+            "presence_correct_for_two_words": true,
+            "presence_raw": [
+              0.9141336679458618,
+              0.47587132453918457
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.4534706473350525,
+              0.8909667730331421
+            ],
+            "word_bit_errors_of_16": 2,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "case": 0,
+          "world_seed": 2404507,
+          "requested": "GetToy",
+          "tick_after_cue": 3,
+          "native_row_sha256": "376db4ad1ce4b135c76d1328408a837a20b3633ce9a28f73db1ee4c388511701",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": true,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.19635581613685849,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": {
+            "confidence": 0.4470588266849518,
+            "speech_act": "Declare",
+            "tokens": [
+              9,
+              1
+            ]
+          },
+          "conditional_payload_correct": false,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              9,
+              1
+            ],
+            "presence_correct_for_two_words": true,
+            "presence_raw": [
+              0.9270159602165222,
+              0.4978780746459961
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.5046294927597046,
+              0.9034966230392456
+            ],
+            "word_bit_errors_of_16": 2,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "case": 2,
+          "world_seed": 2608889,
+          "requested": "GetToy",
+          "tick_after_cue": 1,
+          "native_row_sha256": "a29796c61d393ca63de1fc941e276afce999fcf4f5431344bb5664c56193b329",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.14847476586898478,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": {
+            "confidence": 0.43921568989753723,
+            "speech_act": "Declare",
+            "tokens": [
+              9,
+              1
+            ]
+          },
+          "conditional_payload_correct": false,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              9,
+              1
+            ],
+            "presence_correct_for_two_words": true,
+            "presence_raw": [
+              0.8363431096076965,
+              0.41018372774124146
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.37233060598373413,
+              0.8245772123336792
+            ],
+            "word_bit_errors_of_16": 2,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "case": 2,
+          "world_seed": 2608889,
+          "requested": "GetToy",
+          "tick_after_cue": 2,
+          "native_row_sha256": "dcd555b782314e19ad1aea6987a7d0d2542a49a6f57f60baaca0e7493b9acda4",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.1799382786676818,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": {
+            "confidence": 0.42352941632270813,
+            "speech_act": "Declare",
+            "tokens": [
+              9,
+              1
+            ]
+          },
+          "conditional_payload_correct": false,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              9,
+              1
+            ],
+            "presence_correct_for_two_words": true,
+            "presence_raw": [
+              0.8529577255249023,
+              0.43333396315574646
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.45454490184783936,
+              0.8512507677078247
+            ],
+            "word_bit_errors_of_16": 2,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "case": 2,
+          "world_seed": 2608889,
+          "requested": "GetToy",
+          "tick_after_cue": 3,
+          "native_row_sha256": "10dd9d234b0c65a27c3818b94f7bcb298d33ed96f38e26815642c1b819349a3c",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.2062886366809375,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": {
+            "confidence": 0.4313725531101227,
+            "speech_act": "Declare",
+            "tokens": [
+              9,
+              1
+            ]
+          },
+          "conditional_payload_correct": false,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              9,
+              1
+            ],
+            "presence_correct_for_two_words": true,
+            "presence_raw": [
+              0.8947135210037231,
+              0.4778375029563904
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.5128282308578491,
+              0.8690510392189026
+            ],
+            "word_bit_errors_of_16": 2,
+            "word_bits_correct": false
+          }
+        }
+      ],
+      "shadow_step_details": [
+        {
+          "actual_target": {
+            "act": "Declare",
+            "continuation": [
+              1,
+              0,
+              0,
+              0,
+              0
+            ],
+            "token": 8,
+            "weight": 1.0
+          },
+          "arm": "shuffled",
+          "case": 0,
+          "frozen_weights_moments_ages_exact": true,
+          "gradient_dot_native_adam_displacement": -0.02917001045647124,
+          "native_gradient_norm": 0.9951426982879639,
+          "native_loss_after_one_shadow_adam_step": 0.049908906993501485,
+          "native_loss_before": 0.07176201703627713,
+          "no_world_action_or_learning_claim_from_shadow_step": true,
+          "requested": "EatFood",
+          "shadow_step": 401,
+          "source_step": 400,
+          "tick_after_cue": 2,
+          "bits_before": 1,
+          "bits_after": 0,
+          "conditional_factors_after": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              8,
+              1
+            ],
+            "presence_correct_for_two_words": true,
+            "presence_raw": [
+              0.9615913033485413,
+              0.7934867143630981
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.823093056678772,
+              0.5719733238220215
+            ],
+            "word_bit_errors_of_16": 0,
+            "word_bits_correct": true
+          }
+        },
+        {
+          "actual_target": {
+            "act": "Declare",
+            "continuation": [
+              1,
+              0,
+              0,
+              0,
+              0
+            ],
+            "token": 9,
+            "weight": 1.0
+          },
+          "arm": "shuffled",
+          "case": 0,
+          "frozen_weights_moments_ages_exact": true,
+          "gradient_dot_native_adam_displacement": -0.00787040727249406,
+          "native_gradient_norm": 0.8156868815422058,
+          "native_loss_after_one_shadow_adam_step": 0.0420385255224335,
+          "native_loss_before": 0.04887835319127615,
+          "no_world_action_or_learning_claim_from_shadow_step": true,
+          "requested": "GetFood",
+          "shadow_step": 401,
+          "source_step": 400,
+          "tick_after_cue": 1,
+          "bits_before": 0,
+          "bits_after": 0,
+          "conditional_factors_after": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              9,
+              1
+            ],
+            "presence_correct_for_two_words": true,
+            "presence_raw": [
+              1.1322389841079712,
+              0.8593566417694092
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.6141754388809204,
+              0.8199011087417603
+            ],
+            "word_bit_errors_of_16": 0,
+            "word_bits_correct": true
+          }
+        },
+        {
+          "actual_target": {
+            "act": "Declare",
+            "continuation": [
+              2,
+              0,
+              0,
+              0,
+              0
+            ],
+            "token": 9,
+            "weight": 1.0
+          },
+          "arm": "shuffled",
+          "case": 0,
+          "frozen_weights_moments_ages_exact": true,
+          "gradient_dot_native_adam_displacement": -0.02706856833385255,
+          "native_gradient_norm": 0.9714804887771606,
+          "native_loss_after_one_shadow_adam_step": 0.0856577556542797,
+          "native_loss_before": 0.10956656094654431,
+          "no_world_action_or_learning_claim_from_shadow_step": true,
+          "requested": "GetToy",
+          "shadow_step": 401,
+          "source_step": 400,
+          "tick_after_cue": 1,
+          "bits_before": 2,
+          "bits_after": 0,
+          "conditional_factors_after": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              9,
+              2
+            ],
+            "presence_correct_for_two_words": true,
+            "presence_raw": [
+              0.9216978549957275,
+              0.49596187472343445
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.4117697775363922,
+              0.8531907796859741
+            ],
+            "word_bit_errors_of_16": 0,
+            "word_bits_correct": true
+          }
+        },
+        {
+          "actual_target": {
+            "act": "Declare",
+            "continuation": [
+              2,
+              0,
+              0,
+              0,
+              0
+            ],
+            "token": 9,
+            "weight": 1.0
+          },
+          "arm": "shuffled",
+          "case": 2,
+          "frozen_weights_moments_ages_exact": true,
+          "gradient_dot_native_adam_displacement": -0.026813718101295195,
+          "native_gradient_norm": 0.964846670627594,
+          "native_loss_after_one_shadow_adam_step": 0.08536853713438303,
+          "native_loss_before": 0.10916305764702024,
+          "no_world_action_or_learning_claim_from_shadow_step": true,
+          "requested": "GetToy",
+          "shadow_step": 401,
+          "source_step": 400,
+          "tick_after_cue": 1,
+          "bits_before": 2,
+          "bits_after": 0,
+          "conditional_factors_after": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              9,
+              2
+            ],
+            "presence_correct_for_two_words": true,
+            "presence_raw": [
+              0.8679525256156921,
+              0.4590565264225006
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.40420034527778625,
+              0.8166133761405945
+            ],
+            "word_bit_errors_of_16": 0,
+            "word_bits_correct": true
+          }
+        }
+      ]
+    },
+    {
+      "arm": "no_speech",
+      "native_decisions": 64,
+      "confirmed_opportunities": 17,
+      "conditional_payload_correct": 0,
+      "native_vocal_choice_selected": 1,
+      "correct_payload_eligible_but_no_vocal_choice": 0,
+      "correct_payload_cooldown_blocked": 0,
+      "correct_payload_actually_spoken": 0,
+      "word_bits_wrong": 17,
+      "presence_wrong": 17,
+      "stop_wrong": 0,
+      "declare_act_wrong": 0,
+      "word_bit_error_histogram": {
+        "2": 4,
+        "1": 13
+      },
+      "native_single_example_shadow_updates": 4,
+      "shadow_loss_decreases": 4,
+      "shadow_gradient_dot_displacement_negative": 4,
+      "median_shadow_loss_ratio": 0.852879253549727,
+      "cue_bank_swaps": [
+        {
+          "arm": "no_speech",
+          "case": 0,
+          "cue_bank_swap_first_two_output_delta_l2": 2.614819361631419,
+          "cue_bank_swap_only_conditional_replay_not_world_transition": true,
+          "cue_bank_swap_word_bit_outputs_delta_l2": 1.550437454792898,
+          "encoded_direct_bank_delta_l2": 4.2318404908180005,
+          "matched_initial_private_neural_state": true,
+          "natural_first_two_output_delta_l2": 2.614819361631419,
+          "natural_speech_source_delta_l2": 1.9680353165257884,
+          "parent_private_sha256": "291e179e997fa3e6b81f4ab4ed3c1719ba362ef807dbd96d9a37920705c8e5c2",
+          "request_a": "EatFood",
+          "request_b": "GetFood"
+        },
+        {
+          "arm": "no_speech",
+          "case": 0,
+          "cue_bank_swap_first_two_output_delta_l2": 2.0878394173505836,
+          "cue_bank_swap_only_conditional_replay_not_world_transition": true,
+          "cue_bank_swap_word_bit_outputs_delta_l2": 0.9993889755596196,
+          "encoded_direct_bank_delta_l2": 5.985956210606606,
+          "matched_initial_private_neural_state": true,
+          "natural_first_two_output_delta_l2": 2.0878394173505836,
+          "natural_speech_source_delta_l2": 2.6367867177191355,
+          "parent_private_sha256": "291e179e997fa3e6b81f4ab4ed3c1719ba362ef807dbd96d9a37920705c8e5c2",
+          "request_a": "GetFood",
+          "request_b": "GetToy"
+        },
+        {
+          "arm": "no_speech",
+          "case": 0,
+          "cue_bank_swap_first_two_output_delta_l2": 5.242524150760513,
+          "cue_bank_swap_only_conditional_replay_not_world_transition": true,
+          "cue_bank_swap_word_bit_outputs_delta_l2": 1.3145636739659132,
+          "encoded_direct_bank_delta_l2": 8.465203275198371,
+          "matched_initial_private_neural_state": true,
+          "natural_first_two_output_delta_l2": 5.242524150760513,
+          "natural_speech_source_delta_l2": 3.875908688037035,
+          "parent_private_sha256": "291e179e997fa3e6b81f4ab4ed3c1719ba362ef807dbd96d9a37920705c8e5c2",
+          "request_a": "GetFood",
+          "request_b": null
+        },
+        {
+          "arm": "no_speech",
+          "case": 2,
+          "cue_bank_swap_first_two_output_delta_l2": 2.5417177382536065,
+          "cue_bank_swap_only_conditional_replay_not_world_transition": true,
+          "cue_bank_swap_word_bit_outputs_delta_l2": 1.5062766750791596,
+          "encoded_direct_bank_delta_l2": 4.111041140349031,
+          "matched_initial_private_neural_state": true,
+          "natural_first_two_output_delta_l2": 2.5417177382536065,
+          "natural_speech_source_delta_l2": 1.9135825340153454,
+          "parent_private_sha256": "6c85de1d3185507696ec4d6a0a961c521eeda4801e395580cbc4259f0622ad3d",
+          "request_a": "EatFood",
+          "request_b": "GetFood"
+        },
+        {
+          "arm": "no_speech",
+          "case": 2,
+          "cue_bank_swap_first_two_output_delta_l2": 2.027855361425289,
+          "cue_bank_swap_only_conditional_replay_not_world_transition": true,
+          "cue_bank_swap_word_bit_outputs_delta_l2": 0.9706760411659235,
+          "encoded_direct_bank_delta_l2": 5.813890082843336,
+          "matched_initial_private_neural_state": true,
+          "natural_first_two_output_delta_l2": 2.027855361425289,
+          "natural_speech_source_delta_l2": 2.560992005483544,
+          "parent_private_sha256": "6c85de1d3185507696ec4d6a0a961c521eeda4801e395580cbc4259f0622ad3d",
+          "request_a": "GetFood",
+          "request_b": "GetToy"
+        },
+        {
+          "arm": "no_speech",
+          "case": 2,
+          "cue_bank_swap_first_two_output_delta_l2": 5.090097931203818,
+          "cue_bank_swap_only_conditional_replay_not_world_transition": true,
+          "cue_bank_swap_word_bit_outputs_delta_l2": 1.277354662857651,
+          "encoded_direct_bank_delta_l2": 8.222082205303467,
+          "matched_initial_private_neural_state": true,
+          "natural_first_two_output_delta_l2": 5.090097931203818,
+          "natural_speech_source_delta_l2": 3.7645136154002232,
+          "parent_private_sha256": "6c85de1d3185507696ec4d6a0a961c521eeda4801e395580cbc4259f0622ad3d",
+          "request_a": "GetFood",
+          "request_b": null
+        }
+      ],
+      "confirmed_opportunity_details": [
+        {
+          "case": 0,
+          "world_seed": 2404507,
+          "requested": "EatFood",
+          "tick_after_cue": 2,
+          "native_row_sha256": "6484f359678db7a0350b0de75a34ad988cd56157b5edf062e6a5c1fea7d78d78",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.005050213027832787,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": null,
+          "conditional_payload_correct": false,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              0,
+              0
+            ],
+            "presence_correct_for_two_words": false,
+            "presence_raw": [
+              -0.9108467102050781,
+              -0.3709811270236969
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.5528469085693359,
+              0.47886234521865845
+            ],
+            "word_bit_errors_of_16": 2,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "case": 0,
+          "world_seed": 2404507,
+          "requested": "EatFood",
+          "tick_after_cue": 3,
+          "native_row_sha256": "f88d2fa62a2702dcc2b53a57a04c9010d0446ee369660bb5ce5e0d5a7dc75fc3",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.004459009909012536,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": null,
+          "conditional_payload_correct": false,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              0,
+              0
+            ],
+            "presence_correct_for_two_words": false,
+            "presence_raw": [
+              -1.016169786453247,
+              -0.4247446358203888
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.5513319969177246,
+              0.5046408772468567
+            ],
+            "word_bit_errors_of_16": 2,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "case": 0,
+          "world_seed": 2404507,
+          "requested": "EatFood",
+          "tick_after_cue": 4,
+          "native_row_sha256": "9bcdc4b431215bf711c246240ffacbe34753bd4edf1fd7d207e71414877074d3",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.0033556813227301947,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": null,
+          "conditional_payload_correct": false,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              0,
+              0
+            ],
+            "presence_correct_for_two_words": false,
+            "presence_raw": [
+              -1.0888034105300903,
+              -0.4677375257015228
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.5599690675735474,
+              0.49539312720298767
+            ],
+            "word_bit_errors_of_16": 2,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "case": 0,
+          "world_seed": 2404507,
+          "requested": "GetFood",
+          "tick_after_cue": 1,
+          "native_row_sha256": "4d7e661ebc830cb63d69291180cb04c4aa662e1ceee2a133962c3bf1963aa752",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.00042362520347684666,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": null,
+          "conditional_payload_correct": false,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              8,
+              0
+            ],
+            "presence_correct_for_two_words": false,
+            "presence_raw": [
+              -0.49095264077186584,
+              -0.007037602365016937
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.3190726637840271,
+              0.7183683514595032
+            ],
+            "word_bit_errors_of_16": 2,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "case": 0,
+          "world_seed": 2404507,
+          "requested": "GetToy",
+          "tick_after_cue": 1,
+          "native_row_sha256": "2e1e8818002677249a005bf5c1ae975e105b4bab099565f16e85efa39b57fb9c",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.011080750638868046,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": null,
+          "conditional_payload_correct": false,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              9,
+              0
+            ],
+            "presence_correct_for_two_words": false,
+            "presence_raw": [
+              -0.4464211165904999,
+              -0.10921965539455414
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.1263355314731598,
+              0.7795092463493347
+            ],
+            "word_bit_errors_of_16": 1,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "case": 0,
+          "world_seed": 2404507,
+          "requested": "GetToy",
+          "tick_after_cue": 2,
+          "native_row_sha256": "36b97aae9514abea24f0cac81ee7fd80929570689f4d19f7e455c2edfc593d6a",
+          "native_vocal_choice_selected": true,
+          "selected_vocal_channel": true,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.009606902865437788,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": null,
+          "conditional_payload_correct": false,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              9,
+              0
+            ],
+            "presence_correct_for_two_words": false,
+            "presence_raw": [
+              -0.5122500658035278,
+              -0.08530150353908539
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.17683179676532745,
+              0.8051941990852356
+            ],
+            "word_bit_errors_of_16": 1,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "case": 0,
+          "world_seed": 2404507,
+          "requested": "GetToy",
+          "tick_after_cue": 3,
+          "native_row_sha256": "b7176da2f5072b167ebcc2f3eadb504dc081c588de790519f22817c71b7439da",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.007113049909075831,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": null,
+          "conditional_payload_correct": false,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              9,
+              0
+            ],
+            "presence_correct_for_two_words": false,
+            "presence_raw": [
+              -0.6127675175666809,
+              -0.13393297791481018
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.18892225623130798,
+              0.8028219938278198
+            ],
+            "word_bit_errors_of_16": 1,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "case": 0,
+          "world_seed": 2404507,
+          "requested": "GetToy",
+          "tick_after_cue": 5,
+          "native_row_sha256": "4c11c4a342832a47a4ef1189b5637d31b40d1e62f8c4c13d218a56ac55f27835",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.00614749330257574,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": null,
+          "conditional_payload_correct": false,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              9,
+              0
+            ],
+            "presence_correct_for_two_words": false,
+            "presence_raw": [
+              -0.636077880859375,
+              -0.11263055354356766
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.22386512160301208,
+              0.8069339990615845
+            ],
+            "word_bit_errors_of_16": 1,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "case": 0,
+          "world_seed": 2404507,
+          "requested": "GetToy",
+          "tick_after_cue": 6,
+          "native_row_sha256": "2c923b6a97f4f219c4f042c9321f62e55104339a39b76a6be2fcd7c628573369",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.004171808053758284,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": null,
+          "conditional_payload_correct": false,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              9,
+              0
+            ],
+            "presence_correct_for_two_words": false,
+            "presence_raw": [
+              -0.7382766008377075,
+              -0.21210870146751404
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.1501869112253189,
+              0.8379839658737183
+            ],
+            "word_bit_errors_of_16": 1,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "case": 0,
+          "world_seed": 2404507,
+          "requested": "GetToy",
+          "tick_after_cue": 7,
+          "native_row_sha256": "803fac5d362442c466d3d12379c059a43d37eda0dbe6f92bf4d1c7f13288d23a",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.003917669023574956,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": null,
+          "conditional_payload_correct": false,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              9,
+              0
+            ],
+            "presence_correct_for_two_words": false,
+            "presence_raw": [
+              -0.7476544380187988,
+              -0.21345654129981995
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.15346507728099823,
+              0.836507260799408
+            ],
+            "word_bit_errors_of_16": 1,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "case": 2,
+          "world_seed": 2608889,
+          "requested": "GetToy",
+          "tick_after_cue": 1,
+          "native_row_sha256": "8c6aef3a5d405f1b5a4d9d8b55848d7d78f63d739fd74ba1965fac0ef1259bed",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.011735140607694969,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": null,
+          "conditional_payload_correct": false,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              9,
+              0
+            ],
+            "presence_correct_for_two_words": false,
+            "presence_raw": [
+              -0.42900756001472473,
+              -0.0970732569694519
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.15026241540908813,
+              0.7521921396255493
+            ],
+            "word_bit_errors_of_16": 1,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "case": 2,
+          "world_seed": 2608889,
+          "requested": "GetToy",
+          "tick_after_cue": 2,
+          "native_row_sha256": "c14455cfd5993aef5078401048a35693b612f0a560db0f3084c9ec65f8c6711c",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.009389704409992239,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": null,
+          "conditional_payload_correct": false,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              9,
+              0
+            ],
+            "presence_correct_for_two_words": false,
+            "presence_raw": [
+              -0.5477532148361206,
+              -0.1352352350950241
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.1444794088602066,
+              0.8142644762992859
+            ],
+            "word_bit_errors_of_16": 1,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "case": 2,
+          "world_seed": 2608889,
+          "requested": "GetToy",
+          "tick_after_cue": 3,
+          "native_row_sha256": "73dc09585cbd2dcdd0b0495a875e6e77b0de9377b7b4a1220d4585a261d49db1",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.009247118551684523,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": null,
+          "conditional_payload_correct": false,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              9,
+              0
+            ],
+            "presence_correct_for_two_words": false,
+            "presence_raw": [
+              -0.5562903881072998,
+              -0.08338025212287903
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.2179223597049713,
+              0.7858636379241943
+            ],
+            "word_bit_errors_of_16": 1,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "case": 2,
+          "world_seed": 2608889,
+          "requested": "GetToy",
+          "tick_after_cue": 4,
+          "native_row_sha256": "f8625facaf0062430750721096ca74b8357b3083b5136c73f4857f0907c3d498",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.0062395278056768914,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": null,
+          "conditional_payload_correct": false,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              9,
+              0
+            ],
+            "presence_correct_for_two_words": false,
+            "presence_raw": [
+              -0.6863042116165161,
+              -0.19310742616653442
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.15444634854793549,
+              0.8151907920837402
+            ],
+            "word_bit_errors_of_16": 1,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "case": 2,
+          "world_seed": 2608889,
+          "requested": "GetToy",
+          "tick_after_cue": 5,
+          "native_row_sha256": "1c2286c47bc5ccdff76875f342a0e6acb075df2fe8f6b98a5b5cf79f2faf42ec",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.005074278440851254,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": null,
+          "conditional_payload_correct": false,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              9,
+              0
+            ],
+            "presence_correct_for_two_words": false,
+            "presence_raw": [
+              -0.7427080869674683,
+              -0.2273385226726532
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.15248124301433563,
+              0.8086302876472473
+            ],
+            "word_bit_errors_of_16": 1,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "case": 2,
+          "world_seed": 2608889,
+          "requested": "GetToy",
+          "tick_after_cue": 6,
+          "native_row_sha256": "7d8264af7486675eacd227c463eb1286fe380db962d74659beddb5e0840eeeda",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.005912252200781782,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": null,
+          "conditional_payload_correct": false,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              9,
+              0
+            ],
+            "presence_correct_for_two_words": false,
+            "presence_raw": [
+              -0.6636991500854492,
+              -0.12793362140655518
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.23791570961475372,
+              0.7749868035316467
+            ],
+            "word_bit_errors_of_16": 1,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "case": 2,
+          "world_seed": 2608889,
+          "requested": "GetToy",
+          "tick_after_cue": 7,
+          "native_row_sha256": "15a062a46fe65b142aae621b03e9e4ffbdf5835f93dd6eb50ec765f3c02bdf17",
+          "native_vocal_choice_selected": false,
+          "selected_vocal_channel": false,
+          "world_speech_cooldown_blocked": false,
+          "world_speech_cooldown_ticks": 8,
+          "voice_choice_probability": 0.005523307828985906,
+          "actual_utterance_tokens": [],
+          "conditional_payload_if_vocal_diagnostic_only": null,
+          "conditional_payload_correct": false,
+          "payload_factors": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              9,
+              0
+            ],
+            "presence_correct_for_two_words": false,
+            "presence_raw": [
+              -0.6731371879577637,
+              -0.12940925359725952
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.24117425084114075,
+              0.7734478712081909
+            ],
+            "word_bit_errors_of_16": 1,
+            "word_bits_correct": false
+          }
+        }
+      ],
+      "shadow_step_details": [
+        {
+          "actual_target": {
+            "act": "Declare",
+            "continuation": [
+              1,
+              0,
+              0,
+              0,
+              0
+            ],
+            "token": 8,
+            "weight": 1.0
+          },
+          "arm": "no_speech",
+          "case": 0,
+          "frozen_weights_moments_ages_exact": true,
+          "gradient_dot_native_adam_displacement": -0.12795726647485456,
+          "native_gradient_norm": 3.6627535820007324,
+          "native_loss_after_one_shadow_adam_step": 0.6190968130564993,
+          "native_loss_before": 0.7393797931226543,
+          "no_world_action_or_learning_claim_from_shadow_step": true,
+          "requested": "EatFood",
+          "shadow_step": 401,
+          "source_step": 400,
+          "tick_after_cue": 2,
+          "bits_before": 2,
+          "bits_after": 1,
+          "conditional_factors_after": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              8,
+              0
+            ],
+            "presence_correct_for_two_words": false,
+            "presence_raw": [
+              -0.8573548793792725,
+              -0.34385961294174194
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.5566699504852295,
+              0.4746127724647522
+            ],
+            "word_bit_errors_of_16": 1,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "actual_target": {
+            "act": "Declare",
+            "continuation": [
+              1,
+              0,
+              0,
+              0,
+              0
+            ],
+            "token": 9,
+            "weight": 1.0
+          },
+          "arm": "no_speech",
+          "case": 0,
+          "frozen_weights_moments_ages_exact": true,
+          "gradient_dot_native_adam_displacement": -0.06195963962553215,
+          "native_gradient_norm": 2.196035623550415,
+          "native_loss_after_one_shadow_adam_step": 0.22093415680750209,
+          "native_loss_before": 0.2777579851151689,
+          "no_world_action_or_learning_claim_from_shadow_step": true,
+          "requested": "GetFood",
+          "shadow_step": 401,
+          "source_step": 400,
+          "tick_after_cue": 1,
+          "bits_before": 2,
+          "bits_after": 2,
+          "conditional_factors_after": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              8,
+              0
+            ],
+            "presence_correct_for_two_words": false,
+            "presence_raw": [
+              -0.4287930428981781,
+              0.031925417482852936
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.3333881199359894,
+              0.708305835723877
+            ],
+            "word_bit_errors_of_16": 2,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "actual_target": {
+            "act": "Declare",
+            "continuation": [
+              2,
+              0,
+              0,
+              0,
+              0
+            ],
+            "token": 9,
+            "weight": 1.0
+          },
+          "arm": "no_speech",
+          "case": 0,
+          "frozen_weights_moments_ages_exact": true,
+          "gradient_dot_native_adam_displacement": -0.026924632410798517,
+          "native_gradient_norm": 1.5246951580047607,
+          "native_loss_after_one_shadow_adam_step": 0.15371260650940916,
+          "native_loss_before": 0.17699865170542228,
+          "no_world_action_or_learning_claim_from_shadow_step": true,
+          "requested": "GetToy",
+          "shadow_step": 401,
+          "source_step": 400,
+          "tick_after_cue": 1,
+          "bits_before": 1,
+          "bits_after": 1,
+          "conditional_factors_after": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              9,
+              0
+            ],
+            "presence_correct_for_two_words": false,
+            "presence_raw": [
+              -0.3598340153694153,
+              -0.05474548041820526
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.1542627215385437,
+              0.7623814344406128
+            ],
+            "word_bit_errors_of_16": 1,
+            "word_bits_correct": false
+          }
+        },
+        {
+          "actual_target": {
+            "act": "Declare",
+            "continuation": [
+              2,
+              0,
+              0,
+              0,
+              0
+            ],
+            "token": 9,
+            "weight": 1.0
+          },
+          "arm": "no_speech",
+          "case": 2,
+          "frozen_weights_moments_ages_exact": true,
+          "gradient_dot_native_adam_displacement": -0.025417570932421044,
+          "native_gradient_norm": 1.4739925861358643,
+          "native_loss_after_one_shadow_adam_step": 0.14917302039954924,
+          "native_loss_before": 0.17113833644757545,
+          "no_world_action_or_learning_claim_from_shadow_step": true,
+          "requested": "GetToy",
+          "shadow_step": 401,
+          "source_step": 400,
+          "tick_after_cue": 1,
+          "bits_before": 1,
+          "bits_after": 1,
+          "conditional_factors_after": {
+            "declare_act_correct": true,
+            "first_act_argmax": 0,
+            "first_two_words_ignoring_gates_diagnostic_only": [
+              9,
+              0
+            ],
+            "presence_correct_for_two_words": false,
+            "presence_raw": [
+              -0.34278079867362976,
+              -0.04313213378190994
+            ],
+            "stop_correct_for_two_words": true,
+            "stop_raw": [
+              -0.17695124447345734,
+              0.7359142899513245
+            ],
+            "word_bit_errors_of_16": 1,
+            "word_bits_correct": false
+          }
+        }
+      ]
+    }
+  ],
+  "shadow_update_count": 18,
+  "all_shadow_native_updates_in_sample_loss_decreases": true,
+  "world_suppressed_vocal_proposal_examples": [
+    {
+      "arm": "shuffled",
+      "case": 2,
+      "requested": null,
+      "tick_after_cue": 5,
+      "native_vocal_choice_selected": true,
+      "selected_vocal_channel": true,
+      "world_speech_cooldown_blocked": true,
+      "world_speech_cooldown_ticks": 32,
+      "conditional_payload_if_vocal_diagnostic_only": {
+        "confidence": 0.7372549176216125,
+        "speech_act": "Declare",
+        "tokens": [
+          9,
+          3
+        ]
+      },
+      "actual_utterance_tokens": []
+    }
+  ],
+  "limits": [
+    "Two previously observed held-out worlds and one founder, pre-sleep only; not an independent validation or new training experiment.",
+    "Conditional payloads, cue-bank swaps and shadow optimizer steps do not execute world actions and do not establish learning or competence.",
+    "The encoder bank contains native word and bodily contributions; swaps hold all other recorded replay context fixed but are not a pure semantic intervention.",
+    "No source checkpoint mutation, default-brain migration, promotion, real SLM request or Luna retry.",
+    "Conditional correct payloads are not spoken outcomes; five eligible grounded misses are native action-selection misses and two are cooldown-ineligible.",
+    "The shadow objective is a single recorded example, not the actual aggregate curriculum gradient; local loss reduction does not prove language learning or predict a training fix.",
+    "A diagnostic assertion initially conflated selected vocal channels with emitted speech. The preserved source world rejects one shuffled silent proposal on cooldown; no prior V17 utterance totals change."
+  ]
+}

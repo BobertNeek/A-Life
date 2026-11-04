@@ -1,5 +1,7 @@
 //! Independent-seed, dimension-balanced continuation of measured public V3.
 use super::*;
+#[cfg(test)]
+mod speech_factor_probe;
 const HELD_OUT_SEEDS: [u64; 6] = [
     2_404_507, 2_509_943, 2_608_889, 2_700_419, 2_805_623, 2_907_709,
 ];

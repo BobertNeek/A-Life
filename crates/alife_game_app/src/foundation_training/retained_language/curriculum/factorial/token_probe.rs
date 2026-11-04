@@ -16,7 +16,7 @@ fn cosine(a: &[f32], b: &[f32]) -> f64 {
         .sum::<f64>()
         / (norm(a) * norm(b)).max(1e-30)
 }
-fn speech(actor: &CpuFoundationTrainer, a: &[f32], offsets: &[f32]) -> Vec<Vec<f32>> {
+pub(super) fn speech(actor: &CpuFoundationTrainer, a: &[f32], offsets: &[f32]) -> Vec<Vec<f32>> {
     let source = actor.phenotype().candidate_decoder().motor_start() as usize + 128;
     let mut inputs = a[source..source + 32].to_vec();
     let mut result = vec![];
