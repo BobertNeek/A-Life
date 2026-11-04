@@ -18,13 +18,23 @@ def main():
     with path.open("rb") as source:
         for line in io.TextIOWrapper(zstandard.ZstdDecompressor().stream_reader(source)):
             row = json.loads(line)
-            if row.get("phase") not in {"curriculum_training", "factorial_training"}:
+            if row.get("phase") not in {"curriculum_training", "factorial_training", "linear_readout_training"}:
                 continue
             out = arms[row["arm"]]
             out["rows"] += 1
             event = row.get("completed")
             if event:
                 out["activities"][event.get("goal", event.get("lesson"))] += 1
+            if row["phase"] == "linear_readout_training" and row.get("instruction_window"):
+                labels = out.setdefault("instruction_labels_by_request", collections.defaultdict(collections.Counter))
+                mask = row["label"]["representative"]
+                key = "multiple_or_unlabelled"
+                if mask is not None and mask.bit_count() == 1:
+                    candidate = row["row"]["patch"]["pre_action"]["perception"]["base"]["candidates"][mask.bit_length() - 1]
+                    entity = candidate["target"]["entity"]
+                    target_name = "food" if entity == row["scene"]["food"] else "toy" if entity == row["scene"]["toy"] else "other"
+                    key = str(candidate["action_id"]) + ":" + target_name
+                labels[row["requested"]][key] += 1
             target = row.get("speech_target")
             evidence = row.get("narration_evidence")
             if target and target["token"] is not None and evidence:
