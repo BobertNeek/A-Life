@@ -1,7 +1,7 @@
 //! Disposable native CPU pilot. Never imports an existing creature/checkpoint.
 use alife_game_app::{
-    continue_language_curriculum, refine_language_payload, reload_language_pilot_child,
-    run_retained_language_pilot, LanguagePilotConfig,
+    continue_language_curriculum, refine_language_payload, refine_language_shared_gates,
+    reload_language_pilot_child, run_retained_language_pilot, LanguagePilotConfig,
 };
 use std::{collections::BTreeMap, path::Path};
 
@@ -33,7 +33,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             | "--rounds"
             | "--decisions"
             | "--continue-curriculum"
-            | "--refine-curriculum-payload" => {
+            | "--refine-curriculum-payload"
+            | "--refine-shared-gates" => {
                 let value = args.next().ok_or("missing argument value")?;
                 if values.insert(key, value).is_some() {
                     return Err("duplicate argument".into());
@@ -66,12 +67,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         llamacpp_translation: slm,
         experimental_word_bridge: bridge,
     };
-    if values.contains_key("--continue-curriculum")
-        && values.contains_key("--refine-curriculum-payload")
+    if [
+        "--continue-curriculum",
+        "--refine-curriculum-payload",
+        "--refine-shared-gates",
+    ]
+    .iter()
+    .filter(|key| values.contains_key(**key))
+    .count()
+        > 1
     {
         return Err("choose one experimental continuation stage".into());
     }
-    let report = if let Some(source) = values.remove("--refine-curriculum-payload") {
+    let report = if let Some(source) = values.remove("--refine-shared-gates") {
+        refine_language_shared_gates(Path::new(&source), Path::new(&output), config)?
+    } else if let Some(source) = values.remove("--refine-curriculum-payload") {
         refine_language_payload(Path::new(&source), Path::new(&output), config)?
     } else if let Some(source) = values.remove("--continue-curriculum") {
         continue_language_curriculum(Path::new(&source), Path::new(&output), config)?

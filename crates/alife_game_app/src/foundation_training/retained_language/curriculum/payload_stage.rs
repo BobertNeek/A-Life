@@ -58,6 +58,14 @@ fn balanced_gradient(
     actor: &CpuFoundationTrainer,
     episodes: &[Episode],
 ) -> Result<(Vec<f32>, Value)> {
+    weighted_gradient(actor, episodes, [0.5, 0.5])
+}
+
+fn weighted_gradient(
+    actor: &CpuFoundationTrainer,
+    episodes: &[Episode],
+    class_budget: [f32; 2],
+) -> Result<(Vec<f32>, Value)> {
     let total = mass(episodes);
     if total.iter().any(|m| *m <= 0.) {
         return Err("global balancing requires genuine positive and silence labels".into());
@@ -87,8 +95,8 @@ fn balanced_gradient(
                 continue;
             }
             // The native probe normalizes this single class locally. Weight
-            // by its actual share of the corpus to obtain equal GLOBAL budgets.
-            let scale = 0.5 * amount / total[class];
+            // by its actual share of the corpus and the explicit GLOBAL budget.
+            let scale = class_budget[class] * amount / total[class];
             let probe = actor.probe_replay_gradients_with_speech(&q, &zero, &targets)?;
             objective[class] += probe.objective * f64::from(scale);
             budgets[class] += f64::from(scale);
@@ -105,7 +113,7 @@ fn balanced_gradient(
     }
     Ok((
         gradient,
-        json!({"positive_loss":objective[0],"silence_loss":objective[1],"positive_budget":budgets[0],"silence_budget":budgets[1],"positive_token_mass":total[0],"silence_token_mass":total[1]}),
+        json!({"positive_loss":objective[0],"silence_loss":objective[1],"positive_budget":budgets[0],"silence_budget":budgets[1],"positive_presence_output_budget":budgets[0]/18.,"silence_presence_output_budget":budgets[1]/2.,"positive_token_mass":total[0],"silence_token_mass":total[1]}),
     ))
 }
 
@@ -113,6 +121,23 @@ pub fn refine_language_payload(
     source: &Path,
     output: &Path,
     config: LanguagePilotConfig,
+) -> Result<Value> {
+    refine(source, output, config, false)
+}
+
+pub fn refine_language_shared_gates(
+    source: &Path,
+    output: &Path,
+    config: LanguagePilotConfig,
+) -> Result<Value> {
+    refine(source, output, config, true)
+}
+
+fn refine(
+    source: &Path,
+    output: &Path,
+    config: LanguagePilotConfig,
+    shared_gates: bool,
 ) -> Result<Value> {
     if !config.experimental_word_bridge
         || !(1..=64).contains(&config.epochs)
@@ -171,7 +196,14 @@ pub fn refine_language_payload(
             mass(&episodes)
         );
         for epoch in 0..config.epochs {
-            let (gradient, objective) = balanced_gradient(&actor, &episodes)?;
+            let (gradient, objective) = if shared_gates {
+                // Presence/stop appear in both classes: 18 positive outputs
+                // versus two silence outputs. Equal per-gate weight needs
+                // class budgets 18/20 and 2/20, not equal class totals.
+                weighted_gradient(&actor, &episodes, [0.9, 0.1])?
+            } else {
+                balanced_gradient(&actor, &episodes)?
+            };
             let before = actor.checkpoint();
             let norm = actor.apply_gradients(&gradient)?;
             preserve_frozen(&before, &actor.checkpoint())?;
@@ -200,7 +232,7 @@ pub fn refine_language_payload(
             continuity["native_private_and_optimizer_hashes"]["assessment"]["evaluation"].clone();
         arms.push(json!({"arm":arm,"source_actor_sha256":source_actor,"source_private_sha256":source_private,"source_step":start_step,"actor_step":actor.optimizer_step(),"actor_sha256":identity(&actor.checkpoint())?,"speech_only_coordinates":ids.len(),"updates":updates,"evaluation":evaluation,"continuity":continuity}));
     }
-    let report = json!({"kind":"experimental-global-payload-balance-v5","execution_domain":"native-cpu","config":config,"source_report_sha256":identity(&previous)?,"real_training_corpus_sha256":corpus_sha,"semantic_prior_enabled":false,"arms":arms,"elapsed_seconds":started.elapsed().as_secs_f64(),"limitations":["Native payload-only stage on actual saved experiences; recurrent/action coordinates and all their optimizer history remain exact.","No additional world transitions/reward or forced assessment action. Corpus contexts remain fixed under conditional replay.","Both source treatment histories retain truthful activity narration; shuffled differs in request alignment.","Explicit native RecoveryProtocol sleep, not spontaneous natural sleep.","Fresh cohorts test retained foundation learning; this is not same-individual online optimizer rebase.","Real SLM delivery remains unavailable; no model output is claimed."]});
+    let report = json!({"kind":if shared_gates{"experimental-shared-speech-gates-v6"}else{"experimental-global-payload-balance-v5"},"execution_domain":"native-cpu","config":config,"source_report_sha256":identity(&previous)?,"real_training_corpus_sha256":corpus_sha,"semantic_prior_enabled":false,"arms":arms,"elapsed_seconds":started.elapsed().as_secs_f64(),"limitations":["Native payload-only stage on actual saved experiences; recurrent/action coordinates and all their optimizer history remain exact.","No additional world transitions/reward or forced assessment action. Corpus contexts remain fixed under conditional replay.","Both source treatment histories retain truthful activity narration; shuffled differs in request alignment.","Explicit native RecoveryProtocol sleep, not spontaneous natural sleep.","Fresh cohorts test retained foundation learning; this is not same-individual online optimizer rebase.","Real SLM delivery remains unavailable; no model output is claimed."]});
     write_json(&output.join("results.json"), &report)?;
     Ok(report)
 }
@@ -208,6 +240,78 @@ pub fn refine_language_payload(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shared_gate_budget_removes_native_silence_bias_at_zero_presence() {
+        let seed = 847_503;
+        let asset = initial_n2048_care_asset(seed).unwrap();
+        let first = new_actor_profile(seed, &asset, true).unwrap();
+        let mut weights = first.weights().to_vec();
+        for (i, s) in first.phenotype().synapses().iter().enumerate() {
+            if matches!(s.kind(),CompiledSynapseKind::Decoder(c) if c.head()==DecoderHeadKind::SpeechPayload)
+            {
+                weights[i] = 0.;
+            }
+        }
+        let asset = FoundationWeightAsset::from_trained_weights(
+            first.phenotype(),
+            weights,
+            TrainingStageManifest::new(1, 1, 1),
+        )
+        .unwrap();
+        let mut actor = new_actor_profile(seed, &asset, true).unwrap();
+        let ids=actor.phenotype().synapses().iter().enumerate().filter_map(|(i,s)|matches!(s.kind(),CompiledSynapseKind::Decoder(c) if c.head()==DecoderHeadKind::SpeechPayload).then_some(i as u32)).collect::<Vec<_>>();
+        actor
+            .set_stage_mask(
+                StageTrainableMask::from_synapse_indices(actor.phenotype(), &ids).unwrap(),
+            )
+            .unwrap();
+        let (mut host, _) = base_host(&actor, &asset, seed + 70_000, seed).unwrap();
+        let id = host.world().organism_entity_ids()[0].0;
+        let pos = speech_position(host.world()).unwrap();
+        host.world_mut()
+            .emit_player_tokens(
+                Some(id),
+                pos,
+                vec![
+                    LanguageTokenId::new(8).unwrap(),
+                    LanguageTokenId::new(1).unwrap(),
+                ],
+            )
+            .unwrap();
+        let row = host.step(&actor, 1.).unwrap().decisions.remove(0);
+        // Contradictory labels on the same real frame isolate objective bias;
+        // this is a gradient fixture, never a grounded-learning claim.
+        let episodes = [true, false].map(|positive| Episode {
+            rows: vec![row.clone()],
+            labels: vec![ImitationTarget {
+                representative: None,
+                motors: [None; 6],
+            }],
+            speech: vec![Some(ReplaySpeechTarget {
+                token: positive.then_some(8),
+                continuation: [0; 5],
+                act: SpeechActKind::Declare,
+                weight: 1.,
+            })],
+        });
+        let (equal, _) = balanced_gradient(&actor, &episodes).unwrap();
+        let (shared, objective) = weighted_gradient(&actor, &episodes, [0.9, 0.1]).unwrap();
+        let target = actor.phenotype().candidate_decoder().motor_start() + 160 + 16;
+        let gate=actor.phenotype().synapses().iter().enumerate().filter(|(_,s)|matches!(s.kind(),CompiledSynapseKind::Decoder(c) if c.head()==DecoderHeadKind::SpeechPayload)&&s.target()==target).map(|(i,_)|i).collect::<Vec<_>>();
+        assert!(gate.iter().any(|&i| equal[i].abs() > 1e-5));
+        assert!(gate.iter().all(|&i| shared[i].abs() < 1e-6));
+        assert!(
+            (objective["positive_presence_output_budget"]
+                .as_f64()
+                .unwrap()
+                - objective["silence_presence_output_budget"]
+                    .as_f64()
+                    .unwrap())
+            .abs()
+                < 1e-7
+        );
+    }
 
     #[test]
     fn duplicating_silence_does_not_change_global_native_payload_objective() {

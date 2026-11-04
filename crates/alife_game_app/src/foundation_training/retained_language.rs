@@ -13,7 +13,11 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::{fs, io::Write, process::Command};
 mod curriculum;
-pub use curriculum::{continue_language_curriculum, refine_language_payload};
+#[cfg(test)]
+mod provider_probe;
+pub use curriculum::{
+    continue_language_curriculum, refine_language_payload, refine_language_shared_gates,
+};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct LanguagePilotConfig {

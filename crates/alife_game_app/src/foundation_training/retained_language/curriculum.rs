@@ -1,7 +1,7 @@
 //! Opt-in continuation of this pilot's own disposable founders, never a live save.
 use super::*;
 mod payload_stage;
-pub use payload_stage::refine_language_payload;
+pub use payload_stage::{refine_language_payload, refine_language_shared_gates};
 
 #[derive(Clone, Copy, Serialize, Deserialize)]
 pub(super) struct AssessmentPlan {
