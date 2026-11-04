@@ -1042,11 +1042,33 @@ fn reload(recovery: Recovery, directory: Option<&Path>) -> Result<Value> {
             let file = fs::OpenOptions::new()
                 .write(true)
                 .create_new(true)
-                .open(directory.join("reloaded-evaluation.jsonl.zst"))?;
-            let mut traces = zstd::stream::write::Encoder::new(file, 3)?;
-            let result = recovered_assessment(&actor, &source, request, &mut traces)?;
-            traces.finish()?;
-            result
+                .open(directory.join("reloaded-evaluation.jsonl.zst"));
+            match file {
+                Ok(file) => {
+                    let mut traces = zstd::stream::write::Encoder::new(file, 3)?;
+                    let result = recovered_assessment(&actor, &source, request, &mut traces)?;
+                    traces.finish()?;
+                    result
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                    // A repeat cold restore must preserve prior evidence. Verify
+                    // its complete native trace against the regenerated one.
+                    let result = recovered_assessment(&actor, &source, request, std::io::sink())?;
+                    let mut saved = zstd::stream::read::Decoder::new(fs::File::open(
+                        directory.join("reloaded-evaluation.jsonl.zst"),
+                    )?)?;
+                    let mut digest = HashedTrace {
+                        inner: std::io::sink(),
+                        digest: Sha256::new(),
+                    };
+                    std::io::copy(&mut saved, &mut digest)?;
+                    if result["native_trace_sha256"] != format!("{:x}", digest.digest.finalize()) {
+                        return Err("existing assessment trace differs from cold replay".into());
+                    }
+                    result
+                }
+                Err(error) => return Err(error.into()),
+            }
         } else {
             recovered_assessment(&actor, &source, request, std::io::sink())?
         })
