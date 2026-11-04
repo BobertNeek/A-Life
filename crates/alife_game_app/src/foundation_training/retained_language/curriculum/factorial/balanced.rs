@@ -21,6 +21,7 @@ struct Sample {
     group: Group,
     verb_mask: u32,
     noun_mask: u32,
+    report_correction: bool,
 }
 
 fn remap(
@@ -202,6 +203,7 @@ fn candidate_mask(frame: &PerceptionFrame, pairs: &[(ActionId, WorldEntityId)]) 
 struct TeachingProtocol {
     visible: bool,
     event_speech: bool,
+    report_correction: bool,
 }
 fn collect(
     actor: &CpuFoundationTrainer,
@@ -215,9 +217,11 @@ fn collect(
     let TeachingProtocol {
         visible,
         event_speech,
+        report_correction,
     } = protocol;
     let (mut samples, mut events, mut heard) = (vec![], [0usize; 3], 0usize);
     let (mut speech_rows, mut speech_with_heard) = (0usize, 0usize);
+    let (mut legal_reports, mut cooldown_suppressed, mut actual_reports) = (0usize, 0usize, 0usize);
     for layout in 0..4 {
         let seed = c.seed + 600_000 + (round * 4 + layout) as u64;
         let (mut base, s) = prepared(
@@ -233,6 +237,7 @@ fn collect(
             let mut h = base.snapshot();
             let id = h.world().organism_entity_ids()[0].0;
             let (mut pending, mut left, mut fulfilled) = (None::<Event>, 0usize, false);
+            let mut reported = false;
             for tick in 0..c.decisions {
                 if arm != Arm::NoSpeech && tick < INSTRUCTION_TICKS && tick % 2 == 0 {
                     let shift = if arm == Arm::Shuffled {
@@ -252,6 +257,8 @@ fn collect(
                             .collect::<std::result::Result<_, _>>()?,
                     )?;
                 }
+                let ready_prompted = h.world().neural_speech_cooldown_ready(id, true);
+                let ready_other = h.world().neural_speech_cooldown_ready(id, false);
                 let before = owners(h.world(), s);
                 let legal = h.world().can_grab_target(id, requested.target(s));
                 let held = before[usize::from(requested == Lesson::GetToy)] == Some(id);
@@ -267,7 +274,9 @@ fn collect(
                             .flatten()
                             .any(|t| t.source_kind == UtteranceSourceKind::Teacher),
                     );
-                    let speech = if event_speech {
+                    let speech = if report_correction && reported {
+                        None
+                    } else if event_speech {
                         (tick < INSTRUCTION_TICKS)
                             .then(|| confirmed_speech(pending.as_ref(), left, Some(requested)))
                             .flatten()
@@ -276,7 +285,29 @@ fn collect(
                     } else {
                         None
                     };
-                    let target = if event_speech && speech.is_some() {
+                    let prompted = f
+                        .sensory()
+                        .language_context
+                        .heard_tokens
+                        .iter()
+                        .flatten()
+                        .any(|t| t.source_kind == UtteranceSourceKind::Player);
+                    let ready = if prompted {
+                        ready_prompted
+                    } else {
+                        ready_other
+                    };
+                    let report_due = speech.is_some() && (!report_correction || ready);
+                    if report_correction && speech.is_some() {
+                        legal_reports += usize::from(ready);
+                        cooldown_suppressed += usize::from(!ready);
+                    }
+                    let target = if report_correction && speech.is_some() && !ready {
+                        let idle = f.candidates().iter().find(|c| c.kind == ActionKind::Idle);
+                        let mut t = candidate_label(&row, idle)?;
+                        t.representative = idle.map(|c| 1 << c.candidate_index);
+                        t
+                    } else if event_speech && report_due {
                         action_target(&row, s, requested, true, true, legal, held)?
                     } else if tick < INSTRUCTION_TICKS && fulfilled {
                         let idle = f.candidates().iter().find(|c| c.kind == ActionKind::Idle);
@@ -313,7 +344,9 @@ fn collect(
                     } else {
                         HeadlessActionIds::GRAB
                     };
-                    let group = if event_speech && speech.is_some() {
+                    let group = if report_correction && speech.is_some() && !ready {
+                        Group::Fulfilled
+                    } else if event_speech && report_due {
                         Group::Narration
                     } else if tick < INSTRUCTION_TICKS {
                         let concrete = candidate_mask(f, &[(desired, requested.target(s))]);
@@ -336,7 +369,7 @@ fn collect(
                     writeln!(
                         traces,
                         "{}",
-                        json!({"phase":"balanced_readout_training","arm":arm,"round":round,"layout":layout,"world_seed":seed,"requested":requested,"instruction_window":tick<INSTRUCTION_TICKS,"scene":s,"group":group,"verb_choice_mask":verb_mask,"noun_choice_mask":noun_mask,"row":row,"owned_before":before,"owned_after":after,"label":{"representative":target.representative,"motors":target.motors},"speech_target":speech,"narration_evidence":pending,"completed":event})
+                        json!({"phase":"balanced_readout_training","arm":arm,"round":round,"layout":layout,"world_seed":seed,"requested":requested,"instruction_window":tick<INSTRUCTION_TICKS,"scene":s,"group":group,"verb_choice_mask":verb_mask,"noun_choice_mask":noun_mask,"row":row,"owned_before":before,"owned_after":after,"label":{"representative":target.representative,"motors":target.motors},"speech_target":speech,"narration_evidence":pending,"completed":event,"report_correction":report_correction,"world_cooldown_ready":ready,"report_already_completed":reported,"vocal_report_due":report_due})
                     )?;
                     if speech.is_some() {
                         speech_rows += 1;
@@ -348,6 +381,30 @@ fn collect(
                                 .any(Option::is_some),
                         );
                         left -= 1;
+                    }
+                    if report_correction
+                        && !reported
+                        && pending.as_ref().is_some_and(|e| e.lesson == requested)
+                    {
+                        let declare = row.patch.selected_bundle().is_some_and(|b| {
+                            b.channels.iter().any(|ch| {
+                                ch.channel == MotorChannel::Vocal
+                                    && ch.payload.values.first() == Some(&0x53485031)
+                                    && ch.payload.values.get(1) == Some(&0)
+                            })
+                        });
+                        let correct = declare
+                            && h.world().audible_utterances().iter().any(|u| {
+                                u.source_kind == UtteranceSourceKind::Creature
+                                    && u.speaker_id == Some(id)
+                                    && u.emitted_tick == f.tick()
+                                    && u.tokens.iter().map(|t| t.raw()).collect::<Vec<_>>()
+                                        == requested.words()
+                            });
+                        if correct {
+                            reported = true;
+                            actual_reports += 1;
+                        }
                     }
                     if let Some(event) = event {
                         events[event.lesson.index()] += 1;
@@ -362,6 +419,7 @@ fn collect(
                         group,
                         verb_mask,
                         noun_mask,
+                        report_correction,
                     });
                 }
             }
@@ -369,7 +427,7 @@ fn collect(
     }
     Ok((
         samples,
-        json!({"round":round,"native_decisions":c.decisions*12,"teacher_heard_rows":heard,"actual_activity_counts":events,"train_seeds":(0..4).map(|l|c.seed+600_000+(round*4+l)as u64).collect::<Vec<_>>(),"fixed_cue_ticks":INSTRUCTION_TICKS,"positive_speech_rows":speech_rows,"positive_speech_with_heard_tokens":speech_with_heard}),
+        json!({"round":round,"native_decisions":c.decisions*12,"teacher_heard_rows":heard,"actual_activity_counts":events,"train_seeds":(0..4).map(|l|c.seed+600_000+(round*4+l)as u64).collect::<Vec<_>>(),"fixed_cue_ticks":INSTRUCTION_TICKS,"positive_speech_rows":speech_rows,"positive_speech_with_heard_tokens":speech_with_heard,"legal_report_rows":legal_reports,"cooldown_suppressed_report_rows":cooldown_suppressed,"actual_correct_reports":actual_reports}),
     ))
 }
 
@@ -431,8 +489,24 @@ fn add_objective(
     );
     Ok(f64::from(objective.loss * scale))
 }
+fn wrong_noun_neighbor(target: ReplaySpeechTarget) -> Option<ReplaySpeechTarget> {
+    if target.token != Some(9) || ![1, 2].contains(&target.continuation[0]) {
+        return None;
+    }
+    let mut wrong = target;
+    // Food=01 and Toy=10. The measured wrong noun is their OR-code 11.
+    // It is a contrastive negative only, never a world event or a runtime remap.
+    wrong.continuation[0] = 1 | 2;
+    Some(wrong)
+}
+fn noun_margin_loss(true_loss: f64, wrong_loss: f64) -> f64 {
+    (0.02 + true_loss - wrong_loss).max(0.)
+}
 fn gradient(actor: &CpuFoundationTrainer, samples: &[Sample]) -> Result<(Vec<f32>, Value)> {
     let (concrete, rest, verbs, nouns) = distribution_counts(samples);
+    let correction = samples.first().is_some_and(|s| s.report_correction);
+    assert!(samples.iter().all(|s| s.report_correction == correction));
+    let (mut margin_loss, mut active_margin_rows) = (0f64, 0usize);
     if concrete.contains(&0) || verbs.contains(&0) || nouns.contains(&0) {
         return Err("missing real concrete classes; cannot claim balanced teaching".into());
     }
@@ -488,7 +562,14 @@ fn gradient(actor: &CpuFoundationTrainer, samples: &[Sample]) -> Result<(Vec<f32
                 loss[3] += add_objective(actor, s, logits, None, 0.1 / rest[0] as f32, &mut adj)?
             }
             Group::Narration => {
-                loss[3] += add_objective(actor, s, logits, None, 0.1 / rest[1] as f32, &mut adj)?
+                loss[3] += add_objective(
+                    actor,
+                    s,
+                    logits,
+                    None,
+                    (if correction { 0.4 } else { 0.1 }) / rest[1] as f32,
+                    &mut adj,
+                )?
             }
             Group::Other => {
                 loss[3] += add_objective(actor, s, logits, None, 0.1 / rest[2] as f32, &mut adj)?
@@ -510,14 +591,35 @@ fn gradient(actor: &CpuFoundationTrainer, samples: &[Sample]) -> Result<(Vec<f32
                 &[Some(t)],
             )?;
             speech_loss += g.objective * f64::from(scale);
-            for (dst, src) in sum.iter_mut().zip(g.gradients) {
+            for (dst, src) in sum.iter_mut().zip(&g.gradients) {
                 *dst += src * scale;
+            }
+            if correction {
+                if let Some(wrong) = wrong_noun_neighbor(t) {
+                    let other = actor.probe_replay_gradients_with_speech(
+                        &q,
+                        &[vec![0.; logits.len()]],
+                        &[Some(wrong)],
+                    )?;
+                    let hinge = noun_margin_loss(g.objective, other.objective);
+                    if hinge > 0. {
+                        let noun_classes = mass[1..].iter().filter(|m| **m > 0.).count();
+                        let pair_scale = t.len() as f32 / mass[k] / noun_classes as f32;
+                        margin_loss += hinge * f64::from(pair_scale);
+                        active_margin_rows += 1;
+                        for ((dst, positive), negative) in
+                            sum.iter_mut().zip(&g.gradients).zip(&other.gradients)
+                        {
+                            *dst += (positive - negative) * pair_scale;
+                        }
+                    }
+                }
             }
         }
     }
     Ok((
         sum,
-        json!({"concrete_counts_eat_food_get_food_get_toy":concrete,"full_concrete_total_mass_per_class":0.4/3.,"verb_pair_counts_eat_get":verbs,"verb_total_mass_per_class":0.075,"noun_pair_counts_food_toy":nouns,"noun_total_mass_per_class":0.075,"fulfilled_narration_other_rows":rest,"other_class_mass":0.1,"loss_full_verb_noun_other":loss,"factual_speech_loss":speech_loss,"actual_payload_class_token_mass":mass,"production_marginals_not_claimed_balanced":true}),
+        json!({"concrete_counts_eat_food_get_food_get_toy":concrete,"full_concrete_total_mass_per_class":0.4/3.,"verb_pair_counts_eat_get":verbs,"verb_total_mass_per_class":0.075,"noun_pair_counts_food_toy":nouns,"noun_total_mass_per_class":0.075,"fulfilled_narration_other_rows":rest,"other_class_mass":0.1,"loss_full_verb_noun_other":loss,"factual_speech_loss":speech_loss,"report_action_mass":if correction{0.4}else{0.1},"noun_margin_loss":margin_loss,"active_noun_margin_rows":active_margin_rows,"noun_native_loss_gap_margin":0.02,"actual_payload_class_token_mass":mass,"production_marginals_not_claimed_balanced":true}),
     ))
 }
 
@@ -736,21 +838,28 @@ pub fn continue_balanced_grounded_language(
     output: &Path,
     c: LanguagePilotConfig,
 ) -> Result<Value> {
-    run_balanced(source, output, c, false, false)
+    run_balanced(source, output, c, false, false, false)
 }
 pub fn continue_visible_balanced_grounded_language(
     source: &Path,
     output: &Path,
     c: LanguagePilotConfig,
 ) -> Result<Value> {
-    run_balanced(source, output, c, true, false)
+    run_balanced(source, output, c, true, false, false)
 }
 pub fn continue_event_confirmed_speech(
     source: &Path,
     output: &Path,
     c: LanguagePilotConfig,
 ) -> Result<Value> {
-    run_balanced(source, output, c, true, true)
+    run_balanced(source, output, c, true, true, false)
+}
+pub fn continue_report_choice(
+    source: &Path,
+    output: &Path,
+    c: LanguagePilotConfig,
+) -> Result<Value> {
+    run_balanced(source, output, c, true, true, true)
 }
 fn run_balanced(
     source: &Path,
@@ -758,6 +867,7 @@ fn run_balanced(
     c: LanguagePilotConfig,
     visible: bool,
     event_speech: bool,
+    report_correction: bool,
 ) -> Result<Value> {
     if c.llamacpp_translation
         || !c.experimental_word_bridge
@@ -770,7 +880,9 @@ fn run_balanced(
         );
     }
     let old: Value = serde_json::from_slice(&fs::read(source.join("results.json"))?)?;
-    let admitted = if event_speech {
+    let admitted = if report_correction {
+        "experimental-event-confirmed-speech-v17"
+    } else if event_speech {
         "experimental-balanced-grounding-visible-v16"
     } else {
         "experimental-linear-word-readout-v14"
@@ -828,6 +940,7 @@ fn run_balanced(
                     TeachingProtocol {
                         visible,
                         event_speech,
+                        report_correction,
                     },
                 )?;
                 eprintln!("balanced collection {receipt}");
@@ -878,7 +991,7 @@ fn run_balanced(
         arms.push(json!({"arm":arm,"common_source_actor_sha256":initial,"source_private_sha256":private_sha,"source_step":before.optimizer_step,"actor_step":actor.optimizer_step(),"actor_sha256":identity(&actor.checkpoint())?,"collections":collections,"updates":updates,"evaluation":cold["native_private_and_optimizer_hashes"]["assessment"]["evaluation"],"continuity":cold,"source_history_retained":true}));
     }
     trace.finish()?;
-    let result = json!({"kind":if event_speech{"experimental-event-confirmed-speech-v17"}else if visible{"experimental-balanced-grounding-visible-v16"}else{"experimental-balanced-grounding-v15"},"execution_domain":"native-cpu","config":c,"source_report_sha256":identity(&old)?,"held_out_world_seeds":HELD_OUT_SEEDS,"independent_seed_count":HELD_OUT_SEEDS.len(),"pre_post_are_paired_not_independent":true,"teacher_and_player_cue_ticks":INSTRUCTION_TICKS,"evaluation_ticks":EVALUATION_TICKS,"arms":arms,"elapsed_seconds":start_time.elapsed().as_secs_f64(),"semantic_prior_enabled":false,"teacher":"scripted ordinary spatial language","limitations":["One common retained source founder; independent held-out environment/sampling seeds are not independent trained founders.","Post-sleep is paired with the same pre-sleep seed and must not double independent N. RecoveryProtocol sleep is induced, with no matched awake-delay causal sleep control.","Native conditional action losses balance verb and noun choices separately; truthful narration activity classes cannot yield exactly balanced lexical marginals without impossible EatToy events.","No-request retains prior grounded history and natural self speech. No real SLM delivery or promotion."]});
+    let result = json!({"kind":if report_correction{"experimental-report-choice-noun-margin-v18"}else if event_speech{"experimental-event-confirmed-speech-v17"}else if visible{"experimental-balanced-grounding-visible-v16"}else{"experimental-balanced-grounding-v15"},"execution_domain":"native-cpu","config":c,"source_report_sha256":identity(&old)?,"held_out_world_seeds":HELD_OUT_SEEDS,"independent_seed_count":HELD_OUT_SEEDS.len(),"pre_post_are_paired_not_independent":true,"teacher_and_player_cue_ticks":INSTRUCTION_TICKS,"evaluation_ticks":EVALUATION_TICKS,"arms":arms,"elapsed_seconds":start_time.elapsed().as_secs_f64(),"semantic_prior_enabled":false,"teacher":"scripted ordinary spatial language","limitations":["One common retained source founder; independent held-out environment/sampling seeds are not independent trained founders.","Post-sleep is paired with the same pre-sleep seed and must not double independent N. RecoveryProtocol sleep is induced, with no matched awake-delay causal sleep control.","Native conditional action losses balance verb and noun choices separately; truthful narration activity classes cannot yield exactly balanced lexical marginals without impossible EatToy events.","No-request retains prior grounded history and natural self speech. No real SLM delivery or promotion."]});
     write_json(&output.join("results.json"), &result)?;
     Ok(result)
 }
@@ -981,6 +1094,79 @@ mod tests {
                 );
             }
         }
+    }
+    #[test]
+    fn native_noun_margin_gradient_matches_finite_difference_on_real_row() {
+        // Numeric objective check on a real native row, not a learning/behavior score.
+        let seed = 847501;
+        let asset = initial_n2048_care_asset(seed).unwrap();
+        let actor = new_actor_profile(seed, &asset, true).unwrap();
+        let (mut h, scene) = prepared(&actor, &asset, seed, 1447501, 2, false).unwrap();
+        place_balanced(h.world_mut(), scene, 0, false, true).unwrap();
+        let id = h.world().organism_entity_ids()[0].0;
+        let pos = speech_position(h.world()).unwrap();
+        h.world_mut()
+            .emit_player_tokens(
+                Some(id),
+                pos,
+                [9, 2]
+                    .into_iter()
+                    .map(|w| LanguageTokenId::new(w).unwrap())
+                    .collect(),
+            )
+            .unwrap();
+        let row = h.step(&actor, 1.).unwrap().decisions.remove(0);
+        let q = readout::single(&actor, &row);
+        let n = row.action.candidate_count as usize;
+        let mut continuation = [0; 5];
+        continuation[0] = 2;
+        let target = ReplaySpeechTarget {
+            token: Some(9),
+            continuation,
+            act: SpeechActKind::Declare,
+            weight: 1.,
+        };
+        let wrong = wrong_noun_neighbor(target).unwrap();
+        assert_eq!(wrong.continuation[0], 3);
+        let evaluate = |a: &CpuFoundationTrainer| {
+            let g = a
+                .probe_replay_gradients_with_speech(&q, &[vec![0.; n]], &[Some(target)])
+                .unwrap();
+            let b = a
+                .probe_replay_gradients_with_speech(&q, &[vec![0.; n]], &[Some(wrong)])
+                .unwrap();
+            (
+                0.02 + g.objective - b.objective,
+                g.gradients
+                    .iter()
+                    .zip(b.gradients)
+                    .map(|(a, b)| a - b)
+                    .collect::<Vec<_>>(),
+            )
+        };
+        // Check the native derivative of the active hinge branch even when
+        // this fresh actor already satisfies the margin; no behavior claim.
+        assert_eq!(noun_margin_loss(0., 1.), 0.);
+        assert!((noun_margin_loss(1., 0.) - 1.02).abs() < 1e-12);
+        let (_, g) = evaluate(&actor);
+        let index=actor.phenotype().synapses().iter().enumerate().filter(|(_,s)|matches!(s.kind(),CompiledSynapseKind::Decoder(c) if c.head()==DecoderHeadKind::SpeechPayload)).max_by(|(a,_),(b,_)|g[*a].abs().total_cmp(&g[*b].abs())).unwrap().0;
+        assert!(g[index].abs() > 1e-5);
+        let epsilon = 0.001;
+        let mut losses = vec![];
+        for delta in [-epsilon, epsilon] {
+            let mut cp = actor.checkpoint();
+            cp.weights[index] += delta;
+            let changed =
+                CpuFoundationTrainer::from_checkpoint(actor.phenotype().clone(), asset.clone(), cp)
+                    .unwrap();
+            losses.push(evaluate(&changed).0);
+        }
+        let numerical = (losses[1] - losses[0]) / (2. * f64::from(epsilon));
+        assert!(
+            (numerical - f64::from(g[index])).abs() < 0.003,
+            "native margin analytic {} numerical {numerical}",
+            g[index]
+        );
     }
     #[test]
     fn confirmed_speech_needs_actual_matching_event_and_constant_bits_prefer_get_food() {
@@ -1107,6 +1293,7 @@ mod tests {
             TeachingProtocol {
                 visible: false,
                 event_speech: false,
+                report_correction: false,
             },
         )
         .unwrap();

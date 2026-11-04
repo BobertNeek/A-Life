@@ -100,7 +100,12 @@ fn diagnose_native_cue_payload_and_voice_factors() {
     assert!(!out.exists(), "preserve an existing diagnostic result");
     let measured: Value =
         serde_json::from_slice(&fs::read(source.join("results.json")).unwrap()).unwrap();
-    assert_eq!(measured["kind"], "experimental-event-confirmed-speech-v17");
+    assert!([
+        "experimental-event-confirmed-speech-v17",
+        "experimental-report-choice-noun-margin-v18"
+    ]
+    .iter()
+    .any(|kind| measured["kind"] == *kind));
     let started = Instant::now();
     let mut records = vec![];
     let mut swaps = vec![];
@@ -303,7 +308,7 @@ fn diagnose_native_cue_payload_and_voice_factors() {
                             emitted, expected_tokens,
                             "native payload and world cooldown must predict actual utterances"
                         );
-                        records.push(json!({"arm":arm,"case":case,"world_seed":seed,"requested":requested,"tick_after_cue":tick,"native_row_sha256":digest,"row_matches_saved_v17":true,"native_action_resampling_exact":true,"event_confirmed_target":target,"prior_actual_event":pending,"actual_food_consumption":consequences(&row,scene).0,"owners_before":owned_before,"owners_after":owned_after,"selected_vocal_channel":vocal,"native_vocal_choice_selected":vocal_choice,"last_actual_speech_tick_before":last_actual_speech_tick,"prompted_world_speech":prompted,"world_speech_cooldown_ticks":cooldown,"world_speech_cooldown_blocked":cooldown_blocked,"native_payload_matches_proposed_vocal_tokens":true,"world_payload_and_cooldown_predict_actual_utterance":true,"voice_choice_probability":voice_probability(&row,logits),"actual_utterance_tokens":emitted,"conditional_payload_if_vocal_diagnostic_only":decoded,"conditional_payload_correct":target.map(|t|conditional_correct(&decoded,t)),"payload_factors":payload_audit(&raw,target)}));
+                        records.push(json!({"arm":arm,"case":case,"world_seed":seed,"requested":requested,"tick_after_cue":tick,"native_row_sha256":digest,"row_matches_saved_source":true,"native_action_resampling_exact":true,"event_confirmed_target":target,"prior_actual_event":pending,"actual_food_consumption":consequences(&row,scene).0,"owners_before":owned_before,"owners_after":owned_after,"selected_vocal_channel":vocal,"native_vocal_choice_selected":vocal_choice,"last_actual_speech_tick_before":last_actual_speech_tick,"prompted_world_speech":prompted,"world_speech_cooldown_ticks":cooldown,"world_speech_cooldown_blocked":cooldown_blocked,"native_payload_matches_proposed_vocal_tokens":true,"world_payload_and_cooldown_predict_actual_utterance":true,"voice_choice_probability":voice_probability(&row,logits),"actual_utterance_tokens":emitted,"conditional_payload_if_vocal_diagnostic_only":decoded,"conditional_payload_correct":target.map(|t|conditional_correct(&decoded,t)),"payload_factors":payload_audit(&raw,target)}));
                         if !emitted.is_empty() {
                             last_actual_speech_tick = Some(frame.tick());
                         }
@@ -400,7 +405,7 @@ fn diagnose_native_cue_payload_and_voice_factors() {
         actors.push(json!({"arm":arm,"actor_sha256":before,"source_actor_private_and_optimizer_files_unmodified":true}));
     }
     assert_eq!(records.len(), 256);
-    let report = json!({"kind":"native-speech-cue-payload-voice-factor-diagnostic-v1","execution_domain":"native-cpu","source_kind":measured["kind"],"actors":actors,"held_out_cases":[0,2],"world_seeds":[HELD_OUT_SEEDS[0],HELD_OUT_SEEDS[2]],"native_decisions":records.len(),"all_rows_match_existing_v17":true,"teacher_and_prior_absent":true,"elapsed_seconds":started.elapsed().as_secs_f64(),"rows":records,"matched_cue_bank_swaps":swaps,"disposable_native_shadow_optimizer_probes":shadows,"limits":["Two previously observed held-out worlds and one founder, pre-sleep only; not an independent validation or new training experiment.","Conditional payloads, cue-bank swaps and shadow optimizer steps do not execute world actions and do not establish learning or competence.","The encoder bank contains native word and bodily contributions; swaps hold all other recorded replay context fixed but are not a pure semantic intervention.","No source checkpoint mutation, default-brain migration, promotion, real SLM request or Luna retry."]});
+    let report = json!({"kind":"native-speech-cue-payload-voice-factor-diagnostic-v1","execution_domain":"native-cpu","source_kind":measured["kind"],"actors":actors,"held_out_cases":[0,2],"world_seeds":[HELD_OUT_SEEDS[0],HELD_OUT_SEEDS[2]],"native_decisions":records.len(),"all_rows_match_existing_source":true,"teacher_and_prior_absent":true,"elapsed_seconds":started.elapsed().as_secs_f64(),"rows":records,"matched_cue_bank_swaps":swaps,"disposable_native_shadow_optimizer_probes":shadows,"limits":["Two previously observed held-out worlds and one founder, pre-sleep only; not an independent validation or new training experiment.","Conditional payloads, cue-bank swaps and shadow optimizer steps do not execute world actions and do not establish learning or competence.","The encoder bank contains native word and bodily contributions; swaps hold all other recorded replay context fixed but are not a pure semantic intervention.","No source checkpoint mutation, default-brain migration, promotion, real SLM request or Luna retry."]});
     let mut file = fs::OpenOptions::new()
         .write(true)
         .create_new(true)

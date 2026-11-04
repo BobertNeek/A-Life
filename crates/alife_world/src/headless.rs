@@ -4910,6 +4910,19 @@ impl HeadlessWorld {
         self.injected_post_action_failure = true;
     }
 
+    /// Query the existing cooldown guard only; other command validation still applies.
+    /// This does not reserve speech, mutate state or shorten either native cadence.
+    pub fn neural_speech_cooldown_ready(&self, organism: OrganismId, prompted: bool) -> bool {
+        let cooldown = if prompted {
+            PROMPTED_SPEECH_COOLDOWN_TICKS
+        } else {
+            SPONTANEOUS_SPEECH_COOLDOWN_TICKS
+        };
+        self.last_creature_utterance_ticks
+            .get(&organism.raw())
+            .is_none_or(|last| self.tick.raw().saturating_sub(last.raw()) >= cooldown)
+    }
+
     /// Executes a neural action while accepting speech content only from the
     /// GPU-authored payload receipt. A missing payload cannot fall through to
     /// the legacy deterministic token emitter.
@@ -4939,16 +4952,7 @@ impl HeadlessWorld {
             self.last_action_result = Some(result.clone());
             return Ok(result);
         };
-        let cooldown = if prompted {
-            PROMPTED_SPEECH_COOLDOWN_TICKS
-        } else {
-            SPONTANEOUS_SPEECH_COOLDOWN_TICKS
-        };
-        if self
-            .last_creature_utterance_ticks
-            .get(&command.organism_id.raw())
-            .is_some_and(|last| self.tick.raw().saturating_sub(last.raw()) < cooldown)
-        {
+        if !self.neural_speech_cooldown_ready(command.organism_id, prompted) {
             let result = self.finish_action(
                 *command,
                 false,
@@ -10007,6 +10011,73 @@ mod task_3_2a_tests {
         assert_eq!(
             world.organism_registry().get(ORGANISM_ID),
             Some(&before_record)
+        );
+    }
+
+    #[test]
+    fn cooldown_query_matches_real_speech_without_mutating_or_shortening_cadence() {
+        let mut world = HeadlessScenarioBuilder::new(32_018)
+            .agent("agent", ORGANISM_ID, Vec3f::ZERO)
+            .build()
+            .unwrap();
+        let agent = world.entity_id("agent").unwrap();
+        world.register_organism_record(record(agent)).unwrap();
+        world
+            .apply_command(&HeadlessWorldCommand::idle(ORGANISM_ID).unwrap())
+            .unwrap();
+        let command = HeadlessWorldCommand::vocalize(ORGANISM_ID).unwrap();
+        let payload = SpeechMotorPayload::try_new(
+            SpeechActKind::Declare,
+            vec![
+                LanguageTokenId::new(9).unwrap(),
+                LanguageTokenId::new(2).unwrap(),
+            ],
+            Confidence::new(1.).unwrap(),
+        )
+        .unwrap();
+        let before = world.save_state();
+        assert!(world.neural_speech_cooldown_ready(ORGANISM_ID, false));
+        assert!(world.neural_speech_cooldown_ready(ORGANISM_ID, true));
+        assert_eq!(world.save_state(), before);
+        assert!(
+            world
+                .apply_neural_command(&command, Some(payload.clone()), false)
+                .unwrap()
+                .execution
+                .succeeded
+        );
+        assert!(!world.neural_speech_cooldown_ready(ORGANISM_ID, true));
+        for _ in 0..8 {
+            world.try_advance_tick().unwrap();
+        }
+        assert!(world.neural_speech_cooldown_ready(ORGANISM_ID, true));
+        assert!(!world.neural_speech_cooldown_ready(ORGANISM_ID, false));
+        assert!(
+            !world
+                .apply_neural_command(&command, Some(payload.clone()), false)
+                .unwrap()
+                .execution
+                .succeeded
+        );
+        assert!(
+            world
+                .apply_neural_command(&command, Some(payload.clone()), true)
+                .unwrap()
+                .execution
+                .succeeded
+        );
+        for _ in 0..31 {
+            world.try_advance_tick().unwrap();
+        }
+        assert!(!world.neural_speech_cooldown_ready(ORGANISM_ID, false));
+        world.try_advance_tick().unwrap();
+        assert!(world.neural_speech_cooldown_ready(ORGANISM_ID, false));
+        assert!(
+            world
+                .apply_neural_command(&command, Some(payload), false)
+                .unwrap()
+                .execution
+                .succeeded
         );
     }
 
