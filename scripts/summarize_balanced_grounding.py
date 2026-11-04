@@ -32,6 +32,9 @@ def audit(path):
             'first_acquisition': None,
             'last_owners': None,
             'utterances': 0,
+            'precompletion_vocal_selections': 0,
+            'precompletion_actual_declares': 0,
+            'eat_toy_declares_under_get_toy': 0,
             'utterance_events': [],
             'recent_actual_activity_declarations': 0,
             'premature_requested_phrase_declarations': 0,
@@ -81,6 +84,10 @@ def audit(path):
             assert WORDS[event['narration_evidence']['lesson']] == [target['token'], target['continuation'][0]]
             t['eligible_rows'] += 1
             t['requested_activity_eligible_rows'] += event['narration_evidence']['lesson'] == event['requested']
+        requested = event['requested']
+        completed = (t['food_consumption_steps'] if requested == 'EatFood' else t['food_acquisition_steps'] if requested == 'GetFood' else t['toy_acquisition_steps'] if requested == 'GetToy' else [])
+        precompletion = bool(requested and not any(s < step for s in completed))
+        t['precompletion_vocal_selections'] += bool(precompletion and row['patch']['decision']['selected_action']['kind'] == 'Vocalize')
         bundle = row['patch']['decision']['selected_bundle']
         payloads = [c['payload']['values'] for c in bundle['channels'] if c['channel'] == 'Vocal'] if bundle else []
         for u in event['emitted']:
@@ -89,6 +96,8 @@ def audit(path):
             declare = payloads[0][1] == 0
             t['utterances'] += 1
             t['declarations'] += declare
+            t['precompletion_actual_declares'] += bool(precompletion and declare)
+            t['eat_toy_declares_under_get_toy'] += bool(declare and requested == 'GetToy' and u['tokens'] == [8, 2])
             evidence = event['narration_evidence']
             age = tick - evidence['tick'] if evidence else None
             recent = bool(declare and evidence and 0 < age <= 3 and u['tokens'] == WORDS[evidence['lesson']])
@@ -185,6 +194,10 @@ def add_actual_first_phrase_metrics(result):
                  g[None]['utterance_events'][0]['tokens'] in WORDS.values()) for g in by_seed.values())
         silent = [g[None] for g in by_seed.values()]
         silent_words = [u for t in silent for u in t['utterance_events']]
+        summary['posthoc_precompletion_diagnostic'] = {
+            'vocal_selections_before_requested_completion': sum(t['precompletion_vocal_selections'] for t in trials),
+            'actual_declares_before_requested_completion_any_words': sum(t['precompletion_actual_declares'] for t in trials),
+            'eat_toy_declares_under_get_toy': sum(t['eat_toy_declares_under_get_toy'] for t in trials)}
         if any('physical_safety' in t for t in trials):
             assert all(t['physical_safety']['recorded_ticks'] == 24 for t in trials)
             summary['physical_safety'] = {
