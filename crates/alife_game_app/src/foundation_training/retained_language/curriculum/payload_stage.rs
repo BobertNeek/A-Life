@@ -252,6 +252,7 @@ fn refine(
                 curriculum: Some(AssessmentPlan {
                     recovery_sleep: true,
                     collect_utterance_timing: false,
+                    factorial_grounding: false,
                 }),
             },
             next.ok_or("no payload update")?,

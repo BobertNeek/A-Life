@@ -2,7 +2,7 @@
 //! No new neural math, runtime thresholds or evaluation action overrides.
 use super::*;
 
-fn targets(
+pub(super) fn targets(
     episodes: &mut [Episode],
     labels: &mut impl Write,
     round: usize,
@@ -174,7 +174,8 @@ pub fn continue_action_gated_language(
                 Arm::Untreated,
                 AssessmentPlan {
                     recovery_sleep: true,
-                    collect_utterance_timing: true
+                    collect_utterance_timing: true,
+                    factorial_grounding: false
                 },
                 &mut trace
             )?);
@@ -222,6 +223,7 @@ pub fn continue_action_gated_language(
                 curriculum: Some(AssessmentPlan {
                     recovery_sleep: true,
                     collect_utterance_timing: true,
+                    factorial_grounding: false,
                 }),
             },
             next.ok_or("no update")?,

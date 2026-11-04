@@ -1,0 +1,34 @@
+{
+  "kind": "authorized-luna-private-stderr-diagnostic",
+  "uses_public_saved_simulation_context": true,
+  "input_seed": 847503,
+  "changed_from_previous": "stdout/stderr privately captured; stderr inspection bounded to first 8192 bytes; 30-second timeout; no guards/credentials/routing changed",
+  "model": "gpt-6-luna",
+  "exit_code": 1,
+  "elapsed_seconds": 0.06471647799844504,
+  "stderr_bytes": 197,
+  "stdout_bytes": 0,
+  "answer_bytes": 0,
+  "stderr_mentions_config_keys": [],
+  "recognized_error_categories": [],
+  "safe_quoted_config_tokens": [],
+  "safe_known_http_statuses": [],
+  "known_cli_version": "codex-cli 0.159.0-alpha.3",
+  "limitations": [
+    "The safe whitelist did not retain the specific stderr error text; its 197 bytes were removed with the private temporary directory.",
+    "Official redacted doctor observations below are separate readiness diagnostics, not the exact cause of the exec exit."
+  ],
+  "readiness_findings": {
+    "HOME_and_CODEX_HOME_readonly": true,
+    "default_log_and_sqlite_locations_under_readonly_CODEX_HOME": true,
+    "ChatGPT_auth_configured": true,
+    "authenticated_http_reachable": true,
+    "authenticated_websocket_probe_status": 401,
+    "local_log_dir_and_sqlite_home_options_recognized": true,
+    "HOME_CODEX_HOME_credentials_transport_unchanged": true,
+    "no_inference_after_known_websocket_unauthorized": true,
+    "no_real_model_output_delivered": true
+  },
+  "invocations": 1,
+  "model_requests_sent": "unverified; the process exited before returning any output"
+}

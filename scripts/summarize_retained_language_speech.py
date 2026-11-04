@@ -12,7 +12,7 @@ import sys
 
 import zstandard
 
-WORDS = {"EatFood": [8, 1], "GetToy": [9, 2]}
+WORDS = {"EatFood": [8, 1], "GetToy": [9, 2], "GetFood": [9, 1]}
 MAGIC = 0x53485031
 
 
@@ -26,13 +26,13 @@ def summarize(directory, arm):
     with path.open("rb") as source:
         for line in io.TextIOWrapper(zstandard.ZstdDecompressor().stream_reader(source)):
             event = json.loads(line)
-            if event.get("phase") != "curriculum_evaluation":
+            if event.get("phase") not in {"curriculum_evaluation", "factorial_evaluation"}:
                 continue
             key = (event["layout"], event["recovery_sleep"], event["requested"])
             row = event["row"]
             tick = row["patch"]["pre_action"]["tick"]
             target = event["grounded_speech_target"]
-            eligible = target["token"] is not None
+            eligible = target is not None and target["token"] is not None
             counts["scored_rows"] += 1
             counts["eligible_rows"] += eligible
             counts["selected_vocalize"] += row["action"]["motor_candidates"][3] is not None
@@ -59,7 +59,7 @@ def summarize(directory, arm):
                     latencies.append(tick - prior["tick"])
                 receipts.append({"layout": key[0], "recovery_sleep": key[1], "requested": key[2], "tick": tick, "tokens": tokens, "speech_act_raw": payload[1], "player_heard": bool(payload[2]), "inside_primary_window": eligible, "preceding_latest_activity": prior, "matches_preceding_activity": latest_match})
             if event["completed"] is not None:
-                previous[key] = {"goal": event["completed"]["goal"], "tick": tick}
+                previous[key] = {"goal": event["completed"].get("goal",event["completed"].get("lesson")), "tick": tick}
     return {"counts": dict(counts), "emitted_token_sequences": dict(sequences), "preceding_activity_match_latency_ticks": latencies, "actual_utterance_receipts": receipts}
 
 
