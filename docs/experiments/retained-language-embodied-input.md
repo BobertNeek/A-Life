@@ -115,6 +115,11 @@ V2 baselines and silent assessment cues; there is no new no-speech training arm.
 No natural-sleep, far-navigation, CFF ChiChi or successful SLM-learning claim is
 supported.
 
+The separate [action-gated payload follow-up](retained-language-action-gate.md)
+diagnoses conflicting presence gradients and measures actual speech production
+with grounded, shuffled and no-request-speech controls. Its primary narration
+and request-comprehension outcomes remain negative.
+
 ## Reproduction
 
 ```sh
