@@ -11,6 +11,9 @@ use alife_core::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+mod body_rounding;
+pub use body_rounding::{with_saved_body_rounding_compatibility, SavedBodyRoundingCompatibilityV1};
+
 const ORGANISM_REGISTRY_SIGNATURE_ENCODING_VERSION: u16 = 1;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -626,7 +629,9 @@ impl WorldOrganismRecord {
         }
         if self.genetic_validation.genetics.get().is_none() {
             self.genome.validate_contract()?;
-            if *self.phenotype != self.genome.express()? {
+            if *self.phenotype != self.genome.express()?
+                && !body_rounding::explicitly_matches(self)?
+            {
                 return Err(ScaffoldContractError::InvalidId);
             }
             // Concurrent readers may race to install the same immutable proof.

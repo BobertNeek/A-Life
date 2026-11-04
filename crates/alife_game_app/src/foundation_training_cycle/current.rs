@@ -3,7 +3,9 @@ use super::*;
 pub use alife_training::SameIndividualProgressV1;
 use alife_training::{CheckpointSeedsV1, CurrentTrainingCheckpointV1};
 use sha2::{Digest, Sha256};
+mod body_rounding;
 mod life;
+pub use body_rounding::*;
 #[cfg(test)]
 mod throughput_tests;
 pub(super) use life::validation_scope;

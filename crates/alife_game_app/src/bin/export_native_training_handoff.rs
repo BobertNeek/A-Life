@@ -28,6 +28,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .collect::<Vec<_>>()
         .as_slice()
     {
+        ["--propose-current-body-rounding", path, expected] => Some(serde_json::to_value(
+            alife_game_app::propose_current_body_rounding_compatibility(Path::new(path), expected)?,
+        )?),
+        ["--inspect-current-body-rounding", path, proof_file] => {
+            let proof: alife_game_app::CurrentBodyRoundingCompatibilityV1 =
+                serde_json::from_slice(&std::fs::read(proof_file)?)?;
+            let checkpoint = alife_game_app::read_current_training_checkpoint_with_body_rounding(
+                Path::new(path),
+                &proof.source_current_sha256,
+                &proof.proof,
+            )?;
+            Some(serde_json::json!({"native_admission":true,
+                "policy_version":checkpoint.handoff.policy_version,
+                "actor_optimizer_step":checkpoint.handoff.actor.optimizer_step,
+                "value_optimizer_step":checkpoint.handoff.value.optimizer_step,
+                "source_current_sha256":proof.source_current_sha256,
+                "explicit_body_rounding_compatibility":proof.proof,
+                "source_modified":false,"private_life_transferred":false,
+                "neural_execution":false}))
+        }
         ["--inspect-current", path] => Some(alife_game_app::inspect_current_training_checkpoint(
             Path::new(path),
         )?),

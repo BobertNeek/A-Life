@@ -132,6 +132,7 @@ impl Fixture {
             lesson,
             food_need_condition: condition,
             known_exclusions: true,
+            saved_body_rounding_compatibility: None,
         }
     }
     fn native_history(&self) -> PathBuf {

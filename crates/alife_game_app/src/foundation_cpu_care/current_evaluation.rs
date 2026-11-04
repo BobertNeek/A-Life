@@ -31,6 +31,10 @@ pub struct CpuCurrentEvaluationRequest {
     pub food_need_condition: FoundationFoodNeedCondition,
     /// Required opt-in: this adapter never upgrades historical freshness.
     pub known_exclusions: bool,
+    /// Explicit source-only body portability proof. It never changes saved
+    /// values or the new assessment body and is bound by the native receipt.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub saved_body_rounding_compatibility: Option<alife_world::SavedBodyRoundingCompatibilityV1>,
 }
 
 /// An assessment matrix declaration, not a fabricated consumed-seed ledger.
@@ -140,7 +144,14 @@ fn admit_current(request: &CpuCurrentEvaluationRequest) -> Result<AdmittedCurren
     if source_hash != request.expected_current_sha256 {
         return Err("Current bytes differ from the explicitly selected source SHA256".into());
     }
-    let current = crate::read_current_training_checkpoint(&request.current)?;
+    let current = match &request.saved_body_rounding_compatibility {
+        None => crate::read_current_training_checkpoint(&request.current)?,
+        Some(proof) => crate::read_current_training_checkpoint_with_body_rounding(
+            &request.current,
+            &request.expected_current_sha256,
+            proof,
+        )?,
+    };
     let history: CpuCurrentAssessmentSeeds = read_json(&request.seed_history)?;
     admit_seeds(request, &current, &history)?;
     let source = current.handoff.clone().admit()?;
@@ -170,7 +181,9 @@ fn admit_current(request: &CpuCurrentEvaluationRequest) -> Result<AdmittedCurren
         "native_rebinding_compatible":true,"source_changed":false,
         "same_individual_restore":false,"private_life_transferred":false,
         "sampler_transferred":false,"training_continuation":false,
-        "exclusion_kinds_reconstructed":false});
+        "exclusion_kinds_reconstructed":false,
+        "saved_body_rounding_compatibility":request.saved_body_rounding_compatibility,
+        "source_biological_bits_modified":false});
     if file_hash(&request.current)? != source_hash {
         return Err("Current changed during native admission".into());
     }
