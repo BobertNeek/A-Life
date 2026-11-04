@@ -196,6 +196,11 @@ fn candidate_mask(frame: &PerceptionFrame, pairs: &[(ActionId, WorldEntityId)]) 
         })
         .fold(0, |m, c| m | (1 << c.candidate_index))
 }
+#[derive(Clone, Copy)]
+struct TeachingProtocol {
+    visible: bool,
+    event_speech: bool,
+}
 fn collect(
     actor: &CpuFoundationTrainer,
     asset: &FoundationWeightAsset,
@@ -203,9 +208,12 @@ fn collect(
     arm: Arm,
     round: usize,
     traces: &mut impl Write,
-    visible: bool,
-    event_speech: bool,
+    protocol: TeachingProtocol,
 ) -> Result<(Vec<Sample>, Value)> {
+    let TeachingProtocol {
+        visible,
+        event_speech,
+    } = protocol;
     let (mut samples, mut events, mut heard) = (vec![], [0usize; 3], 0usize);
     let (mut speech_rows, mut speech_with_heard) = (0usize, 0usize);
     for layout in 0..4 {
@@ -815,8 +823,10 @@ fn run_balanced(
                     arm,
                     round,
                     &mut trace,
-                    visible,
-                    event_speech,
+                    TeachingProtocol {
+                        visible,
+                        event_speech,
+                    },
                 )?;
                 eprintln!("balanced collection {receipt}");
                 collections.push(receipt);
@@ -1088,8 +1098,10 @@ mod tests {
             Arm::Grounded,
             0,
             &mut std::io::sink(),
-            false,
-            false,
+            TeachingProtocol {
+                visible: false,
+                event_speech: false,
+            },
         )
         .unwrap();
         let (concrete, _, verb, noun) = distribution_counts(&samples);
