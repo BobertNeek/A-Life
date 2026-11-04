@@ -170,6 +170,21 @@ fn physical_event(
         })
         .transpose()
 }
+fn confirmed_speech(
+    event: Option<&Event>,
+    left: usize,
+    requested: Option<Lesson>,
+) -> Option<ReplaySpeechTarget> {
+    let event = event.filter(|e| left > 0 && Some(e.lesson) == requested)?;
+    let mut continuation = [0; 5];
+    continuation[0] = event.lesson.words()[1];
+    Some(ReplaySpeechTarget {
+        token: Some(event.lesson.words()[0]),
+        continuation,
+        act: SpeechActKind::Declare,
+        weight: 1.,
+    })
+}
 fn candidate_mask(frame: &PerceptionFrame, pairs: &[(ActionId, WorldEntityId)]) -> u32 {
     frame
         .candidates()
@@ -181,6 +196,11 @@ fn candidate_mask(frame: &PerceptionFrame, pairs: &[(ActionId, WorldEntityId)]) 
         })
         .fold(0, |m, c| m | (1 << c.candidate_index))
 }
+#[derive(Clone, Copy)]
+struct TeachingProtocol {
+    visible: bool,
+    event_speech: bool,
+}
 fn collect(
     actor: &CpuFoundationTrainer,
     asset: &FoundationWeightAsset,
@@ -188,9 +208,14 @@ fn collect(
     arm: Arm,
     round: usize,
     traces: &mut impl Write,
-    visible: bool,
+    protocol: TeachingProtocol,
 ) -> Result<(Vec<Sample>, Value)> {
+    let TeachingProtocol {
+        visible,
+        event_speech,
+    } = protocol;
     let (mut samples, mut events, mut heard) = (vec![], [0usize; 3], 0usize);
+    let (mut speech_rows, mut speech_with_heard) = (0usize, 0usize);
     for layout in 0..4 {
         let seed = c.seed + 600_000 + (round * 4 + layout) as u64;
         let (mut base, s) = prepared(
@@ -240,12 +265,18 @@ fn collect(
                             .flatten()
                             .any(|t| t.source_kind == UtteranceSourceKind::Teacher),
                     );
-                    let speech = if tick >= INSTRUCTION_TICKS {
+                    let speech = if event_speech {
+                        (tick < INSTRUCTION_TICKS)
+                            .then(|| confirmed_speech(pending.as_ref(), left, Some(requested)))
+                            .flatten()
+                    } else if tick >= INSTRUCTION_TICKS {
                         narration(f, pending.as_ref(), left)
                     } else {
                         None
                     };
-                    let target = if tick < INSTRUCTION_TICKS && fulfilled {
+                    let target = if event_speech && speech.is_some() {
+                        action_target(&row, s, requested, true, true, legal, held)?
+                    } else if tick < INSTRUCTION_TICKS && fulfilled {
                         let idle = f.candidates().iter().find(|c| c.kind == ActionKind::Idle);
                         let mut t = candidate_label(&row, idle)?;
                         t.representative = idle.map(|c| 1 << c.candidate_index);
@@ -280,7 +311,9 @@ fn collect(
                     } else {
                         HeadlessActionIds::GRAB
                     };
-                    let group = if tick < INSTRUCTION_TICKS {
+                    let group = if event_speech && speech.is_some() {
+                        Group::Narration
+                    } else if tick < INSTRUCTION_TICKS {
                         let concrete = candidate_mask(f, &[(desired, requested.target(s))]);
                         if target
                             .representative
@@ -304,6 +337,14 @@ fn collect(
                         json!({"phase":"balanced_readout_training","arm":arm,"round":round,"layout":layout,"world_seed":seed,"requested":requested,"instruction_window":tick<INSTRUCTION_TICKS,"scene":s,"group":group,"verb_choice_mask":verb_mask,"noun_choice_mask":noun_mask,"row":row,"owned_before":before,"owned_after":after,"label":{"representative":target.representative,"motors":target.motors},"speech_target":speech,"narration_evidence":pending,"completed":event})
                     )?;
                     if speech.is_some() {
+                        speech_rows += 1;
+                        speech_with_heard += usize::from(
+                            f.sensory()
+                                .language_context
+                                .heard_tokens
+                                .iter()
+                                .any(Option::is_some),
+                        );
                         left -= 1;
                     }
                     if let Some(event) = event {
@@ -326,7 +367,7 @@ fn collect(
     }
     Ok((
         samples,
-        json!({"round":round,"native_decisions":c.decisions*12,"teacher_heard_rows":heard,"actual_activity_counts":events,"train_seeds":(0..4).map(|l|c.seed+600_000+(round*4+l)as u64).collect::<Vec<_>>(),"fixed_cue_ticks":INSTRUCTION_TICKS}),
+        json!({"round":round,"native_decisions":c.decisions*12,"teacher_heard_rows":heard,"actual_activity_counts":events,"train_seeds":(0..4).map(|l|c.seed+600_000+(round*4+l)as u64).collect::<Vec<_>>(),"fixed_cue_ticks":INSTRUCTION_TICKS,"positive_speech_rows":speech_rows,"positive_speech_with_heard_tokens":speech_with_heard}),
     ))
 }
 
@@ -620,7 +661,11 @@ pub(crate) fn evaluate(
                             }
                         }
                         metric.last_owners = after;
-                        let speech = if tick >= INSTRUCTION_TICKS {
+                        let speech = if plan.event_confirmed_speech_v1 {
+                            (tick < INSTRUCTION_TICKS)
+                                .then(|| confirmed_speech(pending.as_ref(), left, requested))
+                                .flatten()
+                        } else if tick >= INSTRUCTION_TICKS {
                             narration(f, pending.as_ref(), left)
                         } else {
                             None
@@ -663,6 +708,10 @@ pub(crate) fn evaluate(
                         let mut record = json!({"phase":"balanced_readout_evaluation","arm":arm,"case":case,"world_seed":seed,"post_sleep":post_sleep,"requested":requested,"scene":s,"row":trace_row,"owned_before":before,"owned_after":after,"actual_food_consumption":consumed,"grounded_speech_target":speech,"narration_evidence":pending,"completed":event,"emitted":emitted});
                         if plan.balanced_grounding_v2 {
                             record["native_full_row_sha256"] = json!(identity(&row)?);
+                            if plan.event_confirmed_speech_v1 {
+                                record["speech_opportunity_protocol"] =
+                                    json!("event-confirmed-cue-window-v1");
+                            }
                             record["state_capture"] =
                                 json!("full-first-row-and-full-state-digest-v1");
                         }
@@ -685,20 +734,28 @@ pub fn continue_balanced_grounded_language(
     output: &Path,
     c: LanguagePilotConfig,
 ) -> Result<Value> {
-    run_balanced(source, output, c, false)
+    run_balanced(source, output, c, false, false)
 }
 pub fn continue_visible_balanced_grounded_language(
     source: &Path,
     output: &Path,
     c: LanguagePilotConfig,
 ) -> Result<Value> {
-    run_balanced(source, output, c, true)
+    run_balanced(source, output, c, true, false)
+}
+pub fn continue_event_confirmed_speech(
+    source: &Path,
+    output: &Path,
+    c: LanguagePilotConfig,
+) -> Result<Value> {
+    run_balanced(source, output, c, true, true)
 }
 fn run_balanced(
     source: &Path,
     output: &Path,
     c: LanguagePilotConfig,
     visible: bool,
+    event_speech: bool,
 ) -> Result<Value> {
     if c.llamacpp_translation
         || !c.experimental_word_bridge
@@ -711,8 +768,13 @@ fn run_balanced(
         );
     }
     let old: Value = serde_json::from_slice(&fs::read(source.join("results.json"))?)?;
-    if old["kind"] != "experimental-linear-word-readout-v14" || old["config"]["seed"] != c.seed {
-        return Err("balanced experiment only admits measured V14".into());
+    let admitted = if event_speech {
+        "experimental-balanced-grounding-visible-v16"
+    } else {
+        "experimental-linear-word-readout-v14"
+    };
+    if old["kind"] != admitted || old["config"]["seed"] != c.seed {
+        return Err("continuation source must match the versioned measured pilot".into());
     }
     let recorded = old["arms"]
         .as_array()
@@ -754,8 +816,18 @@ fn run_balanced(
         if arm != Arm::Untreated {
             for round in 0..c.rounds {
                 eprintln!("balanced {arm:?} round{round} native collection");
-                let (samples, receipt) =
-                    collect(&actor, &asset, c, arm, round, &mut trace, visible)?;
+                let (samples, receipt) = collect(
+                    &actor,
+                    &asset,
+                    c,
+                    arm,
+                    round,
+                    &mut trace,
+                    TeachingProtocol {
+                        visible,
+                        event_speech,
+                    },
+                )?;
                 eprintln!("balanced collection {receipt}");
                 collections.push(receipt);
                 for epoch in 0..c.epochs {
@@ -784,6 +856,7 @@ fn run_balanced(
             linear_readout: true,
             balanced_grounding_v1: !visible,
             balanced_grounding_v2: visible,
+            event_confirmed_speech_v1: event_speech,
         };
         eprintln!("balanced {arm:?} cold independent-seed assessment");
         let cold = exact_reload_plan(
@@ -803,7 +876,7 @@ fn run_balanced(
         arms.push(json!({"arm":arm,"common_source_actor_sha256":initial,"source_private_sha256":private_sha,"source_step":before.optimizer_step,"actor_step":actor.optimizer_step(),"actor_sha256":identity(&actor.checkpoint())?,"collections":collections,"updates":updates,"evaluation":cold["native_private_and_optimizer_hashes"]["assessment"]["evaluation"],"continuity":cold,"source_history_retained":true}));
     }
     trace.finish()?;
-    let result = json!({"kind":if visible{"experimental-balanced-grounding-visible-v16"}else{"experimental-balanced-grounding-v15"},"execution_domain":"native-cpu","config":c,"source_report_sha256":identity(&old)?,"held_out_world_seeds":HELD_OUT_SEEDS,"independent_seed_count":HELD_OUT_SEEDS.len(),"pre_post_are_paired_not_independent":true,"teacher_and_player_cue_ticks":INSTRUCTION_TICKS,"evaluation_ticks":EVALUATION_TICKS,"arms":arms,"elapsed_seconds":start_time.elapsed().as_secs_f64(),"semantic_prior_enabled":false,"teacher":"scripted ordinary spatial language","limitations":["One common retained V14 founder; independent held-out environment/sampling seeds are not independent trained founders.","Post-sleep is paired with the same pre-sleep seed and must not double independent N. RecoveryProtocol sleep is induced, with no matched awake-delay causal sleep control.","Native conditional action losses balance verb and noun choices separately; truthful narration activity classes cannot yield exactly balanced lexical marginals without impossible EatToy events.","No-request retains prior grounded history and natural self speech. No real SLM delivery or promotion."]});
+    let result = json!({"kind":if event_speech{"experimental-event-confirmed-speech-v17"}else if visible{"experimental-balanced-grounding-visible-v16"}else{"experimental-balanced-grounding-v15"},"execution_domain":"native-cpu","config":c,"source_report_sha256":identity(&old)?,"held_out_world_seeds":HELD_OUT_SEEDS,"independent_seed_count":HELD_OUT_SEEDS.len(),"pre_post_are_paired_not_independent":true,"teacher_and_player_cue_ticks":INSTRUCTION_TICKS,"evaluation_ticks":EVALUATION_TICKS,"arms":arms,"elapsed_seconds":start_time.elapsed().as_secs_f64(),"semantic_prior_enabled":false,"teacher":"scripted ordinary spatial language","limitations":["One common retained source founder; independent held-out environment/sampling seeds are not independent trained founders.","Post-sleep is paired with the same pre-sleep seed and must not double independent N. RecoveryProtocol sleep is induced, with no matched awake-delay causal sleep control.","Native conditional action losses balance verb and noun choices separately; truthful narration activity classes cannot yield exactly balanced lexical marginals without impossible EatToy events.","No-request retains prior grounded history and natural self speech. No real SLM delivery or promotion."]});
     write_json(&output.join("results.json"), &result)?;
     Ok(result)
 }
@@ -908,6 +981,108 @@ mod tests {
         }
     }
     #[test]
+    fn confirmed_speech_needs_actual_matching_event_and_constant_bits_prefer_get_food() {
+        let event = Event {
+            lesson: Lesson::GetToy,
+            tick: 4,
+            patch_sha256: "actual-world-receipt".into(),
+        };
+        assert!(confirmed_speech(None, 3, Some(Lesson::GetToy)).is_none());
+        assert!(confirmed_speech(Some(&event), 3, Some(Lesson::GetFood)).is_none());
+        assert!(confirmed_speech(Some(&event), 0, Some(Lesson::GetToy)).is_none());
+        assert!(confirmed_speech(Some(&event), 3, None).is_none());
+        assert_eq!(
+            confirmed_speech(Some(&event), 3, Some(Lesson::GetToy))
+                .unwrap()
+                .continuation[0],
+            2
+        );
+        // Diagnostic of the native bit-regression constant optimum, not behavior.
+        let targets = Lesson::ALL.map(|lesson| {
+            let e = Event {
+                lesson,
+                ..event.clone()
+            };
+            confirmed_speech(Some(&e), 1, Some(lesson)).unwrap()
+        });
+        let words = [0, 1].map(|step| {
+            (0..8).fold(0u32, |word, bit| {
+                let mean = targets
+                    .iter()
+                    .map(|t| t.step_logits(step)[8 + bit])
+                    .sum::<f32>()
+                    / 3.;
+                word | (u32::from(mean > 0.) << bit)
+            })
+        });
+        assert_eq!(words, [9, 1]);
+    }
+    #[test]
+    #[ignore = "explicit saved public-row speech timing/gradient diagnosis; no provider request"]
+    fn diagnose_actual_positive_speech_input_and_native_gradients() {
+        let data: Value = serde_json::from_slice(
+            &fs::read("/tmp/language-speech-timing-diagnostic.json").unwrap(),
+        )
+        .unwrap();
+        let r = read_recovery(Path::new(
+            "/workspace/language-balanced-visible-v16-run/recovery-Grounded",
+        ))
+        .unwrap();
+        let p =
+            PhenotypeCompiler::compile_validated(&r.inputs, &BrainCapacityClass::n2048()).unwrap();
+        let asset = FoundationWeightAsset::decode_canonical(&r.foundation).unwrap();
+        let actor = CpuFoundationTrainer::from_checkpoint(p, asset, r.actor).unwrap();
+        let start = actor.phenotype().candidate_decoder().motor_start() as usize + 128;
+        let speech_ids = actor.phenotype().synapses().iter().enumerate().filter_map(|(i,s)| matches!(s.kind(), CompiledSynapseKind::Decoder(c) if c.head()==DecoderHeadKind::SpeechPayload).then_some(i)).collect::<Vec<_>>();
+        let mut receipts = vec![];
+        for key in ["8_1", "9_1", "9_2"] {
+            let example = &data["examples"][key];
+            let row: CpuCollectedDecision = serde_json::from_value(example["row"].clone()).unwrap();
+            let target: ReplaySpeechTarget =
+                serde_json::from_value(example["speech_target"].clone()).unwrap();
+            let language = row
+                .patch
+                .pre_action()
+                .perception()
+                .sensory()
+                .language_prior_neural_lanes();
+            assert!(language[..16].iter().all(|v| *v == 0.));
+            let q = readout::single(&actor, &row);
+            let ev = actor.evaluate_replay(&q).unwrap();
+            let zeros = vec![0.; ev.candidate_logits[0].len()];
+            let g = actor
+                .probe_replay_gradients_with_speech(
+                    &q,
+                    std::slice::from_ref(&zeros),
+                    &[Some(target)],
+                )
+                .unwrap();
+            let mut intervention = q.clone();
+            intervention.ticks[0].encoded_inputs[start + 8] += 0.25;
+            let changed = actor
+                .probe_replay_gradients_with_speech(&intervention, &[zeros], &[Some(target)])
+                .unwrap();
+            let delta = speech_ids
+                .iter()
+                .map(|i| f64::from(g.gradients[*i] - changed.gradients[*i]).powi(2))
+                .sum::<f64>()
+                .sqrt();
+            assert!(delta > 0.);
+            let decoded = alife_training::cpu::decode_cpu_speech(
+                &actor,
+                &ev.final_activations[0],
+                &q.ticks[0].effective_weight_offsets,
+            )
+            .unwrap();
+            receipts.push(json!({"target_words":[target.token.unwrap(),target.continuation[0]],"actual_heard_word_lane_l1":language[..16].iter().map(|v|v.abs()).sum::<f32>(),"native_speech_gradient_nonzero":speech_ids.iter().filter(|i|g.gradients[**i]!=0.).count(),"input_only_speech_noun_lane_pulse_gradient_delta_l2":delta,"decoded_if_vocal_diagnostic_only":decoded,"not_a_scored_world_or_learning_claim":true}));
+        }
+        write_json(
+            Path::new("/tmp/language-speech-native-timing-proof.json"),
+            &json!({"actual_training_counts":data["counts"],"receipts":receipts}),
+        )
+        .unwrap();
+    }
+    #[test]
     fn renamed_instances_and_balanced_native_masks_preserve_real_labels() {
         let seed = 847501;
         let asset = initial_n2048_care_asset(seed).unwrap();
@@ -927,7 +1102,10 @@ mod tests {
             Arm::Grounded,
             0,
             &mut std::io::sink(),
-            false,
+            TeachingProtocol {
+                visible: false,
+                event_speech: false,
+            },
         )
         .unwrap();
         let (concrete, _, verb, noun) = distribution_counts(&samples);

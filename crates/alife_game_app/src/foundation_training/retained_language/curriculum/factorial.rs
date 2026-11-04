@@ -2,7 +2,8 @@
 use super::*;
 pub(super) mod balanced;
 pub use balanced::{
-    continue_balanced_grounded_language, continue_visible_balanced_grounded_language,
+    continue_balanced_grounded_language, continue_event_confirmed_speech,
+    continue_visible_balanced_grounded_language,
 };
 mod contrastive;
 mod focus;
@@ -610,6 +611,7 @@ fn run_factorial(
             linear_readout: false,
             balanced_grounding_v1: false,
             balanced_grounding_v2: false,
+            event_confirmed_speech_v1: false,
         };
         if arm == Arm::Grounded {
             eprintln!("factorial common baseline");
