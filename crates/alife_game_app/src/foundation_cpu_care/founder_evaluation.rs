@@ -4,6 +4,10 @@ use super::*;
 use serde::{Deserialize, Serialize};
 use std::{fs, path::Path};
 
+const BARE_MODE: &str = "native-cpu-founder-inference-assessment";
+const FULL_MODE: &str = "native-cpu-full-founder-actor-assessment";
+const FULL_PROOF: &str = "native-full-actor-preservation.json";
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CpuFounderEvaluationRequest {
@@ -72,9 +76,10 @@ pub(super) fn reconstruct(root: &Path) -> Result<CpuInferenceFounder> {
 
 pub fn verify_cpu_founder_evaluation(root: &Path) -> Result<Value> {
     let receipt: FounderReceipt = read_json(&root.join(CPU_CARE_EVALUATION_FILE))?;
-    if receipt.schema_version != 2
-        || receipt.mode != "native-cpu-founder-inference-assessment"
-        || receipt.payload_sha256 != receipt.digest()?
+    if !matches!(
+        (receipt.schema_version, receipt.mode.as_str()),
+        (2, BARE_MODE) | (3, FULL_MODE)
+    ) || receipt.payload_sha256 != receipt.digest()?
         || receipt.artifacts != inventory(root)?
     {
         return Err("founder assessment seal or retained artifacts changed".into());
@@ -86,7 +91,23 @@ pub fn verify_cpu_founder_evaluation(root: &Path) -> Result<Value> {
         );
     }
     verify_pins(&receipt.input_sha256)?;
-    verify_founder_artifacts(root, &receipt.request.expected_foundation_sha256)
+    let mut verified = verify_founder_artifacts(root, &receipt.request.expected_foundation_sha256)?;
+    if receipt.mode == FULL_MODE {
+        let source = read_cpu_founder_source(&receipt.request.seed_anchor)?;
+        let expected = native_full_proof(&receipt.request, &source.handoff)?;
+        if fs::read(root.join(FULL_PROOF))? != serde_json::to_vec(&expected)?
+            || verified["result"]["mode"] != FULL_MODE
+            || verified["result"]["full_actor_control"] != true
+        {
+            return Err(
+                "native full founder lost exact actor/value Adam preservation proof".into(),
+            );
+        }
+        verified["offline_optimizer_constructed"] = json!(true);
+    } else if root.join(FULL_PROOF).exists() || verified["result"]["mode"] != BARE_MODE {
+        return Err("bare founder assessment claims full optimizer state".into());
+    }
+    Ok(verified)
 }
 
 pub(super) fn verify_founder_artifacts(root: &Path, expected_asset_sha256: &str) -> Result<Value> {
@@ -143,7 +164,42 @@ pub fn compare_cpu_founder_evaluations(left: &Path, right: &Path) -> Result<Valu
         "left":left,"right":right,"automatic_adoption":false}))
 }
 
-pub fn evaluate_cpu_founder(mut request: CpuFounderEvaluationRequest) -> Result<Value> {
+pub fn evaluate_cpu_founder(request: CpuFounderEvaluationRequest) -> Result<Value> {
+    evaluate_native_founder(request, false)
+}
+pub fn evaluate_cpu_full_founder(request: CpuFounderEvaluationRequest) -> Result<Value> {
+    evaluate_native_founder(request, true)
+}
+fn native_full_proof(
+    request: &CpuFounderEvaluationRequest,
+    handoff: &alife_training::FoundationTrainingHandoffV1,
+) -> Result<Value> {
+    let source = handoff.clone().admit()?;
+    let native = read_cpu_founder_source(&request.seed_anchor)?;
+    let founder_seed = native.receipt["founder_seed_base"]
+        .as_u64()
+        .ok_or("native full source lacks body seed")?;
+    if source.foundation.encode_canonical()? != fs::read(&request.foundation)?
+        || file_hash(&request.foundation)? != request.expected_foundation_sha256
+    {
+        return Err("full founder control must use its actual native source policy".into());
+    }
+    let (_, next, _) = compile_cpu_founder_game(request.seed, founder_seed, &source.foundation)?;
+    validate_cpu_founder_rebinding(&source.phenotype, &source.actor, &next, &source.foundation)?;
+    let mut actor = source.actor.clone();
+    actor.phenotype_hash = next.phenotype_hash();
+    actor.source_foundation_digest = source.foundation.digest();
+    Ok(
+        json!({"kind":"actual-native-cpu-frozen-full-actor-control","schema_version":1,
+        "source_actor_sha256":hash_value(&source.actor)?,"source_value_sha256":hash_value(&source.value)?,
+        "rebound_actor_before_sha256":hash_value(&actor)?,"rebound_actor_after_sha256":hash_value(&actor)?,
+        "allowed_rebinding_metadata_fields":["phenotype_hash","source_foundation_digest"],
+        "preserved_fields":["weights","first_moment","second_moment","update_ages","optimizer_step","config","stage_mask"],
+        "actor_optimizer_updates":0,"value_optimizer_updates":0,"critic_checkpoint_preserved_and_unused":true,
+        "private_life_transferred":false,"same_individual_restore":false}),
+    )
+}
+fn evaluate_native_founder(mut request: CpuFounderEvaluationRequest, full: bool) -> Result<Value> {
     request.foundation = request.foundation.canonicalize()?;
     request.seed_anchor = request.seed_anchor.canonicalize()?;
     request.seed_history = request.seed_history.canonicalize()?;
@@ -205,17 +261,54 @@ pub fn evaluate_cpu_founder(mut request: CpuFounderEvaluationRequest) -> Result<
         .filter(|v| *v != 0)
         .or(source.receipt["seed"].as_u64())
         .ok_or("seed anchor lacks founder construction seed")?;
-    let result = collect_founder_assessment(
-        &request,
-        asset_bytes,
-        founder_seed,
-        source.handoff.policy_version,
-        &pins,
-        None,
-    )?;
+    let result = if full {
+        let expected = native_full_proof(&request, &source.handoff)?;
+        let admitted = source.handoff.clone().admit()?;
+        let value = CpuValueHead::from_checkpoint(admitted.value.clone())?;
+        let mut before = None;
+        let context = json!({"mode":FULL_MODE,"full_actor_control":true,"offline_optimizer_constructed":true,"critic_constructed":true});
+        let (result, trainer) = collect_founder_assessment_with_policy(
+            &request,
+            asset_bytes,
+            founder_seed,
+            source.handoff.policy_version,
+            &pins,
+            Some(&context),
+            |next, asset| {
+                let mut trainer = CpuFoundationTrainer::from_checkpoint(
+                    admitted.phenotype,
+                    admitted.foundation,
+                    admitted.actor,
+                )?;
+                trainer.rebind_for_next_cohort(next, asset)?;
+                before = Some(hash_value(&trainer.checkpoint())?);
+                Ok(trainer)
+            },
+        )?;
+        if before.as_deref() != expected["rebound_actor_before_sha256"].as_str()
+            || hash_value(&trainer.checkpoint())? != expected["rebound_actor_after_sha256"]
+            || hash_value(&value.checkpoint())? != expected["source_value_sha256"]
+        {
+            return Err(
+                "native full founder actor or value changed during assessment; preserve prefix"
+                    .into(),
+            );
+        }
+        write(request.output.join(FULL_PROOF), &expected)?;
+        result
+    } else {
+        collect_founder_assessment(
+            &request,
+            asset_bytes,
+            founder_seed,
+            source.handoff.policy_version,
+            &pins,
+            None,
+        )?
+    };
     let mut receipt = FounderReceipt {
-        schema_version: 2,
-        mode: "native-cpu-founder-inference-assessment".into(),
+        schema_version: if full { 3 } else { 2 },
+        mode: if full { FULL_MODE } else { BARE_MODE }.into(),
         request: request.clone(),
         input_sha256: pins,
         artifacts: inventory(&request.output)?,
@@ -225,6 +318,37 @@ pub fn evaluate_cpu_founder(mut request: CpuFounderEvaluationRequest) -> Result<
     write(request.output.join(CPU_CARE_EVALUATION_FILE), &receipt)?;
     verify_cpu_founder_evaluation(&request.output)?;
     Ok(result)
+}
+
+pub fn verify_cpu_native_founder_parity(left: &Path, right: &Path) -> Result<Value> {
+    let a = verify_cpu_founder_evaluation(left)?;
+    let b = verify_cpu_founder_evaluation(right)?;
+    let mut ra: FounderReceipt = read_json(&left.join(CPU_CARE_EVALUATION_FILE))?;
+    let rb: FounderReceipt = read_json(&right.join(CPU_CARE_EVALUATION_FILE))?;
+    if !matches!(
+        (ra.mode.as_str(), rb.mode.as_str()),
+        (BARE_MODE, FULL_MODE) | (FULL_MODE, BARE_MODE)
+    ) {
+        return Err("native parity requires one bare and one full native parent".into());
+    }
+    ra.request.output = rb.request.output.clone();
+    if hash_value(&ra.request)? != hash_value(&rb.request)? || a["comparison"] != b["comparison"] {
+        return Err("native full/bare source, case, initial state or executable differs".into());
+    }
+    for name in ["first-input.json", "care-trace.json"] {
+        if fs::read(left.join(name))? != fs::read(right.join(name))? {
+            return Err("native full/bare inputs or actions differ".into());
+        }
+    }
+    if read_cpu_private_checkpoint_bytes(left, 64 * 1024 * 1024)?
+        != read_cpu_private_checkpoint_bytes(right, 64 * 1024 * 1024)?
+    {
+        return Err("native full/bare complete private state differs".into());
+    }
+    Ok(
+        json!({"parity_verified":true,"full_actor_and_adam_preserved":true,"actual_inputs_and_actions_exact":true,
+        "new_private_checkpoint_exact":true,"native_initial_controls_and_executable_exact":true,"automatic_adoption":false}),
+    )
 }
 
 /// Shared native life runner only; each entry point owns its source admission
@@ -512,6 +636,19 @@ mod tests {
         let before = inventory(&request.output).unwrap();
         assert!(evaluate_cpu_founder(request.clone()).is_err());
         assert_eq!(inventory(&request.output).unwrap(), before);
+        let mut full_request = request.clone();
+        full_request.output = root.0.join("actual-native-full-control");
+        let full = evaluate_cpu_full_founder(full_request.clone()).unwrap();
+        assert_eq!(full["full_actor_control"], true);
+        assert_eq!(
+            verify_cpu_native_founder_parity(&request.output, &full_request.output).unwrap()
+                ["parity_verified"],
+            true
+        );
+        assert!(verify_cpu_native_founder_parity(&request.output, &request.output).is_err());
+        let proof = full_request.output.join(FULL_PROOF);
+        fs::write(proof, b"{}").unwrap();
+        assert!(verify_cpu_founder_evaluation(&full_request.output).is_err());
         fs::write(
             request.output.join("care-trace.json"),
             b"tampered disposable trace",

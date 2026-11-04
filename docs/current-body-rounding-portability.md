@@ -35,3 +35,24 @@ Run full/bare actual-parent parity before scoring. Both policies still require
 identical executable and initial controls for a matched comparison. The saved
 private life is retained in the source and is not transferred into a new life.
 
+The same executable also qualifies an untouched native CPU parent without
+converting its source format. Use the existing `CpuFounderEvaluationRequest`
+and actual native source asset/anchor/history for both requests; only the absent
+output directories differ:
+
+```text
+evaluate_cpu_current --founder-spec BARE_NATIVE_CPU_REQUEST.json
+evaluate_cpu_current --full-founder-spec FULL_NATIVE_CPU_REQUEST.json
+evaluate_cpu_current --founder-parity BARE_OUTPUT FULL_OUTPUT
+```
+
+The full control requires the actual source policy, carries its actor/value and
+complete Adam read-only, and validates rebinding before inference. Its separate
+schema3 receipt binds full-head preservation. Strict parity verifies identical
+initial controls/executable, actual first inputs, action traces and entire new
+private checkpoints. Different parents, candidates, cases or binary identities
+are rejected. Original native CPU source files are read-only and no new CPU
+training receipt is created. Run both policies' bare cases with this executable
+and require `--compare LEFT RIGHT` to return `matched:true` before interpreting
+paired differences.
+

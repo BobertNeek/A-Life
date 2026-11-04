@@ -412,7 +412,9 @@ pub fn verify_cpu_fresh_assessment(root: &Path) -> Result<Value> {
     let header: Value = read_json(&root.join(CPU_CARE_EVALUATION_FILE))?;
     match header["mode"].as_str() {
         Some(MODE | FULL_MODE) => verify_cpu_current_evaluation(root),
-        Some("native-cpu-founder-inference-assessment") => verify_cpu_founder_evaluation(root),
+        Some(
+            "native-cpu-founder-inference-assessment" | "native-cpu-full-founder-actor-assessment",
+        ) => verify_cpu_founder_evaluation(root),
         _ => Err("unsupported fresh CPU assessment receipt domain".into()),
     }
 }
