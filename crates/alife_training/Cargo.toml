@@ -41,6 +41,11 @@ path = "src/bin/merge_founder_inference.rs"
 required-features = ["receipt-lineage"]
 
 [[bin]]
+name = "prepare_retained_interpolation"
+path = "src/bin/prepare_retained_interpolation.rs"
+required-features = ["cpu-backend"]
+
+[[bin]]
 name = "experiment_connection_budget"
 path = "src/bin/experiment_connection_budget.rs"
 required-features = ["cpu-backend"]

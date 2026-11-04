@@ -5,12 +5,14 @@ two-parent convex interpolation of canonical genetic coordinates. It asserts no
 common ancestor and does not use the founder merge API's caller-supplied ancestry
 descriptors. A higher policy number does not establish a better parent.
 
-This is a synthetic-fixture harness, not a native merge/adoption CLI. It archives
-both complete input Current artifacts byte-for-byte, including both actor/value
-Adam histories, integer ages, seed histories and any private life. Both raw
-artifacts require explicit expected SHA256 pins from the owners' verified
-receipts. Callers cannot supply a detached retained projection. The old unbound
-projection input format is rejected by strict input decoding.
+This is an inference-only preparation harness. It archives the PC Current
+byte-for-byte and accepts either a second Current or an explicitly tagged native
+CPU parent file archive. Both complete parent states retain their actor/value
+Adam histories, integer ages, seed histories and private life. Expected source
+pins must come from the owners' verified copies. Callers cannot supply a detached
+retained projection. Earlier disposable input encodings are replaced by schema3;
+opaque native bytes use lossless base64 in the experiment, without changing any
+parent bytes. Accepted native checkpoint formats are unchanged.
 
 `derive_retained_projection_from_current(bytes, expected_sha256)` extracts the
 PC projection directly from the pinned Current's own required native asset refs.
@@ -48,7 +50,8 @@ Current checkpoint. The overlay sequence is not an optimizer step. Parent Adam
 histories remain untouched in their archives; candidate optimizer semantics are
 unresolved. `validate()` cold-reconstructs every field from the archived inputs
 and rejects modified candidates/receipts. This is not a signed authenticity proof.
-There is no mutation, filesystem write, dispatch or promotion API in this module.
+There is no parent mutation, world dispatch or promotion API. Native CPU archive
+admission writes only a bounded owned scratch copy, then removes that copy.
 It does not install personal memories, chemistry, activations or eligibility into
 a new life. These remain in the complete parent archives.
 
@@ -92,6 +95,69 @@ Before real-parent use, the executing owner must:
   private overlay, so it is a candidate variant and cannot stand in for the
   untouched cloud-parent control.
 
-There is no real-parent execution CLI here. The native assessment owner owns
-co-location and the actual candidate/control run. Optimizer/adoption semantics
-remain unresolved, and no comparison or promotion follows from fixture success.
+## Native CPU archive and preparation command
+
+A native CPU output with `training-handoff.json` and a preceding private collector
+does not need, and is never converted into, a Current. `inspect_native_cpu_archive`
+and `capture_native_cpu_archive` snapshot every regular file under the sealed,
+extracted native source root. Symlinks, ambiguous/private checkpoint variants,
+noncanonical paths, more than8192 files or more than512MiB are refused. Every file,
+including private collector, original optimizer files and lineage/seed evidence,
+stays byte-exact in the embedded archive. Admission uses the existing
+`read_cpu_founder_source`, including native output pins, complete typed heads and
+existing ancestry verification. No new ancestry is supplied or invented.
+
+The private collector is cold-restored with `collection-policy.alife-foundation`,
+`collection-compiler-inputs.json` and `collection-actor-checkpoint.json`, and must
+recapture exactly. The original initial critic is retained and validated. The
+collector policy version and trained global policy version remain separate in
+the receipt. No action or optimizer step is executed during admission; this is
+not a claim of resumed training. Unknown historical freshness remains unknown.
+
+The file-tree SHA256 is a domain-separated, length-prefixed hash of sorted UTF8
+relative paths and their exact raw bytes. It is distinct from the original ZIP
+or other transport hash. The executing owner keeps the approved original archive
+unchanged, verifies its receipt hash/length and supported extraction independently,
+then records the native root's inspected tree pin. This adapter does not download,
+unpack or claim to authenticate a transport archive against its tree by itself.
+
+```sh
+cargo build --release --locked --offline -p alife_training --features cpu-backend --bin prepare_retained_interpolation
+prepare_retained_interpolation inspect-cpu CPU_NATIVE_ROOT
+prepare_retained_interpolation prepare REQUEST.json
+prepare_retained_interpolation verify NEW_PRIVATE_EXPERIMENT
+```
+
+Place the request outside both preserved source trees:
+
+```json
+{
+  "pc_current": "PC_COPY.alife-checkpoint",
+  "expected_pc_current_sha256": "OWNER_VERIFIED_PC_SHA256",
+  "cloud_native_cpu_root": "CPU_NATIVE_ROOT",
+  "expected_cloud_tree_sha256": "OWNER_RECORDED_NATIVE_TREE_SHA256",
+  "cloud_fraction": 0.5,
+  "output": "NEW_PRIVATE_EXPERIMENT",
+  "body_rounding_proof": "SOURCE_BOUND_PC_BODY_PROOF.json"
+}
+```
+
+Omit `body_rounding_proof` if native PC admission needs no compatibility scope.
+When provided, it uses the existing envelope with `source_current_sha256` and
+`proof`; the source pin must match and the lexical proof must actually be used.
+The strict production comparator stays unchanged.
+
+Preparation refuses an existing or overlapping output and rechecks source bytes.
+It writes `experiment.json.zst` with both complete parent snapshots, the candidate
+foundation, compiler inputs and retained-neural projection, plus an inference-only
+receipt. Verification cold-rebuilds the experiment and checks every candidate
+export against it. Outputs contain private model state: keep them outside version
+control. They contain no candidate actor, critic, training handoff or Current export.
+
+The native assessment owner owns co-location and the actual candidate/control
+dispatch. The preparation CLI does not measure skills. Synthetic tests use the
+supported CPU writer and verify identical candidate genetics and retained state
+against a separate matched-head fixture, exact fraction-zero control, CLI recovery,
+full optimizer/archive retention, corruption rejection and parent immutability.
+Optimizer/adoption semantics remain unresolved; fixture success implies no model
+comparison or promotion.

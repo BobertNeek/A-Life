@@ -180,7 +180,13 @@ pub(super) fn attach(
 
 pub(super) fn repin(inputs: &mut InterpolationExperimentInputs) {
     inputs.expected_pc_current_sha256 = native_receipt::sha256(&inputs.pc_current);
-    inputs.expected_cloud_current_sha256 = native_receipt::sha256(&inputs.cloud_current);
+    if let InterpolationCloudParent::Current {
+        bytes,
+        expected_sha256,
+    } = &mut inputs.cloud_parent
+    {
+        *expected_sha256 = native_receipt::sha256(bytes);
+    }
 }
 
 pub(super) fn replace_selected_asset(

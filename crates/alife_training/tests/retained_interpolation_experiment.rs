@@ -4,11 +4,27 @@ use alife_core::*;
 use alife_gpu_backend::{GpuLiveTopologyCheckpointV1, GpuV11CausalState};
 use alife_training::{cpu::retained_interpolation_experiment::*, cpu::*, *};
 use alife_world::persistence::*;
+#[path = "retained_interpolation_experiment/native_cpu_archive.rs"]
+mod native_cpu_archive;
 #[path = "retained_interpolation_experiment/source_binding.rs"]
 mod source_binding;
 #[path = "retained_interpolation_experiment/source_fixture.rs"]
 mod source_fixture;
 use source_fixture::repin;
+
+fn cloud_current(inputs: &InterpolationExperimentInputs) -> &Vec<u8> {
+    match &inputs.cloud_parent {
+        InterpolationCloudParent::Current { bytes, .. } => bytes,
+        _ => panic!("Current fixture expected"),
+    }
+}
+fn set_cloud_current(inputs: &mut InterpolationExperimentInputs, bytes: Vec<u8>) {
+    inputs.cloud_parent = InterpolationCloudParent::Current {
+        bytes,
+        expected_sha256: String::new(),
+    };
+    repin(inputs);
+}
 
 fn parent(inputs: PhenotypeCompilerInputs, policy: u64) -> Vec<u8> {
     let p = PhenotypeCompiler::compile_validated(&inputs, &BrainCapacityClass::n2048()).unwrap();
@@ -107,6 +123,15 @@ fn fixture(active_bank: u8) -> InterpolationExperimentInputs {
     let (_, cloud_inputs) =
         PhenotypeCompiler::compile_n2048_foundation_candidate(genome, development, cloud_asset)
             .unwrap();
+    fixture_from_inputs(pc_inputs, cloud_inputs, active_bank)
+}
+
+fn fixture_from_inputs(
+    pc_inputs: PhenotypeCompilerInputs,
+    cloud_inputs: PhenotypeCompilerInputs,
+    active_bank: u8,
+) -> InterpolationExperimentInputs {
+    let p = PhenotypeCompiler::compile_validated(&pc_inputs, &BrainCapacityClass::n2048()).unwrap();
     let topology = (0..16)
         .find_map(|source| {
             let mut state = GpuV11CausalState::for_phenotype(&p).unwrap();
@@ -196,8 +221,10 @@ fn fixture(active_bank: u8) -> InterpolationExperimentInputs {
     let mut result = InterpolationExperimentInputs {
         pc_current: pc.encode().unwrap(),
         expected_pc_current_sha256: String::new(),
-        cloud_current: parent(cloud_inputs, 200),
-        expected_cloud_current_sha256: String::new(),
+        cloud_parent: InterpolationCloudParent::Current {
+            bytes: parent(cloud_inputs, 200),
+            expected_sha256: String::new(),
+        },
         cloud_fraction: 0.5,
     };
     repin(&mut result);
@@ -209,7 +236,7 @@ fn both_active_banks_acquired_edges_decoder_offsets_and_complete_parents_survive
     for active in [0, 1] {
         let inputs = fixture(active);
         let pc = CurrentTrainingCheckpointV1::decode(&inputs.pc_current).unwrap();
-        let cloud = CurrentTrainingCheckpointV1::decode(&inputs.cloud_current).unwrap();
+        let cloud = CurrentTrainingCheckpointV1::decode(cloud_current(&inputs)).unwrap();
         let (before, binding) = derive_retained_projection_from_current(
             &inputs.pc_current,
             &inputs.expected_pc_current_sha256,
@@ -224,7 +251,7 @@ fn both_active_banks_acquired_edges_decoder_offsets_and_complete_parents_survive
         );
         let saved_pc = CurrentTrainingCheckpointV1::decode(&candidate.inputs().pc_current).unwrap();
         let saved_cloud =
-            CurrentTrainingCheckpointV1::decode(&candidate.inputs().cloud_current).unwrap();
+            CurrentTrainingCheckpointV1::decode(cloud_current(candidate.inputs())).unwrap();
         assert_eq!(saved_pc.handoff, pc.handoff);
         assert_eq!(saved_cloud.handoff, cloud.handoff);
         assert_eq!(saved_pc.handoff.actor.update_ages[0], 16_777_219);
@@ -298,7 +325,7 @@ fn interpolation_endpoints_are_exact_and_fraction_is_bounded() {
     let mut inputs = fixture(1);
     for (fraction, bytes) in [
         (0., inputs.pc_current.clone()),
-        (1., inputs.cloud_current.clone()),
+        (1., cloud_current(&inputs).clone()),
     ] {
         inputs.cloud_fraction = fraction;
         let expected = CurrentTrainingCheckpointV1::decode(&bytes).unwrap();
@@ -328,7 +355,7 @@ fn interpolation_endpoints_are_exact_and_fraction_is_bounded() {
 #[test]
 fn rejects_frozen_disagreement_masks_and_changed_coordinate_contracts() {
     let inputs = fixture(1);
-    let cloud = CurrentTrainingCheckpointV1::decode(&inputs.cloud_current).unwrap();
+    let cloud = CurrentTrainingCheckpointV1::decode(cloud_current(&inputs)).unwrap();
     let p = cloud.handoff.clone().admit().unwrap().phenotype;
     let mut weights = cloud.handoff.actor.weights.clone();
     *weights.last_mut().unwrap() += 0.01;
@@ -345,7 +372,7 @@ fn rejects_frozen_disagreement_masks_and_changed_coordinate_contracts() {
     )
     .unwrap();
     let mut invalid = inputs.clone();
-    invalid.cloud_current = parent(changed_inputs, 200);
+    set_cloud_current(&mut invalid, parent(changed_inputs, 200));
     repin(&mut invalid);
     assert!(prepare_retained_interpolation_experiment(invalid).is_err());
     let mut changed = cloud.clone();
@@ -355,7 +382,7 @@ fn rejects_frozen_disagreement_masks_and_changed_coordinate_contracts() {
     )
     .unwrap();
     let mut invalid = inputs.clone();
-    invalid.cloud_current = changed.encode().unwrap();
+    set_cloud_current(&mut invalid, changed.encode().unwrap());
     repin(&mut invalid);
     assert!(prepare_retained_interpolation_experiment(invalid).is_err());
     // A different sensor/decoder graph is an admitted parent but not a successor.
@@ -382,7 +409,7 @@ fn rejects_frozen_disagreement_masks_and_changed_coordinate_contracts() {
     let (_, other_inputs) =
         PhenotypeCompiler::compile_n2048_foundation_candidate(genome, development, asset).unwrap();
     let mut invalid = inputs;
-    invalid.cloud_current = parent(other_inputs, 200);
+    set_cloud_current(&mut invalid, parent(other_inputs, 200));
     repin(&mut invalid);
     assert!(prepare_retained_interpolation_experiment(invalid).is_err());
 }
@@ -442,6 +469,8 @@ fn cold_validation_rejects_changed_overlay_or_receipt_and_bad_parent_bytes() {
         assert!(invalid.validate().is_err());
     }
     let mut invalid = inputs;
-    invalid.cloud_current[56] ^= 1;
+    if let InterpolationCloudParent::Current { bytes, .. } = &mut invalid.cloud_parent {
+        bytes[56] ^= 1;
+    }
     assert!(prepare_retained_interpolation_experiment(invalid).is_err());
 }

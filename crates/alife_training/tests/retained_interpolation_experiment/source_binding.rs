@@ -68,7 +68,12 @@ fn source_hash_pins_reject_different_same_graph_archives_and_missing_private_lif
     )
     .is_err());
     let mut wrong_cloud = inputs.clone();
-    wrong_cloud.expected_cloud_current_sha256 = "0".repeat(64);
+    if let InterpolationCloudParent::Current {
+        expected_sha256, ..
+    } = &mut wrong_cloud.cloud_parent
+    {
+        *expected_sha256 = "0".repeat(64);
+    }
     assert!(prepare_retained_interpolation_experiment(wrong_cloud).is_err());
     let mut current = CurrentTrainingCheckpointV1::decode(&inputs.pc_current).unwrap();
     current.life = None;
@@ -84,7 +89,7 @@ fn source_hash_pins_reject_different_same_graph_archives_and_missing_private_lif
 fn native_binding_rejects_corrupt_closure_refs_identity_and_resealed_cognitive_substitution() {
     let inputs = fixture(1);
     let original = serde_json::to_vec(&inputs).unwrap();
-    let cloud = CurrentTrainingCheckpointV1::decode(&inputs.cloud_current).unwrap();
+    let cloud = CurrentTrainingCheckpointV1::decode(cloud_current(&inputs)).unwrap();
     let current = CurrentTrainingCheckpointV1::decode(&inputs.pc_current).unwrap();
     let p = current.handoff.admit().unwrap().phenotype;
     for variant in 0..15 {

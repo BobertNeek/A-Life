@@ -13,6 +13,9 @@ use alife_gpu_backend::GpuLiveTopologyCheckpointV1;
 use serde::{Deserialize, Serialize};
 mod source_projection;
 pub use source_projection::*;
+mod cpu_archive;
+pub use cpu_archive::*;
+mod archive_encoding;
 
 type Result<T> = std::result::Result<T, CpuHostError>;
 
@@ -21,11 +24,24 @@ type Result<T> = std::result::Result<T, CpuHostError>;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct InterpolationExperimentInputs {
+    #[serde(with = "archive_encoding::blob")]
     pub pc_current: Vec<u8>,
     pub expected_pc_current_sha256: String,
-    pub cloud_current: Vec<u8>,
-    pub expected_cloud_current_sha256: String,
+    pub cloud_parent: InterpolationCloudParent,
     pub cloud_fraction: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum InterpolationCloudParent {
+    Current {
+        #[serde(with = "archive_encoding::blob")]
+        bytes: Vec<u8>,
+        expected_sha256: String,
+    },
+    NativeCpuArchive {
+        archive: NativeCpuParentArchive,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -36,7 +52,10 @@ pub struct InterpolationExperimentReceipt {
     pub qualification: String,
     pub optimizer_semantics: String,
     pub pc_current_sha256: String,
-    pub cloud_current_sha256: String,
+    pub cloud_parent_kind: String,
+    /// Current byte SHA256 or the explicitly distinct native CPU file-tree pin.
+    pub cloud_parent_sha256: String,
+    pub cloud_native_cpu_binding: Option<NativeCpuArchiveBinding>,
     pub pc_projection_sha256: String,
     pub pc_projection_binding: RetainedProjectionBinding,
     pub canonical_coordinates: usize,
@@ -91,17 +110,39 @@ pub fn prepare_retained_interpolation_experiment(
     if !inputs.cloud_fraction.is_finite() || !(0.0..=1.0).contains(&inputs.cloud_fraction) {
         return Err(bad("interpolation fraction must be finite and in [0,1]"));
     }
-    if sha256(&inputs.pc_current) != inputs.expected_pc_current_sha256
-        || sha256(&inputs.cloud_current) != inputs.expected_cloud_current_sha256
-    {
+    if sha256(&inputs.pc_current) != inputs.expected_pc_current_sha256 {
         return Err(bad("parent artifact differs from its explicit SHA256 pin"));
     }
     let pc = CurrentTrainingCheckpointV1::decode(&inputs.pc_current)
         .map_err(|_| bad("PC Current codec admission failed"))?;
-    let cloud = CurrentTrainingCheckpointV1::decode(&inputs.cloud_current)
-        .map_err(|_| bad("cloud Current codec admission failed"))?;
+    let (cloud_handoff, cloud_kind, cloud_pin, cloud_native_cpu_binding) =
+        match &inputs.cloud_parent {
+            InterpolationCloudParent::Current {
+                bytes,
+                expected_sha256,
+            } => {
+                if sha256(bytes) != *expected_sha256 {
+                    return Err(bad("cloud parent differs from its explicit SHA256 pin"));
+                }
+                let cloud = CurrentTrainingCheckpointV1::decode(bytes)
+                    .map_err(|_| bad("cloud Current codec admission failed"))?;
+                (cloud.handoff, "current", expected_sha256.clone(), None)
+            }
+            InterpolationCloudParent::NativeCpuArchive { archive } => {
+                let (handoff, binding) =
+                    cpu_archive::admit_native_cpu_archive(archive).map_err(|e| {
+                        CpuHostError::Preparation(format!("native CPU parent admission: {e}"))
+                    })?;
+                (
+                    handoff,
+                    "native_cpu_archive",
+                    binding.tree_sha256.clone(),
+                    Some(binding),
+                )
+            }
+        };
     let a = pc.handoff.clone().admit()?;
-    let b = cloud.handoff.clone().admit()?;
+    let b = cloud_handoff.admit()?;
     validate_weight_only_policy_successor(&a.phenotype, &b.phenotype)?;
     if a.actor.stage_mask != b.actor.stage_mask
         || a.foundation
@@ -189,12 +230,14 @@ pub fn prepare_retained_interpolation_experiment(
     }
     next.validate_against(&BrainCapacityClass::n2048())?;
     let receipt = InterpolationExperimentReceipt {
-        schema: 2,
+        schema: 3,
         kind: "inference-only-two-parent-interpolation-pc-retained-overlay".into(),
         qualification: "synthetic-fixture-qualified-source-projection-binding; full-native-recovery/runtime/skills-unqualified; no-common-ancestry-claim".into(),
         optimizer_semantics: "unresolved; no-candidate-actor-or-critic; both-parent-Adam-archives-unchanged; not-resumable".into(),
         pc_current_sha256: sha256(&inputs.pc_current),
-        cloud_current_sha256: sha256(&inputs.cloud_current),
+        cloud_parent_kind:cloud_kind.into(),
+        cloud_parent_sha256:cloud_pin,
+        cloud_native_cpu_binding,
         pc_projection_sha256: sha256(&serde_json::to_vec(&source)?),
         pc_projection_binding: source_binding,
         canonical_coordinates: source_map.len(),
