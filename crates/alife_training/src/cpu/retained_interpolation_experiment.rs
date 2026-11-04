@@ -1,0 +1,204 @@
+//! Disposable, unqualified two-parent interpolation. No ancestry is asserted and
+//! no candidate Adam/critic or resumable Current checkpoint is manufactured.
+//!
+//! The explicit retained projection is checked against the PC graph, but this
+//! fixture harness does not authenticate its extraction from the archived Current
+//! private assets. A native source-binding adapter is required before real use.
+use super::{CpuHostError, CpuRetainedNeuralInheritance};
+use crate::{native_receipt::sha256, CurrentTrainingCheckpointV1};
+use alife_core::{
+    validate_weight_only_policy_successor, BrainCapacityClass, FoundationWeightAsset,
+    N2048LivePolicyTransition, PhenotypeCompilerInputs,
+};
+use alife_gpu_backend::GpuLiveTopologyCheckpointV1;
+use serde::{Deserialize, Serialize};
+
+type Result<T> = std::result::Result<T, CpuHostError>;
+
+/// Original artifact bytes, including both full optimizer histories and any
+/// private life. They remain unchanged, rather than reserialized as new parents.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct InterpolationExperimentInputs {
+    pub pc_current: Vec<u8>,
+    pub cloud_current: Vec<u8>,
+    pub pc_retained_projection_json: Vec<u8>,
+    pub cloud_fraction: f64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct InterpolationExperimentReceipt {
+    pub schema: u16,
+    pub kind: String,
+    pub qualification: String,
+    pub optimizer_semantics: String,
+    pub pc_current_sha256: String,
+    pub cloud_current_sha256: String,
+    pub pc_projection_sha256: String,
+    pub canonical_coordinates: usize,
+    pub acquired_coordinates: usize,
+    pub changed_genetic_coordinates: usize,
+}
+
+/// An inference-only view, not a FoundationTrainingHandoff or accepted Current.
+/// Both parent archives contain their original Adam, but the candidate has none.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RetainedInterpolationExperiment {
+    inputs: InterpolationExperimentInputs,
+    compiler_inputs: PhenotypeCompilerInputs,
+    retained: CpuRetainedNeuralInheritance,
+    receipt: InterpolationExperimentReceipt,
+}
+
+impl RetainedInterpolationExperiment {
+    pub fn inputs(&self) -> &InterpolationExperimentInputs {
+        &self.inputs
+    }
+    pub fn compiler_inputs(&self) -> &PhenotypeCompilerInputs {
+        &self.compiler_inputs
+    }
+    pub fn retained(&self) -> &CpuRetainedNeuralInheritance {
+        &self.retained
+    }
+    pub fn receipt(&self) -> &InterpolationExperimentReceipt {
+        &self.receipt
+    }
+    /// Cold requalification checks all candidate fields against both exact
+    /// archived parents. Merely decoding this experiment confers no authority.
+    pub fn validate(&self) -> Result<()> {
+        let expected = prepare_retained_interpolation_experiment(self.inputs.clone())?;
+        if serde_json::to_vec(self)? != serde_json::to_vec(&expected)? {
+            return Err(CpuHostError::State(
+                "interpolation candidate or receipt changed",
+            ));
+        }
+        Ok(())
+    }
+}
+
+/// Synthetic-fixture preparation only. The native Current codec checks the
+/// archived heads and metadata; full native private closure, projection source
+/// binding, gameplay parity and skill retention are not qualified by this API.
+pub fn prepare_retained_interpolation_experiment(
+    inputs: InterpolationExperimentInputs,
+) -> Result<RetainedInterpolationExperiment> {
+    let bad = |message| CpuHostError::State(message);
+    if !inputs.cloud_fraction.is_finite() || !(0.0..=1.0).contains(&inputs.cloud_fraction) {
+        return Err(bad("interpolation fraction must be finite and in [0,1]"));
+    }
+    if inputs.pc_retained_projection_json.len() > 50 * 1024 * 1024 {
+        return Err(bad("retained projection exceeds experimental bound"));
+    }
+    let pc = CurrentTrainingCheckpointV1::decode(&inputs.pc_current)
+        .map_err(|_| bad("PC Current codec admission failed"))?;
+    let cloud = CurrentTrainingCheckpointV1::decode(&inputs.cloud_current)
+        .map_err(|_| bad("cloud Current codec admission failed"))?;
+    let a = pc.handoff.clone().admit()?;
+    let b = cloud.handoff.clone().admit()?;
+    validate_weight_only_policy_successor(&a.phenotype, &b.phenotype)?;
+    if a.actor.stage_mask != b.actor.stage_mask
+        || a.foundation
+            .manifest()
+            .training_stage()
+            .curriculum_version()
+            != b.foundation
+                .manifest()
+                .training_stage()
+                .curriculum_version()
+        || a.foundation
+            .manifest()
+            .training_stage()
+            .evaluation_version()
+            != b.foundation
+                .manifest()
+                .training_stage()
+                .evaluation_version()
+    {
+        return Err(bad(
+            "parent stage masks or curriculum/evaluation contracts differ",
+        ));
+    }
+    let source: CpuRetainedNeuralInheritance =
+        serde_json::from_slice(&inputs.pc_retained_projection_json)?;
+    let source_map = source.canonical_to_live(&a.phenotype)?;
+    let mut weights = a.actor.weights.clone();
+    let mut changed = 0;
+    for (i, weight) in weights.iter_mut().enumerate() {
+        let other = b.actor.weights[i];
+        if !a.actor.stage_mask.is_trainable(i) {
+            if weight.to_bits() != other.to_bits() {
+                return Err(bad("parents disagree on a frozen coordinate"));
+            }
+        } else if weight.to_bits() != other.to_bits() {
+            let before = weight.to_bits();
+            *weight = match inputs.cloud_fraction {
+                0.0 => *weight,
+                1.0 => other,
+                x => ((1.0 - x) * f64::from(*weight) + x * f64::from(other)) as f32,
+            };
+            changed += usize::from(before != weight.to_bits());
+        }
+    }
+    let asset = FoundationWeightAsset::from_trained_weights(
+        &a.phenotype,
+        weights,
+        a.foundation.manifest().training_stage(),
+    )?;
+    // This is an experimental overlay sequence, not an offline optimizer step
+    // or a claim that either parent descended from the other.
+    let transition = N2048LivePolicyTransition::prepare(
+        &pc.handoff.compiler_inputs,
+        pc.handoff.policy_version,
+        asset,
+    )?;
+    let next = transition.next_phenotype();
+    let topology = GpuLiveTopologyCheckpointV1::recompile_for_phenotype(
+        next,
+        source.topology.v11_checkpoint.clone(),
+    )?;
+    // Only canonical genetic weights and their derived identities may change.
+    // Added edges never become actor/Adam coordinates; offsets cannot shift.
+    let mut allowed = source.topology.clone();
+    allowed.phenotype_hash = next.phenotype_hash();
+    for (canonical, &live) in source_map.iter().enumerate() {
+        allowed.genetic_weight_bits[live] = next.synapses()[canonical].genetic_weight().to_bits();
+    }
+    allowed.canonical_digest = allowed.recompute_canonical_digest()?;
+    if serde_json::to_vec(&allowed)? != serde_json::to_vec(&topology)? {
+        return Err(bad(
+            "weight-only transition changed live coordinates or acquired state",
+        ));
+    }
+    let mut retained = source.clone();
+    retained.topology = topology;
+    for bank in [&mut retained.lifetime, &mut retained.fast] {
+        bank.phenotype_hash = next.phenotype_hash();
+        bank.canonical_digest = bank.recompute_canonical_digest()?;
+    }
+    if retained.canonical_to_live(next)? != source_map {
+        return Err(bad(
+            "canonical-to-live permutation changed during interpolation",
+        ));
+    }
+    next.validate_against(&BrainCapacityClass::n2048())?;
+    let receipt = InterpolationExperimentReceipt {
+        schema: 1,
+        kind: "inference-only-two-parent-interpolation-pc-retained-overlay".into(),
+        qualification: "synthetic-fixture-only; native-private-closure/projection-source-binding/runtime/skills-unqualified; no-common-ancestry-claim".into(),
+        optimizer_semantics: "unresolved; no-candidate-actor-or-critic; both-parent-Adam-archives-unchanged; not-resumable".into(),
+        pc_current_sha256: sha256(&inputs.pc_current),
+        cloud_current_sha256: sha256(&inputs.cloud_current),
+        pc_projection_sha256: sha256(&inputs.pc_retained_projection_json),
+        canonical_coordinates: source_map.len(),
+        acquired_coordinates: retained.topology.total_synapse_count as usize - source_map.len(),
+        changed_genetic_coordinates: changed,
+    };
+    Ok(RetainedInterpolationExperiment {
+        inputs,
+        compiler_inputs: transition.next_inputs().clone(),
+        retained,
+        receipt,
+    })
+}
