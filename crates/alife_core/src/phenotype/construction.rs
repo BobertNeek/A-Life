@@ -208,7 +208,16 @@ fn compile_inner(
             } else {
                 0.0
             };
-            NeuronDynamics::new(bias, 0.25, ActivationFunction::Tanh, 0.95, 0.01, 1.0)
+            if inputs.experimental_language_input()
+                == Some(super::ExperimentalLanguageInputV1::LinearWordReadoutV3)
+                && (motor.start..motor.start + 160).contains(&neuron)
+            {
+                // Disposable direct word/readout sources. The stock native
+                // neuron equation and trainable decoder coordinates are reused.
+                NeuronDynamics::new(0., 1., ActivationFunction::Identity, 0.95, 0.01, 0.)
+            } else {
+                NeuronDynamics::new(bias, 0.25, ActivationFunction::Tanh, 0.95, 0.01, 1.0)
+            }
         })
         .collect();
     let microstep_count = match development.maturation.raw() {

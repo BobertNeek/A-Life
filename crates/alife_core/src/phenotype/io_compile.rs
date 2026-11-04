@@ -46,21 +46,27 @@ pub(super) fn compile_encoder_for_inputs(
     if motor.len < 160 {
         return Err(compile_error());
     }
+    let linear = inputs.experimental_language_input()
+        == Some(super::ExperimentalLanguageInputV1::LinearWordReadoutV3);
     let mut assignments = legacy.assignments().to_vec();
     for offset in 0..160_u32 {
         assignments.push(SensorEncoderAssignment::new(
             SensorEncoderSourceGroup::HeardLanguage,
             (offset % 16) as u16,
             motor.start + offset,
-            0.5,
+            if linear { 4.0 } else { 0.5 },
             0.0,
             -1.0,
             1.0,
         ));
     }
-    if inputs.experimental_language_input()
-        == Some(super::ExperimentalLanguageInputV1::TwoTokenAndEmbodiedSpeechV2)
-    {
+    if matches!(
+        inputs.experimental_language_input(),
+        Some(
+            super::ExperimentalLanguageInputV1::TwoTokenAndEmbodiedSpeechV2
+                | super::ExperimentalLanguageInputV1::LinearWordReadoutV3
+        )
+    ) {
         // Raw native bodily senses, not event labels or word meanings. This
         // gives speech the holding/taste/need signals missing from sparse support.
         for offset in 0..30_u32 {

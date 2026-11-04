@@ -190,8 +190,31 @@ impl CpuFoundationTrainer {
         &self,
         source: &PhenotypeCompilerInputs,
     ) -> Result<(Self, PhenotypeCompilerInputs), TrainingError> {
-        if source.experimental_language_input()
-            != Some(ExperimentalLanguageInputV1::TwoTokenReadoutBroadcastV1)
+        self.fork_language_profile(
+            source,
+            ExperimentalLanguageInputV1::TwoTokenReadoutBroadcastV1,
+            ExperimentalLanguageInputV1::TwoTokenAndEmbodiedSpeechV2,
+        )
+    }
+    /// Explicit new disposable readout founder; preserves all native parameters
+    /// and optimizer history, but never admits an old resident/private snapshot.
+    pub fn fork_linear_language_readout_experiment(
+        &self,
+        source: &PhenotypeCompilerInputs,
+    ) -> Result<(Self, PhenotypeCompilerInputs), TrainingError> {
+        self.fork_language_profile(
+            source,
+            ExperimentalLanguageInputV1::TwoTokenAndEmbodiedSpeechV2,
+            ExperimentalLanguageInputV1::LinearWordReadoutV3,
+        )
+    }
+    fn fork_language_profile(
+        &self,
+        source: &PhenotypeCompilerInputs,
+        from: ExperimentalLanguageInputV1,
+        to: ExperimentalLanguageInputV1,
+    ) -> Result<(Self, PhenotypeCompilerInputs), TrainingError> {
+        if source.experimental_language_input() != Some(from)
             || self.phenotype.experimental_language_input() != source.experimental_language_input()
             || source.live_policy().is_some()
             || source
@@ -209,18 +232,29 @@ impl CpuFoundationTrainer {
         {
             return Err(invalid());
         }
-        let inputs = source.clone().with_experimental_language_input(
-            ExperimentalLanguageInputV1::TwoTokenAndEmbodiedSpeechV2,
-        )?;
+        let inputs = source.clone().with_experimental_language_input(to)?;
         let next = PhenotypeCompiler::compile_validated(&inputs, &BrainCapacityClass::n2048())?;
         if next.synapses() != self.phenotype.synapses()
             || next.projections() != self.phenotype.projections()
-            || next.neuron_dynamics() != self.phenotype.neuron_dynamics()
             || next.persistent_address_map() != self.phenotype.persistent_address_map()
             || next.candidate_decoder() != self.phenotype.candidate_decoder()
             || next.speech_decoder() != self.phenotype.speech_decoder()
         {
             return Err(invalid());
+        }
+        let motor = next.candidate_decoder().motor_start();
+        for (i, (a, b)) in self
+            .phenotype
+            .neuron_dynamics()
+            .iter()
+            .zip(next.neuron_dynamics())
+            .enumerate()
+        {
+            let changed_readout = to == ExperimentalLanguageInputV1::LinearWordReadoutV3
+                && (motor..motor + 160).contains(&(i as u32));
+            if !changed_readout && a != b {
+                return Err(invalid());
+            }
         }
         let mut checkpoint = self.checkpoint();
         checkpoint.phenotype_hash = next.phenotype_hash();
