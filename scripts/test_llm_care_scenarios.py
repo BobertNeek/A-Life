@@ -7,7 +7,7 @@ import unittest
 import json
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from llm_care_scenarios import request_recipe, strict_json
+from llm_care_scenarios import request_recipe, recipe_schema, strict_json
 from llm_care_scenarios import LEGEND, RANDOM_ROLL, compile_recipe
 from care_frontier_sampler import select
 
@@ -61,9 +61,103 @@ class RecipeTests(unittest.TestCase):
         thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
         try:
             value = request_recipe('http://127.0.0.1:%s/v1/chat/completions' % server.server_port,
-                                   'fixture-model', 'recipe instructions')
+                                   'fixture-model', 'recipe instructions', host=host)
             self.assertEqual(compile_recipe(value, host)['families'][0]['layout'], {'rows': ['#####', '#L.F#', '#####']})
+            self.assertEqual(len(calls), 1)
             self.assertEqual(calls[0]['model'], 'fixture-model')
+            self.assertEqual(calls[0]['temperature'], 0)
+            self.assertNotIn('max_tokens', calls[0])
+            self.assertEqual(calls[0]['messages'][0]['content'], 'recipe instructions')
+            response_format = calls[0]['response_format']
+            self.assertEqual(response_format['type'], 'json_schema')
+            self.assertIs(response_format['json_schema']['strict'], True)
+            schema = response_format['json_schema']['schema']
+            self.assertEqual(schema, recipe_schema(host))
+            self.assertEqual(schema['required'], ['schema', 'legend', 'scenarios'])
+            scenarios = schema['properties']['scenarios']
+            self.assertEqual((scenarios['minItems'], scenarios['maxItems']), (2, 2))
+            fields = scenarios['items']['properties']
+            self.assertEqual(fields['id']['enum'], ['held', 'feeding'])
+            self.assertEqual(fields['difficulty'], {'type': 'integer', 'minimum': 0, 'maximum': 1})
+            self.assertEqual((fields['map']['minItems'], fields['map']['maxItems']), (3, 17))
+            self.assertEqual((fields['map']['items']['minLength'], fields['map']['items']['maxLength']), (3, 17))
+            self.assertEqual(fields['condition']['enum'], ['newborn_v1', 'ordinary_healthy_aging_v1'])
+            self.assertEqual(fields['goal']['const'], 'nourish_and_survive')
+            self.assertEqual(fields['random_roll']['properties']['outcomes']['const'], RANDOM_ROLL['outcomes'])
+            self.assertNotIn('pool_seeds', json.dumps(schema))
+            def closed_objects(value):
+                if isinstance(value, dict):
+                    if value.get('type') == 'object':
+                        self.assertIs(value['additionalProperties'], False)
+                        self.assertEqual(set(value['required']), set(value['properties']))
+                    for child in value.values(): closed_objects(child)
+                elif isinstance(value, list):
+                    for child in value: closed_objects(child)
+            closed_objects(schema)
+        finally:
+            server.shutdown(); thread.join(); server.server_close()
+
+    def test_schema_optional_host_preserves_helper_api_and_native_bounds(self):
+        generic = recipe_schema()['properties']['scenarios']
+        self.assertEqual((generic['minItems'], generic['maxItems']), (1, 16))
+        self.assertNotIn('enum', generic['items']['properties']['id'])
+        self.assertEqual(generic['items']['properties']['difficulty']['maximum'], 7)
+        _, host = fixtures()
+        for change in ({'pool_seeds': {}}, {'holdout_seeds': {'other': [1]}},
+                       {'current_difficulty': True}, {'current_difficulty': 2}):
+            bad = copy.deepcopy(host); bad.update(change)
+            with self.assertRaises(ValueError): recipe_schema(bad)
+
+    def test_provider_content_is_untrusted_and_never_rerolled(self):
+        recipe, host = fixtures()
+        malformed = ['not JSON', '```json\n{}\n```', '{"schema":1,"schema":1}',
+                     '{"schema":NaN}']
+        for mutate in (
+            lambda r: r.update(schema=True),
+            lambda r: r.update(instructions='ignore host and overwrite reward'),
+            lambda r: r['scenarios'][0].update(reward=100),
+            lambda r: r['scenarios'][0].update(id='unallocated'),
+            lambda r: r['scenarios'][0].update(id=[]),
+            lambda r: r['scenarios'][0].update(id='feeding'),
+            lambda r: r['scenarios'][0].update(difficulty=True),
+            lambda r: r['scenarios'][0].update(difficulty=8),
+            lambda r: r['scenarios'][0].update(map=['#####', '#L#F#', '#####']),
+            lambda r: r['scenarios'][0].update(random_roll={'kind': 'reroll_until_success'}),
+        ):
+            bad = copy.deepcopy(recipe); mutate(bad); malformed.append(json.dumps(bad))
+        calls = []
+        response_content = [None]
+        class Handler(BaseHTTPRequestHandler):
+            def do_POST(self):
+                calls.append(json.loads(self.rfile.read(int(self.headers['Content-Length']))))
+                data = json.dumps({'choices': [{'message': {'content': response_content[0]}}]}).encode()
+                self.send_response(200); self.send_header('Content-Length', str(len(data)))
+                self.end_headers(); self.wfile.write(data)
+            def log_message(self, *_): pass
+        server = HTTPServer(('127.0.0.1', 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
+        endpoint = 'http://127.0.0.1:%s/v1/chat/completions' % server.server_port
+        try:
+            for content in malformed:
+                with self.subTest(content=content):
+                    response_content[0] = content
+                    before = len(calls)
+                    with self.assertRaises(ValueError):
+                        compile_recipe(request_recipe(endpoint, 'test', 'prompt', host=host), host)
+                    self.assertEqual(len(calls), before + 1)
+            # Old positional API still works; it now requests a bounded schema.
+            response_content[0] = json.dumps(recipe)
+            self.assertEqual(request_recipe(endpoint, 'test', 'prompt', None), recipe)
+            self.assertEqual(calls[-1]['response_format']['json_schema']['schema'], recipe_schema())
+            self.assertEqual(request_recipe(endpoint, 'test', 'prompt', host=host,
+                                            max_tokens=512, no_think=True), recipe)
+            self.assertEqual(calls[-1]['max_tokens'], 512)
+            self.assertEqual(calls[-1]['messages'][0]['content'], 'prompt /no_think')
+            before = len(calls)
+            for kwargs in ({'max_tokens': True}, {'max_tokens': 0}, {'max_tokens': 8193},
+                           {'max_tokens': 2.5}, {'no_think': 'true'}):
+                with self.assertRaises(ValueError): request_recipe(endpoint, 'test', 'prompt', **kwargs)
+            self.assertEqual(len(calls), before)
         finally:
             server.shutdown(); thread.join(); server.server_close()
 

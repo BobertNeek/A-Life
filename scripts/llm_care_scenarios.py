@@ -11,7 +11,7 @@ import urllib.request
 from urllib.parse import urlsplit
 from pathlib import Path
 
-from care_frontier_sampler import validate_bank, validate_layout
+from care_frontier_sampler import integer, validate_bank, validate_layout
 
 # A finite 2 m grid; columns increase world X and rows world Z. The learner
 # anchors the inherited founder. Native terrain owns wall and movement physics.
@@ -40,7 +40,7 @@ def map_layout(rows):
 
 
 def compile_recipe(recipe, host):
-    if not isinstance(recipe, dict) or set(recipe) != {"schema", "legend", "scenarios"} or recipe["schema"] != 1 or recipe["legend"] != LEGEND:
+    if not isinstance(recipe, dict) or set(recipe) != {"schema", "legend", "scenarios"} or type(recipe["schema"]) is not int or recipe["schema"] != 1 or recipe["legend"] != LEGEND:
         raise ValueError("invalid recipe schema or legend")
     scenarios = recipe["scenarios"]
     if not isinstance(scenarios, list) or not 1 <= len(scenarios) <= 16:
@@ -49,6 +49,8 @@ def compile_recipe(recipe, host):
     for scenario in scenarios:
         if not isinstance(scenario, dict) or set(scenario) != {"id", "map", "condition", "difficulty", "goal", "random_roll"}:
             raise ValueError("invalid scenario fields")
+        if not isinstance(scenario["id"], str):
+            raise ValueError("scenario ID must be a string")
         layout = map_layout(scenario["map"])
         if scenario["goal"] != GOAL or scenario["random_roll"] != RANDOM_ROLL:
             raise ValueError("unsupported goal or random roll")
@@ -87,20 +89,89 @@ def strict_json(raw):
     return json.loads(raw, object_pairs_hook=unique, parse_constant=lambda _: (_ for _ in ()).throw(ValueError("non-finite JSON number")))
 
 
+def recipe_schema(host=None):
+    """Constrain decoding, not admission: native/host checks remain mandatory.
+
+    The optional host preserves the request helper's original calling convention.
+    The CLI always supplies it, restricting IDs and scenario count to its ledger.
+    Cross-field rules (unique IDs, connected maps and contiguous difficulties)
+    are still checked by compile_recipe, never repaired or silently rerolled.
+    """
+    ids = None
+    if host is not None:
+        if (not isinstance(host, dict) or set(host) != {
+                "decision_budget", "slots", "sampler_seed", "current_difficulty",
+                "pool_seeds", "holdout_seeds"}
+                or not isinstance(host["pool_seeds"], dict)
+                or not isinstance(host["holdout_seeds"], dict)):
+            raise ValueError("invalid host settings")
+        ids = list(host["pool_seeds"])
+        if (not 1 <= len(ids) <= 16 or set(ids) != set(host["holdout_seeds"])
+                or any(not isinstance(name, str) or not name.isascii()
+                       or not name.replace("_", "").isalnum() or len(name) > 48 for name in ids)
+                or not integer(host["current_difficulty"], 0, min(7, len(ids) - 1))):
+            raise ValueError("invalid host family IDs or difficulty")
+
+    def obj(properties):
+        return {"type": "object", "properties": properties,
+                "required": list(properties), "additionalProperties": False}
+
+    def fixed(value):
+        return {"type": "string", "const": value}
+
+    family_id = {"type": "string", "minLength": 1, "maxLength": 48,
+                 "pattern": "^[A-Za-z0-9_]+$"}
+    if ids is not None:
+        family_id["enum"] = ids
+    scenario = obj({
+        "id": family_id,
+        "map": {"type": "array", "minItems": 3, "maxItems": 17,
+                "items": {"type": "string", "minLength": 3, "maxLength": 17,
+                          "pattern": "^#[#L.F]{1,15}#$"}},
+        "condition": {"type": "string", "enum": ["newborn_v1", "ordinary_healthy_aging_v1"]},
+        "difficulty": {"type": "integer", "minimum": 0,
+                       "maximum": min(7, len(ids) - 1) if ids is not None else 7},
+        "goal": fixed(GOAL),
+        "random_roll": obj({
+            "kind": fixed(RANDOM_ROLL["kind"]),
+            "formula": fixed(RANDOM_ROLL["formula"]),
+            "outcomes": {"type": "array", "const": list(RANDOM_ROLL["outcomes"]),
+                         "minItems": 3, "maxItems": 3,
+                         "items": {"type": "string", "enum": list(RANDOM_ROLL["outcomes"])}}}),
+    })
+    return obj({
+        "schema": {"type": "integer", "const": 1},
+        "legend": obj({key: fixed(value) for key, value in LEGEND.items()}),
+        "scenarios": {"type": "array", "items": scenario,
+                      "minItems": len(ids) if ids is not None else 1,
+                      "maxItems": len(ids) if ids is not None else 16},
+    })
+
+
 class RejectRedirects(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         return None
 
 
-def request_recipe(endpoint, model, prompt, api_key=None):
+def request_recipe(endpoint, model, prompt, api_key=None, *, host=None, max_tokens=None, no_think=False):
     # Never forward credentials across redirects or send them over plaintext.
     url = urlsplit(endpoint)
     if (url.scheme not in {"http", "https"} or not url.hostname or url.username or url.password
             or url.fragment or (url.scheme == "http" and url.hostname not in {"127.0.0.1", "::1", "localhost"})):
         raise ValueError("endpoint must be HTTPS or a loopback HTTP URL without userinfo")
+    if max_tokens is not None and not integer(max_tokens, 1, 8192):
+        raise ValueError("max_tokens must be an integer in 1..8192")
+    if type(no_think) is not bool:
+        raise ValueError("no_think must be a boolean")
+    if no_think:
+        prompt += " /no_think"
     # Explicitly configured endpoint; credentials come only from environment.
     payload = {"model": model, "messages": [{"role": "system", "content": prompt}],
-               "response_format": {"type": "json_object"}, "temperature": 0}
+               "response_format": {"type": "json_schema", "json_schema": {
+                   "name": "alife_care_recipe", "strict": True, "schema": recipe_schema(host)}},
+               "temperature": 0}
+    if max_tokens is not None:
+        payload["max_tokens"] = max_tokens
     headers = {"Content-Type": "application/json"}
     if api_key:
         headers["Authorization"] = "Bearer " + api_key
@@ -119,6 +190,8 @@ def main():
     parser.add_argument("--endpoint", required=True, help="explicit OpenAI-compatible chat completions URL")
     parser.add_argument("--model", required=True)
     parser.add_argument("--output", type=Path, required=True, help="new sampler-bank file")
+    parser.add_argument("--max-tokens", type=int, help="optional generation cap in 1..8192 tokens")
+    parser.add_argument("--no-think", action="store_true", help="append Qwen /no_think instruction (opt-in)")
     args = parser.parse_args()
     host = strict_json(args.host.read_text(encoding="utf-8"))
     prompt = ("Return JSON only with schema=1, legend=" + json.dumps(LEGEND) +
@@ -131,7 +204,8 @@ def main():
               "Use exactly these family IDs: " + json.dumps(list(host["pool_seeds"])) +
               ". Use distinct maps/condition pairs. Difficulties form contiguous integers starting at 0 and include "
               + str(host["current_difficulty"]) + ". Do not add fields.")
-    recipe = request_recipe(args.endpoint, args.model, prompt, os.environ.get("ALIFE_SCENARIO_API_KEY"))
+    recipe = request_recipe(args.endpoint, args.model, prompt, os.environ.get("ALIFE_SCENARIO_API_KEY"),
+                            host=host, max_tokens=args.max_tokens, no_think=args.no_think)
     bank = compile_recipe(recipe, host)
     recipe_path = args.output.with_name(args.output.name + ".recipe.json")
     # Preserve the untrusted proposal alongside its compiled artifact. Never
