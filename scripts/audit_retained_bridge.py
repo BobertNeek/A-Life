@@ -81,7 +81,7 @@ def compose_map(plan, source):
     return mapping, packed_live, acquired
 
 
-def packed_forward(plan, source, mapping, packed_live, acquired, q, before):
+def packed_forward(plan, source, mapping, packed_live, acquired, q, before, pre_output=None):
     p, t = plan["phenotype"], source["topology"]
     tick = q["ticks"][0]
     g, alpha = floats(t["genetic_weight_bits"]), floats(t["alpha_bits"])
@@ -111,6 +111,8 @@ def packed_forward(plan, source, mapping, packed_live, acquired, q, before):
     n = t["neuron_count"]
     branches = q["initial"]["dendrites"]["branches"]
     for step in range(tick["microstep_count"]):
+        if pre_output is not None:
+            pre_output[:] = a
         sums = np.zeros(n, dtype=F)
         for target in range(n):
             for i in range(t["target_offsets"][target], t["target_offsets"][target + 1]):
@@ -296,7 +298,13 @@ def main(root):
             if not all(trace.values()): failures.append((condition, number, "typed-trace-reproduction"))
             results = []
             for ev in record["evaluations"]:
-                expected, offsets = packed_forward(plan, source, mapping, packed_live, acquired, ev["sequence"], record["before_neural"])
+                before = record["before_neural"]
+                if ev["variant"] in ("zero_lifetime", "zero_fast", "zero_somatic"):
+                    before = dict(before)
+                    for layer in ("lifetime", "fast"):
+                        if ev["variant"] == "zero_somatic" or ev["variant"] == "zero_" + layer:
+                            before[layer] = [0.] * len(before[layer])
+                expected, offsets = packed_forward(plan, source, mapping, packed_live, acquired, ev["sequence"], before)
                 item = {"variant": ev["variant"], "effective_offset_check": offsets,
                         "scalar_vs_cpu": {key: distance(expected[key], ev["cpu"][key]) for key in expected}}
                 if "offline_wgsl" in ev:

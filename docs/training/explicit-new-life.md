@@ -240,6 +240,16 @@ It does not independently continue predictor updates, waking plasticity or the
 following world tick. Raw diagnostic exports contain private state and remain
 outside the repository.
 
+The bridge also supports `--first-frame-only` and explicit replay views that
+zero lifetime, fast or both somatic layers while retaining native/saved
+dendrites and the acquired edge. These replay interventions do not resume or
+modify a parent. `scripts/audit_retained_waking.py NEW_OUTPUT` independently
+checks canonical-coordinate eligibility staging and the next waking fast update
+against the native scalar formulas on the captured sealed decisions. Its
+declared f32 tolerance covers reconstruction of receptor activation from the
+exported effects. Added-edge private eligibility, sleep and hardware arithmetic
+remain outside this waking check.
+
 For an explicitly available CPU Vulkan adapter, compile the bridge with
 `--features cpu-training,gpu-tests` and request `--offline-wgsl`. This uses only
 the offline trainer factory. If that factory is unavailable, retain the failure

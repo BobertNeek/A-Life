@@ -32,10 +32,21 @@ fn evaluation(v: &alife_training::TrainingReplayEvaluation) -> Value {
 
 fn main() -> Result<()> {
     let a = std::env::args().skip(1).collect::<Vec<_>>();
-    if !(a.len() == 4 || a.len() == 5 && a[4] == "--offline-wgsl") {
-        return Err("CURRENT EXPECTED_SHA BATTERY_DIRECTORY NEW_OUTPUT [--offline-wgsl]".into());
+    if !(a.len() == 4
+        || a.len() == 5 && matches!(a[4].as_str(), "--offline-wgsl" | "--first-frame-only"))
+    {
+        return Err(
+            "CURRENT EXPECTED_SHA BATTERY_DIRECTORY NEW_OUTPUT [--offline-wgsl|--first-frame-only]"
+                .into(),
+        );
     }
-    if a.len() == 5 && !cfg!(feature = "gpu-tests") {
+    let offline_requested = a.get(4).is_some_and(|flag| flag == "--offline-wgsl");
+    let capture_limit = if a.get(4).is_some_and(|flag| flag == "--first-frame-only") {
+        1
+    } else {
+        6
+    };
+    if offline_requested && !cfg!(feature = "gpu-tests") {
         return Err("--offline-wgsl requires the explicit gpu-tests build feature".into());
     }
     let source_path = Path::new(&a[0]);
@@ -68,7 +79,7 @@ fn main() -> Result<()> {
         serde_json::from_value(qualification["body_compatibility"]["explicit_proof"].clone())?;
 
     #[cfg(feature = "gpu-tests")]
-    let mut gpu = if a.get(4).is_some() {
+    let mut gpu = if offline_requested {
         let session = alife_runtime::GpuAuthoritativeSession::new_software_vulkan_training_test()?;
         if !session.backend().is_software_training_test() {
             return Err("expected explicit software offline fixture".into());
@@ -178,9 +189,17 @@ fn main() -> Result<()> {
                     "acquired_edge_ablated",
                     "native_canonical_topology",
                     "all_dendrites_and_acquired_edges_ablated",
+                    "zero_lifetime",
+                    "zero_fast",
+                    "zero_somatic",
                 ] {
                     let mut q = q.clone();
-                    if variant != "full" {
+                    if matches!(
+                        variant,
+                        "acquired_edge_ablated"
+                            | "native_canonical_topology"
+                            | "all_dendrites_and_acquired_edges_ablated"
+                    ) {
                         q.ticks[0].structural_synapses.clear();
                     }
                     if variant == "native_canonical_topology" {
@@ -188,6 +207,19 @@ fn main() -> Result<()> {
                     }
                     if variant == "all_dendrites_and_acquired_edges_ablated" {
                         q.initial.dendrites = Default::default();
+                    }
+                    if matches!(variant, "zero_lifetime" | "zero_fast" | "zero_somatic") {
+                        let state = &before.residents[0].neural;
+                        q.ticks[0].effective_weight_offsets = p
+                            .synapses()
+                            .iter()
+                            .enumerate()
+                            .map(|(index, synapse)| match variant {
+                                "zero_lifetime" => synapse.alpha() * state.fast[index],
+                                "zero_fast" => state.lifetime[index],
+                                _ => 0.,
+                            })
+                            .collect();
                     }
                     let cpu = founder.evaluate_replay(&q)?;
                     let frame = row.patch.pre_action().perception();
@@ -233,12 +265,12 @@ fn main() -> Result<()> {
                 )?;
                 records.push(json!({"row":row,"evaluations":evaluations,"sampling_seed":before.sampling_seed,"native_receptor_effects":effects,"before_neural":before.residents[0].neural,"after_neural":after.residents[0].neural,"before_world":before.world.world,"after_world":after.world.world,"original_trace":old}));
             }
-            if records.len() >= 6 {
+            if records.len() >= capture_limit {
                 break;
             }
         }
-        if records.len() != 6 {
-            return Err("bounded diagnostic did not capture six decisions".into());
+        if records.len() != capture_limit {
+            return Err("bounded diagnostic did not capture the requested decisions".into());
         }
         write(output.join(format!("{condition}-rows.json")), &records)?;
     }
@@ -279,7 +311,7 @@ fn main() -> Result<()> {
     }
     write(
         output.join("completion.json"),
-        &json!({"source_unchanged":true,"actor_unchanged":true,"value_unchanged":true,"conditions":2,"decisions_each":6,"new_training_allocations":0,"full_battery_rerun":false,"gpu_live_dispatch":false,"hardware_live_parity":false}),
+        &json!({"source_unchanged":true,"actor_unchanged":true,"value_unchanged":true,"conditions":2,"decisions_each":capture_limit,"new_training_allocations":0,"full_battery_rerun":false,"gpu_live_dispatch":false,"hardware_live_parity":false}),
     )?;
     println!("{}", output.display());
     Ok(())
