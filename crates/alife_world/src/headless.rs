@@ -5419,6 +5419,15 @@ impl HeadlessWorld {
             && within_reach
     }
 
+    /// Read-only native grasp preconditions, without executing a command.
+    /// Useful to unscored teachers; this does not select a creature action.
+    pub fn can_grab_target(&self, organism_id: OrganismId, target: WorldEntityId) -> bool {
+        let Ok(agent_id) = self.agent_entity_id(organism_id) else {
+            return false;
+        };
+        self.grab_target_is_legal(organism_id, agent_id, target)
+    }
+
     fn grab_target_is_legal(
         &self,
         organism_id: OrganismId,

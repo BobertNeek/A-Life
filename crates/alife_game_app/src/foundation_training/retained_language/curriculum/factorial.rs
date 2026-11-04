@@ -95,12 +95,40 @@ fn narration(
         weight: 1.,
     })
 }
+fn instruction_choice(
+    frame: &PerceptionFrame,
+    s: Scene,
+    requested: Lesson,
+    grasp_legal: bool,
+) -> Option<&ActionCandidate> {
+    if grasp_legal {
+        let primitive = if requested == Lesson::EatFood {
+            HeadlessActionIds::EAT
+        } else {
+            HeadlessActionIds::GRAB
+        };
+        if let Some(candidate) = frame
+            .candidates()
+            .iter()
+            .find(|c| c.action_id == primitive && c.target.entity == Some(requested.target(s)))
+        {
+            return Some(candidate);
+        }
+    }
+    vocabulary_reception_choice(
+        frame,
+        Some(u32::from(requested.words()[0])),
+        Some(requested.target(s)),
+        None,
+    )
+}
 fn action_target(
     row: &CpuCollectedDecision,
     s: Scene,
     requested: Lesson,
     narrate: bool,
     heard: bool,
+    grasp_legal: bool,
 ) -> Result<ImitationTarget> {
     if row.action.motor_masks[3] != 0 {
         return Err("factorial experiment requires representative-only vocal arbitration".into());
@@ -112,12 +140,7 @@ fn action_target(
             .iter()
             .find(|c| c.kind == ActionKind::Vocalize)
     } else if heard {
-        vocabulary_reception_choice(
-            frame,
-            Some(u32::from(requested.words()[0])),
-            Some(requested.target(s)),
-            None,
-        )
+        instruction_choice(frame, s, requested, grasp_legal)
     } else {
         None
     };
@@ -193,6 +216,7 @@ fn collect_factorial(
                             .collect::<std::result::Result<_, _>>()?,
                     )?;
                 }
+                let legal_grasp = h.world().can_grab_target(id, requested.target(s));
                 let before = owners(h.world(), s);
                 let step = h.step(actor, 1.)?;
                 let after = owners(h.world(), s);
@@ -207,7 +231,8 @@ fn collect_factorial(
                         .any(|t| t.source_kind == UtteranceSourceKind::Teacher);
                     heard += usize::from(is_heard);
                     let speech = narration(f, pending.as_ref(), left);
-                    let label = action_target(&row, s, requested, speech.is_some(), is_heard)?;
+                    let label =
+                        action_target(&row, s, requested, speech.is_some(), is_heard, legal_grasp)?;
                     if speech.is_some() {
                         positive += 1;
                         left -= 1;
@@ -235,9 +260,10 @@ fn collect_factorial(
             episodes.push(e);
         }
     }
+    let native_decisions = episodes.iter().map(|e| e.rows.len()).sum::<usize>();
     Ok((
         episodes,
-        json!({"round":round,"native_decisions":6*c.decisions,"teacher_heard_frames":heard,"actual_activity_counts":counts,"positive_narration_rows":positive,"positive_label_lags_ticks":lag,"cue_stops_after_any_actual_activity":true}),
+        json!({"round":round,"native_decisions":native_decisions,"teacher_heard_frames":heard,"actual_activity_counts":counts,"positive_narration_rows":positive,"positive_label_lags_ticks":lag,"training_distance":0.36+round as f32*0.08,"cue_stops_after_any_actual_activity":true}),
     ))
 }
 fn balanced_activity_payload(
@@ -255,6 +281,9 @@ fn balanced_activity_payload(
     let classes = mass.iter().filter(|x| **x > 0.).count();
     let (mut g, mut losses) = (vec![0.; actor.weights().len()], [0f64; 3]);
     for episode in e {
+        if episode.rows.is_empty() {
+            continue;
+        }
         let q = sequence(actor, episode, episode.rows.len(), 0);
         let zero = q
             .ticks
@@ -371,6 +400,7 @@ pub(super) fn evaluate_factorial(
                 mut nourished,
             ) = ([0usize; 3], 0, 0, 0, 0, 0);
             let mut visible = false;
+            let mut native_decisions = 0usize;
             for tick in 0..c.decisions {
                 if tick < 16 && first.is_none() && tick % 2 == 0 {
                     if let Some(goal) = requested {
@@ -389,6 +419,7 @@ pub(super) fn evaluate_factorial(
                 let step = h.step(actor, 1.)?;
                 let after = owners(h.world(), s);
                 for row in step.decisions {
+                    native_decisions += 1;
                     no_teacher_or_prior(&row)?;
                     if h.world().entity_id("nursery-teacher").is_some() {
                         return Err("teacher in factorial assessment".into());
@@ -447,7 +478,7 @@ pub(super) fn evaluate_factorial(
             if !visible {
                 return Err("factorial assessment lacks visible food/toy/distractor".into());
             }
-            result.push(json!({"arm":arm,"layout":layout,"recovery_sleep":sleep,"sleep_trigger":if sleep{Some("RecoveryProtocol")}else{None},"sleeping_ticks":sleeping,"sleep_consolidations":consolidations,"paired_initial_private_sha256":paired,"requested":requested,"first_completed_activity":first,"first_completion_matches_request":requested.zip(first).map(|(a,b)|a==b),"requested_activity_completed":requested.map(|l|counts[l.index()]>0),"actual_activity_counts":counts,"nourished_meals":nourished,"utterances":speech_count,"correct_grounded_utterances":correct,"grounded_utterance_opportunities":opportunities,"outside_primary_window_utterances":outside,"native_decisions":c.decisions,"initial_targets_and_distractor_visible":visible,"teacher_present":false,"prior_enabled":false}));
+            result.push(json!({"arm":arm,"layout":layout,"recovery_sleep":sleep,"sleep_trigger":if sleep{Some("RecoveryProtocol")}else{None},"sleeping_ticks":sleeping,"sleep_consolidations":consolidations,"paired_initial_private_sha256":paired,"requested":requested,"first_completed_activity":first,"first_completion_matches_request":requested.zip(first).map(|(a,b)|a==b),"requested_activity_completed":requested.map(|l|counts[l.index()]>0),"actual_activity_counts":counts,"nourished_meals":nourished,"utterances":speech_count,"correct_grounded_utterances":correct,"grounded_utterance_opportunities":opportunities,"outside_primary_window_utterances":outside,"native_decisions":native_decisions,"initial_targets_and_distractor_visible":visible,"teacher_present":false,"prior_enabled":false}));
         }
     }
     Ok(result)
@@ -563,7 +594,7 @@ pub fn continue_factorial_grounded_language(
         arms.push(json!({"arm":arm,"common_source_actor_sha256":initial,"source_private_sha256":source_private,"source_step":start,"actor_step":actor.optimizer_step(),"actor_sha256":identity(&actor.checkpoint())?,"collections":collections,"updates":updates,"evaluation":evaluation,"continuity":continuity}));
     }
     trace.finish()?;
-    let report = json!({"kind":"experimental-factorial-timing-grounding-v9","execution_domain":"native-cpu","config":c,"source_report_sha256":identity(&old)?,"lessons":Lesson::ALL,"common_baseline":baseline,"semantic_prior_enabled":false,"teacher":"scripted ordinary spatial speech","arms":arms,"elapsed_seconds":started.elapsed().as_secs_f64(),"limitations":["One common retained V8 history and seed; NoSpeech removes incremental teacher requests, not prior learning or truthful offline activity labels.","Training and assessment both stop request speech after any genuine completed activity; narration keeps the original three eligible quiet-row criterion.","GetFood ownership distinguishes noun choice from GetToy and action choice from EatFood. Missing physical activity classes receive no invented payload labels.","First-event discrimination is reported separately from eventual requested completion: grabbing food can be a legitimate prefix to eating food.","Native actor/Adam continuation across fresh cohorts; exact private/cold/sleep recovery is measured, not same-individual live optimizer rebase.","Induced RecoveryProtocol sleep, relocated contact/near fixtures and visible distractor; no spontaneous sleep or far-navigation claim.","Multiple targeted curriculum changes; no equal-dose old-objective arm, no real SLM delivery claim."]});
+    let report = json!({"kind":"experimental-factorial-legal-action-v10","execution_domain":"native-cpu","config":c,"source_report_sha256":identity(&old)?,"lessons":Lesson::ALL,"training_distances":[0.36,0.44],"native_grasp_legality_for_teaching":true,"common_baseline":baseline,"semantic_prior_enabled":false,"teacher":"scripted ordinary spatial speech","arms":arms,"elapsed_seconds":started.elapsed().as_secs_f64(),"limitations":["One common retained V8 history and seed; NoSpeech removes incremental teacher requests, not prior learning or truthful offline activity labels.","Training and assessment both stop request speech after any genuine completed activity; narration keeps the original three eligible quiet-row criterion.","GetFood ownership distinguishes noun choice from GetToy and action choice from EatFood. Missing physical activity classes receive no invented payload labels.","First-event discrimination is reported separately from eventual requested completion: grabbing food can be a legitimate prefix to eating food.","Native actor/Adam continuation across fresh cohorts; exact private/cold/sleep recovery is measured, not same-individual live optimizer rebase.","Induced RecoveryProtocol sleep, relocated contact/near fixtures and visible distractor; no spontaneous sleep or far-navigation claim.","Multiple targeted curriculum changes; no equal-dose old-objective arm, no real SLM delivery claim."]});
     write_json(&output.join("results.json"), &report)?;
     Ok(report)
 }
@@ -595,7 +626,10 @@ mod tests {
                 bio.homeostasis,
             )
             .unwrap();
-        let chosen = vocabulary_reception_choice(&frame, Some(9), Some(s.food), None).unwrap();
+        assert!(h.world().can_grab_target(id, s.food));
+        let legacy = vocabulary_reception_choice(&frame, Some(9), Some(s.food), None).unwrap();
+        assert_eq!(legacy.action_id, HeadlessActionIds::APPROACH);
+        let chosen = instruction_choice(&frame, s, Lesson::GetFood, true).unwrap();
         assert_eq!(chosen.action_id, HeadlessActionIds::GRAB);
         assert_eq!(chosen.target.entity, Some(s.food));
         let cmd = chosen.to_command(id, Confidence::new(1.).unwrap()).unwrap();
