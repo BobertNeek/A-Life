@@ -16,7 +16,7 @@ use std::{
     error::Error,
     fs::{self, OpenOptions},
     io::Write,
-    path::Path,
+    path::{Component, Path},
 };
 
 pub const CPU_UNTRAINED_FOUNDER_MODE: &str = "native_cpu_untrained_founder";
@@ -156,6 +156,14 @@ pub fn initialize_cpu_untrained_founder(
     seed: u64,
     asset: FoundationWeightAsset,
 ) -> Result<Value> {
+    // Never let lexical normalization hide an existing symlink behind a
+    // nonexistent ancestor such as missing/../link/new-source.
+    if output
+        .components()
+        .any(|component| matches!(component, Component::ParentDir))
+    {
+        return Err("untrained founder output must not contain parent traversal".into());
+    }
     for ancestor in output.ancestors() {
         if fs::symlink_metadata(ancestor)
             .is_ok_and(|metadata| metadata.file_type().is_symlink())

@@ -138,4 +138,27 @@ mod tests {
         assert!(initialize_cpu_care_founder(&output, 53).is_err());
         assert_eq!(bytes(&output), before);
     }
+
+    #[cfg(unix)]
+    #[test]
+    fn untrained_founder_rejects_symlink_hidden_by_nonexistent_parent_traversal() {
+        let directory = Directory::new();
+        let retained = directory.0.join("retained");
+        fs::create_dir(&retained).unwrap();
+        fs::write(retained.join("keep"), b"retained source evidence").unwrap();
+        let before = bytes(&retained);
+        std::os::unix::fs::symlink(&retained, directory.0.join("link")).unwrap();
+        let output = directory.0.join("missing/../link/new-source");
+        let error = initialize_cpu_care_founder(&output, 53)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("parent traversal"), "{error}");
+        assert!(!directory.0.join("missing").exists());
+        assert!(!retained.join("new-source").exists());
+        assert_eq!(bytes(&retained), before);
+        assert!(fs::symlink_metadata(directory.0.join("link"))
+            .unwrap()
+            .file_type()
+            .is_symlink());
+    }
 }
