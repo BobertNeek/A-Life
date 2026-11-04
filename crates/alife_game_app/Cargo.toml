@@ -6,6 +6,11 @@ license.workspace = true
 repository.workspace = true
 
 [[bin]]
+name = "evaluate_cpu_current"
+path = "src/bin/evaluate_cpu_current.rs"
+required-features = ["cpu-training"]
+
+[[bin]]
 name = "evaluate_cpu_founder"
 path = "src/bin/evaluate_cpu_founder.rs"
 required-features = ["cpu-training"]

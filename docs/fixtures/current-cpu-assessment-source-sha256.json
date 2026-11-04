@@ -1,0 +1,53 @@
+{
+  "schema": 1,
+  "kind": "source-only-current-cpu-assessment-adapter",
+  "base_source_commit": "a7ef22b7f61a553e41b412af6ff2ca750992d147",
+  "includes_trained_or_private_artifacts": false,
+  "production_comparator_sha256": "8eb59d011a67bc6c3068b1de1889065f7d37edbcc3b70a7c3979a63d641b9141",
+  "files": {
+    "crates/alife_game_app/Cargo.toml": {
+      "bytes": 3997,
+      "sha256": "4716a22b7b89aec4e55b3ebc79d8ded988bf11633c1d110367858c4afaafd76c"
+    },
+    "crates/alife_game_app/src/bin/evaluate_cpu_current.rs": {
+      "bytes": 1536,
+      "sha256": "108c65f65f1b8d788ed60af6780abcdd95991a49fd7025d21cf2f782ca2cadb3"
+    },
+    "crates/alife_game_app/src/foundation_cpu_care.rs": {
+      "bytes": 44227,
+      "sha256": "e48a693a399c0fce06a747d6aaf8bf78e211e7698bfbf7db7a869a5c8e7fd81a"
+    },
+    "crates/alife_game_app/src/foundation_cpu_care/founder_evaluation.rs": {
+      "bytes": 20810,
+      "sha256": "e93f586fdc72169349c11f05803f6b24ca1d7d9b2c447bd6b15f158455c73655"
+    },
+    "crates/alife_game_app/src/foundation_cpu_care/current_evaluation.rs": {
+      "bytes": 13426,
+      "sha256": "23a54bfc288e29aee272b1f3712a0f1c67d3c917c219d076670f81aa7da88ebf"
+    },
+    "crates/alife_game_app/src/foundation_cpu_care/current_evaluation/tests.rs": {
+      "bytes": 12666,
+      "sha256": "e2d237f92678d77ee752557ad69db7f74ba2b61cfa475ed72209cda7190a79f1"
+    },
+    "crates/alife_training/src/cpu/mod.rs": {
+      "bytes": 13444,
+      "sha256": "748c8875b5d2cab8d9a3754583798378e468c1e29fbe24472793ed63925cf5e4"
+    },
+    "crates/alife_training/tests/cpu_backend.rs": {
+      "bytes": 31374,
+      "sha256": "6ca287b9f2e3868ba8202501385f3c68821cf553f85e22b9893e513218286fc6"
+    },
+    "docs/current-cpu-assessment.md": {
+      "bytes": 6577,
+      "sha256": "1a7007b9bfa4acf247a03e6e67f2adcb11691223f6e456ffd5614cb15ce14f2a"
+    },
+    "docs/cpu-care-comparison-handoff.md": {
+      "bytes": 12900,
+      "sha256": "53872d3cbde68560c5bec70ad4ad54e0d23bf93562b02562f0b4459d0a75e103"
+    },
+    "docs/fixtures/cpu-care-handoff-source-sha256.json": {
+      "bytes": 1250,
+      "sha256": "582a7ab288968908245adf0ef0c134de41f8b4374aaa18abc8abc8bdc95d3814"
+    }
+  }
+}

@@ -167,59 +167,7 @@ impl CpuFoundationTrainer {
         next: BrainPhenotype,
         asset: FoundationWeightAsset,
     ) -> Result<(), TrainingError> {
-        asset.validate_against(&next)?;
-        self.checkpoint.stage_mask.validate_for(&next)?;
-        let p = &self.phenotype;
-        let binding = next
-            .foundation_abi_selection()
-            .canonical_v2()
-            .ok_or_else(invalid)?;
-        if p.foundation_abi_selection().canonical_v2().is_none()
-            || binding.foundation_payload_digest() != Some(asset.digest())
-            || p.schema_version() != next.schema_version()
-            || p.brain_class_id() != next.brain_class_id()
-            || p.neuron_count() != next.neuron_count()
-            || p.microstep_count() != next.microstep_count()
-            || p.sensor_profile() != next.sensor_profile()
-            || p.lobe_layout() != next.lobe_layout()
-            || p.language_codebook() != next.language_codebook()
-            || p.cognitive_architecture() != next.cognitive_architecture()
-            || p.projections() != next.projections()
-            || p.neuron_dynamics() != next.neuron_dynamics()
-            || p.sensor_encoder() != next.sensor_encoder()
-            || p.candidate_decoder() != next.candidate_decoder()
-            || p.speech_decoder() != next.speech_decoder()
-            || p.memory_decoder() != next.memory_decoder()
-            || p.cognitive_decoder() != next.cognitive_decoder()
-            || p.cognitive_channel_plan() != next.cognitive_channel_plan()
-            || p.plasticity_receptors() != next.plasticity_receptors()
-            || p.replay_capture_plan() != next.replay_capture_plan()
-            || p.sleep_consolidation_plan() != next.sleep_consolidation_plan()
-            || p.plasticity_plan_digest() != next.plasticity_plan_digest()
-            || p.persistent_address_map() != next.persistent_address_map()
-            || p.route_abi_digest() != next.route_abi_digest()
-            || p.plasticity_abi_digest() != next.plasticity_abi_digest()
-            || p.budgets() != next.budgets()
-            || p.synapses().len() != next.synapses().len()
-            || p.synapses().iter().zip(next.synapses()).any(|(a, b)| {
-                a.source() != b.source()
-                    || a.target() != b.target()
-                    || a.alpha().to_bits() != b.alpha().to_bits()
-                    || a.route_index() != b.route_index()
-                    || a.receptor_index() != b.receptor_index()
-                    || a.kind() != b.kind()
-            })
-            || self
-                .weights()
-                .iter()
-                .zip(asset.weights())
-                .zip(next.synapses())
-                .any(|((a, b), s)| {
-                    a.to_bits() != b.to_bits() || a.to_bits() != s.genetic_weight().to_bits()
-                })
-        {
-            return Err(invalid());
-        }
+        validate_cpu_founder_rebinding(&self.phenotype, &self.checkpoint, &next, &asset)?;
         self.checkpoint.phenotype_hash = next.phenotype_hash();
         self.checkpoint.source_foundation_digest = asset.digest();
         self.graph = replay::SparseGraph::new(&next);
@@ -365,4 +313,70 @@ fn adam_coordinate(
             + c.weight_decay * w);
     finite(&[next, m, v])?;
     Ok((next, m, v))
+}
+
+/// Read-only native compatibility witness for a saved actor in a fresh body.
+/// Performs the same checks as rebind_for_next_cohort without constructing,
+/// updating or changing an optimizer or the original phenotype identity.
+pub fn validate_cpu_founder_rebinding(
+    p: &BrainPhenotype,
+    checkpoint: &FoundationTrainerCheckpoint,
+    next: &BrainPhenotype,
+    asset: &FoundationWeightAsset,
+) -> Result<(), TrainingError> {
+    checkpoint.validate_for(p, checkpoint.source_foundation_digest)?;
+    asset.validate_against(next)?;
+    checkpoint.stage_mask.validate_for(next)?;
+    let binding = next
+        .foundation_abi_selection()
+        .canonical_v2()
+        .ok_or_else(invalid)?;
+    if p.foundation_abi_selection().canonical_v2().is_none()
+        || binding.foundation_payload_digest() != Some(asset.digest())
+        || p.schema_version() != next.schema_version()
+        || p.brain_class_id() != next.brain_class_id()
+        || p.neuron_count() != next.neuron_count()
+        || p.microstep_count() != next.microstep_count()
+        || p.sensor_profile() != next.sensor_profile()
+        || p.lobe_layout() != next.lobe_layout()
+        || p.language_codebook() != next.language_codebook()
+        || p.cognitive_architecture() != next.cognitive_architecture()
+        || p.projections() != next.projections()
+        || p.neuron_dynamics() != next.neuron_dynamics()
+        || p.sensor_encoder() != next.sensor_encoder()
+        || p.candidate_decoder() != next.candidate_decoder()
+        || p.speech_decoder() != next.speech_decoder()
+        || p.memory_decoder() != next.memory_decoder()
+        || p.cognitive_decoder() != next.cognitive_decoder()
+        || p.cognitive_channel_plan() != next.cognitive_channel_plan()
+        || p.plasticity_receptors() != next.plasticity_receptors()
+        || p.replay_capture_plan() != next.replay_capture_plan()
+        || p.sleep_consolidation_plan() != next.sleep_consolidation_plan()
+        || p.plasticity_plan_digest() != next.plasticity_plan_digest()
+        || p.persistent_address_map() != next.persistent_address_map()
+        || p.route_abi_digest() != next.route_abi_digest()
+        || p.plasticity_abi_digest() != next.plasticity_abi_digest()
+        || p.budgets() != next.budgets()
+        || p.synapses().len() != next.synapses().len()
+        || p.synapses().iter().zip(next.synapses()).any(|(a, b)| {
+            a.source() != b.source()
+                || a.target() != b.target()
+                || a.alpha().to_bits() != b.alpha().to_bits()
+                || a.route_index() != b.route_index()
+                || a.receptor_index() != b.receptor_index()
+                || a.kind() != b.kind()
+        })
+        || checkpoint
+            .weights
+            .as_slice()
+            .iter()
+            .zip(asset.weights())
+            .zip(next.synapses())
+            .any(|((a, b), s)| {
+                a.to_bits() != b.to_bits() || a.to_bits() != s.genetic_weight().to_bits()
+            })
+    {
+        return Err(invalid());
+    }
+    Ok(())
 }

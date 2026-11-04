@@ -47,7 +47,7 @@ impl FounderReceipt {
     }
 }
 
-fn write(path: impl AsRef<Path>, value: &impl Serialize) -> Result<()> {
+pub(super) fn write(path: impl AsRef<Path>, value: &impl Serialize) -> Result<()> {
     use std::io::Write;
     let mut f = fs::OpenOptions::new()
         .create_new(true)
@@ -57,7 +57,7 @@ fn write(path: impl AsRef<Path>, value: &impl Serialize) -> Result<()> {
     f.sync_all()?;
     Ok(())
 }
-fn reconstruct(root: &Path) -> Result<CpuInferenceFounder> {
+pub(super) fn reconstruct(root: &Path) -> Result<CpuInferenceFounder> {
     let inputs: alife_core::PhenotypeCompilerInputs =
         read_json(&root.join("collection-compiler-inputs.json"))?;
     let asset = alife_core::FoundationWeightAsset::decode_canonical(&fs::read(
@@ -86,11 +86,13 @@ pub fn verify_cpu_founder_evaluation(root: &Path) -> Result<Value> {
         );
     }
     verify_pins(&receipt.input_sha256)?;
+    verify_founder_artifacts(root, &receipt.request.expected_foundation_sha256)
+}
+
+pub(super) fn verify_founder_artifacts(root: &Path, expected_asset_sha256: &str) -> Result<Value> {
     let result: Value = read_json(&root.join("founder-result.json"))?;
     let comparison: Value = read_json(&root.join("founder-comparison.json"))?;
-    if file_hash(&root.join("collection-policy.alife-foundation"))?
-        != receipt.request.expected_foundation_sha256
-    {
+    if file_hash(&root.join("collection-policy.alife-foundation"))? != expected_asset_sha256 {
         return Err(
             "retained collection founder differs from explicitly selected candidate".into(),
         );
@@ -151,7 +153,7 @@ pub fn evaluate_cpu_founder(mut request: CpuFounderEvaluationRequest) -> Result<
         return Err("selected founder asset differs from expected SHA256".into());
     }
     let asset_bytes = fs::read(&request.foundation)?;
-    let asset = alife_core::FoundationWeightAsset::decode_canonical(&asset_bytes)?;
+    alife_core::FoundationWeightAsset::decode_canonical(&asset_bytes)?;
     request.output = alife_training::resolve_isolated_training_output(
         &request.output,
         [
@@ -178,19 +180,6 @@ pub fn evaluate_cpu_founder(mut request: CpuFounderEvaluationRequest) -> Result<
         food_need_condition: request.food_need_condition,
         known_exclusions: request.known_exclusions,
     };
-    let (_, mut episode) = prepare_care_episode(CpuCareRequest {
-        previous: Some(request.seed_anchor.clone()),
-        output: request.output.clone(),
-        seed: request.seed,
-        decisions: request.decisions,
-        temperature: request.temperature,
-        lesson: request.lesson,
-        food_need_condition: request.food_need_condition,
-        seed_history: Some(request.seed_history.clone()),
-        known_exclusions: request.known_exclusions,
-        record_diagnostic_replay: false,
-        fixture: false,
-    })?;
     if !request.temperature.is_finite() || request.temperature <= 0. || request.seed == 0 {
         return Err("invalid founder assessment sampling".into());
     }
@@ -216,6 +205,52 @@ pub fn evaluate_cpu_founder(mut request: CpuFounderEvaluationRequest) -> Result<
         .filter(|v| *v != 0)
         .or(source.receipt["seed"].as_u64())
         .ok_or("seed anchor lacks founder construction seed")?;
+    let result = collect_founder_assessment(
+        &request,
+        asset_bytes,
+        founder_seed,
+        source.handoff.policy_version,
+        &pins,
+        None,
+    )?;
+    let mut receipt = FounderReceipt {
+        schema_version: 2,
+        mode: "native-cpu-founder-inference-assessment".into(),
+        request: request.clone(),
+        input_sha256: pins,
+        artifacts: inventory(&request.output)?,
+        payload_sha256: String::new(),
+    };
+    receipt.payload_sha256 = receipt.digest()?;
+    write(request.output.join(CPU_CARE_EVALUATION_FILE), &receipt)?;
+    verify_cpu_founder_evaluation(&request.output)?;
+    Ok(result)
+}
+
+/// Shared native life runner only; each entry point owns its source admission
+/// and independent receipt contract. No source is synthesized here.
+pub(super) fn collect_founder_assessment(
+    request: &CpuFounderEvaluationRequest,
+    asset_bytes: Vec<u8>,
+    founder_seed: u64,
+    anchor_policy_version: u64,
+    pins: &BTreeMap<PathBuf, String>,
+    result_context: Option<&Value>,
+) -> Result<Value> {
+    let asset = alife_core::FoundationWeightAsset::decode_canonical(&asset_bytes)?;
+    let (_, mut episode) = prepare_care_episode(CpuCareRequest {
+        previous: Some(request.seed_anchor.clone()),
+        output: request.output.clone(),
+        seed: request.seed,
+        decisions: request.decisions,
+        temperature: request.temperature,
+        lesson: request.lesson,
+        food_need_condition: request.food_need_condition,
+        seed_history: Some(request.seed_history.clone()),
+        known_exclusions: request.known_exclusions,
+        record_diagnostic_replay: false,
+        fixture: false,
+    })?;
     let (game, phenotype, inputs) = compile_cpu_founder_game(request.seed, founder_seed, &asset)?;
     let founder = CpuInferenceFounder::new(phenotype, asset)?;
     episode.assessment = true;
@@ -324,8 +359,8 @@ pub fn evaluate_cpu_founder(mut request: CpuFounderEvaluationRequest) -> Result<
         .organism_registry()
         .get(subject)
         .ok_or("assessment lost learner")?;
-    let result = json!({"mode":"native-cpu-founder-inference-assessment","backend":"native-cpu",
-        "candidate_sha256":request.expected_foundation_sha256,"anchor_policy_version":source.handoff.policy_version,
+    let mut result = json!({"mode":"native-cpu-founder-inference-assessment","backend":"native-cpu",
+        "candidate_sha256":request.expected_foundation_sha256,"anchor_policy_version":anchor_policy_version,
         "seed_anchor_scope":"source-bound exclusions and fresh-body construction only; candidate is not a native training continuation",
         "historical_freshness":if request.known_exclusions {"unknown"} else {"operator-attested-complete"},
         "same_individual_restore":false,"body":"new-prepared-life","offline_optimizer_constructed":false,
@@ -334,22 +369,19 @@ pub fn evaluate_cpu_founder(mut request: CpuFounderEvaluationRequest) -> Result<
         "evaluated_decisions":request.decisions,"bootstrap_decisions":1,
         "lesson_completed":metadata["lesson_completed"],"evaluated_nourished_meals":metadata["evaluated_nourished_meals"],
         "final_physiology":final_record.biochemistry(),"world_tick":host.world().tick(),"automatic_adoption":false});
-    verify_pins(&pins)?;
+    if let Some(context) = result_context {
+        for (key, value) in context
+            .as_object()
+            .ok_or("invalid assessment result context")?
+        {
+            result[key] = value.clone();
+        }
+    }
+    verify_pins(pins)?;
     // Hash exact retained bytes. Re-parsing arbitrary f64 JSON into Value and
     // reserializing it is not a canonical raw-evidence digest contract.
     write(request.output.join("founder-result.json"), &result)?;
     write(request.output.join("founder-comparison.json"), &comparison)?;
-    let mut receipt = FounderReceipt {
-        schema_version: 2,
-        mode: "native-cpu-founder-inference-assessment".into(),
-        request: request.clone(),
-        input_sha256: pins,
-        artifacts: inventory(&request.output)?,
-        payload_sha256: String::new(),
-    };
-    receipt.payload_sha256 = receipt.digest()?;
-    write(request.output.join(CPU_CARE_EVALUATION_FILE), &receipt)?;
-    verify_cpu_founder_evaluation(&request.output)?;
     Ok(result)
 }
 

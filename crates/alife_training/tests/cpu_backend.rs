@@ -593,6 +593,56 @@ fn rebind_fresh_cohort_retains_native_optimizer_state() {
 }
 
 #[test]
+fn read_only_rebinding_checks_real_heads_and_rejects_graph_or_weight_changes() {
+    let capacity = BrainCapacityClass::n2048();
+    let genome = BrainGenome::scaffold(0x7a11, capacity.id());
+    let development =
+        DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(0.8).unwrap());
+    let base = PhenotypeCompiler::compile_testing_procedural_baseline(
+        &genome,
+        &capacity,
+        &development,
+        SensorProfile::GroundedObjectSlotsV1,
+    )
+    .unwrap();
+    let asset = FoundationWeightAsset::from_phenotype_for_genetic_birth(&base).unwrap();
+    let (p, _) =
+        PhenotypeCompiler::compile_n2048_foundation_candidate(genome, development, asset.clone())
+            .unwrap();
+    let t = trainer(&p, &asset);
+    let checkpoint = t.checkpoint();
+    let original = serde_json::to_vec(&checkpoint).unwrap();
+    validate_cpu_founder_rebinding(&p, &checkpoint, &p, &asset).unwrap();
+    assert_eq!(serde_json::to_vec(&t.checkpoint()).unwrap(), original);
+    let mut bad = checkpoint.clone();
+    bad.weights.pop();
+    assert!(validate_cpu_founder_rebinding(&p, &bad, &p, &asset).is_err());
+    let mut bad = checkpoint.clone();
+    bad.weights[0] += 0.001;
+    assert!(validate_cpu_founder_rebinding(&p, &bad, &p, &asset).is_err());
+    let capacity = BrainCapacityClass::n2048();
+    let genome = BrainGenome::scaffold(0x7411, capacity.id());
+    let development =
+        DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(1.).unwrap());
+    let other = PhenotypeCompiler::compile_testing_procedural_baseline(
+        &genome,
+        &capacity,
+        &development,
+        SensorProfile::GroundedTerrainVisionV1,
+    )
+    .unwrap();
+    let other_asset = FoundationWeightAsset::from_phenotype_for_genetic_birth(&other).unwrap();
+    let (other, _) = PhenotypeCompiler::compile_n2048_foundation_candidate(
+        genome,
+        development,
+        other_asset.clone(),
+    )
+    .unwrap();
+    assert!(validate_cpu_founder_rebinding(&p, &checkpoint, &other, &other_asset).is_err());
+    assert_eq!(serde_json::to_vec(&t.checkpoint()).unwrap(), original);
+}
+
+#[test]
 fn six_step_speech_bptt_matches_finite_differences() {
     let (p, s) = fixture();
     let t = trainer(&p, &s);

@@ -126,8 +126,9 @@ transplant that source's critic/Adam or prove the candidate's ancestry. The exac
 body seed must match the catalogue. A standalone `.alife-checkpoint` Current/GPU
 save is **not accepted as this anchor**, and `--inspect-current` does not convert
 it. Do not manufacture CPU receipts, zero Adam or edit `founder_seed_base` to
-force admission. A supported read-only Current-to-assessment adaptation and
-qualification is still needed if that is the only available PC input. The
+force admission. The [Current assessment adapter](current-cpu-assessment.md) supplies a separate
+read-only entry point and receipt, qualified with disposable fixtures. The actual
+PC input still needs native admission and actual-parent parity. The
 candidate canonical founder must also be proven to contain the actual saved
 actor weights under the same graph, frozen-coordinate and sensor semantics;
 a stale genetic asset is insufficient. Keep original full Adam and private lives
@@ -191,8 +192,8 @@ adoption is performed by these commands.
    for both untouched parents and candidates, or explicitly qualify a cross-build
    comparison protocol with actual-parent controls before causal claims/adoption.
 
-The public case handoff is usable now. Native Current-anchor adaptation, actual
-imported-parent parity and cross-build qualification remain independent blockers
+The public case handoff is usable now. Actual Current input admission, imported-parent parity and cross-build
+qualification remain independent blockers
 when their required inputs/evidence are absent. There is no completed two-parent
 comparison in this source artifact. Broader PC skills, more independent seeds,
 long-horizon survival and continued-learning retention still require coverage.
