@@ -180,6 +180,7 @@ pub fn continue_action_gated_language(
                     balanced_grounding_v1: false,
                     balanced_grounding_v2: false,
                     event_confirmed_speech_v1: false,
+                    unseen_report_transfer_v1: false,
                     factorial_grounding: false
                 },
                 &mut trace
@@ -234,6 +235,7 @@ pub fn continue_action_gated_language(
                     balanced_grounding_v1: false,
                     balanced_grounding_v2: false,
                     event_confirmed_speech_v1: false,
+                    unseen_report_transfer_v1: false,
                 }),
             },
             next.ok_or("no update")?,
