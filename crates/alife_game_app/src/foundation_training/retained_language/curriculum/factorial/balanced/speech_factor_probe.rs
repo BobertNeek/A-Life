@@ -172,7 +172,8 @@ fn diagnose_native_cue_payload_and_voice_factors() {
                 let mut pending = None::<Event>;
                 let mut left = 0;
                 let mut shadow_done = false;
-                for tick in 0..8 {
+                for (tick, expected_digest) in expected[&(case, request)].iter().take(8).enumerate()
+                {
                     if tick % 2 == 0 {
                         if let Some(goal) = requested {
                             let pos = speech_position(h.world()).unwrap();
@@ -199,7 +200,7 @@ fn diagnose_native_cue_payload_and_voice_factors() {
                     for row in step.decisions {
                         no_teacher_or_prior(&row).unwrap();
                         let digest = identity(&row).unwrap();
-                        assert_eq!(&digest, &expected[&(case, request)][tick]);
+                        assert_eq!(&digest, expected_digest);
                         let target = confirmed_speech(pending.as_ref(), left, requested);
                         let q = readout::single(&actor, &row);
                         let ev = actor.evaluate_replay(&q).unwrap();
