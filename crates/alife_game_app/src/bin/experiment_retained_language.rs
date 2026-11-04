@@ -1,6 +1,7 @@
 //! Disposable native CPU pilot. Never imports an existing creature/checkpoint.
 use alife_game_app::{
-    reload_language_pilot_child, run_retained_language_pilot, LanguagePilotConfig,
+    continue_language_curriculum, reload_language_pilot_child, run_retained_language_pilot,
+    LanguagePilotConfig,
 };
 use std::{collections::BTreeMap, path::Path};
 
@@ -26,7 +27,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "--disposable-public-founder" if !disposable => disposable = true,
             "--llamacpp-translation" if !slm => slm = true,
             "--experimental-word-bridge" if !bridge => bridge = true,
-            "--output" | "--seed" | "--epochs" | "--rounds" | "--decisions" => {
+            "--output"
+            | "--seed"
+            | "--epochs"
+            | "--rounds"
+            | "--decisions"
+            | "--continue-curriculum" => {
                 let value = args.next().ok_or("missing argument value")?;
                 if values.insert(key, value).is_some() {
                     return Err("duplicate argument".into());
@@ -59,9 +65,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         llamacpp_translation: slm,
         experimental_word_bridge: bridge,
     };
-    println!(
-        "{}",
+    let report = if let Some(source) = values.remove("--continue-curriculum") {
+        continue_language_curriculum(Path::new(&source), Path::new(&output), config)?
+    } else {
         run_retained_language_pilot(Path::new(&output), config)?
-    );
+    };
+    println!("{report}");
     Ok(())
 }

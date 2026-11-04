@@ -12,6 +12,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::{fs, io::Write, process::Command};
+mod curriculum;
+pub use curriculum::continue_language_curriculum;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct LanguagePilotConfig {
@@ -995,6 +997,8 @@ struct Recovery {
 struct RecoveredAssessment {
     config: LanguagePilotConfig,
     arm: Arm,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    curriculum: Option<curriculum::AssessmentPlan>,
 }
 struct HashedTrace<W> {
     inner: W,
@@ -1020,7 +1024,11 @@ fn recovered_assessment(
         inner: traces,
         digest: Sha256::new(),
     };
-    let evaluation = evaluate(actor, asset, request.config, request.arm, &mut traces)?;
+    let evaluation = if let Some(plan) = request.curriculum {
+        curriculum::evaluate(actor, asset, request.config, request.arm, plan, &mut traces)?
+    } else {
+        evaluate(actor, asset, request.config, request.arm, &mut traces)?
+    };
     Ok(
         json!({"evaluation":evaluation,"native_trace_sha256":format!("{:x}",traces.digest.finalize())}),
     )
@@ -1091,7 +1099,7 @@ fn reload(recovery: Recovery, directory: Option<&Path>) -> Result<Value> {
 
 /// Only the experimental runner uses this path; it is not a native joint-PPO
 /// handoff and makes no critic/version continuity claim.
-pub fn reload_language_pilot_child(directory: &Path) -> Result<Value> {
+fn read_recovery(directory: &Path) -> Result<Recovery> {
     let bytes = fs::read(directory.join("experimental-recovery.json"))?;
     let expected = fs::read_to_string(directory.join("experimental-recovery.sha256"))?;
     if hash(&bytes) != expected {
@@ -1099,7 +1107,10 @@ pub fn reload_language_pilot_child(directory: &Path) -> Result<Value> {
     }
     let mut de = serde_json::Deserializer::from_slice(&bytes);
     de.disable_recursion_limit();
-    reload(Recovery::deserialize(&mut de)?, Some(directory))
+    Ok(Recovery::deserialize(&mut de)?)
+}
+pub fn reload_language_pilot_child(directory: &Path) -> Result<Value> {
+    reload(read_recovery(directory)?, Some(directory))
 }
 
 fn exact_reload(
@@ -1110,8 +1121,27 @@ fn exact_reload(
     arm: Arm,
     gradient: Vec<f32>,
 ) -> Result<Value> {
+    exact_reload_plan(
+        directory,
+        actor,
+        asset,
+        RecoveredAssessment {
+            config,
+            arm,
+            curriculum: None,
+        },
+        gradient,
+    )
+}
+fn exact_reload_plan(
+    directory: &Path,
+    actor: &CpuFoundationTrainer,
+    asset: &FoundationWeightAsset,
+    assessment: RecoveredAssessment,
+    gradient: Vec<f32>,
+) -> Result<Value> {
     fs::create_dir(directory)?;
-    let seed = config.seed;
+    let seed = assessment.config.seed;
     let (mut host, _) = host(seed + 20_000, seed, asset, actor, 0, true)?;
     for _ in 0..4 {
         host.step(actor, 1.)?;
@@ -1128,7 +1158,7 @@ fn exact_reload(
         actor: actor.checkpoint(),
         host: host.checkpoint(actor)?,
         next_gradient: gradient,
-        assessment: Some(RecoveredAssessment { config, arm }),
+        assessment: Some(assessment),
     };
     let bytes = serde_json::to_vec(&recovery)?;
     fs::write(directory.join("experimental-recovery.sha256"), hash(&bytes))?;
