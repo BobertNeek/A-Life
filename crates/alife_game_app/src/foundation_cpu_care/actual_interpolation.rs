@@ -167,6 +167,16 @@ fn model_candidate(
 pub fn run_actual_interpolation_assessment(spec_path: &Path) -> Result<Value> {
     let request_bytes = fs::read(spec_path)?;
     let request: Request = serde_json::from_slice(&request_bytes)?;
+    if request.phase == "ablations"
+        && request
+            .ablation_variant
+            .as_deref()
+            .is_some_and(|v| v != "lifetime_refine")
+        || !matches!(request.phase.as_str(), "ablations" | "fresh_battery")
+            && request.ablation_variant.is_some()
+    {
+        return Err("unexpected state-variant selector for this phase".into());
+    }
     if !matches!(
         request.phase.as_str(),
         "controls" | "candidates" | "ablations" | "fresh_battery"

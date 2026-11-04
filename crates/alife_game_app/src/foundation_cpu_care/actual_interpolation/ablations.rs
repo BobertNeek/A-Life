@@ -3,12 +3,14 @@ use super::*;
 use alife_gpu_backend::{GpuLiveTopologyCheckpointV1, GpuPhenotypeUpload, GpuV11Checkpoint};
 use alife_world::persistence::PortableDualWeightBankV1;
 
-const VARIANTS: [&str; 9] = [
+const VARIANTS: [&str; 11] = [
     "pc_retained",
     "native_dendrites",
     "no_dendrites",
     "reset_predictor",
     "reset_lifetime",
+    "reset_lifetime_decoder",
+    "reset_lifetime_recurrent",
     "reset_fast",
     "reset_somatic",
     "reset_somatic_predictor",
@@ -19,6 +21,23 @@ fn zero_bank(bank: &mut PortableDualWeightBankV1) -> Result<()> {
     bank.bank_1_bits.fill(0f32.to_bits());
     bank.canonical_digest = bank.recompute_canonical_digest()?;
     bank.validate()?;
+    Ok(())
+}
+fn zero_lifetime_subset(
+    next: &mut CpuRetainedNeuralInheritance,
+    p: &BrainPhenotype,
+    decoder: bool,
+) -> Result<()> {
+    let map = next.canonical_to_live(p)?;
+    for (canonical, synapse) in p.synapses().iter().enumerate() {
+        if matches!(synapse.kind(), CompiledSynapseKind::Decoder(_)) == decoder {
+            let slot = map[canonical];
+            next.lifetime.bank_0_bits[slot] = 0f32.to_bits();
+            next.lifetime.bank_1_bits[slot] = 0f32.to_bits();
+        }
+    }
+    next.lifetime.canonical_digest = next.lifetime.recompute_canonical_digest()?;
+    next.lifetime.validate()?;
     Ok(())
 }
 fn edge_ablation(
@@ -99,6 +118,8 @@ fn modify(
             next.predictor = alife_runtime::canonical_preparation::predictor_for_phenotype(p)?
         }
         "reset_lifetime" => zero_bank(&mut next.lifetime)?,
+        "reset_lifetime_decoder" => zero_lifetime_subset(&mut next, p, true)?,
+        "reset_lifetime_recurrent" => zero_lifetime_subset(&mut next, p, false)?,
         "reset_fast" => zero_bank(&mut next.fast)?,
         "reset_somatic" | "reset_somatic_predictor" => {
             zero_bank(&mut next.lifetime)?;
@@ -126,6 +147,19 @@ pub(super) fn models(
         PhenotypeCompiler::compile_validated(&pc.compiler_inputs, &BrainCapacityClass::n2048())?;
     let mut models = Vec::new();
     for role in VARIANTS {
+        if request.phase == "ablations" {
+            let selected = if request.ablation_variant.as_deref() == Some("lifetime_refine") {
+                matches!(
+                    role,
+                    "reset_lifetime" | "reset_lifetime_decoder" | "reset_lifetime_recurrent"
+                )
+            } else {
+                !matches!(role, "reset_lifetime_decoder" | "reset_lifetime_recurrent")
+            };
+            if !selected {
+                continue;
+            }
+        }
         if request.phase == "fresh_battery" && request.ablation_variant.as_deref() != Some(role) {
             continue;
         }
@@ -152,6 +186,8 @@ pub(super) fn qualify_battery_request(request: &Request, executable_sha: &str) -
         variant,
         "reset_fast"
             | "reset_lifetime"
+            | "reset_lifetime_decoder"
+            | "reset_lifetime_recurrent"
             | "reset_somatic"
             | "reset_somatic_predictor"
             | "reset_predictor"
