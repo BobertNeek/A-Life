@@ -145,3 +145,69 @@ not contribute to final efficacy counts. Compilation, diagnostic work and those
 smokes are additional costs, not included in a completed comparison's timer.
 Timings describe execution cost under concurrent build/test activity, not a
 performance benchmark or speedup.
+
+### Corrected comparison
+
+[Complete source-safe results](retained-language-results.json) preserve all 36
+assessment rows and all 64 trained-arm update rows. Measured implementation is
+`2ed9edd181e891c1afb6b73344f7f428abf4f7c6`; executable SHA256 is
+`51f23486452754d3a60e7ec770250fee2e16a8a7c65c00fa1ec6ad015ef44afe`.
+The corrected run took 378.334 seconds internally and 378.342 seconds externally.
+The two completed comparisons therefore total 764.370 measured internal seconds,
+plus the separate smoke, diagnostics, setup engineering and builds. This is cost
+accounting, not a speed comparison.
+
+Every subject reached the native developmental gates at world tick 456,
+maturation 0.25, through ordinary biology. The scored/captured data contain 2,016
+native decisions: 384 training decisions and 288 assessment decisions per arm.
+The paired word probes add 64 native world steps, and recovery checks execute
+another 40 steps across original and cold-restored copies. Scripted controls are
+separate: two real Eat commands consumed food with net energy gain 0.127869, and
+one real Grab acquired the toy.
+
+| Arm | Actor updates | Teacher-heard frames | Assessment toy Grab commands | Acquisitions | Meals | Utterances | Joint failures |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Grounded | 32 | 96 | 6 | 0 | 0 | 0 | 21 |
+| Shuffled words | 32 | 96 | 6 | 0 | 0 | 0 | 21 |
+| Untreated | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+
+Each arm's player, silent and swapped conditions had identical aggregate physical
+and utterance outcomes: 96 decisions per condition; each trained arm attempted
+two toy Grabs per condition, without acquiring ownership. No arm selected a
+food-target Eat in assessment. All 36 initial assessment frames exposed food,
+toy and distractor. All assessments rejected teacher/prior input and had zero
+sleeping ticks and zero sleep consolidations.
+
+The corrected grounded and shuffled arms supplied 94 and 102 action-label rows
+in rounds one and two, respectively, and zero positive speech-label rows. The
+untreated arm had 93 and 94 potential action-label rows, which were not trained.
+There were zero grounded speech opportunities in assessment. Consequently, the
+utterance result does not test successful teaching of a completed-action phrase:
+the assessments contained no qualifying physical precursor. No labels or failures were
+manufactured or removed to change that denominator.
+
+The grounded and shuffled final actor checkpoints are identical (SHA256
+`659ba4f6ec0e6672541af9771d3cf4d18fb05bd81c6427a396fe5e42e6dfa4f1`).
+Before and after teaching, swapping the actual words changed three encoded lanes
+but zero candidate logits and zero trainable gradients in the paired eight-step
+probe. The unresolved word-to-action-objective path is measured for this founder;
+its precise connectivity/routing cause has not been isolated. The experiment
+establishes neither retained language nor improved physical task success.
+
+Both trained arms passed exact fresh-process private-state, eight-step and next
+Adam-update checks. Frozen coordinates remained exact through all updates. A
+separate corrupted-checksum copy was rejected before restore, and the original
+recovery remained unchanged. Four focused pilot tests and 39 existing native
+backend/collector tests passed; the performance-only benchmark remained ignored.
+Strict Clippy and the feature-disabled headless build passed. The known zero word
+objective effect is an explicit negative regression fixture, not a language
+capability pass.
+
+Missing controls/results remain explicit: no real SLM delivery run, natural-sleep
+retention, same-individual optimizer rebase, noun/verb composition test, or separate
+equally trained no-speech arm. The shuffled arm supplies the matched supervised
+control; the untreated arm differs in both speech exposure and optimizer dose.
+The small four-world assessment and conditional replay do not establish general
+CFF competence. The full native trace remains local at the selected output;
+corrected trace SHA256 is
+`c117a30e700244692f72a896de2c4b34332ed27f3f1ce77847b8cd5b0c04de8f`.
