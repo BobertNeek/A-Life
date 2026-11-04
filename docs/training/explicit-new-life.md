@@ -151,13 +151,47 @@ make this qualification appear successful.
 
 ## Cloud evidence
 
-Source-only cloud work uses disposable metadata fixtures for typed lineage/codec
+The original #248 cloud fixture work used disposable metadata for typed lineage/codec
 checks, and a real native CPU newborn world for collection, recovery and next-Adam
-continuity. The existing CPU collector rejects the GPU live-policy compiler hash;
-the component smoke explicitly binds only its disposable actor metadata to the
+continuity. Its ordinary CPU collector rejected the GPU live-policy compiler hash;
+that component smoke explicitly bound only its disposable actor metadata to the
 ordinary founder graph while preserving weights, moments, ages and masks. It is
 not an end-to-end test of GPU Current admission. Production transition code never
 performs that metadata rebind. Metadata placeholders are explicitly rejected by full native asset
 admission. These tests do not certify the actual saved PC checkpoint, native GPU
 birth/restore, feeding capability or all-night survival. Those require the owner
 qualification above before training is resumed.
+
+## Retained-neural CPU assessment
+
+`assess_retained_cpu inspect CURRENT UNUSED_OUTPUT EXPECTED_SHA256` performs full
+Current admission, native fixed-slot topology reconstruction, canonical-to-live
+mapping, exact optimizer retention and a two-tick scalar forward check. The
+explicit body bridge allows only derived neural identity hashes to differ; all
+neural execution fields must match. Saved physiological bits are preserved.
+Cross-platform phenotype admission permits only an adjacent-f32 difference in
+`body.metabolic_turnover`, the platform `exp2` result; all other fields remain
+exact. Separate source-bound and newborn-bound lexical proofs are recorded in
+qualification; ordinary validation remains strict outside those scopes. This
+reuses the compatibility contract from evaluator revision `4a6a1523` and is not
+bit-identical re-expression or GPU parity.
+
+`assess_retained_cpu battery CURRENT NEW_OUTPUT EXPECTED_SHA256` runs the six
+standard conditions on assessment-only seeds 202611185878–202611185897, 128 scored
+decisions plus one bootstrap, temperature 1, no teacher/prior and no offline
+updates. It uses a fresh body and personal memory while retaining somatic weights,
+acquired dendrites/sparse structure/structural candidates and learned predictor.
+Both original live banks remain exact, immutable inheritance evidence in every
+CPU checkpoint; current active CPU weights use the native mapping to the original
+actor coordinates. Global Adam and critic history are unchanged.
+
+The current CPU sparse execution supports added edges whose native alpha and both
+somatic banks are zero. It rejects other added-coordinate state before dispatch,
+with no policy-only fallback. Ordinary waking learning and sleep use the existing
+CPU contracts. Incomplete, dead and failed trials retain their prefix artifacts
+and remain in results. Existing output is never restarted or overwritten.
+
+The fixed-slot scalar check validates mapping and formulas. It does not execute a
+GPU or certify Windows/NVIDIA parity. Results from this executable are a separate
+CPU benchmark until both actual parents and initial states are qualified under
+the same executable. Unknown historical seed freshness remains unknown.

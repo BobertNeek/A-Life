@@ -7,6 +7,8 @@ use alife_world::*;
 mod collector_shards;
 #[path = "cpu_collector/need_switching.rs"]
 mod need_switching;
+#[path = "cpu_collector/retained_neural.rs"]
+mod retained_neural;
 #[path = "cpu_collector/sealed_authority.rs"]
 mod sealed_authority;
 fn fixture() -> (CpuCanonicalHost, CpuFoundationTrainer) {

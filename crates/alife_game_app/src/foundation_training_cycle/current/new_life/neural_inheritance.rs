@@ -48,6 +48,15 @@ pub(super) struct RetainedNeural {
     fast: PortableDualWeightBankV1,
 }
 impl RetainedNeural {
+    #[cfg(feature = "cpu-training")]
+    pub(super) fn cpu_projection(&self) -> alife_training::cpu::CpuRetainedNeuralInheritance {
+        alife_training::cpu::CpuRetainedNeuralInheritance {
+            topology: self.topology.clone(),
+            lifetime: self.lifetime.clone(),
+            fast: self.fast.clone(),
+            predictor: self.exact.predictor.clone(),
+        }
+    }
     pub(super) fn read(source: &CurrentTrainingCheckpointV1) -> Result<Self> {
         let life = source
             .life

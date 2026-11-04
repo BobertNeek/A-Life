@@ -15,6 +15,8 @@ use alife_world::{
     PortableSaveFile, RuntimeConfig,
 };
 use std::collections::BTreeMap;
+mod retained_neural;
+pub use retained_neural::*;
 
 #[derive(Debug, thiserror::Error)]
 pub enum CpuHostError {
@@ -35,6 +37,7 @@ pub enum CpuHostError {
 }
 #[derive(Clone)]
 struct Resident {
+    inherited_neural_source: Option<CpuRetainedNeuralInheritance>,
     // Process-local proof of the last completed boundary. Private state is
     // invalidated before mutation and resealed before a staged host is committed.
     // Never restored from serialized data; cold admission recomputes the digest.
@@ -85,6 +88,10 @@ struct CpuReplayEvent {
 }
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CpuResidentCheckpoint {
+    /// Immutable inheritance evidence, including both original live banks.
+    /// Current active CPU weights remain in `neural`, in canonical coordinates.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub inherited_neural_source: Option<CpuRetainedNeuralInheritance>,
     pub neural: CpuOrganismCheckpoint,
     pub activity: CpuActivityState,
     pub neural_topology: GpuV11Checkpoint,
@@ -209,6 +216,7 @@ impl CpuCanonicalHost {
             residents.insert(
                 id.raw(),
                 Resident {
+                    inherited_neural_source: None,
                     sealed_authority: None,
                     neural,
                     activity: CpuActivityState::default(),
@@ -427,6 +435,7 @@ impl CpuCanonicalHost {
             .values()
             .map(|r| {
                 Ok(CpuResidentCheckpoint {
+                    inherited_neural_source: r.inherited_neural_source.clone(),
                     neural: r.neural.checkpoint()?,
                     activity: r.activity.clone(),
                     neural_topology: r.v11.checkpoint(),
@@ -554,7 +563,11 @@ impl CpuCanonicalHost {
             {
                 return Err(CpuHostError::State("neural topology checkpoint mismatch"));
             }
+            if let Some(source) = &r.inherited_neural_source {
+                source.canonical_to_live(p)?;
+            }
             let mut resident = Resident {
+                inherited_neural_source: r.inherited_neural_source,
                 sealed_authority: None,
                 v11: GpuV11CausalState::restore(r.neural_topology)?,
                 neural: CpuOrganismState::from_checkpoint(p, r.neural)?,
@@ -1354,7 +1367,9 @@ pub(super) fn validate_record_founder(
         development,
         founder.source_foundation.clone(),
     )?;
-    if compiled.phenotype_hash() != p.phenotype_hash() {
+    if compiled.phenotype_hash() != p.phenotype_hash()
+        && founder.assessment_body_phenotype_hash != Some(compiled.phenotype_hash())
+    {
         return Err(CpuHostError::State("organism compiler identity differs from CPU founder; heterogeneous graphs require per-row compilation"));
     }
     let inherited =
