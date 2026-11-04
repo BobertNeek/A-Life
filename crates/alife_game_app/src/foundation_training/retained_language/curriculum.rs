@@ -6,8 +6,9 @@ mod payload_stage;
 pub use action_gate::continue_action_gated_language;
 pub use factorial::{
     continue_balanced_grounded_language, continue_contrastive_grounded_language,
-    continue_factorial_grounded_language, continue_focused_grounded_language,
-    continue_linear_grounded_language, continue_visible_balanced_grounded_language,
+    continue_event_confirmed_speech, continue_factorial_grounded_language,
+    continue_focused_grounded_language, continue_linear_grounded_language,
+    continue_visible_balanced_grounded_language,
 };
 pub use payload_stage::{refine_language_payload, refine_language_shared_gates};
 
@@ -26,6 +27,8 @@ pub(super) struct AssessmentPlan {
     balanced_grounding_v1: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     balanced_grounding_v2: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    event_confirmed_speech_v1: bool,
 }
 
 #[derive(Clone, Serialize)]
@@ -571,6 +574,7 @@ fn continue_curriculum(
                     linear_readout: false,
                     balanced_grounding_v1: false,
                     balanced_grounding_v2: false,
+                    event_confirmed_speech_v1: false,
                 },
                 &mut baseline_trace
             )?);
@@ -630,6 +634,7 @@ fn continue_curriculum(
                     linear_readout: false,
                     balanced_grounding_v1: false,
                     balanced_grounding_v2: false,
+                    event_confirmed_speech_v1: false,
                 }),
             },
             next_gradient.ok_or("no native update")?,

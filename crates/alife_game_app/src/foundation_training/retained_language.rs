@@ -21,10 +21,10 @@ mod speech_gate_probe;
 pub use curriculum::{
     continue_action_gated_language, continue_balanced_grounded_language,
     continue_contrastive_grounded_language, continue_embodied_language_curriculum,
-    continue_factorial_grounded_language, continue_focused_grounded_language,
-    continue_language_curriculum, continue_linear_grounded_language,
-    continue_visible_balanced_grounded_language, refine_language_payload,
-    refine_language_shared_gates,
+    continue_event_confirmed_speech, continue_factorial_grounded_language,
+    continue_focused_grounded_language, continue_language_curriculum,
+    continue_linear_grounded_language, continue_visible_balanced_grounded_language,
+    refine_language_payload, refine_language_shared_gates,
 };
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
