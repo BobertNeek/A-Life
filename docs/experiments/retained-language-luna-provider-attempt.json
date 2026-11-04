@@ -1,0 +1,336 @@
+{
+  "actor_unchanged": true,
+  "actual_model_output": null,
+  "demonstrates_retained_language": false,
+  "elapsed_seconds": 0.125068476,
+  "execution_domain": "native-cpu",
+  "input": {
+    "body": {
+      "pose": {
+        "rotation": {
+          "w": 1.0,
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "translation": {
+          "x": 3.0,
+          "y": 0.0,
+          "z": 0.0
+        }
+      },
+      "velocity": {
+        "angular": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "linear": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        }
+      }
+    },
+    "grounded_object_slots": [
+      {
+        "bearing": [
+          0.5480239391326904,
+          0.8364626169204712
+        ],
+        "chemical": [
+          0.0,
+          0.0,
+          -0.0
+        ],
+        "color": [
+          0.062745101749897,
+          0.8901960849761963,
+          0.6117647290229797
+        ],
+        "confidence": 0.9325312376022339,
+        "contact": 0.0,
+        "distance": 0.08124999701976776,
+        "material": [
+          0.19607843458652496,
+          0.6666666865348816,
+          0.10588235408067703
+        ],
+        "proprioception": [
+          0.0,
+          0.0
+        ],
+        "relative_velocity": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "shape": [
+          0.07058823853731155,
+          0.09803921729326248,
+          0.16862745583057404
+        ],
+        "slot_index": 0,
+        "temperature": 0.0,
+        "terrain": [
+          0.0235294122248888,
+          0.7215686440467834
+        ],
+        "tracked_object_id": 100927875903217
+      },
+      {
+        "bearing": [
+          -0.5480239391326904,
+          0.836462676525116
+        ],
+        "chemical": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "color": [
+          0.18941175937652588,
+          0.3499999940395355,
+          0.8999999761581421
+        ],
+        "confidence": 0.9261875152587891,
+        "contact": 0.0,
+        "distance": 0.08749999850988388,
+        "material": [
+          0.20000000298023224,
+          0.800000011920929,
+          0.20000000298023224
+        ],
+        "proprioception": [
+          0.0,
+          0.0
+        ],
+        "relative_velocity": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "shape": [
+          0.800000011920929,
+          0.800000011920929,
+          0.800000011920929
+        ],
+        "slot_index": 1,
+        "temperature": 0.0,
+        "terrain": [
+          0.5686274766921997,
+          0.11764705926179886
+        ],
+        "tracked_object_id": 100927875903218
+      },
+      {
+        "bearing": [
+          0.0,
+          1.0
+        ],
+        "chemical": [
+          -0.0,
+          0.0,
+          0.0
+        ],
+        "color": [
+          0.5803921818733215,
+          0.5803921818733215,
+          0.5960784554481506
+        ],
+        "confidence": 0.5709375143051147,
+        "contact": 0.0,
+        "distance": 0.4375,
+        "material": [
+          0.41960784792900085,
+          0.01568627543747425,
+          0.7803921699523926
+        ],
+        "proprioception": [
+          0.0,
+          0.0
+        ],
+        "relative_velocity": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "shape": [
+          0.7058823704719543,
+          0.5529412031173706,
+          0.5843137502670288
+        ],
+        "slot_index": 2,
+        "temperature": 0.0,
+        "terrain": [
+          0.501960813999176,
+          0.6313725709915161
+        ],
+        "tracked_object_id": 100927875903216
+      }
+    ],
+    "heard": {
+      "heard_tokens": [
+        {
+          "addressee": 1,
+          "confidence": 0.43137499690055847,
+          "sequence_position": 0,
+          "source_entity": null,
+          "source_kind": "Player",
+          "source_position": {
+            "x": 3.0,
+            "y": 0.0,
+            "z": 3.0
+          },
+          "speaker_id": null,
+          "teacher_channel": null,
+          "token_id": 8,
+          "utterance_id": 1
+        },
+        {
+          "addressee": 1,
+          "confidence": 0.5074999928474426,
+          "sequence_position": 1,
+          "source_entity": null,
+          "source_kind": "Player",
+          "source_position": {
+            "x": 3.0,
+            "y": 0.0,
+            "z": 3.0
+          },
+          "speaker_id": null,
+          "teacher_channel": null,
+          "token_id": 1,
+          "utterance_id": 1
+        },
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "teacher_channel_marker": null,
+      "vocalized_token": null,
+      "word_confidence": 0.800000011920929
+    },
+    "homeostasis": {
+      "drives": {
+        "brain_atp": 0.6459774971008301,
+        "curiosity": 0.4499916136264801,
+        "extension": [
+          0.09120039641857147,
+          0.0
+        ],
+        "fatigue": 0.025757858529686928,
+        "fear": 0.09999813884496689,
+        "hunger": 0.40602898597717285,
+        "loneliness": 0.14999720454216003,
+        "pain": 0.0,
+        "reproductive_drive": 0.09999813884496689,
+        "temperature_stress": 0.0
+      },
+      "hormones": {
+        "acetylcholine": 0.4999997615814209,
+        "adrenaline": 0.1999998837709427,
+        "cortisol": 0.1999998837709427,
+        "developmental_hormone": 0.4999997615814209,
+        "dopamine": 0.4999997615814209,
+        "extension": [
+          0.0,
+          0.0
+        ],
+        "learning_modulator": 0.4999997615814209,
+        "oxytocin": 0.4999997615814209,
+        "serotonin": 0.5999995470046997,
+        "sleep_pressure": 0.025757858529686928
+      },
+      "schema_version": 3,
+      "tick": 456
+    },
+    "organism": 1,
+    "tick": 456
+  },
+  "kind": "real-remote-luna-native-delivery-probe-v1",
+  "local_slm": false,
+  "nonzero_actual_encoded_prior_targets": [],
+  "provider_metrics": {
+    "backend": "luna",
+    "cache_hits": 0,
+    "context_contract": "grounded-terrain-language-prior-v1:4de8db44e72923b5cc12165dcee83879fb94d09d7336a0644c18484c0eb19e01:87f3a36081574ad35177e2eafee845fff77aa6cbc6787a8d8935c25bf302359f",
+    "decision_frames": 1,
+    "decision_frames_with_heard_language": 1,
+    "decision_frames_with_prior": 0,
+    "decision_frames_without_prior": 1,
+    "decision_inputs": [
+      {
+        "context_digest": null,
+        "dispatch_generation": 1,
+        "frame_digest": [
+          14794747959929003143,
+          8432814360088967012,
+          5826296647296240817,
+          6379084831693449642
+        ],
+        "gain": 0.0,
+        "grounded_object_slots": 3,
+        "heard_tokens": 2,
+        "natural_senses_context": "heard words eat food; hunger low; tiredness low; smells chemical levels 0.7,0.7,0.1; feels contact pressure 1.0 grip 0.0; sees object color 0.1,0.9,0.6 shape 0.1,0.1,0.2 chemical 0.0,0.0,-0.0; sees object color 0.2,0.3,0.9 shape 0.8,0.8,0.8 chemical 0.0,0.0,0.0; ",
+        "nonzero_encoded_prior_lanes": 0,
+        "nonzero_prior_lanes": 0,
+        "organism": 1,
+        "output_digest": null,
+        "semantic_codes": 0,
+        "semantic_encoder_lanes": 128,
+        "sensory_digest": "274c24f1e748d11642aec144738d8d98473eb3425dacecbc850009aafba5454b",
+        "sequence": 1,
+        "status": "provider_failure",
+        "tick": 456
+      }
+    ],
+    "delivered_frames": 0,
+    "deliveries": [],
+    "dropout_frames": 0,
+    "empty_hint_frames": 0,
+    "failures": 1,
+    "last_error": "Codex prior failed (exit Some(1)); check CLI version, existing ChatGPT login, model access and usage limits",
+    "last_priming": null,
+    "model": "codex:gpt-6-luna",
+    "model_sha256": "unverified-model",
+    "prime_timeouts": 0,
+    "prime_wait_ms": 0,
+    "provider_failures": [
+      {
+        "context_digest": "01896aede01f16880b1536cb3cc249e5f31c29e7699d89805abce88bb5e3e02c",
+        "error": "Codex prior failed (exit Some(1)); check CLI version, existing ChatGPT login, model access and usage limits",
+        "organism": 1,
+        "tick": 456
+      }
+    ],
+    "provider_identity": "9f5e94219236d6245a6bf7252b4d479f9e639587cba277268f90cbfc87225756",
+    "recorded_bank_digest": null,
+    "requests": 1,
+    "rich_information_required": false,
+    "source_provider_identity": null,
+    "stale_replies": 0,
+    "unusable_hint_retries": [],
+    "unusable_hint_retry_requests": 0,
+    "validated_provider_replies": 0
+  },
+  "scene": {
+    "distractor": 10,
+    "food": 8,
+    "maturation": 0.25,
+    "prepared_tick": 456,
+    "toy": 9
+  },
+  "seed": 847503
+}
