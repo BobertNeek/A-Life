@@ -176,6 +176,7 @@ pub fn continue_action_gated_language(
                     recovery_sleep: true,
                     collect_utterance_timing: true,
                     paired_request_focus: false,
+                    linear_readout: false,
                     factorial_grounding: false
                 },
                 &mut trace
@@ -226,6 +227,7 @@ pub fn continue_action_gated_language(
                     collect_utterance_timing: true,
                     factorial_grounding: false,
                     paired_request_focus: false,
+                    linear_readout: false,
                 }),
             },
             next.ok_or("no update")?,

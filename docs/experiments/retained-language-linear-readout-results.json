@@ -1,0 +1,5612 @@
+{
+  "kind": "source-safe-linear-native-readout-result",
+  "execution_domain": "native-cpu",
+  "profile": "LinearWordReadoutV3",
+  "measurement_provenance": {
+    "head": "7aa59024cc81df401625e4d1c84794b13730288a",
+    "binary_sha256": "1fb02baf3a8ccb75a1017cfeb921024ffae042d12c7be13f0139cdff7a9434d1",
+    "args": [
+      "/workspace/embodied-speech/target/debug/experiment_retained_language",
+      "--disposable-public-founder",
+      "--experimental-word-bridge",
+      "--linear-readout",
+      "/workspace/language-action-gated-run",
+      "--output",
+      "/workspace/language-linear-readout-run",
+      "--seed",
+      "847501",
+      "--rounds",
+      "2",
+      "--epochs",
+      "32",
+      "--decisions",
+      "24"
+    ],
+    "started_utc": "2026-11-04T17:52:22.149086+00:00",
+    "exit_code": 0,
+    "elapsed_seconds": 576.1310436669992,
+    "finished_utc": "2026-11-04T18:01:58.280341+00:00"
+  },
+  "exact_local_results_sha256": "3ddb54ce0a78d4ee4a51224c95f6e9fda2228749ae57d3f479654e5211cf5db8",
+  "native_trace_sha256": "468472ff7e8eea84d83a2f0eb8e539c85f7496a1fdbb3f0e16451b72c84c4c79",
+  "elapsed_seconds": 576.114158716,
+  "config": {
+    "decisions": 24,
+    "epochs": 32,
+    "experimental_word_bridge": true,
+    "llamacpp_translation": false,
+    "rounds": 2,
+    "seed": 847501
+  },
+  "common_baseline": [
+    {
+      "actual_activity_counts": [
+        1,
+        0,
+        1
+      ],
+      "arm": "untreated",
+      "correct_grounded_utterances": 0,
+      "first_completed_activity": "EatFood",
+      "first_completion_matches_request": true,
+      "grounded_utterance_opportunities": 6,
+      "initial_targets_and_distractor_visible": true,
+      "layout": 0,
+      "native_decisions": 24,
+      "nourished_meals": 1,
+      "outside_primary_window_utterances": 0,
+      "paired_initial_private_sha256": "c51884c0a1473a1ca7505f8afcab3f4297bd67fc8f2107e419a29d30e1aff48b",
+      "prior_enabled": false,
+      "recovery_sleep": false,
+      "requested": "EatFood",
+      "requested_activity_completed": true,
+      "sleep_consolidations": 0,
+      "sleep_trigger": null,
+      "sleeping_ticks": 0,
+      "teacher_present": false,
+      "utterances": 1
+    },
+    {
+      "actual_activity_counts": [
+        1,
+        0,
+        1
+      ],
+      "arm": "untreated",
+      "correct_grounded_utterances": 0,
+      "first_completed_activity": "EatFood",
+      "first_completion_matches_request": false,
+      "grounded_utterance_opportunities": 6,
+      "initial_targets_and_distractor_visible": true,
+      "layout": 0,
+      "native_decisions": 24,
+      "nourished_meals": 1,
+      "outside_primary_window_utterances": 1,
+      "paired_initial_private_sha256": "c51884c0a1473a1ca7505f8afcab3f4297bd67fc8f2107e419a29d30e1aff48b",
+      "prior_enabled": false,
+      "recovery_sleep": false,
+      "requested": "GetFood",
+      "requested_activity_completed": false,
+      "sleep_consolidations": 0,
+      "sleep_trigger": null,
+      "sleeping_ticks": 0,
+      "teacher_present": false,
+      "utterances": 1
+    },
+    {
+      "actual_activity_counts": [
+        1,
+        0,
+        1
+      ],
+      "arm": "untreated",
+      "correct_grounded_utterances": 0,
+      "first_completed_activity": "EatFood",
+      "first_completion_matches_request": false,
+      "grounded_utterance_opportunities": 6,
+      "initial_targets_and_distractor_visible": true,
+      "layout": 0,
+      "native_decisions": 24,
+      "nourished_meals": 1,
+      "outside_primary_window_utterances": 1,
+      "paired_initial_private_sha256": "c51884c0a1473a1ca7505f8afcab3f4297bd67fc8f2107e419a29d30e1aff48b",
+      "prior_enabled": false,
+      "recovery_sleep": false,
+      "requested": "GetToy",
+      "requested_activity_completed": true,
+      "sleep_consolidations": 0,
+      "sleep_trigger": null,
+      "sleeping_ticks": 0,
+      "teacher_present": false,
+      "utterances": 1
+    },
+    {
+      "actual_activity_counts": [
+        1,
+        0,
+        1
+      ],
+      "arm": "untreated",
+      "correct_grounded_utterances": 0,
+      "first_completed_activity": "EatFood",
+      "first_completion_matches_request": null,
+      "grounded_utterance_opportunities": 6,
+      "initial_targets_and_distractor_visible": true,
+      "layout": 0,
+      "native_decisions": 24,
+      "nourished_meals": 1,
+      "outside_primary_window_utterances": 0,
+      "paired_initial_private_sha256": "c51884c0a1473a1ca7505f8afcab3f4297bd67fc8f2107e419a29d30e1aff48b",
+      "prior_enabled": false,
+      "recovery_sleep": false,
+      "requested": null,
+      "requested_activity_completed": null,
+      "sleep_consolidations": 0,
+      "sleep_trigger": null,
+      "sleeping_ticks": 0,
+      "teacher_present": false,
+      "utterances": 1
+    },
+    {
+      "actual_activity_counts": [
+        1,
+        0,
+        1
+      ],
+      "arm": "untreated",
+      "correct_grounded_utterances": 0,
+      "first_completed_activity": "EatFood",
+      "first_completion_matches_request": true,
+      "grounded_utterance_opportunities": 4,
+      "initial_targets_and_distractor_visible": true,
+      "layout": 1,
+      "native_decisions": 24,
+      "nourished_meals": 1,
+      "outside_primary_window_utterances": 0,
+      "paired_initial_private_sha256": "37e6c1333f32da8702439294daf01072119965dd144e2c57f047067a98131112",
+      "prior_enabled": false,
+      "recovery_sleep": false,
+      "requested": "EatFood",
+      "requested_activity_completed": true,
+      "sleep_consolidations": 0,
+      "sleep_trigger": null,
+      "sleeping_ticks": 0,
+      "teacher_present": false,
+      "utterances": 1
+    },
+    {
+      "actual_activity_counts": [
+        1,
+        0,
+        0
+      ],
+      "arm": "untreated",
+      "correct_grounded_utterances": 0,
+      "first_completed_activity": "EatFood",
+      "first_completion_matches_request": false,
+      "grounded_utterance_opportunities": 3,
+      "initial_targets_and_distractor_visible": true,
+      "layout": 1,
+      "native_decisions": 24,
+      "nourished_meals": 1,
+      "outside_primary_window_utterances": 2,
+      "paired_initial_private_sha256": "37e6c1333f32da8702439294daf01072119965dd144e2c57f047067a98131112",
+      "prior_enabled": false,
+      "recovery_sleep": false,
+      "requested": "GetFood",
+      "requested_activity_completed": false,
+      "sleep_consolidations": 0,
+      "sleep_trigger": null,
+      "sleeping_ticks": 0,
+      "teacher_present": false,
+      "utterances": 2
+    },
+    {
+      "actual_activity_counts": [
+        1,
+        0,
+        0
+      ],
+      "arm": "untreated",
+      "correct_grounded_utterances": 0,
+      "first_completed_activity": "EatFood",
+      "first_completion_matches_request": false,
+      "grounded_utterance_opportunities": 3,
+      "initial_targets_and_distractor_visible": true,
+      "layout": 1,
+      "native_decisions": 24,
+      "nourished_meals": 1,
+      "outside_primary_window_utterances": 1,
+      "paired_initial_private_sha256": "37e6c1333f32da8702439294daf01072119965dd144e2c57f047067a98131112",
+      "prior_enabled": false,
+      "recovery_sleep": false,
+      "requested": "GetToy",
+      "requested_activity_completed": false,
+      "sleep_consolidations": 0,
+      "sleep_trigger": null,
+      "sleeping_ticks": 0,
+      "teacher_present": false,
+      "utterances": 1
+    },
+    {
+      "actual_activity_counts": [
+        1,
+        0,
+        0
+      ],
+      "arm": "untreated",
+      "correct_grounded_utterances": 0,
+      "first_completed_activity": "EatFood",
+      "first_completion_matches_request": null,
+      "grounded_utterance_opportunities": 3,
+      "initial_targets_and_distractor_visible": true,
+      "layout": 1,
+      "native_decisions": 24,
+      "nourished_meals": 1,
+      "outside_primary_window_utterances": 1,
+      "paired_initial_private_sha256": "37e6c1333f32da8702439294daf01072119965dd144e2c57f047067a98131112",
+      "prior_enabled": false,
+      "recovery_sleep": false,
+      "requested": null,
+      "requested_activity_completed": null,
+      "sleep_consolidations": 0,
+      "sleep_trigger": null,
+      "sleeping_ticks": 0,
+      "teacher_present": false,
+      "utterances": 1
+    },
+    {
+      "actual_activity_counts": [
+        1,
+        0,
+        1
+      ],
+      "arm": "untreated",
+      "correct_grounded_utterances": 0,
+      "first_completed_activity": "EatFood",
+      "first_completion_matches_request": true,
+      "grounded_utterance_opportunities": 4,
+      "initial_targets_and_distractor_visible": true,
+      "layout": 1,
+      "native_decisions": 24,
+      "nourished_meals": 1,
+      "outside_primary_window_utterances": 0,
+      "paired_initial_private_sha256": "2feaadee920fabab06b79276284165fbf8bd38dca37d2d5d21ae854c1b04127e",
+      "prior_enabled": false,
+      "recovery_sleep": true,
+      "requested": "EatFood",
+      "requested_activity_completed": true,
+      "sleep_consolidations": 1,
+      "sleep_trigger": "RecoveryProtocol",
+      "sleeping_ticks": 13,
+      "teacher_present": false,
+      "utterances": 1
+    },
+    {
+      "actual_activity_counts": [
+        1,
+        0,
+        0
+      ],
+      "arm": "untreated",
+      "correct_grounded_utterances": 0,
+      "first_completed_activity": "EatFood",
+      "first_completion_matches_request": false,
+      "grounded_utterance_opportunities": 3,
+      "initial_targets_and_distractor_visible": true,
+      "layout": 1,
+      "native_decisions": 24,
+      "nourished_meals": 1,
+      "outside_primary_window_utterances": 2,
+      "paired_initial_private_sha256": "2feaadee920fabab06b79276284165fbf8bd38dca37d2d5d21ae854c1b04127e",
+      "prior_enabled": false,
+      "recovery_sleep": true,
+      "requested": "GetFood",
+      "requested_activity_completed": false,
+      "sleep_consolidations": 1,
+      "sleep_trigger": "RecoveryProtocol",
+      "sleeping_ticks": 13,
+      "teacher_present": false,
+      "utterances": 2
+    },
+    {
+      "actual_activity_counts": [
+        1,
+        0,
+        0
+      ],
+      "arm": "untreated",
+      "correct_grounded_utterances": 0,
+      "first_completed_activity": "EatFood",
+      "first_completion_matches_request": false,
+      "grounded_utterance_opportunities": 3,
+      "initial_targets_and_distractor_visible": true,
+      "layout": 1,
+      "native_decisions": 24,
+      "nourished_meals": 1,
+      "outside_primary_window_utterances": 1,
+      "paired_initial_private_sha256": "2feaadee920fabab06b79276284165fbf8bd38dca37d2d5d21ae854c1b04127e",
+      "prior_enabled": false,
+      "recovery_sleep": true,
+      "requested": "GetToy",
+      "requested_activity_completed": false,
+      "sleep_consolidations": 1,
+      "sleep_trigger": "RecoveryProtocol",
+      "sleeping_ticks": 13,
+      "teacher_present": false,
+      "utterances": 1
+    },
+    {
+      "actual_activity_counts": [
+        1,
+        0,
+        0
+      ],
+      "arm": "untreated",
+      "correct_grounded_utterances": 0,
+      "first_completed_activity": "EatFood",
+      "first_completion_matches_request": null,
+      "grounded_utterance_opportunities": 3,
+      "initial_targets_and_distractor_visible": true,
+      "layout": 1,
+      "native_decisions": 24,
+      "nourished_meals": 1,
+      "outside_primary_window_utterances": 1,
+      "paired_initial_private_sha256": "2feaadee920fabab06b79276284165fbf8bd38dca37d2d5d21ae854c1b04127e",
+      "prior_enabled": false,
+      "recovery_sleep": true,
+      "requested": null,
+      "requested_activity_completed": null,
+      "sleep_consolidations": 1,
+      "sleep_trigger": "RecoveryProtocol",
+      "sleeping_ticks": 13,
+      "teacher_present": false,
+      "utterances": 1
+    },
+    {
+      "actual_food_consumptions": 1,
+      "actual_utterance_tokens": [],
+      "arm": "untreated",
+      "first_manipulation": [
+        210,
+        8
+      ],
+      "first_requested_primitive_target": true,
+      "kind": "composition_evaluation",
+      "layout": 0,
+      "native_decisions": 8,
+      "note": "Unseen eat-toy attempts are not successful ingestion or proof of knowing inedibility.",
+      "nourished_meals": 1,
+      "paired_initial_private_sha256": "61771f87aaa9749b886b0bccbc0c8247b5892bb9079539d2e54e3278151afaad",
+      "prior_enabled": false,
+      "requested_primitive_target_attempted": true,
+      "requested_target_acquired": true,
+      "requested_words": [
+        8,
+        1
+      ],
+      "teacher_present": false,
+      "unseen_word_combination": false,
+      "world_seed": 1237501
+    },
+    {
+      "actual_food_consumptions": 1,
+      "actual_utterance_tokens": [
+        [
+          2
+        ]
+      ],
+      "arm": "untreated",
+      "first_manipulation": [
+        210,
+        8
+      ],
+      "first_requested_primitive_target": false,
+      "kind": "composition_evaluation",
+      "layout": 0,
+      "native_decisions": 8,
+      "note": "Unseen eat-toy attempts are not successful ingestion or proof of knowing inedibility.",
+      "nourished_meals": 1,
+      "paired_initial_private_sha256": "61771f87aaa9749b886b0bccbc0c8247b5892bb9079539d2e54e3278151afaad",
+      "prior_enabled": false,
+      "requested_primitive_target_attempted": false,
+      "requested_target_acquired": true,
+      "requested_words": [
+        9,
+        1
+      ],
+      "teacher_present": false,
+      "unseen_word_combination": false,
+      "world_seed": 1237501
+    },
+    {
+      "actual_food_consumptions": 1,
+      "actual_utterance_tokens": [
+        [
+          2
+        ]
+      ],
+      "arm": "untreated",
+      "first_manipulation": [
+        210,
+        8
+      ],
+      "first_requested_primitive_target": false,
+      "kind": "composition_evaluation",
+      "layout": 0,
+      "native_decisions": 8,
+      "note": "Unseen eat-toy attempts are not successful ingestion or proof of knowing inedibility.",
+      "nourished_meals": 1,
+      "paired_initial_private_sha256": "61771f87aaa9749b886b0bccbc0c8247b5892bb9079539d2e54e3278151afaad",
+      "prior_enabled": false,
+      "requested_primitive_target_attempted": false,
+      "requested_target_acquired": false,
+      "requested_words": [
+        9,
+        2
+      ],
+      "teacher_present": false,
+      "unseen_word_combination": false,
+      "world_seed": 1237501
+    },
+    {
+      "actual_food_consumptions": 1,
+      "actual_utterance_tokens": [],
+      "arm": "untreated",
+      "first_manipulation": [
+        210,
+        8
+      ],
+      "first_requested_primitive_target": false,
+      "kind": "composition_evaluation",
+      "layout": 0,
+      "native_decisions": 8,
+      "note": "Unseen eat-toy attempts are not successful ingestion or proof of knowing inedibility.",
+      "nourished_meals": 1,
+      "paired_initial_private_sha256": "61771f87aaa9749b886b0bccbc0c8247b5892bb9079539d2e54e3278151afaad",
+      "prior_enabled": false,
+      "requested_primitive_target_attempted": false,
+      "requested_target_acquired": false,
+      "requested_words": [
+        8,
+        2
+      ],
+      "teacher_present": false,
+      "unseen_word_combination": true,
+      "world_seed": 1237501
+    },
+    {
+      "actual_food_consumptions": 1,
+      "actual_utterance_tokens": [
+        [
+          3
+        ]
+      ],
+      "arm": "untreated",
+      "first_manipulation": [
+        210,
+        8
+      ],
+      "first_requested_primitive_target": null,
+      "kind": "composition_evaluation",
+      "layout": 0,
+      "native_decisions": 8,
+      "note": "Unseen eat-toy attempts are not successful ingestion or proof of knowing inedibility.",
+      "nourished_meals": 1,
+      "paired_initial_private_sha256": "61771f87aaa9749b886b0bccbc0c8247b5892bb9079539d2e54e3278151afaad",
+      "prior_enabled": false,
+      "requested_primitive_target_attempted": false,
+      "requested_target_acquired": false,
+      "requested_words": null,
+      "teacher_present": false,
+      "unseen_word_combination": false,
+      "world_seed": 1237501
+    },
+    {
+      "actual_food_consumptions": 1,
+      "actual_utterance_tokens": [
+        [
+          3
+        ]
+      ],
+      "arm": "untreated",
+      "first_manipulation": [
+        210,
+        8
+      ],
+      "first_requested_primitive_target": true,
+      "kind": "composition_evaluation",
+      "layout": 1,
+      "native_decisions": 8,
+      "note": "Unseen eat-toy attempts are not successful ingestion or proof of knowing inedibility.",
+      "nourished_meals": 1,
+      "paired_initial_private_sha256": "a209076696dea91634df544d8e90885ee44fdf280f77914248653e99671659cc",
+      "prior_enabled": false,
+      "requested_primitive_target_attempted": true,
+      "requested_target_acquired": true,
+      "requested_words": [
+        8,
+        1
+      ],
+      "teacher_present": false,
+      "unseen_word_combination": false,
+      "world_seed": 1237502
+    },
+    {
+      "actual_food_consumptions": 1,
+      "actual_utterance_tokens": [
+        [
+          2
+        ]
+      ],
+      "arm": "untreated",
+      "first_manipulation": [
+        210,
+        8
+      ],
+      "first_requested_primitive_target": false,
+      "kind": "composition_evaluation",
+      "layout": 1,
+      "native_decisions": 8,
+      "note": "Unseen eat-toy attempts are not successful ingestion or proof of knowing inedibility.",
+      "nourished_meals": 1,
+      "paired_initial_private_sha256": "a209076696dea91634df544d8e90885ee44fdf280f77914248653e99671659cc",
+      "prior_enabled": false,
+      "requested_primitive_target_attempted": false,
+      "requested_target_acquired": true,
+      "requested_words": [
+        9,
+        1
+      ],
+      "teacher_present": false,
+      "unseen_word_combination": false,
+      "world_seed": 1237502
+    },
+    {
+      "actual_food_consumptions": 0,
+      "actual_utterance_tokens": [
+        [
+          2
+        ]
+      ],
+      "arm": "untreated",
+      "first_manipulation": null,
+      "first_requested_primitive_target": false,
+      "kind": "composition_evaluation",
+      "layout": 1,
+      "native_decisions": 8,
+      "note": "Unseen eat-toy attempts are not successful ingestion or proof of knowing inedibility.",
+      "nourished_meals": 0,
+      "paired_initial_private_sha256": "a209076696dea91634df544d8e90885ee44fdf280f77914248653e99671659cc",
+      "prior_enabled": false,
+      "requested_primitive_target_attempted": false,
+      "requested_target_acquired": false,
+      "requested_words": [
+        9,
+        2
+      ],
+      "teacher_present": false,
+      "unseen_word_combination": false,
+      "world_seed": 1237502
+    },
+    {
+      "actual_food_consumptions": 0,
+      "actual_utterance_tokens": [
+        [
+          3
+        ]
+      ],
+      "arm": "untreated",
+      "first_manipulation": [
+        210,
+        8
+      ],
+      "first_requested_primitive_target": false,
+      "kind": "composition_evaluation",
+      "layout": 1,
+      "native_decisions": 8,
+      "note": "Unseen eat-toy attempts are not successful ingestion or proof of knowing inedibility.",
+      "nourished_meals": 0,
+      "paired_initial_private_sha256": "a209076696dea91634df544d8e90885ee44fdf280f77914248653e99671659cc",
+      "prior_enabled": false,
+      "requested_primitive_target_attempted": false,
+      "requested_target_acquired": false,
+      "requested_words": [
+        8,
+        2
+      ],
+      "teacher_present": false,
+      "unseen_word_combination": true,
+      "world_seed": 1237502
+    },
+    {
+      "actual_food_consumptions": 0,
+      "actual_utterance_tokens": [
+        [
+          3
+        ]
+      ],
+      "arm": "untreated",
+      "first_manipulation": [
+        210,
+        8
+      ],
+      "first_requested_primitive_target": null,
+      "kind": "composition_evaluation",
+      "layout": 1,
+      "native_decisions": 8,
+      "note": "Unseen eat-toy attempts are not successful ingestion or proof of knowing inedibility.",
+      "nourished_meals": 0,
+      "paired_initial_private_sha256": "a209076696dea91634df544d8e90885ee44fdf280f77914248653e99671659cc",
+      "prior_enabled": false,
+      "requested_primitive_target_attempted": false,
+      "requested_target_acquired": false,
+      "requested_words": null,
+      "teacher_present": false,
+      "unseen_word_combination": false,
+      "world_seed": 1237502
+    }
+  ],
+  "common_baseline_summary": {
+    "formal_requested_trials": 9,
+    "first_requested_activity": 3,
+    "eventual_explicit_activity": 4,
+    "first_label_verb_pairs": 0,
+    "first_label_noun_pairs": 0,
+    "paired_contexts": 3,
+    "actual_formal_utterances": 14,
+    "timely_factual_utterances": 0,
+    "formal_decisions": 288,
+    "composition_decisions": 80,
+    "seen_command_first_primitive_target_attempts": 2,
+    "seen_command_attempt_trials": 6,
+    "unseen_eat_toy_first_primitive_target_attempts": 0,
+    "unseen_combination_trials": 2,
+    "composition_attempt_is_not_ingestion": true
+  },
+  "baseline_physical_trace": [
+    {
+      "layout": 0,
+      "sleep": false,
+      "requested": "EatFood",
+      "rows": 24,
+      "first_activity": "EatFood",
+      "activities": {
+        "EatFood": 1,
+        "GetToy": 1
+      },
+      "food_consumption_steps": [
+        2
+      ],
+      "food_acquisition_steps": [
+        1
+      ],
+      "toy_acquisition_steps": [
+        11
+      ],
+      "utterances": 1,
+      "timely_exact": 0,
+      "first_physical_events": {
+        "step": 1,
+        "events": [
+          "GetFood"
+        ]
+      },
+      "owned_last": [
+        null,
+        1
+      ]
+    },
+    {
+      "layout": 0,
+      "sleep": false,
+      "requested": "GetFood",
+      "rows": 24,
+      "first_activity": "EatFood",
+      "activities": {
+        "EatFood": 1,
+        "GetToy": 1
+      },
+      "food_consumption_steps": [
+        2
+      ],
+      "food_acquisition_steps": [
+        1
+      ],
+      "toy_acquisition_steps": [
+        11
+      ],
+      "utterances": 1,
+      "timely_exact": 0,
+      "first_physical_events": {
+        "step": 1,
+        "events": [
+          "GetFood"
+        ]
+      },
+      "owned_last": [
+        null,
+        1
+      ]
+    },
+    {
+      "layout": 0,
+      "sleep": false,
+      "requested": "GetToy",
+      "rows": 24,
+      "first_activity": "EatFood",
+      "activities": {
+        "EatFood": 1,
+        "GetToy": 1
+      },
+      "food_consumption_steps": [
+        6
+      ],
+      "food_acquisition_steps": [
+        5
+      ],
+      "toy_acquisition_steps": [
+        11
+      ],
+      "utterances": 1,
+      "timely_exact": 0,
+      "first_physical_events": {
+        "step": 5,
+        "events": [
+          "GetFood"
+        ]
+      },
+      "owned_last": [
+        null,
+        1
+      ]
+    },
+    {
+      "layout": 0,
+      "sleep": false,
+      "requested": null,
+      "rows": 24,
+      "first_activity": "EatFood",
+      "activities": {
+        "EatFood": 1,
+        "GetToy": 1
+      },
+      "food_consumption_steps": [
+        2
+      ],
+      "food_acquisition_steps": [
+        1
+      ],
+      "toy_acquisition_steps": [
+        11
+      ],
+      "utterances": 1,
+      "timely_exact": 0,
+      "first_physical_events": {
+        "step": 1,
+        "events": [
+          "GetFood"
+        ]
+      },
+      "owned_last": [
+        null,
+        1
+      ]
+    },
+    {
+      "layout": 1,
+      "sleep": false,
+      "requested": "EatFood",
+      "rows": 24,
+      "first_activity": "EatFood",
+      "activities": {
+        "EatFood": 1,
+        "GetToy": 1
+      },
+      "food_consumption_steps": [
+        7
+      ],
+      "food_acquisition_steps": [
+        6
+      ],
+      "toy_acquisition_steps": [
+        8
+      ],
+      "utterances": 1,
+      "timely_exact": 0,
+      "first_physical_events": {
+        "step": 6,
+        "events": [
+          "GetFood"
+        ]
+      },
+      "owned_last": [
+        null,
+        1
+      ]
+    },
+    {
+      "layout": 1,
+      "sleep": false,
+      "requested": "GetFood",
+      "rows": 24,
+      "first_activity": "EatFood",
+      "activities": {
+        "EatFood": 1
+      },
+      "food_consumption_steps": [
+        8
+      ],
+      "food_acquisition_steps": [
+        7
+      ],
+      "toy_acquisition_steps": [],
+      "utterances": 2,
+      "timely_exact": 0,
+      "first_physical_events": {
+        "step": 7,
+        "events": [
+          "GetFood"
+        ]
+      },
+      "owned_last": [
+        null,
+        null
+      ]
+    },
+    {
+      "layout": 1,
+      "sleep": false,
+      "requested": "GetToy",
+      "rows": 24,
+      "first_activity": "EatFood",
+      "activities": {
+        "EatFood": 1
+      },
+      "food_consumption_steps": [
+        9
+      ],
+      "food_acquisition_steps": [
+        8
+      ],
+      "toy_acquisition_steps": [],
+      "utterances": 1,
+      "timely_exact": 0,
+      "first_physical_events": {
+        "step": 8,
+        "events": [
+          "GetFood"
+        ]
+      },
+      "owned_last": [
+        null,
+        null
+      ]
+    },
+    {
+      "layout": 1,
+      "sleep": false,
+      "requested": null,
+      "rows": 24,
+      "first_activity": "EatFood",
+      "activities": {
+        "EatFood": 1
+      },
+      "food_consumption_steps": [
+        7
+      ],
+      "food_acquisition_steps": [
+        6
+      ],
+      "toy_acquisition_steps": [],
+      "utterances": 1,
+      "timely_exact": 0,
+      "first_physical_events": {
+        "step": 6,
+        "events": [
+          "GetFood"
+        ]
+      },
+      "owned_last": [
+        null,
+        null
+      ]
+    },
+    {
+      "layout": 1,
+      "sleep": true,
+      "requested": "EatFood",
+      "rows": 24,
+      "first_activity": "EatFood",
+      "activities": {
+        "EatFood": 1,
+        "GetToy": 1
+      },
+      "food_consumption_steps": [
+        7
+      ],
+      "food_acquisition_steps": [
+        6
+      ],
+      "toy_acquisition_steps": [
+        8
+      ],
+      "utterances": 1,
+      "timely_exact": 0,
+      "first_physical_events": {
+        "step": 6,
+        "events": [
+          "GetFood"
+        ]
+      },
+      "owned_last": [
+        null,
+        1
+      ]
+    },
+    {
+      "layout": 1,
+      "sleep": true,
+      "requested": "GetFood",
+      "rows": 24,
+      "first_activity": "EatFood",
+      "activities": {
+        "EatFood": 1
+      },
+      "food_consumption_steps": [
+        8
+      ],
+      "food_acquisition_steps": [
+        7
+      ],
+      "toy_acquisition_steps": [],
+      "utterances": 2,
+      "timely_exact": 0,
+      "first_physical_events": {
+        "step": 7,
+        "events": [
+          "GetFood"
+        ]
+      },
+      "owned_last": [
+        null,
+        null
+      ]
+    },
+    {
+      "layout": 1,
+      "sleep": true,
+      "requested": "GetToy",
+      "rows": 24,
+      "first_activity": "EatFood",
+      "activities": {
+        "EatFood": 1
+      },
+      "food_consumption_steps": [
+        9
+      ],
+      "food_acquisition_steps": [
+        8
+      ],
+      "toy_acquisition_steps": [],
+      "utterances": 1,
+      "timely_exact": 0,
+      "first_physical_events": {
+        "step": 8,
+        "events": [
+          "GetFood"
+        ]
+      },
+      "owned_last": [
+        null,
+        null
+      ]
+    },
+    {
+      "layout": 1,
+      "sleep": true,
+      "requested": null,
+      "rows": 24,
+      "first_activity": "EatFood",
+      "activities": {
+        "EatFood": 1
+      },
+      "food_consumption_steps": [
+        7
+      ],
+      "food_acquisition_steps": [
+        6
+      ],
+      "toy_acquisition_steps": [],
+      "utterances": 1,
+      "timely_exact": 0,
+      "first_physical_events": {
+        "step": 6,
+        "events": [
+          "GetFood"
+        ]
+      },
+      "owned_last": [
+        null,
+        null
+      ]
+    }
+  ],
+  "baseline_physical_verb_pairs": 0,
+  "trainable_native_decoder_coordinates": 4096,
+  "all_arms_same_initial_actor_and_source_history": true,
+  "scored_native_decisions": 2336,
+  "additional_cold_repeat_assessment_decisions": 1104,
+  "arms": [
+    {
+      "actor_sha256": "8d43907be655949f537aa40939a5fa02b259563ae117048df8aeb050ac881218",
+      "actor_step": 320,
+      "arm": "grounded",
+      "collections": [
+        {
+          "actual_activity_counts": [
+            4,
+            0,
+            1
+          ],
+          "fixed_eight_tick_instruction_window": true,
+          "instruction_window_rows": 48,
+          "native_decisions": 144,
+          "positive_narration_rows": 14,
+          "round": 0,
+          "teacher_heard_rows": 48
+        },
+        {
+          "actual_activity_counts": [
+            0,
+            5,
+            4
+          ],
+          "fixed_eight_tick_instruction_window": true,
+          "instruction_window_rows": 48,
+          "native_decisions": 144,
+          "positive_narration_rows": 19,
+          "round": 1,
+          "teacher_heard_rows": 48
+        }
+      ],
+      "continuity": {
+        "fresh_process_exact": true,
+        "native_private_and_optimizer_hashes": {
+          "after_host": "6e9b694f8921204a27e02badd6d1331a84d409e8474a1aff09e4d63931fc50f1",
+          "after_native_adam_update": "a9dcbfc9bed5a5b99a00715569e72f2d6882970d906045bca06b31d188773216",
+          "assessment": {
+            "native_trace_sha256": "012ae6acb196629781f811e6bee314af8e685babba910623eb531f2139509697"
+          },
+          "before_actor": "8d43907be655949f537aa40939a5fa02b259563ae117048df8aeb050ac881218",
+          "before_host": "10e5deb1f4c4f5a2ef330f450d652e9d1b318586ae1382f785e245fec5e3f92b",
+          "decisions": "3a92ad8587337eb79618999384445c9fce6ac4d4adc507acdb7657aea6ec6d79"
+        },
+        "duplicate_evaluation_omitted": true
+      },
+      "evaluation": [
+        {
+          "actual_activity_counts": [
+            1,
+            0,
+            1
+          ],
+          "arm": "grounded",
+          "correct_grounded_utterances": 0,
+          "first_completed_activity": "EatFood",
+          "first_completion_matches_request": true,
+          "grounded_utterance_opportunities": 6,
+          "initial_targets_and_distractor_visible": true,
+          "layout": 0,
+          "native_decisions": 24,
+          "nourished_meals": 1,
+          "outside_primary_window_utterances": 0,
+          "paired_initial_private_sha256": "9167e71aa07895829cd1afc4145d80dd3186d67509952f9f63514d3e8ee2d1b6",
+          "prior_enabled": false,
+          "recovery_sleep": false,
+          "requested": "EatFood",
+          "requested_activity_completed": true,
+          "sleep_consolidations": 0,
+          "sleep_trigger": null,
+          "sleeping_ticks": 0,
+          "teacher_present": false,
+          "utterances": 1
+        },
+        {
+          "actual_activity_counts": [
+            1,
+            1,
+            1
+          ],
+          "arm": "grounded",
+          "correct_grounded_utterances": 0,
+          "first_completed_activity": "GetFood",
+          "first_completion_matches_request": true,
+          "grounded_utterance_opportunities": 6,
+          "initial_targets_and_distractor_visible": true,
+          "layout": 0,
+          "native_decisions": 24,
+          "nourished_meals": 1,
+          "outside_primary_window_utterances": 0,
+          "paired_initial_private_sha256": "9167e71aa07895829cd1afc4145d80dd3186d67509952f9f63514d3e8ee2d1b6",
+          "prior_enabled": false,
+          "recovery_sleep": false,
+          "requested": "GetFood",
+          "requested_activity_completed": true,
+          "sleep_consolidations": 0,
+          "sleep_trigger": null,
+          "sleeping_ticks": 0,
+          "teacher_present": false,
+          "utterances": 1
+        },
+        {
+          "actual_activity_counts": [
+            1,
+            1,
+            0
+          ],
+          "arm": "grounded",
+          "correct_grounded_utterances": 0,
+          "first_completed_activity": "GetFood",
+          "first_completion_matches_request": false,
+          "grounded_utterance_opportunities": 6,
+          "initial_targets_and_distractor_visible": true,
+          "layout": 0,
+          "native_decisions": 24,
+          "nourished_meals": 1,
+          "outside_primary_window_utterances": 0,
+          "paired_initial_private_sha256": "9167e71aa07895829cd1afc4145d80dd3186d67509952f9f63514d3e8ee2d1b6",
+          "prior_enabled": false,
+          "recovery_sleep": false,
+          "requested": "GetToy",
+          "requested_activity_completed": false,
+          "sleep_consolidations": 0,
+          "sleep_trigger": null,
+          "sleeping_ticks": 0,
+          "teacher_present": false,
+          "utterances": 1
+        },
+        {
+          "actual_activity_counts": [
+            0,
+            0,
+            1
+          ],
+          "arm": "grounded",
+          "correct_grounded_utterances": 0,
+          "first_completed_activity": "GetToy",
+          "first_completion_matches_request": null,
+          "grounded_utterance_opportunities": 3,
+          "initial_targets_and_distractor_visible": true,
+          "layout": 0,
+          "native_decisions": 24,
+          "nourished_meals": 0,
+          "outside_primary_window_utterances": 1,
+          "paired_initial_private_sha256": "9167e71aa07895829cd1afc4145d80dd3186d67509952f9f63514d3e8ee2d1b6",
+          "prior_enabled": false,
+          "recovery_sleep": false,
+          "requested": null,
+          "requested_activity_completed": null,
+          "sleep_consolidations": 0,
+          "sleep_trigger": null,
+          "sleeping_ticks": 0,
+          "teacher_present": false,
+          "utterances": 1
+        },
+        {
+          "actual_activity_counts": [
+            1,
+            0,
+            1
+          ],
+          "arm": "grounded",
+          "correct_grounded_utterances": 0,
+          "first_completed_activity": "EatFood",
+          "first_completion_matches_request": true,
+          "grounded_utterance_opportunities": 6,
+          "initial_targets_and_distractor_visible": true,
+          "layout": 1,
+          "native_decisions": 24,
+          "nourished_meals": 1,
+          "outside_primary_window_utterances": 1,
+          "paired_initial_private_sha256": "d64972279a0939f068653ef833a8ce102fab13dca0af2a11d7d11b53a137f9e7",
+          "prior_enabled": false,
+          "recovery_sleep": false,
+          "requested": "EatFood",
+          "requested_activity_completed": true,
+          "sleep_consolidations": 0,
+          "sleep_trigger": null,
+          "sleeping_ticks": 0,
+          "teacher_present": false,
+          "utterances": 1
+        },
+        {
+          "actual_activity_counts": [
+            0,
+            1,
+            0
+          ],
+          "arm": "grounded",
+          "correct_grounded_utterances": 0,
+          "first_completed_activity": "GetFood",
+          "first_completion_matches_request": true,
+          "grounded_utterance_opportunities": 3,
+          "initial_targets_and_distractor_visible": true,
+          "layout": 1,
+          "native_decisions": 24,
+          "nourished_meals": 0,
+          "outside_primary_window_utterances": 1,
+          "paired_initial_private_sha256": "d64972279a0939f068653ef833a8ce102fab13dca0af2a11d7d11b53a137f9e7",
+          "prior_enabled": false,
+          "recovery_sleep": false,
+          "requested": "GetFood",
+          "requested_activity_completed": true,
+          "sleep_consolidations": 0,
+          "sleep_trigger": null,
+          "sleeping_ticks": 0,
+          "teacher_present": false,
+          "utterances": 1
+        },
+        {
+          "actual_activity_counts": [
+            0,
+            1,
+            0
+          ],
+          "arm": "grounded",
+          "correct_grounded_utterances": 0,
+          "first_completed_activity": "GetFood",
+          "first_completion_matches_request": false,
+          "grounded_utterance_opportunities": 3,
+          "initial_targets_and_distractor_visible": true,
+          "layout": 1,
+          "native_decisions": 24,
+          "nourished_meals": 0,
+          "outside_primary_window_utterances": 1,
+          "paired_initial_private_sha256": "d64972279a0939f068653ef833a8ce102fab13dca0af2a11d7d11b53a137f9e7",
+          "prior_enabled": false,
+          "recovery_sleep": false,
+          "requested": "GetToy",
+          "requested_activity_completed": false,
+          "sleep_consolidations": 0,
+          "sleep_trigger": null,
+          "sleeping_ticks": 0,
+          "teacher_present": false,
+          "utterances": 1
+        },
+        {
+          "actual_activity_counts": [
+            0,
+            0,
+            0
+          ],
+          "arm": "grounded",
+          "correct_grounded_utterances": 0,
+          "first_completed_activity": null,
+          "first_completion_matches_request": null,
+          "grounded_utterance_opportunities": 0,
+          "initial_targets_and_distractor_visible": true,
+          "layout": 1,
+          "native_decisions": 24,
+          "nourished_meals": 0,
+          "outside_primary_window_utterances": 1,
+          "paired_initial_private_sha256": "d64972279a0939f068653ef833a8ce102fab13dca0af2a11d7d11b53a137f9e7",
+          "prior_enabled": false,
+          "recovery_sleep": false,
+          "requested": null,
+          "requested_activity_completed": null,
+          "sleep_consolidations": 0,
+          "sleep_trigger": null,
+          "sleeping_ticks": 0,
+          "teacher_present": false,
+          "utterances": 1
+        },
+        {
+          "actual_activity_counts": [
+            1,
+            0,
+            1
+          ],
+          "arm": "grounded",
+          "correct_grounded_utterances": 0,
+          "first_completed_activity": "EatFood",
+          "first_completion_matches_request": true,
+          "grounded_utterance_opportunities": 6,
+          "initial_targets_and_distractor_visible": true,
+          "layout": 1,
+          "native_decisions": 24,
+          "nourished_meals": 1,
+          "outside_primary_window_utterances": 1,
+          "paired_initial_private_sha256": "ca273b49d33d440ff6c8a77bb75323a0dd8d3976ad5ea617a75c200957dbe396",
+          "prior_enabled": false,
+          "recovery_sleep": true,
+          "requested": "EatFood",
+          "requested_activity_completed": true,
+          "sleep_consolidations": 1,
+          "sleep_trigger": "RecoveryProtocol",
+          "sleeping_ticks": 13,
+          "teacher_present": false,
+          "utterances": 1
+        },
+        {
+          "actual_activity_counts": [
+            0,
+            1,
+            0
+          ],
+          "arm": "grounded",
+          "correct_grounded_utterances": 0,
+          "first_completed_activity": "GetFood",
+          "first_completion_matches_request": true,
+          "grounded_utterance_opportunities": 3,
+          "initial_targets_and_distractor_visible": true,
+          "layout": 1,
+          "native_decisions": 24,
+          "nourished_meals": 0,
+          "outside_primary_window_utterances": 1,
+          "paired_initial_private_sha256": "ca273b49d33d440ff6c8a77bb75323a0dd8d3976ad5ea617a75c200957dbe396",
+          "prior_enabled": false,
+          "recovery_sleep": true,
+          "requested": "GetFood",
+          "requested_activity_completed": true,
+          "sleep_consolidations": 1,
+          "sleep_trigger": "RecoveryProtocol",
+          "sleeping_ticks": 13,
+          "teacher_present": false,
+          "utterances": 1
+        },
+        {
+          "actual_activity_counts": [
+            0,
+            1,
+            0
+          ],
+          "arm": "grounded",
+          "correct_grounded_utterances": 0,
+          "first_completed_activity": "GetFood",
+          "first_completion_matches_request": false,
+          "grounded_utterance_opportunities": 3,
+          "initial_targets_and_distractor_visible": true,
+          "layout": 1,
+          "native_decisions": 24,
+          "nourished_meals": 0,
+          "outside_primary_window_utterances": 1,
+          "paired_initial_private_sha256": "ca273b49d33d440ff6c8a77bb75323a0dd8d3976ad5ea617a75c200957dbe396",
+          "prior_enabled": false,
+          "recovery_sleep": true,
+          "requested": "GetToy",
+          "requested_activity_completed": false,
+          "sleep_consolidations": 1,
+          "sleep_trigger": "RecoveryProtocol",
+          "sleeping_ticks": 13,
+          "teacher_present": false,
+          "utterances": 1
+        },
+        {
+          "actual_activity_counts": [
+            0,
+            0,
+            0
+          ],
+          "arm": "grounded",
+          "correct_grounded_utterances": 0,
+          "first_completed_activity": null,
+          "first_completion_matches_request": null,
+          "grounded_utterance_opportunities": 0,
+          "initial_targets_and_distractor_visible": true,
+          "layout": 1,
+          "native_decisions": 24,
+          "nourished_meals": 0,
+          "outside_primary_window_utterances": 1,
+          "paired_initial_private_sha256": "ca273b49d33d440ff6c8a77bb75323a0dd8d3976ad5ea617a75c200957dbe396",
+          "prior_enabled": false,
+          "recovery_sleep": true,
+          "requested": null,
+          "requested_activity_completed": null,
+          "sleep_consolidations": 1,
+          "sleep_trigger": "RecoveryProtocol",
+          "sleeping_ticks": 13,
+          "teacher_present": false,
+          "utterances": 1
+        },
+        {
+          "actual_food_consumptions": 0,
+          "actual_utterance_tokens": [
+            [
+              9,
+              3
+            ]
+          ],
+          "arm": "grounded",
+          "first_manipulation": [
+            210,
+            8
+          ],
+          "first_requested_primitive_target": true,
+          "kind": "composition_evaluation",
+          "layout": 0,
+          "native_decisions": 8,
+          "note": "Unseen eat-toy attempts are not successful ingestion or proof of knowing inedibility.",
+          "nourished_meals": 0,
+          "paired_initial_private_sha256": "eb344548cd4d58697d730c20f68f0826bb6efd94c4f082c299ba283800be937d",
+          "prior_enabled": false,
+          "requested_primitive_target_attempted": true,
+          "requested_target_acquired": true,
+          "requested_words": [
+            8,
+            1
+          ],
+          "teacher_present": false,
+          "unseen_word_combination": false,
+          "world_seed": 1237501
+        },
+        {
+          "actual_food_consumptions": 0,
+          "actual_utterance_tokens": [
+            [
+              9,
+              3
+            ]
+          ],
+          "arm": "grounded",
+          "first_manipulation": [
+            211,
+            8
+          ],
+          "first_requested_primitive_target": true,
+          "kind": "composition_evaluation",
+          "layout": 0,
+          "native_decisions": 8,
+          "note": "Unseen eat-toy attempts are not successful ingestion or proof of knowing inedibility.",
+          "nourished_meals": 0,
+          "paired_initial_private_sha256": "eb344548cd4d58697d730c20f68f0826bb6efd94c4f082c299ba283800be937d",
+          "prior_enabled": false,
+          "requested_primitive_target_attempted": true,
+          "requested_target_acquired": true,
+          "requested_words": [
+            9,
+            1
+          ],
+          "teacher_present": false,
+          "unseen_word_combination": false,
+          "world_seed": 1237501
+        },
+        {
+          "actual_food_consumptions": 0,
+          "actual_utterance_tokens": [
+            [
+              9,
+              3
+            ]
+          ],
+          "arm": "grounded",
+          "first_manipulation": [
+            211,
+            8
+          ],
+          "first_requested_primitive_target": false,
+          "kind": "composition_evaluation",
+          "layout": 0,
+          "native_decisions": 8,
+          "note": "Unseen eat-toy attempts are not successful ingestion or proof of knowing inedibility.",
+          "nourished_meals": 0,
+          "paired_initial_private_sha256": "eb344548cd4d58697d730c20f68f0826bb6efd94c4f082c299ba283800be937d",
+          "prior_enabled": false,
+          "requested_primitive_target_attempted": false,
+          "requested_target_acquired": false,
+          "requested_words": [
+            9,
+            2
+          ],
+          "teacher_present": false,
+          "unseen_word_combination": false,
+          "world_seed": 1237501
+        },
+        {
+          "actual_food_consumptions": 0,
+          "actual_utterance_tokens": [
+            [
+              9,
+              3
+            ]
+          ],
+          "arm": "grounded",
+          "first_manipulation": [
+            211,
+            8
+          ],
+          "first_requested_primitive_target": false,
+          "kind": "composition_evaluation",
+          "layout": 0,
+          "native_decisions": 8,
+          "note": "Unseen eat-toy attempts are not successful ingestion or proof of knowing inedibility.",
+          "nourished_meals": 0,
+          "paired_initial_private_sha256": "eb344548cd4d58697d730c20f68f0826bb6efd94c4f082c299ba283800be937d",
+          "prior_enabled": false,
+          "requested_primitive_target_attempted": false,
+          "requested_target_acquired": false,
+          "requested_words": [
+            8,
+            2
+          ],
+          "teacher_present": false,
+          "unseen_word_combination": true,
+          "world_seed": 1237501
+        },
+        {
+          "actual_food_consumptions": 0,
+          "actual_utterance_tokens": [
+            [
+              9,
+              3
+            ]
+          ],
+          "arm": "grounded",
+          "first_manipulation": [
+            211,
+            8
+          ],
+          "first_requested_primitive_target": null,
+          "kind": "composition_evaluation",
+          "layout": 0,
+          "native_decisions": 8,
+          "note": "Unseen eat-toy attempts are not successful ingestion or proof of knowing inedibility.",
+          "nourished_meals": 0,
+          "paired_initial_private_sha256": "eb344548cd4d58697d730c20f68f0826bb6efd94c4f082c299ba283800be937d",
+          "prior_enabled": false,
+          "requested_primitive_target_attempted": false,
+          "requested_target_acquired": false,
+          "requested_words": null,
+          "teacher_present": false,
+          "unseen_word_combination": false,
+          "world_seed": 1237501
+        },
+        {
+          "actual_food_consumptions": 1,
+          "actual_utterance_tokens": [
+            [
+              9,
+              1
+            ]
+          ],
+          "arm": "grounded",
+          "first_manipulation": [
+            210,
+            10
+          ],
+          "first_requested_primitive_target": false,
+          "kind": "composition_evaluation",
+          "layout": 1,
+          "native_decisions": 8,
+          "note": "Unseen eat-toy attempts are not successful ingestion or proof of knowing inedibility.",
+          "nourished_meals": 1,
+          "paired_initial_private_sha256": "5f064e93bf4bef98607cd5472c9591035ce319f1dcc3f886bd50c7f42584dc9a",
+          "prior_enabled": false,
+          "requested_primitive_target_attempted": true,
+          "requested_target_acquired": true,
+          "requested_words": [
+            8,
+            1
+          ],
+          "teacher_present": false,
+          "unseen_word_combination": false,
+          "world_seed": 1237502
+        },
+        {
+          "actual_food_consumptions": 1,
+          "actual_utterance_tokens": [
+            [
+              9,
+              1
+            ]
+          ],
+          "arm": "grounded",
+          "first_manipulation": [
+            211,
+            8
+          ],
+          "first_requested_primitive_target": true,
+          "kind": "composition_evaluation",
+          "layout": 1,
+          "native_decisions": 8,
+          "note": "Unseen eat-toy attempts are not successful ingestion or proof of knowing inedibility.",
+          "nourished_meals": 1,
+          "paired_initial_private_sha256": "5f064e93bf4bef98607cd5472c9591035ce319f1dcc3f886bd50c7f42584dc9a",
+          "prior_enabled": false,
+          "requested_primitive_target_attempted": true,
+          "requested_target_acquired": true,
+          "requested_words": [
+            9,
+            1
+          ],
+          "teacher_present": false,
+          "unseen_word_combination": false,
+          "world_seed": 1237502
+        },
+        {
+          "actual_food_consumptions": 0,
+          "actual_utterance_tokens": [
+            [
+              9,
+              3
+            ]
+          ],
+          "arm": "grounded",
+          "first_manipulation": [
+            211,
+            9
+          ],
+          "first_requested_primitive_target": true,
+          "kind": "composition_evaluation",
+          "layout": 1,
+          "native_decisions": 8,
+          "note": "Unseen eat-toy attempts are not successful ingestion or proof of knowing inedibility.",
+          "nourished_meals": 0,
+          "paired_initial_private_sha256": "5f064e93bf4bef98607cd5472c9591035ce319f1dcc3f886bd50c7f42584dc9a",
+          "prior_enabled": false,
+          "requested_primitive_target_attempted": true,
+          "requested_target_acquired": true,
+          "requested_words": [
+            9,
+            2
+          ],
+          "teacher_present": false,
+          "unseen_word_combination": false,
+          "world_seed": 1237502
+        },
+        {
+          "actual_food_consumptions": 0,
+          "actual_utterance_tokens": [
+            [
+              9,
+              3
+            ]
+          ],
+          "arm": "grounded",
+          "first_manipulation": [
+            210,
+            10
+          ],
+          "first_requested_primitive_target": false,
+          "kind": "composition_evaluation",
+          "layout": 1,
+          "native_decisions": 8,
+          "note": "Unseen eat-toy attempts are not successful ingestion or proof of knowing inedibility.",
+          "nourished_meals": 0,
+          "paired_initial_private_sha256": "5f064e93bf4bef98607cd5472c9591035ce319f1dcc3f886bd50c7f42584dc9a",
+          "prior_enabled": false,
+          "requested_primitive_target_attempted": false,
+          "requested_target_acquired": false,
+          "requested_words": [
+            8,
+            2
+          ],
+          "teacher_present": false,
+          "unseen_word_combination": true,
+          "world_seed": 1237502
+        },
+        {
+          "actual_food_consumptions": 0,
+          "actual_utterance_tokens": [
+            [
+              9,
+              3
+            ]
+          ],
+          "arm": "grounded",
+          "first_manipulation": [
+            210,
+            8
+          ],
+          "first_requested_primitive_target": null,
+          "kind": "composition_evaluation",
+          "layout": 1,
+          "native_decisions": 8,
+          "note": "Unseen eat-toy attempts are not successful ingestion or proof of knowing inedibility.",
+          "nourished_meals": 0,
+          "paired_initial_private_sha256": "5f064e93bf4bef98607cd5472c9591035ce319f1dcc3f886bd50c7f42584dc9a",
+          "prior_enabled": false,
+          "requested_primitive_target_attempted": false,
+          "requested_target_acquired": false,
+          "requested_words": null,
+          "teacher_present": false,
+          "unseen_word_combination": false,
+          "world_seed": 1237502
+        }
+      ],
+      "old_private_state_rejected": true,
+      "profile": "LinearWordReadoutV3",
+      "profile_initial_actor_sha256": "4bfeffccecf91b51812ee886256cfb678cdbbc9ecd1b7e7940302ba68f60cb77",
+      "source_actor_sha256": "0fab85cb1e324bf579571ceca6defa2afdcdb8548cf6f3159909fbf555ee6c13",
+      "source_history_copied_exactly": true,
+      "source_step": 256,
+      "native_updates": 64,
+      "first_and_last_updates": [
+        {
+          "all_frozen_coordinates_exact": true,
+          "epoch": 0,
+          "gradient_norm": 13.111164093017578,
+          "objective": {
+            "action_class_budgets": [
+              0.800000011920929,
+              0.10000000149011612,
+              0.10000000149011612
+            ],
+            "action_class_rows": [
+              48,
+              14,
+              82
+            ],
+            "action_loss": 7.572474412452607,
+            "factual_payload_token_mass": [
+              22.0,
+              0.0,
+              6.0
+            ],
+            "native_one_step_readout_gradients": true,
+            "recurrent_parameters_frozen": true,
+            "speech_loss": 4.822047296421722
+          },
+          "round": 0,
+          "step": 257
+        },
+        {
+          "all_frozen_coordinates_exact": true,
+          "epoch": 31,
+          "gradient_norm": 0.28532958030700684,
+          "objective": {
+            "action_class_budgets": [
+              0.800000011920929,
+              0.10000000149011612,
+              0.10000000149011612
+            ],
+            "action_class_rows": [
+              48,
+              19,
+              77
+            ],
+            "action_loss": 0.40089418907882646,
+            "factual_payload_token_mass": [
+              0.0,
+              30.0,
+              8.0
+            ],
+            "native_one_step_readout_gradients": true,
+            "recurrent_parameters_frozen": true,
+            "speech_loss": 0.0387228502052535
+          },
+          "round": 1,
+          "step": 320
+        }
+      ],
+      "all_frozen_weights_moments_ages_exact": true,
+      "summary": {
+        "formal_requested_trials": 9,
+        "first_requested_activity": 6,
+        "eventual_explicit_activity": 6,
+        "first_label_verb_pairs": 3,
+        "first_label_noun_pairs": 0,
+        "paired_contexts": 3,
+        "actual_formal_utterances": 12,
+        "timely_factual_utterances": 0,
+        "formal_decisions": 288,
+        "composition_decisions": 80,
+        "seen_command_first_primitive_target_attempts": 4,
+        "seen_command_attempt_trials": 6,
+        "unseen_eat_toy_first_primitive_target_attempts": 0,
+        "unseen_combination_trials": 2,
+        "composition_attempt_is_not_ingestion": true,
+        "physical_verb_pairs": 2,
+        "first_physical_target_noun_pairs": 0,
+        "eventual_requested_physical_event_trials": 6,
+        "physical_verb_definition": "EatFood ingests food; paired GetFood acquires food with zero food ingestion throughout the same 24-decision window. Acquisition includes implicit Eat pickup.",
+        "noun_definition": "First actual acquired target is food for GetFood and toy for GetToy, independent of primitive."
+      },
+      "physical_ownership_audit": {
+        "trials": [
+          {
+            "layout": 0,
+            "recovery_sleep": false,
+            "requested": "EatFood",
+            "first_physical_events": {
+              "tick": 458,
+              "events": [
+                "GetFood"
+              ]
+            },
+            "physical_counts": {
+              "GetFood": 1,
+              "EatFood": 1,
+              "GetToy": 1
+            },
+            "acquisitions_without_explicit_grab": {
+              "GetFood": 1
+            },
+            "last_owners": [
+              null,
+              null
+            ],
+            "consumption_ticks": [
+              459
+            ],
+            "native_rows": 24,
+            "requested_physical_event_observed": true
+          },
+          {
+            "layout": 0,
+            "recovery_sleep": false,
+            "requested": "GetFood",
+            "first_physical_events": {
+              "tick": 458,
+              "events": [
+                "GetFood"
+              ]
+            },
+            "physical_counts": {
+              "GetFood": 1,
+              "EatFood": 1,
+              "GetToy": 1
+            },
+            "acquisitions_without_explicit_grab": {},
+            "last_owners": [
+              null,
+              null
+            ],
+            "consumption_ticks": [
+              459
+            ],
+            "native_rows": 24,
+            "requested_physical_event_observed": true
+          },
+          {
+            "layout": 0,
+            "recovery_sleep": false,
+            "requested": "GetToy",
+            "first_physical_events": {
+              "tick": 458,
+              "events": [
+                "GetFood"
+              ]
+            },
+            "physical_counts": {
+              "GetFood": 1,
+              "EatFood": 1
+            },
+            "acquisitions_without_explicit_grab": {},
+            "last_owners": [
+              null,
+              null
+            ],
+            "consumption_ticks": [
+              469
+            ],
+            "native_rows": 24,
+            "requested_physical_event_observed": false
+          },
+          {
+            "layout": 0,
+            "recovery_sleep": false,
+            "requested": null,
+            "first_physical_events": {
+              "tick": 463,
+              "events": [
+                "GetToy"
+              ]
+            },
+            "physical_counts": {
+              "GetToy": 1
+            },
+            "acquisitions_without_explicit_grab": {},
+            "last_owners": [
+              null,
+              null
+            ],
+            "consumption_ticks": [],
+            "native_rows": 24,
+            "requested_physical_event_observed": null
+          },
+          {
+            "layout": 1,
+            "recovery_sleep": false,
+            "requested": "EatFood",
+            "first_physical_events": {
+              "tick": 458,
+              "events": [
+                "GetFood"
+              ]
+            },
+            "physical_counts": {
+              "GetFood": 1,
+              "EatFood": 1,
+              "GetToy": 1
+            },
+            "acquisitions_without_explicit_grab": {
+              "GetFood": 1
+            },
+            "last_owners": [
+              null,
+              1
+            ],
+            "consumption_ticks": [
+              460
+            ],
+            "native_rows": 24,
+            "requested_physical_event_observed": true
+          },
+          {
+            "layout": 1,
+            "recovery_sleep": false,
+            "requested": "GetFood",
+            "first_physical_events": {
+              "tick": 458,
+              "events": [
+                "GetFood"
+              ]
+            },
+            "physical_counts": {
+              "GetFood": 2
+            },
+            "acquisitions_without_explicit_grab": {
+              "GetFood": 1
+            },
+            "last_owners": [
+              1,
+              null
+            ],
+            "consumption_ticks": [],
+            "native_rows": 24,
+            "requested_physical_event_observed": true
+          },
+          {
+            "layout": 1,
+            "recovery_sleep": false,
+            "requested": "GetToy",
+            "first_physical_events": {
+              "tick": 460,
+              "events": [
+                "GetFood"
+              ]
+            },
+            "physical_counts": {
+              "GetFood": 2
+            },
+            "acquisitions_without_explicit_grab": {
+              "GetFood": 1
+            },
+            "last_owners": [
+              1,
+              null
+            ],
+            "consumption_ticks": [],
+            "native_rows": 24,
+            "requested_physical_event_observed": false
+          },
+          {
+            "layout": 1,
+            "recovery_sleep": false,
+            "requested": null,
+            "first_physical_events": {
+              "tick": 466,
+              "events": [
+                "GetFood"
+              ]
+            },
+            "physical_counts": {
+              "GetFood": 1
+            },
+            "acquisitions_without_explicit_grab": {
+              "GetFood": 1
+            },
+            "last_owners": [
+              1,
+              null
+            ],
+            "consumption_ticks": [],
+            "native_rows": 24,
+            "requested_physical_event_observed": null
+          },
+          {
+            "layout": 1,
+            "recovery_sleep": true,
+            "requested": "EatFood",
+            "first_physical_events": {
+              "tick": 471,
+              "events": [
+                "GetFood"
+              ]
+            },
+            "physical_counts": {
+              "GetFood": 1,
+              "EatFood": 1,
+              "GetToy": 1
+            },
+            "acquisitions_without_explicit_grab": {
+              "GetFood": 1
+            },
+            "last_owners": [
+              null,
+              1
+            ],
+            "consumption_ticks": [
+              473
+            ],
+            "native_rows": 24,
+            "requested_physical_event_observed": true
+          },
+          {
+            "layout": 1,
+            "recovery_sleep": true,
+            "requested": "GetFood",
+            "first_physical_events": {
+              "tick": 471,
+              "events": [
+                "GetFood"
+              ]
+            },
+            "physical_counts": {
+              "GetFood": 2
+            },
+            "acquisitions_without_explicit_grab": {
+              "GetFood": 1
+            },
+            "last_owners": [
+              1,
+              null
+            ],
+            "consumption_ticks": [],
+            "native_rows": 24,
+            "requested_physical_event_observed": true
+          },
+          {
+            "layout": 1,
+            "recovery_sleep": true,
+            "requested": "GetToy",
+            "first_physical_events": {
+              "tick": 471,
+              "events": [
+                "GetFood"
+              ]
+            },
+            "physical_counts": {
+              "GetFood": 2
+            },
+            "acquisitions_without_explicit_grab": {
+              "GetFood": 1
+            },
+            "last_owners": [
+              1,
+              null
+            ],
+            "consumption_ticks": [],
+            "native_rows": 24,
+            "requested_physical_event_observed": false
+          },
+          {
+            "layout": 1,
+            "recovery_sleep": true,
+            "requested": null,
+            "first_physical_events": {
+              "tick": 479,
+              "events": [
+                "GetFood"
+              ]
+            },
+            "physical_counts": {
+              "GetFood": 1
+            },
+            "acquisitions_without_explicit_grab": {
+              "GetFood": 1
+            },
+            "last_owners": [
+              1,
+              null
+            ],
+            "consumption_ticks": [],
+            "native_rows": 24,
+            "requested_physical_event_observed": null
+          }
+        ],
+        "requested_trials": 9,
+        "eventual_requested_physical_event_trials": 6,
+        "implicit_food_acquisitions": 9,
+        "implicit_toy_acquisitions": 0,
+        "requested_food_consumption_trials": 3
+      },
+      "actual_speech_analysis": {
+        "counts": {
+          "scored_rows": 288,
+          "eligible_rows": 45,
+          "selected_vocalize": 22,
+          "actual_utterances": 12,
+          "declarations": 12,
+          "spoken_while_player_heard": 0,
+          "outside_primary_window": 9,
+          "strict_expected_token_match": 0,
+          "strict_expected_declaration": 0,
+          "tokens_match_preceding_latest_activity": 0,
+          "declaration_matches_preceding_latest_activity": 0,
+          "utterances_without_preceding_completion": 3
+        },
+        "emitted_token_sequences": {
+          "9 1": 3,
+          "9 3": 9
+        },
+        "preceding_activity_match_latency_ticks": [],
+        "actual_utterance_receipts": [
+          {
+            "layout": 0,
+            "recovery_sleep": false,
+            "requested": "EatFood",
+            "tick": 461,
+            "tokens": [
+              9,
+              1
+            ],
+            "speech_act_raw": 0,
+            "player_heard": false,
+            "inside_primary_window": true,
+            "preceding_latest_activity": {
+              "goal": "EatFood",
+              "tick": 459
+            },
+            "matches_preceding_activity": false
+          },
+          {
+            "layout": 0,
+            "recovery_sleep": false,
+            "requested": "GetFood",
+            "tick": 461,
+            "tokens": [
+              9,
+              1
+            ],
+            "speech_act_raw": 0,
+            "player_heard": false,
+            "inside_primary_window": true,
+            "preceding_latest_activity": {
+              "goal": "EatFood",
+              "tick": 459
+            },
+            "matches_preceding_activity": false
+          },
+          {
+            "layout": 0,
+            "recovery_sleep": false,
+            "requested": "GetToy",
+            "tick": 461,
+            "tokens": [
+              9,
+              3
+            ],
+            "speech_act_raw": 0,
+            "player_heard": false,
+            "inside_primary_window": true,
+            "preceding_latest_activity": {
+              "goal": "GetFood",
+              "tick": 458
+            },
+            "matches_preceding_activity": false
+          },
+          {
+            "layout": 0,
+            "recovery_sleep": false,
+            "requested": null,
+            "tick": 461,
+            "tokens": [
+              9,
+              1
+            ],
+            "speech_act_raw": 0,
+            "player_heard": false,
+            "inside_primary_window": false,
+            "preceding_latest_activity": null,
+            "matches_preceding_activity": false
+          },
+          {
+            "layout": 1,
+            "recovery_sleep": false,
+            "requested": "EatFood",
+            "tick": 477,
+            "tokens": [
+              9,
+              3
+            ],
+            "speech_act_raw": 0,
+            "player_heard": false,
+            "inside_primary_window": false,
+            "preceding_latest_activity": {
+              "goal": "GetToy",
+              "tick": 466
+            },
+            "matches_preceding_activity": false
+          },
+          {
+            "layout": 1,
+            "recovery_sleep": false,
+            "requested": "GetFood",
+            "tick": 477,
+            "tokens": [
+              9,
+              3
+            ],
+            "speech_act_raw": 0,
+            "player_heard": false,
+            "inside_primary_window": false,
+            "preceding_latest_activity": {
+              "goal": "GetFood",
+              "tick": 458
+            },
+            "matches_preceding_activity": false
+          },
+          {
+            "layout": 1,
+            "recovery_sleep": false,
+            "requested": "GetToy",
+            "tick": 477,
+            "tokens": [
+              9,
+              3
+            ],
+            "speech_act_raw": 0,
+            "player_heard": false,
+            "inside_primary_window": false,
+            "preceding_latest_activity": {
+              "goal": "GetFood",
+              "tick": 460
+            },
+            "matches_preceding_activity": false
+          },
+          {
+            "layout": 1,
+            "recovery_sleep": false,
+            "requested": null,
+            "tick": 477,
+            "tokens": [
+              9,
+              3
+            ],
+            "speech_act_raw": 0,
+            "player_heard": false,
+            "inside_primary_window": false,
+            "preceding_latest_activity": null,
+            "matches_preceding_activity": false
+          },
+          {
+            "layout": 1,
+            "recovery_sleep": true,
+            "requested": "EatFood",
+            "tick": 490,
+            "tokens": [
+              9,
+              3
+            ],
+            "speech_act_raw": 0,
+            "player_heard": false,
+            "inside_primary_window": false,
+            "preceding_latest_activity": {
+              "goal": "GetToy",
+              "tick": 479
+            },
+            "matches_preceding_activity": false
+          },
+          {
+            "layout": 1,
+            "recovery_sleep": true,
+            "requested": "GetFood",
+            "tick": 490,
+            "tokens": [
+              9,
+              3
+            ],
+            "speech_act_raw": 0,
+            "player_heard": false,
+            "inside_primary_window": false,
+            "preceding_latest_activity": {
+              "goal": "GetFood",
+              "tick": 471
+            },
+            "matches_preceding_activity": false
+          },
+          {
+            "layout": 1,
+            "recovery_sleep": true,
+            "requested": "GetToy",
+            "tick": 490,
+            "tokens": [
+              9,
+              3
+            ],
+            "speech_act_raw": 0,
+            "player_heard": false,
+            "inside_primary_window": false,
+            "preceding_latest_activity": {
+              "goal": "GetFood",
+              "tick": 471
+            },
+            "matches_preceding_activity": false
+          },
+          {
+            "layout": 1,
+            "recovery_sleep": true,
+            "requested": null,
+            "tick": 490,
+            "tokens": [
+              9,
+              3
+            ],
+            "speech_act_raw": 0,
+            "player_heard": false,
+            "inside_primary_window": false,
+            "preceding_latest_activity": null,
+            "matches_preceding_activity": false
+          }
+        ]
+      },
+      "teaching_audit": {
+        "rows": 288,
+        "activities": {
+          "EatFood": 4,
+          "GetToy": 5,
+          "GetFood": 5
+        },
+        "positive_lags": {
+          "requested": {
+            "4": 2,
+            "5": 3,
+            "6": 3,
+            "8": 2,
+            "9": 2,
+            "10": 1,
+            "1": 1,
+            "7": 1
+          },
+          "nonrequested": {
+            "1": 3,
+            "2": 3,
+            "3": 3,
+            "6": 1,
+            "7": 2,
+            "8": 3,
+            "9": 2,
+            "10": 1
+          }
+        },
+        "get_labels_reversing_existing_ownership": [],
+        "instruction_labels_by_request": {
+          "EatFood": {
+            "210:food": 14,
+            "1:other": 7,
+            "multiple_or_unlabelled": 11
+          },
+          "GetFood": {
+            "211:food": 18,
+            "1:other": 14
+          },
+          "GetToy": {
+            "211:toy": 8,
+            "multiple_or_unlabelled": 10,
+            "1:other": 14
+          }
+        }
+      }
+    },
+    {
+      "actor_sha256": "04cf37f3f0a66aa5fe3effc2f4516dce582d155af132a7efe39c49fe85d441e6",
+      "actor_step": 320,
+      "arm": "shuffled",
+      "collections": [
+        {
+          "actual_activity_counts": [
+            4,
+            0,
+            1
+          ],
+          "fixed_eight_tick_instruction_window": true,
+          "instruction_window_rows": 48,
+          "native_decisions": 144,
+          "positive_narration_rows": 14,
+          "round": 0,
+          "teacher_heard_rows": 48
+        },
+        {
+          "actual_activity_counts": [
+            0,
+            3,
+            6
+          ],
+          "fixed_eight_tick_instruction_window": true,
+          "instruction_window_rows": 48,
+          "native_decisions": 144,
+          "positive_narration_rows": 18,
+          "round": 1,
+          "teacher_heard_rows": 48
+        }
+      ],
+      "continuity": {
+        "fresh_process_exact": true,
+        "native_private_and_optimizer_hashes": {
+          "after_host": "22c84463b5df39076bccda19659622733697d37a6758c836f2d6d92c7fc9fc6d",
+          "after_native_adam_update": "7935fbb47b2821ccf4ac6917cedab8bc3af71c0a1e43a1b6737bbe0fe971ad3e",
+          "assessment": {
+            "native_trace_sha256": "1b4a13b5067f12e1d3b5cf13b363986219bbf859f54d0918f26b7ef740d1b776"
+          },
+          "before_actor": "04cf37f3f0a66aa5fe3effc2f4516dce582d155af132a7efe39c49fe85d441e6",
+          "before_host": "40ce5c20a7ef51d2a5945b5460d53202156ed1aec6c93b444abdc7d5d42466de",
+          "decisions": "f5f4de39733841c8a5df3d793cb12599a2f5a423dc95b10b819298dad2ba8864"
+        },
+        "duplicate_evaluation_omitted": true
+      },
+      "evaluation": [
+        {
+          "actual_activity_counts": [
+            0,
+            0,
+            0
+          ],
+          "arm": "shuffled",
+          "correct_grounded_utterances": 0,
+          "first_completed_activity": null,
+          "first_completion_matches_request": null,
+          "grounded_utterance_opportunities": 0,
+          "initial_targets_and_distractor_visible": true,
+          "layout": 0,
+          "native_decisions": 24,
+          "nourished_meals": 0,
+          "outside_primary_window_utterances": 1,
+          "paired_initial_private_sha256": "b9f5d6f834920483ca2a5541f05ce1f4720bf8ebf7b18ddd0acb73568c807ea8",
+          "prior_enabled": false,
+          "recovery_sleep": false,
+          "requested": "EatFood",
+          "requested_activity_completed": false,
+          "sleep_consolidations": 0,
+          "sleep_trigger": null,
+          "sleeping_ticks": 0,
+          "teacher_present": false,
+          "utterances": 1
+        },
+        {
+          "actual_activity_counts": [
+            0,
+            0,
+            0
+          ],
+          "arm": "shuffled",
+          "correct_grounded_utterances": 0,
+          "first_completed_activity": null,
+          "first_completion_matches_request": null,
+          "grounded_utterance_opportunities": 0,
+          "initial_targets_and_distractor_visible": true,
+          "layout": 0,
+          "native_decisions": 24,
+          "nourished_meals": 0,
+          "outside_primary_window_utterances": 1,
+          "paired_initial_private_sha256": "b9f5d6f834920483ca2a5541f05ce1f4720bf8ebf7b18ddd0acb73568c807ea8",
+          "prior_enabled": false,
+          "recovery_sleep": false,
+          "requested": "GetFood",
+          "requested_activity_completed": false,
+          "sleep_consolidations": 0,
+          "sleep_trigger": null,
+          "sleeping_ticks": 0,
+          "teacher_present": false,
+          "utterances": 1
+        },
+        {
+          "actual_activity_counts": [
+            0,
+            0,
+            0
+          ],
+          "arm": "shuffled",
+          "correct_grounded_utterances": 0,
+          "first_completed_activity": null,
+          "first_completion_matches_request": null,
+          "grounded_utterance_opportunities": 0,
+          "initial_targets_and_distractor_visible": true,
+          "layout": 0,
+          "native_decisions": 24,
+          "nourished_meals": 0,
+          "outside_primary_window_utterances": 1,
+          "paired_initial_private_sha256": "b9f5d6f834920483ca2a5541f05ce1f4720bf8ebf7b18ddd0acb73568c807ea8",
+          "prior_enabled": false,
+          "recovery_sleep": false,
+          "requested": "GetToy",
+          "requested_activity_completed": false,
+          "sleep_consolidations": 0,
+          "sleep_trigger": null,
+          "sleeping_ticks": 0,
+          "teacher_present": false,
+          "utterances": 1
+        },
+        {
+          "actual_activity_counts": [
+            0,
+            0,
+            1
+          ],
+          "arm": "shuffled",
+          "correct_grounded_utterances": 0,
+          "first_completed_activity": "GetToy",
+          "first_completion_matches_request": null,
+          "grounded_utterance_opportunities": 3,
+          "initial_targets_and_distractor_visible": true,
+          "layout": 0,
+          "native_decisions": 24,
+          "nourished_meals": 0,
+          "outside_primary_window_utterances": 1,
+          "paired_initial_private_sha256": "b9f5d6f834920483ca2a5541f05ce1f4720bf8ebf7b18ddd0acb73568c807ea8",
+          "prior_enabled": false,
+          "recovery_sleep": false,
+          "requested": null,
+          "requested_activity_completed": null,
+          "sleep_consolidations": 0,
+          "sleep_trigger": null,
+          "sleeping_ticks": 0,
+          "teacher_present": false,
+          "utterances": 1
+        },
+        {
+          "actual_activity_counts": [
+            0,
+            1,
+            0
+          ],
+          "arm": "shuffled",
+          "correct_grounded_utterances": 0,
+          "first_completed_activity": "GetFood",
+          "first_completion_matches_request": false,
+          "grounded_utterance_opportunities": 3,
+          "initial_targets_and_distractor_visible": true,
+          "layout": 1,
+          "native_decisions": 24,
+          "nourished_meals": 0,
+          "outside_primary_window_utterances": 1,
+          "paired_initial_private_sha256": "97b48f18c58414dfb5bd9d4ec154aaef99acd4cd1f6dc85a2f21451593297ca1",
+          "prior_enabled": false,
+          "recovery_sleep": false,
+          "requested": "EatFood",
+          "requested_activity_completed": false,
+          "sleep_consolidations": 0,
+          "sleep_trigger": null,
+          "sleeping_ticks": 0,
+          "teacher_present": false,
+          "utterances": 1
+        },
+        {
+          "actual_activity_counts": [
+            0,
+            0,
+            0
+          ],
+          "arm": "shuffled",
+          "correct_grounded_utterances": 0,
+          "first_completed_activity": null,
+          "first_completion_matches_request": null,
+          "grounded_utterance_opportunities": 0,
+          "initial_targets_and_distractor_visible": true,
+          "layout": 1,
+          "native_decisions": 24,
+          "nourished_meals": 0,
+          "outside_primary_window_utterances": 1,
+          "paired_initial_private_sha256": "97b48f18c58414dfb5bd9d4ec154aaef99acd4cd1f6dc85a2f21451593297ca1",
+          "prior_enabled": false,
+          "recovery_sleep": false,
+          "requested": "GetFood",
+          "requested_activity_completed": false,
+          "sleep_consolidations": 0,
+          "sleep_trigger": null,
+          "sleeping_ticks": 0,
+          "teacher_present": false,
+          "utterances": 1
+        },
+        {
+          "actual_activity_counts": [
+            0,
+            0,
+            0
+          ],
+          "arm": "shuffled",
+          "correct_grounded_utterances": 0,
+          "first_completed_activity": null,
+          "first_completion_matches_request": null,
+          "grounded_utterance_opportunities": 0,
+          "initial_targets_and_distractor_visible": true,
+          "layout": 1,
+          "native_decisions": 24,
+          "nourished_meals": 0,
+          "outside_primary_window_utterances": 1,
+          "paired_initial_private_sha256": "97b48f18c58414dfb5bd9d4ec154aaef99acd4cd1f6dc85a2f21451593297ca1",
+          "prior_enabled": false,
+          "recovery_sleep": false,
+          "requested": "GetToy",
+          "requested_activity_completed": false,
+          "sleep_consolidations": 0,
+          "sleep_trigger": null,
+          "sleeping_ticks": 0,
+          "teacher_present": false,
+          "utterances": 1
+        },
+        {
+          "actual_activity_counts": [
+            0,
+            0,
+            1
+          ],
+          "arm": "shuffled",
+          "correct_grounded_utterances": 0,
+          "first_completed_activity": "GetToy",
+          "first_completion_matches_request": null,
+          "grounded_utterance_opportunities": 3,
+          "initial_targets_and_distractor_visible": true,
+          "layout": 1,
+          "native_decisions": 24,
+          "nourished_meals": 0,
+          "outside_primary_window_utterances": 1,
+          "paired_initial_private_sha256": "97b48f18c58414dfb5bd9d4ec154aaef99acd4cd1f6dc85a2f21451593297ca1",
+          "prior_enabled": false,
+          "recovery_sleep": false,
+          "requested": null,
+          "requested_activity_completed": null,
+          "sleep_consolidations": 0,
+          "sleep_trigger": null,
+          "sleeping_ticks": 0,
+          "teacher_present": false,
+          "utterances": 1
+        },
+        {
+          "actual_activity_counts": [
+            0,
+            0,
+            0
+          ],
+          "arm": "shuffled",
+          "correct_grounded_utterances": 0,
+          "first_completed_activity": null,
+          "first_completion_matches_request": null,
+          "grounded_utterance_opportunities": 0,
+          "initial_targets_and_distractor_visible": true,
+          "layout": 1,
+          "native_decisions": 24,
+          "nourished_meals": 0,
+          "outside_primary_window_utterances": 1,
+          "paired_initial_private_sha256": "7bbbe39f3cdf6837512fc532c0f97cfa32f5bbde963ad7487e992052ba55adcf",
+          "prior_enabled": false,
+          "recovery_sleep": true,
+          "requested": "EatFood",
+          "requested_activity_completed": false,
+          "sleep_consolidations": 1,
+          "sleep_trigger": "RecoveryProtocol",
+          "sleeping_ticks": 13,
+          "teacher_present": false,
+          "utterances": 1
+        },
+        {
+          "actual_activity_counts": [
+            0,
+            0,
+            0
+          ],
+          "arm": "shuffled",
+          "correct_grounded_utterances": 0,
+          "first_completed_activity": null,
+          "first_completion_matches_request": null,
+          "grounded_utterance_opportunities": 0,
+          "initial_targets_and_distractor_visible": true,
+          "layout": 1,
+          "native_decisions": 24,
+          "nourished_meals": 0,
+          "outside_primary_window_utterances": 1,
+          "paired_initial_private_sha256": "7bbbe39f3cdf6837512fc532c0f97cfa32f5bbde963ad7487e992052ba55adcf",
+          "prior_enabled": false,
+          "recovery_sleep": true,
+          "requested": "GetFood",
+          "requested_activity_completed": false,
+          "sleep_consolidations": 1,
+          "sleep_trigger": "RecoveryProtocol",
+          "sleeping_ticks": 13,
+          "teacher_present": false,
+          "utterances": 1
+        },
+        {
+          "actual_activity_counts": [
+            0,
+            0,
+            0
+          ],
+          "arm": "shuffled",
+          "correct_grounded_utterances": 0,
+          "first_completed_activity": null,
+          "first_completion_matches_request": null,
+          "grounded_utterance_opportunities": 0,
+          "initial_targets_and_distractor_visible": true,
+          "layout": 1,
+          "native_decisions": 24,
+          "nourished_meals": 0,
+          "outside_primary_window_utterances": 1,
+          "paired_initial_private_sha256": "7bbbe39f3cdf6837512fc532c0f97cfa32f5bbde963ad7487e992052ba55adcf",
+          "prior_enabled": false,
+          "recovery_sleep": true,
+          "requested": "GetToy",
+          "requested_activity_completed": false,
+          "sleep_consolidations": 1,
+          "sleep_trigger": "RecoveryProtocol",
+          "sleeping_ticks": 13,
+          "teacher_present": false,
+          "utterances": 1
+        },
+        {
+          "actual_activity_counts": [
+            0,
+            0,
+            1
+          ],
+          "arm": "shuffled",
+          "correct_grounded_utterances": 0,
+          "first_completed_activity": "GetToy",
+          "first_completion_matches_request": null,
+          "grounded_utterance_opportunities": 3,
+          "initial_targets_and_distractor_visible": true,
+          "layout": 1,
+          "native_decisions": 24,
+          "nourished_meals": 0,
+          "outside_primary_window_utterances": 1,
+          "paired_initial_private_sha256": "7bbbe39f3cdf6837512fc532c0f97cfa32f5bbde963ad7487e992052ba55adcf",
+          "prior_enabled": false,
+          "recovery_sleep": true,
+          "requested": null,
+          "requested_activity_completed": null,
+          "sleep_consolidations": 1,
+          "sleep_trigger": "RecoveryProtocol",
+          "sleeping_ticks": 13,
+          "teacher_present": false,
+          "utterances": 1
+        },
+        {
+          "actual_food_consumptions": 0,
+          "actual_utterance_tokens": [
+            [
+              9,
+              1
+            ]
+          ],
+          "arm": "shuffled",
+          "first_manipulation": [
+            210,
+            8
+          ],
+          "first_requested_primitive_target": true,
+          "kind": "composition_evaluation",
+          "layout": 0,
+          "native_decisions": 8,
+          "note": "Unseen eat-toy attempts are not successful ingestion or proof of knowing inedibility.",
+          "nourished_meals": 0,
+          "paired_initial_private_sha256": "58a32473b71e2f325bb97f89bbba4135d99036d0504f1d254956b94abd7e9557",
+          "prior_enabled": false,
+          "requested_primitive_target_attempted": true,
+          "requested_target_acquired": true,
+          "requested_words": [
+            8,
+            1
+          ],
+          "teacher_present": false,
+          "unseen_word_combination": false,
+          "world_seed": 1237501
+        },
+        {
+          "actual_food_consumptions": 0,
+          "actual_utterance_tokens": [
+            [
+              9,
+              1
+            ]
+          ],
+          "arm": "shuffled",
+          "first_manipulation": [
+            210,
+            8
+          ],
+          "first_requested_primitive_target": false,
+          "kind": "composition_evaluation",
+          "layout": 0,
+          "native_decisions": 8,
+          "note": "Unseen eat-toy attempts are not successful ingestion or proof of knowing inedibility.",
+          "nourished_meals": 0,
+          "paired_initial_private_sha256": "58a32473b71e2f325bb97f89bbba4135d99036d0504f1d254956b94abd7e9557",
+          "prior_enabled": false,
+          "requested_primitive_target_attempted": false,
+          "requested_target_acquired": true,
+          "requested_words": [
+            9,
+            1
+          ],
+          "teacher_present": false,
+          "unseen_word_combination": false,
+          "world_seed": 1237501
+        },
+        {
+          "actual_food_consumptions": 0,
+          "actual_utterance_tokens": [
+            [
+              9,
+              1
+            ]
+          ],
+          "arm": "shuffled",
+          "first_manipulation": [
+            210,
+            8
+          ],
+          "first_requested_primitive_target": false,
+          "kind": "composition_evaluation",
+          "layout": 0,
+          "native_decisions": 8,
+          "note": "Unseen eat-toy attempts are not successful ingestion or proof of knowing inedibility.",
+          "nourished_meals": 0,
+          "paired_initial_private_sha256": "58a32473b71e2f325bb97f89bbba4135d99036d0504f1d254956b94abd7e9557",
+          "prior_enabled": false,
+          "requested_primitive_target_attempted": false,
+          "requested_target_acquired": false,
+          "requested_words": [
+            9,
+            2
+          ],
+          "teacher_present": false,
+          "unseen_word_combination": false,
+          "world_seed": 1237501
+        },
+        {
+          "actual_food_consumptions": 0,
+          "actual_utterance_tokens": [
+            [
+              9,
+              1
+            ]
+          ],
+          "arm": "shuffled",
+          "first_manipulation": [
+            211,
+            8
+          ],
+          "first_requested_primitive_target": false,
+          "kind": "composition_evaluation",
+          "layout": 0,
+          "native_decisions": 8,
+          "note": "Unseen eat-toy attempts are not successful ingestion or proof of knowing inedibility.",
+          "nourished_meals": 0,
+          "paired_initial_private_sha256": "58a32473b71e2f325bb97f89bbba4135d99036d0504f1d254956b94abd7e9557",
+          "prior_enabled": false,
+          "requested_primitive_target_attempted": false,
+          "requested_target_acquired": false,
+          "requested_words": [
+            8,
+            2
+          ],
+          "teacher_present": false,
+          "unseen_word_combination": true,
+          "world_seed": 1237501
+        },
+        {
+          "actual_food_consumptions": 0,
+          "actual_utterance_tokens": [
+            [
+              9,
+              1
+            ]
+          ],
+          "arm": "shuffled",
+          "first_manipulation": [
+            211,
+            8
+          ],
+          "first_requested_primitive_target": null,
+          "kind": "composition_evaluation",
+          "layout": 0,
+          "native_decisions": 8,
+          "note": "Unseen eat-toy attempts are not successful ingestion or proof of knowing inedibility.",
+          "nourished_meals": 0,
+          "paired_initial_private_sha256": "58a32473b71e2f325bb97f89bbba4135d99036d0504f1d254956b94abd7e9557",
+          "prior_enabled": false,
+          "requested_primitive_target_attempted": false,
+          "requested_target_acquired": false,
+          "requested_words": null,
+          "teacher_present": false,
+          "unseen_word_combination": false,
+          "world_seed": 1237501
+        },
+        {
+          "actual_food_consumptions": 0,
+          "actual_utterance_tokens": [
+            [
+              9,
+              1
+            ]
+          ],
+          "arm": "shuffled",
+          "first_manipulation": [
+            210,
+            10
+          ],
+          "first_requested_primitive_target": false,
+          "kind": "composition_evaluation",
+          "layout": 1,
+          "native_decisions": 8,
+          "note": "Unseen eat-toy attempts are not successful ingestion or proof of knowing inedibility.",
+          "nourished_meals": 0,
+          "paired_initial_private_sha256": "a443d4b54ebae82a33c2190269624ebcaefabb253decc9385dfda1a7a9e00700",
+          "prior_enabled": false,
+          "requested_primitive_target_attempted": false,
+          "requested_target_acquired": true,
+          "requested_words": [
+            8,
+            1
+          ],
+          "teacher_present": false,
+          "unseen_word_combination": false,
+          "world_seed": 1237502
+        },
+        {
+          "actual_food_consumptions": 0,
+          "actual_utterance_tokens": [
+            [
+              9,
+              1
+            ]
+          ],
+          "arm": "shuffled",
+          "first_manipulation": [
+            210,
+            10
+          ],
+          "first_requested_primitive_target": false,
+          "kind": "composition_evaluation",
+          "layout": 1,
+          "native_decisions": 8,
+          "note": "Unseen eat-toy attempts are not successful ingestion or proof of knowing inedibility.",
+          "nourished_meals": 0,
+          "paired_initial_private_sha256": "a443d4b54ebae82a33c2190269624ebcaefabb253decc9385dfda1a7a9e00700",
+          "prior_enabled": false,
+          "requested_primitive_target_attempted": false,
+          "requested_target_acquired": true,
+          "requested_words": [
+            9,
+            1
+          ],
+          "teacher_present": false,
+          "unseen_word_combination": false,
+          "world_seed": 1237502
+        },
+        {
+          "actual_food_consumptions": 0,
+          "actual_utterance_tokens": [
+            [
+              9,
+              1
+            ]
+          ],
+          "arm": "shuffled",
+          "first_manipulation": [
+            210,
+            10
+          ],
+          "first_requested_primitive_target": false,
+          "kind": "composition_evaluation",
+          "layout": 1,
+          "native_decisions": 8,
+          "note": "Unseen eat-toy attempts are not successful ingestion or proof of knowing inedibility.",
+          "nourished_meals": 0,
+          "paired_initial_private_sha256": "a443d4b54ebae82a33c2190269624ebcaefabb253decc9385dfda1a7a9e00700",
+          "prior_enabled": false,
+          "requested_primitive_target_attempted": false,
+          "requested_target_acquired": false,
+          "requested_words": [
+            9,
+            2
+          ],
+          "teacher_present": false,
+          "unseen_word_combination": false,
+          "world_seed": 1237502
+        },
+        {
+          "actual_food_consumptions": 0,
+          "actual_utterance_tokens": [
+            [
+              9,
+              1
+            ]
+          ],
+          "arm": "shuffled",
+          "first_manipulation": [
+            210,
+            10
+          ],
+          "first_requested_primitive_target": false,
+          "kind": "composition_evaluation",
+          "layout": 1,
+          "native_decisions": 8,
+          "note": "Unseen eat-toy attempts are not successful ingestion or proof of knowing inedibility.",
+          "nourished_meals": 0,
+          "paired_initial_private_sha256": "a443d4b54ebae82a33c2190269624ebcaefabb253decc9385dfda1a7a9e00700",
+          "prior_enabled": false,
+          "requested_primitive_target_attempted": false,
+          "requested_target_acquired": false,
+          "requested_words": [
+            8,
+            2
+          ],
+          "teacher_present": false,
+          "unseen_word_combination": true,
+          "world_seed": 1237502
+        },
+        {
+          "actual_food_consumptions": 0,
+          "actual_utterance_tokens": [
+            [
+              9,
+              1
+            ]
+          ],
+          "arm": "shuffled",
+          "first_manipulation": [
+            211,
+            8
+          ],
+          "first_requested_primitive_target": null,
+          "kind": "composition_evaluation",
+          "layout": 1,
+          "native_decisions": 8,
+          "note": "Unseen eat-toy attempts are not successful ingestion or proof of knowing inedibility.",
+          "nourished_meals": 0,
+          "paired_initial_private_sha256": "a443d4b54ebae82a33c2190269624ebcaefabb253decc9385dfda1a7a9e00700",
+          "prior_enabled": false,
+          "requested_primitive_target_attempted": false,
+          "requested_target_acquired": false,
+          "requested_words": null,
+          "teacher_present": false,
+          "unseen_word_combination": false,
+          "world_seed": 1237502
+        }
+      ],
+      "old_private_state_rejected": true,
+      "profile": "LinearWordReadoutV3",
+      "profile_initial_actor_sha256": "4bfeffccecf91b51812ee886256cfb678cdbbc9ecd1b7e7940302ba68f60cb77",
+      "source_actor_sha256": "0fab85cb1e324bf579571ceca6defa2afdcdb8548cf6f3159909fbf555ee6c13",
+      "source_history_copied_exactly": true,
+      "source_step": 256,
+      "native_updates": 64,
+      "first_and_last_updates": [
+        {
+          "all_frozen_coordinates_exact": true,
+          "epoch": 0,
+          "gradient_norm": 13.346829414367676,
+          "objective": {
+            "action_class_budgets": [
+              0.800000011920929,
+              0.10000000149011612,
+              0.10000000149011612
+            ],
+            "action_class_rows": [
+              48,
+              14,
+              82
+            ],
+            "action_loss": 8.144632237264886,
+            "factual_payload_token_mass": [
+              22.0,
+              0.0,
+              6.0
+            ],
+            "native_one_step_readout_gradients": true,
+            "recurrent_parameters_frozen": true,
+            "speech_loss": 4.822047296421723
+          },
+          "round": 0,
+          "step": 257
+        },
+        {
+          "all_frozen_coordinates_exact": true,
+          "epoch": 31,
+          "gradient_norm": 0.3349001407623291,
+          "objective": {
+            "action_class_budgets": [
+              0.800000011920929,
+              0.10000000149011612,
+              0.10000000149011612
+            ],
+            "action_class_rows": [
+              48,
+              18,
+              78
+            ],
+            "action_loss": 0.5045137687120587,
+            "factual_payload_token_mass": [
+              0.0,
+              18.0,
+              18.0
+            ],
+            "native_one_step_readout_gradients": true,
+            "recurrent_parameters_frozen": true,
+            "speech_loss": 0.037001878492137485
+          },
+          "round": 1,
+          "step": 320
+        }
+      ],
+      "all_frozen_weights_moments_ages_exact": true,
+      "summary": {
+        "formal_requested_trials": 9,
+        "first_requested_activity": 0,
+        "eventual_explicit_activity": 0,
+        "first_label_verb_pairs": 0,
+        "first_label_noun_pairs": 0,
+        "paired_contexts": 3,
+        "actual_formal_utterances": 12,
+        "timely_factual_utterances": 0,
+        "formal_decisions": 288,
+        "composition_decisions": 80,
+        "seen_command_first_primitive_target_attempts": 1,
+        "seen_command_attempt_trials": 6,
+        "unseen_eat_toy_first_primitive_target_attempts": 0,
+        "unseen_combination_trials": 2,
+        "composition_attempt_is_not_ingestion": true,
+        "physical_verb_pairs": 0,
+        "first_physical_target_noun_pairs": 0,
+        "eventual_requested_physical_event_trials": 3,
+        "physical_verb_definition": "EatFood ingests food; paired GetFood acquires food with zero food ingestion throughout the same 24-decision window. Acquisition includes implicit Eat pickup.",
+        "noun_definition": "First actual acquired target is food for GetFood and toy for GetToy, independent of primitive."
+      },
+      "physical_ownership_audit": {
+        "trials": [
+          {
+            "layout": 0,
+            "recovery_sleep": false,
+            "requested": "EatFood",
+            "first_physical_events": {
+              "tick": 458,
+              "events": [
+                "GetFood"
+              ]
+            },
+            "physical_counts": {
+              "GetFood": 1
+            },
+            "acquisitions_without_explicit_grab": {
+              "GetFood": 1
+            },
+            "last_owners": [
+              1,
+              null
+            ],
+            "consumption_ticks": [],
+            "native_rows": 24,
+            "requested_physical_event_observed": false
+          },
+          {
+            "layout": 0,
+            "recovery_sleep": false,
+            "requested": "GetFood",
+            "first_physical_events": {
+              "tick": 458,
+              "events": [
+                "GetFood"
+              ]
+            },
+            "physical_counts": {
+              "GetFood": 1
+            },
+            "acquisitions_without_explicit_grab": {
+              "GetFood": 1
+            },
+            "last_owners": [
+              1,
+              null
+            ],
+            "consumption_ticks": [],
+            "native_rows": 24,
+            "requested_physical_event_observed": true
+          },
+          {
+            "layout": 0,
+            "recovery_sleep": false,
+            "requested": "GetToy",
+            "first_physical_events": {
+              "tick": 458,
+              "events": [
+                "GetFood"
+              ]
+            },
+            "physical_counts": {
+              "GetFood": 1
+            },
+            "acquisitions_without_explicit_grab": {
+              "GetFood": 1
+            },
+            "last_owners": [
+              1,
+              null
+            ],
+            "consumption_ticks": [],
+            "native_rows": 24,
+            "requested_physical_event_observed": false
+          },
+          {
+            "layout": 0,
+            "recovery_sleep": false,
+            "requested": null,
+            "first_physical_events": {
+              "tick": 463,
+              "events": [
+                "GetToy"
+              ]
+            },
+            "physical_counts": {
+              "GetToy": 1
+            },
+            "acquisitions_without_explicit_grab": {},
+            "last_owners": [
+              null,
+              null
+            ],
+            "consumption_ticks": [],
+            "native_rows": 24,
+            "requested_physical_event_observed": null
+          },
+          {
+            "layout": 1,
+            "recovery_sleep": false,
+            "requested": "EatFood",
+            "first_physical_events": {
+              "tick": 458,
+              "events": [
+                "GetFood"
+              ]
+            },
+            "physical_counts": {
+              "GetFood": 2
+            },
+            "acquisitions_without_explicit_grab": {
+              "GetFood": 1
+            },
+            "last_owners": [
+              1,
+              null
+            ],
+            "consumption_ticks": [],
+            "native_rows": 24,
+            "requested_physical_event_observed": false
+          },
+          {
+            "layout": 1,
+            "recovery_sleep": false,
+            "requested": "GetFood",
+            "first_physical_events": {
+              "tick": 458,
+              "events": [
+                "GetFood"
+              ]
+            },
+            "physical_counts": {
+              "GetFood": 1
+            },
+            "acquisitions_without_explicit_grab": {
+              "GetFood": 1
+            },
+            "last_owners": [
+              1,
+              null
+            ],
+            "consumption_ticks": [],
+            "native_rows": 24,
+            "requested_physical_event_observed": true
+          },
+          {
+            "layout": 1,
+            "recovery_sleep": false,
+            "requested": "GetToy",
+            "first_physical_events": {
+              "tick": 458,
+              "events": [
+                "GetFood"
+              ]
+            },
+            "physical_counts": {
+              "GetFood": 1
+            },
+            "acquisitions_without_explicit_grab": {
+              "GetFood": 1
+            },
+            "last_owners": [
+              1,
+              null
+            ],
+            "consumption_ticks": [],
+            "native_rows": 24,
+            "requested_physical_event_observed": false
+          },
+          {
+            "layout": 1,
+            "recovery_sleep": false,
+            "requested": null,
+            "first_physical_events": {
+              "tick": 464,
+              "events": [
+                "GetToy"
+              ]
+            },
+            "physical_counts": {
+              "GetToy": 1
+            },
+            "acquisitions_without_explicit_grab": {},
+            "last_owners": [
+              null,
+              null
+            ],
+            "consumption_ticks": [],
+            "native_rows": 24,
+            "requested_physical_event_observed": null
+          },
+          {
+            "layout": 1,
+            "recovery_sleep": true,
+            "requested": "EatFood",
+            "first_physical_events": {
+              "tick": 471,
+              "events": [
+                "GetFood"
+              ]
+            },
+            "physical_counts": {
+              "GetFood": 1
+            },
+            "acquisitions_without_explicit_grab": {
+              "GetFood": 1
+            },
+            "last_owners": [
+              1,
+              null
+            ],
+            "consumption_ticks": [],
+            "native_rows": 24,
+            "requested_physical_event_observed": false
+          },
+          {
+            "layout": 1,
+            "recovery_sleep": true,
+            "requested": "GetFood",
+            "first_physical_events": {
+              "tick": 471,
+              "events": [
+                "GetFood"
+              ]
+            },
+            "physical_counts": {
+              "GetFood": 1
+            },
+            "acquisitions_without_explicit_grab": {
+              "GetFood": 1
+            },
+            "last_owners": [
+              1,
+              null
+            ],
+            "consumption_ticks": [],
+            "native_rows": 24,
+            "requested_physical_event_observed": true
+          },
+          {
+            "layout": 1,
+            "recovery_sleep": true,
+            "requested": "GetToy",
+            "first_physical_events": {
+              "tick": 471,
+              "events": [
+                "GetFood"
+              ]
+            },
+            "physical_counts": {
+              "GetFood": 1
+            },
+            "acquisitions_without_explicit_grab": {
+              "GetFood": 1
+            },
+            "last_owners": [
+              1,
+              null
+            ],
+            "consumption_ticks": [],
+            "native_rows": 24,
+            "requested_physical_event_observed": false
+          },
+          {
+            "layout": 1,
+            "recovery_sleep": true,
+            "requested": null,
+            "first_physical_events": {
+              "tick": 477,
+              "events": [
+                "GetToy"
+              ]
+            },
+            "physical_counts": {
+              "GetToy": 1
+            },
+            "acquisitions_without_explicit_grab": {},
+            "last_owners": [
+              null,
+              null
+            ],
+            "consumption_ticks": [],
+            "native_rows": 24,
+            "requested_physical_event_observed": null
+          }
+        ],
+        "requested_trials": 9,
+        "eventual_requested_physical_event_trials": 3,
+        "implicit_food_acquisitions": 9,
+        "implicit_toy_acquisitions": 0,
+        "requested_food_consumption_trials": 0
+      },
+      "actual_speech_analysis": {
+        "counts": {
+          "scored_rows": 288,
+          "eligible_rows": 12,
+          "selected_vocalize": 18,
+          "actual_utterances": 12,
+          "declarations": 12,
+          "spoken_while_player_heard": 0,
+          "outside_primary_window": 12,
+          "strict_expected_token_match": 0,
+          "strict_expected_declaration": 0,
+          "tokens_match_preceding_latest_activity": 1,
+          "declaration_matches_preceding_latest_activity": 1,
+          "utterances_without_preceding_completion": 9
+        },
+        "emitted_token_sequences": {
+          "9 1": 12
+        },
+        "preceding_activity_match_latency_ticks": [
+          19
+        ],
+        "actual_utterance_receipts": [
+          {
+            "layout": 0,
+            "recovery_sleep": false,
+            "requested": "EatFood",
+            "tick": 476,
+            "tokens": [
+              9,
+              1
+            ],
+            "speech_act_raw": 0,
+            "player_heard": false,
+            "inside_primary_window": false,
+            "preceding_latest_activity": null,
+            "matches_preceding_activity": false
+          },
+          {
+            "layout": 0,
+            "recovery_sleep": false,
+            "requested": "GetFood",
+            "tick": 476,
+            "tokens": [
+              9,
+              1
+            ],
+            "speech_act_raw": 0,
+            "player_heard": false,
+            "inside_primary_window": false,
+            "preceding_latest_activity": null,
+            "matches_preceding_activity": false
+          },
+          {
+            "layout": 0,
+            "recovery_sleep": false,
+            "requested": "GetToy",
+            "tick": 476,
+            "tokens": [
+              9,
+              1
+            ],
+            "speech_act_raw": 0,
+            "player_heard": false,
+            "inside_primary_window": false,
+            "preceding_latest_activity": null,
+            "matches_preceding_activity": false
+          },
+          {
+            "layout": 0,
+            "recovery_sleep": false,
+            "requested": null,
+            "tick": 461,
+            "tokens": [
+              9,
+              1
+            ],
+            "speech_act_raw": 0,
+            "player_heard": false,
+            "inside_primary_window": false,
+            "preceding_latest_activity": null,
+            "matches_preceding_activity": false
+          },
+          {
+            "layout": 1,
+            "recovery_sleep": false,
+            "requested": "EatFood",
+            "tick": 477,
+            "tokens": [
+              9,
+              1
+            ],
+            "speech_act_raw": 0,
+            "player_heard": false,
+            "inside_primary_window": false,
+            "preceding_latest_activity": {
+              "goal": "GetFood",
+              "tick": 458
+            },
+            "matches_preceding_activity": true
+          },
+          {
+            "layout": 1,
+            "recovery_sleep": false,
+            "requested": "GetFood",
+            "tick": 477,
+            "tokens": [
+              9,
+              1
+            ],
+            "speech_act_raw": 0,
+            "player_heard": false,
+            "inside_primary_window": false,
+            "preceding_latest_activity": null,
+            "matches_preceding_activity": false
+          },
+          {
+            "layout": 1,
+            "recovery_sleep": false,
+            "requested": "GetToy",
+            "tick": 477,
+            "tokens": [
+              9,
+              1
+            ],
+            "speech_act_raw": 0,
+            "player_heard": false,
+            "inside_primary_window": false,
+            "preceding_latest_activity": null,
+            "matches_preceding_activity": false
+          },
+          {
+            "layout": 1,
+            "recovery_sleep": false,
+            "requested": null,
+            "tick": 477,
+            "tokens": [
+              9,
+              1
+            ],
+            "speech_act_raw": 0,
+            "player_heard": false,
+            "inside_primary_window": false,
+            "preceding_latest_activity": {
+              "goal": "GetToy",
+              "tick": 464
+            },
+            "matches_preceding_activity": false
+          },
+          {
+            "layout": 1,
+            "recovery_sleep": true,
+            "requested": "EatFood",
+            "tick": 490,
+            "tokens": [
+              9,
+              1
+            ],
+            "speech_act_raw": 0,
+            "player_heard": false,
+            "inside_primary_window": false,
+            "preceding_latest_activity": null,
+            "matches_preceding_activity": false
+          },
+          {
+            "layout": 1,
+            "recovery_sleep": true,
+            "requested": "GetFood",
+            "tick": 490,
+            "tokens": [
+              9,
+              1
+            ],
+            "speech_act_raw": 0,
+            "player_heard": false,
+            "inside_primary_window": false,
+            "preceding_latest_activity": null,
+            "matches_preceding_activity": false
+          },
+          {
+            "layout": 1,
+            "recovery_sleep": true,
+            "requested": "GetToy",
+            "tick": 490,
+            "tokens": [
+              9,
+              1
+            ],
+            "speech_act_raw": 0,
+            "player_heard": false,
+            "inside_primary_window": false,
+            "preceding_latest_activity": null,
+            "matches_preceding_activity": false
+          },
+          {
+            "layout": 1,
+            "recovery_sleep": true,
+            "requested": null,
+            "tick": 490,
+            "tokens": [
+              9,
+              1
+            ],
+            "speech_act_raw": 0,
+            "player_heard": false,
+            "inside_primary_window": false,
+            "preceding_latest_activity": {
+              "goal": "GetToy",
+              "tick": 477
+            },
+            "matches_preceding_activity": false
+          }
+        ]
+      },
+      "teaching_audit": {
+        "rows": 288,
+        "activities": {
+          "EatFood": 4,
+          "GetToy": 7,
+          "GetFood": 3
+        },
+        "positive_lags": {
+          "nonrequested": {
+            "4": 3,
+            "5": 5,
+            "6": 5,
+            "1": 2,
+            "2": 2,
+            "3": 2,
+            "7": 2,
+            "8": 1,
+            "9": 1
+          },
+          "requested": {
+            "1": 1,
+            "2": 1,
+            "3": 1,
+            "4": 1,
+            "5": 1,
+            "6": 1,
+            "7": 1,
+            "8": 1,
+            "9": 1
+          }
+        },
+        "get_labels_reversing_existing_ownership": [],
+        "instruction_labels_by_request": {
+          "EatFood": {
+            "210:food": 21,
+            "multiple_or_unlabelled": 11
+          },
+          "GetFood": {
+            "211:food": 14,
+            "1:other": 11,
+            "multiple_or_unlabelled": 7
+          },
+          "GetToy": {
+            "211:toy": 13,
+            "1:other": 15,
+            "multiple_or_unlabelled": 4
+          }
+        }
+      }
+    },
+    {
+      "actor_sha256": "1dc57bb3418ce13e08c333007fa419737795358d2d412d5c732f9e3828bfdf02",
+      "actor_step": 320,
+      "arm": "no_speech",
+      "collections": [
+        {
+          "actual_activity_counts": [
+            6,
+            0,
+            0
+          ],
+          "fixed_eight_tick_instruction_window": true,
+          "instruction_window_rows": 48,
+          "native_decisions": 144,
+          "positive_narration_rows": 18,
+          "round": 0,
+          "teacher_heard_rows": 0
+        },
+        {
+          "actual_activity_counts": [
+            0,
+            0,
+            9
+          ],
+          "fixed_eight_tick_instruction_window": true,
+          "instruction_window_rows": 48,
+          "native_decisions": 144,
+          "positive_narration_rows": 18,
+          "round": 1,
+          "teacher_heard_rows": 0
+        }
+      ],
+      "continuity": {
+        "fresh_process_exact": true,
+        "native_private_and_optimizer_hashes": {
+          "after_host": "5a4173ee1c00ab345100991013064ae4cf12b6539a8d7a5eea8a3def06b7dec3",
+          "after_native_adam_update": "f50aeb942c07b07a42a48f584dce2abe9e1d5f3e9c97e71f1e1d62f0fed96bb1",
+          "assessment": {
+            "native_trace_sha256": "a9a1dca392bbaa3445e4eb409231fb3e42e258559d8e4fb0a281e76e5b9b4317"
+          },
+          "before_actor": "1dc57bb3418ce13e08c333007fa419737795358d2d412d5c732f9e3828bfdf02",
+          "before_host": "a65326214da7fd262e68c924479d5924d1f20f1310c67e70376b9a23a1df8897",
+          "decisions": "1502789a86b4fe7f1763a51decbe3bdcc08c14b9ef74990880ce7e7fc08437b1"
+        },
+        "duplicate_evaluation_omitted": true
+      },
+      "evaluation": [
+        {
+          "actual_activity_counts": [
+            1,
+            1,
+            1
+          ],
+          "arm": "no_speech",
+          "correct_grounded_utterances": 0,
+          "first_completed_activity": "GetFood",
+          "first_completion_matches_request": false,
+          "grounded_utterance_opportunities": 6,
+          "initial_targets_and_distractor_visible": true,
+          "layout": 0,
+          "native_decisions": 24,
+          "nourished_meals": 1,
+          "outside_primary_window_utterances": 1,
+          "paired_initial_private_sha256": "4f4a2803034a36ddb77ac3ae51d54c56b94604d2733ce2aa1999468892621b22",
+          "prior_enabled": false,
+          "recovery_sleep": false,
+          "requested": "EatFood",
+          "requested_activity_completed": true,
+          "sleep_consolidations": 0,
+          "sleep_trigger": null,
+          "sleeping_ticks": 0,
+          "teacher_present": false,
+          "utterances": 1
+        },
+        {
+          "actual_activity_counts": [
+            1,
+            1,
+            1
+          ],
+          "arm": "no_speech",
+          "correct_grounded_utterances": 0,
+          "first_completed_activity": "GetFood",
+          "first_completion_matches_request": true,
+          "grounded_utterance_opportunities": 6,
+          "initial_targets_and_distractor_visible": true,
+          "layout": 0,
+          "native_decisions": 24,
+          "nourished_meals": 1,
+          "outside_primary_window_utterances": 1,
+          "paired_initial_private_sha256": "4f4a2803034a36ddb77ac3ae51d54c56b94604d2733ce2aa1999468892621b22",
+          "prior_enabled": false,
+          "recovery_sleep": false,
+          "requested": "GetFood",
+          "requested_activity_completed": true,
+          "sleep_consolidations": 0,
+          "sleep_trigger": null,
+          "sleeping_ticks": 0,
+          "teacher_present": false,
+          "utterances": 1
+        },
+        {
+          "actual_activity_counts": [
+            0,
+            0,
+            2
+          ],
+          "arm": "no_speech",
+          "correct_grounded_utterances": 0,
+          "first_completed_activity": "GetToy",
+          "first_completion_matches_request": true,
+          "grounded_utterance_opportunities": 6,
+          "initial_targets_and_distractor_visible": true,
+          "layout": 0,
+          "native_decisions": 24,
+          "nourished_meals": 0,
+          "outside_primary_window_utterances": 1,
+          "paired_initial_private_sha256": "4f4a2803034a36ddb77ac3ae51d54c56b94604d2733ce2aa1999468892621b22",
+          "prior_enabled": false,
+          "recovery_sleep": false,
+          "requested": "GetToy",
+          "requested_activity_completed": true,
+          "sleep_consolidations": 0,
+          "sleep_trigger": null,
+          "sleeping_ticks": 0,
+          "teacher_present": false,
+          "utterances": 1
+        },
+        {
+          "actual_activity_counts": [
+            1,
+            0,
+            1
+          ],
+          "arm": "no_speech",
+          "correct_grounded_utterances": 0,
+          "first_completed_activity": "EatFood",
+          "first_completion_matches_request": null,
+          "grounded_utterance_opportunities": 6,
+          "initial_targets_and_distractor_visible": true,
+          "layout": 0,
+          "native_decisions": 24,
+          "nourished_meals": 1,
+          "outside_primary_window_utterances": 1,
+          "paired_initial_private_sha256": "4f4a2803034a36ddb77ac3ae51d54c56b94604d2733ce2aa1999468892621b22",
+          "prior_enabled": false,
+          "recovery_sleep": false,
+          "requested": null,
+          "requested_activity_completed": null,
+          "sleep_consolidations": 0,
+          "sleep_trigger": null,
+          "sleeping_ticks": 0,
+          "teacher_present": false,
+          "utterances": 1
+        },
+        {
+          "actual_activity_counts": [
+            1,
+            1,
+            1
+          ],
+          "arm": "no_speech",
+          "correct_grounded_utterances": 0,
+          "first_completed_activity": "GetFood",
+          "first_completion_matches_request": false,
+          "grounded_utterance_opportunities": 6,
+          "initial_targets_and_distractor_visible": true,
+          "layout": 1,
+          "native_decisions": 24,
+          "nourished_meals": 1,
+          "outside_primary_window_utterances": 1,
+          "paired_initial_private_sha256": "1767d5ad486cc71b9e2a7d868527c0d65cd5084c4fabb9ddc91e05fa6af4bc96",
+          "prior_enabled": false,
+          "recovery_sleep": false,
+          "requested": "EatFood",
+          "requested_activity_completed": true,
+          "sleep_consolidations": 0,
+          "sleep_trigger": null,
+          "sleeping_ticks": 0,
+          "teacher_present": false,
+          "utterances": 1
+        },
+        {
+          "actual_activity_counts": [
+            1,
+            0,
+            1
+          ],
+          "arm": "no_speech",
+          "correct_grounded_utterances": 0,
+          "first_completed_activity": "EatFood",
+          "first_completion_matches_request": false,
+          "grounded_utterance_opportunities": 6,
+          "initial_targets_and_distractor_visible": true,
+          "layout": 1,
+          "native_decisions": 24,
+          "nourished_meals": 1,
+          "outside_primary_window_utterances": 1,
+          "paired_initial_private_sha256": "1767d5ad486cc71b9e2a7d868527c0d65cd5084c4fabb9ddc91e05fa6af4bc96",
+          "prior_enabled": false,
+          "recovery_sleep": false,
+          "requested": "GetFood",
+          "requested_activity_completed": false,
+          "sleep_consolidations": 0,
+          "sleep_trigger": null,
+          "sleeping_ticks": 0,
+          "teacher_present": false,
+          "utterances": 1
+        },
+        {
+          "actual_activity_counts": [
+            0,
+            0,
+            2
+          ],
+          "arm": "no_speech",
+          "correct_grounded_utterances": 0,
+          "first_completed_activity": "GetToy",
+          "first_completion_matches_request": true,
+          "grounded_utterance_opportunities": 6,
+          "initial_targets_and_distractor_visible": true,
+          "layout": 1,
+          "native_decisions": 24,
+          "nourished_meals": 0,
+          "outside_primary_window_utterances": 1,
+          "paired_initial_private_sha256": "1767d5ad486cc71b9e2a7d868527c0d65cd5084c4fabb9ddc91e05fa6af4bc96",
+          "prior_enabled": false,
+          "recovery_sleep": false,
+          "requested": "GetToy",
+          "requested_activity_completed": true,
+          "sleep_consolidations": 0,
+          "sleep_trigger": null,
+          "sleeping_ticks": 0,
+          "teacher_present": false,
+          "utterances": 1
+        },
+        {
+          "actual_activity_counts": [
+            0,
+            0,
+            1
+          ],
+          "arm": "no_speech",
+          "correct_grounded_utterances": 0,
+          "first_completed_activity": "GetToy",
+          "first_completion_matches_request": null,
+          "grounded_utterance_opportunities": 3,
+          "initial_targets_and_distractor_visible": true,
+          "layout": 1,
+          "native_decisions": 24,
+          "nourished_meals": 0,
+          "outside_primary_window_utterances": 1,
+          "paired_initial_private_sha256": "1767d5ad486cc71b9e2a7d868527c0d65cd5084c4fabb9ddc91e05fa6af4bc96",
+          "prior_enabled": false,
+          "recovery_sleep": false,
+          "requested": null,
+          "requested_activity_completed": null,
+          "sleep_consolidations": 0,
+          "sleep_trigger": null,
+          "sleeping_ticks": 0,
+          "teacher_present": false,
+          "utterances": 1
+        },
+        {
+          "actual_activity_counts": [
+            0,
+            0,
+            2
+          ],
+          "arm": "no_speech",
+          "correct_grounded_utterances": 0,
+          "first_completed_activity": "GetToy",
+          "first_completion_matches_request": false,
+          "grounded_utterance_opportunities": 6,
+          "initial_targets_and_distractor_visible": true,
+          "layout": 1,
+          "native_decisions": 24,
+          "nourished_meals": 0,
+          "outside_primary_window_utterances": 1,
+          "paired_initial_private_sha256": "698a396bae74dbb31ac6ef40cfed4f5827a95b217cf3e72bfe2084afa509c468",
+          "prior_enabled": false,
+          "recovery_sleep": true,
+          "requested": "EatFood",
+          "requested_activity_completed": false,
+          "sleep_consolidations": 1,
+          "sleep_trigger": "RecoveryProtocol",
+          "sleeping_ticks": 13,
+          "teacher_present": false,
+          "utterances": 1
+        },
+        {
+          "actual_activity_counts": [
+            0,
+            0,
+            2
+          ],
+          "arm": "no_speech",
+          "correct_grounded_utterances": 0,
+          "first_completed_activity": "GetToy",
+          "first_completion_matches_request": false,
+          "grounded_utterance_opportunities": 6,
+          "initial_targets_and_distractor_visible": true,
+          "layout": 1,
+          "native_decisions": 24,
+          "nourished_meals": 0,
+          "outside_primary_window_utterances": 1,
+          "paired_initial_private_sha256": "698a396bae74dbb31ac6ef40cfed4f5827a95b217cf3e72bfe2084afa509c468",
+          "prior_enabled": false,
+          "recovery_sleep": true,
+          "requested": "GetFood",
+          "requested_activity_completed": false,
+          "sleep_consolidations": 1,
+          "sleep_trigger": "RecoveryProtocol",
+          "sleeping_ticks": 13,
+          "teacher_present": false,
+          "utterances": 1
+        },
+        {
+          "actual_activity_counts": [
+            0,
+            0,
+            2
+          ],
+          "arm": "no_speech",
+          "correct_grounded_utterances": 0,
+          "first_completed_activity": "GetToy",
+          "first_completion_matches_request": true,
+          "grounded_utterance_opportunities": 6,
+          "initial_targets_and_distractor_visible": true,
+          "layout": 1,
+          "native_decisions": 24,
+          "nourished_meals": 0,
+          "outside_primary_window_utterances": 1,
+          "paired_initial_private_sha256": "698a396bae74dbb31ac6ef40cfed4f5827a95b217cf3e72bfe2084afa509c468",
+          "prior_enabled": false,
+          "recovery_sleep": true,
+          "requested": "GetToy",
+          "requested_activity_completed": true,
+          "sleep_consolidations": 1,
+          "sleep_trigger": "RecoveryProtocol",
+          "sleeping_ticks": 13,
+          "teacher_present": false,
+          "utterances": 1
+        },
+        {
+          "actual_activity_counts": [
+            1,
+            1,
+            1
+          ],
+          "arm": "no_speech",
+          "correct_grounded_utterances": 0,
+          "first_completed_activity": "GetFood",
+          "first_completion_matches_request": null,
+          "grounded_utterance_opportunities": 7,
+          "initial_targets_and_distractor_visible": true,
+          "layout": 1,
+          "native_decisions": 24,
+          "nourished_meals": 1,
+          "outside_primary_window_utterances": 1,
+          "paired_initial_private_sha256": "698a396bae74dbb31ac6ef40cfed4f5827a95b217cf3e72bfe2084afa509c468",
+          "prior_enabled": false,
+          "recovery_sleep": true,
+          "requested": null,
+          "requested_activity_completed": null,
+          "sleep_consolidations": 1,
+          "sleep_trigger": "RecoveryProtocol",
+          "sleeping_ticks": 13,
+          "teacher_present": false,
+          "utterances": 1
+        },
+        {
+          "actual_food_consumptions": 0,
+          "actual_utterance_tokens": [
+            [
+              9,
+              2
+            ]
+          ],
+          "arm": "no_speech",
+          "first_manipulation": [
+            211,
+            8
+          ],
+          "first_requested_primitive_target": false,
+          "kind": "composition_evaluation",
+          "layout": 0,
+          "native_decisions": 8,
+          "note": "Unseen eat-toy attempts are not successful ingestion or proof of knowing inedibility.",
+          "nourished_meals": 0,
+          "paired_initial_private_sha256": "d3bd4b22f7ff2c6262be74eb8795eedd2930e7ee19c56b32ce1bc396f2d91547",
+          "prior_enabled": false,
+          "requested_primitive_target_attempted": false,
+          "requested_target_acquired": true,
+          "requested_words": [
+            8,
+            1
+          ],
+          "teacher_present": false,
+          "unseen_word_combination": false,
+          "world_seed": 1237501
+        },
+        {
+          "actual_food_consumptions": 0,
+          "actual_utterance_tokens": [
+            [
+              9,
+              2
+            ]
+          ],
+          "arm": "no_speech",
+          "first_manipulation": [
+            211,
+            9
+          ],
+          "first_requested_primitive_target": false,
+          "kind": "composition_evaluation",
+          "layout": 0,
+          "native_decisions": 8,
+          "note": "Unseen eat-toy attempts are not successful ingestion or proof of knowing inedibility.",
+          "nourished_meals": 0,
+          "paired_initial_private_sha256": "d3bd4b22f7ff2c6262be74eb8795eedd2930e7ee19c56b32ce1bc396f2d91547",
+          "prior_enabled": false,
+          "requested_primitive_target_attempted": false,
+          "requested_target_acquired": false,
+          "requested_words": [
+            9,
+            1
+          ],
+          "teacher_present": false,
+          "unseen_word_combination": false,
+          "world_seed": 1237501
+        },
+        {
+          "actual_food_consumptions": 0,
+          "actual_utterance_tokens": [
+            [
+              9,
+              2
+            ]
+          ],
+          "arm": "no_speech",
+          "first_manipulation": [
+            211,
+            9
+          ],
+          "first_requested_primitive_target": true,
+          "kind": "composition_evaluation",
+          "layout": 0,
+          "native_decisions": 8,
+          "note": "Unseen eat-toy attempts are not successful ingestion or proof of knowing inedibility.",
+          "nourished_meals": 0,
+          "paired_initial_private_sha256": "d3bd4b22f7ff2c6262be74eb8795eedd2930e7ee19c56b32ce1bc396f2d91547",
+          "prior_enabled": false,
+          "requested_primitive_target_attempted": true,
+          "requested_target_acquired": true,
+          "requested_words": [
+            9,
+            2
+          ],
+          "teacher_present": false,
+          "unseen_word_combination": false,
+          "world_seed": 1237501
+        },
+        {
+          "actual_food_consumptions": 0,
+          "actual_utterance_tokens": [
+            [
+              9,
+              2
+            ]
+          ],
+          "arm": "no_speech",
+          "first_manipulation": [
+            211,
+            9
+          ],
+          "first_requested_primitive_target": false,
+          "kind": "composition_evaluation",
+          "layout": 0,
+          "native_decisions": 8,
+          "note": "Unseen eat-toy attempts are not successful ingestion or proof of knowing inedibility.",
+          "nourished_meals": 0,
+          "paired_initial_private_sha256": "d3bd4b22f7ff2c6262be74eb8795eedd2930e7ee19c56b32ce1bc396f2d91547",
+          "prior_enabled": false,
+          "requested_primitive_target_attempted": false,
+          "requested_target_acquired": true,
+          "requested_words": [
+            8,
+            2
+          ],
+          "teacher_present": false,
+          "unseen_word_combination": true,
+          "world_seed": 1237501
+        },
+        {
+          "actual_food_consumptions": 0,
+          "actual_utterance_tokens": [
+            [
+              9,
+              2
+            ]
+          ],
+          "arm": "no_speech",
+          "first_manipulation": [
+            211,
+            8
+          ],
+          "first_requested_primitive_target": null,
+          "kind": "composition_evaluation",
+          "layout": 0,
+          "native_decisions": 8,
+          "note": "Unseen eat-toy attempts are not successful ingestion or proof of knowing inedibility.",
+          "nourished_meals": 0,
+          "paired_initial_private_sha256": "d3bd4b22f7ff2c6262be74eb8795eedd2930e7ee19c56b32ce1bc396f2d91547",
+          "prior_enabled": false,
+          "requested_primitive_target_attempted": false,
+          "requested_target_acquired": false,
+          "requested_words": null,
+          "teacher_present": false,
+          "unseen_word_combination": false,
+          "world_seed": 1237501
+        },
+        {
+          "actual_food_consumptions": 1,
+          "actual_utterance_tokens": [],
+          "arm": "no_speech",
+          "first_manipulation": [
+            211,
+            8
+          ],
+          "first_requested_primitive_target": false,
+          "kind": "composition_evaluation",
+          "layout": 1,
+          "native_decisions": 8,
+          "note": "Unseen eat-toy attempts are not successful ingestion or proof of knowing inedibility.",
+          "nourished_meals": 1,
+          "paired_initial_private_sha256": "8f924422ec7651261fa6e6dd86d8c53b294f8572ea335aff63880569dce7b61c",
+          "prior_enabled": false,
+          "requested_primitive_target_attempted": true,
+          "requested_target_acquired": true,
+          "requested_words": [
+            8,
+            1
+          ],
+          "teacher_present": false,
+          "unseen_word_combination": false,
+          "world_seed": 1237502
+        },
+        {
+          "actual_food_consumptions": 1,
+          "actual_utterance_tokens": [],
+          "arm": "no_speech",
+          "first_manipulation": [
+            211,
+            8
+          ],
+          "first_requested_primitive_target": true,
+          "kind": "composition_evaluation",
+          "layout": 1,
+          "native_decisions": 8,
+          "note": "Unseen eat-toy attempts are not successful ingestion or proof of knowing inedibility.",
+          "nourished_meals": 1,
+          "paired_initial_private_sha256": "8f924422ec7651261fa6e6dd86d8c53b294f8572ea335aff63880569dce7b61c",
+          "prior_enabled": false,
+          "requested_primitive_target_attempted": true,
+          "requested_target_acquired": true,
+          "requested_words": [
+            9,
+            1
+          ],
+          "teacher_present": false,
+          "unseen_word_combination": false,
+          "world_seed": 1237502
+        },
+        {
+          "actual_food_consumptions": 1,
+          "actual_utterance_tokens": [],
+          "arm": "no_speech",
+          "first_manipulation": [
+            211,
+            8
+          ],
+          "first_requested_primitive_target": false,
+          "kind": "composition_evaluation",
+          "layout": 1,
+          "native_decisions": 8,
+          "note": "Unseen eat-toy attempts are not successful ingestion or proof of knowing inedibility.",
+          "nourished_meals": 1,
+          "paired_initial_private_sha256": "8f924422ec7651261fa6e6dd86d8c53b294f8572ea335aff63880569dce7b61c",
+          "prior_enabled": false,
+          "requested_primitive_target_attempted": true,
+          "requested_target_acquired": true,
+          "requested_words": [
+            9,
+            2
+          ],
+          "teacher_present": false,
+          "unseen_word_combination": false,
+          "world_seed": 1237502
+        },
+        {
+          "actual_food_consumptions": 1,
+          "actual_utterance_tokens": [],
+          "arm": "no_speech",
+          "first_manipulation": [
+            211,
+            8
+          ],
+          "first_requested_primitive_target": false,
+          "kind": "composition_evaluation",
+          "layout": 1,
+          "native_decisions": 8,
+          "note": "Unseen eat-toy attempts are not successful ingestion or proof of knowing inedibility.",
+          "nourished_meals": 1,
+          "paired_initial_private_sha256": "8f924422ec7651261fa6e6dd86d8c53b294f8572ea335aff63880569dce7b61c",
+          "prior_enabled": false,
+          "requested_primitive_target_attempted": false,
+          "requested_target_acquired": true,
+          "requested_words": [
+            8,
+            2
+          ],
+          "teacher_present": false,
+          "unseen_word_combination": true,
+          "world_seed": 1237502
+        },
+        {
+          "actual_food_consumptions": 0,
+          "actual_utterance_tokens": [
+            [
+              9,
+              2
+            ]
+          ],
+          "arm": "no_speech",
+          "first_manipulation": [
+            211,
+            9
+          ],
+          "first_requested_primitive_target": null,
+          "kind": "composition_evaluation",
+          "layout": 1,
+          "native_decisions": 8,
+          "note": "Unseen eat-toy attempts are not successful ingestion or proof of knowing inedibility.",
+          "nourished_meals": 0,
+          "paired_initial_private_sha256": "8f924422ec7651261fa6e6dd86d8c53b294f8572ea335aff63880569dce7b61c",
+          "prior_enabled": false,
+          "requested_primitive_target_attempted": false,
+          "requested_target_acquired": false,
+          "requested_words": null,
+          "teacher_present": false,
+          "unseen_word_combination": false,
+          "world_seed": 1237502
+        }
+      ],
+      "old_private_state_rejected": true,
+      "profile": "LinearWordReadoutV3",
+      "profile_initial_actor_sha256": "4bfeffccecf91b51812ee886256cfb678cdbbc9ecd1b7e7940302ba68f60cb77",
+      "source_actor_sha256": "0fab85cb1e324bf579571ceca6defa2afdcdb8548cf6f3159909fbf555ee6c13",
+      "source_history_copied_exactly": true,
+      "source_step": 256,
+      "native_updates": 64,
+      "first_and_last_updates": [
+        {
+          "all_frozen_coordinates_exact": true,
+          "epoch": 0,
+          "gradient_norm": 14.593789100646973,
+          "objective": {
+            "action_class_budgets": [
+              0.800000011920929,
+              0.10000000149011612,
+              0.10000000149011612
+            ],
+            "action_class_rows": [
+              48,
+              18,
+              78
+            ],
+            "action_loss": 10.19210394937545,
+            "factual_payload_token_mass": [
+              36.0,
+              0.0,
+              0.0
+            ],
+            "native_one_step_readout_gradients": true,
+            "recurrent_parameters_frozen": true,
+            "speech_loss": 4.6653956056511205
+          },
+          "round": 0,
+          "step": 257
+        },
+        {
+          "all_frozen_coordinates_exact": true,
+          "epoch": 31,
+          "gradient_norm": 0.26293790340423584,
+          "objective": {
+            "action_class_budgets": [
+              0.800000011920929,
+              0.10000000149011612,
+              0.10000000149011612
+            ],
+            "action_class_rows": [
+              48,
+              18,
+              78
+            ],
+            "action_loss": 0.8196548906125827,
+            "factual_payload_token_mass": [
+              0.0,
+              0.0,
+              36.0
+            ],
+            "native_one_step_readout_gradients": true,
+            "recurrent_parameters_frozen": true,
+            "speech_loss": 0.0026046702942865417
+          },
+          "round": 1,
+          "step": 320
+        }
+      ],
+      "all_frozen_weights_moments_ages_exact": true,
+      "summary": {
+        "formal_requested_trials": 9,
+        "first_requested_activity": 4,
+        "eventual_explicit_activity": 6,
+        "first_label_verb_pairs": 0,
+        "first_label_noun_pairs": 1,
+        "paired_contexts": 3,
+        "actual_formal_utterances": 12,
+        "timely_factual_utterances": 0,
+        "formal_decisions": 288,
+        "composition_decisions": 80,
+        "seen_command_first_primitive_target_attempts": 2,
+        "seen_command_attempt_trials": 6,
+        "unseen_eat_toy_first_primitive_target_attempts": 0,
+        "unseen_combination_trials": 2,
+        "composition_attempt_is_not_ingestion": true,
+        "physical_verb_pairs": 0,
+        "first_physical_target_noun_pairs": 2,
+        "eventual_requested_physical_event_trials": 7,
+        "physical_verb_definition": "EatFood ingests food; paired GetFood acquires food with zero food ingestion throughout the same 24-decision window. Acquisition includes implicit Eat pickup.",
+        "noun_definition": "First actual acquired target is food for GetFood and toy for GetToy, independent of primitive."
+      },
+      "physical_ownership_audit": {
+        "trials": [
+          {
+            "layout": 0,
+            "recovery_sleep": false,
+            "requested": "EatFood",
+            "first_physical_events": {
+              "tick": 458,
+              "events": [
+                "GetFood"
+              ]
+            },
+            "physical_counts": {
+              "GetFood": 1,
+              "EatFood": 1,
+              "GetToy": 1
+            },
+            "acquisitions_without_explicit_grab": {},
+            "last_owners": [
+              null,
+              1
+            ],
+            "consumption_ticks": [
+              459
+            ],
+            "native_rows": 24,
+            "requested_physical_event_observed": true
+          },
+          {
+            "layout": 0,
+            "recovery_sleep": false,
+            "requested": "GetFood",
+            "first_physical_events": {
+              "tick": 458,
+              "events": [
+                "GetFood"
+              ]
+            },
+            "physical_counts": {
+              "GetFood": 1,
+              "EatFood": 1,
+              "GetToy": 1
+            },
+            "acquisitions_without_explicit_grab": {},
+            "last_owners": [
+              null,
+              1
+            ],
+            "consumption_ticks": [
+              459
+            ],
+            "native_rows": 24,
+            "requested_physical_event_observed": true
+          },
+          {
+            "layout": 0,
+            "recovery_sleep": false,
+            "requested": "GetToy",
+            "first_physical_events": {
+              "tick": 458,
+              "events": [
+                "GetToy"
+              ]
+            },
+            "physical_counts": {
+              "GetToy": 2
+            },
+            "acquisitions_without_explicit_grab": {},
+            "last_owners": [
+              null,
+              1
+            ],
+            "consumption_ticks": [],
+            "native_rows": 24,
+            "requested_physical_event_observed": true
+          },
+          {
+            "layout": 0,
+            "recovery_sleep": false,
+            "requested": null,
+            "first_physical_events": {
+              "tick": 458,
+              "events": [
+                "GetFood"
+              ]
+            },
+            "physical_counts": {
+              "GetFood": 1,
+              "EatFood": 1,
+              "GetToy": 1
+            },
+            "acquisitions_without_explicit_grab": {
+              "GetFood": 1
+            },
+            "last_owners": [
+              null,
+              1
+            ],
+            "consumption_ticks": [
+              459
+            ],
+            "native_rows": 24,
+            "requested_physical_event_observed": null
+          },
+          {
+            "layout": 1,
+            "recovery_sleep": false,
+            "requested": "EatFood",
+            "first_physical_events": {
+              "tick": 458,
+              "events": [
+                "GetFood"
+              ]
+            },
+            "physical_counts": {
+              "GetFood": 1,
+              "EatFood": 1,
+              "GetToy": 1
+            },
+            "acquisitions_without_explicit_grab": {},
+            "last_owners": [
+              null,
+              1
+            ],
+            "consumption_ticks": [
+              459
+            ],
+            "native_rows": 24,
+            "requested_physical_event_observed": true
+          },
+          {
+            "layout": 1,
+            "recovery_sleep": false,
+            "requested": "GetFood",
+            "first_physical_events": {
+              "tick": 458,
+              "events": [
+                "GetFood"
+              ]
+            },
+            "physical_counts": {
+              "GetFood": 1,
+              "EatFood": 1,
+              "GetToy": 1
+            },
+            "acquisitions_without_explicit_grab": {
+              "GetFood": 1
+            },
+            "last_owners": [
+              null,
+              1
+            ],
+            "consumption_ticks": [
+              459
+            ],
+            "native_rows": 24,
+            "requested_physical_event_observed": true
+          },
+          {
+            "layout": 1,
+            "recovery_sleep": false,
+            "requested": "GetToy",
+            "first_physical_events": {
+              "tick": 458,
+              "events": [
+                "GetToy"
+              ]
+            },
+            "physical_counts": {
+              "GetToy": 2
+            },
+            "acquisitions_without_explicit_grab": {},
+            "last_owners": [
+              null,
+              1
+            ],
+            "consumption_ticks": [],
+            "native_rows": 24,
+            "requested_physical_event_observed": true
+          },
+          {
+            "layout": 1,
+            "recovery_sleep": false,
+            "requested": null,
+            "first_physical_events": {
+              "tick": 466,
+              "events": [
+                "GetToy"
+              ]
+            },
+            "physical_counts": {
+              "GetToy": 1
+            },
+            "acquisitions_without_explicit_grab": {},
+            "last_owners": [
+              null,
+              1
+            ],
+            "consumption_ticks": [],
+            "native_rows": 24,
+            "requested_physical_event_observed": null
+          },
+          {
+            "layout": 1,
+            "recovery_sleep": true,
+            "requested": "EatFood",
+            "first_physical_events": {
+              "tick": 471,
+              "events": [
+                "GetToy"
+              ]
+            },
+            "physical_counts": {
+              "GetToy": 2
+            },
+            "acquisitions_without_explicit_grab": {},
+            "last_owners": [
+              null,
+              1
+            ],
+            "consumption_ticks": [],
+            "native_rows": 24,
+            "requested_physical_event_observed": false
+          },
+          {
+            "layout": 1,
+            "recovery_sleep": true,
+            "requested": "GetFood",
+            "first_physical_events": {
+              "tick": 471,
+              "events": [
+                "GetToy"
+              ]
+            },
+            "physical_counts": {
+              "GetToy": 2
+            },
+            "acquisitions_without_explicit_grab": {},
+            "last_owners": [
+              null,
+              1
+            ],
+            "consumption_ticks": [],
+            "native_rows": 24,
+            "requested_physical_event_observed": false
+          },
+          {
+            "layout": 1,
+            "recovery_sleep": true,
+            "requested": "GetToy",
+            "first_physical_events": {
+              "tick": 471,
+              "events": [
+                "GetToy"
+              ]
+            },
+            "physical_counts": {
+              "GetToy": 2
+            },
+            "acquisitions_without_explicit_grab": {},
+            "last_owners": [
+              null,
+              1
+            ],
+            "consumption_ticks": [],
+            "native_rows": 24,
+            "requested_physical_event_observed": true
+          },
+          {
+            "layout": 1,
+            "recovery_sleep": true,
+            "requested": null,
+            "first_physical_events": {
+              "tick": 471,
+              "events": [
+                "GetFood"
+              ]
+            },
+            "physical_counts": {
+              "GetFood": 1,
+              "EatFood": 1,
+              "GetToy": 1
+            },
+            "acquisitions_without_explicit_grab": {},
+            "last_owners": [
+              null,
+              1
+            ],
+            "consumption_ticks": [
+              472
+            ],
+            "native_rows": 24,
+            "requested_physical_event_observed": null
+          }
+        ],
+        "requested_trials": 9,
+        "eventual_requested_physical_event_trials": 7,
+        "implicit_food_acquisitions": 2,
+        "implicit_toy_acquisitions": 0,
+        "requested_food_consumption_trials": 2
+      },
+      "actual_speech_analysis": {
+        "counts": {
+          "scored_rows": 288,
+          "eligible_rows": 70,
+          "selected_vocalize": 17,
+          "actual_utterances": 12,
+          "declarations": 12,
+          "spoken_while_player_heard": 0,
+          "outside_primary_window": 12,
+          "strict_expected_token_match": 0,
+          "strict_expected_declaration": 0,
+          "tokens_match_preceding_latest_activity": 12,
+          "declaration_matches_preceding_latest_activity": 12,
+          "utterances_without_preceding_completion": 0
+        },
+        "emitted_token_sequences": {
+          "9 2": 12
+        },
+        "preceding_activity_match_latency_ticks": [
+          7,
+          7,
+          7,
+          7,
+          11,
+          11,
+          11,
+          11,
+          11,
+          11,
+          11,
+          11
+        ],
+        "actual_utterance_receipts": [
+          {
+            "layout": 0,
+            "recovery_sleep": false,
+            "requested": "EatFood",
+            "tick": 470,
+            "tokens": [
+              9,
+              2
+            ],
+            "speech_act_raw": 0,
+            "player_heard": false,
+            "inside_primary_window": false,
+            "preceding_latest_activity": {
+              "goal": "GetToy",
+              "tick": 463
+            },
+            "matches_preceding_activity": true
+          },
+          {
+            "layout": 0,
+            "recovery_sleep": false,
+            "requested": "GetFood",
+            "tick": 470,
+            "tokens": [
+              9,
+              2
+            ],
+            "speech_act_raw": 0,
+            "player_heard": false,
+            "inside_primary_window": false,
+            "preceding_latest_activity": {
+              "goal": "GetToy",
+              "tick": 463
+            },
+            "matches_preceding_activity": true
+          },
+          {
+            "layout": 0,
+            "recovery_sleep": false,
+            "requested": "GetToy",
+            "tick": 470,
+            "tokens": [
+              9,
+              2
+            ],
+            "speech_act_raw": 0,
+            "player_heard": false,
+            "inside_primary_window": false,
+            "preceding_latest_activity": {
+              "goal": "GetToy",
+              "tick": 463
+            },
+            "matches_preceding_activity": true
+          },
+          {
+            "layout": 0,
+            "recovery_sleep": false,
+            "requested": null,
+            "tick": 470,
+            "tokens": [
+              9,
+              2
+            ],
+            "speech_act_raw": 0,
+            "player_heard": false,
+            "inside_primary_window": false,
+            "preceding_latest_activity": {
+              "goal": "GetToy",
+              "tick": 463
+            },
+            "matches_preceding_activity": true
+          },
+          {
+            "layout": 1,
+            "recovery_sleep": false,
+            "requested": "EatFood",
+            "tick": 477,
+            "tokens": [
+              9,
+              2
+            ],
+            "speech_act_raw": 0,
+            "player_heard": false,
+            "inside_primary_window": false,
+            "preceding_latest_activity": {
+              "goal": "GetToy",
+              "tick": 466
+            },
+            "matches_preceding_activity": true
+          },
+          {
+            "layout": 1,
+            "recovery_sleep": false,
+            "requested": "GetFood",
+            "tick": 477,
+            "tokens": [
+              9,
+              2
+            ],
+            "speech_act_raw": 0,
+            "player_heard": false,
+            "inside_primary_window": false,
+            "preceding_latest_activity": {
+              "goal": "GetToy",
+              "tick": 466
+            },
+            "matches_preceding_activity": true
+          },
+          {
+            "layout": 1,
+            "recovery_sleep": false,
+            "requested": "GetToy",
+            "tick": 477,
+            "tokens": [
+              9,
+              2
+            ],
+            "speech_act_raw": 0,
+            "player_heard": false,
+            "inside_primary_window": false,
+            "preceding_latest_activity": {
+              "goal": "GetToy",
+              "tick": 466
+            },
+            "matches_preceding_activity": true
+          },
+          {
+            "layout": 1,
+            "recovery_sleep": false,
+            "requested": null,
+            "tick": 477,
+            "tokens": [
+              9,
+              2
+            ],
+            "speech_act_raw": 0,
+            "player_heard": false,
+            "inside_primary_window": false,
+            "preceding_latest_activity": {
+              "goal": "GetToy",
+              "tick": 466
+            },
+            "matches_preceding_activity": true
+          },
+          {
+            "layout": 1,
+            "recovery_sleep": true,
+            "requested": "EatFood",
+            "tick": 490,
+            "tokens": [
+              9,
+              2
+            ],
+            "speech_act_raw": 0,
+            "player_heard": false,
+            "inside_primary_window": false,
+            "preceding_latest_activity": {
+              "goal": "GetToy",
+              "tick": 479
+            },
+            "matches_preceding_activity": true
+          },
+          {
+            "layout": 1,
+            "recovery_sleep": true,
+            "requested": "GetFood",
+            "tick": 490,
+            "tokens": [
+              9,
+              2
+            ],
+            "speech_act_raw": 0,
+            "player_heard": false,
+            "inside_primary_window": false,
+            "preceding_latest_activity": {
+              "goal": "GetToy",
+              "tick": 479
+            },
+            "matches_preceding_activity": true
+          },
+          {
+            "layout": 1,
+            "recovery_sleep": true,
+            "requested": "GetToy",
+            "tick": 490,
+            "tokens": [
+              9,
+              2
+            ],
+            "speech_act_raw": 0,
+            "player_heard": false,
+            "inside_primary_window": false,
+            "preceding_latest_activity": {
+              "goal": "GetToy",
+              "tick": 479
+            },
+            "matches_preceding_activity": true
+          },
+          {
+            "layout": 1,
+            "recovery_sleep": true,
+            "requested": null,
+            "tick": 490,
+            "tokens": [
+              9,
+              2
+            ],
+            "speech_act_raw": 0,
+            "player_heard": false,
+            "inside_primary_window": false,
+            "preceding_latest_activity": {
+              "goal": "GetToy",
+              "tick": 479
+            },
+            "matches_preceding_activity": true
+          }
+        ]
+      },
+      "teaching_audit": {
+        "rows": 288,
+        "activities": {
+          "EatFood": 6,
+          "GetToy": 9
+        },
+        "positive_lags": {
+          "requested": {
+            "1": 4,
+            "2": 3,
+            "3": 3,
+            "8": 1,
+            "9": 1
+          },
+          "nonrequested": {
+            "1": 8,
+            "2": 6,
+            "3": 6,
+            "8": 2,
+            "9": 2
+          }
+        },
+        "get_labels_reversing_existing_ownership": [],
+        "instruction_labels_by_request": {
+          "EatFood": {
+            "210:food": 21,
+            "multiple_or_unlabelled": 11
+          },
+          "GetFood": {
+            "211:food": 21,
+            "1:other": 5,
+            "multiple_or_unlabelled": 6
+          },
+          "GetToy": {
+            "211:toy": 11,
+            "multiple_or_unlabelled": 10,
+            "1:other": 11
+          }
+        }
+      }
+    }
+  ],
+  "token_diagnostic_raw_sha256": "408d5db007e86c41d135b2a34f07ea8b1089602783e775916fe8ed80d5a49af0",
+  "post_training_native_diagnostics": [
+    {
+      "actor": "candidate_grounded",
+      "actor_sha256": "8d43907be655949f537aa40939a5fa02b259563ae117048df8aeb050ac881218",
+      "not_a_behavioral_learning_score": true,
+      "real_one_step_fixture": [
+        {
+          "lesson": "EatFood",
+          "command_logits_order": [
+            "food_eat",
+            "food_grab",
+            "toy_grab"
+          ],
+          "command_logits": [
+            4.181926250457764,
+            1.782193899154663,
+            -1.3568189144134521
+          ],
+          "sampling": {
+            "argmax_representative": 19,
+            "counter": 0,
+            "exact_native_resampling_matches_collected_action": true,
+            "label_margin_to_maximum": 0.0,
+            "label_representative": 19,
+            "label_representative_probability": 0.5611499547958374,
+            "seed": 947839,
+            "temperature": 1.0
+          },
+          "actual_outcome": {
+            "actual_first_completed_activity": null,
+            "actual_food_consumption": false,
+            "biological_reward": -1.500929647590965e-05,
+            "energy_delta": -0.00015980005264282227,
+            "owned_after": [
+              1,
+              null
+            ],
+            "owned_before": [
+              null,
+              null
+            ],
+            "scene": {
+              "distractor": 10,
+              "food": 8,
+              "maturation": 0.25,
+              "prepared_tick": 456,
+              "toy": 9
+            },
+            "sealed_patch_sha256": "d6b3ca225d447db2103f9b0dcaebd1d0c7288430228efbf04d1ca5461aaa446e",
+            "teacher_or_prior_present": false
+          }
+        },
+        {
+          "lesson": "GetFood",
+          "command_logits_order": [
+            "food_eat",
+            "food_grab",
+            "toy_grab"
+          ],
+          "command_logits": [
+            3.8040716648101807,
+            3.9294321537017822,
+            0.2522639334201813
+          ],
+          "sampling": {
+            "argmax_representative": 20,
+            "counter": 0,
+            "exact_native_resampling_matches_collected_action": true,
+            "label_margin_to_maximum": 0.0,
+            "label_representative": 20,
+            "label_representative_probability": 0.41175398230552673,
+            "seed": 947839,
+            "temperature": 1.0
+          },
+          "actual_outcome": {
+            "actual_first_completed_activity": null,
+            "actual_food_consumption": false,
+            "biological_reward": -1.500929647590965e-05,
+            "energy_delta": -0.00015980005264282227,
+            "owned_after": [
+              1,
+              null
+            ],
+            "owned_before": [
+              null,
+              null
+            ],
+            "scene": {
+              "distractor": 10,
+              "food": 8,
+              "maturation": 0.25,
+              "prepared_tick": 456,
+              "toy": 9
+            },
+            "sealed_patch_sha256": "8715e0820d208f1bf44db28ab208dc5b0b8dc763fc19ae7e7929e543dd6b069a",
+            "teacher_or_prior_present": false
+          }
+        },
+        {
+          "lesson": "GetToy",
+          "command_logits_order": [
+            "food_eat",
+            "food_grab",
+            "toy_grab"
+          ],
+          "command_logits": [
+            1.0909626483917236,
+            3.444028615951538,
+            2.233126640319824
+          ],
+          "sampling": {
+            "argmax_representative": 20,
+            "counter": 0,
+            "exact_native_resampling_matches_collected_action": true,
+            "label_margin_to_maximum": -1.2109019756317139,
+            "label_representative": 26,
+            "label_representative_probability": 0.14242121577262878,
+            "seed": 947839,
+            "temperature": 1.0
+          },
+          "actual_outcome": {
+            "actual_first_completed_activity": {
+              "lesson": "GetFood",
+              "patch_sha256": "893fa990af4883358c19c1d8ae2737e55a09278d5d1a20e4158f4f8cd91de417",
+              "tick": 456
+            },
+            "actual_food_consumption": false,
+            "biological_reward": -1.500929647590965e-05,
+            "energy_delta": -0.00015980005264282227,
+            "owned_after": [
+              1,
+              null
+            ],
+            "owned_before": [
+              null,
+              null
+            ],
+            "scene": {
+              "distractor": 10,
+              "food": 8,
+              "maturation": 0.25,
+              "prepared_tick": 456,
+              "toy": 9
+            },
+            "sealed_patch_sha256": "893fa990af4883358c19c1d8ae2737e55a09278d5d1a20e4158f4f8cd91de417",
+            "teacher_or_prior_present": false
+          }
+        }
+      ],
+      "pairs": [
+        {
+          "word_pair": "verb",
+          "first_action_logit_delta": {
+            "changed": 31,
+            "l2": 6.063899849312923,
+            "max_abs": 2.5625152587890625
+          },
+          "first_speech_step_delta": {
+            "changed": 32,
+            "l2": 1.4451624500989584,
+            "max_abs": 0.4691535234451294
+          },
+          "matched_gradient_cosine": -0.4859087226327251
+        },
+        {
+          "word_pair": "noun",
+          "first_action_logit_delta": {
+            "changed": 31,
+            "l2": 5.351254764505374,
+            "max_abs": 2.713109016418457
+          },
+          "first_speech_step_delta": {
+            "changed": 32,
+            "l2": 1.6466031643293153,
+            "max_abs": 0.6573162078857422
+          },
+          "matched_gradient_cosine": 0.2085792781194898
+        }
+      ]
+    },
+    {
+      "actor": "candidate_shuffled",
+      "actor_sha256": "04cf37f3f0a66aa5fe3effc2f4516dce582d155af132a7efe39c49fe85d441e6",
+      "not_a_behavioral_learning_score": true,
+      "real_one_step_fixture": [
+        {
+          "lesson": "EatFood",
+          "command_logits_order": [
+            "food_eat",
+            "food_grab",
+            "toy_grab"
+          ],
+          "command_logits": [
+            2.409888982772827,
+            2.802377939224243,
+            2.7376949787139893
+          ],
+          "sampling": {
+            "argmax_representative": 3,
+            "counter": 0,
+            "exact_native_resampling_matches_collected_action": true,
+            "label_margin_to_maximum": -0.6153647899627686,
+            "label_representative": 19,
+            "label_representative_probability": 0.12654584646224976,
+            "seed": 947839,
+            "temperature": 1.0
+          },
+          "actual_outcome": {
+            "actual_first_completed_activity": null,
+            "actual_food_consumption": false,
+            "biological_reward": -1.4602995179302525e-05,
+            "energy_delta": -0.0001506805419921875,
+            "owned_after": [
+              null,
+              null
+            ],
+            "owned_before": [
+              null,
+              null
+            ],
+            "scene": {
+              "distractor": 10,
+              "food": 8,
+              "maturation": 0.25,
+              "prepared_tick": 456,
+              "toy": 9
+            },
+            "sealed_patch_sha256": "40b2f2359fc5792a8d3c283c9a3385accf79e5231438fef54b11a4e103a338a5",
+            "teacher_or_prior_present": false
+          }
+        },
+        {
+          "lesson": "GetFood",
+          "command_logits_order": [
+            "food_eat",
+            "food_grab",
+            "toy_grab"
+          ],
+          "command_logits": [
+            3.652205228805542,
+            2.5000109672546387,
+            1.5073269605636597
+          ],
+          "sampling": {
+            "argmax_representative": 19,
+            "counter": 0,
+            "exact_native_resampling_matches_collected_action": true,
+            "label_margin_to_maximum": -1.1521942615509033,
+            "label_representative": 20,
+            "label_representative_probability": 0.12202169746160507,
+            "seed": 947839,
+            "temperature": 1.0
+          },
+          "actual_outcome": {
+            "actual_first_completed_activity": null,
+            "actual_food_consumption": false,
+            "biological_reward": -1.4602995179302525e-05,
+            "energy_delta": -0.0001506805419921875,
+            "owned_after": [
+              null,
+              null
+            ],
+            "owned_before": [
+              null,
+              null
+            ],
+            "scene": {
+              "distractor": 10,
+              "food": 8,
+              "maturation": 0.25,
+              "prepared_tick": 456,
+              "toy": 9
+            },
+            "sealed_patch_sha256": "0b7f284235529f4da3d9ca3ec411a20ecfadaf695bd1041e0630c9e733750f9f",
+            "teacher_or_prior_present": false
+          }
+        },
+        {
+          "lesson": "GetToy",
+          "command_logits_order": [
+            "food_eat",
+            "food_grab",
+            "toy_grab"
+          ],
+          "command_logits": [
+            3.0197367668151855,
+            4.05574893951416,
+            1.0257903337478638
+          ],
+          "sampling": {
+            "argmax_representative": 20,
+            "counter": 0,
+            "exact_native_resampling_matches_collected_action": true,
+            "label_margin_to_maximum": -3.029958724975586,
+            "label_representative": 26,
+            "label_representative_probability": 0.02074250765144825,
+            "seed": 947839,
+            "temperature": 1.0
+          },
+          "actual_outcome": {
+            "actual_first_completed_activity": null,
+            "actual_food_consumption": false,
+            "biological_reward": -1.500929647590965e-05,
+            "energy_delta": -0.00015980005264282227,
+            "owned_after": [
+              1,
+              null
+            ],
+            "owned_before": [
+              null,
+              null
+            ],
+            "scene": {
+              "distractor": 10,
+              "food": 8,
+              "maturation": 0.25,
+              "prepared_tick": 456,
+              "toy": 9
+            },
+            "sealed_patch_sha256": "c198f16c46199adf0440efb4da70213a92ff7b0fb03e7831e140df5a43fe0818",
+            "teacher_or_prior_present": false
+          }
+        }
+      ],
+      "pairs": [
+        {
+          "word_pair": "verb",
+          "first_action_logit_delta": {
+            "changed": 31,
+            "l2": 4.774488114051414,
+            "max_abs": 2.5625152587890625
+          },
+          "first_speech_step_delta": {
+            "changed": 32,
+            "l2": 1.446751542778801,
+            "max_abs": 0.46933120489120483
+          },
+          "matched_gradient_cosine": -0.570050421211494
+        },
+        {
+          "word_pair": "noun",
+          "first_action_logit_delta": {
+            "changed": 31,
+            "l2": 3.9153173775114833,
+            "max_abs": 1.9642744064331055
+          },
+          "first_speech_step_delta": {
+            "changed": 32,
+            "l2": 1.648167146970866,
+            "max_abs": 0.6573163866996765
+          },
+          "matched_gradient_cosine": 0.42609600644491796
+        }
+      ]
+    },
+    {
+      "actor": "candidate_no_speech",
+      "actor_sha256": "1dc57bb3418ce13e08c333007fa419737795358d2d412d5c732f9e3828bfdf02",
+      "not_a_behavioral_learning_score": true,
+      "real_one_step_fixture": [
+        {
+          "lesson": "EatFood",
+          "command_logits_order": [
+            "food_eat",
+            "food_grab",
+            "toy_grab"
+          ],
+          "command_logits": [
+            1.8719931840896606,
+            5.2831268310546875,
+            5.194788455963135
+          ],
+          "sampling": {
+            "argmax_representative": 20,
+            "counter": 0,
+            "exact_native_resampling_matches_collected_action": true,
+            "label_margin_to_maximum": -3.4111337661743164,
+            "label_representative": 19,
+            "label_representative_probability": 0.014179968275129795,
+            "seed": 947839,
+            "temperature": 1.0
+          },
+          "actual_outcome": {
+            "actual_first_completed_activity": {
+              "lesson": "GetFood",
+              "patch_sha256": "6fadc82f0e21092bc61e1db8461c1e7c25c625a4c3c0d0eaa3b1915159bd8904",
+              "tick": 456
+            },
+            "actual_food_consumption": false,
+            "biological_reward": -1.500929647590965e-05,
+            "energy_delta": -0.00015980005264282227,
+            "owned_after": [
+              1,
+              null
+            ],
+            "owned_before": [
+              null,
+              null
+            ],
+            "scene": {
+              "distractor": 10,
+              "food": 8,
+              "maturation": 0.25,
+              "prepared_tick": 456,
+              "toy": 9
+            },
+            "sealed_patch_sha256": "6fadc82f0e21092bc61e1db8461c1e7c25c625a4c3c0d0eaa3b1915159bd8904",
+            "teacher_or_prior_present": false
+          }
+        },
+        {
+          "lesson": "GetFood",
+          "command_logits_order": [
+            "food_eat",
+            "food_grab",
+            "toy_grab"
+          ],
+          "command_logits": [
+            1.9579755067825317,
+            4.942129135131836,
+            5.054780006408691
+          ],
+          "sampling": {
+            "argmax_representative": 26,
+            "counter": 0,
+            "exact_native_resampling_matches_collected_action": true,
+            "label_margin_to_maximum": -0.11265087127685547,
+            "label_representative": 20,
+            "label_representative_probability": 0.4125690758228302,
+            "seed": 947839,
+            "temperature": 1.0
+          },
+          "actual_outcome": {
+            "actual_first_completed_activity": {
+              "lesson": "GetFood",
+              "patch_sha256": "69ac0664f84b4d5299ce574abe44550930e73f84f0cb0f6d4a15a6acf4350a99",
+              "tick": 456
+            },
+            "actual_food_consumption": false,
+            "biological_reward": -1.500929647590965e-05,
+            "energy_delta": -0.00015980005264282227,
+            "owned_after": [
+              1,
+              null
+            ],
+            "owned_before": [
+              null,
+              null
+            ],
+            "scene": {
+              "distractor": 10,
+              "food": 8,
+              "maturation": 0.25,
+              "prepared_tick": 456,
+              "toy": 9
+            },
+            "sealed_patch_sha256": "69ac0664f84b4d5299ce574abe44550930e73f84f0cb0f6d4a15a6acf4350a99",
+            "teacher_or_prior_present": false
+          }
+        },
+        {
+          "lesson": "GetToy",
+          "command_logits_order": [
+            "food_eat",
+            "food_grab",
+            "toy_grab"
+          ],
+          "command_logits": [
+            0.8760855793952942,
+            5.5366034507751465,
+            6.12556791305542
+          ],
+          "sampling": {
+            "argmax_representative": 26,
+            "counter": 0,
+            "exact_native_resampling_matches_collected_action": true,
+            "label_margin_to_maximum": 0.0,
+            "label_representative": 26,
+            "label_representative_probability": 0.6173467040061951,
+            "seed": 947839,
+            "temperature": 1.0
+          },
+          "actual_outcome": {
+            "actual_first_completed_activity": {
+              "lesson": "GetFood",
+              "patch_sha256": "56dc8282ed536748c84d12ee765b4a1a028c493850e8939f33cc20c97a8855e7",
+              "tick": 456
+            },
+            "actual_food_consumption": false,
+            "biological_reward": -1.500929647590965e-05,
+            "energy_delta": -0.00015980005264282227,
+            "owned_after": [
+              1,
+              null
+            ],
+            "owned_before": [
+              null,
+              null
+            ],
+            "scene": {
+              "distractor": 10,
+              "food": 8,
+              "maturation": 0.25,
+              "prepared_tick": 456,
+              "toy": 9
+            },
+            "sealed_patch_sha256": "56dc8282ed536748c84d12ee765b4a1a028c493850e8939f33cc20c97a8855e7",
+            "teacher_or_prior_present": false
+          }
+        }
+      ],
+      "pairs": [
+        {
+          "word_pair": "verb",
+          "first_action_logit_delta": {
+            "changed": 31,
+            "l2": 4.588349989362885,
+            "max_abs": 2.5868186950683594
+          },
+          "first_speech_step_delta": {
+            "changed": 32,
+            "l2": 1.4446269603319297,
+            "max_abs": 0.46981483697891235
+          },
+          "matched_gradient_cosine": -0.12293767686727539
+        },
+        {
+          "word_pair": "noun",
+          "first_action_logit_delta": {
+            "changed": 31,
+            "l2": 4.1184372236204245,
+            "max_abs": 2.0802001953125
+          },
+          "first_speech_step_delta": {
+            "changed": 32,
+            "l2": 1.6516644968392848,
+            "max_abs": 0.6573161482810974
+          },
+          "matched_gradient_cosine": -0.7878994240940818
+        }
+      ]
+    }
+  ],
+  "historical_v13_recovery": {
+    "historical_v13_cold_private_optimizer_trace_exact_under_v3_compiler": true,
+    "actor_sha256": "4c4757da781b7e17df5053e05f72b8ae06d624c6594c87c6c88e21d2c6686b1b",
+    "elapsed_seconds": 25.591394169001433
+  },
+  "limitations": [
+    "New disposable V3 identity; no accepted brain/private migration or promotion.",
+    "Existing native action/speech decoder coordinates train; recurrent weights/moments/ages freeze. No separate text classifier or forced evaluation.",
+    "Common V8 prior history; no-request removes new teacher cues, not prior language or factual narration labels.",
+    "Unseen eat-toy is a composition/attempt probe; native inedibility and physical outcomes remain authoritative.",
+    "Induced RecoveryProtocol sleep, not spontaneous. No real SLM request or delivery.",
+    "No equal-dose V2-routing arm with this exact curriculum; profile, training mask, instruction schedule and dose differ from the older negative study.",
+    "Two successful physical verb contexts share a seed before/after induced sleep; they are not independent founder replications.",
+    "Eight-tick teaching schedule differs from assessment requests stopping after first explicit activity; speech timing transfer is unresolved.",
+    "Grounded noun pairs and unseen eat-toy composition remain negative; no promotion or full CFF-language claim.",
+    "Raw full reports, every update, measured binary, traces and recoveries remain local; duplicate evaluation arrays omitted here."
+  ],
+  "baseline_first_physical_target_noun_pairs": 0,
+  "baseline_eventual_requested_physical_event_trials": 7
+}

@@ -27,12 +27,14 @@ pub enum FoundationWeightApplication {
 pub enum ExperimentalLanguageInputV1 {
     TwoTokenReadoutBroadcastV1,
     TwoTokenAndEmbodiedSpeechV2,
+    LinearWordReadoutV3,
 }
 impl ExperimentalLanguageInputV1 {
     pub(super) const fn canonical_tag(self) -> &'static [u8] {
         match self {
             Self::TwoTokenReadoutBroadcastV1 => b"experimental-two-token-readout-broadcast-v1",
             Self::TwoTokenAndEmbodiedSpeechV2 => b"experimental-two-token-embodied-speech-v2",
+            Self::LinearWordReadoutV3 => b"experimental-linear-word-readout-v3",
         }
     }
 }

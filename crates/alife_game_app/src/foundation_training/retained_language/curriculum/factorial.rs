@@ -2,6 +2,8 @@
 use super::*;
 mod contrastive;
 mod focus;
+pub(super) mod readout;
+pub use readout::continue_linear_grounded_language;
 #[cfg(test)]
 mod token_probe;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -363,7 +365,9 @@ pub(super) fn evaluate_factorial(
             actor,
             asset,
             c.seed
-                + if plan.paired_request_focus {
+                + if plan.linear_readout {
+                    290_000
+                } else if plan.paired_request_focus {
                     190_000
                 } else {
                     90_000
@@ -599,6 +603,7 @@ fn run_factorial(
             collect_utterance_timing: true,
             factorial_grounding: true,
             paired_request_focus: focused,
+            linear_readout: false,
         };
         if arm == Arm::Grounded {
             eprintln!("factorial common baseline");
