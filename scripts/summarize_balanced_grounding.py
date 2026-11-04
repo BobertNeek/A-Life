@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Audit real V15/V16/V17 rows; report six seed units separately before/after sleep."""
+"""Audit real balanced-curriculum rows; report six seed units separately before/after sleep."""
 import collections
 import io
 import json
@@ -147,12 +147,35 @@ def audit(path):
             'native_rows': sum((t['rows'] for t in phase)),
             'full_native_row_digests': sum(t['full_native_row_digest_count'] for t in phase),
             'by_seed': pairs}
-    return {'kind': 'independent-native-ownership-ingestion-speech-audit',
+    return add_actual_first_phrase_metrics({'kind': 'independent-native-ownership-ingestion-speech-audit',
         'speech_opportunity_protocols': sorted(protocols),
         'independent_N_counts_seeds_once': len({t['world_seed'] for t in rows}),
         'pre_post_not_independent_replicates': True,
         'summaries': summaries,
-        'trials': rows}
+        'trials': rows})
+
+def add_actual_first_phrase_metrics(result):
+    """Literal spoken cue mapping; deliberately separate from event-grounded success."""
+    for phase, summary in result['summaries'].items():
+        trials = [t for t in result['trials'] if t['post_sleep'] == (phase == 'post_sleep')]
+        by_seed = collections.defaultdict(dict)
+        for trial in trials:
+            by_seed[trial['world_seed']][trial['requested']] = trial
+        def first_matches(trial):
+            first = trial['utterance_events'][0] if trial['utterance_events'] else None
+            return bool(first and first['declare'] and first['step'] < 8 and
+                        first['tokens'] == WORDS.get(trial['requested']))
+        summary['first_spoken_requested_verb_pairs_exact_in_cue_window'] = sum(
+            first_matches(g['EatFood']) and first_matches(g['GetFood']) for g in by_seed.values())
+        summary['first_spoken_requested_noun_pairs_exact_in_cue_window'] = sum(
+            first_matches(g['GetFood']) and first_matches(g['GetToy']) for g in by_seed.values())
+        summary['first_spoken_phrase_matches_by_request_in_cue_window'] = {
+            request: sum(first_matches(g[request]) for g in by_seed.values()) for request in WORDS}
+        summary['silent_first_declare_is_taught_phrase'] = sum(
+            bool(g[None]['utterance_events'] and g[None]['utterance_events'][0]['declare'] and
+                 g[None]['utterance_events'][0]['tokens'] in WORDS.values()) for g in by_seed.values())
+    return result
+
 if __name__ == '__main__':
     directory = pathlib.Path(sys.argv[1])
     names = sys.argv[2:] or ['Untreated', 'Grounded', 'Shuffled', 'NoSpeech']
