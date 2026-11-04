@@ -1051,7 +1051,11 @@ mod tests {
             let ev = actor.evaluate_replay(&q).unwrap();
             let zeros = vec![0.; ev.candidate_logits[0].len()];
             let g = actor
-                .probe_replay_gradients_with_speech(&q, &[zeros.clone()], &[Some(target)])
+                .probe_replay_gradients_with_speech(
+                    &q,
+                    std::slice::from_ref(&zeros),
+                    &[Some(target)],
+                )
                 .unwrap();
             let mut intervention = q.clone();
             intervention.ticks[0].encoded_inputs[start + 8] += 0.25;
