@@ -174,6 +174,18 @@ def add_actual_first_phrase_metrics(result):
         summary['silent_first_declare_is_taught_phrase'] = sum(
             bool(g[None]['utterance_events'] and g[None]['utterance_events'][0]['declare'] and
                  g[None]['utterance_events'][0]['tokens'] in WORDS.values()) for g in by_seed.values())
+        silent = [g[None] for g in by_seed.values()]
+        silent_words = [u for t in silent for u in t['utterance_events']]
+        summary['silence'] = {
+            'trials': len(silent),
+            'actual_utterances': sum(t['utterances'] for t in silent),
+            'taught_phrase_declarations': sum(u['declare'] and u['tokens'] in WORDS.values() for u in silent_words),
+            'recent_actual_activity_declarations': sum(t['recent_actual_activity_declarations'] for t in silent),
+            'taught_phrase_without_recent_matching_activity': sum(
+                u['declare'] and u['tokens'] in WORDS.values() and not u['recent_actual_activity_match'] for u in silent_words),
+            'nourished_meals': sum(len(t['nourished_consumption_steps']) for t in silent),
+            'first_acquisition_food_trials': sum(t['first_acquisition'] == 'food' for t in silent),
+            'first_acquisition_toy_trials': sum(t['first_acquisition'] == 'toy' for t in silent)}
     return result
 
 if __name__ == '__main__':
