@@ -105,10 +105,7 @@ fn model_candidate(
     match &experiment.inputs().cloud_parent {
         InterpolationCloudParent::NativeCpuArchive { archive }
             if archive.expected_tree_sha256 == request.expected_cloud_tree_sha256
-                && archive.tree_sha256()? == request.expected_cloud_tree_sha256 =>
-        {
-            ()
-        }
+                && archive.tree_sha256()? == request.expected_cloud_tree_sha256 => {}
         _ => return Err("candidate cloud archive differs from the inspected native tree".into()),
     }
     scope(proof, || {
