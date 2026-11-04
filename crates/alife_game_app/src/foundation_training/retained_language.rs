@@ -1062,6 +1062,6 @@ mod tests {
         export(&mut actor, seed).unwrap();
         assert_eq!(actor.optimizer_step(), 1);
         assert!(actor.checkpoint().first_moment.iter().any(|m| *m != 0.));
-        assert!(actor.checkpoint().update_ages.iter().any(|age| *age == 1));
+        assert!(actor.checkpoint().update_ages.contains(&1));
     }
 }
