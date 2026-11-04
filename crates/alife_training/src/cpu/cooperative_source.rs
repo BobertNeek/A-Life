@@ -114,7 +114,11 @@ fn validate_header(receipt: &Value, handoff: &FoundationTrainingHandoffV1) -> Re
         || receipt["backend"] != "native-cpu"
         || !matches!(
             receipt["mode"].as_str(),
-            Some("native_cpu_fresh_cohort" | CPU_COOPERATIVE_FOUNDER_MODE)
+            Some(
+                "native_cpu_fresh_cohort"
+                    | CPU_COOPERATIVE_FOUNDER_MODE
+                    | super::CPU_UNTRAINED_FOUNDER_MODE
+            )
         )
         || receipt["receipt_filename"] != RECEIPT
         || receipt["handoff_filename"] != HANDOFF
@@ -177,6 +181,17 @@ pub fn read_cpu_founder_source(directory: &Path) -> Result<CpuNativeFounderSourc
     let handoff: FoundationTrainingHandoffV1 = serde_json::from_slice(&files[HANDOFF])?;
     handoff.validate()?;
     validate_header(&receipt, &handoff)?;
+    if receipt["mode"] == super::CPU_UNTRAINED_FOUNDER_MODE {
+        super::fresh_founder::validate_source(&receipt, &handoff)?;
+        let names = fs::read_dir(&root)?
+            .map(|entry| Ok(entry?.file_name().to_string_lossy().into_owned()))
+            .collect::<io::Result<BTreeSet<_>>>()?;
+        if names != files.keys().cloned().collect() {
+            return Err(
+                invalid("untrained founder has unexpected lifetime or source artifacts").into(),
+            );
+        }
+    }
     let actor: FoundationTrainerCheckpoint =
         serde_json::from_slice(&files["actor-checkpoint.json"])?;
     let value: PpoValueHeadCheckpoint = serde_json::from_slice(&files["value-checkpoint.json"])?;
