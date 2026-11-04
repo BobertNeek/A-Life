@@ -2,6 +2,8 @@
 use super::*;
 #[cfg(test)]
 mod speech_factor_probe;
+mod unseen_transfer;
+pub use unseen_transfer::assess_unseen_grounding;
 const HELD_OUT_SEEDS: [u64; 6] = [
     2_404_507, 2_509_943, 2_608_889, 2_700_419, 2_805_623, 2_907_709,
 ];
@@ -24,11 +26,16 @@ struct Sample {
     report_correction: bool,
 }
 
-fn remap(
+fn remap(world: &mut HeadlessWorld, s: Scene, padding: usize, toy_first: bool) -> Result<Scene> {
+    remap_with_food(world, s, padding, toy_first, 1., 0.12)
+}
+fn remap_with_food(
     world: &mut HeadlessWorld,
     mut s: Scene,
     padding: usize,
     toy_first: bool,
+    nutrition: f32,
+    radius: f32,
 ) -> Result<Scene> {
     let b = world
         .entity(world.organism_entity_ids()[0].1)
@@ -56,9 +63,9 @@ fn remap(
             kind: WorldObjectKind::Food,
             organism_id: None,
             position: pos,
-            nutrition: 1.,
+            nutrition,
             hazard_pain: 0.,
-            radius: 0.12,
+            radius,
             token_id: None,
         })
     };
@@ -647,15 +654,24 @@ pub(crate) fn evaluate(
     traces: &mut impl Write,
 ) -> Result<Vec<Value>> {
     let mut results = vec![];
-    for (case, seed) in HELD_OUT_SEEDS.into_iter().enumerate() {
-        let (mut base, s) = prepared(
-            actor,
-            asset,
-            c.seed,
-            seed,
-            40 + case * 7,
-            !case.is_multiple_of(2),
-        )?;
+    let seeds = if plan.unseen_report_transfer_v1 {
+        unseen_transfer::SEEDS
+    } else {
+        HELD_OUT_SEEDS
+    };
+    for (case, seed) in seeds.into_iter().enumerate() {
+        let (mut base, s) = if plan.unseen_report_transfer_v1 {
+            unseen_transfer::prepared_case(actor, asset, c.seed, case)?
+        } else {
+            prepared(
+                actor,
+                asset,
+                c.seed,
+                seed,
+                40 + case * 7,
+                !case.is_multiple_of(2),
+            )?
+        };
         for _ in 0..2 {
             base.step(actor, 1.)?;
         }
@@ -692,13 +708,17 @@ pub(crate) fn evaluate(
                     return Err("balanced assessment sleep failed to wake/consolidate".into());
                 }
             }
-            place_balanced(
-                parent.world_mut(),
-                s,
-                case,
-                true,
-                plan.balanced_grounding_v2,
-            )?;
+            if plan.unseen_report_transfer_v1 {
+                unseen_transfer::place_case(parent.world_mut(), s, case)?;
+            } else {
+                place_balanced(
+                    parent.world_mut(),
+                    s,
+                    case,
+                    true,
+                    plan.balanced_grounding_v2,
+                )?;
+            }
             let paired = identity(&parent.checkpoint(actor)?)?;
             for requested in [
                 Some(Lesson::EatFood),
@@ -972,6 +992,7 @@ fn run_balanced(
             balanced_grounding_v1: !visible,
             balanced_grounding_v2: visible,
             event_confirmed_speech_v1: event_speech,
+            unseen_report_transfer_v1: false,
         };
         eprintln!("balanced {arm:?} cold independent-seed assessment");
         let cold = exact_reload_plan(
@@ -999,7 +1020,7 @@ fn run_balanced(
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn eat_control(
+    pub(super) fn eat_control(
         h: &mut CpuCanonicalHost,
         actor: &CpuFoundationTrainer,
         s: Scene,

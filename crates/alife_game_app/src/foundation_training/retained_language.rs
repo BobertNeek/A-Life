@@ -19,7 +19,7 @@ mod provider_probe;
 #[cfg(test)]
 mod speech_gate_probe;
 pub use curriculum::{
-    continue_action_gated_language, continue_balanced_grounded_language,
+    assess_unseen_grounding, continue_action_gated_language, continue_balanced_grounded_language,
     continue_contrastive_grounded_language, continue_embodied_language_curriculum,
     continue_event_confirmed_speech, continue_factorial_grounded_language,
     continue_focused_grounded_language, continue_language_curriculum,
