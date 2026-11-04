@@ -17,7 +17,7 @@ fn write_new(
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let usage =
-        "export_native_training_handoff SOURCE NEW_OUTPUT\n  --inspect-current FILE\n  --export-current-actor CURRENT NEW_DIRECTORY\n  --inspect-native-frontier SOURCE --expected-policy POLICY\n  --import-current LEGACY_SOURCE SEEDS_JSON NEW_FILE\n  --reserve-current CURRENT FIRST LAST NEW_FILE\n  --consume-current CURRENT SEED NEW_FILE\n  --advance-current CURRENT EPISODE NEW_FILE\n  --extract-current-life CURRENT NEW_DIRECTORY\n  --begin-training-attempt TERMINAL_CURRENT ATTEMPT_NONCE NEW_FILE\nDevice-free admission; no simulation or GPU execution. New files must not exist. Actor export is for fresh-founder probes, not same-individual continuation.";
+        "export_native_training_handoff SOURCE NEW_OUTPUT\n  --inspect-current FILE\n  --export-current-actor CURRENT NEW_DIRECTORY\n  --inspect-native-frontier SOURCE --expected-policy POLICY\n  --import-current LEGACY_SOURCE SEEDS_JSON NEW_FILE\n  --reserve-current CURRENT FIRST LAST NEW_FILE\n  --consume-current CURRENT SEED NEW_FILE\n  --advance-current CURRENT EPISODE NEW_FILE\n  --extract-current-life CURRENT NEW_DIRECTORY\n  --check-new-life TERMINAL_CURRENT NEW_WORLD_SEED NEW_ORGANISM_ID\n  --begin-new-life TERMINAL_CURRENT NEW_WORLD_SEED NEW_ORGANISM_ID NEW_DIRECTORY (GPU initialization, no training)\n  --begin-training-attempt TERMINAL_CURRENT ATTEMPT_NONCE NEW_FILE\nNew-life initialization explicitly requires the native GPU; it performs no world ticks or training. Other commands are device-free. New outputs must not exist. Actor export is for fresh-founder probes, not same-individual continuation.";
     if args.as_slice() == ["--help"] {
         println!("{usage}");
         return Ok(());
@@ -34,6 +34,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ["--export-current-actor", path, output] => Some(
             alife_game_app::export_current_actor_asset(Path::new(path), Path::new(output))?,
         ),
+        ["--check-new-life", path, seed, id] => {
+            Some(alife_game_app::check_new_individual_training_life(
+                Path::new(path),
+                seed.parse()?,
+                id.parse()?,
+            )?)
+        }
+        ["--begin-new-life", path, seed, id, output] => {
+            Some(alife_game_app::begin_new_individual_training_life(
+                Path::new(path),
+                seed.parse()?,
+                id.parse()?,
+                Path::new(output),
+            )?)
+        }
         ["--begin-training-attempt", path, nonce, output] => {
             alife_game_app::resolve_current_training_destination(
                 Path::new(path),
