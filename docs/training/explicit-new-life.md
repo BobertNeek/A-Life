@@ -61,19 +61,14 @@ continuous producer. Setup never extends them. Phase logs include the fixture
 path, Unix time, monotonic elapsed time and both boundaries. Failure preserves
 the disposable fixture; a run must actually reach and pass recovery to qualify.
 
-The first PC hardware attempt on `ec1fe21e` reportedly ran for 894.80 seconds and
-completed four PPO rows before the producer rejected a snapshot. That attempt
-used a fixed 240-second collection / 300-second finalization window starting
-after newborn initialization. It failed at the producer call, before the next
-recovery statement ran; it does not establish successful training recovery.
-The PC owner's retained fixture places the world snapshot write at 12:47:44 UTC,
-55 seconds after the request's 12:46:49 UTC finalization deadline. This confirms
-that capture/publication crossed that test's finalization boundary. The original
-fixture and negative result remain preserved. Production diagnostics now identify the failed invariant,
-including observed admission/deadline seconds for a late snapshot. The production
-predicate is unchanged: a snapshot admitted after its finalization deadline is
-rejected even if GPU capture began in time. No grace period, retrospective clock
-change or promotion of the failed run is provided.
+A capture can begin before finalization and finish after it. The snapshot callback
+checks the admission time after capture/publication and handoff readback. A
+producer failure there occurs before the hardware test's recovery call, so an
+optimizer update alone does not establish a recoverable Current. Production
+diagnostics identify the failed invariant, including admission/deadline seconds
+for a late snapshot. The production predicate remains unchanged: late admission
+is rejected. No grace period, retrospective clock change or promotion of a failed
+run is provided. Preserve failed fixtures for the owner to inspect locally.
 
 Select a new organism ID greater than all retained lineage IDs. Select two
 consecutive unused owned seed entries: the new world seed and world seed + 1 for
