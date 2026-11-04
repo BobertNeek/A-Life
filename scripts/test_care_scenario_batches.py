@@ -11,6 +11,20 @@ import care_scenario_batches as batches
 from llm_care_scenarios import LEGEND, RANDOM_ROLL
 
 
+class PlatformBoundaryTests(unittest.TestCase):
+    def test_windows_initialization_fails_before_filesystem_changes(self):
+        # Runs on every host, including Windows; no POSIX setup is needed.
+        with patch.object(batches.os, 'name', 'nt'), \
+                patch.object(batches, 'validate_plan') as validate, \
+                patch.object(batches, 'Path') as path:
+            with self.assertRaisesRegex(ValueError, 'local POSIX filesystem required'):
+                batches.initialize('must-not-be-created', {})
+            validate.assert_not_called()
+            path.assert_not_called()
+
+
+@unittest.skipUnless(os.name == 'posix' and hasattr(os, 'O_DIRECTORY'),
+                     'batch durability requires a local POSIX filesystem')
 class BatchTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(); self.addCleanup(self.temp.cleanup)

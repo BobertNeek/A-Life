@@ -14,6 +14,22 @@ import care_scenario_dispatch as dispatch
 from llm_care_scenarios import LEGEND, RANDOM_ROLL
 
 
+class PlatformBoundaryTests(unittest.TestCase):
+    def test_windows_initialization_fails_before_paths_or_native_commands(self):
+        # The platform guard must run before reading inputs or choosing a backend.
+        with patch.object(dispatch.os, 'name', 'nt'), \
+                patch.object(dispatch, 'explicit_path') as paths, \
+                patch.object(dispatch, 'construction_only_backend') as backend, \
+                patch.object(dispatch, '_bounded_process') as native:
+            with self.assertRaisesRegex(ValueError, 'local POSIX filesystem required'):
+                dispatch.initialize('run', 'ledger', 'care', 'evaluator', 1)
+            paths.assert_not_called()
+            backend.assert_not_called()
+            native.assert_not_called()
+
+
+@unittest.skipUnless(os.name == 'posix' and hasattr(os, 'O_DIRECTORY'),
+                     'dispatcher lifecycle requires a local POSIX filesystem')
 class DispatcherTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(); self.addCleanup(self.temp.cleanup)
@@ -407,6 +423,8 @@ class FakeProcess:
         return 0
 
 
+@unittest.skipUnless(os.name == 'posix' and hasattr(os, 'O_DIRECTORY'),
+                     'dispatcher process groups and pipe selectors require POSIX')
 class BoundedProcessTests(unittest.TestCase):
     def test_no_shell_or_credentials_and_fixed_prior_off(self):
         fake = FakeProcess(b'{"ok":true}\n', b'native log')
