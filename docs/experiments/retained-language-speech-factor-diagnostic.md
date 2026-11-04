@@ -8,10 +8,12 @@ no-new-teacher actors. Eight unforced native steps per life give 256 decisions.
 Every decision must match the existing V17 full-row digest, and native action
 resampling must reproduce the collected choice exactly.
 
-The probe separates the actual native Vocalize choice, executed vocal channel,
+The probe separates the actual native Vocalize choice, selected vocal channel, authoritative cooldown,
 conditional native payload, lexical bits, presence/stop/Declare gates, and true
 prior physical events. Correct conditional payloads are diagnostics, not actual
-spoken outcomes. Executed utterances must agree with the conditional decoder.
+spoken outcomes. Proposed channel tokens must match the native decoder; actual emissions must
+match that payload after the authoritative cooldown (8 prompted, 32 spontaneous).
+The last actual speech tick is checked against the exact world checkpoint.
 Factual opportunities use V17's event-confirmed cue-window rule.
 
 For each paired onset, a frozen-row replay swaps only the 160-neuron direct input

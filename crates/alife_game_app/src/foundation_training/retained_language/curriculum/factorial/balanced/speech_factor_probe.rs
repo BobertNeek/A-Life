@@ -148,7 +148,15 @@ fn diagnose_native_cue_payload_and_voice_factors() {
             }
             place_balanced(parent.world_mut(), scene, case, true, true).unwrap();
             let id = parent.world().organism_entity_ids()[0].0;
-            let parent_hash = identity(&parent.checkpoint(&actor).unwrap()).unwrap();
+            let parent_checkpoint = parent.checkpoint(&actor).unwrap();
+            let parent_hash = identity(&parent_checkpoint).unwrap();
+            let inherited_speech_tick = parent_checkpoint
+                .world
+                .world
+                .last_creature_utterance_ticks
+                .iter()
+                .find(|(speaker, _)| *speaker == id)
+                .map(|(_, tick)| *tick);
             let mut first = vec![];
             for (request, requested) in [
                 Some(Lesson::EatFood),
@@ -160,6 +168,7 @@ fn diagnose_native_cue_payload_and_voice_factors() {
             .enumerate()
             {
                 let mut h = parent.snapshot();
+                let mut last_actual_speech_tick = inherited_speech_tick;
                 let mut pending = None::<Event>;
                 let mut left = 0;
                 let mut shadow_done = false;
@@ -240,17 +249,63 @@ fn diagnose_native_cue_payload_and_voice_factors() {
                             })
                             .map(|u| u.tokens.iter().map(|t| t.raw()).collect::<Vec<_>>())
                             .collect::<Vec<_>>();
-                        if vocal {
-                            let expected_tokens = decoded
+                        let frame = row.patch.pre_action().perception();
+                        let prompted = frame
+                            .sensory()
+                            .language_context
+                            .heard_tokens
+                            .iter()
+                            .flatten()
+                            .any(|t| t.source_kind == UtteranceSourceKind::Player);
+                        // Match the authoritative world guard: prompted 8, spontaneous 32.
+                        // The actual selected channel flag below verifies the host agrees.
+                        let cooldown = if prompted {
+                            8
+                        } else {
+                            SPONTANEOUS_SPEECH_COOLDOWN_TICKS
+                        };
+                        let cooldown_blocked = last_actual_speech_tick.is_some_and(|last: Tick| {
+                            frame.tick().raw().saturating_sub(last.raw()) < cooldown
+                        });
+                        if let Some(channel) = row.patch.selected_bundle().and_then(|b| {
+                            b.channels
+                                .iter()
+                                .find(|ch| ch.channel == MotorChannel::Vocal)
+                        }) {
+                            if let Some(payload) = decoded.as_ref() {
+                                assert_eq!(
+                                    channel.payload.values.get(2).copied(),
+                                    Some(u32::from(prompted))
+                                );
+                                assert_eq!(
+                                    &channel.payload.values[4..],
+                                    &payload
+                                        .tokens
+                                        .iter()
+                                        .map(|t| u32::from(t.raw()))
+                                        .collect::<Vec<_>>()
+                                );
+                            } else {
+                                assert!(channel.payload.values.is_empty());
+                            }
+                        }
+                        let expected_tokens = if vocal && !cooldown_blocked {
+                            decoded
                                 .as_ref()
                                 .map(|p| p.tokens.iter().map(|t| t.raw()).collect::<Vec<_>>())
                                 .into_iter()
-                                .collect::<Vec<_>>();
-                            assert_eq!(emitted, expected_tokens, "conditional native decoder must match actual executed vocal tokens");
+                                .collect::<Vec<_>>()
                         } else {
-                            assert!(emitted.is_empty());
+                            vec![]
+                        };
+                        assert_eq!(
+                            emitted, expected_tokens,
+                            "native payload and world cooldown must predict actual utterances"
+                        );
+                        records.push(json!({"arm":arm,"case":case,"world_seed":seed,"requested":requested,"tick_after_cue":tick,"native_row_sha256":digest,"row_matches_saved_v17":true,"native_action_resampling_exact":true,"event_confirmed_target":target,"prior_actual_event":pending,"actual_food_consumption":consequences(&row,scene).0,"owners_before":owned_before,"owners_after":owned_after,"selected_vocal_channel":vocal,"native_vocal_choice_selected":vocal_choice,"last_actual_speech_tick_before":last_actual_speech_tick,"prompted_world_speech":prompted,"world_speech_cooldown_ticks":cooldown,"world_speech_cooldown_blocked":cooldown_blocked,"native_payload_matches_proposed_vocal_tokens":true,"world_payload_and_cooldown_predict_actual_utterance":true,"voice_choice_probability":voice_probability(&row,logits),"actual_utterance_tokens":emitted,"conditional_payload_if_vocal_diagnostic_only":decoded,"conditional_payload_correct":target.map(|t|conditional_correct(&decoded,t)),"payload_factors":payload_audit(&raw,target)}));
+                        if !emitted.is_empty() {
+                            last_actual_speech_tick = Some(frame.tick());
                         }
-                        records.push(json!({"arm":arm,"case":case,"world_seed":seed,"requested":requested,"tick_after_cue":tick,"native_row_sha256":digest,"row_matches_saved_v17":true,"native_action_resampling_exact":true,"event_confirmed_target":target,"prior_actual_event":pending,"actual_food_consumption":consequences(&row,scene).0,"owners_before":owned_before,"owners_after":owned_after,"actual_vocal_selected":vocal,"native_vocal_choice_selected":vocal_choice,"native_payload_matches_executed_utterance":true,"voice_choice_probability":voice_probability(&row,logits),"actual_utterance_tokens":emitted,"conditional_payload_if_vocal_diagnostic_only":decoded,"conditional_payload_correct":target.map(|t|conditional_correct(&decoded,t)),"payload_factors":payload_audit(&raw,target)}));
                         if tick == 0 {
                             first.push((
                                 requested,
@@ -311,6 +366,16 @@ fn diagnose_native_cue_payload_and_voice_factors() {
                         }
                     }
                 }
+                let saved_last = h
+                    .checkpoint(&actor)
+                    .unwrap()
+                    .world
+                    .world
+                    .last_creature_utterance_ticks
+                    .iter()
+                    .find(|(speaker, _)| *speaker == id)
+                    .map(|(_, tick)| *tick);
+                assert_eq!(last_actual_speech_tick, saved_last);
             }
             for (a, b) in [(0usize, 1usize), (1, 2), (1, 3)] {
                 let (ra, qa, aa, sa) = &first[a];
