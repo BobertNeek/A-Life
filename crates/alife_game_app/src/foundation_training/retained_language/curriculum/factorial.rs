@@ -1,5 +1,6 @@
 //! Three real commands separate noun choice from action choice; align narration timing.
 use super::*;
+mod contrastive;
 mod focus;
 #[cfg(test)]
 mod token_probe;
@@ -524,20 +525,28 @@ pub fn continue_factorial_grounded_language(
     output: &Path,
     c: LanguagePilotConfig,
 ) -> Result<Value> {
-    run_factorial(source, output, c, false)
+    run_factorial(source, output, c, false, false)
 }
 pub fn continue_focused_grounded_language(
     source: &Path,
     output: &Path,
     c: LanguagePilotConfig,
 ) -> Result<Value> {
-    run_factorial(source, output, c, true)
+    run_factorial(source, output, c, true, false)
+}
+pub fn continue_contrastive_grounded_language(
+    source: &Path,
+    output: &Path,
+    c: LanguagePilotConfig,
+) -> Result<Value> {
+    run_factorial(source, output, c, true, true)
 }
 fn run_factorial(
     source: &Path,
     output: &Path,
     c: LanguagePilotConfig,
     focused: bool,
+    paired_margin: bool,
 ) -> Result<Value> {
     if c.llamacpp_translation
         || !c.experimental_word_bridge
@@ -621,6 +630,15 @@ fn run_factorial(
                 } else {
                     gradients_with_speech(&actor, &e, false)?
                 };
+                let pair_objective = if paired_margin {
+                    let (pair, receipt) = contrastive::gradients(&actor, &e)?;
+                    for (dst, src) in g.iter_mut().zip(pair) {
+                        *dst += 2. * src;
+                    }
+                    Some(receipt)
+                } else {
+                    None
+                };
                 let (payload, objective) = balanced_activity_payload(&actor, &e)?;
                 for (dst, src) in g.iter_mut().zip(payload) {
                     *dst += src
@@ -628,7 +646,7 @@ fn run_factorial(
                 let before = actor.checkpoint();
                 let norm = actor.apply_gradients(&g)?;
                 preserve_frozen(&before, &actor.checkpoint())?;
-                updates.push(json!({"round":round,"epoch":epoch,"step":actor.optimizer_step(),"action":action,"payload":objective,"gradient_norm":norm,"frozen_coordinates_exact":true}));
+                updates.push(json!({"round":round,"epoch":epoch,"step":actor.optimizer_step(),"action":action,"paired_margin":pair_objective,"payload":objective,"gradient_norm":norm,"frozen_coordinates_exact":true}));
                 next = Some(g);
             }
             asset = export(&mut actor, c.seed)?;
@@ -650,7 +668,7 @@ fn run_factorial(
         arms.push(json!({"arm":arm,"common_source_actor_sha256":initial,"source_private_sha256":source_private,"source_step":start,"actor_step":actor.optimizer_step(),"actor_sha256":identity(&actor.checkpoint())?,"collections":collections,"updates":updates,"evaluation":evaluation,"continuity":continuity}));
     }
     trace.finish()?;
-    let report = json!({"kind":if focused {"experimental-paired-request-focus-v12"} else {"experimental-factorial-hold-aware-v11"},"paired_request_focus":focused,"execution_domain":"native-cpu","config":c,"source_report_sha256":identity(&old)?,"lessons":Lesson::ALL,"training_distances":[0.36,0.44],"native_grasp_legality_for_teaching":true,"common_baseline":baseline,"semantic_prior_enabled":false,"teacher":"scripted ordinary spatial speech","arms":arms,"elapsed_seconds":started.elapsed().as_secs_f64(),"limitations":["One common retained V8 history and seed; NoSpeech removes incremental teacher requests, not prior learning or truthful offline activity labels.","Training and assessment both stop request speech after any genuine completed activity; narration keeps the original three eligible quiet-row criterion.","GetFood ownership distinguishes noun choice from GetToy and action choice from EatFood. Missing physical activity classes receive no invented payload labels.","First-event discrimination is reported separately from eventual requested completion: grabbing food can be a legitimate prefix to eating food.","Native actor/Adam continuation across fresh cohorts; exact private/cold/sleep recovery is measured, not same-individual live optimizer rebase.","Induced RecoveryProtocol sleep, relocated contact/near fixtures and visible distractor; no spontaneous sleep or far-navigation claim.","Multiple targeted curriculum changes; no equal-dose old-objective arm, no real SLM delivery claim."]});
+    let report = json!({"kind":if paired_margin {"experimental-paired-margin-v13"} else if focused {"experimental-paired-request-focus-v12"} else {"experimental-factorial-hold-aware-v11"},"paired_request_focus":focused,"execution_domain":"native-cpu","config":c,"source_report_sha256":identity(&old)?,"lessons":Lesson::ALL,"training_distances":[0.36,0.44],"native_grasp_legality_for_teaching":true,"common_baseline":baseline,"semantic_prior_enabled":false,"teacher":"scripted ordinary spatial speech","arms":arms,"elapsed_seconds":started.elapsed().as_secs_f64(),"limitations":["One common retained V8 history and seed; NoSpeech removes incremental teacher requests, not prior learning or truthful offline activity labels.","Training and assessment both stop request speech after any genuine completed activity; narration keeps the original three eligible quiet-row criterion.","GetFood ownership distinguishes noun choice from GetToy and action choice from EatFood. Missing physical activity classes receive no invented payload labels.","First-event discrimination is reported separately from eventual requested completion: grabbing food can be a legitimate prefix to eating food.","Native actor/Adam continuation across fresh cohorts; exact private/cold/sleep recovery is measured, not same-individual live optimizer rebase.","Induced RecoveryProtocol sleep, relocated contact/near fixtures and visible distractor; no spontaneous sleep or far-navigation claim.","Multiple targeted curriculum changes; no equal-dose old-objective arm, no real SLM delivery claim."]});
     write_json(&output.join("results.json"), &report)?;
     Ok(report)
 }

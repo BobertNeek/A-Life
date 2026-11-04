@@ -4,7 +4,10 @@ mod action_gate;
 mod factorial;
 mod payload_stage;
 pub use action_gate::continue_action_gated_language;
-pub use factorial::{continue_factorial_grounded_language, continue_focused_grounded_language};
+pub use factorial::{
+    continue_contrastive_grounded_language, continue_factorial_grounded_language,
+    continue_focused_grounded_language,
+};
 pub use payload_stage::{refine_language_payload, refine_language_shared_gates};
 
 #[derive(Clone, Copy, Serialize, Deserialize)]

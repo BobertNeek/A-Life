@@ -83,7 +83,7 @@ fn action_gradient(
 fn trace_paired_token_paths_and_teaching_gradients() {
     let out = std::path::PathBuf::from(std::env::var("ALIFE_TOKEN_PROBE_OUT").unwrap());
     let mut results = vec![];
-    for (name, directory) in [
+    let mut sources = vec![
         (
             "common_v8",
             "/workspace/language-action-gated-run/recovery-Grounded",
@@ -100,7 +100,20 @@ fn trace_paired_token_paths_and_teaching_gradients() {
             "v11_no_speech",
             "/workspace/language-factorial-hold-run/recovery-NoSpeech",
         ),
-    ] {
+    ];
+    if let Ok(root) = std::env::var("ALIFE_TOKEN_PROBE_FINAL") {
+        for (name, sub) in [
+            ("v12_grounded", "Grounded"),
+            ("v12_shuffled", "Shuffled"),
+            ("v12_no_speech", "NoSpeech"),
+        ] {
+            sources.push((
+                name,
+                Box::leak(format!("{root}/recovery-{sub}").into_boxed_str()),
+            ));
+        }
+    }
+    for (name, directory) in sources {
         let r = read_recovery(Path::new(directory)).unwrap();
         let p =
             PhenotypeCompiler::compile_validated(&r.inputs, &BrainCapacityClass::n2048()).unwrap();
@@ -130,6 +143,12 @@ fn trace_paired_token_paths_and_teaching_gradients() {
             no_teacher_or_prior(&row).unwrap();
             rows.push(row);
         }
+        let silent = base
+            .snapshot()
+            .step(&actor, 1.)
+            .unwrap()
+            .decisions
+            .remove(0);
         let mut qs = vec![];
         let mut evaluations = vec![];
         let mut tapes = vec![];
@@ -171,7 +190,20 @@ fn trace_paired_token_paths_and_teaching_gradients() {
             let other_label =
                 action_target(&rows[a], s, Lesson::ALL[b], false, true, true, false).unwrap();
             let same_input = action_gradient(&actor, &qs[a], &rows[a], other_label).unwrap();
-            pairs.push(json!({"pair":kind,"encoded":delta(&qs[a].ticks[0].encoded_inputs,&qs[b].ticks[0].encoded_inputs),"candidate_context_identical":qs[a].ticks[0].candidates==qs[b].ticks[0].candidates,"initial_identical":rows[a].initial==rows[b].initial,"effective_offsets_identical":qs[a].ticks[0].effective_weight_offsets==qs[b].ticks[0].effective_weight_offsets,"microsteps":tapes[a].iter().zip(&tapes[b]).enumerate().map(|(i,(a,b))|json!({"index":i,"all":delta(a,b),"action_source":delta(&a[motor..motor+128],&b[motor..motor+128]),"speech_source":delta(&a[motor+128..motor+160],&b[motor+128..motor+160])})).collect::<Vec<_>>(),"action_logits_by_tick":evaluations[a].candidate_logits.iter().zip(&evaluations[b].candidate_logits).map(|(a,b)|delta(a,b)).collect::<Vec<_>>(),"speech_logits_by_tick":evaluations[a].final_activations.iter().zip(&evaluations[b].final_activations).map(|(aa,bb)| {let sa=speech(&actor,aa,&qs[a].ticks[0].effective_weight_offsets);let sb=speech(&actor,bb,&qs[b].ticks[0].effective_weight_offsets);sa.iter().zip(sb).map(|(a,b)|delta(a,&b)).collect::<Vec<_>>()}).collect::<Vec<_>>(),"matched_teaching_gradient_delta":delta(&gradients[a],&gradients[b]),"matched_teaching_gradient_cosine":cosine(&gradients[a],&gradients[b]),"first_action_logits_a":evaluations[a].candidate_logits[0],"first_action_logits_b":evaluations[b].candidate_logits[0],"token_only_same_label_gradient_delta":delta(&gradients[a],&same_label),"label_only_same_input_gradient_delta":delta(&gradients[a],&same_input)}));
+            let mut pulse_a = qs[a].clone();
+            let mut pulse_b = qs[b].clone();
+            for q in [&mut pulse_a, &mut pulse_b] {
+                for tick in q.ticks.iter_mut().skip(1) {
+                    *tick = silent.replay_tick.clone();
+                }
+            }
+            let pa = actor.evaluate_replay(&pulse_a).unwrap();
+            let pb = actor.evaluate_replay(&pulse_b).unwrap();
+            let pulse=pa.final_activations.iter().zip(&pb.final_activations).enumerate().map(|(i,(aa,bb))| {
+                let sa=speech(&actor,aa,&pulse_a.ticks[i].effective_weight_offsets);let sb=speech(&actor,bb,&pulse_b.ticks[i].effective_weight_offsets);
+                json!({"tick_after_onset":i,"native_action_source":delta(&aa[motor..motor+128],&bb[motor..motor+128]),"native_speech_source":delta(&aa[motor+128..motor+160],&bb[motor+128..motor+160]),"action_logits":delta(&pa.candidate_logits[i],&pb.candidate_logits[i]),"speech_logits":sa.iter().zip(sb).map(|(a,b)|delta(a,&b)).collect::<Vec<_>>()})
+            }).collect::<Vec<_>>();
+            pairs.push(json!({"pair":kind,"word_pulse_then_actual_silent_context":pulse,"encoded":delta(&qs[a].ticks[0].encoded_inputs,&qs[b].ticks[0].encoded_inputs),"candidate_context_identical":qs[a].ticks[0].candidates==qs[b].ticks[0].candidates,"initial_identical":rows[a].initial==rows[b].initial,"effective_offsets_identical":qs[a].ticks[0].effective_weight_offsets==qs[b].ticks[0].effective_weight_offsets,"microsteps":tapes[a].iter().zip(&tapes[b]).enumerate().map(|(i,(a,b))|json!({"index":i,"all":delta(a,b),"action_source":delta(&a[motor..motor+128],&b[motor..motor+128]),"speech_source":delta(&a[motor+128..motor+160],&b[motor+128..motor+160])})).collect::<Vec<_>>(),"action_logits_by_tick":evaluations[a].candidate_logits.iter().zip(&evaluations[b].candidate_logits).map(|(a,b)|delta(a,b)).collect::<Vec<_>>(),"speech_logits_by_tick":evaluations[a].final_activations.iter().zip(&evaluations[b].final_activations).map(|(aa,bb)| {let sa=speech(&actor,aa,&qs[a].ticks[0].effective_weight_offsets);let sb=speech(&actor,bb,&qs[b].ticks[0].effective_weight_offsets);sa.iter().zip(sb).map(|(a,b)|delta(a,&b)).collect::<Vec<_>>()}).collect::<Vec<_>>(),"matched_teaching_gradient_delta":delta(&gradients[a],&gradients[b]),"matched_teaching_gradient_cosine":cosine(&gradients[a],&gradients[b]),"first_action_logits_a":evaluations[a].candidate_logits[0],"first_action_logits_b":evaluations[b].candidate_logits[0],"token_only_same_label_gradient_delta":delta(&gradients[a],&same_label),"label_only_same_input_gradient_delta":delta(&gradients[a],&same_input)}));
         }
         #[derive(Deserialize)]
         struct Captured {
