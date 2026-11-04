@@ -94,6 +94,9 @@ mod tests {
         let source = directory.0.join("source");
         initialize_cpu_care_founder(&source, 53).unwrap();
         let original = bytes(&source);
+        let compiler_bytes = serde_json::to_vec(
+            &read_cpu_founder_source(&source).unwrap().handoff.compiler_inputs,
+        ).unwrap();
         for mutation in ["actor-age", "actor-moment", "value-moment", "training-claim", "seed"] {
             let mut files = original.clone();
             let mut receipt: Value = serde_json::from_slice(&files["cpu-cycle.json"]).unwrap();
@@ -121,6 +124,12 @@ mod tests {
         for (name, contents) in &original { fs::write(source.join(name), contents).unwrap(); }
         fs::write(source.join("private-checkpoint.json"), b"unexpected lifetime").unwrap();
         assert!(read_cpu_founder_source(&source).is_err());
+        fs::remove_file(source.join("private-checkpoint.json")).unwrap();
+        // The older source modes allow this matching sidecar. Construction-only
+        // sources deliberately have exactly six files and must reject it too.
+        fs::write(source.join("compiler-inputs.json"), compiler_bytes).unwrap();
+        let error = read_cpu_founder_source(&source).err().unwrap().to_string();
+        assert!(error.contains("six standard source files"), "{error}");
     }
 
     #[test]
