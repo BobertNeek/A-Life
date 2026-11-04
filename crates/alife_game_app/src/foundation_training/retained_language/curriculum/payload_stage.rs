@@ -259,6 +259,7 @@ fn refine(
                     balanced_grounding_v2: false,
                     event_confirmed_speech_v1: false,
                     unseen_report_transfer_v1: false,
+                    physical_before_speech_v1: false,
                 }),
             },
             next.ok_or("no payload update")?,

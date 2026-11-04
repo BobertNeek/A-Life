@@ -36,7 +36,7 @@ pub use retained_language::{
     continue_contrastive_grounded_language, continue_embodied_language_curriculum,
     continue_event_confirmed_speech, continue_factorial_grounded_language,
     continue_focused_grounded_language, continue_language_curriculum,
-    continue_linear_grounded_language, continue_report_choice,
+    continue_linear_grounded_language, continue_physical_before_speech, continue_report_choice,
     continue_visible_balanced_grounded_language, refine_language_payload,
     refine_language_shared_gates, reload_language_pilot_child, run_retained_language_pilot,
     LanguagePilotConfig,

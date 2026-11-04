@@ -42,6 +42,15 @@ def audit(path):
             'eligible_rows': 0,
             'token_sequences': collections.Counter()})
         step = tick - t['first_tick']
+        safety = event.get('physical_safety_after_native_tick')
+        if safety is not None:
+            current = t.setdefault('physical_safety', {'recorded_ticks': 0, 'all_alive': True, 'min_health': 1., 'max_injury': 0., 'min_energy': 1., 'max_pain': 0.})
+            current['recorded_ticks'] += 1
+            current['all_alive'] &= safety['alive']
+            current['min_health'] = min(current['min_health'], safety['health'])
+            current['max_injury'] = max(current['max_injury'], safety['injury'])
+            current['min_energy'] = min(current['min_energy'], safety['energy'])
+            current['max_pain'] = max(current['max_pain'], safety['pain'])
         t['rows'] += 1
         if 'native_full_row_sha256' in event:
             assert len(event['native_full_row_sha256']) == 64
@@ -176,6 +185,15 @@ def add_actual_first_phrase_metrics(result):
                  g[None]['utterance_events'][0]['tokens'] in WORDS.values()) for g in by_seed.values())
         silent = [g[None] for g in by_seed.values()]
         silent_words = [u for t in silent for u in t['utterance_events']]
+        if any('physical_safety' in t for t in trials):
+            assert all(t['physical_safety']['recorded_ticks'] == 24 for t in trials)
+            summary['physical_safety'] = {
+                'trials': len(trials),
+                'all_alive_every_recorded_tick': all(t['physical_safety']['all_alive'] for t in trials),
+                'min_health': min(t['physical_safety']['min_health'] for t in trials),
+                'max_injury': max(t['physical_safety']['max_injury'] for t in trials),
+                'min_energy': min(t['physical_safety']['min_energy'] for t in trials),
+                'max_pain': max(t['physical_safety']['max_pain'] for t in trials)}
         summary['silence'] = {
             'trials': len(silent),
             'actual_utterances': sum(t['utterances'] for t in silent),
