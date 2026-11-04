@@ -2,6 +2,7 @@
 //! Native parents stay immutable. Candidates export no optimizer/critic/handoff.
 use super::retained::{run_view_trial, saved_source_phenotype, AssessmentCase, AssessmentView};
 use super::*;
+mod ablations;
 use alife_core::*;
 use alife_training::{cpu::retained_interpolation_experiment::*, AdamWConfig, StageTrainableMask};
 use alife_world::{with_saved_body_rounding_compatibility, SavedBodyRoundingCompatibilityV1};
@@ -25,6 +26,8 @@ struct Request {
     candidates: Vec<CandidateSpec>,
     qualified_controls: Option<PathBuf>,
     output: PathBuf,
+    #[serde(default)]
+    ablation_variant: Option<String>,
 }
 struct Model {
     role: &'static str,
@@ -164,8 +167,13 @@ fn model_candidate(
 pub fn run_actual_interpolation_assessment(spec_path: &Path) -> Result<Value> {
     let request_bytes = fs::read(spec_path)?;
     let request: Request = serde_json::from_slice(&request_bytes)?;
-    if !matches!(request.phase.as_str(), "controls" | "candidates") {
-        return Err("explicit controls or candidates phase required".into());
+    if !matches!(
+        request.phase.as_str(),
+        "controls" | "candidates" | "ablations" | "fresh_battery"
+    ) {
+        return Err(
+            "explicit controls, candidates, ablations or fresh_battery phase required".into(),
+        );
     }
     if request.phase == "controls"
         && (request.candidates.len() != 1 || request.candidates[0].fraction != 0.)
@@ -173,6 +181,8 @@ pub fn run_actual_interpolation_assessment(spec_path: &Path) -> Result<Value> {
             && (request.candidates.len() != 2
                 || request.candidates[0].fraction != 0.5
                 || request.candidates[1].fraction != 1.)
+        || matches!(request.phase.as_str(), "ablations" | "fresh_battery")
+            && !request.candidates.is_empty()
     {
         return Err("unexpected bounded candidate set".into());
     }
@@ -221,7 +231,12 @@ pub fn run_actual_interpolation_assessment(spec_path: &Path) -> Result<Value> {
     let cloud_seed_evidence: Value = serde_json::from_slice(&fs::read(
         request.cloud_native_root.join("care-seed-admission.json"),
     )?)?;
-    for seed in 202611185878..=202611185879 {
+    let seeds = if request.phase == "fresh_battery" {
+        202611185878..=202611185897
+    } else {
+        202611185878..=202611185879
+    };
+    for seed in seeds.clone() {
         if pc.seeds.contains(seed) {
             return Err("assessment seed overlaps known PC training history".into());
         }
@@ -240,6 +255,9 @@ pub fn run_actual_interpolation_assessment(spec_path: &Path) -> Result<Value> {
         return Err("parent body seeds differ".into());
     }
     let executable_sha = hash(&fs::read(std::env::current_exe()?)?);
+    if request.phase == "fresh_battery" {
+        ablations::qualify_battery_request(&request, &executable_sha)?;
+    }
     if request.phase == "candidates" {
         let controls = request
             .qualified_controls
@@ -288,6 +306,14 @@ pub fn run_actual_interpolation_assessment(spec_path: &Path) -> Result<Value> {
         )?);
         models.push(model_parent("pc_native_fresh", &pc.handoff, None)?);
         models.push(model_parent("cloud_native_fresh", &cloud.handoff, None)?);
+    } else if matches!(request.phase.as_str(), "ablations" | "fresh_battery") {
+        let (retained, _) = scope(&proof, || {
+            Ok(derive_retained_projection_from_current(
+                &pc_bytes,
+                &request.expected_pc_sha256,
+            )?)
+        })?;
+        models = ablations::models(&request, &pc.handoff, &cloud.handoff, &retained)?;
     } else {
         for candidate in &request.candidates {
             models.push(model_candidate(
@@ -308,22 +334,55 @@ pub fn run_actual_interpolation_assessment(spec_path: &Path) -> Result<Value> {
     let mut results = Vec::new();
     let mut parity = true;
     let mut trace_pins = BTreeMap::new();
-    for (condition_label, lesson, condition) in [
-        (
-            "held",
-            FoundationTeacherLesson::EatHeldFood,
-            FoundationFoodNeedCondition::NewbornV1,
-        ),
-        (
-            "feeding_aged",
-            FoundationTeacherLesson::Feeding,
-            FoundationFoodNeedCondition::OrdinaryHealthyAgingV1,
-        ),
-    ] {
-        for seed in 202611185878..=202611185879 {
-            if pc.seeds.contains(seed) {
-                return Err("assessment seed overlaps known PC training history".into());
-            }
+    let conditions = if request.phase == "fresh_battery" {
+        vec![
+            (
+                "held",
+                FoundationTeacherLesson::EatHeldFood,
+                FoundationFoodNeedCondition::NewbornV1,
+            ),
+            (
+                "reachable",
+                FoundationTeacherLesson::EatReachableFood,
+                FoundationFoodNeedCondition::NewbornV1,
+            ),
+            (
+                "feeding_newborn",
+                FoundationTeacherLesson::Feeding,
+                FoundationFoodNeedCondition::NewbornV1,
+            ),
+            (
+                "feeding_aged",
+                FoundationTeacherLesson::Feeding,
+                FoundationFoodNeedCondition::OrdinaryHealthyAgingV1,
+            ),
+            (
+                "navigation",
+                FoundationTeacherLesson::ObstacleNavigation,
+                FoundationFoodNeedCondition::NewbornV1,
+            ),
+            (
+                "relocated_aged",
+                FoundationTeacherLesson::RelocatedFood,
+                FoundationFoodNeedCondition::OrdinaryHealthyAgingV1,
+            ),
+        ]
+    } else {
+        vec![
+            (
+                "held",
+                FoundationTeacherLesson::EatHeldFood,
+                FoundationFoodNeedCondition::NewbornV1,
+            ),
+            (
+                "feeding_aged",
+                FoundationTeacherLesson::Feeding,
+                FoundationFoodNeedCondition::OrdinaryHealthyAgingV1,
+            ),
+        ]
+    };
+    for (condition_label, lesson, condition) in conditions {
+        for seed in seeds.clone() {
             for model in &mut models {
                 let trial = output.join(format!("{condition_label}-{seed}-{}", model.role));
                 let mut result = match run_view_trial(
@@ -398,7 +457,7 @@ pub fn run_actual_interpolation_assessment(spec_path: &Path) -> Result<Value> {
     {
         return Err("actual parent bytes changed during assessment".into());
     }
-    let result = json!({"phase":request.phase,"trials":results,"parents_unchanged":true,"global_optimizer_updates":0,"candidate_adoption":"unresolved; no promotion","hardware_gpu_parity":false,"historical_freshness":"unknown"});
+    let result = json!({"pc_sha256":request.expected_pc_sha256,"cloud_tree_sha256":request.expected_cloud_tree_sha256,"executable_sha256":executable_sha,"phase":request.phase,"trials":results,"parents_unchanged":true,"global_optimizer_updates":0,"candidate_adoption":"unresolved; no promotion","hardware_gpu_parity":false,"historical_freshness":"unknown"});
     write(output.join("comparison.json"), &result)?;
     if request.phase == "controls" {
         parity &= results
