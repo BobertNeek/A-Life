@@ -63,3 +63,20 @@ Retain the original newborn case as a named control. A later acquired-parent
 comparison needs properly admitted assessment seeds, frozen actor/full Adam,
 matched bodies and geometry, teacher/prior removal and original success metrics.
 Source qualification does not automatically adopt this condition for training.
+
+For an acquired-parent comparison, build the direct native assessment example.
+Its separate executable leaves existing training and round binaries in place:
+
+```sh
+cargo build --release --offline -j1 -p alife_game_app \
+  --no-default-features --features cpu-training --example assess_cpu_care
+"$CARGO_TARGET_DIR/release/examples/assess_cpu_care" ASSESSMENT.json
+```
+
+Use the existing `CpuCareEvaluationRequest` schema, an immutable admitted native
+parent, a hash-bound history, newly declared assessment exclusions, isolated
+outputs and matched seeds. Set `lesson` to `obstacle_navigation`; compare
+`food_need_condition` values `newborn_v1` and `ordinary_healthy_obstacle_v1`.
+The native evaluator disables teacher/prior and offline optimizer updates while
+preserving ordinary private learning. It verifies full actor/value preservation
+and collector recovery. The example adds no alternative admission or simulation.
