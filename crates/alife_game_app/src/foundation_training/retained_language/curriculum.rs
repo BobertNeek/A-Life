@@ -1,8 +1,10 @@
 //! Opt-in continuation of this pilot's own disposable founders, never a live save.
 use super::*;
 mod action_gate;
+mod factorial;
 mod payload_stage;
 pub use action_gate::continue_action_gated_language;
+pub use factorial::continue_factorial_grounded_language;
 pub use payload_stage::{refine_language_payload, refine_language_shared_gates};
 
 #[derive(Clone, Copy, Serialize, Deserialize)]
@@ -10,6 +12,8 @@ pub(super) struct AssessmentPlan {
     recovery_sleep: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     collect_utterance_timing: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    factorial_grounding: bool,
 }
 
 #[derive(Clone, Serialize)]
@@ -250,6 +254,9 @@ pub(super) fn evaluate(
     plan: AssessmentPlan,
     traces: &mut impl Write,
 ) -> Result<Vec<Value>> {
+    if plan.factorial_grounding {
+        return factorial::evaluate_factorial(actor, asset, config, arm, plan, traces);
+    }
     let mut results = Vec::new();
     for (layout, sleep) in [(0, false), (1, false), (1, true)] {
         if sleep && !plan.recovery_sleep {
@@ -541,6 +548,7 @@ fn continue_curriculum(
                 AssessmentPlan {
                     recovery_sleep: true,
                     collect_utterance_timing: false,
+                    factorial_grounding: false,
                 },
                 &mut baseline_trace
             )?);
@@ -595,6 +603,7 @@ fn continue_curriculum(
                 curriculum: Some(AssessmentPlan {
                     recovery_sleep: true,
                     collect_utterance_timing: false,
+                    factorial_grounding: false,
                 }),
             },
             next_gradient.ok_or("no native update")?,
