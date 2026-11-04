@@ -198,6 +198,18 @@ It does not execute a GPU or certify Windows/NVIDIA parity. Results from this ex
 CPU benchmark until both actual parents and initial states are qualified under
 the same executable. Unknown historical seed freshness remains unknown.
 
+`assess_retained_cpu fresh-controls CURRENT NEW_OUTPUT EXPECTED_SHA256` runs a
+bounded within-parent comparison: two assessment-only seeds, held food and
+ordinarily aged feeding, with retained versus native fresh neural state. Both
+views use the exact same global actor/value history, physical newborn bits,
+temperature 1, 128 scored decisions plus bootstrap and ordinary waking
+plasticity. Native fresh state includes the native default dendrites. It omits
+the source's somatic overlays, acquired sparse structure and learned predictor
+only in that explicitly labeled disposable control. The complete source and
+both optimizer histories remain unchanged. Eight trials can isolate sensitivity
+to the retained overlay; they do not establish an older/newer regression, GPU
+parity or unseen-seed performance.
+
 ### Bounded decoder and motor diagnosis
 
 Build `audit_retained_bridge` and `audit_retained_motor` as examples with

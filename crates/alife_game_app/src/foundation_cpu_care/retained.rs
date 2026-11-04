@@ -240,13 +240,14 @@ pub fn run_retained_cpu_battery(
             let trial = output.join(format!("{label}-{seed}"));
             let result = run_trial(
                 &source,
-                &retained,
+                Some(&retained),
                 &mut founder,
                 &value,
                 &trial,
                 seed,
                 lesson,
                 condition,
+                128,
             );
             let mut record = match result {
                 Ok(v) => v,
@@ -274,22 +275,140 @@ pub fn run_retained_cpu_battery(
     Ok(result)
 }
 
+/// Small within-parent control: the actual retained overlay versus the native
+/// fresh-neural constructor. This is not an older-parent or GPU comparison.
+pub fn run_retained_cpu_fresh_controls(
+    current: &Path,
+    output: &Path,
+    expected_sha256: &str,
+) -> Result<Value> {
+    let source_bytes = fs::read(current)?;
+    if hash(&source_bytes) != expected_sha256 {
+        return Err("control source differs from its explicit SHA256 pin".into());
+    }
+    let (source, source_proof) = match crate::read_current_training_checkpoint(current) {
+        Ok(source) => (source, None),
+        Err(_) => {
+            let proposal =
+                crate::propose_current_body_rounding_compatibility(current, expected_sha256)?;
+            let source = crate::read_current_training_checkpoint_with_body_rounding(
+                current,
+                expected_sha256,
+                &proposal.proof,
+            )?;
+            (source, Some(proposal.proof))
+        }
+    };
+    let retained = body_scope(&source_proof, || {
+        crate::foundation_training_cycle::retained_neural_cpu_projection(&source)
+    })?;
+    let admitted = source.handoff.clone().admit()?;
+    let mut founder = CpuFoundationTrainer::from_checkpoint(
+        admitted.phenotype,
+        admitted.foundation,
+        admitted.actor,
+    )?;
+    let value = CpuValueHead::from_checkpoint(admitted.value)?;
+    retained.canonical_to_live(founder.phenotype())?;
+    let actor_before = serde_json::to_vec(&founder.checkpoint())?;
+    let value_before = serde_json::to_vec(&value.checkpoint())?;
+    if output.exists() {
+        return Err("control output already exists; preserve and inspect".into());
+    }
+    for seed in 202611185878..=202611185879 {
+        if source.seeds.contains(seed) {
+            return Err("assessment-only control seed overlaps known PC training history".into());
+        }
+    }
+    fs::create_dir_all(output)?;
+    write(
+        output.join("control-intent.json"),
+        &json!({
+            "kind":"within-parent-retained-versus-native-fresh-neural",
+            "policy":source.handoff.policy_version,"source_sha256":expected_sha256,
+            "actor_adam":source.handoff.actor.optimizer_step,"value_adam":source.handoff.value.optimizer_step,
+            "assessment_only_seeds":[202611185878u64,202611185879u64],"scored_decisions":128,"bootstrap_decisions":1,
+            "retained":"exact source somatic weights, sparse structure, native/saved dendrites and predictor; new personal memory and body",
+            "native_fresh":"same actual global actor/value and complete Adam; native fresh somatic/topology/predictor state, including native default dendrites",
+            "temperature":1,"teacher_and_semantic_prior":false,"waking_plasticity":"ordinary in both views",
+            "offline_optimizer_updates":0,"new_training_allocations":0,"gpu_parity":false,
+            "limits":"Eight diagnostic trials on reused assessment seeds; no older-parent, GPU, independent native waking-update or generalization claim. World semantics belong to this executable."
+        }),
+    )?;
+    let mut results = Vec::new();
+    for (condition_label, lesson, condition) in [
+        (
+            "held",
+            FoundationTeacherLesson::EatHeldFood,
+            FoundationFoodNeedCondition::NewbornV1,
+        ),
+        (
+            "feeding_aged",
+            FoundationTeacherLesson::Feeding,
+            FoundationFoodNeedCondition::OrdinaryHealthyAgingV1,
+        ),
+    ] {
+        for seed in 202611185878..=202611185879 {
+            for (view, projection) in [("retained", Some(&retained)), ("native_fresh", None)] {
+                let trial = output.join(format!("{condition_label}-{seed}-{view}"));
+                let mut record = match run_trial(
+                    &source,
+                    projection,
+                    &mut founder,
+                    &value,
+                    &trial,
+                    seed,
+                    lesson,
+                    condition,
+                    128,
+                ) {
+                    Ok(record) => record,
+                    Err(error) => {
+                        json!({"complete":false,"lesson_completed":false,"error":error.to_string(),"preserve_all_prefix_artifacts":true})
+                    }
+                };
+                record["view"] = json!(view);
+                record["condition"] = json!(condition_label);
+                record["seed"] = json!(seed);
+                println!(
+                    "{}",
+                    json!({"condition":condition_label,"seed":seed,"view":view,"complete":record["complete"],"lesson_completed":record["lesson_completed"],"error":record["error"]})
+                );
+                results.push(record);
+                write(output.join("results.json"), &results)?;
+            }
+        }
+    }
+    if fs::read(current)? != source_bytes
+        || serde_json::to_vec(&founder.checkpoint())? != actor_before
+        || serde_json::to_vec(&value.checkpoint())? != value_before
+    {
+        return Err(
+            "fresh-neural controls changed source or complete offline optimizer history".into(),
+        );
+    }
+    let result = json!({"trials":results,"source_unchanged":true,"complete_actor_value_unchanged":true,"new_training_allocations":0,"comparative_parent_verdict_qualified":false});
+    write(output.join("comparison.json"), &result)?;
+    Ok(result)
+}
+
 fn run_trial(
     source: &CurrentTrainingCheckpointV1,
-    retained: &CpuRetainedNeuralInheritance,
+    retained: Option<&CpuRetainedNeuralInheritance>,
     founder: &mut CpuFoundationTrainer,
     value: &CpuValueHead,
     output: &Path,
     seed: u64,
     lesson: FoundationTeacherLesson,
     condition: FoundationFoodNeedCondition,
+    scored_limit: usize,
 ) -> Result<Value> {
     let started = Instant::now();
     let (_, mut episode) = prepare_care_episode(CpuCareRequest {
         previous: None,
         output: output.into(),
         seed,
-        decisions: 128,
+        decisions: scored_limit,
         temperature: 1.,
         lesson,
         food_need_condition: condition,
@@ -309,7 +428,9 @@ fn run_trial(
         (seed as u32) ^ ((seed >> 32) as u32),
         |world| episode.prepare_world(world),
     )?;
-    host.inherit_retained_neural(founder, retained)?;
+    if let Some(retained) = retained {
+        host.inherit_retained_neural(founder, retained)?;
+    }
     fs::create_dir(output)?;
     let asset = source
         .handoff
@@ -338,7 +459,7 @@ fn run_trial(
     )?;
     let mut rows = BTreeMap::<u64, Vec<CpuCollectedDecision>>::new();
     let mut failure = None;
-    for _ in 0..129 * 256 {
+    for _ in 0..(scored_limit + 1) * 256 {
         let step = (|| -> Result<CpuCanonicalStep> {
             episode.before_step(&mut host, founder)?;
             let step = host.step_with_preparation(founder, 1., |draft, sequence| {
@@ -358,7 +479,7 @@ fn run_trial(
                 break;
             }
         }
-        if rows.values().map(Vec::len).sum::<usize>() >= 129
+        if rows.values().map(Vec::len).sum::<usize>() >= scored_limit + 1
             || host
                 .world()
                 .organism_registry()
@@ -369,7 +490,7 @@ fn run_trial(
         }
     }
     let decisions = rows.values().map(Vec::len).sum::<usize>();
-    let scored = decisions.min(128);
+    let scored = decisions.min(scored_limit);
     let alive = host
         .world()
         .organism_registry()
@@ -380,8 +501,8 @@ fn run_trial(
     episode.preserve_collection_recovery(&host, founder, output)?;
     let receipt = episode.finish_collection(&host, founder, &rows, scored, output)?;
     let organisms=host.world().organism_registry().iter().map(|r|json!({"organism":r.organism_id(),"alive":r.lifecycle().is_alive(),"biology":r.biochemistry()})).collect::<Vec<_>>();
-    let complete = decisions == 129 && alive && failure.is_none();
-    let result = json!({"lesson":lesson,"food_need_condition":condition,"seed":seed,"body_seed":source.founder_seed_base,"policy":source.handoff.policy_version,"complete":complete,"lesson_completed":receipt.metadata["lesson_completed"],"scored_decisions":scored,"captured_decisions":decisions,"bootstrap_decisions":decisions.saturating_sub(128),"error":failure,"alive":alive,"organisms":organisms,"seconds":started.elapsed().as_secs_f64(),"body_compatibility":compatibility,"episode":receipt.metadata,"teacher_present":false,"semantic_prior_enabled":false,"private_waking_learning":"ordinary","offline_actor_optimizer_updates":0,"offline_value_optimizer_updates":0});
+    let complete = decisions == scored_limit + 1 && alive && failure.is_none();
+    let result = json!({"lesson":lesson,"food_need_condition":condition,"seed":seed,"body_seed":source.founder_seed_base,"policy":source.handoff.policy_version,"complete":complete,"lesson_completed":receipt.metadata["lesson_completed"],"scored_decisions":scored,"captured_decisions":decisions,"bootstrap_decisions":decisions.saturating_sub(scored_limit),"error":failure,"alive":alive,"organisms":organisms,"seconds":started.elapsed().as_secs_f64(),"body_compatibility":compatibility,"episode":receipt.metadata,"teacher_present":false,"semantic_prior_enabled":false,"private_waking_learning":"ordinary","offline_actor_optimizer_updates":0,"offline_value_optimizer_updates":0});
     write(output.join("retained-assessment.json"), &result)?;
     Ok(result)
 }
