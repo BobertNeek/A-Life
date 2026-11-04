@@ -48,9 +48,110 @@ pub(super) fn effective_sampling_temperature(
     Ok(actual)
 }
 
+/// The producer's existing snapshot admission predicate, with an explicit clock
+/// for deterministic deadline tests. A completed capture has no deadline grace.
+pub(super) fn snapshot_boundary(
+    consumed: bool,
+    request: &super::ResidentContinuousRequest,
+    progress: &alife_training::SameIndividualProgressV1,
+    actual_temperature: f32,
+    now: u64,
+) -> Result<(), String> {
+    if !consumed {
+        return Err("session was not durably dispatched".into());
+    }
+    if progress.session_nonce != request.seed_range[0] {
+        return Err(format!(
+            "session nonce {} differs from request {}",
+            progress.session_nonce, request.seed_range[0]
+        ));
+    }
+    if progress.trained_rows > request.total_trained_decisions as u64 {
+        return Err(format!(
+            "trained rows {} exceed request {}",
+            progress.trained_rows, request.total_trained_decisions
+        ));
+    }
+    if progress.sampling_temperature.to_bits() != actual_temperature.to_bits() {
+        return Err(format!(
+            "sampling temperature bits {} differ from retained {}",
+            progress.sampling_temperature.to_bits(),
+            actual_temperature.to_bits()
+        ));
+    }
+    if now > request.finalization_deadline_unix_seconds {
+        return Err(format!(
+            "snapshot admission time {now} exceeds finalization deadline {} by {} seconds",
+            request.finalization_deadline_unix_seconds,
+            now - request.finalization_deadline_unix_seconds
+        ));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn snapshot_fixture() -> (
+        super::super::ResidentContinuousRequest,
+        alife_training::SameIndividualProgressV1,
+    ) {
+        (
+            super::super::ResidentContinuousRequest {
+                schema: 1,
+                seed_range: [8002, 8010],
+                total_trained_decisions: 4,
+                decisions_per_update: 4,
+                snapshot_every_updates: 1,
+                care_assistance: false,
+                sampling_temperature: 0.9,
+                collection_cutoff_unix_seconds: 240,
+                finalization_deadline_unix_seconds: 300,
+                max_temporary_bytes: 2 * 1024 * 1024 * 1024,
+            },
+            alife_training::SameIndividualProgressV1 {
+                session_nonce: 8002,
+                organism_id: 2,
+                session_start_world_tick: 0,
+                world_tick: 5,
+                trained_rows: 4,
+                completed_updates: 1,
+                sampling_temperature: 0.9,
+            },
+        )
+    }
+    #[test]
+    fn snapshot_boundary_rejects_capture_crossing_deadline_without_grace() {
+        let (request, progress) = snapshot_fixture();
+        // Capturing starts before the deadline and returns after it. The
+        // callback's time remains authoritative, not its pre-capture check.
+        assert!(snapshot_boundary(true, &request, &progress, 0.9, 299).is_ok());
+        assert!(snapshot_boundary(true, &request, &progress, 0.9, 300).is_ok());
+        assert_eq!(
+            snapshot_boundary(true, &request, &progress, 0.9, 301).unwrap_err(),
+            "snapshot admission time 301 exceeds finalization deadline 300 by 1 seconds"
+        );
+    }
+    #[test]
+    fn snapshot_boundary_preserves_every_nonclock_rejection() {
+        let (request, progress) = snapshot_fixture();
+        assert!(snapshot_boundary(false, &request, &progress, 0.9, 299)
+            .unwrap_err()
+            .contains("not durably dispatched"));
+        let mut changed = progress.clone();
+        changed.session_nonce += 1;
+        assert!(snapshot_boundary(true, &request, &changed, 0.9, 299)
+            .unwrap_err()
+            .contains("session nonce"));
+        let mut changed = progress.clone();
+        changed.trained_rows += 1;
+        assert!(snapshot_boundary(true, &request, &changed, 0.9, 299)
+            .unwrap_err()
+            .contains("trained rows"));
+        assert!(snapshot_boundary(true, &request, &progress, 1.0, 299)
+            .unwrap_err()
+            .contains("temperature bits"));
+    }
     #[test]
     fn shared_torn_magic_never_identifies_one_store_kind() {
         let new = b"ALIFE-CON-RET-1\n";

@@ -93,7 +93,7 @@ pub(super) fn capture(source: &Path) -> Result<CurrentLifeCheckpointV1> {
     Ok(snapshot)
 }
 
-fn materialize(snapshot: &CurrentLifeCheckpointV1, root: &Path) -> Result<()> {
+pub(super) fn materialize(snapshot: &CurrentLifeCheckpointV1, root: &Path) -> Result<()> {
     let save = alife_world::PortableSaveFile::from_json_str(&snapshot.world_json)?;
     let expected: BTreeSet<_> = save
         .assets
