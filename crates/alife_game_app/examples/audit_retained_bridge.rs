@@ -142,9 +142,12 @@ fn main() -> Result<()> {
             .inherited_neural_source
             .as_ref()
             .ok_or("retained state absent")?;
+        let native_dendrites = alife_gpu_backend::GpuV11CausalState::for_phenotype(&p)?
+            .checkpoint()
+            .dendritic_branches;
         write(
             output.join(format!("{condition}-mapping.json")),
-            &json!({"adapter_map":retained.canonical_to_live(&p)?,"source":retained,"initial_neural":cp.residents[0].neural,"initial_world":cp.world.world}),
+            &json!({"adapter_map":retained.canonical_to_live(&p)?,"source":retained,"retained_dendrites_match_native_initializer":retained.topology.v11_checkpoint.dendritic_branches == native_dendrites,"initial_neural":cp.residents[0].neural,"initial_world":cp.world.world}),
         )?;
         let mut host = scope(&proof, || {
             Ok(CpuCanonicalHost::from_checkpoint(cp, &founder)?)
@@ -173,13 +176,17 @@ fn main() -> Result<()> {
                 for variant in [
                     "full",
                     "acquired_edge_ablated",
-                    "canonical_no_acquired_neural",
+                    "native_canonical_topology",
+                    "all_dendrites_and_acquired_edges_ablated",
                 ] {
                     let mut q = q.clone();
                     if variant != "full" {
                         q.ticks[0].structural_synapses.clear();
                     }
-                    if variant == "canonical_no_acquired_neural" {
+                    if variant == "native_canonical_topology" {
+                        q.initial.dendrites = native_dendrites.clone();
+                    }
+                    if variant == "all_dendrites_and_acquired_edges_ablated" {
                         q.initial.dendrites = Default::default();
                     }
                     let cpu = founder.evaluate_replay(&q)?;

@@ -211,8 +211,10 @@ aged feeding case. Use the battery's exact source/executable semantics: a newer
 world or candidate-enumeration contract can legitimately change its trace and is
 not evidence of a decoder fault. It records actual candidate identities, features, recurrent
 state, mutable offsets, logits and temperature-1 training-sampler state. Replay
-controls remove the acquired edge, then remove both acquired edges and dendrites;
-both retain base somatic weights and the same input state. These controls measure
+controls remove the acquired edge, restore native initial dendrites without
+acquired edges, and remove all dendrites and acquired edges. Each retains base
+somatic weights and the same input state. Saved dendrites can be native defaults;
+do not call their removal an acquired-only or canonical control. These controls measure
 local sensitivity, not ablated world rollouts. An artificial nonzero-input case
 exercises all eight decoder families only to qualify arithmetic.
 
