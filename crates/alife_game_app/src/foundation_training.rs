@@ -32,8 +32,9 @@ mod comparison_identity;
 mod retained_language;
 #[cfg(feature = "cpu-training")]
 pub use retained_language::{
-    continue_language_curriculum, refine_language_payload, refine_language_shared_gates,
-    reload_language_pilot_child, run_retained_language_pilot, LanguagePilotConfig,
+    continue_embodied_language_curriculum, continue_language_curriculum, refine_language_payload,
+    refine_language_shared_gates, reload_language_pilot_child, run_retained_language_pilot,
+    LanguagePilotConfig,
 };
 pub(crate) mod diagnostics;
 pub use comparison_identity::{

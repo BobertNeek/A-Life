@@ -97,6 +97,9 @@ contact and aversive taste do reach speech; the world is not wholly disconnected
 This sharply limits direct bodily grounding. More payload updates do not repair
 those missing paths. A separate explicit embodied-input experiment must preserve
 default/V1 identities and must not migrate accepted or private living state.
+The separate [embodied-input experiment](retained-language-embodied-input.md)
+implements and measures that restricted fork; its matched result also remains
+negative.
 
 ## Real provider attempt and resource blocker
 

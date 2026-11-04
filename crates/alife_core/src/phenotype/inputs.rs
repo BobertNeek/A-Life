@@ -26,6 +26,15 @@ pub enum FoundationWeightApplication {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ExperimentalLanguageInputV1 {
     TwoTokenReadoutBroadcastV1,
+    TwoTokenAndEmbodiedSpeechV2,
+}
+impl ExperimentalLanguageInputV1 {
+    pub(super) const fn canonical_tag(self) -> &'static [u8] {
+        match self {
+            Self::TwoTokenReadoutBroadcastV1 => b"experimental-two-token-readout-broadcast-v1",
+            Self::TwoTokenAndEmbodiedSpeechV2 => b"experimental-two-token-embodied-speech-v2",
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -428,8 +437,8 @@ impl PhenotypeCompilerInputs {
             d.write_u8(1);
             d.write_u64(seed);
         }
-        if self.experimental_language_input.is_some() {
-            d.write_bytes(b"experimental-two-token-readout-broadcast-v1");
+        if let Some(profile) = self.experimental_language_input {
+            d.write_bytes(profile.canonical_tag());
         }
         let language_codebook = self.foundation_abi_selection.language_codebook();
         if let Some(asset) = &self.n2048_candidate_asset {

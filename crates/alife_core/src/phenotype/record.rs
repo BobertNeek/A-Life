@@ -579,8 +579,8 @@ impl BrainPhenotype {
         for word in self.compiler_inputs_digest {
             d.write_u64(word);
         }
-        if self.experimental_language_input.is_some() {
-            d.write_bytes(b"experimental-two-token-readout-broadcast-v1");
+        if let Some(profile) = self.experimental_language_input {
+            d.write_bytes(profile.canonical_tag());
         }
         self.cognitive_architecture.write_canonical(&mut d)?;
         d.write_u16(self.brain_class_id.raw());

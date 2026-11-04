@@ -35,8 +35,10 @@ use crate::{
     AdamWConfig, FoundationTrainerCheckpoint, StageTrainableMask, TrainingError,
     TrainingGradientProbe, TrainingReplayEvaluation, TrainingSequence,
 };
+use alife_core::phenotype::ExperimentalLanguageInputV1;
 use alife_core::{
-    BrainPhenotype, FoundationWeightAsset, ScaffoldContractError, TrainingStageManifest,
+    BrainCapacityClass, BrainPhenotype, FoundationWeightAsset, PhenotypeCompiler,
+    PhenotypeCompilerInputs, ScaffoldContractError, TrainingStageManifest,
 };
 
 fn invalid() -> TrainingError {
@@ -179,6 +181,53 @@ impl CpuFoundationTrainer {
         mask.validate_for(&self.phenotype)?;
         self.checkpoint.stage_mask = mask;
         Ok(())
+    }
+
+    /// Explicit NEW experimental founder. Never rebinds a resident/private life.
+    /// Only the existing experimental V1 input can fork to embodied V2; ordinary
+    /// or live-policy inputs cannot enter. All weights/moments/ages are retained.
+    pub fn fork_embodied_language_input_experiment(
+        &self,
+        source: &PhenotypeCompilerInputs,
+    ) -> Result<(Self, PhenotypeCompilerInputs), TrainingError> {
+        if source.experimental_language_input()
+            != Some(ExperimentalLanguageInputV1::TwoTokenReadoutBroadcastV1)
+            || self.phenotype.experimental_language_input() != source.experimental_language_input()
+            || source.live_policy().is_some()
+            || source
+                .n2048_candidate_asset()
+                .map(FoundationWeightAsset::digest)
+                != Some(self.source_foundation.digest())
+            || PhenotypeCompiler::compile_validated(source, &BrainCapacityClass::n2048())?
+                .phenotype_hash()
+                != self.phenotype.phenotype_hash()
+            || self
+                .weights()
+                .iter()
+                .zip(self.phenotype.synapses())
+                .any(|(w, s)| w.to_bits() != s.genetic_weight().to_bits())
+        {
+            return Err(invalid());
+        }
+        let inputs = source.clone().with_experimental_language_input(
+            ExperimentalLanguageInputV1::TwoTokenAndEmbodiedSpeechV2,
+        )?;
+        let next = PhenotypeCompiler::compile_validated(&inputs, &BrainCapacityClass::n2048())?;
+        if next.synapses() != self.phenotype.synapses()
+            || next.projections() != self.phenotype.projections()
+            || next.neuron_dynamics() != self.phenotype.neuron_dynamics()
+            || next.persistent_address_map() != self.phenotype.persistent_address_map()
+            || next.candidate_decoder() != self.phenotype.candidate_decoder()
+            || next.speech_decoder() != self.phenotype.speech_decoder()
+        {
+            return Err(invalid());
+        }
+        let mut checkpoint = self.checkpoint();
+        checkpoint.phenotype_hash = next.phenotype_hash();
+        Ok((
+            Self::from_checkpoint(next, self.source_foundation.clone(), checkpoint)?,
+            inputs,
+        ))
     }
     /// Admit an exported founder for the next fresh cohort without resetting
     /// either Adam moment, any per-coordinate age, the mask or global step.
