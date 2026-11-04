@@ -24,6 +24,44 @@ pub(super) struct CompiledDecoderSet {
     pub receipts: Vec<RouteBudgetReceipt>,
 }
 
+pub(super) fn compile_encoder_for_inputs(
+    inputs: &super::PhenotypeCompilerInputs,
+    layout: &LobeLayout,
+) -> Result<SensorEncoderPlan, ScaffoldContractError> {
+    let legacy = compile_encoder(
+        inputs.genome(),
+        inputs.development(),
+        layout,
+        inputs.sensor_profile(),
+    )?;
+    if inputs.experimental_language_input().is_none() {
+        return Ok(legacy);
+    }
+    // Explicit experiment: distribute the same two raw token bit vectors to
+    // each native action-source bank and speech context. No token meanings,
+    // desired actions, labels or world entity IDs enter this projection.
+    let motor = layout
+        .region(LobeKind::ActionPlanning)
+        .ok_or_else(compile_error)?;
+    if motor.len < 160 {
+        return Err(compile_error());
+    }
+    let mut assignments = legacy.assignments().to_vec();
+    for offset in 0..160_u32 {
+        assignments.push(SensorEncoderAssignment::new(
+            SensorEncoderSourceGroup::HeardLanguage,
+            (offset % 16) as u16,
+            motor.start + offset,
+            0.5,
+            0.0,
+            -1.0,
+            1.0,
+        ));
+    }
+    assignments.sort_by_key(|a| (a.target_neuron(), a.source_group().raw(), a.source_index()));
+    SensorEncoderPlan::try_new(inputs.sensor_profile(), assignments)
+}
+
 pub(super) fn compile_encoder(
     genome: &BrainGenome,
     development: &DevelopmentState,

@@ -1349,11 +1349,19 @@ pub(super) fn validate_record_founder(
             .phenotype()
             .development_state_at(record.biochemistry().tick)?,
     )?;
-    let (compiled, _) = PhenotypeCompiler::compile_n2048_foundation_candidate(
-        genome.clone(),
-        development,
-        founder.source_foundation.clone(),
-    )?;
+    let (compiled, _) = if p.experimental_language_input().is_some() {
+        PhenotypeCompiler::compile_experimental_n2048_language_candidate(
+            genome.clone(),
+            development,
+            founder.source_foundation.clone(),
+        )?
+    } else {
+        PhenotypeCompiler::compile_n2048_foundation_candidate(
+            genome.clone(),
+            development,
+            founder.source_foundation.clone(),
+        )?
+    };
     if compiled.phenotype_hash() != p.phenotype_hash() {
         return Err(CpuHostError::State("organism compiler identity differs from CPU founder; heterogeneous graphs require per-row compilation"));
     }

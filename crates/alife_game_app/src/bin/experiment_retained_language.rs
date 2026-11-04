@@ -16,14 +16,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut values = BTreeMap::new();
     let mut disposable = false;
     let mut slm = false;
+    let mut bridge = false;
     while let Some(key) = args.next() {
         match key.as_str() {
             "--help" | "-h" => {
-                println!("experiment_retained_language --disposable-public-founder --output NEW_DIRECTORY [--seed 847501] [--epochs 16] [--rounds 2] [--decisions 24] [--llamacpp-translation]\n\nExperimental native CPU food/eat versus toy/get teaching with grounded, shuffled-word, and untreated arms. Reuses ordinary spatial speech and the existing bounded translator. Optional llama.cpp translation uses its existing localhost defaults and must return confirmed translations; it never falls back silently. No semantic prior is injected. Evaluates player requests and silent lives with the teacher absent, reversed positions and visible distractors. Writes local experimental recovery data and a source-safe results JSON; does not promote a creature or change live training.");
+                println!("experiment_retained_language --disposable-public-founder --output NEW_DIRECTORY [--seed 847501] [--epochs 16] [--rounds 2] [--decisions 24] [--llamacpp-translation] [--experimental-word-bridge]\n\nExperimental native CPU food/eat versus toy/get teaching with grounded, shuffled-word, and untreated arms. Reuses ordinary spatial speech and the existing bounded translator. Optional llama.cpp translation uses its existing localhost defaults and must return confirmed translations; it never falls back silently. No semantic prior is injected. Evaluates player requests and silent lives with the teacher absent, reversed positions and visible distractors. Writes local experimental recovery data and a source-safe results JSON; does not promote a creature or change live training.");
                 return Ok(());
             }
             "--disposable-public-founder" if !disposable => disposable = true,
             "--llamacpp-translation" if !slm => slm = true,
+            "--experimental-word-bridge" if !bridge => bridge = true,
             "--output" | "--seed" | "--epochs" | "--rounds" | "--decisions" => {
                 let value = args.next().ok_or("missing argument value")?;
                 if values.insert(key, value).is_some() {
@@ -55,6 +57,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .unwrap_or_else(|| "24".into())
             .parse()?,
         llamacpp_translation: slm,
+        experimental_word_bridge: bridge,
     };
     println!(
         "{}",
