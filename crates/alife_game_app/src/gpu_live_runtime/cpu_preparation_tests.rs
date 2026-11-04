@@ -199,6 +199,7 @@ impl OwnerFixture {
         }
         Self {
             input: CapturedCpuPreparation {
+                candidate_binding: None,
                 approximate_cache: None,
                 draft,
                 sequence_id,
@@ -290,6 +291,115 @@ fn terrain_slots(count: usize) -> Vec<GpuBrainSlot> {
             slot
         })
         .collect()
+}
+
+#[test]
+fn crowded_observed_focus_reaches_audited_and_cached_gpu_preparation() {
+    let owner = OrganismId(811);
+    let mut fixture = OwnerFixture::terrain(owner.raw(), false);
+    let tick = fixture.input.draft.tick();
+    let mut world = HeadlessScenarioBuilder::new(60_044)
+        .agent("observer", owner, Vec3f::ZERO)
+        .build()
+        .unwrap();
+    let mut far = None;
+    for i in 0..16 {
+        let id = world
+            .spawn_toy(
+                &format!("object-{i}"),
+                Vec3f::new(1.0 + i as f32 * 0.3, 0.0, 0.2),
+                true,
+            )
+            .unwrap();
+        world.editor_set_optical_opacity(id, 0.0).unwrap();
+        far = Some(id);
+    }
+    let far = far.unwrap();
+    let mut moving = world.entity(far).unwrap().grounded_physical;
+    moving.velocity = Vec3f::new(4.0, 0.0, 0.0);
+    world.set_grounded_physical_properties(far, moving).unwrap();
+    let index = world.build_perception_batch_index().unwrap();
+    let (draft, binding) = world
+        .perception_frame_draft_indexed_with_bindings(
+            owner,
+            tick,
+            SensorProfile::GroundedTerrainVisionV1,
+            fixture.input.homeostasis,
+            &index,
+        )
+        .unwrap();
+    assert_eq!(draft.grounded_object_slots().len(), 16);
+    assert!(!draft
+        .candidates()
+        .iter()
+        .any(|c| c.target.entity == Some(far)));
+    fixture.input.draft = draft;
+    fixture.input.candidate_binding = binding;
+    fixture.input.hysteresis = HysteresisState::default();
+    fixture.input.policy.switch_cost = NormalizedScalar::new(1.0).unwrap();
+    let slots = terrain_slots(1);
+    let original = fixture.snapshot();
+    for cached in [false, true] {
+        fixture.input.approximate_cache = cached.then(Default::default);
+        // Switch the real attention incumbent without advancing the cache's
+        // recall interval. Each newly admitted object's memory keys must bind.
+        for focal_slot in [15, 14, 15] {
+            let focal = StableFocusIdentity::TrackedObject(
+                fixture.input.draft.grounded_object_slots()[focal_slot].tracked_object_id,
+            );
+            let target = world.entity_id(&format!("object-{focal_slot}")).unwrap();
+            fixture.input.hysteresis.previous_identity = Some(focal);
+            let outcome = prepare_cpu_rows(&[fixture.job(&slots[0])], 1, false)
+                .unwrap()
+                .remove(0);
+            let prepared = outcome
+                .result
+                .unwrap_or_else(|e| panic!("{}: {e}", outcome.stage));
+            assert_eq!(prepared.frame.candidates().len(), 31);
+            assert_eq!(
+                prepared
+                    .memory_recall
+                    .cognitive_context()
+                    .unwrap()
+                    .attention
+                    .focal_targets[0],
+                focal
+            );
+            assert_eq!(
+                prepared
+                    .frame
+                    .candidates()
+                    .iter()
+                    .filter(|c| c.target.entity == Some(target))
+                    .count(),
+                6
+            );
+            prepared
+                .memory_recall
+                .validate_for_frame(&prepared.frame)
+                .unwrap();
+            assert_eq!(
+                alife_gpu_backend::GpuPerceptionUpload::try_from_frame(
+                    &prepared.frame,
+                    &slots[0],
+                    0
+                )
+                .unwrap()
+                .candidates
+                .len(),
+                31
+            );
+            if cached {
+                fixture.input.approximate_cache = outcome.approximate_cache;
+            }
+        }
+    }
+    fixture.input.hysteresis = HysteresisState::default();
+    assert_eq!(
+        fixture.snapshot(),
+        original,
+        "preparation cannot rewrite retained sidecars or ordinary evidence"
+    );
 }
 
 fn canonical_slots(count: usize) -> Vec<GpuBrainSlot> {
