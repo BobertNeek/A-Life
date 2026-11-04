@@ -5,7 +5,10 @@ exact measured V14 grounded actor, native Adam moments and integer optimizer age
 at step 320. Untouched, grounded, shuffled and no-new-request arms begin from that
 same actor. The three continuations take 48 native updates (two rounds of 24).
 Default brains, the experimental V3 identity, source private recovery and all
-previous negative evidence remain unchanged. No creature is promoted.
+previous negative evidence remain unchanged. No creature is promoted. Each new
+cohort has its own native private life; this retains the learned actor rather
+than transplanting the source individual into another world. Exact private-state
+continuity is checked within each saved life, and the original host is preserved.
 
 ## Teaching and assessment
 
@@ -26,7 +29,9 @@ real acquisition or consumption, begin after the instruction window and last at
 most three eligible quiet rows. Impossible EatToy events are never fabricated,
 so truthful speech lexical marginals cannot be exactly factorially balanced.
 
-Only the existing 4,096 native action/speech decoder coordinates train. Frozen
+This is actor-only supervised foundation continuation, not an online critic/PPO
+claim. Biological rewards are recorded from the unmodified world. Only the
+existing 4,096 native action/speech decoder coordinates train. Frozen
 weights, moments and ages are checked exactly after each update. Native recurrent
 inputs, private state, routes, biological receptor modulation and sealed outcomes
 remain in each actual replay row. There is no independent text classifier.
@@ -38,13 +43,18 @@ remain in the authoritative world. Each seed has paired EatFood/GetFood/GetToy a
 silence trials. Evaluation has no teacher or semantic prior, no forced action and
 no evaluation update. Native ownership, actual consumption with nourishment and
 executed Vocal payloads determine outcomes, rather than desired labels or logits.
+The audit separately counts timely factual narration and timely narration whose
+actual activity also matches the requested command; acquisition under Eat does
+not become a completed Eat declaration.
 
 Pre-sleep and post-sleep results are separate, with N=6 seed units in each phase.
 The same seed before and after sleep is dependent, not two independent samples.
 Sleep uses the existing induced RecoveryProtocol and must consolidate and wake;
 there is no matched awake-delay control or spontaneous-sleep causal claim. These
 are six environments for one trained founder, not six independent trained brains.
-All four arms receive full fresh-process trace/state/next-Adam checks.
+All four arms receive full fresh-process trace/state/next-Adam checks. This
+expansion tests the three taught token combinations on new physical instances;
+it does not teach new nouns or rerun the earlier negative unseen EatToy probe.
 
 ## Preserved V15 fixture diagnostic
 
@@ -85,7 +95,9 @@ scored. These scripted controls are separate from unforced evaluation.
 V16 assessment traces retain the first complete native row for each life,
 complete action/world patches on every row and a SHA-256 of every full native
 row. Full actor/host/private recovery remains saved. Cold recovery regenerates
-and checks full-row digests and next-Adam/private-state identity. V15's original
+and checks full-row digests and next-Adam/private-state identity. The next-update
+check applies the retained real gradient in both process copies; it does not
+claim a newly recomputed training gradient after reload. V15's original
 full-row format and replay path are preserved. Training rows remain complete.
 
 ## Provider boundary
@@ -106,3 +118,57 @@ python scripts/summarize_balanced_grounding.py NEW_DIRECTORY
 The older `--balanced-readout` flag retains the V15 geometry and trace protocol
 for reproducibility. Both require this pilot's measured public V14 source and
 write a new directory. Neither path accepts or changes live training.
+
+## Completed expanded comparison
+
+V16 measured source: `4d3d5bdfe7ab474f213b78898e2a876745ee31de`.
+Binary SHA-256:
+`62b5b5a85470a136385911cb2c7f681cd62ef160b6dca95986bbcd2c808779c4`.
+Elapsed: 1022.755 native CPU seconds (1022.791 external seconds). V15's preserved
+diagnostic cost another 1420.740 native seconds. Each run has 48 updates per
+trained arm, 576 training decisions per continuation and 1,152 scored assessment
+decisions per arm, each repeated completely in a fresh process. Preparation,
+private continuation and sleep steps are additional unscored work.
+
+Each arrow is pre-sleep to post-sleep, with the same six seed units in each phase.
+
+| Arm | Verb pairs (of 6) | Noun pairs (of 6) | Actual utterances | Timely factual declarations | Timely requested-activity declarations |
+|---|---:|---:|---:|---:|---:|
+| Untouched | 0 → 0 | 1 → 1 | 16 → 24 | 1 → 1 | 0 → 0 |
+| Grounded | 1 → 1 | 3 → 3 | 20 → 24 | 1 → 1 | 1 → 1 |
+| Shuffled | 0 → 0 | 0 → 0 | 16 → 24 | 1 → 0 | 0 → 0 |
+| No new teacher cue | 1 → 1 | 1 → 1 | 17 → 20 | 4 → 3 | 1 → 1 |
+
+A physical verb pair requires actual ingestion under EatFood and real acquisition
+without any ingestion over all 24 steps under GetFood. A noun pair requires the
+first acquired object to be food under GetFood and toy under GetToy. Restricting
+the physical outcomes to the eight-tick cue window gives the same counts.
+Grounded's verb positive is seed 2907709; no-request's is 2509943. Each repeats
+before/after sleep and counts once. The no-request control matches grounded's
+verb score, so a grounded-specific Eat/Get improvement is not established.
+
+The small noun advantage (three of six versus one, zero and one) is a limited
+physical signal on new instances, not reliable noun comprehension. There is only
+one trained founder, six coupled seed/layout units and no independent training
+replicate or new lexical noun. All trained-arm utterances are the same `get food`
+sequence: grounded 44, shuffled 40 and no-request 37. Grounded's one timely
+requested-activity match per phase is therefore not cue-sensitive production;
+no-request matches that score and has more factual matches. Neither utterance
+volume nor loss is treated as competence. No promotion is supported.
+
+All four arms have exact full assessment, private state and next-Adam recovery.
+Every V16 assessed row has a full native-row digest; independent patch/ownership/
+speech audits match the native metrics exactly. Each seed's induced sleep has
+13 sleeping ticks, one consolidation and a completed wake before assessment.
+These paired outcomes establish no causal sleep benefit without an awake-delay
+control. All frozen native weights, moments and integer ages stay exact at every
+update; the untouched actor remains byte-identical to the common source actor.
+
+Seventeen native language tests pass, including the three new balance/occlusion/
+feeding tests; four opt-in diagnostics are ignored. Strict Clippy including
+tests, headless compilation, formatting and Python compilation pass. Historical
+V14 and V15 full existing traces, private continuity and next native Adam update
+reproduce exactly under the final native code. Earlier result files remain
+unchanged. Source-safe per-seed outcomes, actual utterance sequences, training
+counts and continuity receipts are in
+[the comparison JSON](retained-language-balanced-grounding-results.json).
