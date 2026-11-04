@@ -1,7 +1,6 @@
 use super::super::tests::{game, metadata_life, terminal};
 use super::*;
 use alife_core::*;
-use alife_training::*;
 
 fn learned_topology(p: &BrainPhenotype) -> GpuLiveTopologyCheckpointV1 {
     for source in 0..16 {
@@ -285,7 +284,7 @@ fn retained_neural_round_trip_preserves_structure_all_banks_and_canonical_adam()
     assert_eq!(source.encode().unwrap(), original);
     #[cfg(feature = "cpu-training")]
     {
-        use alife_training::cpu::*;
+        use alife_training::{cpu::*, CriticResidualRow};
         let p = source.handoff.clone().admit().unwrap().phenotype;
         let asset = source
             .handoff
