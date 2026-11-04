@@ -14,7 +14,7 @@ from pathlib import Path
 import subprocess
 import time
 
-from compare_cpu_care_rounds import file_pin, native_pins, raw_tree, read_json, require
+from compare_cpu_care_rounds import decode_json, file_pin, native_pins, raw_tree, read_json, require
 from care_frontier_sampler import score_assessment, select, validate_bank
 
 FAMILIES = [
@@ -31,6 +31,16 @@ def write_new(path, value):
     with path.open("x", encoding="utf-8") as stream:
         json.dump(value, stream, sort_keys=True, allow_nan=False)
         stream.write("\n")
+
+
+def read_discovery(path):
+    # Unlike the object-only bank, discovery is an explicit bounded JSON array.
+    with Path(path).open("rb") as stream:
+        raw = stream.read(1024**2 + 1)
+    require(len(raw) <= 1024**2, "discovery JSON exceeds byte bound")
+    value = decode_json(raw, path, object_only=False)
+    require(isinstance(value, list), "discovery JSON must be an array")
+    return value
 
 
 class Pilot:
@@ -193,7 +203,7 @@ def main():
     pilot = Pilot(args.output.absolute(), args.care_binary, args.round_binary,
                   args.decisions, args.discovery_per_family, args.slots,
                   read_json(args.bank, 1024**2) if args.bank else None,
-                  read_json(args.discovery, 1024**2) if args.discovery else None)
+                  read_discovery(args.discovery) if args.discovery else None)
     try:
         result = pilot.run()
     except (ValueError, KeyError, TypeError, OSError, subprocess.TimeoutExpired) as error:

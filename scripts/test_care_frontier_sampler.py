@@ -11,7 +11,38 @@ import sys
 from unittest.mock import patch
 
 import care_frontier_sampler as sampler
+import run_care_frontier_fixture as fixture_runner
 from run_care_frontier_fixture import Pilot
+
+
+class FixtureDiscoveryCliTests(unittest.TestCase):
+    def test_cli_loads_discovery_array_and_passes_it_to_pilot(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            bank_path = root / "bank.json"
+            discovery_path = root / "discovery.json"
+            bank_path.write_text(json.dumps({"test": "bank"}), encoding="utf-8")
+            discovery = [{"family": "a", "seed": 301}]
+            discovery_path.write_text(json.dumps(discovery), encoding="utf-8")
+            argv = ["fixture", "--output", str(root / "out"), "--care-binary", "care",
+                    "--round-binary", "round", "--bank", str(bank_path),
+                    "--discovery", str(discovery_path)]
+            with patch.object(sys, "argv", argv), patch.object(fixture_runner, "Pilot") as cls:
+                cls.return_value.root = root / "out"
+                cls.return_value.run.return_value = {"status": "test", "statistics": {}}
+                fixture_runner.main()
+                self.assertEqual(cls.call_args.args[-1], discovery)
+
+    def test_discovery_rejects_duplicate_keys_and_non_array(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "discovery.json"
+            for raw in ('[{"family":"a","family":"b","seed":1}]', '{}', '[NaN]'):
+                path.write_text(raw, encoding="utf-8")
+                with self.assertRaises(ValueError):
+                    fixture_runner.read_discovery(path)
+            path.write_bytes(b" " * (1024**2 + 1))
+            with self.assertRaisesRegex(ValueError, "exceeds byte bound"):
+                fixture_runner.read_discovery(path)
 
 
 def bank():
