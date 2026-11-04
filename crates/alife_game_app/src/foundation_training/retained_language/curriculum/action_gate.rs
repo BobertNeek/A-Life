@@ -177,6 +177,7 @@ pub fn continue_action_gated_language(
                     collect_utterance_timing: true,
                     paired_request_focus: false,
                     linear_readout: false,
+                    balanced_grounding_v1: false,
                     factorial_grounding: false
                 },
                 &mut trace
@@ -228,6 +229,7 @@ pub fn continue_action_gated_language(
                     factorial_grounding: false,
                     paired_request_focus: false,
                     linear_readout: false,
+                    balanced_grounding_v1: false,
                 }),
             },
             next.ok_or("no update")?,

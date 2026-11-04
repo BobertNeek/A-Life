@@ -5,8 +5,9 @@ mod factorial;
 mod payload_stage;
 pub use action_gate::continue_action_gated_language;
 pub use factorial::{
-    continue_contrastive_grounded_language, continue_factorial_grounded_language,
-    continue_focused_grounded_language, continue_linear_grounded_language,
+    continue_balanced_grounded_language, continue_contrastive_grounded_language,
+    continue_factorial_grounded_language, continue_focused_grounded_language,
+    continue_linear_grounded_language,
 };
 pub use payload_stage::{refine_language_payload, refine_language_shared_gates};
 
@@ -21,6 +22,8 @@ pub(super) struct AssessmentPlan {
     paired_request_focus: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     linear_readout: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    balanced_grounding_v1: bool,
 }
 
 #[derive(Clone, Serialize)]
@@ -261,6 +264,9 @@ pub(super) fn evaluate(
     plan: AssessmentPlan,
     traces: &mut impl Write,
 ) -> Result<Vec<Value>> {
+    if plan.balanced_grounding_v1 {
+        return factorial::balanced::evaluate(actor, asset, config, arm, plan, traces);
+    }
     if plan.linear_readout {
         return factorial::readout::evaluate(actor, asset, config, arm, plan, traces);
     }
@@ -561,6 +567,7 @@ fn continue_curriculum(
                     factorial_grounding: false,
                     paired_request_focus: false,
                     linear_readout: false,
+                    balanced_grounding_v1: false,
                 },
                 &mut baseline_trace
             )?);
@@ -618,6 +625,7 @@ fn continue_curriculum(
                     factorial_grounding: false,
                     paired_request_focus: false,
                     linear_readout: false,
+                    balanced_grounding_v1: false,
                 }),
             },
             next_gradient.ok_or("no native update")?,
