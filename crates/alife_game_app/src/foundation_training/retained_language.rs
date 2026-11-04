@@ -1,0 +1,1067 @@
+//! Explicit public-founder experiment; not a gameplay policy or checkpoint migration.
+//! Teacher labels only enter detached native BPTT. Every collected transition,
+//! reward, motor bundle and speech emission comes from the canonical CPU host.
+use super::*;
+use alife_core::*;
+use alife_semantic::{BoundedSpeechTranslator, TranslationAssistance};
+use alife_training::{
+    cpu::*, FoundationTrainerCheckpoint, ImitationExample, ImitationTarget, ReplaySpeechTarget,
+};
+use alife_world::*;
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
+use std::{fs, io::Write, process::Command};
+
+#[derive(Debug, Clone, Copy, Serialize)]
+pub struct LanguagePilotConfig {
+    pub seed: u64,
+    pub epochs: usize,
+    pub rounds: usize,
+    pub decisions: usize,
+    pub llamacpp_translation: bool,
+}
+
+fn hash(bytes: &[u8]) -> String {
+    format!("{:x}", Sha256::digest(bytes))
+}
+fn identity(value: &impl Serialize) -> Result<String> {
+    Ok(hash(&serde_json::to_vec(value)?))
+}
+fn write_json(path: &Path, value: &impl Serialize) -> Result<()> {
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)?;
+    file.write_all(&serde_json::to_vec(value)?)?;
+    Ok(())
+}
+
+#[derive(Clone, Copy, Serialize, Deserialize)]
+enum Goal {
+    EatFood,
+    GetToy,
+}
+impl Goal {
+    fn word(self) -> u16 {
+        match self {
+            Self::EatFood => 8,
+            Self::GetToy => 9,
+        }
+    }
+    fn noun(self) -> u16 {
+        match self {
+            Self::EatFood => 1,
+            Self::GetToy => 2,
+        }
+    }
+    fn index(self) -> usize {
+        match self {
+            Self::EatFood => 0,
+            Self::GetToy => 1,
+        }
+    }
+}
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum Arm {
+    Grounded,
+    Shuffled,
+    Untreated,
+}
+#[derive(Clone, Copy, Serialize, Deserialize)]
+struct Scene {
+    food: WorldEntityId,
+    toy: WorldEntityId,
+    distractor: WorldEntityId,
+}
+impl Scene {
+    fn target(self, goal: Goal) -> WorldEntityId {
+        match goal {
+            Goal::EatFood => self.food,
+            Goal::GetToy => self.toy,
+        }
+    }
+}
+
+fn teacher_input(slm: bool) -> Result<Vec<SpeechTranslationReceipt>> {
+    ["eat food", "get toy"]
+        .into_iter()
+        .enumerate()
+        .map(|(i, text)| {
+            let request = SpeechTranslationRequest::try_new(
+                UtteranceId::new(i as u64 + 1)?,
+                None,
+                SpeechTranslationInput::PlayerText { text: text.into() },
+                basic_vocabulary_bindings(),
+            )?;
+            let receipt = if slm {
+                alife_semantic::LlamaCppSpeechTranslator::new(Default::default())?
+                    .translate(&request)?
+            } else {
+                BoundedSpeechTranslator::new(
+                    "bounded-pilot-teacher-v1",
+                    TranslationAssistance::Disabled,
+                )?
+                .translate(&request)?
+            };
+            // This pilot's fixed distinction cannot silently change when a translator
+            // omits or reorders a word. Preserve the actual delivery receipt.
+            let expected = if i == 0 { vec![8, 1] } else { vec![9, 2] };
+            if receipt
+                .literal_tokens
+                .iter()
+                .map(|t| t.raw())
+                .collect::<Vec<_>>()
+                != expected
+                || receipt.assisted != slm
+            {
+                return Err(
+                    "teacher translation did not deliver this pilot's bounded lesson".into(),
+                );
+            }
+            Ok(receipt)
+        })
+        .collect()
+}
+
+fn game(seed: u64, founder: u64, asset: &FoundationWeightAsset) -> Result<CanonicalNewGame> {
+    let mut config = CanonicalNewGameConfig::phase3(seed, 1)?;
+    config.brain_class = BrainScaleTier::Standard2048;
+    config.sensor_profile = asset.manifest().sensor_profile();
+    config.founder_seed_base = founder;
+    Ok(create_canonical_new_game_with_n2048_candidate(
+        &config, asset,
+    )?)
+}
+
+fn compile(
+    seed: u64,
+    asset: &FoundationWeightAsset,
+) -> Result<(BrainPhenotype, PhenotypeCompilerInputs)> {
+    let initial = game(seed, seed, asset)?;
+    let record = initial
+        .world
+        .organism_registry()
+        .iter()
+        .next()
+        .ok_or("no founder")?;
+    let genome = record.phenotype().brain_genome.clone();
+    let capacity = BrainCapacityClass::n2048();
+    let development = alife_runtime::canonical_preparation::foundation_construction_development(
+        &genome,
+        &capacity,
+        &record.phenotype().development_state_at(Tick::ZERO)?,
+    )?;
+    Ok(PhenotypeCompiler::compile_n2048_foundation_candidate(
+        genome,
+        development,
+        asset.clone(),
+    )?)
+}
+
+fn new_actor(seed: u64, asset: &FoundationWeightAsset) -> Result<CpuFoundationTrainer> {
+    let (p, _) = compile(seed, asset)?;
+    let ids = p
+        .synapses()
+        .iter()
+        .enumerate()
+        .filter_map(|(i, s)| match s.kind() {
+            CompiledSynapseKind::Recurrent => Some(i as u32),
+            CompiledSynapseKind::Decoder(c)
+                if matches!(
+                    c.head(),
+                    DecoderHeadKind::ActionCandidate | DecoderHeadKind::SpeechPayload
+                ) =>
+            {
+                Some(i as u32)
+            }
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    let mask = StageTrainableMask::from_synapse_indices(&p, &ids)?;
+    Ok(CpuFoundationTrainer::new(
+        p,
+        asset.clone(),
+        mask,
+        AdamWConfig {
+            learning_rate: 0.003,
+            ..Default::default()
+        },
+    )?)
+}
+
+fn arrange(world: &mut HeadlessWorld, layout: usize, evaluation: bool) -> Result<Scene> {
+    ground_foundation_training_world(world)?;
+    world.configure_ecology(EcologyState::default())?;
+    let (_, body) = world.organism_entity_ids()[0];
+    for object in world.object_snapshots() {
+        if object.id != body {
+            world.editor_remove_object(object.id)?;
+        }
+    }
+    let body = world.entity(body).ok_or("missing body")?.clone();
+    let distance = if evaluation {
+        if layout == 0 {
+            0.85
+        } else {
+            2.4
+        }
+    } else {
+        0.65 + 0.04 * layout as f32
+    };
+    let side = if layout.is_multiple_of(2) { 1. } else { -1. };
+    let offset = if evaluation { -side } else { side };
+    let position = |bearing: f32, distance: f32| {
+        Vec3f::new(
+            body.position.x + distance * (body.body_yaw + bearing).cos(),
+            body.position.y,
+            body.position.z + distance * (body.body_yaw + bearing).sin(),
+        )
+    };
+    let food = world.editor_spawn_object(WorldEditorSpawnSpec {
+        label: "pilot-food".into(),
+        kind: WorldObjectKind::Food,
+        organism_id: None,
+        position: position(offset * 0.58, distance),
+        nutrition: 1.,
+        hazard_pain: 0.,
+        radius: 0.12,
+        token_id: None,
+    })?;
+    let toy = world.spawn_toy("pilot-toy", position(-offset * 0.58, distance + 0.05), true)?;
+    let distractor = world.editor_spawn_object(WorldEditorSpawnSpec {
+        label: "pilot-visible-distractor".into(),
+        kind: WorldObjectKind::Obstacle,
+        organism_id: None,
+        position: position(0., 3.5),
+        nutrition: 0.,
+        hazard_pain: 0.,
+        radius: 0.15,
+        token_id: None,
+    })?;
+    Ok(Scene {
+        food,
+        toy,
+        distractor,
+    })
+}
+
+fn host(
+    seed: u64,
+    founder_seed: u64,
+    asset: &FoundationWeightAsset,
+    actor: &CpuFoundationTrainer,
+    layout: usize,
+    evaluation: bool,
+) -> Result<(CpuCanonicalHost, Scene)> {
+    Ok(CpuCanonicalHost::new_prepared_cohort(
+        game(seed, founder_seed, asset)?,
+        actor,
+        seed as u32,
+        |world| arrange(world, layout, evaluation),
+    )?)
+}
+
+fn speech_position(world: &HeadlessWorld) -> Result<Vec3f> {
+    let entity = world
+        .entity(world.organism_entity_ids()[0].1)
+        .ok_or("no learner body")?;
+    // A lateral speaker does not stand between the eye and either target.
+    Ok(Vec3f::new(
+        entity.position.x,
+        entity.position.y,
+        entity.position.z + 3.0,
+    ))
+}
+fn no_teacher_or_prior(row: &CpuCollectedDecision) -> Result<()> {
+    let frame = row.patch.pre_action().perception();
+    if frame
+        .sensory()
+        .language_context
+        .heard_tokens
+        .iter()
+        .flatten()
+        .any(|h| h.source_kind == UtteranceSourceKind::Teacher)
+        || frame.sensory().semantic_context.is_some()
+    {
+        return Err("evaluation retained teacher speech or semantic prior".into());
+    }
+    Ok(())
+}
+
+struct Episode {
+    rows: Vec<CpuCollectedDecision>,
+    labels: Vec<ImitationTarget>,
+    speech: Vec<Option<ReplaySpeechTarget>>,
+}
+
+fn action_label(row: &CpuCollectedDecision, goal: Goal, scene: Scene) -> ImitationTarget {
+    let frame = row.patch.pre_action().perception();
+    // Existing foundation vocabulary selector supplies a loss label only. Its
+    // target and remembered geometry never enter the learner's sensory frame.
+    let chosen = vocabulary_reception_choice(
+        frame,
+        Some(u32::from(goal.word())),
+        Some(scene.target(goal)),
+        None,
+    );
+    let mut motors = [None; 6];
+    if let Some(candidate) = chosen {
+        let slot = match candidate.kind {
+            ActionKind::Move => Some(0),
+            ActionKind::Look => Some(1),
+            ActionKind::Interact => Some(2),
+            ActionKind::Rest | ActionKind::Inspect | ActionKind::Idle => Some(4),
+            _ => None,
+        };
+        if let Some(slot) = slot {
+            let bit = 1u32 << candidate.candidate_index;
+            if row.action.motor_masks[slot] & bit != 0 {
+                motors[slot] = Some(bit);
+            }
+        }
+    }
+    ImitationTarget {
+        representative: None,
+        motors,
+    }
+}
+
+fn speech_label(
+    row: &CpuCollectedDecision,
+    previous: Option<&CpuCollectedDecision>,
+    goal: Goal,
+    scene: Scene,
+) -> Option<ReplaySpeechTarget> {
+    // Existing vocabulary production gates: a verb requires an actual earlier
+    // successful command/consequence; hearing the request earns no verb label.
+    grounded_speech_label(
+        row.patch.pre_action().perception(),
+        Some(goal.word()),
+        Some(goal.noun()),
+        Some(scene.target(goal)),
+        previous.map(|r| &r.patch),
+        None,
+        true,
+    )
+}
+
+fn collect(
+    actor: &CpuFoundationTrainer,
+    asset: &FoundationWeightAsset,
+    config: LanguagePilotConfig,
+    arm: Arm,
+    round: usize,
+    translations: &[SpeechTranslationReceipt],
+    traces: &mut impl Write,
+) -> Result<(Vec<Episode>, Value)> {
+    let mut episodes = Vec::new();
+    let (mut heard, mut positive, mut labels, mut decisions, mut rewards) = (0, 0, 0, 0, 0.0f64);
+    for episode in 0..8 {
+        let goal = if episode % 2 == 0 {
+            Goal::EatFood
+        } else {
+            Goal::GetToy
+        };
+        let seed = config.seed + 100 + (round * 8 + episode) as u64;
+        let (mut host, scene) = host(seed, config.seed, asset, actor, episode / 2, false)?;
+        let mut data = Episode {
+            rows: Vec::new(),
+            labels: Vec::new(),
+            speech: Vec::new(),
+        };
+        for tick in 0..config.decisions {
+            if arm != Arm::Untreated && tick % 8 == 0 {
+                // Four counterbalanced blocks: half aligned, half crossed in
+                // the shuffled control, for each physical lesson and layout.
+                let index = goal.index()
+                    ^ usize::from(
+                        arm == Arm::Shuffled && (episode / 2 + tick / 8).is_multiple_of(2),
+                    );
+                let position = speech_position(host.world())?;
+                let id = host.world().organism_entity_ids()[0].0;
+                alife_school::LanguageNursery::speak_in_world(
+                    host.world_mut(),
+                    id,
+                    position,
+                    translations[index].literal_tokens.clone(),
+                )?;
+            }
+            let step = host.step(actor, 1.0).map_err(|e| {
+                format!("native collection round {round} episode {episode} tick {tick}: {e}")
+            })?;
+            for row in step.decisions {
+                let frame = row.patch.pre_action().perception();
+                heard += usize::from(
+                    frame
+                        .sensory()
+                        .language_context
+                        .heard_tokens
+                        .iter()
+                        .flatten()
+                        .any(|h| h.source_kind == UtteranceSourceKind::Teacher),
+                );
+                let label = action_label(&row, goal, scene);
+                let speech = speech_label(&row, data.rows.last(), goal, scene);
+                positive += usize::from(speech.is_some_and(|s| s.token.is_some()));
+                labels += usize::from(label.motors.iter().any(Option::is_some));
+                decisions += 1;
+                rewards += f64::from(row.biological_reward);
+                writeln!(
+                    traces,
+                    "{}",
+                    json!({"phase":"training","arm":arm,"round":round,"episode":episode,"goal":goal,"scene":scene,"row":row,"label":{"representative":label.representative,"motors":label.motors},"speech_target":speech})
+                )?;
+                data.labels.push(label);
+                data.speech.push(speech);
+                data.rows.push(row);
+            }
+        }
+        if data.rows.is_empty() {
+            return Err("lesson collected no native decisions".into());
+        }
+        episodes.push(data);
+    }
+    Ok((
+        episodes,
+        json!({"round":round,"native_decisions":decisions,"teacher_heard_frames":heard,"action_label_rows":labels,"positive_speech_label_rows":positive,"sum_native_biological_reward":rewards}),
+    ))
+}
+
+fn sequence(
+    actor: &CpuFoundationTrainer,
+    episode: &Episode,
+    end: usize,
+    start: usize,
+) -> TrainingSequence {
+    TrainingSequence {
+        phenotype_hash: actor.phenotype().phenotype_hash(),
+        initial: episode.rows[0].initial.clone(),
+        ticks: episode.rows[..end]
+            .iter()
+            .map(|r| r.replay_tick.clone())
+            .collect(),
+        burn_in_ticks: start,
+        memory_candidate_gain: actor
+            .phenotype()
+            .candidate_decoder()
+            .memory_channel()
+            .map_or(0., |m| m.max_candidate_gain()),
+    }
+}
+
+fn gradients(actor: &CpuFoundationTrainer, episodes: &[Episode]) -> Result<(Vec<f32>, Value)> {
+    let mut sum = vec![0.; actor.weights().len()];
+    let mut loss = 0.0f64;
+    let mut windows = 0;
+    for episode in episodes {
+        for start in (0..episode.rows.len()).step_by(16) {
+            let end = (start + 16).min(episode.rows.len());
+            let sequence = sequence(actor, episode, end, start);
+            let replay = actor.evaluate_replay(&sequence)?;
+            let mut adjoints = Vec::new();
+            for (i, logits) in replay
+                .candidate_logits
+                .iter()
+                .enumerate()
+                .take(end)
+                .skip(start)
+            {
+                let action = &episode.rows[i].action;
+                if episode.labels[i].representative.is_none()
+                    && episode.labels[i].motors.iter().all(Option::is_none)
+                {
+                    // Absence of an observed actionable referent is absence of
+                    // supervision, not an invented idle label or dropped row.
+                    adjoints.push(vec![0.; logits.len()]);
+                    continue;
+                }
+                let example = ImitationExample {
+                    candidate_count: action.candidate_count,
+                    representative_mask: action.representative_mask,
+                    motor_masks: action.motor_masks,
+                    forced_slots: action.forced_slots.clone(),
+                    target: episode.labels[i].clone(),
+                };
+                let objective = cpu_imitation_objective(logits, &example, 1., 1.)?;
+                loss +=
+                    f64::from(objective.loss) / episode.rows.len() as f64 / episodes.len() as f64;
+                adjoints.push(
+                    objective
+                        .logit_gradients
+                        .into_iter()
+                        .map(|g| g / (end - start) as f32)
+                        .collect(),
+                );
+            }
+            let mut speech = vec![None; start];
+            speech.extend_from_slice(&episode.speech[start..end]);
+            let probe = actor.probe_replay_gradients_with_speech(&sequence, &adjoints, &speech)?;
+            let scale = (end - start) as f32 / episode.rows.len() as f32 / episodes.len() as f32;
+            for (dst, src) in sum.iter_mut().zip(probe.gradients) {
+                *dst += src * scale;
+            }
+            windows += 1;
+        }
+    }
+    Ok((sum, json!({"mean_action_loss":loss,"bptt_windows":windows})))
+}
+
+fn preserve_frozen(
+    before: &FoundationTrainerCheckpoint,
+    after: &FoundationTrainerCheckpoint,
+) -> Result<()> {
+    for i in 0..before.weights.len() {
+        if !before.stage_mask.is_trainable(i)
+            && (before.weights[i].to_bits() != after.weights[i].to_bits()
+                || before.first_moment[i].to_bits() != after.first_moment[i].to_bits()
+                || before.second_moment[i].to_bits() != after.second_moment[i].to_bits()
+                || before.update_ages[i] != after.update_ages[i])
+        {
+            return Err("offline pilot changed a frozen coordinate".into());
+        }
+    }
+    Ok(())
+}
+
+fn export(actor: &mut CpuFoundationTrainer, seed: u64) -> Result<FoundationWeightAsset> {
+    let before = actor.checkpoint();
+    let asset = actor.export_candidate(TrainingStageManifest::new(1, 1, 1))?;
+    let (p, _) = compile(seed, &asset)?;
+    actor.rebind_for_next_cohort(p, asset.clone())?;
+    let after = actor.checkpoint();
+    if before.weights != after.weights
+        || before.first_moment != after.first_moment
+        || before.second_moment != after.second_moment
+        || before.update_ages != after.update_ages
+        || before.optimizer_step != after.optimizer_step
+        || before.stage_mask != after.stage_mask
+    {
+        return Err("founder export reset native Adam state".into());
+    }
+    Ok(asset)
+}
+
+fn physical_controls(
+    actor: &CpuFoundationTrainer,
+    asset: &FoundationWeightAsset,
+    seed: u64,
+) -> Result<Vec<Value>> {
+    let mut controls = Vec::new();
+    for goal in [Goal::EatFood, Goal::GetToy] {
+        let (mut host, scene) = host(
+            seed + 30_000 + goal.index() as u64,
+            seed,
+            asset,
+            actor,
+            0,
+            false,
+        )?;
+        let (id, body) = host.world().organism_entity_ids()[0];
+        let mut consumed = false;
+        let mut energy_gain = 0.0;
+        let mut outcomes = Vec::new();
+        for _ in 0..if goal.index() == 0 { 2 } else { 1 } {
+            let world = host.world_mut();
+            let before = *world
+                .organism_registry()
+                .get(id)
+                .ok_or("no control organism")?
+                .biochemistry();
+            let frame = world.perception_frame(
+                id,
+                world.tick(),
+                actor.phenotype().sensor_profile(),
+                before.homeostasis,
+            )?;
+            if ![scene.food, scene.toy, scene.distractor]
+                .into_iter()
+                .all(|t| visible_target(&frame, t))
+            {
+                return Err("positive control lacks visible food, toy or distractor".into());
+            }
+            let primitive = if goal.index() == 0 {
+                HeadlessActionIds::EAT
+            } else {
+                HeadlessActionIds::GRAB
+            };
+            let candidate = frame
+                .candidates()
+                .iter()
+                .find(|c| c.action_id == primitive && c.target.entity == Some(scene.target(goal)))
+                .ok_or("physical control lacks native candidate")?;
+            let command = candidate.to_command(id, Confidence::new(1.)?)?;
+            let receipt =
+                world.apply_registered_command(&command, body, Tick(world.tick().raw() + 1))?;
+            consumed |=
+                receipt.action_result.execution.physical.contact == PhysicalContactKind::Consumed;
+            energy_gain += receipt.biology_after.body.energy - before.body.energy;
+            outcomes.push(json!({"command":command,"physical":receipt.action_result.execution.physical,"energy_delta":receipt.biology_after.body.energy-before.body.energy}));
+            world.try_advance_tick()?;
+        }
+        let acquired = host
+            .world()
+            .entity(scene.toy)
+            .is_some_and(|o| o.carried_by == Some(id));
+        if (goal.index() == 0 && (!consumed || energy_gain <= 0.))
+            || (goal.index() == 1 && !acquired)
+        {
+            return Err("native physical positive control failed".into());
+        }
+        controls.push(json!({"goal":goal,"scripted_not_learned":true,"consumed":consumed,"energy_gain":energy_gain,"acquired_toy":acquired,"receipts":outcomes}));
+    }
+    Ok(controls)
+}
+
+fn visible_target(frame: &PerceptionFrame, target: WorldEntityId) -> bool {
+    frame.candidates().iter().any(|c| {
+        c.target.entity == Some(target)
+            && matches!(c.observation, CandidateObservationRef::ObjectSlot(_))
+    })
+}
+
+fn consequences(row: &CpuCollectedDecision, scene: Scene) -> (bool, bool) {
+    let bundle = row.patch.selected_bundle();
+    let command = |primitive, target| {
+        bundle.is_some_and(|b| {
+            b.channels.iter().any(|c| {
+                c.primitive == primitive && c.target.and_then(|t| t.entity) == Some(target)
+            })
+        })
+    };
+    let consumed = command(HeadlessActionIds::EAT, scene.food)
+        && row.patch.outcome().joint.as_ref().is_some_and(|j| {
+            j.channel_outcomes.iter().any(|o| {
+                o.physical.target_entity == Some(scene.food)
+                    && o.physical.contact == PhysicalContactKind::Consumed
+            })
+        });
+    let grabbed = command(HeadlessActionIds::GRAB, scene.toy)
+        && row.patch.outcome().joint.as_ref().is_some_and(|j| {
+            j.channel_outcomes.iter().any(|o| {
+                o.physical.target_entity == Some(scene.toy)
+                    && o.physical.contact == PhysicalContactKind::Touch
+            })
+        });
+    (consumed, grabbed)
+}
+
+fn evaluate(
+    actor: &CpuFoundationTrainer,
+    asset: &FoundationWeightAsset,
+    config: LanguagePilotConfig,
+    arm: Arm,
+    traces: &mut impl Write,
+) -> Result<Vec<Value>> {
+    let mut results = Vec::new();
+    for layout in 0..2 {
+        for goal in [Goal::EatFood, Goal::GetToy] {
+            for cue in ["player", "silent", "swapped"] {
+                let seed = config.seed + 10_000 + (layout * 2 + goal.index()) as u64;
+                let (mut host, scene) = host(seed, config.seed, asset, actor, layout, true)?;
+                let id = host.world().organism_entity_ids()[0].0;
+                let mut previous = None;
+                let (
+                    mut meals,
+                    mut nourished,
+                    mut acquisitions,
+                    mut utterances,
+                    mut correct,
+                    mut opportunities,
+                    mut heard,
+                    mut failures,
+                    mut decisions,
+                    mut sleeping,
+                    mut consolidations,
+                ) = (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+                let (mut selected_eat, mut selected_grab) = (0, 0);
+                let mut visible = Value::Null;
+                for tick in 0..config.decisions {
+                    if cue != "silent" && tick % 8 == 0 {
+                        let words = if cue == "swapped" {
+                            if goal.index() == 0 {
+                                vec![9, 2]
+                            } else {
+                                vec![8, 1]
+                            }
+                        } else {
+                            vec![goal.word(), goal.noun()]
+                        };
+                        let position = speech_position(host.world())?;
+                        host.world_mut().emit_player_tokens(
+                            Some(id),
+                            position,
+                            words
+                                .into_iter()
+                                .map(LanguageTokenId::new)
+                                .collect::<std::result::Result<_, _>>()?,
+                        )?;
+                    }
+                    let owned_before = host.world().entity(scene.toy).and_then(|o| o.carried_by);
+                    let step = host.step(actor, 1.)?;
+                    sleeping += step.sleeping_organisms;
+                    consolidations += step.sleep_consolidations;
+                    if host.world().entity_id("nursery-teacher").is_some() {
+                        return Err("teacher actor in assessment".into());
+                    }
+                    for row in step.decisions {
+                        no_teacher_or_prior(&row)?;
+                        let frame = row.patch.pre_action().perception();
+                        if visible.is_null() {
+                            visible = json!({"food":visible_target(frame,scene.food),"toy":visible_target(frame,scene.toy),"distractor":visible_target(frame,scene.distractor)});
+                        }
+                        heard += usize::from(
+                            frame
+                                .sensory()
+                                .language_context
+                                .heard_tokens
+                                .iter()
+                                .flatten()
+                                .any(|h| h.source_kind == UtteranceSourceKind::Player),
+                        );
+                        if let Some(bundle) = row.patch.selected_bundle() {
+                            selected_eat += bundle
+                                .channels
+                                .iter()
+                                .filter(|c| {
+                                    c.primitive == HeadlessActionIds::EAT
+                                        && c.target.and_then(|t| t.entity) == Some(scene.food)
+                                })
+                                .count();
+                            selected_grab += bundle
+                                .channels
+                                .iter()
+                                .filter(|c| {
+                                    c.primitive == HeadlessActionIds::GRAB
+                                        && c.target.and_then(|t| t.entity) == Some(scene.toy)
+                                })
+                                .count();
+                        }
+                        let (meal, grab) = consequences(&row, scene);
+                        meals += usize::from(meal);
+                        nourished +=
+                            usize::from(meal && row.patch.outcome().energy_delta.raw() > 0.);
+                        acquisitions += usize::from(
+                            grab && owned_before != Some(id)
+                                && host
+                                    .world()
+                                    .entity(scene.toy)
+                                    .is_some_and(|o| o.carried_by == Some(id)),
+                        );
+                        let label = speech_label(&row, previous.as_ref(), goal, scene)
+                            .filter(|s| s.token.is_some());
+                        opportunities += usize::from(label.is_some());
+                        let emitted = host
+                            .world()
+                            .audible_utterances()
+                            .into_iter()
+                            .filter(|u| {
+                                u.source_kind == UtteranceSourceKind::Creature
+                                    && u.speaker_id == Some(id)
+                                    && u.emitted_tick == frame.tick()
+                            })
+                            .collect::<Vec<_>>();
+                        utterances += emitted.len();
+                        for utterance in &emitted {
+                            if let Some(label) = label {
+                                let expected = std::iter::once(label.token.unwrap())
+                                    .chain(label.continuation.into_iter().take_while(|t| *t != 0))
+                                    .collect::<Vec<_>>();
+                                correct += usize::from(
+                                    utterance.tokens.iter().map(|t| t.raw()).collect::<Vec<_>>()
+                                        == expected,
+                                );
+                            }
+                        }
+                        failures += usize::from(!row.patch.outcome().success);
+                        decisions += 1;
+                        writeln!(
+                            traces,
+                            "{}",
+                            json!({"phase":"evaluation","arm":arm,"layout":layout,"goal":goal,"cue":cue,"scene":scene,"row":row,"emitted":emitted,"grounded_speech_target":label})
+                        )?;
+                        previous = Some(row);
+                    }
+                }
+                results.push(json!({"arm":arm,"layout":if layout==0{"relocated_near"}else{"relocated_far"},"goal":goal,"cue":cue,"seed":seed,"native_decisions":decisions,"teacher_present":false,"prior_enabled":false,"initial_visible":visible,"player_heard_frames":heard,"selected_food_eat_commands":selected_eat,"selected_toy_grab_commands":selected_grab,"consumptions":meals,"nourished_meals":nourished,"toy_acquisitions":acquisitions,"correct_physical":if goal.index()==0{nourished}else{acquisitions},"utterances":utterances,"grounded_utterance_opportunities":opportunities,"correct_grounded_utterances":correct,"joint_failures":failures,"sleeping_ticks":sleeping,"sleep_consolidations":consolidations}));
+            }
+        }
+    }
+    Ok(results)
+}
+
+#[derive(Serialize, Deserialize)]
+struct Recovery {
+    kind: String,
+    inputs: PhenotypeCompilerInputs,
+    foundation: Vec<u8>,
+    actor: FoundationTrainerCheckpoint,
+    host: CpuCanonicalCheckpoint,
+    next_gradient: Vec<f32>,
+}
+fn reload(recovery: Recovery) -> Result<Value> {
+    if recovery.kind != "disposable-retained-language-pilot-v1" {
+        return Err("not an experimental pilot recovery".into());
+    }
+    let p = PhenotypeCompiler::compile_validated(&recovery.inputs, &BrainCapacityClass::n2048())?;
+    let source = FoundationWeightAsset::decode_canonical(&recovery.foundation)?;
+    let mut actor = CpuFoundationTrainer::from_checkpoint(p, source, recovery.actor)?;
+    let mut host = CpuCanonicalHost::from_checkpoint(recovery.host, &actor)?;
+    let before_host = identity(&host.checkpoint(&actor)?)?;
+    let before_actor = identity(&actor.checkpoint())?;
+    let mut decisions = Vec::new();
+    for _ in 0..8 {
+        decisions.extend(host.step(&actor, 1.)?.decisions);
+    }
+    let after_host = identity(&host.checkpoint(&actor)?)?;
+    let rows = identity(&decisions)?;
+    actor.apply_gradients(&recovery.next_gradient)?;
+    Ok(
+        json!({"before_host":before_host,"before_actor":before_actor,"after_host":after_host,"decisions":rows,"after_native_adam_update":identity(&actor.checkpoint())?}),
+    )
+}
+
+/// Only the experimental runner uses this path; it is not a native joint-PPO
+/// handoff and makes no critic/version continuity claim.
+pub fn reload_language_pilot_child(directory: &Path) -> Result<Value> {
+    let bytes = fs::read(directory.join("experimental-recovery.json"))?;
+    let expected = fs::read_to_string(directory.join("experimental-recovery.sha256"))?;
+    if hash(&bytes) != expected {
+        return Err("experimental recovery checksum mismatch".into());
+    }
+    let mut de = serde_json::Deserializer::from_slice(&bytes);
+    de.disable_recursion_limit();
+    reload(Recovery::deserialize(&mut de)?)
+}
+
+fn exact_reload(
+    directory: &Path,
+    actor: &CpuFoundationTrainer,
+    asset: &FoundationWeightAsset,
+    seed: u64,
+    gradient: Vec<f32>,
+) -> Result<Value> {
+    fs::create_dir(directory)?;
+    let (mut host, _) = host(seed + 20_000, seed, asset, actor, 0, true)?;
+    for _ in 0..4 {
+        host.step(actor, 1.)?;
+    }
+    let (_, inputs) = compile(seed, asset)?;
+    let recovery = Recovery {
+        kind: "disposable-retained-language-pilot-v1".into(),
+        inputs,
+        foundation: asset.encode_canonical()?,
+        actor: actor.checkpoint(),
+        host: host.checkpoint(actor)?,
+        next_gradient: gradient,
+    };
+    let bytes = serde_json::to_vec(&recovery)?;
+    fs::write(directory.join("experimental-recovery.sha256"), hash(&bytes))?;
+    fs::write(directory.join("experimental-recovery.json"), bytes)?;
+    let expected = reload(recovery)?;
+    let child = Command::new(std::env::current_exe()?)
+        .arg("--experimental-reload-child")
+        .arg(directory)
+        .output()?;
+    if !child.status.success() {
+        return Err(format!(
+            "fresh-process pilot restore failed: {}",
+            String::from_utf8_lossy(&child.stderr)
+        )
+        .into());
+    }
+    let actual: Value = serde_json::from_slice(&child.stdout)?;
+    if actual != expected {
+        return Err("fresh-process native continuation differs".into());
+    }
+    Ok(json!({"fresh_process_exact":true,"native_private_and_optimizer_hashes":actual}))
+}
+
+pub fn run_retained_language_pilot(output: &Path, config: LanguagePilotConfig) -> Result<Value> {
+    if config.seed == 0
+        || !(1..=64).contains(&config.epochs)
+        || !(1..=4).contains(&config.rounds)
+        || !(4..=64).contains(&config.decisions)
+    {
+        return Err(
+            "pilot bounds: nonzero seed, epochs 1..64, rounds 1..4, decisions 4..64".into(),
+        );
+    }
+    fs::create_dir(output)?;
+    let started = Instant::now();
+    let translations = teacher_input(config.llamacpp_translation)?;
+    write_json(&output.join("teacher-deliveries.json"), &translations)?;
+    let source = initial_n2048_care_asset(config.seed)?;
+    let control_actor = new_actor(config.seed, &source)?;
+    let controls = physical_controls(&control_actor, &source, config.seed)?;
+    let initial = control_actor.checkpoint();
+    let trace_file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(output.join("native-trace.jsonl.zst"))?;
+    let mut traces = zstd::stream::write::Encoder::new(trace_file, 3)?;
+    let mut arms = Vec::new();
+    for arm in [Arm::Grounded, Arm::Shuffled, Arm::Untreated] {
+        let mut asset = source.clone();
+        let mut actor = new_actor(config.seed, &asset)?;
+        if actor.checkpoint() != initial {
+            return Err("matched actors differ before treatment".into());
+        }
+        let mut collections = Vec::new();
+        let mut updates = Vec::new();
+        let mut next_gradient = None;
+        for round in 0..config.rounds {
+            eprintln!("language pilot {arm:?} round {round}: native collection");
+            let (episodes, receipt) = collect(
+                &actor,
+                &asset,
+                config,
+                arm,
+                round,
+                &translations,
+                &mut traces,
+            )?;
+            collections.push(receipt);
+            if arm != Arm::Untreated {
+                for epoch in 0..config.epochs {
+                    let (gradient, objective) = gradients(&actor, &episodes)?;
+                    let before = actor.checkpoint();
+                    let norm = actor.apply_gradients(&gradient)?;
+                    let after = actor.checkpoint();
+                    preserve_frozen(&before, &after)?;
+                    let recurrent = actor
+                        .phenotype()
+                        .synapses()
+                        .iter()
+                        .enumerate()
+                        .filter(|(i, s)| {
+                            s.kind() == CompiledSynapseKind::Recurrent
+                                && before.weights[*i].to_bits() != after.weights[*i].to_bits()
+                        })
+                        .count();
+                    updates.push(json!({"round":round,"epoch":epoch,"step":actor.optimizer_step(),"objective":objective,"gradient_norm":norm,"changed_recurrent_weights":recurrent,"frozen_coordinates_exact":true}));
+                    next_gradient = Some(gradient);
+                }
+                asset = export(&mut actor, config.seed)?;
+            }
+        }
+        eprintln!("language pilot {arm:?}: teacher-absent evaluation");
+        let evaluation = evaluate(&actor, &asset, config, arm, &mut traces)?;
+        let continuity = if let Some(gradient) = next_gradient {
+            exact_reload(
+                &output.join(format!("recovery-{arm:?}")),
+                &actor,
+                &asset,
+                config.seed,
+                gradient,
+            )?
+        } else {
+            Value::Null
+        };
+        arms.push(json!({"arm":arm,"collections":collections,"updates":updates,"actor_step":actor.optimizer_step(),"actor_sha256":identity(&actor.checkpoint())?,"evaluation":evaluation,"continuity":continuity}));
+    }
+    traces.finish()?;
+    let report = json!({"kind":"experimental-retained-grounded-language-v1","execution_domain":"native-cpu","config":config,"teacher_translation_deliveries":translations,"semantic_prior_deliveries":0,"semantic_prior_enabled":false,"initial_actor_sha256":identity(&initial)?,"scripted_world_positive_controls":controls,"arms":arms,"elapsed_seconds":started.elapsed().as_secs_f64(),"limitations":["Fixed small pilot, not standard CFF ChiChi competence or a general language model.","Actor-only supervised foundation learning across fresh cohorts; no same-individual optimizer rebase or critic update.","Recorded lifetime/fast offsets, memory and route context remain fixed during conditional replay; recurrent prefixes are rebuilt under current weights for every update.","No natural-sleep retention trial; sleeping ticks within ordinary assessment are reported without forcing sleep.","Default uses a deterministic bounded teacher translator; a real SLM delivery is claimed only with confirmed optional llama.cpp receipts.","Fresh-process reload covers exact private state, next eight native steps and the next native Adam update using a retained real gradient; it does not retrain the gradient after reload."]});
+    write_json(&output.join("results.json"), &report)?;
+    Ok(report)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn native_world_controls_consume_nourish_and_acquire_distinct_visible_objects() {
+        let seed = 847_511;
+        let source = initial_n2048_care_asset(seed).unwrap();
+        let actor = new_actor(seed, &source).unwrap();
+        let before = actor.checkpoint();
+        let controls = physical_controls(&actor, &source, seed).unwrap();
+        assert_eq!(controls.len(), 2);
+        assert_eq!(controls[0]["consumed"], true);
+        assert!(controls[0]["energy_gain"].as_f64().unwrap() > 0.);
+        assert_eq!(controls[1]["acquired_toy"], true);
+        assert_eq!(actor.checkpoint(), before);
+    }
+
+    #[test]
+    fn ordinary_spatial_teacher_is_not_a_retention_result_and_targets_stay_offline() {
+        let seed = 847_512;
+        let source = initial_n2048_care_asset(seed).unwrap();
+        let actor = new_actor(seed, &source).unwrap();
+        let (mut host, scene) = host(seed, seed, &source, &actor, 0, false).unwrap();
+        let id = host.world().organism_entity_ids()[0].0;
+        let position = speech_position(host.world()).unwrap();
+        let translations = teacher_input(false).unwrap();
+        alife_school::LanguageNursery::speak_in_world(
+            host.world_mut(),
+            id,
+            position,
+            translations[0].literal_tokens.clone(),
+        )
+        .unwrap();
+        let row = host.step(&actor, 1.).unwrap().decisions.remove(0);
+        assert!(no_teacher_or_prior(&row).is_err());
+        assert!(speech_label(&row, None, Goal::EatFood, scene)
+            .unwrap()
+            .token
+            .is_none());
+        let label = action_label(&row, Goal::EatFood, scene);
+        assert!(label.motors.iter().flatten().any(|mask| *mask != 0));
+        let action = &row.action;
+        ImitationExample {
+            candidate_count: action.candidate_count,
+            representative_mask: action.representative_mask,
+            motor_masks: action.motor_masks,
+            forced_slots: action.forced_slots.clone(),
+            target: label,
+        }
+        .validate()
+        .unwrap();
+    }
+
+    #[test]
+    fn native_recurrent_update_and_export_keep_frozen_coordinates_and_all_adam_history() {
+        let seed = 847_513;
+        let source = initial_n2048_care_asset(seed).unwrap();
+        let mut actor = new_actor(seed, &source).unwrap();
+        let (mut host, scene) = host(seed, seed, &source, &actor, 0, false).unwrap();
+        let rows = (0..4)
+            .flat_map(|_| host.step(&actor, 1.).unwrap().decisions)
+            .collect::<Vec<_>>();
+        let labels = rows
+            .iter()
+            .map(|r| action_label(r, Goal::EatFood, scene))
+            .collect();
+        let speech = rows.iter().map(|_| None).collect();
+        let mut episode = Episode {
+            rows,
+            labels,
+            speech,
+        };
+        let observed_labels = episode.labels.clone();
+        episode.labels.fill(ImitationTarget {
+            representative: None,
+            motors: [None; 6],
+        });
+        let (unsupervised_gradient, _) = gradients(&actor, std::slice::from_ref(&episode)).unwrap();
+        assert!(unsupervised_gradient.iter().all(|g| *g == 0.));
+        episode.labels = observed_labels;
+        let (gradient, _) = gradients(&actor, &[episode]).unwrap();
+        assert!(actor
+            .phenotype()
+            .synapses()
+            .iter()
+            .enumerate()
+            .any(|(i, s)| s.kind() == CompiledSynapseKind::Recurrent && gradient[i] != 0.));
+        let before = actor.checkpoint();
+        actor.apply_gradients(&gradient).unwrap();
+        preserve_frozen(&before, &actor.checkpoint()).unwrap();
+        assert_eq!(actor.optimizer_step(), 1);
+        export(&mut actor, seed).unwrap();
+        assert_eq!(actor.optimizer_step(), 1);
+        assert!(actor.checkpoint().first_moment.iter().any(|m| *m != 0.));
+        assert!(actor.checkpoint().update_ages.iter().any(|age| *age == 1));
+    }
+}
