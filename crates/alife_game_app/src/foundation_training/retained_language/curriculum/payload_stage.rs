@@ -16,10 +16,19 @@ struct Captured {
     speech_target: ReplaySpeechTarget,
 }
 
+fn corpus_path(source: &Path) -> std::path::PathBuf {
+    let retained = source.join("retained-training-corpus.jsonl.zst");
+    if retained.is_file() {
+        retained
+    } else {
+        source.join("native-trace.jsonl.zst")
+    }
+}
+
 fn corpus(source: &Path, arm: Arm) -> Result<Vec<Episode>> {
     let mut episodes = BTreeMap::<(usize, usize, usize), Episode>::new();
     let input = BufReader::new(zstd::stream::read::Decoder::new(fs::File::open(
-        source.join("native-trace.jsonl.zst"),
+        corpus_path(source),
     )?)?);
     for line in input.lines() {
         let row: Captured = serde_json::from_str(&line?)?;
@@ -150,15 +159,33 @@ fn refine(
         );
     }
     let previous: Value = serde_json::from_slice(&fs::read(source.join("results.json"))?)?;
-    if previous["kind"] != "experimental-request-contingent-language-v4"
-        || previous["config"]["seed"] != config.seed
+    if !matches!(
+        previous["kind"].as_str(),
+        Some(
+            "experimental-request-contingent-language-v4"
+                | "experimental-global-payload-balance-v5"
+                | "experimental-shared-speech-gates-v6"
+        )
+    ) || previous["config"]["seed"] != config.seed
     {
         return Err("payload stage only accepts matching measured disposable curriculum".into());
     }
     fs::create_dir(output)?;
     let started = Instant::now();
     let mut arms = Vec::new();
-    let corpus_sha = hash(&fs::read(source.join("native-trace.jsonl.zst"))?);
+    let corpus_source = corpus_path(source);
+    let corpus_sha = hash(&fs::read(&corpus_source)?);
+    if previous
+        .get("real_training_corpus_sha256")
+        .and_then(Value::as_str)
+        .is_some_and(|expected| expected != corpus_sha)
+    {
+        return Err("retained actual training corpus differs from the recorded source".into());
+    }
+    fs::copy(
+        &corpus_source,
+        output.join("retained-training-corpus.jsonl.zst"),
+    )?;
     for arm in [Arm::Grounded, Arm::Shuffled] {
         let saved = read_recovery(&source.join(format!("recovery-{arm:?}")))?;
         if saved.kind != "disposable-retained-language-pilot-v1"
