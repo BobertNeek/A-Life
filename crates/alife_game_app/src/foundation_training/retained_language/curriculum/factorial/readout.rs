@@ -391,6 +391,7 @@ pub fn continue_linear_grounded_language(
             paired_request_focus: true,
             linear_readout: true,
             balanced_grounding_v1: false,
+            balanced_grounding_v2: false,
         };
         if arm == Arm::Grounded {
             eprintln!("linear profile untreated baseline");

@@ -86,12 +86,34 @@ fn prepared(
         },
     )?)
 }
-fn place_balanced(w: &mut HeadlessWorld, s: Scene, layout: usize, held_out: bool) -> Result<()> {
+fn place_balanced(
+    w: &mut HeadlessWorld,
+    s: Scene,
+    layout: usize,
+    held_out: bool,
+    visible: bool,
+) -> Result<()> {
     let b = w
         .entity(w.organism_entity_ids()[0].1)
         .ok_or("no body")?
         .clone();
-    let (food_angle, toy_angle, food_d, toy_d) = if held_out {
+    let (food_angle, toy_angle, food_d, toy_d) = if visible && held_out {
+        [
+            (-0.39, 0.75, 0.40, 0.64),
+            (0.58, -0.73, 0.45, 0.69),
+            (-0.47, 0.74, 0.67, 0.73),
+            (0.65, -0.72, 0.72, 0.78),
+            (-0.52, 0.76, 0.56, 0.72),
+            (0.44, -0.75, 0.62, 0.77),
+        ][layout]
+    } else if visible {
+        [
+            (0.42, -0.74, 0.38, 0.62),
+            (-0.54, 0.72, 0.42, 0.65),
+            (0.62, -0.76, 0.46, 0.68),
+            (-0.46, 0.74, 0.48, 0.70),
+        ][layout]
+    } else if held_out {
         [
             (-0.31, 0.69, 0.39, 0.44),
             (0.71, -0.29, 0.43, 0.38),
@@ -166,6 +188,7 @@ fn collect(
     arm: Arm,
     round: usize,
     traces: &mut impl Write,
+    visible: bool,
 ) -> Result<(Vec<Sample>, Value)> {
     let (mut samples, mut events, mut heard) = (vec![], [0usize; 3], 0usize);
     for layout in 0..4 {
@@ -178,7 +201,7 @@ fn collect(
             2 + round * 8 + layout,
             !layout.is_multiple_of(2),
         )?;
-        place_balanced(base.world_mut(), s, layout, false)?;
+        place_balanced(base.world_mut(), s, layout, false, visible)?;
         for requested in Lesson::ALL {
             let mut h = base.snapshot();
             let id = h.world().organism_entity_ids()[0].0;
@@ -475,7 +498,7 @@ pub(crate) fn evaluate(
     asset: &FoundationWeightAsset,
     c: LanguagePilotConfig,
     arm: Arm,
-    _plan: AssessmentPlan,
+    plan: AssessmentPlan,
     traces: &mut impl Write,
 ) -> Result<Vec<Value>> {
     let mut results = vec![];
@@ -524,7 +547,13 @@ pub(crate) fn evaluate(
                     return Err("balanced assessment sleep failed to wake/consolidate".into());
                 }
             }
-            place_balanced(parent.world_mut(), s, case, true)?;
+            place_balanced(
+                parent.world_mut(),
+                s,
+                case,
+                true,
+                plan.balanced_grounding_v2,
+            )?;
             let paired = identity(&parent.checkpoint(actor)?)?;
             for requested in [
                 Some(Lesson::EatFood),
@@ -626,11 +655,18 @@ pub(crate) fn evaluate(
                             metric.utterance_tokens.push(words);
                         }
                         let event = physical_event(&row, s, before, after)?;
-                        writeln!(
-                            traces,
-                            "{}",
-                            json!({"phase":"balanced_readout_evaluation","arm":arm,"case":case,"world_seed":seed,"post_sleep":post_sleep,"requested":requested,"scene":s,"row":row,"owned_before":before,"owned_after":after,"actual_food_consumption":consumed,"grounded_speech_target":speech,"narration_evidence":pending,"completed":event,"emitted":emitted})
-                        )?;
+                        let trace_row = if plan.balanced_grounding_v2 && tick > 0 {
+                            json!({"organism_id":row.organism_id,"sampling_counter":row.sampling_counter,"action":row.action,"patch":row.patch,"biological_reward":row.biological_reward,"brain_work":row.brain_work})
+                        } else {
+                            serde_json::to_value(&row)?
+                        };
+                        let mut record = json!({"phase":"balanced_readout_evaluation","arm":arm,"case":case,"world_seed":seed,"post_sleep":post_sleep,"requested":requested,"scene":s,"row":trace_row,"owned_before":before,"owned_after":after,"actual_food_consumption":consumed,"grounded_speech_target":speech,"narration_evidence":pending,"completed":event,"emitted":emitted});
+                        if plan.balanced_grounding_v2 {
+                            record["native_full_row_sha256"] = json!(identity(&row)?);
+                            record["state_capture"] =
+                                json!("full-first-row-and-full-state-digest-v1");
+                        }
+                        writeln!(traces, "{}", record)?;
                         if let Some(event) = event {
                             pending = Some(event);
                             left = 3;
@@ -648,6 +684,21 @@ pub fn continue_balanced_grounded_language(
     source: &Path,
     output: &Path,
     c: LanguagePilotConfig,
+) -> Result<Value> {
+    run_balanced(source, output, c, false)
+}
+pub fn continue_visible_balanced_grounded_language(
+    source: &Path,
+    output: &Path,
+    c: LanguagePilotConfig,
+) -> Result<Value> {
+    run_balanced(source, output, c, true)
+}
+fn run_balanced(
+    source: &Path,
+    output: &Path,
+    c: LanguagePilotConfig,
+    visible: bool,
 ) -> Result<Value> {
     if c.llamacpp_translation
         || !c.experimental_word_bridge
@@ -703,7 +754,8 @@ pub fn continue_balanced_grounded_language(
         if arm != Arm::Untreated {
             for round in 0..c.rounds {
                 eprintln!("balanced {arm:?} round{round} native collection");
-                let (samples, receipt) = collect(&actor, &asset, c, arm, round, &mut trace)?;
+                let (samples, receipt) =
+                    collect(&actor, &asset, c, arm, round, &mut trace, visible)?;
                 eprintln!("balanced collection {receipt}");
                 collections.push(receipt);
                 for epoch in 0..c.epochs {
@@ -730,7 +782,8 @@ pub fn continue_balanced_grounded_language(
             factorial_grounding: true,
             paired_request_focus: true,
             linear_readout: true,
-            balanced_grounding_v1: true,
+            balanced_grounding_v1: !visible,
+            balanced_grounding_v2: visible,
         };
         eprintln!("balanced {arm:?} cold independent-seed assessment");
         let cold = exact_reload_plan(
@@ -750,7 +803,7 @@ pub fn continue_balanced_grounded_language(
         arms.push(json!({"arm":arm,"common_source_actor_sha256":initial,"source_private_sha256":private_sha,"source_step":before.optimizer_step,"actor_step":actor.optimizer_step(),"actor_sha256":identity(&actor.checkpoint())?,"collections":collections,"updates":updates,"evaluation":cold["native_private_and_optimizer_hashes"]["assessment"]["evaluation"],"continuity":cold,"source_history_retained":true}));
     }
     trace.finish()?;
-    let result = json!({"kind":"experimental-balanced-grounding-v15","execution_domain":"native-cpu","config":c,"source_report_sha256":identity(&old)?,"held_out_world_seeds":HELD_OUT_SEEDS,"independent_seed_count":HELD_OUT_SEEDS.len(),"pre_post_are_paired_not_independent":true,"teacher_and_player_cue_ticks":INSTRUCTION_TICKS,"evaluation_ticks":EVALUATION_TICKS,"arms":arms,"elapsed_seconds":start_time.elapsed().as_secs_f64(),"semantic_prior_enabled":false,"teacher":"scripted ordinary spatial language","limitations":["One common retained V14 founder; independent held-out environment/sampling seeds are not independent trained founders.","Post-sleep is paired with the same pre-sleep seed and must not double independent N. RecoveryProtocol sleep is induced, with no matched awake-delay causal sleep control.","Native conditional action losses balance verb and noun choices separately; truthful narration activity classes cannot yield exactly balanced lexical marginals without impossible EatToy events.","No-request retains prior grounded history and natural self speech. No real SLM delivery or promotion."]});
+    let result = json!({"kind":if visible{"experimental-balanced-grounding-visible-v16"}else{"experimental-balanced-grounding-v15"},"execution_domain":"native-cpu","config":c,"source_report_sha256":identity(&old)?,"held_out_world_seeds":HELD_OUT_SEEDS,"independent_seed_count":HELD_OUT_SEEDS.len(),"pre_post_are_paired_not_independent":true,"teacher_and_player_cue_ticks":INSTRUCTION_TICKS,"evaluation_ticks":EVALUATION_TICKS,"arms":arms,"elapsed_seconds":start_time.elapsed().as_secs_f64(),"semantic_prior_enabled":false,"teacher":"scripted ordinary spatial language","limitations":["One common retained V14 founder; independent held-out environment/sampling seeds are not independent trained founders.","Post-sleep is paired with the same pre-sleep seed and must not double independent N. RecoveryProtocol sleep is induced, with no matched awake-delay causal sleep control.","Native conditional action losses balance verb and noun choices separately; truthful narration activity classes cannot yield exactly balanced lexical marginals without impossible EatToy events.","No-request retains prior grounded history and natural self speech. No real SLM delivery or promotion."]});
     write_json(&output.join("results.json"), &result)?;
     Ok(result)
 }
@@ -758,6 +811,102 @@ pub fn continue_balanced_grounded_language(
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn eat_control(
+        h: &mut CpuCanonicalHost,
+        actor: &CpuFoundationTrainer,
+        s: Scene,
+    ) -> Option<(bool, f32)> {
+        let w = h.world_mut();
+        let (id, body) = w.organism_entity_ids()[0];
+        let before = *w.organism_registry().get(id).unwrap().biochemistry();
+        let frame = w
+            .perception_frame(
+                id,
+                w.tick(),
+                actor.phenotype().sensor_profile(),
+                before.homeostasis,
+            )
+            .unwrap();
+        let candidate = frame
+            .candidates()
+            .iter()
+            .find(|c| c.action_id == HeadlessActionIds::EAT && c.target.entity == Some(s.food))?;
+        let command = candidate
+            .to_command(id, Confidence::new(1.).unwrap())
+            .unwrap();
+        let receipt = w
+            .apply_registered_command(&command, body, Tick(w.tick().raw() + 1))
+            .unwrap();
+        let consumed =
+            receipt.action_result.execution.physical.contact == PhysicalContactKind::Consumed;
+        let gain = receipt.biology_after.body.energy - before.body.energy;
+        w.try_advance_tick().unwrap();
+        Some((consumed, gain))
+    }
+    #[test]
+    fn v15_near_toy_occludes_carried_food_and_moving_toy_restores_eat() {
+        let founder = 847501;
+        let asset = initial_n2048_care_asset(founder).unwrap();
+        let actor = new_actor_profile(founder, &asset, true).unwrap();
+        let (mut h, s) = prepared(&actor, &asset, founder, HELD_OUT_SEEDS[0], 40, false).unwrap();
+        place_balanced(h.world_mut(), s, 0, false, false).unwrap();
+        assert!(!eat_control(&mut h, &actor, s).unwrap().0);
+        let id = h.world().organism_entity_ids()[0].0;
+        assert_eq!(h.world().entity(s.food).unwrap().carried_by, Some(id));
+        assert!(eat_control(&mut h, &actor, s).is_none());
+        let b = h
+            .world()
+            .entity(h.world().organism_entity_ids()[0].1)
+            .unwrap()
+            .clone();
+        h.world_mut()
+            .editor_move_object(
+                s.toy,
+                Vec3f::new(b.position.x + 4., b.position.y, b.position.z + 4.),
+            )
+            .unwrap();
+        let (consumed, gain) = eat_control(&mut h, &actor, s).unwrap();
+        assert!(consumed && gain > 0.);
+    }
+    #[test]
+    fn v16_all_layouts_really_consume_and_nourish_without_toy_occlusion() {
+        let founder = 847501;
+        let asset = initial_n2048_care_asset(founder).unwrap();
+        let actor = new_actor_profile(founder, &asset, true).unwrap();
+        for (held_out, count) in [(false, 4), (true, 6)] {
+            for layout in 0..count {
+                let seed = if held_out {
+                    *HELD_OUT_SEEDS.get(layout).unwrap()
+                } else {
+                    1_447_501 + layout as u64
+                };
+                let (mut h, s) = prepared(
+                    &actor,
+                    &asset,
+                    founder,
+                    seed,
+                    40 + layout * 7,
+                    layout % 2 == 1,
+                )
+                .unwrap();
+                place_balanced(h.world_mut(), s, layout, held_out, true).unwrap();
+                assert!(
+                    !eat_control(&mut h, &actor, s)
+                        .unwrap_or_else(|| panic!(
+                            "first Eat absent: held_out={held_out} layout={layout}"
+                        ))
+                        .0
+                );
+                let (consumed, gain) = eat_control(&mut h, &actor, s).unwrap_or_else(|| {
+                    panic!("held Eat absent: held_out={held_out} layout={layout}")
+                });
+                assert!(
+                    consumed && gain > 0.,
+                    "failed nutrition: held_out={held_out} layout={layout}"
+                );
+            }
+        }
+    }
     #[test]
     fn renamed_instances_and_balanced_native_masks_preserve_real_labels() {
         let seed = 847501;
@@ -778,6 +927,7 @@ mod tests {
             Arm::Grounded,
             0,
             &mut std::io::sink(),
+            false,
         )
         .unwrap();
         let (concrete, _, verb, noun) = distribution_counts(&samples);
@@ -817,12 +967,12 @@ mod tests {
         let source = actor.checkpoint();
         assert_eq!(actor.optimizer_step(), source.optimizer_step);
         let mut all_ids = std::collections::BTreeSet::new();
-        for case in 0..6 {
+        for (case, world_seed) in HELD_OUT_SEEDS.into_iter().enumerate() {
             let (h, s) = prepared(
                 &actor,
                 &asset,
                 seed,
-                HELD_OUT_SEEDS[case],
+                world_seed,
                 40 + case * 7,
                 !case.is_multiple_of(2),
             )

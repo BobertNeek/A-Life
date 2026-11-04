@@ -256,6 +256,7 @@ fn refine(
                     paired_request_focus: false,
                     linear_readout: false,
                     balanced_grounding_v1: false,
+                    balanced_grounding_v2: false,
                 }),
             },
             next.ok_or("no payload update")?,
