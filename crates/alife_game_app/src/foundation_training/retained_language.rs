@@ -71,6 +71,8 @@ enum Arm {
 }
 #[derive(Clone, Copy, Serialize, Deserialize)]
 struct Scene {
+    prepared_tick: u64,
+    maturation: f32,
     food: WorldEntityId,
     toy: WorldEntityId,
     distractor: WorldEntityId,
@@ -194,7 +196,41 @@ fn new_actor(seed: u64, asset: &FoundationWeightAsset) -> Result<CpuFoundationTr
 fn arrange(world: &mut HeadlessWorld, layout: usize, evaluation: bool) -> Result<Scene> {
     ground_foundation_training_world(world)?;
     world.configure_ecology(EcologyState::default())?;
-    let (_, body) = world.organism_entity_ids()[0];
+    let (id, body) = world.organism_entity_ids()[0];
+    // Ordinary biological preparation, never a maturation/chemistry override.
+    // Newborn association/speech gates cannot test retained language.
+    let mut ready = None;
+    for _ in 0..=2400 {
+        let record = world
+            .organism_registry()
+            .get(id)
+            .ok_or("missing prepared organism")?;
+        let development = record
+            .phenotype()
+            .development_state_at(record.age_at(world.tick())?)?;
+        if development
+            .enabled_lobes
+            .contains(&LobeKind::MultimodalAssociation)
+            && development
+                .active_sensor_channels
+                .contains(&SensorChannelKind::Hearing)
+            && [MotorAffordanceKind::Interact, MotorAffordanceKind::Vocalize]
+                .iter()
+                .all(|m| development.active_motor_affordances.contains(m))
+        {
+            if record.biochemistry().body.health < 0.95
+                || record.biochemistry().body.energy <= 0.2
+                || record.biochemistry().body.sleeping
+            {
+                return Err("ordinary language preparation is not healthy and awake".into());
+            }
+            ready = Some(development.maturation.raw());
+            break;
+        }
+        world.try_advance_tick()?;
+    }
+    let maturation =
+        ready.ok_or("ordinary language preparation did not reach native developmental gates")?;
     for object in world.object_snapshots() {
         if object.id != body {
             world.editor_remove_object(object.id)?;
@@ -241,6 +277,8 @@ fn arrange(world: &mut HeadlessWorld, layout: usize, evaluation: bool) -> Result
         token_id: None,
     })?;
     Ok(Scene {
+        prepared_tick: world.tick().raw(),
+        maturation,
         food,
         toy,
         distractor,
@@ -296,36 +334,63 @@ struct Episode {
     speech: Vec<Option<ReplaySpeechTarget>>,
 }
 
-fn action_label(row: &CpuCollectedDecision, goal: Goal, scene: Scene) -> ImitationTarget {
-    let frame = row.patch.pre_action().perception();
-    // Existing foundation vocabulary selector supplies a loss label only. Its
-    // target and remembered geometry never enter the learner's sensory frame.
-    let chosen = vocabulary_reception_choice(
-        frame,
-        Some(u32::from(goal.word())),
-        Some(scene.target(goal)),
-        None,
-    );
+fn candidate_label(
+    row: &CpuCollectedDecision,
+    chosen: Option<&ActionCandidate>,
+) -> Result<ImitationTarget> {
     let mut motors = [None; 6];
-    if let Some(candidate) = chosen {
-        let slot = match candidate.kind {
-            ActionKind::Move => Some(0),
-            ActionKind::Look => Some(1),
-            ActionKind::Interact => Some(2),
-            ActionKind::Rest | ActionKind::Inspect | ActionKind::Idle => Some(4),
-            _ => None,
-        };
-        if let Some(slot) = slot {
-            let bit = 1u32 << candidate.candidate_index;
-            if row.action.motor_masks[slot] & bit != 0 {
-                motors[slot] = Some(bit);
+    if let Some(chosen) = chosen {
+        let enabled = row
+            .action
+            .motor_masks
+            .iter()
+            .enumerate()
+            .fold(0, |bits, (slot, mask)| {
+                bits | (u32::from(*mask != 0) << slot)
+            });
+        let demonstration =
+            assemble_grounded_teacher(row.patch.pre_action().perception(), enabled, chosen)?;
+        for (slot, &index) in demonstration.motor_indices.iter().enumerate() {
+            if index == u16::MAX {
+                continue;
             }
+            if row.action.forced_slots.get(index as usize) != Some(&Some(slot as u8)) {
+                return Err(
+                    "teacher target does not match native representative arbitration".into(),
+                );
+            }
+            // A representative may force this channel even when its conditional
+            // sampling mask is empty. The existing objective marginalizes it.
+            motors[slot] = Some(1u32 << index);
         }
     }
-    ImitationTarget {
+    Ok(ImitationTarget {
         representative: None,
         motors,
-    }
+    })
+}
+
+fn action_label(
+    row: &CpuCollectedDecision,
+    goal: Goal,
+    scene: Scene,
+    narrate: bool,
+) -> Result<ImitationTarget> {
+    let frame = row.patch.pre_action().perception();
+    let chosen = if narrate {
+        frame
+            .candidates()
+            .iter()
+            .find(|c| c.kind == ActionKind::Vocalize)
+    } else {
+        vocabulary_reception_choice(
+            frame,
+            Some(u32::from(goal.word())),
+            Some(scene.target(goal)),
+            None,
+        )
+    };
+    candidate_label(row, chosen)
 }
 
 fn speech_label(
@@ -366,6 +431,7 @@ fn collect(
         };
         let seed = config.seed + 100 + (round * 8 + episode) as u64;
         let (mut host, scene) = host(seed, config.seed, asset, actor, episode / 2, false)?;
+        let mut narration = None;
         let mut data = Episode {
             rows: Vec::new(),
             labels: Vec::new(),
@@ -402,8 +468,23 @@ fn collect(
                         .flatten()
                         .any(|h| h.source_kind == UtteranceSourceKind::Teacher),
                 );
-                let label = action_label(&row, goal, scene);
-                let speech = speech_label(&row, data.rows.last(), goal, scene);
+                let speech = speech_label(&row, narration.as_ref(), goal, scene);
+                let narrate = speech.is_some_and(|s| s.token.is_some());
+                let label = action_label(&row, goal, scene, narrate)?;
+                if narrate {
+                    narration = None;
+                }
+                let (consumed, grabbed) = consequences(&row, scene);
+                if (goal.index() == 0 && consumed)
+                    || (goal.index() == 1
+                        && grabbed
+                        && host
+                            .world()
+                            .entity(scene.toy)
+                            .is_some_and(|o| o.carried_by == Some(row.organism_id)))
+                {
+                    narration = Some(row.clone());
+                }
                 positive += usize::from(speech.is_some_and(|s| s.token.is_some()));
                 labels += usize::from(label.motors.iter().any(Option::is_some));
                 decisions += 1;
@@ -506,6 +587,76 @@ fn gradients(actor: &CpuFoundationTrainer, episodes: &[Episode]) -> Result<(Vec<
         }
     }
     Ok((sum, json!({"mean_action_loss":loss,"bptt_windows":windows})))
+}
+
+fn word_path_probe(
+    actor: &CpuFoundationTrainer,
+    asset: &FoundationWeightAsset,
+    seed: u64,
+) -> Result<Value> {
+    let (base, scene) = host(seed + 40_000, seed, asset, actor, 0, false)?;
+    let before = identity(&actor.checkpoint())?;
+    let mut probes = Vec::new();
+    for tokens in [vec![8, 1], vec![9, 2]] {
+        let mut host = base.snapshot();
+        let id = host.world().organism_entity_ids()[0].0;
+        let position = speech_position(host.world())?;
+        alife_school::LanguageNursery::speak_in_world(
+            host.world_mut(),
+            id,
+            position,
+            tokens
+                .into_iter()
+                .map(LanguageTokenId::new)
+                .collect::<std::result::Result<_, _>>()?,
+        )?;
+        let mut rows = Vec::new();
+        for _ in 0..8 {
+            rows.extend(host.step(actor, 1.)?.decisions);
+        }
+        let labels = rows
+            .iter()
+            .map(|row| action_label(row, Goal::EatFood, scene, false))
+            .collect::<Result<Vec<_>>>()?;
+        let encoded = rows[0].replay_tick.encoded_inputs.clone();
+        let rows_hash = identity(&rows)?;
+        let speech = vec![None; rows.len()];
+        let episode = Episode {
+            rows,
+            labels,
+            speech,
+        };
+        let replay = actor.evaluate_replay(&sequence(actor, &episode, episode.rows.len(), 0))?;
+        let (gradient, _) = gradients(actor, &[episode])?;
+        probes.push((encoded, gradient, replay.candidate_logits, rows_hash));
+    }
+    if identity(&actor.checkpoint())? != before {
+        return Err("word probe changed the actor".into());
+    }
+    let encoded = probes[0]
+        .0
+        .iter()
+        .zip(&probes[1].0)
+        .filter(|(a, b)| a.to_bits() != b.to_bits())
+        .count();
+    let mask = actor.checkpoint().stage_mask;
+    let changed = probes[0]
+        .1
+        .iter()
+        .zip(&probes[1].1)
+        .enumerate()
+        .filter(|(i, (a, b))| mask.is_trainable(*i) && a.to_bits() != b.to_bits())
+        .count();
+    let logits = probes[0]
+        .2
+        .iter()
+        .flatten()
+        .zip(probes[1].2.iter().flatten())
+        .filter(|(a, b)| a.to_bits() != b.to_bits())
+        .count();
+    Ok(
+        json!({"native_world_steps":16,"prepared_tick":scene.prepared_tick,"maturation":scene.maturation,"changed_encoded_lanes":encoded,"changed_candidate_logits":logits,"changed_trainable_gradients":changed,"action_objective_word_influence_observed":changed>0,"demonstrates_retained_language":false,"actual_row_sha256":[probes[0].3,probes[1].3]}),
+    )
 }
 
 fn preserve_frozen(
@@ -781,10 +932,23 @@ fn evaluate(
                             "{}",
                             json!({"phase":"evaluation","arm":arm,"layout":layout,"goal":goal,"cue":cue,"scene":scene,"row":row,"emitted":emitted,"grounded_speech_target":label})
                         )?;
-                        previous = Some(row);
+                        if label.is_some() {
+                            previous = None;
+                        }
+                        if (goal.index() == 0 && meal)
+                            || (goal.index() == 1
+                                && grab
+                                && owned_before != Some(id)
+                                && host
+                                    .world()
+                                    .entity(scene.toy)
+                                    .is_some_and(|o| o.carried_by == Some(id)))
+                        {
+                            previous = Some(row);
+                        }
                     }
                 }
-                results.push(json!({"arm":arm,"layout":if layout==0{"relocated_near"}else{"relocated_far"},"goal":goal,"cue":cue,"seed":seed,"native_decisions":decisions,"teacher_present":false,"prior_enabled":false,"initial_visible":visible,"player_heard_frames":heard,"selected_food_eat_commands":selected_eat,"selected_toy_grab_commands":selected_grab,"consumptions":meals,"nourished_meals":nourished,"toy_acquisitions":acquisitions,"correct_physical":if goal.index()==0{nourished}else{acquisitions},"utterances":utterances,"grounded_utterance_opportunities":opportunities,"correct_grounded_utterances":correct,"joint_failures":failures,"sleeping_ticks":sleeping,"sleep_consolidations":consolidations}));
+                results.push(json!({"arm":arm,"layout":if layout==0{"relocated_near"}else{"relocated_far"},"goal":goal,"cue":cue,"seed":seed,"prepared_tick":scene.prepared_tick,"maturation":scene.maturation,"native_decisions":decisions,"teacher_present":false,"prior_enabled":false,"initial_visible":visible,"player_heard_frames":heard,"selected_food_eat_commands":selected_eat,"selected_toy_grab_commands":selected_grab,"consumptions":meals,"nourished_meals":nourished,"toy_acquisitions":acquisitions,"correct_physical":if goal.index()==0{nourished}else{acquisitions},"utterances":utterances,"grounded_utterance_opportunities":opportunities,"correct_grounded_utterances":correct,"joint_failures":failures,"sleeping_ticks":sleeping,"sleep_consolidations":consolidations}));
             }
         }
     }
@@ -896,6 +1060,7 @@ pub fn run_retained_language_pilot(output: &Path, config: LanguagePilotConfig) -
     let control_actor = new_actor(config.seed, &source)?;
     let controls = physical_controls(&control_actor, &source, config.seed)?;
     let initial = control_actor.checkpoint();
+    let initial_word_probe = word_path_probe(&control_actor, &source, config.seed)?;
     let trace_file = fs::OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -948,6 +1113,7 @@ pub fn run_retained_language_pilot(output: &Path, config: LanguagePilotConfig) -
         }
         eprintln!("language pilot {arm:?}: teacher-absent evaluation");
         let evaluation = evaluate(&actor, &asset, config, arm, &mut traces)?;
+        let final_word_probe = word_path_probe(&actor, &asset, config.seed)?;
         let continuity = if let Some(gradient) = next_gradient {
             exact_reload(
                 &output.join(format!("recovery-{arm:?}")),
@@ -959,10 +1125,10 @@ pub fn run_retained_language_pilot(output: &Path, config: LanguagePilotConfig) -
         } else {
             Value::Null
         };
-        arms.push(json!({"arm":arm,"collections":collections,"updates":updates,"actor_step":actor.optimizer_step(),"actor_sha256":identity(&actor.checkpoint())?,"evaluation":evaluation,"continuity":continuity}));
+        arms.push(json!({"arm":arm,"collections":collections,"updates":updates,"actor_step":actor.optimizer_step(),"final_word_path_probe":final_word_probe,"actor_sha256":identity(&actor.checkpoint())?,"evaluation":evaluation,"continuity":continuity}));
     }
     traces.finish()?;
-    let report = json!({"kind":"experimental-retained-grounded-language-v1","execution_domain":"native-cpu","config":config,"teacher_translation_deliveries":translations,"semantic_prior_deliveries":0,"semantic_prior_enabled":false,"initial_actor_sha256":identity(&initial)?,"scripted_world_positive_controls":controls,"arms":arms,"elapsed_seconds":started.elapsed().as_secs_f64(),"limitations":["Fixed small pilot, not standard CFF ChiChi competence or a general language model.","Actor-only supervised foundation learning across fresh cohorts; no same-individual optimizer rebase or critic update.","Recorded lifetime/fast offsets, memory and route context remain fixed during conditional replay; recurrent prefixes are rebuilt under current weights for every update.","No natural-sleep retention trial; sleeping ticks within ordinary assessment are reported without forcing sleep.","Default uses a deterministic bounded teacher translator; a real SLM delivery is claimed only with confirmed optional llama.cpp receipts.","Fresh-process reload covers exact private state, next eight native steps and the next native Adam update using a retained real gradient; it does not retrain the gradient after reload."]});
+    let report = json!({"kind":"experimental-retained-grounded-language-v2","execution_domain":"native-cpu","config":config,"teacher_translation_deliveries":translations,"semantic_prior_deliveries":0,"semantic_prior_enabled":false,"initial_actor_sha256":identity(&initial)?,"initial_word_path_probe":initial_word_probe,"scripted_world_positive_controls":controls,"arms":arms,"elapsed_seconds":started.elapsed().as_secs_f64(),"limitations":["Fixed small pilot, not standard CFF ChiChi competence or a general language model.","Actor-only supervised foundation learning across fresh cohorts; no same-individual optimizer rebase or critic update.","Recorded lifetime/fast offsets, memory and route context remain fixed during conditional replay; recurrent prefixes are rebuilt under current weights for every update.","Subjects pass native hearing/association/motor developmental gates through ordinary world ticks before neural capture. No natural-sleep retention trial; sleeping ticks within ordinary assessment are reported without forcing sleep.","Default uses a deterministic bounded teacher translator; a real SLM delivery is claimed only with confirmed optional llama.cpp receipts.","Fresh-process reload covers exact private state, next eight native steps and the next native Adam update using a retained real gradient; it does not retrain the gradient after reload."]});
     write_json(&output.join("results.json"), &report)?;
     Ok(report)
 }
@@ -1002,14 +1168,38 @@ mod tests {
         )
         .unwrap();
         let row = host.step(&actor, 1.).unwrap().decisions.remove(0);
+        assert!(scene.prepared_tick > 0 && scene.maturation > 0.);
         assert!(no_teacher_or_prior(&row).is_err());
         assert!(speech_label(&row, None, Goal::EatFood, scene)
             .unwrap()
             .token
             .is_none());
-        let label = action_label(&row, Goal::EatFood, scene);
+        let label = action_label(&row, Goal::EatFood, scene, false).unwrap();
         assert!(label.motors.iter().flatten().any(|mask| *mask != 0));
         let action = &row.action;
+        assert_eq!(
+            action.motor_masks[2], 0,
+            "reference founder has one sampled head"
+        );
+        let eat = row
+            .patch
+            .pre_action()
+            .perception()
+            .candidates()
+            .iter()
+            .find(|c| c.action_id == HeadlessActionIds::EAT && c.target.entity == Some(scene.food))
+            .unwrap();
+        let forced_label = candidate_label(&row, Some(eat)).unwrap();
+        assert_eq!(forced_label.motors[2], Some(1u32 << eat.candidate_index));
+        ImitationExample {
+            candidate_count: action.candidate_count,
+            representative_mask: action.representative_mask,
+            motor_masks: action.motor_masks,
+            forced_slots: action.forced_slots.clone(),
+            target: forced_label,
+        }
+        .validate()
+        .unwrap();
         ImitationExample {
             candidate_count: action.candidate_count,
             representative_mask: action.representative_mask,
@@ -1019,6 +1209,19 @@ mod tests {
         }
         .validate()
         .unwrap();
+    }
+
+    #[test]
+    fn reports_unresolved_word_objective_path_without_confusing_hearing_with_learning() {
+        let seed = 847_514;
+        let source = initial_n2048_care_asset(seed).unwrap();
+        let actor = new_actor(seed, &source).unwrap();
+        let report = word_path_probe(&actor, &source, seed).unwrap();
+        assert!(report["changed_encoded_lanes"].as_u64().unwrap() > 0);
+        // A measured limitation of this public founder, not a passing language
+        // capability test. Keep the negative visible until the path is repaired.
+        assert_eq!(report["changed_trainable_gradients"], 0);
+        assert_eq!(report["demonstrates_retained_language"], false);
     }
 
     #[test]
@@ -1032,7 +1235,7 @@ mod tests {
             .collect::<Vec<_>>();
         let labels = rows
             .iter()
-            .map(|r| action_label(r, Goal::EatFood, scene))
+            .map(|r| action_label(r, Goal::EatFood, scene, false).unwrap())
             .collect();
         let speech = rows.iter().map(|_| None).collect();
         let mut episode = Episode {
