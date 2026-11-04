@@ -492,7 +492,7 @@ fn run_trial(
                 break;
             }
         }
-        if rows.values().map(Vec::len).sum::<usize>() >= scored_limit + 1
+        if rows.values().map(Vec::len).sum::<usize>() > scored_limit
             || host
                 .world()
                 .organism_registry()
