@@ -537,10 +537,83 @@ fn new_life_newborn_cpu_component_training_and_recovery_smoke() {
     eprintln!("new-life newborn/native-CPU component smoke: 5 real decisions; exact next private step and full next actor/value Adam states; policy 11891 -> 11892, ages {}/{}; no feeding efficacy claim",a.actor_optimizer_step,a.value_optimizer_step);
 }
 
+fn gpu_qualification_request(
+    now: u64,
+    collection: Option<&str>,
+    finalization: Option<&str>,
+) -> Result<crate::ResidentContinuousRequest> {
+    let collection_cutoff_unix_seconds: u64 = collection
+        .ok_or("set ALIFE_NEW_LIFE_GPU_COLLECTION_CUTOFF to the admitted absolute Unix cutoff")?
+        .parse()?;
+    let finalization_deadline_unix_seconds: u64 = finalization
+        .ok_or(
+            "set ALIFE_NEW_LIFE_GPU_FINALIZATION_DEADLINE to the admitted absolute Unix deadline",
+        )?
+        .parse()?;
+    let request = crate::ResidentContinuousRequest {
+        schema: 1,
+        seed_range: [8002, 8010],
+        total_trained_decisions: 4,
+        decisions_per_update: 4,
+        snapshot_every_updates: 1,
+        care_assistance: false,
+        sampling_temperature: 0.9,
+        collection_cutoff_unix_seconds,
+        finalization_deadline_unix_seconds,
+        max_temporary_bytes: 2 * 1024 * 1024 * 1024,
+    };
+    crate::validate_resident_continuous_request(&request, now)?;
+    Ok(request)
+}
+
+#[test]
+fn new_life_gpu_qualification_requires_both_explicit_deadlines() {
+    assert!(gpu_qualification_request(100, None, None).is_err());
+    assert!(gpu_qualification_request(100, Some("200"), None).is_err());
+    assert!(gpu_qualification_request(100, None, Some("300")).is_err());
+    assert!(gpu_qualification_request(100, Some("invalid"), Some("300")).is_err());
+}
+
+#[test]
+fn new_life_gpu_qualification_rejects_expired_and_reversed_windows() {
+    for (collection, finalization) in [
+        ("100", "300"),
+        ("99", "300"),
+        ("300", "300"),
+        ("300", "200"),
+    ] {
+        assert!(gpu_qualification_request(100, Some(collection), Some(finalization)).is_err());
+    }
+}
+
+#[test]
+fn new_life_gpu_qualification_preserves_absolute_window_through_slow_setup() {
+    let request = gpu_qualification_request(100, Some("1000"), Some("1600")).unwrap();
+    // Setup consumes real time; it never moves the owner's absolute boundaries.
+    crate::validate_resident_continuous_request(&request, 999).unwrap();
+    assert!(crate::validate_resident_continuous_request(&request, 1000).is_err());
+    assert_eq!(request.collection_cutoff_unix_seconds, 1000);
+    assert_eq!(request.finalization_deadline_unix_seconds, 1600);
+    assert_eq!(request.total_trained_decisions, 4);
+}
+
 #[cfg(feature = "gpu-tests")]
 #[test]
 #[ignore = "requires an admitted native hardware GPU; creates only disposable public fixture state"]
 fn new_life_gpu_initialization_and_continuous_recovery() {
+    let started = std::time::Instant::now();
+    let now = || {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+    };
+    let collection = std::env::var("ALIFE_NEW_LIFE_GPU_COLLECTION_CUTOFF").ok();
+    let finalization = std::env::var("ALIFE_NEW_LIFE_GPU_FINALIZATION_DEADLINE").ok();
+    // No invented host-speed budget, hidden extension or rolling deadline.
+    // Missing/expired settings fail before any device or fixture construction.
+    let request = gpu_qualification_request(now(), collection.as_deref(), finalization.as_deref())
+        .expect("native GPU qualification requires an explicit admitted absolute window");
     let root = std::env::temp_dir().join(format!(
         "alife-new-life-gpu-{}-{}",
         std::process::id(),
@@ -550,6 +623,18 @@ fn new_life_gpu_initialization_and_continuous_recovery() {
             .as_nanos()
     ));
     fs::create_dir(&root).unwrap();
+    let phase = |name: &str| {
+        eprintln!(
+            "{}",
+            serde_json::json!({
+                "kind":"new-life-gpu-qualification-phase-v1", "phase":name,
+                "fixture":root,"unix_seconds":now(),"elapsed_seconds":started.elapsed().as_secs_f64(),
+                "collection_cutoff_unix_seconds":request.collection_cutoff_unix_seconds,
+                "finalization_deadline_unix_seconds":request.finalization_deadline_unix_seconds,
+            })
+        )
+    };
+    phase("fixture-created");
     let source_dir = root.join("source");
     fs::create_dir(&source_dir).unwrap();
     let mut source = terminal();
@@ -575,6 +660,7 @@ fn new_life_gpu_initialization_and_continuous_recovery() {
         &source_dir,
     )
     .unwrap();
+    phase("source-native-initialized");
     let save = PortableSaveFile::from_json_str(&life.world_json).unwrap();
     let tag = source.same_individual.as_mut().unwrap();
     tag.private_life_sha256 = sha(&life);
@@ -596,6 +682,7 @@ fn new_life_gpu_initialization_and_continuous_recovery() {
     read_current_training_checkpoint(&source_path).unwrap();
     let output = root.join("new-life");
     begin_new_individual_training_life(&source_path, 8000, 2, &output).unwrap();
+    phase("new-individual-native-initialized");
     let checkpoint =
         read_current_training_checkpoint(&output.join("store/current.alife-checkpoint")).unwrap();
     assert_eq!(
@@ -610,27 +697,20 @@ fn new_life_gpu_initialization_and_continuous_recovery() {
     assert!(brain.pending_eligibility.is_none());
     assert_eq!(brain.checkpoint_tick, Tick::ZERO);
     assert!(begin_new_individual_training_life(&source_path, 8000, 2, &output).is_err());
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
-    crate::run_resident_continuous_care(
-        &output.join("store"),
-        crate::ResidentContinuousRequest {
-            schema: 1,
-            seed_range: [8002, 8010],
-            total_trained_decisions: 4,
-            decisions_per_update: 4,
-            snapshot_every_updates: 1,
-            care_assistance: false,
-            sampling_temperature: 0.9,
-            collection_cutoff_unix_seconds: now + 240,
-            finalization_deadline_unix_seconds: now + 300,
-            max_temporary_bytes: 2 * 1024 * 1024 * 1024,
-        },
-    )
-    .unwrap();
+    crate::validate_resident_continuous_request(&request, now())
+        .expect("admitted collection window expired during fixture setup; fixture retained");
+    phase("continuous-producer-starting");
+    if let Err(error) = crate::run_resident_continuous_care(&output.join("store"), request.clone())
+    {
+        phase("continuous-producer-failed-before-recovery");
+        panic!(
+            "native qualification producer failed; fixture retained at {}: {error}",
+            root.display()
+        );
+    }
+    phase("continuous-producer-finished");
     let recovery = crate::recover_resident_serial_checkpoint(&output.join("store")).unwrap();
+    phase("continuous-recovery-finished");
     let recovered =
         read_current_training_checkpoint(Path::new(recovery["candidate"].as_str().unwrap()))
             .unwrap();

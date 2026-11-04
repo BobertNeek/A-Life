@@ -44,6 +44,10 @@ brain/compiler branch. Do not upload private checkpoints or their outputs.
 
 ```powershell
 cargo test -p alife_game_app --features cpu-training --lib new_life -- --nocapture
+# Set both to the owner's admitted absolute Unix-second boundaries. These must
+# include fixture construction, GPU setup, collection and snapshot admission.
+$env:ALIFE_NEW_LIFE_GPU_COLLECTION_CUTOFF = $admittedCollectionCutoffUnix.ToString()
+$env:ALIFE_NEW_LIFE_GPU_FINALIZATION_DEADLINE = $admittedFinalizationDeadlineUnix.ToString()
 cargo test -p alife_game_app --features "cpu-training,gpu-tests" --lib new_life_gpu_initialization_and_continuous_recovery -- --ignored --nocapture
 cargo build --release -p alife_game_app --features foundation-training --bin export_native_training_handoff --bin train_n2048_care
 ```
@@ -51,6 +55,25 @@ cargo build --release -p alife_game_app --features foundation-training --bin exp
 The second test uses only disposable public/synthetic state on the actual native
 GPU, then exercises birth, full native admission, actual continuous-world PPO and
 recovery. It is ignored by ordinary CPU tests; an ignored result is not a GPU pass.
+The hardware test has no implicit host-speed budget. Both absolute deadlines are
+required and validated before a device is created, and checked again before the
+continuous producer. Setup never extends them. Phase logs include the fixture
+path, Unix time, monotonic elapsed time and both boundaries. Failure preserves
+the disposable fixture; a run must actually reach and pass recovery to qualify.
+
+The first PC hardware attempt on `ec1fe21e` reportedly ran for 894.80 seconds and
+completed four PPO rows before the producer rejected a snapshot. That attempt
+used a fixed 240-second collection / 300-second finalization window starting
+after newborn initialization. It failed at the producer call, before the next
+recovery statement ran; it does not establish successful training recovery.
+The PC owner's retained fixture places the world snapshot write at 12:47:44 UTC,
+55 seconds after the request's 12:46:49 UTC finalization deadline. This confirms
+that capture/publication crossed that test's finalization boundary. The original
+fixture and negative result remain preserved. Production diagnostics now identify the failed invariant,
+including observed admission/deadline seconds for a late snapshot. The production
+predicate is unchanged: a snapshot admitted after its finalization deadline is
+rejected even if GPU capture began in time. No grace period, retrospective clock
+change or promotion of the failed run is provided.
 
 Select a new organism ID greater than all retained lineage IDs. Select two
 consecutive unused owned seed entries: the new world seed and world seed + 1 for
