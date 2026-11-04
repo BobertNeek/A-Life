@@ -153,7 +153,8 @@ class RejectRedirects(urllib.request.HTTPRedirectHandler):
         return None
 
 
-def request_recipe(endpoint, model, prompt, api_key=None, *, host=None, max_tokens=None, no_think=False):
+def request_recipe(endpoint, model, prompt, api_key=None, *, host=None, max_tokens=None,
+                   no_think=False, response_output=None):
     # Never forward credentials across redirects or send them over plaintext.
     url = urlsplit(endpoint)
     if (url.scheme not in {"http", "https"} or not url.hostname or url.username or url.password
@@ -163,6 +164,11 @@ def request_recipe(endpoint, model, prompt, api_key=None, *, host=None, max_toke
         raise ValueError("max_tokens must be an integer in 1..8192")
     if type(no_think) is not bool:
         raise ValueError("no_think must be a boolean")
+    response_path = Path(response_output) if response_output is not None else None
+    # Refuse known collisions before dispatch; exclusive creation below also
+    # closes the race if another process creates the path during the request.
+    if response_path is not None and os.path.lexists(response_path):
+        raise FileExistsError("response output already exists: " + str(response_path))
     if no_think:
         prompt += " /no_think"
     # Explicitly configured endpoint; credentials come only from environment.
@@ -180,8 +186,29 @@ def request_recipe(endpoint, model, prompt, api_key=None, *, host=None, max_toke
         raw = response.read(1_000_001)
     if len(raw) > 1_000_000:
         raise ValueError("model response too large")
+    if response_path is not None:
+        # Only the bounded response body, byte for byte: no request headers,
+        # credentials or synthetic envelope. Preserve malformed output as evidence.
+        with response_path.open("xb") as out:
+            out.write(raw)
     result = strict_json(raw)
     return strict_json(result["choices"][0]["message"]["content"])
+
+
+def preflight_outputs(output, response_output=None):
+    """Refuse output collisions before spending a model request."""
+    output = Path(output)
+    recipe_path = output.with_name(output.name + ".recipe.json")
+    for path in (output, recipe_path):
+        if os.path.lexists(path):
+            raise FileExistsError("output already exists: " + str(path))
+    if response_output is not None:
+        response_path = Path(response_output)
+        if response_path.resolve() in {output.resolve(), recipe_path.resolve()}:
+            raise ValueError("response output must differ from bank and recipe outputs")
+        if os.path.lexists(response_path):
+            raise FileExistsError("response output already exists: " + str(response_path))
+    return recipe_path
 
 
 def main():
@@ -192,7 +219,9 @@ def main():
     parser.add_argument("--output", type=Path, required=True, help="new sampler-bank file")
     parser.add_argument("--max-tokens", type=int, help="optional generation cap in 1..8192 tokens")
     parser.add_argument("--no-think", action="store_true", help="append Qwen /no_think instruction (opt-in)")
+    parser.add_argument("--response-output", type=Path, help="new private file for the bounded raw provider response")
     args = parser.parse_args()
+    recipe_path = preflight_outputs(args.output, args.response_output)
     host = strict_json(args.host.read_text(encoding="utf-8"))
     prompt = ("Return JSON only with schema=1, legend=" + json.dumps(LEGEND) +
               ", and scenarios array. Each scenario has id, map (rectangular array of strings), condition, difficulty, "
@@ -205,9 +234,9 @@ def main():
               ". Use distinct maps/condition pairs. Difficulties form contiguous integers starting at 0 and include "
               + str(host["current_difficulty"]) + ". Do not add fields.")
     recipe = request_recipe(args.endpoint, args.model, prompt, os.environ.get("ALIFE_SCENARIO_API_KEY"),
-                            host=host, max_tokens=args.max_tokens, no_think=args.no_think)
+                            host=host, max_tokens=args.max_tokens, no_think=args.no_think,
+                            response_output=args.response_output)
     bank = compile_recipe(recipe, host)
-    recipe_path = args.output.with_name(args.output.name + ".recipe.json")
     # Preserve the untrusted proposal alongside its compiled artifact. Never
     # overwrite an earlier run, including a partial run.
     with recipe_path.open("x", encoding="utf-8") as out:

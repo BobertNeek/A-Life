@@ -116,6 +116,17 @@ provider setting. A token cap that truncates JSON fails rather than repairing th
 response; choose an adequate cap for the requested number of scenarios. A server
 may also require its own reasoning configuration; these flags do not change it.
 
+For audit or provider debugging, opt in with `--response-output RESPONSE.raw`.
+This exclusively creates a new file containing the exact response-body bytes
+before JSON parsing or host validation, so malformed envelopes and rejected
+recipes remain available for inspection. It does not save request headers or
+credentials. The response is untrusted and may itself contain sensitive
+provider-generated text: keep this file private and review it before sharing.
+Existing paths are refused, oversized bodies (over 1,000,000 bytes) are rejected
+without saving a truncated response, and no raw-response file is written unless
+requested. HTTP/transport failures are not captured as successful response
+bodies. Capture never triggers a retry or makes a rejected recipe admissible.
+
 The map language has exactly one `L` learner and one `F` food on a rectangular
 3–17-cell grid with a complete `#` wall border; `.` marks open space. A cell is
 two world units; columns increase world X and rows world Z. For example

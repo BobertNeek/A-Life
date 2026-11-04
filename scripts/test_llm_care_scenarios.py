@@ -4,10 +4,11 @@ import tempfile
 from pathlib import Path
 from run_care_frontier_fixture import Pilot
 import unittest
+from unittest.mock import patch
 import json
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from llm_care_scenarios import request_recipe, recipe_schema, strict_json
+from llm_care_scenarios import main, request_recipe, recipe_schema, strict_json
 from llm_care_scenarios import LEGEND, RANDOM_ROLL, compile_recipe
 from care_frontier_sampler import select
 
@@ -160,6 +161,113 @@ class RecipeTests(unittest.TestCase):
             self.assertEqual(len(calls), before)
         finally:
             server.shutdown(); thread.join(); server.server_close()
+
+    def test_opt_in_raw_response_capture_is_exact_bounded_and_exclusive(self):
+        recipe, host = fixtures()
+        calls = []
+        response_body = [None]
+        class Handler(BaseHTTPRequestHandler):
+            def do_POST(self):
+                self.rfile.read(int(self.headers['Content-Length']))
+                calls.append(self.headers.get('Authorization'))
+                self.send_response(200)
+                self.send_header('Content-Length', str(len(response_body[0])))
+                self.end_headers(); self.wfile.write(response_body[0])
+            def log_message(self, *_): pass
+        server = HTTPServer(('127.0.0.1', 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
+        endpoint = 'http://127.0.0.1:%s/v1/chat/completions' % server.server_port
+        def envelope(content):
+            return ('  ' + json.dumps({'choices': [{'message': {'content': content}}]},
+                                      indent=2) + '\n').encode()
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                valid = envelope(json.dumps(recipe))
+                response_body[0] = valid
+                self.assertEqual(request_recipe(endpoint, 'test', 'prompt', 'test-key'), recipe)
+                self.assertEqual(list(root.iterdir()), [])
+                path = root / 'valid.raw'
+                self.assertEqual(request_recipe(endpoint, 'test', 'prompt', 'test-key',
+                                                response_output=path), recipe)
+                self.assertEqual(path.read_bytes(), valid)
+                self.assertNotIn(b'test-key', path.read_bytes())
+                self.assertEqual(calls[-1], 'Bearer test-key')
+                before = len(calls)
+                with self.assertRaises(FileExistsError):
+                    request_recipe(endpoint, 'test', 'prompt', response_output=path)
+                self.assertEqual(len(calls), before)
+                self.assertEqual(path.read_bytes(), valid)
+                bad_recipe = copy.deepcopy(recipe)
+                bad_recipe['scenarios'][0]['map'] = ['#####', '#L#F#', '#####']
+                for index, raw in enumerate((b'not a JSON envelope\n', envelope('not JSON'),
+                                             envelope(json.dumps(bad_recipe)))):
+                    response_body[0] = raw
+                    path = root / ('invalid-%d.raw' % index)
+                    before = len(calls)
+                    with self.assertRaises(ValueError):
+                        compile_recipe(request_recipe(endpoint, 'test', 'prompt', host=host,
+                                                      response_output=path), host)
+                    self.assertEqual(path.read_bytes(), raw)
+                    self.assertEqual(len(calls), before + 1)
+                response_body[0] = valid + b' ' * (1_000_000 - len(valid))
+                path = root / 'maximum.raw'
+                self.assertEqual(request_recipe(endpoint, 'test', 'prompt', response_output=path), recipe)
+                self.assertEqual(path.read_bytes(), response_body[0])
+                response_body[0] = b' ' * 1_000_001
+                path = root / 'oversized.raw'
+                before = len(calls)
+                with self.assertRaisesRegex(ValueError, 'too large'):
+                    request_recipe(endpoint, 'test', 'prompt', response_output=path)
+                self.assertFalse(path.exists())
+                self.assertEqual(len(calls), before + 1)
+        finally:
+            server.shutdown(); thread.join(); server.server_close()
+
+    def test_cli_output_collisions_fail_before_model_request(self):
+        _, host = fixtures()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            host_path = root / 'host.json'
+            host_path.write_text(json.dumps(host))
+            bank = root / 'bank.json'
+            recipe = root / 'bank.json.recipe.json'
+            argv = ['llm_care_scenarios.py', '--host', str(host_path),
+                    '--endpoint', 'http://127.0.0.1:1/v1/chat/completions',
+                    '--model', 'test', '--output', str(bank)]
+            def refused(extra=()):
+                with patch('sys.argv', argv + list(extra)), patch('llm_care_scenarios.request_recipe') as request:
+                    with self.assertRaises((ValueError, FileExistsError)): main()
+                    request.assert_not_called()
+            for existing in (bank, recipe):
+                with self.subTest(existing=existing):
+                    existing.write_bytes(b'preserve')
+                    refused()
+                    self.assertEqual(existing.read_bytes(), b'preserve')
+                    existing.unlink()
+            for destination in (bank, recipe, root / 'unused' / '..' / 'bank.json',
+                                root / 'unused' / '..' / 'bank.json.recipe.json'):
+                with self.subTest(destination=destination):
+                    refused(['--response-output', str(destination)])
+                    self.assertFalse(bank.exists())
+                    self.assertFalse(recipe.exists())
+            existing_response = root / 'response.raw'
+            existing_response.write_bytes(b'preserve response')
+            refused(['--response-output', str(existing_response)])
+            self.assertEqual(existing_response.read_bytes(), b'preserve response')
+            # A symlinked directory aliases even not-yet-created output files.
+            alias = root / 'alias'
+            try:
+                alias.symlink_to(root, target_is_directory=True)
+            except (OSError, NotImplementedError):
+                return  # Windows may require elevated symlink privileges.
+            for name in (bank.name, recipe.name):
+                refused(['--response-output', str(alias / name)])
+            for existing in (bank, recipe):
+                existing.symlink_to(root / 'missing-target')
+                refused()
+                self.assertTrue(existing.is_symlink())
+                existing.unlink()
 
     def test_walls_are_distinct_sampler_families_and_unreachable_rejected(self):
         recipe, host = fixtures()
