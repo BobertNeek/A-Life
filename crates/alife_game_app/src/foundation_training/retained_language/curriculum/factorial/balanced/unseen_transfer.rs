@@ -4,6 +4,9 @@ use super::*;
 pub(super) const SEEDS: [u64; 6] = [
     4_104_491, 4_209_927, 4_308_851, 4_401_393, 4_507_581, 4_609_807,
 ];
+pub(super) const FRESH_SEEDS: [u64; 6] = [
+    6_104_531, 6_210_019, 6_309_173, 6_401_879, 6_508_117, 6_610_327,
+];
 // Food angle, toy angle, food distance, toy distance, food nutrition, food radius.
 const INSTANCES: [[f32; 6]; 6] = [
     [0.36, -0.79, 0.37, 0.71, 0.85, 0.105],
@@ -22,17 +25,42 @@ pub(super) fn prepared_case(
     founder: u64,
     case: usize,
 ) -> Result<(CpuCanonicalHost, Scene)> {
+    prepared_instance(actor, asset, founder, case, SEEDS[case], padding(case))
+}
+pub(super) fn prepared_fresh_case(
+    actor: &CpuFoundationTrainer,
+    asset: &FoundationWeightAsset,
+    founder: u64,
+    case: usize,
+) -> Result<(CpuCanonicalHost, Scene)> {
+    prepared_instance(
+        actor,
+        asset,
+        founder,
+        case,
+        FRESH_SEEDS[case],
+        379 + 23 * case,
+    )
+}
+fn prepared_instance(
+    actor: &CpuFoundationTrainer,
+    asset: &FoundationWeightAsset,
+    founder: u64,
+    case: usize,
+    seed: u64,
+    identity_padding: usize,
+) -> Result<(CpuCanonicalHost, Scene)> {
     let [_, _, _, _, nutrition, radius] = INSTANCES[case];
     Ok(CpuCanonicalHost::new_prepared_cohort(
-        game(SEEDS[case], founder, asset)?,
+        game(seed, founder, asset)?,
         actor,
-        SEEDS[case] as u32,
+        seed as u32,
         |w| {
             let s = arrange(w, 1, true)?;
             remap_with_food(
                 w,
                 s,
-                padding(case),
+                identity_padding,
                 case.is_multiple_of(2),
                 nutrition,
                 radius,
@@ -72,6 +100,7 @@ fn plan() -> AssessmentPlan {
         balanced_grounding_v2: true,
         event_confirmed_speech_v1: true,
         unseen_report_transfer_v1: true,
+        physical_before_speech_v1: false,
     }
 }
 pub fn assess_unseen_grounding(
@@ -150,37 +179,43 @@ mod tests {
         let founder = 847501;
         let asset = initial_n2048_care_asset(founder).unwrap();
         let actor = new_actor_profile(founder, &asset, true).unwrap();
-        for case in 0..SEEDS.len() {
-            let (mut h, s) = prepared_case(&actor, &asset, founder, case).unwrap();
-            place_case(h.world_mut(), s, case).unwrap();
-            assert!(s.food.raw() > 170 && s.toy.raw() > 170);
-            let id = h.world().organism_entity_ids()[0].0;
-            let homeostasis = h
-                .world()
-                .organism_registry()
-                .get(id)
-                .unwrap()
-                .biochemistry()
-                .homeostasis;
-            let tick = h.world().tick();
-            let frame = h
-                .world_mut()
-                .perception_frame(id, tick, actor.phenotype().sensor_profile(), homeostasis)
-                .unwrap();
-            assert!(
-                [s.food, s.toy, s.distractor]
-                    .into_iter()
-                    .all(|t| visible_target(&frame, t)),
-                "transfer visibility {case}"
-            );
-            assert!(
-                !super::super::tests::eat_control(&mut h, &actor, s)
+        for fresh in [false, true] {
+            for case in 0..SEEDS.len() {
+                let (mut h, s) = if fresh {
+                    prepared_fresh_case(&actor, &asset, founder, case).unwrap()
+                } else {
+                    prepared_case(&actor, &asset, founder, case).unwrap()
+                };
+                place_case(h.world_mut(), s, case).unwrap();
+                assert!(s.food.raw() > 170 && s.toy.raw() > 170);
+                let id = h.world().organism_entity_ids()[0].0;
+                let homeostasis = h
+                    .world()
+                    .organism_registry()
+                    .get(id)
                     .unwrap()
-                    .0
-            );
-            let (consumed, gain) = super::super::tests::eat_control(&mut h, &actor, s)
-                .unwrap_or_else(|| panic!("held food occluded in transfer case {case}"));
-            assert!(consumed && gain > 0., "transfer fixture {case}");
+                    .biochemistry()
+                    .homeostasis;
+                let tick = h.world().tick();
+                let frame = h
+                    .world_mut()
+                    .perception_frame(id, tick, actor.phenotype().sensor_profile(), homeostasis)
+                    .unwrap();
+                assert!(
+                    [s.food, s.toy, s.distractor]
+                        .into_iter()
+                        .all(|t| visible_target(&frame, t)),
+                    "transfer visibility {case}"
+                );
+                assert!(
+                    !super::super::tests::eat_control(&mut h, &actor, s)
+                        .unwrap()
+                        .0
+                );
+                let (consumed, gain) = super::super::tests::eat_control(&mut h, &actor, s)
+                    .unwrap_or_else(|| panic!("held food occluded in transfer case {case}"));
+                assert!(consumed && gain > 0., "transfer fixture {case}");
+            }
         }
     }
     #[test]
