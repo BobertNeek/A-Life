@@ -113,13 +113,24 @@ pub(super) fn prepared_instance(
     seed: u64,
     identity_padding: usize,
 ) -> Result<(CpuCanonicalHost, Scene)> {
+    prepared_instance_capped(actor, asset, founder, case, seed, identity_padding, None)
+}
+pub(super) fn prepared_instance_capped(
+    actor: &CpuFoundationTrainer,
+    asset: &FoundationWeightAsset,
+    founder: u64,
+    case: usize,
+    seed: u64,
+    identity_padding: usize,
+    cap: Option<u64>,
+) -> Result<(CpuCanonicalHost, Scene)> {
     let [_, _, _, _, nutrition, radius] = INSTANCES[case];
     Ok(CpuCanonicalHost::new_prepared_cohort(
         game(seed, founder, asset)?,
         actor,
         seed as u32,
         |w| {
-            let s = arrange(w, 1, true)?;
+            let s = arrange_with_preparation_cap(w, 1, true, cap)?;
             remap_with_food(
                 w,
                 s,

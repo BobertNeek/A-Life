@@ -11,7 +11,7 @@ const TEST: &str = "foundation_training::retained_language::curriculum::factoria
 const ARMS: [&str; 4] = ["Untouched", "ZeroGradient4", "PositiveOnly4", "Balanced4"];
 const CASES: [(u64, usize, usize); 2] = [(19_310_729, 2, 1833), (19_508_423, 4, 1874)];
 #[derive(Clone, Serialize, Deserialize)]
-struct Example {
+pub(super) struct Example {
     row: CpuCollectedDecision,
     target: ReplaySpeechTarget,
     positive: bool,
@@ -206,7 +206,7 @@ fn collect_examples(
     write_compressed(&out.join("grounded-gate-corpus.json.zst"), &data)?;
     Ok(data)
 }
-fn component(
+pub(super) fn component(
     actor: &CpuFoundationTrainer,
     data: &[Example],
     ids: &[usize],

@@ -8,6 +8,8 @@ mod bounded_tape_probe;
 #[cfg(test)]
 mod detached_speech_inputs;
 #[cfg(test)]
+mod matched_gate_curriculum;
+#[cfg(test)]
 mod physical_priority_probe;
 #[cfg(test)]
 mod speech_factor_probe;

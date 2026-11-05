@@ -245,6 +245,15 @@ fn new_actor_profile(
 }
 
 fn arrange(world: &mut HeadlessWorld, layout: usize, evaluation: bool) -> Result<Scene> {
+    arrange_with_preparation_cap(world, layout, evaluation, None)
+}
+fn arrange_with_preparation_cap(
+    world: &mut HeadlessWorld,
+    layout: usize,
+    evaluation: bool,
+    cap: Option<u64>,
+) -> Result<Scene> {
+    let started = world.tick().raw();
     ground_foundation_training_world(world)?;
     world.configure_ecology(EcologyState::default())?;
     let (id, body) = world.organism_entity_ids()[0];
@@ -277,6 +286,9 @@ fn arrange(world: &mut HeadlessWorld, layout: usize, evaluation: bool) -> Result
             }
             ready = Some(development.maturation.raw());
             break;
+        }
+        if cap.is_some_and(|limit| world.tick().raw() - started >= limit) {
+            return Err("explicit biological preparation tick cap reached".into());
         }
         world.try_advance_tick()?;
     }
