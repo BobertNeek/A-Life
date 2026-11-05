@@ -222,8 +222,8 @@ pub(super) fn apply(old: &Snapshot, file: &File, path: &Path) -> io::Result<()> 
     } else {
         UNPROTECTED_DACL_SECURITY_INFORMATION
     };
-    if old.protected || old.automatic {
-        // The modern API preserves protected and auto-inherited descriptors.
+    if old.automatic {
+        // Preserve the source inheritance model, including its AI control bit.
         // SAFETY: the handle and source ACL allocation remain live.
         unsafe {
             win_result(SetSecurityInfo(
@@ -441,6 +441,80 @@ fn reject_named_streams(path: &Path) -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn modern_inherited_descriptor_round_trip() {
+        let root =
+            std::env::temp_dir().join(format!("alife-win-modern-security-{}", std::process::id()));
+        std::fs::create_dir(&root).unwrap();
+        let root = std::fs::canonicalize(root).unwrap();
+        let source_path = root.join("source.json");
+        std::fs::write(&source_path, b"original").unwrap();
+        let output = std::process::Command::new("pwsh.exe")
+            .args([
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                r#"
+                $ErrorActionPreference = 'Stop'
+                $acl = Get-Acl -LiteralPath $env:ALIFE_DACL_PARENT
+                $everyone = [System.Security.Principal.SecurityIdentifier]::new('S-1-1-0')
+                $acl.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new(
+                    $everyone, 'ReadAndExecute', 'ContainerInherit,ObjectInherit', 'None', 'Allow'))
+                Set-Acl -LiteralPath $env:ALIFE_DACL_PARENT -AclObject $acl
+            "#,
+            ])
+            .env("ALIFE_DACL_PARENT", &root)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let source = OpenOptions::new().write(true).open(source_path).unwrap();
+        let old = snapshot(&source).unwrap();
+        assert!(old.automatic && !old.protected);
+        let stage = root.join("stage.json");
+        let stage_file = create_private(&stage).unwrap();
+        let result = apply(&old, &stage_file, &stage);
+        let copied = snapshot(&stage_file).unwrap();
+        if result.is_err() {
+            let path = wide(&stage).unwrap();
+            // Disposable empty-stage diagnostics for inheritance-model changes.
+            let legacy = unsafe {
+                SetFileSecurityW(path.as_ptr(), DACL_SECURITY_INFORMATION, old._allocation.0)
+            };
+            eprintln!(
+                "legacy DACL-only={legacy}; staged={}",
+                String::from_utf16_lossy(&snapshot(&stage_file).unwrap().text)
+            );
+            let modern = unsafe {
+                SetSecurityInfo(
+                    stage_file.as_raw_handle(),
+                    SE_FILE_OBJECT,
+                    DACL_SECURITY_INFORMATION,
+                    null_mut(),
+                    null_mut(),
+                    old.dacl,
+                    null_mut(),
+                )
+            };
+            eprintln!(
+                "modern DACL-only={modern}; staged={}",
+                String::from_utf16_lossy(&snapshot(&stage_file).unwrap().text)
+            );
+        }
+        assert!(
+            result.is_ok(),
+            "{result:?}; original={}; staged={}",
+            String::from_utf16_lossy(&old.text),
+            String::from_utf16_lossy(&copied.text)
+        );
+        drop(stage_file);
+        drop(source);
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn inherited_descriptor_round_trip() {
