@@ -450,6 +450,28 @@ fn evaluate_saved(source: &Path, out: &Path, cold: bool) -> Result<Value> {
             cp.clone(),
         )?;
         let before = identity(&cp)?;
+        let summary_path = out.join(format!("{prefix}-summary-{arm}.json"));
+        if resumed && summary_path.exists() {
+            let saved: Value = serde_json::from_slice(&fs::read(&summary_path)?)?;
+            assert_eq!(saved["actor_sha256"], before);
+            let name = if !cold && arm == "Untouched" {
+                "hot-Untouched.jsonl.zst".to_owned()
+            } else {
+                format!("{prefix}-{arm}.jsonl.zst")
+            };
+            let mut reader = zstd::stream::read::Decoder::new(fs::File::open(out.join(name))?)?;
+            let mut h = HashedTrace {
+                inner: std::io::sink(),
+                digest: Sha256::new(),
+            };
+            std::io::copy(&mut reader, &mut h)?;
+            assert_eq!(
+                saved["native_trace_sha256"],
+                format!("{:x}", h.digest.finalize())
+            );
+            results.push(saved);
+            continue;
+        }
         let mut rebased = vec![];
         let mut proofs = vec![];
         for c in &cases {
@@ -479,9 +501,11 @@ fn evaluate_saved(source: &Path, out: &Path, cold: bool) -> Result<Value> {
                 .fork_experimental_speech_gate_policy(&base, &invalid)
                 .is_err());
             if !receipt.changed_weight_indices.is_empty() {
-                let normal = CpuCanonicalHost::from_checkpoint(c.host.clone(), &actor)?;
                 assert!(
-                    normal.checkpoint(&actor).is_err(),
+                    match CpuCanonicalHost::from_checkpoint(c.host.clone(), &actor) {
+                        Err(_) => true,
+                        Ok(normal) => normal.checkpoint(&actor).is_err(),
+                    },
                     "normal admission must retain the policy guard"
                 );
             }
@@ -542,7 +566,7 @@ fn evaluate_saved(source: &Path, out: &Path, cold: bool) -> Result<Value> {
             },
         )?;
         let record = json!({"condition":arm,"actor_sha256":before,"optimizer_step":actor.optimizer_step(),"native_trace_sha256":trace_hash,"assessment":assessment,"next_gradient_sha256":identity(&g)?,"next_gradient_objective":objective,"zero_optimizer_updates_during_assessment_or_cold_restore":true,"experimental_policy_branch_proofs":proofs});
-        write_json(&out.join(format!("{prefix}-summary-{arm}.json")), &record)?;
+        write_json(&summary_path, &record)?;
         results.push(record);
     }
     Ok(json!(results))
@@ -618,8 +642,32 @@ fn recover_saved_updates(source: &Path, out: &Path) -> Result<Value> {
 }
 fn resume_saved_assessment(source: &Path, out: &Path) -> Result<()> {
     let start = Instant::now();
-    let models = recover_saved_updates(source, out)?;
-    write_json(&out.join("recovered-update-receipts.json"), &models)?;
+    let receipt_path = out.join("recovered-update-receipts.json");
+    let models = if receipt_path.exists() {
+        let saved: Value = serde_json::from_slice(&fs::read(&receipt_path)?)?;
+        for m in saved.as_array().ok_or("no saved models")? {
+            let arm = m["condition"].as_str().ok_or("bad saved arm")?;
+            let cp: FoundationTrainerCheckpoint =
+                read_compressed(&out.join(format!("actor-{arm}.json.zst")))?;
+            assert_eq!(m["actor_sha256"], identity(&cp)?);
+            assert_eq!(
+                m["updates"].as_array().ok_or("no updates")?.len(),
+                if arm == "Untouched" { 0 } else { 4 }
+            );
+            for u in m["updates"].as_array().ok_or("no updates")? {
+                let cp: FoundationTrainerCheckpoint = read_compressed(&out.join(format!(
+                    "actor-{arm}-after-{}.json.zst",
+                    u["epoch"].as_u64().ok_or("bad epoch")? + 1
+                )))?;
+                assert_eq!(u["checkpoint_sha256"], identity(&cp)?);
+            }
+        }
+        saved
+    } else {
+        let m = recover_saved_updates(source, out)?;
+        write_json(&receipt_path, &m)?;
+        m
+    };
     let hot = evaluate_saved(source, out, false)?;
     write_json(&out.join("resumed-hot-results.json"), &hot)?;
     let status = Command::new(std::env::current_exe()?)
@@ -641,11 +689,18 @@ fn resume_saved_assessment(source: &Path, out: &Path) -> Result<()> {
             "optimizer_step",
             "native_trace_sha256",
             "next_gradient_sha256",
-            "next_gradient_objective",
             "experimental_policy_branch_proofs",
         ] {
             assert_eq!(h[key], c[key], "hot/cold {key} differs");
         }
+        let arm = h["condition"].as_str().ok_or("bad condition")?;
+        let hs: Value = serde_json::from_slice(&fs::read(
+            out.join(format!("resumed-hot-summary-{arm}.json")),
+        )?)?;
+        let cs: Value = serde_json::from_slice(&fs::read(
+            out.join(format!("resumed-cold-summary-{arm}.json")),
+        )?)?;
+        assert_eq!(hs["next_gradient_objective"], cs["next_gradient_objective"]);
         if h["condition"] != "Untouched" {
             assert_eq!(h["assessment"], c["assessment"]);
         }
