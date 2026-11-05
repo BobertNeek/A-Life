@@ -58,6 +58,8 @@ fn register(world: &mut HeadlessWorld) -> WorldEntityId {
 
 #[test]
 fn movement_hazard_feedback_and_injury_are_independent_of_spawn_order() {
+    let mut lower_pain_max_injury_delta = 0.0_f32;
+    let mut higher_pain_min_injury_delta = f32::INFINITY;
     for (near_pain, far_pain) in [(0.8, 0.1), (0.1, 0.8)] {
         for intensity in [0.0, 1.0] {
             for registered in [false, true] {
@@ -75,6 +77,15 @@ fn movement_hazard_feedback_and_injury_are_independent_of_spawn_order() {
                     if registered {
                         register(&mut world);
                     }
+                    let initial_injury = registered.then(|| {
+                        world
+                            .organism_registry()
+                            .get(OrganismId(1))
+                            .unwrap()
+                            .biochemistry()
+                            .body
+                            .injury
+                    });
                     let result = if registered {
                         world
                             .apply_registered_neural_command(
@@ -123,6 +134,18 @@ fn movement_hazard_feedback_and_injury_are_independent_of_spawn_order() {
                             assert_eq!(injury, previous);
                         }
                         previous_injury = Some(injury);
+                        let injury_delta = injury - initial_injury.unwrap();
+                        assert!(
+                            injury_delta > 0.0,
+                            "selected hazard must cause biological injury"
+                        );
+                        if near_pain == 0.1 {
+                            lower_pain_max_injury_delta =
+                                lower_pain_max_injury_delta.max(injury_delta);
+                        } else {
+                            higher_pain_min_injury_delta =
+                                higher_pain_min_injury_delta.min(injury_delta);
+                        }
                     } else {
                         assert_eq!(
                             world
@@ -136,6 +159,11 @@ fn movement_hazard_feedback_and_injury_are_independent_of_spawn_order() {
             }
         }
     }
+    assert!(lower_pain_max_injury_delta > 0.0 && higher_pain_min_injury_delta.is_finite());
+    assert!(
+        higher_pain_min_injury_delta > lower_pain_max_injury_delta,
+        "higher selected pain must produce greater injury in these fresh identical bodies"
+    );
 }
 
 #[test]
