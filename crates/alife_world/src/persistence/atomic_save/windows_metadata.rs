@@ -478,6 +478,94 @@ mod tests {
     use super::*;
 
     #[test]
+    fn unc_and_extended_spellings_are_preserved_without_network_io() {
+        // This tests conversion only. It does not qualify a network server's
+        // permissions or rename semantics and never attempts to connect one.
+        for path in [
+            r"\\server\share\creature.json".to_owned(),
+            r"\\?\C:\creature.json".to_owned(),
+            format!(
+                r"\\?\UNC\server\share\{}creature.json",
+                "directory\\".repeat(40)
+            ),
+        ] {
+            let path = Path::new(&path);
+            let expected: Vec<_> = path.as_os_str().encode_wide().chain([0]).collect();
+            assert_eq!(wide(path).unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn low_integrity_label_is_preserved_or_refused_without_publication() {
+        let root =
+            std::env::temp_dir().join(format!("alife-win-low-integrity-{}", std::process::id()));
+        std::fs::create_dir(&root).unwrap();
+        let root = std::fs::canonicalize(root).unwrap();
+        let path = root.join("source.json");
+        let recovery = root.join(".alife-portable-save-recovery.tmp");
+        std::fs::write(&path, b"original").unwrap();
+        std::fs::write(&recovery, b"recoverable sibling").unwrap();
+        let source = OpenOptions::new().write(true).open(&path).unwrap();
+        let default = snapshot(&source).unwrap();
+        drop(source);
+        // Lower only this disposable file's label. No token privilege is enabled
+        // and no high/system label or another user's ownership is requested.
+        let output = std::process::Command::new("icacls.exe")
+            .arg(&path)
+            .args(["/setintegritylevel", "L"])
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{} {}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let source = OpenOptions::new().write(true).open(&path).unwrap();
+        let old = snapshot(&source).unwrap();
+        let label = String::from_utf16_lossy(&old.label_text);
+        assert!(
+            label.contains(";;;LW)") || label.contains("S-1-16-4096"),
+            "{label}"
+        );
+        assert_ne!(
+            old.label_text, default.label_text,
+            "fixture must change the default label"
+        );
+        drop(source);
+        eprintln!("native explicit low-integrity fixture: {label}");
+        match super::super::write(&path, b"replacement") {
+            Ok(()) => {
+                assert_eq!(std::fs::read(&path).unwrap(), b"replacement");
+                let source = OpenOptions::new().write(true).open(&path).unwrap();
+                assert_eq!(snapshot(&source).unwrap().text, old.text);
+                eprintln!("native explicit low-integrity label preserved on replacement");
+            }
+            Err(error) => {
+                assert!(
+                    matches!(
+                        error.kind(),
+                        io::ErrorKind::PermissionDenied | io::ErrorKind::Unsupported
+                    ),
+                    "{error}"
+                );
+                assert_eq!(std::fs::read(&path).unwrap(), b"original");
+                let source = OpenOptions::new().write(true).open(&path).unwrap();
+                assert_eq!(snapshot(&source).unwrap().text, old.text);
+                assert_eq!(std::fs::read_dir(&root).unwrap().count(), 2);
+                eprintln!("native explicit low-integrity copy refused before publication: {error}");
+                // The explicit alternative offered by the error remains usable,
+                // with the original labeled content and recovery copy retained.
+                let alternative = root.join("alternative.json");
+                super::super::write(&alternative, b"replacement").unwrap();
+                assert_eq!(std::fs::read(alternative).unwrap(), b"replacement");
+            }
+        }
+        assert_eq!(std::fs::read(recovery).unwrap(), b"recoverable sibling");
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn modern_inherited_descriptor_round_trip() {
         let root =
             std::env::temp_dir().join(format!("alife-win-modern-security-{}", std::process::id()));

@@ -118,16 +118,22 @@ fn windows_native_metadata_supports_relative_and_unprefixed_long_save_paths() {
 #[cfg(windows)]
 #[test]
 fn windows_short_relative_save_in_long_working_directory() {
+    use std::os::windows::ffi::OsStrExt;
     const CHILD_DIRECTORY: &str = "ALIFE_LONG_CWD_SAVE_CHILD";
     if let Some(directory) = std::env::var_os(CHILD_DIRECTORY) {
         // Change cwd only in this isolated test subprocess, never in the
         // process running the rest of the integration suite.
         let previous = std::env::current_dir().unwrap();
         std::env::set_current_dir(directory).unwrap();
-        assert!(std::env::current_dir().unwrap().as_os_str().len() > 260);
+        let cwd = std::env::current_dir().unwrap();
+        let cwd_length = cwd.as_os_str().encode_wide().count();
+        assert!((240..260).contains(&cwd_length));
+        let staged_control = ".alife-portable-save-control-stage.tmp";
+        let expanded = std::path::absolute(staged_control).unwrap();
+        assert!(expanded.as_os_str().encode_wide().count() > 260);
         fs::write("std-control.json", b"previous").unwrap();
-        fs::write("std-stage.tmp", b"replacement").unwrap();
-        fs::rename("std-stage.tmp", "std-control.json").unwrap();
+        fs::write(staged_control, b"replacement").unwrap();
+        fs::rename(staged_control, "std-control.json").unwrap();
         assert_eq!(fs::read("std-control.json").unwrap(), b"replacement");
         fs::remove_file("std-control.json").unwrap();
         eprintln!("std::fs short-relative create/replace/read control passed in long cwd");
@@ -162,10 +168,11 @@ fn windows_short_relative_save_in_long_working_directory() {
     }
 
     let root = temp_root("short-relative-long-cwd");
-    let mut nested = root.clone();
-    for index in 0..7 {
-        nested.push(format!("long-working-directory-{index}-abcdefghijklmnop"));
-    }
+    // A legal cwd (240 ordinary characters plus the extended prefix) with
+    // enough room for source names, but not the generated staging basename.
+    let root_length = root.as_os_str().encode_wide().count();
+    assert!(root_length + 1 < 244);
+    let nested = root.join("d".repeat(244 - root_length - 1));
     fs::create_dir_all(&nested).unwrap();
     let output = std::process::Command::new(std::env::current_exe().unwrap())
         .args([
@@ -183,6 +190,68 @@ fn windows_short_relative_save_in_long_working_directory() {
         String::from_utf8_lossy(&output.stderr)
     );
     fs::remove_dir_all(root).unwrap();
+}
+
+#[cfg(windows)]
+#[test]
+fn windows_changed_owner_and_group_are_preserved_when_assignable() {
+    let cases = [
+        ("owner", "(Get-Acl -LiteralPath $env:ALIFE_DACL_PATH).GetOwner([System.Security.Principal.SecurityIdentifier]).Value", r#"
+            $ErrorActionPreference = 'Stop'
+            $acl = Get-Acl -LiteralPath $env:ALIFE_DACL_PATH
+            $acl.SetOwner([System.Security.Principal.WindowsIdentity]::GetCurrent().User)
+            Set-Acl -LiteralPath $env:ALIFE_DACL_PATH -AclObject $acl
+            (Get-Acl -LiteralPath $env:ALIFE_DACL_PATH).GetOwner([System.Security.Principal.SecurityIdentifier]).Value
+        "#),
+        ("group", "(Get-Acl -LiteralPath $env:ALIFE_DACL_PATH).GetGroup([System.Security.Principal.SecurityIdentifier]).Value", r#"
+            $ErrorActionPreference = 'Stop'
+            $acl = Get-Acl -LiteralPath $env:ALIFE_DACL_PATH
+            $old = $acl.GetGroup([System.Security.Principal.SecurityIdentifier]).Value
+            $target = if ($old -eq 'S-1-5-11') { 'S-1-5-32-545' } else { 'S-1-5-11' }
+            $groups = [System.Security.Principal.WindowsIdentity]::GetCurrent().Groups.Value
+            if ($groups -notcontains $target) { 'UNAVAILABLE: no alternative fixture group in token'; exit 0 }
+            $acl.SetGroup([System.Security.Principal.SecurityIdentifier]::new($target))
+            Set-Acl -LiteralPath $env:ALIFE_DACL_PATH -AclObject $acl
+            (Get-Acl -LiteralPath $env:ALIFE_DACL_PATH).GetGroup([System.Security.Principal.SecurityIdentifier]).Value
+        "#),
+    ];
+    for (field, read, modify) in cases {
+        let root = temp_root(&format!("changed-{field}"));
+        let path = root.join("source.json");
+        let probe = root.join("native-default.json");
+        let recovery = root.join(".alife-portable-save-recovery.tmp");
+        let original = fixture("original");
+        fs::write(&path, original.to_json_string_pretty().unwrap()).unwrap();
+        original.to_json_file(&probe).unwrap();
+        let native_default = windows_acl_script(&probe, read);
+        assert_eq!(windows_acl_script(&path, read), native_default);
+        fs::remove_file(probe).unwrap();
+        let changed = windows_acl_script(&path, modify);
+        if changed.starts_with("UNAVAILABLE:") || changed == native_default {
+            // A normal token commonly owns new files directly, so assigning
+            // its own SID cannot exercise a changed-owner copy. Do not enable
+            // privileges or invent another identity to force branch coverage.
+            eprintln!(
+                "UNAVAILABLE: changed-{field} fixture: default={native_default}; result={changed}"
+            );
+            fs::remove_dir_all(root).unwrap();
+            continue;
+        }
+        assert_eq!(windows_acl_script(&path, read), changed);
+        eprintln!("native {field} fixture changed default {native_default} to {changed}");
+        let expected = windows_sddl(&path);
+        fs::write(&recovery, b"recoverable sibling").unwrap();
+        let replacement = fixture("replacement");
+        replacement.to_json_file(&path).unwrap();
+        assert_eq!(windows_sddl(&path), expected);
+        assert_eq!(windows_acl_script(&path, read), changed);
+        assert_eq!(
+            PortableSaveFile::from_json_file(&path).unwrap(),
+            replacement
+        );
+        assert_eq!(fs::read(&recovery).unwrap(), b"recoverable sibling");
+        fs::remove_dir_all(root).unwrap();
+    }
 }
 
 #[cfg(windows)]
