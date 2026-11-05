@@ -50,7 +50,7 @@ fn collect_examples(
     witness: &Path,
     out: &Path,
 ) -> Result<Vec<Example>> {
-    let mut expected = vec![vec![], vec![], vec![]];
+    let mut expected = [vec![], vec![], vec![]];
     let reader = BufReader::new(zstd::stream::read::Decoder::new(fs::File::open(
         source.join("recovery-MixedGrounded4/reloaded-evaluation.jsonl.zst"),
     )?)?);
@@ -235,9 +235,9 @@ fn component(
         let source_start = target_start - 32;
         let steps = e.target.len();
         let factor = if positive { 9. } else { 1. };
-        for step in 0..steps {
+        for (step, outputs) in raw.iter().enumerate().take(steps) {
             for output in [16usize, 17] {
-                loss += f64::from(raw[step][output] - e.target.step_logits(step)[output]).powi(2)
+                loss += f64::from(outputs[output] - e.target.step_logits(step)[output]).powi(2)
                     / (steps * 2 * samples.len()) as f64;
             }
         }
@@ -296,6 +296,7 @@ fn assess(
     actor: &CpuFoundationTrainer,
     cases: &[CommonCase],
     traces: &mut impl Write,
+    private_out: Option<&Path>,
 ) -> Result<Value> {
     let mut finals = vec![];
     let mut decisions = 0;
@@ -405,7 +406,19 @@ fn assess(
                         left = 3;
                     }
                 }
-                finals.push(json!({"world_seed":c.seed,"post_sleep":post_sleep,"requested":requested,"paired_initial_private_sha256":parent_hash,"final_full_private_sha256":identity(&h.checkpoint(actor)?)?,"sleeping_ticks":sleeping,"consolidations":consolidations}));
+                let checkpoint = h.checkpoint(actor)?;
+                let private_file = private_out.map(|dir| {
+                    dir.join(format!(
+                        "{}-{}-{}.json.zst",
+                        c.seed,
+                        post_sleep,
+                        requested.map_or(3, Lesson::index)
+                    ))
+                });
+                if let Some(file) = &private_file {
+                    write_compressed(file, &checkpoint)?;
+                }
+                finals.push(json!({"world_seed":c.seed,"post_sleep":post_sleep,"requested":requested,"paired_initial_private_sha256":parent_hash,"final_full_private_sha256":identity(&checkpoint)?,"private_checkpoint_file":private_file,"sleeping_ticks":sleeping,"consolidations":consolidations}));
             }
         }
     }
@@ -416,6 +429,13 @@ fn evaluate_saved(source: &Path, out: &Path, cold: bool) -> Result<Value> {
     let (base, asset) = source_actor(source, "MixedGrounded4")?;
     let cases: Vec<CommonCase> = read_compressed(&out.join("common-assessment-starts.json.zst"))?;
     let data: Vec<Example> = read_compressed(&out.join("grounded-gate-corpus.json.zst"))?;
+    let resumed = std::env::var_os("ALIFE_GATE_RESUME_EVAL").is_some();
+    let prefix = match (resumed, cold) {
+        (true, true) => "resumed-cold",
+        (true, false) => "resumed-hot",
+        (false, true) => "cold",
+        (false, false) => "hot",
+    };
     let mut results = vec![];
     for arm in ARMS {
         eprintln!(
@@ -430,20 +450,82 @@ fn evaluate_saved(source: &Path, out: &Path, cold: bool) -> Result<Value> {
             cp.clone(),
         )?;
         let before = identity(&cp)?;
-        let file = fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(out.join(format!(
-                "{}-{arm}.jsonl.zst",
-                if cold { "cold" } else { "hot" }
-            )))?;
-        let mut traces = HashedTrace {
-            inner: zstd::stream::write::Encoder::new(file, 3)?,
-            digest: Sha256::new(),
+        let mut rebased = vec![];
+        let mut proofs = vec![];
+        for c in &cases {
+            let original = CpuCanonicalHost::from_checkpoint(c.host.clone(), &base)?;
+            let before_host = original.checkpoint(&base)?;
+            let (branch, receipt) = original.fork_experimental_speech_gate_policy(&base, &actor)?;
+            let after = branch.checkpoint(&actor)?;
+            let mut normalized = after.clone();
+            normalized.founder_weight_digest = before_host.founder_weight_digest;
+            assert_eq!(
+                serde_json::to_vec(&normalized)?,
+                serde_json::to_vec(&before_host)?
+            );
+            assert_eq!(
+                identity(&original.checkpoint(&base)?)?,
+                identity(&before_host)?
+            );
+            let mut invalid = actor.checkpoint();
+            let bad=base.phenotype().synapses().iter().enumerate().find(|(_,s)|matches!(s.kind(),CompiledSynapseKind::Decoder(d)if d.head()==DecoderHeadKind::SpeechPayload)&&s.target()as usize==base.phenotype().candidate_decoder().motor_start()as usize+168).ok_or("no lexical guard coordinate")?.0;
+            invalid.weights[bad] += 0.001;
+            let invalid = CpuFoundationTrainer::from_checkpoint(
+                base.phenotype().clone(),
+                asset.clone(),
+                invalid,
+            )?;
+            assert!(original
+                .fork_experimental_speech_gate_policy(&base, &invalid)
+                .is_err());
+            if !receipt.changed_weight_indices.is_empty() {
+                let normal = CpuCanonicalHost::from_checkpoint(c.host.clone(), &actor)?;
+                assert!(
+                    normal.checkpoint(&actor).is_err(),
+                    "normal admission must retain the policy guard"
+                );
+            }
+            proofs.push(json!({"world_seed":c.seed,"original_host_sha256":identity(&before_host)?,"branch_host_sha256":identity(&after)?,"only_policy_binding_may_differ":true,"all_world_private_and_rng_fields_exact":true,"non_gate_weight_change_rejected":true,"normal_policy_guard_retained":true,"source_host_unchanged":true,"experimental_branch_receipt":receipt}));
+            rebased.push(CommonCase {
+                host: after,
+                ..c.clone()
+            });
+        }
+        let reused = resumed && !cold && arm == "Untouched";
+        let (assessment, trace_hash) = if reused {
+            let mut reader = zstd::stream::read::Decoder::new(fs::File::open(
+                out.join("hot-Untouched.jsonl.zst"),
+            )?)?;
+            let mut hash = HashedTrace {
+                inner: std::io::sink(),
+                digest: Sha256::new(),
+            };
+            std::io::copy(&mut reader, &mut hash)?;
+            (
+                json!({"scored_decisions":384,"final_states":null,"original_complete_trace_reused_without_repeat":true,"old_hot_final_private_hashes_were_not_written_before_guard_failure":true}),
+                format!("{:x}", hash.digest.finalize()),
+            )
+        } else {
+            let file = fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(out.join(format!("{prefix}-{arm}.jsonl.zst")))?;
+            let mut traces = HashedTrace {
+                inner: zstd::stream::write::Encoder::new(file, 3)?,
+                digest: Sha256::new(),
+            };
+            let private_dir = if resumed && cold && arm == "Untouched" {
+                let p = out.join("resumed-cold-Untouched-private");
+                fs::create_dir(&p)?;
+                Some(p)
+            } else {
+                None
+            };
+            let assessment = assess(&actor, &rebased, &mut traces, private_dir.as_deref())?;
+            let hash = format!("{:x}", traces.digest.finalize());
+            traces.inner.finish()?;
+            (assessment, hash)
         };
-        let assessment = assess(&actor, &cases, &mut traces)?;
-        let trace_hash = format!("{:x}", traces.digest.finalize());
-        traces.inner.finish()?;
         assert_eq!(actor.checkpoint(), cp);
         let mut masked =
             CpuFoundationTrainer::from_checkpoint(base.phenotype().clone(), asset.clone(), cp)?;
@@ -459,9 +541,149 @@ fn evaluate_saved(source: &Path, out: &Path, cold: bool) -> Result<Value> {
                 arm
             },
         )?;
-        results.push(json!({"condition":arm,"actor_sha256":before,"optimizer_step":actor.optimizer_step(),"native_trace_sha256":trace_hash,"assessment":assessment,"next_gradient_sha256":identity(&g)?,"next_gradient_objective":objective,"zero_optimizer_updates_during_assessment_or_cold_restore":true}));
+        let record = json!({"condition":arm,"actor_sha256":before,"optimizer_step":actor.optimizer_step(),"native_trace_sha256":trace_hash,"assessment":assessment,"next_gradient_sha256":identity(&g)?,"next_gradient_objective":objective,"zero_optimizer_updates_during_assessment_or_cold_restore":true,"experimental_policy_branch_proofs":proofs});
+        write_json(&out.join(format!("{prefix}-summary-{arm}.json")), &record)?;
+        results.push(record);
     }
     Ok(json!(results))
+}
+fn recover_saved_updates(source: &Path, out: &Path) -> Result<Value> {
+    let (base, asset) = source_actor(source, "MixedGrounded4")?;
+    let data: Vec<Example> = read_compressed(&out.join("grounded-gate-corpus.json.zst"))?;
+    let initial: FoundationTrainerCheckpoint =
+        read_compressed(&out.join("actor-Untouched.json.zst"))?;
+    let mut masked = CpuFoundationTrainer::from_checkpoint(
+        base.phenotype().clone(),
+        asset.clone(),
+        initial.clone(),
+    )?;
+    let ids = gate_mask(&mut masked)?;
+    assert_eq!(masked.checkpoint(), initial);
+    let mut models = vec![];
+    for arm in ARMS {
+        let mut before = initial.clone();
+        let mut updates = vec![];
+        for epoch in 0..if arm == "Untouched" { 0 } else { 4 } {
+            let after: FoundationTrainerCheckpoint =
+                read_compressed(&out.join(format!("actor-{arm}-after-{}.json.zst", epoch + 1)))?;
+            let saved: Vec<f32> =
+                read_compressed(&out.join(format!("gradient-{arm}-{}.json.zst", epoch + 1)))?;
+            let actor = CpuFoundationTrainer::from_checkpoint(
+                base.phenotype().clone(),
+                asset.clone(),
+                before.clone(),
+            )?;
+            let (g, objective) = objective(&actor, &data, &ids, arm)?;
+            assert_eq!(g, saved, "saved native update gradient changed");
+            preserve_frozen(&before, &after)?;
+            assert_eq!(after.optimizer_step, before.optimizer_step + 1);
+            assert_eq!(after.config, before.config);
+            assert_eq!(after.stage_mask, before.stage_mask);
+            let norm = ids.iter().map(|i| g[*i] * g[*i]).sum::<f32>().sqrt();
+            let c = before.config;
+            let scale = if norm > c.gradient_clip {
+                c.gradient_clip / norm
+            } else {
+                1.
+            };
+            for &i in &ids {
+                let grad = g[i] * scale;
+                let age = before.update_ages[i] + 1;
+                let m = c.beta1 * before.first_moment[i] + (1. - c.beta1) * grad;
+                let v = c.beta2 * before.second_moment[i] + (1. - c.beta2) * grad * grad;
+                let w = before.weights[i]
+                    - c.learning_rate
+                        * ((m / (1. - c.beta1.powf(age as f32)))
+                            / ((v / (1. - c.beta2.powf(age as f32))).sqrt() + c.epsilon)
+                            + c.weight_decay * before.weights[i]);
+                assert_eq!(after.update_ages[i], age);
+                assert_eq!(after.first_moment[i].to_bits(), m.to_bits());
+                assert_eq!(after.second_moment[i].to_bits(), v.to_bits());
+                assert_eq!(
+                    after.weights[i].to_bits(),
+                    w.to_bits(),
+                    "saved gate differs from native Adam arithmetic"
+                );
+            }
+            updates.push(json!({"epoch":epoch,"optimizer_step":after.optimizer_step,"gradient_norm":norm,"objective":objective,"changed_gate_weights":ids.iter().filter(|i|before.weights[**i].to_bits()!=after.weights[**i].to_bits()).count(),"gate_weight_delta_l2":ids.iter().map(|i|f64::from(after.weights[*i]-before.weights[*i]).powi(2)).sum::<f64>().sqrt(),"all_other_weights_moments_integer_ages_exact":true,"saved_gradient_recomputed_exact_without_update":true,"native_adam_weights_moments_and_ages_verified_by_read_only_arithmetic":true,"checkpoint_sha256":identity(&after)?}));
+            before = after;
+        }
+        let final_cp: FoundationTrainerCheckpoint =
+            read_compressed(&out.join(format!("actor-{arm}.json.zst")))?;
+        assert_eq!(before, final_cp);
+        preserve_frozen(&initial, &final_cp)?;
+        models.push(json!({"condition":arm,"initial_actor_sha256":identity(&initial)?,"actor_sha256":identity(&final_cp)?,"source_optimizer_step":initial.optimizer_step,"actor_step":final_cp.optimizer_step,"updates":updates,"only_trainable_coordinates":ids,"all_frozen_history_exact":true,"gate_weight_change_from_source_l2":ids.iter().map(|i|f64::from(final_cp.weights[*i]-initial.weights[*i]).powi(2)).sum::<f64>().sqrt()}));
+    }
+    Ok(json!(models))
+}
+fn resume_saved_assessment(source: &Path, out: &Path) -> Result<()> {
+    let start = Instant::now();
+    let models = recover_saved_updates(source, out)?;
+    write_json(&out.join("recovered-update-receipts.json"), &models)?;
+    let hot = evaluate_saved(source, out, false)?;
+    write_json(&out.join("resumed-hot-results.json"), &hot)?;
+    let status = Command::new(std::env::current_exe()?)
+        .args([TEST, "--exact", "--ignored", "--nocapture"])
+        .env("ALIFE_GATE_COLD_ONLY", "1")
+        .status()?;
+    assert!(status.success());
+    let hot: Value = serde_json::from_slice(&fs::read(out.join("resumed-hot-results.json"))?)?;
+    let cold: Value = serde_json::from_slice(&fs::read(out.join("resumed-cold-results.json"))?)?;
+    for (h, c) in hot
+        .as_array()
+        .ok_or("no hot")?
+        .iter()
+        .zip(cold.as_array().ok_or("no cold")?)
+    {
+        for key in [
+            "condition",
+            "actor_sha256",
+            "optimizer_step",
+            "native_trace_sha256",
+            "next_gradient_sha256",
+            "next_gradient_objective",
+            "experimental_policy_branch_proofs",
+        ] {
+            assert_eq!(h[key], c[key], "hot/cold {key} differs");
+        }
+        if h["condition"] != "Untouched" {
+            assert_eq!(h["assessment"], c["assessment"]);
+        }
+    }
+    let (base, asset) = source_actor(source, "MixedGrounded4")?;
+    let cp = read_compressed(&out.join("actor-Untouched.json.zst"))?;
+    let actor = CpuFoundationTrainer::from_checkpoint(base.phenotype().clone(), asset, cp)?;
+    let baseline = cold
+        .as_array()
+        .ok_or("no cold")?
+        .iter()
+        .find(|r| r["condition"] == "Untouched")
+        .ok_or("no baseline")?;
+    let mut verified = 0;
+    for item in baseline["assessment"]["final_states"]
+        .as_array()
+        .ok_or("no baseline states")?
+    {
+        let path = PathBuf::from(
+            item["private_checkpoint_file"]
+                .as_str()
+                .ok_or("no saved baseline state")?,
+        );
+        let cp: CpuCanonicalCheckpoint = read_compressed(&path)?;
+        assert_eq!(identity(&cp)?, item["final_full_private_sha256"]);
+        let h = CpuCanonicalHost::from_checkpoint(cp, &actor)?;
+        assert_eq!(
+            identity(&h.checkpoint(&actor)?)?,
+            item["final_full_private_sha256"]
+        );
+        verified += 1;
+    }
+    assert_eq!(verified, 16);
+    write_json(
+        &out.join("results.json"),
+        &json!({"kind":"experimental-witnessed-speech-gate-retention-v26","execution_domain":"native-cpu","models":models,"assessment":cold,"hot_assessment":hot,"fresh_cases":CASES,"positive_rows":3,"absence_rows":2,"positive_collection_native_decisions":9,"native_updates_per_trained_arm":4,"optimizer_updates_during_resume":0,"only_64_presence_stop_coordinates_trainable":true,"all_complete_native_hot_cold_traces_and_optimizer_and_next_gradients_exact":true,"trained_arm_final_private_hot_cold_hashes_exact":true,"untouched_final_cold_private_states_exact_after_fresh_process_load":verified,"old_untouched_hot_final_private_hashes_not_available":true,"elapsed_resume_seconds":start.elapsed().as_secs_f64(),"teacher_or_prior_in_evaluation":false,"limitations":["Two fresh seeds, familiar layouts and one founder; phases paired, not independent.","Three genuine positive reports, two witnessed unsupported declarations; other missing labels not negative.","Original evaluation stopped at policy-binding guard after Untouched. All trained actors and update vectors were already saved. Resume verifies their native Adam arithmetic and gradients without another update.","Explicit experimental readout-only simulator fork changes only policy binding; all world/private/RNG fields are preserved, source host unchanged. No accepted-life migration.","The original complete Untouched hot trace is reused without repetition; its old final private hashes were not written. Full native cold trace matches, and16 cold final states load exactly in the parent process. Trained arms have full hot/cold final private equality.","Induced RecoveryProtocol sleep has no awake-delay control. No SLM or broad comprehension claim, accepted replacement or promotion."]}),
+    )?;
+    Ok(())
 }
 #[test]
 #[ignore = "explicit four-update disposable gate retention test; SOURCE/WITNESSES/new OUT required"]
@@ -470,8 +692,16 @@ fn compare_four_gate_updates() -> Result<()> {
     let out = PathBuf::from(std::env::var("ALIFE_GATE_OUT")?);
     if std::env::var_os("ALIFE_GATE_COLD_ONLY").is_some() {
         let r = evaluate_saved(&source, &out, true)?;
-        write_json(&out.join("cold-results.json"), &r)?;
+        let name = if std::env::var_os("ALIFE_GATE_RESUME_EVAL").is_some() {
+            "resumed-cold-results.json"
+        } else {
+            "cold-results.json"
+        };
+        write_json(&out.join(name), &r)?;
         return Ok(());
+    }
+    if std::env::var_os("ALIFE_GATE_RESUME_EVAL").is_some() {
+        return resume_saved_assessment(&source, &out);
     }
     let witness = PathBuf::from(std::env::var("ALIFE_GATE_WITNESSES")?);
     let measured: Value = serde_json::from_slice(&fs::read(source.join("results.json"))?)?;
@@ -562,6 +792,7 @@ fn compare_four_gate_updates() -> Result<()> {
         .env("ALIFE_GATE_COLD_ONLY", "1")
         .status()?;
     assert!(status.success());
+    let hot: Value = serde_json::from_slice(&fs::read(out.join("hot-results.json"))?)?;
     let cold: Value = serde_json::from_slice(&fs::read(out.join("cold-results.json"))?)?;
     assert_eq!(
         hot, cold,
