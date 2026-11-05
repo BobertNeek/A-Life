@@ -28,16 +28,28 @@ fn stationary(w: &mut HeadlessWorld, id: WorldEntityId, position: Vec3f) -> Resu
     Ok(())
 }
 
-fn normalize_food_position(value: &mut Value, food: WorldEntityId) -> Result<()> {
+fn normalize_food_placement(value: &mut Value, food: WorldEntityId) -> Result<()> {
+    let food = serde_json::to_value(food)?;
     let objects = value
         .pointer_mut("/world/world/objects")
         .and_then(Value::as_array_mut)
         .ok_or("no checkpoint objects")?;
     let object = objects
         .iter_mut()
-        .find(|o| o["id"] == serde_json::to_value(food).unwrap_or(Value::Null))
+        .find(|o| o["id"] == food)
         .ok_or("no matched food")?;
     object["position"] = Value::Null;
+    // Ordinary editor placement also rebuilds this food's derived voxel tile.
+    // Keep its stable ID/chunk and all unrelated world/private/RNG fields bound.
+    let resources = value
+        .pointer_mut("/world/world/voxel_backend/world_resource_refs")
+        .and_then(Value::as_array_mut)
+        .ok_or("no checkpoint voxel resource bindings")?;
+    let resource = resources
+        .iter_mut()
+        .find(|r| r["stable_id"] == food)
+        .ok_or("no derived food binding")?;
+    resource["tile"] = Value::Null;
     Ok(())
 }
 
@@ -95,7 +107,7 @@ fn record_matched_food_report_opportunities() -> Result<()> {
         let common = serde_json::to_value(parent.checkpoint(&actor)?)?;
         write_compressed(&out.join(format!("common-{}.json.zst", case.seed)), &common)?;
         let mut normalized_common = common.clone();
-        normalize_food_position(&mut normalized_common, case.scene.food)?;
+        normalize_food_placement(&mut normalized_common, case.scene.food)?;
         let body = parent
             .world()
             .entity(parent.world().organism_entity_ids()[0].1)
@@ -115,19 +127,19 @@ fn record_matched_food_report_opportunities() -> Result<()> {
             )?;
             let before = serde_json::to_value(host.checkpoint(&actor)?)?;
             let mut normalized = before.clone();
-            normalize_food_position(&mut normalized, case.scene.food)?;
-            assert_eq!(
-                normalized, normalized_common,
-                "fixture changed more than initial food position"
-            );
-            assert_eq!(owners(host.world(), case.scene), [None, None]);
-            let initial_grab_legal = host.world().can_grab_target(id, case.scene.food);
-            assert_eq!(initial_grab_legal, condition == "near_opportunity");
-            let fork = json!({"seed":case.seed,"condition":condition,"food_distance":distance,"food_angle":0.15,"initial_native_grab_legal":initial_grab_legal,"scene":case.scene,"common_full_sha256":identity(&common)?,"branch_full_sha256":identity(&before)?,"all_except_initial_food_position_identical":true,"normalized_full_sha256":identity(&normalized)?,"initial_prompted_cooldown_ready":host.world().neural_speech_cooldown_ready(id,true),"source_prior_replay_events":common.pointer("/residents/0/replay").and_then(Value::as_array).map(|v|v.iter().map(|r|r["event"].clone()).collect::<Vec<_>>())});
+            normalize_food_placement(&mut normalized, case.scene.food)?;
             write_compressed(
                 &out.join(format!("start-{}-{condition}.json.zst", case.seed)),
                 &before,
             )?;
+            assert!(
+                normalized == normalized_common,
+                "fixture changed more than food position and its derived voxel tile"
+            );
+            assert_eq!(owners(host.world(), case.scene), [None, None]);
+            let initial_grab_legal = host.world().can_grab_target(id, case.scene.food);
+            assert_eq!(initial_grab_legal, condition == "near_opportunity");
+            let fork = json!({"seed":case.seed,"condition":condition,"food_distance":distance,"food_angle":0.15,"initial_native_grab_legal":initial_grab_legal,"scene":case.scene,"common_full_sha256":identity(&common)?,"branch_full_sha256":identity(&before)?,"all_except_initial_food_position_and_its_derived_voxel_tile_identical":true,"normalized_full_sha256":identity(&normalized)?,"initial_prompted_cooldown_ready":host.world().neural_speech_cooldown_ready(id,true),"source_prior_replay_events":common.pointer("/residents/0/replay").and_then(Value::as_array).map(|v|v.iter().map(|r|r["event"].clone()).collect::<Vec<_>>())});
             forks.push(fork);
             let mut events = Vec::<Event>::new();
             for offset in 0..4 {
