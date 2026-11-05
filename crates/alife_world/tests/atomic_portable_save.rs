@@ -146,6 +146,42 @@ fn macos_inherited_acl_does_not_broaden_save_access() {
     fs::remove_dir_all(root).unwrap();
 }
 
+#[cfg(target_os = "macos")]
+#[test]
+fn macos_post_write_metadata_failure_keeps_save_and_cleans_staging() {
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+    let root = temp_root("macos-post-write-metadata");
+    let original = fixture("previous");
+    let bytes = original.to_json_string_pretty().unwrap().into_bytes();
+    let mut replacement = original.clone();
+    replacement.save_id = "replacement with different bytes".to_string();
+    let replacement_bytes = replacement.to_json_string_pretty().unwrap().into_bytes();
+    let peak = (bytes.len() + replacement_bytes.len()) as u64;
+    let budget = alife_storage::OutputBudget::register(&root, peak).unwrap();
+    let path = root.join("save.json");
+    alife_storage::write(&path, &bytes).unwrap();
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o200)).unwrap();
+    let before = fs::metadata(&path).unwrap();
+    let error = replacement.to_json_file(&path).unwrap_err();
+    assert!(error.to_string().contains("ACLs/xattrs"), "{error}");
+    let after = fs::metadata(&path).unwrap();
+    assert_eq!((after.ino(), after.mode()), (before.ino(), before.mode()));
+    assert_eq!(fs::read_dir(&root).unwrap().count(), 1);
+    let usage = budget.usage().unwrap();
+    assert_eq!(
+        (usage.high_water, usage.used, usage.reserved),
+        (peak, bytes.len() as u64, 0)
+    );
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
+    assert_eq!(fs::read(&path).unwrap(), bytes);
+    replacement.to_json_file(&path).unwrap();
+    assert_eq!(
+        PortableSaveFile::from_json_file(&path).unwrap(),
+        replacement
+    );
+    alife_storage::remove_dir_all(&root).unwrap();
+}
+
 #[cfg(unix)]
 #[test]
 fn unix_read_only_save_is_not_replaced() {
@@ -521,16 +557,122 @@ fn failed_save_write_keeps_previous_save_readable_and_releases_staging_budget() 
 }
 
 #[test]
-fn failed_save_publication_preserves_destination_and_cleans_its_staged_file() {
+fn non_regular_save_destination_is_rejected_before_staging() {
     let root = temp_root("publication-failure");
     let budget = alife_storage::OutputBudget::register(&root, 8 * 1024 * 1024).unwrap();
     let path = root.join("creature.alife.json");
     fs::create_dir(&path).unwrap();
     let sentinel = path.join("recoverable-state");
     alife_storage::write(&sentinel, b"preserve this").unwrap();
-    assert!(fixture("replacement").to_json_file(&path).is_err());
+    let error = fixture("replacement").to_json_file(&path).unwrap_err();
+    assert!(error.to_string().contains("regular file"), "{error}");
     assert_eq!(fs::read(&sentinel).unwrap(), b"preserve this");
     assert_eq!(fs::read_dir(&root).unwrap().count(), 1);
     assert_eq!(budget.usage().unwrap().used, 13);
+    assert_eq!(budget.usage().unwrap().high_water, 13);
+    alife_storage::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn publication_failure_after_staging_keeps_previous_save_and_releases_budget() {
+    let root = temp_root("publication-active-writer");
+    let original = fixture("previous");
+    let bytes = original.to_json_string_pretty().unwrap().into_bytes();
+    let mut replacement = original.clone();
+    replacement.save_id = "replacement with a different length".to_string();
+    let replacement_bytes = replacement.to_json_string_pretty().unwrap().into_bytes();
+    let recovery_bytes = b"recoverable staging from an earlier attempt";
+    let baseline = (bytes.len() + recovery_bytes.len()) as u64;
+    let peak = baseline + replacement_bytes.len() as u64;
+    let budget = alife_storage::OutputBudget::register(&root, peak).unwrap();
+    let path = root.join("creature.alife.json");
+    let recovery = root.join(".alife-portable-save-previous.tmp");
+    alife_storage::write(&path, &bytes).unwrap();
+    alife_storage::write(&recovery, recovery_bytes).unwrap();
+
+    // This non-truncating handle is registered as an active destination writer.
+    // Staging may proceed, but replace_with refuses its publication at rename.
+    let handle = fs::OpenOptions::new().write(true).open(&path).unwrap();
+    let active_writer = alife_storage::writer(&path, handle).unwrap();
+    let error = replacement.to_json_file(&path).unwrap_err();
+    assert!(
+        error.to_string().contains("active destination writer"),
+        "{error}"
+    );
+    assert_eq!(fs::read(&path).unwrap(), bytes);
+    assert_eq!(PortableSaveFile::from_json_file(&path).unwrap(), original);
+    assert_eq!(fs::read(&recovery).unwrap(), recovery_bytes);
+    assert_eq!(fs::read_dir(&root).unwrap().count(), 2);
+    let usage = budget.usage().unwrap();
+    // The full replacement was charged before publication failed. Its cleanup
+    // must release that charge without removing the previous recovery sibling.
+    assert_eq!(usage.high_water, peak);
+    assert_eq!(usage.used, baseline);
+    assert_eq!(usage.reserved, 0);
+
+    drop(active_writer);
+    replacement.to_json_file(&path).unwrap();
+    assert_eq!(
+        PortableSaveFile::from_json_file(&path).unwrap(),
+        replacement
+    );
+    assert_eq!(fs::read(&recovery).unwrap(), recovery_bytes);
+    assert_eq!(fs::read_dir(&root).unwrap().count(), 2);
+    assert_eq!(
+        budget.usage().unwrap().used,
+        (replacement_bytes.len() + recovery_bytes.len()) as u64
+    );
+    alife_storage::remove_dir_all(&root).unwrap();
+}
+
+#[cfg(windows)]
+#[test]
+fn windows_rename_failure_after_staging_preserves_save_and_recovery() {
+    use alife_world::persistence::PersistenceError;
+    use std::os::windows::fs::OpenOptionsExt;
+    let root = temp_root("publication-sharing-violation");
+    let original = fixture("previous");
+    let bytes = original.to_json_string_pretty().unwrap().into_bytes();
+    let mut replacement = original.clone();
+    replacement.save_id = "replacement".to_string();
+    let replacement_bytes = replacement.to_json_string_pretty().unwrap().into_bytes();
+    let recovery_bytes = b"keep prior recoverable work";
+    let baseline = (bytes.len() + recovery_bytes.len()) as u64;
+    let peak = baseline + replacement_bytes.len() as u64;
+    let budget = alife_storage::OutputBudget::register(&root, peak).unwrap();
+    let path = root.join("creature.alife.json");
+    let recovery = root.join(".alife-portable-save-previous.tmp");
+    alife_storage::write(&path, &bytes).unwrap();
+    alife_storage::write(&recovery, recovery_bytes).unwrap();
+    // Permit the write-access probe, but deny deletion/replacement of the
+    // destination until this handle closes (FILE_SHARE_READ | FILE_SHARE_WRITE).
+    let held = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .share_mode(0x1 | 0x2)
+        .open(&path)
+        .unwrap();
+    let error = replacement.to_json_file(&path).unwrap_err();
+    eprintln!("native publication refusal: {error:?}");
+    assert!(
+        matches!(&error, PersistenceError::Io(source) if matches!(source.raw_os_error(), Some(5 | 32))),
+        "expected native access/sharing denial at rename, got {error}"
+    );
+    assert_eq!(fs::read(&path).unwrap(), bytes);
+    assert_eq!(fs::read(&recovery).unwrap(), recovery_bytes);
+    assert_eq!(fs::read_dir(&root).unwrap().count(), 2);
+    let usage = budget.usage().unwrap();
+    assert_eq!(
+        (usage.high_water, usage.used, usage.reserved),
+        (peak, baseline, 0)
+    );
+    drop(held);
+    replacement.to_json_file(&path).unwrap();
+    assert_eq!(
+        PortableSaveFile::from_json_file(&path).unwrap(),
+        replacement
+    );
+    assert_eq!(fs::read(&recovery).unwrap(), recovery_bytes);
+    assert_eq!(fs::read_dir(&root).unwrap().count(), 2);
     alife_storage::remove_dir_all(&root).unwrap();
 }

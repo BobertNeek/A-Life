@@ -20,6 +20,14 @@ struct Destination {
 }
 
 pub(super) fn write(destination: &Path, bytes: &[u8]) -> io::Result<()> {
+    write_with_sync(destination, bytes, File::sync_all)
+}
+
+fn write_with_sync(
+    destination: &Path,
+    bytes: &[u8],
+    sync_file: impl FnOnce(&File) -> io::Result<()>,
+) -> io::Result<()> {
     let previous = open_destination(destination).map_err(|e| before_publication(destination, e))?;
     let parent = destination
         .parent()
@@ -69,12 +77,14 @@ pub(super) fn write(destination: &Path, bytes: &[u8]) -> io::Result<()> {
             }
         }
         recheck(destination, previous.as_ref(), &file)?;
-        file.sync_all()
+        sync_file(&file)
     })();
     // Close before cleanup/publication on Windows. Only this call's newly
     // created staging file is eligible for cleanup.
     drop(file);
     if let Err(error) = result {
+        // Cleanup is best effort: an I/O error can leave this recoverable
+        // sibling behind. Never remove a pre-existing recovery sibling.
         let _ = alife_storage::remove_file(&staged);
         return Err(before_publication(destination, error));
     }
@@ -237,5 +247,63 @@ fn create_staged_file(parent: &Path) -> io::Result<(PathBuf, File)> {
             Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
             Err(error) => return Err(error),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn file_sync_failure_after_write_preserves_previous_save_and_recovery() {
+        let root = std::env::temp_dir().join(format!(
+            "alife-save-sync-failure-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir(&root).unwrap();
+        let root = std::fs::canonicalize(root).unwrap();
+        let path = root.join("save.json");
+        let recovery = root.join(".alife-portable-save-previous.tmp");
+        let previous = b"previous complete save";
+        let replacement = b"replacement complete save with different bytes";
+        let recovery_bytes = b"recoverable staging";
+        let baseline = (previous.len() + recovery_bytes.len()) as u64;
+        let peak = baseline + replacement.len() as u64;
+        let budget = alife_storage::OutputBudget::register(&root, peak).unwrap();
+        alife_storage::write(&path, previous).unwrap();
+        alife_storage::write(&recovery, recovery_bytes).unwrap();
+        let error = write_with_sync(&path, replacement, |file| {
+            assert_eq!(file.metadata().unwrap().len(), replacement.len() as u64);
+            let staged = std::fs::read_dir(&root)
+                .unwrap()
+                .map(|entry| entry.unwrap().path())
+                .find(|candidate| candidate != &path && candidate != &recovery)
+                .unwrap();
+            assert_eq!(std::fs::read(staged).unwrap(), replacement);
+            assert_eq!(budget.usage().unwrap().used, peak);
+            Err(io::Error::other("injected file-sync failure"))
+        })
+        .unwrap_err();
+        assert!(
+            error.to_string().contains("injected file-sync failure"),
+            "{error}"
+        );
+        assert_eq!(std::fs::read(&path).unwrap(), previous);
+        assert_eq!(std::fs::read(&recovery).unwrap(), recovery_bytes);
+        assert_eq!(std::fs::read_dir(&root).unwrap().count(), 2);
+        let usage = budget.usage().unwrap();
+        assert_eq!(
+            (usage.high_water, usage.used, usage.reserved),
+            (peak, baseline, 0)
+        );
+        // The same quota and destination remain usable after the failed sync.
+        write(&path, replacement).unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), replacement);
+        assert_eq!(std::fs::read(&recovery).unwrap(), recovery_bytes);
+        alife_storage::remove_dir_all(&root).unwrap();
     }
 }

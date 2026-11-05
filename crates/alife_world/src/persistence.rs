@@ -1484,6 +1484,7 @@ impl PortableSaveFile {
     /// cannot make rename conditional on an inode or permission snapshot, and
     /// do not establish opaque MAC, hidden-metadata or remote-server ACL
     /// guarantees. Directory-sync errors can occur after publication.
+    /// Staging cleanup is best effort; removal errors can leave a sibling.
     pub fn to_json_file(&self, path: impl AsRef<Path>) -> Result<(), PersistenceError> {
         atomic_save::write(path.as_ref(), &serde_json::to_vec_pretty(self)?)?;
         Ok(())
