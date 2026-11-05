@@ -1473,6 +1473,17 @@ impl PortableSaveFile {
 
     /// Publish a complete sibling file so failures before replacement preserve
     /// the previous save. Staging also counts against any shared output budget.
+    ///
+    /// A non-truncating write-open checks existing write access. Unix staging
+    /// requests mode 0600, and replacement retains ordinary modes/ownership.
+    /// Linux copies visible xattrs and POSIX ACLs; macOS uses native ACL/xattr
+    /// copying. A concrete metadata failure refuses publication. New saves do
+    /// not silently replace symlinks. Windows DACL copying is not implemented.
+    ///
+    /// Callers must serialize writes and permission/path changes. The checks
+    /// cannot make rename conditional on an inode or permission snapshot, and
+    /// do not establish opaque MAC, hidden-metadata or remote-server ACL
+    /// guarantees. Directory-sync errors can occur after publication.
     pub fn to_json_file(&self, path: impl AsRef<Path>) -> Result<(), PersistenceError> {
         atomic_save::write(path.as_ref(), &serde_json::to_vec_pretty(self)?)?;
         Ok(())

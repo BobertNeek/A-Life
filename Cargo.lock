@@ -253,6 +253,7 @@ version = "0.1.0"
 dependencies = [
  "alife_core",
  "alife_storage",
+ "rustix 1.1.4",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
