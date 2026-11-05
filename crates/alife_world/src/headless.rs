@@ -5788,7 +5788,7 @@ impl HeadlessWorld {
             };
             destination = grounded;
         }
-        if let Some(blocker) = self.blocking_object_between(start, destination) {
+        if let Some(blocker) = self.first_motion_blocker(start, destination) {
             return self.finish_action(
                 command,
                 false,
@@ -6176,6 +6176,40 @@ impl HeadlessWorld {
                 .blocks_segment(start, end)
                 .then_some(WorldEntityId(*id))
         })
+    }
+
+    fn first_motion_blocker(&self, start: Vec3f, end: Vec3f) -> Option<WorldEntityId> {
+        let length = distance(start, end);
+        let direction = if length > 0.0 {
+            scale(subtract(end, start), 1.0 / length)
+        } else {
+            Vec3f::ZERO
+        };
+        self.objects
+            .values()
+            // Retain the existing collision predicate, including tangencies.
+            .filter(|object| {
+                object.kind == WorldObjectKind::Obstacle
+                    && !object.consumed
+                    && object.blocks_segment(start, end)
+            })
+            .map(|object| {
+                let entry = sight_sphere_hit(
+                    start,
+                    direction,
+                    object.position,
+                    object.radius.max(HEADLESS_CONTACT_RADIUS),
+                    length,
+                )
+                // If the ray arithmetic rounds a tangent to a miss, keep the
+                // existing blocking decision and use its closest contact point.
+                .unwrap_or_else(|| {
+                    distance(start, closest_point_on_segment(object.position, start, end))
+                });
+                (entry, object.id)
+            })
+            .min_by(|a, b| a.0.total_cmp(&b.0).then_with(|| a.1.raw().cmp(&b.1.raw())))
+            .map(|(_, id)| id)
     }
 
     /// Contact legality uses solid geometry, independently of gaze and opacity.
