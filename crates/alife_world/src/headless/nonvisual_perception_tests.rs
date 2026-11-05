@@ -232,12 +232,51 @@ fn indexed_and_canonical_touch_both_respect_solid_terrain() {
         )
         .unwrap(),
     );
-    let (draft, canonical, indexed) = assert_packet_matches(&world);
-    assert_eq!((canonical, indexed), (129, 1));
+    // These counters count outer source visits, not total geometry work.
+    let (draft, canonical_sources, indexed_sources) = assert_packet_matches(&world);
+    assert_eq!((canonical_sources, indexed_sources), (129, 1));
     assert_eq!(draft.sensory().channels.tactile_contact[0], 0.0);
     assert_eq!(draft.sensory().channels.tactile_contact[3], 0.0);
     assert!(draft.sensory().channels.smell_chemistry[0] > 0.0);
     assert!(draft.grounded_object_slots().is_empty());
+}
+
+#[test]
+fn contact_occlusion_keeps_a_large_blocker_outside_the_source_query() {
+    let mut world = sparse_world(Vec3f::ZERO, 1024);
+    let source = insert_food(
+        &mut world,
+        "large-source",
+        Vec3f::new(16.0, 0.0, 0.0),
+        [0.0; 2],
+    );
+    let object = world.objects.get_mut(&source.raw()).unwrap();
+    object.radius = 16.0;
+    object.grounded_physical.surface_temperature = 0.8;
+    let blocker = world
+        .editor_spawn_object(WorldEditorSpawnSpec {
+            label: "off-query-rock".into(),
+            kind: WorldObjectKind::Obstacle,
+            organism_id: None,
+            position: Vec3f::new(40.0, 0.0, 0.0),
+            radius: 25.0,
+            nutrition: 0.0,
+            hazard_pain: 0.0,
+            token_id: None,
+        })
+        .unwrap();
+    let index = world.build_perception_batch_index().unwrap();
+    let sources = world
+        .indexed_nonvisual_objects(world.agent_for(OBSERVER).unwrap(), &index)
+        .unwrap()
+        .expect("fixture must exercise indexed source selection");
+    assert!(sources.iter().any(|object| object.id == source));
+    assert!(!sources.iter().any(|object| object.id == blocker));
+    let (blocked, _, _) = assert_packet_matches(&world);
+    assert_eq!(blocked.sensory().channels.tactile_contact[3], 0.0);
+    world.editor_remove_object(blocker).unwrap();
+    let (clear, _, _) = assert_packet_matches(&world);
+    assert_eq!(clear.sensory().channels.tactile_contact[3], 0.8);
 }
 
 #[test]

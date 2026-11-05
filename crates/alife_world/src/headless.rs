@@ -1421,6 +1421,7 @@ pub struct HeadlessPerceptionBatchIndex {
     object_count: usize,
     cells: BTreeMap<(i32, i32, i32), Vec<u64>>,
     organism_entities: BTreeMap<u64, u64>,
+    obstacle_entities: Vec<u64>,
     max_contact_radius: f32,
     carried_entities: BTreeMap<u64, Vec<u64>>,
     nonvisual_requires_full_scan: bool,
@@ -2671,12 +2672,16 @@ impl HeadlessWorld {
     ) -> Result<HeadlessPerceptionBatchIndex, ScaffoldContractError> {
         let mut cells = BTreeMap::<(i32, i32, i32), Vec<u64>>::new();
         let mut organism_entities = BTreeMap::new();
+        let mut obstacle_entities = Vec::new();
         let mut max_contact_radius = HEADLESS_CONTACT_RADIUS;
         let mut carried_entities = BTreeMap::<u64, Vec<u64>>::new();
         let collect_nonvisual_metadata = self.objects.len() > NONVISUAL_SMALL_WORLD_OBJECTS;
         let mut nonvisual_requires_full_scan = !collect_nonvisual_metadata;
         for object in self.objects.values() {
             object.position.validate()?;
+            if object.kind == WorldObjectKind::Obstacle && !object.consumed {
+                obstacle_entities.push(object.id.raw());
+            }
             cells
                 .entry(perception_cell(object.position))
                 .or_default()
@@ -2711,6 +2716,7 @@ impl HeadlessWorld {
             object_count: self.objects.len(),
             cells,
             organism_entities,
+            obstacle_entities,
             max_contact_radius,
             carried_entities,
             nonvisual_requires_full_scan,
@@ -3778,6 +3784,26 @@ impl HeadlessWorld {
                 }
                 if terrain_vision {
                     let observer = self.agent_for(organism_id)?;
+                    // Occluders are complete, independent of the source query.
+                    // Resolve them once per observer, never once per contact.
+                    let obstacles = match index {
+                        Some(index) => index
+                            .obstacle_entities
+                            .iter()
+                            .map(|id| {
+                                self.objects
+                                    .get(id)
+                                    .ok_or(ScaffoldContractError::InvalidPerceptionFrame)
+                            })
+                            .collect::<Result<Vec<_>, _>>()?,
+                        None => self
+                            .objects
+                            .values()
+                            .filter(|object| {
+                                object.kind == WorldObjectKind::Obstacle && !object.consumed
+                            })
+                            .collect(),
+                    };
                     sensory.channels.visual_affordance = self.terrain_vision_fan(observer);
                     let vision_gain =
                         embodiment.map_or(1.0, |body| body.sensor_gain(SensorCapability::Vision));
@@ -3791,12 +3817,14 @@ impl HeadlessWorld {
                             observer,
                             &mut sensory,
                             objects.into_iter(),
+                            &obstacles,
                         )?;
                     } else {
                         self.grounded_nonvisual_channels_from_objects(
                             observer,
                             &mut sensory,
                             self.objects.values(),
+                            &obstacles,
                         )?;
                     }
                 }
@@ -3974,6 +4002,7 @@ impl HeadlessWorld {
         observer: &WorldObject,
         sensory: &mut SensorySnapshot,
         objects: impl Iterator<Item = &'a WorldObject>,
+        obstacles: &[&WorldObject],
     ) -> Result<(), ScaffoldContractError> {
         let record = observer
             .organism_id
@@ -4007,14 +4036,17 @@ impl HeadlessWorld {
                         chemical.abs() * attenuation;
                 }
             }
-            // Contact survives turning away, but cannot cross another solid.
+            // Contact survives turning away, but cannot cross another obstacle
+            // entity or terrain AABB. Height-field reach uses the same existing
+            // contract as physical actions below.
             // The contacted object itself must not occlude its own surface.
             if distance(observer.position, object.position)
                 <= object.radius.max(HEADLESS_CONTACT_RADIUS)
-                && self.solid_segment_clear_except(
+                && self.solid_segment_clear_from(
                     observer.position,
                     object.position,
                     Some(object.id),
+                    obstacles.iter().copied(),
                 )
             {
                 sensory.channels.tactile_contact[0] = 1.0;
@@ -6246,23 +6278,26 @@ impl HeadlessWorld {
             .map(|(_, id)| id)
     }
 
-    /// Contact legality uses solid geometry, independently of gaze and opacity.
+    /// Contact legality checks obstacle entities and terrain AABBs independently
+    /// of gaze and opacity. Ground-level poses do not yet define effector height
+    /// for height-field reach.
     fn physical_contact_reachable(&self, start: Vec3f, end: Vec3f) -> bool {
         distance(start, end) <= EAT_RADIUS && self.solid_segment_clear(start, end)
     }
 
     fn solid_segment_clear(&self, start: Vec3f, end: Vec3f) -> bool {
-        self.solid_segment_clear_except(start, end, None)
+        self.solid_segment_clear_from(start, end, None, self.objects.values())
     }
 
-    fn solid_segment_clear_except(
+    fn solid_segment_clear_from<'a>(
         &self,
         start: Vec3f,
         end: Vec3f,
         ignored: Option<WorldEntityId>,
+        mut obstacles: impl Iterator<Item = &'a WorldObject>,
     ) -> bool {
         let length = distance(start, end);
-        if self.blocking_object_between(start, end, ignored).is_some() {
+        if obstacles.any(|object| Some(object.id) != ignored && object.blocks_segment(start, end)) {
             return false;
         }
         let Some(terrain) = self.terrain.as_ref() else {
