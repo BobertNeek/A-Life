@@ -625,6 +625,27 @@ impl CpuCanonicalHost {
         }
         Ok(())
     }
+    /// Explicit disposable exploration fork. Only the future sampling stream and
+    /// its authority seals change; neural/world/optimizer history is not reset.
+    /// Training may compare actual outcomes from these forks. Evaluation need
+    /// not call this, and the original host remains byte-for-byte unchanged.
+    pub fn fork_sampling_stream(&self, sampling_seed: u32) -> Result<Self, CpuHostError> {
+        for (&raw, resident) in &self.residents {
+            let record = self
+                .world
+                .organism_registry()
+                .get(OrganismId(raw))
+                .ok_or(CpuHostError::State("missing exploration organism"))?;
+            resident
+                .sealed_authority
+                .ok_or(CpuHostError::State("unsealed exploration source"))?
+                .validate(record, self.sampling_seed, self.sampling_counter)?;
+        }
+        let mut fork = self.clone();
+        fork.sampling_seed = sampling_seed;
+        fork.seal_all_residents()?;
+        Ok(fork)
+    }
     /// Atomic whole-world tick: a failed seal/learning/checkpoint invariant rolls
     /// back body, biology, all cognitive rows and the sampling counter together.
     pub fn step(

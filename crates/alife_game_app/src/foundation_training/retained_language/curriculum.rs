@@ -9,7 +9,8 @@ pub use factorial::{
     continue_contrastive_grounded_language, continue_event_confirmed_speech,
     continue_factorial_grounded_language, continue_focused_grounded_language,
     continue_linear_grounded_language, continue_physical_before_speech, continue_report_choice,
-    continue_visible_balanced_grounded_language,
+    continue_visible_balanced_grounded_language, continue_witnessed_replay,
+    preflight_witnessed_replay,
 };
 pub use payload_stage::{refine_language_payload, refine_language_shared_gates};
 
@@ -34,6 +35,8 @@ pub(super) struct AssessmentPlan {
     unseen_report_transfer_v1: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     physical_before_speech_v1: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    captured_failure_replay_v1: bool,
 }
 
 #[derive(Clone, Serialize)]
@@ -582,6 +585,7 @@ fn continue_curriculum(
                     event_confirmed_speech_v1: false,
                     unseen_report_transfer_v1: false,
                     physical_before_speech_v1: false,
+                    captured_failure_replay_v1: false,
                 },
                 &mut baseline_trace
             )?);
@@ -644,6 +648,7 @@ fn continue_curriculum(
                     event_confirmed_speech_v1: false,
                     unseen_report_transfer_v1: false,
                     physical_before_speech_v1: false,
+                    captured_failure_replay_v1: false,
                 }),
             },
             next_gradient.ok_or("no native update")?,

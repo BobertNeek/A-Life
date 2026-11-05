@@ -7,6 +7,24 @@ pub(super) const SEEDS: [u64; 6] = [
 pub(super) const FRESH_SEEDS: [u64; 6] = [
     6_104_531, 6_210_019, 6_309_173, 6_401_879, 6_508_117, 6_610_327,
 ];
+pub(super) const REPLAY_SEEDS: [u64; 6] = [
+    8_104_543, 8_210_021, 8_309_181, 8_401_903, 8_508_131, 8_610_343,
+];
+pub(super) fn prepared_replay_case(
+    actor: &CpuFoundationTrainer,
+    asset: &FoundationWeightAsset,
+    founder: u64,
+    case: usize,
+) -> Result<(CpuCanonicalHost, Scene)> {
+    prepared_instance(
+        actor,
+        asset,
+        founder,
+        case,
+        REPLAY_SEEDS[case],
+        617 + 29 * case,
+    )
+}
 // Food angle, toy angle, food distance, toy distance, food nutrition, food radius.
 const INSTANCES: [[f32; 6]; 6] = [
     [0.36, -0.79, 0.37, 0.71, 0.85, 0.105],
@@ -101,6 +119,7 @@ fn plan() -> AssessmentPlan {
         event_confirmed_speech_v1: true,
         unseen_report_transfer_v1: true,
         physical_before_speech_v1: false,
+        captured_failure_replay_v1: false,
     }
 }
 pub fn assess_unseen_grounding(
@@ -179,9 +198,11 @@ mod tests {
         let founder = 847501;
         let asset = initial_n2048_care_asset(founder).unwrap();
         let actor = new_actor_profile(founder, &asset, true).unwrap();
-        for fresh in [false, true] {
+        for variant in 0..3 {
             for case in 0..SEEDS.len() {
-                let (mut h, s) = if fresh {
+                let (mut h, s) = if variant == 2 {
+                    prepared_replay_case(&actor, &asset, founder, case).unwrap()
+                } else if variant == 1 {
                     prepared_fresh_case(&actor, &asset, founder, case).unwrap()
                 } else {
                     prepared_case(&actor, &asset, founder, case).unwrap()
