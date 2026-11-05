@@ -9,6 +9,8 @@ use std::{
 mod linux_metadata;
 #[cfg(target_os = "macos")]
 mod macos_metadata;
+#[cfg(windows)]
+mod windows_metadata;
 
 static SAVE_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
@@ -17,6 +19,8 @@ struct Destination {
     metadata: Metadata,
     #[cfg(target_os = "linux")]
     attributes: linux_metadata::Attributes,
+    #[cfg(windows)]
+    security: windows_metadata::Snapshot,
 }
 
 pub(super) fn write(destination: &Path, bytes: &[u8]) -> io::Result<()> {
@@ -36,6 +40,12 @@ fn write_with_sync(
     let (staged, mut file) =
         create_staged_file(parent).map_err(|e| before_publication(destination, e))?;
     let result = (|| {
+        // Windows keeps the staging handle exclusive. Prepare and verify the
+        // old descriptor while the file is empty, before writing any new data.
+        #[cfg(windows)]
+        if let Some(previous) = &previous {
+            windows_metadata::apply(&previous.security, &file)?;
+        }
         #[cfg(target_os = "macos")]
         macos_metadata::make_private(&file)?;
         #[cfg(unix)]
@@ -49,6 +59,7 @@ fn write_with_sync(
             }
         }
         alife_storage::write_all(&staged, &mut file, bytes)?;
+        #[cfg(unix)]
         if let Some(previous) = &previous {
             #[cfg(unix)]
             {
@@ -156,11 +167,15 @@ fn open_destination(path: &Path) -> io::Result<Option<Destination>> {
     }
     #[cfg(target_os = "linux")]
     let attributes = linux_metadata::read(&file)?;
+    #[cfg(windows)]
+    let security = windows_metadata::capture(&file, path)?;
     Ok(Some(Destination {
         file,
         metadata,
         #[cfg(target_os = "linux")]
         attributes,
+        #[cfg(windows)]
+        security,
     }))
 }
 
@@ -214,6 +229,8 @@ fn recheck(path: &Path, previous: Option<&Destination>, staged: &File) -> io::Re
                     "save destination read-only protection changed before publication",
                 ));
             }
+            #[cfg(windows)]
+            windows_metadata::recheck(&previous.security, &previous.file, path, staged)?;
         }
         _ => {
             return Err(io::Error::new(
@@ -234,14 +251,20 @@ fn create_staged_file(parent: &Path) -> io::Result<(PathBuf, File)> {
             std::process::id(),
             SAVE_SEQUENCE.fetch_add(1, Ordering::Relaxed)
         ));
+        #[cfg(not(windows))]
         let mut options = OpenOptions::new();
-        options.write(true).create_new(true);
+        #[cfg(not(windows))]
+        options.read(true).write(true).create_new(true);
         #[cfg(unix)]
         {
             use std::os::unix::fs::OpenOptionsExt;
             options.mode(0o600);
         }
-        match options.open(&staged) {
+        #[cfg(not(windows))]
+        let opened = options.open(&staged);
+        #[cfg(windows)]
+        let opened = windows_metadata::create_private(&staged);
+        match opened {
             Ok(file) => return Ok((staged, file)),
             // Preserve recoverable siblings left by previous processes.
             Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
@@ -278,12 +301,12 @@ mod tests {
         alife_storage::write(&recovery, recovery_bytes).unwrap();
         let error = write_with_sync(&path, replacement, |file| {
             assert_eq!(file.metadata().unwrap().len(), replacement.len() as u64);
-            let staged = std::fs::read_dir(&root)
-                .unwrap()
-                .map(|entry| entry.unwrap().path())
-                .find(|candidate| candidate != &path && candidate != &recovery)
-                .unwrap();
-            assert_eq!(std::fs::read(staged).unwrap(), replacement);
+            use std::io::{Read, Seek, SeekFrom};
+            let mut reader = file.try_clone().unwrap();
+            reader.seek(SeekFrom::Start(0)).unwrap();
+            let mut actual = Vec::new();
+            reader.read_to_end(&mut actual).unwrap();
+            assert_eq!(actual, replacement);
             assert_eq!(budget.usage().unwrap().used, peak);
             Err(io::Error::other("injected file-sync failure"))
         })

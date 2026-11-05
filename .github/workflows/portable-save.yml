@@ -32,5 +32,4 @@ jobs:
       - name: Preserve save content and native access controls
         run: cargo test --locked -p alife_world --test atomic_portable_save -- --nocapture
       - name: File-sync failure after a complete staged write
-        if: runner.os == 'Linux'
         run: cargo test --locked -p alife_world --lib persistence::atomic_save::tests::file_sync_failure_after_write_preserves_previous_save_and_recovery -- --nocapture

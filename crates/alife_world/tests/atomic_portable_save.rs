@@ -34,6 +34,51 @@ fn temp_root(name: &str) -> PathBuf {
 }
 
 #[cfg(windows)]
+fn windows_acl_script(path: &std::path::Path, script: &str) -> String {
+    let output = std::process::Command::new("pwsh.exe")
+        .args(["-NoProfile", "-NonInteractive", "-Command", script])
+        .env("ALIFE_DACL_PATH", path)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8(output.stdout).unwrap().trim().to_owned()
+}
+
+#[cfg(windows)]
+fn windows_sddl(path: &std::path::Path) -> String {
+    windows_acl_script(path, "(Get-Acl -LiteralPath $env:ALIFE_DACL_PATH).Sddl")
+}
+
+#[cfg(windows)]
+#[test]
+fn windows_ordinary_inherited_save_retains_security_and_new_save_is_private() {
+    let root = temp_root("inherited-dacl");
+    let path = root.join("inherited.json");
+    let original = fixture("inherited");
+    fs::write(&path, original.to_json_string_pretty().unwrap()).unwrap();
+    let before = windows_sddl(&path);
+    original.to_json_file(&path).unwrap();
+    assert_eq!(windows_sddl(&path), before);
+    assert_eq!(PortableSaveFile::from_json_file(&path).unwrap(), original);
+    let new = root.join("new.json");
+    original.to_json_file(&new).unwrap();
+    let acl = windows_sddl(&new);
+    assert!(
+        acl.contains("D:P"),
+        "new save DACL must be protected: {acl}"
+    );
+    assert!(
+        !acl.contains(";;;WD)"),
+        "new save grants Everyone access: {acl}"
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[cfg(windows)]
 #[test]
 fn windows_explicit_restricted_dacl_survives_broader_parent() {
     let root = temp_root("explicit-dacl");
@@ -72,6 +117,29 @@ fn windows_explicit_restricted_dacl_survives_broader_parent() {
     );
     let mut replacement = original.clone();
     replacement.save_id = "replacement".to_string();
+    // Both a read-only flag and a denied delete-sharing handle must preserve
+    // the restricted descriptor and old content. Closing the blocker allows retry.
+    let mut permissions = fs::metadata(&path).unwrap().permissions();
+    permissions.set_readonly(true);
+    fs::set_permissions(&path, permissions).unwrap();
+    assert!(replacement.to_json_file(&path).is_err());
+    assert_eq!(PortableSaveFile::from_json_file(&path).unwrap(), original);
+    assert_eq!(windows_sddl(&path), before.trim());
+    let mut permissions = fs::metadata(&path).unwrap().permissions();
+    permissions.set_readonly(false);
+    fs::set_permissions(&path, permissions).unwrap();
+    use std::os::windows::fs::OpenOptionsExt;
+    let blocker = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .share_mode(3)
+        .open(&path)
+        .unwrap();
+    assert!(replacement.to_json_file(&path).is_err());
+    assert_eq!(PortableSaveFile::from_json_file(&path).unwrap(), original);
+    assert_eq!(windows_sddl(&path), before.trim());
+    assert_eq!(fs::read_dir(&root).unwrap().count(), 1);
+    drop(blocker);
     replacement.to_json_file(&path).unwrap();
     assert_eq!(
         PortableSaveFile::from_json_file(&path).unwrap(),
