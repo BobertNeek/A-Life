@@ -165,6 +165,75 @@ impl HeadlessWorld {
 mod tests {
     use super::*;
 
+    fn editor_fixture(terrain: bool) -> HeadlessWorld {
+        let mut world = HeadlessScenarioBuilder::new(17)
+            .agent("walker", OrganismId(1), Vec3f::ZERO)
+            .food("food", Vec3f::new(2.0, 0.0, 0.0), 0.5)
+            .toy("ball", Vec3f::new(4.0, 0.0, 0.0), true)
+            .token("token", Vec3f::new(6.0, 0.0, 0.0), 1)
+            .food("unrelated", Vec3f::new(8.0, 0.0, 0.0), 0.5)
+            .build()
+            .unwrap();
+        if terrain {
+            world
+                .enable_terrain_for_new_game(crate::island_terrain(), Vec3f::new(80.0, 0.0, 250.0))
+                .unwrap();
+        }
+        world
+    }
+
+    fn portable_roundtrip(world: &HeadlessWorld) -> HeadlessWorld {
+        use crate::persistence::{AssetManifest, PortableSaveFile, RuntimeConfig};
+        let save = PortableSaveFile::from_headless_world(
+            "player-hold-editor",
+            world,
+            RuntimeConfig::deterministic_default(world.seed(), alife_core::BrainScaleTier::Nano512),
+            AssetManifest::empty(),
+            vec![],
+        )
+        .unwrap();
+        PortableSaveFile::from_json_str(&save.to_json_string_pretty().unwrap())
+            .unwrap()
+            .restore_headless_world()
+            .expect("editor operations must leave a restorable world")
+    }
+
+    #[test]
+    fn editor_move_cannot_displace_a_player_held_object_or_break_its_save() {
+        for terrain in [false, true] {
+            for held_label in ["walker", "food", "ball", "token"] {
+                let mut world = editor_fixture(terrain);
+                let held = world.entity_id(held_label).unwrap();
+                world.begin_player_hold(held).unwrap();
+                let unrelated = world.entity_id("unrelated").unwrap();
+                let position = world.entity(unrelated).unwrap().position;
+                world
+                    .editor_move_object(
+                        unrelated,
+                        Vec3f::new(position.x + 1.0, position.y, position.z),
+                    )
+                    .unwrap();
+                assert_eq!(world.player_held_object(), Some(held));
+                let before = world.save_state();
+                let position = world.entity(held).unwrap().position;
+                let destination = if terrain {
+                    Vec3f::new(position.x + 2.0, 0.0, position.z)
+                } else {
+                    Vec3f::new(position.x + 2.0, position.y, 0.0)
+                };
+                let result = world.editor_move_object(held, destination);
+                let mut restored = portable_roundtrip(&world);
+                assert!(result.is_err());
+                assert_eq!(world.save_state(), before);
+                assert_eq!(restored.save_state(), before);
+                assert_eq!(restored.release_player_hold().unwrap(), Some(held));
+                restored.editor_move_object(held, destination).unwrap();
+                let restored = portable_roundtrip(&restored);
+                assert_eq!(restored.entity(held).unwrap().position.x, destination.x);
+            }
+        }
+    }
+
     #[test]
     fn removing_an_agent_clears_only_its_own_player_hold_before_save() {
         for registered in [false, true] {
