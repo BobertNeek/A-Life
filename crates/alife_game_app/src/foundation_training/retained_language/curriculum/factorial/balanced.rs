@@ -4,6 +4,8 @@ mod captured_replay;
 mod frozen_causal;
 pub use frozen_causal::assess_frozen_commands;
 #[cfg(test)]
+mod bounded_tape_probe;
+#[cfg(test)]
 mod physical_priority_probe;
 #[cfg(test)]
 mod speech_factor_probe;
