@@ -5819,12 +5819,27 @@ impl HeadlessWorld {
             })
             .map(|(id, _)| WorldEntityId(*id))
             .collect::<Vec<_>>();
-        let hazard = touched.iter().find_map(|id| {
-            self.objects
-                .get(&id.raw())
-                .filter(|object| object.kind == WorldObjectKind::Hazard)
-                .map(|object| (*id, object.hazard_pain))
-        });
+        // Prefer endpoint contacts, matching body-contact proximity. Keep the
+        // nearest swept-only contact as a fallback and entity-ID ties stable.
+        let hazard = touched
+            .iter()
+            .filter_map(|id| {
+                self.objects
+                    .get(&id.raw())
+                    .filter(|object| object.kind == WorldObjectKind::Hazard)
+                    .map(|object| {
+                        let separation = distance(object.position, destination);
+                        let endpoint_contact = separation <= object.radius;
+                        (*id, object.hazard_pain, !endpoint_contact, separation)
+                    })
+            })
+            .min_by(|left, right| {
+                left.2
+                    .cmp(&right.2)
+                    .then_with(|| left.3.total_cmp(&right.3))
+                    .then_with(|| left.0.raw().cmp(&right.0.raw()))
+            })
+            .map(|(id, pain, _, _)| (id, pain));
         let displacement = subtract(destination, start);
         let yaw = if displacement.x.hypot(displacement.z) > f32::EPSILON {
             displacement.z.atan2(displacement.x)
