@@ -137,6 +137,7 @@ fn windows_named_stream_refusal_preserves_original_and_recovery() {
 
 #[cfg(windows)]
 #[test]
+#[allow(clippy::permissions_set_readonly_false)] // Windows-only attribute reset.
 fn windows_explicit_restricted_dacl_survives_broader_parent() {
     let root = temp_root("explicit-dacl");
     let path = root.join("creature.alife.json");
@@ -223,6 +224,7 @@ fn windows_explicit_restricted_dacl_survives_broader_parent() {
 
 #[cfg(windows)]
 #[test]
+#[allow(clippy::permissions_set_readonly_false)] // Windows-only attribute reset.
 fn windows_read_only_save_is_not_replaced() {
     let root = temp_root("read-only");
     let path = root.join("creature.alife.json");
