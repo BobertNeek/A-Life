@@ -3175,6 +3175,11 @@ impl HeadlessWorld {
     ) -> Result<(), ScaffoldContractError> {
         id.validate()?;
         position.validate()?;
+        // The player hand owns the raised pose and its ground release point.
+        // Other repositioning paths must not leave that saved constraint stale.
+        if self.player_held_object() == Some(id) {
+            return Err(ScaffoldContractError::InvalidActionDecision);
+        }
         if let Some(terrain) = self.terrain.as_ref() {
             position.y = terrain
                 .surface()
