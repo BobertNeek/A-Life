@@ -5,7 +5,7 @@ use std::{
     fs::{File, OpenOptions},
     io,
     os::windows::{
-        ffi::OsStrExt,
+        ffi::{OsStrExt, OsStringExt},
         fs::{MetadataExt, OpenOptionsExt},
         io::{AsRawHandle, FromRawHandle, OwnedHandle},
     },
@@ -86,14 +86,14 @@ fn string(pointer: *const u16) -> Vec<u16> {
         std::slice::from_raw_parts(pointer, length).to_vec()
     }
 }
-fn descriptor_text(descriptor: PSECURITY_DESCRIPTOR) -> io::Result<Vec<u16>> {
+fn descriptor_text(descriptor: PSECURITY_DESCRIPTOR, parts: u32) -> io::Result<Vec<u16>> {
     let mut text = null_mut();
     // SAFETY: descriptor is live, outputs have valid storage; API allocates text.
     unsafe {
         bool_result(ConvertSecurityDescriptorToStringSecurityDescriptorW(
             descriptor,
             1,
-            PARTS,
+            parts,
             &mut text,
             null_mut(),
         ))?;
@@ -146,7 +146,7 @@ fn snapshot(file: &File) -> io::Result<Snapshot> {
             }
         }
     }
-    let text = descriptor_text(descriptor)?;
+    let text = descriptor_text(descriptor, PARTS)?;
     let mut info = std::mem::MaybeUninit::uninit();
     // SAFETY: live handle and appropriately sized output buffer.
     unsafe {
@@ -313,8 +313,25 @@ pub(super) fn create_private(path: &Path) -> io::Result<File> {
     }
     // SAFETY: successful CreateFileW transfers the newly created handle.
     let file = unsafe { File::from_raw_handle(handle) };
-    // Retain the allocation until CreateFileW has consumed its descriptor.
-    drop(_descriptor);
+    let verified = (|| {
+        let current = snapshot(&file)?;
+        if descriptor_text(current._allocation.0, DACL_SECURITY_INFORMATION)?
+            != descriptor_text(descriptor, DACL_SECURITY_INFORMATION)?
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "this save location did not honor the requested private Windows staging DACL",
+            ));
+        }
+        Ok(())
+    })();
+    if let Err(error) = verified {
+        drop(file);
+        // Still empty and not entered into the storage ledger. Only remove the
+        // file created by this call; a cleanup failure can leave an empty sibling.
+        let _ = std::fs::remove_file(std::ffi::OsString::from_wide(&path[..path.len() - 1]));
+        return Err(error);
+    }
     Ok(file)
 }
 
@@ -377,5 +394,37 @@ fn reject_named_streams(path: &Path) -> io::Result<()> {
                 Err(error)
             };
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn inherited_descriptor_round_trip() {
+        let root = std::env::temp_dir().join(format!(
+            "alife-win-security-roundtrip-{}",
+            std::process::id()
+        ));
+        std::fs::create_dir(&root).unwrap();
+        let root = std::fs::canonicalize(root).unwrap();
+        let source = root.join("source.json");
+        std::fs::write(&source, b"original").unwrap();
+        let source = OpenOptions::new().write(true).open(source).unwrap();
+        let old = snapshot(&source).unwrap();
+        let stage = root.join("stage.json");
+        let stage_file = create_private(&stage).unwrap();
+        let result = apply(&old, &stage_file);
+        let copied = snapshot(&stage_file).unwrap();
+        assert!(
+            result.is_ok(),
+            "{result:?}; original={}; staged={}",
+            String::from_utf16_lossy(&old.text),
+            String::from_utf16_lossy(&copied.text)
+        );
+        drop(stage_file);
+        drop(source);
+        std::fs::remove_dir_all(root).unwrap();
     }
 }

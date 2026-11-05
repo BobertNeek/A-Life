@@ -80,6 +80,63 @@ fn windows_ordinary_inherited_save_retains_security_and_new_save_is_private() {
 
 #[cfg(windows)]
 #[test]
+fn windows_write_denied_dacl_is_not_bypassed_by_directory_rename() {
+    let root = temp_root("write-denied-dacl");
+    let path = root.join("denied.json");
+    let original = fixture("write denied");
+    fs::write(&path, original.to_json_string_pretty().unwrap()).unwrap();
+    windows_acl_script(
+        &path,
+        r#"
+        $ErrorActionPreference = 'Stop'
+        $acl = Get-Acl -LiteralPath $env:ALIFE_DACL_PATH
+        $me = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
+        $acl.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new($me, 'WriteData', 'Deny'))
+        Set-Acl -LiteralPath $env:ALIFE_DACL_PATH -AclObject $acl
+    "#,
+    );
+    let before = windows_sddl(&path);
+    assert!(fs::OpenOptions::new().write(true).open(&path).is_err());
+    let error = fixture("replacement").to_json_file(&path).unwrap_err();
+    eprintln!("native DACL write refusal: {error}");
+    assert_eq!(PortableSaveFile::from_json_file(&path).unwrap(), original);
+    assert_eq!(windows_sddl(&path), before);
+    assert_eq!(fs::read_dir(&root).unwrap().count(), 1);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[cfg(windows)]
+#[test]
+fn windows_named_stream_refusal_preserves_original_and_recovery() {
+    let root = temp_root("named-stream");
+    let path = root.join("stream.json");
+    let original = fixture("stream owner");
+    fs::write(&path, original.to_json_string_pretty().unwrap()).unwrap();
+    let stream = path.with_file_name("stream.json:recovery");
+    fs::write(&stream, b"recoverable stream").unwrap();
+    let before = windows_sddl(&path);
+    let error = fixture("replacement").to_json_file(&path).unwrap_err();
+    assert!(
+        error.to_string().contains("named Windows data streams"),
+        "{error}"
+    );
+    assert_eq!(PortableSaveFile::from_json_file(&path).unwrap(), original);
+    assert_eq!(fs::read(&stream).unwrap(), b"recoverable stream");
+    assert_eq!(windows_sddl(&path), before);
+    assert_eq!(fs::read_dir(&root).unwrap().count(), 1);
+    // Removing only this disposable extra stream permits an ordinary retry.
+    fs::remove_file(stream).unwrap();
+    let replacement = fixture("replacement");
+    replacement.to_json_file(&path).unwrap();
+    assert_eq!(
+        PortableSaveFile::from_json_file(&path).unwrap(),
+        replacement
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[cfg(windows)]
+#[test]
 fn windows_explicit_restricted_dacl_survives_broader_parent() {
     let root = temp_root("explicit-dacl");
     let path = root.join("creature.alife.json");

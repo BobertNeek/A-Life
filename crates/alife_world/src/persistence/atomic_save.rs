@@ -301,6 +301,18 @@ mod tests {
         alife_storage::write(&recovery, recovery_bytes).unwrap();
         let error = write_with_sync(&path, replacement, |file| {
             assert_eq!(file.metadata().unwrap().len(), replacement.len() as u64);
+            #[cfg(windows)]
+            {
+                let staged = std::fs::read_dir(&root)
+                    .unwrap()
+                    .map(|entry| entry.unwrap().path())
+                    .find(|candidate| candidate != &path && candidate != &recovery)
+                    .unwrap();
+                assert!(
+                    File::open(staged).is_err(),
+                    "staging must deny concurrent data opens"
+                );
+            }
             use std::io::{Read, Seek, SeekFrom};
             let mut reader = file.try_clone().unwrap();
             reader.seek(SeekFrom::Start(0)).unwrap();

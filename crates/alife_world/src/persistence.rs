@@ -1478,7 +1478,14 @@ impl PortableSaveFile {
     /// requests mode 0600, and replacement retains ordinary modes/ownership.
     /// Linux copies visible xattrs and POSIX ACLs; macOS uses native ACL/xattr
     /// copying. A concrete metadata failure refuses publication. New saves do
-    /// not silently replace symlinks. Windows DACL copying is not implemented.
+    /// not silently replace symlinks. Windows prepares owner/group, DACL and
+    /// integrity-label metadata on an empty, exclusively opened staging file,
+    /// verifies it before writing, and rechecks before rename. New Windows saves
+    /// request a protected DACL granting the process user full control.
+    /// EFS-encrypted saves, detected named data streams and resource/central
+    /// access policies are refused rather than silently discarded. Windows
+    /// audit SACLs and extended attributes are not copied; stream detection
+    /// depends on filesystem support for the native enumeration API.
     ///
     /// Callers must serialize writes and permission/path changes. The checks
     /// cannot make rename conditional on an inode or permission snapshot, and
