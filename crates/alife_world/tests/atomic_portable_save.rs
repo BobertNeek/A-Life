@@ -35,6 +35,69 @@ fn temp_root(name: &str) -> PathBuf {
 
 #[cfg(windows)]
 #[test]
+fn windows_explicit_restricted_dacl_survives_broader_parent() {
+    let root = temp_root("explicit-dacl");
+    let path = root.join("creature.alife.json");
+    let original = fixture("previous");
+    fs::write(&path, original.to_json_string_pretty().unwrap()).unwrap();
+    let setup = std::process::Command::new("powershell.exe")
+        .args(["-NoProfile", "-NonInteractive", "-Command", r#"
+            $ErrorActionPreference = 'Stop'
+            $path = $env:ALIFE_DACL_PATH
+            $parent = $env:ALIFE_DACL_PARENT
+            $everyone = [System.Security.Principal.SecurityIdentifier]::new('S-1-1-0')
+            $parentAcl = Get-Acl -LiteralPath $parent
+            $parentAcl.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new(
+                $everyone, 'ReadAndExecute', 'ContainerInherit,ObjectInherit', 'None', 'Allow'))
+            Set-Acl -LiteralPath $parent -AclObject $parentAcl
+            $acl = Get-Acl -LiteralPath $path
+            $acl.SetAccessRuleProtection($true, $false)
+            foreach ($rule in @($acl.Access)) { $acl.RemoveAccessRuleSpecific($rule) }
+            $me = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
+            $acl.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new($me, 'FullControl', 'Allow'))
+            Set-Acl -LiteralPath $path -AclObject $acl
+            (Get-Acl -LiteralPath $path).Sddl
+        "#])
+        .env("ALIFE_DACL_PATH", &path).env("ALIFE_DACL_PARENT", &root)
+        .output().unwrap();
+    assert!(
+        setup.status.success(),
+        "{}",
+        String::from_utf8_lossy(&setup.stderr)
+    );
+    let before = String::from_utf8(setup.stdout).unwrap();
+    assert!(
+        before.contains("D:P"),
+        "fixture DACL is not protected: {before}"
+    );
+    let mut replacement = original.clone();
+    replacement.save_id = "replacement".to_string();
+    replacement.to_json_file(&path).unwrap();
+    assert_eq!(
+        PortableSaveFile::from_json_file(&path).unwrap(),
+        replacement
+    );
+    let after = std::process::Command::new("powershell.exe")
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "(Get-Acl -LiteralPath $env:ALIFE_DACL_PATH).Sddl",
+        ])
+        .env("ALIFE_DACL_PATH", &path)
+        .output()
+        .unwrap();
+    assert!(after.status.success());
+    assert_eq!(
+        String::from_utf8(after.stdout).unwrap().trim(),
+        before.trim(),
+        "replacement changed the explicit DACL"
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[cfg(windows)]
+#[test]
 fn windows_read_only_save_is_not_replaced() {
     let root = temp_root("read-only");
     let path = root.join("creature.alife.json");
