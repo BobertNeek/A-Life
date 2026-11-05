@@ -44,7 +44,11 @@ pub(super) fn copy(source: &File, staged: &File) -> io::Result<()> {
         )
     } != 0
     {
-        return Err(io::Error::last_os_error());
+        let error = io::Error::last_os_error();
+        return Err(io::Error::new(
+            error.kind(),
+            format!("macOS could not read or copy existing ACLs/xattrs: {error}"),
+        ));
     }
     Ok(())
 }

@@ -28,7 +28,9 @@ fn temp_root(name: &str) -> PathBuf {
         std::process::id()
     ));
     fs::create_dir(&root).unwrap();
-    root
+    // macOS temp_dir commonly traverses /var -> /private/var. Budget fixtures
+    // must use their real owned path; do not weaken the output alias guard.
+    fs::canonicalize(root).unwrap()
 }
 
 #[cfg(windows)]
@@ -230,7 +232,23 @@ fn unix_save_mode_child() {
     for mode in [0o200, 0o600, 0o640, 0o644] {
         fs::set_permissions(&path, fs::Permissions::from_mode(mode)).unwrap();
         let before = fs::metadata(&path).unwrap();
-        save.to_json_file(&path).unwrap();
+        let result = save.to_json_file(&path);
+        #[cfg(target_os = "macos")]
+        if mode == 0o200 {
+            let error = result.unwrap_err();
+            assert!(error.to_string().contains("ACLs/xattrs"), "{error}");
+            assert!(error.to_string().contains("unchanged"), "{error}");
+            let after = fs::metadata(&path).unwrap();
+            assert_eq!((after.ino(), after.mode()), (before.ino(), before.mode()));
+            fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
+            assert_eq!(
+                fs::read(&path).unwrap(),
+                save.to_json_string_pretty().unwrap().as_bytes()
+            );
+            fs::set_permissions(&path, fs::Permissions::from_mode(mode)).unwrap();
+            continue;
+        }
+        result.unwrap();
         let after = fs::metadata(&path).unwrap();
         assert_eq!((after.uid(), after.gid()), (before.uid(), before.gid()));
         assert_eq!(
