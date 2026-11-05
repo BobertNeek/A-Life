@@ -80,7 +80,15 @@ fn wide(path: &Path) -> io::Result<Vec<u16>> {
     // extended paths. Raw Win32 calls need that conversion too. Resolve an
     // existing file, or the existing parent of our new staging file, through
     // std::fs so UNC paths and normal Windows path normalization stay intact.
-    if value.len() >= 248 && !value.starts_with(&[92, 92, 63, 92]) {
+    // A short relative spelling can expand past the limit in a long cwd.
+    // Keep absolute/UNC and explicitly extended spellings on their existing
+    // path; only the threshold decision needs the expanded relative length.
+    let expanded_length = if path.is_absolute() {
+        value.len()
+    } else {
+        std::path::absolute(path)?.as_os_str().encode_wide().count()
+    };
+    if expanded_length >= 248 && !value.starts_with(&[92, 92, 63, 92]) {
         let resolved = match std::fs::canonicalize(path) {
             Ok(resolved) => resolved,
             Err(error) if error.kind() == io::ErrorKind::NotFound => {

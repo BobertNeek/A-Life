@@ -183,6 +183,9 @@ fn windows_short_relative_save_in_long_working_directory() {
         .env(CHILD_DIRECTORY, &nested)
         .output()
         .unwrap();
+    if output.status.success() {
+        eprintln!("{}", String::from_utf8_lossy(&output.stderr).trim());
+    }
     assert!(
         output.status.success(),
         "stdout:\n{}\nstderr:\n{}",
