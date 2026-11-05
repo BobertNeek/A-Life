@@ -1,7 +1,7 @@
 //! Per-organism sparse recurrent and waking plasticity state. The collector
 //! supplies canonical encoded perception/receptor evidence; there is no body or
 //! chemistry simulator here and no synthetic-biology training entry point.
-use super::{finite, invalid, CpuFoundationTrainer};
+use super::{finite, invalid, CpuExperimentalSpeechGatePolicy, CpuFoundationTrainer};
 use crate::{
     PpoJointAction, TrainingError, TrainingInitialState, TrainingReplayTick, TrainingSequence,
 };
@@ -172,18 +172,39 @@ impl CpuOrganismState {
     pub fn advance(
         &mut self,
         founder: &CpuFoundationTrainer,
+        context: TrainingReplayTick,
+        effects: &NeuralReceptorEffects,
+    ) -> Result<CpuDecisionOutput, TrainingError> {
+        self.advance_with_gate_policy(founder, context, effects, None)
+    }
+    pub(super) fn advance_with_experimental_speech_gate_policy(
+        &mut self,
+        founder: &CpuFoundationTrainer,
+        context: TrainingReplayTick,
+        effects: &NeuralReceptorEffects,
+        policy: &CpuExperimentalSpeechGatePolicy,
+    ) -> Result<CpuDecisionOutput, TrainingError> {
+        self.advance_with_gate_policy(founder, context, effects, Some(policy))
+    }
+    fn advance_with_gate_policy(
+        &mut self,
+        founder: &CpuFoundationTrainer,
         mut context: TrainingReplayTick,
         effects: &NeuralReceptorEffects,
+        policy: Option<&CpuExperimentalSpeechGatePolicy>,
     ) -> Result<CpuDecisionOutput, TrainingError> {
         effects.validate_contract()?;
         let tick = effects.source_tick.raw();
         let p = founder.phenotype();
         if self.pending.is_some()
-            || founder
-                .weights()
-                .iter()
-                .zip(p.synapses())
-                .any(|(w, s)| w.to_bits() != s.genetic_weight().to_bits())
+            || match policy {
+                Some(policy) => !policy.admits(founder),
+                None => founder
+                    .weights()
+                    .iter()
+                    .zip(p.synapses())
+                    .any(|(w, s)| w.to_bits() != s.genetic_weight().to_bits()),
+            }
             || self.checkpoint.last_outcome_tick.is_some_and(|t| tick < t)
             || self
                 .checkpoint
@@ -340,13 +361,45 @@ impl CpuOrganismState {
         development: &DevelopmentState,
         parameters: &PlasticityGenomeParameters,
     ) -> Result<(), TrainingError> {
+        self.apply_credit_with_gate_policy(founder, patch, receptors, development, parameters, None)
+    }
+    pub(super) fn apply_credit_with_experimental_speech_gate_policy(
+        &mut self,
+        founder: &CpuFoundationTrainer,
+        patch: &ExperiencePatch,
+        receptors: &NeuralReceptorFrame,
+        development: &DevelopmentState,
+        parameters: &PlasticityGenomeParameters,
+        policy: &CpuExperimentalSpeechGatePolicy,
+    ) -> Result<(), TrainingError> {
+        self.apply_credit_with_gate_policy(
+            founder,
+            patch,
+            receptors,
+            development,
+            parameters,
+            Some(policy),
+        )
+    }
+    fn apply_credit_with_gate_policy(
+        &mut self,
+        founder: &CpuFoundationTrainer,
+        patch: &ExperiencePatch,
+        receptors: &NeuralReceptorFrame,
+        development: &DevelopmentState,
+        parameters: &PlasticityGenomeParameters,
+        policy: Option<&CpuExperimentalSpeechGatePolicy>,
+    ) -> Result<(), TrainingError> {
         let p = founder.phenotype();
         if p.phenotype_hash() != self.checkpoint.phenotype_hash
-            || founder
-                .weights()
-                .iter()
-                .zip(p.synapses())
-                .any(|(w, s)| w.to_bits() != s.genetic_weight().to_bits())
+            || match policy {
+                Some(policy) => !policy.admits(founder),
+                None => founder
+                    .weights()
+                    .iter()
+                    .zip(p.synapses())
+                    .any(|(w, s)| w.to_bits() != s.genetic_weight().to_bits()),
+            }
         {
             return Err(invalid());
         }

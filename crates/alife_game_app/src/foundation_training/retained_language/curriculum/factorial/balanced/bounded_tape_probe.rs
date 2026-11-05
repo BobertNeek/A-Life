@@ -9,7 +9,7 @@ use std::{
 
 const TEST: &str = "foundation_training::retained_language::curriculum::factorial::balanced::bounded_tape_probe::diagnose_two_frozen_witnesses";
 
-fn source_actor(
+pub(super) fn source_actor(
     source: &Path,
     label: &str,
 ) -> Result<(CpuFoundationTrainer, FoundationWeightAsset)> {
@@ -19,7 +19,7 @@ fn source_actor(
     let actor = CpuFoundationTrainer::from_checkpoint(p, asset.clone(), r.actor)?;
     Ok((actor, asset))
 }
-fn write_compressed(path: &Path, v: &impl Serialize) -> Result<()> {
+pub(super) fn write_compressed(path: &Path, v: &impl Serialize) -> Result<()> {
     let f = fs::OpenOptions::new()
         .write(true)
         .create_new(true)

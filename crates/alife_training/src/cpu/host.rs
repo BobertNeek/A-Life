@@ -112,6 +112,8 @@ pub struct CpuCanonicalCheckpoint {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tracked_objects: Vec<alife_world::TrackedObjectRegistrySaveState>,
     pub residents: Vec<CpuResidentCheckpoint>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub experimental_speech_gate_policy: Option<CpuExperimentalSpeechGatePolicy>,
 }
 /// Complete in-memory pre-success branch state. Restoring it restores the world,
 /// chemistry, memories, predictor, neural traces, sleep, sequence and RNG counter.
@@ -124,6 +126,7 @@ pub struct CpuCanonicalHost {
     residents: BTreeMap<u64, Resident>,
     sampling_seed: u32,
     sampling_counter: u32,
+    experimental_speech_gate_policy: Option<CpuExperimentalSpeechGatePolicy>,
 }
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct CpuCollectedDecision {
@@ -146,6 +149,73 @@ pub struct CpuCanonicalStep {
     pub decisions: Vec<CpuCollectedDecision>,
     pub sleeping_organisms: usize,
     pub sleep_consolidations: usize,
+}
+/// Provenance for a deliberately counterfactual offline branch, not a live handoff.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct CpuExperimentalSpeechGateBranchReceipt {
+    pub source_policy_weight_digest: [u64; 4],
+    pub branch_policy_weight_digest: [u64; 4],
+    pub source_actor_checkpoint_digest: [u64; 4],
+    pub branch_actor_checkpoint_digest: [u64; 4],
+    pub source_snapshot_digest: [u64; 4],
+    pub branch_snapshot_digest: [u64; 4],
+    pub source_optimizer_step: u32,
+    pub branch_optimizer_step: u32,
+    pub allowed_gate_synapse_indices: Vec<u32>,
+    pub changed_weight_indices: Vec<u32>,
+    pub world_private_rng_and_source_snapshot_preserved: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_policy_admission: Option<CpuExperimentalSpeechGatePolicy>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub branch_policy_admission: Option<CpuExperimentalSpeechGatePolicy>,
+}
+/// Explicit same-graph parameter intervention. Ordinary founders still require
+/// compiled genetic weights. This admission is restricted to64 measured gates.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct CpuExperimentalSpeechGatePolicy {
+    kind: String,
+    phenotype_hash: PhenotypeHash,
+    source_policy_weight_digest: [u64; 4],
+    compiled_genetic_weight_digest: [u64; 4],
+    branch_policy_weight_digest: [u64; 4],
+    gate_indices: Vec<u32>,
+}
+impl CpuExperimentalSpeechGatePolicy {
+    pub(super) fn admits(&self, founder: &CpuFoundationTrainer) -> bool {
+        let p = founder.phenotype();
+        if self.kind != "experimental-speech-gate-policy-v1"
+            || self.phenotype_hash != p.phenotype_hash()
+            || p.experimental_language_input()
+                != Some(ExperimentalLanguageInputV1::LinearWordReadoutV3)
+            || weight_digest(founder).ok() != Some(self.branch_policy_weight_digest)
+            || genetic_weight_digest(p).ok() != Some(self.compiled_genetic_weight_digest)
+        {
+            return false;
+        }
+        let target = p.candidate_decoder().motor_start() as usize
+            + SpeechDecoderLayoutV1::MOTOR_TARGET_OFFSET as usize;
+        let mut gates = Vec::new();
+        for (i, s) in p.synapses().iter().enumerate() {
+            let gate = matches!(s.kind(),CompiledSynapseKind::Decoder(d)if d.head()==DecoderHeadKind::SpeechPayload)
+                && [target + 16, target + 17].contains(&(s.target() as usize));
+            if founder.checkpoint.stage_mask.is_trainable(i) != gate
+                || (!gate && founder.weights()[i].to_bits() != s.genetic_weight().to_bits())
+            {
+                return false;
+            }
+            if gate {
+                gates.push(i as u32);
+            }
+        }
+        gates.len() == 64 && gates == self.gate_indices
+    }
+}
+fn genetic_weight_digest(p: &BrainPhenotype) -> Result<[u64; 4], ScaffoldContractError> {
+    let mut d = CanonicalDigestBuilder::new(b"ALIFE-CPU-FOUNDER-WEIGHTS-V1");
+    for s in p.synapses() {
+        d.write_f32(s.genetic_weight())?;
+    }
+    Ok(d.finish256())
 }
 fn weight_digest(founder: &CpuFoundationTrainer) -> Result<[u64; 4], ScaffoldContractError> {
     let mut d = CanonicalDigestBuilder::new(b"ALIFE-CPU-FOUNDER-WEIGHTS-V1");
@@ -249,6 +319,7 @@ impl CpuCanonicalHost {
             residents,
             sampling_seed,
             sampling_counter: 0,
+            experimental_speech_gate_policy: None,
         };
         host.seal_all_residents()?;
         Ok(host)
@@ -357,11 +428,128 @@ impl CpuCanonicalHost {
         *self = snapshot;
         Ok(())
     }
+    /// Explicit offline counterfactual branch for the experimental language profile.
+    /// Only speech presence/stop readout weights and their optimizer history may
+    /// differ. The source collector remains immutable; world, private learning,
+    /// memory, topology and RNG are copied exactly. This is not a living-save
+    /// migration or permission to replace a collector's policy in place.
+    pub fn fork_experimental_speech_gate_policy(
+        &self,
+        source: &CpuFoundationTrainer,
+        next: &CpuFoundationTrainer,
+    ) -> Result<(Self, CpuExperimentalSpeechGateBranchReceipt), CpuHostError> {
+        self.validate_founder(source)?;
+        let a = source.checkpoint();
+        let b = next.checkpoint();
+        if source.phenotype().experimental_language_input()
+            != Some(ExperimentalLanguageInputV1::LinearWordReadoutV3)
+            || source.phenotype().phenotype_hash() != next.phenotype().phenotype_hash()
+            || a.source_foundation_digest != b.source_foundation_digest
+            || a.config != b.config
+        {
+            return Err(CpuHostError::State("speech-gate branch requires the same experimental phenotype, asset and optimizer config"));
+        }
+        let target = source.phenotype().candidate_decoder().motor_start() as usize
+            + SpeechDecoderLayoutV1::MOTOR_TARGET_OFFSET as usize;
+        let mut allowed = Vec::new();
+        let mut changed = Vec::new();
+        for (i, s) in source.phenotype().synapses().iter().enumerate() {
+            let gate = matches!(s.kind(),CompiledSynapseKind::Decoder(d) if d.head()==DecoderHeadKind::SpeechPayload)
+                && [target + 16, target + 17].contains(&(s.target() as usize));
+            if b.stage_mask.is_trainable(i) != gate {
+                return Err(CpuHostError::State(
+                    "speech-gate branch target mask is not exactly the gate coordinates",
+                ));
+            }
+            if gate {
+                allowed.push(i as u32);
+            }
+            if a.weights[i].to_bits() != b.weights[i].to_bits() {
+                changed.push(i as u32);
+            }
+            if !gate
+                && (a.weights[i].to_bits() != b.weights[i].to_bits()
+                    || a.first_moment[i].to_bits() != b.first_moment[i].to_bits()
+                    || a.second_moment[i].to_bits() != b.second_moment[i].to_bits()
+                    || a.update_ages[i] != b.update_ages[i])
+            {
+                return Err(CpuHostError::State(
+                    "speech-gate branch changed a frozen non-gate coordinate",
+                ));
+            }
+        }
+        if allowed.len() != 64 {
+            return Err(CpuHostError::State(
+                "speech-gate branch requires exactly64 gate coordinates",
+            ));
+        }
+        let before = self.checkpoint(source)?;
+        let mut branch = self.clone();
+        branch.founder_weight_digest = weight_digest(next)?;
+        branch.experimental_speech_gate_policy = if changed.is_empty() {
+            self.experimental_speech_gate_policy.clone()
+        } else {
+            Some(CpuExperimentalSpeechGatePolicy {
+                kind: "experimental-speech-gate-policy-v1".into(),
+                phenotype_hash: next.phenotype().phenotype_hash(),
+                source_policy_weight_digest: self.founder_weight_digest,
+                compiled_genetic_weight_digest: genetic_weight_digest(next.phenotype())?,
+                branch_policy_weight_digest: branch.founder_weight_digest,
+                gate_indices: allowed.clone(),
+            })
+        };
+        let after = branch.checkpoint(next)?;
+        let mut normalized = after.clone();
+        normalized.founder_weight_digest = before.founder_weight_digest;
+        normalized.experimental_speech_gate_policy = before.experimental_speech_gate_policy.clone();
+        if serde_json::to_vec(&before)? != serde_json::to_vec(&normalized)? {
+            return Err(CpuHostError::State(
+                "speech-gate branch changed private or physical state",
+            ));
+        }
+        let receipt = CpuExperimentalSpeechGateBranchReceipt {
+            source_policy_weight_digest: before.founder_weight_digest,
+            branch_policy_weight_digest: after.founder_weight_digest,
+            source_actor_checkpoint_digest: json_digest(
+                b"ALIFE-CPU-EXPERIMENTAL-GATE-ACTOR-V1",
+                &a,
+            )?,
+            branch_actor_checkpoint_digest: json_digest(
+                b"ALIFE-CPU-EXPERIMENTAL-GATE-ACTOR-V1",
+                &b,
+            )?,
+            source_snapshot_digest: json_digest(
+                b"ALIFE-CPU-EXPERIMENTAL-GATE-SNAPSHOT-V1",
+                &before,
+            )?,
+            branch_snapshot_digest: json_digest(
+                b"ALIFE-CPU-EXPERIMENTAL-GATE-SNAPSHOT-V1",
+                &after,
+            )?,
+            source_optimizer_step: a.optimizer_step,
+            branch_optimizer_step: b.optimizer_step,
+            allowed_gate_synapse_indices: allowed,
+            changed_weight_indices: changed,
+            world_private_rng_and_source_snapshot_preserved: true,
+            source_policy_admission: before.experimental_speech_gate_policy,
+            branch_policy_admission: after.experimental_speech_gate_policy,
+        };
+        Ok((branch, receipt))
+    }
     fn validate_founder(&self, founder: &CpuFoundationTrainer) -> Result<(), CpuHostError> {
         if self.phenotype_hash != founder.phenotype().phenotype_hash()
             || self.founder_weight_digest != weight_digest(founder)?
         {
             return Err(CpuHostError::State("living collector policy changed: export/recompile a fresh cohort or explicitly rebase a simulator branch"));
+        }
+        if self
+            .experimental_speech_gate_policy
+            .as_ref()
+            .is_some_and(|p| !p.admits(founder))
+        {
+            return Err(CpuHostError::State(
+                "invalid explicit experimental speech-gate policy admission",
+            ));
         }
         Ok(())
     }
@@ -456,6 +644,7 @@ impl CpuCanonicalHost {
                 .map(|&id| self.world.tracked_objects().save_state(OrganismId(id)))
                 .collect::<Result<_, _>>()?,
             residents,
+            experimental_speech_gate_policy: self.experimental_speech_gate_policy.clone(),
         })
     }
     pub fn from_checkpoint(
@@ -600,6 +789,7 @@ impl CpuCanonicalHost {
             residents,
             sampling_seed: checkpoint.sampling_seed,
             sampling_counter: checkpoint.sampling_counter,
+            experimental_speech_gate_policy: checkpoint.experimental_speech_gate_policy,
         };
         host.validate_founder(founder)?;
         Ok(host)
@@ -701,6 +891,7 @@ impl CpuCanonicalHost {
         ) -> Result<PerceptionFrameDraft, ScaffoldContractError>,
     ) -> Result<CpuCanonicalStep, CpuHostError> {
         let p = founder.phenotype();
+        let experimental_policy = self.experimental_speech_gate_policy.clone();
         let tick = self.world.tick();
         let mut decisions = Vec::new();
         let mut sleeping = 0;
@@ -945,7 +1136,13 @@ impl CpuCanonicalHost {
                     .collect(),
             )?;
             context.microstep_count = u32::from(activity.microsteps);
-            let output = r.neural.advance(founder, context, &effects)?;
+            let output = if let Some(policy) = &experimental_policy {
+                r.neural.advance_with_experimental_speech_gate_policy(
+                    founder, context, &effects, policy,
+                )?
+            } else {
+                r.neural.advance(founder, context, &effects)?
+            };
             r.activity.remaining_atp_q16 = activity.available_atp_q16 - activity.debit_atp_q16;
             r.activity.source_frame_digest = frame.frame_digest().0;
             let sampling_counter = self.sampling_counter;
@@ -1210,13 +1407,24 @@ impl CpuCanonicalHost {
                 pre_context,
             )?;
             let credit_receptors = receptors;
-            r.neural.apply_credit(
-                founder,
-                &patch,
-                &credit_receptors,
-                &development,
-                after.phenotype().brain_genome.plasticity_parameters(),
-            )?;
+            if let Some(policy) = &experimental_policy {
+                r.neural.apply_credit_with_experimental_speech_gate_policy(
+                    founder,
+                    &patch,
+                    &credit_receptors,
+                    &development,
+                    after.phenotype().brain_genome.plasticity_parameters(),
+                    policy,
+                )?;
+            } else {
+                r.neural.apply_credit(
+                    founder,
+                    &patch,
+                    &credit_receptors,
+                    &development,
+                    after.phenotype().brain_genome.plasticity_parameters(),
+                )?;
+            }
             r.language_grounding.observe_sealed(&patch)?;
             r.memory.observe_sealed_patch(&patch)?;
             let topology_receipt = r.topology.observe_sealed_patch(&patch);
