@@ -16,10 +16,10 @@ use windows_sys::Win32::{
     Foundation::{LocalFree, GENERIC_READ, GENERIC_WRITE, INVALID_HANDLE_VALUE},
     Security::{
         Authorization::*, EqualSid, GetAce, GetSecurityDescriptorControl, GetTokenInformation,
-        TokenUser, ACE_HEADER, ACL, ATTRIBUTE_SECURITY_INFORMATION, DACL_SECURITY_INFORMATION,
-        GROUP_SECURITY_INFORMATION, LABEL_SECURITY_INFORMATION, OWNER_SECURITY_INFORMATION,
-        PROTECTED_DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR, PSID,
-        SCOPE_SECURITY_INFORMATION, SECURITY_ATTRIBUTES, SE_DACL_PROTECTED, TOKEN_QUERY,
+        SetFileSecurityW, TokenUser, ACE_HEADER, ACL, ATTRIBUTE_SECURITY_INFORMATION,
+        DACL_SECURITY_INFORMATION, GROUP_SECURITY_INFORMATION, LABEL_SECURITY_INFORMATION,
+        OWNER_SECURITY_INFORMATION, PROTECTED_DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR,
+        PSID, SCOPE_SECURITY_INFORMATION, SECURITY_ATTRIBUTES, SE_DACL_PROTECTED, TOKEN_QUERY,
         TOKEN_USER, UNPROTECTED_DACL_SECURITY_INFORMATION,
     },
     Storage::FileSystem::{
@@ -46,7 +46,6 @@ pub(super) struct Snapshot {
     _allocation: Allocation,
     owner: PSID,
     group: PSID,
-    dacl: *mut ACL,
     label: *mut ACL,
     protected: bool,
     text: Vec<u16>,
@@ -163,7 +162,6 @@ fn snapshot(file: &File) -> io::Result<Snapshot> {
         _allocation: allocation,
         owner,
         group,
-        dacl,
         label,
         protected: control & SE_DACL_PROTECTED != 0,
         text,
@@ -183,17 +181,11 @@ pub(super) fn capture(file: &File, path: &Path) -> io::Result<Snapshot> {
     reject_named_streams(path)?;
     snapshot(file)
 }
-pub(super) fn apply(old: &Snapshot, file: &File) -> io::Result<()> {
+pub(super) fn apply(old: &Snapshot, file: &File, path: &Path) -> io::Result<()> {
     let current = snapshot(file)?;
-    let mut parts = DACL_SECURITY_INFORMATION
-        | LABEL_SECURITY_INFORMATION
-        | if old.protected {
-            PROTECTED_DACL_SECURITY_INFORMATION
-        } else {
-            UNPROTECTED_DACL_SECURITY_INFORMATION
-        };
-    // Avoid requiring assignment privileges for unchanged owner/group SIDs.
-    // SAFETY: SID pointers are held by their live Snapshot allocations.
+    let mut parts = 0;
+    // Avoid assigning unchanged SIDs or manufacturing a null SACL where the
+    // original descriptor has no integrity-label state.
     unsafe {
         if EqualSid(old.owner, current.owner) == 0 {
             parts |= OWNER_SECURITY_INFORMATION;
@@ -201,14 +193,44 @@ pub(super) fn apply(old: &Snapshot, file: &File) -> io::Result<()> {
         if EqualSid(old.group, current.group) == 0 {
             parts |= GROUP_SECURITY_INFORMATION;
         }
-        win_result(SetSecurityInfo(
-            file.as_raw_handle(),
-            SE_FILE_OBJECT,
-            parts,
-            old.owner,
-            old.group,
-            old.dacl,
-            old.label,
+    }
+    if descriptor_text(old._allocation.0, LABEL_SECURITY_INFORMATION)?
+        != descriptor_text(current._allocation.0, LABEL_SECURITY_INFORMATION)?
+    {
+        parts |= LABEL_SECURITY_INFORMATION;
+    }
+    if parts != 0 {
+        // SAFETY: handle and every supplied SID/ACL allocation remain live.
+        unsafe {
+            win_result(SetSecurityInfo(
+                file.as_raw_handle(),
+                SE_FILE_OBJECT,
+                parts,
+                old.owner,
+                old.group,
+                null_mut(),
+                old.label,
+            ))?;
+        }
+    }
+    let path = wide(path)?;
+    // SetSecurityInfo imposes automatic inheritance, which can add parent ACEs
+    // absent from a legacy unprotected descriptor. This documented older file
+    // API is documented obsolete, but can request legacy descriptors without
+    // that merge. Use it only on our empty, exclusively held staging file,
+    // then verify the exact result through the original handle.
+    // https://learn.microsoft.com/windows/win32/api/securitybaseapi/nf-securitybaseapi-setfilesecurityw
+    let protection = if old.protected {
+        PROTECTED_DACL_SECURITY_INFORMATION
+    } else {
+        UNPROTECTED_DACL_SECURITY_INFORMATION
+    };
+    // SAFETY: valid NUL-terminated owned path and live security descriptor.
+    unsafe {
+        bool_result(SetFileSecurityW(
+            path.as_ptr(),
+            DACL_SECURITY_INFORMATION | protection,
+            old._allocation.0,
         ))?;
     }
     if snapshot(file)?.text != old.text {
@@ -415,7 +437,7 @@ mod tests {
         let old = snapshot(&source).unwrap();
         let stage = root.join("stage.json");
         let stage_file = create_private(&stage).unwrap();
-        let result = apply(&old, &stage_file);
+        let result = apply(&old, &stage_file, &stage);
         let copied = snapshot(&stage_file).unwrap();
         assert!(
             result.is_ok(),

@@ -44,7 +44,7 @@ fn write_with_sync(
         // old descriptor while the file is empty, before writing any new data.
         #[cfg(windows)]
         if let Some(previous) = &previous {
-            windows_metadata::apply(&previous.security, &file)?;
+            windows_metadata::apply(&previous.security, &file, &staged)?;
         }
         #[cfg(target_os = "macos")]
         macos_metadata::make_private(&file)?;
