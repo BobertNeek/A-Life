@@ -1621,7 +1621,7 @@ impl HeadlessWorld {
         if !record.lifecycle().is_alive()
             || distance(source, body.position) > reach
             || if praise {
-                self.blocking_object_between(source, body.position)
+                self.blocking_object_between(source, body.position, None)
                     .is_some()
             } else {
                 !self.physical_contact_reachable(source, body.position)
@@ -4007,9 +4007,15 @@ impl HeadlessWorld {
                         chemical.abs() * attenuation;
                 }
             }
-            // Contact has its own physical range. Turning away does not remove it.
+            // Contact survives turning away, but cannot cross another solid.
+            // The contacted object itself must not occlude its own surface.
             if distance(observer.position, object.position)
                 <= object.radius.max(HEADLESS_CONTACT_RADIUS)
+                && self.solid_segment_clear_except(
+                    observer.position,
+                    object.position,
+                    Some(object.id),
+                )
             {
                 sensory.channels.tactile_contact[0] = 1.0;
                 let heat = object.grounded_physical.surface_temperature;
@@ -6170,10 +6176,14 @@ impl HeadlessWorld {
         visible
     }
 
-    fn blocking_object_between(&self, start: Vec3f, end: Vec3f) -> Option<WorldEntityId> {
+    fn blocking_object_between(
+        &self,
+        start: Vec3f,
+        end: Vec3f,
+        ignored: Option<WorldEntityId>,
+    ) -> Option<WorldEntityId> {
         self.objects.iter().find_map(|(id, object)| {
-            object
-                .blocks_segment(start, end)
+            (Some(object.id) != ignored && object.blocks_segment(start, end))
                 .then_some(WorldEntityId(*id))
         })
     }
@@ -6242,8 +6252,17 @@ impl HeadlessWorld {
     }
 
     fn solid_segment_clear(&self, start: Vec3f, end: Vec3f) -> bool {
+        self.solid_segment_clear_except(start, end, None)
+    }
+
+    fn solid_segment_clear_except(
+        &self,
+        start: Vec3f,
+        end: Vec3f,
+        ignored: Option<WorldEntityId>,
+    ) -> bool {
         let length = distance(start, end);
-        if self.blocking_object_between(start, end).is_some() {
+        if self.blocking_object_between(start, end, ignored).is_some() {
             return false;
         }
         let Some(terrain) = self.terrain.as_ref() else {
@@ -9566,7 +9585,7 @@ mod task_6_factorized_motor_tests {
 
         assert!(world.physical_contact_reachable(Vec3f::ZERO, world.entity(food).unwrap().position));
         assert_eq!(
-            world.blocking_object_between(Vec3f::ZERO, Vec3f::new(MOVE_STEP, 0.0, 0.0)),
+            world.blocking_object_between(Vec3f::ZERO, Vec3f::new(MOVE_STEP, 0.0, 0.0), None),
             Some(blocker),
         );
         let receipt = world.apply_registered_motor_bundle(&bundle, agent).unwrap();

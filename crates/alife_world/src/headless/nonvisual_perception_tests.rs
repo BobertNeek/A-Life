@@ -202,6 +202,45 @@ fn indexed_nonvisual_far_oversized_contact_and_temperature_are_retained() {
 }
 
 #[test]
+fn indexed_and_canonical_touch_both_respect_solid_terrain() {
+    let mut world = sparse_world(Vec3f::ZERO, 128);
+    let source = insert_food(
+        &mut world,
+        "warm-behind-wall",
+        Vec3f::new(0.75, 0.0, 0.0),
+        [0.6, 0.0],
+    );
+    world
+        .objects
+        .get_mut(&source.raw())
+        .unwrap()
+        .grounded_physical
+        .surface_temperature = 0.8;
+    world.terrain = Some(
+        crate::WorldTerrain::new(
+            crate::TerrainData {
+                width: 3,
+                depth: 3,
+                origin_x: -2.0,
+                origin_z: -2.0,
+                spacing: 2.0,
+                heights: vec![0.0; 9],
+                obstacles: vec![[0.37, -1.0, 0.38, 1.0, -0.5, 2.0]],
+                water_level: None,
+            },
+            crate::LocomotionLimits::default(),
+        )
+        .unwrap(),
+    );
+    let (draft, canonical, indexed) = assert_packet_matches(&world);
+    assert_eq!((canonical, indexed), (129, 1));
+    assert_eq!(draft.sensory().channels.tactile_contact[0], 0.0);
+    assert_eq!(draft.sensory().channels.tactile_contact[3], 0.0);
+    assert!(draft.sensory().channels.smell_chemistry[0] > 0.0);
+    assert!(draft.grounded_object_slots().is_empty());
+}
+
+#[test]
 fn indexed_nonvisual_far_possession_and_duplicate_membership_are_retained_once() {
     let mut world = sparse_world(Vec3f::ZERO, 128);
     let far = insert_food(
