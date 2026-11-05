@@ -40,7 +40,7 @@ fn windows_explicit_restricted_dacl_survives_broader_parent() {
     let path = root.join("creature.alife.json");
     let original = fixture("previous");
     fs::write(&path, original.to_json_string_pretty().unwrap()).unwrap();
-    let setup = std::process::Command::new("powershell.exe")
+    let setup = std::process::Command::new("pwsh.exe")
         .args(["-NoProfile", "-NonInteractive", "-Command", r#"
             $ErrorActionPreference = 'Stop'
             $path = $env:ALIFE_DACL_PATH
@@ -77,7 +77,7 @@ fn windows_explicit_restricted_dacl_survives_broader_parent() {
         PortableSaveFile::from_json_file(&path).unwrap(),
         replacement
     );
-    let after = std::process::Command::new("powershell.exe")
+    let after = std::process::Command::new("pwsh.exe")
         .args([
             "-NoProfile",
             "-NonInteractive",
