@@ -193,6 +193,9 @@ impl CpuOrganismState {
         effects: &NeuralReceptorEffects,
         policy: Option<&CpuExperimentalSpeechGatePolicy>,
     ) -> Result<CpuDecisionOutput, TrainingError> {
+        if !alife_core::load_only::permitted(alife_core::load_only::Operation::Decision) {
+            return Err(invalid());
+        }
         effects.validate_contract()?;
         let tick = effects.source_tick.raw();
         let p = founder.phenotype();
@@ -390,6 +393,9 @@ impl CpuOrganismState {
         parameters: &PlasticityGenomeParameters,
         policy: Option<&CpuExperimentalSpeechGatePolicy>,
     ) -> Result<(), TrainingError> {
+        if !alife_core::load_only::permitted(alife_core::load_only::Operation::Credit) {
+            return Err(invalid());
+        }
         let p = founder.phenotype();
         if p.phenotype_hash() != self.checkpoint.phenotype_hash
             || match policy {
@@ -485,6 +491,9 @@ impl CpuOrganismState {
         development: &DevelopmentState,
         parameters: &PlasticityGenomeParameters,
     ) -> Result<(), TrainingError> {
+        if !alife_core::load_only::permitted(alife_core::load_only::Operation::Credit) {
+            return Err(invalid());
+        }
         if self.pending.is_some()
             || self.checkpoint.phenotype_hash != founder.phenotype().phenotype_hash()
         {

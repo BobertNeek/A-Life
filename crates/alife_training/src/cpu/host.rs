@@ -858,6 +858,11 @@ impl CpuCanonicalHost {
             ExperienceSequenceId,
         ) -> Result<PerceptionFrameDraft, ScaffoldContractError>,
     ) -> Result<CpuCanonicalStep, CpuHostError> {
+        if !alife_core::load_only::permitted(alife_core::load_only::Operation::Decision) {
+            return Err(CpuHostError::State(
+                "decision forbidden during load-only admission",
+            ));
+        }
         self.validate_founder(founder)?;
         for (&raw, r) in &self.residents {
             let record = self

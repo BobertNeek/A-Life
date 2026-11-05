@@ -1,0 +1,105 @@
+{
+  "owner_manifest_sha256": "57e3f76942e9d620ab0573f47e531c4bc5d26e667e89c06380ee7c7f09f8ff6e",
+  "profile": "actor_history",
+  "selected_file_bytes": 9240739,
+  "selected_files": 32,
+  "actor_admissions": 14,
+  "private_admissions": 6,
+  "global_actor_steps": {
+    "f001#actor": 436,
+    "f003": 436,
+    "f004": 440,
+    "f005": 437,
+    "f007": 438,
+    "f009": 439,
+    "f012": 440,
+    "f013": 437,
+    "f015": 438,
+    "f017": 439,
+    "f020": 440,
+    "f021": 437,
+    "f023": 438,
+    "f025": 439
+  },
+  "world_ticks": {
+    "f001#host": 460,
+    "f031": 479,
+    "f032": 479,
+    "f029": 479,
+    "f030": 479,
+    "f028": 458
+  },
+  "exact_actor_complete_adam": true,
+  "exact_world_private_rng_policy_provenance": true,
+  "input_files_including_manifest_hashed_before_after": 33,
+  "input_hashes_unchanged": true,
+  "forbidden_operation_attempts": {
+    "actor_adam": 0,
+    "credit": 0,
+    "critic_adam": 0,
+    "decision": 0,
+    "neural_forward": 0,
+    "world_action": 0,
+    "world_advance": 0
+  },
+  "matching_critic_version": "unavailable_actor_only_lineage",
+  "joint_actor_critic_certified": false,
+  "ppo_continuation_certified": false,
+  "critic_initialized": false,
+  "checkpoint_schema_or_admission_bypassed": false,
+  "source_tests": {
+    "pure_passed": 3,
+    "isolated_native_fixture_passed": 1
+  },
+  "standalone_executable_sha256": "dbdd08dd0651c1136c930fe32d1c034675b9e53040101aca0f91497731c1a89d",
+  "standalone_executable_bytes": 11192280,
+  "native_admission_receipt_sha256": "a696f8acb916eb262aa88aaed50283504fbf265e26b0f0aad97e4913303dcd0a",
+  "source_file_hashes": {
+    "Cargo.lock": {
+      "bytes": 161088,
+      "sha256": "a8323d85b09d781596a62e7f383e2dc36cd57628c002f4dfcd75a8b49b4031eb"
+    },
+    "crates/alife_core/src/lib.rs": {
+      "bytes": 21530,
+      "sha256": "cc920d630e9eec9c15f3c996b7df3a59f6f9e40068bb260e24507f572f75e92f"
+    },
+    "crates/alife_core/src/load_only.rs": {
+      "bytes": 1949,
+      "sha256": "1586f0498db769f909f7da53c96a87a6b53a0793d747f75b339d9992a42cc6de"
+    },
+    "crates/alife_game_app/Cargo.toml": {
+      "bytes": 4031,
+      "sha256": "6e6fd59e1b77cd383a1f7f008b8c8b445bbc799438ae8d5fd2bdb86f3ec9adba"
+    },
+    "crates/alife_game_app/src/bin/verify_actor_private_recovery.rs": {
+      "bytes": 26363,
+      "sha256": "522ceec13a68acb03614f9cf62f855bd1a84683ef82d65ff60a5373cb5d6fbbb"
+    },
+    "crates/alife_training/src/cpu/host.rs": {
+      "bytes": 72849,
+      "sha256": "7632976316f96bfb55ad7a10a99f7538a62fcbe51106f5316fe94fb1abceb01e"
+    },
+    "crates/alife_training/src/cpu/mod.rs": {
+      "bytes": 19521,
+      "sha256": "a1333e64803aa449be0222601d243072a7584d430d56561fe7eb257c0f30c2a6"
+    },
+    "crates/alife_training/src/cpu/objective.rs": {
+      "bytes": 22584,
+      "sha256": "7b8100a9c649f9deb836be25477d789579bd729ae6871cdb82dea842c363666a"
+    },
+    "crates/alife_training/src/cpu/organism.rs": {
+      "bytes": 42811,
+      "sha256": "44ddb4095822cdd26433af9c7859c2e652c8cec8e4610c6cfb73964a1a7eec66"
+    },
+    "crates/alife_world/src/headless.rs": {
+      "bytes": 450724,
+      "sha256": "98ad20df3451d8080815a18f7dfc13a312a41eb623cc401d80f8545edb297740"
+    }
+  },
+  "new_world_decisions": 0,
+  "new_neural_forwards": 0,
+  "new_optimizer_updates": 0,
+  "trained_or_private_state_transferred": false,
+  "independent_payload_backup_verified": false,
+  "local_receipts_directory": "/workspace/language-native-load-only-v34"
+}

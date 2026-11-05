@@ -1749,6 +1749,9 @@ impl HeadlessWorld {
         &mut self,
         body_events: &BTreeMap<u64, BodyEventDelta>,
     ) -> Result<Tick, ScaffoldContractError> {
+        if !alife_core::load_only::permitted(alife_core::load_only::Operation::WorldAdvance) {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
         let candidate = self;
         let current_tick = candidate.tick;
         let next_tick = Tick::new(
@@ -4399,6 +4402,9 @@ impl HeadlessWorld {
         &mut self,
         command: &ActionCommand,
     ) -> Result<HeadlessActionResult, ScaffoldContractError> {
+        if !alife_core::load_only::permitted(alife_core::load_only::Operation::WorldAction) {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
         command.validate_contract()?;
         let result = self.execute_command(command)?;
         self.last_touched_entities = result.touched_entities.clone();
@@ -4451,6 +4457,9 @@ impl HeadlessWorld {
         novelty: f32,
         object_novelty: &[(WorldEntityId, f32)],
     ) -> Result<HeadlessMotorTransactionReceipt, HeadlessMotorTransactionError> {
+        if !alife_core::load_only::permitted(alife_core::load_only::Operation::WorldAction) {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
+        }
         if !novelty.is_finite()
             || !(0.0..=1.0).contains(&novelty)
             || object_novelty.len() > bundle.channels.len()
@@ -4805,6 +4814,9 @@ impl HeadlessWorld {
         outcome_tick: Tick,
         mode: RegisteredCommandMode,
     ) -> Result<HeadlessActionBiologyReceipt, ScaffoldContractError> {
+        if !alife_core::load_only::permitted(alife_core::load_only::Operation::WorldAction) {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
         let biology_before =
             self.validate_registered_action(command, world_entity_id, outcome_tick)?;
         let initial_position = self.objects[&world_entity_id.raw()].position;
@@ -4932,6 +4944,9 @@ impl HeadlessWorld {
         speech_payload: Option<SpeechMotorPayload>,
         prompted: bool,
     ) -> Result<HeadlessActionResult, ScaffoldContractError> {
+        if !alife_core::load_only::permitted(alife_core::load_only::Operation::WorldAction) {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
         command.validate_contract()?;
         if command.kind != ActionKind::Vocalize {
             if speech_payload.is_some() {

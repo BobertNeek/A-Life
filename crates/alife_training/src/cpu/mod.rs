@@ -423,6 +423,9 @@ impl CpuFoundationTrainer {
         )
     }
     fn forward(&self, sequence: &TrainingSequence) -> Result<replay::Tape, TrainingError> {
+        if !alife_core::load_only::permitted(alife_core::load_only::Operation::NeuralForward) {
+            return Err(invalid());
+        }
         sequence.validate_for(&self.phenotype)?;
         self.graph
             .forward(&self.phenotype, self.weights(), sequence)
@@ -430,6 +433,9 @@ impl CpuFoundationTrainer {
     /// One atomic AdamW commit after complete finite/age validation. Ages remain
     /// integers throughout serialization and restoration, including >2^24.
     pub fn apply_gradients(&mut self, gradients: &[f32]) -> Result<f32, TrainingError> {
+        if !alife_core::load_only::permitted(alife_core::load_only::Operation::ActorAdam) {
+            return Err(invalid());
+        }
         if gradients.len() != self.weights().len() {
             return Err(invalid());
         }

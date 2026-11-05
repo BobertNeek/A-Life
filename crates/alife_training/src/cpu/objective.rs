@@ -281,6 +281,9 @@ impl CpuValueHead {
         self.checkpoint.clone()
     }
     pub fn predict(&self, features: &[f32]) -> Result<f32, TrainingError> {
+        if !alife_core::load_only::permitted(alife_core::load_only::Operation::NeuralForward) {
+            return Err(invalid());
+        }
         let n = self.checkpoint.feature_count as usize;
         if features.len() != n {
             return Err(invalid());
@@ -299,6 +302,9 @@ impl CpuValueHead {
         config: AdamWConfig,
         policy: u64,
     ) -> Result<Self, TrainingError> {
+        if !alife_core::load_only::permitted(alife_core::load_only::Operation::CriticAdam) {
+            return Err(invalid());
+        }
         config.validate()?;
         finite(gradients)?;
         let width = self.checkpoint.feature_count as usize + 1;

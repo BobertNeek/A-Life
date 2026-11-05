@@ -31,6 +31,7 @@ pub mod ids;
 pub mod language;
 pub mod learning;
 mod legacy_nano512_compatibility;
+pub mod load_only;
 mod nano512_readout_candidate;
 pub use cognitive_channel::{
     CognitiveChannelExtensionV1, CognitiveChannelPlanV1,

@@ -70,16 +70,20 @@ update Adam, so it is unsuitable here. The old test verifier would fail on its
 create-new receipt guard in the existing output directory; no in-place retry or
 payload copy is used to evade that guard.
 
-A standalone native load-only CLI is not available. The documented native
-constructor recipe is source-inspected and backed by prior successful cold
-receipts; it is not newly executed. Cross-platform restoration or a bit-identical
-future source rebuild is unverified. Native source is pinned to
+A standalone native load-only CLI was subsequently implemented and verified;
+see [native actor/private admission](native-actor-private-load-only.md). Its
+authorized read-only check admitted14 actor and6 private checkpoints with exact
+roundtrips and zero execution/update attempts, without rerunning scored cases.
+Matching critic/version state remains absent, so joint/PPO certification is
+explicitly refused. Cross-platform restoration or a bit-identical future source
+rebuild is unverified. The original measured pilot native source is pinned to
 `ad9dc5a8410a34bc8d3d0770ea7df09f9b37e3b0`, result source to
 `1bab7e2d01e9f36a6d3a8b15deb726ad70f37f13`, and optional executable to SHA256
 `a25a715602b1cdcce7f9b8adef8e72a2986dd149ff6f7a547a5b099f21345019`.
 
 Only metadata/source files are added. The482148352-byte free-space floor remains
-preserved. The safe next step is review or metadata verification; independent
+preserved. The safe next step is review, metadata verification or the supported
+native load-only admission; independent
 backup needs the unresolved transfer authorization/destination, and joint-PPO
 continuity needs matching critic/version state. No promotion, new training,
 archive, PR/model-triggering route or automatic next experiment follows.

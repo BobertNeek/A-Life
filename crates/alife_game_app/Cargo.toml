@@ -54,6 +54,11 @@ name = "experiment_retained_language"
 path = "src/bin/experiment_retained_language.rs"
 required-features = ["cpu-training"]
 
+[[bin]]
+name = "verify_actor_private_recovery"
+path = "src/bin/verify_actor_private_recovery.rs"
+required-features = ["cpu-training"]
+
 [dependencies]
 alife_storage.workspace = true
 accesskit = { version = "=0.21.1", optional = true }
