@@ -31,5 +31,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Preserve save content and native access controls
         run: cargo test --locked -p alife_world --test atomic_portable_save -- --nocapture
-      - name: File-sync failure after a complete staged write
+      - name: Staged-write failures and native descriptors
+        if: success() || failure()
         run: cargo test --locked -p alife_world --lib persistence::atomic_save:: -- --nocapture
