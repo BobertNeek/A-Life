@@ -8,12 +8,14 @@ import sys
 import zstandard
 WORDS = {'EatFood': [8, 1], 'GetFood': [9, 1], 'GetToy': [9, 2]}
 
-def audit(path):
+def audit(path, seeds=None):
     trials = {}
     protocols = set()
     for line in io.TextIOWrapper(zstandard.ZstdDecompressor().stream_reader(path.open('rb'))):
         event = json.loads(line)
         if event.get('phase') != 'balanced_readout_evaluation':
+            continue
+        if seeds is not None and event['world_seed'] not in seeds:
             continue
         protocols.add(event.get('speech_opportunity_protocol', 'quiet-after-cue-v1'))
         row = event['row']
