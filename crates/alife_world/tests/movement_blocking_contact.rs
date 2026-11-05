@@ -35,6 +35,12 @@ fn blocked_step_reports_the_first_rock_surface_independently_of_spawn_order() {
             builder = builder.obstacle(name, Vec3f::new(x, 0.0, 0.0), 0.75);
         }
         let mut world = builder.build().unwrap();
+        let before = ["creature", "near", "far"].map(|label| {
+            world
+                .entity(world.entity_id(label).unwrap())
+                .unwrap()
+                .clone()
+        });
         let result = step(&mut world, 1.0);
         assert_eq!(
             result.execution.physical.contact,
@@ -61,6 +67,37 @@ fn blocked_step_reports_the_first_rock_surface_independently_of_spawn_order() {
                 .unwrap()
                 .position,
             Vec3f::ZERO
+        );
+        for object in before {
+            assert_eq!(world.entity(object.id), Some(&object));
+        }
+    }
+}
+
+#[test]
+fn starting_on_a_surface_keeps_contact_at_the_start_of_the_step() {
+    for intensity in [0.0, 1.0] {
+        let mut world = HeadlessScenarioBuilder::new(4242)
+            .agent("creature", OrganismId(1), Vec3f::ZERO)
+            .obstacle("far", Vec3f::new(0.82, 0.0, 0.0), 0.75)
+            .obstacle("touching", Vec3f::new(0.75, 0.0, 0.0), 0.75)
+            .build()
+            .unwrap();
+        let result = step(&mut world, intensity);
+        let touching = world.entity_id("touching").unwrap();
+        assert_eq!(
+            result.execution.physical.contact,
+            PhysicalContactKind::Blocked
+        );
+        assert_eq!(result.execution.physical.target_entity, Some(touching));
+        assert_eq!(result.execution.physical.displacement, Vec3f::ZERO);
+        assert_eq!(result.touched_entities, vec![touching]);
+        assert_eq!(
+            world
+                .sensory_report(OrganismId(1), world.tick())
+                .unwrap()
+                .touched_entities,
+            vec![touching]
         );
     }
 }
