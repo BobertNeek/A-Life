@@ -1,0 +1,3211 @@
+{
+  "kind": "experimental-matched-within-seed-frozen-gate-transfer-v28",
+  "summary": {
+    "labeled_valid_reports": 1,
+    "labeled_unsupported_reports": 3,
+    "abstentions": 12,
+    "valid_reports_preserved_by_frozen_fit": 0,
+    "unsupported_reports_suppressed_by_frozen_fit": 1,
+    "matched_valid_unsupported_pairs": 1,
+    "matched_pairs_both_correct": 0,
+    "matched_pair_word_and_prompted_cooldown_exact": 1,
+    "actual_food_consumptions": 0,
+    "actual_utterance_count": 4,
+    "all_rows_survive": true,
+    "maximum_injury": 0.0,
+    "minimum_health": 1.0,
+    "minimum_energy": 0.7909929752349854
+  },
+  "matching_and_label_protocol": {
+    "command": [
+      9,
+      1
+    ],
+    "near_distance": 0.37,
+    "far_distance": 1.6,
+    "relative_angle": 0.15,
+    "cues_at_offsets": [
+      0,
+      2
+    ],
+    "four_decisions_per_episode": true,
+    "two_existing_V26_start_seeds": [
+      19310729,
+      19508423
+    ],
+    "seeds_excluded_from_original_five_tape_fit": true,
+    "seeds_previously_assessed_not_independently_new": true,
+    "only_initial_food_position_and_its_derived_voxel_tile_differ": true,
+    "all_initial_private_world_except_placement_and_rng_exact": true,
+    "actual_matching_Declare_required_for_any_label": true,
+    "valid_requires_prior_actual_ownership_within_three_ticks": true,
+    "unsupported_requires_absent_current_and_observed_prior_matching_event_and_initial_unheld_food": true,
+    "other_rows_abstain": true
+  },
+  "frozen_gate_probe": {
+    "fit_sha256": "dd42b8111ee04ccc36ea415b62d40170baa3c41eb4c99d3d91480adcf772aed9",
+    "margin": 0.1,
+    "source_actor_compressed_sha256": "f8cf3f7a56b74e817078176ee7a3e2ca062117060a87bc0e7d6e20787aa38921",
+    "delta_vectors_offline_only": [
+      [
+        -0.2587927674851414,
+        -0.2587927674851414,
+        0.2587927674851412,
+        -0.2587927674851414,
+        -0.057702312847832754,
+        -0.2301440011554387,
+        -0.2587927674851414,
+        -0.2587927674851414,
+        -0.15426300251875513,
+        -0.2587927674851415,
+        -0.2587927674851414,
+        -0.2587927674851414,
+        -0.2587927674851414,
+        -0.2587927674851414,
+        0.2587927674851414,
+        -0.2587927674851414,
+        -0.03708004995132577,
+        -0.2587927674851414,
+        0.2587927674851414,
+        0.2587927674851414,
+        -0.2587927674851414,
+        0.2587927674851414,
+        0.2587927674851414,
+        -0.2587927674851414,
+        -0.03405213736107393,
+        0.2587927674851414,
+        0.2587927674851414,
+        -0.25879276748514063,
+        -0.1256055291223848,
+        -0.2587927674851414,
+        -0.2587927674851414,
+        -0.2587927674851414
+      ],
+      [
+        0.05961574797355583,
+        0.09109612260395968,
+        -0.09109612260395979,
+        0.09109612260395966,
+        -0.09109612260395815,
+        0.0910961226039635,
+        0.09109612260396137,
+        0.09109612260396009,
+        0.09109612260395998,
+        0.09109612260396024,
+        0.09109612260395877,
+        0.0910961226039631,
+        0.09109612260395829,
+        0.0910961226039601,
+        0.09109612260395919,
+        0.09109612260395854,
+        -0.09109612260395984,
+        -0.09109612260396006,
+        -0.0910961226039599,
+        -0.09109612260395994,
+        0.09109612260395956,
+        -0.09109612260395963,
+        0.09109612260396009,
+        -0.044192075048200934,
+        -0.06290675505445406,
+        -0.09109612260395927,
+        0.09109612260395965,
+        0.0910961226039597,
+        -0.09109612260395976,
+        0.09109612260395998,
+        0.09109612260396024,
+        0.050646295739801075
+      ]
+    ],
+    "never_installed_in_creature": true,
+    "new_fits": 0,
+    "scores_are_single_captured_state_readouts_not_real_new_utterances": true
+  },
+  "native_provenance": {
+    "source_head": "bc4be649147be920d358a0fce1c96b69a2659eda",
+    "binary_sha256": "5d65b465f321e90c9b35f5d8f812bb398989859f10fb6542092131726270021c",
+    "source_sha256": "a11068302bb22e38b29b4245a1801766076b513ae0669cffc425a6b18f796226",
+    "build": "test; alife_training opt-level2; debug0; incremental0",
+    "maximum_native_steps": 16,
+    "native_steps_in_preserved_prior_attempt": 0,
+    "new_preparation_decisions": 0,
+    "native_and_shadow_optimizer_updates_allowed": 0,
+    "offline_fit_never_installed": true,
+    "normal_admission_guards_unchanged": true,
+    "matching_exclusions": [
+      "same food position",
+      "same food derived voxel tile only"
+    ],
+    "command": [
+      "/workspace/language-within-seed-gate-v28-spatial-measured/native-test-measured",
+      "foundation_training::retained_language::curriculum::factorial::balanced::within_seed_gate_validation::record_matched_food_report_opportunities",
+      "--exact",
+      "--ignored",
+      "--nocapture"
+    ],
+    "started_at_utc": "2026-11-05T06:17:33.029667+00:00",
+    "exit_code": 0,
+    "elapsed_wall_seconds": 14.298684279012377,
+    "ended_at_utc": "2026-11-05T06:17:47.328365+00:00"
+  },
+  "native_controls": {
+    "all_actor_weights_moments_ages_config_mask_exact": true,
+    "elapsed_seconds": 13.525044887,
+    "execution_domain": "native-cpu",
+    "final_actor_sha256": "a64296c15537030f3dd7fbe967472947bd1afb3da42e1a9103bd4217dc9ec58f",
+    "gradient_probes": 0,
+    "kind": "experimental-within-seed-record-only-gate-v28",
+    "limitations": [
+      "Two V26 saved seeds, previously assessed but excluded from the five-tape separator fit; not newly independent seeds.",
+      "Food distance changes physical affordances/candidates. Later actions, sensory input, biology/private history and cooldown may diverge naturally; only initial food position differs.",
+      "Only actual matching Declare emissions are labeled. Recent physical ownership supports positives; unsupported labels refer to the observed prefix plus saved initially unheld food and prehistory.",
+      "Frozen offline coefficients are never installed or used to choose native actions. No training, refitting, reset, promotion or external model call."
+    ],
+    "matching_forks": [
+      {
+        "all_except_initial_food_position_and_its_derived_voxel_tile_identical": true,
+        "branch_full_sha256": "545624afdbdebdd3f9c4c6159d332775fd28bf5b9cd1c3f1540368a8e3a62208",
+        "common_full_sha256": "17b2abc1a88e01e84147e2fb16ce8a9daecef518b530dbfbb4ff418b0c524545",
+        "condition": "near_opportunity",
+        "food_angle": 0.15,
+        "food_distance": 0.3700000047683716,
+        "initial_native_grab_legal": true,
+        "initial_prompted_cooldown_ready": true,
+        "normalized_full_sha256": "59004f9c05ba033a7574be400d43383599a2e40d03f0b1ebdf367da5e023938b",
+        "scene": {
+          "distractor": 10,
+          "food": 1845,
+          "maturation": 0.25,
+          "prepared_tick": 456,
+          "toy": 1844
+        },
+        "seed": 19310729,
+        "source_prior_replay_events": [
+          {
+            "action_id": 212,
+            "candidate_feature_digest": [
+              12354707912099581957,
+              8421312519971332949
+            ],
+            "family": "Contact",
+            "frame_digest": [
+              14345112403463369534,
+              12432378474493942511,
+              8609742478331197554,
+              12163534890752621246
+            ],
+            "modulator": {
+              "frame": [
+                0.37060239911079407,
+                0.0,
+                -4.8408168368041515e-05,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                9.681628398539033e-06
+              ],
+              "frustration": 0.0,
+              "homeostatic_improvement": -4.8408168368041515e-05,
+              "novelty": 0.0,
+              "pain": 0.0,
+              "prediction_residual": 0.37060239911079407
+            },
+            "originating_tick": 456,
+            "sequence_id": 1
+          },
+          {
+            "action_id": 211,
+            "candidate_feature_digest": [
+              10474645306430327432,
+              1085739418680180805
+            ],
+            "family": "Contact",
+            "frame_digest": [
+              9449237128775138548,
+              13672636315834950719,
+              7299673449248976783,
+              13049926284576879443
+            ],
+            "modulator": {
+              "frame": [
+                0.37095028162002563,
+                0.0,
+                -5.081364361103624e-05,
+                0.029999999329447746,
+                0.0,
+                0.0,
+                0.0,
+                0.00601015891879797
+              ],
+              "frustration": 0.029999999329447746,
+              "homeostatic_improvement": -5.081364361103624e-05,
+              "novelty": 0.0,
+              "pain": 0.0,
+              "prediction_residual": 0.37095028162002563
+            },
+            "originating_tick": 457,
+            "sequence_id": 2
+          }
+        ]
+      },
+      {
+        "all_except_initial_food_position_and_its_derived_voxel_tile_identical": true,
+        "branch_full_sha256": "929f8d1c733bed455e7ab9b6e8f97b5e4d6167a0f638e72daf3b95cb521f73fd",
+        "common_full_sha256": "17b2abc1a88e01e84147e2fb16ce8a9daecef518b530dbfbb4ff418b0c524545",
+        "condition": "far_opportunity",
+        "food_angle": 0.15,
+        "food_distance": 1.600000023841858,
+        "initial_native_grab_legal": false,
+        "initial_prompted_cooldown_ready": true,
+        "normalized_full_sha256": "59004f9c05ba033a7574be400d43383599a2e40d03f0b1ebdf367da5e023938b",
+        "scene": {
+          "distractor": 10,
+          "food": 1845,
+          "maturation": 0.25,
+          "prepared_tick": 456,
+          "toy": 1844
+        },
+        "seed": 19310729,
+        "source_prior_replay_events": [
+          {
+            "action_id": 212,
+            "candidate_feature_digest": [
+              12354707912099581957,
+              8421312519971332949
+            ],
+            "family": "Contact",
+            "frame_digest": [
+              14345112403463369534,
+              12432378474493942511,
+              8609742478331197554,
+              12163534890752621246
+            ],
+            "modulator": {
+              "frame": [
+                0.37060239911079407,
+                0.0,
+                -4.8408168368041515e-05,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                9.681628398539033e-06
+              ],
+              "frustration": 0.0,
+              "homeostatic_improvement": -4.8408168368041515e-05,
+              "novelty": 0.0,
+              "pain": 0.0,
+              "prediction_residual": 0.37060239911079407
+            },
+            "originating_tick": 456,
+            "sequence_id": 1
+          },
+          {
+            "action_id": 211,
+            "candidate_feature_digest": [
+              10474645306430327432,
+              1085739418680180805
+            ],
+            "family": "Contact",
+            "frame_digest": [
+              9449237128775138548,
+              13672636315834950719,
+              7299673449248976783,
+              13049926284576879443
+            ],
+            "modulator": {
+              "frame": [
+                0.37095028162002563,
+                0.0,
+                -5.081364361103624e-05,
+                0.029999999329447746,
+                0.0,
+                0.0,
+                0.0,
+                0.00601015891879797
+              ],
+              "frustration": 0.029999999329447746,
+              "homeostatic_improvement": -5.081364361103624e-05,
+              "novelty": 0.0,
+              "pain": 0.0,
+              "prediction_residual": 0.37095028162002563
+            },
+            "originating_tick": 457,
+            "sequence_id": 2
+          }
+        ]
+      },
+      {
+        "all_except_initial_food_position_and_its_derived_voxel_tile_identical": true,
+        "branch_full_sha256": "ce2c8709382c83d7f33937d7f69868942f7429d842a9499c708bf0d13d5c795e",
+        "common_full_sha256": "7aefdfc56435c3f3f4ebf111f539be3a77e93c63f20522735f92f12feefd1159",
+        "condition": "near_opportunity",
+        "food_angle": 0.15,
+        "food_distance": 0.3700000047683716,
+        "initial_native_grab_legal": true,
+        "initial_prompted_cooldown_ready": true,
+        "normalized_full_sha256": "babd4462393dabfcc24f95a14819ac21d2395580a8e1c50b3a48472fa04563a2",
+        "scene": {
+          "distractor": 10,
+          "food": 1886,
+          "maturation": 0.25,
+          "prepared_tick": 456,
+          "toy": 1885
+        },
+        "seed": 19508423,
+        "source_prior_replay_events": [
+          {
+            "action_id": 400,
+            "candidate_feature_digest": [
+              11266013145350257030,
+              9089874134347797278
+            ],
+            "family": "Other",
+            "frame_digest": [
+              13011029366114804671,
+              17696575156076177751,
+              17809407012979653573,
+              15030096488814562968
+            ],
+            "modulator": {
+              "frame": [
+                0.37060239911079407,
+                0.0,
+                -4.97748187626712e-05,
+                0.029999999329447746,
+                0.0,
+                0.0,
+                0.0,
+                0.006009951233863831
+              ],
+              "frustration": 0.029999999329447746,
+              "homeostatic_improvement": -4.97748187626712e-05,
+              "novelty": 0.0,
+              "pain": 0.0,
+              "prediction_residual": 0.37060239911079407
+            },
+            "originating_tick": 456,
+            "sequence_id": 1
+          },
+          {
+            "action_id": 1,
+            "candidate_feature_digest": [
+              18306013749801743064,
+              9863945192479259718
+            ],
+            "family": "Idle",
+            "frame_digest": [
+              2445932904013259625,
+              486147101932074806,
+              17524733649342684761,
+              12284988411412285390
+            ],
+            "modulator": {
+              "frame": [
+                0.3716442883014679,
+                0.0,
+                -5.019205127609894e-05,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0038404070655815e-05
+              ],
+              "frustration": 0.0,
+              "homeostatic_improvement": -5.019205127609894e-05,
+              "novelty": 0.0,
+              "pain": 0.0,
+              "prediction_residual": 0.3716442883014679
+            },
+            "originating_tick": 457,
+            "sequence_id": 2
+          }
+        ]
+      },
+      {
+        "all_except_initial_food_position_and_its_derived_voxel_tile_identical": true,
+        "branch_full_sha256": "2528f5813034620b1c5891339e97223a2f6069333a01d325ab6ce5e3b0b8d660",
+        "common_full_sha256": "7aefdfc56435c3f3f4ebf111f539be3a77e93c63f20522735f92f12feefd1159",
+        "condition": "far_opportunity",
+        "food_angle": 0.15,
+        "food_distance": 1.600000023841858,
+        "initial_native_grab_legal": false,
+        "initial_prompted_cooldown_ready": true,
+        "normalized_full_sha256": "babd4462393dabfcc24f95a14819ac21d2395580a8e1c50b3a48472fa04563a2",
+        "scene": {
+          "distractor": 10,
+          "food": 1886,
+          "maturation": 0.25,
+          "prepared_tick": 456,
+          "toy": 1885
+        },
+        "seed": 19508423,
+        "source_prior_replay_events": [
+          {
+            "action_id": 400,
+            "candidate_feature_digest": [
+              11266013145350257030,
+              9089874134347797278
+            ],
+            "family": "Other",
+            "frame_digest": [
+              13011029366114804671,
+              17696575156076177751,
+              17809407012979653573,
+              15030096488814562968
+            ],
+            "modulator": {
+              "frame": [
+                0.37060239911079407,
+                0.0,
+                -4.97748187626712e-05,
+                0.029999999329447746,
+                0.0,
+                0.0,
+                0.0,
+                0.006009951233863831
+              ],
+              "frustration": 0.029999999329447746,
+              "homeostatic_improvement": -4.97748187626712e-05,
+              "novelty": 0.0,
+              "pain": 0.0,
+              "prediction_residual": 0.37060239911079407
+            },
+            "originating_tick": 456,
+            "sequence_id": 1
+          },
+          {
+            "action_id": 1,
+            "candidate_feature_digest": [
+              18306013749801743064,
+              9863945192479259718
+            ],
+            "family": "Idle",
+            "frame_digest": [
+              2445932904013259625,
+              486147101932074806,
+              17524733649342684761,
+              12284988411412285390
+            ],
+            "modulator": {
+              "frame": [
+                0.3716442883014679,
+                0.0,
+                -5.019205127609894e-05,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0038404070655815e-05
+              ],
+              "frustration": 0.0,
+              "homeostatic_improvement": -5.019205127609894e-05,
+              "novelty": 0.0,
+              "pain": 0.0,
+              "prediction_residual": 0.3716442883014679
+            },
+            "originating_tick": 457,
+            "sequence_id": 2
+          }
+        ]
+      }
+    ],
+    "native_or_shadow_optimizer_updates": 0,
+    "preparation_decisions": 0,
+    "provider_calls": 0,
+    "source_actor_sha256": "a64296c15537030f3dd7fbe967472947bd1afb3da42e1a9103bd4217dc9ec58f",
+    "source_optimizer_step": 436,
+    "total_native_steps_and_scored_decisions": 16
+  },
+  "matching_pair": {
+    "matched_pair_seed": 19508423,
+    "report_offset": 1,
+    "decoder_input_l2_difference": 0.5869462901812535,
+    "decoder_input_cosine": 0.9990473838619699,
+    "all32_features_equal": false,
+    "same_word_lanes": true,
+    "same_speech_weight_offsets": true,
+    "prior_native_actions": [
+      {
+        "row": 9,
+        "condition": "near_opportunity",
+        "selected_action": {
+          "abi_version": 2,
+          "action_id": 210,
+          "arbitration_trace": null,
+          "confidence": 0.9680628776550293,
+          "duration_ticks": 1,
+          "intensity": 1.0,
+          "kind": "Interact",
+          "motor_payload": null,
+          "organism_id": 1,
+          "source_mask": 0,
+          "target_entity": 1886,
+          "target_position": {
+            "x": 3.365845203399658,
+            "y": 0.0,
+            "z": 0.05529211461544037
+          },
+          "teacher_lesson": null
+        },
+        "selected_bundle": {
+          "channels": [
+            {
+              "channel": "Locomotion",
+              "confidence": 1.0,
+              "coordination_group": 0,
+              "direction": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+              },
+              "duration_ticks": 1,
+              "intensity": 1.0,
+              "payload": {
+                "values": []
+              },
+              "primitive": 103,
+              "stand_off_distance": 0.0,
+              "target": null
+            },
+            {
+              "channel": "Manipulation",
+              "confidence": 0.9680628776550293,
+              "coordination_group": 0,
+              "direction": {
+                "x": 3.365845203399658,
+                "y": 0.0,
+                "z": 0.05529211461544037
+              },
+              "duration_ticks": 1,
+              "intensity": 1.0,
+              "payload": {
+                "values": []
+              },
+              "primitive": 210,
+              "stand_off_distance": 0.0,
+              "target": {
+                "entity": 1886,
+                "position": {
+                  "x": 3.365845203399658,
+                  "y": 0.0,
+                  "z": 0.05529211461544037
+                }
+              }
+            }
+          ],
+          "coordination": {
+            "groups": [
+              {
+                "channels": [
+                  "Locomotion",
+                  "Manipulation"
+                ],
+                "group_id": 0
+              }
+            ]
+          },
+          "organism_id": 1,
+          "schema_version": 1,
+          "sequence_id": 3,
+          "tick": 458
+        },
+        "physical_outcome": {
+          "collision_normal": null,
+          "contact": "Touch",
+          "displacement": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "energy_cost": 0.05999999865889549,
+          "target_entity": 1886
+        },
+        "success": true,
+        "owned_before": [
+          null,
+          null
+        ],
+        "owned_after": [
+          1,
+          null
+        ],
+        "event": {
+          "lesson": "GetFood",
+          "patch_sha256": "8df96ea5120b7c4ce8d4035182d93d781b36cdfbe497a0b3a7d3e8b39880e787",
+          "tick": 458
+        }
+      },
+      {
+        "row": 13,
+        "condition": "far_opportunity",
+        "selected_action": {
+          "abi_version": 2,
+          "action_id": 4,
+          "arbitration_trace": null,
+          "confidence": 0.8119935989379883,
+          "duration_ticks": 1,
+          "intensity": 1.0,
+          "kind": "Inspect",
+          "motor_payload": null,
+          "organism_id": 1,
+          "source_mask": 0,
+          "target_entity": 1886,
+          "target_position": {
+            "x": 4.582033634185791,
+            "y": 0.0,
+            "z": 0.23910103738307953
+          },
+          "teacher_lesson": null
+        },
+        "selected_bundle": {
+          "channels": [
+            {
+              "channel": "Locomotion",
+              "confidence": 1.0,
+              "coordination_group": 0,
+              "direction": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+              },
+              "duration_ticks": 1,
+              "intensity": 1.0,
+              "payload": {
+                "values": []
+              },
+              "primitive": 103,
+              "stand_off_distance": 0.0,
+              "target": null
+            },
+            {
+              "channel": "Posture",
+              "confidence": 0.8119935989379883,
+              "coordination_group": 0,
+              "direction": {
+                "x": 4.582033634185791,
+                "y": 0.0,
+                "z": 0.23910103738307953
+              },
+              "duration_ticks": 1,
+              "intensity": 1.0,
+              "payload": {
+                "values": []
+              },
+              "primitive": 4,
+              "stand_off_distance": 0.0,
+              "target": {
+                "entity": 1886,
+                "position": {
+                  "x": 4.582033634185791,
+                  "y": 0.0,
+                  "z": 0.23910103738307953
+                }
+              }
+            }
+          ],
+          "coordination": {
+            "groups": [
+              {
+                "channels": [
+                  "Locomotion",
+                  "Posture"
+                ],
+                "group_id": 0
+              }
+            ]
+          },
+          "organism_id": 1,
+          "schema_version": 1,
+          "sequence_id": 3,
+          "tick": 458
+        },
+        "physical_outcome": {
+          "collision_normal": null,
+          "contact": "None",
+          "displacement": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "energy_cost": 0.019999999552965164,
+          "target_entity": 1886
+        },
+        "success": true,
+        "owned_before": [
+          null,
+          null
+        ],
+        "owned_after": [
+          null,
+          null
+        ],
+        "event": null
+      }
+    ],
+    "valid": {
+      "native_first_gates": [
+        1.5153783559799194,
+        -1.059136152267456
+      ],
+      "frozen_first_gates": [
+        -0.043620944023132324,
+        -0.01865965873003006
+      ],
+      "native_tokens": [
+        9,
+        1
+      ],
+      "frozen_tokens": [
+        1
+      ]
+    },
+    "unsupported": {
+      "native_first_gates": [
+        1.395310640335083,
+        -0.9759396910667419
+      ],
+      "frozen_first_gates": [
+        -0.09717237949371338,
+        0.05753149837255478
+      ],
+      "native_tokens": [
+        9,
+        1
+      ],
+      "frozen_tokens": []
+    }
+  },
+  "all_scored_rows": [
+    {
+      "number": 1,
+      "seed": 19310729,
+      "condition": "near_opportunity",
+      "offset": 0,
+      "tick": 458,
+      "label": "unsupported_observed_prefix",
+      "actual_emitted": [
+        {
+          "addressee": null,
+          "confidence": 0.7529411911964417,
+          "emitted_tick": 458,
+          "expires_after_tick": 459,
+          "source_kind": "Creature",
+          "source_position": {
+            "x": 3.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "speaker_id": 1,
+          "teacher_channel": null,
+          "tokens": [
+            9,
+            1
+          ],
+          "utterance_id": 2
+        }
+      ],
+      "prior_actual_events": [],
+      "current_actual_event": null,
+      "recent_matching_support": null,
+      "latest_prior_event_matches": false,
+      "owned_before": [
+        null,
+        null
+      ],
+      "owned_after": [
+        null,
+        null
+      ],
+      "actual_food_consumption": false,
+      "prompted_cooldown_ready": true,
+      "unprompted_cooldown_ready": true,
+      "first_two_heard_slots": [
+        9,
+        1
+      ],
+      "native_conditional_payload": {
+        "tokens": [
+          9,
+          1
+        ],
+        "visited_steps": [
+          0,
+          1
+        ],
+        "gate_logits_all_six_steps": [
+          [
+            1.068265676498413,
+            -0.6613306999206543
+          ],
+          [
+            0.9544743299484253,
+            0.78883957862854
+          ],
+          [
+            0.9221801161766052,
+            1.0736371278762817
+          ],
+          [
+            0.8958631157875061,
+            1.124158501625061
+          ],
+          [
+            0.8780310153961182,
+            1.1702783107757568
+          ],
+          [
+            0.8689360618591309,
+            1.230741024017334
+          ]
+        ]
+      },
+      "frozen_offline_conditional_payload": {
+        "tokens": [
+          9
+        ],
+        "visited_steps": [
+          0
+        ],
+        "gate_logits_all_six_steps": [
+          [
+            0.1081535816192627,
+            0.1441897749900818
+          ],
+          [
+            0.3391576409339905,
+            1.6755918264389038
+          ],
+          [
+            0.604997992515564,
+            2.111140727996826
+          ],
+          [
+            0.45440733432769775,
+            2.178708791732788
+          ],
+          [
+            0.3055967688560486,
+            2.2458202838897705
+          ],
+          [
+            0.13057857751846313,
+            2.33431339263916
+          ]
+        ]
+      },
+      "verdict": "failed_unsupported_report",
+      "safety": {
+        "alive": true,
+        "energy": 0.791469156742096,
+        "health": 1.0,
+        "injury": 0.0,
+        "pain": 0.0
+      },
+      "native_full_row_sha256": "5d15e4da547e1f7943e11e61f51932bafc5be0e030a8c4a960422952bb9e01d1",
+      "new_global_optimizer_updates": 0
+    },
+    {
+      "number": 2,
+      "seed": 19310729,
+      "condition": "near_opportunity",
+      "offset": 1,
+      "tick": 459,
+      "label": "abstain_no_actual_matching_declare",
+      "actual_emitted": [],
+      "prior_actual_events": [],
+      "current_actual_event": {
+        "lesson": "GetFood",
+        "patch_sha256": "902756b35fcf195665bf6f5a2deb667e9e81e9ea571378397aae919918836c52",
+        "tick": 459
+      },
+      "recent_matching_support": null,
+      "latest_prior_event_matches": false,
+      "owned_before": [
+        null,
+        null
+      ],
+      "owned_after": [
+        1,
+        null
+      ],
+      "actual_food_consumption": false,
+      "prompted_cooldown_ready": false,
+      "unprompted_cooldown_ready": false,
+      "first_two_heard_slots": [
+        9,
+        1
+      ],
+      "native_conditional_payload": {
+        "tokens": [
+          9,
+          1
+        ],
+        "visited_steps": [
+          0,
+          1
+        ],
+        "gate_logits_all_six_steps": [
+          [
+            1.336220145225525,
+            -0.9433068037033081
+          ],
+          [
+            1.2101033926010132,
+            0.9518271088600159
+          ],
+          [
+            1.1950212717056274,
+            1.2479135990142822
+          ],
+          [
+            1.1550267934799194,
+            1.3076648712158203
+          ],
+          [
+            1.127578616142273,
+            1.3799892663955688
+          ],
+          [
+            1.137884497642517,
+            1.495285987854004
+          ]
+        ]
+      },
+      "frozen_offline_conditional_payload": {
+        "tokens": [],
+        "visited_steps": [
+          0
+        ],
+        "gate_logits_all_six_steps": [
+          [
+            -0.01360410451889038,
+            0.05381307005882263
+          ],
+          [
+            0.23435163497924805,
+            2.0669751167297363
+          ],
+          [
+            0.5457068085670471,
+            2.530731201171875
+          ],
+          [
+            0.32309675216674805,
+            2.6171274185180664
+          ],
+          [
+            0.08850076794624329,
+            2.728175401687622
+          ],
+          [
+            -0.18912652134895325,
+            2.8925297260284424
+          ]
+        ]
+      },
+      "verdict": "abstain_unlabeled_actual_state",
+      "safety": {
+        "alive": true,
+        "energy": 0.7913093566894531,
+        "health": 1.0,
+        "injury": 0.0,
+        "pain": 0.0
+      },
+      "native_full_row_sha256": "c9e77afd3c58705cb395c383b5dbb887a0fd717a4676870cff8d1a2134c48a16",
+      "new_global_optimizer_updates": 0
+    },
+    {
+      "number": 3,
+      "seed": 19310729,
+      "condition": "near_opportunity",
+      "offset": 2,
+      "tick": 460,
+      "label": "abstain_no_actual_matching_declare",
+      "actual_emitted": [],
+      "prior_actual_events": [
+        {
+          "lesson": "GetFood",
+          "patch_sha256": "902756b35fcf195665bf6f5a2deb667e9e81e9ea571378397aae919918836c52",
+          "tick": 459
+        }
+      ],
+      "current_actual_event": null,
+      "recent_matching_support": {
+        "lesson": "GetFood",
+        "patch_sha256": "902756b35fcf195665bf6f5a2deb667e9e81e9ea571378397aae919918836c52",
+        "tick": 459
+      },
+      "latest_prior_event_matches": true,
+      "owned_before": [
+        1,
+        null
+      ],
+      "owned_after": [
+        1,
+        null
+      ],
+      "actual_food_consumption": false,
+      "prompted_cooldown_ready": false,
+      "unprompted_cooldown_ready": false,
+      "first_two_heard_slots": [
+        9,
+        1
+      ],
+      "native_conditional_payload": {
+        "tokens": [
+          9,
+          1
+        ],
+        "visited_steps": [
+          0,
+          1
+        ],
+        "gate_logits_all_six_steps": [
+          [
+            1.4608029127120972,
+            -1.1453622579574585
+          ],
+          [
+            1.3453490734100342,
+            0.9768117070198059
+          ],
+          [
+            1.3344519138336182,
+            1.2710086107254028
+          ],
+          [
+            1.2885838747024536,
+            1.3350471258163452
+          ],
+          [
+            1.2567921876907349,
+            1.417585015296936
+          ],
+          [
+            1.2787277698516846,
+            1.550431728363037
+          ]
+        ]
+      },
+      "frozen_offline_conditional_payload": {
+        "tokens": [
+          9,
+          1
+        ],
+        "visited_steps": [
+          0,
+          1
+        ],
+        "gate_logits_all_six_steps": [
+          [
+            0.17146438360214233,
+            -0.15246038138866425
+          ],
+          [
+            0.42907071113586426,
+            2.123354196548462
+          ],
+          [
+            0.7403720617294312,
+            2.5954537391662598
+          ],
+          [
+            0.4915657937526703,
+            2.6860804557800293
+          ],
+          [
+            0.22447866201400757,
+            2.811401844024658
+          ],
+          [
+            -0.08071070164442062,
+            2.998577833175659
+          ]
+        ]
+      },
+      "verdict": "abstain_unlabeled_actual_state",
+      "safety": {
+        "alive": true,
+        "energy": 0.7911540865898132,
+        "health": 1.0,
+        "injury": 0.0,
+        "pain": 0.0
+      },
+      "native_full_row_sha256": "4acf721b586590bb2dc34368627ee9a2b206a1a6c6dc9ccfa0fba86dd233f5c1",
+      "new_global_optimizer_updates": 0
+    },
+    {
+      "number": 4,
+      "seed": 19310729,
+      "condition": "near_opportunity",
+      "offset": 3,
+      "tick": 461,
+      "label": "abstain_no_actual_matching_declare",
+      "actual_emitted": [],
+      "prior_actual_events": [
+        {
+          "lesson": "GetFood",
+          "patch_sha256": "902756b35fcf195665bf6f5a2deb667e9e81e9ea571378397aae919918836c52",
+          "tick": 459
+        }
+      ],
+      "current_actual_event": null,
+      "recent_matching_support": {
+        "lesson": "GetFood",
+        "patch_sha256": "902756b35fcf195665bf6f5a2deb667e9e81e9ea571378397aae919918836c52",
+        "tick": 459
+      },
+      "latest_prior_event_matches": true,
+      "owned_before": [
+        1,
+        null
+      ],
+      "owned_after": [
+        1,
+        null
+      ],
+      "actual_food_consumption": false,
+      "prompted_cooldown_ready": false,
+      "unprompted_cooldown_ready": false,
+      "first_two_heard_slots": [
+        9,
+        1
+      ],
+      "native_conditional_payload": {
+        "tokens": [
+          9,
+          1
+        ],
+        "visited_steps": [
+          0,
+          1
+        ],
+        "gate_logits_all_six_steps": [
+          [
+            1.4701244831085205,
+            -1.2141691446304321
+          ],
+          [
+            1.3681392669677734,
+            0.9846505522727966
+          ],
+          [
+            1.355043888092041,
+            1.2849880456924438
+          ],
+          [
+            1.3078198432922363,
+            1.347269058227539
+          ],
+          [
+            1.274086594581604,
+            1.426249384880066
+          ],
+          [
+            1.285860538482666,
+            1.55210542678833
+          ]
+        ]
+      },
+      "frozen_offline_conditional_payload": {
+        "tokens": [
+          9,
+          1
+        ],
+        "visited_steps": [
+          0,
+          1
+        ],
+        "gate_logits_all_six_steps": [
+          [
+            0.20004189014434814,
+            -0.19753457605838776
+          ],
+          [
+            0.44186246395111084,
+            2.162248373031616
+          ],
+          [
+            0.7592364549636841,
+            2.6439270973205566
+          ],
+          [
+            0.5071987509727478,
+            2.733103036880493
+          ],
+          [
+            0.24249573051929474,
+            2.8541815280914307
+          ],
+          [
+            -0.06010453402996063,
+            3.034109592437744
+          ]
+        ]
+      },
+      "verdict": "abstain_unlabeled_actual_state",
+      "safety": {
+        "alive": true,
+        "energy": 0.7909975051879883,
+        "health": 1.0,
+        "injury": 0.0,
+        "pain": 0.0
+      },
+      "native_full_row_sha256": "8e620839e2df8d41c08358a33eaace57807ed77371c0cc5d103680183864d4d5",
+      "new_global_optimizer_updates": 0
+    },
+    {
+      "number": 5,
+      "seed": 19310729,
+      "condition": "far_opportunity",
+      "offset": 0,
+      "tick": 458,
+      "label": "unsupported_observed_prefix",
+      "actual_emitted": [
+        {
+          "addressee": null,
+          "confidence": 0.7176470756530762,
+          "emitted_tick": 458,
+          "expires_after_tick": 459,
+          "source_kind": "Creature",
+          "source_position": {
+            "x": 3.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "speaker_id": 1,
+          "teacher_channel": null,
+          "tokens": [
+            9,
+            1
+          ],
+          "utterance_id": 2
+        }
+      ],
+      "prior_actual_events": [],
+      "current_actual_event": null,
+      "recent_matching_support": null,
+      "latest_prior_event_matches": false,
+      "owned_before": [
+        null,
+        null
+      ],
+      "owned_after": [
+        null,
+        null
+      ],
+      "actual_food_consumption": false,
+      "prompted_cooldown_ready": true,
+      "unprompted_cooldown_ready": true,
+      "first_two_heard_slots": [
+        9,
+        1
+      ],
+      "native_conditional_payload": {
+        "tokens": [
+          9,
+          1
+        ],
+        "visited_steps": [
+          0,
+          1
+        ],
+        "gate_logits_all_six_steps": [
+          [
+            0.9831290245056152,
+            -0.6860039830207825
+          ],
+          [
+            0.8665050268173218,
+            0.7190524339675903
+          ],
+          [
+            0.8316592574119568,
+            1.0091296434402466
+          ],
+          [
+            0.80899578332901,
+            1.0593637228012085
+          ],
+          [
+            0.7937943935394287,
+            1.1005442142486572
+          ],
+          [
+            0.7840821743011475,
+            1.1499063968658447
+          ]
+        ]
+      },
+      "frozen_offline_conditional_payload": {
+        "tokens": [
+          9
+        ],
+        "visited_steps": [
+          0
+        ],
+        "gate_logits_all_six_steps": [
+          [
+            0.1282978057861328,
+            0.09154292196035385
+          ],
+          [
+            0.32750168442726135,
+            1.574188232421875
+          ],
+          [
+            0.6018681526184082,
+            2.0179784297943115
+          ],
+          [
+            0.47411125898361206,
+            2.0840835571289062
+          ],
+          [
+            0.3482956886291504,
+            2.1425414085388184
+          ],
+          [
+            0.20406387746334076,
+            2.214433431625366
+          ]
+        ]
+      },
+      "verdict": "failed_unsupported_report",
+      "safety": {
+        "alive": true,
+        "energy": 0.791469156742096,
+        "health": 1.0,
+        "injury": 0.0,
+        "pain": 0.0
+      },
+      "native_full_row_sha256": "b71fb5a1a5a50b86ed73e86994a7274f132f7e513fe707c996e2e856812749e4",
+      "new_global_optimizer_updates": 0
+    },
+    {
+      "number": 6,
+      "seed": 19310729,
+      "condition": "far_opportunity",
+      "offset": 1,
+      "tick": 459,
+      "label": "abstain_no_actual_matching_declare",
+      "actual_emitted": [],
+      "prior_actual_events": [],
+      "current_actual_event": null,
+      "recent_matching_support": null,
+      "latest_prior_event_matches": false,
+      "owned_before": [
+        null,
+        null
+      ],
+      "owned_after": [
+        null,
+        null
+      ],
+      "actual_food_consumption": false,
+      "prompted_cooldown_ready": false,
+      "unprompted_cooldown_ready": false,
+      "first_two_heard_slots": [
+        9,
+        1
+      ],
+      "native_conditional_payload": {
+        "tokens": [
+          9,
+          1
+        ],
+        "visited_steps": [
+          0,
+          1
+        ],
+        "gate_logits_all_six_steps": [
+          [
+            1.2701611518859863,
+            -0.9622912406921387
+          ],
+          [
+            1.1411503553390503,
+            0.8996771574020386
+          ],
+          [
+            1.125083565711975,
+            1.2000012397766113
+          ],
+          [
+            1.088594913482666,
+            1.257994294166565
+          ],
+          [
+            1.0627952814102173,
+            1.3239765167236328
+          ],
+          [
+            1.0635273456573486,
+            1.4260426759719849
+          ]
+        ]
+      },
+      "frozen_offline_conditional_payload": {
+        "tokens": [
+          9
+        ],
+        "visited_steps": [
+          0
+        ],
+        "gate_logits_all_six_steps": [
+          [
+            0.0034737586975097656,
+            0.011878713965415955
+          ],
+          [
+            0.22812384366989136,
+            1.990628957748413
+          ],
+          [
+            0.550449788570404,
+            2.4600236415863037
+          ],
+          [
+            0.34678375720977783,
+            2.5424067974090576
+          ],
+          [
+            0.13269539177417755,
+            2.6431868076324463
+          ],
+          [
+            -0.1269753873348236,
+            2.790994882583618
+          ]
+        ]
+      },
+      "verdict": "abstain_unlabeled_actual_state",
+      "safety": {
+        "alive": true,
+        "energy": 0.7913231253623962,
+        "health": 1.0,
+        "injury": 0.0,
+        "pain": 0.0
+      },
+      "native_full_row_sha256": "1f9f6431f3c4c6a6c7f18278958ed9bcd6c776fa0b302f90358d32300a49e90c",
+      "new_global_optimizer_updates": 0
+    },
+    {
+      "number": 7,
+      "seed": 19310729,
+      "condition": "far_opportunity",
+      "offset": 2,
+      "tick": 460,
+      "label": "abstain_no_actual_matching_declare",
+      "actual_emitted": [],
+      "prior_actual_events": [],
+      "current_actual_event": null,
+      "recent_matching_support": null,
+      "latest_prior_event_matches": false,
+      "owned_before": [
+        null,
+        null
+      ],
+      "owned_after": [
+        null,
+        null
+      ],
+      "actual_food_consumption": false,
+      "prompted_cooldown_ready": false,
+      "unprompted_cooldown_ready": false,
+      "first_two_heard_slots": [
+        9,
+        1
+      ],
+      "native_conditional_payload": {
+        "tokens": [
+          9,
+          1
+        ],
+        "visited_steps": [
+          0,
+          1
+        ],
+        "gate_logits_all_six_steps": [
+          [
+            1.3371710777282715,
+            -1.0667142868041992
+          ],
+          [
+            1.23017418384552,
+            0.9502564668655396
+          ],
+          [
+            1.2110024690628052,
+            1.2630163431167603
+          ],
+          [
+            1.1691317558288574,
+            1.3207179307937622
+          ],
+          [
+            1.1391589641571045,
+            1.388208031654358
+          ],
+          [
+            1.1371673345565796,
+            1.4928779602050781
+          ]
+        ]
+      },
+      "frozen_offline_conditional_payload": {
+        "tokens": [
+          9,
+          1
+        ],
+        "visited_steps": [
+          0,
+          1
+        ],
+        "gate_logits_all_six_steps": [
+          [
+            0.03470909595489502,
+            -0.036521755158901215
+          ],
+          [
+            0.22435438632965088,
+            2.127183675765991
+          ],
+          [
+            0.5556241869926453,
+            2.6142659187316895
+          ],
+          [
+            0.3286670446395874,
+            2.6997008323669434
+          ],
+          [
+            0.09795376658439636,
+            2.8053128719329834
+          ],
+          [
+            -0.17355838418006897,
+            2.9584927558898926
+          ]
+        ]
+      },
+      "verdict": "abstain_unlabeled_actual_state",
+      "safety": {
+        "alive": true,
+        "energy": 0.7911677956581116,
+        "health": 1.0,
+        "injury": 0.0,
+        "pain": 0.0
+      },
+      "native_full_row_sha256": "a16fe6ef49fde6349e44cf14595aa296c909605a2474ab9b723f51f4e7a3701d",
+      "new_global_optimizer_updates": 0
+    },
+    {
+      "number": 8,
+      "seed": 19310729,
+      "condition": "far_opportunity",
+      "offset": 3,
+      "tick": 461,
+      "label": "abstain_no_actual_matching_declare",
+      "actual_emitted": [],
+      "prior_actual_events": [],
+      "current_actual_event": null,
+      "recent_matching_support": null,
+      "latest_prior_event_matches": false,
+      "owned_before": [
+        null,
+        null
+      ],
+      "owned_after": [
+        null,
+        null
+      ],
+      "actual_food_consumption": false,
+      "prompted_cooldown_ready": false,
+      "unprompted_cooldown_ready": false,
+      "first_two_heard_slots": [
+        9,
+        1
+      ],
+      "native_conditional_payload": {
+        "tokens": [
+          9,
+          1
+        ],
+        "visited_steps": [
+          0,
+          1
+        ],
+        "gate_logits_all_six_steps": [
+          [
+            1.355538249015808,
+            -1.1288052797317505
+          ],
+          [
+            1.262557029724121,
+            0.9661554098129272
+          ],
+          [
+            1.2409336566925049,
+            1.286586046218872
+          ],
+          [
+            1.1971560716629028,
+            1.3430249691009521
+          ],
+          [
+            1.1655378341674805,
+            1.4085534811019897
+          ],
+          [
+            1.1588726043701172,
+            1.5089789628982544
+          ]
+        ]
+      },
+      "frozen_offline_conditional_payload": {
+        "tokens": [
+          9,
+          1
+        ],
+        "visited_steps": [
+          0,
+          1
+        ],
+        "gate_logits_all_six_steps": [
+          [
+            0.05000793933868408,
+            -0.0675697773694992
+          ],
+          [
+            0.22534209489822388,
+            2.1812829971313477
+          ],
+          [
+            0.5633825063705444,
+            2.67866849899292
+          ],
+          [
+            0.32969075441360474,
+            2.763885736465454
+          ],
+          [
+            0.0979764312505722,
+            2.8677468299865723
+          ],
+          [
+            -0.17108076810836792,
+            3.0164926052093506
+          ]
+        ]
+      },
+      "verdict": "abstain_unlabeled_actual_state",
+      "safety": {
+        "alive": true,
+        "energy": 0.7910113334655762,
+        "health": 1.0,
+        "injury": 0.0,
+        "pain": 0.0
+      },
+      "native_full_row_sha256": "336c1ea69a5912562cbf414d4d2e253e1608d156e8c8b012184422d26beb2352",
+      "new_global_optimizer_updates": 0
+    },
+    {
+      "number": 9,
+      "seed": 19508423,
+      "condition": "near_opportunity",
+      "offset": 0,
+      "tick": 458,
+      "label": "abstain_no_actual_matching_declare",
+      "actual_emitted": [],
+      "prior_actual_events": [],
+      "current_actual_event": {
+        "lesson": "GetFood",
+        "patch_sha256": "8df96ea5120b7c4ce8d4035182d93d781b36cdfbe497a0b3a7d3e8b39880e787",
+        "tick": 458
+      },
+      "recent_matching_support": null,
+      "latest_prior_event_matches": false,
+      "owned_before": [
+        null,
+        null
+      ],
+      "owned_after": [
+        1,
+        null
+      ],
+      "actual_food_consumption": false,
+      "prompted_cooldown_ready": true,
+      "unprompted_cooldown_ready": true,
+      "first_two_heard_slots": [
+        9,
+        1
+      ],
+      "native_conditional_payload": {
+        "tokens": [
+          9,
+          1
+        ],
+        "visited_steps": [
+          0,
+          1
+        ],
+        "gate_logits_all_six_steps": [
+          [
+            1.151099443435669,
+            -0.6905840039253235
+          ],
+          [
+            1.018846035003662,
+            0.8509319424629211
+          ],
+          [
+            0.9967197775840759,
+            1.1247587203979492
+          ],
+          [
+            0.9671115875244141,
+            1.1798951625823975
+          ],
+          [
+            0.9467800855636597,
+            1.2381824254989624
+          ],
+          [
+            0.9459618926048279,
+            1.3249551057815552
+          ]
+        ]
+      },
+      "frozen_offline_conditional_payload": {
+        "tokens": [],
+        "visited_steps": [
+          0
+        ],
+        "gate_logits_all_six_steps": [
+          [
+            -0.0029050111770629883,
+            0.17947572469711304
+          ],
+          [
+            0.2958031892776489,
+            1.7845985889434814
+          ],
+          [
+            0.5621287226676941,
+            2.210752010345459
+          ],
+          [
+            0.3906955122947693,
+            2.284198045730591
+          ],
+          [
+            0.20841586589813232,
+            2.369472026824951
+          ],
+          [
+            -0.016386181116104126,
+            2.49361252784729
+          ]
+        ]
+      },
+      "verdict": "abstain_unlabeled_actual_state",
+      "safety": {
+        "alive": true,
+        "energy": 0.7914554476737976,
+        "health": 1.0,
+        "injury": 0.0,
+        "pain": 0.0
+      },
+      "native_full_row_sha256": "28992f99eaa194e66a43cc26dbcc7f9723cce4d837c2944cc382f82577eecb3c",
+      "new_global_optimizer_updates": 0
+    },
+    {
+      "number": 10,
+      "seed": 19508423,
+      "condition": "near_opportunity",
+      "offset": 1,
+      "tick": 459,
+      "label": "supported_recent",
+      "actual_emitted": [
+        {
+          "addressee": null,
+          "confidence": 0.7686274647712708,
+          "emitted_tick": 459,
+          "expires_after_tick": 460,
+          "source_kind": "Creature",
+          "source_position": {
+            "x": 3.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "speaker_id": 1,
+          "teacher_channel": null,
+          "tokens": [
+            9,
+            1
+          ],
+          "utterance_id": 2
+        }
+      ],
+      "prior_actual_events": [
+        {
+          "lesson": "GetFood",
+          "patch_sha256": "8df96ea5120b7c4ce8d4035182d93d781b36cdfbe497a0b3a7d3e8b39880e787",
+          "tick": 458
+        }
+      ],
+      "current_actual_event": null,
+      "recent_matching_support": {
+        "lesson": "GetFood",
+        "patch_sha256": "8df96ea5120b7c4ce8d4035182d93d781b36cdfbe497a0b3a7d3e8b39880e787",
+        "tick": 458
+      },
+      "latest_prior_event_matches": true,
+      "owned_before": [
+        1,
+        null
+      ],
+      "owned_after": [
+        1,
+        null
+      ],
+      "actual_food_consumption": false,
+      "prompted_cooldown_ready": true,
+      "unprompted_cooldown_ready": true,
+      "first_two_heard_slots": [
+        9,
+        1
+      ],
+      "native_conditional_payload": {
+        "tokens": [
+          9,
+          1
+        ],
+        "visited_steps": [
+          0,
+          1
+        ],
+        "gate_logits_all_six_steps": [
+          [
+            1.5153783559799194,
+            -1.059136152267456
+          ],
+          [
+            1.3639286756515503,
+            1.0127747058868408
+          ],
+          [
+            1.361854910850525,
+            1.2893056869506836
+          ],
+          [
+            1.315259575843811,
+            1.365267038345337
+          ],
+          [
+            1.2909296751022339,
+            1.473468542098999
+          ],
+          [
+            1.387447714805603,
+            1.6448191404342651
+          ]
+        ]
+      },
+      "frozen_offline_conditional_payload": {
+        "tokens": [
+          1
+        ],
+        "visited_steps": [
+          0,
+          1
+        ],
+        "gate_logits_all_six_steps": [
+          [
+            -0.043620944023132324,
+            -0.01865965873003006
+          ],
+          [
+            0.34554025530815125,
+            2.151264190673828
+          ],
+          [
+            0.6389167308807373,
+            2.5983364582061768
+          ],
+          [
+            0.3801558017730713,
+            2.7027575969696045
+          ],
+          [
+            0.08095104992389679,
+            2.8620212078094482
+          ],
+          [
+            -0.2281915247440338,
+            3.085968255996704
+          ]
+        ]
+      },
+      "verdict": "failed_valid_report",
+      "safety": {
+        "alive": true,
+        "energy": 0.7913047671318054,
+        "health": 1.0,
+        "injury": 0.0,
+        "pain": 0.0
+      },
+      "native_full_row_sha256": "88659f8ae7a86d6fe65739eac3092fa6f00b63b8fd114c84ad2c978821399012",
+      "new_global_optimizer_updates": 0
+    },
+    {
+      "number": 11,
+      "seed": 19508423,
+      "condition": "near_opportunity",
+      "offset": 2,
+      "tick": 460,
+      "label": "abstain_no_actual_matching_declare",
+      "actual_emitted": [],
+      "prior_actual_events": [
+        {
+          "lesson": "GetFood",
+          "patch_sha256": "8df96ea5120b7c4ce8d4035182d93d781b36cdfbe497a0b3a7d3e8b39880e787",
+          "tick": 458
+        }
+      ],
+      "current_actual_event": null,
+      "recent_matching_support": {
+        "lesson": "GetFood",
+        "patch_sha256": "8df96ea5120b7c4ce8d4035182d93d781b36cdfbe497a0b3a7d3e8b39880e787",
+        "tick": 458
+      },
+      "latest_prior_event_matches": true,
+      "owned_before": [
+        1,
+        null
+      ],
+      "owned_after": [
+        1,
+        null
+      ],
+      "actual_food_consumption": false,
+      "prompted_cooldown_ready": false,
+      "unprompted_cooldown_ready": false,
+      "first_two_heard_slots": [
+        9,
+        1
+      ],
+      "native_conditional_payload": {
+        "tokens": [
+          9,
+          1
+        ],
+        "visited_steps": [
+          0,
+          1
+        ],
+        "gate_logits_all_six_steps": [
+          [
+            1.5694246292114258,
+            -1.175883412361145
+          ],
+          [
+            1.4344816207885742,
+            1.048211932182312
+          ],
+          [
+            1.4305899143218994,
+            1.3328410387039185
+          ],
+          [
+            1.3793721199035645,
+            1.4082940816879272
+          ],
+          [
+            1.3499937057495117,
+            1.5160460472106934
+          ],
+          [
+            1.4362343549728394,
+            1.6848169565200806
+          ]
+        ]
+      },
+      "frozen_offline_conditional_payload": {
+        "tokens": [
+          9,
+          1
+        ],
+        "visited_steps": [
+          0,
+          1
+        ],
+        "gate_logits_all_six_steps": [
+          [
+            0.01540374755859375,
+            -0.09797082841396332
+          ],
+          [
+            0.3612169027328491,
+            2.2594728469848633
+          ],
+          [
+            0.6610209941864014,
+            2.7209370136260986
+          ],
+          [
+            0.3854959309101105,
+            2.8270533084869385
+          ],
+          [
+            0.07599364221096039,
+            2.987962007522583
+          ],
+          [
+            -0.23733030259609222,
+            3.2115964889526367
+          ]
+        ]
+      },
+      "verdict": "abstain_unlabeled_actual_state",
+      "safety": {
+        "alive": true,
+        "energy": 0.7911494374275208,
+        "health": 1.0,
+        "injury": 0.0,
+        "pain": 0.0
+      },
+      "native_full_row_sha256": "74f9c303cdf48e037ad75976f8b2d57b71b6038177a1a4895319810259bfaa2b",
+      "new_global_optimizer_updates": 0
+    },
+    {
+      "number": 12,
+      "seed": 19508423,
+      "condition": "near_opportunity",
+      "offset": 3,
+      "tick": 461,
+      "label": "abstain_no_actual_matching_declare",
+      "actual_emitted": [],
+      "prior_actual_events": [
+        {
+          "lesson": "GetFood",
+          "patch_sha256": "8df96ea5120b7c4ce8d4035182d93d781b36cdfbe497a0b3a7d3e8b39880e787",
+          "tick": 458
+        }
+      ],
+      "current_actual_event": null,
+      "recent_matching_support": {
+        "lesson": "GetFood",
+        "patch_sha256": "8df96ea5120b7c4ce8d4035182d93d781b36cdfbe497a0b3a7d3e8b39880e787",
+        "tick": 458
+      },
+      "latest_prior_event_matches": true,
+      "owned_before": [
+        1,
+        null
+      ],
+      "owned_after": [
+        1,
+        null
+      ],
+      "actual_food_consumption": false,
+      "prompted_cooldown_ready": false,
+      "unprompted_cooldown_ready": false,
+      "first_two_heard_slots": [
+        9,
+        1
+      ],
+      "native_conditional_payload": {
+        "tokens": [
+          9,
+          1
+        ],
+        "visited_steps": [
+          0,
+          1
+        ],
+        "gate_logits_all_six_steps": [
+          [
+            1.5243605375289917,
+            -1.2179511785507202
+          ],
+          [
+            1.4133923053741455,
+            1.0257389545440674
+          ],
+          [
+            1.404122233390808,
+            1.3195706605911255
+          ],
+          [
+            1.353969931602478,
+            1.3869600296020508
+          ],
+          [
+            1.3199245929718018,
+            1.4774541854858398
+          ],
+          [
+            1.3550113439559937,
+            1.6222832202911377
+          ]
+        ]
+      },
+      "frozen_offline_conditional_payload": {
+        "tokens": [
+          9,
+          1
+        ],
+        "visited_steps": [
+          0,
+          1
+        ],
+        "gate_logits_all_six_steps": [
+          [
+            0.13751769065856934,
+            -0.16698849201202393
+          ],
+          [
+            0.41191941499710083,
+            2.2338850498199463
+          ],
+          [
+            0.721725583076477,
+            2.7083866596221924
+          ],
+          [
+            0.45590925216674805,
+            2.8043196201324463
+          ],
+          [
+            0.16933366656303406,
+            2.9418914318084717
+          ],
+          [
+            -0.14554408192634583,
+            3.143545627593994
+          ]
+        ]
+      },
+      "verdict": "abstain_unlabeled_actual_state",
+      "safety": {
+        "alive": true,
+        "energy": 0.7909929752349854,
+        "health": 1.0,
+        "injury": 0.0,
+        "pain": 0.0
+      },
+      "native_full_row_sha256": "f395e3660c188147045287b45385ad9a8be9f4e2a09ae2b54796c36db7582e53",
+      "new_global_optimizer_updates": 0
+    },
+    {
+      "number": 13,
+      "seed": 19508423,
+      "condition": "far_opportunity",
+      "offset": 0,
+      "tick": 458,
+      "label": "abstain_no_actual_matching_declare",
+      "actual_emitted": [],
+      "prior_actual_events": [],
+      "current_actual_event": null,
+      "recent_matching_support": null,
+      "latest_prior_event_matches": false,
+      "owned_before": [
+        null,
+        null
+      ],
+      "owned_after": [
+        null,
+        null
+      ],
+      "actual_food_consumption": false,
+      "prompted_cooldown_ready": true,
+      "unprompted_cooldown_ready": true,
+      "first_two_heard_slots": [
+        9,
+        1
+      ],
+      "native_conditional_payload": {
+        "tokens": [
+          9,
+          1
+        ],
+        "visited_steps": [
+          0,
+          1
+        ],
+        "gate_logits_all_six_steps": [
+          [
+            1.1214008331298828,
+            -0.696518063545227
+          ],
+          [
+            0.9865873456001282,
+            0.8188706040382385
+          ],
+          [
+            0.9648414850234985,
+            1.0950416326522827
+          ],
+          [
+            0.9379482865333557,
+            1.148566484451294
+          ],
+          [
+            0.9194498062133789,
+            1.2021371126174927
+          ],
+          [
+            0.9154898524284363,
+            1.2787362337112427
+          ]
+        ]
+      },
+      "frozen_offline_conditional_payload": {
+        "tokens": [
+          9
+        ],
+        "visited_steps": [
+          0
+        ],
+        "gate_logits_all_six_steps": [
+          [
+            0.028302490711212158,
+            0.14295914769172668
+          ],
+          [
+            0.30390337109565735,
+            1.725322961807251
+          ],
+          [
+            0.5798520445823669,
+            2.1543915271759033
+          ],
+          [
+            0.42211514711380005,
+            2.2257566452026367
+          ],
+          [
+            0.2563110888004303,
+            2.304006338119507
+          ],
+          [
+            0.05326099693775177,
+            2.4144980907440186
+          ]
+        ]
+      },
+      "verdict": "abstain_unlabeled_actual_state",
+      "safety": {
+        "alive": true,
+        "energy": 0.7914645075798035,
+        "health": 1.0,
+        "injury": 0.0,
+        "pain": 0.0
+      },
+      "native_full_row_sha256": "a662524b90be0b509c4c62db5784f955915360ebc75cfb395c7a06dab2cbc27c",
+      "new_global_optimizer_updates": 0
+    },
+    {
+      "number": 14,
+      "seed": 19508423,
+      "condition": "far_opportunity",
+      "offset": 1,
+      "tick": 459,
+      "label": "unsupported_observed_prefix",
+      "actual_emitted": [
+        {
+          "addressee": null,
+          "confidence": 0.7843137383460999,
+          "emitted_tick": 459,
+          "expires_after_tick": 460,
+          "source_kind": "Creature",
+          "source_position": {
+            "x": 3.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "speaker_id": 1,
+          "teacher_channel": null,
+          "tokens": [
+            9,
+            1
+          ],
+          "utterance_id": 2
+        }
+      ],
+      "prior_actual_events": [],
+      "current_actual_event": null,
+      "recent_matching_support": null,
+      "latest_prior_event_matches": false,
+      "owned_before": [
+        null,
+        null
+      ],
+      "owned_after": [
+        null,
+        null
+      ],
+      "actual_food_consumption": false,
+      "prompted_cooldown_ready": true,
+      "unprompted_cooldown_ready": true,
+      "first_two_heard_slots": [
+        9,
+        1
+      ],
+      "native_conditional_payload": {
+        "tokens": [
+          9,
+          1
+        ],
+        "visited_steps": [
+          0,
+          1
+        ],
+        "gate_logits_all_six_steps": [
+          [
+            1.395310640335083,
+            -0.9759396910667419
+          ],
+          [
+            1.2523778676986694,
+            0.9842819571495056
+          ],
+          [
+            1.2451369762420654,
+            1.2710012197494507
+          ],
+          [
+            1.2038873434066772,
+            1.3360605239868164
+          ],
+          [
+            1.177548885345459,
+            1.4205318689346313
+          ],
+          [
+            1.2118885517120361,
+            1.558530569076538
+          ]
+        ]
+      },
+      "frozen_offline_conditional_payload": {
+        "tokens": [],
+        "visited_steps": [
+          0
+        ],
+        "gate_logits_all_six_steps": [
+          [
+            -0.09717237949371338,
+            0.05753149837255478
+          ],
+          [
+            0.20837454497814178,
+            2.1191933155059814
+          ],
+          [
+            0.5192650556564331,
+            2.575540781021118
+          ],
+          [
+            0.28887850046157837,
+            2.668961524963379
+          ],
+          [
+            0.035426974296569824,
+            2.7971103191375732
+          ],
+          [
+            -0.25969159603118896,
+            2.9869942665100098
+          ]
+        ]
+      },
+      "verdict": "suppressed_unsupported_report",
+      "safety": {
+        "alive": true,
+        "energy": 0.791313886642456,
+        "health": 1.0,
+        "injury": 0.0,
+        "pain": 0.0
+      },
+      "native_full_row_sha256": "fc688f25efdafb54986c677dc0c7af4847f36f5301d38670e545e472e82894db",
+      "new_global_optimizer_updates": 0
+    },
+    {
+      "number": 15,
+      "seed": 19508423,
+      "condition": "far_opportunity",
+      "offset": 2,
+      "tick": 460,
+      "label": "abstain_no_actual_matching_declare",
+      "actual_emitted": [],
+      "prior_actual_events": [],
+      "current_actual_event": null,
+      "recent_matching_support": null,
+      "latest_prior_event_matches": false,
+      "owned_before": [
+        null,
+        null
+      ],
+      "owned_after": [
+        null,
+        null
+      ],
+      "actual_food_consumption": false,
+      "prompted_cooldown_ready": false,
+      "unprompted_cooldown_ready": false,
+      "first_two_heard_slots": [
+        9,
+        1
+      ],
+      "native_conditional_payload": {
+        "tokens": [
+          9,
+          1
+        ],
+        "visited_steps": [
+          0,
+          1
+        ],
+        "gate_logits_all_six_steps": [
+          [
+            1.4457744359970093,
+            -1.0845247507095337
+          ],
+          [
+            1.3203383684158325,
+            1.021788477897644
+          ],
+          [
+            1.3106440305709839,
+            1.3199796676635742
+          ],
+          [
+            1.2647864818572998,
+            1.384381651878357
+          ],
+          [
+            1.2341690063476562,
+            1.468542218208313
+          ],
+          [
+            1.261220932006836,
+            1.604646921157837
+          ]
+        ]
+      },
+      "frozen_offline_conditional_payload": {
+        "tokens": [
+          1
+        ],
+        "visited_steps": [
+          0,
+          1
+        ],
+        "gate_logits_all_six_steps": [
+          [
+            -0.05834561586380005,
+            -0.0047911182045936584
+          ],
+          [
+            0.20034265518188477,
+            2.236966609954834
+          ],
+          [
+            0.5220979452133179,
+            2.7102158069610596
+          ],
+          [
+            0.27403736114501953,
+            2.8056881427764893
+          ],
+          [
+            0.009986042976379395,
+            2.935760736465454
+          ],
+          [
+            -0.2902991771697998,
+            3.1256301403045654
+          ]
+        ]
+      },
+      "verdict": "abstain_unlabeled_actual_state",
+      "safety": {
+        "alive": true,
+        "energy": 0.7911586165428162,
+        "health": 1.0,
+        "injury": 0.0,
+        "pain": 0.0
+      },
+      "native_full_row_sha256": "ecbd9f6900c49950616e497bee5dea875114e7d12377c862d5a322829ab32879",
+      "new_global_optimizer_updates": 0
+    },
+    {
+      "number": 16,
+      "seed": 19508423,
+      "condition": "far_opportunity",
+      "offset": 3,
+      "tick": 461,
+      "label": "abstain_no_actual_matching_declare",
+      "actual_emitted": [],
+      "prior_actual_events": [],
+      "current_actual_event": null,
+      "recent_matching_support": null,
+      "latest_prior_event_matches": false,
+      "owned_before": [
+        null,
+        null
+      ],
+      "owned_after": [
+        null,
+        null
+      ],
+      "actual_food_consumption": false,
+      "prompted_cooldown_ready": false,
+      "unprompted_cooldown_ready": false,
+      "first_two_heard_slots": [
+        9,
+        1
+      ],
+      "native_conditional_payload": {
+        "tokens": [
+          9,
+          1
+        ],
+        "visited_steps": [
+          0,
+          1
+        ],
+        "gate_logits_all_six_steps": [
+          [
+            1.4059213399887085,
+            -1.1224067211151123
+          ],
+          [
+            1.308389663696289,
+            1.0060508251190186
+          ],
+          [
+            1.2900735139846802,
+            1.319983720779419
+          ],
+          [
+            1.244065523147583,
+            1.3785483837127686
+          ],
+          [
+            1.2113398313522339,
+            1.4500305652618408
+          ],
+          [
+            1.2125335931777954,
+            1.5623259544372559
+          ]
+        ]
+      },
+      "frozen_offline_conditional_payload": {
+        "tokens": [
+          9,
+          1
+        ],
+        "visited_steps": [
+          0,
+          1
+        ],
+        "gate_logits_all_six_steps": [
+          [
+            0.02844250202178955,
+            -0.04802060127258301
+          ],
+          [
+            0.22471249103546143,
+            2.233956813812256
+          ],
+          [
+            0.5563001036643982,
+            2.724918842315674
+          ],
+          [
+            0.31142133474349976,
+            2.813728094100952
+          ],
+          [
+            0.06501005589962006,
+            2.9267053604125977
+          ],
+          [
+            -0.2178870290517807,
+            3.090221881866455
+          ]
+        ]
+      },
+      "verdict": "abstain_unlabeled_actual_state",
+      "safety": {
+        "alive": true,
+        "energy": 0.791002094745636,
+        "health": 1.0,
+        "injury": 0.0,
+        "pain": 0.0
+      },
+      "native_full_row_sha256": "97840dfbb1449b5c602788dcbfdadd2c569dec2c5130d4002f5760658871fec9",
+      "new_global_optimizer_updates": 0
+    }
+  ],
+  "pair_matching": [
+    {
+      "seed": 19310729,
+      "offset": 0,
+      "near_label": "unsupported_observed_prefix",
+      "far_label": "unsupported_observed_prefix",
+      "both_actual_matching_declarations": true,
+      "valid_unsupported_label_pair": false,
+      "same_actual_tick": true,
+      "same_sampling_counter": true,
+      "same_first_two_heard_slots": true,
+      "near_heard": [
+        9,
+        1
+      ],
+      "far_heard": [
+        9,
+        1
+      ],
+      "same_native_word_lanes": true,
+      "same_prompted_cooldown_ready": true,
+      "near_prompted_ready": true,
+      "far_prompted_ready": true,
+      "same_unprompted_ready": true,
+      "same_pre_forward_neural_initial": true,
+      "same_effective_speech_offsets": true,
+      "changed_pre_state_paths_count": 3,
+      "changed_pre_state_path_samples": [
+        "/world/world/voxel_backend/world_resource_refs/0/tile/x",
+        "/world/world/objects/3/position/z",
+        "/world/world/objects/3/position/x"
+      ],
+      "both_frozen_classifications_correct": false
+    },
+    {
+      "seed": 19310729,
+      "offset": 1,
+      "near_label": "abstain_no_actual_matching_declare",
+      "far_label": "abstain_no_actual_matching_declare",
+      "both_actual_matching_declarations": false,
+      "valid_unsupported_label_pair": false,
+      "same_actual_tick": true,
+      "same_sampling_counter": true,
+      "same_first_two_heard_slots": true,
+      "near_heard": [
+        9,
+        1
+      ],
+      "far_heard": [
+        9,
+        1
+      ],
+      "same_native_word_lanes": true,
+      "same_prompted_cooldown_ready": true,
+      "near_prompted_ready": false,
+      "far_prompted_ready": false,
+      "same_unprompted_ready": true,
+      "same_pre_forward_neural_initial": false,
+      "same_effective_speech_offsets": false,
+      "changed_pre_state_paths_count": 11394,
+      "changed_pre_state_path_samples": [
+        "/tracked_objects/0/records/0/stable_physical_descriptor/11",
+        "/world/world/organism_records/0/state_graph/brain/content_digest/0",
+        "/world/world/organism_records/0/state_graph/brain/content_digest/1",
+        "/world/world/organism_records/0/state_graph/brain/content_digest/2",
+        "/world/world/organism_records/0/state_graph/brain/content_digest/3",
+        "/world/world/organism_records/0/state_graph/memory/content_digest/0",
+        "/world/world/organism_records/0/state_graph/memory/content_digest/1",
+        "/world/world/organism_records/0/state_graph/memory/content_digest/2",
+        "/world/world/organism_records/0/state_graph/memory/content_digest/3",
+        "/world/world/voxel_backend/world_resource_refs/0/tile/x",
+        "/world/world/audible_utterances/1/confidence",
+        "/world/world/objects/3/position/z",
+        "/world/world/objects/3/position/x",
+        "/residents/0/neural/eligibility/512",
+        "/residents/0/neural/eligibility/513",
+        "/residents/0/neural/eligibility/514",
+        "/residents/0/neural/eligibility/515",
+        "/residents/0/neural/eligibility/516",
+        "/residents/0/neural/eligibility/517",
+        "/residents/0/neural/eligibility/518",
+        "/residents/0/neural/eligibility/519",
+        "/residents/0/neural/eligibility/520",
+        "/residents/0/neural/eligibility/521",
+        "/residents/0/neural/eligibility/522",
+        "/residents/0/neural/eligibility/523",
+        "/residents/0/neural/eligibility/524",
+        "/residents/0/neural/eligibility/525",
+        "/residents/0/neural/eligibility/526",
+        "/residents/0/neural/eligibility/527",
+        "/residents/0/neural/eligibility/528",
+        "/residents/0/neural/eligibility/529",
+        "/residents/0/neural/eligibility/530",
+        "/residents/0/neural/eligibility/531",
+        "/residents/0/neural/eligibility/532",
+        "/residents/0/neural/eligibility/533",
+        "/residents/0/neural/eligibility/534",
+        "/residents/0/neural/eligibility/535",
+        "/residents/0/neural/eligibility/536",
+        "/residents/0/neural/eligibility/537",
+        "/residents/0/neural/eligibility/538"
+      ],
+      "both_frozen_classifications_correct": false
+    },
+    {
+      "seed": 19310729,
+      "offset": 2,
+      "near_label": "abstain_no_actual_matching_declare",
+      "far_label": "abstain_no_actual_matching_declare",
+      "both_actual_matching_declarations": false,
+      "valid_unsupported_label_pair": false,
+      "same_actual_tick": true,
+      "same_sampling_counter": true,
+      "same_first_two_heard_slots": true,
+      "near_heard": [
+        9,
+        1
+      ],
+      "far_heard": [
+        9,
+        1
+      ],
+      "same_native_word_lanes": true,
+      "same_prompted_cooldown_ready": true,
+      "near_prompted_ready": false,
+      "far_prompted_ready": false,
+      "same_unprompted_ready": true,
+      "same_pre_forward_neural_initial": false,
+      "same_effective_speech_offsets": false,
+      "changed_pre_state_paths_count": 32963,
+      "changed_pre_state_path_samples": [
+        "/tracked_objects/0/records/0/stable_physical_descriptor/11",
+        "/world/world/organism_records/0/biochemistry/pending_prediction_residual/activity",
+        "/world/world/organism_records/0/biochemistry/graph_state/concentrations/0",
+        "/world/world/organism_records/0/biochemistry/graph_state/concentrations/6",
+        "/world/world/organism_records/0/biochemistry/graph_state/concentrations/9",
+        "/world/world/organism_records/0/biochemistry/body/energy",
+        "/world/world/organism_records/0/biochemistry/body/organs/0/energy",
+        "/world/world/organism_records/0/biochemistry/body/organs/1/energy",
+        "/world/world/organism_records/0/biochemistry/body/organs/2/energy",
+        "/world/world/organism_records/0/biochemistry/body/organs/3/energy",
+        "/world/world/organism_records/0/biochemistry/body/organs/4/energy",
+        "/world/world/organism_records/0/biochemistry/body/organs/5/energy",
+        "/world/world/organism_records/0/biochemistry/homeostasis/drives/hunger",
+        "/world/world/organism_records/0/biochemistry/homeostasis/drives/brain_atp",
+        "/world/world/organism_records/0/biochemistry/homeostasis/hormones/adrenaline",
+        "/world/world/organism_records/0/state_graph/body_biochemistry/content_digest/0",
+        "/world/world/organism_records/0/state_graph/body_biochemistry/content_digest/1",
+        "/world/world/organism_records/0/state_graph/body_biochemistry/content_digest/2",
+        "/world/world/organism_records/0/state_graph/body_biochemistry/content_digest/3",
+        "/world/world/organism_records/0/state_graph/brain/content_digest/0",
+        "/world/world/organism_records/0/state_graph/brain/content_digest/1",
+        "/world/world/organism_records/0/state_graph/brain/content_digest/2",
+        "/world/world/organism_records/0/state_graph/brain/content_digest/3",
+        "/world/world/organism_records/0/state_graph/memory/content_digest/0",
+        "/world/world/organism_records/0/state_graph/memory/content_digest/1",
+        "/world/world/organism_records/0/state_graph/memory/content_digest/2",
+        "/world/world/organism_records/0/state_graph/memory/content_digest/3",
+        "/world/world/voxel_backend/world_resource_refs/0/tile/x",
+        "/world/world/last_touched_entities",
+        "/world/world/objects/3/grounded_physical/velocity/z",
+        "/world/world/objects/3/grounded_physical/velocity/x",
+        "/world/world/objects/3/carried_by",
+        "/world/world/objects/3/activity_hold",
+        "/world/world/objects/3/position/z",
+        "/world/world/objects/3/position/x",
+        "/world/creatures/0/mind/homeostasis/drives/hunger",
+        "/world/creatures/0/mind/homeostasis/drives/brain_atp",
+        "/world/creatures/0/mind/homeostasis/hormones/adrenaline",
+        "/residents/0/neural/eligibility/512",
+        "/residents/0/neural/eligibility/513"
+      ],
+      "both_frozen_classifications_correct": false
+    },
+    {
+      "seed": 19310729,
+      "offset": 3,
+      "near_label": "abstain_no_actual_matching_declare",
+      "far_label": "abstain_no_actual_matching_declare",
+      "both_actual_matching_declarations": false,
+      "valid_unsupported_label_pair": false,
+      "same_actual_tick": true,
+      "same_sampling_counter": true,
+      "same_first_two_heard_slots": true,
+      "near_heard": [
+        9,
+        1
+      ],
+      "far_heard": [
+        9,
+        1
+      ],
+      "same_native_word_lanes": true,
+      "same_prompted_cooldown_ready": true,
+      "near_prompted_ready": false,
+      "far_prompted_ready": false,
+      "same_unprompted_ready": true,
+      "same_pre_forward_neural_initial": false,
+      "same_effective_speech_offsets": false,
+      "changed_pre_state_paths_count": 41386,
+      "changed_pre_state_path_samples": [
+        "/tracked_objects/0/records/0/stable_physical_descriptor/11",
+        "/world/world/organism_records/0/biochemistry/pending_prediction_residual/activity",
+        "/world/world/organism_records/0/biochemistry/graph_state/concentrations/0",
+        "/world/world/organism_records/0/biochemistry/graph_state/concentrations/6",
+        "/world/world/organism_records/0/biochemistry/graph_state/concentrations/15",
+        "/world/world/organism_records/0/biochemistry/body/energy",
+        "/world/world/organism_records/0/biochemistry/body/organs/0/energy",
+        "/world/world/organism_records/0/biochemistry/body/organs/1/energy",
+        "/world/world/organism_records/0/biochemistry/body/organs/2/energy",
+        "/world/world/organism_records/0/biochemistry/body/organs/3/energy",
+        "/world/world/organism_records/0/biochemistry/body/organs/4/energy",
+        "/world/world/organism_records/0/biochemistry/body/organs/5/energy",
+        "/world/world/organism_records/0/biochemistry/homeostasis/drives/hunger",
+        "/world/world/organism_records/0/biochemistry/homeostasis/drives/brain_atp",
+        "/world/world/organism_records/0/biochemistry/homeostasis/hormones/learning_modulator",
+        "/world/world/organism_records/0/cognitive_energy_debit",
+        "/world/world/organism_records/0/cognitive_work/weighted_total",
+        "/world/world/organism_records/0/cognitive_work/focal_target_ops",
+        "/world/world/organism_records/0/cognitive_work/memory_ops",
+        "/world/world/organism_records/0/cognitive_work/concept_ops",
+        "/world/world/organism_records/0/state_graph/body_biochemistry/content_digest/0",
+        "/world/world/organism_records/0/state_graph/body_biochemistry/content_digest/1",
+        "/world/world/organism_records/0/state_graph/body_biochemistry/content_digest/2",
+        "/world/world/organism_records/0/state_graph/body_biochemistry/content_digest/3",
+        "/world/world/organism_records/0/state_graph/brain/content_digest/0",
+        "/world/world/organism_records/0/state_graph/brain/content_digest/1",
+        "/world/world/organism_records/0/state_graph/brain/content_digest/2",
+        "/world/world/organism_records/0/state_graph/brain/content_digest/3",
+        "/world/world/organism_records/0/state_graph/memory/content_digest/0",
+        "/world/world/organism_records/0/state_graph/memory/content_digest/1",
+        "/world/world/organism_records/0/state_graph/memory/content_digest/2",
+        "/world/world/organism_records/0/state_graph/memory/content_digest/3",
+        "/world/world/voxel_backend/world_resource_refs/0/tile/x",
+        "/world/world/objects/3/carried_by",
+        "/world/world/objects/3/activity_hold",
+        "/world/world/objects/3/position/z",
+        "/world/world/objects/3/position/x",
+        "/world/creatures/0/mind/homeostasis/drives/hunger",
+        "/world/creatures/0/mind/homeostasis/drives/brain_atp",
+        "/world/creatures/0/mind/homeostasis/hormones/learning_modulator"
+      ],
+      "both_frozen_classifications_correct": false
+    },
+    {
+      "seed": 19508423,
+      "offset": 0,
+      "near_label": "abstain_no_actual_matching_declare",
+      "far_label": "abstain_no_actual_matching_declare",
+      "both_actual_matching_declarations": false,
+      "valid_unsupported_label_pair": false,
+      "same_actual_tick": true,
+      "same_sampling_counter": true,
+      "same_first_two_heard_slots": true,
+      "near_heard": [
+        9,
+        1
+      ],
+      "far_heard": [
+        9,
+        1
+      ],
+      "same_native_word_lanes": true,
+      "same_prompted_cooldown_ready": true,
+      "near_prompted_ready": true,
+      "far_prompted_ready": true,
+      "same_unprompted_ready": true,
+      "same_pre_forward_neural_initial": true,
+      "same_effective_speech_offsets": true,
+      "changed_pre_state_paths_count": 3,
+      "changed_pre_state_path_samples": [
+        "/world/world/voxel_backend/world_resource_refs/0/tile/x",
+        "/world/world/objects/3/position/z",
+        "/world/world/objects/3/position/x"
+      ],
+      "both_frozen_classifications_correct": false
+    },
+    {
+      "seed": 19508423,
+      "offset": 1,
+      "near_label": "supported_recent",
+      "far_label": "unsupported_observed_prefix",
+      "both_actual_matching_declarations": true,
+      "valid_unsupported_label_pair": true,
+      "same_actual_tick": true,
+      "same_sampling_counter": true,
+      "same_first_two_heard_slots": true,
+      "near_heard": [
+        9,
+        1
+      ],
+      "far_heard": [
+        9,
+        1
+      ],
+      "same_native_word_lanes": true,
+      "same_prompted_cooldown_ready": true,
+      "near_prompted_ready": true,
+      "far_prompted_ready": true,
+      "same_unprompted_ready": true,
+      "same_pre_forward_neural_initial": false,
+      "same_effective_speech_offsets": true,
+      "changed_pre_state_paths_count": 30728,
+      "changed_pre_state_path_samples": [
+        "/tracked_objects/0/records/0/stable_physical_descriptor/11",
+        "/world/world/organism_records/0/biochemistry/pending_prediction_residual/activity",
+        "/world/world/organism_records/0/biochemistry/graph_state/concentrations/0",
+        "/world/world/organism_records/0/biochemistry/graph_state/concentrations/5",
+        "/world/world/organism_records/0/biochemistry/graph_state/concentrations/6",
+        "/world/world/organism_records/0/biochemistry/graph_state/concentrations/9",
+        "/world/world/organism_records/0/biochemistry/body/energy",
+        "/world/world/organism_records/0/biochemistry/body/organs/0/energy",
+        "/world/world/organism_records/0/biochemistry/body/organs/1/energy",
+        "/world/world/organism_records/0/biochemistry/body/organs/2/energy",
+        "/world/world/organism_records/0/biochemistry/body/organs/3/energy",
+        "/world/world/organism_records/0/biochemistry/body/organs/4/energy",
+        "/world/world/organism_records/0/biochemistry/body/organs/5/energy",
+        "/world/world/organism_records/0/biochemistry/homeostasis/drives/hunger",
+        "/world/world/organism_records/0/biochemistry/homeostasis/drives/curiosity",
+        "/world/world/organism_records/0/biochemistry/homeostasis/drives/brain_atp",
+        "/world/world/organism_records/0/biochemistry/homeostasis/hormones/adrenaline",
+        "/world/world/organism_records/0/state_graph/body_biochemistry/content_digest/0",
+        "/world/world/organism_records/0/state_graph/body_biochemistry/content_digest/1",
+        "/world/world/organism_records/0/state_graph/body_biochemistry/content_digest/2",
+        "/world/world/organism_records/0/state_graph/body_biochemistry/content_digest/3",
+        "/world/world/organism_records/0/state_graph/brain/content_digest/0",
+        "/world/world/organism_records/0/state_graph/brain/content_digest/1",
+        "/world/world/organism_records/0/state_graph/brain/content_digest/2",
+        "/world/world/organism_records/0/state_graph/brain/content_digest/3",
+        "/world/world/organism_records/0/state_graph/memory/content_digest/0",
+        "/world/world/organism_records/0/state_graph/memory/content_digest/1",
+        "/world/world/organism_records/0/state_graph/memory/content_digest/2",
+        "/world/world/organism_records/0/state_graph/memory/content_digest/3",
+        "/world/world/voxel_backend/world_resource_refs/0/tile/x",
+        "/world/world/last_touched_entities",
+        "/world/world/objects/3/grounded_physical/velocity/z",
+        "/world/world/objects/3/grounded_physical/velocity/x",
+        "/world/world/objects/3/carried_by",
+        "/world/world/objects/3/activity_hold",
+        "/world/world/objects/3/position/z",
+        "/world/world/objects/3/position/x",
+        "/world/creatures/0/mind/homeostasis/drives/hunger",
+        "/world/creatures/0/mind/homeostasis/drives/curiosity",
+        "/world/creatures/0/mind/homeostasis/drives/brain_atp"
+      ],
+      "both_frozen_classifications_correct": false
+    },
+    {
+      "seed": 19508423,
+      "offset": 2,
+      "near_label": "abstain_no_actual_matching_declare",
+      "far_label": "abstain_no_actual_matching_declare",
+      "both_actual_matching_declarations": false,
+      "valid_unsupported_label_pair": false,
+      "same_actual_tick": true,
+      "same_sampling_counter": true,
+      "same_first_two_heard_slots": true,
+      "near_heard": [
+        9,
+        1
+      ],
+      "far_heard": [
+        9,
+        1
+      ],
+      "same_native_word_lanes": true,
+      "same_prompted_cooldown_ready": true,
+      "near_prompted_ready": false,
+      "far_prompted_ready": false,
+      "same_unprompted_ready": true,
+      "same_pre_forward_neural_initial": false,
+      "same_effective_speech_offsets": false,
+      "changed_pre_state_paths_count": 43080,
+      "changed_pre_state_path_samples": [
+        "/tracked_objects/0/records/0/stable_physical_descriptor/11",
+        "/world/world/organism_records/0/biochemistry/pending_prediction_residual/activity",
+        "/world/world/organism_records/0/biochemistry/graph_state/concentrations/0",
+        "/world/world/organism_records/0/biochemistry/graph_state/concentrations/5",
+        "/world/world/organism_records/0/biochemistry/graph_state/concentrations/6",
+        "/world/world/organism_records/0/biochemistry/graph_state/concentrations/9",
+        "/world/world/organism_records/0/biochemistry/graph_state/concentrations/15",
+        "/world/world/organism_records/0/biochemistry/body/energy",
+        "/world/world/organism_records/0/biochemistry/body/organs/0/energy",
+        "/world/world/organism_records/0/biochemistry/body/organs/1/energy",
+        "/world/world/organism_records/0/biochemistry/body/organs/2/energy",
+        "/world/world/organism_records/0/biochemistry/body/organs/3/energy",
+        "/world/world/organism_records/0/biochemistry/body/organs/4/energy",
+        "/world/world/organism_records/0/biochemistry/body/organs/5/energy",
+        "/world/world/organism_records/0/biochemistry/homeostasis/drives/hunger",
+        "/world/world/organism_records/0/biochemistry/homeostasis/drives/curiosity",
+        "/world/world/organism_records/0/biochemistry/homeostasis/drives/brain_atp",
+        "/world/world/organism_records/0/biochemistry/homeostasis/hormones/adrenaline",
+        "/world/world/organism_records/0/biochemistry/homeostasis/hormones/learning_modulator",
+        "/world/world/organism_records/0/cognitive_energy_debit",
+        "/world/world/organism_records/0/cognitive_work/weighted_total",
+        "/world/world/organism_records/0/cognitive_work/focal_target_ops",
+        "/world/world/organism_records/0/state_graph/body_biochemistry/content_digest/0",
+        "/world/world/organism_records/0/state_graph/body_biochemistry/content_digest/1",
+        "/world/world/organism_records/0/state_graph/body_biochemistry/content_digest/2",
+        "/world/world/organism_records/0/state_graph/body_biochemistry/content_digest/3",
+        "/world/world/organism_records/0/state_graph/brain/content_digest/0",
+        "/world/world/organism_records/0/state_graph/brain/content_digest/1",
+        "/world/world/organism_records/0/state_graph/brain/content_digest/2",
+        "/world/world/organism_records/0/state_graph/brain/content_digest/3",
+        "/world/world/organism_records/0/state_graph/memory/content_digest/0",
+        "/world/world/organism_records/0/state_graph/memory/content_digest/1",
+        "/world/world/organism_records/0/state_graph/memory/content_digest/2",
+        "/world/world/organism_records/0/state_graph/memory/content_digest/3",
+        "/world/world/voxel_backend/world_resource_refs/0/tile/x",
+        "/world/world/audible_utterances/0/confidence",
+        "/world/world/objects/3/carried_by",
+        "/world/world/objects/3/activity_hold",
+        "/world/world/objects/3/position/z",
+        "/world/world/objects/3/position/x"
+      ],
+      "both_frozen_classifications_correct": false
+    },
+    {
+      "seed": 19508423,
+      "offset": 3,
+      "near_label": "abstain_no_actual_matching_declare",
+      "far_label": "abstain_no_actual_matching_declare",
+      "both_actual_matching_declarations": false,
+      "valid_unsupported_label_pair": false,
+      "same_actual_tick": true,
+      "same_sampling_counter": true,
+      "same_first_two_heard_slots": true,
+      "near_heard": [
+        9,
+        1
+      ],
+      "far_heard": [
+        9,
+        1
+      ],
+      "same_native_word_lanes": true,
+      "same_prompted_cooldown_ready": true,
+      "near_prompted_ready": false,
+      "far_prompted_ready": false,
+      "same_unprompted_ready": true,
+      "same_pre_forward_neural_initial": false,
+      "same_effective_speech_offsets": false,
+      "changed_pre_state_paths_count": 45613,
+      "changed_pre_state_path_samples": [
+        "/tracked_objects/0/records/0/stable_physical_descriptor/11",
+        "/world/world/organism_records/0/biochemistry/pending_prediction_residual/activity",
+        "/world/world/organism_records/0/biochemistry/graph_state/concentrations/0",
+        "/world/world/organism_records/0/biochemistry/graph_state/concentrations/5",
+        "/world/world/organism_records/0/biochemistry/graph_state/concentrations/6",
+        "/world/world/organism_records/0/biochemistry/graph_state/concentrations/9",
+        "/world/world/organism_records/0/biochemistry/graph_state/concentrations/15",
+        "/world/world/organism_records/0/biochemistry/body/energy",
+        "/world/world/organism_records/0/biochemistry/body/organs/0/energy",
+        "/world/world/organism_records/0/biochemistry/body/organs/1/energy",
+        "/world/world/organism_records/0/biochemistry/body/organs/2/energy",
+        "/world/world/organism_records/0/biochemistry/body/organs/3/energy",
+        "/world/world/organism_records/0/biochemistry/body/organs/4/energy",
+        "/world/world/organism_records/0/biochemistry/body/organs/5/energy",
+        "/world/world/organism_records/0/biochemistry/homeostasis/drives/hunger",
+        "/world/world/organism_records/0/biochemistry/homeostasis/drives/curiosity",
+        "/world/world/organism_records/0/biochemistry/homeostasis/drives/brain_atp",
+        "/world/world/organism_records/0/biochemistry/homeostasis/hormones/adrenaline",
+        "/world/world/organism_records/0/biochemistry/homeostasis/hormones/learning_modulator",
+        "/world/world/organism_records/0/cognitive_energy_debit",
+        "/world/world/organism_records/0/cognitive_work/weighted_total",
+        "/world/world/organism_records/0/cognitive_work/focal_target_ops",
+        "/world/world/organism_records/0/state_graph/body_biochemistry/content_digest/0",
+        "/world/world/organism_records/0/state_graph/body_biochemistry/content_digest/1",
+        "/world/world/organism_records/0/state_graph/body_biochemistry/content_digest/2",
+        "/world/world/organism_records/0/state_graph/body_biochemistry/content_digest/3",
+        "/world/world/organism_records/0/state_graph/brain/content_digest/0",
+        "/world/world/organism_records/0/state_graph/brain/content_digest/1",
+        "/world/world/organism_records/0/state_graph/brain/content_digest/2",
+        "/world/world/organism_records/0/state_graph/brain/content_digest/3",
+        "/world/world/organism_records/0/state_graph/memory/content_digest/0",
+        "/world/world/organism_records/0/state_graph/memory/content_digest/1",
+        "/world/world/organism_records/0/state_graph/memory/content_digest/2",
+        "/world/world/organism_records/0/state_graph/memory/content_digest/3",
+        "/world/world/voxel_backend/world_resource_refs/0/tile/x",
+        "/world/world/objects/3/carried_by",
+        "/world/world/objects/3/activity_hold",
+        "/world/world/objects/3/position/z",
+        "/world/world/objects/3/position/x",
+        "/world/creatures/0/mind/homeostasis/drives/hunger"
+      ],
+      "both_frozen_classifications_correct": false
+    }
+  ],
+  "initial_setup_differences": [
+    {
+      "seed": 19310729,
+      "exact_different_paths": [
+        "/world/world/voxel_backend/world_resource_refs/0/tile/x",
+        "/world/world/objects/3/position/z",
+        "/world/world/objects/3/position/x"
+      ],
+      "only_food_position_and_its_derived_voxel_tile_changed": true
+    },
+    {
+      "seed": 19508423,
+      "exact_different_paths": [
+        "/world/world/voxel_backend/world_resource_refs/0/tile/x",
+        "/world/world/objects/3/position/z",
+        "/world/world/objects/3/position/x"
+      ],
+      "only_food_position_and_its_derived_voxel_tile_changed": true
+    }
+  ],
+  "all_3072_captured_source_raw_speech_values_bit_exact": true,
+  "preservation": {
+    "protected_original_files_checked": 360,
+    "all_byte_identical": true
+  },
+  "preserved_initial_setup_failure": {
+    "guard": "all except initial food position equality",
+    "native_step_reservations": 0,
+    "normalized_checkpoint_differences": [
+      {
+        "path": "/world/world/voxel_backend/world_resource_refs/0/tile/x",
+        "branch": 3,
+        "common": 4
+      }
+    ],
+    "original_failure_log_sha256": "4a4732cc10f03105729f4b3fb8ec4e386d2a2eb8dc037742fa51e1e2af7551d9"
+  },
+  "limits": [
+    "Two previously assessed V26 seeds, never used to fit the V27 LP; this is not an independent broad generalization cohort.",
+    "Natural actions, physical consequences, sensory input and private history can differ after the initial food-position intervention. Matching quality is scored rather than forced.",
+    "Only actual matching GetFood Declare emissions receive valid/unsupported labels. Other states abstain.",
+    "Frozen separator scores are single-captured-state arithmetic, not new emissions or a rollout with the separator installed.",
+    "No new fit is performed. No missing later evidence is recaptured beyond the16 allowed decisions.",
+    "Only one seed produced a supported/unsupported report pair; the other produced two unsupported reports.",
+    "Native food pickup was produced by a selected Eat action in one near case; far selected Inspect. Actions, perceptual distance and later private/physiological history differ, so this does not isolate historical fact from proximity or action identity.",
+    "The frozen stop gate distinguishes the single matched pair, but the presence gate rejects the valid first token; no complete transferred report on the sole positive.",
+    "No teacher/prior, forced action, optimizer/shadow update, new model call, recapture after16 decisions or promotion."
+  ],
+  "raw_artifact_sha256": {
+    "results.json": "4ec09fc63641cb7741b184cdadb56a4495b501a96ec59a106fec9bf5ffb969e8",
+    "native-tapes.jsonl.zst": "88de3c6169c78510a1dbb43253688437ca92da0700e302dded4eaa0a65a64752",
+    "frozen-separator-results.json": "bcde57516bea271935a587e0bdd69c852b6e59e06561634a2edec0a97a995243",
+    "matched-pair-evidence.json": "bea24072df46993e27e321dec326f634b400fa432ea284bc82737eae03a35646"
+  },
+  "final_audit": {
+    "protected_original_files_checked": 360,
+    "all_byte_identical": true,
+    "prior_failed_source_executable_log_and_common_state_exact": true,
+    "failed_attempt_native_steps": 0,
+    "successful_native_steps": 16,
+    "total_native_steps": 16,
+    "new_preparation_steps": 0,
+    "optimizer_or_shadow_updates": 0,
+    "portable_scorer_matches_original_analysis_summary_and_all16_records": true,
+    "no_refit_or_installed_coefficients": true
+  }
+}
