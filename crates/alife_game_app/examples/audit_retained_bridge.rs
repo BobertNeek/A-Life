@@ -9,6 +9,8 @@ use alife_world::SavedBodyRoundingCompatibilityV1;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::{error::Error, fs, path::Path};
+#[path = "audit_retained_bridge/recovery_probe.rs"]
+mod recovery_probe;
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
 fn scope<T>(proof: &SavedBodyRoundingCompatibilityV1, f: impl FnOnce() -> Result<T>) -> Result<T> {
@@ -32,6 +34,9 @@ fn evaluation(v: &alife_training::TrainingReplayEvaluation) -> Value {
 
 fn main() -> Result<()> {
     let a = std::env::args().skip(1).collect::<Vec<_>>();
+    if a.len() == 2 && a[0] == "--probe-quarter-recovery" {
+        return recovery_probe::run(Path::new(&a[1]));
+    }
     if !(a.len() == 4
         || a.len() == 5 && matches!(a[4].as_str(), "--offline-wgsl" | "--first-frame-only"))
     {

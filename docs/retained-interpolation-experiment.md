@@ -147,6 +147,57 @@ When provided, it uses the existing envelope with `source_current_sha256` and
 `proof`; the source pin must match and the lexical proof must actually be used.
 The strict production comparator stays unchanged.
 
+## Zero-update recovery and optimizer initialization probe
+
+The `audit_retained_bridge` CPU example accepts
+`--probe-quarter-recovery REQUEST.json` for a previously measured 25%-cloud
+experiment. This bounded diagnostic cold-validates both original parents and
+the prepared experiment, restores a saved measured initial state, checks its
+zero fast/lifetime banks and retained topology/predictor, and replays exactly
+one decision. The original body-rounding proof stays explicitly scoped.
+
+The request contains `prepared`, `initial_trial`, `pc_current`,
+`expected_pc_sha256`, `cloud_native_root`, `expected_cloud_tree_sha256`, and a
+new isolated `output` directory. All paths refer to local, owner-verified copies.
+No materialization or network operation occurs. The output includes a reset
+projection and recovery copies; these are private assessment/debugging artifacts.
+The prepared experiment's original retained projection has **not** itself been
+reset. The actual measured initial checkpoint supplies that separate state.
+
+Three zero-update constructor probes use the candidate genetic weights:
+
+- Fresh native actor Adam and a fresh zero critic, with the admitted parent
+  trainable mask and the native default Adam configuration.
+- A disposable PC optimizer initialization, retaining its complete mask,
+  configuration, moments, integer ages and global step, plus its complete critic.
+- The equivalent explicitly selected cloud optimizer/critic initialization.
+
+For a donor initialization, only the disposable actor's weight vector and the
+two derived phenotype/source identities are replaced. Native checkpoint
+validation must accept it, every optimizer bit must still match that donor, and
+the unmodified donor's exact `rebind_for_next_cohort` route must reject the
+changed genetic weights without mutating itself. This is an explicit optimizer
+transfer fork, not exact parameter continuation. No optimizer states are averaged.
+The three recovered decisions and private world states must agree before any
+global gradient update; this does not qualify their later learning behavior or
+the accuracy of a transferred critic.
+
+The probe never applies gradients, changes a critic's last-updated policy marker,
+exports candidate actor/critic files, manufactures a training handoff, or promotes
+a candidate. It verifies source immutability afterward. Its saved assessment seed
+and assessment-acquired private state must not become training input.
+
+The low-level CPU constructors and residual training kernels support an explicit
+fresh/donor initialization. The shipped exact-continuation CLI does not provide
+a provenance-aware two-parent fork importer or install this retained projection.
+A practical training adapter must first admit both source pins, record the
+optimizer choice as a new fork, construct a fresh world on independently allocated
+training seeds, preserve the acquired layout across weight/identity rebinding,
+and emit a native handoff only after genuine consistent actor/value updates.
+It must not relabel a parent receipt, forge the critic's policy marker, or route
+the candidate through a development fixture. Full original parent archives remain
+the rollback points. CPU recovery does not establish hardware GPU parity.
+
 Preparation refuses an existing or overlapping output and rechecks source bytes.
 It writes `experiment.json.zst` with both complete parent snapshots, the candidate
 foundation, compiler inputs and retained-neural projection, plus an inference-only
