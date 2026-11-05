@@ -80,6 +80,39 @@ fn windows_ordinary_inherited_save_retains_security_and_new_save_is_private() {
 
 #[cfg(windows)]
 #[test]
+fn windows_modern_inherited_acl_survives_replacement() {
+    let root = temp_root("modern-inherited-dacl");
+    let path = root.join("inherited.json");
+    let original = fixture("modern inherited");
+    fs::write(&path, original.to_json_string_pretty().unwrap()).unwrap();
+    windows_acl_script(
+        &root,
+        r#"
+        $ErrorActionPreference = 'Stop'
+        $acl = Get-Acl -LiteralPath $env:ALIFE_DACL_PATH
+        $everyone = [System.Security.Principal.SecurityIdentifier]::new('S-1-1-0')
+        $acl.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new(
+            $everyone, 'ReadAndExecute', 'ContainerInherit,ObjectInherit', 'None', 'Allow'))
+        Set-Acl -LiteralPath $env:ALIFE_DACL_PATH -AclObject $acl
+    "#,
+    );
+    let before = windows_sddl(&path);
+    assert!(
+        before.contains("D:AI") && before.contains(";ID;"),
+        "fixture did not produce an automatically inherited ACL: {before}"
+    );
+    let replacement = fixture("replacement");
+    replacement.to_json_file(&path).unwrap();
+    assert_eq!(windows_sddl(&path), before);
+    assert_eq!(
+        PortableSaveFile::from_json_file(&path).unwrap(),
+        replacement
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[cfg(windows)]
+#[test]
 fn windows_write_denied_dacl_is_not_bypassed_by_directory_rename() {
     let root = temp_root("write-denied-dacl");
     let path = root.join("denied.json");

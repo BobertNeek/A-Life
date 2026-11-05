@@ -47,6 +47,8 @@ pub(super) struct Snapshot {
     owner: PSID,
     group: PSID,
     label: *mut ACL,
+    dacl: *mut ACL,
+    automatic: bool,
     protected: bool,
     text: Vec<u16>,
     identity: (u64, u64),
@@ -164,6 +166,8 @@ fn snapshot(file: &File) -> io::Result<Snapshot> {
         group,
         label,
         protected: control & SE_DACL_PROTECTED != 0,
+        automatic: control & windows_sys::Win32::Security::SE_DACL_AUTO_INHERITED != 0,
+        dacl,
         text,
         identity: (
             info.dwVolumeSerialNumber as u64,
@@ -213,25 +217,40 @@ pub(super) fn apply(old: &Snapshot, file: &File, path: &Path) -> io::Result<()> 
             ))?;
         }
     }
-    let path = wide(path)?;
-    // SetSecurityInfo imposes automatic inheritance, which can add parent ACEs
-    // absent from a legacy unprotected descriptor. This documented older file
-    // API is documented obsolete, but can request legacy descriptors without
-    // that merge. Use it only on our empty, exclusively held staging file,
-    // then verify the exact result through the original handle.
-    // https://learn.microsoft.com/windows/win32/api/securitybaseapi/nf-securitybaseapi-setfilesecurityw
     let protection = if old.protected {
         PROTECTED_DACL_SECURITY_INFORMATION
     } else {
         UNPROTECTED_DACL_SECURITY_INFORMATION
     };
-    // SAFETY: valid NUL-terminated owned path and live security descriptor.
-    unsafe {
-        bool_result(SetFileSecurityW(
-            path.as_ptr(),
-            DACL_SECURITY_INFORMATION | protection,
-            old._allocation.0,
-        ))?;
+    if old.protected || old.automatic {
+        // The modern API preserves protected and auto-inherited descriptors.
+        // SAFETY: the handle and source ACL allocation remain live.
+        unsafe {
+            win_result(SetSecurityInfo(
+                file.as_raw_handle(),
+                SE_FILE_OBJECT,
+                DACL_SECURITY_INFORMATION | protection,
+                null_mut(),
+                null_mut(),
+                old.dacl,
+                null_mut(),
+            ))?;
+        }
+    } else {
+        let path = wide(path)?;
+        // SetSecurityInfo imposes automatic inheritance on legacy unprotected
+        // ACLs, adding parent ACEs absent from the original. The documented
+        // obsolete file API preserves that legacy descriptor. It runs only on
+        // our empty, exclusively held staging file; verify through its handle.
+        // https://learn.microsoft.com/windows/win32/api/securitybaseapi/nf-securitybaseapi-setfilesecurityw
+        // SAFETY: valid NUL-terminated path and live security descriptor.
+        unsafe {
+            bool_result(SetFileSecurityW(
+                path.as_ptr(),
+                DACL_SECURITY_INFORMATION | protection,
+                old._allocation.0,
+            ))?;
+        }
     }
     if snapshot(file)?.text != old.text {
         return Err(io::Error::new(
