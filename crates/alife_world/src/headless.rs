@@ -6179,12 +6179,12 @@ impl HeadlessWorld {
     }
 
     fn first_motion_blocker(&self, start: Vec3f, end: Vec3f) -> Option<WorldEntityId> {
-        let length = distance(start, end);
-        let direction = if length > 0.0 {
-            scale(subtract(end, start), 1.0 / length)
-        } else {
-            Vec3f::ZERO
-        };
+        let delta = [
+            f64::from(end.x) - f64::from(start.x),
+            f64::from(end.y) - f64::from(start.y),
+            f64::from(end.z) - f64::from(start.z),
+        ];
+        let length_squared = delta.iter().map(|d| d * d).sum::<f64>();
         self.objects
             .values()
             // Retain the existing collision predicate, including tangencies.
@@ -6194,21 +6194,45 @@ impl HeadlessWorld {
                     && object.blocks_segment(start, end)
             })
             .map(|object| {
-                let entry = sight_sphere_hit(
-                    start,
-                    direction,
-                    object.position,
-                    object.radius.max(HEADLESS_CONTACT_RADIUS),
-                    length,
-                )
-                // If the ray arithmetic rounds a tangent to a miss, keep the
-                // existing blocking decision and use its closest contact point.
-                .unwrap_or_else(|| {
-                    distance(start, closest_point_on_segment(object.position, start, end))
-                });
+                let entry = if length_squared == 0.0 || object.blocks_position(start) {
+                    0.0
+                } else {
+                    let offset = [
+                        f64::from(object.position.x) - f64::from(start.x),
+                        f64::from(object.position.y) - f64::from(start.y),
+                        f64::from(object.position.z) - f64::from(start.z),
+                    ];
+                    let middle =
+                        offset.iter().zip(delta).map(|(o, d)| o * d).sum::<f64>() / length_squared;
+                    // Rank in wider precision without the cancellation in a
+                    // f32 quadratic discriminant near a tangent. No admission
+                    // decision is made here: that remains the predicate above.
+                    let perpendicular_squared = offset
+                        .iter()
+                        .zip(delta)
+                        .map(|(o, d)| {
+                            let component = o - middle * d;
+                            component * component
+                        })
+                        .sum::<f64>();
+                    let radius = f64::from(object.radius.max(HEADLESS_CONTACT_RADIUS));
+                    // A rounding-only admitted contact keeps its closest point
+                    // rather than introducing a new collision tolerance.
+                    let half_span = ((radius * radius - perpendicular_squared).max(0.0)
+                        / length_squared)
+                        .sqrt();
+                    (middle - half_span).clamp(0.0, 1.0)
+                };
                 (entry, object.id)
             })
-            .min_by(|a, b| a.0.total_cmp(&b.0).then_with(|| a.1.raw().cmp(&b.1.raw())))
+            .min_by(|a, b| {
+                let order = if a.0 == b.0 {
+                    std::cmp::Ordering::Equal
+                } else {
+                    a.0.total_cmp(&b.0)
+                };
+                order.then_with(|| a.1.raw().cmp(&b.1.raw()))
+            })
             .map(|(_, id)| id)
     }
 
