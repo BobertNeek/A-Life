@@ -5,11 +5,11 @@ mod factorial;
 mod payload_stage;
 pub use action_gate::continue_action_gated_language;
 pub use factorial::{
-    assess_unseen_grounding, compare_care_retention, compare_witnessed_early_stop,
-    continue_balanced_grounded_language, continue_contrastive_grounded_language,
-    continue_event_confirmed_speech, continue_factorial_grounded_language,
-    continue_focused_grounded_language, continue_linear_grounded_language,
-    continue_physical_before_speech, continue_report_choice,
+    assess_frozen_commands, assess_unseen_grounding, compare_care_retention,
+    compare_witnessed_early_stop, continue_balanced_grounded_language,
+    continue_contrastive_grounded_language, continue_event_confirmed_speech,
+    continue_factorial_grounded_language, continue_focused_grounded_language,
+    continue_linear_grounded_language, continue_physical_before_speech, continue_report_choice,
     continue_visible_balanced_grounded_language, continue_witnessed_replay,
     preflight_care_retention, preflight_witnessed_replay,
 };
@@ -42,6 +42,14 @@ pub(super) struct AssessmentPlan {
     replay_early_stop_v1: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     care_retention_v1: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    frozen_causal_v1: bool,
+}
+
+impl AssessmentPlan {
+    pub(super) fn frozen_causal(&self) -> bool {
+        self.frozen_causal_v1
+    }
 }
 
 #[derive(Clone, Serialize)]
@@ -593,6 +601,7 @@ fn continue_curriculum(
                     captured_failure_replay_v1: false,
                     replay_early_stop_v1: false,
                     care_retention_v1: false,
+                    frozen_causal_v1: false,
                 },
                 &mut baseline_trace
             )?);
@@ -658,6 +667,7 @@ fn continue_curriculum(
                     captured_failure_replay_v1: false,
                     replay_early_stop_v1: false,
                     care_retention_v1: false,
+                    frozen_causal_v1: false,
                 }),
             },
             next_gradient.ok_or("no native update")?,

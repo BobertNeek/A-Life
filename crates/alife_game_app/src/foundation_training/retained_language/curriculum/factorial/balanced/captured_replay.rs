@@ -354,6 +354,7 @@ fn run(
             captured_failure_replay_v1: true,
             replay_early_stop_v1: false,
             care_retention_v1: false,
+            frozen_causal_v1: false,
         };
         eprintln!("witnessed {arm:?}: fresh native assessment and cold repeat");
         let cold = exact_reload_plan(

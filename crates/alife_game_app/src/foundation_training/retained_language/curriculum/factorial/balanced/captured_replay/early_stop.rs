@@ -260,6 +260,7 @@ pub fn compare_witnessed_early_stop(
             captured_failure_replay_v1: true,
             replay_early_stop_v1: true,
             care_retention_v1: false,
+            frozen_causal_v1: false,
         };
         let cold = exact_reload_plan(
             &output.join(format!("recovery-{}", model.label)),

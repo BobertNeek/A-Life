@@ -263,6 +263,7 @@ fn refine(
                     captured_failure_replay_v1: false,
                     replay_early_stop_v1: false,
                     care_retention_v1: false,
+                    frozen_causal_v1: false,
                 }),
             },
             next.ok_or("no payload update")?,
