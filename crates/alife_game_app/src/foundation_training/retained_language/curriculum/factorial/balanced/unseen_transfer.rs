@@ -10,6 +10,24 @@ pub(super) const FRESH_SEEDS: [u64; 6] = [
 pub(super) const REPLAY_SEEDS: [u64; 6] = [
     8_104_543, 8_210_021, 8_309_181, 8_401_903, 8_508_131, 8_610_343,
 ];
+pub(super) const EARLY_STOP_SEEDS: [u64; 6] = [
+    10_104_579, 10_210_057, 10_309_219, 10_401_957, 10_508_179, 10_610_399,
+];
+pub(super) fn prepared_early_stop_case(
+    actor: &CpuFoundationTrainer,
+    asset: &FoundationWeightAsset,
+    founder: u64,
+    case: usize,
+) -> Result<(CpuCanonicalHost, Scene)> {
+    prepared_instance(
+        actor,
+        asset,
+        founder,
+        case,
+        EARLY_STOP_SEEDS[case],
+        853 + 31 * case,
+    )
+}
 pub(super) fn prepared_replay_case(
     actor: &CpuFoundationTrainer,
     asset: &FoundationWeightAsset,
@@ -120,6 +138,7 @@ fn plan() -> AssessmentPlan {
         unseen_report_transfer_v1: true,
         physical_before_speech_v1: false,
         captured_failure_replay_v1: false,
+        replay_early_stop_v1: false,
     }
 }
 pub fn assess_unseen_grounding(
@@ -198,9 +217,11 @@ mod tests {
         let founder = 847501;
         let asset = initial_n2048_care_asset(founder).unwrap();
         let actor = new_actor_profile(founder, &asset, true).unwrap();
-        for variant in 0..3 {
+        for variant in 0..4 {
             for case in 0..SEEDS.len() {
-                let (mut h, s) = if variant == 2 {
+                let (mut h, s) = if variant == 3 {
+                    prepared_early_stop_case(&actor, &asset, founder, case).unwrap()
+                } else if variant == 2 {
                     prepared_replay_case(&actor, &asset, founder, case).unwrap()
                 } else if variant == 1 {
                     prepared_fresh_case(&actor, &asset, founder, case).unwrap()

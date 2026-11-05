@@ -1,5 +1,7 @@
 //! Failure replay labelled only by real native success in an input-matched sampler fork.
 use super::*;
+mod early_stop;
+pub use early_stop::compare_witnessed_early_stop;
 struct Pair {
     failure: CpuCollectedDecision,
     target: u32,
@@ -348,6 +350,7 @@ fn run(
             unseen_report_transfer_v1: true,
             physical_before_speech_v1: true,
             captured_failure_replay_v1: true,
+            replay_early_stop_v1: false,
         };
         eprintln!("witnessed {arm:?}: fresh native assessment and cold repeat");
         let cold = exact_reload_plan(
