@@ -10,6 +10,8 @@ mod physical_priority_probe;
 #[cfg(test)]
 mod speech_factor_probe;
 mod unseen_transfer;
+#[cfg(test)]
+mod witnessed_gate_retention;
 pub use captured_replay::{
     compare_care_retention, compare_witnessed_early_stop, continue_witnessed_replay,
     preflight_care_retention, preflight_witnessed_replay,

@@ -105,7 +105,7 @@ pub(super) fn prepared_frozen_case(
     let c = super::frozen_causal::CASES[index];
     prepared_instance(actor, asset, founder, c.fixture, c.seed, c.padding)
 }
-fn prepared_instance(
+pub(super) fn prepared_instance(
     actor: &CpuFoundationTrainer,
     asset: &FoundationWeightAsset,
     founder: u64,
