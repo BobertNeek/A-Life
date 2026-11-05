@@ -19,12 +19,13 @@ mod provider_probe;
 #[cfg(test)]
 mod speech_gate_probe;
 pub use curriculum::{
-    assess_unseen_grounding, compare_care_retention, compare_witnessed_early_stop,
-    continue_action_gated_language, continue_balanced_grounded_language,
-    continue_contrastive_grounded_language, continue_embodied_language_curriculum,
-    continue_event_confirmed_speech, continue_factorial_grounded_language,
-    continue_focused_grounded_language, continue_language_curriculum,
-    continue_linear_grounded_language, continue_physical_before_speech, continue_report_choice,
+    assess_frozen_commands, assess_unseen_grounding, compare_care_retention,
+    compare_witnessed_early_stop, continue_action_gated_language,
+    continue_balanced_grounded_language, continue_contrastive_grounded_language,
+    continue_embodied_language_curriculum, continue_event_confirmed_speech,
+    continue_factorial_grounded_language, continue_focused_grounded_language,
+    continue_language_curriculum, continue_linear_grounded_language,
+    continue_physical_before_speech, continue_report_choice,
     continue_visible_balanced_grounded_language, continue_witnessed_replay,
     preflight_care_retention, preflight_witnessed_replay, refine_language_payload,
     refine_language_shared_gates,
@@ -1083,6 +1084,11 @@ fn reload(recovery: Recovery, directory: Option<&Path>) -> Result<Value> {
     let before_actor = identity(&actor.checkpoint())?;
     // The child restores the full actor before constructing assessment worlds.
     // No update, forced action, teacher actor or semantic prior enters assessment.
+    let frozen = recovery
+        .assessment
+        .as_ref()
+        .and_then(|r| r.curriculum)
+        .is_some_and(|p| p.frozen_causal());
     let assessment = if let Some(request) = recovery.assessment {
         Some(if let Some(directory) = directory {
             let file = fs::OpenOptions::new()
@@ -1127,8 +1133,18 @@ fn reload(recovery: Recovery, directory: Option<&Path>) -> Result<Value> {
     }
     let after_host = identity(&host.checkpoint(&actor)?)?;
     let rows = identity(&decisions)?;
-    actor.apply_gradients(&recovery.next_gradient)?;
-    let mut result = json!({"before_host":before_host,"before_actor":before_actor,"after_host":after_host,"decisions":rows,"after_native_adam_update":identity(&actor.checkpoint())?});
+    let mut result = json!({"before_host":before_host,"before_actor":before_actor,"after_host":after_host,"decisions":rows});
+    if frozen {
+        let after = identity(&actor.checkpoint())?;
+        if after != before_actor {
+            return Err("frozen actor/optimizer state changed".into());
+        }
+        result["frozen_actor_after_native_replay"] = json!(after);
+        result["global_optimizer_updates"] = json!(0);
+    } else {
+        actor.apply_gradients(&recovery.next_gradient)?;
+        result["after_native_adam_update"] = json!(identity(&actor.checkpoint())?);
+    }
     if let Some(assessment) = assessment {
         result["assessment"] = assessment;
     }

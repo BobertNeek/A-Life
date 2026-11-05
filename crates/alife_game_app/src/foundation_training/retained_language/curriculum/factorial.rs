@@ -2,9 +2,9 @@
 use super::*;
 pub(super) mod balanced;
 pub use balanced::{
-    assess_unseen_grounding, compare_care_retention, compare_witnessed_early_stop,
-    continue_balanced_grounded_language, continue_event_confirmed_speech,
-    continue_physical_before_speech, continue_report_choice,
+    assess_frozen_commands, assess_unseen_grounding, compare_care_retention,
+    compare_witnessed_early_stop, continue_balanced_grounded_language,
+    continue_event_confirmed_speech, continue_physical_before_speech, continue_report_choice,
     continue_visible_balanced_grounded_language, continue_witnessed_replay,
     preflight_care_retention, preflight_witnessed_replay,
 };
@@ -620,6 +620,7 @@ fn run_factorial(
             captured_failure_replay_v1: false,
             replay_early_stop_v1: false,
             care_retention_v1: false,
+            frozen_causal_v1: false,
         };
         if arm == Arm::Grounded {
             eprintln!("factorial common baseline");

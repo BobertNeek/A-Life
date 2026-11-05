@@ -1,6 +1,8 @@
 //! Independent-seed, dimension-balanced continuation of measured public V3.
 use super::*;
 mod captured_replay;
+mod frozen_causal;
+pub use frozen_causal::assess_frozen_commands;
 #[cfg(test)]
 mod physical_priority_probe;
 #[cfg(test)]
@@ -701,7 +703,9 @@ pub(crate) fn evaluate(
 ) -> Result<Vec<Value>> {
     let mut results = vec![];
     let seeds = if plan.unseen_report_transfer_v1 {
-        if plan.care_retention_v1 {
+        if plan.frozen_causal_v1 {
+            frozen_causal::CASES.map(|c| c.seed)
+        } else if plan.care_retention_v1 {
             unseen_transfer::CARE_SEEDS
         } else if plan.replay_early_stop_v1 {
             unseen_transfer::EARLY_STOP_SEEDS
@@ -717,7 +721,9 @@ pub(crate) fn evaluate(
     };
     for (case, seed) in seeds.into_iter().enumerate() {
         let (mut base, s) = if plan.unseen_report_transfer_v1 {
-            if plan.care_retention_v1 {
+            if plan.frozen_causal_v1 {
+                unseen_transfer::prepared_frozen_case(actor, asset, c.seed, case)?
+            } else if plan.care_retention_v1 {
                 unseen_transfer::prepared_care_case(actor, asset, c.seed, case)?
             } else if plan.replay_early_stop_v1 {
                 unseen_transfer::prepared_early_stop_case(actor, asset, c.seed, case)?
@@ -775,7 +781,15 @@ pub(crate) fn evaluate(
                 }
             }
             if plan.unseen_report_transfer_v1 {
-                unseen_transfer::place_case(parent.world_mut(), s, case)?;
+                unseen_transfer::place_case(
+                    parent.world_mut(),
+                    s,
+                    if plan.frozen_causal_v1 {
+                        frozen_causal::CASES[case].fixture
+                    } else {
+                        case
+                    },
+                )?;
             } else {
                 place_balanced(
                     parent.world_mut(),
@@ -786,6 +800,7 @@ pub(crate) fn evaluate(
                 )?;
             }
             let paired = identity(&parent.checkpoint(actor)?)?;
+            let mut causal_first = vec![];
             for requested in [
                 Some(Lesson::EatFood),
                 Some(Lesson::GetFood),
@@ -796,6 +811,11 @@ pub(crate) fn evaluate(
                 let (mut pending, mut left) = (None::<Event>, 0usize);
                 let mut metric = PhysicalMetrics::default();
                 for tick in 0..EVALUATION_TICKS {
+                    let causal_before = if plan.frozen_causal_v1 && tick == 0 {
+                        Some(frozen_causal::before_audio(&h, actor)?)
+                    } else {
+                        None
+                    };
                     if tick < INSTRUCTION_TICKS && tick % 2 == 0 {
                         if let Some(goal) = requested {
                             let pos = speech_position(h.world())?;
@@ -809,6 +829,9 @@ pub(crate) fn evaluate(
                             )?;
                         }
                     }
+                    let causal_setup = causal_before
+                        .map(|before| frozen_causal::after_audio(before, &h, actor))
+                        .transpose()?;
                     let before = owners(h.world(), s);
                     let step = h.step(actor, 1.)?;
                     let after = owners(h.world(), s);
@@ -896,6 +919,20 @@ pub(crate) fn evaluate(
                             serde_json::to_value(&row)?
                         };
                         let mut record = json!({"phase":"balanced_readout_evaluation","arm":arm,"case":case,"world_seed":seed,"post_sleep":post_sleep,"requested":requested,"scene":s,"row":trace_row,"owned_before":before,"owned_after":after,"actual_food_consumption":consumed,"grounded_speech_target":speech,"narration_evidence":pending,"completed":event,"emitted":emitted});
+                        if plan.frozen_causal_v1 {
+                            record["causal_stratum"] = json!(frozen_causal::CASES[case].stratum);
+                            record["fixture_case"] = json!(frozen_causal::CASES[case].fixture);
+                            if tick == 0 {
+                                record["causal_input_evidence"] = frozen_causal::input(
+                                    &row,
+                                    requested,
+                                    causal_setup
+                                        .clone()
+                                        .ok_or("missing intervention setup proof")?,
+                                )?;
+                                causal_first.push((requested, row.clone()));
+                            }
+                        }
                         if plan.physical_before_speech_v1 {
                             let organism = h
                                 .world()
@@ -922,6 +959,14 @@ pub(crate) fn evaluate(
                     }
                 }
                 results.push(json!({"arm":arm,"case":case,"world_seed":seed,"post_sleep":post_sleep,"independent_seed_unit":case,"sleep_is_paired_not_independent_sample":true,"sleeping_ticks":sleeping,"sleep_consolidations":consolidations,"requested":requested,"paired_initial_private_sha256":paired,"scene":s,"teacher_present":false,"prior_enabled":false,"cue_ticks":INSTRUCTION_TICKS,"metrics":metric}));
+            }
+            if plan.frozen_causal_v1 {
+                let proof = frozen_causal::compare_inputs(actor, &causal_first)?;
+                writeln!(
+                    traces,
+                    "{}",
+                    json!({"phase":"frozen_causal_pair_inputs","case":case,"world_seed":seed,"post_sleep":post_sleep,"causal_stratum":frozen_causal::CASES[case].stratum,"proof":proof})
+                )?;
             }
         }
     }
@@ -1083,6 +1128,7 @@ fn run_balanced(
             captured_failure_replay_v1: false,
             replay_early_stop_v1: false,
             care_retention_v1: false,
+            frozen_causal_v1: false,
         };
         eprintln!("balanced {arm:?} cold independent-seed assessment");
         let cold = exact_reload_plan(

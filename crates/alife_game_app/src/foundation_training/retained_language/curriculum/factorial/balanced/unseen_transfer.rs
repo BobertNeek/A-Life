@@ -96,6 +96,15 @@ pub(super) fn prepared_fresh_case(
         379 + 23 * case,
     )
 }
+pub(super) fn prepared_frozen_case(
+    actor: &CpuFoundationTrainer,
+    asset: &FoundationWeightAsset,
+    founder: u64,
+    index: usize,
+) -> Result<(CpuCanonicalHost, Scene)> {
+    let c = super::frozen_causal::CASES[index];
+    prepared_instance(actor, asset, founder, c.fixture, c.seed, c.padding)
+}
 fn prepared_instance(
     actor: &CpuFoundationTrainer,
     asset: &FoundationWeightAsset,
@@ -158,6 +167,7 @@ fn plan() -> AssessmentPlan {
         captured_failure_replay_v1: false,
         replay_early_stop_v1: false,
         care_retention_v1: false,
+        frozen_causal_v1: false,
     }
 }
 pub fn assess_unseen_grounding(
