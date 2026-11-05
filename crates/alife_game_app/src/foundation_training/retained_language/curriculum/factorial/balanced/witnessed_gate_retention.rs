@@ -111,10 +111,21 @@ fn collect_examples(
             assert_eq!(identity(&row)?, prior["native_full_row_sha256"]);
             let target = confirmed_speech(pending.as_ref(), left, Some(lesson));
             let event = physical_event(&row, s, before, after)?;
+            let emitted = h
+                .world()
+                .audible_utterances()
+                .into_iter()
+                .filter(|u| {
+                    u.source_kind == UtteranceSourceKind::Creature
+                        && u.speaker_id == Some(id)
+                        && u.emitted_tick == row.patch.pre_action().tick
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(serde_json::to_value(&emitted)?, prior["emitted"]);
             writeln!(
                 trace,
                 "{}",
-                json!({"requested":lesson,"step":tick,"row":row,"owned_before":before,"owned_after":after,"pending":pending,"actual_event":event,"target":target,"prior_native_row_sha256":prior["native_full_row_sha256"]})
+                json!({"requested":lesson,"step":tick,"row":row,"owned_before":before,"owned_after":after,"pending":pending,"actual_event":event,"target":target,"actual_emitted":emitted,"prior_native_row_sha256":prior["native_full_row_sha256"]})
             )?;
             if tick == last {
                 let t = target.ok_or("no genuine positive activity report target")?;
