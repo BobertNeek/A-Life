@@ -7,7 +7,8 @@ mod physical_priority_probe;
 mod speech_factor_probe;
 mod unseen_transfer;
 pub use captured_replay::{
-    compare_witnessed_early_stop, continue_witnessed_replay, preflight_witnessed_replay,
+    compare_care_retention, compare_witnessed_early_stop, continue_witnessed_replay,
+    preflight_care_retention, preflight_witnessed_replay,
 };
 pub use unseen_transfer::assess_unseen_grounding;
 const HELD_OUT_SEEDS: [u64; 6] = [
@@ -700,7 +701,9 @@ pub(crate) fn evaluate(
 ) -> Result<Vec<Value>> {
     let mut results = vec![];
     let seeds = if plan.unseen_report_transfer_v1 {
-        if plan.replay_early_stop_v1 {
+        if plan.care_retention_v1 {
+            unseen_transfer::CARE_SEEDS
+        } else if plan.replay_early_stop_v1 {
             unseen_transfer::EARLY_STOP_SEEDS
         } else if plan.captured_failure_replay_v1 {
             unseen_transfer::REPLAY_SEEDS
@@ -714,7 +717,9 @@ pub(crate) fn evaluate(
     };
     for (case, seed) in seeds.into_iter().enumerate() {
         let (mut base, s) = if plan.unseen_report_transfer_v1 {
-            if plan.replay_early_stop_v1 {
+            if plan.care_retention_v1 {
+                unseen_transfer::prepared_care_case(actor, asset, c.seed, case)?
+            } else if plan.replay_early_stop_v1 {
                 unseen_transfer::prepared_early_stop_case(actor, asset, c.seed, case)?
             } else if plan.captured_failure_replay_v1 {
                 unseen_transfer::prepared_replay_case(actor, asset, c.seed, case)?
@@ -1077,6 +1082,7 @@ fn run_balanced(
             physical_before_speech_v1: physical_ordering,
             captured_failure_replay_v1: false,
             replay_early_stop_v1: false,
+            care_retention_v1: false,
         };
         eprintln!("balanced {arm:?} cold independent-seed assessment");
         let cold = exact_reload_plan(

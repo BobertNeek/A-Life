@@ -262,6 +262,7 @@ fn refine(
                     physical_before_speech_v1: false,
                     captured_failure_replay_v1: false,
                     replay_early_stop_v1: false,
+                    care_retention_v1: false,
                 }),
             },
             next.ok_or("no payload update")?,

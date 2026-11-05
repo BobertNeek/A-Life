@@ -1,6 +1,8 @@
 //! Failure replay labelled only by real native success in an input-matched sampler fork.
 use super::*;
+mod care_retention;
 mod early_stop;
+pub use care_retention::{compare_care_retention, preflight_care_retention};
 pub use early_stop::compare_witnessed_early_stop;
 struct Pair {
     failure: CpuCollectedDecision,
@@ -351,6 +353,7 @@ fn run(
             physical_before_speech_v1: true,
             captured_failure_replay_v1: true,
             replay_early_stop_v1: false,
+            care_retention_v1: false,
         };
         eprintln!("witnessed {arm:?}: fresh native assessment and cold repeat");
         let cold = exact_reload_plan(
