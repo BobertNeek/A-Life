@@ -1,0 +1,271 @@
+{
+  "reviewed_base": "26963404226f5905c1a9db81836a2fe663ded834",
+  "independent_findings_received": true,
+  "confirmed_defect": "unguarded non-vocal public motor-bundle wrappers",
+  "correction": "WorldAction check moved to shared apply_registered_motor_bundle_inner before validation or mutation",
+  "pre_fix_regression": {
+    "expected_failed_test": 1,
+    "accepted_under_scope": true,
+    "biology_tick_before": 0,
+    "biology_tick_after": 1,
+    "complete_world_unchanged": false,
+    "attempts": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "earlier_fixture_compile_typo_preserved": true
+  },
+  "corrected_source_tests": {
+    "world_barrier": 2,
+    "world_existing_inactive": 6,
+    "utility_pure": 3,
+    "utility_isolated": 4,
+    "native_cpu": 14,
+    "total_passed": 29,
+    "total_failed": 0
+  },
+  "pre_fix_existing_world_tests_passed": 6,
+  "actual_world_api_blocked_calls": 14,
+  "paired_inactive_world_transaction_and_tick_calls": 28,
+  "scope_contract": [
+    "otherwise quiescent process before entry",
+    "all workers joined before receipt/drop",
+    "no safe concurrent simulation embedding",
+    "in-flight work is not drained",
+    "counter attribution can race unsupported snapshot/drop/reset"
+  ],
+  "filesystem_contract": [
+    "owner-pinned trusted inputs",
+    "no concurrent writers",
+    "initial canonical root check and repeated byte hashes",
+    "not immutable inode/path identity",
+    "zstd-only 64MiB decode bound; plain JSON unbounded and recursion limit disabled"
+  ],
+  "native_cpu_case_names": [
+    "cpu::objective::distribution_tests::load_only_rejects_valid_critic_apis_without_mutation",
+    "cpu::organism::tests::actual_staging_matches_elapsed_traces_route_masks_and_selected_decoders",
+    "cpu::organism::tests::rejected_ungrounded_credit_keeps_pending_and_all_private_state",
+    "recurrent_formula_includes_leak_metabolic_and_context",
+    "bptt_matches_finite_differences_with_detached_burn_in_and_private_context",
+    "native_checkpoint_roundtrip_preserves_accepted_ages_and_frozen_coordinates",
+    "critic_residual_adam_differentiates_next_state_and_bias",
+    "six_step_speech_bptt_matches_finite_differences",
+    "cpu_cohort_updates_both_native_optimizers_and_rejects_stale_policy",
+    "cohort_tapes_follow_each_optimizer_step_with_auxiliary_and_speech_loss",
+    "canonical_cpu_seals_biology_memory_and_exact_restore_without_an_icd",
+    "snapshot_branch_and_failed_step_preserve_all_private_state",
+    "restore_rejects_cross_owner_or_modified_private_state",
+    "canonical_restore_retains_observed_objects_and_their_identity_cursor"
+  ],
+  "performance_overhead_measured": false,
+  "saved_closure_read_or_modified_during_qualification": false,
+  "owner_native_admission_not_repeated": true,
+  "original_owner_admission_source": "26963404226f5905c1a9db81836a2fe663ded834",
+  "public_fixture_world_neural_and_optimizer_work_performed": true,
+  "matching_owner_critic_version": "unavailable",
+  "joint_actor_critic_or_ppo_certified": false,
+  "new_language_experiment": false,
+  "new_model_or_jules_call": false,
+  "promotion": false,
+  "trained_state_transfer_archive_or_deletion": false,
+  "workspace_floor_bytes": 482148352,
+  "initial_workspace_build_aborted_before_cpu_cases": true,
+  "free_bytes_at_abort": 521338880,
+  "workspace_free_bytes": 521236480,
+  "tmp_free_bytes": 8060731392,
+  "standalone_binary": {
+    "path": "/tmp/alife-load-only-qualification-target-v35/debug/verify_actor_private_recovery",
+    "bytes": 11191752,
+    "sha256": "f6e9132c89af4b3324f662af56b67d259bb7dce093114b93924deea67c2282e7"
+  },
+  "source_identities": {
+    "crates/alife_core/src/load_only.rs": {
+      "bytes": 2660,
+      "sha256": "c31892e29636b9f34199be0cb9aca3a68151a3e099e8cfc262262279373bb9bc"
+    },
+    "crates/alife_game_app/Cargo.toml": {
+      "bytes": 4031,
+      "sha256": "6e6fd59e1b77cd383a1f7f008b8c8b445bbc799438ae8d5fd2bdb86f3ec9adba"
+    },
+    "crates/alife_game_app/src/bin/verify_actor_private_recovery.rs": {
+      "bytes": 26905,
+      "sha256": "5d832c02bc777222257f99cbc9ef26e08e54be4ad3c9978932fbd033459ef5ee"
+    },
+    "crates/alife_game_app/src/bin/verify_actor_private_recovery/qualification_tests.rs": {
+      "bytes": 14722,
+      "sha256": "5d1144db198334eba6d0c9bf602a78128b55a80d0b4c87bbbf4da52f87b7af50"
+    },
+    "crates/alife_training/src/cpu/mod.rs": {
+      "bytes": 19521,
+      "sha256": "a1333e64803aa449be0222601d243072a7584d430d56561fe7eb257c0f30c2a6"
+    },
+    "crates/alife_training/src/cpu/host.rs": {
+      "bytes": 72849,
+      "sha256": "7632976316f96bfb55ad7a10a99f7538a62fcbe51106f5316fe94fb1abceb01e"
+    },
+    "crates/alife_training/src/cpu/organism.rs": {
+      "bytes": 42811,
+      "sha256": "44ddb4095822cdd26433af9c7859c2e652c8cec8e4610c6cfb73964a1a7eec66"
+    },
+    "crates/alife_training/src/cpu/objective.rs": {
+      "bytes": 24338,
+      "sha256": "68c2819eb34069af56322c34f11dd3a9898683fb324b0db2dc862a05499abfc7"
+    },
+    "crates/alife_world/src/headless.rs": {
+      "bytes": 456605,
+      "sha256": "cb3bc3a533d4311f8d1add801766709d87eeb4f541778ac815ae05a6d45fda82"
+    },
+    "Cargo.lock": {
+      "bytes": 161088,
+      "sha256": "a8323d85b09d781596a62e7f383e2dc36cd57628c002f4dfcd75a8b49b4031eb"
+    }
+  },
+  "receipt_identities": {
+    "cpu-case-1.json": {
+      "bytes": 554,
+      "sha256": "9fd7a679168edc964ab837732e89a311aaa75aa8031d6530b27fbe450b0ba7ef"
+    },
+    "cpu-case-10.json": {
+      "bytes": 501,
+      "sha256": "f5321dbed695cb295f84b3c61e9eb497b9854de6655b794219f9b4093cd7e0f8"
+    },
+    "cpu-case-11.json": {
+      "bytes": 499,
+      "sha256": "fadbc1a0d2df5518b0ea89419b8f28aed932c6a99a0cef792b517c595e7e57ef"
+    },
+    "cpu-case-12.json": {
+      "bytes": 481,
+      "sha256": "abd9f99ddad39a90a34da503d3e5c203c393312eaad4dcf17ff17f3699df81ef"
+    },
+    "cpu-case-13.json": {
+      "bytes": 471,
+      "sha256": "c37ba694637716aec5e18535f2a69520b15fdaebf5fdeb344032bb524e920b66"
+    },
+    "cpu-case-14.json": {
+      "bytes": 501,
+      "sha256": "d5db80587b79ea41bef5cfdb9a8f1d81b608bec087304859c4e6c511aae5bd30"
+    },
+    "cpu-case-2.json": {
+      "bytes": 547,
+      "sha256": "43847bb0d1562f06e702bdb7a2f391117fc92c779d32008ba10826910ec6f277"
+    },
+    "cpu-case-3.json": {
+      "bytes": 529,
+      "sha256": "c05835c8965371835631669fd5cd9a91688f758812cd4e3bbfe3821d06fefd08"
+    },
+    "cpu-case-4.json": {
+      "bytes": 467,
+      "sha256": "1b2bb75e152776285d0f7741d1b874ff3b9938e831cc01759914367ff8aeb920"
+    },
+    "cpu-case-5.json": {
+      "bytes": 507,
+      "sha256": "9bed542383bcb8d446f2b51440b9adb242f6063db1f1f76463f2296ca8f03fa7"
+    },
+    "cpu-case-6.json": {
+      "bytes": 509,
+      "sha256": "0b3d7c102a382efa671f5a0e6978143d62c88380da808c15beebb074d46e43de"
+    },
+    "cpu-case-7.json": {
+      "bytes": 471,
+      "sha256": "582749f67ce753b5dba485b473c548e4d049d35d48d23aae84bf40f1f266fbca"
+    },
+    "cpu-case-8.json": {
+      "bytes": 455,
+      "sha256": "c1abace927e3bb0b40ada258731a7a29f6d50fd65b48c5d7a2728676976f84e8"
+    },
+    "cpu-case-9.json": {
+      "bytes": 493,
+      "sha256": "8589ca178931f8789336b2e2c57db171b71806a3a4188327d6238d0ee587afd1"
+    },
+    "cpu-integration-build.json": {
+      "bytes": 368,
+      "sha256": "24d8f8b2387d2c66d956b19f11155882e35a317ee21bf16c2772e6da641bb6ca"
+    },
+    "cpu-integration-build.txt": {
+      "bytes": 847,
+      "sha256": "65a6b6f99dc599ae1b6dd8a3f8a64206c137d4fc0dd02791b3c87a75fab28e63"
+    },
+    "cpu-integrations.json": {
+      "bytes": 7353,
+      "sha256": "bfb4477d1904bdee28183f81ef6d22fe7fec8813ab0bf78e2ab54a725a3fa572"
+    },
+    "cpu-tmp-integration-build.json": {
+      "bytes": 456,
+      "sha256": "644cbc793292833338680427dfa8fdb19484154abc5158dd063f730c381e2092"
+    },
+    "cpu-tmp-integration-build.txt": {
+      "bytes": 3906,
+      "sha256": "1d9270dc39c5f9ae723b9d2d701c273529f10ab7f3f0eb6ff301a275083afe64"
+    },
+    "final-binary-build.json": {
+      "bytes": 434,
+      "sha256": "2e3368bca4fd848eb796f9fc70ea881fa20e926da7d07ff9d289fc6d8c6a0c0f"
+    },
+    "final-binary-build.txt": {
+      "bytes": 1924,
+      "sha256": "7139caa8792f1311a0d5f07a60a16a104d1a3ac83a5b71877844ca61dcea535e"
+    },
+    "final-binary-refusals.json": {
+      "bytes": 973,
+      "sha256": "7b0bd80b381b77121ee47c95a7e789448500099f9e8b8dad0ef6ee9da3eb5d1e"
+    },
+    "final-binary-version.json": {
+      "bytes": 198,
+      "sha256": "5fb5411e24759ae18f972ebfba6b1986484e79079e8ced71fb958f4601f450dd"
+    },
+    "motor-before-fix.json": {
+      "bytes": 338,
+      "sha256": "03be3acc26057e8db0ca1b7eb641eb1280067cace9d2fda92d1518ccc0e14e69"
+    },
+    "motor-before-fix.txt": {
+      "bytes": 1279,
+      "sha256": "fb1d87ba35d0f6d389a2231602d4f322c4902c6709c963e028432d213e16ead3"
+    },
+    "motor-gap-repro.json": {
+      "bytes": 338,
+      "sha256": "61549ed3a315c6d980f6e63a04a83aaf426c2282b069d3236817b58fba45d1a2"
+    },
+    "motor-gap-repro.txt": {
+      "bytes": 9579,
+      "sha256": "f8a9f8118a706b617c85a6dafe82774e11a0a93ce4e5998a1bb0febc251c5838"
+    },
+    "utility-isolated.json": {
+      "bytes": 361,
+      "sha256": "d9ff84a8ad6e619ec3d59a5789d5ef036c1e4ccfa7fc02a6b22e426607b7cfe0"
+    },
+    "utility-isolated.txt": {
+      "bytes": 946,
+      "sha256": "66bcafac7883c574d3a2b2a2c99082c50ac9ff47ead4fa7876a6f4189abfdf16"
+    },
+    "utility-pure.json": {
+      "bytes": 293,
+      "sha256": "cc019395c124ac485719beb2e3560f58b9371fb62e4b113f7a5edbf27d821fc0"
+    },
+    "utility-pure.txt": {
+      "bytes": 2036,
+      "sha256": "0111efae18ecfd4536fd2e8daecaf2db39046744aa5b06be3b5b5f04f6d80a29"
+    },
+    "world-barrier-fixed.json": {
+      "bytes": 272,
+      "sha256": "4f0a771553e30674d9913e8c26018453ab833bf4d1fd8b62cfc6bbd04a526c4c"
+    },
+    "world-barrier-fixed.txt": {
+      "bytes": 988,
+      "sha256": "527e9d2218542845d4a2ac0b26ffd59b4bdf9f8bcad9874b55ca33090062a0b3"
+    },
+    "world-inactive-fixed.json": {
+      "bytes": 3500,
+      "sha256": "ad73a96c5deedabce5372cfdbe72530b14e44836da43f9ad9eefb3cf5a87b9d8"
+    },
+    "world-inactive-parent.json": {
+      "bytes": 3500,
+      "sha256": "a52d66c0ffb9514f636c2b9f2134998441090aee866625bd665064b82b28eba0"
+    }
+  },
+  "local_receipts": "/workspace/language-load-only-qualification-v35"
+}

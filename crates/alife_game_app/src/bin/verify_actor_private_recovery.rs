@@ -403,6 +403,14 @@ fn inspect_loaded(
     Ok((ar, pr))
 }
 fn inspect_files(request: Request) -> Result<Receipt> {
+    inspect_files_with_after_admission(request, || Ok(()))
+}
+// Private test seam: the production entry point supplies only the no-op above.
+// A fixture can change its own input here to exercise the actual second read.
+fn inspect_files_with_after_admission(
+    request: Request,
+    after_admission: impl FnOnce() -> Result<()>,
+) -> Result<Receipt> {
     if request.require_joint {
         return Err("matching critic/version state is unavailable; refusing joint actor/critic or PPO continuation certification; no critic initialized".into());
     }
@@ -427,6 +435,7 @@ fn inspect_files(request: Request) -> Result<Receipt> {
         paths.insert(id.to_owned(), path);
     }
     let result = inspect_loaded(&m, &request.profile, &cache, &scope);
+    after_admission()?;
     // Also checked after a failed semantic admission: no input can be repaired,
     // resealed, rewritten or replaced by a default to make validation succeed.
     for (id, path) in &paths {
@@ -559,11 +568,12 @@ mod tests {
         m.profiles.get_mut("actor_history").unwrap().files.pop();
         assert!(selected(&m, "actor_history").is_err());
     }
-    fn fixture() -> Result<(
+    pub(super) fn fixture() -> Result<(
         alife_core::BrainPhenotype,
         FoundationWeightAsset,
         FoundationTrainerCheckpoint,
         CpuCanonicalCheckpoint,
+        PhenotypeCompilerInputs,
     )> {
         let mut c = CanonicalNewGameConfig::phase3(117, 1)?;
         c.brain_class = BrainScaleTier::Standard2048;
@@ -590,7 +600,7 @@ mod tests {
             TrainingStageManifest::new(1, 1, 1),
         )?;
         let game = create_canonical_new_game_with_n2048_candidate(&c, &asset)?;
-        let (p, _) = PhenotypeCompiler::compile_n2048_foundation_candidate(
+        let (p, inputs) = PhenotypeCompiler::compile_n2048_foundation_candidate(
             genome,
             development,
             asset.clone(),
@@ -610,7 +620,7 @@ mod tests {
         let a = CpuFoundationTrainer::from_checkpoint(p.clone(), asset.clone(), cp.clone())?;
         let host = CpuCanonicalHost::new_cohort(game, &a, 117)?;
         assert_eq!(host.world().tick(), Tick::ZERO);
-        Ok((p, asset, cp, host.checkpoint(&a)?))
+        Ok((p, asset, cp, host.checkpoint(&a)?, inputs))
     }
     #[test]
     #[ignore = "process-wide fail-closed guard: run this source fixture in isolation with --test-threads=1; zero simulation"]
@@ -620,7 +630,7 @@ mod tests {
             .spawn(|| -> std::result::Result<(), String> {
                 let run = || -> Result<()> {
                     let scope = load_only::Scope::enter()?;
-                    let (p, asset, cp, host) = fixture()?;
+                    let (p, asset, cp, host, _) = fixture()?;
                     let original_actor = serde_json::to_vec(&cp)?;
                     let original_host = serde_json::to_vec(&host)?;
                     assert!(load_only::Scope::enter().is_err());
@@ -686,3 +696,7 @@ mod tests {
             .map_err(|s| -> Box<dyn std::error::Error + Send + Sync> { s.into() })
     }
 }
+
+#[cfg(test)]
+#[path = "verify_actor_private_recovery/qualification_tests.rs"]
+mod qualification_tests;

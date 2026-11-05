@@ -592,6 +592,46 @@ where
 mod distribution_tests {
     use super::*;
     #[test]
+    #[ignore = "process-wide scope: public synthetic critic fixture only; run in isolation"]
+    fn load_only_rejects_valid_critic_apis_without_mutation() {
+        use alife_core::load_only::{Operation, Scope};
+        let cp = PpoValueHeadCheckpoint {
+            feature_count: 2,
+            optimizer_step: 19_800,
+            parameters: vec![0.2, -0.3, 0.1, 0.01, 0.02, 0.03, 0.1, 0.2, 0.3],
+            last_updated_policy_version: Some(7400),
+        };
+        let mut value = CpuValueHead::from_checkpoint(cp.clone()).unwrap();
+        let features = vec![vec![0.3, 0.8], vec![0.7, 0.2]];
+        let rows = [CriticResidualRow {
+            current: 0,
+            next: 1,
+            reward: 0.15,
+            discount: 0.9,
+        }];
+        let config = AdamWConfig::default();
+        let mut control = value.clone();
+        control
+            .residual_step(&features, &rows, config, 0.5, 7401)
+            .unwrap();
+        assert!(value.proposal(&[0.3, -0.2, 0.1], config, 7401).is_ok());
+        let scope = Scope::enter().unwrap();
+        assert!(value.predict(&features[0]).is_err());
+        assert!(value
+            .residual_step(&features, &rows, config, 0.5, 7401)
+            .is_err());
+        assert!(value.proposal(&[0.3, -0.2, 0.1], config, 7401).is_err());
+        assert_eq!(scope.attempts()[Operation::NeuralForward as usize], 2);
+        assert_eq!(scope.attempts()[Operation::CriticAdam as usize], 1);
+        assert_eq!(scope.attempts().iter().sum::<u64>(), 3);
+        assert_eq!(value.checkpoint(), cp);
+        drop(scope);
+        value
+            .residual_step(&features, &rows, config, 0.5, 7401)
+            .unwrap();
+        assert_eq!(value.checkpoint(), control.checkpoint());
+    }
+    #[test]
     fn categorical_preserves_common_logit_shifts_at_nonunit_temperature() {
         let small = categorical(&[0., 0.125, 0.25], 7, 0.7).unwrap();
         let shifted = categorical(&[0., 0.125, 0.25].map(|v| v + 1_000_000.), 7, 0.7).unwrap();

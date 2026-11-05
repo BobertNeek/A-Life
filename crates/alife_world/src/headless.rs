@@ -4457,9 +4457,6 @@ impl HeadlessWorld {
         novelty: f32,
         object_novelty: &[(WorldEntityId, f32)],
     ) -> Result<HeadlessMotorTransactionReceipt, HeadlessMotorTransactionError> {
-        if !alife_core::load_only::permitted(alife_core::load_only::Operation::WorldAction) {
-            return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
-        }
         if !novelty.is_finite()
             || !(0.0..=1.0).contains(&novelty)
             || object_novelty.len() > bundle.channels.len()
@@ -4484,6 +4481,9 @@ impl HeadlessWorld {
         neural: Option<&NeuralEmissionFrame>,
         novelty: Option<(f32, &[(WorldEntityId, f32)])>,
     ) -> Result<HeadlessMotorTransactionReceipt, HeadlessMotorTransactionError> {
+        if !alife_core::load_only::permitted(alife_core::load_only::Operation::WorldAction) {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
+        }
         let outcome_tick = self.validate_registered_motor_bundle(bundle, world_entity_id)?;
         let embodiment = self
             .organism_registry
@@ -8724,6 +8724,131 @@ mod task_6_factorized_motor_tests {
             vec![command],
         )
         .unwrap()
+    }
+
+    #[test]
+    #[ignore = "process-wide load-only scope: run in isolation with --test-threads=1"]
+    fn load_only_rejects_all_public_motor_wrappers_before_mutation() {
+        use alife_core::load_only::{Operation, Scope};
+        let invoke = |world: &mut HeadlessWorld, agent, bundle: &MotorCommandBundle, wrapper| {
+            let neural = NeuralEmissionFrame::new(Tick::ZERO, 1, vec![]).unwrap();
+            match wrapper {
+                0 => world.apply_registered_motor_bundle(bundle, agent),
+                1 => {
+                    world.apply_registered_motor_bundle_with_neural_emission(bundle, agent, &neural)
+                }
+                2 => world.apply_registered_motor_bundle_with_perceived_novelty_in_staged_tick(
+                    bundle,
+                    agent,
+                    &neural,
+                    0.0,
+                    &[],
+                ),
+                _ => unreachable!(),
+            }
+        };
+        for posture_only in [true, false] {
+            let (original, agent, _, mixed) = prepared_world();
+            let bundle = if posture_only {
+                posture_bundle(ActionKind::Idle.canonical_id(), None)
+            } else {
+                mixed
+            };
+            for wrapper in 0..3 {
+                let mut control = original.clone();
+                let expected = invoke(&mut control, agent, &bundle, wrapper).unwrap();
+                let mut rejected = original.clone();
+                let before = format!("{rejected:#?}");
+                let scope = Scope::enter().unwrap();
+                let result = invoke(&mut rejected, agent, &bundle, wrapper);
+                let unchanged = format!("{rejected:#?}") == before;
+                assert!(result.is_err() && unchanged,
+                    "wrapper={wrapper} posture_only={posture_only} accepted={} complete_state_unchanged={unchanged} attempts={:?}", result.is_ok(), scope.attempts());
+                assert_eq!(scope.attempts()[Operation::WorldAction as usize], 1);
+                assert_eq!(scope.attempts().iter().sum::<u64>(), 1);
+                drop(scope);
+                assert_eq!(
+                    invoke(&mut rejected, agent, &bundle, wrapper).unwrap(),
+                    expected
+                );
+                assert_eq!(format!("{rejected:#?}"), format!("{control:#?}"));
+            }
+        }
+    }
+
+    #[test]
+    #[ignore = "process-wide load-only scope: run in isolation with --test-threads=1"]
+    fn load_only_rejects_command_and_tick_apis_and_restores_inactive_behavior() {
+        use alife_core::load_only::{Operation, Scope};
+        let (original, agent, _, _) = prepared_world();
+        let idle = HeadlessWorldCommand::structured(
+            ORGANISM_ID,
+            ActionKind::Idle.canonical_id(),
+            ActionKind::Idle,
+            None,
+            None,
+        )
+        .unwrap();
+        let command =
+            |world: &mut HeadlessWorld, variant| -> Result<String, ScaffoldContractError> {
+                match variant {
+                    0 => world.apply_command(&idle).map(|r| format!("{r:?}")),
+                    1 => world
+                        .apply_neural_command(&idle, None, false)
+                        .map(|r| format!("{r:?}")),
+                    2 => world
+                        .apply_registered_command(&idle, agent, Tick::new(1))
+                        .map(|r| format!("{r:?}")),
+                    3 => world
+                        .apply_registered_neural_command(&idle, agent, Tick::new(1), None, false)
+                        .map(|r| format!("{r:?}")),
+                    _ => unreachable!(),
+                }
+            };
+        for variant in 0..4 {
+            let mut control = original.clone();
+            let expected = command(&mut control, variant).unwrap();
+            let mut rejected = original.clone();
+            let before = format!("{rejected:#?}");
+            let scope = Scope::enter().unwrap();
+            assert!(command(&mut rejected, variant).is_err());
+            assert_eq!(format!("{rejected:#?}"), before);
+            assert_eq!(scope.attempts()[Operation::WorldAction as usize], 1);
+            assert_eq!(scope.attempts().iter().sum::<u64>(), 1);
+            drop(scope);
+            assert_eq!(command(&mut rejected, variant).unwrap(), expected);
+            assert_eq!(format!("{rejected:#?}"), format!("{control:#?}"));
+        }
+        let advance = |world: &mut HeadlessWorld, variant| -> Result<Tick, ScaffoldContractError> {
+            match variant {
+                0 => world.try_advance_tick(),
+                1 => world.try_advance_tick_with_body_events(&BTreeMap::new()),
+                2 => world.try_advance_tick_with_body_events_in_staged_tick(&BTreeMap::new()),
+                3 => Ok(world.advance_tick()),
+                _ => unreachable!(),
+            }
+        };
+        for variant in 0..4 {
+            let mut control = original.clone();
+            let expected = advance(&mut control, variant).unwrap();
+            let mut rejected = original.clone();
+            let before = format!("{rejected:#?}");
+            let scope = Scope::enter().unwrap();
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                advance(&mut rejected, variant)
+            }));
+            if variant == 3 {
+                assert!(result.is_err());
+            } else {
+                assert!(result.unwrap().is_err());
+            }
+            assert_eq!(format!("{rejected:#?}"), before);
+            assert_eq!(scope.attempts()[Operation::WorldAdvance as usize], 1);
+            assert_eq!(scope.attempts().iter().sum::<u64>(), 1);
+            drop(scope);
+            assert_eq!(advance(&mut rejected, variant).unwrap(), expected);
+            assert_eq!(format!("{rejected:#?}"), format!("{control:#?}"));
+        }
     }
 
     #[test]

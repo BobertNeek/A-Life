@@ -66,6 +66,26 @@ is not checkpoint state. It is an internal execution barrier, not an OS sandbox
 against arbitrary unrelated code; the utility exposes only the audited restore
 call graph.
 
+The process must otherwise be quiescent before entry, with every spawned worker
+joined before receipt or drop. `Scope` is an admission flag, not a quiescence
+barrier: an operation that read inactive may finish after entry, and a paused
+attempt may miss a snapshot or be counted after a later reset. Concurrent
+ordinary simulation is unsupported and intentionally errors; the existing
+infallible `advance_tick` wrapper panics on that error. Nested/concurrent scope
+owners are rejected. See the subsequent
+[integration qualification](native-load-only-integration-qualification.md) for
+the motor-wrapper coverage correction and lifecycle tests. The isolated V34
+owner admission remains a separate measured fact.
+
+The owner-pinned inputs must also have no concurrent writers. Initial canonical
+paths are checked for root escape, and byte hashes are compared before/after;
+this is not a guarantee of immutable file identity against concurrent path
+replacement. The64MiB decoded-size limit covers zstd inputs only. Plain JSON
+inputs are trusted and recursion limits are disabled for native checkpoints;
+this utility is not hardened for arbitrary hostile manifests/checkpoints.
+Several atomic reads can occur per ordinary tick. No performance overhead was
+measured, so passing functional tests does not establish zero cost.
+
 Successful admission certifies these saved actor/private states under this native
 source, without consuming a decision. It does not demonstrate new learning,
 successful future gameplay, cross-platform bit identity, complete pre436 gradient
@@ -93,6 +113,11 @@ Pure tests cover corrupt bytes, missing dependencies, traversal, digest
 requirements, unsupported experiment flags and early joint/PPO refusal.
 
 ## Measured result
+
+These V34 measurements were made at
+`26963404226f5905c1a9db81836a2fe663ded834`. They are preserved as historical
+receipts; subsequent integration qualification uses public fixtures and does
+not rerun the saved recovery closure.
 
 All four focused tests passed: three pure tests and one isolated native fixture.
 The standalone binary then admitted the pinned owner `actor_history` closure in
