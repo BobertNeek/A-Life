@@ -134,3 +134,49 @@ fn retained_projection_rejects_a_learned_extra_coordinate_without_dropping_it() 
     source.fast.canonical_digest = source.fast.recompute_canonical_digest().unwrap();
     assert!(source.canonical_to_live(trainer.phenotype()).is_err());
 }
+
+#[test]
+fn retained_fork_export_uses_current_active_cpu_vectors_and_keeps_original_bank_evidence() {
+    let (mut host, trainer) = fixture();
+    let source = inherited(trainer.phenotype());
+    let original = serde_json::to_vec(&source).unwrap();
+    host.inherit_retained_neural(&trainer, &source).unwrap();
+    host.step(&trainer, 1.).unwrap();
+    let cp = host.checkpoint(&trainer).unwrap();
+    let resident = &cp.residents[0];
+    let next = host
+        .export_retained_neural_for_newborn(&trainer, resident.neural.organism_id)
+        .unwrap();
+    let map = next.canonical_to_live(trainer.phenotype()).unwrap();
+    for (i, &slot) in map.iter().enumerate() {
+        assert_eq!(
+            next.fast.bank_0_bits[slot],
+            resident.neural.fast[i].to_bits()
+        );
+        assert_eq!(
+            next.fast.bank_1_bits[slot],
+            resident.neural.fast[i].to_bits()
+        );
+        assert_eq!(
+            next.lifetime.bank_0_bits[slot],
+            resident.neural.lifetime[i].to_bits()
+        );
+        assert_eq!(
+            next.lifetime.bank_1_bits[slot],
+            resident.neural.lifetime[i].to_bits()
+        );
+    }
+    assert_eq!(
+        next.fast.active_generation,
+        resident.neural.weight_generation
+    );
+    assert_eq!(next.topology.v11_checkpoint, resident.neural_topology);
+    assert_eq!(
+        serde_json::to_vec(resident.inherited_neural_source.as_ref().unwrap()).unwrap(),
+        original
+    );
+    assert_eq!(
+        serde_json::to_vec(&host.checkpoint(&trainer).unwrap()).unwrap(),
+        serde_json::to_vec(&cp).unwrap()
+    );
+}

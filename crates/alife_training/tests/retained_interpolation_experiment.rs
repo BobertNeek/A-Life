@@ -10,6 +10,8 @@ mod native_cpu_archive;
 mod source_binding;
 #[path = "retained_interpolation_experiment/source_fixture.rs"]
 mod source_fixture;
+#[path = "retained_interpolation_experiment/training_fork.rs"]
+mod training_fork;
 use source_fixture::repin;
 
 fn cloud_current(inputs: &InterpolationExperimentInputs) -> &Vec<u8> {

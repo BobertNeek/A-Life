@@ -16,6 +16,7 @@ mod organism;
 mod private_checkpoint;
 mod replay;
 pub mod retained_interpolation_experiment;
+pub mod retained_training_fork;
 mod round_output;
 
 pub use activity::*;

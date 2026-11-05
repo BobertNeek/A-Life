@@ -64,7 +64,7 @@ pub(super) fn saved_source_phenotype(
     )?)
 }
 
-fn newborn_for_view(
+pub(super) fn newborn_for_view(
     asset: &FoundationWeightAsset,
     body_seed: u64,
     saved: &CreaturePhenotype,

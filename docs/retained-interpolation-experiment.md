@@ -188,15 +188,79 @@ a candidate. It verifies source immutability afterward. Its saved assessment see
 and assessment-acquired private state must not become training input.
 
 The low-level CPU constructors and residual training kernels support an explicit
-fresh/donor initialization. The shipped exact-continuation CLI does not provide
-a provenance-aware two-parent fork importer or install this retained projection.
-A practical training adapter must first admit both source pins, record the
-optimizer choice as a new fork, construct a fresh world on independently allocated
-training seeds, preserve the acquired layout across weight/identity rebinding,
-and emit a native handoff only after genuine consistent actor/value updates.
-It must not relabel a parent receipt, forge the critic's policy marker, or route
-the candidate through a development fixture. Full original parent archives remain
-the rollback points. CPU recovery does not establish hardware GPU parity.
+fresh/donor initialization. The ordinary exact-continuation CLI does not import
+two-parent forks. The separate experimental route below preserves that distinction.
+Full original parent archives remain rollback points. CPU recovery does not
+establish hardware GPU parity.
+
+## Explicit PC-optimizer training fork
+
+`train_retained_fork_cpu`, behind `cpu-training`, runs one bounded native actor
+and residual-critic update from a 25%-cloud experiment. Its required optimizer
+choice is `complete_pc_donor_optimizer_transfer`. Both complete source archives
+remain embedded byte-exact in the preserved experiment. This is a new experimental
+fork, not exact continuation, an averaged optimizer, an accepted Current, or a
+promotion. It never enters the development fixture route.
+
+```sh
+cargo build --release --locked --offline -p alife_game_app --features cpu-training --bin train_retained_fork_cpu
+train_retained_fork_cpu run REQUEST.json
+train_retained_fork_cpu verify FORK EXPECTED_MANIFEST_SHA256 EXPECTED_EXPERIMENT_SHA256
+```
+
+The request contains the prepared experiment path and its expected compressed
+SHA256; the PC Current path/SHA256; the cloud native root/tree SHA256 and preserved
+transport archive path/SHA256; an explicit `CheckpointSeedsV1` `seed_history`
+path/SHA256; consecutive `seed` and `recovery_seed`; `decisions` in 1..=128;
+`optimizer_initialization`; and a new isolated `output`. The expected-hash fields
+are named `expected_experiment_sha256`, `expected_pc_sha256`,
+`expected_cloud_tree_sha256`, `expected_cloud_archive_sha256`, and
+`expected_seed_history_sha256`. Source paths are `prepared`, `pc_current`,
+`cloud_native_root`, `cloud_archive`, and `seed_history`.
+
+Full native parent admission, source pins, all PC exclusions, cloud seed evidence
+and authenticated lineage-frame training exclusions precede dispatch. Assessment
+reservations are excluded from training too. Freshness must remain `unknown`.
+The owned seed state is persisted before dispatch; an existing output is never
+restarted or overwritten automatically. A technical failure keeps its private
+collector and captured prefix where available. Collection runs its requested
+decision horizon unless natural death or an actual technical limit occurs;
+injury/health is observed without censoring. Teacher and semantic prior are
+explicitly disabled while real collection rows retain their normal training loss.
+
+The donor actor's complete mask, Adam configuration, moments, per-coordinate u32
+ages and global step are retained, and its complete critic is copied unchanged.
+Only the disposable actor's genetic weights and derived identities change at
+initialization. Both fast/lifetime physical banks reset to +0 once at fork start;
+their original selector/generation, acquired edge/layout, dendrites and predictor
+are retained. After collection, ordinary CPU waking/sleep changes are preserved.
+
+The CPU owns one active canonical fast and lifetime vector. Newborn export maps
+those current values into the current native sparse layout and duplicates each
+active vector into both exported newborn banks. This explicitly represents
+newborn inheritance, not GPU ping-pong-bank continuation. The complete old-bank
+inheritance evidence and personal state remain separately in the collection
+checkpoint; no inactive GPU history is invented or silently deleted. Acquired
+edges remain outside actor/Adam coordinates. Native weight-only rebinding checks
+all layout metadata and signed-zero alpha bits before installing new genetic
+values. Unsupported acquired state fails rather than falling back to bare policy.
+
+`training-handoff.json` is emitted only after one real native update and strict
+native head admission, with the critic's actual update marker. It describes the
+updated fresh-cohort global head. `retained-neural.json` carries the separate
+learned newborn projection. `collection/` retains the preceding collector under
+its original collection asset and full initial optimizer. Consumers must admit
+the complete pinned `retained-fork.json` bundle; using the head alone would drop
+acquired state. No ordinary single-parent `cpu-cycle.json` receipt is fabricated.
+
+Cold verification checks the complete artifact closure, source-bound initialization,
+seed history, original collection recovery, current learned projection, and native
+handoff. It recomputes the single native PPO/critic update on a disposable clone
+and requires the saved full optimizer/head to agree. A second, separately reserved
+training-validation world cold-restores the updated head and retained state and
+reproduces its next physical transition. This is recovery/update evidence, not a
+new matched skill battery, GPU parity, or a claim that transferred Adam/critic
+history is well calibrated for the interpolated policy.
 
 Preparation refuses an existing or overlapping output and rechecks source bytes.
 It writes `experiment.json.zst` with both complete parent snapshots, the candidate

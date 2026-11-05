@@ -60,6 +60,15 @@ pub(crate) fn verify_native_cpu_care_assessment_exclusions(
     admission::exclusions(evidence, seed, true)
 }
 
+/// New training must also exclude every declared assessment reservation.
+#[cfg(feature = "cpu-training")]
+pub(crate) fn verify_native_cpu_care_training_exclusions(
+    evidence: &serde_json::Value,
+    seed: u64,
+) -> Result<()> {
+    admission::exclusions(evidence, seed, false)
+}
+
 /// Recheck the qualified known-exclusions recovery proof without admitting or
 /// reserving any seed. This opens no GPU and cannot restart a private lifetime.
 #[cfg(feature = "cpu-training")]

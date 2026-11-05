@@ -22,6 +22,10 @@ mod retained;
 pub use retained::*;
 mod actual_interpolation;
 pub use actual_interpolation::run_actual_interpolation_assessment;
+mod retained_fork;
+pub use retained_fork::{
+    run_pc_donor_retained_training_fork, verify_pc_donor_retained_training_fork,
+};
 mod layout;
 pub use layout::CpuCareLayout;
 mod round;
@@ -149,6 +153,7 @@ fn prepare_care_episode(request: CpuCareRequest) -> Result<(CpuContinuationConfi
         collection_binding: None,
         explicit_deterministic_prior: false,
         assessment: false,
+        independent_training: false,
     };
     Ok((config, episode))
 }
@@ -190,6 +195,9 @@ struct CareEpisode {
     collection_binding: Option<(CpuCollectorAssignmentV1, [u8; 32])>,
     explicit_deterministic_prior: bool,
     assessment: bool,
+    /// Explicit experimental fork collection: ordinary loss rows, with no
+    /// teacher or semantic prior. It has separate source/seed admission.
+    independent_training: bool,
 }
 
 impl CareEpisode {
@@ -313,7 +321,7 @@ impl CpuEpisodeHooks for CareEpisode {
         if founder.phenotype().sensor_profile() != SensorProfile::GroundedTerrainVisionV1 {
             return Err("CPU care requires the retained grounded natural-senses policy; sensor conversion is not continuation".into());
         }
-        self.prior = if self.assessment {
+        self.prior = if self.assessment || self.independent_training {
             None
         } else if self.explicit_deterministic_prior {
             Some(RuntimeSemanticPrior::deterministic_for_training(
@@ -360,7 +368,7 @@ impl CpuEpisodeHooks for CareEpisode {
             true,
             self.request.food_need_condition,
         )?;
-        if self.assessment {
+        if self.assessment || self.independent_training {
             evaluation::ensure_no_teacher(world)?;
             scenario.silent_request = true;
             scenario.teacher_cue_tokens.clear();
@@ -411,7 +419,7 @@ impl CpuEpisodeHooks for CareEpisode {
                 }
             }
         }
-        if self.assessment {
+        if self.assessment || self.independent_training {
             evaluation::ensure_no_teacher(host.world())?;
         } else {
             expose_foundation_teacher_cue(host.world_mut(), scenario)?;
@@ -445,7 +453,7 @@ impl CpuEpisodeHooks for CareEpisode {
         founder: &CpuFoundationTrainer,
         step: &CpuCanonicalStep,
     ) -> Result<()> {
-        if self.assessment {
+        if self.assessment || self.independent_training {
             evaluation::ensure_no_teacher(host.world())?;
         }
         let scenario = self.scenario.as_ref().ok_or("care scene missing")?;
@@ -456,7 +464,7 @@ impl CpuEpisodeHooks for CareEpisode {
         for row in &step.decisions {
             row.patch.validate_contract()?;
             let frame = row.patch.pre_action().perception();
-            if self.assessment && evaluation::teacher_heard(frame) {
+            if (self.assessment || self.independent_training) && evaluation::teacher_heard(frame) {
                 return Err("assessment heard a teacher; retain private recovery without qualifying results".into());
             }
             let evidence = row.patch.decision().neural_evidence()?;
@@ -656,6 +664,12 @@ impl CpuEpisodeHooks for CareEpisode {
             metadata["offline_actor_optimizer_updates"] = json!(0);
             metadata["offline_value_optimizer_updates"] = json!(0);
             metadata["persistent_learning"] = json!("fresh-private-life-with-ordinary-biology-waking-learning-and-sleep; frozen-founder-and-full-optimizers");
+        }
+        if self.independent_training {
+            metadata["kind"] = json!("experimental-retained-fork-cpu-collection");
+            metadata["teacher_present"] = json!(false);
+            metadata["semantic_prior_enabled"] = json!(false);
+            metadata["prior_failure_policy"] = json!("explicitly-disabled-for-independent-fork");
         }
         add_unknown_freshness_context(&mut metadata, self.request.known_exclusions);
         write("care-episode.json", &metadata)?;
