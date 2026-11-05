@@ -436,6 +436,8 @@ fn evaluate_saved(source: &Path, out: &Path, cold: bool) -> Result<Value> {
         (false, true) => "cold",
         (false, false) => "hot",
     };
+    let tag = std::env::var("ALIFE_GATE_TRACE_TAG").unwrap_or_default();
+    assert!(tag.len() <= 24 && tag.chars().all(|c| c.is_ascii_alphanumeric() || c == '-'));
     let mut results = vec![];
     for arm in ARMS {
         eprintln!(
@@ -454,7 +456,9 @@ fn evaluate_saved(source: &Path, out: &Path, cold: bool) -> Result<Value> {
         if resumed && summary_path.exists() {
             let saved: Value = serde_json::from_slice(&fs::read(&summary_path)?)?;
             assert_eq!(saved["actor_sha256"], before);
-            let name = if !cold && arm == "Untouched" {
+            let name = if let Some(name) = saved["native_trace_file"].as_str() {
+                name.to_owned()
+            } else if !cold && arm == "Untouched" {
                 "hot-Untouched.jsonl.zst".to_owned()
             } else {
                 format!("{prefix}-{arm}.jsonl.zst")
@@ -481,6 +485,8 @@ fn evaluate_saved(source: &Path, out: &Path, cold: bool) -> Result<Value> {
             let after = branch.checkpoint(&actor)?;
             let mut normalized = after.clone();
             normalized.founder_weight_digest = before_host.founder_weight_digest;
+            normalized.experimental_speech_gate_policy =
+                before_host.experimental_speech_gate_policy.clone();
             assert_eq!(
                 serde_json::to_vec(&normalized)?,
                 serde_json::to_vec(&before_host)?
@@ -516,6 +522,13 @@ fn evaluate_saved(source: &Path, out: &Path, cold: bool) -> Result<Value> {
             });
         }
         let reused = resumed && !cold && arm == "Untouched";
+        let trace_name = if reused {
+            "hot-Untouched.jsonl.zst".to_owned()
+        } else if resumed && !tag.is_empty() {
+            format!("{prefix}-{arm}-{tag}.jsonl.zst")
+        } else {
+            format!("{prefix}-{arm}.jsonl.zst")
+        };
         let (assessment, trace_hash) = if reused {
             let mut reader = zstd::stream::read::Decoder::new(fs::File::open(
                 out.join("hot-Untouched.jsonl.zst"),
@@ -533,7 +546,7 @@ fn evaluate_saved(source: &Path, out: &Path, cold: bool) -> Result<Value> {
             let file = fs::OpenOptions::new()
                 .write(true)
                 .create_new(true)
-                .open(out.join(format!("{prefix}-{arm}.jsonl.zst")))?;
+                .open(out.join(&trace_name))?;
             let mut traces = HashedTrace {
                 inner: zstd::stream::write::Encoder::new(file, 3)?,
                 digest: Sha256::new(),
@@ -565,7 +578,10 @@ fn evaluate_saved(source: &Path, out: &Path, cold: bool) -> Result<Value> {
                 arm
             },
         )?;
-        let record = json!({"condition":arm,"actor_sha256":before,"optimizer_step":actor.optimizer_step(),"native_trace_sha256":trace_hash,"assessment":assessment,"next_gradient_sha256":identity(&g)?,"next_gradient_objective":objective,"zero_optimizer_updates_during_assessment_or_cold_restore":true,"experimental_policy_branch_proofs":proofs});
+        let mut record = json!({"condition":arm,"actor_sha256":before,"optimizer_step":actor.optimizer_step(),"native_trace_sha256":trace_hash,"assessment":assessment,"next_gradient_sha256":identity(&g)?,"next_gradient_objective":objective,"zero_optimizer_updates_during_assessment_or_cold_restore":true,"experimental_policy_branch_proofs":proofs});
+        if resumed {
+            record["native_trace_file"] = json!(trace_name);
+        }
         write_json(&summary_path, &record)?;
         results.push(record);
     }
