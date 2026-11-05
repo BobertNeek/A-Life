@@ -1,0 +1,4778 @@
+{
+  "native_result": {
+    "adam_or_shadow_adam_steps": 0,
+    "elapsed_seconds": 23.782522020000002,
+    "execution_domain": "native-cpu",
+    "fresh_process_load_has_zero_decisions_or_probes": true,
+    "gradient_probes": 16,
+    "kind": "experimental-two-witness-native-tape-gradient-v25",
+    "limitations": [
+      "Post-hoc diagnosis of two previously witnessed pre-sleep failures, not held-out behavioral improvement.",
+      "Existing per-row native imitation and factual-speech components use unit weights; historical batch normalization, conditional and noun-margin terms are not reproduced.",
+      "Raw gradient directions are infinitesimal diagnostics; current stage mask is retained, no optimizer update or behavioral correction is performed.",
+      "Only actual pre-event premature Declare states receive the native silence target; other missing speech targets remain unlabeled.",
+      "Full parent states and native rows match earlier cold traces. Eight prefix states are loaded exactly in a new process without taking extra decisions."
+    ],
+    "models": [
+      {
+        "all_weights_moments_ages_config_mask_and_source_asset_exact": true,
+        "condition": "Untreated",
+        "final_actor_sha256": "ed1fdfa8bda84f7b8514d6e335f6bbab8eb165964e4cd7fa445ebe00fbabee6d",
+        "optimizer_step": 432,
+        "source_actor_sha256": "ed1fdfa8bda84f7b8514d6e335f6bbab8eb165964e4cd7fa445ebe00fbabee6d"
+      },
+      {
+        "all_weights_moments_ages_config_mask_and_source_asset_exact": true,
+        "condition": "MixedGrounded4",
+        "final_actor_sha256": "4d364f09fe2c9bfa16d81a716b79eb27553985615254156d4488c9d916e5ea7f",
+        "optimizer_step": 436,
+        "source_actor_sha256": "4d364f09fe2c9bfa16d81a716b79eb27553985615254156d4488c9d916e5ea7f"
+      }
+    ],
+    "necessary_preparation_steps": 8,
+    "records": [
+      {
+        "actual_emitted": [],
+        "actual_food_consumption": false,
+        "biological_reward": -1.5208965123747475e-05,
+        "condition": "Untreated",
+        "decoded_conditional_payload": {
+          "confidence": 0.5960784554481506,
+          "speech_act": "Declare",
+          "tokens": [
+            9,
+            1
+          ]
+        },
+        "energy_delta": -0.0001506805419921875,
+        "event_confirmed_speech_target": null,
+        "exact_prior_full_row_outcome_emission_and_sampling": true,
+        "native_full_row_sha256": "20918602f9739d31ce10df22e3c83a960eb3daefe41884ba047196e32ee95c7d",
+        "owned_after": [
+          null,
+          null
+        ],
+        "owned_before": [
+          null,
+          null
+        ],
+        "parent_full_state_matches_prior": true,
+        "post_private_sha256": "fd9a09b21ba46a17a3c198da39793a305e5d879a86fec20b179630f489ccc325",
+        "pre_private_sha256": "922739d59ab83c04445c9f64a37e93cbad3cf9b0eedae181afaac0a2bbbd61d2",
+        "prior_actual_event": null,
+        "prompted_cooldown_ready": true,
+        "requested": "EatFood",
+        "step": 0,
+        "world_seed": 16309347,
+        "total_native_candidate_count": 31,
+        "relevant_native_action_logits": [
+          {
+            "action_id": 1,
+            "index": 6,
+            "kind": "Idle",
+            "logit": 0.5812450647354126,
+            "representative_allowed": true,
+            "target": {
+              "entity": null,
+              "position": null
+            }
+          },
+          {
+            "action_id": 400,
+            "index": 8,
+            "kind": "Vocalize",
+            "logit": 1.348536491394043,
+            "representative_allowed": true,
+            "target": {
+              "entity": null,
+              "position": null
+            }
+          },
+          {
+            "action_id": 210,
+            "index": 19,
+            "kind": "Interact",
+            "logit": -3.1094157695770264,
+            "representative_allowed": true,
+            "target": {
+              "entity": 1462,
+              "position": {
+                "x": 3.567283868789673,
+                "y": 0.0,
+                "z": 0.3173151910305023
+              }
+            }
+          },
+          {
+            "action_id": 211,
+            "index": 20,
+            "kind": "Interact",
+            "logit": -1.9974151849746704,
+            "representative_allowed": true,
+            "target": {
+              "entity": 1462,
+              "position": {
+                "x": 3.567283868789673,
+                "y": 0.0,
+                "z": 0.3173151910305023
+              }
+            }
+          }
+        ],
+        "first_two_raw_speech_outputs": [
+          [
+            0.6858641505241394,
+            -0.7818038463592529,
+            -0.7701693177223206,
+            -0.7301923632621765,
+            -0.7146376371383667,
+            -0.7798950672149658,
+            -0.8190035820007324,
+            -0.7892204523086548,
+            0.01916246861219406,
+            -0.8981927037239075,
+            -0.7755497694015503,
+            0.5217151045799255,
+            -0.7897208333015442,
+            -0.771251380443573,
+            -0.7890182137489319,
+            -0.7583324909210205,
+            0.6975387334823608,
+            -0.7009532451629639,
+            -0.0800599455833435,
+            4.0047078132629395,
+            -6.4633402824401855,
+            -5.169626235961914,
+            -6.152376651763916,
+            -6.329319477081299,
+            -7.453243732452393,
+            -6.327019214630127,
+            -1.1704261302947998,
+            -6.385828495025635,
+            -4.170103549957275,
+            -4.721583366394043,
+            0.07052922248840332,
+            -6.447232723236084
+          ],
+          [
+            0.6458786129951477,
+            -0.7734429240226746,
+            -0.7156937122344971,
+            -0.741303563117981,
+            -0.7483524680137634,
+            -0.7620028853416443,
+            -0.8469607830047607,
+            -0.7656278610229492,
+            0.2939465343952179,
+            -0.6372672319412231,
+            -0.7541394233703613,
+            -0.7718440294265747,
+            -0.7480573654174805,
+            -0.763232946395874,
+            -0.7636212110519409,
+            -0.7690497040748596,
+            0.5749530792236328,
+            0.5870915651321411,
+            0.8230980634689331,
+            3.516784191131592,
+            -1.9638196229934692,
+            -1.905291199684143,
+            -2.318636178970337,
+            -2.3702781200408936,
+            -3.0878913402557373,
+            -2.718637228012085,
+            0.9758431911468506,
+            -2.833587646484375,
+            -1.374003529548645,
+            -1.644083857536316,
+            1.2891650199890137,
+            -2.769075632095337
+          ]
+        ]
+      },
+      {
+        "actual_emitted": [
+          {
+            "addressee": null,
+            "confidence": 0.6431372761726379,
+            "emitted_tick": 459,
+            "expires_after_tick": 460,
+            "source_kind": "Creature",
+            "source_position": {
+              "x": 3.0,
+              "y": 0.0,
+              "z": 0.0
+            },
+            "speaker_id": 1,
+            "teacher_channel": null,
+            "tokens": [
+              8,
+              1
+            ],
+            "utterance_id": 2
+          }
+        ],
+        "actual_food_consumption": false,
+        "biological_reward": -1.5496289051952772e-05,
+        "condition": "Untreated",
+        "decoded_conditional_payload": {
+          "confidence": 0.6431372761726379,
+          "speech_act": "Declare",
+          "tokens": [
+            8,
+            1
+          ]
+        },
+        "energy_delta": -0.00015056133270263672,
+        "event_confirmed_speech_target": null,
+        "exact_prior_full_row_outcome_emission_and_sampling": true,
+        "existing_unit_native_imitation_and_factual_speech_components": {
+          "action_ce": 7.874993324279785,
+          "gradient": {
+            "current_stage_trainable_l2": [
+              0.0,
+              29.32671930695642,
+              0.0,
+              0.0
+            ],
+            "nonzero_current_trainable_coordinates": [
+              0,
+              1648,
+              0,
+              0
+            ],
+            "order": [
+              "recurrent",
+              "action_head",
+              "speech_head",
+              "other"
+            ],
+            "raw_l2": [
+              15.980851516317479,
+              29.32671930695642,
+              0.0,
+              0.4598791185024771
+            ]
+          },
+          "normalization": "unit per-row components; historical batch normalization, conditional and noun-margin terms are not reproduced",
+          "speech_loss": 6.221405721633451,
+          "target": {
+            "motors": [
+              268435456,
+              null,
+              524288,
+              null,
+              null,
+              null
+            ],
+            "representative": 524288
+          }
+        },
+        "native_full_row_sha256": "a49e54ce576f3cc2d05f82fd55acf58e783bbf1b3dda0e160ce1a7c66e4913e4",
+        "owned_after": [
+          null,
+          null
+        ],
+        "owned_before": [
+          null,
+          null
+        ],
+        "parent_full_state_matches_prior": true,
+        "post_private_sha256": "ab914682da595d7164569acfaaa736fd584f8d3434cdc2f93bc64634ed34deed",
+        "pre_private_sha256": "fd9a09b21ba46a17a3c198da39793a305e5d879a86fec20b179630f489ccc325",
+        "prior_actual_event": null,
+        "prompted_cooldown_ready": true,
+        "requested": "EatFood",
+        "step": 1,
+        "witnessed_silence_only": {
+          "current_stage_mask_unmodified": true,
+          "eligibility": "actual matching Declare emitted before any activity; both owners absent; no physical event, not arbitrary missing target",
+          "gradient": {
+            "current_stage_trainable_l2": [
+              0.0,
+              0.0,
+              27.5188557567506,
+              0.0
+            ],
+            "nonzero_current_trainable_coordinates": [
+              0,
+              0,
+              64,
+              0
+            ],
+            "order": [
+              "recurrent",
+              "action_head",
+              "speech_head",
+              "other"
+            ],
+            "raw_l2": [
+              3.428625824048759,
+              0.0,
+              27.5188557567506,
+              0.0
+            ]
+          },
+          "loss": 3.1641425358632205,
+          "native_target": {
+            "act": "Declare",
+            "continuation": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "token": null,
+            "weight": 1.0
+          },
+          "no_update": true,
+          "speech_head_only_negative_gradient_direction_presence_raw0": -211.19583813511946,
+          "speech_head_only_negative_gradient_direction_stop_raw0": 214.51968559973056
+        },
+        "world_seed": 16309347,
+        "total_native_candidate_count": 31,
+        "relevant_native_action_logits": [
+          {
+            "action_id": 1,
+            "index": 6,
+            "kind": "Idle",
+            "logit": 0.5844918489456177,
+            "representative_allowed": true,
+            "target": {
+              "entity": null,
+              "position": null
+            }
+          },
+          {
+            "action_id": 400,
+            "index": 8,
+            "kind": "Vocalize",
+            "logit": 1.898200273513794,
+            "representative_allowed": true,
+            "target": {
+              "entity": null,
+              "position": null
+            }
+          },
+          {
+            "action_id": 210,
+            "index": 19,
+            "kind": "Interact",
+            "logit": -4.6675124168396,
+            "representative_allowed": true,
+            "target": {
+              "entity": 1462,
+              "position": {
+                "x": 3.567283868789673,
+                "y": 0.0,
+                "z": 0.3173151910305023
+              }
+            }
+          },
+          {
+            "action_id": 211,
+            "index": 20,
+            "kind": "Interact",
+            "logit": -2.5763187408447266,
+            "representative_allowed": true,
+            "target": {
+              "entity": 1462,
+              "position": {
+                "x": 3.567283868789673,
+                "y": 0.0,
+                "z": 0.3173151910305023
+              }
+            }
+          }
+        ],
+        "first_two_raw_speech_outputs": [
+          [
+            0.7606135606765747,
+            -0.8291205167770386,
+            -0.8096776008605957,
+            -0.8000593185424805,
+            -0.7843015193939209,
+            -0.8155611753463745,
+            -0.8394718170166016,
+            -0.8537256717681885,
+            -0.09912896156311035,
+            -0.9673410654067993,
+            -0.8597027063369751,
+            0.6470930576324463,
+            -0.881045937538147,
+            -0.8179208040237427,
+            -0.8441872596740723,
+            -0.8467092514038086,
+            0.9648616313934326,
+            -0.9926372766494751,
+            0.17850568890571594,
+            4.971802234649658,
+            -7.939707279205322,
+            -6.229325294494629,
+            -7.46403694152832,
+            -7.661756992340088,
+            -9.217442512512207,
+            -7.819190979003906,
+            -1.5339831113815308,
+            -7.885721206665039,
+            -5.118160724639893,
+            -5.838360786437988,
+            0.33285659551620483,
+            -7.8643341064453125
+          ],
+          [
+            0.7197938561439514,
+            -0.7553009986877441,
+            -0.6979494690895081,
+            -0.7137341499328613,
+            -0.7418869733810425,
+            -0.7406091690063477,
+            -0.8070454001426697,
+            -0.7484438419342041,
+            0.3137129247188568,
+            -0.5889254212379456,
+            -0.7599379420280457,
+            -0.8836816549301147,
+            -0.7312156558036804,
+            -0.7229476571083069,
+            -0.7574511766433716,
+            -0.7806318998336792,
+            0.8222090005874634,
+            0.7671796083450317,
+            1.4104046821594238,
+            4.321441650390625,
+            -1.7440613508224487,
+            -1.7336249351501465,
+            -2.131056547164917,
+            -2.2044901847839355,
+            -3.123338222503662,
+            -2.753164768218994,
+            1.389466643333435,
+            -2.815455436706543,
+            -1.209790825843811,
+            -1.5034794807434082,
+            1.9980664253234863,
+            -2.678867816925049
+          ]
+        ]
+      },
+      {
+        "actual_emitted": [],
+        "actual_food_consumption": false,
+        "biological_reward": -1.5208965123747475e-05,
+        "condition": "Untreated",
+        "decoded_conditional_payload": {
+          "confidence": 0.7607843279838562,
+          "speech_act": "Declare",
+          "tokens": [
+            9,
+            1
+          ]
+        },
+        "energy_delta": -0.0001506805419921875,
+        "event_confirmed_speech_target": null,
+        "exact_prior_full_row_outcome_emission_and_sampling": true,
+        "native_full_row_sha256": "02ed3966fcfeb36a243c124945e381703497fa31f99c1c38fc1987ca5eb7b06e",
+        "owned_after": [
+          null,
+          null
+        ],
+        "owned_before": [
+          null,
+          null
+        ],
+        "parent_full_state_matches_prior": true,
+        "post_private_sha256": "58edd3d7dfae2e23cdc777e5d05d9ee0b0a2bf2e0d87941fdefa1e8b63f2c172",
+        "pre_private_sha256": "242ebfb3b5a93f5721ac1aa0994e2873214bb2c5c70bd13d09d354ddf70566f8",
+        "prior_actual_event": null,
+        "prompted_cooldown_ready": true,
+        "requested": "GetFood",
+        "step": 0,
+        "world_seed": 16309347,
+        "total_native_candidate_count": 31,
+        "relevant_native_action_logits": [
+          {
+            "action_id": 1,
+            "index": 6,
+            "kind": "Idle",
+            "logit": 0.7726404070854187,
+            "representative_allowed": true,
+            "target": {
+              "entity": null,
+              "position": null
+            }
+          },
+          {
+            "action_id": 400,
+            "index": 8,
+            "kind": "Vocalize",
+            "logit": 1.5600649118423462,
+            "representative_allowed": true,
+            "target": {
+              "entity": null,
+              "position": null
+            }
+          },
+          {
+            "action_id": 210,
+            "index": 19,
+            "kind": "Interact",
+            "logit": -6.362757682800293,
+            "representative_allowed": true,
+            "target": {
+              "entity": 1462,
+              "position": {
+                "x": 3.567283868789673,
+                "y": 0.0,
+                "z": 0.3173151910305023
+              }
+            }
+          },
+          {
+            "action_id": 211,
+            "index": 20,
+            "kind": "Interact",
+            "logit": 0.9679908156394958,
+            "representative_allowed": true,
+            "target": {
+              "entity": 1462,
+              "position": {
+                "x": 3.567283868789673,
+                "y": 0.0,
+                "z": 0.3173151910305023
+              }
+            }
+          }
+        ],
+        "first_two_raw_speech_outputs": [
+          [
+            1.001294732093811,
+            -0.6927429437637329,
+            -0.692886233329773,
+            -0.5987437963485718,
+            -0.6872393488883972,
+            -0.6920294761657715,
+            -0.675662636756897,
+            -0.711543619632721,
+            0.3824298083782196,
+            -0.8223724365234375,
+            -0.7599800825119019,
+            0.9104907512664795,
+            -0.6940255165100098,
+            -0.6250317096710205,
+            -0.692659854888916,
+            -0.7720321416854858,
+            1.1150367259979248,
+            -0.6585068106651306,
+            0.40908920764923096,
+            4.46985387802124,
+            -6.424218654632568,
+            -5.3748297691345215,
+            -6.141706943511963,
+            -6.235133171081543,
+            -7.684530735015869,
+            -6.35747766494751,
+            -0.7322936058044434,
+            -6.395801067352295,
+            -4.142991542816162,
+            -4.657368183135986,
+            0.42217952013015747,
+            -6.497906684875488
+          ],
+          [
+            0.9371731877326965,
+            -0.7572960257530212,
+            -0.7335871458053589,
+            -0.6908215880393982,
+            -0.7753592729568481,
+            -0.7132349014282227,
+            -0.7328195571899414,
+            -0.762632429599762,
+            0.5130881071090698,
+            -0.48659196496009827,
+            -0.7862711548805237,
+            -0.6808022856712341,
+            -0.7213041186332703,
+            -0.6770867109298706,
+            -0.7192214131355286,
+            -0.8291725516319275,
+            1.001126766204834,
+            0.8360032439231873,
+            1.3796501159667969,
+            4.01141881942749,
+            -1.279750943183899,
+            -1.6299145221710205,
+            -1.7810767889022827,
+            -1.6942015886306763,
+            -2.66884708404541,
+            -2.2263848781585693,
+            1.7437801361083984,
+            -2.3344287872314453,
+            -0.9691763520240784,
+            -1.1648107767105103,
+            1.858431100845337,
+            -2.250291109085083
+          ]
+        ]
+      },
+      {
+        "actual_emitted": [
+          {
+            "addressee": null,
+            "confidence": 0.7960784435272217,
+            "emitted_tick": 459,
+            "expires_after_tick": 460,
+            "source_kind": "Creature",
+            "source_position": {
+              "x": 3.0,
+              "y": 0.0,
+              "z": 0.0
+            },
+            "speaker_id": 1,
+            "teacher_channel": null,
+            "tokens": [
+              9,
+              1
+            ],
+            "utterance_id": 2
+          }
+        ],
+        "actual_food_consumption": false,
+        "biological_reward": -1.5496289051952772e-05,
+        "condition": "Untreated",
+        "decoded_conditional_payload": {
+          "confidence": 0.7960784435272217,
+          "speech_act": "Declare",
+          "tokens": [
+            9,
+            1
+          ]
+        },
+        "energy_delta": -0.00015056133270263672,
+        "event_confirmed_speech_target": null,
+        "exact_prior_full_row_outcome_emission_and_sampling": true,
+        "existing_unit_native_imitation_and_factual_speech_components": {
+          "action_ce": 2.1956565380096436,
+          "gradient": {
+            "current_stage_trainable_l2": [
+              0.0,
+              10.49578495944225,
+              0.0,
+              0.0
+            ],
+            "nonzero_current_trainable_coordinates": [
+              0,
+              1648,
+              0,
+              0
+            ],
+            "order": [
+              "recurrent",
+              "action_head",
+              "speech_head",
+              "other"
+            ],
+            "raw_l2": [
+              2.0981586143469757,
+              10.49578495944225,
+              0.0,
+              0.8355465992891825
+            ]
+          },
+          "normalization": "unit per-row components; historical batch normalization, conditional and noun-margin terms are not reproduced",
+          "speech_loss": 0.5042653798188814,
+          "target": {
+            "motors": [
+              268435456,
+              null,
+              1048576,
+              null,
+              null,
+              null
+            ],
+            "representative": 1048576
+          }
+        },
+        "native_full_row_sha256": "81eb7e3856b3992a1ae33e8907afb387c10965cfd487d76b949f0c6807e7be13",
+        "owned_after": [
+          null,
+          null
+        ],
+        "owned_before": [
+          null,
+          null
+        ],
+        "parent_full_state_matches_prior": true,
+        "post_private_sha256": "f0fa97e2754cc1bcd8cfdc12aa2720f436d5c12f767d69613d99499b70f0f334",
+        "pre_private_sha256": "58edd3d7dfae2e23cdc777e5d05d9ee0b0a2bf2e0d87941fdefa1e8b63f2c172",
+        "prior_actual_event": null,
+        "prompted_cooldown_ready": true,
+        "requested": "GetFood",
+        "step": 1,
+        "witnessed_silence_only": {
+          "current_stage_mask_unmodified": true,
+          "eligibility": "actual matching Declare emitted before any activity; both owners absent; no physical event, not arbitrary missing target",
+          "gradient": {
+            "current_stage_trainable_l2": [
+              0.0,
+              0.0,
+              31.92160581154833,
+              0.0
+            ],
+            "nonzero_current_trainable_coordinates": [
+              0,
+              0,
+              64,
+              0
+            ],
+            "order": [
+              "recurrent",
+              "action_head",
+              "speech_head",
+              "other"
+            ],
+            "raw_l2": [
+              4.060954098303739,
+              0.0,
+              31.92160581154833,
+              0.0
+            ]
+          },
+          "loss": 3.919544150872646,
+          "native_target": {
+            "act": "Declare",
+            "continuation": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "token": null,
+            "weight": 1.0
+          },
+          "no_update": true,
+          "speech_head_only_negative_gradient_direction_presence_raw0": -284.25142322562823,
+          "speech_head_only_negative_gradient_direction_stop_raw0": 227.28320417776342
+        },
+        "world_seed": 16309347,
+        "total_native_candidate_count": 31,
+        "relevant_native_action_logits": [
+          {
+            "action_id": 1,
+            "index": 6,
+            "kind": "Idle",
+            "logit": 0.7953941822052002,
+            "representative_allowed": true,
+            "target": {
+              "entity": null,
+              "position": null
+            }
+          },
+          {
+            "action_id": 400,
+            "index": 8,
+            "kind": "Vocalize",
+            "logit": 2.128222942352295,
+            "representative_allowed": true,
+            "target": {
+              "entity": null,
+              "position": null
+            }
+          },
+          {
+            "action_id": 210,
+            "index": 19,
+            "kind": "Interact",
+            "logit": -8.18763542175293,
+            "representative_allowed": true,
+            "target": {
+              "entity": 1462,
+              "position": {
+                "x": 3.567283868789673,
+                "y": 0.0,
+                "z": 0.3173151910305023
+              }
+            }
+          },
+          {
+            "action_id": 211,
+            "index": 20,
+            "kind": "Interact",
+            "logit": 0.6572253108024597,
+            "representative_allowed": true,
+            "target": {
+              "entity": 1462,
+              "position": {
+                "x": 3.567283868789673,
+                "y": 0.0,
+                "z": 0.3173151910305023
+              }
+            }
+          }
+        ],
+        "first_two_raw_speech_outputs": [
+          [
+            1.084754228591919,
+            -0.7305086255073547,
+            -0.7311904430389404,
+            -0.6612396240234375,
+            -0.7609206438064575,
+            -0.7193537950515747,
+            -0.6917381286621094,
+            -0.7746249437332153,
+            0.28294089436531067,
+            -0.8832669258117676,
+            -0.8350176215171814,
+            1.059265375137329,
+            -0.7794454097747803,
+            -0.6677747964859009,
+            -0.740371584892273,
+            -0.8625613451004028,
+            1.38674795627594,
+            -0.9484911561012268,
+            0.6729529500007629,
+            5.426025867462158,
+            -7.8731536865234375,
+            -6.429413795471191,
+            -7.435290813446045,
+            -7.536043643951416,
+            -9.425901412963867,
+            -7.811588287353516,
+            -1.0731170177459717,
+            -7.861455917358398,
+            -5.081225395202637,
+            -5.74409294128418,
+            0.6753919124603271,
+            -7.8809661865234375
+          ],
+          [
+            1.0200111865997314,
+            -0.7114264369010925,
+            -0.692328691482544,
+            -0.6403917670249939,
+            -0.7578449845314026,
+            -0.6729476451873779,
+            -0.6789794564247131,
+            -0.7280623316764832,
+            0.567186713218689,
+            -0.4282070994377136,
+            -0.7778071165084839,
+            -0.7370085120201111,
+            -0.6849879026412964,
+            -0.6190823316574097,
+            -0.6941631436347961,
+            -0.8376048803329468,
+            1.258008360862732,
+            0.9940749406814575,
+            1.971078872680664,
+            4.792807579040527,
+            -1.082061767578125,
+            -1.4864492416381836,
+            -1.6214830875396729,
+            -1.5398385524749756,
+            -2.7384121417999268,
+            -2.270383834838867,
+            2.144120931625366,
+            -2.3226583003997803,
+            -0.8270474076271057,
+            -1.0203194618225098,
+            2.5457825660705566,
+            -2.169188976287842
+          ]
+        ]
+      },
+      {
+        "actual_emitted": [],
+        "actual_food_consumption": false,
+        "biological_reward": -1.5619063560734503e-05,
+        "condition": "Untreated",
+        "decoded_conditional_payload": {
+          "confidence": 0.5882353186607361,
+          "speech_act": "Declare",
+          "tokens": [
+            8,
+            1
+          ]
+        },
+        "energy_delta": -0.00015985965728759766,
+        "event_confirmed_speech_target": null,
+        "exact_prior_full_row_outcome_emission_and_sampling": true,
+        "native_full_row_sha256": "361bb5c00c5a6a1026cb7c6b6bbdbb358cd841f0d08c171f301d29f4ccc11e19",
+        "owned_after": [
+          1,
+          null
+        ],
+        "owned_before": [
+          null,
+          null
+        ],
+        "parent_full_state_matches_prior": true,
+        "post_private_sha256": "bab9827b07dbfd7f75317eab81f10543fc93cac04862e4a95ea51a659ba3e077",
+        "pre_private_sha256": "90b42d3731f3deab135d32c5a1409ce596665909a6529774bd598e8d09f15a5b",
+        "prior_actual_event": null,
+        "prompted_cooldown_ready": true,
+        "requested": "EatFood",
+        "step": 0,
+        "world_seed": 16508317,
+        "total_native_candidate_count": 31,
+        "relevant_native_action_logits": [
+          {
+            "action_id": 1,
+            "index": 6,
+            "kind": "Idle",
+            "logit": 0.5812469124794006,
+            "representative_allowed": true,
+            "target": {
+              "entity": null,
+              "position": null
+            }
+          },
+          {
+            "action_id": 400,
+            "index": 8,
+            "kind": "Vocalize",
+            "logit": 1.341968059539795,
+            "representative_allowed": true,
+            "target": {
+              "entity": null,
+              "position": null
+            }
+          },
+          {
+            "action_id": 210,
+            "index": 19,
+            "kind": "Interact",
+            "logit": 1.438269019126892,
+            "representative_allowed": true,
+            "target": {
+              "entity": 1503,
+              "position": {
+                "x": 3.463045597076416,
+                "y": 0.0,
+                "z": 0.29679763317108154
+              }
+            }
+          },
+          {
+            "action_id": 211,
+            "index": 20,
+            "kind": "Interact",
+            "logit": 3.311815023422241,
+            "representative_allowed": true,
+            "target": {
+              "entity": 1503,
+              "position": {
+                "x": 3.463045597076416,
+                "y": 0.0,
+                "z": 0.29679763317108154
+              }
+            }
+          }
+        ],
+        "first_two_raw_speech_outputs": [
+          [
+            0.6748173832893372,
+            -0.7692670822143555,
+            -0.7677898406982422,
+            -0.7393916845321655,
+            -0.7134686708450317,
+            -0.7740839719772339,
+            -0.8059107065200806,
+            -0.7900075912475586,
+            -0.020189646631479263,
+            -0.8991560339927673,
+            -0.7620679140090942,
+            0.51768958568573,
+            -0.7928944230079651,
+            -0.7809953093528748,
+            -0.8000073432922363,
+            -0.7466883659362793,
+            0.6755707263946533,
+            -0.7053212523460388,
+            -0.11298385262489319,
+            3.9271135330200195,
+            -6.41822624206543,
+            -5.132396221160889,
+            -6.116419315338135,
+            -6.2980756759643555,
+            -7.405676364898682,
+            -6.263992786407471,
+            -1.1885300874710083,
+            -6.3256731033325195,
+            -4.15954065322876,
+            -4.6955885887146,
+            0.0464063435792923,
+            -6.409529685974121
+          ],
+          [
+            0.6377647519111633,
+            -0.7581225037574768,
+            -0.711101770401001,
+            -0.7461292147636414,
+            -0.746576189994812,
+            -0.7561237812042236,
+            -0.8345026969909668,
+            -0.7641789317131042,
+            0.25890064239501953,
+            -0.6449860334396362,
+            -0.737434983253479,
+            -0.750798225402832,
+            -0.7495628595352173,
+            -0.7738397717475891,
+            -0.7736206650733948,
+            -0.7563557028770447,
+            0.551848292350769,
+            0.5628997683525085,
+            0.77888023853302,
+            3.4424495697021484,
+            -1.991104006767273,
+            -1.9242405891418457,
+            -2.343190908432007,
+            -2.4034805297851562,
+            -3.1109635829925537,
+            -2.7156074047088623,
+            0.9235326051712036,
+            -2.8317465782165527,
+            -1.4067353010177612,
+            -1.6656893491744995,
+            1.2418714761734009,
+            -2.794463872909546
+          ]
+        ]
+      },
+      {
+        "actual_emitted": [],
+        "actual_food_consumption": true,
+        "biological_reward": 0.036173250526189804,
+        "condition": "Untreated",
+        "decoded_conditional_payload": {
+          "confidence": 0.6039215922355652,
+          "speech_act": "Declare",
+          "tokens": [
+            8,
+            1
+          ]
+        },
+        "energy_delta": 0.1220163106918335,
+        "event_confirmed_speech_target": null,
+        "exact_prior_full_row_outcome_emission_and_sampling": true,
+        "existing_unit_native_imitation_and_factual_speech_components": {
+          "action_ce": 0.04737798124551773,
+          "gradient": {
+            "current_stage_trainable_l2": [
+              0.0,
+              1.3294590377287094,
+              0.0,
+              0.0
+            ],
+            "nonzero_current_trainable_coordinates": [
+              0,
+              2096,
+              0,
+              0
+            ],
+            "order": [
+              "recurrent",
+              "action_head",
+              "speech_head",
+              "other"
+            ],
+            "raw_l2": [
+              0.7975469501190888,
+              1.3294590377287094,
+              0.0,
+              0.3336273500920388
+            ]
+          },
+          "normalization": "unit per-row components; historical batch normalization, conditional and noun-margin terms are not reproduced",
+          "speech_loss": -0.2088893868551317,
+          "target": {
+            "motors": [
+              268435456,
+              null,
+              8,
+              null,
+              null,
+              null
+            ],
+            "representative": 8
+          }
+        },
+        "held_food_margin": {
+          "current_stage_negative_existing_gradient_direction": 22.44629935679194,
+          "eat_index": 3,
+          "eat_minus_best_idle_or_voice": 3.9561030864715576,
+          "infinitesimal_direction_not_an_optimizer_step": true,
+          "margin_gradient": {
+            "current_stage_trainable_l2": [
+              0.0,
+              23.0371895402193,
+              0.0,
+              0.0
+            ],
+            "nonzero_current_trainable_coordinates": [
+              0,
+              352,
+              0,
+              0
+            ],
+            "order": [
+              "recurrent",
+              "action_head",
+              "speech_head",
+              "other"
+            ],
+            "raw_l2": [
+              17.472406068768475,
+              23.0371895402193,
+              0.0,
+              7.1787521481234
+            ]
+          },
+          "non_eat_index": 8
+        },
+        "native_full_row_sha256": "d67fe7bb763cfe10a1dd0ef0cd913cafa85deb9ff74b55f631cd05edb17b2066",
+        "owned_after": [
+          null,
+          null
+        ],
+        "owned_before": [
+          1,
+          null
+        ],
+        "parent_full_state_matches_prior": true,
+        "post_private_sha256": "2c27059d1f1d2e1b281dab3b7fe532b5bbf447f812edd44eaf0a62bb9e5c16cc",
+        "pre_private_sha256": "bab9827b07dbfd7f75317eab81f10543fc93cac04862e4a95ea51a659ba3e077",
+        "prior_actual_event": {
+          "lesson": "GetFood",
+          "patch_sha256": "aca10bc6d79d51be1f281b65072b2f061d604e5cfcbb1f84bd9c70370d071091",
+          "tick": 458
+        },
+        "prompted_cooldown_ready": true,
+        "requested": "EatFood",
+        "step": 1,
+        "world_seed": 16508317,
+        "total_native_candidate_count": 31,
+        "relevant_native_action_logits": [
+          {
+            "action_id": 210,
+            "index": 3,
+            "kind": "Interact",
+            "logit": 5.837822437286377,
+            "representative_allowed": true,
+            "target": {
+              "entity": 1503,
+              "position": {
+                "x": 3.5,
+                "y": 0.0,
+                "z": 0.0
+              }
+            }
+          },
+          {
+            "action_id": 211,
+            "index": 4,
+            "kind": "Interact",
+            "logit": -8.799370765686035,
+            "representative_allowed": true,
+            "target": {
+              "entity": 1503,
+              "position": {
+                "x": 3.5,
+                "y": 0.0,
+                "z": 0.0
+              }
+            }
+          },
+          {
+            "action_id": 1,
+            "index": 6,
+            "kind": "Idle",
+            "logit": 0.5858141779899597,
+            "representative_allowed": true,
+            "target": {
+              "entity": null,
+              "position": null
+            }
+          },
+          {
+            "action_id": 400,
+            "index": 8,
+            "kind": "Vocalize",
+            "logit": 1.8817193508148193,
+            "representative_allowed": true,
+            "target": {
+              "entity": null,
+              "position": null
+            }
+          }
+        ],
+        "first_two_raw_speech_outputs": [
+          [
+            0.7002862095832825,
+            -0.8507444858551025,
+            -0.8127570152282715,
+            -0.837902307510376,
+            -0.8258177042007446,
+            -0.8713762760162354,
+            -0.8527522683143616,
+            -0.8648594617843628,
+            -0.02803545817732811,
+            -0.8969348669052124,
+            -0.8671059608459473,
+            0.5594680309295654,
+            -0.9149168729782104,
+            -0.8404556512832642,
+            -0.8995815515518188,
+            -0.844877302646637,
+            0.983246922492981,
+            -1.057631254196167,
+            0.2946271300315857,
+            4.979269981384277,
+            -8.040460586547852,
+            -6.2339677810668945,
+            -7.5504326820373535,
+            -7.694468021392822,
+            -9.268486976623535,
+            -7.874255657196045,
+            -1.596135139465332,
+            -7.950320720672607,
+            -5.152416706085205,
+            -5.888882160186768,
+            0.3754976987838745,
+            -7.890973091125488
+          ],
+          [
+            0.6540060639381409,
+            -0.7878195643424988,
+            -0.7156692147254944,
+            -0.772327184677124,
+            -0.7905411720275879,
+            -0.7949163317680359,
+            -0.8339709639549255,
+            -0.7779169678688049,
+            0.3783171474933624,
+            -0.5192461013793945,
+            -0.7781777381896973,
+            -1.008754014968872,
+            -0.7699825763702393,
+            -0.7581990957260132,
+            -0.8117414712905884,
+            -0.7841007113456726,
+            0.8400499820709229,
+            0.7318585515022278,
+            1.5535571575164795,
+            4.326442241668701,
+            -1.7529566287994385,
+            -1.6706697940826416,
+            -2.138827323913574,
+            -2.1482691764831543,
+            -3.0904479026794434,
+            -2.7558228969573975,
+            1.3532084226608276,
+            -2.8223023414611816,
+            -1.2029969692230225,
+            -1.510943055152893,
+            2.0769882202148438,
+            -2.635854482650757
+          ]
+        ]
+      },
+      {
+        "actual_emitted": [],
+        "actual_food_consumption": false,
+        "biological_reward": -1.5619063560734503e-05,
+        "condition": "Untreated",
+        "decoded_conditional_payload": {
+          "confidence": 0.7568627595901489,
+          "speech_act": "Declare",
+          "tokens": [
+            9,
+            1
+          ]
+        },
+        "energy_delta": -0.00015985965728759766,
+        "event_confirmed_speech_target": null,
+        "exact_prior_full_row_outcome_emission_and_sampling": true,
+        "native_full_row_sha256": "c2c5ca3e2ccbbe0016992f662c0301198614fabb9918dc1430cdb594dc60e007",
+        "owned_after": [
+          1,
+          null
+        ],
+        "owned_before": [
+          null,
+          null
+        ],
+        "parent_full_state_matches_prior": true,
+        "post_private_sha256": "a95a9db5848e3f10585b36aa03a1dcd26363c8071f8c072ee9b400cb57cf3149",
+        "pre_private_sha256": "5ff90b204451a90bcb49dbbc7cc48a422f6625b900b1de2abbf552efc1d9db1e",
+        "prior_actual_event": null,
+        "prompted_cooldown_ready": true,
+        "requested": "GetFood",
+        "step": 0,
+        "world_seed": 16508317,
+        "total_native_candidate_count": 31,
+        "relevant_native_action_logits": [
+          {
+            "action_id": 1,
+            "index": 6,
+            "kind": "Idle",
+            "logit": 0.7726520895957947,
+            "representative_allowed": true,
+            "target": {
+              "entity": null,
+              "position": null
+            }
+          },
+          {
+            "action_id": 400,
+            "index": 8,
+            "kind": "Vocalize",
+            "logit": 1.5535075664520264,
+            "representative_allowed": true,
+            "target": {
+              "entity": null,
+              "position": null
+            }
+          },
+          {
+            "action_id": 210,
+            "index": 19,
+            "kind": "Interact",
+            "logit": -1.1436318159103394,
+            "representative_allowed": true,
+            "target": {
+              "entity": 1503,
+              "position": {
+                "x": 3.463045597076416,
+                "y": 0.0,
+                "z": 0.29679763317108154
+              }
+            }
+          },
+          {
+            "action_id": 211,
+            "index": 20,
+            "kind": "Interact",
+            "logit": 6.433175086975098,
+            "representative_allowed": true,
+            "target": {
+              "entity": 1503,
+              "position": {
+                "x": 3.463045597076416,
+                "y": 0.0,
+                "z": 0.29679763317108154
+              }
+            }
+          }
+        ],
+        "first_two_raw_speech_outputs": [
+          [
+            0.9902523756027222,
+            -0.6801980137825012,
+            -0.6905019283294678,
+            -0.6079350709915161,
+            -0.6860689520835876,
+            -0.6862099170684814,
+            -0.6625632643699646,
+            -0.712325930595398,
+            0.3430864214897156,
+            -0.8233271241188049,
+            -0.7464911937713623,
+            0.9064798951148987,
+            -0.697192907333374,
+            -0.6347689628601074,
+            -0.7036406993865967,
+            -0.7603859901428223,
+            1.0930768251419067,
+            -0.662876307964325,
+            0.3761831820011139,
+            4.392266750335693,
+            -6.37909460067749,
+            -5.337596893310547,
+            -6.105739593505859,
+            -6.203873157501221,
+            -7.636959075927734,
+            -6.294437885284424,
+            -0.750386655330658,
+            -6.335634231567383,
+            -4.132424831390381,
+            -4.6313629150390625,
+            0.3980645537376404,
+            -6.460190296173096
+          ],
+          [
+            0.9276618957519531,
+            -0.7431021928787231,
+            -0.7299107909202576,
+            -0.6969159245491028,
+            -0.7745979428291321,
+            -0.708253800868988,
+            -0.7213668823242188,
+            -0.7625276446342468,
+            0.4762106239795685,
+            -0.49390333890914917,
+            -0.7717428803443909,
+            -0.6628396511077881,
+            -0.724671483039856,
+            -0.6887211799621582,
+            -0.7308272123336792,
+            -0.8184254169464111,
+            0.9773823618888855,
+            0.8119257092475891,
+            1.334947109222412,
+            3.9374983310699463,
+            -1.3058139085769653,
+            -1.6479215621948242,
+            -1.8050212860107422,
+            -1.7260563373565674,
+            -2.6921498775482178,
+            -2.2231223583221436,
+            1.6914677619934082,
+            -2.332667827606201,
+            -1.0017009973526,
+            -1.1859642267227173,
+            1.8124208450317383,
+            -2.2752511501312256
+          ]
+        ]
+      },
+      {
+        "actual_emitted": [],
+        "actual_food_consumption": true,
+        "biological_reward": 0.036173250526189804,
+        "condition": "Untreated",
+        "decoded_conditional_payload": {
+          "confidence": 0.772549033164978,
+          "speech_act": "Declare",
+          "tokens": [
+            9,
+            1
+          ]
+        },
+        "energy_delta": 0.1220163106918335,
+        "event_confirmed_speech_target": {
+          "act": "Declare",
+          "continuation": [
+            1,
+            0,
+            0,
+            0,
+            0
+          ],
+          "token": 9,
+          "weight": 1.0
+        },
+        "exact_prior_full_row_outcome_emission_and_sampling": true,
+        "existing_unit_native_imitation_and_factual_speech_components": {
+          "action_ce": 1.4314911365509033,
+          "gradient": {
+            "current_stage_trainable_l2": [
+              0.0,
+              16.374432130393366,
+              0.737167859187048,
+              0.0
+            ],
+            "nonzero_current_trainable_coordinates": [
+              0,
+              2096,
+              992,
+              0
+            ],
+            "order": [
+              "recurrent",
+              "action_head",
+              "speech_head",
+              "other"
+            ],
+            "raw_l2": [
+              11.314675823835247,
+              16.374432130393366,
+              0.737167859187048,
+              4.511636728167583
+            ]
+          },
+          "normalization": "unit per-row components; historical batch normalization, conditional and noun-margin terms are not reproduced",
+          "speech_loss": 0.34664461317467554,
+          "target": {
+            "motors": [
+              268435456,
+              null,
+              null,
+              256,
+              null,
+              null
+            ],
+            "representative": 256
+          }
+        },
+        "held_food_margin": {
+          "current_stage_negative_existing_gradient_direction": -410.5452580118212,
+          "eat_index": 3,
+          "eat_minus_best_idle_or_voice": 0.962848424911499,
+          "infinitesimal_direction_not_an_optimizer_step": true,
+          "margin_gradient": {
+            "current_stage_trainable_l2": [
+              0.0,
+              25.266170355033758,
+              0.0,
+              0.0
+            ],
+            "nonzero_current_trainable_coordinates": [
+              0,
+              352,
+              0,
+              0
+            ],
+            "order": [
+              "recurrent",
+              "action_head",
+              "speech_head",
+              "other"
+            ],
+            "raw_l2": [
+              17.87786064565624,
+              25.266170355033758,
+              0.0,
+              7.178715751951022
+            ]
+          },
+          "non_eat_index": 8
+        },
+        "native_full_row_sha256": "9fc2eca0fc3379f7c46ecd52b85c0c9bae71b7caddb8126ff031a4f517a07fdf",
+        "owned_after": [
+          null,
+          null
+        ],
+        "owned_before": [
+          1,
+          null
+        ],
+        "parent_full_state_matches_prior": true,
+        "post_private_sha256": "a28f71479986f078f2d7ae561771351ff62e5d19e3d6918d4691528adc3fa9f2",
+        "pre_private_sha256": "a95a9db5848e3f10585b36aa03a1dcd26363c8071f8c072ee9b400cb57cf3149",
+        "prior_actual_event": {
+          "lesson": "GetFood",
+          "patch_sha256": "5dd07292df41a9ff28eab80d2da851a33883e05e6ade9cf1f04aebed79008662",
+          "tick": 458
+        },
+        "prompted_cooldown_ready": true,
+        "requested": "GetFood",
+        "step": 1,
+        "world_seed": 16508317,
+        "total_native_candidate_count": 31,
+        "relevant_native_action_logits": [
+          {
+            "action_id": 210,
+            "index": 3,
+            "kind": "Interact",
+            "logit": 3.082568645477295,
+            "representative_allowed": true,
+            "target": {
+              "entity": 1503,
+              "position": {
+                "x": 3.5,
+                "y": 0.0,
+                "z": 0.0
+              }
+            }
+          },
+          {
+            "action_id": 211,
+            "index": 4,
+            "kind": "Interact",
+            "logit": -4.9363861083984375,
+            "representative_allowed": true,
+            "target": {
+              "entity": 1503,
+              "position": {
+                "x": 3.5,
+                "y": 0.0,
+                "z": 0.0
+              }
+            }
+          },
+          {
+            "action_id": 1,
+            "index": 6,
+            "kind": "Idle",
+            "logit": 0.8012251257896423,
+            "representative_allowed": true,
+            "target": {
+              "entity": null,
+              "position": null
+            }
+          },
+          {
+            "action_id": 400,
+            "index": 8,
+            "kind": "Vocalize",
+            "logit": 2.119720220565796,
+            "representative_allowed": true,
+            "target": {
+              "entity": null,
+              "position": null
+            }
+          }
+        ],
+        "first_two_raw_speech_outputs": [
+          [
+            1.026004433631897,
+            -0.7414659261703491,
+            -0.7239894866943359,
+            -0.6863594651222229,
+            -0.7946920394897461,
+            -0.7629175782203674,
+            -0.6937944889068604,
+            -0.7752746939659119,
+            0.35519829392433167,
+            -0.8000664710998535,
+            -0.8333308696746826,
+            0.9840911030769348,
+            -0.8038958311080933,
+            -0.6777329444885254,
+            -0.7831037044525146,
+            -0.853247880935669,
+            1.4209012985229492,
+            -1.0191839933395386,
+            0.8262635469436646,
+            5.458261489868164,
+            -7.975880146026611,
+            -6.430598735809326,
+            -7.5146307945251465,
+            -7.558474063873291,
+            -9.487141609191895,
+            -7.872669219970703,
+            -1.132032871246338,
+            -7.931448936462402,
+            -5.115356922149658,
+            -5.795917987823486,
+            0.7453036308288574,
+            -7.904619216918945
+          ],
+          [
+            0.9573342800140381,
+            -0.7306426763534546,
+            -0.6988858580589294,
+            -0.6814892292022705,
+            -0.7994475364685059,
+            -0.7183945178985596,
+            -0.6959728598594666,
+            -0.7460391521453857,
+            0.6404550671577454,
+            -0.34663549065589905,
+            -0.7838866710662842,
+            -0.8453453779220581,
+            -0.713668942451477,
+            -0.6438904404640198,
+            -0.7391251921653748,
+            -0.8330268859863281,
+            1.2891576290130615,
+            0.9589126110076904,
+            2.1500937938690186,
+            4.820984363555908,
+            -1.0826237201690674,
+            -1.4170477390289307,
+            -1.615667462348938,
+            -1.4686988592147827,
+            -2.7034289836883545,
+            -2.2624614238739014,
+            2.120974063873291,
+            -2.320305347442627,
+            -0.80982506275177,
+            -1.0151530504226685,
+            2.6495277881622314,
+            -2.115269660949707
+          ]
+        ]
+      },
+      {
+        "actual_emitted": [],
+        "actual_food_consumption": false,
+        "biological_reward": -1.5208965123747475e-05,
+        "condition": "MixedGrounded4",
+        "decoded_conditional_payload": {
+          "confidence": 0.5960784554481506,
+          "speech_act": "Declare",
+          "tokens": [
+            9,
+            1
+          ]
+        },
+        "energy_delta": -0.0001506805419921875,
+        "event_confirmed_speech_target": null,
+        "exact_prior_full_row_outcome_emission_and_sampling": true,
+        "native_full_row_sha256": "c2729d6cb2826709b1d234d8024de60232a197fcc756b09a323871772d455402",
+        "owned_after": [
+          null,
+          null
+        ],
+        "owned_before": [
+          null,
+          null
+        ],
+        "parent_full_state_matches_prior": true,
+        "post_private_sha256": "6bb1ad63241b74bf267c8edbb91d2135f574174d2ed1f5b245067365c601e90b",
+        "pre_private_sha256": "fc6143f2e61020530b0ac2d21a05a0a2dfd406cd91aede73b210d5d0d39dfc10",
+        "prior_actual_event": null,
+        "prompted_cooldown_ready": true,
+        "requested": "EatFood",
+        "step": 0,
+        "world_seed": 16309347,
+        "total_native_candidate_count": 31,
+        "relevant_native_action_logits": [
+          {
+            "action_id": 1,
+            "index": 6,
+            "kind": "Idle",
+            "logit": 0.4564392864704132,
+            "representative_allowed": true,
+            "target": {
+              "entity": null,
+              "position": null
+            }
+          },
+          {
+            "action_id": 400,
+            "index": 8,
+            "kind": "Vocalize",
+            "logit": 1.155489206314087,
+            "representative_allowed": true,
+            "target": {
+              "entity": null,
+              "position": null
+            }
+          },
+          {
+            "action_id": 210,
+            "index": 19,
+            "kind": "Interact",
+            "logit": -2.466966390609741,
+            "representative_allowed": true,
+            "target": {
+              "entity": 1462,
+              "position": {
+                "x": 3.567283868789673,
+                "y": 0.0,
+                "z": 0.3173151910305023
+              }
+            }
+          },
+          {
+            "action_id": 211,
+            "index": 20,
+            "kind": "Interact",
+            "logit": -1.8020955324172974,
+            "representative_allowed": true,
+            "target": {
+              "entity": 1462,
+              "position": {
+                "x": 3.567283868789673,
+                "y": 0.0,
+                "z": 0.3173151910305023
+              }
+            }
+          }
+        ],
+        "first_two_raw_speech_outputs": [
+          [
+            0.6852020621299744,
+            -0.774172306060791,
+            -0.760994553565979,
+            -0.7202262878417969,
+            -0.7065809369087219,
+            -0.7706105709075928,
+            -0.8098095655441284,
+            -0.779923677444458,
+            0.015779346227645874,
+            -0.8883720636367798,
+            -0.7692124843597412,
+            0.5275099873542786,
+            -0.7824718952178955,
+            -0.7607263922691345,
+            -0.7791911959648132,
+            -0.7509372234344482,
+            0.7107940912246704,
+            -0.7064686417579651,
+            -0.04729180037975311,
+            4.029690742492676,
+            -6.4712371826171875,
+            -5.16736364364624,
+            -6.149933815002441,
+            -6.327054023742676,
+            -7.467565059661865,
+            -6.341022491455078,
+            -1.1727104187011719,
+            -6.398499011993408,
+            -4.172112941741943,
+            -4.729552745819092,
+            0.0975206196308136,
+            -6.452183723449707
+          ],
+          [
+            0.6432400941848755,
+            -0.7733626365661621,
+            -0.7164251804351807,
+            -0.7387737035751343,
+            -0.7473505139350891,
+            -0.7617088556289673,
+            -0.845345139503479,
+            -0.7654134035110474,
+            0.2823609411716461,
+            -0.6248984336853027,
+            -0.7547978162765503,
+            -0.7850733995437622,
+            -0.7512816786766052,
+            -0.7621277570724487,
+            -0.76511150598526,
+            -0.7690159678459167,
+            0.5847612619400024,
+            0.5956018567085266,
+            0.8540850281715393,
+            3.546173572540283,
+            -1.9405748844146729,
+            -1.8829319477081299,
+            -2.293731451034546,
+            -2.344200849533081,
+            -3.072646379470825,
+            -2.7027242183685303,
+            0.9931960701942444,
+            -2.820488214492798,
+            -1.3567652702331543,
+            -1.6302871704101562,
+            1.3241444826126099,
+            -2.7490105628967285
+          ]
+        ]
+      },
+      {
+        "actual_emitted": [
+          {
+            "addressee": null,
+            "confidence": 0.6392157077789307,
+            "emitted_tick": 459,
+            "expires_after_tick": 460,
+            "source_kind": "Creature",
+            "source_position": {
+              "x": 3.0,
+              "y": 0.0,
+              "z": 0.0
+            },
+            "speaker_id": 1,
+            "teacher_channel": null,
+            "tokens": [
+              8,
+              1
+            ],
+            "utterance_id": 2
+          }
+        ],
+        "actual_food_consumption": false,
+        "biological_reward": -1.5496289051952772e-05,
+        "condition": "MixedGrounded4",
+        "decoded_conditional_payload": {
+          "confidence": 0.6392157077789307,
+          "speech_act": "Declare",
+          "tokens": [
+            8,
+            1
+          ]
+        },
+        "energy_delta": -0.00015056133270263672,
+        "event_confirmed_speech_target": null,
+        "exact_prior_full_row_outcome_emission_and_sampling": true,
+        "existing_unit_native_imitation_and_factual_speech_components": {
+          "action_ce": 5.780133247375488,
+          "gradient": {
+            "current_stage_trainable_l2": [
+              0.0,
+              18.191969858653742,
+              0.0,
+              0.0
+            ],
+            "nonzero_current_trainable_coordinates": [
+              0,
+              1648,
+              0,
+              0
+            ],
+            "order": [
+              "recurrent",
+              "action_head",
+              "speech_head",
+              "other"
+            ],
+            "raw_l2": [
+              15.223071139225878,
+              18.191969858653742,
+              0.0,
+              1.1607163291675393
+            ]
+          },
+          "normalization": "unit per-row components; historical batch normalization, conditional and noun-margin terms are not reproduced",
+          "speech_loss": 4.32022595965104,
+          "target": {
+            "motors": [
+              268435456,
+              null,
+              524288,
+              null,
+              null,
+              null
+            ],
+            "representative": 524288
+          }
+        },
+        "native_full_row_sha256": "8d3bc19b41efb42ea53646529525b0795edaa6bbc7e6d5de0423ac632e6aae81",
+        "owned_after": [
+          null,
+          null
+        ],
+        "owned_before": [
+          null,
+          null
+        ],
+        "parent_full_state_matches_prior": true,
+        "post_private_sha256": "d42ef3f01e8af5371cc02edaec511fd273d417615183f377a4648aeb3d2a8ca9",
+        "pre_private_sha256": "6bb1ad63241b74bf267c8edbb91d2135f574174d2ed1f5b245067365c601e90b",
+        "prior_actual_event": null,
+        "prompted_cooldown_ready": true,
+        "requested": "EatFood",
+        "step": 1,
+        "witnessed_silence_only": {
+          "current_stage_mask_unmodified": true,
+          "eligibility": "actual matching Declare emitted before any activity; both owners absent; no physical event, not arbitrary missing target",
+          "gradient": {
+            "current_stage_trainable_l2": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            "nonzero_current_trainable_coordinates": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "order": [
+              "recurrent",
+              "action_head",
+              "speech_head",
+              "other"
+            ],
+            "raw_l2": [
+              3.464327961306539,
+              0.0,
+              27.82045258583717,
+              0.0
+            ]
+          },
+          "loss": 3.218704071413981,
+          "native_target": {
+            "act": "Declare",
+            "continuation": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "token": null,
+            "weight": 1.0
+          },
+          "no_update": true,
+          "speech_head_only_negative_gradient_direction_presence_raw0": -214.7731618669502,
+          "speech_head_only_negative_gradient_direction_stop_raw0": 216.63050504426468
+        },
+        "world_seed": 16309347,
+        "total_native_candidate_count": 31,
+        "relevant_native_action_logits": [
+          {
+            "action_id": 1,
+            "index": 6,
+            "kind": "Idle",
+            "logit": 0.4618285298347473,
+            "representative_allowed": true,
+            "target": {
+              "entity": null,
+              "position": null
+            }
+          },
+          {
+            "action_id": 400,
+            "index": 8,
+            "kind": "Vocalize",
+            "logit": 1.6421018838882446,
+            "representative_allowed": true,
+            "target": {
+              "entity": null,
+              "position": null
+            }
+          },
+          {
+            "action_id": 210,
+            "index": 19,
+            "kind": "Interact",
+            "logit": -3.617719888687134,
+            "representative_allowed": true,
+            "target": {
+              "entity": 1462,
+              "position": {
+                "x": 3.567283868789673,
+                "y": 0.0,
+                "z": 0.3173151910305023
+              }
+            }
+          },
+          {
+            "action_id": 211,
+            "index": 20,
+            "kind": "Interact",
+            "logit": -2.366682291030884,
+            "representative_allowed": true,
+            "target": {
+              "entity": 1462,
+              "position": {
+                "x": 3.567283868789673,
+                "y": 0.0,
+                "z": 0.3173151910305023
+              }
+            }
+          }
+        ],
+        "first_two_raw_speech_outputs": [
+          [
+            0.7594531178474426,
+            -0.8167925477027893,
+            -0.7948269844055176,
+            -0.7839123010635376,
+            -0.7712389230728149,
+            -0.8004150986671448,
+            -0.8244818449020386,
+            -0.8386545777320862,
+            -0.1048283502459526,
+            -0.9513896703720093,
+            -0.8494858145713806,
+            0.656619131565094,
+            -0.8692531585693359,
+            -0.8007668256759644,
+            -0.8281727433204651,
+            -0.8346898555755615,
+            0.986333966255188,
+            -1.0017821788787842,
+            0.23155924677848816,
+            5.012356281280518,
+            -7.952850341796875,
+            -6.225830554962158,
+            -7.460203170776367,
+            -7.658205032348633,
+            -9.24091625213623,
+            -7.842233180999756,
+            -1.538019061088562,
+            -7.906459808349609,
+            -5.121659278869629,
+            -5.8515167236328125,
+            0.37658315896987915,
+            -7.872491836547852
+          ],
+          [
+            0.7165263295173645,
+            -0.7540844082832336,
+            -0.6981282234191895,
+            -0.708813488483429,
+            -0.7391383051872253,
+            -0.7394776344299316,
+            -0.8037348985671997,
+            -0.7470172047615051,
+            0.29603806138038635,
+            -0.568734884262085,
+            -0.7597763538360596,
+            -0.9027934670448303,
+            -0.7352001667022705,
+            -0.7203001379966736,
+            -0.7587668895721436,
+            -0.779373288154602,
+            0.8388288021087646,
+            0.7805503010749817,
+            1.4608403444290161,
+            4.368544101715088,
+            -1.7079734802246094,
+            -1.6983449459075928,
+            -2.0922691822052,
+            -2.1639761924743652,
+            -3.0997114181518555,
+            -2.7285335063934326,
+            1.4167563915252686,
+            -2.7950148582458496,
+            -1.182763934135437,
+            -1.4818751811981201,
+            2.0537941455841064,
+            -2.647322654724121
+          ]
+        ]
+      },
+      {
+        "actual_emitted": [],
+        "actual_food_consumption": false,
+        "biological_reward": -1.5208965123747475e-05,
+        "condition": "MixedGrounded4",
+        "decoded_conditional_payload": {
+          "confidence": 0.7607843279838562,
+          "speech_act": "Declare",
+          "tokens": [
+            9,
+            1
+          ]
+        },
+        "energy_delta": -0.0001506805419921875,
+        "event_confirmed_speech_target": null,
+        "exact_prior_full_row_outcome_emission_and_sampling": true,
+        "native_full_row_sha256": "1a4fe875bd334b69f539864301d5ed5870bc277ce6548b49dc3edc7f389396d6",
+        "owned_after": [
+          null,
+          null
+        ],
+        "owned_before": [
+          null,
+          null
+        ],
+        "parent_full_state_matches_prior": true,
+        "post_private_sha256": "12992fb5a3342edd0b874bf924120b3e311006452b903c35daea7a610202cf8d",
+        "pre_private_sha256": "d6a8d54ac194843d6dba3b2444a1a4b1c29ff902e1908a14c4ab335cb67687f1",
+        "prior_actual_event": null,
+        "prompted_cooldown_ready": true,
+        "requested": "GetFood",
+        "step": 0,
+        "world_seed": 16309347,
+        "total_native_candidate_count": 31,
+        "relevant_native_action_logits": [
+          {
+            "action_id": 1,
+            "index": 6,
+            "kind": "Idle",
+            "logit": 0.6422752737998962,
+            "representative_allowed": true,
+            "target": {
+              "entity": null,
+              "position": null
+            }
+          },
+          {
+            "action_id": 400,
+            "index": 8,
+            "kind": "Vocalize",
+            "logit": 1.3817403316497803,
+            "representative_allowed": true,
+            "target": {
+              "entity": null,
+              "position": null
+            }
+          },
+          {
+            "action_id": 210,
+            "index": 19,
+            "kind": "Interact",
+            "logit": -5.65924072265625,
+            "representative_allowed": true,
+            "target": {
+              "entity": 1462,
+              "position": {
+                "x": 3.567283868789673,
+                "y": 0.0,
+                "z": 0.3173151910305023
+              }
+            }
+          },
+          {
+            "action_id": 211,
+            "index": 20,
+            "kind": "Interact",
+            "logit": 1.144900918006897,
+            "representative_allowed": true,
+            "target": {
+              "entity": 1462,
+              "position": {
+                "x": 3.567283868789673,
+                "y": 0.0,
+                "z": 0.3173151910305023
+              }
+            }
+          }
+        ],
+        "first_two_raw_speech_outputs": [
+          [
+            0.9995573163032532,
+            -0.6870639324188232,
+            -0.6848366260528564,
+            -0.590734601020813,
+            -0.6795575618743896,
+            -0.6847353577613831,
+            -0.6680077314376831,
+            -0.7034122943878174,
+            0.37705135345458984,
+            -0.814578652381897,
+            -0.7553789019584656,
+            0.9127605557441711,
+            -0.688267707824707,
+            -0.6161302328109741,
+            -0.6847801208496094,
+            -0.7651488184928894,
+            1.1262303590774536,
+            -0.6636501550674438,
+            0.4376355707645416,
+            4.493342876434326,
+            -6.434525489807129,
+            -5.373315334320068,
+            -6.141650199890137,
+            -6.2368550300598145,
+            -7.699950218200684,
+            -6.374480247497559,
+            -0.737170934677124,
+            -6.411177635192871,
+            -4.145947456359863,
+            -4.668064594268799,
+            0.4472988247871399,
+            -6.506333827972412
+          ],
+          [
+            0.9344382882118225,
+            -0.7571582794189453,
+            -0.7333470582962036,
+            -0.6880887150764465,
+            -0.7732447981834412,
+            -0.7138898968696594,
+            -0.731614351272583,
+            -0.7616263628005981,
+            0.5024300813674927,
+            -0.4768180847167969,
+            -0.7867447733879089,
+            -0.6926397085189819,
+            -0.7239101529121399,
+            -0.676177978515625,
+            -0.7211054563522339,
+            -0.8280227184295654,
+            1.009289264678955,
+            0.8430705666542053,
+            1.4062989950180054,
+            4.038247108459473,
+            -1.2642512321472168,
+            -1.6124138832092285,
+            -1.763006567955017,
+            -1.6771990060806274,
+            -2.6594433784484863,
+            -2.2172350883483887,
+            1.7559317350387573,
+            -2.3273394107818604,
+            -0.9555851221084595,
+            -1.156278371810913,
+            1.8891085386276245,
+            -2.2380802631378174
+          ]
+        ]
+      },
+      {
+        "actual_emitted": [
+          {
+            "addressee": null,
+            "confidence": 0.7921568751335144,
+            "emitted_tick": 459,
+            "expires_after_tick": 460,
+            "source_kind": "Creature",
+            "source_position": {
+              "x": 3.0,
+              "y": 0.0,
+              "z": 0.0
+            },
+            "speaker_id": 1,
+            "teacher_channel": null,
+            "tokens": [
+              9,
+              1
+            ],
+            "utterance_id": 2
+          }
+        ],
+        "actual_food_consumption": false,
+        "biological_reward": -1.5496289051952772e-05,
+        "condition": "MixedGrounded4",
+        "decoded_conditional_payload": {
+          "confidence": 0.7921568751335144,
+          "speech_act": "Declare",
+          "tokens": [
+            9,
+            1
+          ]
+        },
+        "energy_delta": -0.00015056133270263672,
+        "event_confirmed_speech_target": null,
+        "exact_prior_full_row_outcome_emission_and_sampling": true,
+        "existing_unit_native_imitation_and_factual_speech_components": {
+          "action_ce": 1.7100833654403687,
+          "gradient": {
+            "current_stage_trainable_l2": [
+              0.0,
+              7.480159597679808,
+              0.0,
+              0.0
+            ],
+            "nonzero_current_trainable_coordinates": [
+              0,
+              1648,
+              0,
+              0
+            ],
+            "order": [
+              "recurrent",
+              "action_head",
+              "speech_head",
+              "other"
+            ],
+            "raw_l2": [
+              1.8608394541192776,
+              7.480159597679808,
+              0.0,
+              1.0262623778640125
+            ]
+          },
+          "normalization": "unit per-row components; historical batch normalization, conditional and noun-margin terms are not reproduced",
+          "speech_loss": 0.27291496140915794,
+          "target": {
+            "motors": [
+              268435456,
+              null,
+              1048576,
+              null,
+              null,
+              null
+            ],
+            "representative": 1048576
+          }
+        },
+        "native_full_row_sha256": "5108de36fbe6c9c4b862d2d68810d8fbf65b85c71db89c4bdc5cd4241d14220d",
+        "owned_after": [
+          null,
+          null
+        ],
+        "owned_before": [
+          null,
+          null
+        ],
+        "parent_full_state_matches_prior": true,
+        "post_private_sha256": "48f754747cd715746df57bd47837fe0e99c91fe828c5a88e4e878a2e01392383",
+        "pre_private_sha256": "12992fb5a3342edd0b874bf924120b3e311006452b903c35daea7a610202cf8d",
+        "prior_actual_event": null,
+        "prompted_cooldown_ready": true,
+        "requested": "GetFood",
+        "step": 1,
+        "witnessed_silence_only": {
+          "current_stage_mask_unmodified": true,
+          "eligibility": "actual matching Declare emitted before any activity; both owners absent; no physical event, not arbitrary missing target",
+          "gradient": {
+            "current_stage_trainable_l2": [
+              0.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            "nonzero_current_trainable_coordinates": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "order": [
+              "recurrent",
+              "action_head",
+              "speech_head",
+              "other"
+            ],
+            "raw_l2": [
+              4.091566906534746,
+              0.0,
+              32.20274664247503,
+              0.0
+            ]
+          },
+          "loss": 3.970981402763215,
+          "native_target": {
+            "act": "Declare",
+            "continuation": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "token": null,
+            "weight": 1.0
+          },
+          "no_update": true,
+          "speech_head_only_negative_gradient_direction_presence_raw0": -287.7557743677128,
+          "speech_head_only_negative_gradient_direction_stop_raw0": 229.3566101927713
+        },
+        "world_seed": 16309347,
+        "total_native_candidate_count": 31,
+        "relevant_native_action_logits": [
+          {
+            "action_id": 1,
+            "index": 6,
+            "kind": "Idle",
+            "logit": 0.6660557389259338,
+            "representative_allowed": true,
+            "target": {
+              "entity": null,
+              "position": null
+            }
+          },
+          {
+            "action_id": 400,
+            "index": 8,
+            "kind": "Vocalize",
+            "logit": 1.8871358633041382,
+            "representative_allowed": true,
+            "target": {
+              "entity": null,
+              "position": null
+            }
+          },
+          {
+            "action_id": 210,
+            "index": 19,
+            "kind": "Interact",
+            "logit": -7.065958023071289,
+            "representative_allowed": true,
+            "target": {
+              "entity": 1462,
+              "position": {
+                "x": 3.567283868789673,
+                "y": 0.0,
+                "z": 0.3173151910305023
+              }
+            }
+          },
+          {
+            "action_id": 211,
+            "index": 20,
+            "kind": "Interact",
+            "logit": 0.8293417692184448,
+            "representative_allowed": true,
+            "target": {
+              "entity": 1462,
+              "position": {
+                "x": 3.567283868789673,
+                "y": 0.0,
+                "z": 0.3173151910305023
+              }
+            }
+          }
+        ],
+        "first_two_raw_speech_outputs": [
+          [
+            1.0820363759994507,
+            -0.7219253778457642,
+            -0.7189780473709106,
+            -0.6490733027458191,
+            -0.7492386102676392,
+            -0.708165168762207,
+            -0.6800073385238647,
+            -0.7622625231742859,
+            0.2745605409145355,
+            -0.8713988065719604,
+            -0.8280870914459229,
+            1.0628688335418701,
+            -0.7706462740898132,
+            -0.6541427373886108,
+            -0.7283076643943787,
+            -0.8520693778991699,
+            1.4037690162658691,
+            -0.956520676612854,
+            0.7162801027297974,
+            5.4618096351623535,
+            -7.889191150665283,
+            -6.427313327789307,
+            -7.435351848602295,
+            -7.538802146911621,
+            -9.44963550567627,
+            -7.8378095626831055,
+            -1.08086097240448,
+            -7.885053634643555,
+            -5.085975170135498,
+            -5.760611534118652,
+            0.7135578393936157,
+            -7.893935680389404
+          ],
+          [
+            1.0176724195480347,
+            -0.7088366746902466,
+            -0.6896997690200806,
+            -0.6337765455245972,
+            -0.7526814937591553,
+            -0.6725283861160278,
+            -0.6755625009536743,
+            -0.7240833640098572,
+            0.5543478727340698,
+            -0.41380634903907776,
+            -0.7755656838417053,
+            -0.7493590712547302,
+            -0.6860404014587402,
+            -0.6158800721168518,
+            -0.6947062611579895,
+            -0.8332512974739075,
+            1.2713391780853271,
+            1.003657579421997,
+            2.01196026802063,
+            4.832400321960449,
+            -1.0624451637268066,
+            -1.462855339050293,
+            -1.5972048044204712,
+            -1.5180178880691528,
+            -2.726640462875366,
+            -2.2587790489196777,
+            2.161017417907715,
+            -2.3135712146759033,
+            -0.8080893158912659,
+            -1.0089083909988403,
+            2.589935541152954,
+            -2.1533777713775635
+          ]
+        ]
+      },
+      {
+        "actual_emitted": [],
+        "actual_food_consumption": false,
+        "biological_reward": -1.5619063560734503e-05,
+        "condition": "MixedGrounded4",
+        "decoded_conditional_payload": {
+          "confidence": 0.5882353186607361,
+          "speech_act": "Declare",
+          "tokens": [
+            8,
+            1
+          ]
+        },
+        "energy_delta": -0.00015985965728759766,
+        "event_confirmed_speech_target": null,
+        "exact_prior_full_row_outcome_emission_and_sampling": true,
+        "native_full_row_sha256": "6e227ec6ee6efc4d36415594954d82538ec8e7c9a0ec7a8061621be245c3c86e",
+        "owned_after": [
+          1,
+          null
+        ],
+        "owned_before": [
+          null,
+          null
+        ],
+        "parent_full_state_matches_prior": true,
+        "post_private_sha256": "96bf6ffb08465dc9beb4984a986a1418f0236eeff122ab2bbc9453b04efe79c1",
+        "pre_private_sha256": "87286407302ec0de9e8786f4e1147e3163d8a86092dd1a72778289f716f8272d",
+        "prior_actual_event": null,
+        "prompted_cooldown_ready": true,
+        "requested": "EatFood",
+        "step": 0,
+        "world_seed": 16508317,
+        "total_native_candidate_count": 31,
+        "relevant_native_action_logits": [
+          {
+            "action_id": 1,
+            "index": 6,
+            "kind": "Idle",
+            "logit": 0.4564425051212311,
+            "representative_allowed": true,
+            "target": {
+              "entity": null,
+              "position": null
+            }
+          },
+          {
+            "action_id": 400,
+            "index": 8,
+            "kind": "Vocalize",
+            "logit": 1.1495906114578247,
+            "representative_allowed": true,
+            "target": {
+              "entity": null,
+              "position": null
+            }
+          },
+          {
+            "action_id": 210,
+            "index": 19,
+            "kind": "Interact",
+            "logit": 2.0983047485351562,
+            "representative_allowed": true,
+            "target": {
+              "entity": 1503,
+              "position": {
+                "x": 3.463045597076416,
+                "y": 0.0,
+                "z": 0.29679763317108154
+              }
+            }
+          },
+          {
+            "action_id": 211,
+            "index": 20,
+            "kind": "Interact",
+            "logit": 3.4405410289764404,
+            "representative_allowed": true,
+            "target": {
+              "entity": 1503,
+              "position": {
+                "x": 3.463045597076416,
+                "y": 0.0,
+                "z": 0.29679763317108154
+              }
+            }
+          }
+        ],
+        "first_two_raw_speech_outputs": [
+          [
+            0.673468828201294,
+            -0.7608676552772522,
+            -0.7584676742553711,
+            -0.729997992515564,
+            -0.705331027507782,
+            -0.7644292116165161,
+            -0.7959057092666626,
+            -0.780769944190979,
+            -0.026004115119576454,
+            -0.8893902897834778,
+            -0.7548885345458984,
+            0.5232359766960144,
+            -0.7858410477638245,
+            -0.7710659503936768,
+            -0.7908653020858765,
+            -0.7385764718055725,
+            0.6874610185623169,
+            -0.7111098766326904,
+            -0.08227232098579407,
+            3.947267532348633,
+            -6.423302173614502,
+            -5.127813339233398,
+            -6.111724853515625,
+            -6.29385232925415,
+            -7.417014122009277,
+            -6.274069786071777,
+            -1.1919351816177368,
+            -6.334592819213867,
+            -4.160884380340576,
+            -4.7019243240356445,
+            0.07189461588859558,
+            -6.412116050720215
+          ],
+          [
+            0.6346120238304138,
+            -0.7570944428443909,
+            -0.711538553237915,
+            -0.7438704967498779,
+            -0.7454695701599121,
+            -0.7554529309272766,
+            -0.8321085572242737,
+            -0.7638741135597229,
+            0.24519413709640503,
+            -0.6331209540367126,
+            -0.7370335459709167,
+            -0.7626833915710449,
+            -0.7528642416000366,
+            -0.7733808159828186,
+            -0.7757312655448914,
+            -0.7555341720581055,
+            0.5602006912231445,
+            0.5698887705802917,
+            0.8071030974388123,
+            3.4672060012817383,
+            -1.9695781469345093,
+            -1.9030988216400146,
+            -2.3198082447052,
+            -2.379478931427002,
+            -3.097151517868042,
+            -2.6995067596435547,
+            0.937637448310852,
+            -2.818535804748535,
+            -1.391526222229004,
+            -1.6532267332077026,
+            1.2738834619522095,
+            -2.7759969234466553
+          ]
+        ]
+      },
+      {
+        "actual_emitted": [],
+        "actual_food_consumption": true,
+        "biological_reward": 0.036173250526189804,
+        "condition": "MixedGrounded4",
+        "decoded_conditional_payload": {
+          "confidence": 0.6039215922355652,
+          "speech_act": "Declare",
+          "tokens": [
+            8,
+            1
+          ]
+        },
+        "energy_delta": 0.1220163106918335,
+        "event_confirmed_speech_target": null,
+        "exact_prior_full_row_outcome_emission_and_sampling": true,
+        "existing_unit_native_imitation_and_factual_speech_components": {
+          "action_ce": 0.002887134440243244,
+          "gradient": {
+            "current_stage_trainable_l2": [
+              0.0,
+              0.06337439717578719,
+              0.0,
+              0.0
+            ],
+            "nonzero_current_trainable_coordinates": [
+              0,
+              2096,
+              0,
+              0
+            ],
+            "order": [
+              "recurrent",
+              "action_head",
+              "speech_head",
+              "other"
+            ],
+            "raw_l2": [
+              0.048960521342792176,
+              0.06337439717578719,
+              0.0,
+              0.020992762683944923
+            ]
+          },
+          "normalization": "unit per-row components; historical batch normalization, conditional and noun-margin terms are not reproduced",
+          "speech_loss": -0.02046839310557823,
+          "target": {
+            "motors": [
+              268435456,
+              null,
+              8,
+              null,
+              null,
+              null
+            ],
+            "representative": 8
+          }
+        },
+        "held_food_margin": {
+          "current_stage_negative_existing_gradient_direction": 1.4358899944805372,
+          "eat_index": 3,
+          "eat_minus_best_idle_or_voice": 6.301031112670898,
+          "infinitesimal_direction_not_an_optimizer_step": true,
+          "margin_gradient": {
+            "current_stage_trainable_l2": [
+              0.0,
+              23.097824526505892,
+              0.0,
+              0.0
+            ],
+            "nonzero_current_trainable_coordinates": [
+              0,
+              352,
+              0,
+              0
+            ],
+            "order": [
+              "recurrent",
+              "action_head",
+              "speech_head",
+              "other"
+            ],
+            "raw_l2": [
+              17.894067568740002,
+              23.097824526505892,
+              0.0,
+              7.178469523623542
+            ]
+          },
+          "non_eat_index": 8
+        },
+        "native_full_row_sha256": "afc34ee4191a98598d7a53be7f93ca64bbfb6c9092885efbb0c64eae7f900a1f",
+        "owned_after": [
+          null,
+          null
+        ],
+        "owned_before": [
+          1,
+          null
+        ],
+        "parent_full_state_matches_prior": true,
+        "post_private_sha256": "f4f8f25672171afbb3ddfe7cc0f685080b808f14c47b8f22c078a2f7f2947cf2",
+        "pre_private_sha256": "96bf6ffb08465dc9beb4984a986a1418f0236eeff122ab2bbc9453b04efe79c1",
+        "prior_actual_event": {
+          "lesson": "GetFood",
+          "patch_sha256": "af1853849ff7b808d2bc8b5e03bccea4b9c101f5ea1f24c38e33ab0f0a26db9b",
+          "tick": 458
+        },
+        "prompted_cooldown_ready": true,
+        "requested": "EatFood",
+        "step": 1,
+        "world_seed": 16508317,
+        "total_native_candidate_count": 31,
+        "relevant_native_action_logits": [
+          {
+            "action_id": 210,
+            "index": 3,
+            "kind": "Interact",
+            "logit": 7.926467418670654,
+            "representative_allowed": true,
+            "target": {
+              "entity": 1503,
+              "position": {
+                "x": 3.5,
+                "y": 0.0,
+                "z": 0.0
+              }
+            }
+          },
+          {
+            "action_id": 211,
+            "index": 4,
+            "kind": "Interact",
+            "logit": -8.680051803588867,
+            "representative_allowed": true,
+            "target": {
+              "entity": 1503,
+              "position": {
+                "x": 3.5,
+                "y": 0.0,
+                "z": 0.0
+              }
+            }
+          },
+          {
+            "action_id": 1,
+            "index": 6,
+            "kind": "Idle",
+            "logit": 0.4647718071937561,
+            "representative_allowed": true,
+            "target": {
+              "entity": null,
+              "position": null
+            }
+          },
+          {
+            "action_id": 400,
+            "index": 8,
+            "kind": "Vocalize",
+            "logit": 1.6254364252090454,
+            "representative_allowed": true,
+            "target": {
+              "entity": null,
+              "position": null
+            }
+          }
+        ],
+        "first_two_raw_speech_outputs": [
+          [
+            0.6995648145675659,
+            -0.8428744077682495,
+            -0.8042691946029663,
+            -0.8290454745292664,
+            -0.8179941177368164,
+            -0.8619295358657837,
+            -0.8433958292007446,
+            -0.8563592433929443,
+            -0.03439726680517197,
+            -0.888788104057312,
+            -0.8604881763458252,
+            0.5654979944229126,
+            -0.9081457853317261,
+            -0.831191897392273,
+            -0.8907229900360107,
+            -0.8374473452568054,
+            0.9937459826469421,
+            -1.0624115467071533,
+            0.32108789682388306,
+            4.997150421142578,
+            -8.044124603271484,
+            -6.229743003845215,
+            -7.545252323150635,
+            -7.6902756690979,
+            -9.27827262878418,
+            -7.882821083068848,
+            -1.5989419221878052,
+            -7.9576416015625,
+            -5.153449535369873,
+            -5.894204616546631,
+            0.39804667234420776,
+            -7.893009185791016
+          ],
+          [
+            0.6524750590324402,
+            -0.7856754660606384,
+            -0.7151070237159729,
+            -0.768994152545929,
+            -0.7882823944091797,
+            -0.7932382225990295,
+            -0.8309389352798462,
+            -0.7765165567398071,
+            0.3660193383693695,
+            -0.5092596411705017,
+            -0.7765877842903137,
+            -1.0163322687149048,
+            -0.771635890007019,
+            -0.7568594217300415,
+            -0.8123694658279419,
+            -0.782364547252655,
+            0.8477588295936584,
+            0.7380918264389038,
+            1.5776159763336182,
+            4.348080158233643,
+            -1.7347404956817627,
+            -1.6530992984771729,
+            -2.1187973022460938,
+            -2.1285722255706787,
+            -3.0792105197906494,
+            -2.7420003414154053,
+            1.3655401468276978,
+            -2.8108224868774414,
+            -1.1900720596313477,
+            -1.500219464302063,
+            2.1041972637176514,
+            -2.6205105781555176
+          ]
+        ]
+      },
+      {
+        "actual_emitted": [],
+        "actual_food_consumption": false,
+        "biological_reward": -1.5619063560734503e-05,
+        "condition": "MixedGrounded4",
+        "decoded_conditional_payload": {
+          "confidence": 0.7568627595901489,
+          "speech_act": "Declare",
+          "tokens": [
+            9,
+            1
+          ]
+        },
+        "energy_delta": -0.00015985965728759766,
+        "event_confirmed_speech_target": null,
+        "exact_prior_full_row_outcome_emission_and_sampling": true,
+        "native_full_row_sha256": "b108ef3aa420c62626147dfb2ca6faa2d38a2c7572ddf1890b48d0e76c38712a",
+        "owned_after": [
+          1,
+          null
+        ],
+        "owned_before": [
+          null,
+          null
+        ],
+        "parent_full_state_matches_prior": true,
+        "post_private_sha256": "711f1ec58b720ee6bbd1aedd9dc6be0f168df719c9311639f9850a236974055b",
+        "pre_private_sha256": "1ca20997484c0c78212160394f48021269c1a3c9f65ee3fecb70af36677c63c3",
+        "prior_actual_event": null,
+        "prompted_cooldown_ready": true,
+        "requested": "GetFood",
+        "step": 0,
+        "world_seed": 16508317,
+        "total_native_candidate_count": 31,
+        "relevant_native_action_logits": [
+          {
+            "action_id": 1,
+            "index": 6,
+            "kind": "Idle",
+            "logit": 0.6422882080078125,
+            "representative_allowed": true,
+            "target": {
+              "entity": null,
+              "position": null
+            }
+          },
+          {
+            "action_id": 400,
+            "index": 8,
+            "kind": "Vocalize",
+            "logit": 1.3758538961410522,
+            "representative_allowed": true,
+            "target": {
+              "entity": null,
+              "position": null
+            }
+          },
+          {
+            "action_id": 210,
+            "index": 19,
+            "kind": "Interact",
+            "logit": -0.4225199818611145,
+            "representative_allowed": true,
+            "target": {
+              "entity": 1503,
+              "position": {
+                "x": 3.463045597076416,
+                "y": 0.0,
+                "z": 0.29679763317108154
+              }
+            }
+          },
+          {
+            "action_id": 211,
+            "index": 20,
+            "kind": "Interact",
+            "logit": 6.538368225097656,
+            "representative_allowed": true,
+            "target": {
+              "entity": 1503,
+              "position": {
+                "x": 3.463045597076416,
+                "y": 0.0,
+                "z": 0.29679763317108154
+              }
+            }
+          }
+        ],
+        "first_two_raw_speech_outputs": [
+          [
+            0.9878289699554443,
+            -0.6737512350082397,
+            -0.682305097579956,
+            -0.6004982590675354,
+            -0.6783060431480408,
+            -0.6785455942153931,
+            -0.6540974378585815,
+            -0.7042535543441772,
+            0.3352765440940857,
+            -0.8155887126922607,
+            -0.7410476207733154,
+            0.908501148223877,
+            -0.6916305422782898,
+            -0.6264630556106567,
+            -0.6964461803436279,
+            -0.7527856826782227,
+            1.1029062271118164,
+            -0.668292760848999,
+            0.4026726186275482,
+            4.410925388336182,
+            -6.386580944061279,
+            -5.333761215209961,
+            -6.10343074798584,
+            -6.203636169433594,
+            -7.64939546585083,
+            -6.3075151443481445,
+            -0.7563847303390503,
+            -6.347260475158691,
+            -4.1347150802612305,
+            -4.640423774719238,
+            0.4216810166835785,
+            -6.466251850128174
+          ],
+          [
+            0.92425137758255,
+            -0.7422457933425903,
+            -0.7295939326286316,
+            -0.694728672504425,
+            -0.7725406885147095,
+            -0.708672821521759,
+            -0.7195442914962769,
+            -0.7616750001907349,
+            0.46305716037750244,
+            -0.4845460057258606,
+            -0.7714719176292419,
+            -0.6739104986190796,
+            -0.7276536226272583,
+            -0.6886345744132996,
+            -0.7335607409477234,
+            -0.8167509436607361,
+            0.9840331673622131,
+            0.8175889253616333,
+            1.3587931394577026,
+            3.9598042964935303,
+            -1.2916415929794312,
+            -1.6313129663467407,
+            -1.7882002592086792,
+            -1.7107456922531128,
+            -2.6839568614959717,
+            -2.2135939598083496,
+            1.7004971504211426,
+            -2.325324773788452,
+            -0.9900031089782715,
+            -1.178626298904419,
+            1.8403877019882202,
+            -2.2643604278564453
+          ]
+        ]
+      },
+      {
+        "actual_emitted": [],
+        "actual_food_consumption": true,
+        "biological_reward": 0.036173250526189804,
+        "condition": "MixedGrounded4",
+        "decoded_conditional_payload": {
+          "confidence": 0.772549033164978,
+          "speech_act": "Declare",
+          "tokens": [
+            9,
+            1
+          ]
+        },
+        "energy_delta": 0.1220163106918335,
+        "event_confirmed_speech_target": {
+          "act": "Declare",
+          "continuation": [
+            1,
+            0,
+            0,
+            0,
+            0
+          ],
+          "token": 9,
+          "weight": 1.0
+        },
+        "exact_prior_full_row_outcome_emission_and_sampling": true,
+        "existing_unit_native_imitation_and_factual_speech_components": {
+          "action_ce": 3.4544782638549805,
+          "gradient": {
+            "current_stage_trainable_l2": [
+              0.0,
+              24.160503832246388,
+              0.0,
+              0.0
+            ],
+            "nonzero_current_trainable_coordinates": [
+              0,
+              2096,
+              0,
+              0
+            ],
+            "order": [
+              "recurrent",
+              "action_head",
+              "speech_head",
+              "other"
+            ],
+            "raw_l2": [
+              17.479490019772086,
+              24.160503832246388,
+              0.75171076819285,
+              6.837299666467887
+            ]
+          },
+          "normalization": "unit per-row components; historical batch normalization, conditional and noun-margin terms are not reproduced",
+          "speech_loss": 3.252247340445186,
+          "target": {
+            "motors": [
+              268435456,
+              null,
+              null,
+              256,
+              null,
+              null
+            ],
+            "representative": 256
+          }
+        },
+        "held_food_margin": {
+          "current_stage_negative_existing_gradient_direction": -611.5557246171074,
+          "eat_index": 3,
+          "eat_minus_best_idle_or_voice": 3.4057469367980957,
+          "infinitesimal_direction_not_an_optimizer_step": true,
+          "margin_gradient": {
+            "current_stage_trainable_l2": [
+              0.0,
+              25.312795164987804,
+              0.0,
+              0.0
+            ],
+            "nonzero_current_trainable_coordinates": [
+              0,
+              352,
+              0,
+              0
+            ],
+            "order": [
+              "recurrent",
+              "action_head",
+              "speech_head",
+              "other"
+            ],
+            "raw_l2": [
+              18.327587552115386,
+              25.312795164987804,
+              0.0,
+              7.178441392687503
+            ]
+          },
+          "non_eat_index": 8
+        },
+        "native_full_row_sha256": "61fbc47fc15966f258746158834111da039f8721a9555374e3d0227310a1edda",
+        "owned_after": [
+          null,
+          null
+        ],
+        "owned_before": [
+          1,
+          null
+        ],
+        "parent_full_state_matches_prior": true,
+        "post_private_sha256": "678bee73231cce7749853ab9991f62354786b925c336576aa70549b745410f18",
+        "pre_private_sha256": "711f1ec58b720ee6bbd1aedd9dc6be0f168df719c9311639f9850a236974055b",
+        "prior_actual_event": {
+          "lesson": "GetFood",
+          "patch_sha256": "88c0ff843128058fd89a5c7e42119f8f1a284203c9f9fed7286d197be13c259e",
+          "tick": 458
+        },
+        "prompted_cooldown_ready": true,
+        "requested": "GetFood",
+        "step": 1,
+        "world_seed": 16508317,
+        "total_native_candidate_count": 31,
+        "relevant_native_action_logits": [
+          {
+            "action_id": 210,
+            "index": 3,
+            "kind": "Interact",
+            "logit": 5.286285400390625,
+            "representative_allowed": true,
+            "target": {
+              "entity": 1503,
+              "position": {
+                "x": 3.5,
+                "y": 0.0,
+                "z": 0.0
+              }
+            }
+          },
+          {
+            "action_id": 211,
+            "index": 4,
+            "kind": "Interact",
+            "logit": -4.850887775421143,
+            "representative_allowed": true,
+            "target": {
+              "entity": 1503,
+              "position": {
+                "x": 3.5,
+                "y": 0.0,
+                "z": 0.0
+              }
+            }
+          },
+          {
+            "action_id": 1,
+            "index": 6,
+            "kind": "Idle",
+            "logit": 0.6743534207344055,
+            "representative_allowed": true,
+            "target": {
+              "entity": null,
+              "position": null
+            }
+          },
+          {
+            "action_id": 400,
+            "index": 8,
+            "kind": "Vocalize",
+            "logit": 1.8805385828018188,
+            "representative_allowed": true,
+            "target": {
+              "entity": null,
+              "position": null
+            }
+          }
+        ],
+        "first_two_raw_speech_outputs": [
+          [
+            1.0242772102355957,
+            -0.7353999614715576,
+            -0.7165235877037048,
+            -0.679304838180542,
+            -0.7871872186660767,
+            -0.7553038597106934,
+            -0.6858434677124023,
+            -0.7678337693214417,
+            0.34694069623947144,
+            -0.7937932014465332,
+            -0.8283205032348633,
+            0.9868367910385132,
+            -0.7984983325004578,
+            -0.6699545383453369,
+            -0.7760399580001831,
+            -0.8462690114974976,
+            1.4295170307159424,
+            -1.0236328840255737,
+            0.8488731980323792,
+            5.474826335906982,
+            -7.9818315505981445,
+            -6.427067756652832,
+            -7.511675834655762,
+            -7.558019638061523,
+            -9.498011589050293,
+            -7.884101390838623,
+            -1.1372811794281006,
+            -7.941352844238281,
+            -5.117285251617432,
+            -5.803830623626709,
+            0.7661974430084229,
+            -7.909941673278809
+          ],
+          [
+            0.9562164545059204,
+            -0.7276403307914734,
+            -0.6966392993927002,
+            -0.6769545674324036,
+            -0.7956151962280273,
+            -0.7171322107315063,
+            -0.6927619576454163,
+            -0.7430458664894104,
+            0.6303437352180481,
+            -0.33939704298973083,
+            -0.7810459136962891,
+            -0.8496232628822327,
+            -0.7137226462364197,
+            -0.642133355140686,
+            -0.7393670678138733,
+            -0.829361617565155,
+            1.295493245124817,
+            0.9633755087852478,
+            2.1702914237976074,
+            4.839914798736572,
+            -1.073033094406128,
+            -1.4051952362060547,
+            -1.6029508113861084,
+            -1.4588264226913452,
+            -2.6984903812408447,
+            -2.255627155303955,
+            2.128023862838745,
+            -2.314962387084961,
+            -0.8007495403289795,
+            -1.0098193883895874,
+            2.671896457672119,
+            -2.108302354812622
+          ]
+        ]
+      }
+    ],
+    "scored_decisions": 16,
+    "semantic_prior": false,
+    "teacher": false
+  },
+  "provenance": {
+    "source_head": "397413f725fd5bf6e064c33a61730ba86b92fb39",
+    "binary_sha256": "122ccbe88a3f1af92a5bba173d99affda9886b21a44a61d93d42f52e29e26e06",
+    "build_profile": "test; alife_training opt-level2; debug0; incremental disabled",
+    "maximum_scored_decisions": 16,
+    "maximum_gradient_probes": 16,
+    "prior_preflight_scored_decisions": 0,
+    "prior_preflight_gradient_probes": 0,
+    "preserved_preflight": "/workspace/language-bounded-tape-v25-measured/preflight-failure.json",
+    "adam_or_shadow_adam_steps_allowed": 0,
+    "started_at_utc": "2026-11-05T03:18:14.103945+00:00",
+    "command": [
+      "/workspace/language-bounded-tape-v25-canonical-measured/native-test-measured",
+      "foundation_training::retained_language::curriculum::factorial::balanced::bounded_tape_probe::diagnose_two_frozen_witnesses",
+      "--exact",
+      "--ignored",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "wall_elapsed_seconds": 23.806067548997817,
+    "ended_at_utc": "2026-11-05T03:18:37.910269+00:00"
+  },
+  "captured_native_actions": [
+    {
+      "condition": "Untreated",
+      "world_seed": 16309347,
+      "requested": "EatFood",
+      "step": 0,
+      "selected_action": {
+        "abi_version": 2,
+        "action_id": 1,
+        "arbitration_trace": null,
+        "confidence": 1.0,
+        "duration_ticks": 1,
+        "intensity": 1.0,
+        "kind": "Idle",
+        "motor_payload": null,
+        "organism_id": 1,
+        "source_mask": 0,
+        "target_entity": null,
+        "target_position": null,
+        "teacher_lesson": null
+      },
+      "actual_joint_receipt": {
+        "candidate_count": 31,
+        "forced_slots": [
+          4,
+          0,
+          0,
+          2,
+          2,
+          2,
+          4,
+          4,
+          3,
+          0,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          4,
+          0,
+          0,
+          2,
+          2,
+          2,
+          4,
+          0,
+          0,
+          2,
+          2,
+          2,
+          0,
+          2,
+          4
+        ],
+        "motor_candidates": [
+          28,
+          null,
+          null,
+          null,
+          6,
+          null
+        ],
+        "motor_masks": [
+          293995014,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "old_joint_log_probability": -1.9272702932357788,
+        "representative": 6,
+        "representative_mask": 2147483647,
+        "temperature": 1.0
+      },
+      "capture_sha256": "eb6f9bc4737e748f7de31dc1a72e0a45a3bbd0522c7021f18585b1b7ee135dca"
+    },
+    {
+      "condition": "Untreated",
+      "world_seed": 16309347,
+      "requested": "EatFood",
+      "step": 1,
+      "selected_action": {
+        "abi_version": 2,
+        "action_id": 400,
+        "arbitration_trace": null,
+        "confidence": 1.0,
+        "duration_ticks": 1,
+        "intensity": 1.0,
+        "kind": "Vocalize",
+        "motor_payload": null,
+        "organism_id": 1,
+        "source_mask": 0,
+        "target_entity": null,
+        "target_position": null,
+        "teacher_lesson": null
+      },
+      "actual_joint_receipt": {
+        "candidate_count": 31,
+        "forced_slots": [
+          4,
+          0,
+          0,
+          2,
+          2,
+          2,
+          4,
+          4,
+          3,
+          0,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          4,
+          0,
+          0,
+          2,
+          2,
+          2,
+          4,
+          0,
+          0,
+          2,
+          2,
+          2,
+          0,
+          2,
+          4
+        ],
+        "motor_candidates": [
+          28,
+          null,
+          null,
+          8,
+          null,
+          null
+        ],
+        "motor_masks": [
+          293995014,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "old_joint_log_probability": -1.3092806339263916,
+        "representative": 8,
+        "representative_mask": 2147483647,
+        "temperature": 1.0
+      },
+      "capture_sha256": "38d1b677f59c52400fa2ac49e289cb500a57956674aecf76a6334b398c3fe012"
+    },
+    {
+      "condition": "Untreated",
+      "world_seed": 16309347,
+      "requested": "GetFood",
+      "step": 0,
+      "selected_action": {
+        "abi_version": 2,
+        "action_id": 1,
+        "arbitration_trace": null,
+        "confidence": 1.0,
+        "duration_ticks": 1,
+        "intensity": 1.0,
+        "kind": "Idle",
+        "motor_payload": null,
+        "organism_id": 1,
+        "source_mask": 0,
+        "target_entity": null,
+        "target_position": null,
+        "teacher_lesson": null
+      },
+      "actual_joint_receipt": {
+        "candidate_count": 31,
+        "forced_slots": [
+          4,
+          0,
+          0,
+          2,
+          2,
+          2,
+          4,
+          4,
+          3,
+          0,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          4,
+          0,
+          0,
+          2,
+          2,
+          2,
+          4,
+          0,
+          0,
+          2,
+          2,
+          2,
+          0,
+          2,
+          4
+        ],
+        "motor_candidates": [
+          28,
+          null,
+          null,
+          null,
+          6,
+          null
+        ],
+        "motor_masks": [
+          293995014,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "old_joint_log_probability": -1.7863258123397827,
+        "representative": 6,
+        "representative_mask": 2147483647,
+        "temperature": 1.0
+      },
+      "capture_sha256": "078e4d1064f20eb520cebdf45a546f354e438951ce1acb708b19e6a1b3ea93e3"
+    },
+    {
+      "condition": "Untreated",
+      "world_seed": 16309347,
+      "requested": "GetFood",
+      "step": 1,
+      "selected_action": {
+        "abi_version": 2,
+        "action_id": 400,
+        "arbitration_trace": null,
+        "confidence": 1.0,
+        "duration_ticks": 1,
+        "intensity": 1.0,
+        "kind": "Vocalize",
+        "motor_payload": null,
+        "organism_id": 1,
+        "source_mask": 0,
+        "target_entity": null,
+        "target_position": null,
+        "teacher_lesson": null
+      },
+      "actual_joint_receipt": {
+        "candidate_count": 31,
+        "forced_slots": [
+          4,
+          0,
+          0,
+          2,
+          2,
+          2,
+          4,
+          4,
+          3,
+          0,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          4,
+          0,
+          0,
+          2,
+          2,
+          2,
+          4,
+          0,
+          0,
+          2,
+          2,
+          2,
+          0,
+          2,
+          4
+        ],
+        "motor_candidates": [
+          28,
+          null,
+          null,
+          8,
+          null,
+          null
+        ],
+        "motor_masks": [
+          293995014,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "old_joint_log_probability": -0.7246590256690979,
+        "representative": 8,
+        "representative_mask": 2147483647,
+        "temperature": 1.0
+      },
+      "capture_sha256": "c8d3668423fd888bceeea259acb1fa100538d2858ed1dd589e6eaee4f3cc53f4"
+    },
+    {
+      "condition": "Untreated",
+      "world_seed": 16508317,
+      "requested": "EatFood",
+      "step": 0,
+      "selected_action": {
+        "abi_version": 2,
+        "action_id": 211,
+        "arbitration_trace": null,
+        "confidence": 0.9452201128005981,
+        "duration_ticks": 1,
+        "intensity": 1.0,
+        "kind": "Interact",
+        "motor_payload": null,
+        "organism_id": 1,
+        "source_mask": 0,
+        "target_entity": 1503,
+        "target_position": {
+          "x": 3.463045597076416,
+          "y": 0.0,
+          "z": 0.29679763317108154
+        },
+        "teacher_lesson": null
+      },
+      "actual_joint_receipt": {
+        "candidate_count": 31,
+        "forced_slots": [
+          4,
+          0,
+          0,
+          2,
+          2,
+          2,
+          4,
+          4,
+          3,
+          0,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          4,
+          0,
+          0,
+          2,
+          2,
+          2,
+          4,
+          0,
+          0,
+          2,
+          2,
+          2,
+          0,
+          2,
+          4
+        ],
+        "motor_candidates": [
+          28,
+          null,
+          20,
+          null,
+          null,
+          null
+        ],
+        "motor_masks": [
+          293995014,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "old_joint_log_probability": -0.4864385426044464,
+        "representative": 20,
+        "representative_mask": 2147483647,
+        "temperature": 1.0
+      },
+      "capture_sha256": "7aa790be0449a0de8ad4ce62062698040589000034cf19e4852f7d77c48ec704"
+    },
+    {
+      "condition": "Untreated",
+      "world_seed": 16508317,
+      "requested": "EatFood",
+      "step": 1,
+      "selected_action": {
+        "abi_version": 2,
+        "action_id": 210,
+        "arbitration_trace": null,
+        "confidence": 0.9515678882598877,
+        "duration_ticks": 1,
+        "intensity": 1.0,
+        "kind": "Interact",
+        "motor_payload": null,
+        "organism_id": 1,
+        "source_mask": 0,
+        "target_entity": 1503,
+        "target_position": {
+          "x": 3.5,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "teacher_lesson": null
+      },
+      "actual_joint_receipt": {
+        "candidate_count": 31,
+        "forced_slots": [
+          4,
+          0,
+          0,
+          2,
+          2,
+          2,
+          4,
+          4,
+          3,
+          0,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          4,
+          0,
+          0,
+          2,
+          2,
+          2,
+          4,
+          0,
+          0,
+          2,
+          2,
+          2,
+          0,
+          2,
+          4
+        ],
+        "motor_candidates": [
+          28,
+          null,
+          3,
+          null,
+          null,
+          null
+        ],
+        "motor_masks": [
+          293995014,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "old_joint_log_probability": -0.04737798124551773,
+        "representative": 3,
+        "representative_mask": 2147483647,
+        "temperature": 1.0
+      },
+      "capture_sha256": "0c853393afc1313b957ee47bb369cf19e2d05d006e923d645bb6438befd6e35d"
+    },
+    {
+      "condition": "Untreated",
+      "world_seed": 16508317,
+      "requested": "GetFood",
+      "step": 0,
+      "selected_action": {
+        "abi_version": 2,
+        "action_id": 211,
+        "arbitration_trace": null,
+        "confidence": 0.9452201128005981,
+        "duration_ticks": 1,
+        "intensity": 1.0,
+        "kind": "Interact",
+        "motor_payload": null,
+        "organism_id": 1,
+        "source_mask": 0,
+        "target_entity": 1503,
+        "target_position": {
+          "x": 3.463045597076416,
+          "y": 0.0,
+          "z": 0.29679763317108154
+        },
+        "teacher_lesson": null
+      },
+      "actual_joint_receipt": {
+        "candidate_count": 31,
+        "forced_slots": [
+          4,
+          0,
+          0,
+          2,
+          2,
+          2,
+          4,
+          4,
+          3,
+          0,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          4,
+          0,
+          0,
+          2,
+          2,
+          2,
+          4,
+          0,
+          0,
+          2,
+          2,
+          2,
+          0,
+          2,
+          4
+        ],
+        "motor_candidates": [
+          28,
+          null,
+          20,
+          null,
+          null,
+          null
+        ],
+        "motor_masks": [
+          293995014,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "old_joint_log_probability": -0.016636591404676437,
+        "representative": 20,
+        "representative_mask": 2147483647,
+        "temperature": 1.0
+      },
+      "capture_sha256": "72802e73ad1138aee762b3a255eb96c8a8506a48f62789f6e0ab78b12d21f904"
+    },
+    {
+      "condition": "Untreated",
+      "world_seed": 16508317,
+      "requested": "GetFood",
+      "step": 1,
+      "selected_action": {
+        "abi_version": 2,
+        "action_id": 210,
+        "arbitration_trace": null,
+        "confidence": 0.9515678882598877,
+        "duration_ticks": 1,
+        "intensity": 1.0,
+        "kind": "Interact",
+        "motor_payload": null,
+        "organism_id": 1,
+        "source_mask": 0,
+        "target_entity": 1503,
+        "target_position": {
+          "x": 3.5,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "teacher_lesson": null
+      },
+      "actual_joint_receipt": {
+        "candidate_count": 31,
+        "forced_slots": [
+          4,
+          0,
+          0,
+          2,
+          2,
+          2,
+          4,
+          4,
+          3,
+          0,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          4,
+          0,
+          0,
+          2,
+          2,
+          2,
+          4,
+          0,
+          0,
+          2,
+          2,
+          2,
+          0,
+          2,
+          4
+        ],
+        "motor_candidates": [
+          28,
+          null,
+          3,
+          null,
+          null,
+          null
+        ],
+        "motor_masks": [
+          293995014,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "old_joint_log_probability": -0.4686426520347595,
+        "representative": 3,
+        "representative_mask": 2147483647,
+        "temperature": 1.0
+      },
+      "capture_sha256": "9355fbf68bc1d98180cd666b446a93713b4159ecf0778ccf64a192b56aca01f6"
+    },
+    {
+      "condition": "MixedGrounded4",
+      "world_seed": 16309347,
+      "requested": "EatFood",
+      "step": 0,
+      "selected_action": {
+        "abi_version": 2,
+        "action_id": 1,
+        "arbitration_trace": null,
+        "confidence": 1.0,
+        "duration_ticks": 1,
+        "intensity": 1.0,
+        "kind": "Idle",
+        "motor_payload": null,
+        "organism_id": 1,
+        "source_mask": 0,
+        "target_entity": null,
+        "target_position": null,
+        "teacher_lesson": null
+      },
+      "actual_joint_receipt": {
+        "candidate_count": 31,
+        "forced_slots": [
+          4,
+          0,
+          0,
+          2,
+          2,
+          2,
+          4,
+          4,
+          3,
+          0,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          4,
+          0,
+          0,
+          2,
+          2,
+          2,
+          4,
+          0,
+          0,
+          2,
+          2,
+          2,
+          0,
+          2,
+          4
+        ],
+        "motor_candidates": [
+          28,
+          null,
+          null,
+          null,
+          6,
+          null
+        ],
+        "motor_masks": [
+          293995014,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "old_joint_log_probability": -1.4446288347244263,
+        "representative": 6,
+        "representative_mask": 2147483647,
+        "temperature": 1.0
+      },
+      "capture_sha256": "2f4f09bb557c23d6407d6e2940ee3ee2116f1974b0f17a69a400e2b9a80e9b54"
+    },
+    {
+      "condition": "MixedGrounded4",
+      "world_seed": 16309347,
+      "requested": "EatFood",
+      "step": 1,
+      "selected_action": {
+        "abi_version": 2,
+        "action_id": 400,
+        "arbitration_trace": null,
+        "confidence": 1.0,
+        "duration_ticks": 1,
+        "intensity": 1.0,
+        "kind": "Vocalize",
+        "motor_payload": null,
+        "organism_id": 1,
+        "source_mask": 0,
+        "target_entity": null,
+        "target_position": null,
+        "teacher_lesson": null
+      },
+      "actual_joint_receipt": {
+        "candidate_count": 31,
+        "forced_slots": [
+          4,
+          0,
+          0,
+          2,
+          2,
+          2,
+          4,
+          4,
+          3,
+          0,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          4,
+          0,
+          0,
+          2,
+          2,
+          2,
+          4,
+          0,
+          0,
+          2,
+          2,
+          2,
+          0,
+          2,
+          4
+        ],
+        "motor_candidates": [
+          28,
+          null,
+          null,
+          8,
+          null,
+          null
+        ],
+        "motor_masks": [
+          293995014,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "old_joint_log_probability": -0.5203113555908203,
+        "representative": 8,
+        "representative_mask": 2147483647,
+        "temperature": 1.0
+      },
+      "capture_sha256": "c056737314658b4896b2383dc4479d3039d447df05112c18aa8f406708c13f1c"
+    },
+    {
+      "condition": "MixedGrounded4",
+      "world_seed": 16309347,
+      "requested": "GetFood",
+      "step": 0,
+      "selected_action": {
+        "abi_version": 2,
+        "action_id": 1,
+        "arbitration_trace": null,
+        "confidence": 1.0,
+        "duration_ticks": 1,
+        "intensity": 1.0,
+        "kind": "Idle",
+        "motor_payload": null,
+        "organism_id": 1,
+        "source_mask": 0,
+        "target_entity": null,
+        "target_position": null,
+        "teacher_lesson": null
+      },
+      "actual_joint_receipt": {
+        "candidate_count": 31,
+        "forced_slots": [
+          4,
+          0,
+          0,
+          2,
+          2,
+          2,
+          4,
+          4,
+          3,
+          0,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          4,
+          0,
+          0,
+          2,
+          2,
+          2,
+          4,
+          0,
+          0,
+          2,
+          2,
+          2,
+          0,
+          2,
+          4
+        ],
+        "motor_candidates": [
+          28,
+          null,
+          null,
+          null,
+          6,
+          null
+        ],
+        "motor_masks": [
+          293995014,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "old_joint_log_probability": -1.785499095916748,
+        "representative": 6,
+        "representative_mask": 2147483647,
+        "temperature": 1.0
+      },
+      "capture_sha256": "61bccefb380a4117a8ec268a21aef2cf5039d037603c6a2c57f6c679fbeb7b46"
+    },
+    {
+      "condition": "MixedGrounded4",
+      "world_seed": 16309347,
+      "requested": "GetFood",
+      "step": 1,
+      "selected_action": {
+        "abi_version": 2,
+        "action_id": 400,
+        "arbitration_trace": null,
+        "confidence": 1.0,
+        "duration_ticks": 1,
+        "intensity": 1.0,
+        "kind": "Vocalize",
+        "motor_payload": null,
+        "organism_id": 1,
+        "source_mask": 0,
+        "target_entity": null,
+        "target_position": null,
+        "teacher_lesson": null
+      },
+      "actual_joint_receipt": {
+        "candidate_count": 31,
+        "forced_slots": [
+          4,
+          0,
+          0,
+          2,
+          2,
+          2,
+          4,
+          4,
+          3,
+          0,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          4,
+          0,
+          0,
+          2,
+          2,
+          2,
+          4,
+          0,
+          0,
+          2,
+          2,
+          2,
+          0,
+          2,
+          4
+        ],
+        "motor_candidates": [
+          28,
+          null,
+          null,
+          8,
+          null,
+          null
+        ],
+        "motor_masks": [
+          293995014,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "old_joint_log_probability": -0.6522892117500305,
+        "representative": 8,
+        "representative_mask": 2147483647,
+        "temperature": 1.0
+      },
+      "capture_sha256": "408dd5167a2b06c6f404ba68809f75adb7693ad072ef3feac0fbf6118dd3f33d"
+    },
+    {
+      "condition": "MixedGrounded4",
+      "world_seed": 16508317,
+      "requested": "EatFood",
+      "step": 0,
+      "selected_action": {
+        "abi_version": 2,
+        "action_id": 211,
+        "arbitration_trace": null,
+        "confidence": 0.9452201128005981,
+        "duration_ticks": 1,
+        "intensity": 1.0,
+        "kind": "Interact",
+        "motor_payload": null,
+        "organism_id": 1,
+        "source_mask": 0,
+        "target_entity": 1503,
+        "target_position": {
+          "x": 3.463045597076416,
+          "y": 0.0,
+          "z": 0.29679763317108154
+        },
+        "teacher_lesson": null
+      },
+      "actual_joint_receipt": {
+        "candidate_count": 31,
+        "forced_slots": [
+          4,
+          0,
+          0,
+          2,
+          2,
+          2,
+          4,
+          4,
+          3,
+          0,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          4,
+          0,
+          0,
+          2,
+          2,
+          2,
+          4,
+          0,
+          0,
+          2,
+          2,
+          2,
+          0,
+          2,
+          4
+        ],
+        "motor_candidates": [
+          28,
+          null,
+          20,
+          null,
+          null,
+          null
+        ],
+        "motor_masks": [
+          293995014,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "old_joint_log_probability": -0.3858204185962677,
+        "representative": 20,
+        "representative_mask": 2147483647,
+        "temperature": 1.0
+      },
+      "capture_sha256": "589c6b09f38050c09380891e96575afec9de0f0982d94317cf25325e9724e662"
+    },
+    {
+      "condition": "MixedGrounded4",
+      "world_seed": 16508317,
+      "requested": "EatFood",
+      "step": 1,
+      "selected_action": {
+        "abi_version": 2,
+        "action_id": 210,
+        "arbitration_trace": null,
+        "confidence": 0.9515678882598877,
+        "duration_ticks": 1,
+        "intensity": 1.0,
+        "kind": "Interact",
+        "motor_payload": null,
+        "organism_id": 1,
+        "source_mask": 0,
+        "target_entity": 1503,
+        "target_position": {
+          "x": 3.5,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "teacher_lesson": null
+      },
+      "actual_joint_receipt": {
+        "candidate_count": 31,
+        "forced_slots": [
+          4,
+          0,
+          0,
+          2,
+          2,
+          2,
+          4,
+          4,
+          3,
+          0,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          4,
+          0,
+          0,
+          2,
+          2,
+          2,
+          4,
+          0,
+          0,
+          2,
+          2,
+          2,
+          0,
+          2,
+          4
+        ],
+        "motor_candidates": [
+          28,
+          null,
+          3,
+          null,
+          null,
+          null
+        ],
+        "motor_masks": [
+          293995014,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "old_joint_log_probability": -0.002887134440243244,
+        "representative": 3,
+        "representative_mask": 2147483647,
+        "temperature": 1.0
+      },
+      "capture_sha256": "27fec5630d319b197fd85f60c531360b4ad251f51ad8b2e550444f85e402226b"
+    },
+    {
+      "condition": "MixedGrounded4",
+      "world_seed": 16508317,
+      "requested": "GetFood",
+      "step": 0,
+      "selected_action": {
+        "abi_version": 2,
+        "action_id": 211,
+        "arbitration_trace": null,
+        "confidence": 0.9452201128005981,
+        "duration_ticks": 1,
+        "intensity": 1.0,
+        "kind": "Interact",
+        "motor_payload": null,
+        "organism_id": 1,
+        "source_mask": 0,
+        "target_entity": 1503,
+        "target_position": {
+          "x": 3.463045597076416,
+          "y": 0.0,
+          "z": 0.29679763317108154
+        },
+        "teacher_lesson": null
+      },
+      "actual_joint_receipt": {
+        "candidate_count": 31,
+        "forced_slots": [
+          4,
+          0,
+          0,
+          2,
+          2,
+          2,
+          4,
+          4,
+          3,
+          0,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          4,
+          0,
+          0,
+          2,
+          2,
+          2,
+          4,
+          0,
+          0,
+          2,
+          2,
+          2,
+          0,
+          2,
+          4
+        ],
+        "motor_candidates": [
+          28,
+          null,
+          20,
+          null,
+          null,
+          null
+        ],
+        "motor_masks": [
+          293995014,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "old_joint_log_probability": -0.011957130394876003,
+        "representative": 20,
+        "representative_mask": 2147483647,
+        "temperature": 1.0
+      },
+      "capture_sha256": "d365b9ce0b069593c3334845c0f83449c0a776f385bcee8869be624989fae280"
+    },
+    {
+      "condition": "MixedGrounded4",
+      "world_seed": 16508317,
+      "requested": "GetFood",
+      "step": 1,
+      "selected_action": {
+        "abi_version": 2,
+        "action_id": 210,
+        "arbitration_trace": null,
+        "confidence": 0.9515678882598877,
+        "duration_ticks": 1,
+        "intensity": 1.0,
+        "kind": "Interact",
+        "motor_payload": null,
+        "organism_id": 1,
+        "source_mask": 0,
+        "target_entity": 1503,
+        "target_position": {
+          "x": 3.5,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "teacher_lesson": null
+      },
+      "actual_joint_receipt": {
+        "candidate_count": 31,
+        "forced_slots": [
+          4,
+          0,
+          0,
+          2,
+          2,
+          2,
+          4,
+          4,
+          3,
+          0,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          4,
+          0,
+          0,
+          2,
+          2,
+          2,
+          4,
+          0,
+          0,
+          2,
+          2,
+          2,
+          0,
+          2,
+          4
+        ],
+        "motor_candidates": [
+          28,
+          null,
+          3,
+          null,
+          null,
+          null
+        ],
+        "motor_masks": [
+          293995014,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "old_joint_log_probability": -0.04873144254088402,
+        "representative": 3,
+        "representative_mask": 2147483647,
+        "temperature": 1.0
+      },
+      "capture_sha256": "8d2becdecd5943ebd7de82241d31eb6eaf5d2eb496848c479b16644e5181d536"
+    }
+  ],
+  "saved_full_later_neural_tapes": 8,
+  "fresh_process_state_verification": {
+    "adam_or_shadow_adam_steps": 0,
+    "checks": [
+      {
+        "actor_optimizer_exact": true,
+        "condition": "Untreated",
+        "file": "prefix-Untreated-16309347-0.json.zst",
+        "host_exact_after_fresh_process_load": true
+      },
+      {
+        "actor_optimizer_exact": true,
+        "condition": "Untreated",
+        "file": "prefix-Untreated-16309347-1.json.zst",
+        "host_exact_after_fresh_process_load": true
+      },
+      {
+        "actor_optimizer_exact": true,
+        "condition": "Untreated",
+        "file": "prefix-Untreated-16508317-0.json.zst",
+        "host_exact_after_fresh_process_load": true
+      },
+      {
+        "actor_optimizer_exact": true,
+        "condition": "Untreated",
+        "file": "prefix-Untreated-16508317-1.json.zst",
+        "host_exact_after_fresh_process_load": true
+      },
+      {
+        "actor_optimizer_exact": true,
+        "condition": "MixedGrounded4",
+        "file": "prefix-MixedGrounded4-16309347-0.json.zst",
+        "host_exact_after_fresh_process_load": true
+      },
+      {
+        "actor_optimizer_exact": true,
+        "condition": "MixedGrounded4",
+        "file": "prefix-MixedGrounded4-16309347-1.json.zst",
+        "host_exact_after_fresh_process_load": true
+      },
+      {
+        "actor_optimizer_exact": true,
+        "condition": "MixedGrounded4",
+        "file": "prefix-MixedGrounded4-16508317-0.json.zst",
+        "host_exact_after_fresh_process_load": true
+      },
+      {
+        "actor_optimizer_exact": true,
+        "condition": "MixedGrounded4",
+        "file": "prefix-MixedGrounded4-16508317-1.json.zst",
+        "host_exact_after_fresh_process_load": true
+      }
+    ],
+    "gradient_probes": 0,
+    "native_decisions": 0
+  },
+  "protected_original_artifacts": {
+    "original_recovery_and_entire_v21_v22_v23_run_files": {
+      "count": 95,
+      "byte_identical": true,
+      "mismatches": []
+    },
+    "original_public_evidence": {
+      "count": 26,
+      "byte_identical": true,
+      "mismatches": []
+    },
+    "preserved_invalid_mask_preflight_artifacts": {
+      "count": 7,
+      "byte_identical": true,
+      "mismatches": []
+    },
+    "prior_seed_receipts": {
+      "count": 56,
+      "byte_identical": true,
+      "mismatches": []
+    },
+    "current_v24_run": {
+      "count": 17,
+      "byte_identical": true,
+      "mismatches": []
+    }
+  },
+  "preserved_initial_preflight": {
+    "kind": "preserved-preflight-validation-failure",
+    "source_head": "ee815e7d1e6b1affba84050e3e4816035b2676bc",
+    "scored_decisions": 0,
+    "gradient_probes": 0,
+    "explicit_preparation_host_steps": 2,
+    "adam_or_shadow_adam_steps": 0,
+    "validation_failed_before_first_cue_or_scored_decision": true,
+    "reason": "Compared typed checkpoint serialization hash against V24 JSON-Value serialization hash. Corrected check uses the identical V24 before_audio representation and requires an exact hash before proceeding.",
+    "original_trace_and_source_data_unchanged": true
+  },
+  "prior_preflight_elapsed_seconds": 3.0626703949965304,
+  "native_trace_files_sha256": {
+    "native-tapes.jsonl.zst": "d683d6a1d9ce0cbf8350698d4260a2485e9f8be9cca487616ba75f0790e46dc8",
+    "native-gradients.json.zst": "ea1935a909ab942adc6ecb014f8e8686744005f05ca76771c7d39f2cfd9f4304",
+    "prefix-checkpoints.json": "73689080950cb5a331ced90cc8caf50bc381c002e2f0aeb7a3e242bdd3e1f6da"
+  },
+  "validation": {
+    "exact_parent_canonical_hashes": 8,
+    "exact_full_native_rows_and_outcomes": 16,
+    "exact_sampling_receipts": 16,
+    "native_gradient_vectors": 16,
+    "gradient_vector_length": 32768,
+    "scored_decisions_including_failed_preflight": 16,
+    "gradient_probes_including_failed_preflight": 16,
+    "global_adam_and_shadow_steps": 0,
+    "explicit_host_preparation_steps_successful": 8,
+    "explicit_host_preparation_steps_initial_preflight": 2,
+    "fmt_check": "passed",
+    "strict_clippy_cpu_lib_and_tests": "passed"
+  },
+  "interpretation": {
+    "verb": "Heard verb changes action logits substantially, but EAT still outranks the legal Vocalize report at the held/GetFood witness. Its native imitation-component gradient is nonzero and lowers that incorrect margin under the existing action mask. No disconnected input or zero teaching gradient at this witness. Historical normalized batch and mixture gradients are not reproduced.",
+    "speech": "Missing speech targets give zero direct speech-head gradient. The real premature-event silence targets give 64 nonzero gate coordinates and lower first presence while raising stop. Untreated permits this signal in its retained stage mask; MixedGrounded4 freezes it out. No gate supervision or mask change is applied.",
+    "limits": "Only two post-hoc pre-sleep witnesses, previously trained language source and care mixture; no learned behavioral correction, new held-out competence, sleep-retention improvement, actual optimizer effect or new SLM contribution."
+  },
+  "full_native_result_sha256": "3968e59391807e659167e47414d9fdf539b036356e10c70d95f76ea58573838e",
+  "publication_scope": "All 16 measured rows retain first-two raw speech outputs and relevant food Eat/Grab/Idle/Vocalize logits. Full native result, all candidate/six-step logits, tapes, gradients and private states remain unmodified locally and are hash-bound here; private checkpoints and executables are not published."
+}
