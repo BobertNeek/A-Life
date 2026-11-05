@@ -24,8 +24,8 @@ pub use curriculum::{
     continue_event_confirmed_speech, continue_factorial_grounded_language,
     continue_focused_grounded_language, continue_language_curriculum,
     continue_linear_grounded_language, continue_physical_before_speech, continue_report_choice,
-    continue_visible_balanced_grounded_language, refine_language_payload,
-    refine_language_shared_gates,
+    continue_visible_balanced_grounded_language, continue_witnessed_replay,
+    preflight_witnessed_replay, refine_language_payload, refine_language_shared_gates,
 };
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]

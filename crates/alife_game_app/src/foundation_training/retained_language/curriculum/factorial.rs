@@ -4,7 +4,8 @@ pub(super) mod balanced;
 pub use balanced::{
     assess_unseen_grounding, continue_balanced_grounded_language, continue_event_confirmed_speech,
     continue_physical_before_speech, continue_report_choice,
-    continue_visible_balanced_grounded_language,
+    continue_visible_balanced_grounded_language, continue_witnessed_replay,
+    preflight_witnessed_replay,
 };
 mod contrastive;
 mod focus;
@@ -615,6 +616,7 @@ fn run_factorial(
             event_confirmed_speech_v1: false,
             unseen_report_transfer_v1: false,
             physical_before_speech_v1: false,
+            captured_failure_replay_v1: false,
         };
         if arm == Arm::Grounded {
             eprintln!("factorial common baseline");

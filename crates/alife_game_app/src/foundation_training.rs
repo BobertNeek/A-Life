@@ -37,9 +37,9 @@ pub use retained_language::{
     continue_event_confirmed_speech, continue_factorial_grounded_language,
     continue_focused_grounded_language, continue_language_curriculum,
     continue_linear_grounded_language, continue_physical_before_speech, continue_report_choice,
-    continue_visible_balanced_grounded_language, refine_language_payload,
-    refine_language_shared_gates, reload_language_pilot_child, run_retained_language_pilot,
-    LanguagePilotConfig,
+    continue_visible_balanced_grounded_language, continue_witnessed_replay,
+    preflight_witnessed_replay, refine_language_payload, refine_language_shared_gates,
+    reload_language_pilot_child, run_retained_language_pilot, LanguagePilotConfig,
 };
 pub(crate) mod diagnostics;
 pub use comparison_identity::{
