@@ -11,6 +11,8 @@ mod physical_priority_probe;
 mod speech_factor_probe;
 mod unseen_transfer;
 #[cfg(test)]
+mod within_seed_gate_validation;
+#[cfg(test)]
 mod witnessed_gate_retention;
 pub use captured_replay::{
     compare_care_retention, compare_witnessed_early_stop, continue_witnessed_replay,
