@@ -1484,7 +1484,8 @@ impl PortableSaveFile {
     /// request a protected DACL granting the process user full control.
     /// EFS-encrypted saves, detected named data streams and resource/central
     /// access policies are refused rather than silently discarded. Windows
-    /// audit SACLs and extended attributes are not copied; stream detection
+    /// audit SACLs (including label-less container flags) and extended attributes
+    /// are not copied; stream detection
     /// depends on filesystem support for the native enumeration API.
     ///
     /// Callers must serialize writes and permission/path changes. The checks

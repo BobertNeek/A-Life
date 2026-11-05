@@ -80,6 +80,41 @@ fn windows_ordinary_inherited_save_retains_security_and_new_save_is_private() {
 
 #[cfg(windows)]
 #[test]
+fn windows_native_metadata_supports_relative_and_unprefixed_long_save_paths() {
+    let relative = PathBuf::from(format!("alife-relative-save-{}", std::process::id()));
+    fs::create_dir(&relative).unwrap();
+    let path = relative.join("creature.json");
+    let original = fixture("relative");
+    original.to_json_file(&path).unwrap();
+    fixture("relative replacement").to_json_file(&path).unwrap();
+    assert_eq!(
+        PortableSaveFile::from_json_file(&path).unwrap().save_id,
+        "relative replacement"
+    );
+    fs::remove_dir_all(relative).unwrap();
+
+    let root = temp_root("long-native-path");
+    let mut nested = root.clone();
+    for index in 0..7 {
+        nested.push(format!("long-save-directory-{index}-abcdefghijklmnop"));
+    }
+    fs::create_dir_all(&nested).unwrap();
+    let path = nested.join("creature.json");
+    // The API must also accept ordinary absolute spellings, as std::fs does.
+    let normal = path.to_str().unwrap().strip_prefix(r"\\?\").unwrap();
+    assert!(normal.len() > 260);
+    original.to_json_file(normal).unwrap();
+    let replacement = fixture("long replacement");
+    replacement.to_json_file(normal).unwrap();
+    assert_eq!(
+        PortableSaveFile::from_json_file(&path).unwrap(),
+        replacement
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[cfg(windows)]
+#[test]
 fn windows_modern_inherited_acl_survives_replacement() {
     let root = temp_root("modern-inherited-dacl");
     let path = root.join("inherited.json");

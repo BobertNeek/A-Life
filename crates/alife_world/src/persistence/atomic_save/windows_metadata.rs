@@ -51,6 +51,7 @@ pub(super) struct Snapshot {
     automatic: bool,
     protected: bool,
     text: Vec<u16>,
+    label_text: Vec<u16>,
     identity: (u64, u64),
 }
 fn win_result(code: u32) -> io::Result<()> {
@@ -147,7 +148,21 @@ fn snapshot(file: &File) -> io::Result<Snapshot> {
             }
         }
     }
-    let text = descriptor_text(descriptor, PARTS)?;
+    // LABEL_SECURITY_INFORMATION can return null-SACL container flags even
+    // when there is no integrity-label ACE. Those are audit-policy metadata,
+    // outside this copy contract; do not manufacture a null SACL to match them.
+    // For an actual label retain its complete text, including inheritance state.
+    let has_label = !label.is_null() && unsafe { (*label).AceCount != 0 };
+    let label_text = if has_label {
+        descriptor_text(descriptor, LABEL_SECURITY_INFORMATION)?
+    } else {
+        Vec::new()
+    };
+    let mut text = descriptor_text(
+        descriptor,
+        OWNER_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
+    )?;
+    text.extend_from_slice(&label_text);
     let mut info = std::mem::MaybeUninit::uninit();
     // SAFETY: live handle and appropriately sized output buffer.
     unsafe {
@@ -169,6 +184,7 @@ fn snapshot(file: &File) -> io::Result<Snapshot> {
         automatic: control & windows_sys::Win32::Security::SE_DACL_AUTO_INHERITED != 0,
         dacl,
         text,
+        label_text,
         identity: (
             info.dwVolumeSerialNumber as u64,
             ((info.nFileIndexHigh as u64) << 32) | info.nFileIndexLow as u64,
@@ -198,9 +214,7 @@ pub(super) fn apply(old: &Snapshot, file: &File, path: &Path) -> io::Result<()> 
             parts |= GROUP_SECURITY_INFORMATION;
         }
     }
-    if descriptor_text(old._allocation.0, LABEL_SECURITY_INFORMATION)?
-        != descriptor_text(current._allocation.0, LABEL_SECURITY_INFORMATION)?
-    {
+    if old.label_text != current.label_text {
         parts |= LABEL_SECURITY_INFORMATION;
     }
     if parts != 0 {
@@ -479,32 +493,6 @@ mod tests {
         let stage_file = create_private(&stage).unwrap();
         let result = apply(&old, &stage_file, &stage);
         let copied = snapshot(&stage_file).unwrap();
-        if result.is_err() {
-            let path = wide(&stage).unwrap();
-            // Disposable empty-stage diagnostics for inheritance-model changes.
-            let legacy = unsafe {
-                SetFileSecurityW(path.as_ptr(), DACL_SECURITY_INFORMATION, old._allocation.0)
-            };
-            eprintln!(
-                "legacy DACL-only={legacy}; staged={}",
-                String::from_utf16_lossy(&snapshot(&stage_file).unwrap().text)
-            );
-            let modern = unsafe {
-                SetSecurityInfo(
-                    stage_file.as_raw_handle(),
-                    SE_FILE_OBJECT,
-                    DACL_SECURITY_INFORMATION,
-                    null_mut(),
-                    null_mut(),
-                    old.dacl,
-                    null_mut(),
-                )
-            };
-            eprintln!(
-                "modern DACL-only={modern}; staged={}",
-                String::from_utf16_lossy(&snapshot(&stage_file).unwrap().text)
-            );
-        }
         assert!(
             result.is_ok(),
             "{result:?}; original={}; staged={}",
