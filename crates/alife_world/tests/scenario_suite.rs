@@ -121,7 +121,7 @@ fn curiosity_contradiction_scenario_raises_gap_bias_without_bypassing_arbitratio
         vec![Some(ReferenceActionFailure::MissingAffordance)]
     );
     assert!(!patch.outcome().success);
-    assert_eq!(patch.outcome().physical.contact, PhysicalContactKind::None);
+    assert_eq!(patch.outcome().physical.contact, PhysicalContactKind::Touch);
     assert_eq!(patch.outcome().homeostatic_delta.hormones.cortisol, 0.0);
     assert!(patch.outcome().prediction_error.raw() >= 0.8);
     assert!(patch.outcome().contradiction_observed);

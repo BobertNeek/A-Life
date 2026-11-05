@@ -1076,9 +1076,8 @@ fn curiosity_contradiction(seed: u64) -> Result<ScenarioFixture, ScaffoldContrac
                 expected_action_id: Some(HeadlessActionIds::EAT),
                 expected_target_label: Some("sealed_box"),
                 expected_success: false,
-                // Solid geometry prevents contact with the box's center; the
-                // rejected ingest reports no touch, unlike blocked locomotion.
-                expected_contact: Some(PhysicalContactKind::None),
+                // The box's surface can be touched even though ingestion fails.
+                expected_contact: Some(PhysicalContactKind::Touch),
                 reward: ExpectedDirection::Zero,
                 hunger_delta: ExpectedDirection::Zero,
                 fear_delta: ExpectedDirection::Zero,

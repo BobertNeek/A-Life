@@ -3943,10 +3943,7 @@ impl HeadlessWorld {
                             properties: {
                                 let mut properties = object.grounded_physical;
                                 if terrain_vision
-                                    && !self.physical_contact_reachable(
-                                        observer.position,
-                                        object.position,
-                                    )
+                                    && !self.object_contact_reachable(observer.position, object)
                                 {
                                     properties.chemical[2] = 0.0;
                                 }
@@ -3954,10 +3951,7 @@ impl HeadlessWorld {
                             },
                             contact: object.carried_by == Some(organism_id)
                                 || (measured_distance <= object.radius
-                                    && self.physical_contact_reachable(
-                                        observer.position,
-                                        object.position,
-                                    )),
+                                    && self.object_contact_reachable(observer.position, object)),
                             confidence: Confidence::new(
                                 proximity_salience(measured_distance, HEADLESS_VISION_RADIUS)
                                     .max(0.1),
@@ -5317,7 +5311,7 @@ impl HeadlessWorld {
                     .get(&target.raw())
                     .map(|object| {
                         (
-                            self.physical_contact_reachable(agent_position, object.position),
+                            self.object_contact_reachable(agent_position, object),
                             !object.consumed
                                 && object.organism_id.is_none_or(|organism_id| {
                                     self.organism_registry
@@ -5626,15 +5620,12 @@ impl HeadlessWorld {
             Ok(target) => target,
             Err(_) => return self.invalid_target(command, command.target_entity),
         };
-        let Some(target_position) = self
-            .objects
-            .get(&target.raw())
-            .map(|object| object.position)
-        else {
+        let Some(target_object) = self.objects.get(&target.raw()) else {
             return self.invalid_target(command, Some(target));
         };
+        let target_position = target_object.position;
         let agent = self.agent_for(command.organism_id)?;
-        if !self.physical_contact_reachable(agent.position, target_position) {
+        if !self.object_contact_reachable(agent.position, target_object) {
             return self.finish_action(
                 command,
                 false,
@@ -6298,6 +6289,18 @@ impl HeadlessWorld {
     /// for height-field reach.
     fn physical_contact_reachable(&self, start: Vec3f, end: Vec3f) -> bool {
         distance(start, end) <= EAT_RADIUS && self.solid_segment_clear(start, end)
+    }
+
+    /// A contacted object's own solid surface is the destination, not an
+    /// intervening barrier. Other objects and terrain retain their checks.
+    fn object_contact_reachable(&self, start: Vec3f, object: &WorldObject) -> bool {
+        distance(start, object.position) <= EAT_RADIUS
+            && self.solid_segment_clear_from(
+                start,
+                object.position,
+                Some(object.id),
+                self.objects.values(),
+            )
     }
 
     fn solid_segment_clear(&self, start: Vec3f, end: Vec3f) -> bool {

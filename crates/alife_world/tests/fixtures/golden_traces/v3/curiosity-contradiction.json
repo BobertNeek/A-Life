@@ -33,7 +33,7 @@
       "selected_action_kind": "Interact",
       "target_entity": 2,
       "success": false,
-      "contact": "None",
+      "contact": "Touch",
       "reward_milli": 0,
       "pain_milli": 0,
       "frustration_milli": 1000,
