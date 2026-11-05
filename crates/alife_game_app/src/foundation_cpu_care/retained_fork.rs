@@ -12,10 +12,19 @@ use std::{
     io::{Read, Write},
     path::Path,
 };
+mod retention;
 mod run;
 mod verify;
+pub use retention::run_retained_fork_retention;
 pub use run::run_pc_donor_retained_training_fork;
 pub use verify::verify_pc_donor_retained_training_fork;
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PreviousFork {
+    directory: PathBuf,
+    manifest_sha256: String,
+}
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -35,6 +44,12 @@ struct Request {
     decisions: usize,
     optimizer_initialization: String,
     output: PathBuf,
+    #[serde(default)]
+    previous_fork: Option<PreviousFork>,
+    #[serde(default)]
+    lesson: Option<FoundationTeacherLesson>,
+    #[serde(default)]
+    food_need_condition: Option<FoundationFoodNeedCondition>,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -47,6 +62,68 @@ struct ForkManifest {
     policy_version: u64,
     ppo: PpoConfig,
     artifacts: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    previous_fork: Option<PreviousFork>,
+}
+
+fn require_space(root: &Path, budget: u64) -> Result<u64> {
+    let response = std::process::Command::new("python3")
+        .args([
+            "-c",
+            "import shutil,sys;print(shutil.disk_usage(sys.argv[1]).free)",
+        ])
+        .arg(root)
+        .output()?;
+    if !response.status.success() {
+        return Err("cannot verify free storage; stop before new work".into());
+    }
+    let free: u64 = std::str::from_utf8(&response.stdout)?.trim().parse()?;
+    if free < 8 * 1024u64.pow(3) + budget {
+        return Err(format!("storage admission stopped: {free} bytes free; preserve 8GiB floor plus {budget} bytes job budget").into());
+    }
+    Ok(free)
+}
+
+fn previous_state(
+    previous: &PreviousFork,
+) -> Result<(
+    CpuFoundationTrainer,
+    CpuValueHead,
+    CpuRetainedNeuralInheritance,
+    PhenotypeCompilerInputs,
+    u64,
+    CheckpointSeedsV1,
+)> {
+    pinned(
+        previous.directory.join("retained-fork.json"),
+        &previous.manifest_sha256,
+    )?;
+    let h: FoundationTrainingHandoffV1 = read(previous.directory.join("training-handoff.json"))?;
+    let admitted = h.clone().admit()?;
+    let retained: CpuRetainedNeuralInheritance =
+        read(previous.directory.join("retained-neural.json"))?;
+    retained.canonical_to_live(&admitted.phenotype)?;
+    Ok((
+        CpuFoundationTrainer::from_checkpoint(
+            admitted.phenotype,
+            admitted.foundation,
+            admitted.actor,
+        )?,
+        CpuValueHead::from_checkpoint(admitted.value)?,
+        retained,
+        h.compiler_inputs,
+        h.policy_version,
+        read(previous.directory.join("seed-state.json"))?,
+    ))
+}
+
+fn covers(history: &CheckpointSeedsV1, previous: &CheckpointSeedsV1) -> bool {
+    previous.excluded_ranges.iter().all(|[a, b]| {
+        history
+            .excluded_ranges
+            .iter()
+            .any(|[x, y]| x <= a && b <= y)
+    })
 }
 struct Context {
     experiment_bytes: Vec<u8>,

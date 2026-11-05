@@ -2,19 +2,31 @@ use super::*;
 
 pub fn run_pc_donor_retained_training_fork(spec: &Path) -> Result<Value> {
     let req: Request = read(spec)?;
-    let output = resolve_isolated_training_output(
-        &req.output,
-        [
-            spec,
-            req.prepared.as_path(),
-            req.pc_current.as_path(),
-            req.cloud_native_root.as_path(),
-            req.cloud_archive.as_path(),
-            req.seed_history.as_path(),
-        ],
-    )?;
+    let mut protected = vec![
+        spec,
+        req.prepared.as_path(),
+        req.pc_current.as_path(),
+        req.cloud_native_root.as_path(),
+        req.cloud_archive.as_path(),
+        req.seed_history.as_path(),
+    ];
+    if let Some(p) = &req.previous_fork {
+        protected.push(p.directory.as_path());
+    }
+    let output = resolve_isolated_training_output(&req.output, protected)?;
     if output.exists() {
         return Err("existing fork prefix preserved; reconcile rather than rerun".into());
+    }
+    require_space(
+        output.parent().ok_or("fork output lacks parent")?,
+        1024u64.pow(3),
+    )?;
+    if let Some(p) = &req.previous_fork {
+        verify_pc_donor_retained_training_fork(
+            &p.directory,
+            &p.manifest_sha256,
+            &req.expected_experiment_sha256,
+        )?;
     }
     let Context {
         experiment_bytes,
@@ -27,13 +39,25 @@ pub fn run_pc_donor_retained_training_fork(spec: &Path) -> Result<Value> {
     let PcDonorRetainedFork {
         mut trainer,
         mut value,
-        retained,
+        mut retained,
         donor_actor,
         donor_value,
     } = scope(&source_proof, || {
         initialize_pc_donor_retained_fork(&experiment)
     })?;
-    let collection_inputs = experiment.compiler_inputs().clone();
+    let mut collection_inputs = experiment.compiler_inputs().clone();
+    let mut source_version = pc.handoff.policy_version;
+    if let Some(p) = &req.previous_fork {
+        let (t, v, r, i, version, seeds) = previous_state(p)?;
+        if !covers(&seed_history, &seeds) {
+            return Err("continuation lost predecessor seed exclusions".into());
+        }
+        trainer = t;
+        value = v;
+        retained = r;
+        collection_inputs = i;
+        source_version = version;
+    }
     let asset = collection_inputs
         .n2048_candidate_asset()
         .ok_or("fork asset missing")?
@@ -42,9 +66,7 @@ pub fn run_pc_donor_retained_training_fork(spec: &Path) -> Result<Value> {
     let source_value = serde_json::to_vec(&donor_value)?;
     let before_actor = trainer.checkpoint();
     let before_value = value.checkpoint();
-    let version = pc
-        .handoff
-        .policy_version
+    let version = source_version
         .checked_add(1)
         .ok_or("fork policy overflow")?;
     if before_value
@@ -59,8 +81,10 @@ pub fn run_pc_donor_retained_training_fork(spec: &Path) -> Result<Value> {
         seed: req.seed,
         decisions: req.decisions,
         temperature: 1.,
-        lesson: FoundationTeacherLesson::EatHeldFood,
-        food_need_condition: FoundationFoodNeedCondition::NewbornV1,
+        lesson: req.lesson.unwrap_or(FoundationTeacherLesson::EatHeldFood),
+        food_need_condition: req
+            .food_need_condition
+            .unwrap_or(FoundationFoodNeedCondition::NewbornV1),
         food_offset: None,
         layout: None,
         seed_history: Some(req.seed_history.clone()),
@@ -108,7 +132,7 @@ pub fn run_pc_donor_retained_training_fork(spec: &Path) -> Result<Value> {
     write(output.join("initial-retained-neural.json"), &retained)?;
     write(
         output.join("fork-genesis.json"),
-        &json!({"kind":"experimental-two-parent-genetics-complete-PC-optimizer-transfer","exact_continuation":false,"merged_optimizer":false,"cloud_fraction":0.25,"pc_sha256":req.expected_pc_sha256,"cloud_tree_sha256":req.expected_cloud_tree_sha256,"cloud_transport_sha256":req.expected_cloud_archive_sha256,"experiment_sha256":req.expected_experiment_sha256,"PC_policy":pc.handoff.policy_version,"cloud_policy":experiment.receipt().cloud_native_cpu_binding.as_ref().map(|b|b.policy_version),"donor_actor_sha256":hash(&source_actor),"donor_critic_sha256":hash(&source_value),"donor_actor_age":before_actor.optimizer_step,"donor_critic_age":before_value.optimizer_step,"candidate_actor_sha256":hash(&serde_json::to_vec(&before_actor)?),"reset":"both fast/lifetime physical banks +0 only at new-fork start; original selectors/generations/topology/dendrites/predictor retained","personal_memory":"newborn; original lives remain archived in experiment","historical_freshness":"unknown","not_promoted":true}),
+        &json!({"kind":"experimental-two-parent-genetics-complete-PC-optimizer-transfer","exact_continuation":false,"merged_optimizer":false,"cloud_fraction":0.25,"pc_sha256":req.expected_pc_sha256,"cloud_tree_sha256":req.expected_cloud_tree_sha256,"cloud_transport_sha256":req.expected_cloud_archive_sha256,"experiment_sha256":req.expected_experiment_sha256,"PC_policy":pc.handoff.policy_version,"cloud_policy":experiment.receipt().cloud_native_cpu_binding.as_ref().map(|b|b.policy_version),"donor_actor_sha256":hash(&source_actor),"donor_critic_sha256":hash(&source_value),"donor_actor_age":donor_actor.optimizer_step,"donor_critic_age":donor_value.optimizer_step,"initial_actor_age":before_actor.optimizer_step,"initial_critic_age":before_value.optimizer_step,"candidate_actor_sha256":hash(&serde_json::to_vec(&before_actor)?),"reset":if req.previous_fork.is_none(){"both fast/lifetime physical banks +0 only at initial fork start"}else{"none; continue complete predecessor optimizer and learned somatic projection"},"previous_fork":req.previous_fork,"personal_memory":"newborn; original lives remain archived in experiment","historical_freshness":"unknown","not_promoted":true}),
     )?;
     fs::write(
         collection.join("collection-policy.alife-foundation"),
@@ -356,6 +380,7 @@ pub fn run_pc_donor_retained_training_fork(spec: &Path) -> Result<Value> {
         policy_version: version,
         ppo: config,
         artifacts: inventory(&output)?,
+        previous_fork: req.previous_fork.clone(),
     };
     write(output.join("retained-fork.json"), &manifest)?;
     let manifest_sha = hash(&fs::read(output.join("retained-fork.json"))?);

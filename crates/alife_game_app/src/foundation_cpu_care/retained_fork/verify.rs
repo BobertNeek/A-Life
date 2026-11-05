@@ -9,6 +9,23 @@ pub fn verify_pc_donor_retained_training_fork(
     expected_manifest_sha256: &str,
     expected_experiment_sha256: &str,
 ) -> Result<Value> {
+    verify_inner(
+        root,
+        expected_manifest_sha256,
+        expected_experiment_sha256,
+        0,
+    )
+}
+
+fn verify_inner(
+    root: &Path,
+    expected_manifest_sha256: &str,
+    expected_experiment_sha256: &str,
+    depth: usize,
+) -> Result<Value> {
+    if depth > 32 {
+        return Err("fork ancestry exceeds bounded verification depth".into());
+    }
     let manifest: ForkManifest = serde_json::from_slice(&pinned(
         root.join("retained-fork.json"),
         expected_manifest_sha256,
@@ -23,6 +40,17 @@ pub fn verify_pc_donor_retained_training_fork(
     {
         return Err("fork manifest or complete artifact inventory differs".into());
     }
+    if let Some(p) = &manifest.previous_fork {
+        if p.directory.canonicalize()? == root.canonicalize()? {
+            return Err("fork cannot be its own predecessor".into());
+        }
+        verify_inner(
+            &p.directory,
+            &p.manifest_sha256,
+            expected_experiment_sha256,
+            depth + 1,
+        )?;
+    }
     let experiment: RetainedInterpolationExperiment = decode_zstd(&pinned(
         root.join("experiment.json.zst"),
         expected_experiment_sha256,
@@ -35,27 +63,43 @@ pub fn verify_pc_donor_retained_training_fork(
     let PcDonorRetainedFork {
         mut trainer,
         mut value,
-        retained,
+        mut retained,
         donor_actor,
         donor_value,
     } = scope(&source_proof, || {
         initialize_pc_donor_retained_fork(&experiment)
     })?;
-    let before_actor = trainer.checkpoint();
-    let before_value = value.checkpoint();
     let pc = scope(&source_proof, || {
         CurrentTrainingCheckpointV1::decode(&experiment.inputs().pc_current)
     })?;
+    let mut source_version = pc.handoff.policy_version;
+    let mut collection_inputs = experiment.compiler_inputs().clone();
+    let mut previous_seeds = None;
+    if let Some(p) = &manifest.previous_fork {
+        let (t, v, r, i, version, seeds) = previous_state(p)?;
+        trainer = t;
+        value = v;
+        retained = r;
+        collection_inputs = i;
+        source_version = version;
+        previous_seeds = Some(seeds);
+    }
+    let before_actor = trainer.checkpoint();
+    let before_value = value.checkpoint();
     if manifest.policy_version
-        != pc
-            .handoff
-            .policy_version
+        != source_version
             .checked_add(1)
             .ok_or("fork version overflow")?
     {
         return Err("fork policy clock differs from explicit donor fork".into());
     }
     let baseline: CheckpointSeedsV1 = read(root.join("seed-exclusions.json"))?;
+    if previous_seeds
+        .as_ref()
+        .is_some_and(|s| !covers(&baseline, s))
+    {
+        return Err("fork lost predecessor reservations".into());
+    }
     let evidence: Vec<Value> = decode_zstd(&fs::read(root.join("seed-evidence.json.zst"))?)?;
     if baseline.historical_freshness != "unknown"
         || baseline.pending_range.is_some()
@@ -91,15 +135,14 @@ pub fn verify_pc_donor_retained_training_fork(
         return Err("fork optimizer-transfer provenance differs from exact source parents".into());
     }
     let collection = root.join("collection");
-    let asset = experiment
-        .compiler_inputs()
+    let asset = collection_inputs
         .n2048_candidate_asset()
         .ok_or("candidate missing")?;
     if fs::read(collection.join("collection-policy.alife-foundation"))?
         != asset.encode_canonical()?
         || serde_json::to_vec(&read::<PhenotypeCompilerInputs>(
             collection.join("collection-compiler-inputs.json"),
-        )?)? != serde_json::to_vec(experiment.compiler_inputs())?
+        )?)? != serde_json::to_vec(&collection_inputs)?
         || serde_json::to_vec(&read::<FoundationTrainerCheckpoint>(
             collection.join("collection-actor-checkpoint.json"),
         )?)? != serde_json::to_vec(&before_actor)?

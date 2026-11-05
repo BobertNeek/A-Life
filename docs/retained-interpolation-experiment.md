@@ -262,6 +262,24 @@ reproduces its next physical transition. This is recovery/update evidence, not a
 new matched skill battery, GPU parity, or a claim that transferred Adam/critic
 history is well calibrated for the interpolated policy.
 
+Subsequent disposable episodes may supply `previous_fork` with `directory` and
+`manifest_sha256`, plus an explicit `lesson` and `food_need_condition`. They
+cold-verify that predecessor before loading its complete current optimizer,
+critic and retained projection. There is no repeated somatic reset or renewed
+optimizer donation. Predecessor exclusions must remain included. Each new
+manifest pins its predecessor; preserve the entire local chain for recovery.
+Verification walks at most32 predecessors and reproduces every native update.
+
+The `retention REQUEST.json` command compares a pinned `baseline` fork and
+`candidate` fork against the actual PC/cloud global parents with native fresh
+neural state. Its request declares the expected experiment/source pins, a pinned
+assessment-only reservation, 1..=20 seeds, and a new output. Every arm uses the
+same128 scored decisions plus bootstrap, physical body seed, temperature1,
+teacher/prior-off protocol and ordinary private plasticity. Shared optimizer
+states stay frozen. Natural deaths, injuries and incomplete cases remain in
+results. Both training and retention consumers verify an8GiB free-storage floor
+plus a per-job reserve before dispatch; storage admission never deletes sources.
+
 Preparation refuses an existing or overlapping output and rechecks source bytes.
 It writes `experiment.json.zst` with both complete parent snapshots, the candidate
 foundation, compiler inputs and retained-neural projection, plus an inference-only

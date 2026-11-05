@@ -24,7 +24,8 @@ mod actual_interpolation;
 pub use actual_interpolation::run_actual_interpolation_assessment;
 mod retained_fork;
 pub use retained_fork::{
-    run_pc_donor_retained_training_fork, verify_pc_donor_retained_training_fork,
+    run_pc_donor_retained_training_fork, run_retained_fork_retention,
+    verify_pc_donor_retained_training_fork,
 };
 mod layout;
 pub use layout::CpuCareLayout;
