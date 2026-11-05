@@ -6,6 +6,8 @@ pub use frozen_causal::assess_frozen_commands;
 #[cfg(test)]
 mod bounded_tape_probe;
 #[cfg(test)]
+mod detached_speech_inputs;
+#[cfg(test)]
 mod physical_priority_probe;
 #[cfg(test)]
 mod speech_factor_probe;
