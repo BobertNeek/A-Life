@@ -92,7 +92,10 @@ Input and setup checks pass in all 192 first rows. Every spoken cue (144) is hea
 with both tokens in the first two broadcast slots, matching all 16 native signed
 word/confidence lanes. All 144 lexical first-row pairs have changed direct word
 inputs with identical neural initial state, replay candidates, effective offsets
-and sampling counter. The full pre/post-emission checkpoint differs only in the
+and sampling counter. A further audit of all 576 scheduled Player deliveries at
+0/2/4/6 finds each new matching utterance heard in both broadcast slots; direct
+encoded-neuron comparisons concern the matched first rows. No simulation rerun
+was needed. The full pre/post-emission checkpoint differs only in the
 audible queue and utterance counter; physical/private/RNG setup stays exact.
 Muted comparisons preserve initial neural state/offsets/RNG but change native
 candidate context as well as input/cooldown; this is disclosed and not treated

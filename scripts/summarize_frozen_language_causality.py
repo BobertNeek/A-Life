@@ -78,22 +78,43 @@ def analyze_model(directory, name, cases):
                 phases['post_sleep' if post else 'pre_sleep'] = {'seed_units': len(seeds), 'totals': totals, 'per_seed': units}
             modes[mode] = phases
         result['strata'][label] = {'seeds': sorted(seeds), 'actual_episode_audit': observed, 'nominal_contrasts_reuse_actual_episodes': modes}
-    first, comparisons = [], []
+    first, comparisons, deliveries = [], [], []
+    starts = {(t['world_seed'], t['post_sleep'], t['requested']): t['first_tick'] for t in complete['trials']}
+    last_player_ids = {}
     for line in io.TextIOWrapper(zstandard.ZstdDecompressor().stream_reader(path.open('rb'))):
         e = json.loads(line)
+        if e.get('phase') == 'balanced_readout_evaluation':
+            key = (e['world_seed'], e['post_sleep'], e['requested'])
+            row = e['row']
+            step = row['patch']['pre_action']['tick'] - starts[key]
+            heard = row['patch']['pre_action']['perception']['base']['sensory']['language_context']['heard_tokens']
+            player = [t for t in heard if t and t['source_kind'] == 'Player']
+            if e['requested'] is None:
+                assert not player
+            elif step in [0, 2, 4, 6]:
+                groups = collections.defaultdict(list)
+                for token in player:
+                    groups[token['utterance_id']].append(token)
+                current = max(groups) if groups else 0
+                words = [t['token_id'] for t in sorted(groups[current], key=lambda t:t['sequence_position'])] if current else []
+                expected = WORDS[e['requested']]
+                delivered = current > last_player_ids.get(key, 0) and words == expected
+                slots = [t['token_id'] if t else None for t in heard[:2]]
+                deliveries.append({'world_seed':e['world_seed'], 'post_sleep':e['post_sleep'], 'delivered_cue':e['requested'], 'cue_step':step, 'latest_heard_player_utterance_id':current, 'latest_player_words':words, 'new_expected_player_sequence_heard':delivered, 'command_in_first_two_broadcast_slots':slots==expected})
+                last_player_ids[key] = current
         if e.get('phase') == 'frozen_causal_pair_inputs':
             comparisons.append(e)
         elif e.get('phase') == 'balanced_readout_evaluation' and 'causal_input_evidence' in e:
             p = e['causal_input_evidence']
             assert p['setup']['all_nonaudio_physical_private_optimizer_binding_and_rng_fields_identical']
             first.append({'world_seed': e['world_seed'], 'post_sleep': e['post_sleep'], 'delivered_cue': e['requested'], 'causal_stratum': e['causal_stratum'], 'evidence': p})
-    assert len(first) == 48 and len(comparisons) == 12
+    assert len(first) == 48 and len(comparisons) == 12 and len(deliveries) == 144
     for key in {(p['world_seed'], p['post_sleep']) for p in first}:
         group = [p for p in first if (p['world_seed'], p['post_sleep']) == key]
         assert len(group) == 4
         assert len({p['evidence']['setup']['before_audio_full_checkpoint_sha256'] for p in group}) == 1
         assert len({p['evidence']['setup']['nonaudio_checkpoint_sha256'] for p in group}) == 1
-    result['actual_input_and_setup_verification'] = {'first_rows': first, 'pairwise_first_inputs': comparisons, 'all_matched_parent_and_nonaudio_setup_checks_passed': True}
+    result['actual_input_and_setup_verification'] = {'first_rows': first, 'pairwise_first_inputs': comparisons, 'all_matched_parent_and_nonaudio_setup_checks_passed': True, 'all_scheduled_player_cue_deliveries': deliveries}
     return result
 
 if __name__ == '__main__':
