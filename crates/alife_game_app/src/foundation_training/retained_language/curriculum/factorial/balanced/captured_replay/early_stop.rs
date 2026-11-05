@@ -4,7 +4,7 @@ use std::io::{BufRead, BufReader};
 
 const CORPUS_SHA256: &str = "2b473602c0f402d5a977292f423be18b35118ed47137b21fefa51f63fad21225";
 
-fn saved_pairs(source: &Path, arm: Arm) -> Result<Vec<Pair>> {
+pub(super) fn saved_pairs(source: &Path, arm: Arm) -> Result<Vec<Pair>> {
     let bytes = fs::read(source.join("native-trace.jsonl.zst"))?;
     if hash(&bytes) != CORPUS_SHA256 {
         return Err("not the preserved measured V21 witness corpus".into());
@@ -259,6 +259,7 @@ pub fn compare_witnessed_early_stop(
             physical_before_speech_v1: true,
             captured_failure_replay_v1: true,
             replay_early_stop_v1: true,
+            care_retention_v1: false,
         };
         let cold = exact_reload_plan(
             &output.join(format!("recovery-{}", model.label)),

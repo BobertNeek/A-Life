@@ -397,6 +397,7 @@ pub fn continue_linear_grounded_language(
             physical_before_speech_v1: false,
             captured_failure_replay_v1: false,
             replay_early_stop_v1: false,
+            care_retention_v1: false,
         };
         if arm == Arm::Grounded {
             eprintln!("linear profile untreated baseline");

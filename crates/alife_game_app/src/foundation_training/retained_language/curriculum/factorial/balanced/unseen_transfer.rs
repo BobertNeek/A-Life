@@ -28,6 +28,24 @@ pub(super) fn prepared_early_stop_case(
         853 + 31 * case,
     )
 }
+pub(super) const CARE_SEEDS: [u64; 6] = [
+    12_104_621, 12_210_103, 12_309_269, 12_402_009, 12_508_237, 12_610_457,
+];
+pub(super) fn prepared_care_case(
+    actor: &CpuFoundationTrainer,
+    asset: &FoundationWeightAsset,
+    founder: u64,
+    case: usize,
+) -> Result<(CpuCanonicalHost, Scene)> {
+    prepared_instance(
+        actor,
+        asset,
+        founder,
+        case,
+        CARE_SEEDS[case],
+        1103 + 37 * case,
+    )
+}
 pub(super) fn prepared_replay_case(
     actor: &CpuFoundationTrainer,
     asset: &FoundationWeightAsset,
@@ -139,6 +157,7 @@ fn plan() -> AssessmentPlan {
         physical_before_speech_v1: false,
         captured_failure_replay_v1: false,
         replay_early_stop_v1: false,
+        care_retention_v1: false,
     }
 }
 pub fn assess_unseen_grounding(
@@ -217,9 +236,11 @@ mod tests {
         let founder = 847501;
         let asset = initial_n2048_care_asset(founder).unwrap();
         let actor = new_actor_profile(founder, &asset, true).unwrap();
-        for variant in 0..4 {
+        for variant in 0..5 {
             for case in 0..SEEDS.len() {
-                let (mut h, s) = if variant == 3 {
+                let (mut h, s) = if variant == 4 {
+                    prepared_care_case(&actor, &asset, founder, case).unwrap()
+                } else if variant == 3 {
                     prepared_early_stop_case(&actor, &asset, founder, case).unwrap()
                 } else if variant == 2 {
                     prepared_replay_case(&actor, &asset, founder, case).unwrap()

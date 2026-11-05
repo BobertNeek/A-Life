@@ -1,14 +1,15 @@
 //! Disposable native CPU pilot. Continuation accepts only its measured public founders.
 use alife_game_app::{
-    assess_unseen_grounding, compare_witnessed_early_stop, continue_action_gated_language,
-    continue_balanced_grounded_language, continue_contrastive_grounded_language,
-    continue_embodied_language_curriculum, continue_event_confirmed_speech,
-    continue_factorial_grounded_language, continue_focused_grounded_language,
-    continue_language_curriculum, continue_linear_grounded_language,
-    continue_physical_before_speech, continue_report_choice,
+    assess_unseen_grounding, compare_care_retention, compare_witnessed_early_stop,
+    continue_action_gated_language, continue_balanced_grounded_language,
+    continue_contrastive_grounded_language, continue_embodied_language_curriculum,
+    continue_event_confirmed_speech, continue_factorial_grounded_language,
+    continue_focused_grounded_language, continue_language_curriculum,
+    continue_linear_grounded_language, continue_physical_before_speech, continue_report_choice,
     continue_visible_balanced_grounded_language, continue_witnessed_replay,
-    preflight_witnessed_replay, refine_language_payload, refine_language_shared_gates,
-    reload_language_pilot_child, run_retained_language_pilot, LanguagePilotConfig,
+    preflight_care_retention, preflight_witnessed_replay, refine_language_payload,
+    refine_language_shared_gates, reload_language_pilot_child, run_retained_language_pilot,
+    LanguagePilotConfig,
 };
 use std::{collections::BTreeMap, path::Path};
 
@@ -28,7 +29,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     while let Some(key) = args.next() {
         match key.as_str() {
             "--help" | "-h" => {
-                println!("experiment_retained_language --disposable-public-founder --output NEW_DIRECTORY [--seed 847501] [--epochs 16] [--rounds 2] [--decisions 24] [--llamacpp-translation] [--experimental-word-bridge]\n\nExperimental native CPU food/eat versus toy/get teaching with grounded, shuffled-word, and untreated arms. The explicit experimental word bridge broadcasts two raw token bit vectors to native readouts and replaces the untreated arm with an equally trained no-speech arm. Continuation stages additionally accept one of --continue-curriculum SOURCE, --refine-curriculum-payload SOURCE, --refine-shared-gates SOURCE, --fork-embodied-speech SOURCE, --action-gated-payload SOURCE, --factorial-grounding SOURCE, --focused-grounding SOURCE, --contrastive-grounding SOURCE, --linear-readout SOURCE, --balanced-readout SOURCE, --balanced-visible-readout SOURCE, --event-confirmed-speech SOURCE, or --report-choice SOURCE; frozen assessment accepts --unseen-grounding SOURCE; physical ordering accepts --physical-before-speech SOURCE; witnessed replay accepts --witnessed-replay SOURCE or --witnessed-preflight SOURCE; matched early-stop comparison accepts --witnessed-early-stop SOURCE. Each validates its matching measured disposable source. The embodied stage creates new founder identities with raw bodily inputs to speech, retains actor/Adam history, and evaluates an untreated profile baseline; it does not migrate a source private life. Reuses ordinary spatial speech and the existing bounded translator. Optional llama.cpp translation uses its existing localhost defaults and must return confirmed translations; it never falls back silently. No semantic prior is injected. Evaluates player requests and silent lives with the teacher absent, reversed positions and visible distractors. Trained arms execute full assessment after fresh-process reload. Writes local experimental recovery data and a source-safe results JSON; does not promote a creature or change live training.");
+                println!("experiment_retained_language --disposable-public-founder --output NEW_DIRECTORY [--seed 847501] [--epochs 16] [--rounds 2] [--decisions 24] [--llamacpp-translation] [--experimental-word-bridge]\n\nExperimental native CPU food/eat versus toy/get teaching with grounded, shuffled-word, and untreated arms. The explicit experimental word bridge broadcasts two raw token bit vectors to native readouts and replaces the untreated arm with an equally trained no-speech arm. Continuation stages additionally accept one of --continue-curriculum SOURCE, --refine-curriculum-payload SOURCE, --refine-shared-gates SOURCE, --fork-embodied-speech SOURCE, --action-gated-payload SOURCE, --factorial-grounding SOURCE, --focused-grounding SOURCE, --contrastive-grounding SOURCE, --linear-readout SOURCE, --balanced-readout SOURCE, --balanced-visible-readout SOURCE, --event-confirmed-speech SOURCE, or --report-choice SOURCE; frozen assessment accepts --unseen-grounding SOURCE; physical ordering accepts --physical-before-speech SOURCE; witnessed replay accepts --witnessed-replay SOURCE or --witnessed-preflight SOURCE; matched early-stop comparison accepts --witnessed-early-stop SOURCE; real care replay accepts --care-retention SOURCE or --care-retention-preflight SOURCE. Each validates its matching measured disposable source. The embodied stage creates new founder identities with raw bodily inputs to speech, retains actor/Adam history, and evaluates an untreated profile baseline; it does not migrate a source private life. Reuses ordinary spatial speech and the existing bounded translator. Optional llama.cpp translation uses its existing localhost defaults and must return confirmed translations; it never falls back silently. No semantic prior is injected. Evaluates player requests and silent lives with the teacher absent, reversed positions and visible distractors. Trained arms execute full assessment after fresh-process reload. Writes local experimental recovery data and a source-safe results JSON; does not promote a creature or change live training.");
                 return Ok(());
             }
             "--disposable-public-founder" if !disposable => disposable = true,
@@ -55,6 +56,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             | "--unseen-grounding"
             | "--physical-before-speech"
             | "--witnessed-replay"
+            | "--care-retention"
+            | "--care-retention-preflight"
             | "--witnessed-early-stop"
             | "--witnessed-preflight" => {
                 let value = args.next().ok_or("missing argument value")?;
@@ -108,6 +111,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "--witnessed-replay",
         "--witnessed-preflight",
         "--witnessed-early-stop",
+        "--care-retention",
+        "--care-retention-preflight",
     ]
     .iter()
     .filter(|key| values.contains_key(**key))
@@ -116,7 +121,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         return Err("choose one experimental continuation stage".into());
     }
-    let report = if let Some(source) = values.remove("--witnessed-early-stop") {
+    let report = if let Some(source) = values.remove("--care-retention-preflight") {
+        preflight_care_retention(Path::new(&source), Path::new(&output), config)?
+    } else if let Some(source) = values.remove("--care-retention") {
+        compare_care_retention(Path::new(&source), Path::new(&output), config)?
+    } else if let Some(source) = values.remove("--witnessed-early-stop") {
         compare_witnessed_early_stop(Path::new(&source), Path::new(&output), config)?
     } else if let Some(source) = values.remove("--witnessed-preflight") {
         preflight_witnessed_replay(Path::new(&source), Path::new(&output), config)?

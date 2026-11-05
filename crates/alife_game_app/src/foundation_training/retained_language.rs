@@ -19,14 +19,15 @@ mod provider_probe;
 #[cfg(test)]
 mod speech_gate_probe;
 pub use curriculum::{
-    assess_unseen_grounding, compare_witnessed_early_stop, continue_action_gated_language,
-    continue_balanced_grounded_language, continue_contrastive_grounded_language,
-    continue_embodied_language_curriculum, continue_event_confirmed_speech,
-    continue_factorial_grounded_language, continue_focused_grounded_language,
-    continue_language_curriculum, continue_linear_grounded_language,
-    continue_physical_before_speech, continue_report_choice,
+    assess_unseen_grounding, compare_care_retention, compare_witnessed_early_stop,
+    continue_action_gated_language, continue_balanced_grounded_language,
+    continue_contrastive_grounded_language, continue_embodied_language_curriculum,
+    continue_event_confirmed_speech, continue_factorial_grounded_language,
+    continue_focused_grounded_language, continue_language_curriculum,
+    continue_linear_grounded_language, continue_physical_before_speech, continue_report_choice,
     continue_visible_balanced_grounded_language, continue_witnessed_replay,
-    preflight_witnessed_replay, refine_language_payload, refine_language_shared_gates,
+    preflight_care_retention, preflight_witnessed_replay, refine_language_payload,
+    refine_language_shared_gates,
 };
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
