@@ -526,7 +526,7 @@ mod tests {
     }
 
     #[test]
-    fn inherited_descriptor_round_trip() {
+    fn legacy_descriptor_round_trip() {
         let root = std::env::temp_dir().join(format!(
             "alife-win-security-roundtrip-{}",
             std::process::id()
@@ -537,6 +537,10 @@ mod tests {
         std::fs::write(&source, b"original").unwrap();
         let source = OpenOptions::new().write(true).open(source).unwrap();
         let old = snapshot(&source).unwrap();
+        assert!(
+            !old.automatic && !old.protected,
+            "fixture must exercise the legacy unprotected ACL branch"
+        );
         let stage = root.join("stage.json");
         let stage_file = create_private(&stage).unwrap();
         let result = apply(&old, &stage_file, &stage);

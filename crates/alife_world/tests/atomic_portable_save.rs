@@ -117,6 +117,76 @@ fn windows_native_metadata_supports_relative_and_unprefixed_long_save_paths() {
 
 #[cfg(windows)]
 #[test]
+fn windows_short_relative_save_in_long_working_directory() {
+    const CHILD_DIRECTORY: &str = "ALIFE_LONG_CWD_SAVE_CHILD";
+    if let Some(directory) = std::env::var_os(CHILD_DIRECTORY) {
+        // Change cwd only in this isolated test subprocess, never in the
+        // process running the rest of the integration suite.
+        let previous = std::env::current_dir().unwrap();
+        std::env::set_current_dir(directory).unwrap();
+        assert!(std::env::current_dir().unwrap().as_os_str().len() > 260);
+        fs::write("std-control.json", b"previous").unwrap();
+        fs::write("std-stage.tmp", b"replacement").unwrap();
+        fs::rename("std-stage.tmp", "std-control.json").unwrap();
+        assert_eq!(fs::read("std-control.json").unwrap(), b"replacement");
+        fs::remove_file("std-control.json").unwrap();
+        eprintln!("std::fs short-relative create/replace/read control passed in long cwd");
+
+        let original = fixture("previous");
+        let bytes = original.to_json_string_pretty().unwrap();
+        fs::write("creature.json", &bytes).unwrap();
+        fs::write(".alife-portable-save-recovery.tmp", b"recovery").unwrap();
+        let replacement = fixture("replacement");
+        let result = replacement.to_json_file("creature.json");
+        eprintln!("short-relative save in long cwd: {result:?}");
+        if result.is_err() {
+            assert_eq!(fs::read("creature.json").unwrap(), bytes.as_bytes());
+            assert_eq!(fs::read_dir(".").unwrap().count(), 2);
+        }
+        assert_eq!(
+            fs::read(".alife-portable-save-recovery.tmp").unwrap(),
+            b"recovery"
+        );
+        result.unwrap();
+        assert_eq!(
+            PortableSaveFile::from_json_file("creature.json").unwrap(),
+            replacement
+        );
+        replacement.to_json_file("new.json").unwrap();
+        assert_eq!(
+            PortableSaveFile::from_json_file("new.json").unwrap(),
+            replacement
+        );
+        std::env::set_current_dir(previous).unwrap();
+        return;
+    }
+
+    let root = temp_root("short-relative-long-cwd");
+    let mut nested = root.clone();
+    for index in 0..7 {
+        nested.push(format!("long-working-directory-{index}-abcdefghijklmnop"));
+    }
+    fs::create_dir_all(&nested).unwrap();
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "windows_short_relative_save_in_long_working_directory",
+            "--nocapture",
+        ])
+        .env(CHILD_DIRECTORY, &nested)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[cfg(windows)]
+#[test]
 fn windows_modern_inherited_acl_survives_replacement() {
     let root = temp_root("modern-inherited-dacl");
     let path = root.join("inherited.json");
