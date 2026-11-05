@@ -193,7 +193,18 @@ fn diagnose_two_frozen_witnesses() -> Result<()> {
             for requested in [Lesson::EatFood, Lesson::GetFood] {
                 let previous = &expected[&(scene_case.seed, requested.index())];
                 let mut h = parent.snapshot();
-                let parent_hash = identity(&h.checkpoint(&actor)?)?;
+                // V24 before_audio/after_audio hash JSON Values, whose object-key
+                // ordering differs from typed checkpoint serialization.
+                let parent_state = frozen_causal::before_audio(&h, &actor)?;
+                let parent_hash = identity(&parent_state)?;
+                write_compressed(
+                    &out.join(format!(
+                        "parent-{label}-{}-{}.json.zst",
+                        scene_case.seed,
+                        requested.index()
+                    )),
+                    &parent_state,
+                )?;
                 assert_eq!(
                     previous[0]["causal_input_evidence"]["setup"]
                         ["before_audio_full_checkpoint_sha256"],
@@ -218,7 +229,7 @@ fn diagnose_two_frozen_witnesses() -> Result<()> {
                                 .collect::<std::result::Result<_, _>>()?,
                         )?;
                         assert_eq!(
-                            identity(&h.checkpoint(&actor)?)?,
+                            identity(&frozen_causal::before_audio(&h, &actor)?)?,
                             prior["causal_input_evidence"]["setup"]
                                 ["after_audio_full_checkpoint_sha256"]
                         );
