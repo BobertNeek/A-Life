@@ -1,0 +1,5421 @@
+{
+  "actual_captured_gate_comparisons": [
+    {
+      "actual_premature_report_gates": [],
+      "arm": "ZeroGradient4",
+      "case": 0,
+      "conditional_payload_changes_not_new_behavior": 0,
+      "max_abs_first_presence_change": 0.02520275115966797,
+      "max_abs_first_stop_change": 0.018113255500793457,
+      "post_sleep": false
+    },
+    {
+      "actual_premature_report_gates": [],
+      "arm": "Balanced4",
+      "case": 0,
+      "conditional_payload_changes_not_new_behavior": 0,
+      "max_abs_first_presence_change": 0.7027272582054138,
+      "max_abs_first_stop_change": 0.5860353708267212,
+      "post_sleep": false
+    },
+    {
+      "actual_premature_report_gates": [],
+      "arm": "MatchedFactual4",
+      "case": 0,
+      "conditional_payload_changes_not_new_behavior": 0,
+      "max_abs_first_presence_change": 0.7249755859375,
+      "max_abs_first_stop_change": 0.5598914623260498,
+      "post_sleep": false
+    },
+    {
+      "actual_premature_report_gates": [],
+      "arm": "ZeroGradient4",
+      "case": 0,
+      "conditional_payload_changes_not_new_behavior": 0,
+      "max_abs_first_presence_change": 0.025264501571655273,
+      "max_abs_first_stop_change": 0.018117070198059082,
+      "post_sleep": true
+    },
+    {
+      "actual_premature_report_gates": [],
+      "arm": "Balanced4",
+      "case": 0,
+      "conditional_payload_changes_not_new_behavior": 0,
+      "max_abs_first_presence_change": 0.7028834223747253,
+      "max_abs_first_stop_change": 0.5862128734588623,
+      "post_sleep": true
+    },
+    {
+      "actual_premature_report_gates": [],
+      "arm": "MatchedFactual4",
+      "case": 0,
+      "conditional_payload_changes_not_new_behavior": 0,
+      "max_abs_first_presence_change": 0.7251444458961487,
+      "max_abs_first_stop_change": 0.5600654482841492,
+      "post_sleep": true
+    },
+    {
+      "actual_premature_report_gates": [
+        {
+          "arm_first_presence_stop": [
+            1.138155221939087,
+            -0.6760233044624329
+          ],
+          "requested": "GetFood",
+          "step": 0,
+          "untouched_first_presence_stop": [
+            1.1158403158187866,
+            -0.6680077910423279
+          ]
+        }
+      ],
+      "arm": "ZeroGradient4",
+      "case": 1,
+      "conditional_payload_changes_not_new_behavior": 0,
+      "max_abs_first_presence_change": 0.026456832885742188,
+      "max_abs_first_stop_change": 0.01808607578277588,
+      "post_sleep": false
+    },
+    {
+      "actual_premature_report_gates": [
+        {
+          "arm_first_presence_stop": [
+            0.6263519525527954,
+            -0.25662752985954285
+          ],
+          "requested": "GetFood",
+          "step": 0,
+          "untouched_first_presence_stop": [
+            1.1158403158187866,
+            -0.6680077910423279
+          ]
+        }
+      ],
+      "arm": "Balanced4",
+      "case": 1,
+      "conditional_payload_changes_not_new_behavior": 0,
+      "max_abs_first_presence_change": 0.8494610786437988,
+      "max_abs_first_stop_change": 0.6693999767303467,
+      "post_sleep": false
+    },
+    {
+      "actual_premature_report_gates": [
+        {
+          "arm_first_presence_stop": [
+            0.6096461415290833,
+            -0.2741789221763611
+          ],
+          "requested": "GetFood",
+          "step": 0,
+          "untouched_first_presence_stop": [
+            1.1158403158187866,
+            -0.6680077910423279
+          ]
+        }
+      ],
+      "arm": "MatchedFactual4",
+      "case": 1,
+      "conditional_payload_changes_not_new_behavior": 0,
+      "max_abs_first_presence_change": 0.8685379028320312,
+      "max_abs_first_stop_change": 0.634407639503479,
+      "post_sleep": false
+    },
+    {
+      "actual_premature_report_gates": [],
+      "arm": "ZeroGradient4",
+      "case": 1,
+      "conditional_payload_changes_not_new_behavior": 0,
+      "max_abs_first_presence_change": 0.02651822566986084,
+      "max_abs_first_stop_change": 0.018089890480041504,
+      "post_sleep": true
+    },
+    {
+      "actual_premature_report_gates": [],
+      "arm": "Balanced4",
+      "case": 1,
+      "conditional_payload_changes_not_new_behavior": 0,
+      "max_abs_first_presence_change": 0.8496644496917725,
+      "max_abs_first_stop_change": 0.6696133613586426,
+      "post_sleep": true
+    },
+    {
+      "actual_premature_report_gates": [],
+      "arm": "MatchedFactual4",
+      "case": 1,
+      "conditional_payload_changes_not_new_behavior": 0,
+      "max_abs_first_presence_change": 0.868754506111145,
+      "max_abs_first_stop_change": 0.634615421295166,
+      "post_sleep": true
+    },
+    {
+      "actual_premature_report_gates": [
+        {
+          "arm_first_presence_stop": [
+            1.0158765316009521,
+            -1.0062501430511475
+          ],
+          "requested": "EatFood",
+          "step": 1,
+          "untouched_first_presence_stop": [
+            0.9986869692802429,
+            -1.0041258335113525
+          ]
+        },
+        {
+          "arm_first_presence_stop": [
+            1.4760912656784058,
+            -0.9888380765914917
+          ],
+          "requested": "GetFood",
+          "step": 1,
+          "untouched_first_presence_stop": [
+            1.454723834991455,
+            -0.980459988117218
+          ]
+        },
+        {
+          "arm_first_presence_stop": [
+            1.3385167121887207,
+            -1.2207516431808472
+          ],
+          "requested": "GetToy",
+          "step": 4,
+          "untouched_first_presence_stop": [
+            1.3162224292755127,
+            -1.202681303024292
+          ]
+        }
+      ],
+      "arm": "ZeroGradient4",
+      "case": 2,
+      "conditional_payload_changes_not_new_behavior": 0,
+      "max_abs_first_presence_change": 0.025792360305786133,
+      "max_abs_first_stop_change": 0.018197298049926758,
+      "post_sleep": false
+    },
+    {
+      "actual_premature_report_gates": [
+        {
+          "arm_first_presence_stop": [
+            0.41461023688316345,
+            -0.5151016712188721
+          ],
+          "requested": "EatFood",
+          "step": 1,
+          "untouched_first_presence_stop": [
+            0.9986869692802429,
+            -1.0041258335113525
+          ]
+        },
+        {
+          "arm_first_presence_stop": [
+            0.8474377989768982,
+            -0.47397831082344055
+          ],
+          "requested": "GetFood",
+          "step": 1,
+          "untouched_first_presence_stop": [
+            1.454723834991455,
+            -0.980459988117218
+          ]
+        },
+        {
+          "arm_first_presence_stop": [
+            0.6704208850860596,
+            -0.6753425002098083
+          ],
+          "requested": "GetToy",
+          "step": 4,
+          "untouched_first_presence_stop": [
+            1.3162224292755127,
+            -1.202681303024292
+          ]
+        }
+      ],
+      "arm": "Balanced4",
+      "case": 2,
+      "conditional_payload_changes_not_new_behavior": 0,
+      "max_abs_first_presence_change": 0.8263593912124634,
+      "max_abs_first_stop_change": 0.651819109916687,
+      "post_sleep": false
+    },
+    {
+      "actual_premature_report_gates": [
+        {
+          "arm_first_presence_stop": [
+            0.40101927518844604,
+            -0.5410241484642029
+          ],
+          "requested": "EatFood",
+          "step": 1,
+          "untouched_first_presence_stop": [
+            0.9986869692802429,
+            -1.0041258335113525
+          ]
+        },
+        {
+          "arm_first_presence_stop": [
+            0.828141450881958,
+            -0.49656495451927185
+          ],
+          "requested": "GetFood",
+          "step": 1,
+          "untouched_first_presence_stop": [
+            1.454723834991455,
+            -0.980459988117218
+          ]
+        },
+        {
+          "arm_first_presence_stop": [
+            0.6509041786193848,
+            -0.6994261741638184
+          ],
+          "requested": "GetToy",
+          "step": 4,
+          "untouched_first_presence_stop": [
+            1.3162224292755127,
+            -1.202681303024292
+          ]
+        }
+      ],
+      "arm": "MatchedFactual4",
+      "case": 2,
+      "conditional_payload_changes_not_new_behavior": 0,
+      "max_abs_first_presence_change": 0.845201849937439,
+      "max_abs_first_stop_change": 0.6180094480514526,
+      "post_sleep": false
+    },
+    {
+      "actual_premature_report_gates": [
+        {
+          "arm_first_presence_stop": [
+            1.0771236419677734,
+            -1.0412744283676147
+          ],
+          "requested": "EatFood",
+          "step": 1,
+          "untouched_first_presence_stop": [
+            1.062029242515564,
+            -1.0392110347747803
+          ]
+        },
+        {
+          "arm_first_presence_stop": [
+            1.5233043432235718,
+            -1.020848274230957
+          ],
+          "requested": "GetFood",
+          "step": 1,
+          "untouched_first_presence_stop": [
+            1.504144549369812,
+            -1.0128021240234375
+          ]
+        },
+        {
+          "arm_first_presence_stop": [
+            1.336578369140625,
+            -1.2198010683059692
+          ],
+          "requested": "GetToy",
+          "step": 4,
+          "untouched_first_presence_stop": [
+            1.3142459392547607,
+            -1.2017254829406738
+          ]
+        }
+      ],
+      "arm": "ZeroGradient4",
+      "case": 2,
+      "conditional_payload_changes_not_new_behavior": 0,
+      "max_abs_first_presence_change": 0.02585577964782715,
+      "max_abs_first_stop_change": 0.018201112747192383,
+      "post_sleep": true
+    },
+    {
+      "actual_premature_report_gates": [
+        {
+          "arm_first_presence_stop": [
+            0.4723253548145294,
+            -0.5480667352676392
+          ],
+          "requested": "EatFood",
+          "step": 1,
+          "untouched_first_presence_stop": [
+            1.062029242515564,
+            -1.0392110347747803
+          ]
+        },
+        {
+          "arm_first_presence_stop": [
+            0.8910322189331055,
+            -0.5039156079292297
+          ],
+          "requested": "GetFood",
+          "step": 1,
+          "untouched_first_presence_stop": [
+            1.504144549369812,
+            -1.0128021240234375
+          ]
+        },
+        {
+          "arm_first_presence_stop": [
+            0.668448805809021,
+            -0.6743550896644592
+          ],
+          "requested": "GetToy",
+          "step": 4,
+          "untouched_first_presence_stop": [
+            1.3142459392547607,
+            -1.2017254829406738
+          ]
+        }
+      ],
+      "arm": "Balanced4",
+      "case": 2,
+      "conditional_payload_changes_not_new_behavior": 0,
+      "max_abs_first_presence_change": 0.8264645338058472,
+      "max_abs_first_stop_change": 0.6519554853439331,
+      "post_sleep": true
+    },
+    {
+      "actual_premature_report_gates": [
+        {
+          "arm_first_presence_stop": [
+            0.45867958664894104,
+            -0.5740993022918701
+          ],
+          "requested": "EatFood",
+          "step": 1,
+          "untouched_first_presence_stop": [
+            1.062029242515564,
+            -1.0392110347747803
+          ]
+        },
+        {
+          "arm_first_presence_stop": [
+            0.8719271421432495,
+            -0.526818573474884
+          ],
+          "requested": "GetFood",
+          "step": 1,
+          "untouched_first_presence_stop": [
+            1.504144549369812,
+            -1.0128021240234375
+          ]
+        },
+        {
+          "arm_first_presence_stop": [
+            0.6489272117614746,
+            -0.6984369158744812
+          ],
+          "requested": "GetToy",
+          "step": 4,
+          "untouched_first_presence_stop": [
+            1.3142459392547607,
+            -1.2017254829406738
+          ]
+        }
+      ],
+      "arm": "MatchedFactual4",
+      "case": 2,
+      "conditional_payload_changes_not_new_behavior": 0,
+      "max_abs_first_presence_change": 0.8453191518783569,
+      "max_abs_first_stop_change": 0.618144154548645,
+      "post_sleep": true
+    }
+  ],
+  "all_176_private_checkpoints_recovered_exact_in_fresh_processes": true,
+  "behavior_comparisons": [
+    {
+      "all_arms_episode_metrics_identical": true,
+      "case": 0,
+      "post_sleep": false
+    },
+    {
+      "all_arms_episode_metrics_identical": true,
+      "case": 0,
+      "post_sleep": true
+    },
+    {
+      "all_arms_episode_metrics_identical": true,
+      "case": 1,
+      "post_sleep": false
+    },
+    {
+      "all_arms_episode_metrics_identical": true,
+      "case": 1,
+      "post_sleep": true
+    },
+    {
+      "all_arms_episode_metrics_identical": true,
+      "case": 2,
+      "post_sleep": false
+    },
+    {
+      "all_arms_episode_metrics_identical": true,
+      "case": 2,
+      "post_sleep": true
+    }
+  ],
+  "budget": {
+    "all_phase_cold_recoveries_passed": true,
+    "awake_preparation_decisions": 6,
+    "controls_retrained": false,
+    "held_out": 512,
+    "new_native_adam_updates": 4,
+    "no_promotion": true,
+    "scored_decisions": 704,
+    "seen_retention": 192,
+    "sleep_requests": 12,
+    "unexpected_awake_sleep_decisions": 0
+  },
+  "candidate_rejected": true,
+  "controls_retrained": false,
+  "execution_domain": "native CPU; real world biology and recurrent/private learning",
+  "external_models_or_jules": 0,
+  "fresh_seed_decisions": [
+    {
+      "paired_pre_post_totals": {
+        "Balanced4": {
+          "meals": 4,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 1,
+          "requested_timely_latest_reports": 4,
+          "utterances": 8,
+          "wrong_taught_activity_strings": 0
+        },
+        "MatchedFactual4": {
+          "meals": 4,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 1,
+          "requested_timely_latest_reports": 4,
+          "utterances": 8,
+          "wrong_taught_activity_strings": 0
+        },
+        "Untouched": {
+          "meals": 4,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 1,
+          "requested_timely_latest_reports": 4,
+          "utterances": 8,
+          "wrong_taught_activity_strings": 0
+        },
+        "ZeroGradient4": {
+          "meals": 4,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 1,
+          "requested_timely_latest_reports": 4,
+          "utterances": 8,
+          "wrong_taught_activity_strings": 0
+        }
+      },
+      "seed": 23110769,
+      "timely_reports_and_meals_retained_against_controls": true,
+      "unsupported_reporting_improved_against_both_trained_controls": false
+    },
+    {
+      "paired_pre_post_totals": {
+        "Balanced4": {
+          "meals": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 6,
+          "requested_timely_latest_reports": 0,
+          "utterances": 8,
+          "wrong_taught_activity_strings": 0
+        },
+        "MatchedFactual4": {
+          "meals": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 6,
+          "requested_timely_latest_reports": 0,
+          "utterances": 8,
+          "wrong_taught_activity_strings": 0
+        },
+        "Untouched": {
+          "meals": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 6,
+          "requested_timely_latest_reports": 0,
+          "utterances": 8,
+          "wrong_taught_activity_strings": 0
+        },
+        "ZeroGradient4": {
+          "meals": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 6,
+          "requested_timely_latest_reports": 0,
+          "utterances": 8,
+          "wrong_taught_activity_strings": 0
+        }
+      },
+      "seed": 23311891,
+      "timely_reports_and_meals_retained_against_controls": true,
+      "unsupported_reporting_improved_against_both_trained_controls": false
+    }
+  ],
+  "fresh_seeds": [
+    23110769,
+    23311891
+  ],
+  "kind": "experimental-four-update-matched-factual-gate-curriculum-v32",
+  "known_positive_control": {
+    "exact_original_native_prefix_hashes_and_emissions": true,
+    "fresh_process_recovery_passed": true,
+    "genuine_consumption_and_matching_declaration": true,
+    "new_optimizer_updates_so_far": 0,
+    "scored_decisions_spent": 24
+  },
+  "limitations": [
+    "Two independent fresh seeds, one founder, familiar geometries; sleep phases are paired.",
+    "Seen retention seed is disclosed and is part of the teaching corpus.",
+    "Sleep branches start from common pre-assessment states; not longitudinal sleep after pretest episodes.",
+    "Unknown or partial taught vocabulary is reported separately; unlabeled rows are not absence training.",
+    "No generalization or comprehension claim from loss, readout differences or source checks."
+  ],
+  "measured_binary_sha256": "a25a715602b1cdcce7f9b8adef8e72a2986dd149ff6f7a547a5b099f21345019",
+  "measured_source_head": "ad9dc5a8410a34bc8d3d0770ea7df09f9b37e3b0",
+  "native_gradient_receipt": {
+    "final_sha256": "43f4f1de9779446ce4fdd65220a46ac7f567417ee03da05a042304766074e4f5",
+    "full_optimizer_recovery_exact": true,
+    "initial_sha256": "a64296c15537030f3dd7fbe967472947bd1afb3da42e1a9103bd4217dc9ec58f",
+    "updates": [
+      {
+        "absence_gate_loss": 3.336638193115188,
+        "all_other_weights_moments_and_integer_ages_exact": true,
+        "changed_gate_weights": 64,
+        "checkpoint_sha256": "fd7ef71ffabafad879cafc0df292171b25923a3a6a80a651f84019e3c8933071",
+        "epoch": 1,
+        "gradient_norm": 15.220968246459961,
+        "optimizer_step": 437,
+        "positive_gate_loss": 0.14957008507716818
+      },
+      {
+        "absence_gate_loss": 3.135177208587075,
+        "all_other_weights_moments_and_integer_ages_exact": true,
+        "changed_gate_weights": 64,
+        "checkpoint_sha256": "4099adb3297d2177d08c71c97016478ee77fabf6795256c6e3e223add2a842bc",
+        "epoch": 2,
+        "gradient_norm": 14.504586219787598,
+        "optimizer_step": 438,
+        "positive_gate_loss": 0.12461084862141969
+      },
+      {
+        "absence_gate_loss": 2.765613679064434,
+        "all_other_weights_moments_and_integer_ages_exact": true,
+        "changed_gate_weights": 64,
+        "checkpoint_sha256": "689e2658ab0ed2abf49aba639646dbe1b8a0b8845525f9352cd0a6ad307dd07d",
+        "epoch": 3,
+        "gradient_norm": 13.12991714477539,
+        "optimizer_step": 439,
+        "positive_gate_loss": 0.08922922332519057
+      },
+      {
+        "absence_gate_loss": 2.2845880597380215,
+        "all_other_weights_moments_and_integer_ages_exact": true,
+        "changed_gate_weights": 64,
+        "checkpoint_sha256": "43f4f1de9779446ce4fdd65220a46ac7f567417ee03da05a042304766074e4f5",
+        "epoch": 4,
+        "gradient_norm": 11.195903778076172,
+        "optimizer_step": 440,
+        "positive_gate_loss": 0.06839619785634432
+      }
+    ]
+  },
+  "per_phase_positive_care_and_safety_retention": [
+    {
+      "genuine_timely_reports_retained": true,
+      "meal_and_physical_care_retained": true,
+      "post_sleep": false,
+      "seed": 10309219,
+      "seen_retention": true,
+      "survival_health_injury_retained": true
+    },
+    {
+      "genuine_timely_reports_retained": true,
+      "meal_and_physical_care_retained": true,
+      "post_sleep": true,
+      "seed": 10309219,
+      "seen_retention": true,
+      "survival_health_injury_retained": true
+    },
+    {
+      "genuine_timely_reports_retained": true,
+      "meal_and_physical_care_retained": true,
+      "post_sleep": false,
+      "seed": 23110769,
+      "seen_retention": false,
+      "survival_health_injury_retained": true
+    },
+    {
+      "genuine_timely_reports_retained": true,
+      "meal_and_physical_care_retained": true,
+      "post_sleep": true,
+      "seed": 23110769,
+      "seen_retention": false,
+      "survival_health_injury_retained": true
+    },
+    {
+      "genuine_timely_reports_retained": true,
+      "meal_and_physical_care_retained": true,
+      "post_sleep": false,
+      "seed": 23311891,
+      "seen_retention": false,
+      "survival_health_injury_retained": true
+    },
+    {
+      "genuine_timely_reports_retained": true,
+      "meal_and_physical_care_retained": true,
+      "post_sleep": true,
+      "seed": 23311891,
+      "seen_retention": false,
+      "survival_health_injury_retained": true
+    }
+  ],
+  "phase_results": [
+    {
+      "arm": "Balanced4",
+      "case": 0,
+      "episodes": [
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            null
+          ],
+          "first_taught_phrase": "EatFood",
+          "food_acquired": true,
+          "joint_physical_and_timely_report": true,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 1,
+          "minimum_energy": 0.7914600372314453,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": "EatFood",
+          "requested_timely_latest_reports": 1,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "timely_latest",
+              "lesson": "EatFood",
+              "step": 4,
+              "tokens": [
+                8,
+                1
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 1,
+          "timely_recent_reports": 1,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            1,
+            null
+          ],
+          "first_taught_phrase": "GetFood",
+          "food_acquired": true,
+          "joint_physical_and_timely_report": true,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903994917869568,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": "GetFood",
+          "requested_timely_latest_reports": 1,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "timely_latest",
+              "lesson": "GetFood",
+              "step": 1,
+              "tokens": [
+                9,
+                1
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 1,
+          "timely_recent_reports": 1,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            1
+          ],
+          "first_taught_phrase": "GetToy",
+          "food_acquired": false,
+          "joint_physical_and_timely_report": true,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903897166252136,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": "GetToy",
+          "requested_timely_latest_reports": 1,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "timely_latest",
+              "lesson": "GetToy",
+              "step": 1,
+              "tokens": [
+                9,
+                2
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 1,
+          "timely_recent_reports": 1,
+          "toy_acquired": true,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        }
+      ],
+      "fresh_recovery_checkpoints": 6,
+      "metrics": {
+        "all_survive": true,
+        "concurrent_unobserved": 0,
+        "first_phrase_noun_distinction": true,
+        "first_phrase_verb_distinction": true,
+        "joint_noun_pair": true,
+        "joint_verb_pair": true,
+        "maximum_injury": 0.0,
+        "maximum_pain": 0.0,
+        "meals": 1,
+        "minimum_energy": 0.7903897166252136,
+        "minimum_health": 1.0,
+        "other_utterances": 0,
+        "partial_taught_declarations": 0,
+        "physical_noun_pair": true,
+        "physical_verb_pair": true,
+        "premature_observed_prefix": 0,
+        "requested_timely_latest_reports": 3,
+        "silent_episode_utterances": 0,
+        "stale_true_history": 0,
+        "taught_declarations": 3,
+        "timely_latest_reports": 3,
+        "timely_recent_reports": 3,
+        "utterances": 3,
+        "wrong_taught_activity_strings": 0
+      },
+      "optimizer_step": 440,
+      "post_sleep": false,
+      "seed": 10309219,
+      "seen_retention": true,
+      "sleep_consolidations": 0,
+      "sleep_world_ticks": 0
+    },
+    {
+      "arm": "Balanced4",
+      "case": 0,
+      "episodes": [
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            null
+          ],
+          "first_taught_phrase": "EatFood",
+          "food_acquired": true,
+          "joint_physical_and_timely_report": true,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 1,
+          "minimum_energy": 0.7913062572479248,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": "EatFood",
+          "requested_timely_latest_reports": 1,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "timely_latest",
+              "lesson": "EatFood",
+              "step": 4,
+              "tokens": [
+                8,
+                1
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 1,
+          "timely_recent_reports": 1,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            1,
+            null
+          ],
+          "first_taught_phrase": "GetFood",
+          "food_acquired": true,
+          "joint_physical_and_timely_report": true,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903962731361389,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": "GetFood",
+          "requested_timely_latest_reports": 1,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "timely_latest",
+              "lesson": "GetFood",
+              "step": 1,
+              "tokens": [
+                9,
+                1
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 1,
+          "timely_recent_reports": 1,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            1
+          ],
+          "first_taught_phrase": "GetToy",
+          "food_acquired": false,
+          "joint_physical_and_timely_report": true,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903864979743958,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": "GetToy",
+          "requested_timely_latest_reports": 1,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "timely_latest",
+              "lesson": "GetToy",
+              "step": 1,
+              "tokens": [
+                9,
+                2
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 1,
+          "timely_recent_reports": 1,
+          "toy_acquired": true,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        }
+      ],
+      "fresh_recovery_checkpoints": 6,
+      "metrics": {
+        "all_survive": true,
+        "concurrent_unobserved": 0,
+        "first_phrase_noun_distinction": true,
+        "first_phrase_verb_distinction": true,
+        "joint_noun_pair": true,
+        "joint_verb_pair": true,
+        "maximum_injury": 0.0,
+        "maximum_pain": 0.0,
+        "meals": 1,
+        "minimum_energy": 0.7903864979743958,
+        "minimum_health": 1.0,
+        "other_utterances": 0,
+        "partial_taught_declarations": 0,
+        "physical_noun_pair": true,
+        "physical_verb_pair": true,
+        "premature_observed_prefix": 0,
+        "requested_timely_latest_reports": 3,
+        "silent_episode_utterances": 0,
+        "stale_true_history": 0,
+        "taught_declarations": 3,
+        "timely_latest_reports": 3,
+        "timely_recent_reports": 3,
+        "utterances": 3,
+        "wrong_taught_activity_strings": 0
+      },
+      "optimizer_step": 440,
+      "post_sleep": true,
+      "seed": 10309219,
+      "seen_retention": true,
+      "sleep_consolidations": 1,
+      "sleep_world_ticks": 13
+    },
+    {
+      "arm": "MatchedFactual4",
+      "case": 0,
+      "episodes": [
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            null
+          ],
+          "first_taught_phrase": "EatFood",
+          "food_acquired": true,
+          "joint_physical_and_timely_report": true,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 1,
+          "minimum_energy": 0.7914600372314453,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": "EatFood",
+          "requested_timely_latest_reports": 1,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "timely_latest",
+              "lesson": "EatFood",
+              "step": 4,
+              "tokens": [
+                8,
+                1
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 1,
+          "timely_recent_reports": 1,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            1,
+            null
+          ],
+          "first_taught_phrase": "GetFood",
+          "food_acquired": true,
+          "joint_physical_and_timely_report": true,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903994917869568,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": "GetFood",
+          "requested_timely_latest_reports": 1,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "timely_latest",
+              "lesson": "GetFood",
+              "step": 1,
+              "tokens": [
+                9,
+                1
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 1,
+          "timely_recent_reports": 1,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            1
+          ],
+          "first_taught_phrase": "GetToy",
+          "food_acquired": false,
+          "joint_physical_and_timely_report": true,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903897166252136,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": "GetToy",
+          "requested_timely_latest_reports": 1,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "timely_latest",
+              "lesson": "GetToy",
+              "step": 1,
+              "tokens": [
+                9,
+                2
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 1,
+          "timely_recent_reports": 1,
+          "toy_acquired": true,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        }
+      ],
+      "fresh_recovery_checkpoints": 6,
+      "metrics": {
+        "all_survive": true,
+        "concurrent_unobserved": 0,
+        "first_phrase_noun_distinction": true,
+        "first_phrase_verb_distinction": true,
+        "joint_noun_pair": true,
+        "joint_verb_pair": true,
+        "maximum_injury": 0.0,
+        "maximum_pain": 0.0,
+        "meals": 1,
+        "minimum_energy": 0.7903897166252136,
+        "minimum_health": 1.0,
+        "other_utterances": 0,
+        "partial_taught_declarations": 0,
+        "physical_noun_pair": true,
+        "physical_verb_pair": true,
+        "premature_observed_prefix": 0,
+        "requested_timely_latest_reports": 3,
+        "silent_episode_utterances": 0,
+        "stale_true_history": 0,
+        "taught_declarations": 3,
+        "timely_latest_reports": 3,
+        "timely_recent_reports": 3,
+        "utterances": 3,
+        "wrong_taught_activity_strings": 0
+      },
+      "optimizer_step": 440,
+      "post_sleep": false,
+      "seed": 10309219,
+      "seen_retention": true,
+      "sleep_consolidations": 0,
+      "sleep_world_ticks": 0
+    },
+    {
+      "arm": "MatchedFactual4",
+      "case": 0,
+      "episodes": [
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            null
+          ],
+          "first_taught_phrase": "EatFood",
+          "food_acquired": true,
+          "joint_physical_and_timely_report": true,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 1,
+          "minimum_energy": 0.7913062572479248,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": "EatFood",
+          "requested_timely_latest_reports": 1,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "timely_latest",
+              "lesson": "EatFood",
+              "step": 4,
+              "tokens": [
+                8,
+                1
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 1,
+          "timely_recent_reports": 1,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            1,
+            null
+          ],
+          "first_taught_phrase": "GetFood",
+          "food_acquired": true,
+          "joint_physical_and_timely_report": true,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903962731361389,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": "GetFood",
+          "requested_timely_latest_reports": 1,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "timely_latest",
+              "lesson": "GetFood",
+              "step": 1,
+              "tokens": [
+                9,
+                1
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 1,
+          "timely_recent_reports": 1,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            1
+          ],
+          "first_taught_phrase": "GetToy",
+          "food_acquired": false,
+          "joint_physical_and_timely_report": true,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903864979743958,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": "GetToy",
+          "requested_timely_latest_reports": 1,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "timely_latest",
+              "lesson": "GetToy",
+              "step": 1,
+              "tokens": [
+                9,
+                2
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 1,
+          "timely_recent_reports": 1,
+          "toy_acquired": true,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        }
+      ],
+      "fresh_recovery_checkpoints": 6,
+      "metrics": {
+        "all_survive": true,
+        "concurrent_unobserved": 0,
+        "first_phrase_noun_distinction": true,
+        "first_phrase_verb_distinction": true,
+        "joint_noun_pair": true,
+        "joint_verb_pair": true,
+        "maximum_injury": 0.0,
+        "maximum_pain": 0.0,
+        "meals": 1,
+        "minimum_energy": 0.7903864979743958,
+        "minimum_health": 1.0,
+        "other_utterances": 0,
+        "partial_taught_declarations": 0,
+        "physical_noun_pair": true,
+        "physical_verb_pair": true,
+        "premature_observed_prefix": 0,
+        "requested_timely_latest_reports": 3,
+        "silent_episode_utterances": 0,
+        "stale_true_history": 0,
+        "taught_declarations": 3,
+        "timely_latest_reports": 3,
+        "timely_recent_reports": 3,
+        "utterances": 3,
+        "wrong_taught_activity_strings": 0
+      },
+      "optimizer_step": 440,
+      "post_sleep": true,
+      "seed": 10309219,
+      "seen_retention": true,
+      "sleep_consolidations": 1,
+      "sleep_world_ticks": 13
+    },
+    {
+      "arm": "Untouched",
+      "case": 0,
+      "episodes": [
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            null
+          ],
+          "first_taught_phrase": "EatFood",
+          "food_acquired": true,
+          "joint_physical_and_timely_report": true,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 1,
+          "minimum_energy": 0.7914600372314453,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": "EatFood",
+          "requested_timely_latest_reports": 1,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "timely_latest",
+              "lesson": "EatFood",
+              "step": 4,
+              "tokens": [
+                8,
+                1
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 1,
+          "timely_recent_reports": 1,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            1,
+            null
+          ],
+          "first_taught_phrase": "GetFood",
+          "food_acquired": true,
+          "joint_physical_and_timely_report": true,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903994917869568,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": "GetFood",
+          "requested_timely_latest_reports": 1,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "timely_latest",
+              "lesson": "GetFood",
+              "step": 1,
+              "tokens": [
+                9,
+                1
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 1,
+          "timely_recent_reports": 1,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            1
+          ],
+          "first_taught_phrase": "GetToy",
+          "food_acquired": false,
+          "joint_physical_and_timely_report": true,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903897166252136,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": "GetToy",
+          "requested_timely_latest_reports": 1,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "timely_latest",
+              "lesson": "GetToy",
+              "step": 1,
+              "tokens": [
+                9,
+                2
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 1,
+          "timely_recent_reports": 1,
+          "toy_acquired": true,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        }
+      ],
+      "fresh_recovery_checkpoints": 6,
+      "metrics": {
+        "all_survive": true,
+        "concurrent_unobserved": 0,
+        "first_phrase_noun_distinction": true,
+        "first_phrase_verb_distinction": true,
+        "joint_noun_pair": true,
+        "joint_verb_pair": true,
+        "maximum_injury": 0.0,
+        "maximum_pain": 0.0,
+        "meals": 1,
+        "minimum_energy": 0.7903897166252136,
+        "minimum_health": 1.0,
+        "other_utterances": 0,
+        "partial_taught_declarations": 0,
+        "physical_noun_pair": true,
+        "physical_verb_pair": true,
+        "premature_observed_prefix": 0,
+        "requested_timely_latest_reports": 3,
+        "silent_episode_utterances": 0,
+        "stale_true_history": 0,
+        "taught_declarations": 3,
+        "timely_latest_reports": 3,
+        "timely_recent_reports": 3,
+        "utterances": 3,
+        "wrong_taught_activity_strings": 0
+      },
+      "optimizer_step": 436,
+      "post_sleep": false,
+      "seed": 10309219,
+      "seen_retention": true,
+      "sleep_consolidations": 0,
+      "sleep_world_ticks": 0
+    },
+    {
+      "arm": "Untouched",
+      "case": 0,
+      "episodes": [
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            null
+          ],
+          "first_taught_phrase": "EatFood",
+          "food_acquired": true,
+          "joint_physical_and_timely_report": true,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 1,
+          "minimum_energy": 0.7913062572479248,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": "EatFood",
+          "requested_timely_latest_reports": 1,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "timely_latest",
+              "lesson": "EatFood",
+              "step": 4,
+              "tokens": [
+                8,
+                1
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 1,
+          "timely_recent_reports": 1,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            1,
+            null
+          ],
+          "first_taught_phrase": "GetFood",
+          "food_acquired": true,
+          "joint_physical_and_timely_report": true,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903962731361389,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": "GetFood",
+          "requested_timely_latest_reports": 1,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "timely_latest",
+              "lesson": "GetFood",
+              "step": 1,
+              "tokens": [
+                9,
+                1
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 1,
+          "timely_recent_reports": 1,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            1
+          ],
+          "first_taught_phrase": "GetToy",
+          "food_acquired": false,
+          "joint_physical_and_timely_report": true,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903864979743958,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": "GetToy",
+          "requested_timely_latest_reports": 1,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "timely_latest",
+              "lesson": "GetToy",
+              "step": 1,
+              "tokens": [
+                9,
+                2
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 1,
+          "timely_recent_reports": 1,
+          "toy_acquired": true,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        }
+      ],
+      "fresh_recovery_checkpoints": 6,
+      "metrics": {
+        "all_survive": true,
+        "concurrent_unobserved": 0,
+        "first_phrase_noun_distinction": true,
+        "first_phrase_verb_distinction": true,
+        "joint_noun_pair": true,
+        "joint_verb_pair": true,
+        "maximum_injury": 0.0,
+        "maximum_pain": 0.0,
+        "meals": 1,
+        "minimum_energy": 0.7903864979743958,
+        "minimum_health": 1.0,
+        "other_utterances": 0,
+        "partial_taught_declarations": 0,
+        "physical_noun_pair": true,
+        "physical_verb_pair": true,
+        "premature_observed_prefix": 0,
+        "requested_timely_latest_reports": 3,
+        "silent_episode_utterances": 0,
+        "stale_true_history": 0,
+        "taught_declarations": 3,
+        "timely_latest_reports": 3,
+        "timely_recent_reports": 3,
+        "utterances": 3,
+        "wrong_taught_activity_strings": 0
+      },
+      "optimizer_step": 436,
+      "post_sleep": true,
+      "seed": 10309219,
+      "seen_retention": true,
+      "sleep_consolidations": 1,
+      "sleep_world_ticks": 13
+    },
+    {
+      "arm": "ZeroGradient4",
+      "case": 0,
+      "episodes": [
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            null
+          ],
+          "first_taught_phrase": "EatFood",
+          "food_acquired": true,
+          "joint_physical_and_timely_report": true,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 1,
+          "minimum_energy": 0.7914600372314453,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": "EatFood",
+          "requested_timely_latest_reports": 1,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "timely_latest",
+              "lesson": "EatFood",
+              "step": 4,
+              "tokens": [
+                8,
+                1
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 1,
+          "timely_recent_reports": 1,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            1,
+            null
+          ],
+          "first_taught_phrase": "GetFood",
+          "food_acquired": true,
+          "joint_physical_and_timely_report": true,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903994917869568,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": "GetFood",
+          "requested_timely_latest_reports": 1,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "timely_latest",
+              "lesson": "GetFood",
+              "step": 1,
+              "tokens": [
+                9,
+                1
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 1,
+          "timely_recent_reports": 1,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            1
+          ],
+          "first_taught_phrase": "GetToy",
+          "food_acquired": false,
+          "joint_physical_and_timely_report": true,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903897166252136,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": "GetToy",
+          "requested_timely_latest_reports": 1,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "timely_latest",
+              "lesson": "GetToy",
+              "step": 1,
+              "tokens": [
+                9,
+                2
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 1,
+          "timely_recent_reports": 1,
+          "toy_acquired": true,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        }
+      ],
+      "fresh_recovery_checkpoints": 6,
+      "metrics": {
+        "all_survive": true,
+        "concurrent_unobserved": 0,
+        "first_phrase_noun_distinction": true,
+        "first_phrase_verb_distinction": true,
+        "joint_noun_pair": true,
+        "joint_verb_pair": true,
+        "maximum_injury": 0.0,
+        "maximum_pain": 0.0,
+        "meals": 1,
+        "minimum_energy": 0.7903897166252136,
+        "minimum_health": 1.0,
+        "other_utterances": 0,
+        "partial_taught_declarations": 0,
+        "physical_noun_pair": true,
+        "physical_verb_pair": true,
+        "premature_observed_prefix": 0,
+        "requested_timely_latest_reports": 3,
+        "silent_episode_utterances": 0,
+        "stale_true_history": 0,
+        "taught_declarations": 3,
+        "timely_latest_reports": 3,
+        "timely_recent_reports": 3,
+        "utterances": 3,
+        "wrong_taught_activity_strings": 0
+      },
+      "optimizer_step": 440,
+      "post_sleep": false,
+      "seed": 10309219,
+      "seen_retention": true,
+      "sleep_consolidations": 0,
+      "sleep_world_ticks": 0
+    },
+    {
+      "arm": "ZeroGradient4",
+      "case": 0,
+      "episodes": [
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            null
+          ],
+          "first_taught_phrase": "EatFood",
+          "food_acquired": true,
+          "joint_physical_and_timely_report": true,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 1,
+          "minimum_energy": 0.7913062572479248,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": "EatFood",
+          "requested_timely_latest_reports": 1,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "timely_latest",
+              "lesson": "EatFood",
+              "step": 4,
+              "tokens": [
+                8,
+                1
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 1,
+          "timely_recent_reports": 1,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            1,
+            null
+          ],
+          "first_taught_phrase": "GetFood",
+          "food_acquired": true,
+          "joint_physical_and_timely_report": true,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903962731361389,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": "GetFood",
+          "requested_timely_latest_reports": 1,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "timely_latest",
+              "lesson": "GetFood",
+              "step": 1,
+              "tokens": [
+                9,
+                1
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 1,
+          "timely_recent_reports": 1,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            1
+          ],
+          "first_taught_phrase": "GetToy",
+          "food_acquired": false,
+          "joint_physical_and_timely_report": true,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903864979743958,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": "GetToy",
+          "requested_timely_latest_reports": 1,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "timely_latest",
+              "lesson": "GetToy",
+              "step": 1,
+              "tokens": [
+                9,
+                2
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 1,
+          "timely_recent_reports": 1,
+          "toy_acquired": true,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        }
+      ],
+      "fresh_recovery_checkpoints": 6,
+      "metrics": {
+        "all_survive": true,
+        "concurrent_unobserved": 0,
+        "first_phrase_noun_distinction": true,
+        "first_phrase_verb_distinction": true,
+        "joint_noun_pair": true,
+        "joint_verb_pair": true,
+        "maximum_injury": 0.0,
+        "maximum_pain": 0.0,
+        "meals": 1,
+        "minimum_energy": 0.7903864979743958,
+        "minimum_health": 1.0,
+        "other_utterances": 0,
+        "partial_taught_declarations": 0,
+        "physical_noun_pair": true,
+        "physical_verb_pair": true,
+        "premature_observed_prefix": 0,
+        "requested_timely_latest_reports": 3,
+        "silent_episode_utterances": 0,
+        "stale_true_history": 0,
+        "taught_declarations": 3,
+        "timely_latest_reports": 3,
+        "timely_recent_reports": 3,
+        "utterances": 3,
+        "wrong_taught_activity_strings": 0
+      },
+      "optimizer_step": 440,
+      "post_sleep": true,
+      "seed": 10309219,
+      "seen_retention": true,
+      "sleep_consolidations": 1,
+      "sleep_world_ticks": 13
+    },
+    {
+      "arm": "Balanced4",
+      "case": 1,
+      "episodes": [
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            null
+          ],
+          "first_taught_phrase": "EatFood",
+          "food_acquired": true,
+          "joint_physical_and_timely_report": true,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 1,
+          "minimum_energy": 0.7913093566894531,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": "EatFood",
+          "requested_timely_latest_reports": 1,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "timely_latest",
+              "lesson": "EatFood",
+              "step": 3,
+              "tokens": [
+                8,
+                1
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 1,
+          "timely_recent_reports": 1,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            null
+          ],
+          "first_taught_phrase": "GetFood",
+          "food_acquired": true,
+          "joint_physical_and_timely_report": false,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 1,
+          "minimum_energy": 0.7913093566894531,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 1,
+          "requested": "GetFood",
+          "requested_timely_latest_reports": 0,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "premature_observed_prefix",
+              "lesson": "GetFood",
+              "step": 0,
+              "tokens": [
+                9,
+                1
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 0,
+          "timely_recent_reports": 0,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            1
+          ],
+          "first_taught_phrase": "GetToy",
+          "food_acquired": false,
+          "joint_physical_and_timely_report": true,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903768420219421,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": "GetToy",
+          "requested_timely_latest_reports": 1,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "timely_latest",
+              "lesson": "GetToy",
+              "step": 1,
+              "tokens": [
+                9,
+                2
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 1,
+          "timely_recent_reports": 1,
+          "toy_acquired": true,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": null,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            1
+          ],
+          "first_taught_phrase": null,
+          "food_acquired": false,
+          "joint_physical_and_timely_report": false,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903859615325928,
+          "minimum_health": 1.0,
+          "other_utterances": 1,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": null,
+          "requested_timely_latest_reports": 0,
+          "silent_episode_utterances": 1,
+          "spoken": [
+            {
+              "classification": "other",
+              "lesson": null,
+              "step": 1,
+              "tokens": [
+                40,
+                3
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 0,
+          "timely_latest_reports": 0,
+          "timely_recent_reports": 0,
+          "toy_acquired": true,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        }
+      ],
+      "fresh_recovery_checkpoints": 8,
+      "metrics": {
+        "all_survive": true,
+        "concurrent_unobserved": 0,
+        "first_phrase_noun_distinction": true,
+        "first_phrase_verb_distinction": true,
+        "joint_noun_pair": false,
+        "joint_verb_pair": false,
+        "maximum_injury": 0.0,
+        "maximum_pain": 0.0,
+        "meals": 2,
+        "minimum_energy": 0.7903768420219421,
+        "minimum_health": 1.0,
+        "other_utterances": 1,
+        "partial_taught_declarations": 0,
+        "physical_noun_pair": true,
+        "physical_verb_pair": false,
+        "premature_observed_prefix": 1,
+        "requested_timely_latest_reports": 2,
+        "silent_episode_utterances": 1,
+        "stale_true_history": 0,
+        "taught_declarations": 3,
+        "timely_latest_reports": 2,
+        "timely_recent_reports": 2,
+        "utterances": 4,
+        "wrong_taught_activity_strings": 0
+      },
+      "optimizer_step": 440,
+      "post_sleep": false,
+      "seed": 23110769,
+      "seen_retention": false,
+      "sleep_consolidations": 0,
+      "sleep_world_ticks": 0
+    },
+    {
+      "arm": "Balanced4",
+      "case": 1,
+      "episodes": [
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            null
+          ],
+          "first_taught_phrase": "EatFood",
+          "food_acquired": true,
+          "joint_physical_and_timely_report": true,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 1,
+          "minimum_energy": 0.7913062572479248,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": "EatFood",
+          "requested_timely_latest_reports": 1,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "timely_latest",
+              "lesson": "EatFood",
+              "step": 3,
+              "tokens": [
+                8,
+                1
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 1,
+          "timely_recent_reports": 1,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            null
+          ],
+          "first_taught_phrase": "GetFood",
+          "food_acquired": true,
+          "joint_physical_and_timely_report": false,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 1,
+          "minimum_energy": 0.7913062572479248,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": "GetFood",
+          "requested_timely_latest_reports": 0,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "timely_recent_history",
+              "lesson": "GetFood",
+              "step": 3,
+              "tokens": [
+                9,
+                1
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 0,
+          "timely_recent_reports": 1,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            1
+          ],
+          "first_taught_phrase": "GetToy",
+          "food_acquired": false,
+          "joint_physical_and_timely_report": true,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903736233711243,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": "GetToy",
+          "requested_timely_latest_reports": 1,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "timely_latest",
+              "lesson": "GetToy",
+              "step": 1,
+              "tokens": [
+                9,
+                2
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 1,
+          "timely_recent_reports": 1,
+          "toy_acquired": true,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": null,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            1
+          ],
+          "first_taught_phrase": null,
+          "food_acquired": false,
+          "joint_physical_and_timely_report": false,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903826832771301,
+          "minimum_health": 1.0,
+          "other_utterances": 1,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": null,
+          "requested_timely_latest_reports": 0,
+          "silent_episode_utterances": 1,
+          "spoken": [
+            {
+              "classification": "other",
+              "lesson": null,
+              "step": 1,
+              "tokens": [
+                40,
+                3
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 0,
+          "timely_latest_reports": 0,
+          "timely_recent_reports": 0,
+          "toy_acquired": true,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        }
+      ],
+      "fresh_recovery_checkpoints": 8,
+      "metrics": {
+        "all_survive": true,
+        "concurrent_unobserved": 0,
+        "first_phrase_noun_distinction": true,
+        "first_phrase_verb_distinction": true,
+        "joint_noun_pair": false,
+        "joint_verb_pair": false,
+        "maximum_injury": 0.0,
+        "maximum_pain": 0.0,
+        "meals": 2,
+        "minimum_energy": 0.7903736233711243,
+        "minimum_health": 1.0,
+        "other_utterances": 1,
+        "partial_taught_declarations": 0,
+        "physical_noun_pair": true,
+        "physical_verb_pair": false,
+        "premature_observed_prefix": 0,
+        "requested_timely_latest_reports": 2,
+        "silent_episode_utterances": 1,
+        "stale_true_history": 0,
+        "taught_declarations": 3,
+        "timely_latest_reports": 2,
+        "timely_recent_reports": 3,
+        "utterances": 4,
+        "wrong_taught_activity_strings": 0
+      },
+      "optimizer_step": 440,
+      "post_sleep": true,
+      "seed": 23110769,
+      "seen_retention": false,
+      "sleep_consolidations": 1,
+      "sleep_world_ticks": 13
+    },
+    {
+      "arm": "MatchedFactual4",
+      "case": 1,
+      "episodes": [
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            null
+          ],
+          "first_taught_phrase": "EatFood",
+          "food_acquired": true,
+          "joint_physical_and_timely_report": true,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 1,
+          "minimum_energy": 0.7913093566894531,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": "EatFood",
+          "requested_timely_latest_reports": 1,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "timely_latest",
+              "lesson": "EatFood",
+              "step": 3,
+              "tokens": [
+                8,
+                1
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 1,
+          "timely_recent_reports": 1,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            null
+          ],
+          "first_taught_phrase": "GetFood",
+          "food_acquired": true,
+          "joint_physical_and_timely_report": false,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 1,
+          "minimum_energy": 0.7913093566894531,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 1,
+          "requested": "GetFood",
+          "requested_timely_latest_reports": 0,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "premature_observed_prefix",
+              "lesson": "GetFood",
+              "step": 0,
+              "tokens": [
+                9,
+                1
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 0,
+          "timely_recent_reports": 0,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            1
+          ],
+          "first_taught_phrase": "GetToy",
+          "food_acquired": false,
+          "joint_physical_and_timely_report": true,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903768420219421,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": "GetToy",
+          "requested_timely_latest_reports": 1,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "timely_latest",
+              "lesson": "GetToy",
+              "step": 1,
+              "tokens": [
+                9,
+                2
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 1,
+          "timely_recent_reports": 1,
+          "toy_acquired": true,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": null,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            1
+          ],
+          "first_taught_phrase": null,
+          "food_acquired": false,
+          "joint_physical_and_timely_report": false,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903859615325928,
+          "minimum_health": 1.0,
+          "other_utterances": 1,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": null,
+          "requested_timely_latest_reports": 0,
+          "silent_episode_utterances": 1,
+          "spoken": [
+            {
+              "classification": "other",
+              "lesson": null,
+              "step": 1,
+              "tokens": [
+                40,
+                3
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 0,
+          "timely_latest_reports": 0,
+          "timely_recent_reports": 0,
+          "toy_acquired": true,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        }
+      ],
+      "fresh_recovery_checkpoints": 8,
+      "metrics": {
+        "all_survive": true,
+        "concurrent_unobserved": 0,
+        "first_phrase_noun_distinction": true,
+        "first_phrase_verb_distinction": true,
+        "joint_noun_pair": false,
+        "joint_verb_pair": false,
+        "maximum_injury": 0.0,
+        "maximum_pain": 0.0,
+        "meals": 2,
+        "minimum_energy": 0.7903768420219421,
+        "minimum_health": 1.0,
+        "other_utterances": 1,
+        "partial_taught_declarations": 0,
+        "physical_noun_pair": true,
+        "physical_verb_pair": false,
+        "premature_observed_prefix": 1,
+        "requested_timely_latest_reports": 2,
+        "silent_episode_utterances": 1,
+        "stale_true_history": 0,
+        "taught_declarations": 3,
+        "timely_latest_reports": 2,
+        "timely_recent_reports": 2,
+        "utterances": 4,
+        "wrong_taught_activity_strings": 0
+      },
+      "optimizer_step": 440,
+      "post_sleep": false,
+      "seed": 23110769,
+      "seen_retention": false,
+      "sleep_consolidations": 0,
+      "sleep_world_ticks": 0
+    },
+    {
+      "arm": "MatchedFactual4",
+      "case": 1,
+      "episodes": [
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            null
+          ],
+          "first_taught_phrase": "EatFood",
+          "food_acquired": true,
+          "joint_physical_and_timely_report": true,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 1,
+          "minimum_energy": 0.7913062572479248,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": "EatFood",
+          "requested_timely_latest_reports": 1,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "timely_latest",
+              "lesson": "EatFood",
+              "step": 3,
+              "tokens": [
+                8,
+                1
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 1,
+          "timely_recent_reports": 1,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            null
+          ],
+          "first_taught_phrase": "GetFood",
+          "food_acquired": true,
+          "joint_physical_and_timely_report": false,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 1,
+          "minimum_energy": 0.7913062572479248,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": "GetFood",
+          "requested_timely_latest_reports": 0,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "timely_recent_history",
+              "lesson": "GetFood",
+              "step": 3,
+              "tokens": [
+                9,
+                1
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 0,
+          "timely_recent_reports": 1,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            1
+          ],
+          "first_taught_phrase": "GetToy",
+          "food_acquired": false,
+          "joint_physical_and_timely_report": true,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903736233711243,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": "GetToy",
+          "requested_timely_latest_reports": 1,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "timely_latest",
+              "lesson": "GetToy",
+              "step": 1,
+              "tokens": [
+                9,
+                2
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 1,
+          "timely_recent_reports": 1,
+          "toy_acquired": true,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": null,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            1
+          ],
+          "first_taught_phrase": null,
+          "food_acquired": false,
+          "joint_physical_and_timely_report": false,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903826832771301,
+          "minimum_health": 1.0,
+          "other_utterances": 1,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": null,
+          "requested_timely_latest_reports": 0,
+          "silent_episode_utterances": 1,
+          "spoken": [
+            {
+              "classification": "other",
+              "lesson": null,
+              "step": 1,
+              "tokens": [
+                40,
+                3
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 0,
+          "timely_latest_reports": 0,
+          "timely_recent_reports": 0,
+          "toy_acquired": true,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        }
+      ],
+      "fresh_recovery_checkpoints": 8,
+      "metrics": {
+        "all_survive": true,
+        "concurrent_unobserved": 0,
+        "first_phrase_noun_distinction": true,
+        "first_phrase_verb_distinction": true,
+        "joint_noun_pair": false,
+        "joint_verb_pair": false,
+        "maximum_injury": 0.0,
+        "maximum_pain": 0.0,
+        "meals": 2,
+        "minimum_energy": 0.7903736233711243,
+        "minimum_health": 1.0,
+        "other_utterances": 1,
+        "partial_taught_declarations": 0,
+        "physical_noun_pair": true,
+        "physical_verb_pair": false,
+        "premature_observed_prefix": 0,
+        "requested_timely_latest_reports": 2,
+        "silent_episode_utterances": 1,
+        "stale_true_history": 0,
+        "taught_declarations": 3,
+        "timely_latest_reports": 2,
+        "timely_recent_reports": 3,
+        "utterances": 4,
+        "wrong_taught_activity_strings": 0
+      },
+      "optimizer_step": 440,
+      "post_sleep": true,
+      "seed": 23110769,
+      "seen_retention": false,
+      "sleep_consolidations": 1,
+      "sleep_world_ticks": 13
+    },
+    {
+      "arm": "Untouched",
+      "case": 1,
+      "episodes": [
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            null
+          ],
+          "first_taught_phrase": "EatFood",
+          "food_acquired": true,
+          "joint_physical_and_timely_report": true,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 1,
+          "minimum_energy": 0.7913093566894531,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": "EatFood",
+          "requested_timely_latest_reports": 1,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "timely_latest",
+              "lesson": "EatFood",
+              "step": 3,
+              "tokens": [
+                8,
+                1
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 1,
+          "timely_recent_reports": 1,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            null
+          ],
+          "first_taught_phrase": "GetFood",
+          "food_acquired": true,
+          "joint_physical_and_timely_report": false,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 1,
+          "minimum_energy": 0.7913093566894531,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 1,
+          "requested": "GetFood",
+          "requested_timely_latest_reports": 0,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "premature_observed_prefix",
+              "lesson": "GetFood",
+              "step": 0,
+              "tokens": [
+                9,
+                1
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 0,
+          "timely_recent_reports": 0,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            1
+          ],
+          "first_taught_phrase": "GetToy",
+          "food_acquired": false,
+          "joint_physical_and_timely_report": true,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903768420219421,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": "GetToy",
+          "requested_timely_latest_reports": 1,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "timely_latest",
+              "lesson": "GetToy",
+              "step": 1,
+              "tokens": [
+                9,
+                2
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 1,
+          "timely_recent_reports": 1,
+          "toy_acquired": true,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": null,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            1
+          ],
+          "first_taught_phrase": null,
+          "food_acquired": false,
+          "joint_physical_and_timely_report": false,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903859615325928,
+          "minimum_health": 1.0,
+          "other_utterances": 1,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": null,
+          "requested_timely_latest_reports": 0,
+          "silent_episode_utterances": 1,
+          "spoken": [
+            {
+              "classification": "other",
+              "lesson": null,
+              "step": 1,
+              "tokens": [
+                40,
+                3
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 0,
+          "timely_latest_reports": 0,
+          "timely_recent_reports": 0,
+          "toy_acquired": true,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        }
+      ],
+      "fresh_recovery_checkpoints": 8,
+      "metrics": {
+        "all_survive": true,
+        "concurrent_unobserved": 0,
+        "first_phrase_noun_distinction": true,
+        "first_phrase_verb_distinction": true,
+        "joint_noun_pair": false,
+        "joint_verb_pair": false,
+        "maximum_injury": 0.0,
+        "maximum_pain": 0.0,
+        "meals": 2,
+        "minimum_energy": 0.7903768420219421,
+        "minimum_health": 1.0,
+        "other_utterances": 1,
+        "partial_taught_declarations": 0,
+        "physical_noun_pair": true,
+        "physical_verb_pair": false,
+        "premature_observed_prefix": 1,
+        "requested_timely_latest_reports": 2,
+        "silent_episode_utterances": 1,
+        "stale_true_history": 0,
+        "taught_declarations": 3,
+        "timely_latest_reports": 2,
+        "timely_recent_reports": 2,
+        "utterances": 4,
+        "wrong_taught_activity_strings": 0
+      },
+      "optimizer_step": 436,
+      "post_sleep": false,
+      "seed": 23110769,
+      "seen_retention": false,
+      "sleep_consolidations": 0,
+      "sleep_world_ticks": 0
+    },
+    {
+      "arm": "Untouched",
+      "case": 1,
+      "episodes": [
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            null
+          ],
+          "first_taught_phrase": "EatFood",
+          "food_acquired": true,
+          "joint_physical_and_timely_report": true,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 1,
+          "minimum_energy": 0.7913062572479248,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": "EatFood",
+          "requested_timely_latest_reports": 1,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "timely_latest",
+              "lesson": "EatFood",
+              "step": 3,
+              "tokens": [
+                8,
+                1
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 1,
+          "timely_recent_reports": 1,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            null
+          ],
+          "first_taught_phrase": "GetFood",
+          "food_acquired": true,
+          "joint_physical_and_timely_report": false,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 1,
+          "minimum_energy": 0.7913062572479248,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": "GetFood",
+          "requested_timely_latest_reports": 0,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "timely_recent_history",
+              "lesson": "GetFood",
+              "step": 3,
+              "tokens": [
+                9,
+                1
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 0,
+          "timely_recent_reports": 1,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            1
+          ],
+          "first_taught_phrase": "GetToy",
+          "food_acquired": false,
+          "joint_physical_and_timely_report": true,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903736233711243,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": "GetToy",
+          "requested_timely_latest_reports": 1,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "timely_latest",
+              "lesson": "GetToy",
+              "step": 1,
+              "tokens": [
+                9,
+                2
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 1,
+          "timely_recent_reports": 1,
+          "toy_acquired": true,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": null,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            1
+          ],
+          "first_taught_phrase": null,
+          "food_acquired": false,
+          "joint_physical_and_timely_report": false,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903826832771301,
+          "minimum_health": 1.0,
+          "other_utterances": 1,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": null,
+          "requested_timely_latest_reports": 0,
+          "silent_episode_utterances": 1,
+          "spoken": [
+            {
+              "classification": "other",
+              "lesson": null,
+              "step": 1,
+              "tokens": [
+                40,
+                3
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 0,
+          "timely_latest_reports": 0,
+          "timely_recent_reports": 0,
+          "toy_acquired": true,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        }
+      ],
+      "fresh_recovery_checkpoints": 8,
+      "metrics": {
+        "all_survive": true,
+        "concurrent_unobserved": 0,
+        "first_phrase_noun_distinction": true,
+        "first_phrase_verb_distinction": true,
+        "joint_noun_pair": false,
+        "joint_verb_pair": false,
+        "maximum_injury": 0.0,
+        "maximum_pain": 0.0,
+        "meals": 2,
+        "minimum_energy": 0.7903736233711243,
+        "minimum_health": 1.0,
+        "other_utterances": 1,
+        "partial_taught_declarations": 0,
+        "physical_noun_pair": true,
+        "physical_verb_pair": false,
+        "premature_observed_prefix": 0,
+        "requested_timely_latest_reports": 2,
+        "silent_episode_utterances": 1,
+        "stale_true_history": 0,
+        "taught_declarations": 3,
+        "timely_latest_reports": 2,
+        "timely_recent_reports": 3,
+        "utterances": 4,
+        "wrong_taught_activity_strings": 0
+      },
+      "optimizer_step": 436,
+      "post_sleep": true,
+      "seed": 23110769,
+      "seen_retention": false,
+      "sleep_consolidations": 1,
+      "sleep_world_ticks": 13
+    },
+    {
+      "arm": "ZeroGradient4",
+      "case": 1,
+      "episodes": [
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            null
+          ],
+          "first_taught_phrase": "EatFood",
+          "food_acquired": true,
+          "joint_physical_and_timely_report": true,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 1,
+          "minimum_energy": 0.7913093566894531,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": "EatFood",
+          "requested_timely_latest_reports": 1,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "timely_latest",
+              "lesson": "EatFood",
+              "step": 3,
+              "tokens": [
+                8,
+                1
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 1,
+          "timely_recent_reports": 1,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            null
+          ],
+          "first_taught_phrase": "GetFood",
+          "food_acquired": true,
+          "joint_physical_and_timely_report": false,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 1,
+          "minimum_energy": 0.7913093566894531,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 1,
+          "requested": "GetFood",
+          "requested_timely_latest_reports": 0,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "premature_observed_prefix",
+              "lesson": "GetFood",
+              "step": 0,
+              "tokens": [
+                9,
+                1
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 0,
+          "timely_recent_reports": 0,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            1
+          ],
+          "first_taught_phrase": "GetToy",
+          "food_acquired": false,
+          "joint_physical_and_timely_report": true,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903768420219421,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": "GetToy",
+          "requested_timely_latest_reports": 1,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "timely_latest",
+              "lesson": "GetToy",
+              "step": 1,
+              "tokens": [
+                9,
+                2
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 1,
+          "timely_recent_reports": 1,
+          "toy_acquired": true,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": null,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            1
+          ],
+          "first_taught_phrase": null,
+          "food_acquired": false,
+          "joint_physical_and_timely_report": false,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903859615325928,
+          "minimum_health": 1.0,
+          "other_utterances": 1,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": null,
+          "requested_timely_latest_reports": 0,
+          "silent_episode_utterances": 1,
+          "spoken": [
+            {
+              "classification": "other",
+              "lesson": null,
+              "step": 1,
+              "tokens": [
+                40,
+                3
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 0,
+          "timely_latest_reports": 0,
+          "timely_recent_reports": 0,
+          "toy_acquired": true,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        }
+      ],
+      "fresh_recovery_checkpoints": 8,
+      "metrics": {
+        "all_survive": true,
+        "concurrent_unobserved": 0,
+        "first_phrase_noun_distinction": true,
+        "first_phrase_verb_distinction": true,
+        "joint_noun_pair": false,
+        "joint_verb_pair": false,
+        "maximum_injury": 0.0,
+        "maximum_pain": 0.0,
+        "meals": 2,
+        "minimum_energy": 0.7903768420219421,
+        "minimum_health": 1.0,
+        "other_utterances": 1,
+        "partial_taught_declarations": 0,
+        "physical_noun_pair": true,
+        "physical_verb_pair": false,
+        "premature_observed_prefix": 1,
+        "requested_timely_latest_reports": 2,
+        "silent_episode_utterances": 1,
+        "stale_true_history": 0,
+        "taught_declarations": 3,
+        "timely_latest_reports": 2,
+        "timely_recent_reports": 2,
+        "utterances": 4,
+        "wrong_taught_activity_strings": 0
+      },
+      "optimizer_step": 440,
+      "post_sleep": false,
+      "seed": 23110769,
+      "seen_retention": false,
+      "sleep_consolidations": 0,
+      "sleep_world_ticks": 0
+    },
+    {
+      "arm": "ZeroGradient4",
+      "case": 1,
+      "episodes": [
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            null
+          ],
+          "first_taught_phrase": "EatFood",
+          "food_acquired": true,
+          "joint_physical_and_timely_report": true,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 1,
+          "minimum_energy": 0.7913062572479248,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": "EatFood",
+          "requested_timely_latest_reports": 1,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "timely_latest",
+              "lesson": "EatFood",
+              "step": 3,
+              "tokens": [
+                8,
+                1
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 1,
+          "timely_recent_reports": 1,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            null
+          ],
+          "first_taught_phrase": "GetFood",
+          "food_acquired": true,
+          "joint_physical_and_timely_report": false,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 1,
+          "minimum_energy": 0.7913062572479248,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": "GetFood",
+          "requested_timely_latest_reports": 0,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "timely_recent_history",
+              "lesson": "GetFood",
+              "step": 3,
+              "tokens": [
+                9,
+                1
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 0,
+          "timely_recent_reports": 1,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            1
+          ],
+          "first_taught_phrase": "GetToy",
+          "food_acquired": false,
+          "joint_physical_and_timely_report": true,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903736233711243,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": "GetToy",
+          "requested_timely_latest_reports": 1,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "timely_latest",
+              "lesson": "GetToy",
+              "step": 1,
+              "tokens": [
+                9,
+                2
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 1,
+          "timely_recent_reports": 1,
+          "toy_acquired": true,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": null,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            1
+          ],
+          "first_taught_phrase": null,
+          "food_acquired": false,
+          "joint_physical_and_timely_report": false,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903826832771301,
+          "minimum_health": 1.0,
+          "other_utterances": 1,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": null,
+          "requested_timely_latest_reports": 0,
+          "silent_episode_utterances": 1,
+          "spoken": [
+            {
+              "classification": "other",
+              "lesson": null,
+              "step": 1,
+              "tokens": [
+                40,
+                3
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 0,
+          "timely_latest_reports": 0,
+          "timely_recent_reports": 0,
+          "toy_acquired": true,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        }
+      ],
+      "fresh_recovery_checkpoints": 8,
+      "metrics": {
+        "all_survive": true,
+        "concurrent_unobserved": 0,
+        "first_phrase_noun_distinction": true,
+        "first_phrase_verb_distinction": true,
+        "joint_noun_pair": false,
+        "joint_verb_pair": false,
+        "maximum_injury": 0.0,
+        "maximum_pain": 0.0,
+        "meals": 2,
+        "minimum_energy": 0.7903736233711243,
+        "minimum_health": 1.0,
+        "other_utterances": 1,
+        "partial_taught_declarations": 0,
+        "physical_noun_pair": true,
+        "physical_verb_pair": false,
+        "premature_observed_prefix": 0,
+        "requested_timely_latest_reports": 2,
+        "silent_episode_utterances": 1,
+        "stale_true_history": 0,
+        "taught_declarations": 3,
+        "timely_latest_reports": 2,
+        "timely_recent_reports": 3,
+        "utterances": 4,
+        "wrong_taught_activity_strings": 0
+      },
+      "optimizer_step": 440,
+      "post_sleep": true,
+      "seed": 23110769,
+      "seen_retention": false,
+      "sleep_consolidations": 1,
+      "sleep_world_ticks": 13
+    },
+    {
+      "arm": "Balanced4",
+      "case": 2,
+      "episodes": [
+        {
+          "all_survive": true,
+          "command_appropriate_physical": false,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            null
+          ],
+          "first_taught_phrase": "EatFood",
+          "food_acquired": false,
+          "joint_physical_and_timely_report": false,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903857231140137,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 1,
+          "requested": "EatFood",
+          "requested_timely_latest_reports": 0,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "premature_observed_prefix",
+              "lesson": "EatFood",
+              "step": 1,
+              "tokens": [
+                8,
+                1
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 0,
+          "timely_recent_reports": 0,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            1,
+            null
+          ],
+          "first_taught_phrase": "GetFood",
+          "food_acquired": true,
+          "joint_physical_and_timely_report": false,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903948426246643,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 1,
+          "requested": "GetFood",
+          "requested_timely_latest_reports": 0,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "premature_observed_prefix",
+              "lesson": "GetFood",
+              "step": 1,
+              "tokens": [
+                9,
+                1
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 0,
+          "timely_recent_reports": 0,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": false,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            1,
+            null
+          ],
+          "first_taught_phrase": "GetToy",
+          "food_acquired": true,
+          "joint_physical_and_timely_report": false,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903719544410706,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 1,
+          "requested": "GetToy",
+          "requested_timely_latest_reports": 0,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "premature_observed_prefix",
+              "lesson": "GetToy",
+              "step": 4,
+              "tokens": [
+                9,
+                2
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 0,
+          "timely_recent_reports": 0,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": null,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            null
+          ],
+          "first_taught_phrase": null,
+          "food_acquired": false,
+          "joint_physical_and_timely_report": false,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903947830200195,
+          "minimum_health": 1.0,
+          "other_utterances": 1,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": null,
+          "requested_timely_latest_reports": 0,
+          "silent_episode_utterances": 1,
+          "spoken": [
+            {
+              "classification": "other",
+              "lesson": null,
+              "step": 1,
+              "tokens": [
+                40,
+                2
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 0,
+          "timely_latest_reports": 0,
+          "timely_recent_reports": 0,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        }
+      ],
+      "fresh_recovery_checkpoints": 8,
+      "metrics": {
+        "all_survive": true,
+        "concurrent_unobserved": 0,
+        "first_phrase_noun_distinction": true,
+        "first_phrase_verb_distinction": true,
+        "joint_noun_pair": false,
+        "joint_verb_pair": false,
+        "maximum_injury": 0.0,
+        "maximum_pain": 0.0,
+        "meals": 0,
+        "minimum_energy": 0.7903719544410706,
+        "minimum_health": 1.0,
+        "other_utterances": 1,
+        "partial_taught_declarations": 0,
+        "physical_noun_pair": false,
+        "physical_verb_pair": false,
+        "premature_observed_prefix": 3,
+        "requested_timely_latest_reports": 0,
+        "silent_episode_utterances": 1,
+        "stale_true_history": 0,
+        "taught_declarations": 3,
+        "timely_latest_reports": 0,
+        "timely_recent_reports": 0,
+        "utterances": 4,
+        "wrong_taught_activity_strings": 0
+      },
+      "optimizer_step": 440,
+      "post_sleep": false,
+      "seed": 23311891,
+      "seen_retention": false,
+      "sleep_consolidations": 0,
+      "sleep_world_ticks": 0
+    },
+    {
+      "arm": "Balanced4",
+      "case": 2,
+      "episodes": [
+        {
+          "all_survive": true,
+          "command_appropriate_physical": false,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            null
+          ],
+          "first_taught_phrase": "EatFood",
+          "food_acquired": false,
+          "joint_physical_and_timely_report": false,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903825640678406,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 1,
+          "requested": "EatFood",
+          "requested_timely_latest_reports": 0,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "premature_observed_prefix",
+              "lesson": "EatFood",
+              "step": 1,
+              "tokens": [
+                8,
+                1
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 0,
+          "timely_recent_reports": 0,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            1,
+            null
+          ],
+          "first_taught_phrase": "GetFood",
+          "food_acquired": true,
+          "joint_physical_and_timely_report": false,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903916239738464,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 1,
+          "requested": "GetFood",
+          "requested_timely_latest_reports": 0,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "premature_observed_prefix",
+              "lesson": "GetFood",
+              "step": 1,
+              "tokens": [
+                9,
+                1
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 0,
+          "timely_recent_reports": 0,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": false,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            1,
+            null
+          ],
+          "first_taught_phrase": "GetToy",
+          "food_acquired": true,
+          "joint_physical_and_timely_report": false,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903687953948975,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 1,
+          "requested": "GetToy",
+          "requested_timely_latest_reports": 0,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "premature_observed_prefix",
+              "lesson": "GetToy",
+              "step": 4,
+              "tokens": [
+                9,
+                2
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 0,
+          "timely_recent_reports": 0,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": null,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            null
+          ],
+          "first_taught_phrase": null,
+          "food_acquired": false,
+          "joint_physical_and_timely_report": false,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903916835784912,
+          "minimum_health": 1.0,
+          "other_utterances": 1,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": null,
+          "requested_timely_latest_reports": 0,
+          "silent_episode_utterances": 1,
+          "spoken": [
+            {
+              "classification": "other",
+              "lesson": null,
+              "step": 1,
+              "tokens": [
+                40,
+                2
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 0,
+          "timely_latest_reports": 0,
+          "timely_recent_reports": 0,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        }
+      ],
+      "fresh_recovery_checkpoints": 8,
+      "metrics": {
+        "all_survive": true,
+        "concurrent_unobserved": 0,
+        "first_phrase_noun_distinction": true,
+        "first_phrase_verb_distinction": true,
+        "joint_noun_pair": false,
+        "joint_verb_pair": false,
+        "maximum_injury": 0.0,
+        "maximum_pain": 0.0,
+        "meals": 0,
+        "minimum_energy": 0.7903687953948975,
+        "minimum_health": 1.0,
+        "other_utterances": 1,
+        "partial_taught_declarations": 0,
+        "physical_noun_pair": false,
+        "physical_verb_pair": false,
+        "premature_observed_prefix": 3,
+        "requested_timely_latest_reports": 0,
+        "silent_episode_utterances": 1,
+        "stale_true_history": 0,
+        "taught_declarations": 3,
+        "timely_latest_reports": 0,
+        "timely_recent_reports": 0,
+        "utterances": 4,
+        "wrong_taught_activity_strings": 0
+      },
+      "optimizer_step": 440,
+      "post_sleep": true,
+      "seed": 23311891,
+      "seen_retention": false,
+      "sleep_consolidations": 1,
+      "sleep_world_ticks": 13
+    },
+    {
+      "arm": "MatchedFactual4",
+      "case": 2,
+      "episodes": [
+        {
+          "all_survive": true,
+          "command_appropriate_physical": false,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            null
+          ],
+          "first_taught_phrase": "EatFood",
+          "food_acquired": false,
+          "joint_physical_and_timely_report": false,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903857231140137,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 1,
+          "requested": "EatFood",
+          "requested_timely_latest_reports": 0,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "premature_observed_prefix",
+              "lesson": "EatFood",
+              "step": 1,
+              "tokens": [
+                8,
+                1
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 0,
+          "timely_recent_reports": 0,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            1,
+            null
+          ],
+          "first_taught_phrase": "GetFood",
+          "food_acquired": true,
+          "joint_physical_and_timely_report": false,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903948426246643,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 1,
+          "requested": "GetFood",
+          "requested_timely_latest_reports": 0,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "premature_observed_prefix",
+              "lesson": "GetFood",
+              "step": 1,
+              "tokens": [
+                9,
+                1
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 0,
+          "timely_recent_reports": 0,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": false,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            1,
+            null
+          ],
+          "first_taught_phrase": "GetToy",
+          "food_acquired": true,
+          "joint_physical_and_timely_report": false,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903719544410706,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 1,
+          "requested": "GetToy",
+          "requested_timely_latest_reports": 0,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "premature_observed_prefix",
+              "lesson": "GetToy",
+              "step": 4,
+              "tokens": [
+                9,
+                2
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 0,
+          "timely_recent_reports": 0,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": null,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            null
+          ],
+          "first_taught_phrase": null,
+          "food_acquired": false,
+          "joint_physical_and_timely_report": false,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903947830200195,
+          "minimum_health": 1.0,
+          "other_utterances": 1,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": null,
+          "requested_timely_latest_reports": 0,
+          "silent_episode_utterances": 1,
+          "spoken": [
+            {
+              "classification": "other",
+              "lesson": null,
+              "step": 1,
+              "tokens": [
+                40,
+                2
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 0,
+          "timely_latest_reports": 0,
+          "timely_recent_reports": 0,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        }
+      ],
+      "fresh_recovery_checkpoints": 8,
+      "metrics": {
+        "all_survive": true,
+        "concurrent_unobserved": 0,
+        "first_phrase_noun_distinction": true,
+        "first_phrase_verb_distinction": true,
+        "joint_noun_pair": false,
+        "joint_verb_pair": false,
+        "maximum_injury": 0.0,
+        "maximum_pain": 0.0,
+        "meals": 0,
+        "minimum_energy": 0.7903719544410706,
+        "minimum_health": 1.0,
+        "other_utterances": 1,
+        "partial_taught_declarations": 0,
+        "physical_noun_pair": false,
+        "physical_verb_pair": false,
+        "premature_observed_prefix": 3,
+        "requested_timely_latest_reports": 0,
+        "silent_episode_utterances": 1,
+        "stale_true_history": 0,
+        "taught_declarations": 3,
+        "timely_latest_reports": 0,
+        "timely_recent_reports": 0,
+        "utterances": 4,
+        "wrong_taught_activity_strings": 0
+      },
+      "optimizer_step": 440,
+      "post_sleep": false,
+      "seed": 23311891,
+      "seen_retention": false,
+      "sleep_consolidations": 0,
+      "sleep_world_ticks": 0
+    },
+    {
+      "arm": "MatchedFactual4",
+      "case": 2,
+      "episodes": [
+        {
+          "all_survive": true,
+          "command_appropriate_physical": false,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            null
+          ],
+          "first_taught_phrase": "EatFood",
+          "food_acquired": false,
+          "joint_physical_and_timely_report": false,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903825640678406,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 1,
+          "requested": "EatFood",
+          "requested_timely_latest_reports": 0,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "premature_observed_prefix",
+              "lesson": "EatFood",
+              "step": 1,
+              "tokens": [
+                8,
+                1
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 0,
+          "timely_recent_reports": 0,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            1,
+            null
+          ],
+          "first_taught_phrase": "GetFood",
+          "food_acquired": true,
+          "joint_physical_and_timely_report": false,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903916239738464,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 1,
+          "requested": "GetFood",
+          "requested_timely_latest_reports": 0,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "premature_observed_prefix",
+              "lesson": "GetFood",
+              "step": 1,
+              "tokens": [
+                9,
+                1
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 0,
+          "timely_recent_reports": 0,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": false,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            1,
+            null
+          ],
+          "first_taught_phrase": "GetToy",
+          "food_acquired": true,
+          "joint_physical_and_timely_report": false,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903687953948975,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 1,
+          "requested": "GetToy",
+          "requested_timely_latest_reports": 0,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "premature_observed_prefix",
+              "lesson": "GetToy",
+              "step": 4,
+              "tokens": [
+                9,
+                2
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 0,
+          "timely_recent_reports": 0,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": null,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            null
+          ],
+          "first_taught_phrase": null,
+          "food_acquired": false,
+          "joint_physical_and_timely_report": false,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903916835784912,
+          "minimum_health": 1.0,
+          "other_utterances": 1,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": null,
+          "requested_timely_latest_reports": 0,
+          "silent_episode_utterances": 1,
+          "spoken": [
+            {
+              "classification": "other",
+              "lesson": null,
+              "step": 1,
+              "tokens": [
+                40,
+                2
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 0,
+          "timely_latest_reports": 0,
+          "timely_recent_reports": 0,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        }
+      ],
+      "fresh_recovery_checkpoints": 8,
+      "metrics": {
+        "all_survive": true,
+        "concurrent_unobserved": 0,
+        "first_phrase_noun_distinction": true,
+        "first_phrase_verb_distinction": true,
+        "joint_noun_pair": false,
+        "joint_verb_pair": false,
+        "maximum_injury": 0.0,
+        "maximum_pain": 0.0,
+        "meals": 0,
+        "minimum_energy": 0.7903687953948975,
+        "minimum_health": 1.0,
+        "other_utterances": 1,
+        "partial_taught_declarations": 0,
+        "physical_noun_pair": false,
+        "physical_verb_pair": false,
+        "premature_observed_prefix": 3,
+        "requested_timely_latest_reports": 0,
+        "silent_episode_utterances": 1,
+        "stale_true_history": 0,
+        "taught_declarations": 3,
+        "timely_latest_reports": 0,
+        "timely_recent_reports": 0,
+        "utterances": 4,
+        "wrong_taught_activity_strings": 0
+      },
+      "optimizer_step": 440,
+      "post_sleep": true,
+      "seed": 23311891,
+      "seen_retention": false,
+      "sleep_consolidations": 1,
+      "sleep_world_ticks": 13
+    },
+    {
+      "arm": "Untouched",
+      "case": 2,
+      "episodes": [
+        {
+          "all_survive": true,
+          "command_appropriate_physical": false,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            null
+          ],
+          "first_taught_phrase": "EatFood",
+          "food_acquired": false,
+          "joint_physical_and_timely_report": false,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903857231140137,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 1,
+          "requested": "EatFood",
+          "requested_timely_latest_reports": 0,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "premature_observed_prefix",
+              "lesson": "EatFood",
+              "step": 1,
+              "tokens": [
+                8,
+                1
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 0,
+          "timely_recent_reports": 0,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            1,
+            null
+          ],
+          "first_taught_phrase": "GetFood",
+          "food_acquired": true,
+          "joint_physical_and_timely_report": false,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903948426246643,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 1,
+          "requested": "GetFood",
+          "requested_timely_latest_reports": 0,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "premature_observed_prefix",
+              "lesson": "GetFood",
+              "step": 1,
+              "tokens": [
+                9,
+                1
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 0,
+          "timely_recent_reports": 0,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": false,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            1,
+            null
+          ],
+          "first_taught_phrase": "GetToy",
+          "food_acquired": true,
+          "joint_physical_and_timely_report": false,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903719544410706,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 1,
+          "requested": "GetToy",
+          "requested_timely_latest_reports": 0,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "premature_observed_prefix",
+              "lesson": "GetToy",
+              "step": 4,
+              "tokens": [
+                9,
+                2
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 0,
+          "timely_recent_reports": 0,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": null,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            null
+          ],
+          "first_taught_phrase": null,
+          "food_acquired": false,
+          "joint_physical_and_timely_report": false,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903947830200195,
+          "minimum_health": 1.0,
+          "other_utterances": 1,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": null,
+          "requested_timely_latest_reports": 0,
+          "silent_episode_utterances": 1,
+          "spoken": [
+            {
+              "classification": "other",
+              "lesson": null,
+              "step": 1,
+              "tokens": [
+                40,
+                2
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 0,
+          "timely_latest_reports": 0,
+          "timely_recent_reports": 0,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        }
+      ],
+      "fresh_recovery_checkpoints": 8,
+      "metrics": {
+        "all_survive": true,
+        "concurrent_unobserved": 0,
+        "first_phrase_noun_distinction": true,
+        "first_phrase_verb_distinction": true,
+        "joint_noun_pair": false,
+        "joint_verb_pair": false,
+        "maximum_injury": 0.0,
+        "maximum_pain": 0.0,
+        "meals": 0,
+        "minimum_energy": 0.7903719544410706,
+        "minimum_health": 1.0,
+        "other_utterances": 1,
+        "partial_taught_declarations": 0,
+        "physical_noun_pair": false,
+        "physical_verb_pair": false,
+        "premature_observed_prefix": 3,
+        "requested_timely_latest_reports": 0,
+        "silent_episode_utterances": 1,
+        "stale_true_history": 0,
+        "taught_declarations": 3,
+        "timely_latest_reports": 0,
+        "timely_recent_reports": 0,
+        "utterances": 4,
+        "wrong_taught_activity_strings": 0
+      },
+      "optimizer_step": 436,
+      "post_sleep": false,
+      "seed": 23311891,
+      "seen_retention": false,
+      "sleep_consolidations": 0,
+      "sleep_world_ticks": 0
+    },
+    {
+      "arm": "Untouched",
+      "case": 2,
+      "episodes": [
+        {
+          "all_survive": true,
+          "command_appropriate_physical": false,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            null
+          ],
+          "first_taught_phrase": "EatFood",
+          "food_acquired": false,
+          "joint_physical_and_timely_report": false,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903825640678406,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 1,
+          "requested": "EatFood",
+          "requested_timely_latest_reports": 0,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "premature_observed_prefix",
+              "lesson": "EatFood",
+              "step": 1,
+              "tokens": [
+                8,
+                1
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 0,
+          "timely_recent_reports": 0,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            1,
+            null
+          ],
+          "first_taught_phrase": "GetFood",
+          "food_acquired": true,
+          "joint_physical_and_timely_report": false,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903916239738464,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 1,
+          "requested": "GetFood",
+          "requested_timely_latest_reports": 0,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "premature_observed_prefix",
+              "lesson": "GetFood",
+              "step": 1,
+              "tokens": [
+                9,
+                1
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 0,
+          "timely_recent_reports": 0,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": false,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            1,
+            null
+          ],
+          "first_taught_phrase": "GetToy",
+          "food_acquired": true,
+          "joint_physical_and_timely_report": false,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903687953948975,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 1,
+          "requested": "GetToy",
+          "requested_timely_latest_reports": 0,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "premature_observed_prefix",
+              "lesson": "GetToy",
+              "step": 4,
+              "tokens": [
+                9,
+                2
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 0,
+          "timely_recent_reports": 0,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": null,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            null
+          ],
+          "first_taught_phrase": null,
+          "food_acquired": false,
+          "joint_physical_and_timely_report": false,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903916835784912,
+          "minimum_health": 1.0,
+          "other_utterances": 1,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": null,
+          "requested_timely_latest_reports": 0,
+          "silent_episode_utterances": 1,
+          "spoken": [
+            {
+              "classification": "other",
+              "lesson": null,
+              "step": 1,
+              "tokens": [
+                40,
+                2
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 0,
+          "timely_latest_reports": 0,
+          "timely_recent_reports": 0,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        }
+      ],
+      "fresh_recovery_checkpoints": 8,
+      "metrics": {
+        "all_survive": true,
+        "concurrent_unobserved": 0,
+        "first_phrase_noun_distinction": true,
+        "first_phrase_verb_distinction": true,
+        "joint_noun_pair": false,
+        "joint_verb_pair": false,
+        "maximum_injury": 0.0,
+        "maximum_pain": 0.0,
+        "meals": 0,
+        "minimum_energy": 0.7903687953948975,
+        "minimum_health": 1.0,
+        "other_utterances": 1,
+        "partial_taught_declarations": 0,
+        "physical_noun_pair": false,
+        "physical_verb_pair": false,
+        "premature_observed_prefix": 3,
+        "requested_timely_latest_reports": 0,
+        "silent_episode_utterances": 1,
+        "stale_true_history": 0,
+        "taught_declarations": 3,
+        "timely_latest_reports": 0,
+        "timely_recent_reports": 0,
+        "utterances": 4,
+        "wrong_taught_activity_strings": 0
+      },
+      "optimizer_step": 436,
+      "post_sleep": true,
+      "seed": 23311891,
+      "seen_retention": false,
+      "sleep_consolidations": 1,
+      "sleep_world_ticks": 13
+    },
+    {
+      "arm": "ZeroGradient4",
+      "case": 2,
+      "episodes": [
+        {
+          "all_survive": true,
+          "command_appropriate_physical": false,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            null
+          ],
+          "first_taught_phrase": "EatFood",
+          "food_acquired": false,
+          "joint_physical_and_timely_report": false,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903857231140137,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 1,
+          "requested": "EatFood",
+          "requested_timely_latest_reports": 0,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "premature_observed_prefix",
+              "lesson": "EatFood",
+              "step": 1,
+              "tokens": [
+                8,
+                1
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 0,
+          "timely_recent_reports": 0,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            1,
+            null
+          ],
+          "first_taught_phrase": "GetFood",
+          "food_acquired": true,
+          "joint_physical_and_timely_report": false,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903948426246643,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 1,
+          "requested": "GetFood",
+          "requested_timely_latest_reports": 0,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "premature_observed_prefix",
+              "lesson": "GetFood",
+              "step": 1,
+              "tokens": [
+                9,
+                1
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 0,
+          "timely_recent_reports": 0,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": false,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            1,
+            null
+          ],
+          "first_taught_phrase": "GetToy",
+          "food_acquired": true,
+          "joint_physical_and_timely_report": false,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903719544410706,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 1,
+          "requested": "GetToy",
+          "requested_timely_latest_reports": 0,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "premature_observed_prefix",
+              "lesson": "GetToy",
+              "step": 4,
+              "tokens": [
+                9,
+                2
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 0,
+          "timely_recent_reports": 0,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": null,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            null
+          ],
+          "first_taught_phrase": null,
+          "food_acquired": false,
+          "joint_physical_and_timely_report": false,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903947830200195,
+          "minimum_health": 1.0,
+          "other_utterances": 1,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": null,
+          "requested_timely_latest_reports": 0,
+          "silent_episode_utterances": 1,
+          "spoken": [
+            {
+              "classification": "other",
+              "lesson": null,
+              "step": 1,
+              "tokens": [
+                40,
+                2
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 0,
+          "timely_latest_reports": 0,
+          "timely_recent_reports": 0,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        }
+      ],
+      "fresh_recovery_checkpoints": 8,
+      "metrics": {
+        "all_survive": true,
+        "concurrent_unobserved": 0,
+        "first_phrase_noun_distinction": true,
+        "first_phrase_verb_distinction": true,
+        "joint_noun_pair": false,
+        "joint_verb_pair": false,
+        "maximum_injury": 0.0,
+        "maximum_pain": 0.0,
+        "meals": 0,
+        "minimum_energy": 0.7903719544410706,
+        "minimum_health": 1.0,
+        "other_utterances": 1,
+        "partial_taught_declarations": 0,
+        "physical_noun_pair": false,
+        "physical_verb_pair": false,
+        "premature_observed_prefix": 3,
+        "requested_timely_latest_reports": 0,
+        "silent_episode_utterances": 1,
+        "stale_true_history": 0,
+        "taught_declarations": 3,
+        "timely_latest_reports": 0,
+        "timely_recent_reports": 0,
+        "utterances": 4,
+        "wrong_taught_activity_strings": 0
+      },
+      "optimizer_step": 440,
+      "post_sleep": false,
+      "seed": 23311891,
+      "seen_retention": false,
+      "sleep_consolidations": 0,
+      "sleep_world_ticks": 0
+    },
+    {
+      "arm": "ZeroGradient4",
+      "case": 2,
+      "episodes": [
+        {
+          "all_survive": true,
+          "command_appropriate_physical": false,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            null
+          ],
+          "first_taught_phrase": "EatFood",
+          "food_acquired": false,
+          "joint_physical_and_timely_report": false,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903825640678406,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 1,
+          "requested": "EatFood",
+          "requested_timely_latest_reports": 0,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "premature_observed_prefix",
+              "lesson": "EatFood",
+              "step": 1,
+              "tokens": [
+                8,
+                1
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 0,
+          "timely_recent_reports": 0,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": true,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            1,
+            null
+          ],
+          "first_taught_phrase": "GetFood",
+          "food_acquired": true,
+          "joint_physical_and_timely_report": false,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903916239738464,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 1,
+          "requested": "GetFood",
+          "requested_timely_latest_reports": 0,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "premature_observed_prefix",
+              "lesson": "GetFood",
+              "step": 1,
+              "tokens": [
+                9,
+                1
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 0,
+          "timely_recent_reports": 0,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": false,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            1,
+            null
+          ],
+          "first_taught_phrase": "GetToy",
+          "food_acquired": true,
+          "joint_physical_and_timely_report": false,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903687953948975,
+          "minimum_health": 1.0,
+          "other_utterances": 0,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 1,
+          "requested": "GetToy",
+          "requested_timely_latest_reports": 0,
+          "silent_episode_utterances": 0,
+          "spoken": [
+            {
+              "classification": "premature_observed_prefix",
+              "lesson": "GetToy",
+              "step": 4,
+              "tokens": [
+                9,
+                2
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 1,
+          "timely_latest_reports": 0,
+          "timely_recent_reports": 0,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        },
+        {
+          "all_survive": true,
+          "command_appropriate_physical": null,
+          "concurrent_unobserved": 0,
+          "final_owned": [
+            null,
+            null
+          ],
+          "first_taught_phrase": null,
+          "food_acquired": false,
+          "joint_physical_and_timely_report": false,
+          "maximum_injury": 0.0,
+          "maximum_pain": 0.0,
+          "meals": 0,
+          "minimum_energy": 0.7903916835784912,
+          "minimum_health": 1.0,
+          "other_utterances": 1,
+          "partial_taught_declarations": 0,
+          "premature_observed_prefix": 0,
+          "requested": null,
+          "requested_timely_latest_reports": 0,
+          "silent_episode_utterances": 1,
+          "spoken": [
+            {
+              "classification": "other",
+              "lesson": null,
+              "step": 1,
+              "tokens": [
+                40,
+                2
+              ]
+            }
+          ],
+          "stale_true_history": 0,
+          "taught_declarations": 0,
+          "timely_latest_reports": 0,
+          "timely_recent_reports": 0,
+          "toy_acquired": false,
+          "utterances": 1,
+          "wrong_taught_activity_strings": 0
+        }
+      ],
+      "fresh_recovery_checkpoints": 8,
+      "metrics": {
+        "all_survive": true,
+        "concurrent_unobserved": 0,
+        "first_phrase_noun_distinction": true,
+        "first_phrase_verb_distinction": true,
+        "joint_noun_pair": false,
+        "joint_verb_pair": false,
+        "maximum_injury": 0.0,
+        "maximum_pain": 0.0,
+        "meals": 0,
+        "minimum_energy": 0.7903687953948975,
+        "minimum_health": 1.0,
+        "other_utterances": 1,
+        "partial_taught_declarations": 0,
+        "physical_noun_pair": false,
+        "physical_verb_pair": false,
+        "premature_observed_prefix": 3,
+        "requested_timely_latest_reports": 0,
+        "silent_episode_utterances": 1,
+        "stale_true_history": 0,
+        "taught_declarations": 3,
+        "timely_latest_reports": 0,
+        "timely_recent_reports": 0,
+        "utterances": 4,
+        "wrong_taught_activity_strings": 0
+      },
+      "optimizer_step": 440,
+      "post_sleep": true,
+      "seed": 23311891,
+      "seen_retention": false,
+      "sleep_consolidations": 1,
+      "sleep_world_ticks": 13
+    }
+  ],
+  "promotion": false,
+  "protected_original_files_byte_exact": 762,
+  "receipt_bytes": 290370679,
+  "seed_exclusions": {
+    "all_candidates_absent": true,
+    "compressed_streams": 258,
+    "files": 793,
+    "issue2_current_reservations_also_checked": true,
+    "raw_bytes": 42990818376,
+    "unique_explicit_values": 259
+  },
+  "seen_positive_seed": 10309219,
+  "setup": {
+    "cases": [
+      {
+        "awake_preparation_decisions": 2,
+        "biological_ticks": 456,
+        "case": 0,
+        "common_sha256": "a991171a32aa1a0c8125d8fdf99e49ee81b645eb0fae71a4a6a37167a3116c3e",
+        "seed": 10309219,
+        "seen": true
+      },
+      {
+        "awake_preparation_decisions": 2,
+        "biological_ticks": 456,
+        "case": 1,
+        "common_sha256": "e1f7604ff176c67527739ac9c03d97d453671e1001df408c5ce8a4d7af9f7803",
+        "seed": 23110769,
+        "seen": false
+      },
+      {
+        "awake_preparation_decisions": 2,
+        "biological_ticks": 456,
+        "case": 2,
+        "common_sha256": "1659a45bf18782efd606d375223c67ab9e70a0ed4dee0dc9f005d4cfae6497d8",
+        "seed": 23311891,
+        "seen": false
+      }
+    ],
+    "source_actor_exact": true,
+    "total_awake_preparation_decisions": 6
+  },
+  "supervision_effect_vs_momentum": {
+    "actual_target_specific_difference": true,
+    "first_moment_l2_versus_zero_gradient_control": 0.34388857328396555,
+    "gate_weights_l2_from_source": 0.0729793278020304,
+    "gate_weights_l2_versus_matched_zero_gradient_control": 0.07321776314745988
+  },
+  "trace_receipts": [
+    {
+      "file": "phase-0-Balanced4-false-scored.jsonl.zst",
+      "full_native_rows": 24,
+      "sha256": "f0b0a4d74ceb66a19512e73304c09942a188dcca7be749a7467e4df12f2a598c"
+    },
+    {
+      "file": "phase-0-Balanced4-true-scored.jsonl.zst",
+      "full_native_rows": 24,
+      "sha256": "01ff0d2adb2b93b2f0fb7a50cf88b13b8c63ac10e9615f3a9ba1aef1349c08d6"
+    },
+    {
+      "file": "phase-0-MatchedFactual4-false-scored.jsonl.zst",
+      "full_native_rows": 24,
+      "sha256": "80ee85a78d035506ba6d981e801f2a0b724073c2b7dbaf4abea020d6b3750871"
+    },
+    {
+      "file": "phase-0-MatchedFactual4-true-scored.jsonl.zst",
+      "full_native_rows": 24,
+      "sha256": "d8303d4949891f65f39bfbf6fb501888a0d11900a3a31699d196f77ea4467cd8"
+    },
+    {
+      "file": "phase-0-Untouched-false-scored.jsonl.zst",
+      "full_native_rows": 24,
+      "sha256": "0f7690e40a93ed7a067f138dec264b9672d81d786a6d0a0eb20ec7cad0a356c9"
+    },
+    {
+      "file": "phase-0-Untouched-true-scored.jsonl.zst",
+      "full_native_rows": 24,
+      "sha256": "b898d5f762764f88ddd99c9d4acad2044a5adf2eb7e42cf6a998af4fca214859"
+    },
+    {
+      "file": "phase-0-ZeroGradient4-false-scored.jsonl.zst",
+      "full_native_rows": 24,
+      "sha256": "6c4c31835a379c924be2ae66c9c3b4b653b2babf875eb83a7f90a25771e2c215"
+    },
+    {
+      "file": "phase-0-ZeroGradient4-true-scored.jsonl.zst",
+      "full_native_rows": 24,
+      "sha256": "ba88b9e055ac71b424517026132f6db966ff21c222ad5957c2f7ba702cef54fa"
+    },
+    {
+      "file": "phase-1-Balanced4-false-scored.jsonl.zst",
+      "full_native_rows": 32,
+      "sha256": "c579d7442e765f8665e2493624f80d10bc2ff96450ceee1793075bded581ab64"
+    },
+    {
+      "file": "phase-1-Balanced4-true-scored.jsonl.zst",
+      "full_native_rows": 32,
+      "sha256": "fb6a634f4cbb3f5d8cc2e402416d4b4a0250da85f9e4d2fd450a36cbf7190da6"
+    },
+    {
+      "file": "phase-1-MatchedFactual4-false-scored.jsonl.zst",
+      "full_native_rows": 32,
+      "sha256": "21e6cca6870a7c26c13d201b83572536c1904ee85a726fe3e1c29d4eef431b58"
+    },
+    {
+      "file": "phase-1-MatchedFactual4-true-scored.jsonl.zst",
+      "full_native_rows": 32,
+      "sha256": "d09f77a6a87780f359b17bb9ca35e8b29092e7d073c715c2bab517761e050780"
+    },
+    {
+      "file": "phase-1-Untouched-false-scored.jsonl.zst",
+      "full_native_rows": 32,
+      "sha256": "56b53bced3231630cf21df65309d5fe40400e85613d8e11dfbe1bce88127da30"
+    },
+    {
+      "file": "phase-1-Untouched-true-scored.jsonl.zst",
+      "full_native_rows": 32,
+      "sha256": "6bbd7b4650a9a3dd308022c451a82210fe3ca93e70016ac96e975410c6402819"
+    },
+    {
+      "file": "phase-1-ZeroGradient4-false-scored.jsonl.zst",
+      "full_native_rows": 32,
+      "sha256": "c8c2b4cfa2f0886359387b57a6e4b4faaab5198215e4a546c612cf826fb2489f"
+    },
+    {
+      "file": "phase-1-ZeroGradient4-true-scored.jsonl.zst",
+      "full_native_rows": 32,
+      "sha256": "55c167405fbafd957ab381e48b1c89b68acdd979c4083007ee77951d1d147c82"
+    },
+    {
+      "file": "phase-2-Balanced4-false-scored.jsonl.zst",
+      "full_native_rows": 32,
+      "sha256": "93b69031d253d59777cd6f1f362e061fc14eb6a71c754eb75551c89de50e2487"
+    },
+    {
+      "file": "phase-2-Balanced4-true-scored.jsonl.zst",
+      "full_native_rows": 32,
+      "sha256": "d26738874b46b8034c38a78277cfdb89f6f45249d9968d73631b48cc026c7cd8"
+    },
+    {
+      "file": "phase-2-MatchedFactual4-false-scored.jsonl.zst",
+      "full_native_rows": 32,
+      "sha256": "e177ce581ce56f1086e17d5cad898b8e0e01ed5de141b173948dfa768dc8f482"
+    },
+    {
+      "file": "phase-2-MatchedFactual4-true-scored.jsonl.zst",
+      "full_native_rows": 32,
+      "sha256": "409ff626c49831ea3f63c462cebf919822b88123e5061df177061d9c22f84b03"
+    },
+    {
+      "file": "phase-2-Untouched-false-scored.jsonl.zst",
+      "full_native_rows": 32,
+      "sha256": "5b7579074b62931cde5c00d7e09b7f1d245cb43e514ca314731d000398abf065"
+    },
+    {
+      "file": "phase-2-Untouched-true-scored.jsonl.zst",
+      "full_native_rows": 32,
+      "sha256": "10aafaccdd02d5ba5da6183a7b63bc1739e6f929459375d30f102e9749882c2e"
+    },
+    {
+      "file": "phase-2-ZeroGradient4-false-scored.jsonl.zst",
+      "full_native_rows": 32,
+      "sha256": "b201bd1cee5fbc01d09993185e28742561927d4dd1c653220123603d8802cdec"
+    },
+    {
+      "file": "phase-2-ZeroGradient4-true-scored.jsonl.zst",
+      "full_native_rows": 32,
+      "sha256": "6fba5045799af07870a847e16cbde2d590fffe81f938e45c84c807761c276394"
+    }
+  ],
+  "training_after_fixed_four_updates": 0,
+  "updates": [
+    {
+      "all_frozen_weights_moments_integer_ages_bit_exact": true,
+      "changed_gate_weights": 64,
+      "epoch": 1,
+      "gate_delta_l2": 0.008852170833535716,
+      "optimizer_step": 437
+    },
+    {
+      "all_frozen_weights_moments_integer_ages_bit_exact": true,
+      "changed_gate_weights": 64,
+      "epoch": 2,
+      "gate_delta_l2": 0.015712225929772887,
+      "optimizer_step": 438
+    },
+    {
+      "all_frozen_weights_moments_integer_ages_bit_exact": true,
+      "changed_gate_weights": 64,
+      "epoch": 3,
+      "gate_delta_l2": 0.021773758737598185,
+      "optimizer_step": 439
+    },
+    {
+      "all_frozen_weights_moments_integer_ages_bit_exact": true,
+      "changed_gate_weights": 64,
+      "epoch": 4,
+      "gate_delta_l2": 0.02698579776111278,
+      "optimizer_step": 440
+    }
+  ]
+}
