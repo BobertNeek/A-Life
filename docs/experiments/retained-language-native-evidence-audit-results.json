@@ -1,0 +1,575 @@
+{
+  "kind": "read-only-native-outcome-to-speech-evidence-audit-v29",
+  "new_world_decisions": 0,
+  "new_neural_forwards_or_gradient_probes": 0,
+  "native_or_shadow_optimizer_updates": 0,
+  "external_model_calls": 0,
+  "holding_observations": [
+    {
+      "captured_row": 9,
+      "seed": 19508423,
+      "condition": "near_opportunity",
+      "offset": 0,
+      "tactile_holding": 0.0,
+      "owned_before": [
+        null,
+        null
+      ],
+      "owned_after": [
+        1,
+        null
+      ],
+      "encoded_neuron_1858": -0.6555541753768921,
+      "initial_neuron_1858": 0.2562769055366516,
+      "final_neuron_1858": -0.09220749139785767,
+      "raw_first_presence_stop": [
+        1.151099443435669,
+        -0.6905840039253235
+      ],
+      "actual_event": {
+        "lesson": "GetFood",
+        "patch_sha256": "8df96ea5120b7c4ce8d4035182d93d781b36cdfbe497a0b3a7d3e8b39880e787",
+        "tick": 458
+      },
+      "recent_support": null,
+      "label": "abstain_no_actual_matching_declare"
+    },
+    {
+      "captured_row": 10,
+      "seed": 19508423,
+      "condition": "near_opportunity",
+      "offset": 1,
+      "tactile_holding": 1.0,
+      "owned_before": [
+        1,
+        null
+      ],
+      "owned_after": [
+        1,
+        null
+      ],
+      "encoded_neuron_1858": -0.32140660285949707,
+      "initial_neuron_1858": -0.09220749139785767,
+      "final_neuron_1858": 0.38449859619140625,
+      "raw_first_presence_stop": [
+        1.5153783559799194,
+        -1.059136152267456
+      ],
+      "actual_event": null,
+      "recent_support": {
+        "lesson": "GetFood",
+        "patch_sha256": "8df96ea5120b7c4ce8d4035182d93d781b36cdfbe497a0b3a7d3e8b39880e787",
+        "tick": 458
+      },
+      "label": "supported_recent"
+    },
+    {
+      "captured_row": 13,
+      "seed": 19508423,
+      "condition": "far_opportunity",
+      "offset": 0,
+      "tactile_holding": 0.0,
+      "owned_before": [
+        null,
+        null
+      ],
+      "owned_after": [
+        null,
+        null
+      ],
+      "encoded_neuron_1858": -0.6555541753768921,
+      "initial_neuron_1858": 0.2562769055366516,
+      "final_neuron_1858": -0.09220749139785767,
+      "raw_first_presence_stop": [
+        1.1214008331298828,
+        -0.696518063545227
+      ],
+      "actual_event": null,
+      "recent_support": null,
+      "label": "abstain_no_actual_matching_declare"
+    },
+    {
+      "captured_row": 14,
+      "seed": 19508423,
+      "condition": "far_opportunity",
+      "offset": 1,
+      "tactile_holding": 0.0,
+      "owned_before": [
+        null,
+        null
+      ],
+      "owned_after": [
+        null,
+        null
+      ],
+      "encoded_neuron_1858": -0.732722818851471,
+      "initial_neuron_1858": -0.09220749139785767,
+      "final_neuron_1858": -0.02680128812789917,
+      "raw_first_presence_stop": [
+        1.395310640335083,
+        -0.9759396910667419
+      ],
+      "actual_event": null,
+      "recent_support": null,
+      "label": "unsupported_observed_prefix"
+    }
+  ],
+  "holding_receiving_neuron_original_gate_terms": [
+    {
+      "output": 16,
+      "synapse_index": 27728,
+      "source_neuron": 1858,
+      "base_weight": 0.16656824946403503,
+      "identical_private_offset": 0.0,
+      "effective_weight": 0.16656824946403503,
+      "near_native_term": 0.0640452578663826,
+      "far_native_term": -0.004464243538677692,
+      "term_difference": 0.06850950140506029,
+      "whole_gate_difference": 0.12006771564483643,
+      "interpretation": "Mixed holding/word/recurrent source-neuron term; not isolated holding causation."
+    },
+    {
+      "output": 17,
+      "synapse_index": 27729,
+      "source_neuron": 1858,
+      "base_weight": -0.06881249696016312,
+      "identical_private_offset": 0.0,
+      "effective_weight": -0.06881249696016312,
+      "near_native_term": -0.02645830810070038,
+      "far_native_term": 0.0018442635191604495,
+      "term_difference": -0.028302571619860828,
+      "whole_gate_difference": -0.08319646120071411,
+      "interpretation": "Mixed holding/word/recurrent source-neuron term; not isolated holding causation."
+    }
+  ],
+  "pickup_candidate_memory_retained": {
+    "source_sequence": 3,
+    "selected_action_id": 210,
+    "first_tick": 458,
+    "last_tick": 458,
+    "tracked_object_id": 275716693113804,
+    "target_latent": [
+      1.0520219802856445e-05,
+      6.705522537231445e-08,
+      0.0,
+      0.03686434030532837,
+      -6.854534149169922e-06,
+      1.0,
+      1.0,
+      0.37256133556365967
+    ],
+    "family_value": [
+      -5.257943121250719e-05,
+      1.0,
+      5.257943121250719e-05,
+      -0.00015980005264282227
+    ],
+    "same_complete_record_present_before_next_decision": true,
+    "exact_grip_transfer_or_action_phase_fields_in_candidate_record": []
+  },
+  "actual_candidate_recall_inputs": [
+    {
+      "row": 9,
+      "action_id": 400,
+      "target": null,
+      "target_memory_decoder_inputs": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "family_memory_decoder_inputs": [
+        -0.029720159247517586,
+        0.0,
+        0.029720159247517586,
+        -0.00015339009405579418
+      ]
+    },
+    {
+      "row": 9,
+      "action_id": 210,
+      "target": 1886,
+      "target_memory_decoder_inputs": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "family_memory_decoder_inputs": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "row": 10,
+      "action_id": 210,
+      "target": 1886,
+      "target_memory_decoder_inputs": [
+        8.350064490514342e-06,
+        5.3222791507323564e-08,
+        0.0,
+        0.029259808361530304,
+        -5.440551831270568e-06,
+        0.79371577501297,
+        0.79371577501297,
+        0.2957078218460083
+      ],
+      "family_memory_decoder_inputs": [
+        -4.449488187674433e-05,
+        0.8462412357330322,
+        4.449488187674433e-05,
+        -0.00013522939116228372
+      ]
+    },
+    {
+      "row": 10,
+      "action_id": 400,
+      "target": null,
+      "target_memory_decoder_inputs": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "family_memory_decoder_inputs": [
+        -0.02945040725171566,
+        0.0,
+        0.02945040725171566,
+        -0.00015199786867015064
+      ]
+    },
+    {
+      "row": 13,
+      "action_id": 400,
+      "target": null,
+      "target_memory_decoder_inputs": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "family_memory_decoder_inputs": [
+        -0.029755523428320885,
+        0.0,
+        0.029755523428320885,
+        -0.00015357260417658836
+      ]
+    },
+    {
+      "row": 13,
+      "action_id": 210,
+      "target": 1886,
+      "target_memory_decoder_inputs": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "family_memory_decoder_inputs": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "row": 14,
+      "action_id": 400,
+      "target": null,
+      "target_memory_decoder_inputs": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "family_memory_decoder_inputs": [
+        -0.029701577499508858,
+        0.0,
+        0.029701577499508858,
+        -0.00015329419693443924
+      ]
+    },
+    {
+      "row": 14,
+      "action_id": 210,
+      "target": 1886,
+      "target_memory_decoder_inputs": [
+        8.314291335409507e-06,
+        5.438126748913419e-08,
+        0.0,
+        -0.03498267009854317,
+        -5.413957296696026e-06,
+        0.8109922409057617,
+        0.0,
+        0.2965826094150543
+      ],
+      "family_memory_decoder_inputs": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    }
+  ],
+  "source_memory_decoder_nonzero_base_weights": 592,
+  "meal_and_delayed_label_observations": [
+    {
+      "offset": 0,
+      "tick": 458,
+      "selected_action_id": 210,
+      "physical_contact": "Touch",
+      "holding": 0.0,
+      "positive_taste": 0.0,
+      "negative_taste": 0.0,
+      "encoded_positive_taste_neuron_1861": -0.6739218235015869,
+      "encoded_negative_taste_neuron_1862": -0.6739218235015869,
+      "hunger": 0.4060361981391907,
+      "actual_event": {
+        "lesson": "GetFood",
+        "patch_sha256": "28bd75a23c1e329f4525ff45e3624d29db1f8d8c392211c670f28fad5dc046f7",
+        "tick": 458
+      },
+      "speech_teaching_target": null,
+      "actual_emitted": [],
+      "has_food_target_candidate": true
+    },
+    {
+      "offset": 1,
+      "tick": 459,
+      "selected_action_id": 210,
+      "physical_contact": "Consumed",
+      "holding": 1.0,
+      "positive_taste": 0.0,
+      "negative_taste": 0.0,
+      "encoded_positive_taste_neuron_1861": -0.754425585269928,
+      "encoded_negative_taste_neuron_1862": -0.754425585269928,
+      "hunger": 0.406046599149704,
+      "actual_event": {
+        "lesson": "EatFood",
+        "patch_sha256": "4b0160eb717bd287eaadfeee84babe48ea139f704a70f2851764bdbb6623aa6d",
+        "tick": 459
+      },
+      "speech_teaching_target": null,
+      "actual_emitted": [],
+      "has_food_target_candidate": true
+    },
+    {
+      "offset": 2,
+      "tick": 460,
+      "selected_action_id": 1,
+      "physical_contact": "None",
+      "holding": 0.0,
+      "positive_taste": 0.0,
+      "negative_taste": 0.8686210513114929,
+      "encoded_positive_taste_neuron_1861": -0.8357076644897461,
+      "encoded_negative_taste_neuron_1862": -0.43582582473754883,
+      "hunger": 0.11730802059173584,
+      "actual_event": null,
+      "speech_teaching_target": {
+        "act": "Declare",
+        "continuation": [
+          1,
+          0,
+          0,
+          0,
+          0
+        ],
+        "token": 8,
+        "weight": 1.0
+      },
+      "actual_emitted": [],
+      "has_food_target_candidate": false
+    },
+    {
+      "offset": 3,
+      "tick": 461,
+      "selected_action_id": 603,
+      "physical_contact": "None",
+      "holding": 0.0,
+      "positive_taste": 0.0,
+      "negative_taste": 0.0,
+      "encoded_positive_taste_neuron_1861": -0.8839088082313538,
+      "encoded_negative_taste_neuron_1862": -0.8839088082313538,
+      "hunger": 0.1251235455274582,
+      "actual_event": null,
+      "speech_teaching_target": {
+        "act": "Declare",
+        "continuation": [
+          1,
+          0,
+          0,
+          0,
+          0
+        ],
+        "token": 8,
+        "weight": 1.0
+      },
+      "actual_emitted": [],
+      "has_food_target_candidate": false
+    },
+    {
+      "offset": 4,
+      "tick": 462,
+      "selected_action_id": 400,
+      "physical_contact": "None",
+      "holding": 0.0,
+      "positive_taste": 0.0,
+      "negative_taste": 0.0,
+      "encoded_positive_taste_neuron_1861": -0.9079064130783081,
+      "encoded_negative_taste_neuron_1862": -0.9079064130783081,
+      "hunger": 0.13263168931007385,
+      "actual_event": null,
+      "speech_teaching_target": {
+        "act": "Declare",
+        "continuation": [
+          1,
+          0,
+          0,
+          0,
+          0
+        ],
+        "token": 8,
+        "weight": 1.0
+      },
+      "actual_emitted": [
+        {
+          "addressee": null,
+          "confidence": 0.5803921818733215,
+          "emitted_tick": 462,
+          "expires_after_tick": 463,
+          "source_kind": "Creature",
+          "source_position": {
+            "x": 3.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "speaker_id": 1,
+          "teacher_channel": null,
+          "tokens": [
+            8,
+            1
+          ],
+          "utterance_id": 4
+        }
+      ],
+      "has_food_target_candidate": false
+    }
+  ],
+  "input_sha256": {
+    "/workspace/language-gate-retention-v26-run/actor-Untouched.json.zst": "f8cf3f7a56b74e817078176ee7a3e2ca062117060a87bc0e7d6e20787aa38921",
+    "/workspace/language-within-seed-gate-v28-corrected-run/native-decision-09.json.zst": "cfa0fb09d05ef5f469a43f0c4c9e9a4314305b271f975da7da573a1766ec8fac",
+    "/workspace/language-within-seed-gate-v28-corrected-run/native-decision-10.json.zst": "11676edeea9208e1751a93b0a55b45e1da40bd18c35bc88bbcb90b414efda57f",
+    "/workspace/language-within-seed-gate-v28-corrected-run/native-decision-13.json.zst": "b5ee1bcbc258d68043bd0864cdb6ca359291357161d69509286702f67c5d653e",
+    "/workspace/language-within-seed-gate-v28-corrected-run/native-decision-14.json.zst": "bff9bf48253d5f0568d86afb36cfda2989f8ef42db87a0e15406358076c4d628",
+    "/workspace/language-gate-retention-v26-run/positive-report-collection.jsonl.zst": "7cfe664a9ff0acdfb8544ea590f4dc59c124b291c0d8221a928b8d5d3e7f7806"
+  },
+  "protected_original_files_checked": 426,
+  "all_byte_identical": true,
+  "conclusion": "Immediate holding/taste paths are active. Delayed exact event identity is compressed and has no dedicated direct episodic-to-speech feature. No implementation correction or new training is justified by this audit alone.",
+  "limits": [
+    "Observational term decomposition is not a sensory-channel ablation.",
+    "No isolated acquired/consumed-event-to-speech test across sleep was captured or newly run.",
+    "Existing test sources were reviewed, not rerun during this zero-decision audit.",
+    "Architecture limitations do not identify the cause of the failed offline separator by themselves."
+  ],
+  "audited_source_head": "b8bd8c4132af5c6c578a7d3299670802234940f5",
+  "source_references": {
+    "native_grip_transfer": "crates/alife_world/src/headless.rs:5465",
+    "eat_preparation": "crates/alife_world/src/headless/hands.rs:50",
+    "consumption": "crates/alife_world/src/headless.rs:5552",
+    "taste_lifetime": "crates/alife_world/src/headless.rs:1296",
+    "bodily_senses": "crates/alife_world/src/headless.rs:3977",
+    "world_persistence": "crates/alife_world/src/headless.rs:3387",
+    "detached_speech_labels": "crates/alife_game_app/src/foundation_training/retained_language/curriculum/factorial/balanced.rs:174",
+    "consumption_label": "crates/alife_game_app/src/foundation_training/retained_language.rs:841",
+    "source_assignments": "crates/alife_core/src/phenotype/io_compile.rs:71",
+    "encoder": "crates/alife_training/src/cpu/input.rs:8",
+    "native_neural_update": "crates/alife_training/src/cpu/replay.rs:111",
+    "speech_decode": "crates/alife_training/src/cpu/input.rs:262",
+    "sealed_observation": "crates/alife_training/src/cpu/host.rs:1384",
+    "memory_projection": "crates/alife_core/src/memory/candidate_recall.rs:14",
+    "targetless_recall": "crates/alife_core/src/memory/candidate_recall.rs:174",
+    "action_memory_decoder": "crates/alife_training/src/cpu/replay.rs:195",
+    "attention_indirect_route": "crates/alife_runtime/src/canonical_preparation.rs:644",
+    "predictor_semantics": "crates/alife_runtime/src/canonical_preparation.rs:462",
+    "sleep_memory": "crates/alife_core/src/sleep.rs:881",
+    "sleep_candidate_records": "crates/alife_core/src/memory.rs:1872",
+    "sleep_private_learning": "crates/alife_training/src/cpu/organism.rs:481",
+    "sleep_staging_clear": "crates/alife_training/src/cpu/host.rs:1020",
+    "sequence_only_language_ledger": "crates/alife_core/src/language.rs:552"
+  },
+  "source_sha256": {
+    "crates/alife_core/src/language.rs": "c0c16844bd0eedee9f9c7d7eb36695fe3b8b70766f578ac3d284904e4cf0932a",
+    "crates/alife_core/src/memory.rs": "ea8b8c803d29f9b724b4f1ed6f9c011bd03a09e46d6f2637d576c395380c539f",
+    "crates/alife_core/src/memory/candidate_recall.rs": "cb1d8945f7fcee8a1a96e60057b0d27883154c13ac96225c681c68041cdfaa62",
+    "crates/alife_core/src/phenotype/io_compile.rs": "dd0deab505c1b885f300f869bc396f521efcc4d71930228b72c5f0f3b45cb237",
+    "crates/alife_core/src/sleep.rs": "dda2e85a291b6fd7cd5412e95844a6493c68e7dd3c61057d9b85959dd82a3cfa",
+    "crates/alife_game_app/src/foundation_training/retained_language.rs": "92702f603d9c238cbe7081db874552e2e663032d17e41baed656002d31c1821e",
+    "crates/alife_game_app/src/foundation_training/retained_language/curriculum/factorial/balanced.rs": "cb5c6fe59c4031ce13c028377e8c3d78076e30db611d1e4ac3dd271eba6c8b59",
+    "crates/alife_runtime/src/canonical_preparation.rs": "5613a3e4435c9a4ef26506df4bcee526ac8c8f8bfb93c479d74ef1b3ddb10514",
+    "crates/alife_training/src/cpu/host.rs": "df7eab7720e80336ac5240d5525c1df96cb66b52f7997bc1759ba4326de9a347",
+    "crates/alife_training/src/cpu/input.rs": "4b0884d6b647880918778e50a81afe4956c176816b59b3321bc0b41b7e1bf256",
+    "crates/alife_training/src/cpu/organism.rs": "02b4501372c64478b0684842b501eb7610139656c6cbdee00cd65c5682918c4a",
+    "crates/alife_training/src/cpu/replay.rs": "9e9aa4bdf4488954a8cb06df860b3332cf615990d3fce362a80a1c3e1bf5db39",
+    "crates/alife_world/src/headless.rs": "f8e68e580a2068a476fda5ae5bdcb08252b99bb5b1515478ba92f7cd84edb294",
+    "crates/alife_world/src/headless/hands.rs": "fbbb624147802ca0f6be8f37a7593dc3726613d704eb5d9252ba4ae21618c356"
+  },
+  "existing_tests_reviewed_not_rerun": [
+    "crates/alife_world/tests/biology_audit_taste.rs::exact_world_roundtrip_preserves_eaters_taste",
+    "crates/alife_world/tests/biology_audit_taste.rs::taste_expires_after_next_perception_and_failed_ingestion_does_not_refresh_it",
+    "crates/alife_world/src/headless.rs::eat_possession_tests::reachable_loose_food_eat_acquires_only_then_later_eat_consumes_same_target",
+    "crates/alife_world/tests/carried_food_terrain_vision.rs::default_radius_owner_retains_small_held_target_at_both_head_limits_and_after_moving",
+    "crates/alife_training/tests/cpu_collector.rs::canonical_cpu_seals_biology_memory_and_exact_restore_without_an_icd",
+    "crates/alife_training/tests/cpu_collector.rs::recovery_sleep_replays_structural_state_and_roundtrips_authority",
+    "crates/alife_core/tests/sleep_consolidation.rs::biologically_due_sleep_commits_replayed_memory_prediction_and_concept_state"
+  ],
+  "next_test_design_not_executed": {
+    "source_rows": "V28 native rows10/14: actual matched GetFood valid/unsupported pair",
+    "frozen_actor": "original V26 Untouched step436; failed LP coefficients excluded",
+    "factorial_conditions": [
+      "baseline",
+      "toggle raw tactile holding by reconstructing native encoder arithmetic into an explicitly counterfactual detached replay tick",
+      "zero candidate-memory projection inputs24..35 only after canonical preparation",
+      "both interventions"
+    ],
+    "budget": {
+      "world_decisions": 0,
+      "read_only_neural_forwards": 8,
+      "gradient_probes": 0,
+      "optimizer_updates": 0,
+      "external_model_calls": 0
+    },
+    "controls": "Keep each captured initial neural/private state, word lanes, all other raw senses, homeostasis, effective weights, candidates and recorded physical outcomes fixed. Explicit neural-input counterfactuals only, not world transitions.",
+    "record": "per-condition changed encoder targets, 32 speech-source activations, all speech gate logits, conditional payload, action/candidate logits; actor/optimizer hashes unchanged",
+    "validation": "Baseline must reproduce captured native outputs; abort on missing original receptor/encoder inputs, failed hash/source binding or unsupported edits.",
+    "interpretation": "Holding intervention tests causal availability; candidate-memory intervention tests the direct readout route while leaving attention/novelty fixed. It cannot prove language learning or indirect memory effects.",
+    "not_started": true,
+    "admission_boundary": "Original canonical frame, recall receipt and sealed patch remain immutable; do not reuse stale receipts to admit a modified frame or world. Only detached replay-input arithmetic changes."
+  }
+}
