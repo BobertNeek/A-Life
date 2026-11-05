@@ -91,6 +91,10 @@ mod tests {
         let hit = surface.ray_hit(origin, direction, 2.0).unwrap();
         assert!((hit.x - 0.95).abs() < 0.00001);
         assert!(surface.ray_hit(origin, direction, 0.9).is_none());
+        let reverse = Vec3f::new(2.0, 1.9, 0.25);
+        let direction = Vec3f::new(-1.0, 0.0, 0.0);
+        assert!((surface.ray_hit(reverse, direction, 2.0).unwrap().x - 1.05).abs() < 0.00001);
+        assert!(surface.ray_hit(reverse, direction, 0.9).is_none());
 
         let surface = TerrainSurface::from_data(crate::TerrainData {
             width: 2,
@@ -105,6 +109,11 @@ mod tests {
         assert!((hit.x - 0.475).abs() < 0.00001);
         assert!((hit.z - 0.525).abs() < 0.00001);
         assert!((surface.height(hit.x, hit.z).unwrap() - hit.y).abs() < 0.00001);
+        let hit = surface
+            .ray_hit(Vec3f::new(1.0, 1.9, 0.0), Vec3f::new(-q, 0.0, q), 2.0)
+            .unwrap();
+        assert!((hit.x - 0.525).abs() < 0.00001);
+        assert!((hit.z - 0.475).abs() < 0.00001);
 
         // This ray's clipped entry rounds just outside x = -500 in f32.
         let surface = TerrainSurface::from_data(crate::TerrainData {
@@ -133,6 +142,65 @@ mod tests {
             .unwrap();
         assert!(surface.height(hit.x, hit.z).is_some());
     }
+    #[test]
+    fn ray_occlusion_parameter_keeps_surface_picks_and_clipped_entry_distinct() {
+        let surface = TerrainSurface::from_data(crate::TerrainData {
+            width: 2,
+            depth: 2,
+            origin_x: 1.0,
+            origin_z: 0.0,
+            spacing: 1.0,
+            heights: vec![2.0; 4],
+            obstacles: vec![],
+            water_level: None,
+        })
+        .unwrap();
+        for (origin, direction, expected_point, expected_parameter) in [
+            (
+                Vec3f::new(1.5, 3.0, 0.5),
+                Vec3f::new(0.0, -1.0, 0.0),
+                Vec3f::new(1.5, 2.0, 0.5),
+                1.0,
+            ),
+            (
+                Vec3f::new(1.5, 3.0, 0.5),
+                Vec3f::new(0.0, -2.0, 0.0),
+                Vec3f::new(1.5, 2.0, 0.5),
+                0.5,
+            ),
+            (
+                Vec3f::new(1.5, 2.0, 0.5),
+                Vec3f::new(0.0, 1.0, 0.0),
+                Vec3f::new(1.5, 2.0, 0.5),
+                0.0,
+            ),
+            (
+                Vec3f::new(1.5, 1.0, 0.5),
+                Vec3f::new(1.0, 0.0, 0.0),
+                Vec3f::new(1.5, 2.0, 0.5),
+                0.0,
+            ),
+            (
+                Vec3f::new(0.0, 1.0, 0.5),
+                Vec3f::new(1.0, 0.0, 0.0),
+                Vec3f::new(1.0, 2.0, 0.5),
+                1.0,
+            ),
+        ] {
+            assert_eq!(
+                surface.ray_hit(origin, direction, 2.0),
+                Some(expected_point)
+            );
+            assert_eq!(
+                surface.ray_hit_with_parameter(origin, direction, 2.0),
+                Some((expected_point, expected_parameter))
+            );
+        }
+        assert!(surface
+            .ray_hit_with_parameter(Vec3f::new(0.0, 1.0, 0.5), Vec3f::new(1.0, 0.0, 0.0), 0.99)
+            .is_none());
+    }
+
     #[test]
     fn rounded_mesh_boundary_supports_player_placement_and_restore() {
         let lo = 650.5266_f32;
@@ -504,6 +572,18 @@ impl TerrainSurface {
         Some(())
     }
     pub fn ray_hit(&self, origin: Vec3f, direction: Vec3f, max_distance: f32) -> Option<Vec3f> {
+        self.ray_hit_with_parameter(origin, direction, max_distance)
+            .map(|(point, _)| point)
+    }
+
+    /// Keep the ray parameter as well as the pick point: a ray entering below
+    /// the surface is already occluded at entry, while its pick projects upward.
+    pub(crate) fn ray_hit_with_parameter(
+        &self,
+        origin: Vec3f,
+        direction: Vec3f,
+        max_distance: f32,
+    ) -> Option<(Vec3f, f32)> {
         if origin.validate().is_err()
             || direction.validate().is_err()
             || !max_distance.is_finite()
@@ -558,8 +638,26 @@ impl TerrainSurface {
             if d == 0.0 {
                 continue;
             }
-            for i in 0..count {
-                let t = ((first + i as f32) * self.spacing - o) / d;
+            let boundary_time = |i: usize| ((first + i as f32) * self.spacing - o) / d;
+            // Search the same rounded f32 times as the full scan, then only
+            // enumerate boundaries inside the clipped ray interval.
+            let monotone = o.is_finite() && d.is_finite();
+            let start = if monotone {
+                partition_index(count, |i| {
+                    if d > 0.0 {
+                        boundary_time(i) <= enter
+                    } else {
+                        boundary_time(i) >= exit
+                    }
+                })
+            } else {
+                0
+            };
+            for i in start..count {
+                let t = boundary_time(i);
+                if monotone && (if d > 0.0 { t >= exit } else { t <= enter }) {
+                    break;
+                }
                 if t > enter && t < exit {
                     cuts.push(t);
                 }
@@ -578,14 +676,26 @@ impl TerrainSurface {
             let gap = f64::from(p.y) - f64::from(h);
             if gap <= 0.0 {
                 if let Some((before, above)) = previous {
-                    return Some(point(
-                        before + (t - before) * (above / (above - gap)) as f32,
-                    ));
+                    let hit = before + (t - before) * (above / (above - gap)) as f32;
+                    return Some((point(hit), hit));
                 }
-                return Some(Vec3f::new(p.x, h, p.z));
+                return Some((Vec3f::new(p.x, h, p.z), t));
             }
             previous = Some((t, gap));
         }
         None
     }
+}
+
+fn partition_index(count: usize, mut predicate: impl FnMut(usize) -> bool) -> usize {
+    let (mut low, mut high) = (0, count);
+    while low < high {
+        let middle = low + (high - low) / 2;
+        if predicate(middle) {
+            low = middle + 1;
+        } else {
+            high = middle;
+        }
+    }
+    low
 }

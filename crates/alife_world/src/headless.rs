@@ -4187,24 +4187,27 @@ impl HeadlessWorld {
                     found = true;
                 }
             }
+            if let Some((_, hit)) = terrain
+                .surface()
+                .ray_hit_with_parameter(origin, direction, nearest)
+            {
+                nearest = hit;
+                found = true;
+            }
+            return found.then_some(nearest);
         }
+        // Preserve the legacy flat-world sampling when no heightfield is bound.
         let mut previous = 0.0;
         let mut distance_along = 0.25;
         while distance_along <= nearest {
             let point = add(origin, scale(direction, distance_along));
-            let ground = self.terrain.as_ref().map_or(Some(0.0), |terrain| {
-                terrain.surface().height(point.x, point.z)
-            });
-            if ground.is_some_and(|height| point.y <= height) {
+            if point.y <= 0.0 {
                 let mut low = previous;
                 let mut high = distance_along;
                 for _ in 0..8 {
                     let middle = (low + high) * 0.5;
                     let point = add(origin, scale(direction, middle));
-                    let surface = self.terrain.as_ref().map_or(Some(0.0), |terrain| {
-                        terrain.surface().height(point.x, point.z)
-                    });
-                    if surface.is_some_and(|height| point.y <= height) {
+                    if point.y <= 0.0 {
                         high = middle;
                     } else {
                         low = middle;
