@@ -37,8 +37,8 @@ fn write_with_sync(
         .parent()
         .filter(|p| !p.as_os_str().is_empty())
         .unwrap_or_else(|| Path::new("."));
-    let (staged, mut file) =
-        create_staged_file(parent).map_err(|e| before_publication(destination, e))?;
+    let (staged, mut file) = create_staged_file(parent, previous.is_some())
+        .map_err(|e| before_publication(destination, e))?;
     let result = (|| {
         // Windows keeps the staging handle exclusive. Prepare and verify the
         // old descriptor while the file is empty, before writing any new data.
@@ -244,7 +244,9 @@ fn recheck(path: &Path, previous: Option<&Destination>, staged: &File) -> io::Re
     Ok(())
 }
 
-fn create_staged_file(parent: &Path) -> io::Result<(PathBuf, File)> {
+fn create_staged_file(parent: &Path, replacing: bool) -> io::Result<(PathBuf, File)> {
+    #[cfg(not(windows))]
+    let _ = replacing;
     loop {
         let staged = parent.join(format!(
             ".alife-portable-save-{}-{}.tmp",
@@ -263,7 +265,22 @@ fn create_staged_file(parent: &Path) -> io::Result<(PathBuf, File)> {
         #[cfg(not(windows))]
         let opened = options.open(&staged);
         #[cfg(windows)]
-        let opened = windows_metadata::create_private(&staged);
+        let opened = {
+            use std::os::windows::fs::OpenOptionsExt;
+            if replacing {
+                windows_metadata::create_private(&staged)
+            } else {
+                // Ordinary new saves inherit the folder's access controls.
+                // Keep the data handle exclusive until publication preparation
+                // finishes, even when the inherited DACL permits sharing.
+                OpenOptions::new()
+                    .read(true)
+                    .write(true)
+                    .create_new(true)
+                    .share_mode(0)
+                    .open(&staged)
+            }
+        };
         match opened {
             Ok(file) => return Ok((staged, file)),
             // Preserve recoverable siblings left by previous processes.
@@ -276,6 +293,48 @@ fn create_staged_file(parent: &Path) -> io::Result<(PathBuf, File)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn new_save_sync_failure_keeps_destination_absent_and_recovery_intact() {
+        let root = std::env::temp_dir().join(format!(
+            "alife-new-save-sync-failure-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir(&root).unwrap();
+        let root = std::fs::canonicalize(root).unwrap();
+        let path = root.join("new.json");
+        let recovery = root.join(".alife-portable-save-previous.tmp");
+        alife_storage::write(&recovery, b"recoverable sibling").unwrap();
+        let error = write_with_sync(&path, b"new complete save", |file| {
+            assert_eq!(file.metadata()?.len(), 17);
+            #[cfg(windows)]
+            {
+                let staged = std::fs::read_dir(&root)?
+                    .map(|entry| entry.unwrap().path())
+                    .find(|candidate| candidate != &recovery)
+                    .unwrap();
+                assert!(
+                    File::open(staged).is_err(),
+                    "new staging must stay exclusive"
+                );
+            }
+            Err(io::Error::other("injected new-save sync failure"))
+        })
+        .unwrap_err();
+        assert!(error.to_string().contains("injected new-save sync failure"));
+        assert!(!path.exists());
+        assert_eq!(std::fs::read(&recovery).unwrap(), b"recoverable sibling");
+        assert_eq!(std::fs::read_dir(&root).unwrap().count(), 1);
+        write(&path, b"new complete save").unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), b"new complete save");
+        assert_eq!(std::fs::read(&recovery).unwrap(), b"recoverable sibling");
+        assert_eq!(std::fs::read_dir(&root).unwrap().count(), 2);
+        alife_storage::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn file_sync_failure_after_write_preserves_previous_save_and_recovery() {

@@ -55,8 +55,19 @@ fn windows_sddl(path: &std::path::Path) -> String {
 
 #[cfg(windows)]
 #[test]
-fn windows_ordinary_inherited_save_retains_security_and_new_save_is_private() {
+fn windows_new_save_inherits_folder_sharing_and_replacement_retains_it() {
     let root = temp_root("inherited-dacl");
+    windows_acl_script(
+        &root,
+        r#"
+        $ErrorActionPreference = 'Stop'
+        $everyone = [System.Security.Principal.SecurityIdentifier]::new('S-1-1-0')
+        $acl = Get-Acl -LiteralPath $env:ALIFE_DACL_PATH
+        $acl.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new(
+            $everyone, 'ReadAndExecute', 'ContainerInherit,ObjectInherit', 'None', 'Allow'))
+        Set-Acl -LiteralPath $env:ALIFE_DACL_PATH -AclObject $acl
+    "#,
+    );
     let path = root.join("inherited.json");
     let original = fixture("inherited");
     fs::write(&path, original.to_json_string_pretty().unwrap()).unwrap();
@@ -64,17 +75,40 @@ fn windows_ordinary_inherited_save_retains_security_and_new_save_is_private() {
     original.to_json_file(&path).unwrap();
     assert_eq!(windows_sddl(&path), before);
     assert_eq!(PortableSaveFile::from_json_file(&path).unwrap(), original);
+    let control = root.join("ordinary.json");
+    fs::write(&control, b"ordinary file creation control").unwrap();
+    let expected = windows_sddl(&control);
+    assert_eq!(
+        windows_acl_script(
+            &control,
+            r#"
+        $acl = Get-Acl -LiteralPath $env:ALIFE_DACL_PATH
+        $inherited = @($acl.Access | Where-Object {
+            $_.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value -eq 'S-1-1-0' -and
+            $_.IsInherited -and $_.AccessControlType -eq 'Allow'
+        })
+        (-not $acl.AreAccessRulesProtected) -and ($inherited.Count -gt 0)
+    "#
+        ),
+        "True",
+        "ordinary control must inherit the deliberate sharing rule: {expected}"
+    );
     let new = root.join("new.json");
     original.to_json_file(&new).unwrap();
-    let acl = windows_sddl(&new);
-    assert!(
-        acl.contains("D:P"),
-        "new save DACL must be protected: {acl}"
+    assert_eq!(
+        windows_sddl(&new),
+        expected,
+        "new saves must match ordinary folder inheritance"
     );
-    assert!(
-        !acl.contains(";;;WD)"),
-        "new save grants Everyone access: {acl}"
+    assert_eq!(PortableSaveFile::from_json_file(&new).unwrap(), original);
+    let replacement = fixture("shared replacement");
+    replacement.to_json_file(&new).unwrap();
+    assert_eq!(
+        windows_sddl(&new),
+        expected,
+        "replacement must retain intentional sharing"
     );
+    assert_eq!(PortableSaveFile::from_json_file(&new).unwrap(), replacement);
     fs::remove_dir_all(root).unwrap();
 }
 

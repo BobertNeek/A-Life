@@ -1481,7 +1481,8 @@ impl PortableSaveFile {
     /// not silently replace symlinks. Windows prepares owner/group, DACL and
     /// integrity-label metadata on an empty, exclusively opened staging file,
     /// verifies it before writing, and rechecks before rename. New Windows saves
-    /// request a protected DACL granting the process user full control.
+    /// use ordinary parent-directory ACL inheritance with exclusive data access
+    /// while the staging handle is open.
     /// EFS-encrypted saves, detected named data streams and resource/central
     /// access policies are refused rather than silently discarded. Windows
     /// audit SACLs (including label-less container flags) and extended attributes
