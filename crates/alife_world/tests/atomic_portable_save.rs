@@ -103,6 +103,8 @@ fn windows_native_metadata_supports_relative_and_unprefixed_long_save_paths() {
     // The API must also accept ordinary absolute spellings, as std::fs does.
     let normal = path.to_str().unwrap().strip_prefix(r"\\?\").unwrap();
     assert!(normal.len() > 260);
+    fs::write(normal, b"std::fs long-path control").unwrap();
+    fs::remove_file(normal).unwrap();
     original.to_json_file(normal).unwrap();
     let replacement = fixture("long replacement");
     replacement.to_json_file(normal).unwrap();

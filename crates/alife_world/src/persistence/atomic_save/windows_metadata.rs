@@ -69,12 +69,33 @@ fn bool_result(ok: i32) -> io::Result<()> {
     }
 }
 fn wide(path: &Path) -> io::Result<Vec<u16>> {
-    let value: Vec<_> = path.as_os_str().encode_wide().collect();
+    let mut value: Vec<_> = path.as_os_str().encode_wide().collect();
     if value.contains(&0) {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
             "NUL in save path",
         ));
+    }
+    // std::fs supports ordinary long path spellings by converting them to
+    // extended paths. Raw Win32 calls need that conversion too. Resolve an
+    // existing file, or the existing parent of our new staging file, through
+    // std::fs so UNC paths and normal Windows path normalization stay intact.
+    if value.len() >= 248 && !value.starts_with(&[92, 92, 63, 92]) {
+        let resolved = match std::fs::canonicalize(path) {
+            Ok(resolved) => resolved,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                let name = path.file_name().ok_or_else(|| {
+                    io::Error::new(io::ErrorKind::InvalidInput, "save path needs a file name")
+                })?;
+                let parent = path
+                    .parent()
+                    .filter(|p| !p.as_os_str().is_empty())
+                    .unwrap_or_else(|| Path::new("."));
+                std::fs::canonicalize(parent)?.join(name)
+            }
+            Err(error) => return Err(error),
+        };
+        value = resolved.as_os_str().encode_wide().collect();
     }
     Ok(value.into_iter().chain([0]).collect())
 }
