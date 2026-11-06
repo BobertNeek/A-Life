@@ -98,6 +98,41 @@ provider receives the prompt, model name, and family IDs; no checkpoint is sent.
 Remote endpoints require HTTPS, loopback may use HTTP, and redirects are rejected
 to avoid forwarding the API key to another host.
 
+Requests use explicit OpenAI-compatible `response_format.type=json_schema`
+with a named strict schema, not generic `json_object` mode. The schema constrains
+family IDs to the host ledger, fixes the scenario count, bounds maps and difficulty,
+and requires all recipe fields while forbidding extra fields. The endpoint must
+support this response format; providers with only generic JSON mode are not
+silently substituted. Constrained decoding does not replace host validation of
+unique IDs, distinct scenarios, contiguous difficulty levels, or seed separation,
+nor native layout and movement validation. Malformed or rejected output and
+provider errors fail the request; there are no automatic retries or silent rerolls.
+
+Generation controls are opt-in: `--max-tokens N` sends a token cap from 1 through
+8192, while `--no-think` appends Qwen's `/no_think` instruction. For example, add
+`--max-tokens 512 --no-think` when using a compatible Qwen model through llama.cpp.
+Neither option is sent by default, and the Qwen instruction is not a portable
+provider setting. A token cap that truncates JSON fails rather than repairing the
+response; choose an adequate cap for the requested number of scenarios. A server
+may also require its own reasoning configuration; these flags do not change it.
+
+For audit or provider debugging, opt in with `--response-output RESPONSE.raw`.
+This exclusively creates a new file containing the exact response-body bytes
+before JSON parsing or host validation, so malformed envelopes and rejected
+recipes remain available for inspection. It does not save request headers or
+credentials. The response is untrusted and may itself contain sensitive
+provider-generated text: keep this file private and review it before sharing.
+On POSIX it is created with mode `0600` (or stricter under the caller's umask),
+before any response bytes are written. Windows retains its normal inherited
+ACLs; owner-only access is not established there. Use a private destination
+directory on every platform and verify Windows ACLs before capturing responses.
+Existing paths are refused, oversized bodies (over 1,000,000 bytes) are rejected
+without saving a truncated response, and no raw-response file is written unless
+requested. A write failure may leave an incomplete capture; retain it as failure
+evidence, not as a complete provider response. HTTP/transport failures are not
+captured as successful response bodies. Capture never triggers a retry or makes
+a rejected recipe admissible.
+
 The map language has exactly one `L` learner and one `F` food on a rectangular
 3–17-cell grid with a complete `#` wall border; `.` marks open space. A cell is
 two world units; columns increase world X and rows world Z. For example
