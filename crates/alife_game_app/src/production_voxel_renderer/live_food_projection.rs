@@ -169,6 +169,212 @@ mod tests {
     use super::*;
 
     #[test]
+    fn picking_prefers_the_first_sphere_surface_over_the_nearest_center() {
+        for reverse in [false, true] {
+            let mut foods = [
+                ("grazed", Vec3f::new(0.4, -0.3, 0.0)),
+                ("front", Vec3f::new(0.0, -0.2, 0.0)),
+            ];
+            if reverse {
+                foods.reverse();
+            }
+            let mut builder = alife_world::HeadlessScenarioBuilder::new(4281);
+            for (label, position) in foods {
+                builder = builder.food(label, position, 0.25);
+            }
+            let mut world = builder.build().unwrap();
+            world
+                .enable_terrain_for_new_game(
+                    alife_world::WorldTerrain::new(
+                        alife_world::TerrainData {
+                            width: 17,
+                            depth: 17,
+                            origin_x: -2.0,
+                            origin_z: -2.0,
+                            spacing: 0.25,
+                            heights: vec![0.0; 289],
+                            obstacles: vec![],
+                            water_level: None,
+                        },
+                        alife_world::LocomotionLimits::default(),
+                    )
+                    .unwrap(),
+                    Vec3f::ZERO,
+                )
+                .unwrap();
+            let front = world.entity_id("front").unwrap();
+            assert_eq!(
+                world.entity(front).unwrap().position,
+                Vec3f::new(0.0, 0.0, -0.2)
+            );
+            let frame = LiveBrainPresentationFrame::try_new(
+                Vec::new(),
+                world.tick(),
+                world.object_snapshots(),
+            )
+            .unwrap();
+            let surface =
+                creature_grounding::RenderedTerrainSurface::from_meshes(std::iter::empty(), 1.0);
+            let ray = bevy::math::Ray3d::new(
+                Vec3::new(0.0, 2.0, -2.0),
+                bevy::math::Dir3::new(Vec3::new(0.0, -1.0, 1.0)).unwrap(),
+            );
+            let ground = ray.get_point(
+                ray.intersect_plane(Vec3::ZERO, InfinitePlane3d::default())
+                    .unwrap(),
+            );
+            assert_eq!(
+                pick_live_object_body(&frame, true, &surface, &ray, ground)
+                    .unwrap()
+                    .1,
+                front
+            );
+            assert_eq!(
+                pick_live_food(&frame, true, &surface, &ray, ground)
+                    .unwrap()
+                    .1,
+                front
+            );
+        }
+    }
+
+    #[test]
+    fn picking_compares_creature_and_food_surfaces_with_their_existing_radii() {
+        for terrain_bound in [false, true] {
+            for reverse in [false, true] {
+                let builder = alife_world::HeadlessScenarioBuilder::new(4285);
+                let world = if reverse {
+                    builder.food("food", Vec3f::new(0.0, 0.6, 0.5), 0.25).agent(
+                        "walker",
+                        OrganismId(11),
+                        Vec3f::new(0.03, 0.0, 0.5),
+                    )
+                } else {
+                    builder
+                        .agent("walker", OrganismId(11), Vec3f::new(0.03, 0.0, 0.5))
+                        .food("food", Vec3f::new(0.0, 0.6, 0.5), 0.25)
+                }
+                .build()
+                .unwrap();
+                let frame = LiveBrainPresentationFrame::try_new(
+                    Vec::new(),
+                    world.tick(),
+                    world.object_snapshots(),
+                )
+                .unwrap();
+                let surface = surface_with_height(Some(0.0));
+                let ray = bevy::math::Ray3d::new(Vec3::new(-2.0, 0.9, 0.5), bevy::math::Dir3::X);
+                let hit = pick_live_object_body(
+                    &frame,
+                    terrain_bound,
+                    &surface,
+                    &ray,
+                    Vec3::new(4.0, 0.0, 0.5),
+                )
+                .unwrap();
+                assert_eq!(hit.1, world.entity_id("walker").unwrap());
+                assert_eq!(hit.2, WorldObjectKind::Agent);
+                assert_eq!(
+                    pick_live_food(
+                        &frame,
+                        terrain_bound,
+                        &surface,
+                        &ray,
+                        Vec3::new(4.0, 0.0, 0.5)
+                    )
+                    .unwrap()
+                    .1,
+                    world.entity_id("food").unwrap()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn picking_surface_ties_use_stable_ids_and_inside_hits_start_at_zero() {
+        let world = alife_world::HeadlessScenarioBuilder::new(4282)
+            .food("first", Vec3f::ZERO, 0.25)
+            .food("second", Vec3f::ZERO, 0.25)
+            .build()
+            .unwrap();
+        let expected = world.entity_id("first").unwrap();
+        let surface =
+            creature_grounding::RenderedTerrainSurface::from_meshes(std::iter::empty(), 1.0);
+        for reverse in [false, true] {
+            let mut objects = world.object_snapshots();
+            if reverse {
+                objects.reverse();
+            }
+            let frame =
+                LiveBrainPresentationFrame::try_new(Vec::new(), world.tick(), objects).unwrap();
+            for origin_x in [-2.0, 0.0] {
+                let ray =
+                    bevy::math::Ray3d::new(Vec3::new(origin_x, 0.3, 0.0), bevy::math::Dir3::X);
+                let ground = Vec3::new(4.0, 0.0, 0.0);
+                let body = pick_live_object_body(&frame, true, &surface, &ray, ground).unwrap();
+                let food = pick_live_food(&frame, true, &surface, &ray, ground).unwrap();
+                assert_eq!(body.1, expected);
+                assert_eq!(food.1, expected);
+                assert_eq!(body.0, food.0);
+                let depth = if origin_x == 0.0 {
+                    0.0
+                } else {
+                    2.0 - f64::from(0.42_f32)
+                };
+                assert!((food.0 - depth).abs() < 1e-12);
+            }
+        }
+    }
+
+    #[test]
+    fn picking_retains_rounding_only_tangencies_at_the_closest_point() {
+        let world = alife_world::HeadlessScenarioBuilder::new(4283)
+            .food("tangent", Vec3f::new(0.00042, 0.0, 0.41999978), 0.25)
+            .build()
+            .unwrap();
+        let frame =
+            LiveBrainPresentationFrame::try_new(Vec::new(), world.tick(), world.object_snapshots())
+                .unwrap();
+        let surface =
+            creature_grounding::RenderedTerrainSurface::from_meshes(std::iter::empty(), 1.0);
+        let center = care_object_center(frame.objects().next().unwrap().position, true, &surface);
+        let ray = bevy::math::Ray3d::new(Vec3::new(0.0, 2.0, 0.0), bevy::math::Dir3::NEG_Y);
+        let along = (center - ray.origin).dot(*ray.direction);
+        assert!(ray.get_point(along).distance_squared(center) <= 0.42_f32.powi(2));
+        assert!(
+            f64::from(center.x).powi(2) + f64::from(center.z).powi(2) > f64::from(0.42_f32).powi(2)
+        );
+        let body = pick_live_object_body(&frame, true, &surface, &ray, Vec3::ZERO).unwrap();
+        let food = pick_live_food(&frame, true, &surface, &ray, Vec3::ZERO).unwrap();
+        assert_eq!(body.1, world.entity_id("tangent").unwrap());
+        assert_eq!(food.1, body.1);
+        assert!((food.0 - (2.0 - f64::from(center.y))).abs() < 1e-12);
+        assert_eq!(body.0, food.0);
+    }
+
+    #[test]
+    fn picking_keeps_existing_miss_behind_and_ground_range_admission() {
+        let world = alife_world::HeadlessScenarioBuilder::new(4284)
+            .food("food", Vec3f::ZERO, 0.25)
+            .build()
+            .unwrap();
+        let frame =
+            LiveBrainPresentationFrame::try_new(Vec::new(), world.tick(), world.object_snapshots())
+                .unwrap();
+        let surface =
+            creature_grounding::RenderedTerrainSurface::from_meshes(std::iter::empty(), 1.0);
+        for (origin, ground) in [
+            (Vec3::new(-2.0, 2.0, 0.0), Vec3::new(4.0, 0.0, 0.0)),
+            (Vec3::new(1.0, 0.3, 0.0), Vec3::new(4.0, 0.0, 0.0)),
+            (Vec3::new(-2.0, 0.3, 0.0), Vec3::new(-1.9, 0.3, 0.0)),
+        ] {
+            let ray = bevy::math::Ray3d::new(origin, bevy::math::Dir3::X);
+            assert!(pick_live_object_body(&frame, true, &surface, &ray, ground).is_none());
+            assert!(pick_live_food(&frame, true, &surface, &ray, ground).is_none());
+        }
+    }
+
+    #[test]
     fn care_feedback_projection_tracks_placement_and_consumption_without_advancing_time() {
         for highlands in [false, true] {
             let position = Vec3f::new(2.5, 4.0, -3.5);
