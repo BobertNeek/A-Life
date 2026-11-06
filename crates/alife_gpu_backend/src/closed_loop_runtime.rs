@@ -7,6 +7,8 @@
 #[cfg(feature = "training-rollout")]
 mod live_policy;
 mod selector_exploration;
+#[cfg(feature = "gpu-tests")]
+mod software_training_test;
 mod tick;
 #[cfg(feature = "training-rollout")]
 pub use live_policy::GpuLivePolicyInstallReceipt;
@@ -1463,21 +1465,129 @@ trait GpuDeviceFactory {
 
 struct WgpuDeviceFactory;
 
+fn requested_backends(
+    value: Option<std::ffi::OsString>,
+) -> Result<wgpu::Backends, ScaffoldContractError> {
+    match value.as_deref() {
+        None => Ok(wgpu::Backends::PRIMARY | wgpu::Backends::SECONDARY),
+        Some(value) if value == "vulkan" => Ok(wgpu::Backends::VULKAN),
+        Some(value) if value == "dx12" => Ok(wgpu::Backends::DX12),
+        Some(_) => Err(ScaffoldContractError::NeuralBackendUnavailable),
+    }
+}
+
+fn requested_dx12_compiler(
+    backends: wgpu::Backends,
+    value: Option<std::ffi::OsString>,
+) -> Result<wgpu::Dx12Compiler, ScaffoldContractError> {
+    match value.as_deref() {
+        None => Ok(wgpu::Dx12Compiler::default()),
+        Some(value) if value == "dxc" && backends == wgpu::Backends::DX12 => {
+            Ok(wgpu::Dx12Compiler::DynamicDxc {
+                dxc_path: "dxcompiler.dll".into(),
+            })
+        }
+        Some(value) if value == "fxc" && backends == wgpu::Backends::DX12 => {
+            Ok(wgpu::Dx12Compiler::Fxc)
+        }
+        Some(_) => Err(ScaffoldContractError::NeuralBackendUnavailable),
+    }
+}
+
+/// Apply the same explicit compiler request as the production device factory.
+/// Test harnesses retain their own strict adapter/backend selection.
+#[cfg(feature = "gpu-tests")]
+pub fn configure_gpu_test_dx12_compiler(
+    descriptor: &mut wgpu::InstanceDescriptor,
+) -> Result<(), ScaffoldContractError> {
+    descriptor.backend_options.dx12.shader_compiler = requested_dx12_compiler(
+        descriptor.backends,
+        std::env::var_os("ALIFE_GPU_DX12_COMPILER"),
+    )?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod backend_request_tests {
+    use super::*;
+
+    #[test]
+    fn explicit_backend_masks_are_strict_and_absence_preserves_default() {
+        assert_eq!(
+            requested_backends(None).unwrap(),
+            wgpu::Backends::PRIMARY | wgpu::Backends::SECONDARY
+        );
+        assert_eq!(
+            requested_backends(Some("vulkan".into())).unwrap(),
+            wgpu::Backends::VULKAN
+        );
+        assert_eq!(
+            requested_backends(Some("dx12".into())).unwrap(),
+            wgpu::Backends::DX12
+        );
+        for invalid in ["", "auto", "cpu", "VULKAN", "dx12,vulkan", " dx12"] {
+            assert!(requested_backends(Some(invalid.into())).is_err());
+        }
+    }
+
+    #[test]
+    fn explicit_compiler_requires_dx12_and_has_no_auto_fallback() {
+        assert!(matches!(
+            requested_dx12_compiler(wgpu::Backends::DX12, None).unwrap(),
+            wgpu::Dx12Compiler::Auto
+        ));
+        assert!(
+            matches!(requested_dx12_compiler(wgpu::Backends::DX12, Some("dxc".into())).unwrap(), wgpu::Dx12Compiler::DynamicDxc { dxc_path } if dxc_path == "dxcompiler.dll")
+        );
+        assert!(matches!(
+            requested_dx12_compiler(wgpu::Backends::DX12, Some("fxc".into())).unwrap(),
+            wgpu::Dx12Compiler::Fxc
+        ));
+        for backends in [
+            wgpu::Backends::VULKAN,
+            wgpu::Backends::PRIMARY | wgpu::Backends::SECONDARY,
+        ] {
+            assert!(requested_dx12_compiler(backends, Some("dxc".into())).is_err());
+            assert!(requested_dx12_compiler(backends, Some("fxc".into())).is_err());
+        }
+        for invalid in ["", "auto", "DXC", "FXC", " dxc", "dxc,fxc"] {
+            assert!(requested_dx12_compiler(wgpu::Backends::DX12, Some(invalid.into())).is_err());
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn non_unicode_backend_request_is_rejected() {
+        use std::os::unix::ffi::OsStringExt;
+        assert!(requested_backends(Some(std::ffi::OsString::from_vec(vec![0xff]))).is_err());
+        assert!(requested_dx12_compiler(
+            wgpu::Backends::DX12,
+            Some(std::ffi::OsString::from_vec(vec![0xff]))
+        )
+        .is_err());
+    }
+}
+
 impl GpuDeviceFactory for WgpuDeviceFactory {
     fn request_adapters(&self) -> Result<Vec<GpuAdapterCandidate>, ScaffoldContractError> {
+        let backends = requested_backends(std::env::var_os("ALIFE_GPU_BACKEND"))?;
+        let compiler =
+            requested_dx12_compiler(backends, std::env::var_os("ALIFE_GPU_DX12_COMPILER"))?;
         pollster::block_on(async {
             let mut descriptor = wgpu::InstanceDescriptor::new_without_display_handle();
-            descriptor.backends = wgpu::Backends::PRIMARY | wgpu::Backends::SECONDARY;
+            descriptor.backends = backends;
+            descriptor.backend_options.dx12.shader_compiler = compiler;
             let instance = wgpu::Instance::new(descriptor);
             let required_features = wgpu::Features::empty();
             let required_limits = required_device_limits();
             let mut adapters = instance
-                .enumerate_adapters(wgpu::Backends::PRIMARY | wgpu::Backends::SECONDARY)
+                .enumerate_adapters(backends)
                 .await
                 .into_iter()
                 .filter(|adapter| {
                     let info = adapter.get_info();
-                    info.device_type != wgpu::DeviceType::Cpu
+                    backends.contains(wgpu::Backends::from(info.backend))
+                        && info.device_type != wgpu::DeviceType::Cpu
                         && info.backend != wgpu::Backend::Noop
                         && backend_slug(info.backend).is_ok()
                         && adapter.features().contains(required_features)
@@ -2592,6 +2702,33 @@ fn compile_v11_slot_upload(
     Ok(upload)
 }
 
+impl GpuLiveTopologyCheckpointV1 {
+    /// Device-free projection through the same fixed-slot compiler used by
+    /// native restore. Physical offsets and slot generations are not identities.
+    pub fn recompile_for_phenotype(
+        phenotype: &BrainPhenotype,
+        checkpoint: GpuV11Checkpoint,
+    ) -> Result<Self, ScaffoldContractError> {
+        let capacity = BrainCapacityClass::production_for_id(phenotype.brain_class_id())?;
+        phenotype.validate_against(&capacity)?;
+        // One bounded CPU plan only; native admission still enforces its actual
+        // device budget. This method creates no device or GPU allocation.
+        let plan =
+            GpuFixedClassArenaPlan::new(capacity, 1, u64::MAX).map_err(map_gpu_contract_error)?;
+        let base = plan
+            .prepare_slot_upload(0, 1, phenotype)
+            .map_err(map_gpu_contract_error)?;
+        let state = GpuV11CausalState::restore(checkpoint)?;
+        let upload = compile_v11_slot_upload(&plan, base.brain_slot(), phenotype, &state)
+            .map_err(map_gpu_contract_error)?;
+        let result = upload
+            .live_topology_checkpoint(phenotype.phenotype_hash(), state.checkpoint())
+            .map_err(map_gpu_contract_error)?;
+        result.validate_for_capacity(&capacity)?;
+        Ok(result)
+    }
+}
+
 pub struct GpuClosedLoopBackend {
     pub(crate) backend_instance_id: NonZeroU64,
     pub(crate) hardware: GpuHardwareReceipt,
@@ -2604,6 +2741,8 @@ pub struct GpuClosedLoopBackend {
     kernels: Arc<GpuClosedLoopKernelSet>,
     pub(crate) state: GpuBackendState,
     runtime_profile: GpuRuntimeProfile,
+    #[cfg(feature = "gpu-tests")]
+    offline_software_training_test: bool,
     runtime_budget: GpuRuntimeBudget,
     activity_policy: BrainActivityPolicyV1,
     admission: GpuAdmissionReceipt,
@@ -2727,6 +2866,13 @@ impl GpuClosedLoopBackend {
     ) -> Result<Self, ScaffoldContractError> {
         profile.validate_contract()?;
         let required = acquire_required_gpu(factory)?;
+        Self::from_required_gpu(required, profile)
+    }
+
+    fn from_required_gpu(
+        required: RequiredGpuDevice,
+        profile: GpuRuntimeProfile,
+    ) -> Result<Self, ScaffoldContractError> {
         let backend_instance_id = next_backend_instance_id()
             .map_err(|_| ScaffoldContractError::NeuralBackendUnavailable)?;
         let runtime_budget = GpuRuntimeBudget::from_device(
@@ -2755,6 +2901,8 @@ impl GpuClosedLoopBackend {
             kernels,
             state: GpuBackendState::Ready,
             runtime_profile: profile,
+            #[cfg(feature = "gpu-tests")]
+            offline_software_training_test: false,
             runtime_budget,
             activity_policy,
             admission,
@@ -2797,6 +2945,10 @@ impl GpuClosedLoopBackend {
     /// admission, generations, counters, and replay state are new and cannot
     /// accept handles issued by the live backend.
     pub fn new_staging_like_live(&self) -> Result<Self, ScaffoldContractError> {
+        #[cfg(feature = "gpu-tests")]
+        if self.offline_software_training_test {
+            return Err(ScaffoldContractError::NeuralBackendUnavailable);
+        }
         if !matches!(self.state, GpuBackendState::Ready) || self.device_lost.load(Ordering::Acquire)
         {
             return Err(ScaffoldContractError::NeuralBackendUnavailable);
@@ -2816,6 +2968,8 @@ impl GpuClosedLoopBackend {
             kernels: Arc::clone(&self.kernels),
             state: plan.state.clone(),
             runtime_profile: self.runtime_profile,
+            #[cfg(feature = "gpu-tests")]
+            offline_software_training_test: self.offline_software_training_test,
             runtime_budget: self.runtime_budget,
             activity_policy: self.activity_policy,
             admission: GpuAdmissionReceipt::empty(self.runtime_budget),
@@ -5284,6 +5438,12 @@ impl GpuClosedLoopBackend {
     }
 
     pub(crate) fn ensure_ready(&mut self) -> Result<(), ScaffoldContractError> {
+        // Explicit software fixtures expose only the quiescent offline queue.
+        // They cannot mint resident handles, live dispatches or restore targets.
+        #[cfg(feature = "gpu-tests")]
+        if self.offline_software_training_test {
+            return Err(ScaffoldContractError::NeuralBackendUnavailable);
+        }
         if self.device_lost.load(Ordering::Acquire) {
             self.mark_device_lost();
         }

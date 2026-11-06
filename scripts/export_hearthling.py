@@ -26,6 +26,9 @@ from bake_hearthling_fur import bake_fur
 bake_fur()
 from refine_hearthling_extremities import refine_extremities
 refine_extremities()
+# Repair the authored tail before animation generation or any asset writes.
+from repair_hearthling_tail import repair_tail
+repair_tail()
 rig = bpy.data.objects['Hearthling_Rig']
 scene = bpy.context.scene
 p = rig.pose.bones

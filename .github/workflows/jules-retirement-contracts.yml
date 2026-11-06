@@ -1,0 +1,34 @@
+name: Jules retirement contracts
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/jules-review.yml'
+      - 'scripts/test_jules_retirement.py'
+      - '.github/workflows/jules-retirement-contracts.yml'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/jules-review.yml'
+      - 'scripts/test_jules_retirement.py'
+      - '.github/workflows/jules-retirement-contracts.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check runner tools
+        run: |
+          command -v bash
+          command -v jq
+          command -v python3
+      - name: Test Jules retirement contracts offline
+        run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest scripts/test_jules_retirement.py -v

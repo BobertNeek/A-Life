@@ -13,6 +13,12 @@ use thiserror::Error;
 
 const ORGANISM_REGISTRY_SIGNATURE_ENCODING_VERSION: u16 = 1;
 
+mod registered_record;
+use registered_record::RegisteredRecord;
+
+#[cfg(test)]
+mod registered_record_tests;
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum FoundationComparisonProjection {
     PolicyWeights,
@@ -285,10 +291,15 @@ impl Validate for OrganismSubsystemStateGraph {
 }
 
 // Genome and expressed phenotype are private, immutable after construction.
-// Cache their validation only; mutable body/state refs still validate every time.
+// Cache their validation and the latest validated biochemistry/embodiment digests;
+// any direct state mutation invalidates the cached digest comparison.
 // Deserialization never imports this process-local proof.
 #[derive(Debug, Clone, Default)]
-struct GeneticValidationCache(OnceLock<[u64; 4]>);
+struct GeneticValidationCache {
+    genetics: OnceLock<[u64; 4]>,
+    biochemistry: OnceLock<(BiochemistryState, [u64; 4])>,
+    embodiment: OnceLock<(EmbodimentState, [u64; 4])>,
+}
 
 impl PartialEq for GeneticValidationCache {
     fn eq(&self, _other: &Self) -> bool {
@@ -297,12 +308,42 @@ impl PartialEq for GeneticValidationCache {
     }
 }
 
+fn biochemistry_exact_eq(a: &BiochemistryState, b: &BiochemistryState) -> bool {
+    *a == *b
+        && a.reproduction.mating_opportunity.to_bits()
+            == b.reproduction.mating_opportunity.to_bits()
+        && a.body.energy.to_bits() == b.body.energy.to_bits()
+}
+
+mod arc_serde {
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+    use std::sync::Arc;
+
+    pub fn serialize<S, T>(value: &Arc<T>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+        T: Serialize,
+    {
+        value.as_ref().serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D, T>(deserializer: D) -> Result<Arc<T>, D::Error>
+    where
+        D: Deserializer<'de>,
+        T: Deserialize<'de>,
+    {
+        T::deserialize(deserializer).map(Arc::new)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WorldOrganismRecord {
     organism_id: OrganismId,
     world_entity_id: WorldEntityId,
-    genome: CreatureGenome,
-    phenotype: CreaturePhenotype,
+    #[serde(with = "arc_serde")]
+    genome: std::sync::Arc<CreatureGenome>,
+    #[serde(with = "arc_serde")]
+    phenotype: std::sync::Arc<CreaturePhenotype>,
     #[serde(skip)]
     genetic_validation: GeneticValidationCache,
     biochemistry: BiochemistryState,
@@ -433,8 +474,8 @@ impl WorldOrganismRecord {
         Ok(WorldOrganismAdmissionSnapshot {
             organism_id: self.organism_id,
             world_entity_id: self.world_entity_id,
-            genome: self.genome.clone(),
-            phenotype: self.phenotype.clone(),
+            genome: (*self.genome).clone(),
+            phenotype: (*self.phenotype).clone(),
             biochemistry: self.biochemistry,
             age: self.age_at(world_tick)?,
         })
@@ -454,6 +495,8 @@ impl WorldOrganismRecord {
         let brain_schema_version = phenotype.brain_genome.schema_version;
         let genetics_development_digest = genetics_development_digest(&genome, &phenotype)?;
         let brain_birth_digest = initial_brain_digest(organism_id, &phenotype)?;
+        let biochemistry_digest = body_biochemistry_digest(&biochemistry)?;
+        let initial_embodiment_digest = embodiment_digest(&embodiment)?;
         let initial_ref = |tag: u64, schema_version: u16| SubsystemStateRef {
             organism_id,
             schema_version,
@@ -464,9 +507,13 @@ impl WorldOrganismRecord {
         let record = Self {
             organism_id,
             world_entity_id,
-            genome,
-            phenotype,
-            genetic_validation: GeneticValidationCache::default(),
+            genome: std::sync::Arc::new(genome),
+            phenotype: std::sync::Arc::new(phenotype),
+            genetic_validation: GeneticValidationCache {
+                genetics: OnceLock::new(),
+                biochemistry: OnceLock::from((biochemistry, biochemistry_digest)),
+                embodiment: OnceLock::from((embodiment.clone(), initial_embodiment_digest)),
+            },
             biochemistry,
             state_graph: OrganismSubsystemStateGraph {
                 organism_id,
@@ -476,7 +523,7 @@ impl WorldOrganismRecord {
                     ..initial_ref(10, SchemaVersions::CURRENT.genome.raw())
                 },
                 body_biochemistry: SubsystemStateRef {
-                    content_digest: body_biochemistry_digest(&biochemistry)?,
+                    content_digest: biochemistry_digest,
                     ..initial_ref(1, SchemaVersions::CURRENT.chemistry.raw())
                 },
                 brain: SubsystemStateRef {
@@ -488,7 +535,7 @@ impl WorldOrganismRecord {
                     ..initial_ref(3, 1)
                 },
                 embodiment: SubsystemStateRef {
-                    content_digest: embodiment_digest(&embodiment)?,
+                    content_digest: initial_embodiment_digest,
                     ..initial_ref(4, embodiment.schema_version())
                 },
                 lifecycle_persistence: SubsystemStateRef {
@@ -540,9 +587,21 @@ impl WorldOrganismRecord {
     }
 
     pub fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
-        let genetics_digest = match self.genetic_validation.0.get() {
+        let genetics_digest = match self.genetic_validation.genetics.get() {
             Some(digest) => *digest,
             None => genetics_development_digest(&self.genome, &self.phenotype)?,
+        };
+        let biochemistry_digest = match self.genetic_validation.biochemistry.get() {
+            Some((cached_state, digest))
+                if biochemistry_exact_eq(cached_state, &self.biochemistry) =>
+            {
+                *digest
+            }
+            _ => body_biochemistry_digest(&self.biochemistry)?,
+        };
+        let current_embodiment_digest = match self.genetic_validation.embodiment.get() {
+            Some((cached_state, digest)) if cached_state == &self.embodiment => *digest,
+            _ => embodiment_digest(&self.embodiment)?,
         };
         self.organism_id.validate()?;
         self.world_entity_id.validate()?;
@@ -553,9 +612,8 @@ impl WorldOrganismRecord {
             || self.state_graph.body_biochemistry.causal_tick != self.biochemistry.tick
             || self.state_graph.embodiment.revision != self.embodiment.revision()
             || self.state_graph.embodiment.causal_tick != self.embodiment.source_tick()
-            || self.state_graph.body_biochemistry.content_digest
-                != body_biochemistry_digest(&self.biochemistry)?
-            || self.state_graph.embodiment.content_digest != embodiment_digest(&self.embodiment)?
+            || self.state_graph.body_biochemistry.content_digest != biochemistry_digest
+            || self.state_graph.embodiment.content_digest != current_embodiment_digest
             || self.state_graph.genetics_development.content_digest != genetics_digest
             || self.state_graph.lifecycle_persistence.content_digest
                 != lifecycle_persistence_digest(
@@ -572,13 +630,13 @@ impl WorldOrganismRecord {
         {
             return Err(ScaffoldContractError::BrainOwnershipMismatch);
         }
-        if self.genetic_validation.0.get().is_none() {
+        if self.genetic_validation.genetics.get().is_none() {
             self.genome.validate_contract()?;
-            if self.phenotype != self.genome.express()? {
+            if *self.phenotype != self.genome.express()? {
                 return Err(ScaffoldContractError::InvalidId);
             }
             // Concurrent readers may race to install the same immutable proof.
-            let _ = self.genetic_validation.0.set(genetics_digest);
+            let _ = self.genetic_validation.genetics.set(genetics_digest);
         }
         if self.phenotype.source_genome_id != self.genome.id
             || self.phenotype.lineage_id != self.genome.lineage_id
@@ -588,6 +646,18 @@ impl WorldOrganismRecord {
         }
 
         self.biochemistry.validate_against(&self.phenotype)?;
+        if self.genetic_validation.biochemistry.get().is_none() {
+            let _ = self
+                .genetic_validation
+                .biochemistry
+                .set((self.biochemistry, biochemistry_digest));
+        }
+        if self.genetic_validation.embodiment.get().is_none() {
+            let _ = self
+                .genetic_validation
+                .embodiment
+                .set((self.embodiment.clone(), current_embodiment_digest));
+        }
         self.cognitive_work.validate_contract()?;
         if !self.cognitive_energy_debit.is_finite() || self.cognitive_energy_debit < 0.0 {
             return Err(ScaffoldContractError::ScalarOutOfRange);
@@ -675,6 +745,7 @@ impl WorldOrganismRecord {
             Ok(applied_debit) => Ok(applied_debit),
             Err(error) => {
                 self.biochemistry = original_biochemistry;
+                self.genetic_validation.biochemistry = OnceLock::new();
                 self.state_graph = original_state_graph;
                 self.cognitive_work = original_work;
                 self.cognitive_energy_debit = original_debit;
@@ -704,6 +775,7 @@ impl WorldOrganismRecord {
         })();
         if let Err(error) = result {
             self.biochemistry = original_biochemistry;
+            self.genetic_validation.biochemistry = OnceLock::new();
             self.state_graph = original_state_graph;
             return Err(error.into());
         }
@@ -737,6 +809,7 @@ impl WorldOrganismRecord {
         })();
         if let Err(error) = result {
             self.biochemistry = original_biochemistry;
+            self.genetic_validation.biochemistry = OnceLock::new();
             self.state_graph = original_state_graph;
             return Err(error.into());
         }
@@ -769,6 +842,7 @@ impl WorldOrganismRecord {
         })();
         if let Err(error) = result {
             self.biochemistry = original_biochemistry;
+            self.genetic_validation.biochemistry = OnceLock::new();
             self.state_graph = original_state_graph;
             return Err(error.into());
         }
@@ -777,6 +851,7 @@ impl WorldOrganismRecord {
 
     fn advance_body_state_ref(&mut self) -> Result<(), ScaffoldContractError> {
         let content_digest = body_biochemistry_digest(&self.biochemistry)?;
+        self.genetic_validation.biochemistry = OnceLock::from((self.biochemistry, content_digest));
         self.state_graph.transaction_revision = self
             .state_graph
             .transaction_revision
@@ -841,6 +916,9 @@ impl WorldOrganismRecord {
         let original_graph = self.state_graph.clone();
         let result = (|| {
             self.embodiment = candidate;
+            let content_digest = embodiment_digest(&self.embodiment)?;
+            self.genetic_validation.embodiment =
+                OnceLock::from((self.embodiment.clone(), content_digest));
             self.state_graph.transaction_revision = self
                 .state_graph
                 .transaction_revision
@@ -848,11 +926,12 @@ impl WorldOrganismRecord {
                 .ok_or(ScaffoldContractError::InvalidId)?;
             self.state_graph.embodiment.revision = self.embodiment.revision();
             self.state_graph.embodiment.causal_tick = self.embodiment.source_tick();
-            self.state_graph.embodiment.content_digest = embodiment_digest(&self.embodiment)?;
+            self.state_graph.embodiment.content_digest = content_digest;
             self.validate_contract()
         })();
         if let Err(error) = result {
             self.embodiment = original_embodiment;
+            self.genetic_validation.embodiment = OnceLock::new();
             self.state_graph = original_graph;
             return Err(error);
         }
@@ -1100,7 +1179,10 @@ impl Validate for WorldOrganismRecord {
 
 #[derive(Debug, Clone, Default)]
 pub struct WorldOrganismRegistry {
-    records_by_organism: HashMap<u64, WorldOrganismRecord>,
+    // Only the per-record proof is reusable. Both registry indices and every
+    // world-object binding are still checked on each full population scan.
+    // The opaque child type invalidates its proof before yielding any &mut.
+    records_by_organism: HashMap<u64, RegisteredRecord>,
     organism_by_world_entity: HashMap<u64, OrganismId>,
 }
 
@@ -1130,7 +1212,8 @@ impl WorldOrganismRegistry {
         {
             return Err(OrganismRegistryError::DuplicateWorldEntity(world_entity_id));
         }
-        self.records_by_organism.insert(organism_id.raw(), record);
+        self.records_by_organism
+            .insert(organism_id.raw(), RegisteredRecord::new(record));
         self.organism_by_world_entity
             .insert(world_entity_id.raw(), organism_id);
         Ok(())
@@ -1154,12 +1237,14 @@ impl WorldOrganismRegistry {
         }
 
         self.records_by_organism
-            .insert(organism_id.raw(), replacement);
+            .insert(organism_id.raw(), RegisteredRecord::new(replacement));
         Ok(())
     }
 
     pub fn get(&self, organism_id: OrganismId) -> Option<&WorldOrganismRecord> {
-        self.records_by_organism.get(&organism_id.raw())
+        self.records_by_organism
+            .get(&organism_id.raw())
+            .map(|record| &**record)
     }
 
     pub fn get_by_world_entity_id(
@@ -1172,7 +1257,7 @@ impl WorldOrganismRegistry {
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &WorldOrganismRecord> {
-        self.records_by_organism.values()
+        self.records_by_organism.values().map(|record| &**record)
     }
 
     pub fn with_biology_mut<R>(
@@ -1194,6 +1279,7 @@ impl WorldOrganismRegistry {
         match result {
             Err(error) => {
                 record.biochemistry = original_biochemistry;
+                record.genetic_validation.biochemistry = OnceLock::new();
                 record.state_graph = original_state_graph;
                 Err(error)
             }
@@ -1201,6 +1287,7 @@ impl WorldOrganismRegistry {
                 let valid_tick = record.biochemistry.tick.raw() >= original_biochemistry.tick.raw();
                 if !valid_tick {
                     record.biochemistry = original_biochemistry;
+                    record.genetic_validation.biochemistry = OnceLock::new();
                     record.state_graph = original_state_graph;
                     return Err(OrganismRegistryError::InvalidRecord(
                         ScaffoldContractError::NonMonotonicTick,
@@ -1211,6 +1298,7 @@ impl WorldOrganismRegistry {
                     .and_then(|_| record.validate_contract())
                 {
                     record.biochemistry = original_biochemistry;
+                    record.genetic_validation.biochemistry = OnceLock::new();
                     record.state_graph = original_state_graph;
                     Err(error.into())
                 } else {
@@ -1226,6 +1314,21 @@ impl WorldOrganismRegistry {
 
     pub fn is_empty(&self) -> bool {
         self.records_by_organism.is_empty()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn edit_biology_unchecked_for_test(
+        &mut self,
+        organism_id: OrganismId,
+        mutate: impl FnOnce(&mut BiochemistryState),
+    ) {
+        mutate(
+            &mut self
+                .records_by_organism
+                .get_mut(&organism_id.raw())
+                .unwrap()
+                .biochemistry,
+        );
     }
 
     pub fn advance_biology(
@@ -1341,7 +1444,7 @@ impl WorldOrganismRegistry {
                 .insert(record.world_entity_id().raw(), removed_index);
             return Err(error);
         }
-        Ok(removed_record)
+        Ok(removed_record.into_inner())
     }
 
     pub(crate) fn write_canonical_signature(
@@ -1404,7 +1507,7 @@ impl WorldOrganismRegistry {
         // The registry map is deliberately excluded from the payload. The
         // record graph is composed of serde structs, enums, arrays, and
         // sequences with no map fields, so serde_json preserves field order.
-        let mut records: Vec<_> = self.records_by_organism.values().collect();
+        let mut records: Vec<_> = self.iter().collect();
         records.sort_unstable_by_key(|record| record.organism_id().raw());
         digest.write_u16(ORGANISM_REGISTRY_SIGNATURE_ENCODING_VERSION);
         digest.write_sequence_len(records.len());
@@ -1594,9 +1697,23 @@ mod tests {
         assert_eq!(restored, record);
 
         let mut forged = record.clone();
+        assert!(std::sync::Arc::ptr_eq(&forged.genome, &record.genome));
+        assert!(std::sync::Arc::ptr_eq(&forged.phenotype, &record.phenotype));
         forged.state_graph.genetics_development.content_digest[0] ^= 1;
         assert_eq!(
             forged.validate_contract(),
+            Err(ScaffoldContractError::BrainOwnershipMismatch)
+        );
+        let mut forged_bio = record.clone();
+        forged_bio.biochemistry.reproduction.mating_opportunity = -0.0;
+        assert_eq!(
+            forged_bio.validate_contract(),
+            Err(ScaffoldContractError::BrainOwnershipMismatch)
+        );
+        let mut forged_embodiment = record.clone();
+        forged_embodiment.state_graph.embodiment.content_digest[0] ^= 1;
+        assert_eq!(
+            forged_embodiment.validate_contract(),
             Err(ScaffoldContractError::BrainOwnershipMismatch)
         );
         let mut forged = wire;
@@ -1607,6 +1724,204 @@ mod tests {
             forged.validate_contract(),
             Err(ScaffoldContractError::BrainOwnershipMismatch)
         );
+    }
+
+    fn validation_cache_registry() -> (WorldOrganismRegistry, OrganismId) {
+        let genome = CreatureGenome::early_mammal_founder(
+            0xE10_3205,
+            FoundationGeneticIdentity::new(10, 1, 7, BrainCapacityClass::N512_ID).unwrap(),
+        )
+        .unwrap();
+        let mut record = WorldOrganismRecord::newborn(
+            OrganismId(1),
+            WorldEntityId(101),
+            genome.clone(),
+            genome.express().unwrap(),
+            Tick::ZERO,
+        )
+        .unwrap();
+        record
+            .advance_biology(Tick(1), BodyEventDelta::zero())
+            .unwrap();
+        let mut registry = WorldOrganismRegistry::default();
+        registry.insert(record).unwrap();
+        (registry, OrganismId(1))
+    }
+
+    #[test]
+    fn mutable_validation_cache_preserves_signed_zero_public_mutations_and_wire_guards() {
+        type Lane = fn(&mut BiochemistryState) -> &mut f32;
+        let lanes: [(&str, bool, Lane); 4] = [
+            ("body injury projection", false, |state| {
+                &mut state.body.injury
+            }),
+            ("body temperature projection", false, |state| {
+                &mut state.body.temperature_stress
+            }),
+            ("drive extension", true, |state| {
+                &mut state.homeostasis.drives.extension[0]
+            }),
+            ("mating opportunity", true, |state| {
+                &mut state.reproduction.mating_opportunity
+            }),
+        ];
+        for (label, allowed, lane) in lanes {
+            let (mut registry, id) = validation_cache_registry();
+            let record = registry.get(id).unwrap();
+            record.validate_contract().unwrap();
+            let original = serde_json::to_vec(record).unwrap();
+            let mut biology = *record.biochemistry();
+            assert_eq!(lane(&mut biology).to_bits(), 0.0_f32.to_bits(), "{label}");
+            let result = registry.with_biology_mut(id, |state| {
+                *lane(state) = -0.0;
+                Ok(())
+            });
+            if !allowed {
+                // Body compatibility projections must match their organ
+                // projections bit-for-bit, including zero signs.
+                assert!(result.is_err(), "{label}");
+                let record = registry.get(id).unwrap();
+                record.validate_contract().unwrap();
+                assert_eq!(serde_json::to_vec(record).unwrap(), original);
+                continue;
+            }
+            result.unwrap_or_else(|error| panic!("{label}: {error:?}"));
+            let record = registry.get(id).unwrap();
+            record.validate_contract().unwrap();
+            let mut biology = *record.biochemistry();
+            assert_eq!(lane(&mut biology).to_bits(), (-0.0_f32).to_bits());
+            let wire = serde_json::to_vec(record).unwrap();
+            let restored: WorldOrganismRecord = serde_json::from_slice(&wire).unwrap();
+            restored.validate_contract().unwrap();
+            assert_eq!(serde_json::to_vec(&restored).unwrap(), wire);
+            let mut forged = serde_json::to_value(record).unwrap();
+            assert!(forged.get("genetic_validation").is_none());
+            forged["biochemistry"]["body"]["energy"] = serde_json::json!(0.123);
+            let forged: WorldOrganismRecord = serde_json::from_value(forged).unwrap();
+            assert!(forged.validate_contract().is_err());
+            record.validate_contract().unwrap();
+        }
+    }
+
+    #[test]
+    fn mutable_validation_cache_rejects_invalid_biology_and_restores_failed_transactions() {
+        let (mut registry, id) = validation_cache_registry();
+        let original = serde_json::to_vec(registry.get(id).unwrap()).unwrap();
+        for value in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY, -1.0, 2.0] {
+            assert!(registry
+                .with_biology_mut(id, |state| {
+                    state.body.energy = value;
+                    Ok(())
+                })
+                .is_err());
+            let record = registry.get(id).unwrap();
+            record.validate_contract().unwrap();
+            assert_eq!(serde_json::to_vec(record).unwrap(), original);
+        }
+        let invalid_projections: [fn(&mut BiochemistryState); 3] = [
+            |state| state.homeostasis.tick = Tick::ZERO,
+            |state| state.development.age_ticks = Tick(2),
+            |state| state.development.maturation = f32::NAN,
+        ];
+        for mutate in invalid_projections {
+            assert!(registry
+                .with_biology_mut(id, |state| {
+                    mutate(state);
+                    Ok(())
+                })
+                .is_err());
+            let record = registry.get(id).unwrap();
+            record.validate_contract().unwrap();
+            assert_eq!(serde_json::to_vec(record).unwrap(), original);
+        }
+        assert!(registry
+            .with_biology_mut(id, |state| {
+                state.body.set_energy(0.25)?;
+                Err::<(), _>(ScaffoldContractError::InvalidId.into())
+            })
+            .is_err());
+        assert!(registry
+            .with_biology_mut(id, |state| {
+                state.tick = Tick::ZERO;
+                Ok(())
+            })
+            .is_err());
+        let record = registry.get(id).unwrap();
+        record.validate_contract().unwrap();
+        assert_eq!(serde_json::to_vec(record).unwrap(), original);
+        registry
+            .with_biology_mut(id, |state| Ok(state.body.set_energy(0.25)?))
+            .unwrap();
+        registry.get(id).unwrap().validate_contract().unwrap();
+        assert_eq!(registry.get(id).unwrap().biochemistry().body.energy, 0.25);
+    }
+
+    #[test]
+    fn mutable_validation_cache_embodiment_replacement_and_deserialization_preserve_binding() {
+        let (mut registry, id) = validation_cache_registry();
+        let record = registry.records_by_organism.get_mut(&id.raw()).unwrap();
+        record.validate_contract().unwrap();
+        let mut candidate = record.embodiment().clone();
+        let mut calibration = candidate.sensor_calibration().to_vec();
+        calibration[0] = -0.0;
+        candidate
+            .replace_calibration(
+                record.biochemistry().tick,
+                calibration,
+                candidate.effector_controllability().to_vec(),
+                candidate.body_schema().to_vec(),
+            )
+            .unwrap();
+        record.replace_embodiment_state(candidate).unwrap();
+        record.validate_contract().unwrap();
+        assert_eq!(
+            record.embodiment().sensor_calibration()[0].to_bits(),
+            (-0.0_f32).to_bits()
+        );
+        let wire = serde_json::to_vec(record).unwrap();
+        let restored: WorldOrganismRecord = serde_json::from_slice(&wire).unwrap();
+        restored.validate_contract().unwrap();
+        assert_eq!(serde_json::to_vec(&restored).unwrap(), wire);
+        let mut forged = serde_json::to_value(&restored).unwrap();
+        forged["embodiment"]["sensor_calibration"][0] = serde_json::json!(0.0);
+        let forged: WorldOrganismRecord = serde_json::from_value(forged).unwrap();
+        assert!(forged.validate_contract().is_err());
+        let mut invalid = record.embodiment().clone();
+        let mut calibration = invalid.sensor_calibration().to_vec();
+        calibration[0] = f32::NAN;
+        assert!(invalid
+            .replace_calibration(
+                record.biochemistry().tick,
+                calibration,
+                invalid.effector_controllability().to_vec(),
+                invalid.body_schema().to_vec()
+            )
+            .is_err());
+        assert_eq!(serde_json::to_vec(record).unwrap(), wire);
+        record.validate_contract().unwrap();
+
+        // A valid loaded graph can exhaust its revision counter. Replacement
+        // then fails after staging the new embodiment/cache and must restore
+        // both the original value and its digest binding.
+        let mut exhausted = serde_json::to_value(record).unwrap();
+        exhausted["state_graph"]["transaction_revision"] = serde_json::json!(u64::MAX);
+        let mut exhausted: WorldOrganismRecord = serde_json::from_value(exhausted).unwrap();
+        exhausted.validate_contract().unwrap();
+        let before = serde_json::to_vec(&exhausted).unwrap();
+        let mut candidate = exhausted.embodiment().clone();
+        let mut calibration = candidate.sensor_calibration().to_vec();
+        calibration[0] = 0.75;
+        candidate
+            .replace_calibration(
+                exhausted.biochemistry().tick,
+                calibration,
+                candidate.effector_controllability().to_vec(),
+                candidate.body_schema().to_vec(),
+            )
+            .unwrap();
+        assert!(exhausted.replace_embodiment_state(candidate).is_err());
+        exhausted.validate_contract().unwrap();
+        assert_eq!(serde_json::to_vec(&exhausted).unwrap(), before);
     }
 
     fn malformed_registry() -> (WorldOrganismRegistry, OrganismId) {
@@ -1632,7 +1947,7 @@ mod tests {
         let mut registry = WorldOrganismRegistry::default();
         registry
             .records_by_organism
-            .insert(organism_id.raw(), malformed);
+            .insert(organism_id.raw(), RegisteredRecord::new(malformed));
         registry
             .organism_by_world_entity
             .insert(world_entity_id.raw(), organism_id);

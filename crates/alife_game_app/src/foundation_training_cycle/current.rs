@@ -3,7 +3,14 @@ use super::*;
 pub use alife_training::SameIndividualProgressV1;
 use alife_training::{CheckpointSeedsV1, CurrentTrainingCheckpointV1};
 use sha2::{Digest, Sha256};
+mod actor_export;
+mod new_life;
+pub use new_life::{
+    begin_new_individual_training_life, begin_new_individual_training_life_with_retained_neural,
+    check_new_individual_retained_neural, check_new_individual_training_life,
+};
 mod life;
+pub use actor_export::export_current_actor_asset;
 #[cfg(test)]
 mod throughput_tests;
 pub(super) use life::validation_scope;
@@ -34,6 +41,12 @@ pub fn resolve_current_training_destination(
 /// Device-free validation, including the ordinary cohort's compiler coordinates.
 pub fn read_current_training_checkpoint(path: &Path) -> Result<CurrentTrainingCheckpointV1> {
     let checkpoint = CurrentTrainingCheckpointV1::read(path)?;
+    admit_current_training_checkpoint(checkpoint)
+}
+
+fn admit_current_training_checkpoint(
+    checkpoint: CurrentTrainingCheckpointV1,
+) -> Result<CurrentTrainingCheckpointV1> {
     life::validate(
         checkpoint
             .life
@@ -125,6 +138,7 @@ fn read_native_current(
         same_individual: None,
         terminal_disposition: None,
         training_attempt_origin: None,
+        new_life_origin: None,
     };
     checkpoint.validate()?;
     Ok((checkpoint, receipt))
@@ -223,6 +237,9 @@ pub fn inspect_current_training_checkpoint(path: &Path) -> Result<serde_json::Va
     }
     if let Some(origin) = &checkpoint.training_attempt_origin {
         report["training_attempt_origin"] = serde_json::to_value(origin)?;
+    }
+    if let Some(origin) = &checkpoint.new_life_origin {
+        report["new_life_origin"] = serde_json::to_value(origin)?;
     }
     Ok(report)
 }

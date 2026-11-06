@@ -307,14 +307,14 @@ fn fast_plasticity_replay_eligibility(
   return eligibility_at_outcome(staged, receptor.eligibility_decay, outcome);
 }
 
-@compute @workgroup_size(1)
-fn initialize_fast_plasticity(@builtin(global_invocation_id) gid:vec3<u32>) {
+// Original ordered preflight/staging; no barriers or success publication on failure.
+fn prepare_initialize_fast_plasticity(gid:vec3<u32>) -> vec2<u32> {
   let row = gid.y;
   let header = load_learning_header(row * PLASTICITY_DISPATCH_ROW_WORDS + PLASTICITY_HEADER_WORD_OFFSET);
-  if (header.brain_slot_index >= arrayLength(&brain_slots)) { return; }
+  if (header.brain_slot_index >= arrayLength(&brain_slots)) { return vec2<u32>(0u); }
   let brain = brain_slots[header.brain_slot_index];
   let receipt_base = brain.diagnostic_offset;
-  if (!state_span_within(receipt_base, FAST_PLASTICITY_RECEIPT_WORDS)) { return; }
+  if (!state_span_within(receipt_base, FAST_PLASTICITY_RECEIPT_WORDS)) { return vec2<u32>(0u); }
   for (var word=0u; word<FAST_PLASTICITY_RECEIPT_WORDS; word+=1u) {
     store_state_u32(receipt_base+word, 0u);
   }
@@ -347,7 +347,7 @@ fn initialize_fast_plasticity(@builtin(global_invocation_id) gid:vec3<u32>) {
     | plasticity_guard_bit(18u, !state_span_within(brain.extension_record_offset,20u))
     | plasticity_guard_bit(19u, !plasticity_frame_span_within(header.outcome_offset,OUTCOME_CREDIT_WORDS));
   if (header_guard != 0u) {
-    publish_plasticity_rejection(receipt_base, PLASTICITY_GUARD_HEADER_LAYOUT, header_guard, 0u, 0u); return;
+    publish_plasticity_rejection(receipt_base, PLASTICITY_GUARD_HEADER_LAYOUT, header_guard, 0u, 0u); return vec2<u32>(0u);
   }
   let extension = load_slot_extension(brain);
   let extension_guard =
@@ -357,7 +357,7 @@ fn initialize_fast_plasticity(@builtin(global_invocation_id) gid:vec3<u32>) {
     | plasticity_guard_bit(3u, !state_span_within(extension.pending_eligibility_offset,PENDING_ELIGIBILITY_WORDS_PLASTICITY))
     | plasticity_guard_bit(4u, !state_span_within(extension.reserved0,4u));
   if (extension_guard != 0u) {
-    publish_plasticity_rejection(receipt_base, PLASTICITY_GUARD_EXTENSION_LAYOUT, extension_guard, 0u, 0u); return;
+    publish_plasticity_rejection(receipt_base, PLASTICITY_GUARD_EXTENSION_LAYOUT, extension_guard, 0u, 0u); return vec2<u32>(0u);
   }
   let learning = load_slot_learning_state(extension);
   let outcome = load_outcome_credit(header.outcome_offset);
@@ -427,12 +427,19 @@ fn initialize_fast_plasticity(@builtin(global_invocation_id) gid:vec3<u32>) {
     | plasticity_guard_bit(24u, !immutable_plan_span_within(extension.synapse_metadata_offset,brain.synapse_count*8u))
     | plasticity_guard_bit(25u, !motor_matches);
   if (state_guard_lo != 0u || state_guard_hi != 0u) {
-    publish_plasticity_rejection(receipt_base, PLASTICITY_GUARD_STATE_EVIDENCE, state_guard_lo, state_guard_hi, 0u); return;
+    publish_plasticity_rejection(receipt_base, PLASTICITY_GUARD_STATE_EVIDENCE, state_guard_lo, state_guard_hi, 0u); return vec2<u32>(0u);
   }
   store_state_u32(receipt_base+4u,learning.active_weight_generation_lo);
   store_state_u32(receipt_base+5u,learning.active_weight_generation_hi);
+  return vec2<u32>(1u, receipt_base);
+}
+
+@compute @workgroup_size(1)
+fn initialize_fast_plasticity(@builtin(global_invocation_id) gid:vec3<u32>) {
+  let publication = prepare_initialize_fast_plasticity(gid);
+  // Every invocation reaches each barrier; workgroup size remains one.
   storageBarrier();
-  store_state_u32(receipt_base+3u,PLASTICITY_STATUS_PREPARED);
+  if (publication.x != 0u) { store_state_u32(publication.y+3u,PLASTICITY_STATUS_PREPARED); }
 }
 
 @compute @workgroup_size(64)
@@ -482,10 +489,10 @@ fn capture_fast_plasticity_replay(@builtin(global_invocation_id) gid:vec3<u32>) 
   store_state_u32(span.span_base+2u,min(learning.replay_event_count+1u,learning.replay_event_capacity));
 }
 
-@compute @workgroup_size(1)
-fn finalize_fast_plasticity(@builtin(global_invocation_id) gid:vec3<u32>) {
+// Original ordered preflight/staging; no barriers or success publication on failure.
+fn prepare_finalize_fast_plasticity(gid:vec3<u32>) -> vec2<u32> {
   let header = load_learning_header(gid.y * PLASTICITY_DISPATCH_ROW_WORDS + PLASTICITY_HEADER_WORD_OFFSET);
-  if (header.brain_slot_index >= arrayLength(&brain_slots)) { return; }
+  if (header.brain_slot_index >= arrayLength(&brain_slots)) { return vec2<u32>(0u); }
   let brain = brain_slots[header.brain_slot_index];
   let receipt_base = brain.diagnostic_offset;
   let status = load_state_u32(receipt_base+3u);
@@ -508,9 +515,9 @@ fn finalize_fast_plasticity(@builtin(global_invocation_id) gid:vec3<u32>) {
       let eligibility = fast_plasticity_replay_eligibility(brain,extension,learning,replay_eligibility_context,outcome);
       publish_plasticity_rejection(receipt_base,PLASTICITY_GUARD_REPLAY_ELIGIBILITY,bitcast<u32>(eligibility),0u,replay_eligibility_context);
     }
-    return;
+    return vec2<u32>(0u);
   }
-  if (status != PLASTICITY_STATUS_PREPARED) { return; }
+  if (status != PLASTICITY_STATUS_PREPARED) { return vec2<u32>(0u); }
   let extension = load_slot_extension(brain);
   let learning = load_slot_learning_state(extension);
   let outcome = load_outcome_credit(header.outcome_offset);
@@ -522,7 +529,7 @@ fn finalize_fast_plasticity(@builtin(global_invocation_id) gid:vec3<u32>) {
     | plasticity_guard_bit(1u, !pair_nonzero(output_replay))
     | plasticity_guard_bit(2u, !pair_nonzero(output_transaction));
   if (generation_guard != 0u) {
-    publish_plasticity_rejection(receipt_base, PLASTICITY_GUARD_GENERATION_OVERFLOW, generation_guard, 0u, 0u); return;
+    publish_plasticity_rejection(receipt_base, PLASTICITY_GUARD_GENERATION_OVERFLOW, generation_guard, 0u, 0u); return vec2<u32>(0u);
   }
   let family = (outcome.selected_candidate_and_family>>16u)&0xffu;
   let event_base = learning.replay_event_rows_offset + learning.replay_cursor*28u;
@@ -556,6 +563,13 @@ fn finalize_fast_plasticity(@builtin(global_invocation_id) gid:vec3<u32>) {
   store_state_u32(receipt_base+9u,learning.inactive_eligibility_generation_hi);
   store_state_u32(receipt_base+10u,output_replay.x); store_state_u32(receipt_base+11u,output_replay.y);
   store_state_u32(receipt_base+12u,output_transaction.x); store_state_u32(receipt_base+13u,output_transaction.y);
+  return vec2<u32>(1u, receipt_base);
+}
+
+@compute @workgroup_size(1)
+fn finalize_fast_plasticity(@builtin(global_invocation_id) gid:vec3<u32>) {
+  let publication = prepare_finalize_fast_plasticity(gid);
+  // Every invocation reaches each barrier; workgroup size remains one.
   storageBarrier();
-  store_state_u32(receipt_base+3u,PLASTICITY_STATUS_SUCCESS);
+  if (publication.x != 0u) { store_state_u32(publication.y+3u,PLASTICITY_STATUS_SUCCESS); }
 }

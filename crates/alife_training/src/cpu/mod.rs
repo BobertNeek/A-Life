@@ -9,6 +9,7 @@ mod collector_shard;
 mod continuation;
 mod cooperative_round;
 mod cooperative_source;
+mod fresh_founder;
 mod host;
 mod input;
 mod objective;
@@ -24,6 +25,7 @@ pub use collector_shard::*;
 pub use continuation::*;
 pub use cooperative_round::*;
 pub use cooperative_source::*;
+pub use fresh_founder::{initialize_cpu_untrained_founder, CPU_UNTRAINED_FOUNDER_MODE};
 pub use host::*;
 pub use input::*;
 pub use objective::*;
@@ -56,6 +58,16 @@ pub struct CpuHardwareReceipt {
     pub backend: &'static str,
     pub architecture: &'static str,
     pub logical_parallelism: usize,
+}
+
+/// Process-local CPU replay scheduling; never changes graph or checkpoint identity.
+/// New/from-checkpoint trainers use Reference until the caller opts in. In-place
+/// checkpoint restore retains the process-local choice; no mode enters the save.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum CpuReplayExecution {
+    #[default]
+    Reference,
+    CadenceCsr,
 }
 
 /// Offline founder policy/optimizer. Cloning an organism never clones this.
@@ -152,6 +164,19 @@ impl CpuFoundationTrainer {
             logical_parallelism: std::thread::available_parallelism().map_or(1, usize::from),
         }
     }
+    /// Opt in to cadence-filtered canonical index views, or release them and
+    /// restore reference traversal. Weights, private replay and Adam are untouched.
+    pub fn set_replay_execution(&mut self, execution: CpuReplayExecution) {
+        self.graph
+            .set_cadence_rows(&self.phenotype, execution == CpuReplayExecution::CadenceCsr);
+    }
+    pub fn replay_execution(&self) -> CpuReplayExecution {
+        if self.graph.cadence_enabled() {
+            CpuReplayExecution::CadenceCsr
+        } else {
+            CpuReplayExecution::Reference
+        }
+    }
     pub fn set_stage_mask(&mut self, mask: StageTrainableMask) -> Result<(), TrainingError> {
         mask.validate_for(&self.phenotype)?;
         self.checkpoint.stage_mask = mask;
@@ -218,9 +243,12 @@ impl CpuFoundationTrainer {
         {
             return Err(invalid());
         }
+        let execution = self.replay_execution();
+        let mut graph = replay::SparseGraph::new(&next);
+        graph.set_cadence_rows(&next, execution == CpuReplayExecution::CadenceCsr);
         self.checkpoint.phenotype_hash = next.phenotype_hash();
         self.checkpoint.source_foundation_digest = asset.digest();
-        self.graph = replay::SparseGraph::new(&next);
+        self.graph = graph;
         self.phenotype = next;
         self.source_foundation = asset;
         Ok(())
@@ -273,6 +301,33 @@ impl CpuFoundationTrainer {
             self.weights(),
             sequence,
             &tape,
+            &full,
+            targets,
+        )
+    }
+    // Both cohort callers keep this window's fresh tape local, without mutating
+    // the trainer between forward and backward. Never retain a tape across
+    // windows or optimizer commits.
+    fn replay_gradients_from_tape(
+        &self,
+        sequence: &TrainingSequence,
+        adjoints: &[Vec<f32>],
+        targets: &[Option<crate::ReplaySpeechTarget>],
+        tape: &replay::Tape,
+    ) -> Result<TrainingGradientProbe, TrainingError> {
+        if adjoints.len() != sequence.ticks.len() - sequence.burn_in_ticks {
+            return Err(invalid());
+        }
+        let mut full = sequence.ticks[..sequence.burn_in_ticks]
+            .iter()
+            .map(|tick| vec![0.; tick.candidates.len()])
+            .collect::<Vec<_>>();
+        full.extend_from_slice(adjoints);
+        self.graph.backward(
+            &self.phenotype,
+            self.weights(),
+            sequence,
+            tape,
             &full,
             targets,
         )
@@ -364,3 +419,6 @@ fn adam_coordinate(
     finite(&[next, m, v])?;
     Ok((next, m, v))
 }
+
+#[cfg(test)]
+mod hotpath_bench;

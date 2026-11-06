@@ -1,0 +1,43 @@
+name: Care frontier sampler
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/care-frontier-sampler.yml'
+      - 'scripts/care_frontier_sampler.py'
+      - 'scripts/run_care_frontier_fixture.py'
+      - 'scripts/test_care_frontier_sampler.py'
+      - 'scripts/compare_cpu_care_rounds.py'
+      - 'docs/experiments/care-frontier-*'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/care-frontier-sampler.yml'
+      - 'scripts/care_frontier_sampler.py'
+      - 'scripts/run_care_frontier_fixture.py'
+      - 'scripts/test_care_frontier_sampler.py'
+      - 'scripts/compare_cpu_care_rounds.py'
+      - 'docs/experiments/care-frontier-*'
+
+permissions:
+  contents: read
+
+jobs:
+  contracts:
+    name: contracts (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Bounded selection, native evidence, held-out seeds and difficulty contracts
+        run: python -B -m unittest discover -s scripts -p 'test_care_frontier_sampler.py' -v
+      - name: Read-only CLI help
+        run: |
+          python -B scripts/care_frontier_sampler.py --help
+          python -B scripts/run_care_frontier_fixture.py --help

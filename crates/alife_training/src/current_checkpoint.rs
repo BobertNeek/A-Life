@@ -14,6 +14,8 @@ mod terminal;
 pub use terminal::*;
 mod training_attempt;
 pub use training_attempt::*;
+mod new_life;
+pub use new_life::*;
 
 /// Exact union of consumed, reserved, interrupted and assessment seeds. Ranges
 /// are coalesced, not a receipt log. Unknown historical freshness stays unknown.
@@ -148,6 +150,8 @@ pub struct CurrentTrainingCheckpointV1 {
     pub terminal_disposition: Option<CurrentTerminalDispositionV1>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub training_attempt_origin: Option<TrainingAttemptOriginV1>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub new_life_origin: Option<NewLifeOriginV1>,
 }
 impl CurrentTrainingCheckpointV1 {
     pub fn validate(&self) -> Result<()> {
@@ -188,6 +192,9 @@ impl CurrentTrainingCheckpointV1 {
         if let Some(origin) = &self.training_attempt_origin {
             origin.validate(self)?;
         }
+        if let Some(origin) = &self.new_life_origin {
+            origin.validate(self)?;
+        }
         self.handoff
             .policy_version
             .checked_add(1)
@@ -196,16 +203,19 @@ impl CurrentTrainingCheckpointV1 {
     }
     pub fn encode(&self) -> Result<Vec<u8>> {
         self.validate()?;
-        let payload = serde_json::to_vec(self)?;
-        if payload.len() as u64 + HEADER as u64 > MAX_CURRENT_CHECKPOINT_BYTES {
+        let mut bytes = Vec::with_capacity(128);
+        bytes.resize(HEADER, 0);
+        serde_json::to_writer(&mut bytes, self)?;
+        if bytes.len() as u64 > MAX_CURRENT_CHECKPOINT_BYTES {
             return Err("current checkpoint byte limit exceeded".into());
         }
-        let mut bytes = Vec::with_capacity(HEADER + payload.len());
-        bytes.extend_from_slice(MAGIC);
-        bytes.extend_from_slice(&(payload.len() as u64).to_le_bytes());
-        bytes.extend_from_slice(&Sha256::digest(&payload));
-        bytes.extend_from_slice(&payload);
-        Ok(bytes)
+        let payload_len = bytes.len() - HEADER;
+        let digest = Sha256::digest(&bytes[HEADER..]);
+        bytes[..16].copy_from_slice(MAGIC);
+        bytes[16..24].copy_from_slice(&(payload_len as u64).to_le_bytes());
+        bytes[24..HEADER].copy_from_slice(&digest);
+        // These bytes remain alive during full admission; do not retain growth capacity.
+        Ok(bytes.into_boxed_slice().into_vec())
     }
     pub fn decode(bytes: &[u8]) -> Result<Self> {
         if bytes.len() < HEADER

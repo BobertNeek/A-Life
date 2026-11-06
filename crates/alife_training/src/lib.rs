@@ -7,6 +7,8 @@ mod current_checkpoint;
 #[cfg(feature = "receipt-lineage")]
 pub use current_checkpoint::*;
 #[cfg(feature = "cpu-backend")]
+pub mod connection_budget_experiment;
+#[cfg(feature = "cpu-backend")]
 pub mod cpu;
 mod founder_demonstrations;
 mod founder_merge;

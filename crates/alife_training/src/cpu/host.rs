@@ -35,6 +35,10 @@ pub enum CpuHostError {
 }
 #[derive(Clone)]
 struct Resident {
+    // Process-local proof of the last completed boundary. Private state is
+    // invalidated before mutation and resealed before a staged host is committed.
+    // Never restored from serialized data; cold admission recomputes the digest.
+    sealed_authority: Option<ResidentAuthority>,
     neural: CpuOrganismState,
     activity: CpuActivityState,
     v11: GpuV11CausalState,
@@ -46,6 +50,32 @@ struct Resident {
     next_sequence: u64,
     replay: Vec<CpuReplayEvent>,
     language_grounding: LanguageGroundingLedger,
+}
+#[derive(Clone, Copy)]
+struct ResidentAuthority {
+    brain: [u64; 4],
+    memory: [u64; 4],
+    sampling_seed: u32,
+    sampling_counter: u32,
+}
+impl ResidentAuthority {
+    fn validate(
+        self,
+        record: &alife_world::WorldOrganismRecord,
+        sampling_seed: u32,
+        sampling_counter: u32,
+    ) -> Result<(), CpuHostError> {
+        if self.sampling_seed != sampling_seed
+            || self.sampling_counter != sampling_counter
+            || record.state_graph().brain.content_digest != self.brain
+            || record.state_graph().memory.content_digest != self.memory
+        {
+            return Err(CpuHostError::State(
+                "canonical organism authority differs from private CPU state",
+            ));
+        }
+        Ok(())
+    }
 }
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 struct CpuReplayEvent {
@@ -179,6 +209,7 @@ impl CpuCanonicalHost {
             residents.insert(
                 id.raw(),
                 Resident {
+                    sealed_authority: None,
                     neural,
                     activity: CpuActivityState::default(),
                     v11,
@@ -343,6 +374,7 @@ impl CpuCanonicalHost {
             .residents
             .get_mut(&id.raw())
             .ok_or(CpuHostError::State("unknown recovery organism"))?;
+        r.sealed_authority = None;
         r.sleep
             .force_sleep(tick, alife_core::SleepTrigger::RecoveryProtocol)?;
         let state = r.sleep.state();
@@ -522,7 +554,8 @@ impl CpuCanonicalHost {
             {
                 return Err(CpuHostError::State("neural topology checkpoint mismatch"));
             }
-            let resident = Resident {
+            let mut resident = Resident {
+                sealed_authority: None,
                 v11: GpuV11CausalState::restore(r.neural_topology)?,
                 neural: CpuOrganismState::from_checkpoint(p, r.neural)?,
                 activity: r.activity,
@@ -540,12 +573,12 @@ impl CpuCanonicalHost {
                 replay: r.replay,
                 language_grounding: r.language_grounding,
             };
-            validate_resident_authority(
+            resident.sealed_authority = Some(validate_resident_authority(
                 record,
                 &resident,
                 checkpoint.sampling_seed,
                 checkpoint.sampling_counter,
-            )?;
+            )?);
             if residents.insert(id.raw(), resident).is_some() {
                 return Err(CpuHostError::State("duplicate checkpoint organism"));
             }
@@ -572,7 +605,7 @@ impl CpuCanonicalHost {
         Ok(host)
     }
     fn seal_all_residents(&mut self) -> Result<(), CpuHostError> {
-        for (&raw, r) in &self.residents {
+        for (&raw, r) in &mut self.residents {
             let mut record = self
                 .world
                 .organism_registry()
@@ -581,12 +614,14 @@ impl CpuCanonicalHost {
                 .ok_or(CpuHostError::State(
                     "missing organism at CPU sealed boundary",
                 ))?;
+            let authority = resident_authority(r, self.sampling_seed, self.sampling_counter)?;
             record.seal_cognitive_subsystems(
                 record.biochemistry().tick,
-                resident_digest(r, self.sampling_seed, self.sampling_counter)?,
-                r.memory.export_active_bank()?.active_bank_digest,
+                authority.brain,
+                authority.memory,
             )?;
             self.world.replace_organism_record_exact(record)?;
+            r.sealed_authority = Some(authority);
         }
         Ok(())
     }
@@ -619,9 +654,18 @@ impl CpuCanonicalHost {
                 .organism_registry()
                 .get(OrganismId(raw))
                 .ok_or(CpuHostError::State("missing canonical organism"))?;
-            validate_resident_authority(record, r, self.sampling_seed, self.sampling_counter)?;
+            r.sealed_authority
+                .ok_or(CpuHostError::State(
+                    "CPU resident has no completed private seal",
+                ))?
+                .validate(record, self.sampling_seed, self.sampling_counter)?;
         }
         let mut next = self.clone();
+        // The global sampling counter is part of every resident digest, even
+        // when a particular resident sleeps or makes no decision this tick.
+        for resident in next.residents.values_mut() {
+            resident.sealed_authority = None;
+        }
         let result = next.step_inner(founder, temperature, &mut prepare)?;
         *self = next;
         Ok(result)
@@ -808,12 +852,13 @@ impl CpuCanonicalHost {
                 &receptors,
                 &NeuralReceptorPhenotype::compile(p)?,
             )?;
-            let draft = perception_world.perception_frame_draft(
-                id,
-                tick,
-                p.sensor_profile(),
-                record.biochemistry().homeostasis,
-            )?;
+            let (draft, candidate_binding) = perception_world
+                .perception_frame_draft_with_bindings(
+                    id,
+                    tick,
+                    p.sensor_profile(),
+                    record.biochemistry().homeostasis,
+                )?;
             let ordinary = draft.clone().with_semantic_context(None)?;
             let draft = prepare(draft, sequence)?;
             if draft.clone().with_semantic_context(None)? != ordinary {
@@ -824,6 +869,7 @@ impl CpuCanonicalHost {
             let preparation = prepare_canonical_frame(
                 &CanonicalPreparationInput {
                     draft,
+                    candidate_binding,
                     sequence_id: sequence,
                     homeostasis: record.biochemistry().homeostasis,
                     hysteresis: r.hysteresis,
@@ -1360,17 +1406,22 @@ fn validate_resident_authority(
     r: &Resident,
     sampling_seed: u32,
     sampling_counter: u32,
-) -> Result<(), CpuHostError> {
-    if record.state_graph().brain.content_digest
-        != resident_digest(r, sampling_seed, sampling_counter)?
-        || record.state_graph().memory.content_digest
-            != r.memory.export_active_bank()?.active_bank_digest
-    {
-        return Err(CpuHostError::State(
-            "canonical organism authority differs from private CPU state",
-        ));
-    }
-    Ok(())
+) -> Result<ResidentAuthority, CpuHostError> {
+    let authority = resident_authority(r, sampling_seed, sampling_counter)?;
+    authority.validate(record, sampling_seed, sampling_counter)?;
+    Ok(authority)
+}
+fn resident_authority(
+    r: &Resident,
+    sampling_seed: u32,
+    sampling_counter: u32,
+) -> Result<ResidentAuthority, CpuHostError> {
+    Ok(ResidentAuthority {
+        brain: resident_digest(r, sampling_seed, sampling_counter)?,
+        memory: r.memory.export_active_bank()?.active_bank_digest,
+        sampling_seed,
+        sampling_counter,
+    })
 }
 
 fn structural_sleep_evidence(

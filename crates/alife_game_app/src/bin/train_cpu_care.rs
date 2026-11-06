@@ -1,5 +1,6 @@
 //! Explicit CPU continuation using the existing held/reachable/feeding/blocked-route lessons.
-use alife_game_app::{run_cpu_care, CpuCareRequest, FoundationTeacherLesson};
+use alife_game_app::{run_cpu_care_with_replay_execution, CpuCareRequest, FoundationTeacherLesson};
+use alife_training::cpu::CpuReplayExecution;
 use std::{collections::BTreeMap, path::PathBuf};
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Cooperative predecessors validate full round proofs. Use the same bounded
@@ -19,6 +20,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 fn run() -> Result<(), Box<dyn std::error::Error>> {
     let special: Vec<_> = std::env::args().skip(1).collect();
+    if special
+        .first()
+        .is_some_and(|arg| arg == "--initialize-founder")
+    {
+        if special.len() != 5 || special[1] != "--output" || special[3] != "--seed" {
+            return Err("construction only: --initialize-founder --output NEW_SOURCE --seed SEED; training arguments are forbidden".into());
+        }
+        let result = alife_game_app::initialize_cpu_care_founder(
+            std::path::Path::new(&special[2]),
+            special[4].parse()?,
+        )?;
+        println!("{}", serde_json::to_string(&result)?);
+        return Ok(());
+    }
     if special.len() == 2 {
         let result = match special[0].as_str() {
             "--validate-output" => Some(alife_game_app::validate_cpu_care_output(
@@ -42,7 +57,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     while let Some(key) = arguments.next() {
         match key.as_str() {
             "--help" | "-h" => {
-                println!("train_cpu_care --previous FINAL_PORTABLE_OR_CPU_SOURCE --output NEW_CPU_LANE/NEW_EPISODE --seed-history EXACT_HISTORY --seed EXPLICIT_NEW_SEED --lesson eat_held_food|eat_reachable_food|feeding|obstacle_navigation|relocated_food --decisions 1..128 [--temperature 1] [--food-need-condition newborn_v1|ordinary_healthy_aging_v1] [--known-exclusions] [--record-diagnostic-replay]\n\nThe opt-in ordinary healthy aging condition applies only to Feeding/RelocatedFood and preserves their geometry and cues.\n\nBulky raw diagnostic replay is opt-in; in-memory training and checkpoint state are unchanged.\n\nDevelopment only: --fixture replaces --previous and --seed-history. No GPU/device is created. New prepared episode body/private cognition; full inherited founder and actor/value Adam state. A separate original individual archive remains required. No automatic curriculum progression or terminal GPU individual restore is claimed.");
+                println!("Construction only: train_cpu_care --initialize-founder --output NEW_SOURCE --seed SEED. Creates an explicitly untrained disposable founder with zero world steps and zero optimizer updates; it runs no care lesson or evaluation.");
+                println!("train_cpu_care --previous FINAL_PORTABLE_OR_CPU_SOURCE --output NEW_CPU_LANE/NEW_EPISODE --seed-history EXACT_HISTORY --seed EXPLICIT_NEW_SEED --lesson eat_held_food|eat_reachable_food|feeding|obstacle_navigation|relocated_food --decisions 1..128 [--temperature 1] [--food-need-condition newborn_v1|ordinary_healthy_aging_v1] [--food-offset-x X --food-offset-z Z] [--layout-json JSON] [--known-exclusions] [--record-diagnostic-replay]\n\nThe opt-in ordinary healthy aging condition applies only to Feeding/RelocatedFood and preserves their geometry and cues.\n\nBulky raw diagnostic replay is opt-in; in-memory training and checkpoint state are unchanged.\n\nDevelopment only: --fixture replaces --previous and --seed-history. No GPU/device is created. New prepared episode body/private cognition; full inherited founder and actor/value Adam state. A separate original individual archive remains required. No automatic curriculum progression or terminal GPU individual restore is claimed.");
+                println!("\nFood offsets are feeding-only world X/Z displacements from the founder, with finite distance 0.5..=8 world units.");
+                println!("\n--replay-execution reference|cadence-csr selects offline CPU training replay only. Reference is default; collection remains Reference. This does not accelerate GPU PPO.");
                 return Ok(());
             }
             "--fixture" => {
@@ -70,6 +88,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             | "--lesson"
             | "--decisions"
             | "--temperature"
+            | "--replay-execution"
+            | "--layout-json"
+            | "--food-offset-x"
+            | "--food-offset-z"
             | "--food-need-condition" => {
                 let value = arguments.next().ok_or("missing argument value")?;
                 if values.insert(key, value).is_some() {
@@ -79,6 +101,11 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             _ => return Err(format!("unknown CPU care argument {key}").into()),
         }
     }
+    let execution = match values.remove("--replay-execution").as_deref() {
+        None | Some("reference") => CpuReplayExecution::Reference,
+        Some("cadence-csr") => CpuReplayExecution::CadenceCsr,
+        _ => return Err("--replay-execution must be reference or cadence-csr".into()),
+    };
     let lesson = match values.remove("--lesson").as_deref() {
         Some("eat_held_food") => FoundationTeacherLesson::EatHeldFood,
         Some("eat_reachable_food") => FoundationTeacherLesson::EatReachableFood,
@@ -87,7 +114,20 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         Some("relocated_food") => FoundationTeacherLesson::RelocatedFood,
         _ => return Err("an explicit supported care lesson is required".into()),
     };
+    let food_offset = match (
+        values.remove("--food-offset-x"),
+        values.remove("--food-offset-z"),
+    ) {
+        (None, None) => None,
+        (Some(x), Some(z)) => Some([x.parse()?, z.parse()?]),
+        _ => return Err("--food-offset-x and --food-offset-z must be supplied together".into()),
+    };
     let request = CpuCareRequest {
+        food_offset,
+        layout: values
+            .remove("--layout-json")
+            .map(|value| serde_json::from_str(&value))
+            .transpose()?,
         previous: values.remove("--previous").map(PathBuf::from),
         output: values.remove("--output").ok_or("--output required")?.into(),
         seed: values.remove("--seed").ok_or("--seed required")?.parse()?,
@@ -110,6 +150,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         known_exclusions,
         record_diagnostic_replay,
     };
-    println!("{}", serde_json::to_string(&run_cpu_care(request)?)?);
+    println!(
+        "{}",
+        serde_json::to_string(&run_cpu_care_with_replay_execution(request, execution)?)?
+    );
     Ok(())
 }

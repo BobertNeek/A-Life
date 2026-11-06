@@ -7,6 +7,27 @@ on:
     branches: ["main"]
 
 jobs:
+  portable-save:
+    name: Atomic portable save (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    env:
+      CARGO_BUILD_JOBS: '2'
+      CARGO_INCREMENTAL: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Preserve prior saves through write and publication failures
+        run: cargo test --locked -p alife_world --test atomic_portable_save
+
   native-texture-decode:
     name: Native texture decode (${{ matrix.os }})
     strategy:
@@ -71,6 +92,8 @@ jobs:
         run: 'cargo test --locked -p alife_game_app --features production-voxel-frontend --lib production_conversation_lineage_ui:: -- --test-threads=1 --color=never'
       - name: Run Hearthling skin, shared-material and inherited-paw CPU regressions
         run: 'cargo test --locked -p alife_game_app --features production-voxel-frontend --lib hearthling -- --test-threads=1 --color=never'
+      - name: Bound shipping Hearthling skin across authored and inherited transforms
+        run: python3 scripts/test_hearthling_skin_bounds.py
       - name: Run saved-appearance identity and inheritance CPU regressions
         run: 'cargo test --locked -p alife_game_app --features production-voxel-frontend --lib appearance -- --test-threads=1 --color=never'
       - name: Run graphics-capture visibility and screenshot delivery CPU regressions
@@ -89,6 +112,8 @@ jobs:
           components: clippy
       - name: Check training CLI
         run: cargo check --locked -p alife_game_app --features foundation-training --bin train_n2048_care
+      - name: Read-only native build identity CLI
+        run: cargo test --locked -p alife_game_app --features foundation-training --test native_build_info -- --test-threads=1
       - name: Strict foundation-training Clippy
         run: cargo clippy --locked -p alife_game_app --features foundation-training --all-targets -- -D warnings
       - name: Adaptive game exploration shader and host CPU contracts
@@ -163,6 +188,9 @@ jobs:
 
       - name: Format
         run: cargo fmt --all -- --check
+
+      - name: Stage timing observation admission
+        run: python3 -B -m unittest discover -s scripts -p test_stage_timing_observations.py -v
 
       - name: Check
         id: check

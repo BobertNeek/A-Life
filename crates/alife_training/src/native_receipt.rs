@@ -289,7 +289,11 @@ impl Lineage {
             let cpu = current["complete"] == true
                 && matches!(
                     current["mode"].as_str(),
-                    Some("native_cpu_fresh_cohort" | "native_cpu_cooperative_founder")
+                    Some(
+                        "native_cpu_fresh_cohort"
+                            | "native_cpu_cooperative_founder"
+                            | "native_cpu_untrained_founder"
+                    )
                 )
                 && current["backend"] == "native-cpu"
                 && current["receipt_filename"] == "cpu-cycle.json"

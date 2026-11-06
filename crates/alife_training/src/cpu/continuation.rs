@@ -121,7 +121,7 @@ pub struct CpuEpisodeReceipt {
 }
 pub struct DefaultCpuEpisode;
 impl CpuEpisodeHooks for DefaultCpuEpisode {}
-fn compile_game(
+pub(super) fn compile_game(
     seed: u64,
     founder_seed: u64,
     asset: &FoundationWeightAsset,
@@ -874,6 +874,16 @@ pub fn run_cpu_continuation(
     args: CpuContinuationConfig,
     episode: &mut impl CpuEpisodeHooks,
 ) -> Result<Value> {
+    run_cpu_continuation_with_replay_execution(args, episode, CpuReplayExecution::Reference)
+}
+
+/// Explicit offline replay scheduling. Collection retains its normal reference
+/// path; no execution selection is added to checkpoints or inference assets.
+pub fn run_cpu_continuation_with_replay_execution(
+    args: CpuContinuationConfig,
+    episode: &mut impl CpuEpisodeHooks,
+    execution: CpuReplayExecution,
+) -> Result<Value> {
     let mut collected = collect_cpu_episode_inner(args, episode)?;
     let config = collected.config();
     let windows = collected.training_windows()?;
@@ -914,6 +924,7 @@ pub fn run_cpu_continuation(
     } = collected;
     let episode_receipt = episode_receipt.ok_or("collection finalization missing")?;
     let profile = trainer.phenotype().sensor_profile();
+    trainer.set_replay_execution(execution);
     let update_started = Instant::now();
     let update = train_cpu_residual_cohort(
         &mut trainer,
@@ -991,6 +1002,10 @@ pub fn run_cpu_continuation(
             .as_object_mut()
             .unwrap()
             .remove("native_source_receipt_ref");
+    }
+    if execution == CpuReplayExecution::CadenceCsr {
+        receipt["cpu_replay_execution"] = json!("cadence-csr");
+        receipt["cpu_collection_execution"] = json!("reference");
     }
     receipt["consumer_build"] = json!({"git_head":option_env!("ALIFE_CONSUMER_GIT_HEAD"),"git_tree":option_env!("ALIFE_CONSUMER_GIT_TREE"),"executable_sha256":std::env::current_exe().ok().and_then(|p| fs::read(p).ok()).map(|bytes| hash(&bytes))});
     receipt["episode"] = episode_receipt.metadata;

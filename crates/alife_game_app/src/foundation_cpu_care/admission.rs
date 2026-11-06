@@ -267,6 +267,7 @@ impl CareSeedReservation {
             "output":config.output,"source":previous,"source_sha256":provenance["source_sha256"],
             "source_policy_version":provenance["native_source_receipt"]["policy_version"],
             "lesson":request.lesson,"decisions":request.decisions,"food_need_condition":request.food_need_condition,
+            "food_offset":request.food_offset,"layout":request.layout,
             "seed_admission":provenance["seed_admission"]}));
         write_atomic(&ledger_path, &ledger)?;
         Ok(Self {
@@ -424,6 +425,7 @@ fn validate_collection_output(attempt: &Value, output: &Path) -> Result<Value> {
     let (provenance_bytes, provenance) =
         read_native_cpu_care_evidence(&output.join("care-seed-admission.json"))?;
     validate_food_need_condition(attempt, &episode)?;
+    validate_food_offset_binding(attempt, &episode)?;
     let source_version = attempt["source_policy_version"]
         .as_u64()
         .ok_or("collection attempt lacks source version")?;
@@ -674,6 +676,33 @@ pub(super) fn collection_attempts(lane: &Path) -> Result<Vec<Value>> {
         .clone())
 }
 
+pub(super) fn validate_food_offset_binding(attempt: &Value, episode: &Value) -> Result<()> {
+    let requested_layout: Option<super::CpuCareLayout> =
+        serde_json::from_value(attempt["layout"].clone())?;
+    let actual_layout: Option<super::CpuCareLayout> =
+        serde_json::from_value(episode["layout"].clone())?;
+    if requested_layout != actual_layout {
+        return Err("CPU layout differs from its reserved attempt".into());
+    }
+    if let Some(layout) = requested_layout {
+        layout.validate(
+            serde_json::from_value(attempt["lesson"].clone())?,
+            serde_json::from_value(attempt["food_offset"].clone())?,
+        )?;
+    }
+    // Missing fields in historical receipts mean legacy seed-derived placement.
+    let requested: Option<[f32; 2]> = serde_json::from_value(attempt["food_offset"].clone())?;
+    let actual: Option<[f32; 2]> = serde_json::from_value(episode["food_offset"].clone())?;
+    if requested != actual {
+        return Err("CPU food offset differs from its reserved attempt".into());
+    }
+    if requested.is_some() {
+        let lesson = serde_json::from_value(attempt["lesson"].clone())?;
+        super::validate_food_offset(lesson, requested)?;
+    }
+    Ok(())
+}
+
 pub(super) fn validate_food_need_condition(attempt: &Value, episode: &Value) -> Result<()> {
     // Absence on historical reservations stays unknown; it never authorizes
     // an explicitly aged prospective episode. Do not rewrite old evidence.
@@ -709,6 +738,7 @@ pub(super) fn validate_food_need_condition(attempt: &Value, episode: &Value) -> 
 
 fn validate_attempt_output(attempt: &Value, receipt: &Value) -> Result<()> {
     validate_food_need_condition(attempt, &receipt["episode"])?;
+    validate_food_offset_binding(attempt, &receipt["episode"])?;
     if receipt["seed"] != attempt["seed"]
         || receipt["source_policy_version"] != attempt["source_policy_version"]
         || receipt["seed_provenance"]["source_sha256"] != attempt["source_sha256"]
@@ -961,6 +991,34 @@ pub(super) fn validate_care_output(output: &Path, receipt: &Value) -> Result<()>
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn authored_layout_receipts_bind_walls_not_only_food() {
+        use serde_json::json;
+        let first = json!({"lesson":"feeding", "layout":{"rows":["#######","#L#..F#","#.....#","#######"]}});
+        let other = json!({"lesson":"feeding", "layout":{"rows":["#######","#L...F#","#.#...#","#######"]}});
+        super::validate_food_offset_binding(&first, &first).unwrap();
+        assert!(super::validate_food_offset_binding(&first, &other).is_err());
+        assert!(super::validate_food_offset_binding(&json!({"lesson":"feeding"}), &first).is_err());
+        assert!(super::validate_food_offset_binding(&first, &json!({})).is_err());
+    }
+
+    #[test]
+    fn food_offset_receipts_bind_geometry_without_rewriting_legacy() {
+        use serde_json::json;
+        let legacy = json!({"lesson":"feeding"});
+        super::validate_food_offset_binding(&legacy, &json!({})).unwrap();
+        let authored = json!({"lesson":"feeding", "food_offset":[2.0,-3.0]});
+        super::validate_food_offset_binding(&authored, &authored).unwrap();
+        assert!(super::validate_food_offset_binding(&legacy, &authored).is_err());
+        assert!(super::validate_food_offset_binding(&authored, &legacy).is_err());
+        assert!(
+            super::validate_food_offset_binding(&authored, &json!({"food_offset":[3.0,-2.0]}))
+                .is_err()
+        );
+        let invalid = json!({"lesson":"relocated_food", "food_offset":[2.0,-3.0]});
+        assert!(super::validate_food_offset_binding(&invalid, &invalid).is_err());
+    }
+
     #[test]
     fn prospective_need_condition_is_bound_without_rewriting_legacy_evidence() {
         let old = serde_json::json!({"lesson":"feeding"});

@@ -101,6 +101,7 @@ fn current_checkpoint_exact_full_state_and_seed_union_are_self_contained() {
         same_individual: None,
         terminal_disposition: None,
         training_attempt_origin: None,
+        new_life_origin: None,
     };
     let restored = CurrentTrainingCheckpointV1::decode(&source.encode().unwrap()).unwrap();
     #[derive(serde::Serialize)]
@@ -240,6 +241,7 @@ fn current_source_admission_binds_original_noncanonical_bytes_and_rejects_change
         same_individual: None,
         terminal_disposition: None,
         training_attempt_origin: None,
+        new_life_origin: None,
     };
     let payload = serde_json::to_vec_pretty(&source).unwrap();
     let mut bytes = b"ALIFE-CURRENT-1\n".to_vec();

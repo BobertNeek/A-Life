@@ -51,7 +51,9 @@ class CpuScheduleTests(unittest.TestCase):
         self.calls.append(args)
         if args[0] == '--validate-output':
             return {'policy_version': 31, 'episode': {'trained_nourished_meals': 0, 'lesson_completed': False,
-                'food_need_initialization': {'condition': self.plan.get('food_need_condition', 'newborn_v1')}}}
+                'food_need_initialization': {'condition': self.plan.get('food_need_condition', 'newborn_v1')}},
+                **({'cpu_replay_execution': 'cadence-csr', 'cpu_collection_execution': 'reference'}
+                   if self.plan.get('replay_execution') == 'cadence-csr' else {})}
         if args[0] == '--reconcile-pending':
             ledger = cpu.read(self.lane / cpu.LEDGER)
             ledger['cpu_care_attempts'][-1]['status'] = 'failed'
@@ -91,6 +93,7 @@ class CpuScheduleTests(unittest.TestCase):
         self.assertEqual(plan['food_need_condition'], 'newborn_v1')
         self.assertEqual(plan['source_sha256'], cpu.pins(self.source))
         self.assertEqual(plan['retention']['keep'], 2)
+        self.assertEqual(plan['replay_execution'], 'reference')
         args.food_need_condition = 'ordinary_healthy_aging_v1'
         with patch.object(cpu.subprocess, 'check_output', side_effect=['', 'head', 'tree']):
             self.assertEqual(cpu.build_plan(args)['food_need_condition'], 'ordinary_healthy_aging_v1')
@@ -110,12 +113,50 @@ class CpuScheduleTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 cpu.verify_source(plan)
 
+    def test_replay_mode_is_opt_in_and_saved_dispatch_is_explicit(self):
+        self.plan['replay_execution'] = 'cadence-csr'
+        self.execute()
+        dispatched = [c for c in self.calls if c[0] == '--previous']
+        self.assertEqual(len(dispatched), 2)
+        for call in dispatched:
+            self.assertEqual(call[call.index('--replay-execution') + 1], 'cadence-csr')
+
+    def test_invalid_saved_replay_mode_fails_before_dispatch(self):
+        self.plan['replay_execution'] = 'gpu'
+        with self.assertRaises(ValueError):
+            self.execute()
+        self.assertFalse(self.calls)
+
+    def test_wrong_mode_after_native_acceptance_still_blocks_resume(self):
+        self.plan['replay_execution'] = 'cadence-csr'
+        original_command = self.command
+
+        def wrong_receipt(binary, *args):
+            result = original_command(binary, *args)
+            if args[0] == '--validate-output':
+                result.pop('cpu_replay_execution', None)
+            return result
+
+        with patch.object(self, 'command', wrong_receipt):
+            with self.assertRaisesRegex(ValueError, 'selected replay execution'):
+                self.execute()
+            self.assertEqual(cpu.read(self.lane / cpu.LEDGER)['cpu_care_attempts'][0]['status'], 'accepted')
+            self.calls.clear()
+            with self.assertRaisesRegex(ValueError, 'selected replay execution'):
+                self.execute()
+        self.assertFalse(any(c[0] == '--previous' for c in self.calls))
+
+    def test_reference_plan_rejects_cadence_attestation(self):
+        with self.assertRaisesRegex(ValueError, 'selected replay execution'):
+            cpu.verify_replay_execution({'cpu_replay_execution': 'cadence-csr'}, 'reference')
+
     def test_serial_uses_latest_full_native_source_and_keeps_unknown_freshness(self):
         result = self.execute()
         self.assertEqual(result['accepted_episodes'], 2)
         self.assertFalse(result['promoted'])
         self.assertEqual(result['seed_admission']['historical_freshness'], 'unknown')
         dispatched = [c for c in self.calls if c[0] == '--previous']
+        self.assertTrue(all('--replay-execution' not in c for c in dispatched))
         self.assertEqual(dispatched[1][1], self.lane / 'episode-00000')
         self.calls.clear()
         self.assertEqual(self.execute(), result)

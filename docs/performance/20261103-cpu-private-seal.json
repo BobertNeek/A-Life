@@ -1,0 +1,706 @@
+{
+  "baseline_commit": "b2f7a81f36acc733313c0db627c730cfe5245f93",
+  "baseline_host_sha256": "640fb30c1b9617e236c760dc4beb8d54494a73ef8e79d5e9111d68fa14c564b3",
+  "candidate_host_sha256": "ff67f6094c0a4eef00196ed65aeea879cc10da10b5203040c456350a90b80e0d",
+  "binary_sha256": {
+    "baseline": "cf1db9360d5c87fbf7ea1d11c57037bd5d490374e8852173608d7eba86d1864e",
+    "candidate": "1219cc27476af26da8fb1859a407592123b55ee030d12e451cb0b247cc2207ad"
+  },
+  "conditions": {
+    "cpu": "AMD EPYC 9V74",
+    "visible_cpus": 5,
+    "cpu_quota": 4,
+    "memory_limit_gib": 16,
+    "rust": "1.99.1",
+    "llvm": "23.1.1",
+    "profile": "test; alife_training opt-level=3; core/world/runtime opt-level=2; debug assertions enabled; no debug symbols; no LTO/native CPU flags",
+    "cli_cpu_affinity": 2,
+    "cli_order": "ABBAABBA",
+    "fresh_founder_seeds": [
+      847401,
+      847402,
+      847403,
+      847404
+    ],
+    "claims": "Small cloud CPU fixture; no GPU, PC, accepted lineage, behavioral competence or universal speedup claim."
+  },
+  "profile_ms": {
+    "admission": [
+      {
+        "case": "object-slots",
+        "count": 65,
+        "total_ms": 698.708949,
+        "median_ms": 10.749485,
+        "min_ms": 4.066282,
+        "max_ms": 14.321596
+      },
+      {
+        "case": "terrain-vision",
+        "count": 65,
+        "total_ms": 669.937255,
+        "median_ms": 10.224072,
+        "min_ms": 4.105745,
+        "max_ms": 21.57293
+      }
+    ],
+    "advance": [
+      {
+        "case": "object-slots",
+        "count": 65,
+        "total_ms": 45.620057,
+        "median_ms": 0.670981,
+        "min_ms": 0.620504,
+        "max_ms": 1.057994
+      },
+      {
+        "case": "terrain-vision",
+        "count": 65,
+        "total_ms": 45.286072,
+        "median_ms": 0.661997,
+        "min_ms": 0.621977,
+        "max_ms": 1.003993
+      }
+    ],
+    "stage_selection": [
+      {
+        "case": "object-slots",
+        "count": 65,
+        "total_ms": 8.619168,
+        "median_ms": 0.120051,
+        "min_ms": 0.105659,
+        "max_ms": 0.269516
+      },
+      {
+        "case": "terrain-vision",
+        "count": 65,
+        "total_ms": 7.961637,
+        "median_ms": 0.118238,
+        "min_ms": 0.103887,
+        "max_ms": 0.167262
+      }
+    ],
+    "apply_credit": [
+      {
+        "case": "object-slots",
+        "count": 65,
+        "total_ms": 50.159202,
+        "median_ms": 0.707245,
+        "min_ms": 0.653243,
+        "max_ms": 1.976576
+      },
+      {
+        "case": "terrain-vision",
+        "count": 65,
+        "total_ms": 48.486258,
+        "median_ms": 0.700075,
+        "min_ms": 0.644021,
+        "max_ms": 2.32352
+      }
+    ],
+    "clone_and_step": [
+      {
+        "case": "object-slots",
+        "count": 65,
+        "total_ms": 1700.274337,
+        "median_ms": 25.940171,
+        "min_ms": 23.504197,
+        "max_ms": 32.553795
+      },
+      {
+        "case": "terrain-vision",
+        "count": 65,
+        "total_ms": 1607.88736,
+        "median_ms": 24.699081,
+        "min_ms": 22.177172,
+        "max_ms": 28.56267
+      }
+    ]
+  },
+  "native_reference": [
+    {
+      "candidate_count_max": 30,
+      "candidate_count_min": 30,
+      "case": "object-slots",
+      "collection_once_ms": 2367.550875,
+      "config": {
+        "clip_ratio": 0.20000000298023224,
+        "discount_half_life_seconds": 60.0,
+        "entropy_coefficient": 0.009999999776482582,
+        "epochs": 2,
+        "gae_half_life_seconds": 10.0,
+        "target_kl": 0.019999999552965164,
+        "temperature": 0.8999999761581421,
+        "value_coefficient": 0.5,
+        "value_optimizer": {
+          "beta1": 0.8999999761581421,
+          "beta2": 0.9990000128746033,
+          "epsilon": 9.99999993922529e-09,
+          "gradient_clip": 1.0,
+          "learning_rate": 0.0003000000142492354,
+          "weight_decay": 9.999999747378752e-05
+        }
+      },
+      "decisions_sha256": "03be4142baf19ea78eb38910a0e66dc0806fc55df38b81fd2bc58164be985173",
+      "effective_batch_size": 1,
+      "learner_ms": [
+        159.916113,
+        159.93051499999999,
+        164.451321,
+        154.115759,
+        151.334302,
+        158.404727,
+        172.109327
+      ],
+      "loss_rows": 64,
+      "native_decisions": 65,
+      "private_sha256": "456f9926873b5769a58a95788b4aa920ff16567dc415ff2125729942292d8ac5",
+      "window_burn_in": [
+        0,
+        8
+      ],
+      "window_preparation_once_ms": 3.482214,
+      "window_rows": [
+        32,
+        32
+      ],
+      "world_steps": 65
+    },
+    {
+      "candidate_count_max": 25,
+      "candidate_count_min": 25,
+      "case": "terrain-vision",
+      "collection_once_ms": 2356.9669219999996,
+      "config": {
+        "clip_ratio": 0.20000000298023224,
+        "discount_half_life_seconds": 60.0,
+        "entropy_coefficient": 0.009999999776482582,
+        "epochs": 2,
+        "gae_half_life_seconds": 10.0,
+        "target_kl": 0.019999999552965164,
+        "temperature": 0.8999999761581421,
+        "value_coefficient": 0.5,
+        "value_optimizer": {
+          "beta1": 0.8999999761581421,
+          "beta2": 0.9990000128746033,
+          "epsilon": 9.99999993922529e-09,
+          "gradient_clip": 1.0,
+          "learning_rate": 0.0003000000142492354,
+          "weight_decay": 9.999999747378752e-05
+        }
+      },
+      "decisions_sha256": "a526952ddde93e1fe857a584be01d427624a275afb4d1d8ac661624cf3b804b6",
+      "effective_batch_size": 2,
+      "learner_ms": [
+        191.426472,
+        198.887923,
+        199.522527,
+        198.434625,
+        196.746471,
+        203.35757099999998,
+        212.606045
+      ],
+      "loss_rows": 64,
+      "native_decisions": 65,
+      "private_sha256": "a1fe832be57e41fe0ecd97039a51b5247be6d37cd491ee095f8f412d3d350695",
+      "window_burn_in": [
+        0,
+        8,
+        8
+      ],
+      "window_preparation_once_ms": 1.141899,
+      "window_rows": [
+        24,
+        24,
+        16
+      ],
+      "world_steps": 65
+    }
+  ],
+  "native_candidate": [
+    {
+      "candidate_count_max": 30,
+      "candidate_count_min": 30,
+      "case": "object-slots",
+      "collection_once_ms": 2054.470229,
+      "config": {
+        "clip_ratio": 0.20000000298023224,
+        "discount_half_life_seconds": 60.0,
+        "entropy_coefficient": 0.009999999776482582,
+        "epochs": 2,
+        "gae_half_life_seconds": 10.0,
+        "target_kl": 0.019999999552965164,
+        "temperature": 0.8999999761581421,
+        "value_coefficient": 0.5,
+        "value_optimizer": {
+          "beta1": 0.8999999761581421,
+          "beta2": 0.9990000128746033,
+          "epsilon": 9.99999993922529e-09,
+          "gradient_clip": 1.0,
+          "learning_rate": 0.0003000000142492354,
+          "weight_decay": 9.999999747378752e-05
+        }
+      },
+      "decisions_sha256": "03be4142baf19ea78eb38910a0e66dc0806fc55df38b81fd2bc58164be985173",
+      "effective_batch_size": 1,
+      "learner_ms": [
+        166.23564,
+        169.628686,
+        190.277623,
+        184.622331,
+        166.588872,
+        182.138804,
+        186.470602
+      ],
+      "loss_rows": 64,
+      "native_decisions": 65,
+      "private_sha256": "456f9926873b5769a58a95788b4aa920ff16567dc415ff2125729942292d8ac5",
+      "window_burn_in": [
+        0,
+        8
+      ],
+      "window_preparation_once_ms": 3.5885309999999997,
+      "window_rows": [
+        32,
+        32
+      ],
+      "world_steps": 65
+    },
+    {
+      "candidate_count_max": 25,
+      "candidate_count_min": 25,
+      "case": "terrain-vision",
+      "collection_once_ms": 1704.839498,
+      "config": {
+        "clip_ratio": 0.20000000298023224,
+        "discount_half_life_seconds": 60.0,
+        "entropy_coefficient": 0.009999999776482582,
+        "epochs": 2,
+        "gae_half_life_seconds": 10.0,
+        "target_kl": 0.019999999552965164,
+        "temperature": 0.8999999761581421,
+        "value_coefficient": 0.5,
+        "value_optimizer": {
+          "beta1": 0.8999999761581421,
+          "beta2": 0.9990000128746033,
+          "epsilon": 9.99999993922529e-09,
+          "gradient_clip": 1.0,
+          "learning_rate": 0.0003000000142492354,
+          "weight_decay": 9.999999747378752e-05
+        }
+      },
+      "decisions_sha256": "a526952ddde93e1fe857a584be01d427624a275afb4d1d8ac661624cf3b804b6",
+      "effective_batch_size": 2,
+      "learner_ms": [
+        194.842502,
+        244.515649,
+        229.396449,
+        253.000589,
+        246.00471,
+        249.960273,
+        239.669735
+      ],
+      "loss_rows": 64,
+      "native_decisions": 65,
+      "private_sha256": "a1fe832be57e41fe0ecd97039a51b5247be6d37cd491ee095f8f412d3d350695",
+      "window_burn_in": [
+        0,
+        8,
+        8
+      ],
+      "window_preparation_once_ms": 1.2410469999999998,
+      "window_rows": [
+        24,
+        24,
+        16
+      ],
+      "world_steps": 65
+    }
+  ],
+  "native_checkpoint_parity": {
+    "equal": true,
+    "bytes": 4688876,
+    "sha256": "948831e152fe9d679404200661574d714d724d579bb28f85c01860ac29981709"
+  },
+  "cli_trials": [
+    {
+      "arm": "baseline",
+      "seed": 847401,
+      "command": [
+        "taskset",
+        "-c",
+        "2",
+        "baseline/train_cpu_foundation",
+        "--fixture",
+        "--output",
+        "outputs/baseline-847401",
+        "--seed",
+        "847401",
+        "--ticks",
+        "65",
+        "--temperature",
+        "0.9",
+        "--replay-execution",
+        "reference"
+      ],
+      "wall_seconds": 3.890408419999858,
+      "exit_code": 0,
+      "collection_seconds": 2.208573048,
+      "update_seconds": 0.204966834,
+      "training_rows": 64,
+      "training_windows": 2,
+      "canonical_valid_decisions": 65,
+      "actor_optimizer_updates": 1,
+      "value_optimizer_updates": 1,
+      "stopped_for_kl": true,
+      "artifact_sha256": {
+        "actor-checkpoint.json": "22bead096a830da06bb83f7d56db0d0ba55971f86fd69cd12a054459c9973bb4",
+        "collection-actor-checkpoint.json": "0cdb4415e3f4335f6ce6711a552ce990e851971c0676d6329c90df724ad41df4",
+        "collection-compiler-inputs.json": "8a498462edebedb6148a688ed31f45eef446a37c59fee6fb1f9a1c2083dd6c47",
+        "collection-policy.alife-foundation": "6299d69cd77efe3d200db5ff3e0395b20426217a44a949bff2b0f71d55bb5c57",
+        "collector-checkpoint.json.zst": "750e5c76dd5b88c652f03116f3c75df60a5d83b43e2d0477f5b9e77e13e5bb08",
+        "initial-value-checkpoint.json": "06f369688ab4a0d057b631a11aefe29781ad6b0754c3b140c787a21122920d4b",
+        "phase.txt": "fb021501c168c3fe64e3f8560e3c751cc2364757ac48901aeb00da55a7e10f32",
+        "trained.alife-foundation": "390ab1e872ea0f634790fe9452c5e2ecf78ac9e70f777a7dbb0c2153ffff26f6",
+        "training-handoff.json": "376b0d20a76dfa7922681b0997c3639e73ee9d7ee79279b9cdcdd6e37dd6883b",
+        "value-checkpoint.json": "b87efb6ec2908673d6f6932542a59c8a8032c5d476a9658c92aa2861558f62cb"
+      }
+    },
+    {
+      "arm": "candidate",
+      "seed": 847401,
+      "command": [
+        "taskset",
+        "-c",
+        "2",
+        "candidate/train_cpu_foundation",
+        "--fixture",
+        "--output",
+        "outputs/candidate-847401",
+        "--seed",
+        "847401",
+        "--ticks",
+        "65",
+        "--temperature",
+        "0.9",
+        "--replay-execution",
+        "reference"
+      ],
+      "wall_seconds": 3.3786517080000067,
+      "exit_code": 0,
+      "collection_seconds": 1.6998797909999999,
+      "update_seconds": 0.201842351,
+      "training_rows": 64,
+      "training_windows": 2,
+      "canonical_valid_decisions": 65,
+      "actor_optimizer_updates": 1,
+      "value_optimizer_updates": 1,
+      "stopped_for_kl": true,
+      "artifact_sha256": {
+        "actor-checkpoint.json": "22bead096a830da06bb83f7d56db0d0ba55971f86fd69cd12a054459c9973bb4",
+        "collection-actor-checkpoint.json": "0cdb4415e3f4335f6ce6711a552ce990e851971c0676d6329c90df724ad41df4",
+        "collection-compiler-inputs.json": "8a498462edebedb6148a688ed31f45eef446a37c59fee6fb1f9a1c2083dd6c47",
+        "collection-policy.alife-foundation": "6299d69cd77efe3d200db5ff3e0395b20426217a44a949bff2b0f71d55bb5c57",
+        "collector-checkpoint.json.zst": "750e5c76dd5b88c652f03116f3c75df60a5d83b43e2d0477f5b9e77e13e5bb08",
+        "initial-value-checkpoint.json": "06f369688ab4a0d057b631a11aefe29781ad6b0754c3b140c787a21122920d4b",
+        "phase.txt": "fb021501c168c3fe64e3f8560e3c751cc2364757ac48901aeb00da55a7e10f32",
+        "trained.alife-foundation": "390ab1e872ea0f634790fe9452c5e2ecf78ac9e70f777a7dbb0c2153ffff26f6",
+        "training-handoff.json": "376b0d20a76dfa7922681b0997c3639e73ee9d7ee79279b9cdcdd6e37dd6883b",
+        "value-checkpoint.json": "b87efb6ec2908673d6f6932542a59c8a8032c5d476a9658c92aa2861558f62cb"
+      }
+    },
+    {
+      "arm": "candidate",
+      "seed": 847402,
+      "command": [
+        "taskset",
+        "-c",
+        "2",
+        "candidate/train_cpu_foundation",
+        "--fixture",
+        "--output",
+        "outputs/candidate-847402",
+        "--seed",
+        "847402",
+        "--ticks",
+        "65",
+        "--temperature",
+        "0.9",
+        "--replay-execution",
+        "reference"
+      ],
+      "wall_seconds": 3.618124534999879,
+      "exit_code": 0,
+      "collection_seconds": 1.8565715470000002,
+      "update_seconds": 0.225447567,
+      "training_rows": 64,
+      "training_windows": 2,
+      "canonical_valid_decisions": 65,
+      "actor_optimizer_updates": 2,
+      "value_optimizer_updates": 2,
+      "stopped_for_kl": false,
+      "artifact_sha256": {
+        "actor-checkpoint.json": "296e52ccd2e4f5ae23bc68b83962543a6ea8a830e57f6e87d49a65751d6e7e05",
+        "collection-actor-checkpoint.json": "e6fb98a29764353c1081e75c626e156e256715986d17238ff7c22696d4229929",
+        "collection-compiler-inputs.json": "f76605846f2a44d702cccd98b416c26f8aafb2d17872c07b7dc77a1bf11d25e0",
+        "collection-policy.alife-foundation": "5b31105934bf70f8071ceee6088c625e14e842110fd707225ab13a284c9bbd21",
+        "collector-checkpoint.json.zst": "0d246b8e87c25059451babbaa49f79e44aeb4e9a0292493b2d6fb2b0dd168bbe",
+        "initial-value-checkpoint.json": "06f369688ab4a0d057b631a11aefe29781ad6b0754c3b140c787a21122920d4b",
+        "phase.txt": "fb021501c168c3fe64e3f8560e3c751cc2364757ac48901aeb00da55a7e10f32",
+        "trained.alife-foundation": "c10599d2c366128b23d7973fef90e18f7680feafa3a779f7f1de80b12bfc7c82",
+        "training-handoff.json": "8af30ca262fc6a5f42f614704af4ee50f919045a2fd148c7c1adf2f12adaaf57",
+        "value-checkpoint.json": "b0f3bb94ae87151ffcc994494c7e362b371734558d9b031db120efaee6916215"
+      }
+    },
+    {
+      "arm": "baseline",
+      "seed": 847402,
+      "command": [
+        "taskset",
+        "-c",
+        "2",
+        "baseline/train_cpu_foundation",
+        "--fixture",
+        "--output",
+        "outputs/baseline-847402",
+        "--seed",
+        "847402",
+        "--ticks",
+        "65",
+        "--temperature",
+        "0.9",
+        "--replay-execution",
+        "reference"
+      ],
+      "wall_seconds": 3.8316824170001382,
+      "exit_code": 0,
+      "collection_seconds": 2.171105285,
+      "update_seconds": 0.185048294,
+      "training_rows": 64,
+      "training_windows": 2,
+      "canonical_valid_decisions": 65,
+      "actor_optimizer_updates": 2,
+      "value_optimizer_updates": 2,
+      "stopped_for_kl": false,
+      "artifact_sha256": {
+        "actor-checkpoint.json": "296e52ccd2e4f5ae23bc68b83962543a6ea8a830e57f6e87d49a65751d6e7e05",
+        "collection-actor-checkpoint.json": "e6fb98a29764353c1081e75c626e156e256715986d17238ff7c22696d4229929",
+        "collection-compiler-inputs.json": "f76605846f2a44d702cccd98b416c26f8aafb2d17872c07b7dc77a1bf11d25e0",
+        "collection-policy.alife-foundation": "5b31105934bf70f8071ceee6088c625e14e842110fd707225ab13a284c9bbd21",
+        "collector-checkpoint.json.zst": "0d246b8e87c25059451babbaa49f79e44aeb4e9a0292493b2d6fb2b0dd168bbe",
+        "initial-value-checkpoint.json": "06f369688ab4a0d057b631a11aefe29781ad6b0754c3b140c787a21122920d4b",
+        "phase.txt": "fb021501c168c3fe64e3f8560e3c751cc2364757ac48901aeb00da55a7e10f32",
+        "trained.alife-foundation": "c10599d2c366128b23d7973fef90e18f7680feafa3a779f7f1de80b12bfc7c82",
+        "training-handoff.json": "8af30ca262fc6a5f42f614704af4ee50f919045a2fd148c7c1adf2f12adaaf57",
+        "value-checkpoint.json": "b0f3bb94ae87151ffcc994494c7e362b371734558d9b031db120efaee6916215"
+      }
+    },
+    {
+      "arm": "baseline",
+      "seed": 847403,
+      "command": [
+        "taskset",
+        "-c",
+        "2",
+        "baseline/train_cpu_foundation",
+        "--fixture",
+        "--output",
+        "outputs/baseline-847403",
+        "--seed",
+        "847403",
+        "--ticks",
+        "65",
+        "--temperature",
+        "0.9",
+        "--replay-execution",
+        "reference"
+      ],
+      "wall_seconds": 4.263553140000113,
+      "exit_code": 0,
+      "collection_seconds": 2.454764078,
+      "update_seconds": 0.208116353,
+      "training_rows": 64,
+      "training_windows": 2,
+      "canonical_valid_decisions": 65,
+      "actor_optimizer_updates": 2,
+      "value_optimizer_updates": 2,
+      "stopped_for_kl": false,
+      "artifact_sha256": {
+        "actor-checkpoint.json": "dac91a3e5af68c55eca5c18111610189896dc852610ce97679ce1d1416214a7d",
+        "collection-actor-checkpoint.json": "39fbb7aabecd3eab5a84eb80f17a52bcb75ee733601064acc887508c1f00ad0c",
+        "collection-compiler-inputs.json": "267a6df31f17a1e8bbb1d38e87798a97295ffcdbd7d66ef3ae881697f31ab932",
+        "collection-policy.alife-foundation": "820ff10bd2d7d24f886d03ffc34c7b7103b79eeab2a80c71e8aff595dd37acd0",
+        "collector-checkpoint.json.zst": "6c6e294cf9f0ef41924d4da53141b4974be1d21a65c055deccc0630fcfc29d10",
+        "initial-value-checkpoint.json": "06f369688ab4a0d057b631a11aefe29781ad6b0754c3b140c787a21122920d4b",
+        "phase.txt": "fb021501c168c3fe64e3f8560e3c751cc2364757ac48901aeb00da55a7e10f32",
+        "trained.alife-foundation": "f403c3ef6aae7c7049fc6eb96cae662fc0fe568847c22889e21c437b5200f975",
+        "training-handoff.json": "ef2b50d1db3c8717eb4d13b0430e67d72a63453544286ab6e8cf1c984029a9c1",
+        "value-checkpoint.json": "c689ffe82112372bd46400d93ebeae957ba8c9f52df37d0c1399f1632d3987a7"
+      }
+    },
+    {
+      "arm": "candidate",
+      "seed": 847403,
+      "command": [
+        "taskset",
+        "-c",
+        "2",
+        "candidate/train_cpu_foundation",
+        "--fixture",
+        "--output",
+        "outputs/candidate-847403",
+        "--seed",
+        "847403",
+        "--ticks",
+        "65",
+        "--temperature",
+        "0.9",
+        "--replay-execution",
+        "reference"
+      ],
+      "wall_seconds": 3.3883374399999866,
+      "exit_code": 0,
+      "collection_seconds": 1.682581165,
+      "update_seconds": 0.20568886,
+      "training_rows": 64,
+      "training_windows": 2,
+      "canonical_valid_decisions": 65,
+      "actor_optimizer_updates": 2,
+      "value_optimizer_updates": 2,
+      "stopped_for_kl": false,
+      "artifact_sha256": {
+        "actor-checkpoint.json": "dac91a3e5af68c55eca5c18111610189896dc852610ce97679ce1d1416214a7d",
+        "collection-actor-checkpoint.json": "39fbb7aabecd3eab5a84eb80f17a52bcb75ee733601064acc887508c1f00ad0c",
+        "collection-compiler-inputs.json": "267a6df31f17a1e8bbb1d38e87798a97295ffcdbd7d66ef3ae881697f31ab932",
+        "collection-policy.alife-foundation": "820ff10bd2d7d24f886d03ffc34c7b7103b79eeab2a80c71e8aff595dd37acd0",
+        "collector-checkpoint.json.zst": "6c6e294cf9f0ef41924d4da53141b4974be1d21a65c055deccc0630fcfc29d10",
+        "initial-value-checkpoint.json": "06f369688ab4a0d057b631a11aefe29781ad6b0754c3b140c787a21122920d4b",
+        "phase.txt": "fb021501c168c3fe64e3f8560e3c751cc2364757ac48901aeb00da55a7e10f32",
+        "trained.alife-foundation": "f403c3ef6aae7c7049fc6eb96cae662fc0fe568847c22889e21c437b5200f975",
+        "training-handoff.json": "ef2b50d1db3c8717eb4d13b0430e67d72a63453544286ab6e8cf1c984029a9c1",
+        "value-checkpoint.json": "c689ffe82112372bd46400d93ebeae957ba8c9f52df37d0c1399f1632d3987a7"
+      }
+    },
+    {
+      "arm": "candidate",
+      "seed": 847404,
+      "command": [
+        "taskset",
+        "-c",
+        "2",
+        "candidate/train_cpu_foundation",
+        "--fixture",
+        "--output",
+        "outputs/candidate-847404",
+        "--seed",
+        "847404",
+        "--ticks",
+        "65",
+        "--temperature",
+        "0.9",
+        "--replay-execution",
+        "reference"
+      ],
+      "wall_seconds": 3.4466617130001396,
+      "exit_code": 0,
+      "collection_seconds": 1.75536525,
+      "update_seconds": 0.206866244,
+      "training_rows": 64,
+      "training_windows": 2,
+      "canonical_valid_decisions": 65,
+      "actor_optimizer_updates": 2,
+      "value_optimizer_updates": 2,
+      "stopped_for_kl": false,
+      "artifact_sha256": {
+        "actor-checkpoint.json": "4ffb6299510ba39d3a0503fdc350c6c59f9c0616aac56206d81a2538c3ea7d1f",
+        "collection-actor-checkpoint.json": "93fd66bcbbae696f79706dc4d5b05eae6c33ed786b978ca7588e31b3533d499f",
+        "collection-compiler-inputs.json": "deaa57419b72f919759590eab3438f87a2837d6046f6449e3b00f29c3662bc46",
+        "collection-policy.alife-foundation": "23ec413ff0e3dfff9392f92142edcc8b3e19615fb318131a891396a5b7a4ffb3",
+        "collector-checkpoint.json.zst": "4822e8c874291d9f1c9742651741cd1d33ffbf34a6fa41b748792e70b5c28866",
+        "initial-value-checkpoint.json": "06f369688ab4a0d057b631a11aefe29781ad6b0754c3b140c787a21122920d4b",
+        "phase.txt": "fb021501c168c3fe64e3f8560e3c751cc2364757ac48901aeb00da55a7e10f32",
+        "trained.alife-foundation": "156c5ca714f96e67fc1f4f60e13f54e10e3b190237b7c827263119751e954bad",
+        "training-handoff.json": "bf0ef426b5aa93a22d4b3666f2f728354c6883ca6fe63be0591e008319d2b3a3",
+        "value-checkpoint.json": "ef399349554283cb24e75e7b4ca36656cceed374c8231b9486ec0b17076ffa0d"
+      }
+    },
+    {
+      "arm": "baseline",
+      "seed": 847404,
+      "command": [
+        "taskset",
+        "-c",
+        "2",
+        "baseline/train_cpu_foundation",
+        "--fixture",
+        "--output",
+        "outputs/baseline-847404",
+        "--seed",
+        "847404",
+        "--ticks",
+        "65",
+        "--temperature",
+        "0.9",
+        "--replay-execution",
+        "reference"
+      ],
+      "wall_seconds": 3.9810604750000493,
+      "exit_code": 0,
+      "collection_seconds": 2.311714033,
+      "update_seconds": 0.189088228,
+      "training_rows": 64,
+      "training_windows": 2,
+      "canonical_valid_decisions": 65,
+      "actor_optimizer_updates": 2,
+      "value_optimizer_updates": 2,
+      "stopped_for_kl": false,
+      "artifact_sha256": {
+        "actor-checkpoint.json": "4ffb6299510ba39d3a0503fdc350c6c59f9c0616aac56206d81a2538c3ea7d1f",
+        "collection-actor-checkpoint.json": "93fd66bcbbae696f79706dc4d5b05eae6c33ed786b978ca7588e31b3533d499f",
+        "collection-compiler-inputs.json": "deaa57419b72f919759590eab3438f87a2837d6046f6449e3b00f29c3662bc46",
+        "collection-policy.alife-foundation": "23ec413ff0e3dfff9392f92142edcc8b3e19615fb318131a891396a5b7a4ffb3",
+        "collector-checkpoint.json.zst": "4822e8c874291d9f1c9742651741cd1d33ffbf34a6fa41b748792e70b5c28866",
+        "initial-value-checkpoint.json": "06f369688ab4a0d057b631a11aefe29781ad6b0754c3b140c787a21122920d4b",
+        "phase.txt": "fb021501c168c3fe64e3f8560e3c751cc2364757ac48901aeb00da55a7e10f32",
+        "trained.alife-foundation": "156c5ca714f96e67fc1f4f60e13f54e10e3b190237b7c827263119751e954bad",
+        "training-handoff.json": "bf0ef426b5aa93a22d4b3666f2f728354c6883ca6fe63be0591e008319d2b3a3",
+        "value-checkpoint.json": "ef399349554283cb24e75e7b4ca36656cceed374c8231b9486ec0b17076ffa0d"
+      }
+    }
+  ],
+  "cli_cycle_receipt_differences": [
+    "collection_seconds",
+    "consumer_build",
+    "elapsed_seconds",
+    "update_seconds"
+  ],
+  "cli_artifact_parity": {
+    "pairs": 4,
+    "files_per_pair": 10,
+    "equal": true,
+    "states_published": false
+  },
+  "medians": {
+    "wall_seconds": {
+      "baseline": 3.9357344474999536,
+      "candidate": 3.417499576500063,
+      "wall_time_reduction": 0.13167424731337818,
+      "speed_ratio": 1.151641531885902
+    },
+    "collection_seconds": {
+      "baseline": 2.2601435404999997,
+      "candidate": 1.7276225205,
+      "wall_time_reduction": 0.23561380525512676,
+      "speed_ratio": 1.3082392210573175
+    },
+    "update_seconds": {
+      "baseline": 0.19702753099999998,
+      "candidate": 0.206277552,
+      "wall_time_reduction": -0.04694786029674214,
+      "speed_ratio": 0.9551574036519493
+    }
+  },
+  "candidate_implementation_commit": "1e72c568191576908d947868076db20e788d474a",
+  "excluded_pilots": "Earlier instrumented-baseline ABBA pilot was rejected by independent review; its 20.5% figure is withdrawn and excluded. Earlier overlapping/unoptimized setup runs and CLI runs concurrent with compilation are also excluded. All local pilot states/logs are preserved.",
+  "cli_command_paths_are_normalized": true,
+  "external_timer": "Python time.perf_counter() around subprocess.run; stdout/stderr redirected to a per-trial log; taskset -c 2; both binaries built before timing"
+}

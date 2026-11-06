@@ -90,7 +90,10 @@ def build_plan(args):
     keep = getattr(args, "keep_checkpoints", None)
     keep = 3 if keep is None else keep
     require(type(keep) is int and keep >= 2, "retain latest checkpoint and at least one rollback")
+    execution = getattr(args, "replay_execution", None) or "reference"
+    require(execution in ("reference", "cadence-csr"), "unknown CPU replay execution")
     return {"schema": 1, "retention": {"mode": "recent-checkpoints", "keep": keep},
+            "replay_execution": execution,
             "kind": "native-cpu-care-plan", "source": str(source), "source_sha256": source_pins,
             "lane": str(lane), "history": str(history), "history_sha256": mixed.host.sha256(history),
             "binary": str(binary), "binary_sha256": mixed.host.sha256(binary), "schedule": schedule,
@@ -131,10 +134,18 @@ def verify_source(plan):
             "pinned scheduling/admission helpers changed")
 
 
+def verify_replay_execution(receipt, execution):
+    require(receipt.get("cpu_replay_execution", "reference") == execution and
+            receipt.get("cpu_collection_execution", "reference") == "reference",
+            "CPU output does not attest selected replay execution")
+
+
 def execute(plan):
     lane = Path(plan["lane"])
     binary = plan["binary"]
     require(plan["schema"] == 1 and plan["kind"] == "native-cpu-care-plan", "invalid saved CPU plan")
+    execution = plan.get("replay_execution", "reference")
+    require(execution in ("reference", "cadence-csr"), "unknown saved CPU replay execution")
     verify_source(plan)
     require(mixed.host.sha256(binary) == plan["binary_sha256"], "pinned CPU binary changed")
     require(mixed.host.sha256(Path(__file__)) == plan["scheduler_sha256"], "pinned scheduler changed")
@@ -183,7 +194,7 @@ def execute(plan):
                     "accepted CPU state lacks continuation pins")
             if path_key(output) in retained:
                 require(pins(output) == expected_source, "accepted CPU output changed")
-                command(binary, "--validate-output", output)
+                verify_replay_execution(command(binary, "--validate-output", output), execution)
             previous = output
             slot += 1
         else:
@@ -207,12 +218,15 @@ def execute(plan):
         argv = ["--previous", previous, "--output", output, "--seed-history", history,
                 "--seed", seed, "--lesson", row["lesson"], "--decisions", row["decisions"],
                 "--temperature", plan["temperature"]]
+        if execution != "reference":
+            argv += ["--replay-execution", execution]
         if food_need_condition != "newborn_v1" and row["lesson"] in ("feeding", "relocated_food"):
             argv += ["--food-need-condition", food_need_condition]
         if plan["seed_admission"]["policy"] == "known-exclusions":
             argv.append("--known-exclusions")
         command(binary, *argv)
         receipt = command(binary, "--validate-output", output)
+        verify_replay_execution(receipt, execution)
         if row["lesson"] in ("feeding", "relocated_food"):
             actual = receipt["episode"].get("food_need_initialization")
             require((actual is None and food_need_condition == "newborn_v1") or
@@ -241,6 +255,8 @@ def main():
     parser.add_argument("--schedule", type=Path)
     parser.add_argument("--seeds", help="explicit nonzero inclusive FIRST:LAST range")
     parser.add_argument("--temperature", type=float, default=1.)
+    parser.add_argument("--replay-execution", choices=("reference", "cadence-csr"),
+                        help="new plan's pinned CPU training replay mode; Reference is default")
     parser.add_argument("--food-need-condition", choices=("newborn_v1", "ordinary_healthy_aging_v1"),
                         help="prospective Feeding/RelocatedFood condition; other lesson setup stays unchanged")
     parser.add_argument("--known-exclusions", action="store_true")
@@ -250,7 +266,8 @@ def main():
     args = parser.parse_args()
     if args.resume:
         require(args.run and not any((args.binary, args.previous, args.lane, args.seed_history, args.schedule, args.seeds,
-                                      args.known_exclusions, args.keep_checkpoints, args.food_need_condition)), "resume uses only --resume LANE --run")
+                                      args.known_exclusions, args.keep_checkpoints, args.food_need_condition,
+                                      args.replay_execution)), "resume uses only --resume LANE --run")
         lane = args.resume.resolve(strict=True)
         plan = read(lane / PLAN)
         require(same_path(plan["lane"], lane), "saved lane identity changed")

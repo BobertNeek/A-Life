@@ -8,8 +8,9 @@ use alife_core::{
 };
 use alife_gpu_backend::{GpuClosedLoopBackend, GpuRuntimeProfile, GpuTrainingSamplingConfig};
 use alife_training::{
-    train_recurrent_ppo_cohort, AdamWConfig, FoundationTrainer, PpoBatch, PpoBoundary, PpoConfig,
-    PpoJointAction, PpoTrainingState, PpoTrainingWindow, PpoTransition, StageTrainableMask,
+    train_recurrent_ppo_cohort, train_recurrent_ppo_cohort_with_windows, AdamWConfig,
+    FoundationTrainer, PpoBatch, PpoBoundary, PpoConfig, PpoJointAction, PpoTrainingState,
+    PpoTrainingWindow, PpoTransition, StageTrainableMask,
 };
 
 use crate::foundation_training::teacher_step_consumed as consumed;
@@ -21,7 +22,7 @@ use crate::{
 
 mod ppo_diagnostics;
 mod replay_window_cache;
-use replay_window_cache::PpoWindowSnapshotCache;
+use replay_window_cache::{PpoWindowHandle, PpoWindowSnapshotCache};
 mod stage_timing;
 use stage_timing::CycleStageTiming;
 mod causal_collection;
@@ -4491,7 +4492,7 @@ fn run_foundation_training_cycle_in_owned_output(
     // policy/cohort. Later PPO passes reuse those bytes without disk round trips;
     // a new external replay load still verifies its actual storage before hits.
     let mut cached_windows = PpoWindowSnapshotCache::new(spans.len());
-    let mut update = train_recurrent_ppo_cohort(
+    let mut update = train_recurrent_ppo_cohort_with_windows(
         &mut trainer,
         &mut value,
         spans.len(),
@@ -4523,7 +4524,7 @@ fn run_foundation_training_cycle_in_owned_output(
                 auxiliary: None,
             };
             cached_windows.retain(index, &window, budget);
-            Ok(window)
+            Ok(PpoWindowHandle::Owned(window))
         },
         actor_only_ppo,
         policy_version,

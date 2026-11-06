@@ -306,7 +306,11 @@ fn replay_cache_charge_is_uncompressed_and_rejects_oversize_without_allocating()
 
 // Synthetic GPU-receipt fields over a measured CPU-world patch exercise the
 // codec/admission contract, not actual GPU behavior or cognition performance.
-fn record_fixture() -> (FoundationReplayRecord, alife_core::BrainPhenotype) {
+pub(super) fn record_fixture() -> (FoundationReplayRecord, alife_core::BrainPhenotype) {
+    record_fixture_at(0)
+}
+
+pub(super) fn record_fixture_at(tick: u64) -> (FoundationReplayRecord, alife_core::BrainPhenotype) {
     let capacity = BrainCapacityClass::n2048();
     let genome = BrainGenome::scaffold(42, capacity.id());
     let development =
@@ -327,6 +331,9 @@ fn record_fixture() -> (FoundationReplayRecord, alife_core::BrainPhenotype) {
         false,
     )
     .unwrap();
+    for _ in 0..tick {
+        world.advance_tick();
+    }
     let frame = super::held_food_lesson_tests::frame(&mut world);
     let (_, outcome) = super::held_food_lesson_tests::eat_outcome(&mut world, scenario.food);
     let patch = super::held_food_lesson_tests::eating_narration_patch(
@@ -682,4 +689,129 @@ fn optional_record_retention_admits_before_allocating_its_copy() {
         bincode::serde::encode_to_vec(&cached, bincode::config::standard()).unwrap(),
         bincode::serde::encode_to_vec(&record, bincode::config::standard()).unwrap(),
     );
+}
+
+#[test]
+fn encode_replay_record_caches_exact_uncompressed_charge_and_prevalidated_options_guard_boundary() {
+    let (record, phenotype) = record_fixture();
+    let mut manual_writer = ReplayCacheChargeWriter(0);
+    bincode::serde::encode_into_std_write(&record, &mut manual_writer, bincode::config::standard())
+        .unwrap();
+    let expected_charge =
+        manual_writer.0 * 8 + std::mem::size_of::<FoundationReplayRecord>() as u64;
+
+    let mut compressed = Vec::new();
+    let (encoded_bytes, digest) = encode_replay_record(&mut compressed, &record).unwrap();
+    let reference = FoundationReplayRecordRef {
+        cohort: None,
+        record_index: record.record_index,
+        segment: record.segment,
+        tick: record.tick,
+        encoded_bytes,
+        digest,
+    };
+    let mut observed_charge = None;
+    cache_verified_replay_record_with_admission(&reference, &record, |charge| {
+        observed_charge = Some(charge);
+        false
+    });
+    assert_eq!(observed_charge, Some(expected_charge));
+    assert!(LAST_REPLAY_UNCOMPRESSED_BYTES.with(|cell| cell.get().is_none()));
+
+    record
+        .validate_with_options(&record.source, &phenotype, true)
+        .unwrap();
+    let mut forged = record.clone();
+    forged.sequence.initial.activity_ema[0] = 0.25;
+    assert_ne!(
+        forged.sequence.initial.activity_ema[0].to_bits(),
+        record.sequence.initial.activity_ema[0].to_bits()
+    );
+    assert!(forged
+        .validate_with_options(&record.source, &phenotype, true)
+        .is_err());
+}
+
+#[test]
+fn constructed_replay_records_retain_identity_and_boundary_guards() {
+    let (record, phenotype) = record_fixture();
+    // These bindings remain checked after the writer has independently
+    // validated its sequence, sealed patch and outcome credit during capture.
+    let corrupt: [fn(&mut FoundationReplayRecord); 12] = [
+        |r| r.source.policy_version += 1,
+        |r| r.source.phenotype_hash.0[0] ^= 1,
+        |r| r.source.compiler_inputs_digest[0] ^= 1,
+        |r| r.sequence.burn_in_ticks = 1,
+        |r| r.sequence.ticks.push(r.sequence.ticks[0].clone()),
+        |r| r.behavior.tick += 1,
+        |r| r.before.organism_id += 1,
+        |r| r.after.weight_digest[0] ^= 1,
+        |r| r.after.activation_side ^= 1,
+        |r| r.sequence.initial.activations[0] = -0.25,
+        |r| r.behavior.decoder_inputs[0] += 0.5,
+        |r| r.behavior.sampling.temperature = f32::NAN,
+    ];
+    for (index, corrupt) in corrupt.into_iter().enumerate() {
+        let mut forged = record.clone();
+        corrupt(&mut forged);
+        assert!(
+            forged.validate(&record.source, &phenotype).is_err(),
+            "disk case {index}"
+        );
+        assert!(
+            forged
+                .validate_with_options(&record.source, &phenotype, true)
+                .is_err(),
+            "constructed case {index}"
+        );
+    }
+    record
+        .validate_with_options(&record.source, &phenotype, true)
+        .unwrap();
+}
+
+#[test]
+fn replay_encoding_charge_token_mismatch_falls_back_to_exact_record_size() {
+    let (record, _) = record_fixture();
+    let mut encoded = Vec::new();
+    let (encoded_bytes, digest) = encode_replay_record(&mut encoded, &record).unwrap();
+    let mut other = record.clone();
+    other.source.source_revision.push_str("-different-record");
+    let mut exact = ReplayCacheChargeWriter(0);
+    bincode::serde::encode_into_std_write(&other, &mut exact, bincode::config::standard()).unwrap();
+    let reference = FoundationReplayRecordRef {
+        cohort: None,
+        record_index: other.record_index,
+        segment: other.segment,
+        tick: other.tick,
+        encoded_bytes,
+        digest: [digest[0] ^ 1; 32],
+    };
+    let mut observed = None;
+    cache_verified_replay_record_with_admission(&reference, &other, |charge| {
+        observed = Some(charge);
+        false
+    });
+    assert_eq!(
+        observed,
+        Some(exact.0 * 8 + std::mem::size_of::<FoundationReplayRecord>() as u64)
+    );
+    assert!(LAST_REPLAY_UNCOMPRESSED_BYTES.with(|cell| cell.get().is_none()));
+}
+
+#[test]
+fn replay_failed_encoding_does_not_publish_a_partial_charge_token() {
+    struct RefuseWrites;
+    impl std::io::Write for RefuseWrites {
+        fn write(&mut self, _: &[u8]) -> std::io::Result<usize> {
+            Err(std::io::Error::other("injected compressed output failure"))
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    let (record, _) = record_fixture();
+    LAST_REPLAY_UNCOMPRESSED_BYTES.with(|cell| cell.set(None));
+    assert!(encode_replay_record(&mut RefuseWrites, &record).is_err());
+    assert!(LAST_REPLAY_UNCOMPRESSED_BYTES.with(|cell| cell.get().is_none()));
 }

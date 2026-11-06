@@ -613,15 +613,18 @@ fn commit_snapshot(
     life: &Path,
     progress: SameIndividualProgressV1,
 ) -> Result<()> {
-    if !wal.consumed
-        || progress.session_nonce != o.request.seed_range[0]
-        || progress.trained_rows > o.request.total_trained_decisions as u64
-        || progress.sampling_temperature.to_bits()
-            != sampling_temperature(base, &o.request)?.to_bits()
-        || now_seconds()? > o.request.finalization_deadline_unix_seconds
-    {
-        return Err("continuous snapshot exceeds request/session/finalization boundary".into());
-    }
+    let actual_temperature = sampling_temperature(base, &o.request)?;
+    let admission_time = now_seconds()?;
+    protocol::snapshot_boundary(
+        wal.consumed,
+        &o.request,
+        &progress,
+        actual_temperature,
+        admission_time,
+    )
+    .map_err(|reason| {
+        format!("continuous snapshot exceeds request/session/finalization boundary: {reason}")
+    })?;
     if let Some(old) = &frontier.snapshot {
         let p = &old.state.progress;
         if progress.trained_rows < p.trained_rows

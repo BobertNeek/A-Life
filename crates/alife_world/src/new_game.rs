@@ -140,6 +140,31 @@ fn create_new_game_inner(
     candidate: Option<&alife_core::Nano512ActionCreditCandidateV2>,
     training_group: bool,
 ) -> Result<CanonicalNewGame, ScaffoldContractError> {
+    create_new_game_with_identity(config, foundation, candidate, training_group, 1)
+}
+
+/// Explicit offline new individual, with the usual newborn biology/ecology.
+/// Identity is allocated by the training lineage owner, never reused from a save.
+pub fn create_canonical_training_new_life(
+    config: &CanonicalNewGameConfig,
+    foundation: &FoundationWeightAsset,
+    organism_id: OrganismId,
+) -> Result<CanonicalNewGame, ScaffoldContractError> {
+    if organism_id.raw() == 0 || config.founder_count != 1 {
+        return Err(ScaffoldContractError::InvalidId);
+    }
+    // Apply the ordinary candidate admission before allocating a new identity.
+    create_canonical_new_game_with_n2048_candidate(config, foundation)?;
+    create_new_game_with_identity(config, foundation, None, false, organism_id.raw())
+}
+
+fn create_new_game_with_identity(
+    config: &CanonicalNewGameConfig,
+    foundation: &FoundationWeightAsset,
+    candidate: Option<&alife_core::Nano512ActionCreditCandidateV2>,
+    training_group: bool,
+    first_organism_id: u64,
+) -> Result<CanonicalNewGame, ScaffoldContractError> {
     let manifest = foundation.manifest();
     let foundation_identity = FoundationGeneticIdentity::new(
         manifest.foundation_id().raw(),
@@ -155,7 +180,11 @@ fn create_new_game_inner(
 
     for slot in 0..config.founder_count {
         let ordinal = u64::from(slot) + 1;
-        let organism_id = OrganismId(ordinal);
+        let organism_id = OrganismId(
+            first_organism_id
+                .checked_add(u64::from(slot))
+                .ok_or(ScaffoldContractError::InvalidId)?,
+        );
         let founder_seed = config
             .founder_seed_base
             .checked_mul(16)
