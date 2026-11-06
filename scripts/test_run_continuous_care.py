@@ -831,7 +831,8 @@ finally:
                             stdout=subprocess.PIPE, timeout=30, check=False)
                     finally:
                         os.close(writer)
-                    self.assertEqual(result.stdout, b'NORMAL_RESULT\n')
+                    # Normal stdout uses the platform's native line ending.
+                    self.assertEqual(result.stdout.splitlines(), [b'NORMAL_RESULT'])
                     self.assertEqual(result.returncode, 0)
 
     def test_runtime_profile_is_displayed_after_retirement_and_never_committed(self):
