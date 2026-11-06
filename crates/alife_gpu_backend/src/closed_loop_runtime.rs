@@ -1636,8 +1636,13 @@ impl GpuDeviceFactory for WgpuDeviceFactory {
         adapter: &wgpu::Adapter,
         descriptor: &wgpu::DeviceDescriptor<'_>,
     ) -> Result<(wgpu::Device, wgpu::Queue), ScaffoldContractError> {
-        pollster::block_on(adapter.request_device(descriptor))
-            .map_err(|_| ScaffoldContractError::NeuralBackendUnavailable)
+        crate::startup_diagnostics::prepare();
+        crate::startup_diagnostics::request_device_result(
+            pollster::block_on(adapter.request_device(descriptor)),
+            || crate::startup_diagnostics::AdapterContext::from_info(&adapter.get_info()),
+            descriptor.label.unwrap_or("unlabeled"),
+            crate::startup_diagnostics::emit,
+        )
     }
 }
 
@@ -6405,8 +6410,14 @@ fn acquire_required_gpu(
         };
         let lost = Arc::new(AtomicBool::new(false));
         let callback_lost = Arc::clone(&lost);
-        device.set_device_lost_callback(move |_reason, _message| {
-            callback_lost.store(true, Ordering::Release);
+        let callback_context = crate::startup_diagnostics::AdapterContext::from_info(&info);
+        device.set_device_lost_callback(move |reason, _message| {
+            crate::startup_diagnostics::device_lost(
+                &callback_lost,
+                callback_context,
+                reason,
+                crate::startup_diagnostics::emit,
+            );
         });
         let hardware = build_hardware_receipt(
             &info,
