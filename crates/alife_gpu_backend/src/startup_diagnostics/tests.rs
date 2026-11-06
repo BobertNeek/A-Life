@@ -1,35 +1,36 @@
+use super::*;
 use std::{
     io,
-    sync::atomic::{AtomicBool, Ordering},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
 };
-
-use super::*;
 
 #[derive(Debug, Clone)]
 struct NativeError(String, Option<Box<NativeError>>);
-
 impl fmt::Display for NativeError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(&self.0)
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
     }
 }
-
 impl Error for NativeError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         self.1.as_deref().map(|error| error as &dyn Error)
     }
 }
-
 fn native_error() -> NativeError {
     NativeError(
         "device initialization failed".into(),
-        Some(Box::new(NativeError("HRESULT 0x8007000E".into(), None))),
+        Some(Box::new(NativeError(
+            "HRESULT 0x8007000E private driver text".into(),
+            None,
+        ))),
     )
 }
-
-fn info(backend: wgpu::Backend, name: &str) -> wgpu::AdapterInfo {
-    wgpu::AdapterInfo {
-        name: name.into(),
+fn context(backend: wgpu::Backend) -> AdapterContext {
+    AdapterContext::from_info(&wgpu::AdapterInfo {
+        name: "private@example.invalid secret-name 192.168.1.1".into(),
         backend,
         vendor: 0x10de,
         device: 0x1234,
@@ -40,11 +41,23 @@ fn info(backend: wgpu::Backend, name: &str) -> wgpu::AdapterInfo {
         subgroup_min_size: 32,
         subgroup_max_size: 32,
         transient_saves_memory: false,
-    }
+    })
+}
+fn record(error: impl Error, label: &str) -> DiagnosticRecord {
+    let mut records = Vec::new();
+    let result = request_device_result::<()>(
+        Err(error),
+        || context(wgpu::Backend::Dx12),
+        label,
+        |record| records.push(record),
+    );
+    assert_eq!(result, Err(ScaffoldContractError::NeuralBackendUnavailable));
+    assert_eq!(records.len(), 1);
+    records[0]
 }
 
 #[test]
-fn request_failure_keeps_the_legacy_error_and_reports_native_context() {
+fn request_failure_preserves_the_legacy_error_and_structured_context() {
     for backend in [
         wgpu::Backend::Vulkan,
         wgpu::Backend::Dx12,
@@ -54,176 +67,264 @@ fn request_failure_keeps_the_legacy_error_and_reports_native_context() {
         let legacy: Result<(), _> =
             Err(error.clone()).map_err(|_| ScaffoldContractError::NeuralBackendUnavailable);
         let mut records = Vec::new();
-        let actual = request_device_result::<()>(
+        let result = request_device_result::<()>(
             Err(error),
-            || info(backend, "Fixture GPU"),
-            "actual requested device",
-            |record| records.push(record.to_owned()),
+            || context(backend),
+            "alife-required-closed-loop-device",
+            |record| records.push(record),
         );
-        assert_eq!(actual, legacy);
-        assert_eq!(records.len(), 1);
-        for expected in [
-            format!("backend={backend:?}"),
-            "adapter=\"Fixture GPU\"".into(),
-            "vendor=0x10de".into(),
-            "device=0x1234".into(),
-            "stage=\"request_device\"".into(),
-            "label=\"actual requested device\"".into(),
-            "device initialization failed".into(),
-            "0x8007000E".into(),
-        ] {
-            assert!(
-                records[0].contains(&expected),
-                "missing {expected}: {}",
-                records[0]
-            );
-        }
-        assert!(!records[0].contains("private"));
+        assert_eq!(result, legacy);
+        assert_eq!(
+            records,
+            [DiagnosticRecord {
+                context: context(backend),
+                event: Event::Request {
+                    role: DeviceRole::RequiredClosedLoop,
+                    detail: RequestDetail::Other,
+                }
+            }]
+        );
+        assert_eq!(records[0].line(), format!("gpu_device_failure backend={backend:?} vendor=0x10de device=0x1234 stage=request_device role=required_closed_loop kind=other"));
     }
 }
 
 #[test]
-fn request_success_preserves_the_resource_without_reading_info_or_reporting() {
+fn request_success_preserves_resource_and_avoids_metadata_and_reporting() {
     let resource = Box::new(17_u32);
-    let address = std::ptr::from_ref(resource.as_ref());
-    let result = request_device_result::<Box<u32>>(
+    let pointer = std::ptr::from_ref(resource.as_ref());
+    let actual = request_device_result(
         Ok::<_, NativeError>(resource),
-        || panic!("success must not read or format adapter metadata"),
-        "actual requested device",
-        |_| panic!("success must remain silent"),
+        || panic!("success must not query context"),
+        "private label",
+        |_| panic!("success must not report"),
     )
     .unwrap();
-    assert_eq!(std::ptr::from_ref(result.as_ref()), address);
-    assert_eq!(*result, 17);
+    assert_eq!(std::ptr::from_ref(actual.as_ref()), pointer);
 }
 
 #[test]
-fn device_loss_retains_fail_stop_before_reporting_and_destruction_is_quiet() {
+fn callback_sets_fail_stop_before_emission_and_destruction_stays_quiet() {
     let lost = AtomicBool::new(false);
     let mut records = Vec::new();
     device_lost(
         &lost,
-        &info(wgpu::Backend::Dx12, "Fixture GPU"),
+        context(wgpu::Backend::Dx12),
         wgpu::DeviceLostReason::Unknown,
-        "native device loss 0x8007000E\nprivate raw shader excerpt",
         |record| {
             assert!(lost.load(Ordering::Acquire));
-            records.push(record.to_owned());
+            records.push(record);
         },
     );
-    assert_eq!(records.len(), 1);
-    for expected in ["device_lost_callback", "reason=Unknown", "0x8007000E"] {
-        assert!(records[0].contains(expected));
-    }
-    assert!(!records[0].contains("private"));
-    assert!(!records[0].contains("compute_pipeline"));
-
+    assert_eq!(records[0].line(), "gpu_device_failure backend=Dx12 vendor=0x10de device=0x1234 stage=device_lost reason=Unknown");
     let destroyed = AtomicBool::new(false);
     device_lost(
         &destroyed,
-        &info(wgpu::Backend::Vulkan, "Fixture GPU"),
+        context(wgpu::Backend::Vulkan),
         wgpu::DeviceLostReason::Destroyed,
-        "normal destruction",
-        |_| panic!("normal destruction must remain silent"),
+        |_| panic!("normal destruction stays quiet"),
     );
     assert!(destroyed.load(Ordering::Acquire));
 }
 
 #[test]
-fn records_bound_causes_utf8_and_controls_and_redact_entire_path_fields() {
-    let mut short_chain = NativeError("fifth cause must be omitted".into(), None);
-    for index in (1..=MAX_CAUSES).rev() {
-        short_chain = NativeError(format!("cause {index}"), Some(Box::new(short_chain)));
+fn arbitrary_text_and_truncated_prefixes_never_reach_output() {
+    let texts = [
+        "personal@example.invalid".into(),
+        "/home/person/private.bin".into(),
+        "C:\\Users\\private person\\file".into(),
+        "private-filename.brain".into(),
+        "192.168.0.1".into(),
+        "secret token content".into(),
+        "HRESULT 0x8007000E".into(),
+        "🦀".repeat(400),
+        format!("{}@private.invalid", "personal".repeat(40)),
+        format!("{}/private/file", "prefix".repeat(50)),
+        format!(
+            "Limit 'max_bind_groups' value 9 is better than allowed 8{}@private",
+            " ".repeat(256)
+        ),
+        "Limit 'max_bind_groups' value 9 is better than allowed 8\nsecret".into(),
+    ];
+    for text in texts {
+        let result = record(NativeError(text, None), "private/path label");
+        assert_eq!(result.line(), "gpu_device_failure backend=Dx12 vendor=0x10de device=0x1234 stage=request_device role=other kind=other");
     }
-    let short_record = failure_record(
-        &info(wgpu::Backend::Vulkan, "Fixture GPU"),
-        "request_device",
-        "label",
-        &short_chain,
-    );
-    for index in 1..=MAX_CAUSES {
-        assert!(short_record.contains(&format!("cause {index}")));
-    }
-    assert!(!short_record.contains("fifth cause"));
-    assert!(!short_record.contains("truncated"));
-
-    let mut error = NativeError("fifth cause must be omitted".into(), None);
-    for _ in 0..MAX_CAUSES {
-        error = NativeError("\u{7f}".repeat(400), Some(Box::new(error)));
-    }
-    let record = failure_record(
-        &info(wgpu::Backend::Vulkan, &"\u{7f}".repeat(400)),
-        "request_device",
-        "label",
-        &error,
-    );
-    assert!(record.len() <= MAX_RECORD_BYTES);
-    assert!(record.ends_with("...[truncated]"));
-    assert!(!record.contains("fifth cause"));
-    assert!(!record.chars().any(char::is_control));
     assert_eq!(
-        safe_field("🦀".repeat(400))
-            .chars()
-            .filter(|c| *c == '🦀')
-            .count(),
-        64
+        DeviceRole::from_label("alife-explicit-software-offline-training-test"),
+        DeviceRole::OfflineSoftwareTest
     );
-    for text in [
-        "compiler C:\\Users\\private person\\file failed",
-        "compiler /private/user name with spaces/file failed",
-        "email user@example.invalid failed",
-        "download https://example.invalid/private failed",
-    ] {
-        assert_eq!(safe_field(text), "\"[redacted]\"");
-    }
-    assert_eq!(safe_field("first line\nprivate shader"), "\"first line\"");
-    assert_eq!(safe_field("first line\rprivate shader"), "\"first line\"");
     assert_eq!(
-        safe_field("tab\tand\u{1b}control"),
-        "\"tab\\tand\\u{1b}control\""
+        DeviceRole::from_label("alife-required-closed-loop-device secret"),
+        DeviceRole::Other
     );
 }
 
 #[test]
-fn first_line_limit_stays_closed_if_display_ignores_format_errors() {
+fn classifier_accepts_only_exact_known_messages_and_validated_numeric_limits() {
+    for (text, expected) in [
+        ("Not enough memory left.", RequestDetail::OutOfMemory),
+        ("Parent device is lost", RequestDetail::DeviceLost),
+        (
+            "Failed to initialize Timestamp Normalizer",
+            RequestDetail::TimestampNormalizer,
+        ),
+    ] {
+        assert_eq!(classify_request(&NativeError(text.into(), None)), expected);
+    }
+    for name in [
+        "max_bind_groups",
+        "max_storage_buffers_per_shader_stage",
+        "max_buffer_size",
+        "max_storage_buffer_binding_size",
+    ] {
+        assert_eq!(
+            classify_request(&NativeError(
+                format!("Limit '{name}' value 9 is better than allowed 8"),
+                None
+            )),
+            RequestDetail::Limit {
+                name,
+                requested: 9,
+                allowed: 8
+            }
+        );
+    }
+    for (name, requested, allowed) in [
+        ("private-file.bin", "9", "8"),
+        ("max_bind_groups", "09", "8"),
+        ("max_bind_groups", "+9", "8"),
+        ("max_bind_groups", "9", "-1"),
+        ("max_bind_groups", "18446744073709551616", "8"),
+        ("max_bind_groups", "9", "8 private"),
+        ("max_bind_groups", "8", "9"),
+        ("max_bind_groups", "8", "8"),
+        ("max_bind_groups", "1.2.3.4", "0"),
+    ] {
+        assert_eq!(
+            classify_request(&NativeError(
+                format!("Limit '{name}' value {requested} is better than allowed {allowed}"),
+                None
+            )),
+            RequestDetail::Other
+        );
+    }
     struct IgnoresErrors;
     impl fmt::Display for IgnoresErrors {
-        fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-            let _ = formatter.write_str("first\nprivate shader");
-            let _ = formatter.write_str("more private shader");
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            let _ = f.write_str(&"x".repeat(MAX_MESSAGE_BYTES + 1));
+            let _ = f.write_str("Not enough memory left.");
             Ok(())
         }
     }
-    assert_eq!(safe_field(IgnoresErrors), "\"first\"");
+    impl fmt::Debug for IgnoresErrors {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.write_str("fixture")
+        }
+    }
+    impl Error for IgnoresErrors {}
+    assert_eq!(classify_request(&IgnoresErrors), RequestDetail::Other);
 }
 
 #[test]
-fn diagnostic_write_failures_do_not_replace_typed_errors_or_fail_stop() {
-    struct Broken;
-    impl io::Write for Broken {
-        fn write(&mut self, _: &[u8]) -> io::Result<usize> {
-            Err(io::Error::new(io::ErrorKind::BrokenPipe, "closed sink"))
-        }
-        fn flush(&mut self) -> io::Result<()> {
-            Ok(())
-        }
-    }
-    let result = request_device_result::<()>(
-        Err(native_error()),
-        || info(wgpu::Backend::Dx12, "Fixture GPU"),
-        "actual requested device",
-        |record| emit_to(Broken, record),
+fn records_have_fixed_storage_and_bounded_structured_output() {
+    assert!(std::mem::size_of::<DiagnosticRecord>() <= 128);
+    let record = DiagnosticRecord {
+        context: AdapterContext {
+            backend: wgpu::Backend::BrowserWebGpu,
+            vendor: u32::MAX,
+            device: u32::MAX,
+        },
+        event: Event::Request {
+            role: DeviceRole::OfflineSoftwareTest,
+            detail: RequestDetail::Limit {
+                name: "max_storage_buffers_per_shader_stage",
+                requested: u64::MAX,
+                allowed: u64::MAX - 1,
+            },
+        },
+    };
+    let line = record.line();
+    assert!(line.len() <= 512);
+    assert!(!line.chars().any(char::is_control));
+}
+
+#[test]
+fn sink_drops_on_unprepared_full_failed_or_disconnected_worker() {
+    let sink = DiagnosticSink::default();
+    let first = record(native_error(), "alife-required-closed-loop-device");
+    let second = record(native_error(), "other");
+    sink.submit(first);
+    let mut receiver = None;
+    sink.prepare_with(|rx| {
+        receiver = Some(rx);
+        Ok(())
+    });
+    let receiver = receiver.unwrap();
+    assert!(receiver.try_recv().is_err());
+    sink.submit(first);
+    sink.submit(second);
+    assert_eq!(receiver.try_recv().unwrap(), first);
+    assert!(receiver.try_recv().is_err());
+    sink.submit(second);
+    assert_eq!(receiver.try_recv().unwrap(), second);
+    drop(receiver);
+    sink.submit(first);
+    sink.prepare_with(|_| panic!("worker must never be restarted"));
+    let failed = DiagnosticSink::default();
+    failed.prepare_with(|_| Err(io::Error::other("fixture spawn failure")));
+    failed.prepare_with(|_| panic!("failed worker must not be retried"));
+    assert_eq!(
+        request_device_result::<()>(
+            Err(native_error()),
+            || context(wgpu::Backend::Metal),
+            "other",
+            |record| failed.submit(record)
+        ),
+        Err(ScaffoldContractError::NeuralBackendUnavailable)
     );
-    assert_eq!(result, Err(ScaffoldContractError::NeuralBackendUnavailable));
     let lost = AtomicBool::new(false);
     device_lost(
         &lost,
-        &info(wgpu::Backend::Dx12, "Fixture GPU"),
+        context(wgpu::Backend::Metal),
         wgpu::DeviceLostReason::Unknown,
-        "lost",
-        |record| emit_to(Broken, record),
+        |record| failed.submit(record),
     );
     assert!(lost.load(Ordering::Acquire));
+}
+
+#[test]
+fn callback_does_not_wait_for_worker_initialization() {
+    let sink = Arc::new(DiagnosticSink::default());
+    let (started_tx, started_rx) = mpsc::channel();
+    let (release_tx, release_rx) = mpsc::channel();
+    let initializing = Arc::clone(&sink);
+    let initializer = std::thread::spawn(move || {
+        initializing.prepare_with(|_| {
+            started_tx.send(()).unwrap();
+            release_rx.recv().unwrap();
+            Err(io::Error::other("fixture"))
+        })
+    });
+    started_rx
+        .recv_timeout(std::time::Duration::from_secs(2))
+        .unwrap();
+    let submitting = Arc::clone(&sink);
+    let (done_tx, done_rx) = mpsc::channel();
+    let producer = std::thread::spawn(move || {
+        let lost = AtomicBool::new(false);
+        device_lost(
+            &lost,
+            context(wgpu::Backend::Metal),
+            wgpu::DeviceLostReason::Unknown,
+            |record| submitting.submit(record),
+        );
+        done_tx.send(lost.load(Ordering::Acquire)).unwrap();
+    });
+    let done = done_rx.recv_timeout(std::time::Duration::from_secs(2));
+    release_tx.send(()).unwrap();
+    initializer.join().unwrap();
+    producer.join().unwrap();
+    assert!(done.unwrap());
 }
 
 #[test]
@@ -233,26 +334,50 @@ fn diagnostic_sink_closed_pipe_does_not_change_exit_status() {
         process::{Command, Stdio},
     };
     const CHILD: &str = "ALIFE_STARTUP_DIAGNOSTICS_CLOSED_STDERR_CHILD";
-    if std::env::var_os(CHILD).is_some() {
+    if let Some(mode) = std::env::var_os(CHILD) {
+        let mode = mode.to_str().unwrap();
+        prepare();
         let mut ready = [0];
         std::io::stdin().read_exact(&mut ready).unwrap();
-        let result = request_device_result::<()>(
-            Err(native_error()),
-            || info(wgpu::Backend::Dx12, "Fixture GPU"),
-            "actual requested device",
-            emit,
-        );
-        assert_eq!(result, Err(ScaffoldContractError::NeuralBackendUnavailable));
-        let lost = AtomicBool::new(false);
-        device_lost(
-            &lost,
-            &info(wgpu::Backend::Dx12, "Fixture GPU"),
-            wgpu::DeviceLostReason::Unknown,
-            "lost",
-            emit,
-        );
-        assert!(lost.load(Ordering::Acquire));
+        let count = if mode == "burst" { 128 } else { 1 };
+        if mode != "loss" {
+            for _ in 0..count {
+                assert_eq!(
+                    request_device_result::<()>(
+                        Err(native_error()),
+                        || context(wgpu::Backend::Dx12),
+                        "other",
+                        emit
+                    ),
+                    Err(ScaffoldContractError::NeuralBackendUnavailable)
+                );
+            }
+            println!("REQUEST_RETURNED");
+        }
+        if mode != "request" {
+            let lock = std::sync::Mutex::new(());
+            let guard = lock.lock().unwrap();
+            let lost = AtomicBool::new(false);
+            for _ in 0..count {
+                device_lost(
+                    &lost,
+                    context(wgpu::Backend::Dx12),
+                    wgpu::DeviceLostReason::Unknown,
+                    emit,
+                );
+            }
+            assert!(lost.load(Ordering::Acquire));
+            drop(guard);
+            assert!(lock.try_lock().is_ok());
+            println!("LOSS_FLAG_SET_CALLBACK_LOCK_RELEASED");
+        }
         println!("NORMAL_RESULT");
+        std::io::stdout().flush().unwrap();
+        if mode == "capture" {
+            // Keep the child alive until the parent has read a real worker
+            // record. Shutdown intentionally does not wait for diagnostics.
+            std::io::stdin().read_exact(&mut ready).unwrap();
+        }
         return;
     }
     let mut child = Command::new(std::env::current_exe().unwrap())
@@ -267,8 +392,6 @@ fn diagnostic_sink_closed_pipe_does_not_change_exit_status() {
         .stderr(Stdio::piped())
         .spawn()
         .unwrap();
-    // Close the reader before releasing the child; the writes must see a
-    // genuinely broken pipe, including during process teardown.
     drop(child.stderr.take().unwrap());
     child.stdin.take().unwrap().write_all(&[1]).unwrap();
     let output = child.wait_with_output().unwrap();
@@ -288,11 +411,11 @@ fn software_vulkan_request_failure_retains_the_actual_native_cause() {
     let adapter = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::VULKAN))
         .into_iter()
         .find(|a| a.get_info().device_type == wgpu::DeviceType::Cpu)
-        .expect("this explicit fixture requires a CPU Vulkan adapter");
+        .expect("explicit fixture requires CPU Vulkan");
     let mut limits = wgpu::Limits::downlevel_defaults();
     limits.max_bind_groups = adapter.limits().max_bind_groups.checked_add(1).unwrap();
     let descriptor = wgpu::DeviceDescriptor {
-        label: Some("alife-diagnostic-invalid-limit-fixture"),
+        label: Some("private fixture label"),
         required_limits: limits,
         ..Default::default()
     };
@@ -303,19 +426,29 @@ fn software_vulkan_request_failure_retains_the_actual_native_cause() {
         Err(ScaffoldContractError::NeuralBackendUnavailable)
     ));
     let error = pollster::block_on(adapter.request_device(&descriptor)).unwrap_err();
-    assert!(error.to_string().contains("max_bind_groups"));
     let mut records = Vec::new();
-    let result = request_device_result::<()>(
-        Err(error),
-        || adapter.get_info(),
-        descriptor.label.unwrap(),
-        |record| records.push(record.to_owned()),
+    assert_eq!(
+        request_device_result::<()>(
+            Err(error),
+            || AdapterContext::from_info(&adapter.get_info()),
+            descriptor.label.unwrap(),
+            |record| records.push(record),
+        ),
+        Err(ScaffoldContractError::NeuralBackendUnavailable)
     );
-    assert_eq!(result, Err(ScaffoldContractError::NeuralBackendUnavailable));
     assert_eq!(records.len(), 1);
-    assert!(records[0].contains("backend=Vulkan"));
-    assert!(records[0].contains("request_device"));
-    assert!(records[0].contains("alife-diagnostic-invalid-limit-fixture"));
-    assert!(records[0].contains("max_bind_groups"));
-    eprintln!("software_vulkan_request_failure={}", records[0]);
+    let record = records[0];
+    assert_eq!(record.context.backend, wgpu::Backend::Vulkan);
+    assert_eq!(
+        record.event,
+        Event::Request {
+            role: DeviceRole::Other,
+            detail: RequestDetail::Limit {
+                name: "max_bind_groups",
+                requested: u64::from(adapter.limits().max_bind_groups) + 1,
+                allowed: u64::from(adapter.limits().max_bind_groups),
+            }
+        }
+    );
+    eprintln!("software_vulkan_verified_limit={}", record.line());
 }

@@ -1636,9 +1636,10 @@ impl GpuDeviceFactory for WgpuDeviceFactory {
         adapter: &wgpu::Adapter,
         descriptor: &wgpu::DeviceDescriptor<'_>,
     ) -> Result<(wgpu::Device, wgpu::Queue), ScaffoldContractError> {
+        crate::startup_diagnostics::prepare();
         crate::startup_diagnostics::request_device_result(
             pollster::block_on(adapter.request_device(descriptor)),
-            || adapter.get_info(),
+            || crate::startup_diagnostics::AdapterContext::from_info(&adapter.get_info()),
             descriptor.label.unwrap_or("unlabeled"),
             crate::startup_diagnostics::emit,
         )
@@ -6409,13 +6410,12 @@ fn acquire_required_gpu(
         };
         let lost = Arc::new(AtomicBool::new(false));
         let callback_lost = Arc::clone(&lost);
-        let callback_info = info.clone();
-        device.set_device_lost_callback(move |reason, message| {
+        let callback_context = crate::startup_diagnostics::AdapterContext::from_info(&info);
+        device.set_device_lost_callback(move |reason, _message| {
             crate::startup_diagnostics::device_lost(
                 &callback_lost,
-                &callback_info,
+                callback_context,
                 reason,
-                &message,
                 crate::startup_diagnostics::emit,
             );
         });
