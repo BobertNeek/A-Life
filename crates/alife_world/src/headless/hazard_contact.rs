@@ -10,6 +10,7 @@ use super::{
 };
 
 const MAX_EXPOSURE_SAMPLES: usize = 64;
+const MAX_POST_CULL_BLOCKER_CHECKS: usize = 1024;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum HazardExposure {
@@ -395,12 +396,17 @@ impl<'a> HazardContacts<'a> {
             }
         }
         let mut samples = 1;
+        let mut remaining_checks = MAX_POST_CULL_BLOCKER_CHECKS;
         for parameter in [0.0, 1.0] {
             samples += 1;
             let point = curve.at(parameter);
-            if distance(point, source) <= hazard.radius && clear_from_solids(point, source, &active)
-            {
-                return HazardExposure::Contact;
+            if distance(point, source) <= hazard.radius {
+                if !reserve_checks(&mut remaining_checks, active.len()) {
+                    return HazardExposure::Unresolved;
+                }
+                if clear_from_solids(point, source, &active) {
+                    return HazardExposure::Contact;
+                }
             }
         }
         let mut stack = vec![(0.0_f32, 1.0_f32)];
@@ -409,6 +415,9 @@ impl<'a> HazardContacts<'a> {
             let range = distance_interval(points, point_intervals(coordinates(source)));
             if range.ok && range.lo > hazard.radius {
                 continue;
+            }
+            if !reserve_checks(&mut remaining_checks, active.len()) {
+                return HazardExposure::Unresolved;
             }
             let ray = RayIntervals::new(points, coordinates(source));
             if active
@@ -423,15 +432,28 @@ impl<'a> HazardContacts<'a> {
             }
             samples += 1;
             let point = curve.at(middle);
-            if distance(point, source) <= hazard.radius && clear_from_solids(point, source, &active)
-            {
-                return HazardExposure::Contact;
+            if distance(point, source) <= hazard.radius {
+                if !reserve_checks(&mut remaining_checks, active.len()) {
+                    return HazardExposure::Unresolved;
+                }
+                if clear_from_solids(point, source, &active) {
+                    return HazardExposure::Contact;
+                }
             }
             stack.push((middle, hi));
             stack.push((lo, middle));
         }
         HazardExposure::None
     }
+}
+/// Charge the full set even if a query short-circuits. Charging actual visits
+/// could make budget exhaustion, and therefore damage, depend on spawn order.
+fn reserve_checks(remaining: &mut usize, count: usize) -> bool {
+    let Some(next) = remaining.checked_sub(count) else {
+        return false;
+    };
+    *remaining = next;
+    true
 }
 struct Curve {
     start: Vec3f,

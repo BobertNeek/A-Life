@@ -40,13 +40,16 @@ a gameplay approximation, not a material-volume clipping operation. Ecological
 hazard fields retain their area effects, and height-field physical reach remains
 outside this rule.
 
-Swept exposure uses f32 interval certificates and at most 64 point samples.
+Swept exposure uses f32 interval certificates, at most 64 point samples, and a
+1,024-check budget after its complete initial blocker scan. Each step charges
+the entire active blocker set even if it exits early, keeping the budget outcome
+independent of blocker order.
 An unresolved query keeps that hazard admitted with its previous damage value
-and ranking inputs;
-it never assumes absence of exposure from an exhausted search. Consequently
-some grazing or complicated barriers can still permit legacy damage. The sample
-bound does not bound the number of blocker checks, and it is not a guarantee of
-universal shielding. No new save state or learned-state reset is introduced.
+and ranking inputs; it never assumes absence of exposure from an exhausted
+search. Consequently some grazing or complicated barriers can still permit
+legacy damage. Initial scans remain linear in blocker count; this is not a
+constant-time query or a guarantee of universal shielding. No new save state or
+learned-state reset is introduced.
 
 Hunger still primes non-contact investigation and contact/reach-gated tasting.
 Fresh procedural candidate distance coefficients are negative. Trained

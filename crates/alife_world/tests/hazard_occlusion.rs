@@ -508,3 +508,47 @@ fn portable_restore_preserves_identity_biology_and_the_same_shielding_and_fallba
         assert_eq!(restored.entity(hazard), Some(&before));
     }
 }
+
+#[test]
+fn dense_search_fallback_keeps_damage_and_is_independent_of_box_order() {
+    let project = |t: f32| 0.015625 + 0.06875 * t;
+    let z1 = f32::from_bits(0.25_f32.to_bits() + 1);
+    let boxes: Vec<_> = (0..64)
+        .map(|i| {
+            [
+                project(i as f32 / 64.0) - 0.000001,
+                0.25,
+                project((i + 1) as f32 / 64.0) + 0.000001,
+                z1,
+                -0.5,
+                2.0,
+            ]
+        })
+        .collect();
+    for reverse in [false, true] {
+        let mut boxes = boxes.clone();
+        if reverse {
+            boxes.reverse();
+        }
+        let initial = world(
+            boxes,
+            &[("thorn", Vec3f::new(0.05, 0.0, 0.8), 0.805, 0.6)],
+            &[],
+        );
+        let hazard = initial.entity_id("thorn").unwrap();
+        for path in PATHS {
+            let mut trial = initial.clone();
+            assert_eq!(
+                run(&mut trial, path),
+                if matches!(path, Path::MotorIdle) {
+                    0.0
+                } else {
+                    0.6
+                }
+            );
+        }
+        let result = initial.clone().apply_command(&step(1.0)).unwrap();
+        assert_eq!(result.touched_entities, vec![hazard]);
+        assert_eq!(result.execution.physical.target_entity, Some(hazard));
+    }
+}
