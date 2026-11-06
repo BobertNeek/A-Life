@@ -82,6 +82,272 @@ fn expected_camera(app: &App, entity: Entity) -> Transform {
     expected
 }
 
+// The key handler reads only the profile; other scene metadata is inert.
+fn camera_scene(profile_id: ProductionFrontendProfileId) -> Fvr03ProductionVoxelSceneResource {
+    Fvr03ProductionVoxelSceneResource {
+        schema: FVR03_PRODUCTION_VOXEL_RENDERER_SCHEMA,
+        schema_version: FVR03_PRODUCTION_VOXEL_RENDERER_SCHEMA_VERSION,
+        snapshot_schema: "CPU camera fixture".into(),
+        profile_id,
+        population: 1,
+        renderer_profile: String::new(),
+        backend_id: FVR10_RENDERER_BACKEND_ID,
+        uses_internal_voxel_terrain_mesh: false,
+        visible_chunk_count: 0,
+        resident_chunk_count: 0,
+        tile_mesh_count: 0,
+        creature_render_count: 0,
+        creature_material_bucket_count: 0,
+        creature_lod: Fvr04CreatureLod::CompactVoxel,
+        creature_root_count: 0,
+        creature_part_entity_count: 0,
+        creature_join_cover_count: 0,
+        creature_part_family_count: 0,
+        creature_mixed_assembly_count: 0,
+        creature_shared_mesh_handle_count: 0,
+        selection_ref_count: 0,
+        dirty_chunk_count: 0,
+        estimated_resident_bytes: 0,
+        draw_radius_chunks: 0,
+        target_fps: 30,
+        performance_artifact_path: None,
+        material_counts: BTreeMap::new(),
+        average_resource_bias: 0.,
+        average_hazard_pressure: 0.,
+        production_dressing_count: 0,
+        production_vfx_marker_count: 0,
+        production_gpu_vfx_emitter_count: 0,
+        production_vfx_budget_state: "CPU fixture",
+        production_visuals_display_only: true,
+        production_vfx_uses_hanabi_gpu_particles: false,
+        mesh_stats: Fvr09TerrainMeshStats {
+            mode: Fvr09MesherMode::LayeredGridQuads,
+            visible_voxels: 0,
+            naive_visible_faces: 0,
+            emitted_quads: 0,
+            face_reduction_ratio: 0.,
+            remesh_time_micros: 0,
+            dirty_chunks: 0,
+            cached_chunks: 0,
+            skipped_chunks: 0,
+            remesh_budget_chunks_per_frame: 0,
+            material_palette_version: "fixture",
+            vertex_color_face_variation: false,
+            top_side_color_separation: false,
+            variation_bucket_count: 0,
+            cache_key: String::new(),
+        },
+        visible_tiles: BTreeSet::new(),
+        visible_chunks: BTreeSet::new(),
+        tile_summaries_by_tile: BTreeMap::new(),
+        creature_refs_by_tile: BTreeMap::new(),
+        selection_positions_by_raw_id: BTreeMap::new(),
+    }
+}
+
+#[test]
+fn reset_view_restores_default_zoom_but_mode_switches_preserve_it() {
+    for profile in ProductionFrontendProfileId::all() {
+        for terrain_bound in [false, true] {
+            let extent = production_camera_extent(*profile);
+            let mut app = fixture(terrain_bound);
+            app.init_resource::<ButtonInput<KeyCode>>()
+                .insert_resource(camera_scene(*profile))
+                .add_systems(
+                    Update,
+                    handle_fvr03_camera_mode_input.before(constrain_camera),
+                );
+            let camera = spawn_camera(
+                &mut app,
+                down_camera(Vec3::new(0.5, 300.0, 0.5)),
+                orthographic(extent),
+            );
+            let (near, far) = if terrain_bound {
+                (9.8 / extent, 1600.0 / extent)
+            } else {
+                (0.35, 3.5)
+            };
+            for (key, zoom, expected) in [
+                (KeyCode::KeyO, near, near),
+                (KeyCode::KeyI, far, far),
+                (KeyCode::KeyR, far, 1.0),
+                (KeyCode::KeyR, near, 1.0),
+                (KeyCode::KeyR, 1.0, 1.0),
+            ] {
+                let mut projection = app.world_mut().get_mut::<Projection>(camera).unwrap();
+                let Projection::Orthographic(projection) = &mut *projection else {
+                    unreachable!()
+                };
+                projection.scale = zoom;
+                let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
+                keys.reset_all();
+                keys.press(key);
+                app.update();
+                let Projection::Orthographic(projection) =
+                    app.world().get::<Projection>(camera).unwrap()
+                else {
+                    unreachable!()
+                };
+                assert_eq!(
+                    projection.scale, expected,
+                    "{profile:?} terrain={terrain_bound} {key:?} after zoom {zoom}"
+                );
+                assert_eq!(
+                    app.world()
+                        .get::<Fvr03ProductionVoxelCamera>(camera)
+                        .unwrap()
+                        .mode,
+                    if key == KeyCode::KeyO {
+                        Fvr03ProductionVoxelCameraMode::Orbit
+                    } else {
+                        Fvr03ProductionVoxelCameraMode::OrthographicIsometric
+                    }
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn production_camera_input_reset_wins_over_wheel_without_deferring_it() {
+    use bevy::{
+        ecs::schedule::{LogLevel, ScheduleBuildSettings},
+        input::mouse::{MouseScrollUnit, MouseWheel},
+    };
+    for profile in ProductionFrontendProfileId::all() {
+        for terrain_bound in [false, true] {
+            for wheel in [-1.0, 1.0] {
+                let extent = production_camera_extent(*profile);
+                let mut app = fixture(terrain_bound);
+                app.init_resource::<ButtonInput<KeyCode>>()
+                    .add_message::<MouseWheel>()
+                    .insert_resource(camera_scene(*profile))
+                    // Use production's actual camera registration, not a test-only chain.
+                    .add_systems(
+                        Update,
+                        camera_view_input_systems()
+                            .in_set(ProductionVoxelPresentationSet::Input)
+                            .before(constrain_camera),
+                    )
+                    .edit_schedule(Update, |schedule| {
+                        schedule.set_build_settings(ScheduleBuildSettings {
+                            ambiguity_detection: LogLevel::Error,
+                            ..Default::default()
+                        });
+                    });
+                let window = app
+                    .world_mut()
+                    .spawn((
+                        bevy::window::Window {
+                            focused: true,
+                            ..Default::default()
+                        },
+                        bevy::window::PrimaryWindow,
+                    ))
+                    .id();
+                let camera = spawn_camera(
+                    &mut app,
+                    down_camera(Vec3::new(0.5, 300.0, 0.5)),
+                    orthographic(extent),
+                );
+                let scale = |app: &App| {
+                    let Projection::Orthographic(p) =
+                        app.world().get::<Projection>(camera).unwrap()
+                    else {
+                        unreachable!()
+                    };
+                    p.scale
+                };
+                let initial = if terrain_bound {
+                    if wheel < 0.0 {
+                        1600.0 / extent
+                    } else {
+                        9.8 / extent
+                    }
+                } else if wheel < 0.0 {
+                    3.5
+                } else {
+                    0.35
+                };
+                let mut projection = app.world_mut().get_mut::<Projection>(camera).unwrap();
+                let Projection::Orthographic(projection) = &mut *projection else {
+                    unreachable!()
+                };
+                projection.scale = initial;
+                app.world_mut()
+                    .resource_mut::<ButtonInput<KeyCode>>()
+                    .press(KeyCode::KeyR);
+                app.world_mut().write_message(MouseWheel {
+                    unit: MouseScrollUnit::Line,
+                    x: 0.0,
+                    y: wheel,
+                    window,
+                });
+                app.update();
+                assert_eq!(
+                    scale(&app),
+                    1.0,
+                    "{profile:?} terrain={terrain_bound} wheel={wheel}"
+                );
+
+                app.world_mut()
+                    .resource_mut::<ButtonInput<KeyCode>>()
+                    .reset_all();
+                app.update();
+                assert_eq!(
+                    scale(&app),
+                    1.0,
+                    "same-frame scrolling must not be deferred"
+                );
+
+                app.world_mut().write_message(MouseWheel {
+                    unit: MouseScrollUnit::Line,
+                    x: 0.0,
+                    y: -1.0,
+                    window,
+                });
+                app.update();
+                assert!(
+                    scale(&app) > 1.0 && scale(&app) < 1.2,
+                    "ordinary wheel input still zooms"
+                );
+                for key in [KeyCode::KeyI, KeyCode::KeyO] {
+                    let mut projection = app.world_mut().get_mut::<Projection>(camera).unwrap();
+                    let Projection::Orthographic(projection) = &mut *projection else {
+                        unreachable!()
+                    };
+                    projection.scale = 1.0;
+                    let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
+                    keys.reset_all();
+                    keys.press(key);
+                    app.world_mut().write_message(MouseWheel {
+                        unit: MouseScrollUnit::Line,
+                        x: 0.0,
+                        y: -1.0,
+                        window,
+                    });
+                    app.update();
+                    assert!(
+                        scale(&app) > 1.0 && scale(&app) < 1.2,
+                        "view-mode changes retain wheel zoom"
+                    );
+                    assert_eq!(
+                        app.world()
+                            .get::<Fvr03ProductionVoxelCamera>(camera)
+                            .unwrap()
+                            .mode,
+                        if key == KeyCode::KeyO {
+                            Fvr03ProductionVoxelCameraMode::Orbit
+                        } else {
+                            Fvr03ProductionVoxelCameraMode::OrthographicIsometric
+                        }
+                    );
+                }
+            }
+        }
+    }
+}
+
 #[test]
 fn settled_cameras_preserve_transform_and_projection_change_ticks() {
     let mut app = fixture(true);
