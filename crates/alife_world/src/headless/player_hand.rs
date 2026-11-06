@@ -50,7 +50,7 @@ impl HeadlessWorld {
             object_id: id,
             last_ground: ground,
         });
-        match self.move_player_hold(ground) {
+        match self.move_player_hold_to(ground, true) {
             Ok(position) => Ok(position),
             Err(error) => {
                 self.player_hold = None;
@@ -59,16 +59,21 @@ impl HeadlessWorld {
         }
     }
 
-    pub fn move_player_hold(&mut self, mut ground: Vec3f) -> Result<Vec3f, ScaffoldContractError> {
+    pub fn move_player_hold(&mut self, ground: Vec3f) -> Result<Vec3f, ScaffoldContractError> {
+        self.move_player_hold_to(ground, false)
+    }
+
+    fn move_player_hold_to(
+        &mut self,
+        mut ground: Vec3f,
+        initial_pickup: bool,
+    ) -> Result<Vec3f, ScaffoldContractError> {
         ground.validate()?;
         let hold = self
             .player_hold
             .as_ref()
             .ok_or(ScaffoldContractError::InvalidActionDecision)?;
         let id = hold.object_id;
-        // Compare before projection so the first lift can normalize an existing
-        // pose onto the ground without preventing recovery from an overlap.
-        let moving_ground = ground != hold.last_ground;
         if let Some(terrain) = &self.terrain {
             // A release location must support the object. Moving through the air
             // may cross rocks/rivers, but dropping into them is not silently allowed.
@@ -82,16 +87,30 @@ impl HeadlessWorld {
         } else {
             ground.z = 0.0;
         }
-        // Preserve pickup/recovery from an existing overlap, but never accept a
-        // new release location inside a solid object. Only the destination is
-        // checked: the player can still carry things across rocks through air.
-        if moving_ground
-            && self
+        // Keep initial pickup and unchanged projected ground available for
+        // recovery. Check only the destination, allowing carrying across rocks.
+        if !initial_pickup && ground != hold.last_ground {
+            if self
                 .objects
                 .values()
                 .any(|object| object.blocks_position(ground))
-        {
-            return Err(ScaffoldContractError::InvalidId);
+            {
+                return Err(ScaffoldContractError::InvalidId);
+            }
+            let object = self.entity(id).ok_or(ScaffoldContractError::InvalidId)?;
+            if let Some(owner) = object.organism_id {
+                let carries = self
+                    .objects
+                    .values()
+                    .any(|item| item.carried_by == Some(owner));
+                // Match the static reach used by carried_pose_reachable without
+                // sweeping from the old grip, which belongs to the air carry.
+                if carries
+                    && !self.solid_segment_clear(ground, Self::carry_grip(ground, object.body_yaw))
+                {
+                    return Err(ScaffoldContractError::InvalidId);
+                }
+            }
         }
         let mut raised = ground;
         if self.terrain.is_some() {
