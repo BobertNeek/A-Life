@@ -54,7 +54,7 @@ jobs:
       - name: Preserve prior saves through write and publication failures
         run: cargo test --locked -p alife_world --test atomic_portable_save
       - name: Keep births supported without stalling world ticks
-        run: cargo test --locked -p alife_world --lib task_4_3a2_tests:: -- --test-threads=1 --color=never
+        run: 'cargo test --locked -p alife_world --lib task_4_3a2_tests:: -- --test-threads=1 --color=never'
 
   native-texture-decode:
     name: Native texture decode (${{ matrix.os }})

@@ -11424,8 +11424,8 @@ mod task_4_3a2_tests {
         assert_eq!(world.next_organism_id, child_id.raw() + 1);
         world.validate_organism_bindings().unwrap();
         let saved = serde_json::to_string(&world.save_state()).unwrap();
-        let restored = HeadlessWorld::from_save_state(&serde_json::from_str(&saved).unwrap())
-            .unwrap();
+        let restored =
+            HeadlessWorld::from_save_state(&serde_json::from_str(&saved).unwrap()).unwrap();
         assert_eq!(restored.save_state(), world.save_state());
         assert_eq!(
             world.canonical_signature_digest().unwrap(),
@@ -11991,4 +11991,3 @@ mod eat_possession_tests {
 
 #[cfg(test)]
 mod nonvisual_perception_tests;
-
