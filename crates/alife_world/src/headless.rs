@@ -2234,6 +2234,12 @@ impl HeadlessWorld {
             return Ok(None);
         }
 
+        // Mating keeps its own proximity radius, but cannot cross the solids
+        // that block ordinary contact. This is not a gaze or walking-path test.
+        if !self.solid_segment_clear(maternal_object.position, paternal_object.position) {
+            return Ok(None);
+        }
+
         Ok(Some(EligibleMatingPair {
             maternal_id,
             paternal_id,
@@ -12009,4 +12015,3 @@ mod eat_possession_tests {
 
 #[cfg(test)]
 mod nonvisual_perception_tests;
-
