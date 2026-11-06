@@ -5,6 +5,12 @@ skinned mesh with idle, walk and sleep clips. Runtime appearance and animation
 project organism state. Walk phase follows ground distance, with a 1.44 model-unit
 left/right cycle scaled to the creature.
 
+During ordinary idle, the existing Hungry expression adds a small forward ear
+lean with a short fade. Pain, fear, sleep, movement, and player holding take
+priority; returning to Neutral fades the cue out. Pause freezes its blend.
+This is transient presentation state reconstructed after loading, not a change
+to biology, learned behavior, saved creature identity, or the shipping model.
+
 Export with Blender 5.2.1 using `scripts/export_hearthling.py`, then refresh
 registrations with `python scripts/register_approved_art.py`. The exporter uses
 the retained sculpt, face, eye, fur and runtime optimization scripts.
