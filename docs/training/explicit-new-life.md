@@ -151,13 +151,109 @@ make this qualification appear successful.
 
 ## Cloud evidence
 
-Source-only cloud work uses disposable metadata fixtures for typed lineage/codec
+The original #248 cloud fixture work used disposable metadata for typed lineage/codec
 checks, and a real native CPU newborn world for collection, recovery and next-Adam
-continuity. The existing CPU collector rejects the GPU live-policy compiler hash;
-the component smoke explicitly binds only its disposable actor metadata to the
+continuity. Its ordinary CPU collector rejected the GPU live-policy compiler hash;
+that component smoke explicitly bound only its disposable actor metadata to the
 ordinary founder graph while preserving weights, moments, ages and masks. It is
 not an end-to-end test of GPU Current admission. Production transition code never
 performs that metadata rebind. Metadata placeholders are explicitly rejected by full native asset
 admission. These tests do not certify the actual saved PC checkpoint, native GPU
 birth/restore, feeding capability or all-night survival. Those require the owner
 qualification above before training is resumed.
+
+## Retained-neural CPU assessment
+
+`assess_retained_cpu inspect CURRENT UNUSED_OUTPUT EXPECTED_SHA256` performs full
+Current admission, native fixed-slot topology reconstruction, canonical-to-live
+mapping, exact optimizer retention and a two-tick scalar recurrent-state check.
+That initial probe uses an Idle candidate with zero decoder inputs; it does not
+qualify candidate logits, action decoding or sampling. The
+explicit body bridge allows only derived neural identity hashes to differ; all
+neural execution fields must match. Saved physiological bits are preserved.
+Cross-platform phenotype admission permits only an adjacent-f32 difference in
+`body.metabolic_turnover`, the platform `exp2` result; all other fields remain
+exact. Separate source-bound and newborn-bound lexical proofs are recorded in
+qualification; ordinary validation remains strict outside those scopes. This
+reuses the compatibility contract from evaluator revision `4a6a1523` and is not
+bit-identical re-expression or GPU parity.
+
+`assess_retained_cpu battery CURRENT NEW_OUTPUT EXPECTED_SHA256` runs the six
+standard conditions on assessment-only seeds 202611185878–202611185897, 128 scored
+decisions plus one bootstrap, temperature 1, no teacher/prior and no offline
+updates. It uses a fresh body and personal memory while retaining somatic weights,
+acquired dendrites/sparse structure/structural candidates and learned predictor.
+Both original live banks remain exact, immutable inheritance evidence in every
+CPU checkpoint; current active CPU weights use the native mapping to the original
+actor coordinates. Global Adam and critic history are unchanged.
+
+The current CPU sparse execution supports added edges whose native alpha and both
+somatic banks are zero. It rejects other added-coordinate state before dispatch,
+with no policy-only fallback. Ordinary waking learning and sleep use the existing
+CPU contracts. Incomplete, dead and failed trials retain their prefix artifacts
+and remain in results. Existing output is never restarted or overwritten.
+
+The fixed-slot scalar check covers the recurrent mapping and state formulas.
+It does not execute a GPU or certify Windows/NVIDIA parity. Results from this executable are a separate
+CPU benchmark until both actual parents and initial states are qualified under
+the same executable. Unknown historical seed freshness remains unknown.
+
+`assess_retained_cpu fresh-controls CURRENT NEW_OUTPUT EXPECTED_SHA256` runs a
+bounded within-parent comparison: two assessment-only seeds, held food and
+ordinarily aged feeding, with retained versus native fresh neural state. Both
+views use the exact same global actor/value history, physical newborn bits,
+temperature 1, 128 scored decisions plus bootstrap and ordinary waking
+plasticity. Native fresh state includes the native default dendrites. It omits
+the source's somatic overlays, acquired sparse structure and learned predictor
+only in that explicitly labeled disposable control. The complete source and
+both optimizer histories remain unchanged. Eight trials can isolate sensitivity
+to the retained overlay; they do not establish an older/newer regression, GPU
+parity or unseen-seed performance.
+
+### Bounded decoder and motor diagnosis
+
+Build `audit_retained_bridge` and `audit_retained_motor` as examples with
+`--features cpu-training`. Run the bridge with `CURRENT EXPECTED_SHA256
+BATTERY_DIRECTORY NEW_OUTPUT`, then run `python3 scripts/audit_retained_bridge.py
+NEW_OUTPUT` (NumPy required), followed by the motor example with
+`BATTERY_DIRECTORY NEW_OUTPUT`.
+
+The bridge reexecutes six decisions from each saved initial held and ordinarily
+aged feeding case. Use the battery's exact source/executable semantics: a newer
+world or candidate-enumeration contract can legitimately change its trace and is
+not evidence of a decoder fault. It records actual candidate identities, features, recurrent
+state, mutable offsets, logits and temperature-1 training-sampler state. Replay
+controls remove the acquired edge, restore native initial dendrites without
+acquired edges, and remove all dendrites and acquired edges. Each retains base
+somatic weights and the same input state. Saved dendrites can be native defaults;
+do not call their removal an acquired-only or canonical control. These controls measure
+local sensitivity, not ablated world rollouts. An artificial nonzero-input case
+exercises all eight decoder families only to qualify arithmetic.
+
+The independent Python implementation composes canonical-to-packed-to-live
+coordinates by skipping acquired slots, checks native ABI metadata, and evaluates
+packed recurrence and decoder maps. It also rebuilds the sensor encoder, candidate
+features, confidence-weighted memory lanes, innate bias and conditional sampling.
+The motor example passes those independently selected actions through the native
+world motor transaction and compares commands, bundles and physical receipts.
+It does not independently continue predictor updates, waking plasticity or the
+following world tick. Raw diagnostic exports contain private state and remain
+outside the repository.
+
+The bridge also supports `--first-frame-only` and explicit replay views that
+zero lifetime, fast or both somatic layers while retaining native/saved
+dendrites and the acquired edge. These replay interventions do not resume or
+modify a parent. `scripts/audit_retained_waking.py NEW_OUTPUT` independently
+checks canonical-coordinate eligibility staging and the next waking fast update
+against the native scalar formulas on the captured sealed decisions. Its
+declared f32 tolerance covers reconstruction of receptor activation from the
+exported effects. Added-edge private eligibility, sleep and hardware arithmetic
+remain outside this waking check.
+
+For an explicitly available CPU Vulkan adapter, compile the bridge with
+`--features cpu-training,gpu-tests` and request `--offline-wgsl`. This uses only
+the offline trainer factory. If that factory is unavailable, retain the failure
+and report the scalar-only scope; do not change the live software-device guard.
+Neither software offline replay nor the motor control establishes hardware-live
+parity. Inspect the representative and selected manipulation channel separately:
+factorized sampling can legitimately fill every enabled nonempty channel.

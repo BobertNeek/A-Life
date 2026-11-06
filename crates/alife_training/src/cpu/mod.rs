@@ -74,6 +74,7 @@ pub struct CpuFoundationTrainer {
     source_foundation: FoundationWeightAsset,
     checkpoint: FoundationTrainerCheckpoint,
     graph: replay::SparseGraph,
+    assessment_body_phenotype_hash: Option<alife_core::PhenotypeHash>,
 }
 
 impl CpuFoundationTrainer {
@@ -116,7 +117,30 @@ impl CpuFoundationTrainer {
             source_foundation: source,
             checkpoint,
             graph,
+            assessment_body_phenotype_hash: None,
         })
+    }
+
+    /// Explicit assessment bridge for a live-policy identity and a freshly
+    /// constructed body. Only the two derived compiler/phenotype identities may
+    /// differ. All neural execution, weights, decoders and plasticity stay exact.
+    pub fn bind_equivalent_assessment_body(
+        &mut self,
+        body: &BrainPhenotype,
+    ) -> Result<(), TrainingError> {
+        body.validate_against(&alife_core::BrainCapacityClass::n2048())?;
+        let strip = |p: &BrainPhenotype| -> Result<serde_json::Value, TrainingError> {
+            let mut value = serde_json::to_value(p).map_err(|_| invalid())?;
+            let object = value.as_object_mut().ok_or_else(invalid)?;
+            object.remove("phenotype_hash");
+            object.remove("compiler_inputs_digest");
+            Ok(value)
+        };
+        if strip(&self.phenotype)? != strip(body)? {
+            return Err(invalid());
+        }
+        self.assessment_body_phenotype_hash = Some(body.phenotype_hash());
+        Ok(())
     }
 
     pub fn from_checkpoint(
@@ -249,6 +273,7 @@ impl CpuFoundationTrainer {
         self.graph = graph;
         self.phenotype = next;
         self.source_foundation = asset;
+        self.assessment_body_phenotype_hash = None;
         Ok(())
     }
     pub fn export_candidate(

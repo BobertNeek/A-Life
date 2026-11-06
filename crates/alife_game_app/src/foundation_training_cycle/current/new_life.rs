@@ -4,6 +4,13 @@ use alife_core::{BrainCapacityClass, N2048LivePolicyTransition, OrganismId, Phen
 use std::{fs, io::Write};
 mod neural_inheritance;
 
+#[cfg(feature = "cpu-training")]
+pub(crate) fn retained_neural_cpu_projection(
+    source: &CurrentTrainingCheckpointV1,
+) -> Result<alife_training::cpu::CpuRetainedNeuralInheritance> {
+    Ok(neural_inheritance::RetainedNeural::read(source)?.cpu_projection())
+}
+
 /// Preflight through the ordinary newborn constructor and the exact existing
 /// learned-policy overlay. No device, filesystem writes or simulated tick.
 pub(super) fn prepare(

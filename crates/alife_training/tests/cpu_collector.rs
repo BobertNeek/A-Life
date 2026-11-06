@@ -9,6 +9,8 @@ mod collector_shards;
 mod need_switching;
 #[path = "cpu_collector/observed_focus.rs"]
 mod observed_focus;
+#[path = "cpu_collector/retained_neural.rs"]
+mod retained_neural;
 #[path = "cpu_collector/sealed_authority.rs"]
 mod sealed_authority;
 fn fixture() -> (CpuCanonicalHost, CpuFoundationTrainer) {

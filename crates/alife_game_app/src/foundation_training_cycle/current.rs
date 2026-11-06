@@ -3,8 +3,12 @@ use super::*;
 pub use alife_training::SameIndividualProgressV1;
 use alife_training::{CheckpointSeedsV1, CurrentTrainingCheckpointV1};
 use sha2::{Digest, Sha256};
+mod body_rounding;
+pub use body_rounding::*;
 mod actor_export;
 mod new_life;
+#[cfg(feature = "cpu-training")]
+pub(crate) use new_life::retained_neural_cpu_projection;
 pub use new_life::{
     begin_new_individual_training_life, begin_new_individual_training_life_with_retained_neural,
     check_new_individual_retained_neural, check_new_individual_training_life,
