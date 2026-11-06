@@ -5565,6 +5565,9 @@ fn handle_fvr03_camera_mode_input(
             orthographic.scaling_mode = ScalingMode::FixedVertical {
                 viewport_height: extent,
             };
+            if keyboard.just_pressed(KeyCode::KeyR) {
+                orthographic.scale = 1.0;
+            }
         }
     }
 }
