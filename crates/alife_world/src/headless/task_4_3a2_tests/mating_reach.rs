@@ -318,69 +318,242 @@ fn benchmark_world(
 }
 
 #[test]
+fn local_candidates_follow_queried_parent_and_do_not_survive_world_changes() {
+    let (mut world, next_tick) = benchmark_world(3, true, 0, 0);
+    let ids = world.alive_organism_ids();
+    for (id, x) in ids.iter().zip([-0.9, 0.0, 0.9]) {
+        let entity = world.agent_entity_id(*id).unwrap();
+        world
+            .editor_move_object(entity, Vec3f::new(x, 0.0, 0.0))
+            .unwrap();
+    }
+    let mut rocks = Vec::new();
+    for (label, x) in [("left-rock", -0.45), ("right-rock", 0.45)] {
+        rocks.push(
+            world
+                .editor_spawn_object(WorldEditorSpawnSpec {
+                    label: label.into(),
+                    kind: WorldObjectKind::Obstacle,
+                    organism_id: None,
+                    position: Vec3f::new(x, 0.7, 0.0),
+                    nutrition: 0.0,
+                    hazard_pain: 0.0,
+                    radius: 0.75,
+                    token_id: None,
+                })
+                .unwrap(),
+        );
+    }
+    // The queried middle ID is paternal for the left mate, maternal for the
+    // right. A blocked earlier mate must not suppress a later clear mate.
+    for (left, right) in [(true, false), (false, true), (true, true), (false, false)] {
+        for (rock, active) in rocks.iter().zip([left, right]) {
+            world.objects.get_mut(&rock.raw()).unwrap().consumed = !active;
+        }
+        let mut expected_pairs = Vec::new();
+        for (index, a) in ids.iter().enumerate() {
+            for b in ids.iter().skip(index + 1) {
+                if let Some(pair) = world.eligible_mating_pair(*a, *b, next_tick).unwrap() {
+                    expected_pairs.push((pair.maternal_id, pair.paternal_id));
+                }
+            }
+        }
+        let report = world.collect_mating_opportunities(next_tick).unwrap();
+        assert_eq!(
+            report
+                .eligible_pairs
+                .iter()
+                .map(|pair| (pair.maternal_id, pair.paternal_id))
+                .collect::<Vec<_>>(),
+            expected_pairs
+        );
+        for id in &ids {
+            let own = world.organism_registry().get(*id).unwrap();
+            let mut expected = 0.0_f32;
+            for (a, b) in &expected_pairs {
+                let partner = if a == id {
+                    Some(*b)
+                } else if b == id {
+                    Some(*a)
+                } else {
+                    None
+                };
+                if let Some(partner) = partner {
+                    let other = world.organism_registry().get(partner).unwrap();
+                    expected = expected.max(own.phenotype().reproduction.mate_response(
+                        own.phenotype(),
+                        other.phenotype(),
+                        other.biochemistry().body.health,
+                    ));
+                }
+            }
+            assert_eq!(world.mating_response(*id, next_tick).unwrap(), expected);
+        }
+        assert_eq!(
+            world.mating_response(ids[1], next_tick).unwrap() > 0.0,
+            !(left && right)
+        );
+    }
+    // Move an already queried obstacle into contact, then replace terrain.
+    world.objects.get_mut(&rocks[0].raw()).unwrap().consumed = false;
+    world
+        .editor_move_object(rocks[0], Vec3f::new(10.0, 0.0, 0.0))
+        .unwrap();
+    assert!(world.mating_response(ids[0], next_tick).unwrap() > 0.0);
+    world
+        .editor_move_object(rocks[0], Vec3f::new(-0.45, 0.7, 0.0))
+        .unwrap();
+    assert_eq!(world.mating_response(ids[0], next_tick).unwrap(), 0.0);
+    world.terrain = Some(terrain(vec![[0.35, -0.2, 0.55, 0.2, -1.0, 1.0]]));
+    assert_eq!(world.mating_response(ids[1], next_tick).unwrap(), 0.0);
+    world.terrain = None;
+    assert!(world.mating_response(ids[1], next_tick).unwrap() > 0.0);
+}
+
+fn island_benchmark_world(count: usize, clustered: bool) -> (HeadlessWorld, Tick) {
+    let (mut world, next_tick) = benchmark_world(count, clustered, 6, 0);
+    let terrain = crate::island_terrain();
+    let mut agent_index = 0;
+    let mut clutter_index = 0;
+    for object in world.objects.values_mut() {
+        let (x, z) = if object.kind == WorldObjectKind::Agent {
+            let index = agent_index;
+            agent_index += 1;
+            if clustered {
+                (80.0 + index as f32 * 0.01, 250.0)
+            } else {
+                (
+                    80.0 + (index % 10) as f32 * 2.0,
+                    250.0 + (index / 10) as f32 * 2.0,
+                )
+            }
+        } else {
+            let x = 120.0 + clutter_index as f32 * 2.0;
+            clutter_index += 1;
+            (x, 250.0)
+        };
+        assert!(terrain.walkable(x, z));
+        object.position = Vec3f::new(x, terrain.surface().height(x, z).unwrap(), z);
+    }
+    assert_eq!(agent_index, count);
+    assert_eq!(terrain.surface().obstacles.len(), 1716);
+    world.terrain = Some(terrain);
+    (world, next_tick)
+}
+
+fn benchmark_cycle(world: &mut HeadlessWorld) {
+    for id in world.alive_organism_ids() {
+        let command = idle_bundle(world, id);
+        let entity = world.agent_entity_id(id).unwrap();
+        world
+            .apply_registered_motor_bundle(&command, entity)
+            .unwrap();
+    }
+    world.try_advance_tick().unwrap();
+}
+
+fn measure_mating_queries(world: HeadlessWorld, next_tick: Tick, clustered: bool, scene: &str) {
+    use std::{hint::black_box, time::Instant};
+    let ids = world.alive_organism_ids();
+    let count = ids.len();
+    let expected = if clustered {
+        count * (count - 1) / 2
+    } else {
+        0
+    };
+    assert_eq!(
+        world
+            .collect_mating_opportunities(next_tick)
+            .unwrap()
+            .eligible_pairs
+            .len(),
+        expected
+    );
+    for id in &ids {
+        assert_eq!(world.mating_response(*id, next_tick).unwrap() > 0.0, clustered);
+    }
+    let before = world.canonical_signature_digest().unwrap();
+    let collect = || {
+        black_box(
+            black_box(&world)
+                .collect_mating_opportunities(black_box(next_tick))
+                .unwrap(),
+        );
+    };
+    let responses = || {
+        for id in &ids {
+            black_box(
+                black_box(&world)
+                    .mating_response(black_box(*id), black_box(next_tick))
+                    .unwrap(),
+            );
+        }
+    };
+    for _ in 0..5 {
+        collect();
+        responses();
+    }
+    let started = Instant::now();
+    for _ in 0..20 {
+        collect();
+    }
+    let collect_ns = started.elapsed().as_nanos() / 20;
+    let started = Instant::now();
+    for _ in 0..20 {
+        responses();
+    }
+    let responses_ns = started.elapsed().as_nanos() / 20;
+
+    // A full CPU world cycle includes all idle bundles, their response queries,
+    // world collection and conception. Fixture cloning/setup/signatures stay
+    // outside the timer; production rollback clones remain inside. Each sample
+    // is one fresh-state cycle, not consecutive ticks. This does not include a
+    // neural policy, rendering or GPU execution.
+    let mut warm = world.clone();
+    benchmark_cycle(&mut warm);
+    let cycle_signature = warm.canonical_signature_digest().unwrap();
+    let mut cycle_ns = 0;
+    for _ in 0..3 {
+        let mut copy = world.clone();
+        let started = Instant::now();
+        benchmark_cycle(black_box(&mut copy));
+        cycle_ns += started.elapsed().as_nanos();
+        assert_eq!(copy.canonical_signature_digest().unwrap(), cycle_signature);
+    }
+    let obstacles = world
+        .objects
+        .values()
+        .filter(|object| object.kind == WorldObjectKind::Obstacle && !object.consumed)
+        .count();
+    println!(
+        "MATING_TIMING {}",
+        serde_json::json!({
+            "scene": scene, "organisms": count, "clustered": clustered,
+            "objects": world.object_count(),
+            "obstacles": obstacles,
+            "terrain_boxes": world.terrain().map_or(0, |terrain| terrain.surface().obstacles.len()),
+            "eligible_pairs": expected, "collect_ns": collect_ns, "responses_ns": responses_ns,
+            "bundle_tick_ns": cycle_ns / 3, "cycle_signature": cycle_signature,
+        })
+    );
+    assert_eq!(world.canonical_signature_digest().unwrap(), before);
+}
+
+#[test]
 #[ignore = "bounded CPU component timing, not a gameplay throughput benchmark"]
 fn mating_query_cpu_cost() {
-    use std::{hint::black_box, time::Instant};
     for count in [2, 50] {
         for clustered in [false, true] {
             for (objects, boxes) in [(0, 0), (192, 0), (192, 64), (768, 256)] {
                 let (world, next_tick) = benchmark_world(count, clustered, objects, boxes);
-                let expected = if clustered {
-                    count * (count - 1) / 2
-                } else {
-                    0
-                };
-                assert_eq!(
-                    world
-                        .collect_mating_opportunities(next_tick)
-                        .unwrap()
-                        .eligible_pairs
-                        .len(),
-                    expected
-                );
-                let ids = world.alive_organism_ids();
-                let before = world.canonical_signature_digest().unwrap();
-                let collect = || {
-                    black_box(
-                        world
-                            .collect_mating_opportunities(black_box(next_tick))
-                            .unwrap(),
-                    );
-                };
-                let responses = || {
-                    for id in &ids {
-                        black_box(
-                            world
-                                .mating_response(black_box(*id), black_box(next_tick))
-                                .unwrap(),
-                        );
-                    }
-                };
-                for _ in 0..5 {
-                    collect();
-                    responses();
-                }
-                let started = Instant::now();
-                for _ in 0..20 {
-                    collect();
-                }
-                let collect_ns = started.elapsed().as_nanos() / 20;
-                let started = Instant::now();
-                for _ in 0..20 {
-                    responses();
-                }
-                let responses_ns = started.elapsed().as_nanos() / 20;
-                println!(
-                    "MATING_TIMING {}",
-                    serde_json::json!({
-                        "organisms": count, "clustered": clustered,
-                        "objects": world.object_count(), "obstacles": objects / 3,
-                        "terrain_boxes": boxes, "eligible_pairs": expected,
-                        "collect_ns": collect_ns, "responses_ns": responses_ns,
-                    })
-                );
-                assert_eq!(world.canonical_signature_digest().unwrap(), before);
+                measure_mating_queries(world, next_tick, clustered, "synthetic");
             }
+        }
+    }
+    for count in [2, 6, 50] {
+        for clustered in [false, true] {
+            let (world, next_tick) = island_benchmark_world(count, clustered);
+            measure_mating_queries(world, next_tick, clustered, "island");
         }
     }
 }

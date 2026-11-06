@@ -62,7 +62,143 @@ fn compare(
         world.solid_segment_clear_from(start, end, ignored, world.objects.values().rev()),
         expected
     );
+    for center in [start, end] {
+        assert_eq!(
+            world.mating_segment_clear(
+                center,
+                start,
+                end,
+                ignored,
+                &std::cell::OnceCell::new(),
+            ),
+            expected,
+            "candidate center={center:?} start={start:?} end={end:?}"
+        );
+    }
     expected
+}
+
+#[test]
+fn local_candidates_preserve_domain_edges_large_spheres_and_cell_faces() {
+    let (mut world, rock) = fixture();
+    for center_x in [
+        -4096.0,
+        (-4096.0_f32).next_down(),
+        -10.0,
+        0.0,
+        10.0,
+        4096.0,
+        4096.0_f32.next_up(),
+    ] {
+        let start = Vec3f::new(center_x, 0.0, 0.0);
+        let end = Vec3f::new(center_x + 0.5, 0.0, 0.0);
+        for radius in [0.1, 0.75, 32.0, 65536.0, 65536.0_f32.next_up(), 1.0e18] {
+            for tangent_y in [radius, radius.next_down(), radius.next_up()] {
+                let object = world.objects.get_mut(&rock.raw()).unwrap();
+                object.position = Vec3f::new(center_x + 0.25, tangent_y, 0.0);
+                object.radius = radius;
+                compare(&world, start, end, None);
+                compare(&world, end, start, None);
+            }
+        }
+        world.objects.get_mut(&rock.raw()).unwrap().consumed = true;
+        for face in [center_x, center_x.next_down(), center_x.next_up()] {
+            world.terrain = Some(terrain(vec![
+                [face, -0.1, face + 0.25, 0.1, -1.0, 1.0]; 32
+            ]));
+            compare(&world, start, end, None);
+            compare(&world, end, start, None);
+            compare(&world, start, start, None);
+        }
+        world.terrain = None;
+        world.objects.get_mut(&rock.raw()).unwrap().consumed = false;
+    }
+}
+
+#[test]
+fn sparse_terrain_cell_faces_use_pruned_index_candidates() {
+    let (mut world, rock) = fixture();
+    world.objects.get_mut(&rock.raw()).unwrap().consumed = true;
+    for face in [-4090.0_f32, -10.0, 0.0, 10.0, 4090.0] {
+        let mut boxes = vec![[face, -0.1, face + 0.1, 0.1, -1.0, 1.0]];
+        boxes.extend((0..64).map(|i| {
+            let x = 10000.0 + i as f32 * 20.0;
+            [x, 100.0, x + 1.0, 101.0, -1.0, 1.0]
+        }));
+        world.terrain = Some(terrain(boxes));
+        for end_x in [face.next_down(), face, face.next_up()] {
+            let start = Vec3f::new(face - 0.5, 0.0, 0.0);
+            let end = Vec3f::new(end_x, 0.0, 0.0);
+            for (a, b) in [(start, end), (end, start)] {
+                let candidates = std::cell::OnceCell::new();
+                assert_eq!(
+                    world.mating_segment_clear(a, a, b, None, &candidates),
+                    original(&world, a, b, None),
+                );
+                assert_eq!(
+                    candidates.get().unwrap().as_ref().unwrap().candidate_counts(),
+                    (0, 1)
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn cached_candidates_fall_back_for_later_unsupported_pairs() {
+    let (mut world, rock) = fixture();
+    world.objects.get_mut(&rock.raw()).unwrap().position = Vec3f::new(10.0, 0.0, 0.0);
+    world.terrain = Some(terrain(vec![[19.5, -0.2, 20.5, 0.2, -1.0, 1.0]]));
+    let candidates = std::cell::OnceCell::new();
+    assert!(world.mating_segment_clear(
+        Vec3f::ZERO,
+        Vec3f::ZERO,
+        Vec3f::new(0.5, 0.0, 0.0),
+        None,
+        &candidates,
+    ));
+    for (start, end) in [
+        (Vec3f::new(9.5, 0.0, 0.0), Vec3f::new(10.0, 0.0, 0.0)),
+        (Vec3f::new(19.0, 0.0, 0.0), Vec3f::new(20.0, 0.0, 0.0)),
+        (
+            Vec3f::new(1.0e18, 0.0, 0.0),
+            Vec3f::new(1.0e18, 0.0, 0.0),
+        ),
+        (Vec3f::new(f32::NAN, 0.0, 0.0), Vec3f::ZERO),
+    ] {
+        assert_eq!(
+            world.mating_segment_clear(Vec3f::ZERO, start, end, None, &candidates),
+            original(&world, start, end, None),
+        );
+    }
+}
+
+#[test]
+fn local_candidates_match_original_over_bounded_nearby_geometry() {
+    let (mut world, rock) = fixture();
+    let mut state = 0x281_4096_u64;
+    let mut clear = 0;
+    let mut blocked = 0;
+    for iteration in 0..4096 {
+        let start = position(&mut state, 4096.0);
+        let end = add(start, position(&mut state, 0.55));
+        let object = world.objects.get_mut(&rock.raw()).unwrap();
+        object.radius = [0.1, 0.75, 32.0, 65536.0][iteration % 4];
+        object.position = add(start, position(&mut state, object.radius * 1.2));
+        let x = start.x + (draw(&mut state) - 0.5);
+        let z = start.z + (draw(&mut state) - 0.5);
+        world.terrain = Some(terrain(vec![
+            [x, z, x + 0.1, z + 0.1, start.y - 0.1, start.y + 0.1],
+        ]));
+        for (a, b) in [(start, end), (end, start)] {
+            if compare(&world, a, b, None) {
+                clear += 1;
+            } else {
+                blocked += 1;
+            }
+        }
+    }
+    assert!(clear > 100 && blocked > 100);
 }
 
 #[test]

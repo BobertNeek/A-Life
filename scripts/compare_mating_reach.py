@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Pair warmed, same-host mating queries with and without the solid guard.
+"""Compare warmed baseline, linear guard and local-candidate mating work.
 
-This compares one CPU component in the optimized test profile. It does not
-measure full ticks, GPU work, or physical-device game throughput.
+This measures query components and idle-bundle/world-tick CPU cycles in the
+optimized test profile, not neural policy, GPU or physical-device gameplay.
 """
 
 import hashlib
@@ -20,19 +20,20 @@ SOURCE = ROOT / "crates/alife_world/src/headless.rs"
 FILTER = "headless::task_4_3a2_tests::mating_reach::mating_query_cpu_cost"
 GUARD = b"""        // Mating keeps its own proximity radius, but cannot cross the solids
         // that block ordinary contact. This is not a gaze or walking-path test.
-        if !self.solid_segment_clear(maternal_object.position, paternal_object.position) {
+        if !reachable(maternal_object.position, paternal_object.position) {
             return Ok(None);
         }
 
 """
-UNFILTERED = b"""        if obstacles.any(|object| Some(object.id) != ignored && object.blocks_segment(start, end)) {
+LINEAR_GUARD = GUARD.replace(b"!reachable(", b"!self.solid_segment_clear(")
+UNFILTERED = b"""    if obstacles.any(|object| Some(object.id) != ignored && object.blocks_segment(start, end)) {
 """
-FILTERED = b"""        if obstacles.any(|object| {
-            Some(object.id) != ignored
-                && object.kind == WorldObjectKind::Obstacle
-                && !object.consumed
-                && object.blocks_segment(start, end)
-        }) {
+FILTERED = b"""    if obstacles.any(|object| {
+        Some(object.id) != ignored
+            && object.kind == WorldObjectKind::Obstacle
+            && !object.consumed
+            && object.blocks_segment(start, end)
+    }) {
 """
 
 
@@ -71,12 +72,12 @@ def run(binary):
         if "MATING_TIMING " not in line:
             continue
         row = json.loads(line.split("MATING_TIMING ", 1)[1])
-        key = (row["organisms"], row["clustered"], row["objects"], row["terrain_boxes"])
+        key = (row["scene"], row["organisms"], row["clustered"], row["objects"], row["terrain_boxes"])
         if key in rows:
             raise RuntimeError(f"Repeated timing case {key}")
         rows[key] = row
-    if len(rows) != 16:
-        raise RuntimeError(f"Expected all 16 timing cases, found {len(rows)}")
+    if len(rows) != 22:
+        raise RuntimeError(f"Expected all 22 timing cases, found {len(rows)}")
     return rows
 
 
@@ -84,18 +85,23 @@ def main():
     original = SOURCE.read_bytes()
     if original.count(GUARD) != 1 or original.count(FILTERED) != 1:
         raise RuntimeError("The exact guard and filter must occur once; refusing baseline edit")
-    unfiltered_source = original.replace(FILTERED, UNFILTERED, 1)
-    baseline_source = unfiltered_source.replace(GUARD, b"", 1)
+    unfiltered_source = original.replace(FILTERED, UNFILTERED, 1).replace(GUARD, LINEAR_GUARD, 1)
+    baseline_source = original.replace(FILTERED, UNFILTERED, 1).replace(GUARD, b"", 1)
     print(json.dumps({
-        "scope": "same-host optimized-test-profile CPU query component",
+        "scope": "same-host optimized-test-profile CPU queries and idle-bundle/world-tick cycle",
         "platform": platform.platform(),
         "rustc": subprocess.check_output(["rustc", "--version"], text=True).strip(),
         "candidate_source_sha256": hashlib.sha256(original).hexdigest(),
+        "candidate_module_sha256": hashlib.sha256(
+            (ROOT / "crates/alife_world/src/headless/mating_reach.rs").read_bytes()).hexdigest(),
+        "fixture_sha256": hashlib.sha256(
+            (ROOT / "crates/alife_world/src/headless/task_4_3a2_tests/mating_reach.rs").read_bytes()).hexdigest(),
         "baseline_source_sha256": hashlib.sha256(baseline_source).hexdigest(),
         "unfiltered_source_sha256": hashlib.sha256(unfiltered_source).hexdigest(),
-        "baseline_change": "remove exact solid guard and early type/consumed filter",
-        "unfiltered_change": "remove only exact early type/consumed filter",
+        "baseline_change": "bypass reach entirely; remove early type/consumed filter",
+        "unfiltered_change": "bypass local candidates with original full scan; remove early type/consumed filter",
         "warmup_runs_per_binary": 1, "rotating_matched_triples": 6,
+        "cycle_measurement": "mean of three fresh-state single idle-bundle/tick cycles; production rollback clones included",
     }), flush=True)
     with tempfile.TemporaryDirectory(prefix="mating-query-") as temporary:
         arms = ("baseline", "unfiltered", "candidate")
@@ -130,8 +136,8 @@ def main():
                 before = measured["baseline"][key]
                 for arm in arms:
                     after = measured[arm][key]
-                    for field in ("organisms", "clustered", "objects", "obstacles",
-                                  "terrain_boxes", "eligible_pairs"):
+                    for field in ("scene", "organisms", "clustered", "objects", "obstacles",
+                                  "terrain_boxes", "eligible_pairs", "cycle_signature"):
                         if before[field] != after[field]:
                             raise RuntimeError(f"Pair workload changed for {field}")
                 row = {"pair": pair, "order": order, **{arm: measured[arm][key] for arm in arms}}
@@ -139,10 +145,10 @@ def main():
                 print("MATING_PAIR " + json.dumps(row), flush=True)
         for key in measured["baseline"]:
             matching = [row for row in samples if (
-                row["baseline"]["organisms"], row["baseline"]["clustered"],
+                row["baseline"]["scene"], row["baseline"]["organisms"], row["baseline"]["clustered"],
                 row["baseline"]["objects"], row["baseline"]["terrain_boxes"]) == key]
-            summary = dict(zip(("organisms", "clustered", "objects", "terrain_boxes"), key))
-            for component in ("collect_ns", "responses_ns"):
+            summary = dict(zip(("scene", "organisms", "clustered", "objects", "terrain_boxes"), key))
+            for component in ("collect_ns", "responses_ns", "bundle_tick_ns"):
                 baseline = [row["baseline"][component] for row in matching]
                 unfiltered = [row["unfiltered"][component] for row in matching]
                 candidate = [row["candidate"][component] for row in matching]

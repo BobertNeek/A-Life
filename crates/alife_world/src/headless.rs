@@ -1346,6 +1346,7 @@ pub struct HeadlessWorld {
 mod hands;
 pub use hands::{ActionPhase, GripTransfer, GripTransferKind};
 mod local_steering;
+mod mating_reach;
 pub use local_steering::LocalSteeringState;
 mod naming;
 pub(crate) mod player_hand;
@@ -2113,10 +2114,14 @@ impl HeadlessWorld {
         let mut eligible_pairs = Vec::new();
         let mut mating_organism_ids = BTreeSet::new();
         for (maternal_index, maternal_id) in alive_organism_ids.iter().enumerate() {
+            let candidates = std::cell::OnceCell::new();
             for paternal_id in alive_organism_ids.iter().skip(maternal_index + 1) {
-                let Some(pair) =
-                    self.eligible_mating_pair(*maternal_id, *paternal_id, next_tick)?
-                else {
+                let Some(pair) = self.eligible_mating_pair_with_reach(
+                    *maternal_id,
+                    *paternal_id,
+                    next_tick,
+                    |start, end| self.mating_segment_clear(start, start, end, None, &candidates),
+                )? else {
                     continue;
                 };
                 mating_organism_ids.insert(pair.maternal_id.raw());
@@ -2164,6 +2169,18 @@ impl HeadlessWorld {
         maternal_id: OrganismId,
         paternal_id: OrganismId,
         next_tick: Tick,
+    ) -> Result<Option<EligibleMatingPair>, ScaffoldContractError> {
+        self.eligible_mating_pair_with_reach(maternal_id, paternal_id, next_tick, |start, end| {
+            self.solid_segment_clear(start, end)
+        })
+    }
+
+    fn eligible_mating_pair_with_reach(
+        &self,
+        maternal_id: OrganismId,
+        paternal_id: OrganismId,
+        next_tick: Tick,
+        mut reachable: impl FnMut(Vec3f, Vec3f) -> bool,
     ) -> Result<Option<EligibleMatingPair>, ScaffoldContractError> {
         if maternal_id == paternal_id {
             return Ok(None);
@@ -2236,7 +2253,7 @@ impl HeadlessWorld {
 
         // Mating keeps its own proximity radius, but cannot cross the solids
         // that block ordinary contact. This is not a gaze or walking-path test.
-        if !self.solid_segment_clear(maternal_object.position, paternal_object.position) {
+        if !reachable(maternal_object.position, paternal_object.position) {
             return Ok(None);
         }
 
@@ -2259,6 +2276,7 @@ impl HeadlessWorld {
             .get(organism_id)
             .ok_or(ScaffoldContractError::InvalidId)?;
         let mut strongest = 0.0_f32;
+        let candidates = std::cell::OnceCell::new();
         for partner_id in self.alive_organism_ids() {
             if partner_id.raw() == organism_id.raw() {
                 continue;
@@ -2269,7 +2287,14 @@ impl HeadlessWorld {
                 (partner_id, organism_id)
             };
             if self
-                .eligible_mating_pair(maternal_id, paternal_id, next_tick)?
+                .eligible_mating_pair_with_reach(maternal_id, paternal_id, next_tick, |start, end| {
+                    let center = if maternal_id == organism_id {
+                        start
+                    } else {
+                        end
+                    };
+                    self.mating_segment_clear(center, start, end, None, &candidates)
+                })?
                 .is_some()
             {
                 let other = self
@@ -6328,33 +6353,17 @@ impl HeadlessWorld {
         start: Vec3f,
         end: Vec3f,
         ignored: Option<WorldEntityId>,
-        mut obstacles: impl Iterator<Item = &'a WorldObject>,
+        obstacles: impl Iterator<Item = &'a WorldObject>,
     ) -> bool {
-        let length = distance(start, end);
-        if obstacles.any(|object| {
-            Some(object.id) != ignored
-                && object.kind == WorldObjectKind::Obstacle
-                && !object.consumed
-                && object.blocks_segment(start, end)
-        }) {
-            return false;
-        }
-        let Some(terrain) = self.terrain.as_ref() else {
-            return true;
-        };
-        if length <= f32::EPSILON {
-            return !terrain
-                .surface()
-                .obstacles
+        solid_segment_clear_among(
+            start,
+            end,
+            ignored,
+            obstacles,
+            self.terrain
                 .iter()
-                .any(|bounds| sight_box_hit(start, Vec3f::ZERO, *bounds, 0.0).is_some());
-        }
-        let direction = scale(subtract(end, start), 1.0 / length);
-        !terrain
-            .surface()
-            .obstacles
-            .iter()
-            .any(|bounds| sight_box_hit(start, direction, *bounds, length).is_some())
+                .flat_map(|terrain| terrain.surface().obstacles.iter()),
+        )
     }
 
     /// Reuse the endpoint hazard scan for peer overlap, including stationary
@@ -8058,6 +8067,29 @@ fn physical(
     };
     outcome.validate_contract()?;
     Ok(outcome)
+}
+
+fn solid_segment_clear_among<'a, 'b>(
+    start: Vec3f,
+    end: Vec3f,
+    ignored: Option<WorldEntityId>,
+    mut obstacles: impl Iterator<Item = &'a WorldObject>,
+    mut boxes: impl Iterator<Item = &'b [f32; 6]>,
+) -> bool {
+    let length = distance(start, end);
+    if obstacles.any(|object| {
+        Some(object.id) != ignored
+            && object.kind == WorldObjectKind::Obstacle
+            && !object.consumed
+            && object.blocks_segment(start, end)
+    }) {
+        return false;
+    }
+    if length <= f32::EPSILON {
+        return !boxes.any(|bounds| sight_box_hit(start, Vec3f::ZERO, *bounds, 0.0).is_some());
+    }
+    let direction = scale(subtract(end, start), 1.0 / length);
+    !boxes.any(|bounds| sight_box_hit(start, direction, *bounds, length).is_some())
 }
 
 fn closest_point_on_segment(point: Vec3f, start: Vec3f, end: Vec3f) -> Vec3f {
