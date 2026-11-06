@@ -387,31 +387,24 @@ fn emit(value: serde_json::Value) {
     let _ = std::io::stdout().flush();
 }
 fn row_summary(receipt: &FoundationCycleReceipt) -> serde_json::Value {
-    let r = serde_json::to_value(receipt).unwrap_or(serde_json::Value::Null);
     let exact = match receipt.lesson {
         Some(FoundationTeacherLesson::EatHeldFood | FoundationTeacherLesson::EatReachableFood) => {
             Some(receipt.trained_held_food_consumption_events)
         }
-        Some(FoundationTeacherLesson::Feeding) => r["feeding_food"]["nourished_meal_rows"]
-            .as_array()
-            .map(|a| {
-                a.iter()
-                    .filter(|v| {
-                        v.as_u64()
-                            .is_some_and(|n| n < receipt.trained_replay_rows as u64)
-                    })
+        Some(FoundationTeacherLesson::Feeding) => receipt.feeding_food.as_ref().map(|food| {
+            food.nourished_meal_rows
+                .iter()
+                .filter(|row| **row < receipt.trained_replay_rows)
+                .count()
+        }),
+        Some(FoundationTeacherLesson::RelocatedFood) => {
+            receipt.food_relocation.as_ref().map(|food| {
+                food.nourished_meal_rows
+                    .iter()
+                    .filter(|row| **row < receipt.trained_replay_rows)
                     .count()
-            }),
-        Some(FoundationTeacherLesson::RelocatedFood) => r["food_relocation"]["nourished_meal_rows"]
-            .as_array()
-            .map(|a| {
-                a.iter()
-                    .filter(|v| {
-                        v.as_u64()
-                            .is_some_and(|n| n < receipt.trained_replay_rows as u64)
-                    })
-                    .count()
-            }),
+            })
+        }
         _ => None,
     };
     // Compact counts survive normal temporary cleanup. Do not retain the
@@ -436,7 +429,8 @@ fn row_summary(receipt: &FoundationCycleReceipt) -> serde_json::Value {
     });
     serde_json::json!({"kind":"resident-provisional-episode-v1","seed":receipt.seed,"policy_version":receipt.policy_version,
         "lesson":receipt.lesson,"trained_rows":receipt.trained_replay_rows,"exact_trained_nourishing_events":exact,
-        "generic_consumed_events":receipt.consumed_events,"full_relocation":r["food_relocation"]["lesson_completed"],
+        "generic_consumed_events":receipt.consumed_events,
+        "full_relocation":receipt.food_relocation.as_ref().map(|food| food.lesson_completed),
         "actor_optimizer_step":receipt.actor_optimizer_step,"value_optimizer_step":receipt.value_optimizer_step,
         "requested_training_ticks":receipt.requested_training_ticks,"training_ticks":receipt.training_ticks,
         "captured_replay_rows":receipt.captured_replay_rows,"bootstrap_replay_rows":receipt.bootstrap_replay_rows,
@@ -1322,9 +1316,8 @@ mod carry_tests;
 mod tests {
     use super::*;
 
-    #[test]
-    fn resident_compact_summary_preserves_dose_prior_and_unknown_nourishment() {
-        let receipt: FoundationCycleReceipt = serde_json::from_value(serde_json::json!({
+    fn summary_receipt() -> FoundationCycleReceipt {
+        serde_json::from_value(serde_json::json!({
             "seed":17,"policy_version":4,"training_ticks":10,
             "requested_training_ticks":512,"captured_replay_rows":10,
             "trained_replay_rows":10,"bootstrap_replay_rows":0,
@@ -1338,24 +1331,177 @@ mod tests {
                 "decision_frames_with_prior":8,"decision_frames_without_prior":2,
                 "empty_hint_frames":2,"failures":2,"requests":3}
         }))
-        .unwrap();
+        .unwrap()
+    }
+
+    #[test]
+    fn resident_compact_summary_preserves_dose_prior_and_unknown_nourishment() {
+        let receipt = summary_receipt();
         let row = row_summary(&receipt);
-        assert_eq!(row["requested_training_ticks"], 512);
-        assert_eq!(row["training_ticks"], 10);
-        assert_eq!(row["captured_replay_rows"], 10);
-        assert_eq!(row["bootstrap_replay_rows"], 0);
-        assert_eq!(row["terminal_death_tick"], 21);
-        assert_eq!(row["actor_optimizer_updates"], 2);
-        assert_eq!(row["value_optimizer_updates"], 3);
-        assert_eq!(row["generic_consumed_events"], 2);
-        assert!(row["exact_trained_nourishing_events"].is_null());
-        assert!(row["causal_collection"].is_null());
-        assert_eq!(row["semantic_prior"]["decision_frames_with_prior"], 8);
-        assert_eq!(row["semantic_prior"]["failures"], 2);
+        assert_eq!(
+            row,
+            serde_json::json!({
+                "kind":"resident-provisional-episode-v1","seed":17,"policy_version":4,
+                "lesson":"feeding","trained_rows":10,"exact_trained_nourishing_events":null,
+                "generic_consumed_events":2,"full_relocation":null,
+                "actor_optimizer_step":7,"value_optimizer_step":5,
+                "requested_training_ticks":512,"training_ticks":10,
+                "captured_replay_rows":10,"bootstrap_replay_rows":0,"terminal_death_tick":21,
+                "actor_optimizer_updates":2,"value_optimizer_updates":3,"completed_epochs":1,
+                "teacher_cue_frames":0,"collection_seconds":1.0,"update_seconds":1.0,
+                "causal_collection":null,"canonical_current_published":false,
+                "durability":"provisional until a full snapshot commits",
+                "semantic_prior":{"backend":"deterministic","provider_identity":"",
+                    "context_contract":"","rich_information_required":false,
+                    "requests":3,"delivered_frames":0,"cache_hits":0,"stale_replies":0,
+                    "failures":2,"dropout_frames":0,"prime_wait_ms":0,"prime_timeouts":0,
+                    "empty_hint_frames":2,"validated_provider_replies":0,"decision_frames":10,
+                    "decision_frames_with_prior":8,"decision_frames_without_prior":2,
+                    "decision_frames_with_heard_language":0,"unusable_hint_retry_requests":0}
+            })
+        );
+    }
+
+    fn relocation_receipt() -> crate::FoundationFoodRelocationReceipt {
+        crate::FoundationFoodRelocationReceipt {
+            schema: 1,
+            organism: alife_core::OrganismId(1),
+            target: alife_core::WorldEntityId(2),
+            setup_tick: 0,
+            initial_position: alife_core::Vec3f::ZERO,
+            relocation_target: alife_core::Vec3f::ZERO,
+            relocation: None,
+            captured_rows: 11,
+            trained_rows: 10,
+            acquisition_rows: vec![],
+            nourished_meal_rows: vec![],
+            trained_post_relocation_acquisitions: 0,
+            trained_post_relocation_nourished_meals: 0,
+            trained_pre_relocation_visible_rows: 0,
+            trained_post_relocation_visible_rows: 0,
+            food_outcome: crate::FoundationFoodOutcome::new(
+                alife_core::OrganismId(1),
+                alife_core::WorldEntityId(2),
+            ),
+            lesson_completed: false,
+            assessment: None,
+            rows: vec![],
+        }
+    }
+
+    #[test]
+    fn resident_compact_summary_distinguishes_unknown_empty_and_bootstrap_meals() {
+        for lesson in [
+            FoundationTeacherLesson::Feeding,
+            FoundationTeacherLesson::RelocatedFood,
+        ] {
+            let mut receipt = summary_receipt();
+            receipt.lesson = Some(lesson);
+            assert!(row_summary(&receipt)["exact_trained_nourishing_events"].is_null());
+            for (trained, rows, expected) in [
+                (10, vec![], 0),
+                (10, vec![0, 9, 10], 2),
+                (10, vec![10], 0),
+                (0, vec![0], 0),
+                (10, vec![usize::MAX], 0),
+            ] {
+                receipt.trained_replay_rows = trained;
+                receipt.captured_replay_rows = trained + 1;
+                receipt.bootstrap_replay_rows = 1;
+                if lesson == FoundationTeacherLesson::Feeding {
+                    let mut food = crate::FoundationFeedingFoodReceipt::new(
+                        alife_core::OrganismId(1),
+                        alife_core::WorldEntityId(2),
+                    );
+                    food.nourished_meal_rows = rows;
+                    receipt.feeding_food = Some(food);
+                } else {
+                    let mut food = relocation_receipt();
+                    food.nourished_meal_rows = rows;
+                    receipt.food_relocation = Some(food);
+                }
+                assert_eq!(
+                    row_summary(&receipt)["exact_trained_nourishing_events"],
+                    expected,
+                    "{lesson:?}, trained {trained}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resident_compact_summary_held_and_reachable_counts_do_not_certify_other_lessons() {
+        for (lesson, expected) in [
+            (None, None),
+            (Some(FoundationTeacherLesson::EatHeldFood), Some(3)),
+            (Some(FoundationTeacherLesson::EatReachableFood), Some(3)),
+            (Some(FoundationTeacherLesson::GrabFood), None),
+            (Some(FoundationTeacherLesson::HazardAvoidance), None),
+            (Some(FoundationTeacherLesson::ObstacleNavigation), None),
+            (Some(FoundationTeacherLesson::Recovery), None),
+            (Some(FoundationTeacherLesson::VisionSearch), None),
+            (Some(FoundationTeacherLesson::MazeNavigation), None),
+            (Some(FoundationTeacherLesson::VocabularyReception), None),
+            (Some(FoundationTeacherLesson::VocabularyProduction), None),
+        ] {
+            let mut receipt = summary_receipt();
+            receipt.lesson = lesson;
+            receipt.trained_held_food_consumption_events = 3;
+            receipt.food_relocation = Some(relocation_receipt());
+            assert_eq!(
+                row_summary(&receipt)["exact_trained_nourishing_events"],
+                serde_json::json!(expected),
+                "{lesson:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn resident_compact_summary_relocation_completion_retains_null_false_true() {
+        let mut receipt = summary_receipt();
+        receipt.lesson = None;
+        receipt.semantic_prior = None;
+        assert!(row_summary(&receipt)["semantic_prior"].is_null());
+        assert!(row_summary(&receipt)["full_relocation"].is_null());
+        for completed in [false, true] {
+            let mut food = relocation_receipt();
+            food.lesson_completed = completed;
+            receipt.food_relocation = Some(food);
+            assert_eq!(row_summary(&receipt)["full_relocation"], completed);
+        }
+    }
+
+    #[test]
+    fn resident_compact_summary_omits_detailed_prior_receipts() {
+        let mut receipt = summary_receipt();
+        let expected = row_summary(&receipt);
+        let prior = receipt.semantic_prior.as_mut().unwrap();
+        prior.model = "model retained only in the full receipt".into();
+        prior.last_error = Some("error retained only in the full receipt".into());
+        prior.decision_inputs.push_back(
+            serde_json::from_value(serde_json::json!({
+                "organism":1,"sequence":2,"tick":3,"dispatch_generation":4,
+                "frame_digest":[1,2,3,4],"sensory_digest":"senses",
+                "natural_senses_context":"heard food near the learner","heard_tokens":1,
+                "grounded_object_slots":1,"semantic_codes":1,"nonzero_prior_lanes":1,
+                "semantic_encoder_lanes":1,"nonzero_encoded_prior_lanes":1,
+                "gain":1.0,"status":"delivered","context_digest":"context","output_digest":"output"
+            }))
+            .unwrap(),
+        );
+        prior.provider_failures.push_back(
+            serde_json::from_value(serde_json::json!({
+                "organism":1,"tick":3,"context_digest":"context","error":"provider unavailable"
+            }))
+            .unwrap(),
+        );
+        let row = row_summary(&receipt);
+        assert_eq!(row, expected);
         for raw in [
             "decision_inputs",
             "deliveries",
             "provider_failures",
+            "unusable_hint_retries",
             "last_priming",
         ] {
             assert!(row["semantic_prior"].get(raw).is_none());
