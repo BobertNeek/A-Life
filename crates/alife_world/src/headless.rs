@@ -11349,6 +11349,91 @@ mod task_4_3a2_tests {
     }
 
     #[test]
+    fn nearby_parents_around_terrain_corner_have_a_supported_birth_without_stalling() {
+        let (mut world, next_tick) =
+            prepared_world(Vec3f::new(0.5, 0.0, 0.0), COMPATIBILITY_FAMILY_ID);
+        world.terrain = Some(
+            crate::WorldTerrain::new(
+                crate::TerrainData {
+                    width: 2,
+                    depth: 2,
+                    origin_x: 0.0,
+                    origin_z: 0.0,
+                    spacing: 10.0,
+                    heights: vec![0.0; 4],
+                    obstacles: vec![[4.0, 4.0, 6.0, 6.0, 0.0, 2.0]],
+                    water_level: None,
+                },
+                crate::LocomotionLimits::default(),
+            )
+            .unwrap(),
+        );
+        let maternal_position = Vec3f::new(3.79, 0.0, 4.25);
+        let paternal_position = Vec3f::new(4.25, 0.0, 3.79);
+        // Reach this layout through the player's actual carry/release APIs.
+        // Neither endpoint is inside the rock or its body-clearance margin.
+        for (organism, position) in [
+            (MATERNAL_ID, maternal_position),
+            (PATERNAL_ID, paternal_position),
+        ] {
+            let entity = world.agent_entity_id(organism).unwrap();
+            assert!(world.terrain().unwrap().walkable(position.x, position.z));
+            world.begin_player_hold(entity).unwrap();
+            world.move_player_hold(position).unwrap();
+            assert_eq!(world.release_player_hold().unwrap(), Some(entity));
+            assert_eq!(world.entity(entity).unwrap().position, position);
+        }
+        assert!(distance(maternal_position, paternal_position) < HEADLESS_MATING_RADIUS);
+        assert!(!world.terrain().unwrap().walkable(4.02, 4.02));
+        assert!(world
+            .eligible_mating_pair(MATERNAL_ID, PATERNAL_ID, next_tick)
+            .unwrap()
+            .is_some());
+        let child_id = OrganismId(world.next_organism_id);
+        let parent_genome_ids = [MATERNAL_ID, PATERNAL_ID]
+            .map(|id| world.organism_registry().get(id).unwrap().genome().id);
+        let maternal_habitat = world
+            .habitat_authority()
+            .membership(MATERNAL_ID)
+            .unwrap()
+            .habitat_id;
+        let mut replay = world.clone();
+
+        assert_eq!(world.try_advance_tick().unwrap(), next_tick);
+        assert_eq!(replay.try_advance_tick().unwrap(), next_tick);
+        assert_eq!(world.organism_registry().iter().count(), 3);
+        let child = world.organism_registry().get(child_id).unwrap();
+        let position = world.entity(child.world_entity_id()).unwrap().position;
+        assert_eq!(child.genome().parent_genome_ids, parent_genome_ids);
+        assert_eq!(child.phenotype().lineage_id, child.genome().lineage_id);
+        assert_eq!(child.birth_tick(), next_tick);
+        assert_eq!(child.biochemistry().development.age_ticks, Tick::ZERO);
+        let membership = world.habitat_authority().membership(child_id).unwrap();
+        assert_eq!(membership.habitat_id, maternal_habitat);
+        assert_eq!(membership.entered_tick, next_tick);
+        assert_eq!(position, maternal_position);
+        assert!(world.terrain().unwrap().walkable(position.x, position.z));
+        assert_eq!(
+            world.agent_for(MATERNAL_ID).unwrap().position,
+            maternal_position
+        );
+        assert_eq!(
+            world.agent_for(PATERNAL_ID).unwrap().position,
+            paternal_position
+        );
+        assert_eq!(world.next_organism_id, child_id.raw() + 1);
+        world.validate_organism_bindings().unwrap();
+        let saved = serde_json::to_string(&world.save_state()).unwrap();
+        let restored = HeadlessWorld::from_save_state(&serde_json::from_str(&saved).unwrap())
+            .unwrap();
+        assert_eq!(restored.save_state(), world.save_state());
+        assert_eq!(
+            world.canonical_signature_digest().unwrap(),
+            replay.canonical_signature_digest().unwrap()
+        );
+    }
+
+    #[test]
     fn distinct_cloned_founders_remain_eligible_for_a_real_birth() {
         let mut first: Option<alife_core::CreatureGenome> = None;
         let (mut world, next_tick) = prepared_world_with_genes(
@@ -11906,3 +11991,4 @@ mod eat_possession_tests {
 
 #[cfg(test)]
 mod nonvisual_perception_tests;
+
