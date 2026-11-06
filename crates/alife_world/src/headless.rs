@@ -11032,6 +11032,8 @@ mod task_3_2a_tests {
 mod task_4_3a2_tests {
     use super::*;
 
+    mod mating_reach;
+
     const MATERNAL_ID: OrganismId = OrganismId(7);
     const PATERNAL_ID: OrganismId = OrganismId(19);
     const FOUNDATION_ID: u64 = 10;
@@ -11381,8 +11383,8 @@ mod task_4_3a2_tests {
             )
             .unwrap(),
         );
-        let maternal_position = Vec3f::new(3.79, 0.0, 4.25);
-        let paternal_position = Vec3f::new(4.25, 0.0, 3.79);
+        let maternal_position = Vec3f::new(3.79, 0.0, 4.10);
+        let paternal_position = Vec3f::new(4.10, 0.0, 3.79);
         // Reach this layout through the player's actual carry/release APIs.
         // Neither endpoint is inside the rock or its body-clearance margin.
         for (organism, position) in [
@@ -11397,7 +11399,10 @@ mod task_4_3a2_tests {
             assert_eq!(world.entity(entity).unwrap().position, position);
         }
         assert!(distance(maternal_position, paternal_position) < HEADLESS_MATING_RADIUS);
-        assert!(!world.terrain().unwrap().walkable(4.02, 4.02));
+        // The center segment clears the solid, but the newborn's body cannot
+        // stand at the midpoint inside the rock's rounded clearance margin.
+        assert!(world.solid_segment_clear(maternal_position, paternal_position));
+        assert!(!world.terrain().unwrap().walkable(3.945, 3.945));
         assert!(world
             .eligible_mating_pair(MATERNAL_ID, PATERNAL_ID, next_tick)
             .unwrap()
@@ -12004,3 +12009,4 @@ mod eat_possession_tests {
 
 #[cfg(test)]
 mod nonvisual_perception_tests;
+

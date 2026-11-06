@@ -53,6 +53,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Preserve prior saves through write and publication failures
         run: cargo test --locked -p alife_world --test atomic_portable_save
+      - name: Observe bounded mating query CPU cost
+        if: runner.os == 'Linux'
+        run: 'cargo test --locked -p alife_world --lib headless::task_4_3a2_tests::mating_reach::mating_query_cpu_cost -- --ignored --exact --nocapture --test-threads=1 --color=never'
       - name: Keep births supported without stalling world ticks
         run: 'cargo test --locked -p alife_world --lib task_4_3a2_tests:: -- --test-threads=1 --color=never'
 
@@ -240,3 +243,4 @@ jobs:
       - name: Core boundaries
         if: ${{ !cancelled() && steps.check.outcome == 'success' }}
         run: bash scripts/check_core_boundaries.sh
+
