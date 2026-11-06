@@ -64,13 +64,7 @@ fn compare(
     );
     for center in [start, end] {
         assert_eq!(
-            world.mating_segment_clear(
-                center,
-                start,
-                end,
-                ignored,
-                &std::cell::OnceCell::new(),
-            ),
+            world.mating_segment_clear(center, start, end, ignored, &std::cell::OnceCell::new(),),
             expected,
             "candidate center={center:?} start={start:?} end={end:?}"
         );
@@ -103,9 +97,7 @@ fn local_candidates_preserve_domain_edges_large_spheres_and_cell_faces() {
         }
         world.objects.get_mut(&rock.raw()).unwrap().consumed = true;
         for face in [center_x, center_x.next_down(), center_x.next_up()] {
-            world.terrain = Some(terrain(vec![
-                [face, -0.1, face + 0.25, 0.1, -1.0, 1.0]; 32
-            ]));
+            world.terrain = Some(terrain(vec![[face, -0.1, face + 0.25, 0.1, -1.0, 1.0]; 32]));
             compare(&world, start, end, None);
             compare(&world, end, start, None);
             compare(&world, start, start, None);
@@ -136,7 +128,12 @@ fn sparse_terrain_cell_faces_use_pruned_index_candidates() {
                     original(&world, a, b, None),
                 );
                 assert_eq!(
-                    candidates.get().unwrap().as_ref().unwrap().candidate_counts(),
+                    candidates
+                        .get()
+                        .unwrap()
+                        .as_ref()
+                        .unwrap()
+                        .candidate_counts(),
                     (0, 1)
                 );
             }
@@ -160,10 +157,7 @@ fn cached_candidates_fall_back_for_later_unsupported_pairs() {
     for (start, end) in [
         (Vec3f::new(9.5, 0.0, 0.0), Vec3f::new(10.0, 0.0, 0.0)),
         (Vec3f::new(19.0, 0.0, 0.0), Vec3f::new(20.0, 0.0, 0.0)),
-        (
-            Vec3f::new(1.0e18, 0.0, 0.0),
-            Vec3f::new(1.0e18, 0.0, 0.0),
-        ),
+        (Vec3f::new(1.0e18, 0.0, 0.0), Vec3f::new(1.0e18, 0.0, 0.0)),
         (Vec3f::new(f32::NAN, 0.0, 0.0), Vec3f::ZERO),
     ] {
         assert_eq!(
@@ -187,9 +181,14 @@ fn local_candidates_match_original_over_bounded_nearby_geometry() {
         object.position = add(start, position(&mut state, object.radius * 1.2));
         let x = start.x + (draw(&mut state) - 0.5);
         let z = start.z + (draw(&mut state) - 0.5);
-        world.terrain = Some(terrain(vec![
-            [x, z, x + 0.1, z + 0.1, start.y - 0.1, start.y + 0.1],
-        ]));
+        world.terrain = Some(terrain(vec![[
+            x,
+            z,
+            x + 0.1,
+            z + 0.1,
+            start.y - 0.1,
+            start.y + 0.1,
+        ]]));
         for (a, b) in [(start, end), (end, start)] {
             if compare(&world, a, b, None) {
                 clear += 1;

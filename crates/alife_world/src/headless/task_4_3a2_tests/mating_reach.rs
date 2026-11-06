@@ -470,7 +470,10 @@ fn measure_mating_queries(world: HeadlessWorld, next_tick: Tick, clustered: bool
         expected
     );
     for id in &ids {
-        assert_eq!(world.mating_response(*id, next_tick).unwrap() > 0.0, clustered);
+        assert_eq!(
+            world.mating_response(*id, next_tick).unwrap() > 0.0,
+            clustered
+        );
     }
     let before = world.canonical_signature_digest().unwrap();
     let collect = || {

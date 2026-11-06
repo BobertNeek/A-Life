@@ -2121,7 +2121,8 @@ impl HeadlessWorld {
                     *paternal_id,
                     next_tick,
                     |start, end| self.mating_segment_clear(start, start, end, None, &candidates),
-                )? else {
+                )?
+                else {
                     continue;
                 };
                 mating_organism_ids.insert(pair.maternal_id.raw());
@@ -2287,14 +2288,19 @@ impl HeadlessWorld {
                 (partner_id, organism_id)
             };
             if self
-                .eligible_mating_pair_with_reach(maternal_id, paternal_id, next_tick, |start, end| {
-                    let center = if maternal_id == organism_id {
-                        start
-                    } else {
-                        end
-                    };
-                    self.mating_segment_clear(center, start, end, None, &candidates)
-                })?
+                .eligible_mating_pair_with_reach(
+                    maternal_id,
+                    paternal_id,
+                    next_tick,
+                    |start, end| {
+                        let center = if maternal_id == organism_id {
+                            start
+                        } else {
+                            end
+                        };
+                        self.mating_segment_clear(center, start, end, None, &candidates)
+                    },
+                )?
                 .is_some()
             {
                 let other = self
