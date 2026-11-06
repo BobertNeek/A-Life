@@ -2031,14 +2031,7 @@ pub fn spawn_fvr03_production_voxel_scene(
                 .after(menu::handle_input)
                 .run_if(menu::world_input_allowed)
                 .run_if(care_dock::world_input_allowed),
-            handle_fvr03_camera_mode_input
-                .after(menu::handle_input)
-                .run_if(menu::world_input_allowed)
-                .run_if(care_dock::world_input_allowed),
-            camera_navigation::zoom_camera
-                .after(menu::handle_input)
-                .run_if(menu::world_input_allowed)
-                .run_if(care_dock::world_input_allowed),
+            camera_view_input_systems(),
             handle_fvr04_camera_follow_input
                 .after(menu::handle_input)
                 .run_if(menu::world_input_allowed)
@@ -5536,6 +5529,23 @@ fn sync_fvr05_footer_status_bar(
     for mut bar in &mut bars {
         bar.0 = text.clone();
     }
+}
+
+fn camera_view_input_systems(
+) -> bevy::ecs::schedule::ScheduleConfigs<bevy::ecs::system::ScheduleSystem> {
+    (
+        handle_fvr03_camera_mode_input
+            .after(menu::handle_input)
+            .run_if(menu::world_input_allowed)
+            .run_if(care_dock::world_input_allowed),
+        // Consume scrolling before the reset so R wins without deferring wheel input.
+        camera_navigation::zoom_camera
+            .before(handle_fvr03_camera_mode_input)
+            .after(menu::handle_input)
+            .run_if(menu::world_input_allowed)
+            .run_if(care_dock::world_input_allowed),
+    )
+        .into_configs()
 }
 
 fn handle_fvr03_camera_mode_input(

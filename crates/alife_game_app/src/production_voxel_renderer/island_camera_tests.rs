@@ -209,6 +209,146 @@ fn reset_view_restores_default_zoom_but_mode_switches_preserve_it() {
 }
 
 #[test]
+fn production_camera_input_reset_wins_over_wheel_without_deferring_it() {
+    use bevy::{
+        ecs::schedule::{LogLevel, ScheduleBuildSettings},
+        input::mouse::{MouseScrollUnit, MouseWheel},
+    };
+    for profile in ProductionFrontendProfileId::all() {
+        for terrain_bound in [false, true] {
+            for wheel in [-1.0, 1.0] {
+                let extent = production_camera_extent(*profile);
+                let mut app = fixture(terrain_bound);
+                app.init_resource::<ButtonInput<KeyCode>>()
+                    .add_message::<MouseWheel>()
+                    .insert_resource(camera_scene(*profile))
+                    // Use production's actual camera registration, not a test-only chain.
+                    .add_systems(
+                        Update,
+                        camera_view_input_systems()
+                            .in_set(ProductionVoxelPresentationSet::Input)
+                            .before(constrain_camera),
+                    )
+                    .edit_schedule(Update, |schedule| {
+                        schedule.set_build_settings(ScheduleBuildSettings {
+                            ambiguity_detection: LogLevel::Error,
+                            ..Default::default()
+                        });
+                    });
+                let window = app
+                    .world_mut()
+                    .spawn((
+                        bevy::window::Window {
+                            focused: true,
+                            ..Default::default()
+                        },
+                        bevy::window::PrimaryWindow,
+                    ))
+                    .id();
+                let camera = spawn_camera(
+                    &mut app,
+                    down_camera(Vec3::new(0.5, 300.0, 0.5)),
+                    orthographic(extent),
+                );
+                let scale = |app: &App| {
+                    let Projection::Orthographic(p) =
+                        app.world().get::<Projection>(camera).unwrap()
+                    else {
+                        unreachable!()
+                    };
+                    p.scale
+                };
+                let initial = if terrain_bound {
+                    if wheel < 0.0 {
+                        1600.0 / extent
+                    } else {
+                        9.8 / extent
+                    }
+                } else if wheel < 0.0 {
+                    3.5
+                } else {
+                    0.35
+                };
+                let mut projection = app.world_mut().get_mut::<Projection>(camera).unwrap();
+                let Projection::Orthographic(projection) = &mut *projection else {
+                    unreachable!()
+                };
+                projection.scale = initial;
+                app.world_mut()
+                    .resource_mut::<ButtonInput<KeyCode>>()
+                    .press(KeyCode::KeyR);
+                app.world_mut().write_message(MouseWheel {
+                    unit: MouseScrollUnit::Line,
+                    x: 0.0,
+                    y: wheel,
+                    window,
+                });
+                app.update();
+                assert_eq!(
+                    scale(&app),
+                    1.0,
+                    "{profile:?} terrain={terrain_bound} wheel={wheel}"
+                );
+
+                app.world_mut()
+                    .resource_mut::<ButtonInput<KeyCode>>()
+                    .reset_all();
+                app.update();
+                assert_eq!(
+                    scale(&app),
+                    1.0,
+                    "same-frame scrolling must not be deferred"
+                );
+
+                app.world_mut().write_message(MouseWheel {
+                    unit: MouseScrollUnit::Line,
+                    x: 0.0,
+                    y: -1.0,
+                    window,
+                });
+                app.update();
+                assert!(
+                    scale(&app) > 1.0 && scale(&app) < 1.2,
+                    "ordinary wheel input still zooms"
+                );
+                for key in [KeyCode::KeyI, KeyCode::KeyO] {
+                    let mut projection = app.world_mut().get_mut::<Projection>(camera).unwrap();
+                    let Projection::Orthographic(projection) = &mut *projection else {
+                        unreachable!()
+                    };
+                    projection.scale = 1.0;
+                    let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
+                    keys.reset_all();
+                    keys.press(key);
+                    app.world_mut().write_message(MouseWheel {
+                        unit: MouseScrollUnit::Line,
+                        x: 0.0,
+                        y: -1.0,
+                        window,
+                    });
+                    app.update();
+                    assert!(
+                        scale(&app) > 1.0 && scale(&app) < 1.2,
+                        "view-mode changes retain wheel zoom"
+                    );
+                    assert_eq!(
+                        app.world()
+                            .get::<Fvr03ProductionVoxelCamera>(camera)
+                            .unwrap()
+                            .mode,
+                        if key == KeyCode::KeyO {
+                            Fvr03ProductionVoxelCameraMode::Orbit
+                        } else {
+                            Fvr03ProductionVoxelCameraMode::OrthographicIsometric
+                        }
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn settled_cameras_preserve_transform_and_projection_change_ticks() {
     let mut app = fixture(true);
     let cameras = [
