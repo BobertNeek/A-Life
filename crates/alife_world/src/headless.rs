@@ -1965,8 +1965,28 @@ impl HeadlessWorld {
                         paternal.phenotype(),
                     )
                 {
-                    conception_pair = Some(pair);
-                    break;
+                    let midpoint = Vec3f::new(
+                        (pair.maternal_position.x + pair.paternal_position.x) * 0.5,
+                        (pair.maternal_position.y + pair.paternal_position.y) * 0.5,
+                        (pair.maternal_position.z + pair.paternal_position.z) * 0.5,
+                    );
+                    midpoint.validate()?;
+                    // Nearby parents can stand around a terrain obstacle corner
+                    // whose midpoint is unwalkable. Prefer that midpoint, then
+                    // a supported parent position, without aborting the tick
+                    // or reserving an identity when no position is available.
+                    if let Some(position) =
+                        [midpoint, pair.maternal_position, pair.paternal_position]
+                            .into_iter()
+                            .find(|position| {
+                                candidate.terrain.as_ref().is_none_or(|terrain| {
+                                    terrain.walkable(position.x, position.z)
+                                })
+                            })
+                    {
+                        conception_pair = Some((pair, position));
+                        break;
+                    }
                 }
             }
         }
@@ -1977,11 +1997,9 @@ impl HeadlessWorld {
         candidate.tick = next_tick;
         candidate.prune_ingestion_observations();
 
-        if let Some(pair) = conception_pair {
+        if let Some((pair, child_position)) = conception_pair {
             let maternal_id = pair.maternal_id;
             let paternal_id = pair.paternal_id;
-            let maternal_position = pair.maternal_position;
-            let paternal_position = pair.paternal_position;
             let habitat_id = pair.habitat_id;
             let mut conception_seed = candidate.seed
                 ^ next_tick.raw().rotate_left(17)
@@ -2032,15 +2050,9 @@ impl HeadlessWorld {
                     .raw()
                     .checked_add(1)
                     .ok_or(ScaffoldContractError::InvalidId)?;
-                let midpoint = Vec3f::new(
-                    (maternal_position.x + paternal_position.x) * 0.5,
-                    (maternal_position.y + paternal_position.y) * 0.5,
-                    (maternal_position.z + paternal_position.z) * 0.5,
-                );
-                midpoint.validate()?;
                 let child_label = format!("organism-{}", child_id.raw());
                 let child_entity_id =
-                    candidate.spawn_social_agent(&child_label, child_id, midpoint, 0.0)?;
+                    candidate.spawn_social_agent(&child_label, child_id, child_position, 0.0)?;
                 let mut child_record = WorldOrganismRecord::newborn(
                     child_id,
                     child_entity_id,
