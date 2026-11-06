@@ -50,7 +50,7 @@ impl HeadlessWorld {
             object_id: id,
             last_ground: ground,
         });
-        match self.move_player_hold(ground) {
+        match self.move_player_hold_to(ground, true) {
             Ok(position) => Ok(position),
             Err(error) => {
                 self.player_hold = None;
@@ -59,7 +59,15 @@ impl HeadlessWorld {
         }
     }
 
-    pub fn move_player_hold(&mut self, mut ground: Vec3f) -> Result<Vec3f, ScaffoldContractError> {
+    pub fn move_player_hold(&mut self, ground: Vec3f) -> Result<Vec3f, ScaffoldContractError> {
+        self.move_player_hold_to(ground, false)
+    }
+
+    fn move_player_hold_to(
+        &mut self,
+        mut ground: Vec3f,
+        initial_pickup: bool,
+    ) -> Result<Vec3f, ScaffoldContractError> {
         ground.validate()?;
         let hold = self
             .player_hold
@@ -78,6 +86,31 @@ impl HeadlessWorld {
                 .ok_or(ScaffoldContractError::InvalidId)?;
         } else {
             ground.z = 0.0;
+        }
+        // Keep initial pickup and unchanged projected ground available for
+        // recovery. Check only the destination, allowing carrying across rocks.
+        if !initial_pickup && ground != hold.last_ground {
+            if self
+                .objects
+                .values()
+                .any(|object| object.blocks_position(ground))
+            {
+                return Err(ScaffoldContractError::InvalidId);
+            }
+            let object = self.entity(id).ok_or(ScaffoldContractError::InvalidId)?;
+            if let Some(owner) = object.organism_id {
+                let carries = self
+                    .objects
+                    .values()
+                    .any(|item| item.carried_by == Some(owner));
+                // Match the static reach used by carried_pose_reachable without
+                // sweeping from the old grip, which belongs to the air carry.
+                if carries
+                    && !self.solid_segment_clear(ground, Self::carry_grip(ground, object.body_yaw))
+                {
+                    return Err(ScaffoldContractError::InvalidId);
+                }
+            }
         }
         let mut raised = ground;
         if self.terrain.is_some() {
