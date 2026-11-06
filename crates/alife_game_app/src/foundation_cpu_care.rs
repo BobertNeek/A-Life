@@ -18,6 +18,8 @@ use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::PathBuf};
 mod admission;
 mod evaluation;
+mod founder;
+pub use founder::initialize_cpu_care_founder;
 mod layout;
 pub use layout::CpuCareLayout;
 mod round;

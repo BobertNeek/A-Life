@@ -99,6 +99,7 @@ jobs:
           cargo test --locked -p alife_game_app --features cpu-training --lib declared_assessment_admission
           cargo test --locked -p alife_game_app --features cpu-training --lib assessment_exceptions
           cargo test --locked -p alife_game_app --features cpu-training --lib foundation_cpu_care::admission::tests
+          cargo test --locked -p alife_game_app --features cpu-training --lib foundation_cpu_care::founder::tests
           cargo test --locked -p alife_game_app --features cpu-training --lib foundation_cpu_care::round::tests
           cargo test --locked -p alife_game_app --features cpu-training --lib collect_only_snapshot_imports_require_current_raw_ledger_bytes_and_keep_exclusions
           cargo test --locked -p alife_game_app --features cpu-training --lib explicit_training_prior

@@ -121,7 +121,7 @@ pub struct CpuEpisodeReceipt {
 }
 pub struct DefaultCpuEpisode;
 impl CpuEpisodeHooks for DefaultCpuEpisode {}
-fn compile_game(
+pub(super) fn compile_game(
     seed: u64,
     founder_seed: u64,
     asset: &FoundationWeightAsset,
