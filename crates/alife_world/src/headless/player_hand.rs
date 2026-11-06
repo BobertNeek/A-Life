@@ -66,6 +66,9 @@ impl HeadlessWorld {
             .as_ref()
             .ok_or(ScaffoldContractError::InvalidActionDecision)?;
         let id = hold.object_id;
+        // Compare before projection so the first lift can normalize an existing
+        // pose onto the ground without preventing recovery from an overlap.
+        let moving_ground = ground != hold.last_ground;
         if let Some(terrain) = &self.terrain {
             // A release location must support the object. Moving through the air
             // may cross rocks/rivers, but dropping into them is not silently allowed.
@@ -78,6 +81,17 @@ impl HeadlessWorld {
                 .ok_or(ScaffoldContractError::InvalidId)?;
         } else {
             ground.z = 0.0;
+        }
+        // Preserve pickup/recovery from an existing overlap, but never accept a
+        // new release location inside a solid object. Only the destination is
+        // checked: the player can still carry things across rocks through air.
+        if moving_ground
+            && self
+                .objects
+                .values()
+                .any(|object| object.blocks_position(ground))
+        {
+            return Err(ScaffoldContractError::InvalidId);
         }
         let mut raised = ground;
         if self.terrain.is_some() {
