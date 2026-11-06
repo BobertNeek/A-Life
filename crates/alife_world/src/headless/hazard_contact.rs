@@ -44,7 +44,7 @@ impl FloatInterval {
         Self {
             lo,
             hi,
-            ok: !lo.is_nan() && !hi.is_nan() && lo <= hi,
+            ok: lo.is_finite() && hi.is_finite() && lo <= hi,
         }
     }
     fn at(x: f32) -> Self {

@@ -113,6 +113,13 @@ fn rounded_radius_admission_and_uncertain_blocker_keep_legacy_damage() {
 
 #[test]
 fn parallel_thresholds_zero_rays_and_unrepresentable_paths_are_conservative() {
+    // Corner products alone can miss an interior infinity-times-zero NaN.
+    // Such an overflowed projection must never turn into a finite certificate.
+    let projection = FloatInterval::at(f32::MAX)
+        .mul(FloatInterval::new(-2.0, 2.0))
+        .mul(FloatInterval::new(-1.0, 1.0))
+        .clamp01();
+    assert!(!projection.ok);
     let epsilon = f32::EPSILON;
     let bounds = [0.6, epsilon * 0.5, 0.65, epsilon * 1.5, -1.0, 1.0];
     for z in [epsilon, f32::from_bits(epsilon.to_bits() + 1)] {
