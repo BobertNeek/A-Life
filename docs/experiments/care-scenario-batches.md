@@ -122,7 +122,11 @@ is claimed until the actual controller integration has been tested.
    duplicate or missing trials, mixed sources and changed evidence reject.
    A controller may separately use `assess --native-evaluator NATIVE --archive ...`
    to admit independently verified completed archives after a dispatch; this is
-   validation only, never permission to re-execute an uncertain life.
+   validation only, never permission to re-execute an uncertain life. Standalone
+   `assess` seals the ledger assessment but does not write the fixed dispatcher's
+   separate `completed.json` batch marker. Later `prepare` therefore remains
+   blocked. This is evidence admission, not resumable recovery; preserve the
+   root and stop rather than redispatching or manually fabricating a marker.
 6. Repeat from `prepare` until the fixed batch count is exhausted. The existing
    sampler adjusts difficulty at most one tier. All-success, all-failure and
    no-frontier batches retain measured outcomes; none is rerolled or represented
@@ -156,8 +160,10 @@ instructions: execution may already have started. Only consume independently
 known complete archives for that batch. If any completion is uncertain or any
 archive is missing, stop. A sealed `assessed` stage can proceed only after its separate completed-batch
 marker and inventory validate. Missing completion blocks `prepare` before it
-returns any next designer request. This handles interruption between the ledger
-assessment commit and batch-seal write without replaying lives.
+returns any next designer request. An interruption between the ledger assessment
+commit and batch-seal write therefore stops progression without replaying lives;
+there is no supported resume operation for that state. Standalone `assess` does
+not repair the missing batch marker.
 
 The hash chain is **not an authenticated external anchor**. It detects ordinary
 changes but cannot detect complete trailing-stage deletion, whole-ledger rollback
@@ -181,6 +187,16 @@ writes, failed proposals, repeated finalization, tampering, evaluator pins,
 mixed source/dose and cross-batch identity. They do not qualify a live model or
 native assessment run.
 
+Current-main integration checks cover the Python protocol/dispatcher contracts,
+related sampler/import/provider/comparison contracts, four native construction
+and admission tests, native receipt compatibility, and strict source checks.
+The native constructor tests use only fresh disposable fixtures and assert zero
+world steps, training rows and optimizer updates. They do not run the dispatcher
+through an actual native assessment. No current-main end-to-end native behavioral
+qualification, autonomous designer invocation, empirical frontier, learning
+improvement or generalization is established by these checks. The CPU workflow
+explicitly selects the four constructor/admission tests.
+
 ## Historical native smoke and correction
 
 One bounded prototype smoke on 2026-11-04 created a disposable founder and ran
@@ -199,5 +215,15 @@ separately implemented explicit construction-only entrypoint.
 
 This smoke verifies frozen assessment/receipt flow from that disposable trained
 fixture, not a no-training source constructor, native learning improvement, or
-automatic Codex designer invocation. No further native lives were run after the
-constructor issue was identified.
+automatic Codex designer invocation. No further native lives were run in that
+prototype after the constructor issue was identified.
+
+The original [PR #245 description](https://github.com/BobertNeek/A-Life/pull/245)
+subsequently reported a two-batch follow-up using the zero-update constructor at
+`d61c761de08c237ff7aa696f852718adc1171353`: 12 frozen discovery trials, 192
+scored decisions plus 12 bootstrap decisions, all survived, zero nourishing
+meals, and difficulty changes 1 to 0 then 0 to 0. Those are historical
+author-reported results, not a new current-main integration run. They establish
+neither an empirical frontier nor autonomous model invocation, learning benefit
+or generalization. The integration checks above do not requalify those results
+against current main.
