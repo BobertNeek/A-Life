@@ -178,8 +178,11 @@ Use existing accounting before adding new instrumentation:
 
 - Continuous same-individual training exposes collection/PPO/install/restore,
   replay-seal/boundary-wait, snapshot and producer counters; the host receipt adds
-  inclusive wall and admitted retained progress. Per-stage current values remain
-  unknown until actual receipts exist.
+  inclusive wall and admitted retained progress. Opt-in
+  [aggregate runtime profiling](continuous-runtime-profile.md) exports existing
+  counters through a separately bounded diagnostic, without expanding Native
+  logs or retirement receipts. Per-stage current values remain unknown until
+  actual runtime measurements exist.
 - Serial cycle/resident-episode profiling through `ALIFE_FOUNDATION_PROFILE`
   writes `stage-timing.json`. It is **not** a full continuous-session profiler.
   [The recorder](../../crates/alife_game_app/src/foundation_training_cycle/stage_timing.rs)

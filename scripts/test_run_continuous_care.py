@@ -4,6 +4,7 @@ import base64
 import copy
 import datetime as dt
 import json
+import io
 import os
 from pathlib import Path
 import tempfile
@@ -611,6 +612,154 @@ class ContinuousCareTests(unittest.TestCase):
                 'trained_rows': 512} for i in range(3)]
             Path(str(log) + '.stdout.log').write_text(''.join(json.dumps(e)+'\n' for e in events))
             Path(str(log) + '.stderr.log').write_text('')
+
+    def runtime_profile_fixture(self, nonce=80):
+        return {'schema': 1, 'kind': 'continuous-runtime-profile-v1',
+                'session_nonce': nonce, 'measurement_status': 'complete',
+                'initial': {'delta_status': 'initial_snapshot', 'delta': None,
+                            'cumulative': {'tick_calls': 0}},
+                'final': {'delta_status': 'partial', 'delta': {'tick_calls': None},
+                          'cumulative': {'tick_calls': 2**64 - 1},
+                          'delta_unavailable_fields': {'tick_calls': 'saturated_counter'}}}
+
+    def profile_path(self):
+        parent = self.store / cp.RUN / 'live'
+        parent.mkdir(parents=True, exist_ok=True)
+        return parent / 'runtime-profile.json'
+
+    def profiled_producer(self, *args, **kwargs):
+        self.continuous_producer(*args, **kwargs)
+        self.profile_path().write_text(json.dumps(self.runtime_profile_fixture()))
+
+    def test_runtime_profile_missing_is_unknown_and_flag_presence_matches_profiling(self):
+        with patch.dict(os.environ):
+            os.environ.pop('ALIFE_FOUNDATION_PROFILE', None)
+            self.assertIsNone(session.read_runtime_profile(self.store, 80))
+            os.environ['ALIFE_FOUNDATION_PROFILE'] = '0'  # Existing presence semantics.
+            self.assertEqual(session.read_runtime_profile(self.store, 80)['measurement_status'], 'unavailable')
+            self.assertNotIn('initial', session.read_runtime_profile(self.store, 80))
+
+    def test_runtime_profile_parser_preserves_zero_unknown_and_error_values(self):
+        path = self.profile_path()
+        for status in ('complete', 'error'):
+            profile = self.runtime_profile_fixture()
+            profile['measurement_status'] = status
+            path.write_text(json.dumps(profile))
+            before = path.read_bytes()
+            self.assertEqual(session.read_runtime_profile(self.store, 80), profile)
+            self.assertEqual(path.read_bytes(), before)
+        for change in ({'schema': 2}, {'session_nonce': 81}, {'initial': None},
+                       {'final': {'cumulative': {'tick_calls': True}}},
+                       {'final': {'cumulative': {'tick_calls': -1}}}):
+            profile = self.runtime_profile_fixture()
+            profile.update(change)
+            path.write_text(json.dumps(profile))
+            result = session.read_runtime_profile(self.store, 80)
+            self.assertEqual(result['measurement_status'], 'unavailable')
+            self.assertNotIn('initial', result)
+        path.write_text('{partial')
+        self.assertEqual(session.read_runtime_profile(self.store, 80)['measurement_status'], 'unavailable')
+
+    def test_runtime_profile_parser_and_display_are_independently_bounded(self):
+        path = self.profile_path()
+        path.write_bytes(b'x' * (session.MAX_RUNTIME_PROFILE_BYTES + 1))
+        self.assertEqual(session.read_runtime_profile(self.store, 80)['unavailable_reason'], 'byte_limit')
+        stream = io.StringIO()
+        oversized = {'session_nonce': 'x' * session.MAX_RUNTIME_PROFILE_BYTES,
+                     'data': 'x' * session.MAX_RUNTIME_PROFILE_BYTES}
+        with patch.object(session.sys, 'stderr', stream):
+            session.emit_runtime_profile(oversized)
+        self.assertLessEqual(len(stream.getvalue().encode()), session.MAX_RUNTIME_PROFILE_BYTES)
+        self.assertEqual(json.loads(stream.getvalue())['measurement_status'], 'unavailable')
+
+    @unittest.skipIf(os.name == 'nt', 'Unix symlink fixture; no Windows privilege assumed')
+    def test_runtime_profile_parser_does_not_follow_a_profile_alias(self):
+        path = self.profile_path()
+        target = self.root / 'foreign.json'
+        target.write_text(json.dumps(self.runtime_profile_fixture()))
+        path.symlink_to(target)
+        before = target.read_bytes()
+        self.assertEqual(session.read_runtime_profile(self.store, 80)['measurement_status'], 'unavailable')
+        self.assertEqual(target.read_bytes(), before)
+
+    def test_runtime_profile_display_failures_are_nonfatal(self):
+        class Broken:
+            def write(self, _):
+                raise OSError('synthetic diagnostic sink failure')
+        for stream in (None, Broken()):
+            with self.subTest(stream=type(stream).__name__), patch.object(session.sys, 'stderr', stream):
+                session.emit_runtime_profile(self.runtime_profile_fixture())
+
+    def test_runtime_profile_is_displayed_after_retirement_and_never_committed(self):
+        profiles = []
+        def capture(profile):
+            self.assertFalse((self.store / cp.RUN).exists())
+            self.assertFalse((self.lane / session.STATE).exists())
+            committed = cp.read_json(self.lane / session.RECEIPT)
+            self.assertEqual(committed['retained_trained_rows'], 1024)
+            self.assertNotIn('runtime_profile', committed)
+            profiles.append(profile)
+        with patch.object(session.current, 'tool', side_effect=self.live_native), \
+                patch.object(session.host, 'run_child', side_effect=self.profiled_producer), \
+                patch.object(session, 'emit_runtime_profile', side_effect=capture):
+            receipt = session.run(self.live_args())
+        self.assertEqual(profiles, [self.runtime_profile_fixture()])
+        self.assertEqual(receipt, cp.read_json(self.lane / session.RECEIPT))
+        self.assertEqual(receipt['after']['policy_version'], 42)
+
+    def test_runtime_profile_sink_failure_keeps_the_retired_result(self):
+        class Broken:
+            def write(self, _):
+                raise OSError('synthetic diagnostic sink failure')
+        with patch.object(session.current, 'tool', side_effect=self.live_native), \
+                patch.object(session.host, 'run_child', side_effect=self.profiled_producer), \
+                patch.object(session.sys, 'stderr', Broken()):
+            receipt = session.run(self.live_args())
+        self.assertEqual(receipt['retained_trained_rows'], 1024)
+        self.assertEqual(receipt, cp.read_json(self.lane / session.RECEIPT))
+        self.assertFalse((self.store / cp.RUN).exists())
+
+    def test_runtime_profile_keeps_native_log_limits_in_both_modes(self):
+        path = self.lane / (session.LOG + '.stdout.log')
+        profile = self.profile_path()
+        profile.write_text(json.dumps(self.runtime_profile_fixture()))
+        packet = json.dumps({'kind': 'continuous-update-v1', 'trained_rows': 512,
+                             'scope': 'synthetic parser fixture'}) + '\n'
+        for count in (1954, 19532):  # Million- and ten-million-decision window counts.
+            data = (packet * count).encode()
+            self.assertLess(len(data), session.MAX_LOG_BYTES)
+            path.write_bytes(data)
+            for enabled in (False, True):
+                with patch.dict(os.environ):
+                    if enabled:
+                        os.environ['ALIFE_FOUNDATION_PROFILE'] = '1'
+                    else:
+                        os.environ.pop('ALIFE_FOUNDATION_PROFILE', None)
+                    self.assertEqual(len(session.read_events(self.lane)), count)
+                    self.assertEqual(session.read_runtime_profile(self.store, 80), self.runtime_profile_fixture())
+                    self.assertEqual(path.read_bytes(), data)
+        data = packet.encode() * 1954
+        data += b'w' * (session.MAX_LOG_BYTES - len(data) - 1) + b'\n'
+        self.assertEqual(len(data), session.MAX_LOG_BYTES)
+        path.write_bytes(data)
+        self.assertEqual(len(session.read_events(self.lane)), 1954)
+        path.write_bytes(data + b'x')
+        with self.assertRaisesRegex(ValueError, 'oversized native log'):
+            session.read_events(self.lane)
+
+    def test_runtime_profile_loss_during_cleanup_does_not_change_retry_authority(self):
+        with patch.object(session.current, 'tool', side_effect=self.live_native), \
+                patch.object(session.host, 'run_child', side_effect=self.profiled_producer), \
+                patch.object(session, 'retire_sidecars', side_effect=RuntimeError('after core commit')):
+            with self.assertRaisesRegex(RuntimeError, 'after core commit'):
+                session.run(self.live_args())
+        committed = cp.read_json(self.lane / session.RECEIPT)
+        self.assertNotIn('runtime_profile', committed)
+        self.assertFalse((self.store / cp.RUN).exists())
+        args = self.live_args()
+        args.reconcile = True
+        with patch.object(session.current, 'tool', side_effect=self.live_native):
+            self.assertEqual(session.run(args), committed)
 
     def test_default_plan_is_same_individual_without_store_access_or_seed_allocation(self):
         result = session.main(['--store', 'absent-store', '--lane', 'absent-owner',

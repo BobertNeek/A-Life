@@ -14,6 +14,7 @@ import math
 import os
 from pathlib import Path
 import subprocess
+import sys
 import time
 import uuid
 
@@ -36,6 +37,7 @@ NATIVE_INITIALIZATION_NEXT = 'resident-initialization.next'
 SIDECARS = (REQUEST, LOG + '.stdout.log', LOG + '.stderr.log',
             STATE + '.tmp', REQUEST + '.tmp', STATE)
 MAX_LOG_BYTES = 8 * 1024 * 1024
+MAX_RUNTIME_PROFILE_BYTES = 64 * 1024
 FAILURE_STDERR_BYTES = 16 * 1024
 HELPERS = ('run_continuous_care.py', 'run_current_care.py', 'current_checkpoint_store.py',
            'run_mixed_care_serial.py', 'care_host.py',
@@ -232,6 +234,67 @@ def read_events(lane):
     return events
 
 
+def unavailable_runtime_profile(session_nonce, reason):
+    return {'schema': 1, 'kind': 'continuous-runtime-profile-v1',
+            'session_nonce': session_nonce, 'measurement_status': 'unavailable',
+            'unavailable_reason': reason}
+
+
+def read_runtime_profile(store, session_nonce):
+    """Optional diagnostics only. Never admit state or fail recovery over them."""
+    missing = unavailable_runtime_profile(session_nonce, 'missing') \
+        if 'ALIFE_FOUNDATION_PROFILE' in os.environ else None
+    path = store / cp.RUN / 'live' / 'runtime-profile.json'
+    try:
+        if not path.exists() and not path.is_symlink():
+            return missing
+        if not cp.real_directory(store / cp.RUN) or not cp.real_directory(path.parent):
+            raise ValueError('profile parent alias')
+        info = cp.regular(path)
+        if info.st_size > MAX_RUNTIME_PROFILE_BYTES:
+            return unavailable_runtime_profile(session_nonce, 'byte_limit')
+        with path.open('rb') as stream:
+            raw = stream.read(MAX_RUNTIME_PROFILE_BYTES + 1)
+        if len(raw) > MAX_RUNTIME_PROFILE_BYTES:
+            return unavailable_runtime_profile(session_nonce, 'byte_limit')
+        profile = json.loads(raw)
+        valid = (isinstance(profile, dict) and type(profile.get('schema')) is int and
+                 profile['schema'] == 1 and profile.get('kind') == 'continuous-runtime-profile-v1' and
+                 type(profile.get('session_nonce')) is int and profile['session_nonce'] == session_nonce and
+                 profile.get('measurement_status') in ('complete', 'error'))
+        for key in ('initial', 'final'):
+            snapshot = profile.get(key) if valid else None
+            cumulative = snapshot.get('cumulative') if isinstance(snapshot, dict) else None
+            valid = valid and isinstance(cumulative, dict) and bool(cumulative) and all(
+                type(value) is int and 0 <= value < 2**64 for value in cumulative.values())
+        if not valid:
+            return unavailable_runtime_profile(session_nonce, 'invalid_report')
+        # Reject non-finite values anywhere, including unknown optional fields.
+        json.dumps(profile, allow_nan=False)
+        return profile
+    except (OSError, ValueError, TypeError, RecursionError, OverflowError):
+        return unavailable_runtime_profile(session_nonce, 'unreadable_or_invalid')
+
+
+def emit_runtime_profile(profile):
+    """One bounded stderr record after retirement; never change its outcome."""
+    if profile is None:
+        return
+    try:
+        if not isinstance(profile, dict):
+            profile = unavailable_runtime_profile(None, 'invalid_report')
+        raw = json.dumps(profile, allow_nan=False, separators=(',', ':')) + '\n'
+        if len(raw.encode()) > MAX_RUNTIME_PROFILE_BYTES:
+            raw = json.dumps(unavailable_runtime_profile(
+                None, 'display_byte_limit'), separators=(',', ':')) + '\n'
+        if sys.stderr is None:
+            return
+        sys.stderr.write(raw)
+        sys.stderr.flush()
+    except (OSError, ValueError, TypeError, RecursionError, OverflowError, AttributeError):
+        pass  # The canonical result and retirement are already committed.
+
+
 def sidecar_identity(path):
     if not path.exists():
         require(not path.is_symlink(), 'sidecar alias refused')
@@ -348,13 +411,16 @@ def retire_sidecars(lane, receipt, validate, after_remove=lambda _: None):
     return receipt
 
 
-def reconcile(lane, state, validate):
+def reconcile(lane, state, validate, profile_capture=None):
     """Native and Python publishers never hold the same store lease together."""
     check_pins(state)
     worker = state['worker']
     require(worker['stopped'] or (worker['pid'] is not None and not cp.pid_alive(worker['pid'])),
             'native writer still alive or launch outcome unknown; preserving recovery files')
     store_root = Path(state['store'])
+    if profile_capture is not None and state.get('producer_mode') == 'same_individual':
+        # Read before Native's existing cleanup; keep this only in memory.
+        profile_capture.append(read_runtime_profile(store_root, state['request']['seed_range'][0]))
     native = Path(state['binary'])
     pending_cleanup = None
     initialization_pending = any((store_root / name).exists() or (store_root / name).is_symlink()
@@ -431,7 +497,8 @@ def finish(lane, state, validate):
     committed = committed_retirement(lane, state)
     if committed is not None:
         return retire_sidecars(lane, committed, validate)
-    admitted, digest, recovery, cleanup = reconcile(lane, state, validate)
+    profile_capture = []
+    admitted, digest, recovery, cleanup = reconcile(lane, state, validate, profile_capture)
     events = read_events(lane)
     rows = [e for e in events if e['kind'] == 'resident-provisional-episode-v1']
     updates = [e for e in events if e['kind'] == 'continuous-update-v1']
@@ -498,7 +565,10 @@ def finish(lane, state, validate):
         receipt['native_failure_stderr'] = failure_stderr_excerpt(
             lane, receipt['retirement']['sidecars'][LOG + '.stderr.log'])
     cp.write_json(lane / RECEIPT, receipt)
-    return retire_sidecars(lane, receipt, validate)
+    result = retire_sidecars(lane, receipt, validate)
+    if profile_capture:
+        emit_runtime_profile(profile_capture[0])
+    return result
 
 
 def refuse_observed_terminal_resume(lane, current_sha256, mode):
