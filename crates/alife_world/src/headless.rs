@@ -1345,6 +1345,8 @@ pub struct HeadlessWorld {
 
 mod hands;
 pub use hands::{ActionPhase, GripTransfer, GripTransferKind};
+mod hazard_contact;
+use hazard_contact::HazardContacts;
 mod local_steering;
 pub use local_steering::LocalSteeringState;
 mod naming;
@@ -5842,6 +5844,7 @@ impl HeadlessWorld {
             );
         }
 
+        let mut hazard_contacts = None;
         let touched = self
             .objects
             .iter()
@@ -5854,6 +5857,11 @@ impl HeadlessWorld {
                                 object.position,
                                 closest_point_on_segment(object.position, start, destination),
                             ) <= object.radius))
+                    && (object.kind != WorldObjectKind::Hazard
+                        || hazard_contacts
+                            .get_or_insert_with(|| HazardContacts::new(self))
+                            .swept(start, destination, object)
+                            .retains_damage())
             })
             .map(|(id, _)| WorldEntityId(*id))
             .collect::<Vec<_>>();
@@ -6333,14 +6341,15 @@ impl HeadlessWorld {
             .any(|bounds| sight_box_hit(start, direction, *bounds, length).is_some())
     }
 
-    /// Reuse the endpoint hazard scan for peer overlap, including stationary
-    /// bodies. No contact list, relationship state, or extra bundle scan is built.
+    /// Reuse the endpoint overlap traversal for hazards and peers. Complete
+    /// physical blockers are collected lazily only for an overlapping hazard.
     fn body_contacts_at(
         &self,
         own_entity: WorldEntityId,
         position: Vec3f,
     ) -> (Option<(WorldEntityId, f32)>, bool) {
         let mut hazard: Option<(&WorldObject, f32)> = None;
+        let mut hazard_contacts = None;
         let mut peer_touch = false;
         for object in self.objects.values() {
             if object.id == own_entity || object.consumed {
@@ -6356,6 +6365,9 @@ impl HeadlessWorld {
                                 .then_with(|| object.id.raw().cmp(&previous.id.raw()))
                                 .is_lt()
                         })
+                        && hazard_contacts
+                            .get_or_insert_with(|| HazardContacts::new(self))
+                            .point_exposed(position, object)
                     {
                         hazard = Some((object, separation));
                     }

@@ -33,6 +33,21 @@ Terrain-vision object chemistry and temperature remain contact observations;
 anonymous bilateral smell is separate. Under danger urgency the inherited Avoid
 readout uses observed bearing before contact, without identifying which object
 is hazardous; contact retains the chemical cue.
+Object hazard damage follows the same center-based solid-contact convention:
+stored f32 radii admit contact, while obstacle entities and terrain AABBs can
+shield stationary contact and the actually executed movement segment. This is
+a gameplay approximation, not a material-volume clipping operation. Ecological
+hazard fields retain their area effects, and height-field physical reach remains
+outside this rule.
+
+Swept exposure uses f32 interval certificates and at most 64 point samples.
+An unresolved query keeps that hazard admitted with its previous damage value
+and ranking inputs;
+it never assumes absence of exposure from an exhausted search. Consequently
+some grazing or complicated barriers can still permit legacy damage. The sample
+bound does not bound the number of blocker checks, and it is not a guarantee of
+universal shielding. No new save state or learned-state reset is introduced.
+
 Hunger still primes non-contact investigation and contact/reach-gated tasting.
 Fresh procedural candidate distance coefficients are negative. Trained
 foundations replace them with their stored signed coefficients; recurrent
