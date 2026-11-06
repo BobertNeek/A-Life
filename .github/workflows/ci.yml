@@ -126,6 +126,10 @@ jobs:
         run: 'cargo test --locked -p alife_game_app --features foundation-training --lib gpu_live_runtime::headless_trace::tests'
       - name: Continuous-session receipt supervisor contracts
         run: python -B -m unittest discover -s scripts -p test_run_continuous_care.py -v
+      - name: Continuous-world runtime profile and store contracts
+        run: |
+          cargo test --locked -p alife_game_app --features foundation-training --lib continuous_world:: -- --test-threads=1
+          cargo test --locked -p alife_game_app --features foundation-training --lib resident::continuous_store -- --test-threads=1
       - name: Group-50 native admission and replay CPU contracts
         run: 'cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training_cycle::group::'
       - name: Residual critic batching CPU regression
