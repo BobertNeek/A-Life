@@ -1979,9 +1979,10 @@ impl HeadlessWorld {
                         [midpoint, pair.maternal_position, pair.paternal_position]
                             .into_iter()
                             .find(|position| {
-                                candidate.terrain.as_ref().is_none_or(|terrain| {
-                                    terrain.walkable(position.x, position.z)
-                                })
+                                candidate
+                                    .terrain
+                                    .as_ref()
+                                    .is_none_or(|terrain| terrain.walkable(position.x, position.z))
                             })
                     {
                         conception_pair = Some((pair, position));
