@@ -25,6 +25,15 @@ GUARD = b"""        // Mating keeps its own proximity radius, but cannot cross t
         }
 
 """
+UNFILTERED = b"""        if obstacles.any(|object| Some(object.id) != ignored && object.blocks_segment(start, end)) {
+"""
+FILTERED = b"""        if obstacles.any(|object| {
+            Some(object.id) != ignored
+                && object.kind == WorldObjectKind::Obstacle
+                && !object.consumed
+                && object.blocks_segment(start, end)
+        }) {
+"""
 
 
 def build(destination):
@@ -73,23 +82,29 @@ def run(binary):
 
 def main():
     original = SOURCE.read_bytes()
-    if original.count(GUARD) != 1:
-        raise RuntimeError("The exact bounded mating guard must occur once; refusing baseline edit")
-    baseline_source = original.replace(GUARD, b"", 1)
+    if original.count(GUARD) != 1 or original.count(FILTERED) != 1:
+        raise RuntimeError("The exact guard and filter must occur once; refusing baseline edit")
+    unfiltered_source = original.replace(FILTERED, UNFILTERED, 1)
+    baseline_source = unfiltered_source.replace(GUARD, b"", 1)
     print(json.dumps({
         "scope": "same-host optimized-test-profile CPU query component",
         "platform": platform.platform(),
         "rustc": subprocess.check_output(["rustc", "--version"], text=True).strip(),
         "candidate_source_sha256": hashlib.sha256(original).hexdigest(),
         "baseline_source_sha256": hashlib.sha256(baseline_source).hexdigest(),
-        "baseline_change": "remove only exact six-line obstruction guard",
-        "warmup_runs_per_binary": 1, "alternating_pairs": 5,
+        "unfiltered_source_sha256": hashlib.sha256(unfiltered_source).hexdigest(),
+        "baseline_change": "remove exact solid guard and early type/consumed filter",
+        "unfiltered_change": "remove only exact early type/consumed filter",
+        "warmup_runs_per_binary": 1, "rotating_matched_triples": 6,
     }), flush=True)
     with tempfile.TemporaryDirectory(prefix="mating-query-") as temporary:
-        binaries = {arm: Path(temporary) / arm for arm in ("baseline", "candidate")}
+        arms = ("baseline", "unfiltered", "candidate")
+        binaries = {arm: Path(temporary) / arm for arm in arms}
         try:
             SOURCE.write_bytes(baseline_source)
             build(binaries["baseline"])
+            SOURCE.write_bytes(unfiltered_source)
+            build(binaries["unfiltered"])
         finally:
             SOURCE.write_bytes(original)
         build(binaries["candidate"])
@@ -98,19 +113,28 @@ def main():
         for binary in binaries.values():
             run(binary)
         samples = []
-        for pair in range(5):
-            order = ("baseline", "candidate") if pair % 2 == 0 else ("candidate", "baseline")
+        for pair in range(6):
+            orders = (
+                ("baseline", "unfiltered", "candidate"),
+                ("unfiltered", "candidate", "baseline"),
+                ("candidate", "baseline", "unfiltered"),
+                ("candidate", "unfiltered", "baseline"),
+                ("unfiltered", "baseline", "candidate"),
+                ("baseline", "candidate", "unfiltered"),
+            )
+            order = orders[pair]
             measured = {arm: run(binaries[arm]) for arm in order}
-            if measured["baseline"].keys() != measured["candidate"].keys():
+            if any(measured[arm].keys() != measured["baseline"].keys() for arm in arms):
                 raise RuntimeError("Baseline and candidate cases differ")
             for key in measured["baseline"]:
                 before = measured["baseline"][key]
-                after = measured["candidate"][key]
-                for field in ("organisms", "clustered", "objects", "obstacles",
-                              "terrain_boxes", "eligible_pairs"):
-                    if before[field] != after[field]:
-                        raise RuntimeError(f"Pair workload changed for {field}")
-                row = {"pair": pair, "order": order, "baseline": before, "candidate": after}
+                for arm in arms:
+                    after = measured[arm][key]
+                    for field in ("organisms", "clustered", "objects", "obstacles",
+                                  "terrain_boxes", "eligible_pairs"):
+                        if before[field] != after[field]:
+                            raise RuntimeError(f"Pair workload changed for {field}")
+                row = {"pair": pair, "order": order, **{arm: measured[arm][key] for arm in arms}}
                 samples.append(row)
                 print("MATING_PAIR " + json.dumps(row), flush=True)
         for key in measured["baseline"]:
@@ -120,12 +144,16 @@ def main():
             summary = dict(zip(("organisms", "clustered", "objects", "terrain_boxes"), key))
             for component in ("collect_ns", "responses_ns"):
                 baseline = [row["baseline"][component] for row in matching]
+                unfiltered = [row["unfiltered"][component] for row in matching]
                 candidate = [row["candidate"][component] for row in matching]
                 summary[component] = {
                     "baseline_median": statistics.median(baseline),
+                    "unfiltered_median": statistics.median(unfiltered),
                     "candidate_median": statistics.median(candidate),
                     "paired_delta_median": statistics.median(b - a for a, b in zip(baseline, candidate)),
                     "paired_ratio_median": statistics.median(b / a for a, b in zip(baseline, candidate)),
+                    "candidate_vs_unfiltered_delta_median": statistics.median(b - a for a, b in zip(unfiltered, candidate)),
+                    "candidate_vs_unfiltered_ratio_median": statistics.median(b / a for a, b in zip(unfiltered, candidate)),
                 }
             print("MATING_SUMMARY " + json.dumps(summary), flush=True)
     if SOURCE.read_bytes() != original:

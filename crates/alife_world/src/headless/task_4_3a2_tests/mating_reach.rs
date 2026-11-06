@@ -1,5 +1,7 @@
 use super::*;
 
+mod solid_reach_equivalence;
+
 fn terrain(obstacles: Vec<[f32; 6]>) -> crate::WorldTerrain {
     crate::WorldTerrain::new(
         crate::TerrainData {

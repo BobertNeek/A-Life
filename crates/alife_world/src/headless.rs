@@ -6331,7 +6331,12 @@ impl HeadlessWorld {
         mut obstacles: impl Iterator<Item = &'a WorldObject>,
     ) -> bool {
         let length = distance(start, end);
-        if obstacles.any(|object| Some(object.id) != ignored && object.blocks_segment(start, end)) {
+        if obstacles.any(|object| {
+            Some(object.id) != ignored
+                && object.kind == WorldObjectKind::Obstacle
+                && !object.consumed
+                && object.blocks_segment(start, end)
+        }) {
             return false;
         }
         let Some(terrain) = self.terrain.as_ref() else {
