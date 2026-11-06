@@ -40,6 +40,7 @@ mod gpu_brain;
 pub use gpu_brain::*;
 mod gpu_brain_vnext;
 pub use gpu_brain_vnext::*;
+mod atomic_save;
 
 pub const P34_SAVE_FILE_SCHEMA: &str = "alife.p34.save_file.v1";
 pub const P34_SAVE_FILE_SCHEMA_VERSION: u16 = SchemaVersions::CURRENT.save.0;
@@ -1470,8 +1471,10 @@ impl PortableSaveFile {
         Ok(serde_json::to_string_pretty(self)?)
     }
 
+    /// Publish a complete sibling file so failures before replacement preserve
+    /// the previous save. Staging also counts against any shared output budget.
     pub fn to_json_file(&self, path: impl AsRef<Path>) -> Result<(), PersistenceError> {
-        alife_storage::write(path, serde_json::to_string_pretty(self)?)?;
+        atomic_save::write(path.as_ref(), &serde_json::to_vec_pretty(self)?)?;
         Ok(())
     }
 

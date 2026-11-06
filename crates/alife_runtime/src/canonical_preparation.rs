@@ -2,7 +2,7 @@
 //! Processor placement never changes organism, memory or biochemical ownership.
 use alife_core::predictive::GroundedSuccessorPredictor;
 use alife_core::*;
-use alife_world::{grounded_peripheral_summaries, HeadlessWorld};
+use alife_world::{grounded_peripheral_summaries, GroundedCandidateBinding, HeadlessWorld};
 use std::collections::BTreeMap;
 pub fn cognitive_memory_context_for_recall(
     organism_id: OrganismId,
@@ -152,6 +152,52 @@ pub fn apply_predecision_attention_evidence(
         summary.validate_contract()?;
     }
     Ok(())
+}
+
+/// Integrate world-bound opportunities before the existing deterministic routing.
+/// Synthetic/unbound drafts retain the original routing-only behavior.
+pub fn route_observed_focal_candidates(
+    draft: &PerceptionFrameDraft,
+    attention: &AttentionFrame,
+    binding: Option<&GroundedCandidateBinding>,
+) -> Result<PerceptionFrameDraft, ScaffoldContractError> {
+    attention.validate_contract()?;
+    if attention.organism_id != draft.organism_id() || attention.world_tick != draft.tick() {
+        return Err(ScaffoldContractError::InvalidDecisionEvidence);
+    }
+    let Some(StableFocusIdentity::TrackedObject(focal_object)) = attention.focal_targets.first()
+    else {
+        return route_focal_candidates(draft, attention);
+    };
+    let Some(slot) = draft
+        .grounded_object_slots()
+        .iter()
+        .find(|slot| slot.tracked_object_id == *focal_object)
+    else {
+        return route_focal_candidates(draft, attention);
+    };
+    // The usual admitted-focus path keeps its original candidates and cost.
+    if draft.candidates().iter().any(|candidate| {
+        candidate.observation == CandidateObservationRef::ObjectSlot(slot.slot_index)
+    }) {
+        return route_focal_candidates(draft, attention);
+    }
+    let Some(binding) = binding else {
+        return route_focal_candidates(draft, attention);
+    };
+    let candidates = binding.candidates_for_focus(draft, Some(*focal_object))?;
+    let observed = PerceptionFrameDraft::new(
+        draft.organism_id(),
+        draft.tick(),
+        draft.sensor_profile(),
+        draft.sensory().clone(),
+        draft.body(),
+        *draft.homeostasis(),
+        candidates,
+        draft.profile_provenance(),
+        draft.grounded_object_slots().to_vec(),
+    )?;
+    route_focal_candidates(&observed, attention)
 }
 
 pub fn route_focal_candidates(
@@ -569,6 +615,7 @@ pub fn sleep_consolidation_config_for(
 #[derive(Debug, Clone)]
 pub struct CanonicalPreparationInput {
     pub draft: PerceptionFrameDraft,
+    pub candidate_binding: Option<GroundedCandidateBinding>,
     pub sequence_id: ExperienceSequenceId,
     pub homeostasis: HomeostaticSnapshot,
     pub hysteresis: HysteresisState,
@@ -732,7 +779,8 @@ pub fn prepare_canonical_frame(
         )?;
         hysteresis = Some(attention.hysteresis);
         preparation_stage = "focal routing";
-        let routed_draft = route_focal_candidates(draft, &attention)?;
+        let routed_draft =
+            route_observed_focal_candidates(draft, &attention, input.candidate_binding.as_ref())?;
         let novelty = selected_focal_novelty(&attention);
         let routed_draft = routed_draft.with_remembered_novelty(novelty)?;
         timing.attention_context_wall_ns = timing

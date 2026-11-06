@@ -2031,14 +2031,7 @@ pub fn spawn_fvr03_production_voxel_scene(
                 .after(menu::handle_input)
                 .run_if(menu::world_input_allowed)
                 .run_if(care_dock::world_input_allowed),
-            handle_fvr03_camera_mode_input
-                .after(menu::handle_input)
-                .run_if(menu::world_input_allowed)
-                .run_if(care_dock::world_input_allowed),
-            camera_navigation::zoom_camera
-                .after(menu::handle_input)
-                .run_if(menu::world_input_allowed)
-                .run_if(care_dock::world_input_allowed),
+            camera_view_input_systems(),
             handle_fvr04_camera_follow_input
                 .after(menu::handle_input)
                 .run_if(menu::world_input_allowed)
@@ -5002,13 +4995,27 @@ fn handle_fvr03_mouse_selection(
 }
 
 // Keep the ray paths independently testable without creating a window or GPU.
+// Called only after the existing f32 proxy hit test admits a sphere. Rank its
+// first surface in wider precision, avoiding discriminant cancellation near a
+// tangent. A rounding-only hit retains its closest point instead of disappearing.
+fn admitted_pick_sphere_entry(ray: &bevy::math::Ray3d, center: Vec3, radius: f32) -> f64 {
+    let direction = (*ray.direction).as_dvec3();
+    let offset = center.as_dvec3() - ray.origin.as_dvec3();
+    let length_squared = direction.length_squared();
+    let middle = offset.dot(direction) / length_squared;
+    let perpendicular_squared = (offset - direction * middle).length_squared();
+    let radius = f64::from(radius);
+    let half_span = ((radius * radius - perpendicular_squared).max(0.0) / length_squared).sqrt();
+    (middle - half_span).max(0.0)
+}
+
 fn pick_live_object_body(
     frame: &LiveBrainPresentationFrame,
     terrain_bound: bool,
     surface: &creature_grounding::RenderedTerrainSurface,
     ray: &bevy::math::Ray3d,
     ground_hit: Vec3,
-) -> Option<(f32, WorldEntityId, WorldObjectKind, Vec3)> {
+) -> Option<(f64, WorldEntityId, WorldObjectKind, Vec3)> {
     frame
         .objects()
         .filter(|object| {
@@ -5045,12 +5052,12 @@ fn pick_live_object_body(
                     (along >= 0.0
                         && along <= (ground_hit - ray.origin).length() + 0.5
                         && closest.distance_squared(center) <= radius * radius)
-                        .then_some(along)
+                        .then(|| admitted_pick_sphere_entry(ray, center, *radius))
                 })
-                .min_by(f32::total_cmp)?;
+                .min_by(f64::total_cmp)?;
             Some((nearest, object.id, object.kind, position))
         })
-        .min_by(|a, b| a.0.total_cmp(&b.0))
+        .min_by(|a, b| a.0.total_cmp(&b.0).then_with(|| a.1.raw().cmp(&b.1.raw())))
 }
 
 fn pick_live_food(
@@ -5059,7 +5066,7 @@ fn pick_live_food(
     surface: &creature_grounding::RenderedTerrainSurface,
     ray: &bevy::math::Ray3d,
     ground_hit: Vec3,
-) -> Option<(f32, WorldEntityId, Vec3)> {
+) -> Option<(f64, WorldEntityId, Vec3)> {
     frame
         .objects()
         .filter(|object| {
@@ -5074,7 +5081,13 @@ fn pick_live_food(
             (along >= 0.0
                 && along <= (ground_hit - ray.origin).length() + 0.42
                 && closest.distance_squared(center) <= 0.42_f32.powi(2))
-            .then_some((along, object.id, ground))
+            .then(|| {
+                (
+                    admitted_pick_sphere_entry(ray, center, 0.42),
+                    object.id,
+                    ground,
+                )
+            })
         })
         .min_by(|a, b| a.0.total_cmp(&b.0).then_with(|| a.1.raw().cmp(&b.1.raw())))
 }
@@ -5518,6 +5531,23 @@ fn sync_fvr05_footer_status_bar(
     }
 }
 
+fn camera_view_input_systems(
+) -> bevy::ecs::schedule::ScheduleConfigs<bevy::ecs::system::ScheduleSystem> {
+    (
+        handle_fvr03_camera_mode_input
+            .after(menu::handle_input)
+            .run_if(menu::world_input_allowed)
+            .run_if(care_dock::world_input_allowed),
+        // Consume scrolling before the reset so R wins without deferring wheel input.
+        camera_navigation::zoom_camera
+            .before(handle_fvr03_camera_mode_input)
+            .after(menu::handle_input)
+            .run_if(menu::world_input_allowed)
+            .run_if(care_dock::world_input_allowed),
+    )
+        .into_configs()
+}
+
 fn handle_fvr03_camera_mode_input(
     keyboard: Res<ButtonInput<KeyCode>>,
     mut cameras: bevy::prelude::Query<(
@@ -5545,6 +5575,9 @@ fn handle_fvr03_camera_mode_input(
             orthographic.scaling_mode = ScalingMode::FixedVertical {
                 viewport_height: extent,
             };
+            if keyboard.just_pressed(KeyCode::KeyR) {
+                orthographic.scale = 1.0;
+            }
         }
     }
 }
