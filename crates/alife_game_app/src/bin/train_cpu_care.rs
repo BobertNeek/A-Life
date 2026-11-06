@@ -20,6 +20,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 fn run() -> Result<(), Box<dyn std::error::Error>> {
     let special: Vec<_> = std::env::args().skip(1).collect();
+    if special
+        .first()
+        .is_some_and(|arg| arg == "--initialize-founder")
+    {
+        if special.len() != 5 || special[1] != "--output" || special[3] != "--seed" {
+            return Err("construction only: --initialize-founder --output NEW_SOURCE --seed SEED; training arguments are forbidden".into());
+        }
+        let result = alife_game_app::initialize_cpu_care_founder(
+            std::path::Path::new(&special[2]),
+            special[4].parse()?,
+        )?;
+        println!("{}", serde_json::to_string(&result)?);
+        return Ok(());
+    }
     if special.len() == 2 {
         let result = match special[0].as_str() {
             "--validate-output" => Some(alife_game_app::validate_cpu_care_output(
@@ -43,6 +57,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     while let Some(key) = arguments.next() {
         match key.as_str() {
             "--help" | "-h" => {
+                println!("Construction only: train_cpu_care --initialize-founder --output NEW_SOURCE --seed SEED. Creates an explicitly untrained disposable founder with zero world steps and zero optimizer updates; it runs no care lesson or evaluation.");
                 println!("train_cpu_care --previous FINAL_PORTABLE_OR_CPU_SOURCE --output NEW_CPU_LANE/NEW_EPISODE --seed-history EXACT_HISTORY --seed EXPLICIT_NEW_SEED --lesson eat_held_food|eat_reachable_food|feeding|obstacle_navigation|relocated_food --decisions 1..128 [--temperature 1] [--food-need-condition newborn_v1|ordinary_healthy_aging_v1] [--food-offset-x X --food-offset-z Z] [--layout-json JSON] [--known-exclusions] [--record-diagnostic-replay]\n\nThe opt-in ordinary healthy aging condition applies only to Feeding/RelocatedFood and preserves their geometry and cues.\n\nBulky raw diagnostic replay is opt-in; in-memory training and checkpoint state are unchanged.\n\nDevelopment only: --fixture replaces --previous and --seed-history. No GPU/device is created. New prepared episode body/private cognition; full inherited founder and actor/value Adam state. A separate original individual archive remains required. No automatic curriculum progression or terminal GPU individual restore is claimed.");
                 println!("\nFood offsets are feeding-only world X/Z displacements from the founder, with finite distance 0.5..=8 world units.");
                 println!("\n--replay-execution reference|cadence-csr selects offline CPU training replay only. Reference is default; collection remains Reference. This does not accelerate GPU PPO.");

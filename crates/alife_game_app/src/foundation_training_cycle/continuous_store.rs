@@ -535,6 +535,15 @@ pub fn run_resident_continuous_care(
     fs::create_dir(&run)?;
     sync_directory(&store)?;
     let budget = alife_storage::OutputBudget::register(&run, request.max_temporary_bytes)?;
+    // Drop after recovery/validation guards, but while aggregate accounting and
+    // the store lease are still alive. Optional output uses released headroom
+    // only after the original producer result has been prepared.
+    const _: () =
+        assert!(super::super::continuous_world::MAX_PROFILE_BYTES as u64 <= RECOVERY_HEADROOM);
+    let mut runtime_profile = super::super::continuous_world::RuntimeProfile::from_environment(
+        &run.join("live"),
+        request.seed_range[0],
+    );
     let init_capacity = budget.reserve(init_bytes.len() as u64)?;
     let _validation = current::validation_scope(&run)?;
     write_new(&run.join("run.json"), &serde_json::to_vec(&o)?)?;
@@ -587,6 +596,7 @@ pub fn run_resident_continuous_care(
             emit(value);
             Ok(())
         },
+        &mut runtime_profile,
     )?;
     if hash_file(&current)? != o.baseline_sha256 {
         return Err("immutable Current changed during continuous producer".into());
@@ -613,15 +623,18 @@ fn commit_snapshot(
     life: &Path,
     progress: SameIndividualProgressV1,
 ) -> Result<()> {
-    if !wal.consumed
-        || progress.session_nonce != o.request.seed_range[0]
-        || progress.trained_rows > o.request.total_trained_decisions as u64
-        || progress.sampling_temperature.to_bits()
-            != sampling_temperature(base, &o.request)?.to_bits()
-        || now_seconds()? > o.request.finalization_deadline_unix_seconds
-    {
-        return Err("continuous snapshot exceeds request/session/finalization boundary".into());
-    }
+    let actual_temperature = sampling_temperature(base, &o.request)?;
+    let admission_time = now_seconds()?;
+    protocol::snapshot_boundary(
+        wal.consumed,
+        &o.request,
+        &progress,
+        actual_temperature,
+        admission_time,
+    )
+    .map_err(|reason| {
+        format!("continuous snapshot exceeds request/session/finalization boundary: {reason}")
+    })?;
     if let Some(old) = &frontier.snapshot {
         let p = &old.state.progress;
         if progress.trained_rows < p.trained_rows
@@ -1363,6 +1376,43 @@ mod tests {
         fs::write(run.join("b"), &source).unwrap();
         assert!(validate_retirement_tree(&run, &r).is_err());
         assert_eq!(fs::read(run.join("b")).unwrap(), source);
+    }
+
+    #[test]
+    fn optional_profile_is_an_owned_live_artifact_not_checkpoint_authority() {
+        for contents in [b"{\"diagnostic\":true}".as_slice(), b"{partial".as_slice()] {
+            let f = Fixture::new();
+            let run = f.0.join(".run");
+            let live = run.join("live");
+            fs::create_dir_all(&live).unwrap();
+            let profile = live.join("runtime-profile.json");
+            fs::write(&profile, contents).unwrap();
+            fs::write(
+                f.0.join("current.alife-checkpoint"),
+                b"synthetic immutable Current",
+            )
+            .unwrap();
+            let mut files = BTreeMap::new();
+            let mut directories = BTreeSet::new();
+            inventory(&run, &run, &mut files, &mut directories).unwrap();
+            let record = ContinuousRetirement {
+                schema: 1,
+                kind: "same-individual-retirement-v1".into(),
+                store: f.0.clone(),
+                current_sha256: "synthetic".into(),
+                max_temporary_bytes: request().max_temporary_bytes,
+                files,
+                directories,
+            };
+            validate_retirement_tree(&run, &record).unwrap();
+            assert_eq!(fs::read(&profile).unwrap(), contents);
+            fs::write(&profile, b"changed after retirement commitment").unwrap();
+            assert!(validate_retirement_tree(&run, &record).is_err());
+            assert_eq!(
+                fs::read(f.0.join("current.alife-checkpoint")).unwrap(),
+                b"synthetic immutable Current"
+            );
+        }
     }
 
     #[test]

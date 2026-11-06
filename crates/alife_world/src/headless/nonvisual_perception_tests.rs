@@ -202,6 +202,84 @@ fn indexed_nonvisual_far_oversized_contact_and_temperature_are_retained() {
 }
 
 #[test]
+fn indexed_and_canonical_touch_both_respect_solid_terrain() {
+    let mut world = sparse_world(Vec3f::ZERO, 128);
+    let source = insert_food(
+        &mut world,
+        "warm-behind-wall",
+        Vec3f::new(0.75, 0.0, 0.0),
+        [0.6, 0.0],
+    );
+    world
+        .objects
+        .get_mut(&source.raw())
+        .unwrap()
+        .grounded_physical
+        .surface_temperature = 0.8;
+    world.terrain = Some(
+        crate::WorldTerrain::new(
+            crate::TerrainData {
+                width: 3,
+                depth: 3,
+                origin_x: -2.0,
+                origin_z: -2.0,
+                spacing: 2.0,
+                heights: vec![0.0; 9],
+                obstacles: vec![[0.37, -1.0, 0.38, 1.0, -0.5, 2.0]],
+                water_level: None,
+            },
+            crate::LocomotionLimits::default(),
+        )
+        .unwrap(),
+    );
+    // These counters count outer source visits, not total geometry work.
+    let (draft, canonical_sources, indexed_sources) = assert_packet_matches(&world);
+    assert_eq!((canonical_sources, indexed_sources), (129, 1));
+    assert_eq!(draft.sensory().channels.tactile_contact[0], 0.0);
+    assert_eq!(draft.sensory().channels.tactile_contact[3], 0.0);
+    assert!(draft.sensory().channels.smell_chemistry[0] > 0.0);
+    assert!(draft.grounded_object_slots().is_empty());
+}
+
+#[test]
+fn contact_occlusion_keeps_a_large_blocker_outside_the_source_query() {
+    let mut world = sparse_world(Vec3f::ZERO, 1024);
+    let source = insert_food(
+        &mut world,
+        "large-source",
+        Vec3f::new(16.0, 0.0, 0.0),
+        [0.0; 2],
+    );
+    let object = world.objects.get_mut(&source.raw()).unwrap();
+    object.radius = 16.0;
+    object.grounded_physical.surface_temperature = 0.8;
+    let blocker = world
+        .editor_spawn_object(WorldEditorSpawnSpec {
+            label: "off-query-rock".into(),
+            kind: WorldObjectKind::Obstacle,
+            organism_id: None,
+            position: Vec3f::new(40.0, 0.0, 0.0),
+            radius: 25.0,
+            nutrition: 0.0,
+            hazard_pain: 0.0,
+            token_id: None,
+        })
+        .unwrap();
+    let index = world.build_perception_batch_index().unwrap();
+    let sources = world
+        .indexed_nonvisual_objects(world.agent_for(OBSERVER).unwrap(), &index)
+        .unwrap()
+        .expect("fixture must exercise indexed source selection");
+    assert!(sources.iter().any(|object| object.id == source));
+    assert!(!sources.iter().any(|object| object.id == blocker));
+    let (blocked, _, _) = assert_packet_matches(&world);
+    assert_eq!(blocked.sensory().channels.tactile_contact[3], 0.0);
+    world.editor_remove_object(blocker).unwrap();
+    let (clear, _, _) = assert_packet_matches(&world);
+    assert_eq!(clear.sensory().channels.tactile_contact[3], 0.8);
+}
+
+#[test]
 fn indexed_nonvisual_far_possession_and_duplicate_membership_are_retained_once() {
     let mut world = sparse_world(Vec3f::ZERO, 128);
     let far = insert_food(

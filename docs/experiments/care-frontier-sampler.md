@@ -122,10 +122,16 @@ before JSON parsing or host validation, so malformed envelopes and rejected
 recipes remain available for inspection. It does not save request headers or
 credentials. The response is untrusted and may itself contain sensitive
 provider-generated text: keep this file private and review it before sharing.
+On POSIX it is created with mode `0600` (or stricter under the caller's umask),
+before any response bytes are written. Windows retains its normal inherited
+ACLs; owner-only access is not established there. Use a private destination
+directory on every platform and verify Windows ACLs before capturing responses.
 Existing paths are refused, oversized bodies (over 1,000,000 bytes) are rejected
 without saving a truncated response, and no raw-response file is written unless
-requested. HTTP/transport failures are not captured as successful response
-bodies. Capture never triggers a retry or makes a rejected recipe admissible.
+requested. A write failure may leave an incomplete capture; retain it as failure
+evidence, not as a complete provider response. HTTP/transport failures are not
+captured as successful response bodies. Capture never triggers a retry or makes
+a rejected recipe admissible.
 
 The map language has exactly one `L` learner and one `F` food on a rectangular
 3–17-cell grid with a complete `#` wall border; `.` marks open space. A cell is

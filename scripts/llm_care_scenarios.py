@@ -153,6 +153,13 @@ class RejectRedirects(urllib.request.HTTPRedirectHandler):
         return None
 
 
+def _raw_response_opener(path, flags):
+    # Restrict POSIX access at creation, before any bytes are written. Keep the
+    # caller's exclusive/binary flags and the existing Windows creation mode;
+    # Windows privacy still depends on the destination's inherited ACLs.
+    return os.open(path, flags, 0o600 if os.name == "posix" else 0o666)
+
+
 def request_recipe(endpoint, model, prompt, api_key=None, *, host=None, max_tokens=None,
                    no_think=False, response_output=None):
     # Never forward credentials across redirects or send them over plaintext.
@@ -189,7 +196,7 @@ def request_recipe(endpoint, model, prompt, api_key=None, *, host=None, max_toke
     if response_path is not None:
         # Only the bounded response body, byte for byte: no request headers,
         # credentials or synthetic envelope. Preserve malformed output as evidence.
-        with response_path.open("xb") as out:
+        with open(response_path, "xb", opener=_raw_response_opener) as out:
             out.write(raw)
     result = strict_json(raw)
     return strict_json(result["choices"][0]["message"]["content"])
@@ -219,7 +226,8 @@ def main():
     parser.add_argument("--output", type=Path, required=True, help="new sampler-bank file")
     parser.add_argument("--max-tokens", type=int, help="optional generation cap in 1..8192 tokens")
     parser.add_argument("--no-think", action="store_true", help="append Qwen /no_think instruction (opt-in)")
-    parser.add_argument("--response-output", type=Path, help="new private file for the bounded raw provider response")
+    parser.add_argument("--response-output", type=Path,
+                        help="new raw-response file (POSIX owner-only; Windows ACLs inherited)")
     args = parser.parse_args()
     recipe_path = preflight_outputs(args.output, args.response_output)
     host = strict_json(args.host.read_text(encoding="utf-8"))

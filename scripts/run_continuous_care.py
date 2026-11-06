@@ -14,6 +14,7 @@ import math
 import os
 from pathlib import Path
 import subprocess
+import sys
 import time
 import uuid
 
@@ -36,6 +37,8 @@ NATIVE_INITIALIZATION_NEXT = 'resident-initialization.next'
 SIDECARS = (REQUEST, LOG + '.stdout.log', LOG + '.stderr.log',
             STATE + '.tmp', REQUEST + '.tmp', STATE)
 MAX_LOG_BYTES = 8 * 1024 * 1024
+MAX_RUNTIME_PROFILE_BYTES = 64 * 1024
+FAILURE_STDERR_BYTES = 16 * 1024
 HELPERS = ('run_continuous_care.py', 'run_current_care.py', 'current_checkpoint_store.py',
            'run_mixed_care_serial.py', 'care_host.py',
            'grab_food_seed_reservations.py', 'summarize_ppo_diagnostics.py', 'care_night_window.py')
@@ -231,6 +234,131 @@ def read_events(lane):
     return events
 
 
+def unavailable_runtime_profile(session_nonce, reason):
+    return {'schema': 1, 'kind': 'continuous-runtime-profile-v1',
+            'session_nonce': session_nonce, 'measurement_status': 'unavailable',
+            'unavailable_reason': reason}
+
+
+def valid_runtime_profile(profile, session_nonce):
+    """Validate v1 snapshots and their checked deltas, not canonical state."""
+    def u64(value):
+        return type(value) is int and 0 <= value < 2**64
+
+    def counter_map(value):
+        return isinstance(value, dict) and bool(value) and all(
+            isinstance(key, str) and key and u64(count) for key, count in value.items())
+
+    if not (isinstance(profile, dict) and type(profile.get('schema')) is int and
+            profile['schema'] == 1 and profile.get('kind') == 'continuous-runtime-profile-v1' and
+            u64(profile.get('session_nonce')) and profile['session_nonce'] == session_nonce and
+            u64(profile.get('organism_id')) and u64(profile.get('source_world_seed')) and
+            isinstance(profile.get('scope'), str) and bool(profile['scope']) and
+            profile.get('measurement_status') in ('complete', 'error')):
+        return False
+    peak = 'sleep_journal_pending_entries_peak'
+    initial, final = profile.get('initial'), profile.get('final')
+    for snapshot in (initial, final):
+        if not (isinstance(snapshot, dict) and type(snapshot.get('schema')) is int and
+                snapshot['schema'] == 1 and counter_map(snapshot.get('cumulative')) and
+                u64(snapshot.get('measurement_enabled_at_world_tick')) and
+                u64(snapshot.get('world_tick')) and snapshot.get('delta_excludes') == [peak] and
+                isinstance(snapshot.get('delta_unavailable_fields'), dict) and
+                all(isinstance(snapshot.get(key), str) and snapshot[key]
+                    for key in ('cumulative_origin', 'time_basis')) and
+                all(key in snapshot for key in ('interval_start_world_tick',
+                                                'committed_world_ticks', 'delta'))):
+            return False
+    start, end = initial['world_tick'], final['world_tick']
+    if not (initial['measurement_enabled_at_world_tick'] == start and
+            initial.get('delta_status') == 'initial_snapshot' and
+            initial['interval_start_world_tick'] is None and
+            initial['committed_world_ticks'] is None and initial['delta'] is None and
+            initial['delta_unavailable_fields'] == {} and
+            final['measurement_enabled_at_world_tick'] == start and
+            u64(final['interval_start_world_tick']) and final['interval_start_world_tick'] == start):
+        return False
+    if end < start:
+        return (final.get('delta_status') == 'world_tick_regressed' and
+                final['committed_world_ticks'] is None and final['delta'] is None and
+                final['delta_unavailable_fields'] == {})
+    if not (u64(final['committed_world_ticks']) and final['committed_world_ticks'] == end - start):
+        return False
+    before, after = initial['cumulative'], final['cumulative']
+    if before.keys() != after.keys():
+        return (final.get('delta_status') == 'counter_schema_changed' and final['delta'] is None and
+                final['delta_unavailable_fields'] == {})
+    expected, unavailable = {}, {}
+    for key in after.keys() - {peak}:
+        old, new = before[key], after[key]
+        if old == 2**64 - 1 or new == 2**64 - 1:
+            expected[key], unavailable[key] = None, 'saturated_counter'
+        elif new < old:
+            expected[key], unavailable[key] = None, 'counter_decreased_reset_or_wrap'
+        else:
+            expected[key] = new - old
+    delta = final['delta']
+    return (isinstance(delta, dict) and
+            all(value is None or u64(value) for value in delta.values()) and delta == expected and
+            final['delta_unavailable_fields'] == unavailable and
+            final.get('delta_status') == ('partial' if unavailable else 'complete'))
+
+
+def read_runtime_profile(store, session_nonce):
+    """Optional diagnostics only. Never admit state or fail recovery over them."""
+    missing = unavailable_runtime_profile(session_nonce, 'missing') \
+        if 'ALIFE_FOUNDATION_PROFILE' in os.environ else None
+    path = store / cp.RUN / 'live' / 'runtime-profile.json'
+    try:
+        if not path.exists() and not path.is_symlink():
+            return missing
+        if not cp.real_directory(store / cp.RUN) or not cp.real_directory(path.parent):
+            raise ValueError('profile parent alias')
+        info = cp.regular(path)
+        if info.st_size > MAX_RUNTIME_PROFILE_BYTES:
+            return unavailable_runtime_profile(session_nonce, 'byte_limit')
+        with path.open('rb') as stream:
+            raw = stream.read(MAX_RUNTIME_PROFILE_BYTES + 1)
+        if len(raw) > MAX_RUNTIME_PROFILE_BYTES:
+            return unavailable_runtime_profile(session_nonce, 'byte_limit')
+        profile = json.loads(raw)
+        if not valid_runtime_profile(profile, session_nonce):
+            return unavailable_runtime_profile(session_nonce, 'invalid_report')
+        # Reject non-finite values anywhere, including unknown optional fields.
+        json.dumps(profile, allow_nan=False)
+        return profile
+    except (OSError, ValueError, TypeError, RecursionError, OverflowError):
+        return unavailable_runtime_profile(session_nonce, 'unreadable_or_invalid')
+
+
+def emit_runtime_profile(profile):
+    """One bounded stderr record after retirement; never change its outcome."""
+    if profile is None:
+        return
+    try:
+        if not isinstance(profile, dict):
+            profile = unavailable_runtime_profile(None, 'invalid_report')
+        raw = json.dumps(profile, allow_nan=False, separators=(',', ':')) + '\n'
+        if len(raw.encode()) > MAX_RUNTIME_PROFILE_BYTES:
+            raw = json.dumps(unavailable_runtime_profile(
+                None, 'display_byte_limit'), separators=(',', ':')) + '\n'
+        if sys.stderr is None:
+            return
+        # Bypass Python's buffered stderr: a caught flush failure can leave it
+        # dirty and turn a successful retirement into exit 120 at shutdown.
+        # Unsupported/custom sinks are optional too; do not fall back to a
+        # buffered write, redirect process descriptors, or flush unrelated data.
+        descriptor = sys.stderr.fileno()
+        pending = memoryview(raw.encode())
+        while pending:
+            written = os.write(descriptor, pending)
+            if written == 0:
+                return  # Best-effort diagnostics may be incomplete.
+            pending = pending[written:]
+    except (OSError, ValueError, TypeError, RecursionError, OverflowError, AttributeError):
+        pass  # The canonical result and retirement are already committed.
+
+
 def sidecar_identity(path):
     if not path.exists():
         require(not path.is_symlink(), 'sidecar alias refused')
@@ -245,6 +373,33 @@ def sidecar_identity(path):
 
     require(fields(before) == fields(after), 'sidecar changed while recording retirement')
     return {**fields(after), 'sha256': digest}
+
+
+def failure_stderr_excerpt(lane, expected):
+    """Failure-only bounded diagnostic, bound to the log retired by this receipt."""
+    if expected is None:
+        return {'available': False}
+    import base64
+
+    path = lane / (LOG + '.stderr.log')
+    require(sidecar_identity(path) == expected, 'failure stderr changed before capture')
+    with path.open('rb') as stream:
+        if expected['bytes'] <= FAILURE_STDERR_BYTES:
+            prefix, suffix = stream.read(FAILURE_STDERR_BYTES), b''
+        else:
+            prefix = stream.read(FAILURE_STDERR_BYTES // 2)
+            stream.seek(-FAILURE_STDERR_BYTES // 2, os.SEEK_END)
+            suffix = stream.read(FAILURE_STDERR_BYTES // 2)
+    require(sidecar_identity(path) == expected, 'failure stderr changed during capture')
+    omitted = expected['bytes'] - len(prefix) - len(suffix)
+    return {'available': True, 'source': path.name, 'sha256': expected['sha256'],
+            'bytes': expected['bytes'], 'captured_bytes': len(prefix) + len(suffix),
+            'omitted_bytes': omitted,
+            'prefix_base64': base64.b64encode(prefix).decode('ascii'),
+            'suffix_base64': base64.b64encode(suffix).decode('ascii'),
+            'text': prefix.decode('utf-8', errors='replace') +
+                (f'\n[... {omitted} stderr bytes omitted ...]\n' if omitted else '') +
+                suffix.decode('utf-8', errors='replace')}
 
 
 def committed_retirement(lane, state=None):
@@ -320,13 +475,16 @@ def retire_sidecars(lane, receipt, validate, after_remove=lambda _: None):
     return receipt
 
 
-def reconcile(lane, state, validate):
+def reconcile(lane, state, validate, profile_capture=None):
     """Native and Python publishers never hold the same store lease together."""
     check_pins(state)
     worker = state['worker']
     require(worker['stopped'] or (worker['pid'] is not None and not cp.pid_alive(worker['pid'])),
             'native writer still alive or launch outcome unknown; preserving recovery files')
     store_root = Path(state['store'])
+    if profile_capture is not None and state.get('producer_mode') == 'same_individual':
+        # Read before Native's existing cleanup; keep this only in memory.
+        profile_capture.append(read_runtime_profile(store_root, state['request']['seed_range'][0]))
     native = Path(state['binary'])
     pending_cleanup = None
     initialization_pending = any((store_root / name).exists() or (store_root / name).is_symlink()
@@ -403,7 +561,8 @@ def finish(lane, state, validate):
     committed = committed_retirement(lane, state)
     if committed is not None:
         return retire_sidecars(lane, committed, validate)
-    admitted, digest, recovery, cleanup = reconcile(lane, state, validate)
+    profile_capture = []
+    admitted, digest, recovery, cleanup = reconcile(lane, state, validate, profile_capture)
     events = read_events(lane)
     rows = [e for e in events if e['kind'] == 'resident-provisional-episode-v1']
     updates = [e for e in events if e['kind'] == 'continuous-update-v1']
@@ -445,6 +604,9 @@ def finish(lane, state, validate):
             if e['kind'] == 'continuous-terminal-v1'), None),
         'seed_admission': state.get('seed_admission'),
         'native_exit_code': state.get('native_exit_code'),
+        # A recovered snapshot proves retained state, not how its writer exited.
+        # In particular, loss of the supervisor can leave no observed exit code.
+        'native_exit_observed': state.get('native_exit_code') is not None,
         'recovery': recovery, 'cleanup': cleanup,
         'one_fresh_world': mode == 'fresh_world' and not recovery.get('initialization_aborted', False),
         'same_individual_across_sessions': progress is not None if mode == 'same_individual' else False,
@@ -463,8 +625,14 @@ def finish(lane, state, validate):
             'owner/request changed before committing retirement')
     receipt['retirement'] = {'schema': 1, 'kind': 'finite-continuous-retirement-v1',
         'owner': deepcopy(state), 'sidecars': {name: sidecar_identity(lane / name) for name in SIDECARS}}
+    if state.get('native_exit_error') is not None or state.get('native_exit_code') != 0:
+        receipt['native_failure_stderr'] = failure_stderr_excerpt(
+            lane, receipt['retirement']['sidecars'][LOG + '.stderr.log'])
     cp.write_json(lane / RECEIPT, receipt)
-    return retire_sidecars(lane, receipt, validate)
+    result = retire_sidecars(lane, receipt, validate)
+    if profile_capture:
+        emit_runtime_profile(profile_capture[0])
+    return result
 
 
 def refuse_observed_terminal_resume(lane, current_sha256, mode):

@@ -7,6 +7,7 @@ pub(super) struct CapturedCpuPreparation {
     pub approximate_cache:
         Option<std::sync::Arc<super::approximate_cognition::ApproximateCognitionCache>>,
     pub draft: PerceptionFrameDraft,
+    pub candidate_binding: Option<alife_world::GroundedCandidateBinding>,
     pub sequence_id: ExperienceSequenceId,
     pub homeostasis: HomeostaticSnapshot,
     pub hysteresis: alife_core::HysteresisState,
@@ -80,6 +81,7 @@ fn prepare_cpu_row(job: &CpuPreparationJob<'_>, measure: bool) -> CpuPreparation
     let input = job.input;
     let shared = alife_runtime::canonical_preparation::CanonicalPreparationInput {
         draft: input.draft.clone(),
+        candidate_binding: input.candidate_binding.clone(),
         sequence_id: input.sequence_id,
         homeostasis: input.homeostasis,
         hysteresis: input.hysteresis,

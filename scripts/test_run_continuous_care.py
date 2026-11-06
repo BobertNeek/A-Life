@@ -1,10 +1,13 @@
 """Synthetic host ownership tests; no native process, GPU or world is created."""
 import argparse
+import base64
 import copy
 import datetime as dt
 import json
 import os
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
 from types import SimpleNamespace
 import unittest
@@ -154,7 +157,9 @@ class ContinuousCareTests(unittest.TestCase):
             Path(str(log) + '.stderr.log').write_text('synthetic device warning\n')
 
     def test_one_long_world_full_state_publication_and_bound_cleanup(self):
-        receipt = session.run(self.args())
+        with patch.object(session, 'failure_stderr_excerpt', side_effect=AssertionError('success sampled stderr')):
+            receipt = session.run(self.args())
+        self.assertNotIn('native_failure_stderr', receipt)
         final = cp.read_json(self.store / cp.CURRENT)
         self.assertEqual(final['policy_version'], 41)
         self.assertEqual(final['actor_optimizer_step'], 102)
@@ -168,10 +173,158 @@ class ContinuousCareTests(unittest.TestCase):
         self.assertTrue((self.lane / session.RECEIPT).is_file())
         self.assertEqual(self.child.call_count, 1)
         self.assertEqual(receipt['native_exit_code'], 0)
+        self.assertTrue(receipt['native_exit_observed'])
         self.assertEqual(receipt['retained_trained_rows'], 512)
         self.assertIsNone(receipt['causal_speed'])  # Missing instrumentation is unknown.
         self.assertEqual(receipt['observed_rows'][0]['exact_trained_nourishing_events'], 2)
         self.assertEqual(receipt['observed_rows'][0]['generic_consumed_events'], 3)
+
+    def install_failed_child(self, stderr):
+        self.crash = True
+
+        class FailedProcess(Process):
+            def poll(self):
+                return 1
+
+        def failed(argv, log, deadline, guard, environment, on_started):
+            Path(str(log) + '.stderr.log').write_bytes(stderr)
+            try:
+                self.producer(argv, log, deadline, guard, environment,
+                              lambda _: on_started(FailedProcess()))
+            except RuntimeError:
+                raise RuntimeError('child exit 1; see owned stderr') from None
+
+        self.child.side_effect = failed
+
+    def test_failed_child_original_stderr_survives_normal_retirement(self):
+        original = b'GPU runtime error: core contract error: the GPU-authoritative neural backend is unavailable\n'
+        self.install_failed_child(original)
+        receipt = session.run(self.args())
+        diagnostic = receipt['native_failure_stderr']
+        self.assertEqual(receipt['native_exit_code'], 1)
+        self.assertTrue(receipt['native_exit_observed'])
+        self.assertEqual(receipt['native_exit_error'], 'RuntimeError: child exit 1; see owned stderr')
+        self.assertEqual(diagnostic['text'], original.decode())
+        self.assertEqual(base64.b64decode(diagnostic['prefix_base64']), original)
+        self.assertEqual(diagnostic['suffix_base64'], '')
+        self.assertEqual(diagnostic['omitted_bytes'], 0)
+        self.assertEqual(diagnostic['sha256'],
+                         receipt['retirement']['sidecars'][session.LOG + '.stderr.log']['sha256'])
+        self.assertEqual(cp.read_json(self.lane / session.RECEIPT), receipt)
+        self.assertTrue(all(not (self.lane / name).exists() for name in session.SIDECARS))
+        self.assertFalse((self.store / cp.RUN).exists())
+        self.assertEqual(receipt['retained_trained_rows'], 0)
+        self.assertEqual(receipt['actor_optimizer_step_delta'], 0)
+        self.assertEqual(receipt['value_optimizer_step_delta'], 0)
+        final = cp.read_json(self.store / cp.CURRENT)
+        self.assertEqual({k: final[k] for k in self.initial if k != 'seeds'},
+                         {k: v for k, v in self.initial.items() if k != 'seeds'})
+        self.assertEqual(final['seeds']['pending_range'], [81, 87])
+
+    def test_failure_excerpt_is_bounded_and_keeps_exact_binary_ends(self):
+        path = self.lane / (session.LOG + '.stderr.log')
+        original = b'original error\xff\n' + b'x' * (3 * session.FAILURE_STDERR_BYTES) + b'\nfinal cause\xfe'
+        path.write_bytes(original)
+        result = session.failure_stderr_excerpt(self.lane, session.sidecar_identity(path))
+        half = session.FAILURE_STDERR_BYTES // 2
+        self.assertEqual(base64.b64decode(result['prefix_base64']), original[:half])
+        self.assertEqual(base64.b64decode(result['suffix_base64']), original[-half:])
+        self.assertEqual(result['captured_bytes'], session.FAILURE_STDERR_BYTES)
+        self.assertEqual(result['omitted_bytes'], len(original) - session.FAILURE_STDERR_BYTES)
+        self.assertIn('original error', result['text'])
+        self.assertIn('final cause', result['text'])
+        self.assertLess(len(cp.encode_json(result)), 8 * session.FAILURE_STDERR_BYTES)
+        self.assertEqual(path.read_bytes(), original)
+        expected = session.sidecar_identity(path)
+        path.write_bytes(b'changed writer')
+        with self.assertRaisesRegex(ValueError, 'changed before capture'):
+            session.failure_stderr_excerpt(self.lane, expected)
+        self.assertEqual(path.read_bytes(), b'changed writer')
+        self.assertEqual(session.failure_stderr_excerpt(self.lane, None), {'available': False})
+
+    def test_failure_receipt_write_interruption_keeps_log_for_recovery(self):
+        original = b'original startup error\n'
+        self.install_failed_child(original)
+        write = cp.write_json
+
+        def interrupted(path, value):
+            # The launcher canonicalizes the lane; Windows temporary paths can
+            # use an 8.3 alias that resolves to the same directory.
+            if path == self.lane.resolve() / session.RECEIPT:
+                raise RuntimeError('before final receipt commit')
+            return write(path, value)
+
+        with patch.object(cp, 'write_json', side_effect=interrupted):
+            with self.assertRaisesRegex(RuntimeError, 'before final receipt commit'):
+                session.run(self.args())
+        self.assertEqual((self.lane / (session.LOG + '.stderr.log')).read_bytes(), original)
+        self.assertFalse((self.lane / session.RECEIPT).exists())
+        args = self.args()
+        args.reconcile = True
+        recovered = session.run(args)
+        self.assertEqual(recovered['native_failure_stderr']['text'], original.decode())
+        self.assertEqual(self.child.call_count, 1)
+
+    def test_failure_diagnostic_survives_interrupted_log_removal_without_resampling(self):
+        original = b'original startup error\n'
+        self.install_failed_child(original)
+        retire = session.retire_sidecars
+
+        def interrupted(lane, receipt, validate):
+            def removed(name):
+                if name == session.LOG + '.stderr.log':
+                    raise RuntimeError('after stderr removal')
+            return retire(lane, receipt, validate, after_remove=removed)
+
+        with patch.object(session, 'retire_sidecars', side_effect=interrupted):
+            with self.assertRaisesRegex(RuntimeError, 'after stderr removal'):
+                session.run(self.args())
+        self.assertFalse((self.lane / (session.LOG + '.stderr.log')).exists())
+        committed = cp.read_json(self.lane / session.RECEIPT)
+        self.assertEqual(committed['native_failure_stderr']['text'], original.decode())
+        args = self.args()
+        args.reconcile = True
+        with patch.object(session, 'failure_stderr_excerpt', side_effect=AssertionError('resampled log')):
+            self.assertEqual(session.run(args), committed)
+        self.assertEqual(self.child.call_count, 1)
+        self.assertTrue(all(not (self.lane / name).exists() for name in session.SIDECARS))
+
+    def test_reconciliation_without_exit_observation_preserves_diagnostics_not_a_cause(self):
+        # Materialize a stopped run, then model loss of the supervisor before
+        # its final exit observation became durable. No second life is launched.
+        with patch.object(session, 'finish', side_effect=RuntimeError('owner interrupted')):
+            with self.assertRaisesRegex(RuntimeError, 'owner interrupted'):
+                session.run(self.args())
+        original = b'last native diagnostic before lost owner\xff\n'
+        stderr = self.lane / (session.LOG + '.stderr.log')
+        stderr.write_bytes(original)
+        state = cp.read_json(self.lane / session.STATE)
+        state.pop('native_exit_code')
+        state.pop('native_exit_error', None)
+        state['worker']['stopped'] = False
+        cp.write_json(self.lane / session.STATE, state)
+        args = self.args()
+        args.reconcile = True
+        with patch.object(cp, 'pid_alive', return_value=True):
+            with self.assertRaisesRegex(ValueError, 'native writer still alive'):
+                session.run(args)
+        self.assertEqual(stderr.read_bytes(), original)
+        self.assertFalse((self.lane / session.RECEIPT).exists())
+        self.assertEqual(cp.read_json(self.store / cp.CURRENT), self.initial)
+        with patch.object(cp, 'pid_alive', return_value=False):
+            receipt = session.run(args)
+        self.assertFalse(receipt['native_exit_observed'])
+        self.assertIsNone(receipt['native_exit_code'])
+        self.assertIsNone(receipt['native_exit_error'])
+        self.assertEqual(base64.b64decode(receipt['native_failure_stderr']['prefix_base64']), original)
+        self.assertEqual(receipt['retained_trained_rows'], 512)
+        self.assertEqual(receipt['actor_optimizer_step_delta'], 2)
+        self.assertEqual(receipt['value_optimizer_step_delta'], 3)
+        self.assertEqual(self.child.call_count, 1)
+        self.assertFalse((self.store / cp.RUN).exists())
+        self.assertTrue(all(not (self.lane / name).exists() for name in session.SIDECARS))
+        with patch.object(cp, 'pid_alive', return_value=False):
+            self.assertEqual(session.run(args), receipt)  # Committed retry needs no logs.
 
     def test_mid_world_loss_retains_baseline_learning_and_consumes_seed(self):
         self.crash = True
@@ -460,6 +613,298 @@ class ContinuousCareTests(unittest.TestCase):
                 'trained_rows': 512} for i in range(3)]
             Path(str(log) + '.stdout.log').write_text(''.join(json.dumps(e)+'\n' for e in events))
             Path(str(log) + '.stderr.log').write_text('')
+
+    def runtime_profile_fixture(self, nonce=80):
+        return {'schema': 1, 'kind': 'continuous-runtime-profile-v1',
+                'session_nonce': nonce, 'measurement_status': 'complete',
+                'organism_id': 1, 'source_world_seed': 80, 'scope': 'synthetic runtime boundary',
+                'initial': {'schema': 1, 'delta_status': 'initial_snapshot', 'delta': None,
+                            'measurement_enabled_at_world_tick': 10, 'world_tick': 10,
+                            'interval_start_world_tick': None, 'committed_world_ticks': None,
+                            'cumulative_origin': 'synthetic existing counters',
+                            'time_basis': 'synthetic host wall nanoseconds',
+                            'delta_excludes': ['sleep_journal_pending_entries_peak'],
+                            'delta_unavailable_fields': {},
+                            'cumulative': {'tick_calls': 0}},
+                'final': {'schema': 1, 'delta_status': 'partial', 'delta': {'tick_calls': None},
+                          'measurement_enabled_at_world_tick': 10, 'world_tick': 11,
+                          'interval_start_world_tick': 10, 'committed_world_ticks': 1,
+                          'cumulative_origin': 'synthetic existing counters',
+                          'time_basis': 'synthetic host wall nanoseconds',
+                          'delta_excludes': ['sleep_journal_pending_entries_peak'],
+                          'cumulative': {'tick_calls': 2**64 - 1},
+                          'delta_unavailable_fields': {'tick_calls': 'saturated_counter'}}}
+
+    def profile_path(self):
+        parent = self.store / cp.RUN / 'live'
+        parent.mkdir(parents=True, exist_ok=True)
+        return parent / 'runtime-profile.json'
+
+    def profiled_producer(self, *args, **kwargs):
+        self.continuous_producer(*args, **kwargs)
+        self.profile_path().write_text(json.dumps(self.runtime_profile_fixture()))
+
+    def test_runtime_profile_missing_is_unknown_and_flag_presence_matches_profiling(self):
+        with patch.dict(os.environ):
+            os.environ.pop('ALIFE_FOUNDATION_PROFILE', None)
+            self.assertIsNone(session.read_runtime_profile(self.store, 80))
+            os.environ['ALIFE_FOUNDATION_PROFILE'] = '0'  # Existing presence semantics.
+            self.assertEqual(session.read_runtime_profile(self.store, 80)['measurement_status'], 'unavailable')
+            self.assertNotIn('initial', session.read_runtime_profile(self.store, 80))
+
+    def test_runtime_profile_parser_preserves_zero_unknown_and_error_values(self):
+        path = self.profile_path()
+        for status in ('complete', 'error'):
+            profile = self.runtime_profile_fixture()
+            profile['measurement_status'] = status
+            path.write_text(json.dumps(profile))
+            before = path.read_bytes()
+            self.assertEqual(session.read_runtime_profile(self.store, 80), profile)
+            self.assertEqual(path.read_bytes(), before)
+        for change in ({'schema': 2}, {'session_nonce': 81}, {'initial': None},
+                       {'final': {'cumulative': {'tick_calls': True}}},
+                       {'final': {'cumulative': {'tick_calls': -1}}}):
+            profile = self.runtime_profile_fixture()
+            profile.update(change)
+            path.write_text(json.dumps(profile))
+            result = session.read_runtime_profile(self.store, 80)
+            self.assertEqual(result['measurement_status'], 'unavailable')
+            self.assertNotIn('initial', result)
+        path.write_text('{partial')
+        self.assertEqual(session.read_runtime_profile(self.store, 80)['measurement_status'], 'unavailable')
+
+    def test_runtime_profile_parser_and_display_are_independently_bounded(self):
+        path = self.profile_path()
+        path.write_bytes(b'x' * (session.MAX_RUNTIME_PROFILE_BYTES + 1))
+        self.assertEqual(session.read_runtime_profile(self.store, 80)['unavailable_reason'], 'byte_limit')
+        oversized = {'session_nonce': 'x' * session.MAX_RUNTIME_PROFILE_BYTES,
+                     'data': 'x' * session.MAX_RUNTIME_PROFILE_BYTES}
+        with tempfile.TemporaryFile() as stream:
+            with patch.object(session.sys, 'stderr', stream):
+                session.emit_runtime_profile(oversized)
+            stream.seek(0)
+            raw = stream.read()
+        self.assertLessEqual(len(raw), session.MAX_RUNTIME_PROFILE_BYTES)
+        self.assertEqual(json.loads(raw)['measurement_status'], 'unavailable')
+
+    def test_runtime_profile_parser_rejects_nested_schema_and_delta_corruption(self):
+        path = self.profile_path()
+        changes = [
+            (('organism_id',), True), (('source_world_seed',), -1), (('scope',), None),
+            (('initial', 'schema'), 999), (('final', 'schema'), True),
+            (('initial', 'delta_status'), 'complete'),
+            (('initial', 'interval_start_world_tick'), 0),
+            (('initial', 'committed_world_ticks'), 0),
+            (('initial', 'delta'), {}),
+            (('initial', 'delta_unavailable_fields'), {'tick_calls': 'unknown'}),
+            (('final', 'measurement_enabled_at_world_tick'), 9),
+            (('final', 'interval_start_world_tick'), True),
+            (('final', 'committed_world_ticks'), True),
+            (('final', 'committed_world_ticks'), 2),
+            (('final', 'world_tick'), -1), (('final', 'world_tick'), 2**64),
+            (('final', 'delta_status'), 'unrecognized'),
+            (('final', 'delta_status'), 'complete'),
+            (('final', 'delta'), {'tick_calls': -1}),
+            (('final', 'delta'), {'tick_calls': True}),
+            (('final', 'delta'), {'tick_calls': 2**64}),
+            (('final', 'delta'), {}),
+            (('final', 'delta_unavailable_fields'), {}),
+            (('final', 'delta_unavailable_fields'), {'tick_calls': 'non_u64_counter'}),
+            (('final', 'delta_excludes'), []), (('final', 'cumulative_origin'), 1),
+            (('final', 'time_basis'), None),
+            (('final', 'cumulative'), {'tick_calls': float('nan')}),
+            (('unexpected',), float('inf')),
+        ]
+        for keys, value in changes:
+            profile = self.runtime_profile_fixture()
+            destination = profile
+            for key in keys[:-1]:
+                destination = destination[key]
+            destination[keys[-1]] = value
+            with self.subTest(keys=keys, value=value):
+                path.write_text(json.dumps(profile))
+                before = path.read_bytes()
+                report = session.read_runtime_profile(self.store, 80)
+                self.assertEqual(report['measurement_status'], 'unavailable')
+                self.assertNotIn('initial', report)
+                self.assertEqual(path.read_bytes(), before)
+
+    def test_runtime_profile_parser_checks_deltas_and_preserves_supported_unknowns(self):
+        path = self.profile_path()
+        profile = self.runtime_profile_fixture()
+        final = profile['final']
+        for old, new, delta, status, reasons in (
+                (0, 0, {'tick_calls': 0}, 'complete', {}),
+                (2, 5, {'tick_calls': 3}, 'complete', {}),
+                (5, 2, {'tick_calls': None}, 'partial',
+                 {'tick_calls': 'counter_decreased_reset_or_wrap'}),
+                (2**64 - 1, 0, {'tick_calls': None}, 'partial',
+                 {'tick_calls': 'saturated_counter'})):
+            profile['initial']['cumulative']['tick_calls'] = old
+            final.update(cumulative={'tick_calls': new}, delta=delta,
+                         delta_status=status, delta_unavailable_fields=reasons)
+            path.write_text(json.dumps(profile))
+            self.assertEqual(session.read_runtime_profile(self.store, 80), profile)
+            final['delta'] = {'tick_calls': 1}  # Even a nonnegative fabricated delta is invalid.
+            path.write_text(json.dumps(profile))
+            self.assertEqual(session.read_runtime_profile(self.store, 80)['measurement_status'], 'unavailable')
+        final.update(cumulative={'new_counter': 0}, delta=None,
+                     delta_status='counter_schema_changed', delta_unavailable_fields={})
+        path.write_text(json.dumps(profile))
+        self.assertEqual(session.read_runtime_profile(self.store, 80), profile)
+        final.update(world_tick=9, committed_world_ticks=None, delta_status='world_tick_regressed')
+        path.write_text(json.dumps(profile))
+        self.assertEqual(session.read_runtime_profile(self.store, 80), profile)
+        final['delta'] = {}  # Unavailable whole intervals must not masquerade as measured zero.
+        path.write_text(json.dumps(profile))
+        self.assertEqual(session.read_runtime_profile(self.store, 80)['measurement_status'], 'unavailable')
+
+    @unittest.skipIf(os.name == 'nt', 'Unix symlink fixture; no Windows privilege assumed')
+    def test_runtime_profile_parser_does_not_follow_a_profile_alias(self):
+        path = self.profile_path()
+        target = self.root / 'foreign.json'
+        target.write_text(json.dumps(self.runtime_profile_fixture()))
+        path.symlink_to(target)
+        before = target.read_bytes()
+        self.assertEqual(session.read_runtime_profile(self.store, 80)['measurement_status'], 'unavailable')
+        self.assertEqual(target.read_bytes(), before)
+
+    def test_runtime_profile_display_failures_are_nonfatal(self):
+        class Broken:
+            def write(self, _):
+                raise OSError('synthetic diagnostic sink failure')
+        for stream in (None, Broken()):
+            with self.subTest(stream=type(stream).__name__), patch.object(session.sys, 'stderr', stream):
+                session.emit_runtime_profile(self.runtime_profile_fixture())
+
+    def test_runtime_profile_display_handles_short_descriptor_writes(self):
+        expected = (json.dumps(self.runtime_profile_fixture(), allow_nan=False,
+                               separators=(',', ':')) + '\n').encode()
+        with tempfile.TemporaryFile() as stream:
+            write = os.write
+            with patch.object(session.sys, 'stderr', stream), \
+                    patch.object(session.os, 'write', side_effect=lambda fd, data: write(fd, data[:7])):
+                session.emit_runtime_profile(self.runtime_profile_fixture())
+            stream.seek(0)
+            self.assertEqual(stream.read(), expected)
+
+    def test_runtime_profile_closed_pipe_does_not_change_retired_subprocess_exit(self):
+        # Real interpreter finalization is essential: a fake Broken.write cannot
+        # expose a dirty TextIOWrapper buffer that changes exit status to 120.
+        code = '''
+import json, sys
+from unittest.mock import patch
+import test_run_continuous_care as fixtures
+import run_continuous_care as session
+import current_checkpoint_store as cp
+case = fixtures.ContinuousCareTests()
+case.setUp()
+try:
+    report = (session.unavailable_runtime_profile(80, 'missing')
+              if sys.argv[1] == 'unavailable' else case.runtime_profile_fixture())
+    report['padding'] = 'x' * int(sys.argv[2])
+    emit = session.emit_runtime_profile
+    def after_retirement(profile):
+        assert not (case.store / cp.RUN).exists()
+        assert not (case.lane / session.STATE).exists()
+        assert cp.read_json(case.lane / session.RECEIPT)['retained_trained_rows'] == 1024
+        emit(report)
+    with patch.object(session.current, 'tool', side_effect=case.live_native), \\
+            patch.object(session.host, 'run_child', side_effect=case.profiled_producer), \\
+            patch.object(session, 'emit_runtime_profile', side_effect=after_retirement):
+        result = session.run(case.live_args())
+    assert result == cp.read_json(case.lane / session.RECEIPT)
+    assert result['after']['policy_version'] == 42
+    print('NORMAL_RESULT', flush=True)
+finally:
+    case.doCleanups()
+'''
+        for status in ('complete', 'unavailable'):
+            for padding in (0, 100, 4100, session.MAX_RUNTIME_PROFILE_BYTES):
+                with self.subTest(status=status, padding=padding):
+                    reader, writer = os.pipe()
+                    os.close(reader)
+                    try:
+                        result = subprocess.run(
+                            [sys.executable, '-B', '-c', code, status, str(padding)],
+                            cwd=Path(__file__).resolve().parent, stderr=writer,
+                            stdout=subprocess.PIPE, timeout=30, check=False)
+                    finally:
+                        os.close(writer)
+                    # Normal stdout uses the platform's native line ending.
+                    self.assertEqual(result.stdout.splitlines(), [b'NORMAL_RESULT'])
+                    self.assertEqual(result.returncode, 0)
+
+    def test_runtime_profile_is_displayed_after_retirement_and_never_committed(self):
+        profiles = []
+        def capture(profile):
+            self.assertFalse((self.store / cp.RUN).exists())
+            self.assertFalse((self.lane / session.STATE).exists())
+            committed = cp.read_json(self.lane / session.RECEIPT)
+            self.assertEqual(committed['retained_trained_rows'], 1024)
+            self.assertNotIn('runtime_profile', committed)
+            profiles.append(profile)
+        with patch.object(session.current, 'tool', side_effect=self.live_native), \
+                patch.object(session.host, 'run_child', side_effect=self.profiled_producer), \
+                patch.object(session, 'emit_runtime_profile', side_effect=capture):
+            receipt = session.run(self.live_args())
+        self.assertEqual(profiles, [self.runtime_profile_fixture()])
+        self.assertEqual(receipt, cp.read_json(self.lane / session.RECEIPT))
+        self.assertEqual(receipt['after']['policy_version'], 42)
+
+    def test_runtime_profile_sink_failure_keeps_the_retired_result(self):
+        class Broken:
+            def write(self, _):
+                raise OSError('synthetic diagnostic sink failure')
+        with patch.object(session.current, 'tool', side_effect=self.live_native), \
+                patch.object(session.host, 'run_child', side_effect=self.profiled_producer), \
+                patch.object(session.sys, 'stderr', Broken()):
+            receipt = session.run(self.live_args())
+        self.assertEqual(receipt['retained_trained_rows'], 1024)
+        self.assertEqual(receipt, cp.read_json(self.lane / session.RECEIPT))
+        self.assertFalse((self.store / cp.RUN).exists())
+
+    def test_runtime_profile_keeps_native_log_limits_in_both_modes(self):
+        path = self.lane / (session.LOG + '.stdout.log')
+        profile = self.profile_path()
+        profile.write_text(json.dumps(self.runtime_profile_fixture()))
+        packet = json.dumps({'kind': 'continuous-update-v1', 'trained_rows': 512,
+                             'scope': 'synthetic parser fixture'}) + '\n'
+        for count in (1954, 19532):  # Million- and ten-million-decision window counts.
+            data = (packet * count).encode()
+            self.assertLess(len(data), session.MAX_LOG_BYTES)
+            path.write_bytes(data)
+            for enabled in (False, True):
+                with patch.dict(os.environ):
+                    if enabled:
+                        os.environ['ALIFE_FOUNDATION_PROFILE'] = '1'
+                    else:
+                        os.environ.pop('ALIFE_FOUNDATION_PROFILE', None)
+                    self.assertEqual(len(session.read_events(self.lane)), count)
+                    self.assertEqual(session.read_runtime_profile(self.store, 80), self.runtime_profile_fixture())
+                    self.assertEqual(path.read_bytes(), data)
+        data = packet.encode() * 1954
+        data += b'w' * (session.MAX_LOG_BYTES - len(data) - 1) + b'\n'
+        self.assertEqual(len(data), session.MAX_LOG_BYTES)
+        path.write_bytes(data)
+        self.assertEqual(len(session.read_events(self.lane)), 1954)
+        path.write_bytes(data + b'x')
+        with self.assertRaisesRegex(ValueError, 'oversized native log'):
+            session.read_events(self.lane)
+
+    def test_runtime_profile_loss_during_cleanup_does_not_change_retry_authority(self):
+        with patch.object(session.current, 'tool', side_effect=self.live_native), \
+                patch.object(session.host, 'run_child', side_effect=self.profiled_producer), \
+                patch.object(session, 'retire_sidecars', side_effect=RuntimeError('after core commit')):
+            with self.assertRaisesRegex(RuntimeError, 'after core commit'):
+                session.run(self.live_args())
+        committed = cp.read_json(self.lane / session.RECEIPT)
+        self.assertNotIn('runtime_profile', committed)
+        self.assertFalse((self.store / cp.RUN).exists())
+        args = self.live_args()
+        args.reconcile = True
+        with patch.object(session.current, 'tool', side_effect=self.live_native):
+            self.assertEqual(session.run(args), committed)
 
     def test_default_plan_is_same_individual_without_store_access_or_seed_allocation(self):
         result = session.main(['--store', 'absent-store', '--lane', 'absent-owner',

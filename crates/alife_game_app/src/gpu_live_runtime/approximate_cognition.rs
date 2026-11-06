@@ -180,7 +180,8 @@ pub(super) fn prepare_row(job: &CpuPreparationJob<'_>, measure: bool) -> CpuPrep
             input.policy,
         )?;
         hysteresis = Some(attention.hysteresis);
-        let routed = route_focal_candidates(draft, &attention)?;
+        let routed =
+            route_observed_focal_candidates(draft, &attention, input.candidate_binding.as_ref())?;
         let novelty = attention
             .focal_targets
             .first()

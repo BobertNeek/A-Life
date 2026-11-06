@@ -1636,8 +1636,13 @@ impl GpuDeviceFactory for WgpuDeviceFactory {
         adapter: &wgpu::Adapter,
         descriptor: &wgpu::DeviceDescriptor<'_>,
     ) -> Result<(wgpu::Device, wgpu::Queue), ScaffoldContractError> {
-        pollster::block_on(adapter.request_device(descriptor))
-            .map_err(|_| ScaffoldContractError::NeuralBackendUnavailable)
+        crate::startup_diagnostics::prepare();
+        crate::startup_diagnostics::request_device_result(
+            pollster::block_on(adapter.request_device(descriptor)),
+            || crate::startup_diagnostics::AdapterContext::from_info(&adapter.get_info()),
+            descriptor.label.unwrap_or("unlabeled"),
+            crate::startup_diagnostics::emit,
+        )
     }
 }
 
@@ -2700,6 +2705,33 @@ fn compile_v11_slot_upload(
         }
     }
     Ok(upload)
+}
+
+impl GpuLiveTopologyCheckpointV1 {
+    /// Device-free projection through the same fixed-slot compiler used by
+    /// native restore. Physical offsets and slot generations are not identities.
+    pub fn recompile_for_phenotype(
+        phenotype: &BrainPhenotype,
+        checkpoint: GpuV11Checkpoint,
+    ) -> Result<Self, ScaffoldContractError> {
+        let capacity = BrainCapacityClass::production_for_id(phenotype.brain_class_id())?;
+        phenotype.validate_against(&capacity)?;
+        // One bounded CPU plan only; native admission still enforces its actual
+        // device budget. This method creates no device or GPU allocation.
+        let plan =
+            GpuFixedClassArenaPlan::new(capacity, 1, u64::MAX).map_err(map_gpu_contract_error)?;
+        let base = plan
+            .prepare_slot_upload(0, 1, phenotype)
+            .map_err(map_gpu_contract_error)?;
+        let state = GpuV11CausalState::restore(checkpoint)?;
+        let upload = compile_v11_slot_upload(&plan, base.brain_slot(), phenotype, &state)
+            .map_err(map_gpu_contract_error)?;
+        let result = upload
+            .live_topology_checkpoint(phenotype.phenotype_hash(), state.checkpoint())
+            .map_err(map_gpu_contract_error)?;
+        result.validate_for_capacity(&capacity)?;
+        Ok(result)
+    }
 }
 
 pub struct GpuClosedLoopBackend {
@@ -6378,8 +6410,14 @@ fn acquire_required_gpu(
         };
         let lost = Arc::new(AtomicBool::new(false));
         let callback_lost = Arc::clone(&lost);
-        device.set_device_lost_callback(move |_reason, _message| {
-            callback_lost.store(true, Ordering::Release);
+        let callback_context = crate::startup_diagnostics::AdapterContext::from_info(&info);
+        device.set_device_lost_callback(move |reason, _message| {
+            crate::startup_diagnostics::device_lost(
+                &callback_lost,
+                callback_context,
+                reason,
+                crate::startup_diagnostics::emit,
+            );
         });
         let hardware = build_hardware_receipt(
             &info,

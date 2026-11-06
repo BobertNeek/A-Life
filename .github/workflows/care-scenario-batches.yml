@@ -1,0 +1,41 @@
+name: Disposable scenario batches
+on:
+  pull_request:
+    paths:
+      - 'scripts/care_scenario_batches.py'
+      - 'scripts/care_scenario_dispatch.py'
+      - 'scripts/test_care_scenario_batches.py'
+      - 'scripts/test_care_scenario_dispatch.py'
+      - 'scripts/care_frontier_sampler.py'
+      - 'scripts/import_care_scenario_recipe.py'
+      - 'scripts/llm_care_scenarios.py'
+      - 'scripts/compare_cpu_care_rounds.py'
+      - '.github/workflows/care-scenario-batches.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/care_scenario_batches.py'
+      - 'scripts/care_scenario_dispatch.py'
+      - 'scripts/test_care_scenario_batches.py'
+      - 'scripts/test_care_scenario_dispatch.py'
+      - 'scripts/care_frontier_sampler.py'
+      - 'scripts/import_care_scenario_recipe.py'
+      - 'scripts/llm_care_scenarios.py'
+      - 'scripts/compare_cpu_care_rounds.py'
+      - '.github/workflows/care-scenario-batches.yml'
+permissions:
+  contents: read
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -B -m unittest discover -s scripts -p 'test_care_scenario_*.py' -v
+      - run: python -B -m unittest discover -s scripts -p 'test_care_frontier_sampler.py' -v
+      - run: python -B -m unittest discover -s scripts -p 'test_import_care_scenario_recipe.py' -v
+      - run: python -B scripts/care_scenario_batches.py --help
+      - run: python -B scripts/care_scenario_dispatch.py --help

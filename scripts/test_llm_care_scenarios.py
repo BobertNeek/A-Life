@@ -1,5 +1,6 @@
 import copy
 import os
+import stat
 import tempfile
 from pathlib import Path
 from run_care_frontier_fixture import Pilot
@@ -8,7 +9,7 @@ from unittest.mock import patch
 import json
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from llm_care_scenarios import main, request_recipe, recipe_schema, strict_json
+from llm_care_scenarios import main, request_recipe, recipe_schema, strict_json, _raw_response_opener
 from llm_care_scenarios import LEGEND, RANDOM_ROLL, compile_recipe
 from care_frontier_sampler import select
 
@@ -223,6 +224,115 @@ class RecipeTests(unittest.TestCase):
                 self.assertEqual(len(calls), before + 1)
         finally:
             server.shutdown(); thread.join(); server.server_close()
+
+    @unittest.skipUnless(os.name == 'posix', 'POSIX creation-mode contract')
+    def test_raw_capture_is_owner_only_under_permissive_umask(self):
+        recipe, _ = fixtures()
+        valid = json.dumps({'choices': [{'message': {'content': json.dumps(recipe)}}]}).encode()
+        for mask in (0o000, 0o022, 0o077):
+            for raw in (valid, b'not a JSON envelope\n'):
+                with self.subTest(umask=oct(mask), valid=raw == valid), tempfile.TemporaryDirectory() as tmp:
+                    path = Path(tmp) / 'response.raw'
+                    with patch('llm_care_scenarios.urllib.request.build_opener') as transport:
+                        transport.return_value.open.return_value.__enter__.return_value.read.return_value = raw
+                        previous = os.umask(mask)
+                        try:
+                            if raw == valid:
+                                self.assertEqual(request_recipe('http://127.0.0.1:1/mock', 'test', 'prompt',
+                                                                response_output=path), recipe)
+                            else:
+                                with self.assertRaises(ValueError):
+                                    request_recipe('http://127.0.0.1:1/mock', 'test', 'prompt', response_output=path)
+                        finally:
+                            os.umask(previous)
+                        transport.return_value.open.assert_called_once()
+                    self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+                    self.assertEqual(path.read_bytes(), raw)
+
+    @unittest.skipUnless(os.name == 'posix', 'POSIX symlink and creation-mode contract')
+    def test_raw_capture_preserves_existing_files_and_symlinks_even_after_preflight(self):
+        recipe, _ = fixtures()
+        raw = json.dumps({'choices': [{'message': {'content': json.dumps(recipe)}}]}).encode()
+        for raced in (False, True):
+            for kind in ('file', 'symlink', 'dangling_symlink'):
+                with self.subTest(raced=raced, kind=kind), tempfile.TemporaryDirectory() as tmp:
+                    root = Path(tmp)
+                    path, target = root / 'response.raw', root / 'target'
+                    target.write_bytes(b'preserve target')
+                    target.chmod(0o640)
+                    link_target = target if kind == 'symlink' else root / 'missing'
+
+                    def install_collision(*_):
+                        if kind == 'file':
+                            path.write_bytes(b'preserve existing response')
+                            path.chmod(0o644)
+                        else:
+                            path.symlink_to(link_target)
+                        return raw
+
+                    if not raced:
+                        install_collision()
+                    with patch('llm_care_scenarios.urllib.request.build_opener') as transport:
+                        response = transport.return_value.open.return_value.__enter__.return_value
+                        response.read.side_effect = install_collision if raced else lambda *_: raw
+                        with self.assertRaises(FileExistsError):
+                            request_recipe('http://127.0.0.1:1/mock', 'test', 'prompt', response_output=path)
+                        if raced:
+                            transport.return_value.open.assert_called_once()
+                            response.read.assert_called_once_with(1_000_001)
+                        else:
+                            transport.assert_not_called()
+                    self.assertEqual(target.read_bytes(), b'preserve target')
+                    self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o640)
+                    if kind == 'file':
+                        self.assertEqual(path.read_bytes(), b'preserve existing response')
+                        self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o644)
+                    else:
+                        self.assertTrue(path.is_symlink())
+                        self.assertEqual(os.readlink(path), str(link_target))
+                    self.assertFalse((root / 'missing').exists())
+
+    def test_raw_capture_write_failure_closes_stream_and_preserves_partial_file(self):
+        raw = b'bounded response bytes'
+        streams = []
+
+        class FailingWriter:
+            def __init__(self, *args, **kwargs):
+                self.stream = open(*args, **kwargs)
+                streams.append(self.stream)
+
+            def __enter__(self):
+                self.stream.__enter__()
+                return self
+
+            def write(self, data):
+                self.stream.write(data[:5])
+                raise OSError('injected write failure')
+
+            def __exit__(self, *args):
+                return self.stream.__exit__(*args)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'response.raw'
+            with patch('llm_care_scenarios.urllib.request.build_opener') as transport, \
+                    patch('llm_care_scenarios.open', side_effect=FailingWriter, create=True):
+                transport.return_value.open.return_value.__enter__.return_value.read.return_value = raw
+                with self.assertRaisesRegex(OSError, 'injected write failure'):
+                    request_recipe('http://127.0.0.1:1/mock', 'test', 'prompt', response_output=path)
+                transport.return_value.open.assert_called_once()
+            self.assertEqual(len(streams), 1)
+            self.assertTrue(streams[0].closed)
+            self.assertEqual(path.read_bytes(), raw[:5])
+            if os.name == 'posix':
+                self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+
+    def test_raw_capture_opener_preserves_non_posix_mode_and_flags(self):
+        # This checks flag/mode forwarding only, not actual Windows ACL privacy.
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, 'O_BINARY', 0)
+        with patch('llm_care_scenarios.os.name', 'nt'), \
+                patch('llm_care_scenarios.os.open', return_value=73) as create:
+            self.assertEqual(_raw_response_opener('response.raw', flags), 73)
+        create.assert_called_once_with('response.raw', flags, 0o666)
 
     def test_cli_output_collisions_fail_before_model_request(self):
         _, host = fixtures()
