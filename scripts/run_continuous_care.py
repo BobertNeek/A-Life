@@ -240,6 +240,70 @@ def unavailable_runtime_profile(session_nonce, reason):
             'unavailable_reason': reason}
 
 
+def valid_runtime_profile(profile, session_nonce):
+    """Validate v1 snapshots and their checked deltas, not canonical state."""
+    def u64(value):
+        return type(value) is int and 0 <= value < 2**64
+
+    def counter_map(value):
+        return isinstance(value, dict) and bool(value) and all(
+            isinstance(key, str) and key and u64(count) for key, count in value.items())
+
+    if not (isinstance(profile, dict) and type(profile.get('schema')) is int and
+            profile['schema'] == 1 and profile.get('kind') == 'continuous-runtime-profile-v1' and
+            u64(profile.get('session_nonce')) and profile['session_nonce'] == session_nonce and
+            u64(profile.get('organism_id')) and u64(profile.get('source_world_seed')) and
+            isinstance(profile.get('scope'), str) and bool(profile['scope']) and
+            profile.get('measurement_status') in ('complete', 'error')):
+        return False
+    peak = 'sleep_journal_pending_entries_peak'
+    initial, final = profile.get('initial'), profile.get('final')
+    for snapshot in (initial, final):
+        if not (isinstance(snapshot, dict) and type(snapshot.get('schema')) is int and
+                snapshot['schema'] == 1 and counter_map(snapshot.get('cumulative')) and
+                u64(snapshot.get('measurement_enabled_at_world_tick')) and
+                u64(snapshot.get('world_tick')) and snapshot.get('delta_excludes') == [peak] and
+                isinstance(snapshot.get('delta_unavailable_fields'), dict) and
+                all(isinstance(snapshot.get(key), str) and snapshot[key]
+                    for key in ('cumulative_origin', 'time_basis')) and
+                all(key in snapshot for key in ('interval_start_world_tick',
+                                                'committed_world_ticks', 'delta'))):
+            return False
+    start, end = initial['world_tick'], final['world_tick']
+    if not (initial['measurement_enabled_at_world_tick'] == start and
+            initial.get('delta_status') == 'initial_snapshot' and
+            initial['interval_start_world_tick'] is None and
+            initial['committed_world_ticks'] is None and initial['delta'] is None and
+            initial['delta_unavailable_fields'] == {} and
+            final['measurement_enabled_at_world_tick'] == start and
+            u64(final['interval_start_world_tick']) and final['interval_start_world_tick'] == start):
+        return False
+    if end < start:
+        return (final.get('delta_status') == 'world_tick_regressed' and
+                final['committed_world_ticks'] is None and final['delta'] is None and
+                final['delta_unavailable_fields'] == {})
+    if not (u64(final['committed_world_ticks']) and final['committed_world_ticks'] == end - start):
+        return False
+    before, after = initial['cumulative'], final['cumulative']
+    if before.keys() != after.keys():
+        return (final.get('delta_status') == 'counter_schema_changed' and final['delta'] is None and
+                final['delta_unavailable_fields'] == {})
+    expected, unavailable = {}, {}
+    for key in after.keys() - {peak}:
+        old, new = before[key], after[key]
+        if old == 2**64 - 1 or new == 2**64 - 1:
+            expected[key], unavailable[key] = None, 'saturated_counter'
+        elif new < old:
+            expected[key], unavailable[key] = None, 'counter_decreased_reset_or_wrap'
+        else:
+            expected[key] = new - old
+    delta = final['delta']
+    return (isinstance(delta, dict) and
+            all(value is None or u64(value) for value in delta.values()) and delta == expected and
+            final['delta_unavailable_fields'] == unavailable and
+            final.get('delta_status') == ('partial' if unavailable else 'complete'))
+
+
 def read_runtime_profile(store, session_nonce):
     """Optional diagnostics only. Never admit state or fail recovery over them."""
     missing = unavailable_runtime_profile(session_nonce, 'missing') \
@@ -258,16 +322,7 @@ def read_runtime_profile(store, session_nonce):
         if len(raw) > MAX_RUNTIME_PROFILE_BYTES:
             return unavailable_runtime_profile(session_nonce, 'byte_limit')
         profile = json.loads(raw)
-        valid = (isinstance(profile, dict) and type(profile.get('schema')) is int and
-                 profile['schema'] == 1 and profile.get('kind') == 'continuous-runtime-profile-v1' and
-                 type(profile.get('session_nonce')) is int and profile['session_nonce'] == session_nonce and
-                 profile.get('measurement_status') in ('complete', 'error'))
-        for key in ('initial', 'final'):
-            snapshot = profile.get(key) if valid else None
-            cumulative = snapshot.get('cumulative') if isinstance(snapshot, dict) else None
-            valid = valid and isinstance(cumulative, dict) and bool(cumulative) and all(
-                type(value) is int and 0 <= value < 2**64 for value in cumulative.values())
-        if not valid:
+        if not valid_runtime_profile(profile, session_nonce):
             return unavailable_runtime_profile(session_nonce, 'invalid_report')
         # Reject non-finite values anywhere, including unknown optional fields.
         json.dumps(profile, allow_nan=False)
@@ -289,8 +344,17 @@ def emit_runtime_profile(profile):
                 None, 'display_byte_limit'), separators=(',', ':')) + '\n'
         if sys.stderr is None:
             return
-        sys.stderr.write(raw)
-        sys.stderr.flush()
+        # Bypass Python's buffered stderr: a caught flush failure can leave it
+        # dirty and turn a successful retirement into exit 120 at shutdown.
+        # Unsupported/custom sinks are optional too; do not fall back to a
+        # buffered write, redirect process descriptors, or flush unrelated data.
+        descriptor = sys.stderr.fileno()
+        pending = memoryview(raw.encode())
+        while pending:
+            written = os.write(descriptor, pending)
+            if written == 0:
+                return  # Best-effort diagnostics may be incomplete.
+            pending = pending[written:]
     except (OSError, ValueError, TypeError, RecursionError, OverflowError, AttributeError):
         pass  # The canonical result and retirement are already committed.
 

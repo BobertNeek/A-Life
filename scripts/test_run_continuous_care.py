@@ -4,9 +4,10 @@ import base64
 import copy
 import datetime as dt
 import json
-import io
 import os
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
 from types import SimpleNamespace
 import unittest
@@ -616,9 +617,21 @@ class ContinuousCareTests(unittest.TestCase):
     def runtime_profile_fixture(self, nonce=80):
         return {'schema': 1, 'kind': 'continuous-runtime-profile-v1',
                 'session_nonce': nonce, 'measurement_status': 'complete',
-                'initial': {'delta_status': 'initial_snapshot', 'delta': None,
+                'organism_id': 1, 'source_world_seed': 80, 'scope': 'synthetic runtime boundary',
+                'initial': {'schema': 1, 'delta_status': 'initial_snapshot', 'delta': None,
+                            'measurement_enabled_at_world_tick': 10, 'world_tick': 10,
+                            'interval_start_world_tick': None, 'committed_world_ticks': None,
+                            'cumulative_origin': 'synthetic existing counters',
+                            'time_basis': 'synthetic host wall nanoseconds',
+                            'delta_excludes': ['sleep_journal_pending_entries_peak'],
+                            'delta_unavailable_fields': {},
                             'cumulative': {'tick_calls': 0}},
-                'final': {'delta_status': 'partial', 'delta': {'tick_calls': None},
+                'final': {'schema': 1, 'delta_status': 'partial', 'delta': {'tick_calls': None},
+                          'measurement_enabled_at_world_tick': 10, 'world_tick': 11,
+                          'interval_start_world_tick': 10, 'committed_world_ticks': 1,
+                          'cumulative_origin': 'synthetic existing counters',
+                          'time_basis': 'synthetic host wall nanoseconds',
+                          'delta_excludes': ['sleep_journal_pending_entries_peak'],
                           'cumulative': {'tick_calls': 2**64 - 1},
                           'delta_unavailable_fields': {'tick_calls': 'saturated_counter'}}}
 
@@ -664,13 +677,87 @@ class ContinuousCareTests(unittest.TestCase):
         path = self.profile_path()
         path.write_bytes(b'x' * (session.MAX_RUNTIME_PROFILE_BYTES + 1))
         self.assertEqual(session.read_runtime_profile(self.store, 80)['unavailable_reason'], 'byte_limit')
-        stream = io.StringIO()
         oversized = {'session_nonce': 'x' * session.MAX_RUNTIME_PROFILE_BYTES,
                      'data': 'x' * session.MAX_RUNTIME_PROFILE_BYTES}
-        with patch.object(session.sys, 'stderr', stream):
-            session.emit_runtime_profile(oversized)
-        self.assertLessEqual(len(stream.getvalue().encode()), session.MAX_RUNTIME_PROFILE_BYTES)
-        self.assertEqual(json.loads(stream.getvalue())['measurement_status'], 'unavailable')
+        with tempfile.TemporaryFile() as stream:
+            with patch.object(session.sys, 'stderr', stream):
+                session.emit_runtime_profile(oversized)
+            stream.seek(0)
+            raw = stream.read()
+        self.assertLessEqual(len(raw), session.MAX_RUNTIME_PROFILE_BYTES)
+        self.assertEqual(json.loads(raw)['measurement_status'], 'unavailable')
+
+    def test_runtime_profile_parser_rejects_nested_schema_and_delta_corruption(self):
+        path = self.profile_path()
+        changes = [
+            (('organism_id',), True), (('source_world_seed',), -1), (('scope',), None),
+            (('initial', 'schema'), 999), (('final', 'schema'), True),
+            (('initial', 'delta_status'), 'complete'),
+            (('initial', 'interval_start_world_tick'), 0),
+            (('initial', 'committed_world_ticks'), 0),
+            (('initial', 'delta'), {}),
+            (('initial', 'delta_unavailable_fields'), {'tick_calls': 'unknown'}),
+            (('final', 'measurement_enabled_at_world_tick'), 9),
+            (('final', 'interval_start_world_tick'), True),
+            (('final', 'committed_world_ticks'), True),
+            (('final', 'committed_world_ticks'), 2),
+            (('final', 'world_tick'), -1), (('final', 'world_tick'), 2**64),
+            (('final', 'delta_status'), 'unrecognized'),
+            (('final', 'delta_status'), 'complete'),
+            (('final', 'delta'), {'tick_calls': -1}),
+            (('final', 'delta'), {'tick_calls': True}),
+            (('final', 'delta'), {'tick_calls': 2**64}),
+            (('final', 'delta'), {}),
+            (('final', 'delta_unavailable_fields'), {}),
+            (('final', 'delta_unavailable_fields'), {'tick_calls': 'non_u64_counter'}),
+            (('final', 'delta_excludes'), []), (('final', 'cumulative_origin'), 1),
+            (('final', 'time_basis'), None),
+            (('final', 'cumulative'), {'tick_calls': float('nan')}),
+            (('unexpected',), float('inf')),
+        ]
+        for keys, value in changes:
+            profile = self.runtime_profile_fixture()
+            destination = profile
+            for key in keys[:-1]:
+                destination = destination[key]
+            destination[keys[-1]] = value
+            with self.subTest(keys=keys, value=value):
+                path.write_text(json.dumps(profile))
+                before = path.read_bytes()
+                report = session.read_runtime_profile(self.store, 80)
+                self.assertEqual(report['measurement_status'], 'unavailable')
+                self.assertNotIn('initial', report)
+                self.assertEqual(path.read_bytes(), before)
+
+    def test_runtime_profile_parser_checks_deltas_and_preserves_supported_unknowns(self):
+        path = self.profile_path()
+        profile = self.runtime_profile_fixture()
+        final = profile['final']
+        for old, new, delta, status, reasons in (
+                (0, 0, {'tick_calls': 0}, 'complete', {}),
+                (2, 5, {'tick_calls': 3}, 'complete', {}),
+                (5, 2, {'tick_calls': None}, 'partial',
+                 {'tick_calls': 'counter_decreased_reset_or_wrap'}),
+                (2**64 - 1, 0, {'tick_calls': None}, 'partial',
+                 {'tick_calls': 'saturated_counter'})):
+            profile['initial']['cumulative']['tick_calls'] = old
+            final.update(cumulative={'tick_calls': new}, delta=delta,
+                         delta_status=status, delta_unavailable_fields=reasons)
+            path.write_text(json.dumps(profile))
+            self.assertEqual(session.read_runtime_profile(self.store, 80), profile)
+            final['delta'] = {'tick_calls': 1}  # Even a nonnegative fabricated delta is invalid.
+            path.write_text(json.dumps(profile))
+            self.assertEqual(session.read_runtime_profile(self.store, 80)['measurement_status'], 'unavailable')
+        final.update(cumulative={'new_counter': 0}, delta=None,
+                     delta_status='counter_schema_changed', delta_unavailable_fields={})
+        path.write_text(json.dumps(profile))
+        self.assertEqual(session.read_runtime_profile(self.store, 80), profile)
+        final.update(world_tick=9, committed_world_ticks=None, delta_status='world_tick_regressed')
+        path.write_text(json.dumps(profile))
+        self.assertEqual(session.read_runtime_profile(self.store, 80), profile)
+        final['delta'] = {}  # Unavailable whole intervals must not masquerade as measured zero.
+        path.write_text(json.dumps(profile))
+        self.assertEqual(session.read_runtime_profile(self.store, 80)['measurement_status'], 'unavailable')
 
     @unittest.skipIf(os.name == 'nt', 'Unix symlink fixture; no Windows privilege assumed')
     def test_runtime_profile_parser_does_not_follow_a_profile_alias(self):
@@ -689,6 +776,63 @@ class ContinuousCareTests(unittest.TestCase):
         for stream in (None, Broken()):
             with self.subTest(stream=type(stream).__name__), patch.object(session.sys, 'stderr', stream):
                 session.emit_runtime_profile(self.runtime_profile_fixture())
+
+    def test_runtime_profile_display_handles_short_descriptor_writes(self):
+        expected = (json.dumps(self.runtime_profile_fixture(), allow_nan=False,
+                               separators=(',', ':')) + '\n').encode()
+        with tempfile.TemporaryFile() as stream:
+            write = os.write
+            with patch.object(session.sys, 'stderr', stream), \
+                    patch.object(session.os, 'write', side_effect=lambda fd, data: write(fd, data[:7])):
+                session.emit_runtime_profile(self.runtime_profile_fixture())
+            stream.seek(0)
+            self.assertEqual(stream.read(), expected)
+
+    def test_runtime_profile_closed_pipe_does_not_change_retired_subprocess_exit(self):
+        # Real interpreter finalization is essential: a fake Broken.write cannot
+        # expose a dirty TextIOWrapper buffer that changes exit status to 120.
+        code = '''
+import json, sys
+from unittest.mock import patch
+import test_run_continuous_care as fixtures
+import run_continuous_care as session
+import current_checkpoint_store as cp
+case = fixtures.ContinuousCareTests()
+case.setUp()
+try:
+    report = (session.unavailable_runtime_profile(80, 'missing')
+              if sys.argv[1] == 'unavailable' else case.runtime_profile_fixture())
+    report['padding'] = 'x' * int(sys.argv[2])
+    emit = session.emit_runtime_profile
+    def after_retirement(profile):
+        assert not (case.store / cp.RUN).exists()
+        assert not (case.lane / session.STATE).exists()
+        assert cp.read_json(case.lane / session.RECEIPT)['retained_trained_rows'] == 1024
+        emit(report)
+    with patch.object(session.current, 'tool', side_effect=case.live_native), \\
+            patch.object(session.host, 'run_child', side_effect=case.profiled_producer), \\
+            patch.object(session, 'emit_runtime_profile', side_effect=after_retirement):
+        result = session.run(case.live_args())
+    assert result == cp.read_json(case.lane / session.RECEIPT)
+    assert result['after']['policy_version'] == 42
+    print('NORMAL_RESULT', flush=True)
+finally:
+    case.doCleanups()
+'''
+        for status in ('complete', 'unavailable'):
+            for padding in (0, 100, 4100, session.MAX_RUNTIME_PROFILE_BYTES):
+                with self.subTest(status=status, padding=padding):
+                    reader, writer = os.pipe()
+                    os.close(reader)
+                    try:
+                        result = subprocess.run(
+                            [sys.executable, '-B', '-c', code, status, str(padding)],
+                            cwd=Path(__file__).resolve().parent, stderr=writer,
+                            stdout=subprocess.PIPE, timeout=30, check=False)
+                    finally:
+                        os.close(writer)
+                    self.assertEqual(result.stdout, b'NORMAL_RESULT\n')
+                    self.assertEqual(result.returncode, 0)
 
     def test_runtime_profile_is_displayed_after_retirement_and_never_committed(self):
         profiles = []

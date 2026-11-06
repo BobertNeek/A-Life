@@ -25,8 +25,14 @@ producer. It does not embed the counter payload in owner state, recovery data
 or the mandatory retirement receipt. Native cleanup still inventories its one
 owned file and validates that inventory normally. Only after retirement commits and housekeeping
 succeeds does it emit one compact JSON diagnostic on the supervisor's stderr.
-That display is independently capped at 64 KiB including its newline. Diagnostic
-sink failures do not change the committed result. Native logs, canonical
+That display is independently capped at 64 KiB including its newline. It writes
+directly to stderr's file descriptor, without leaving data in Python's text
+buffer that could fail again during interpreter shutdown. Missing descriptors,
+closed pipes and other ordinary write errors discard the optional display;
+custom sinks without a file descriptor are unsupported. A partial write may
+leave an incomplete record, and a stalled sink can still block. It neither
+redirects process descriptors nor flushes unrelated buffered diagnostics.
+Diagnostic sink failures do not change the committed result. Native logs, canonical
 receipts and normal supervisor stdout retain their existing schema and budgets.
 The stderr record may coexist with other ordinary diagnostics; select its
 `continuous-runtime-profile-v1` kind rather than assuming every line is JSON.
@@ -38,6 +44,12 @@ profiling must not be interpreted as measured zeros. No complete profile is
 promised for panic, abort, OOM or failed output. A `measurement_status` of
 `complete` describes the runtime measurement boundary, not successful owner
 publication, retained learning, independent feeding or gameplay capability.
+The reader validates v1 envelope and snapshot versions, unsigned counter and
+tick types, interval relationships, and checked deltas against both snapshots.
+Unknown versions or malformed deltas make the report unavailable. Supported
+counter-set changes and regressed world ticks retain raw snapshots with null
+interval deltas; they do not become measured zeros. This diagnostic validation
+does not admit canonical state or certify counter accuracy.
 
 Initial and final snapshots retain raw runtime-instance cumulative counters.
 Checked deltas span that whole interval. Reset, wrapped or saturated counters
