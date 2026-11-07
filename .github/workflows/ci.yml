@@ -55,9 +55,6 @@ jobs:
         run: cargo test --locked -p alife_world --test atomic_portable_save
       - name: Keep births supported without stalling world ticks
         run: 'cargo test --locked -p alife_world --lib task_4_3a2_tests:: -- --test-threads=1 --color=never'
-      - name: Compare bounded mating query CPU cost
-        if: runner.os == 'Linux'
-        run: python scripts/compare_mating_reach.py
 
   native-texture-decode:
     name: Native texture decode (${{ matrix.os }})

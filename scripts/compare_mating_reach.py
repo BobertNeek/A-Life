@@ -3,10 +3,25 @@
 
 This measures query components and idle-bundle/world-tick CPU cycles in the
 optimized test profile, not neural policy, GPU or physical-device gameplay.
+
+Opt-in Linux diagnostic, requiring Rust and Python 3. From an isolated checkout:
+    python3 scripts/compare_mating_reach.py
+
+It temporarily rewrites headless.rs for historical arms. Normal build failures
+restore the original bytes, but a hard kill cannot. Do not run in an active
+working tree or alongside edits. Build settings below reproduce the measured
+profile without relying on CI environment variables. This is not an automatic
+CI performance gate.
+
+Qualified receipt: commit 2d60f619394ef6292ad4fbc92307b62f189fb280,
+https://github.com/BobertNeek/A-Life/actions/runs/42315157339/job/128225840243
+The earlier scoped-candidate receipt is at commit 782be6c1a591adad38e9ba70c4c671c9e81b827f,
+https://github.com/BobertNeek/A-Life/actions/runs/42314025099/job/128222153023
 """
 
 import hashlib
 import json
+import os
 from pathlib import Path
 import platform
 import shutil
@@ -35,6 +50,12 @@ FILTERED = b"""    if obstacles.any(|object| {
             && object.blocks_segment(start, end)
     }) {
 """
+BUILD_SETTINGS = {
+    "CARGO_BUILD_JOBS": "2",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_PROFILE_TEST_DEBUG": "0",
+    "CARGO_PROFILE_DEV_DEBUG": "0",
+}
 
 
 def build(destination):
@@ -42,6 +63,7 @@ def build(destination):
         ["cargo", "test", "--locked", "-p", "alife_world", "--lib", "--no-run",
          "--message-format=json"],
         cwd=ROOT, check=False, text=True, stdout=subprocess.PIPE,
+        env={**os.environ, **BUILD_SETTINGS},
     )
     if result.returncode:
         print(result.stdout, flush=True)
@@ -91,6 +113,7 @@ def main():
         "scope": "same-host optimized-test-profile CPU queries and idle-bundle/world-tick cycle",
         "platform": platform.platform(),
         "rustc": subprocess.check_output(["rustc", "--version"], text=True).strip(),
+        "build_environment": BUILD_SETTINGS,
         "candidate_source_sha256": hashlib.sha256(original).hexdigest(),
         "candidate_module_sha256": hashlib.sha256(
             (ROOT / "crates/alife_world/src/headless/mating_reach.rs").read_bytes()).hexdigest(),
