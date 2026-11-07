@@ -244,7 +244,7 @@ executable SHA-256 is
 Fresh candidate asset bytes are written and synced before each arm's first
 behavioral step. No prior receipt is overwritten.
 
-This revision additionally uses the final motor in each family as an un-driven
+This revision additionally uses the final motor in each family as an not positively driven by the constructed signal paths
 reference. Its grounded readout has −5 times the signal coefficient, per signal
 motor. This makes the negative resting motor operating point explicit rather
 than incorrectly assuming zero activation. The reference is an ordinary native
@@ -327,3 +327,279 @@ receipt contains6,144 neural updates (2,048 × 3 executed steps), although the
 phenotype allows4. Its576 dendritic operations also confirm participation of the
 64 inherited branches. ATP/runtime policy and per-route cadence must be accounted
 for when predicting how many frames a signal needs.
+
+## Completed revision5 results
+
+All132 predeclared trials completed: [36 ablations](whole-v5-ablation-summary.json),
+[64 held-out transfer trials](whole-v5-transfer-summary.json), and
+[32 held-out navigation trials](whole-v5-navigation-summary.json). These use the
+same frozen candidate without tuning between suites. An independent read-only
+parse confirmed the counts, actual outcomes and preservation flags.
+
+| Condition | Public shipped founder | Engineered candidate |
+|---|---:|---:|
+| Reachable positive food, forward/left | 0/16 | 16/16 |
+| Matched harmless bitter food, forward/left | 0/16 | 0/16 |
+| Distant food, forward/left/back,48 steps | 0/12 | 12/12 |
+| Food behind obstacle,48 steps | 0/4 | 0/4 |
+
+Actual consumption is a physical world outcome, not a reward proxy or an inferred
+logit preference. The raw receipts also distinguish selected ingestion, possession,
+completed ingestion and final energy. No injury occurred in these trials. They
+are fresh, initially low-energy CPU lives with unchanged newborn homeostasis,
+not a comparison with Cassidy's best retained PC/cloud checkpoint and not real
+GPU gameplay qualification.
+
+The three-frame detached hunger perturbation increased the full candidate's
+positive-food Ingest logit by0.10956764; the old graph and initial no-need lesion
+showed0. Need and tonic genetic lesions reopened through ordinary plasticity by
+at most about0.000001802 and0.000002488 during the12-step ablations. These results
+support a delayed, effective encoded-input pathway. They do not demonstrate
+biological hunger conditioning or learned motivational control.
+
+In the revised two-seed ablation, all three engineered lesions still consumed
+positive food2/2. The reference lesion consumed bitter food1/2; full and other
+lesions consumed0/2. Therefore the positive-food result no longer establishes
+that the tonic, need or reference component is individually necessary. The earlier
+revision4 necessity result must not be carried over to revision5. The multi-frame
+probe isolates the engineered need path more directly than endpoint consumption.
+
+Decision: retain this as a promising **experimental native care founder**, with
+measured signed-taste and unobstructed reach behavior, while leaving accepted
+brains unchanged. Obstacle competence, reversal learning, delayed memory,
+biological need generalization, speech/language, aged/retained organisms, terrain
+profile and GPU execution remain unqualified. Static synapse counts are matched,
+but137 versus96 active tiles and native work receipts mean compute is not matched.
+The summaries expose measured work per trial rather than assuming equivalence.
+
+
+### What the new-seed tests do and do not replicate
+
+All whole-care trials in these suites use one identical hand-built candidate
+digest. New seeds change sampling, body/world identities and positions; they are
+not independent trained brains or unseen-genome replications. The near left-food
+condition is already in reach at0.25m. The forward/left/back2.5m scenes provide the
+actual unobstructed reaching test. ObjectSlots supplies raw distant chemistry,
+and Approach invokes the existing bounded visible-goal clearance steering in the
+actuator. Neither distant success nor lateral movement establishes learned
+route planning or a neural tangent choice.
+
+### Longer unchanged obstacle control
+
+The same frozen revision5 executable/candidate was evaluated for120 steps on
+the same four obstacle seeds with matched untouched controls: [8 trials](whole-v5-obstacle-extended-summary.json).
+Neither arm consumed any food. The full candidate initially moved around the
+obstacle, first reached the food-contact feature at tick60, then stopped choosing
+Approach to food and repeatedly attempted ingestion without completing it. Its
+final food distance was approximately0.480m. The48-step failure alone was horizon
+censoring, not proof of a stall; the120-step extension exposes a later
+contact-stage problem. Investigation must distinguish neural target choice and
+grip geometry before changing any action interface.
+
+### Prepared-biology pilot, separate from aged neural learning
+
+An optional bounded preparation mode advances the newly admitted world600
+ordinary ticks before its first neural dispatch, with no replacement of neural
+state, forced actions or invented hormones. One new seed,2026111001, was then
+tested for24 steps in matched positive/bitter scenes, untouched/full: [4 trials](whole-v5-prepared-biology-summary.json).
+Initial biology was exactly identical in all four: age600, maturation0.328947,
+hunger0.812937, energy0.249395. The candidate consumed positive food1/1 and bitter
+food0/1; untouched consumed neither. Final positive-food energy was0.383607
+versus0.247320 untouched. This is a useful first juvenile, naturally hungry
+biochemistry check, not an independent weight-set replication, a mature trained
+organism, biological need-causality proof or a survival benchmark. The compiled
+construction phenotype stays canonical while current development gates runtime.
+The fresh neural state has not lived or learned through those600 preparation
+ticks.
+
+Preparation harness source SHA-256 is
+`82f3203c5f5df175c15c2c962b101d8d8e63a4574ca35719e995da577879badc`;
+executable SHA-256 is
+`9f5316a4b7907b5372334e955c93b8963a9ba281a0ea53837eecaec70caf627f`.
+This harness change leaves revision5's candidate-weight recipe unchanged.
+
+## Revision6: repair a measured target/grip interaction
+
+The extended obstacle failure provided a concrete weight-level diagnosis. Food
+contact flips its Approach logit from+18.43 to−9.72, while obstacle Approach stays
+positive. Native locomotion runs before manipulation and turns body yaw toward
+that wrong target. At the stalled position the carry grip intersects the
+obstacle's effective blocking region, so selected Ingest cannot acquire food.
+This is not evidence that a detour command is missing: the earlier part of the
+same trajectory already detoured using ordinary Approach and actuator clearance.
+
+Revision6 changes Approach's contact-lane18 coefficient from−5 to−2, with the
+matching reference coefficient. Exactly two static weights differ from revision5;
+the builder test asserts their family/lane and preserves all sign constraints.
+The hypothesis is that contact must not suppress Approach to nutritious food
+below Approach to the obstacle before the grip is clear. It changes no physics,
+hand legality, action enumeration, reward, phenotype coordinates, plasticity,
+biology or optimizer. This is an explicit feedback-informed repair.
+
+The [frozen source](frozen/whole-v6-contact.rs.txt) SHA-256 is
+`207df08e994179ed5bc5d6c25fd14f7a27a865fc02ea6e5e83b24adfe4c33c1c`;
+executable SHA-256 is
+`56469b0903a328f83d60c2da4af34c65951dd140f6ebadd1bdfd4625072e643d`.
+The contact mode includes the exact revision5 weight builder as its matched
+control. A [one-seed pilot](whole-v6-contact-pilot-summary.json), same old obstacle
+seed2026110901 and120 steps, completed ingestion for revision6 and not revision5.
+Final energy was0.517650 versus0.380073. This pilot is feedback evidence, not an
+unseen-seed result. Before inspecting subsequent outcomes, the unchanged
+candidate was assigned four new seeds2026111101–2026111104, both versions, four
+scenes (near positive, near bitter, distant left positive, obstacle positive),
+120 steps each. The result must include every arm and scene, including failures.
+
+## Running the current interface
+
+From a checkout of this PR, with the repository's Rust toolchain:
+
+```sh
+cargo test -p alife_core --profile dev --test n2048_experimental_graph
+cargo test -p alife_training --profile dev --features cpu-backend --test cpu_experimental_graph
+cargo test -p alife_training --profile dev --features cpu-backend --example probe_weight_space_care
+cargo run -p alife_training --profile dev --features cpu-backend --example probe_weight_space_care -- \
+  NEW_OUTPUT_DIRECTORY 120 -8 contact 4 2026111101 \
+  food,bitter-food,far-food-left,obstacle-food .4 0
+python docs/experiments/weight-space-2026-11-07/summarize_receipts.py \
+  NEW_OUTPUT_DIRECTORY > NEW_SUMMARY.json
+```
+
+Arguments after the output directory are step count, surgery gain, mode, seed
+count, first seed, comma-separated scenes, initial energy, optional biology-
+only preparation ticks and optional target hazard pain0..1 (default0). Modes: surgery (untouched/signed/opposite), whole (all
+component lesions), validate (untouched/current), contact (revision5/current).
+Output directories and candidate asset filenames are created exclusively; use
+new locations. The current example is revision6. Reproducing an earlier version
+requires that version's frozen example source and compatible compiler from this
+PR, in a separate disposable worktree; never replace a retained life or current
+project asset to reproduce it. Summaries bind the raw completed receipt SHA-256.
+All candidates are unpromoted and the experimental graph is opt-in CPU only.
+
+## What Astra should attempt next
+
+A stronger native mind needs tests that this care scaffold has not passed. Keep
+these as separate development gates rather than fold them into the food score:
+
+- Sensory generalization: a separately versioned Terrain/Hearing graph with
+  essential heard/semantic ports admitted and latency measured. Hide chemistry
+  until genuine contact, then test remembered taste rather than distant raw data.
+- Motivation: matched low/high biological hunger, fatigue and pain contexts,
+  per-need genetic lesions plus logged effective offsets, and action/energy
+  consequences. Encoded-input sensitivity alone is not motivated behavior.
+- Memory: cue disappears before choice; randomize cue/reward mapping between
+  episodes and measure delay curves and memory-state lesions. Current mnemonic
+  recurrent weights are a design proposal; speech/memory readout zeros do not
+  establish useful recall.
+- Learning: preserve one organism's full state through acquisition and reversal,
+  compare ordinary plasticity with an explicitly admitted no-update control, and
+  distinguish existing reflexes from improvement over experience. Founder Adam
+  staying fixed does not mean somatic learning is absent.
+- Rest and sleep: fatigue recovery, interruptibility, wake after danger and
+  retained skills across sleep/save/load, with actual biological outcomes.
+- Language: grounded referent/action transfer through ordinary spatial speech,
+  novel speakers/positions, ambiguity and delayed reference. Never equate token
+  numbers, a decoded payload or external teacher text with understanding.
+- Navigation: visible-goal actuator steering versus neural exploration when the
+  target is occluded. Admit new turn/waypoint affordances only as a separately
+  controlled profile extension; do not blame an interface for a wrong-target
+  readout bug.
+- Release qualification: full GPU-authoritative gameplay, exact retained-life
+  restore and evidence-preserving acquired-state migration are independent gates.
+  This new graph cannot reinterpret the old graph's acquired coordinates.
+
+Preserve the original proposal, every meaningful revision and the causal reason
+for each edit. Iterate boldly, but freeze each candidate before evaluating its
+next unseen contexts and retain the failures. The present result is native
+engineering practice and a reproducible starting point, not a substitute for
+those tests or for Cassidy's retained learned creatures.
+
+
+### Completed revision6 regression and collector recovery
+
+All32 predeclared120-step trials have durable individual receipts. The unchanged
+revision6 candidate consumed positive food4/4, harmless bitter food0/4,
+distant-left positive food4/4 and obstacle food4/4. Revision5 matched the first
+three counts but consumed obstacle food1/4. Thus the old version sometimes
+escapes its contact/grip failure through stochastic alternatives; it was not
+impossible in every new context. Mean obstacle final energy was0.517552 versus
+0.414408. [Per-trial summary and hashes](whole-v6-contact-held-out-summary.json)
+include the failures and flags. This remains one fixed engineered weight set
+under new sampling/body/world contexts, not a breed-generalization claim.
+
+The original collector was killed (exit137) while cloning/serializing the final
+large aggregate after all32 complete trial files had been synced. Its empty
+original aggregate and log were preserved. A separately labeled completion
+index was reconstructed from exactly those original files after verifying
+120 rows and unchanged-optimizer/exact-cold flags in each. No simulation was
+rerun and no row was invented or edited. The summary records this aggregation
+recovery and the SHA-256 of every source trial, rather than claiming the original
+collector exited successfully.
+
+The current collector retains only filenames after each synced trial. It writes
+a small journal-v2 index, syncs it, then publishes the completed name with a
+non-overwriting hard link. The summarizer supports both historical embedded
+aggregates and compact journals, loading one trial at a time. This fixes evidence
+collection memory growth without changing neural execution or candidate weights.
+The original frozen scientific executables remain unchanged.
+
+## Separate world-rule correction and causal controls
+
+A joint audit found a genuine host-rule inconsistency: Eat's automatic hand
+preparation rejected an unheld mobile object based on its hidden hazard_pain
+value, while ordinary Grab could acquire the same object and held Eat then
+consumed it with real consequences. This was a legacy safe-acquisition policy,
+not a geometric impossibility or a learned aversion. The controlling architecture
+requires grounded cues and physical outcomes rather than hidden semantic value
+preferences. [World fix PR297](https://github.com/BobertNeek/A-Life/pull/297) removes
+the two hidden-hazard predicates, retaining liveness, ownership, effector,
+reach/occlusion, grip clearance, real taste, nutrition and injury. The shared
+preparation path also serves mobile Play/Ball acquisition; that scope is explicit
+and covered by world unit tests, although the matrix below tests Food only.
+
+This correction is separate from the brain patch and from every earlier receipt.
+The [frozen assay source](frozen/whole-v6-world-factor.rs.txt),
+[build bindings](world-factor-build-bindings.json) and
+[32-trial factor summary](world-factor-summary.json) record the exact old/new
+worlds and unchanged revision5/revision6 candidates. The new-world executable
+was built from this PR's f8f96ce base plus the source-only world patch; it did not
+borrow an executable from an unverified checkout. Candidate asset bytes match
+across all16 old/new condition pairs. All8 harmless complete trial pairs are
+byte-identical, not merely similar aggregate counts.
+
+The matrix uses two new seeds2026111201–2026111202, both brain revisions, old/new
+world, newborn/600-world-tick-prepared juvenile biology,12 neural steps and
+reachable Food with identical positive chemistry+.85, nutrition.6 and geometry.
+Only the harmful condition sets hazard_pain=.3. Per four-trial biology context:
+
+| Context | Old-world consumed | Corrected-world consumed |
+|---|---:|---:|
+| Newborn, harmless | 4/4 | 4/4 |
+| Newborn, harmful | 1/4 | 4/4 |
+| Prepared juvenile, harmless | 4/4 | 4/4 |
+| Prepared juvenile, harmful | 1/4 | 4/4 |
+
+The old exceptions use Contact/Grab before Eat and must not be omitted. Corrected
+harmful ingestion causes actual injury approximately0.081 and a measured pain
+delta0.24, rather than treating poison as harmless nutrition. Final pain can
+return to zero in the prepared condition; trajectory pain is logged separately
+from endpoint pain. Founder Adam remains unchanged and exact cold-next-state
+checks pass for every trial.
+
+**This is oracle-removal and honest-consequence evidence, not improved poison
+avoidance.** Positive-tasting harmful food supplies no negative-taste warning in
+this assay. A creature must learn or otherwise develop aversion from grounded
+cues and experience; blocking it with a hidden value gate would fake that
+ability. None of these trials establishes such learning.
+
+The earlier contact-stage neural failure and its two-weight repair remain real
+under the original world. Further review separately found that rendered/authored
+obstacle radius and the world minimum solid radius are not obviously normalized;
+that geometry question is not resolved by these brain or hazard results. No
+geometry relaxation or new detour affordance is included here.
+
+Journal durability claims are limited to completed process-failure recovery.
+Individual files are synced, but no power-loss or storage-device failure test was
+performed and directory fsync is not claimed. Current journals declare seed count,
+scenes and arms; the summarizer rejects duplicate files/identities, missing matrix
+members and paths outside the receipt directory. Historical embedded receipts
+lack some declarations and receive balanced-observed-matrix checks instead.

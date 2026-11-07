@@ -41,7 +41,28 @@ fn experimental_native_graph_covers_grounded_inputs_and_exact_budgets() {
     assert_eq!(p.synapses().len(), 32768);
     assert_eq!(p.budgets().global.recurrent_synapses, 24576);
     assert_eq!(p.budgets().global.active_tiles, 137);
-    assert!(p.budgets().global.active_tiles <= 192);
+    // A future coordinate or plasticity recipe requires a new explicit identity.
+    assert_eq!(
+        *p.route_abi_digest().bytes(),
+        [
+            194, 126, 174, 19, 184, 147, 89, 23, 160, 235, 150, 20, 78, 203, 242, 36, 47, 204, 67,
+            61, 226, 110, 108, 141, 0, 130, 47, 7, 66, 115, 31, 57
+        ]
+    );
+    assert_eq!(
+        *p.plasticity_abi_digest().bytes(),
+        [
+            219, 85, 37, 200, 67, 12, 4, 172, 192, 72, 84, 77, 159, 159, 108, 199, 186, 253, 189,
+            165, 132, 209, 71, 16, 219, 111, 138, 2, 210, 187, 183, 157
+        ]
+    );
+    assert_eq!(
+        *p.persistent_address_map().digest().bytes(),
+        [
+            18, 99, 20, 233, 131, 146, 5, 162, 156, 201, 68, 111, 109, 46, 217, 7, 108, 122, 49,
+            113, 207, 4, 185, 113, 62, 27, 59, 26, 84, 238, 247, 113
+        ]
+    );
     assert_eq!(p.lobe_layout(), &N2048FoundationLayoutV1::lobe_layout());
     for (projection, receipt) in p.projections().iter().zip(&p.budgets().routes) {
         let (start, len) = projection.synapse_range();

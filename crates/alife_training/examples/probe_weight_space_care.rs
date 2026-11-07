@@ -55,9 +55,15 @@ fn source(
         PhenotypeCompiler::compile_n2048_foundation_candidate(genome, development, asset.clone())?;
     Ok((config, p, asset))
 }
-// Whole-weight revision 5. Feedback-informed: explicit signed tonic/need circuits
+// Whole-weight revision 6. Feedback-informed: explicit signed tonic/need circuits
 // and a native reference motor population; never an external action policy.
 fn whole_care(p: &BrainPhenotype) -> Result<(Vec<f32>, Vec<serde_json::Value>)> {
+    whole_care_with_contact(p, -2.)
+}
+fn whole_care_with_contact(
+    p: &BrainPhenotype,
+    contact_coefficient: f32,
+) -> Result<(Vec<f32>, Vec<serde_json::Value>)> {
     use std::collections::BTreeSet;
     let mut w = vec![0.; p.synapses().len()];
     let mut circuits = Vec::new();
@@ -216,7 +222,7 @@ fn whole_care(p: &BrainPhenotype) -> Result<(Vec<f32>, Vec<serde_json::Value>)> 
                 (CandidateActionFamily::Ingest, 2) => -6.,
                 (CandidateActionFamily::Approach, 15) => 4.,
                 (CandidateActionFamily::Approach, 2) => -2.,
-                (CandidateActionFamily::Approach, 18) => -5.,
+                (CandidateActionFamily::Approach, 18) => contact_coefficient,
                 (CandidateActionFamily::Rest, 23) => 2.,
                 (CandidateActionFamily::Avoid, 15) => -10.,
                 (CandidateActionFamily::Inspect, 6..=8) => 0.5,
@@ -250,6 +256,8 @@ struct TrialSpec<'a> {
     receipt_root: &'a str,
     write_asset: bool,
     initial_energy: f32,
+    preparation_ticks: usize,
+    target_hazard_pain: f32,
 }
 fn trial(spec: TrialSpec<'_>) -> Result<serde_json::Value> {
     let TrialSpec {
@@ -261,6 +269,8 @@ fn trial(spec: TrialSpec<'_>) -> Result<serde_json::Value> {
         receipt_root,
         write_asset,
         initial_energy,
+        preparation_ticks,
+        target_hazard_pain,
     } = spec;
     let experimental = arm == "zero-excitatory" || arm.starts_with("whole-care");
     let (config, p, source) = source(seed, experimental)?;
@@ -281,7 +291,11 @@ fn trial(spec: TrialSpec<'_>) -> Result<serde_json::Value> {
             }
         }
     } else if arm.starts_with("whole-care") {
-        let (whole, circuits) = whole_care(&p)?;
+        let (whole, circuits) = if arm == "whole-care-v5" {
+            whole_care_with_contact(&p, -5.)?
+        } else {
+            whole_care(&p)?
+        };
         weights = whole;
         edits = circuits;
         if arm == "whole-care-no-need" || arm == "whole-care-no-tonic" {
@@ -417,7 +431,7 @@ fn trial(spec: TrialSpec<'_>) -> Result<serde_json::Value> {
             organism_id: None,
             position: target_position,
             nutrition: 0.6,
-            hazard_pain: 0.,
+            hazard_pain: target_hazard_pain,
             radius: 0.5,
             token_id: None,
         })?
@@ -442,7 +456,24 @@ fn trial(spec: TrialSpec<'_>) -> Result<serde_json::Value> {
         old.birth_tick(),
     )?)?;
     game.world = world;
-    let mut host = CpuCanonicalHost::new_cohort(game, &trainer, (seed ^ (seed >> 32)) as u32)?;
+    let sampling_seed = (seed ^ (seed >> 32)) as u32;
+    let mut host = if preparation_ticks == 0 {
+        CpuCanonicalHost::new_cohort(game, &trainer, sampling_seed)?
+    } else {
+        CpuCanonicalHost::new_prepared_cohort(game, &trainer, sampling_seed, |world| {
+            for _ in 0..preparation_ticks {
+                world.try_advance_tick()?;
+            }
+            Ok::<_, ScaffoldContractError>(())
+        })?
+        .0
+    };
+    let initial_biology = *host
+        .world()
+        .organism_registry()
+        .get(own)
+        .unwrap()
+        .biochemistry();
     let mut rows = Vec::new();
     for tick in 0..ticks {
         let step = host.step(&trainer, 1.)?;
@@ -599,7 +630,7 @@ fn trial(spec: TrialSpec<'_>) -> Result<serde_json::Value> {
     );
     let r = host.world().organism_registry().get(own).unwrap();
     Ok(
-        json!({"seed":seed,"arm":arm,"scene":scene,"edits":edits,"source_digest":source.digest(),"candidate_digest":candidate_digest,"changed_weights":changed_weights,"experimental_graph":experimental,"active_tiles":trainer.phenotype().budgets().global.active_tiles,"microstep_count":trainer.phenotype().microstep_count(),"total_synapses":trainer.phenotype().synapses().len(),"optimizer_unchanged":true,"cold_next_step_exact":true,"target_active":!host.world().entity(object).unwrap().consumed,"final_position":host.world().entity(host.world().entity_id("learner").unwrap()).unwrap().position,"final_target_carrier":host.world().entity(object).unwrap().carried_by,"final_body":r.biochemistry().body,"final_homeostasis":r.biochemistry().homeostasis,"rows":rows}),
+        json!({"seed":seed,"arm":arm,"scene":scene,"edits":edits,"source_digest":source.digest(),"candidate_digest":candidate_digest,"changed_weights":changed_weights,"experimental_graph":experimental,"active_tiles":trainer.phenotype().budgets().global.active_tiles,"microstep_count":trainer.phenotype().microstep_count(),"total_synapses":trainer.phenotype().synapses().len(),"preparation_ticks":preparation_ticks,"target_hazard_pain":target_hazard_pain,"initial_biology":initial_biology,"optimizer_unchanged":true,"cold_next_step_exact":true,"target_active":!host.world().entity(object).unwrap().consumed,"final_position":host.world().entity(host.world().entity_id("learner").unwrap()).unwrap().position,"final_target_carrier":host.world().entity(object).unwrap().carried_by,"final_body":r.biochemistry().body,"final_homeostasis":r.biochemistry().homeostasis,"rows":rows}),
     )
 }
 fn graph_report(p: &BrainPhenotype) -> serde_json::Value {
@@ -661,6 +692,14 @@ fn main() -> Result<()> {
         .split(',')
         .collect::<Vec<_>>();
     let initial_energy: f32 = args.get(8).map_or(Ok(0.4), |s| s.parse())?;
+    let preparation_ticks: usize = args.get(9).map_or(Ok(0), |s| s.parse())?;
+    let target_hazard_pain: f32 = args.get(10).map_or(Ok(0.), |s| s.parse())?;
+    if !target_hazard_pain.is_finite() || !(0.0..=1.).contains(&target_hazard_pain) {
+        return Err("target hazard pain must be finite0..1".into());
+    }
+    if preparation_ticks > 1200 {
+        return Err("preparation ticks must be0..1200".into());
+    }
     if seed_start.checked_add(seeds as u64).is_none()
         || scenes.is_empty()
         || scenes.len() > 10
@@ -698,6 +737,7 @@ fn main() -> Result<()> {
             ("wrong-sign", -gain),
         ],
         "validate" => vec![("untouched", 0.), ("whole-care", 0.)],
+        "contact" => vec![("whole-care-v5", 0.), ("whole-care", 0.)],
         "whole" => vec![
             ("untouched", 0.),
             ("zero-excitatory", 0.),
@@ -706,11 +746,11 @@ fn main() -> Result<()> {
             ("whole-care-no-tonic", 0.),
             ("whole-care-no-reference", 0.),
         ],
-        _ => return Err("mode must be surgery, whole or validate".into()),
+        _ => return Err("mode must be surgery, whole, validate or contact".into()),
     };
     // Reserve a new output directory before any simulation. Never overwrite a prior receipt.
     std::fs::create_dir(path)?;
-    let mut results = Vec::new();
+    let mut trial_files = Vec::new();
     for seed in (seed_start..).take(seeds) {
         for (scene_index, &scene) in scenes.iter().enumerate() {
             for &(arm, gain) in &arms {
@@ -723,6 +763,8 @@ fn main() -> Result<()> {
                     receipt_root: path,
                     write_asset: scene_index == 0,
                     initial_energy,
+                    preparation_ticks,
+                    target_hazard_pain,
                 })?;
                 use std::io::Write;
                 let mut receipt = std::fs::OpenOptions::new()
@@ -735,17 +777,26 @@ fn main() -> Result<()> {
                     "{seed} {scene} {arm} energy={} active={}",
                     r["final_body"]["energy"], r["target_active"]
                 );
-                results.push(r);
+                trial_files.push(format!("{seed}.{scene}.{arm}.json"));
             }
         }
     }
-    use std::io::Write;
     let mut output = std::fs::OpenOptions::new()
         .write(true)
         .create_new(true)
-        .open(format!("{path}/receipt.json"))?;
-    output.write_all(&serde_json::to_vec(&json!({"backend":"native-cpu","experimental":true,"promoted":false,"initial_energy":initial_energy,"seed_start":seed_start,"scenes":scenes,"newborn_homeostasis_unchanged":true,"gain":gain,"ticks":ticks,"mode":mode,"results":results}))?)?;
+        .open(format!("{path}/receipt.pending.json"))?;
+    serde_json::to_writer(
+        &mut output,
+        &json!({"receipt_format":"journal-v2","complete":true,"backend":"native-cpu","experimental":true,"promoted":false,"initial_energy":initial_energy,"seed_start":seed_start,"seed_count":seeds,"arms":arms.iter().map(|(arm,_)|*arm).collect::<Vec<_>>(),"scenes":scenes,"preparation_ticks":preparation_ticks,"target_hazard_pain":target_hazard_pain,"newborn_homeostasis_unchanged":preparation_ticks==0,"gain":gain,"ticks":ticks,"mode":mode,"trial_files":trial_files}),
+    )?;
     output.sync_all()?;
+    // Publish only after every per-trial receipt and the compact index are durable.
+    // hard_link fails rather than replacing an existing completed receipt.
+    std::fs::hard_link(
+        format!("{path}/receipt.pending.json"),
+        format!("{path}/receipt.json"),
+    )?;
+    std::fs::remove_file(format!("{path}/receipt.pending.json"))?;
     Ok(())
 }
 
@@ -757,6 +808,19 @@ mod tests {
         let (_, p, source) = source(2026110711, true).unwrap();
         let (weights, circuits) = whole_care(&p).unwrap();
         assert_eq!(weights.len(), 32768);
+        let (old, _) = whole_care_with_contact(&p, -5.).unwrap();
+        let changes = p
+            .synapses()
+            .iter()
+            .zip(weights.iter().zip(&old))
+            .filter(|(_, (a, b))| a.to_bits() != b.to_bits())
+            .collect::<Vec<_>>();
+        assert_eq!(changes.len(), 2);
+        for (s, _) in changes {
+            assert!(matches!(s.kind(), CompiledSynapseKind::Decoder(c)
+                if c.head() == DecoderHeadKind::ActionCandidate
+                && c.family() == CandidateActionFamily::Approach && c.input_lane() == 18));
+        }
         for (s, w) in p.synapses().iter().zip(&weights) {
             assert!(w.is_finite());
             if s.kind() == CompiledSynapseKind::Recurrent {
