@@ -142,3 +142,20 @@ held and unheld targets. This exercises the exact-frame physical research API;
 registered dispatch is covered separately. Production safety gates and genes
 are unchanged. The corrected fixture and later CPU/GPU/lint stages still await
 actual hosted execution; no autonomous study has run.
+
+[Run 42416897062](https://github.com/BobertNeek/A-Life/actions/runs/42416897062)
+passed all 130 core tests, all 18 world grip tests and both CPU continuation
+fixtures at head `06dc6aac16ef8b59edb5f256c891185297035bdf`. The new CPU fixture
+exercised actual fresh decisions, seeded nonzero optimizer moments/ages,
+cross-interface rejection and exact cold next-checkpoint equality. No retained
+private creature was an input.
+
+The next GPU-upload test did not compile: its ordering assertion referenced a
+conversion map exported only with the separate training-rollout feature. The
+test-only correction reconstructs the check through default-feature public
+learning/eligibility metadata, compares the full ordered CPU coordinate sequence,
+checks 4096 unique rows and verifies that a naive lane-53-last sort would differ.
+It does not expose a production field, enable an extra feature or drop the order
+assertion. GPU fixtures, detached reader/gradient fixtures and Clippy still need
+actual execution after this correction. Shader device parity and autonomous
+release remain unmeasured.

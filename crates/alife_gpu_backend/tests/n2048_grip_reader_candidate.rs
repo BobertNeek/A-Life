@@ -15,12 +15,74 @@ fn grip_identity_uses_the_same_memory_upload_coordinates_as_cpu() {
     .0;
     let upload = GpuPhenotypeUpload::try_from(&p).unwrap();
     // CPU SparseGraph accumulates each family's memory in phenotype order.
-    // The schema3 GPU map must retain that exact f32 summation order too.
-    let expected_memory = p.synapses().iter().enumerate().filter_map(|(index, s)| {
-        matches!(s.kind(), CompiledSynapseKind::Decoder(c) if c.head() == DecoderHeadKind::MemoryContext)
-            .then_some(upload.canonical_to_local_synapse[index])
-    }).collect::<Vec<_>>();
-    assert_eq!(upload.memory_weight_indices, expected_memory);
+    // Resolve the GPU map through its public packed learning/eligibility records,
+    // independently of the training-only canonical_to_local_synapse convenience
+    // field. Compare coordinates and weight bits in order, not sorted sets.
+    let expected_memory = p
+        .synapses()
+        .iter()
+        .filter_map(|s| match s.kind() {
+            CompiledSynapseKind::Decoder(c) if c.head() == DecoderHeadKind::MemoryContext => {
+                Some([
+                    c.head().raw(),
+                    u32::from(c.family().raw()),
+                    u32::from(c.input_lane()),
+                    s.source(),
+                    s.target(),
+                    u32::from(s.receptor_index()),
+                    s.genetic_weight().to_bits(),
+                    s.alpha().to_bits(),
+                ])
+            }
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    let actual_memory = upload
+        .memory_weight_indices
+        .iter()
+        .map(|&local_id| {
+            let local = local_id as usize;
+            let learning = &upload.synapse_learning_metadata[local];
+            assert_eq!(learning.global_synapse_id, local_id);
+            assert_eq!(learning.kind, CompiledSynapseKind::DECODER_RAW);
+            let decoder = &upload.decoder_eligibility_metadata
+                [learning.decoder_metadata_local_or_max as usize];
+            assert_eq!(decoder.global_synapse_id, local_id);
+            assert_eq!(
+                decoder.eligibility_local_index,
+                learning.eligibility_local_index
+            );
+            assert_eq!(decoder.receptor_index, learning.receptor_index);
+            // The GPU eligibility ABI's motor_index stores the absolute source
+            // neuron, not the phenotype's lobe-local output ordinal.
+            assert_eq!(decoder.motor_index, learning.source_neuron);
+            [
+                decoder.decoder_head,
+                decoder.family,
+                decoder.input_lane,
+                learning.source_neuron,
+                learning.target_neuron,
+                learning.receptor_index,
+                upload.genetic_weights[local].to_bits(),
+                upload.alpha[local].to_bits(),
+            ]
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(actual_memory, expected_memory);
+    assert_eq!(expected_memory.len(), 4096);
+    assert_eq!(
+        expected_memory
+            .iter()
+            .copied()
+            .collect::<std::collections::BTreeSet<_>>()
+            .len(),
+        4096
+    );
+    // Sensitivity check: naive lane53-last ordering must differ from the
+    // intended interleaving of the 64 retargeted source55 coordinates.
+    let mut naive_lane_order = expected_memory.clone();
+    naive_lane_order.sort_by_key(|row| (row[0], row[1], row[2], row[4], row[3]));
+    assert_ne!(actual_memory, naive_lane_order);
     let plan = upload.memory_channel_plans[0];
     assert_eq!(plan.schema_version, 3);
     assert_eq!(plan.decoder_input_stride, 54);
