@@ -1745,7 +1745,7 @@ mod help_feedback {
             }
             app.update();
             let text = &app.world().get::<Text>(strip).unwrap().0;
-            assert!(text.contains("queued for the selected creature"));
+            assert!(text.contains("queued"));
             assert_eq!(text.contains("Resume with Space"), paused);
             assert_eq!(
                 app.world().get::<Visibility>(strip),
@@ -1762,6 +1762,72 @@ mod help_feedback {
     #[test]
     fn praise_help_distinguishes_queued_care_from_paused_delivery() {
         check_queued_care(Action::Praise);
+    }
+
+    fn check_selection_independent_feedback(status: String, feedback: &str, queued: bool) {
+        let original = Some(reference(
+            StableVoxelRefKind::Creature,
+            Some(WorldEntityId(1)),
+        ));
+        let other = Some(reference(
+            StableVoxelRefKind::Creature,
+            Some(WorldEntityId(2)),
+        ));
+        for paused in [false, true] {
+            let (mut app, strip) = app();
+            {
+                let mut ux = app
+                    .world_mut()
+                    .resource_mut::<Fvr05ProductionUxStateResource>();
+                ux.show_help = true;
+                ux.settings.paused = paused;
+                ux.update_selection_snapshot(original, false);
+                ux.last_action = status.clone();
+            }
+            app.update();
+            for selected in [other, None, original] {
+                {
+                    let mut ux = app
+                        .world_mut()
+                        .resource_mut::<Fvr05ProductionUxStateResource>();
+                    // The real input system uses this snapshot update when a
+                    // click or PgUp/PgDn changes the stable selection identity.
+                    ux.update_selection_snapshot(selected, false);
+                    assert_eq!(
+                        ux.settings.selected_stable_id,
+                        selected.and_then(|s| s.stable_id.map(WorldEntityId::raw))
+                    );
+                    assert_eq!(ux.last_action, status, "selection retains action history");
+                }
+                app.update();
+                let text = &app.world().get::<Text>(strip).unwrap().0;
+                assert!(
+                    text.contains(feedback),
+                    "last action must remain visible: {text}"
+                );
+                assert!(
+                    !text.contains("selected creature") && !text.contains("selected ground"),
+                    "last action must not be attributed to a newer selection: {text}"
+                );
+                assert_eq!(text.contains("Resume with Space"), queued && paused);
+            }
+        }
+    }
+
+    #[test]
+    fn touch_help_does_not_retarget_queued_care_when_selection_changes() {
+        check_selection_independent_feedback(Action::Touch.queued_status(), "touch queued", true);
+    }
+
+    #[test]
+    fn praise_help_does_not_retarget_queued_care_when_selection_changes() {
+        check_selection_independent_feedback(Action::Praise.queued_status(), "Praise queued", true);
+    }
+
+    #[test]
+    fn food_help_does_not_retarget_placement_when_selection_changes() {
+        check_selection_independent_feedback("Food placed".into(), "Food placed", false);
+        check_selection_independent_feedback("Food moved".into(), "Food moved", false);
     }
 
     fn check_rejected_selection_guidance(action: Action) {
@@ -1802,8 +1868,8 @@ mod help_feedback {
                 assert!(text.contains(guidance), "{action:?}: {text}");
                 assert!(!text.contains("The last action couldn't finish"));
                 assert!(!text.contains("Food wasn't placed"));
-                assert!(!text.contains("Food placed on"));
-                assert!(!text.contains("queued for the selected creature"));
+                assert!(!text.contains("Food placed"));
+                assert!(!text.contains("queued"));
                 assert!(!text.contains("Plaything offered"));
                 assert!(!text.contains("Resume with Space"));
             }
@@ -1855,7 +1921,7 @@ mod help_feedback {
             assert!(text.contains("The last action couldn't finish"));
             assert!(!text.contains("before giving care"));
             assert!(!text.contains("Click a ground tile, then press E"));
-            assert!(!text.contains("queued for the selected creature"));
+            assert!(!text.contains("queued"));
             assert!(!text.contains("Resume with Space"));
         }
     }
@@ -1874,7 +1940,7 @@ mod help_feedback {
         }
         app.update();
         let text = &app.world().get::<Text>(strip).unwrap().0;
-        assert!(!text.contains("queued for the selected creature"));
+        assert!(!text.contains("queued"));
         assert!(!text.contains("Resume with Space"));
         {
             let mut ux = app

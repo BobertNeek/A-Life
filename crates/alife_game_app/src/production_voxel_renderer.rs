@@ -4748,15 +4748,15 @@ fn sync_v0_player_control_strip(
         text.push_str(message);
     } else {
         if ux.last_action == "Food placed" {
-            text.push_str("\nFood placed on the selected ground.");
+            text.push_str("\nFood placed.");
         } else if ux.last_action == "Food moved" {
-            text.push_str("\nFood moved to the selected ground.");
+            text.push_str("\nFood moved.");
         } else if ux.last_action == "Food move cancelled" {
             text.push_str("\nFood move cancelled.");
         } else if ux.last_action == care_dock::Action::Touch.queued_status() {
-            text.push_str("\nGentle touch queued for the selected creature.");
+            text.push_str("\nGentle touch queued.");
         } else if ux.last_action == care_dock::Action::Praise.queued_status() {
-            text.push_str("\nPraise queued for the selected creature.");
+            text.push_str("\nPraise queued.");
         } else if ux.last_action.starts_with("Plaything offered") {
             text.push_str("\nPlaything offered. The creature can investigate or ignore it.");
         }
