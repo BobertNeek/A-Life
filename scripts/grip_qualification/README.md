@@ -27,9 +27,14 @@ The fixed test inventory covers:
 Every fixture target is first compiled explicitly with Cargo `--no-run` and JSON
 compiler messages. A separate `--list` invocation binds failure identifiers to
 that target and filter. Execution requires a nonempty test inventory and a matching
-libtest summary with at least one passing test and no failed or ignored tests;
-stale filters cannot pass silently. The example's inventory must match the three
-reviewed fixture identifiers exactly.
+libtest summary with at least one passing test and no failed tests; stale filters
+cannot pass silently. Ignored tests are forbidden except the existing
+`memory_cpu_recall_microbenchmark` in `alife_core/candidate_memory_retrieval`.
+Its ignored identifier must appear in that harness's inventory and output, with
+exact set/count agreement with the per-suite allowlist and summary. Missing,
+duplicate or unexpected ignored tests fail qualification. The benchmark stays
+ignored: no `--ignored` execution or ignore-attribute change is authorized.
+The example's inventory must match the three reviewed fixture identifiers exactly.
 All Cargo commands use `--locked --profile dev` and one cold target directory.
 
 ## Output and resource limits
@@ -43,8 +48,9 @@ Compiler output publishes at most 24 deduplicated records per command: code,
 level, tracked Rust source file and valid line, and a fixed canonical message.
 Compiler free text, snippets, suggestions, child diagnostics, build-script output,
 dependency paths and unknown JSON are never printed. For a failed fixture, at most
-12 bounded test identifiers from that harness's inventory and the numeric summary
-are printed. No raw-log fallback exists, including infrastructure errors.
+12 bounded failed identifiers and 12 ignored identifiers from that harness's
+inventory and the numeric summary are printed. Ignore reasons remain private.
+No raw-log fallback exists, including infrastructure errors.
 
 A cold build requires 12 GiB free. During each command a 250 ms monitor stops its
 whole process group at a 3 GiB free-space watermark, leaving a 1 GiB cushion above

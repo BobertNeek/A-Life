@@ -29,6 +29,7 @@ MAX_LOG_BYTES = 64 << 20
 MAX_LINE_BYTES = 64 << 10
 MAX_DIAGNOSTICS = 24
 MAX_FAILED_NAMES = 12
+MAX_IGNORED_NAMES = 12
 NAME = r"[A-Za-z_][A-Za-z0-9_]{0,99}(?:::[A-Za-z_][A-Za-z0-9_]{0,99}){0,10}"
 SUMMARY = re.compile(
     r"test result: (ok|FAILED)\. ([0-9]{1,5}) passed; ([0-9]{1,5}) failed; "
@@ -83,6 +84,7 @@ class Suite:
     target: str
     kind: str = "test"
     test_filter: str = ""
+    expected_ignored: frozenset[str] = frozenset()
 
     @property
     def label(self):
@@ -101,7 +103,8 @@ SUITES = (
     Suite("alife_core", "perception_digest_golden"),
     Suite("alife_core", "memory_query", "lib", "memory_query::"),
     Suite("alife_core", "candidate_memory_queries"),
-    Suite("alife_core", "candidate_memory_retrieval"),
+    Suite("alife_core", "candidate_memory_retrieval",
+          expected_ignored=frozenset({"memory_cpu_recall_microbenchmark"})),
     Suite("alife_world", "grip_research", "lib", "headless::grip_research::tests::"),
     Suite("alife_training", "cpu_grip_reader_candidate"),
     Suite("alife_training", "cpu_memory_gain_candidate"),
@@ -221,8 +224,9 @@ def listed_tests(path):
     return names
 
 
-def test_result(path, known_names):
+def test_result(path, known_names, expected_ignored=frozenset()):
     summaries, failed = [], set()
+    ignored_names, ignored_lines, unknown_ignored = set(), 0, False
     for line in bounded_lines(path):
         match = SUMMARY.fullmatch(line)
         if match:
@@ -232,13 +236,28 @@ def test_result(path, known_names):
             match = re.fullmatch(f"({NAME}) --- FAILED", line)
         if match and match[1] in known_names:
             failed.add(match[1])
-    result = {"failed_tests": sorted(failed)[:MAX_FAILED_NAMES]}
+        # libtest may append an arbitrary #[ignore = "reason"]. Never publish
+        # that reason. Only bounded identifiers from this harness are retained.
+        match = re.fullmatch(f"test ({NAME}) \\.\\.\\. ignored(?:, .*)?", line)
+        if match:
+            ignored_lines += 1
+            if match[1] in known_names and len(match[1]) <= 240:
+                ignored_names.add(match[1])
+            else:
+                unknown_ignored = True
+    result = {"failed_tests": sorted(failed)[:MAX_FAILED_NAMES],
+              "ignored_tests": sorted(ignored_names)[:MAX_IGNORED_NAMES]}
     # One selected integration target or one filtered library harness only.
     if len(summaries) == 1:
         status, passed, failures, ignored, measured, filtered = summaries[0]
         if passed + failures + ignored == len(known_names) and measured == 0:
             result.update(status=status, passed=passed, failed=failures,
-                          ignored=ignored, filtered=filtered)
+                          ignored=ignored, filtered=filtered,
+                          ignored_inventory_valid=(
+                              not unknown_ignored
+                              and ignored_names == expected_ignored
+                              and expected_ignored <= known_names
+                              and ignored_lines == ignored == len(ignored_names)))
     return result
 
 
@@ -362,13 +381,16 @@ class Runner:
             known = listed_tests(log)
             if suite.kind == "example" and known != EXAMPLE_TESTS:
                 raise GateError("fixture_inventory_changed")
+            if not suite.expected_ignored <= known:
+                raise GateError("fixture_inventory_changed")
         except GateError:
             print(json.dumps({"gate": suite.label + "/inventory", "status": "failed"}), flush=True)
             raise
         code, log = self.run(suite.label + "/fixtures", cargo_command(suite, "test", self.target), 240)
-        result = test_result(log, known)
+        result = test_result(log, known, suite.expected_ignored)
         passed = (code == 0 and result.get("status") == "ok" and result.get("passed", 0) > 0
-                  and result.get("failed") == 0 and result.get("ignored") == 0)
+                  and result.get("failed") == 0 and not result["failed_tests"]
+                  and result.get("ignored_inventory_valid") is True)
         print(json.dumps({"gate": suite.label + "/fixtures", **result,
                           "status": "passed" if passed else "failed"}), flush=True)
         if not passed:

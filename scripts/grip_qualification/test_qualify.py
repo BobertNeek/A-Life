@@ -124,8 +124,9 @@ class ProjectionTests(unittest.TestCase):
             "thread 'tests::two' panicked: " + PRIVATE,
             "test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.02s",
         ]), names)
-        self.assertEqual(result, {"failed_tests": ["tests::two"], "status": "FAILED",
-                                  "passed": 1, "failed": 1, "ignored": 0, "filtered": 7})
+        self.assertEqual(result, {"failed_tests": ["tests::two"], "ignored_tests": [],
+                                  "status": "FAILED", "passed": 1, "failed": 1,
+                                  "ignored": 0, "filtered": 7, "ignored_inventory_valid": True})
         self.assertNotIn(PRIVATE, json.dumps(result))
 
     def test_inventory_accepts_only_test_identifier_lines(self):
@@ -148,6 +149,16 @@ class ProjectionTests(unittest.TestCase):
         names = {f"tests::failure_{i}" for i in range(50)}
         result = q.test_result(self.log([f"test {name} ... FAILED" for name in names]), names)
         self.assertEqual(len(result["failed_tests"]), q.MAX_FAILED_NAMES)
+
+    def test_ignored_identifier_count_is_bounded_and_unknown_names_are_private(self):
+        names = {f"tests::skip_{i}" for i in range(50)}
+        result = q.test_result(self.log([f"test {name} ... ignored, {PRIVATE}" for name in names]
+            + [f"test {PRIVATE} ... ignored, {PRIVATE}",
+               "test result: ok. 0 passed; 0 failed; 50 ignored; 0 measured; 0 filtered out; finished in 0.01s"]),
+            names, frozenset(names))
+        self.assertEqual(len(result["ignored_tests"]), q.MAX_IGNORED_NAMES)
+        self.assertFalse(result["ignored_inventory_valid"])
+        self.assertNotIn(PRIVATE, json.dumps(result))
 
     def test_terse_failure_format_still_reports_only_known_names(self):
         result = q.test_result(self.log(["tests::one --- FAILED", PRIVATE + " --- FAILED"]), {"tests::one"})
@@ -219,6 +230,12 @@ class SourceAndCommandTests(unittest.TestCase):
                              (q.Suite("alife_training", "probe_grip_reader", "example"), "test")):
             with self.assertRaises(q.GateError):
                 q.cargo_command(suite, phase, "/tmp/target")
+
+    def test_only_the_existing_recall_microbenchmark_is_declared_ignored(self):
+        self.assertEqual(len(q.SUITES), 18)
+        ignored = {suite.label: suite.expected_ignored for suite in q.SUITES if suite.expected_ignored}
+        self.assertEqual(ignored, {"alife_core/candidate_memory_retrieval":
+                                  frozenset({"memory_cpu_recall_microbenchmark"})})
 
     def test_required_contract_targets_and_source_files_exist(self):
         selected = {(s.package, s.target) for s in q.SUITES}
@@ -376,6 +393,93 @@ class RunnerGuardTests(unittest.TestCase):
             with self.assertRaisesRegex(q.GateError, "fixture_inventory_changed"):
                 self.runner.suite(q.SUITES[-1])
         self.assertEqual(run.call_count, 1)
+
+
+class IgnoredFixtureTests(unittest.TestCase):
+    """Mocked harness output only; no benchmark or native fixture is executed."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix="grip-ignored-test-")
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.runner = q.Runner(self.root, self.root, {})
+        self.suite = next(s for s in q.SUITES if s.target == "candidate_memory_retrieval")
+        self.benchmark = "memory_cpu_recall_microbenchmark"
+        self.names = {f"fixture_{i}" for i in range(74)} | {self.benchmark}
+
+    def run_fixture(self, ignored_lines, passed=74, ignored=1, failures=0, code=0,
+                    inventory=None, suite=None, extra_lines=()):
+        inventory_log, fixture_log = self.root / "inventory.log", self.root / "fixture.log"
+        inventory = self.names if inventory is None else inventory
+        inventory_log.write_text("\n".join(f"{name}: test" for name in sorted(inventory)))
+        status = "FAILED" if failures else "ok"
+        fixture_log.write_text("\n".join([*ignored_lines, *extra_lines,
+            f"test result: {status}. {passed} passed; {failures} failed; {ignored} ignored; "
+            "0 measured; 0 filtered out; finished in 0.01s"]))
+        output = io.StringIO()
+        with patch.object(self.runner, "check"), \
+                patch.object(self.runner, "run", side_effect=[(0, inventory_log), (code, fixture_log)]) as run, \
+                contextlib.redirect_stdout(output):
+            try:
+                self.runner.suite(suite or self.suite)
+                accepted = True
+            except q.GateError:
+                accepted = False
+        self.assertNotIn(PRIVATE, output.getvalue())
+        return accepted, json.loads(output.getvalue().splitlines()[-1]), run.call_count
+
+    def test_74_passed_and_exact_declared_benchmark_ignored_are_accepted(self):
+        for suffix in ("", ", " + PRIVATE + " ::error:: " + PRIVATE):
+            with self.subTest(reason=bool(suffix)):
+                accepted, result, calls = self.run_fixture([f"test {self.benchmark} ... ignored{suffix}"])
+                self.assertTrue(accepted)
+                self.assertEqual(result["status"], "passed")
+                self.assertEqual((result["passed"], result["failed"], result["ignored"]), (74, 0, 1))
+                self.assertEqual(result["ignored_tests"], [self.benchmark])
+                self.assertTrue(result["ignored_inventory_valid"])
+                self.assertEqual(calls, 2)
+
+    def test_missing_different_duplicate_and_unexpected_ignored_names_fail(self):
+        expected = f"test {self.benchmark} ... ignored, {PRIVATE}"
+        for lines, passed, ignored in (
+            ([], 74, 1),
+            (["test fixture_0 ... ignored"], 74, 1),
+            ([f"test {PRIVATE} ... ignored, {PRIVATE}"], 74, 1),
+            ([expected, "test fixture_0 ... ignored"], 73, 2),
+            ([expected, expected], 73, 2),
+            ([expected, f"test {PRIVATE} ... ignored"], 74, 1),
+            ([expected], 75, 0),
+            ([], 75, 0),
+        ):
+            with self.subTest(case=(len(lines), passed, ignored)):
+                accepted, result, _ = self.run_fixture(lines, passed=passed, ignored=ignored)
+                self.assertFalse(accepted)
+                self.assertEqual(result["status"], "failed")
+                self.assertFalse(result["ignored_inventory_valid"])
+
+    def test_missing_declared_benchmark_in_inventory_prevents_execution(self):
+        accepted, result, calls = self.run_fixture([], inventory=self.names - {self.benchmark})
+        self.assertFalse(accepted)
+        self.assertEqual(result["gate"], self.suite.label + "/inventory")
+        self.assertEqual(calls, 1)
+
+    def test_other_suites_cannot_inherit_the_benchmark_exception(self):
+        accepted, result, _ = self.run_fixture([f"test {self.benchmark} ... ignored"], suite=q.SUITES[0])
+        self.assertFalse(accepted)
+        self.assertFalse(result["ignored_inventory_valid"])
+
+    def test_failed_zero_test_and_nonzero_exit_results_still_fail(self):
+        line = f"test {self.benchmark} ... ignored"
+        for options in (
+            {"passed": 73, "failures": 1, "code": 1, "extra_lines": ("test fixture_0 ... FAILED", PRIVATE)},
+            {"passed": 0, "inventory": {self.benchmark}},
+            {"code": 1},
+            {"extra_lines": ("test fixture_0 ... FAILED",)},
+        ):
+            with self.subTest(options=tuple(options)):
+                accepted, result, _ = self.run_fixture([line], **options)
+                self.assertFalse(accepted)
+                self.assertEqual(result["status"], "failed")
 
 
 if __name__ == "__main__":

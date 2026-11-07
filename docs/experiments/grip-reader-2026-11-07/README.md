@@ -119,3 +119,14 @@ recall, then verify its own real operation namespace is retained. Malformed
 profile-4 operations must still reject. No production guard is weakened and no
 new inherited weight is changed. The corrected test and all later stages still
 need actual hosted execution. No autonomous study or replacement life ran.
+
+[Run 42414924757](https://github.com/BobertNeek/A-Life/actions/runs/42414924757)
+then confirmed the corrected fixture at head
+`fe5950659b429a654646bb7cc9b0768cf5c814f0`: 130 core tests passed, zero failed,
+and the pre-existing CPU recall microbenchmark remained intentionally ignored.
+The qualification wrapper nevertheless stopped because it incorrectly required
+zero ignored tests. The next infrastructure change permits exactly that named
+benchmark skip in that one suite, checking the observed name and counts against
+the inventory. All other skips, failures and zero-test runs still reject; the
+benchmark is not enabled. Production code and inherited genes are unchanged.
+World, CPU, GPU and lint stages still need execution on the corrected wrapper.
