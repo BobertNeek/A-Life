@@ -99,8 +99,11 @@ Placement checks eight local ring positions followed by the actor's feet. It
 retains bounded reach, terrain support, an item-radius map footprint, swept solid
 obstacle clearance, and conservative spacing from unrelated items and peers.
 The held path is airborne: its start need not have ground beneath it, but its
-endpoint must be supported and the full path must clear actual solids. The
-carrier and newly acquired target are excluded from this spacing: the latter
+endpoint must be supported and the full path must clear actual solids. The item
+sweep conservatively expands terrain boxes by the item radius on all three axes,
+including raised solids and vertical tangency. This is clearance geometry, not a
+rendered-mesh collision model. The carrier and newly acquired target are excluded
+from this spacing: the latter
 vacates its ground slot atomically. Contact radii are not authored mesh volumes;
 existing carry poses already overlap the carrier's contact envelope. This does
 not make real terrain or obstacle solids passable.

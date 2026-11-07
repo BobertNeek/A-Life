@@ -344,8 +344,8 @@ impl HeadlessWorld {
                     bounds[1] - object.radius,
                     bounds[2] + object.radius,
                     bounds[3] + object.radius,
-                    bounds[4],
-                    bounds[5],
+                    bounds[4] - object.radius,
+                    bounds[5] + object.radius,
                 ];
                 sight_box_hit(object.position, direction, expanded, length).is_some()
             })
@@ -686,22 +686,19 @@ mod tests {
         world
             .apply_command(&command(HeadlessActionIds::PLAY, ball))
             .unwrap();
-        world.terrain = Some(
-            crate::WorldTerrain::new(
-                crate::TerrainData {
-                    width: 3,
-                    depth: 3,
-                    origin_x: -0.3,
-                    origin_z: -0.3,
-                    spacing: 0.3,
-                    heights: vec![0.0; 9],
-                    obstacles: Vec::new(),
-                    water_level: None,
-                },
-                crate::LocomotionLimits::default(),
-            )
-            .unwrap(),
-        );
+        let body_radius = world.locomotion_body_radius();
+        let item_radius = world.entity(ball).unwrap().radius;
+        assert!(item_radius > body_radius);
+        // A map exactly as wide as the item radius admits the feet anchor.
+        // Instead keep the actor supported while the item footprint cannot fit.
+        let half_width = (body_radius + item_radius) * 0.5;
+        assert!(half_width > body_radius && half_width < item_radius);
+        world.terrain = Some(flat_terrain(half_width, None));
+        world.objects.get_mut(&food.raw()).unwrap().position = Vec3f::new(0.0, 0.0, 0.1);
+        let actor = world.agent_entity_id(ORGANISM).unwrap();
+        assert!(world.terrain.as_ref().unwrap().walkable(0.0, 0.0));
+        assert!(world.grasp_target_is_reachable(ORGANISM, actor, food));
+        assert_eq!(world.hand_placement(ORGANISM, ball, Some(food)), None);
         let before = material_objects(&world);
         let result = world
             .apply_command(&command(HeadlessActionIds::EAT, food))
@@ -1150,7 +1147,13 @@ mod tests {
         world
             .apply_command(&command(HeadlessActionIds::GRAB, held))
             .unwrap();
-        world.objects.get_mut(&food.raw()).unwrap().position.x = 1.4;
+        // Require a real move, but stay within one embodiment-adapted interval.
+        // The previous 1.4-unit fixture remained unreachable after that move.
+        let target_before = Vec3f::new(EAT_RADIUS + MOVE_STEP * 0.1, 0.0, 0.0);
+        world.objects.get_mut(&food.raw()).unwrap().position = target_before;
+        let actor_before = world.entity(actor).unwrap().position;
+        assert!(distance(actor_before, target_before) > EAT_RADIUS);
+        assert!(!world.physical_contact_reachable(actor_before, target_before));
         let eat = command(HeadlessActionIds::EAT, food);
         assert_eq!(
             world.check_action(&eat),
@@ -1181,7 +1184,25 @@ mod tests {
         assert!(receipt.succeeded);
         assert_eq!(world.tick(), before_tick);
         assert_eq!(receipt.outcome_tick.raw(), before_tick.raw() + 1);
-        assert!(world.entity(actor).unwrap().position.x > 0.0);
+        let actor_after = world.entity(actor).unwrap().position;
+        assert!(actor_after.x > actor_before.x);
+        // Compare against the original loose-target pose, not its new grip pose.
+        assert!(distance(actor_after, target_before) < EAT_RADIUS);
+        assert!(world.physical_contact_reachable(actor_after, target_before));
+        assert_eq!(
+            receipt.channel_receipts[0].command.channel,
+            MotorChannel::Locomotion
+        );
+        assert_eq!(
+            receipt.channel_receipts[1].command.channel,
+            MotorChannel::Manipulation
+        );
+        let locomotion = &receipt.channel_receipts[0];
+        assert_eq!(locomotion.physical.contact, PhysicalContactKind::Moved);
+        assert_eq!(
+            locomotion.physical.displacement,
+            subtract(actor_after, actor_before)
+        );
         let manipulation = receipt
             .channel_receipts
             .iter()
@@ -1190,6 +1211,11 @@ mod tests {
         assert_eq!(manipulation.phase, ActionPhase::Preparation);
         assert_eq!(manipulation.physical.target_entity, Some(food));
         assert_eq!(manipulation.grip_transfers.len(), 2);
+        assert_eq!(manipulation.grip_transfers[1].object, food);
+        assert_eq!(
+            manipulation.grip_transfers[1].previous_position,
+            target_before
+        );
         assert_eq!(receipt.grip_transfers, manipulation.grip_transfers);
         assert_eq!(world.entity(held).unwrap().carried_by, None);
         assert_eq!(world.entity(food).unwrap().carried_by, Some(ORGANISM));
@@ -1320,6 +1346,99 @@ mod tests {
                 assert_eq!(result.body_event.nutrition, 0.0);
                 assert!(result.grip_transfers.is_empty());
                 assert_eq!(material_objects(&world), before, "{case}/{route}");
+            }
+        }
+    }
+
+    fn raised_midpath_world(
+        min_y: f32,
+        max_y: f32,
+    ) -> (HeadlessWorld, WorldEntityId, WorldEntityId) {
+        let (mut world, held, food) = world();
+        for (id, x) in [(held, 0.02), (food, -0.02)] {
+            let object = world.objects.get_mut(&id.raw()).unwrap();
+            object.kind = WorldObjectKind::Food;
+            object.radius = 0.05;
+            object.position.x = x;
+        }
+        let mut data = flat_terrain(0.1, None).state().data;
+        // Obstacle metadata may extend outside the supporting terrain. The
+        // small map permits feet placement only; the held anchor is airborne.
+        data.obstacles = vec![[0.24, -0.01, 0.26, 0.01, min_y, max_y]];
+        world.terrain =
+            Some(crate::WorldTerrain::new(data, crate::LocomotionLimits::default()).unwrap());
+        // Preserve existing pickup rules: this is an ordinary allowed pickup,
+        // not an injected pose or a change to general carry/locomotion physics.
+        let pickup = world
+            .apply_command(&command(HeadlessActionIds::GRAB, held))
+            .unwrap();
+        assert!(pickup.execution.succeeded);
+        world
+            .apply_command(&HeadlessWorldCommand::rest(ORGANISM).unwrap())
+            .unwrap();
+        (world, held, food)
+    }
+
+    #[test]
+    fn raised_midpath_solid_rejects_swap_without_losing_the_previous_hold() {
+        for action in [HeadlessActionIds::EAT, HeadlessActionIds::GRAB] {
+            for min_y in [0.02, 0.08] {
+                let (mut world, held, food) = raised_midpath_world(min_y, min_y + 0.02);
+                let start = world.entity(held).unwrap().position;
+                assert!(world.solid_segment_clear(start, Vec3f::ZERO));
+                assert!(!world
+                    .terrain
+                    .as_ref()
+                    .unwrap()
+                    .surface()
+                    .obstacle_at(0.0, 0.0, 0.05));
+                let clear = min_y > 0.05;
+                assert_eq!(
+                    world.hand_placement(ORGANISM, held, Some(food)),
+                    clear.then_some(Vec3f::ZERO)
+                );
+                let before = world.object_snapshots();
+                let tick = world.tick();
+                let result = world.apply_command(&command(action, food)).unwrap();
+                assert_eq!(result.execution.succeeded, clear);
+                assert_eq!(world.tick(), tick);
+                assert_no_activity(&result);
+                if clear {
+                    assert_eq!(result.grip_transfers.len(), 2);
+                    assert_eq!(result.grip_transfers[0].kind, GripTransferKind::Placed);
+                    assert_eq!(result.grip_transfers[1].kind, GripTransferKind::Acquired);
+                    assert_eq!(world.entity(held).unwrap().position, Vec3f::ZERO);
+                    assert_eq!(world.entity(held).unwrap().carried_by, None);
+                    assert_eq!(world.entity(food).unwrap().carried_by, Some(ORGANISM));
+                } else {
+                    assert_eq!(result.phase, ActionPhase::Attempt);
+                    assert!(result.grip_transfers.is_empty());
+                    assert_eq!(world.object_snapshots(), before);
+                    assert_eq!(world.entity(held).unwrap().carried_by, Some(ORGANISM));
+                    assert_eq!(world.entity(food).unwrap().carried_by, None);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn item_sweep_vertical_radius_boundaries_are_closed_above_and_below() {
+        let radius = 0.05_f32;
+        for above in [true, false] {
+            for clearance in [radius.next_down(), radius, radius.next_up()] {
+                let (min_y, max_y) = if above {
+                    (clearance, clearance + 0.02)
+                } else {
+                    (-clearance - 0.02, -clearance)
+                };
+                let (world, held, _) = raised_midpath_world(min_y, max_y);
+                let object = world.entity(held).unwrap();
+                assert!(world.solid_segment_clear(object.position, Vec3f::ZERO));
+                assert_eq!(
+                    world.hand_solid_sweep_clear(object, Vec3f::ZERO),
+                    clearance > radius,
+                    "above={above}, clearance={clearance:?}"
+                );
             }
         }
     }
