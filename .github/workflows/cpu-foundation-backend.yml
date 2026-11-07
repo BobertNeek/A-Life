@@ -79,10 +79,10 @@ jobs:
           cargo test --locked -p alife_core --test n2048_experimental_graph
           cargo test --locked -p alife_training --features cpu-backend --test cpu_experimental_graph --example probe_weight_space_care
           cargo clippy --locked -p alife_training --features cpu-backend --test cpu_experimental_graph --example probe_weight_space_care -- -D warnings
-          python3 -m unittest discover -s docs/experiments/weight-space-2026-11-07 -p 'test_*.py'
+          python3 -B -m unittest discover -s docs/experiments/weight-space-2026-11-07 -p 'test_*.py'
           output="$RUNNER_TEMP/weight-space-journal-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           cargo run --locked -p alife_training --features cpu-backend --example probe_weight_space_care -- "$output" 1 -8 contact 1 2026111301 food .4 0 0
-          python3 docs/experiments/weight-space-2026-11-07/summarize_receipts.py "$output" > "$RUNNER_TEMP/weight-space-journal-summary.json"
+          python3 -B docs/experiments/weight-space-2026-11-07/summarize_receipts.py "$output" > "$RUNNER_TEMP/weight-space-journal-summary.json"
       - name: Inference-only founder merge contracts
         env:
           RUST_MIN_STACK: '33554432'
