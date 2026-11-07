@@ -1,0 +1,3052 @@
+{
+  "schema": "fresh-native-transfer-causal-v1",
+  "backend": "native-cpu",
+  "comparison": "fixed-state-ingest-family-valence-ablation",
+  "rows": [
+    {
+      "seed": 2026111201,
+      "arm": "family-value-off",
+      "mirror_z": false,
+      "index": 0,
+      "tick": 600,
+      "after_harm": false,
+      "held_a": false,
+      "actual_manipulation": "Other:A",
+      "ablated_manipulation": "Other:A",
+      "actual_representative": "Other:A",
+      "ablated_representative": "Other:A",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": 1.5756292343139648,
+        "ingest_b": 1.5756292343139648,
+        "ingest_a_minus_b": 0.0,
+        "approach_a": 0.8152666091918945,
+        "avoid_a": -1.4740755558013916
+      },
+      "ablated_scores": {
+        "ingest_a": 1.5756292343139648,
+        "ingest_b": 1.5756292343139648,
+        "ingest_a_minus_b": 0.0,
+        "approach_a": 0.8152666091918945,
+        "avoid_a": -1.4740755558013916
+      }
+    },
+    {
+      "seed": 2026111201,
+      "arm": "family-value-off",
+      "mirror_z": false,
+      "index": 8,
+      "tick": 608,
+      "after_harm": false,
+      "held_a": false,
+      "actual_manipulation": "Ingest:B",
+      "ablated_manipulation": "Ingest:B",
+      "actual_representative": "Ingest:B",
+      "ablated_representative": "Ingest:B",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": 3.3821470737457275,
+        "ingest_b": 3.3714094161987305,
+        "ingest_a_minus_b": 0.01073765754699707,
+        "approach_a": 1.814455270767212,
+        "avoid_a": -5.290377140045166
+      },
+      "ablated_scores": {
+        "ingest_a": 3.3821470737457275,
+        "ingest_b": 3.3714094161987305,
+        "ingest_a_minus_b": 0.01073765754699707,
+        "approach_a": 1.814455270767212,
+        "avoid_a": -5.290377140045166
+      }
+    },
+    {
+      "seed": 2026111201,
+      "arm": "family-value-off",
+      "mirror_z": false,
+      "index": 10,
+      "tick": 610,
+      "after_harm": false,
+      "held_a": true,
+      "actual_manipulation": "Ingest:A",
+      "ablated_manipulation": "Ingest:A",
+      "actual_representative": "Ingest:A",
+      "ablated_representative": "Ingest:A",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": 3.677668809890747,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": 1.8014650344848633,
+        "avoid_a": -6.137725830078125
+      },
+      "ablated_scores": {
+        "ingest_a": 3.677668809890747,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": 1.8014650344848633,
+        "avoid_a": -6.137725830078125
+      }
+    },
+    {
+      "seed": 2026111201,
+      "arm": "family-value-off",
+      "mirror_z": false,
+      "index": 24,
+      "tick": 624,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "none",
+      "ablated_manipulation": "none",
+      "actual_representative": "Approach:B",
+      "ablated_representative": "Approach:B",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": null,
+        "ingest_b": 3.6250650882720947,
+        "ingest_a_minus_b": null,
+        "approach_a": null,
+        "avoid_a": null
+      },
+      "ablated_scores": {
+        "ingest_a": null,
+        "ingest_b": 3.6250650882720947,
+        "ingest_a_minus_b": null,
+        "approach_a": null,
+        "avoid_a": null
+      }
+    },
+    {
+      "seed": 2026111201,
+      "arm": "family-value-off",
+      "mirror_z": false,
+      "index": 32,
+      "tick": 632,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "none",
+      "ablated_manipulation": "none",
+      "actual_representative": "Approach:A",
+      "ablated_representative": "Approach:A",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": -0.6070244312286377,
+        "ingest_b": 3.848100185394287,
+        "ingest_a_minus_b": -4.455124855041504,
+        "approach_a": 2.874183177947998,
+        "avoid_a": 1.6403989791870117
+      },
+      "ablated_scores": {
+        "ingest_a": -0.6070244312286377,
+        "ingest_b": 3.848100185394287,
+        "ingest_a_minus_b": -4.455124855041504,
+        "approach_a": 2.874183177947998,
+        "avoid_a": 1.6403989791870117
+      }
+    },
+    {
+      "seed": 2026111201,
+      "arm": "family-value-off",
+      "mirror_z": false,
+      "index": 33,
+      "tick": 633,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "Ingest:B",
+      "ablated_manipulation": "Ingest:B",
+      "actual_representative": "Ingest:B",
+      "ablated_representative": "Ingest:B",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": -0.5915803909301758,
+        "ingest_b": 3.8542635440826416,
+        "ingest_a_minus_b": -4.445843696594238,
+        "approach_a": 2.889366626739502,
+        "avoid_a": 1.6408820152282715
+      },
+      "ablated_scores": {
+        "ingest_a": -0.5915803909301758,
+        "ingest_b": 3.8542635440826416,
+        "ingest_a_minus_b": -4.445843696594238,
+        "approach_a": 2.889366626739502,
+        "avoid_a": 1.6408820152282715
+      }
+    },
+    {
+      "seed": 2026111201,
+      "arm": "family-value-off",
+      "mirror_z": false,
+      "index": 35,
+      "tick": 635,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "none",
+      "ablated_manipulation": "none",
+      "actual_representative": "Avoid:A",
+      "ablated_representative": "Avoid:A",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": -1.0002343654632568,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": -0.6042861938476562,
+        "avoid_a": 2.2832469940185547
+      },
+      "ablated_scores": {
+        "ingest_a": -1.0002343654632568,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": -0.6042861938476562,
+        "avoid_a": 2.2832469940185547
+      }
+    },
+    {
+      "seed": 2026111201,
+      "arm": "family-value-off",
+      "mirror_z": false,
+      "index": 55,
+      "tick": 655,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "Ingest:B",
+      "ablated_manipulation": "Ingest:B",
+      "actual_representative": "Ingest:B",
+      "ablated_representative": "Ingest:B",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": -0.8302326202392578,
+        "ingest_b": 3.8514575958251953,
+        "ingest_a_minus_b": -4.681690216064453,
+        "approach_a": -0.608759880065918,
+        "avoid_a": 2.1301803588867188
+      },
+      "ablated_scores": {
+        "ingest_a": -0.8302326202392578,
+        "ingest_b": 3.851457357406616,
+        "ingest_a_minus_b": -4.681690216064453,
+        "approach_a": -0.608759880065918,
+        "avoid_a": 2.1301803588867188
+      }
+    },
+    {
+      "seed": 2026111201,
+      "arm": "family-value-off",
+      "mirror_z": false,
+      "index": 61,
+      "tick": 661,
+      "after_harm": true,
+      "held_a": true,
+      "actual_manipulation": "Ingest:A",
+      "ablated_manipulation": "Ingest:A",
+      "actual_representative": "Ingest:A",
+      "ablated_representative": "Ingest:A",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": 4.067593097686768,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": 1.7316151857376099,
+        "avoid_a": -7.33323335647583
+      },
+      "ablated_scores": {
+        "ingest_a": 4.067815780639648,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": 1.7316151857376099,
+        "avoid_a": -7.33323335647583
+      }
+    },
+    {
+      "seed": 2026111201,
+      "arm": "family-value-off",
+      "mirror_z": false,
+      "index": 64,
+      "tick": 664,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "none",
+      "ablated_manipulation": "none",
+      "actual_representative": "Idle:other",
+      "ablated_representative": "Idle:other",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": null,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": null,
+        "avoid_a": null
+      },
+      "ablated_scores": {
+        "ingest_a": null,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": null,
+        "avoid_a": null
+      }
+    },
+    {
+      "seed": 2026111201,
+      "arm": "family-value-off",
+      "mirror_z": false,
+      "index": 84,
+      "tick": 684,
+      "after_harm": true,
+      "held_a": true,
+      "actual_manipulation": "Ingest:A",
+      "ablated_manipulation": "Ingest:A",
+      "actual_representative": "Ingest:A",
+      "ablated_representative": "Ingest:A",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": -0.13811445236206055,
+        "ingest_b": 4.031035423278809,
+        "ingest_a_minus_b": -4.169149875640869,
+        "approach_a": -0.2841322422027588,
+        "avoid_a": 0.3700566291809082
+      },
+      "ablated_scores": {
+        "ingest_a": -0.13391923904418945,
+        "ingest_b": 4.030936241149902,
+        "ingest_a_minus_b": -4.164855480194092,
+        "approach_a": -0.2841322422027588,
+        "avoid_a": 0.3700566291809082
+      }
+    },
+    {
+      "seed": 2026111201,
+      "arm": "family-value-on",
+      "mirror_z": false,
+      "index": 0,
+      "tick": 600,
+      "after_harm": false,
+      "held_a": false,
+      "actual_manipulation": "Other:A",
+      "ablated_manipulation": "Other:A",
+      "actual_representative": "Other:A",
+      "ablated_representative": "Other:A",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": 1.5756292343139648,
+        "ingest_b": 1.5756292343139648,
+        "ingest_a_minus_b": 0.0,
+        "approach_a": 0.8152666091918945,
+        "avoid_a": -1.4740755558013916
+      },
+      "ablated_scores": {
+        "ingest_a": 1.5756292343139648,
+        "ingest_b": 1.5756292343139648,
+        "ingest_a_minus_b": 0.0,
+        "approach_a": 0.8152666091918945,
+        "avoid_a": -1.4740755558013916
+      }
+    },
+    {
+      "seed": 2026111201,
+      "arm": "family-value-on",
+      "mirror_z": false,
+      "index": 8,
+      "tick": 608,
+      "after_harm": false,
+      "held_a": false,
+      "actual_manipulation": "Ingest:B",
+      "ablated_manipulation": "Ingest:B",
+      "actual_representative": "Ingest:B",
+      "ablated_representative": "Ingest:B",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": 3.3808720111846924,
+        "ingest_b": 3.3701701164245605,
+        "ingest_a_minus_b": 0.010701894760131836,
+        "approach_a": 1.814455270767212,
+        "avoid_a": -5.290377140045166
+      },
+      "ablated_scores": {
+        "ingest_a": 3.3821470737457275,
+        "ingest_b": 3.3714094161987305,
+        "ingest_a_minus_b": 0.01073765754699707,
+        "approach_a": 1.814455270767212,
+        "avoid_a": -5.290377140045166
+      }
+    },
+    {
+      "seed": 2026111201,
+      "arm": "family-value-on",
+      "mirror_z": false,
+      "index": 10,
+      "tick": 610,
+      "after_harm": false,
+      "held_a": true,
+      "actual_manipulation": "Ingest:A",
+      "ablated_manipulation": "Ingest:A",
+      "actual_representative": "Ingest:A",
+      "ablated_representative": "Ingest:A",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": 3.6763954162597656,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": 1.8014650344848633,
+        "avoid_a": -6.137725830078125
+      },
+      "ablated_scores": {
+        "ingest_a": 3.677668809890747,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": 1.8014650344848633,
+        "avoid_a": -6.137725830078125
+      }
+    },
+    {
+      "seed": 2026111201,
+      "arm": "family-value-on",
+      "mirror_z": false,
+      "index": 24,
+      "tick": 624,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "Ingest:B",
+      "ablated_manipulation": "none",
+      "actual_representative": "Ingest:B",
+      "ablated_representative": "Approach:B",
+      "sampled_choice_changed": true,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": null,
+        "ingest_b": 3.817629337310791,
+        "ingest_a_minus_b": null,
+        "approach_a": null,
+        "avoid_a": null
+      },
+      "ablated_scores": {
+        "ingest_a": null,
+        "ingest_b": 3.6250650882720947,
+        "ingest_a_minus_b": null,
+        "approach_a": null,
+        "avoid_a": null
+      }
+    },
+    {
+      "seed": 2026111201,
+      "arm": "family-value-on",
+      "mirror_z": false,
+      "index": 25,
+      "tick": 625,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "Ingest:B",
+      "ablated_manipulation": "Ingest:B",
+      "actual_representative": "Ingest:B",
+      "ablated_representative": "Ingest:B",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": null,
+        "ingest_b": 3.9218151569366455,
+        "ingest_a_minus_b": null,
+        "approach_a": null,
+        "avoid_a": null
+      },
+      "ablated_scores": {
+        "ingest_a": null,
+        "ingest_b": 3.7224578857421875,
+        "ingest_a_minus_b": null,
+        "approach_a": null,
+        "avoid_a": null
+      }
+    },
+    {
+      "seed": 2026111201,
+      "arm": "family-value-on",
+      "mirror_z": false,
+      "index": 29,
+      "tick": 629,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "none",
+      "ablated_manipulation": "none",
+      "actual_representative": "Inspect:A",
+      "ablated_representative": "Inspect:A",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": -7.908387660980225,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": -0.6120715141296387,
+        "avoid_a": 1.608994960784912
+      },
+      "ablated_scores": {
+        "ingest_a": -0.6538839340209961,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": -0.6120715141296387,
+        "avoid_a": 1.608994960784912
+      }
+    },
+    {
+      "seed": 2026111201,
+      "arm": "family-value-on",
+      "mirror_z": false,
+      "index": 32,
+      "tick": 632,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "none",
+      "ablated_manipulation": "none",
+      "actual_representative": "Approach:A",
+      "ablated_representative": "Approach:A",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": -4.303972244262695,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": 5.069422245025635,
+        "avoid_a": -7.36397123336792
+      },
+      "ablated_scores": {
+        "ingest_a": 4.098098278045654,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": 5.069422245025635,
+        "avoid_a": -7.36397123336792
+      }
+    },
+    {
+      "seed": 2026111201,
+      "arm": "family-value-on",
+      "mirror_z": false,
+      "index": 45,
+      "tick": 645,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "Ingest:B",
+      "ablated_manipulation": "Ingest:B",
+      "actual_representative": "Ingest:B",
+      "ablated_representative": "Ingest:B",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": -4.557595729827881,
+        "ingest_b": 4.045914649963379,
+        "ingest_a_minus_b": -8.603509902954102,
+        "approach_a": 5.070295333862305,
+        "avoid_a": -6.78427267074585
+      },
+      "ablated_scores": {
+        "ingest_a": 3.8384294509887695,
+        "ingest_b": 3.8429129123687744,
+        "ingest_a_minus_b": -0.004483461380004883,
+        "approach_a": 5.070295333862305,
+        "avoid_a": -6.78427267074585
+      }
+    },
+    {
+      "seed": 2026111201,
+      "arm": "family-value-on",
+      "mirror_z": false,
+      "index": 62,
+      "tick": 662,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "Ingest:B",
+      "ablated_manipulation": "Ingest:B",
+      "actual_representative": "Ingest:B",
+      "ablated_representative": "Ingest:B",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": -8.112524032592773,
+        "ingest_b": 3.9847612380981445,
+        "ingest_a_minus_b": -12.097285270690918,
+        "approach_a": -0.5755683183670044,
+        "avoid_a": 2.0483317375183105
+      },
+      "ablated_scores": {
+        "ingest_a": -0.8161804676055908,
+        "ingest_b": 3.8067309856414795,
+        "ingest_a_minus_b": -4.62291145324707,
+        "approach_a": -0.5755683183670044,
+        "avoid_a": 2.0483317375183105
+      }
+    },
+    {
+      "seed": 2026111201,
+      "arm": "family-value-on",
+      "mirror_z": false,
+      "index": 64,
+      "tick": 664,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "none",
+      "ablated_manipulation": "none",
+      "actual_representative": "Inspect:A",
+      "ablated_representative": "Approach:A",
+      "sampled_choice_changed": true,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": -4.84523868560791,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": 1.7505922317504883,
+        "avoid_a": -6.9435272216796875
+      },
+      "ablated_scores": {
+        "ingest_a": 3.841064453125,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": 1.7505922317504883,
+        "avoid_a": -6.9435272216796875
+      }
+    },
+    {
+      "seed": 2026111201,
+      "arm": "family-value-on",
+      "mirror_z": false,
+      "index": 90,
+      "tick": 690,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "Ingest:B",
+      "ablated_manipulation": "Ingest:B",
+      "actual_representative": "Ingest:B",
+      "ablated_representative": "Ingest:B",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": -4.606623649597168,
+        "ingest_b": 3.9516987800598145,
+        "ingest_a_minus_b": -8.55832290649414,
+        "approach_a": 5.004601001739502,
+        "avoid_a": -6.77822732925415
+      },
+      "ablated_scores": {
+        "ingest_a": 3.760923385620117,
+        "ingest_b": 3.7640254497528076,
+        "ingest_a_minus_b": -0.0031020641326904297,
+        "approach_a": 5.004601001739502,
+        "avoid_a": -6.77822732925415
+      }
+    },
+    {
+      "seed": 2026111201,
+      "arm": "family-value-on",
+      "mirror_z": false,
+      "index": 96,
+      "tick": 696,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "none",
+      "ablated_manipulation": "Ingest:A",
+      "actual_representative": "Rest:other",
+      "ablated_representative": "Ingest:A",
+      "sampled_choice_changed": true,
+      "ablation_to_ingest_a": true,
+      "actual_scores": {
+        "ingest_a": -4.633910179138184,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": 1.7804701328277588,
+        "avoid_a": -7.331149578094482
+      },
+      "ablated_scores": {
+        "ingest_a": 4.033489227294922,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": 1.7804701328277588,
+        "avoid_a": -7.331149578094482
+      }
+    },
+    {
+      "seed": 2026111201,
+      "arm": "family-value-on",
+      "mirror_z": false,
+      "index": 128,
+      "tick": 728,
+      "after_harm": true,
+      "held_a": true,
+      "actual_manipulation": "none",
+      "ablated_manipulation": "Ingest:A",
+      "actual_representative": "Approach:B",
+      "ablated_representative": "Ingest:A",
+      "sampled_choice_changed": true,
+      "ablation_to_ingest_a": true,
+      "actual_scores": {
+        "ingest_a": -3.819368839263916,
+        "ingest_b": 3.9985949993133545,
+        "ingest_a_minus_b": -7.817963600158691,
+        "approach_a": 1.639984130859375,
+        "avoid_a": -6.7703094482421875
+      },
+      "ablated_scores": {
+        "ingest_a": 3.6810901165008545,
+        "ingest_b": 3.812192916870117,
+        "ingest_a_minus_b": -0.1311028003692627,
+        "approach_a": 1.639984130859375,
+        "avoid_a": -6.7703094482421875
+      }
+    },
+    {
+      "seed": 2026111201,
+      "arm": "family-value-on",
+      "mirror_z": false,
+      "index": 139,
+      "tick": 739,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "Ingest:B",
+      "ablated_manipulation": "Ingest:B",
+      "actual_representative": "Ingest:B",
+      "ablated_representative": "Ingest:B",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": -4.969630241394043,
+        "ingest_b": 3.842151403427124,
+        "ingest_a_minus_b": -8.811781883239746,
+        "approach_a": 1.6284743547439575,
+        "avoid_a": -6.7802276611328125
+      },
+      "ablated_scores": {
+        "ingest_a": 3.6742262840270996,
+        "ingest_b": 3.6555590629577637,
+        "ingest_a_minus_b": 0.018667221069335938,
+        "approach_a": 1.6284743547439575,
+        "avoid_a": -6.7802276611328125
+      }
+    },
+    {
+      "seed": 2026111201,
+      "arm": "family-value-on",
+      "mirror_z": false,
+      "index": 160,
+      "tick": 760,
+      "after_harm": true,
+      "held_a": true,
+      "actual_manipulation": "none",
+      "ablated_manipulation": "Ingest:A",
+      "actual_representative": "Approach:B",
+      "ablated_representative": "Ingest:A",
+      "sampled_choice_changed": true,
+      "ablation_to_ingest_a": true,
+      "actual_scores": {
+        "ingest_a": -3.8715648651123047,
+        "ingest_b": 3.911128520965576,
+        "ingest_a_minus_b": -7.782693386077881,
+        "approach_a": 1.5998992919921875,
+        "avoid_a": -6.769711017608643
+      },
+      "ablated_scores": {
+        "ingest_a": 3.613220691680908,
+        "ingest_b": 3.7240335941314697,
+        "ingest_a_minus_b": -0.11081290245056152,
+        "approach_a": 1.5998992919921875,
+        "avoid_a": -6.769711017608643
+      }
+    },
+    {
+      "seed": 2026111201,
+      "arm": "family-value-on",
+      "mirror_z": false,
+      "index": 192,
+      "tick": 792,
+      "after_harm": true,
+      "held_a": true,
+      "actual_manipulation": "Ingest:B",
+      "ablated_manipulation": "Ingest:B",
+      "actual_representative": "Ingest:B",
+      "ablated_representative": "Ingest:B",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": -5.068253517150879,
+        "ingest_b": 3.8615336418151855,
+        "ingest_a_minus_b": -8.929786682128906,
+        "approach_a": 1.504163146018982,
+        "avoid_a": -6.782546043395996
+      },
+      "ablated_scores": {
+        "ingest_a": 3.545060634613037,
+        "ingest_b": 3.6748270988464355,
+        "ingest_a_minus_b": -0.12976646423339844,
+        "approach_a": 1.504163146018982,
+        "avoid_a": -6.782546043395996
+      }
+    },
+    {
+      "seed": 2026111201,
+      "arm": "family-value-on",
+      "mirror_z": false,
+      "index": 224,
+      "tick": 824,
+      "after_harm": true,
+      "held_a": true,
+      "actual_manipulation": "Ingest:B",
+      "ablated_manipulation": "Ingest:B",
+      "actual_representative": "Ingest:B",
+      "ablated_representative": "Ingest:B",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": -5.122074604034424,
+        "ingest_b": 3.7539896965026855,
+        "ingest_a_minus_b": -8.87606430053711,
+        "approach_a": 1.4071906805038452,
+        "avoid_a": -6.782179355621338
+      },
+      "ablated_scores": {
+        "ingest_a": 3.4685075283050537,
+        "ingest_b": 3.567634105682373,
+        "ingest_a_minus_b": -0.09912657737731934,
+        "approach_a": 1.4071906805038452,
+        "avoid_a": -6.782179355621338
+      }
+    },
+    {
+      "seed": 2026111202,
+      "arm": "family-value-off",
+      "mirror_z": true,
+      "index": 0,
+      "tick": 600,
+      "after_harm": false,
+      "held_a": false,
+      "actual_manipulation": "none",
+      "ablated_manipulation": "none",
+      "actual_representative": "Approach:other",
+      "ablated_representative": "Approach:other",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": 1.5756292343139648,
+        "ingest_b": 1.5756292343139648,
+        "ingest_a_minus_b": 0.0,
+        "approach_a": 0.8152666091918945,
+        "avoid_a": -1.4740755558013916
+      },
+      "ablated_scores": {
+        "ingest_a": 1.5756292343139648,
+        "ingest_b": 1.5756292343139648,
+        "ingest_a_minus_b": 0.0,
+        "approach_a": 0.8152666091918945,
+        "avoid_a": -1.4740755558013916
+      }
+    },
+    {
+      "seed": 2026111202,
+      "arm": "family-value-off",
+      "mirror_z": true,
+      "index": 12,
+      "tick": 612,
+      "after_harm": false,
+      "held_a": false,
+      "actual_manipulation": "Ingest:B",
+      "ablated_manipulation": "Ingest:B",
+      "actual_representative": "Ingest:B",
+      "ablated_representative": "Ingest:B",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": 3.870551586151123,
+        "ingest_b": 3.9074342250823975,
+        "ingest_a_minus_b": -0.036882638931274414,
+        "approach_a": 5.242701053619385,
+        "avoid_a": -6.536783218383789
+      },
+      "ablated_scores": {
+        "ingest_a": 3.870551586151123,
+        "ingest_b": 3.9074342250823975,
+        "ingest_a_minus_b": -0.036882638931274414,
+        "approach_a": 5.242701053619385,
+        "avoid_a": -6.536783218383789
+      }
+    },
+    {
+      "seed": 2026111202,
+      "arm": "family-value-off",
+      "mirror_z": true,
+      "index": 20,
+      "tick": 620,
+      "after_harm": false,
+      "held_a": true,
+      "actual_manipulation": "Ingest:A",
+      "ablated_manipulation": "Ingest:A",
+      "actual_representative": "Ingest:A",
+      "ablated_representative": "Ingest:A",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": 3.9760046005249023,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": 1.8048095703125,
+        "avoid_a": -6.774753570556641
+      },
+      "ablated_scores": {
+        "ingest_a": 3.9760046005249023,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": 1.8048095703125,
+        "avoid_a": -6.774753570556641
+      }
+    },
+    {
+      "seed": 2026111202,
+      "arm": "family-value-off",
+      "mirror_z": true,
+      "index": 34,
+      "tick": 634,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "Ingest:B",
+      "ablated_manipulation": "Ingest:B",
+      "actual_representative": "Ingest:B",
+      "ablated_representative": "Ingest:B",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": null,
+        "ingest_b": 3.93314266204834,
+        "ingest_a_minus_b": null,
+        "approach_a": null,
+        "avoid_a": null
+      },
+      "ablated_scores": {
+        "ingest_a": null,
+        "ingest_b": 3.93314266204834,
+        "ingest_a_minus_b": null,
+        "approach_a": null,
+        "avoid_a": null
+      }
+    },
+    {
+      "seed": 2026111202,
+      "arm": "family-value-off",
+      "mirror_z": true,
+      "index": 36,
+      "tick": 636,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "none",
+      "ablated_manipulation": "none",
+      "actual_representative": "Rest:other",
+      "ablated_representative": "Rest:other",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": -0.783104658126831,
+        "ingest_b": 3.876192331314087,
+        "ingest_a_minus_b": -4.659296989440918,
+        "approach_a": -0.5864397287368774,
+        "avoid_a": 2.0907769203186035
+      },
+      "ablated_scores": {
+        "ingest_a": -0.783104658126831,
+        "ingest_b": 3.876192331314087,
+        "ingest_a_minus_b": -4.659296989440918,
+        "approach_a": -0.5864397287368774,
+        "avoid_a": 2.0907769203186035
+      }
+    },
+    {
+      "seed": 2026111202,
+      "arm": "family-value-off",
+      "mirror_z": true,
+      "index": 37,
+      "tick": 637,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "Ingest:B",
+      "ablated_manipulation": "Ingest:B",
+      "actual_representative": "Ingest:B",
+      "ablated_representative": "Ingest:B",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": -0.77435302734375,
+        "ingest_b": 3.878382921218872,
+        "ingest_a_minus_b": -4.652735710144043,
+        "approach_a": -0.573859691619873,
+        "avoid_a": 2.1001954078674316
+      },
+      "ablated_scores": {
+        "ingest_a": -0.77435302734375,
+        "ingest_b": 3.878382921218872,
+        "ingest_a_minus_b": -4.652735710144043,
+        "approach_a": -0.573859691619873,
+        "avoid_a": 2.1001954078674316
+      }
+    },
+    {
+      "seed": 2026111202,
+      "arm": "family-value-off",
+      "mirror_z": true,
+      "index": 45,
+      "tick": 645,
+      "after_harm": true,
+      "held_a": true,
+      "actual_manipulation": "Ingest:A",
+      "ablated_manipulation": "Ingest:A",
+      "actual_representative": "Ingest:A",
+      "ablated_representative": "Ingest:A",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": 4.042690277099609,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": 1.7321537733078003,
+        "avoid_a": -7.208505630493164
+      },
+      "ablated_scores": {
+        "ingest_a": 4.042690753936768,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": 1.7321537733078003,
+        "avoid_a": -7.208505630493164
+      }
+    },
+    {
+      "seed": 2026111202,
+      "arm": "family-value-off",
+      "mirror_z": true,
+      "index": 55,
+      "tick": 655,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "Ingest:B",
+      "ablated_manipulation": "Ingest:B",
+      "actual_representative": "Ingest:B",
+      "ablated_representative": "Ingest:B",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": null,
+        "ingest_b": 4.0343918800354,
+        "ingest_a_minus_b": null,
+        "approach_a": null,
+        "avoid_a": null
+      },
+      "ablated_scores": {
+        "ingest_a": null,
+        "ingest_b": 4.034296035766602,
+        "ingest_a_minus_b": null,
+        "approach_a": null,
+        "avoid_a": null
+      }
+    },
+    {
+      "seed": 2026111202,
+      "arm": "family-value-off",
+      "mirror_z": true,
+      "index": 64,
+      "tick": 664,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "none",
+      "ablated_manipulation": "none",
+      "actual_representative": "Approach:A",
+      "ablated_representative": "Approach:A",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": 3.906625747680664,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": 4.895103454589844,
+        "avoid_a": -7.4057183265686035
+      },
+      "ablated_scores": {
+        "ingest_a": 3.9108035564422607,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": 4.895103454589844,
+        "avoid_a": -7.4057183265686035
+      }
+    },
+    {
+      "seed": 2026111202,
+      "arm": "family-value-off",
+      "mirror_z": true,
+      "index": 68,
+      "tick": 668,
+      "after_harm": true,
+      "held_a": true,
+      "actual_manipulation": "Ingest:A",
+      "ablated_manipulation": "Ingest:A",
+      "actual_representative": "Ingest:A",
+      "ablated_representative": "Ingest:A",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": 3.9666035175323486,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": 1.6651087999343872,
+        "avoid_a": -7.430774211883545
+      },
+      "ablated_scores": {
+        "ingest_a": 3.9709291458129883,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": 1.6651087999343872,
+        "avoid_a": -7.430774211883545
+      }
+    },
+    {
+      "seed": 2026111202,
+      "arm": "family-value-on",
+      "mirror_z": true,
+      "index": 0,
+      "tick": 600,
+      "after_harm": false,
+      "held_a": false,
+      "actual_manipulation": "none",
+      "ablated_manipulation": "none",
+      "actual_representative": "Approach:other",
+      "ablated_representative": "Approach:other",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": 1.5756292343139648,
+        "ingest_b": 1.5756292343139648,
+        "ingest_a_minus_b": 0.0,
+        "approach_a": 0.8152666091918945,
+        "avoid_a": -1.4740755558013916
+      },
+      "ablated_scores": {
+        "ingest_a": 1.5756292343139648,
+        "ingest_b": 1.5756292343139648,
+        "ingest_a_minus_b": 0.0,
+        "approach_a": 0.8152666091918945,
+        "avoid_a": -1.4740755558013916
+      }
+    },
+    {
+      "seed": 2026111202,
+      "arm": "family-value-on",
+      "mirror_z": true,
+      "index": 12,
+      "tick": 612,
+      "after_harm": false,
+      "held_a": false,
+      "actual_manipulation": "Ingest:B",
+      "ablated_manipulation": "Ingest:B",
+      "actual_representative": "Ingest:B",
+      "ablated_representative": "Ingest:B",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": 3.869192600250244,
+        "ingest_b": 3.906266212463379,
+        "ingest_a_minus_b": -0.037073612213134766,
+        "approach_a": 5.242701053619385,
+        "avoid_a": -6.536783218383789
+      },
+      "ablated_scores": {
+        "ingest_a": 3.870551586151123,
+        "ingest_b": 3.9074342250823975,
+        "ingest_a_minus_b": -0.036882638931274414,
+        "approach_a": 5.242701053619385,
+        "avoid_a": -6.536783218383789
+      }
+    },
+    {
+      "seed": 2026111202,
+      "arm": "family-value-on",
+      "mirror_z": true,
+      "index": 20,
+      "tick": 620,
+      "after_harm": false,
+      "held_a": true,
+      "actual_manipulation": "Ingest:A",
+      "ablated_manipulation": "Ingest:A",
+      "actual_representative": "Ingest:A",
+      "ablated_representative": "Ingest:A",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": 3.9725732803344727,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": 1.8048095703125,
+        "avoid_a": -6.774753570556641
+      },
+      "ablated_scores": {
+        "ingest_a": 3.9760046005249023,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": 1.8048095703125,
+        "avoid_a": -6.774753570556641
+      }
+    },
+    {
+      "seed": 2026111202,
+      "arm": "family-value-on",
+      "mirror_z": true,
+      "index": 34,
+      "tick": 634,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "Ingest:B",
+      "ablated_manipulation": "Ingest:B",
+      "actual_representative": "Ingest:B",
+      "ablated_representative": "Ingest:B",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": null,
+        "ingest_b": 4.131383895874023,
+        "ingest_a_minus_b": null,
+        "approach_a": null,
+        "avoid_a": null
+      },
+      "ablated_scores": {
+        "ingest_a": null,
+        "ingest_b": 3.93314266204834,
+        "ingest_a_minus_b": null,
+        "approach_a": null,
+        "avoid_a": null
+      }
+    },
+    {
+      "seed": 2026111202,
+      "arm": "family-value-on",
+      "mirror_z": true,
+      "index": 36,
+      "tick": 636,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "Contact:B",
+      "ablated_manipulation": "none",
+      "actual_representative": "Contact:B",
+      "ablated_representative": "Rest:other",
+      "sampled_choice_changed": true,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": -8.045916557312012,
+        "ingest_b": 4.075355052947998,
+        "ingest_a_minus_b": -12.121271133422852,
+        "approach_a": -0.5864397287368774,
+        "avoid_a": 2.0907769203186035
+      },
+      "ablated_scores": {
+        "ingest_a": -0.783104658126831,
+        "ingest_b": 3.876192331314087,
+        "ingest_a_minus_b": -4.659296989440918,
+        "approach_a": -0.5864397287368774,
+        "avoid_a": 2.0907769203186035
+      }
+    },
+    {
+      "seed": 2026111202,
+      "arm": "family-value-on",
+      "mirror_z": true,
+      "index": 40,
+      "tick": 640,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "Ingest:B",
+      "ablated_manipulation": "Ingest:B",
+      "actual_representative": "Ingest:B",
+      "ablated_representative": "Ingest:B",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": -8.039827346801758,
+        "ingest_b": 4.0355224609375,
+        "ingest_a_minus_b": -12.075349807739258,
+        "approach_a": -0.5876741409301758,
+        "avoid_a": 2.116161823272705
+      },
+      "ablated_scores": {
+        "ingest_a": -0.7808160781860352,
+        "ingest_b": 3.8598787784576416,
+        "ingest_a_minus_b": -4.640694618225098,
+        "approach_a": -0.5876741409301758,
+        "avoid_a": 2.116161823272705
+      }
+    },
+    {
+      "seed": 2026111202,
+      "arm": "family-value-on",
+      "mirror_z": true,
+      "index": 59,
+      "tick": 659,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "Ingest:B",
+      "ablated_manipulation": "Ingest:B",
+      "actual_representative": "Ingest:B",
+      "ablated_representative": "Ingest:B",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": -8.09368896484375,
+        "ingest_b": 4.043535232543945,
+        "ingest_a_minus_b": -12.137224197387695,
+        "approach_a": -0.6126508712768555,
+        "avoid_a": 2.1054630279541016
+      },
+      "ablated_scores": {
+        "ingest_a": -0.8255691528320312,
+        "ingest_b": 3.85300612449646,
+        "ingest_a_minus_b": -4.67857551574707,
+        "approach_a": -0.6126508712768555,
+        "avoid_a": 2.1054630279541016
+      }
+    },
+    {
+      "seed": 2026111202,
+      "arm": "family-value-on",
+      "mirror_z": true,
+      "index": 64,
+      "tick": 664,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "none",
+      "ablated_manipulation": "none",
+      "actual_representative": "Approach:A",
+      "ablated_representative": "Approach:A",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": -4.364500522613525,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": 5.013529300689697,
+        "avoid_a": -7.305988311767578
+      },
+      "ablated_scores": {
+        "ingest_a": 4.032456874847412,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": 5.013529300689697,
+        "avoid_a": -7.305988311767578
+      }
+    },
+    {
+      "seed": 2026111202,
+      "arm": "family-value-on",
+      "mirror_z": true,
+      "index": 83,
+      "tick": 683,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "Ingest:B",
+      "ablated_manipulation": "Ingest:B",
+      "actual_representative": "Ingest:B",
+      "ablated_representative": "Ingest:B",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": -8.112184524536133,
+        "ingest_b": 4.016820907592773,
+        "ingest_a_minus_b": -12.129005432128906,
+        "approach_a": -0.5907279253005981,
+        "avoid_a": 2.0949320793151855
+      },
+      "ablated_scores": {
+        "ingest_a": -0.8316221237182617,
+        "ingest_b": 3.8281989097595215,
+        "ingest_a_minus_b": -4.659821033477783,
+        "approach_a": -0.5907279253005981,
+        "avoid_a": 2.0949320793151855
+      }
+    },
+    {
+      "seed": 2026111202,
+      "arm": "family-value-on",
+      "mirror_z": true,
+      "index": 96,
+      "tick": 696,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "none",
+      "ablated_manipulation": "none",
+      "actual_representative": "Inspect:A",
+      "ablated_representative": "Inspect:A",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": -7.947007179260254,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": -0.591078519821167,
+        "avoid_a": 1.692202091217041
+      },
+      "ablated_scores": {
+        "ingest_a": -0.6733837127685547,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": -0.591078519821167,
+        "avoid_a": 1.692202091217041
+      }
+    },
+    {
+      "seed": 2026111202,
+      "arm": "family-value-on",
+      "mirror_z": true,
+      "index": 102,
+      "tick": 702,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "Ingest:B",
+      "ablated_manipulation": "Ingest:B",
+      "actual_representative": "Ingest:B",
+      "ablated_representative": "Ingest:B",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": -8.119844436645508,
+        "ingest_b": 3.9957988262176514,
+        "ingest_a_minus_b": -12.115643501281738,
+        "approach_a": -0.5635576248168945,
+        "avoid_a": 2.0977611541748047
+      },
+      "ablated_scores": {
+        "ingest_a": -0.8457479476928711,
+        "ingest_b": 3.804295063018799,
+        "ingest_a_minus_b": -4.65004301071167,
+        "approach_a": -0.5635576248168945,
+        "avoid_a": 2.0977611541748047
+      }
+    },
+    {
+      "seed": 2026111202,
+      "arm": "family-value-on",
+      "mirror_z": true,
+      "index": 125,
+      "tick": 725,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "Ingest:B",
+      "ablated_manipulation": "Ingest:B",
+      "actual_representative": "Ingest:B",
+      "ablated_representative": "Ingest:B",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": -4.84941291809082,
+        "ingest_b": 3.9652175903320312,
+        "ingest_a_minus_b": -8.814630508422852,
+        "approach_a": 1.7783750295639038,
+        "avoid_a": -6.815171241760254
+      },
+      "ablated_scores": {
+        "ingest_a": 3.814892053604126,
+        "ingest_b": 3.781771183013916,
+        "ingest_a_minus_b": 0.03312087059020996,
+        "approach_a": 1.7783750295639038,
+        "avoid_a": -6.815171241760254
+      }
+    },
+    {
+      "seed": 2026111202,
+      "arm": "family-value-on",
+      "mirror_z": true,
+      "index": 128,
+      "tick": 728,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "none",
+      "ablated_manipulation": "Ingest:A",
+      "actual_representative": "Approach:A",
+      "ablated_representative": "Ingest:A",
+      "sampled_choice_changed": true,
+      "ablation_to_ingest_a": true,
+      "actual_scores": {
+        "ingest_a": -4.694498062133789,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": 1.825763463973999,
+        "avoid_a": -7.165252208709717
+      },
+      "ablated_scores": {
+        "ingest_a": 3.9670097827911377,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": 1.825763463973999,
+        "avoid_a": -7.165252208709717
+      }
+    },
+    {
+      "seed": 2026111202,
+      "arm": "family-value-on",
+      "mirror_z": true,
+      "index": 142,
+      "tick": 742,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "Ingest:B",
+      "ablated_manipulation": "Ingest:A",
+      "actual_representative": "Ingest:B",
+      "ablated_representative": "Ingest:A",
+      "sampled_choice_changed": true,
+      "ablation_to_ingest_a": true,
+      "actual_scores": {
+        "ingest_a": -4.591261863708496,
+        "ingest_b": 4.180656433105469,
+        "ingest_a_minus_b": -8.771918296813965,
+        "approach_a": 1.8111368417739868,
+        "avoid_a": -7.324764251708984
+      },
+      "ablated_scores": {
+        "ingest_a": 4.063032150268555,
+        "ingest_b": 3.9901485443115234,
+        "ingest_a_minus_b": 0.07288360595703125,
+        "approach_a": 1.8111368417739868,
+        "avoid_a": -7.324764251708984
+      }
+    },
+    {
+      "seed": 2026111202,
+      "arm": "family-value-on",
+      "mirror_z": true,
+      "index": 160,
+      "tick": 760,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "none",
+      "ablated_manipulation": "Ingest:A",
+      "actual_representative": "Rest:other",
+      "ablated_representative": "Ingest:A",
+      "sampled_choice_changed": true,
+      "ablation_to_ingest_a": true,
+      "actual_scores": {
+        "ingest_a": -4.689443588256836,
+        "ingest_b": 4.2223639488220215,
+        "ingest_a_minus_b": -8.911808013916016,
+        "approach_a": 1.7156124114990234,
+        "avoid_a": -7.326446056365967
+      },
+      "ablated_scores": {
+        "ingest_a": 3.955007553100586,
+        "ingest_b": 4.033113479614258,
+        "ingest_a_minus_b": -0.07810592651367188,
+        "approach_a": 1.7156124114990234,
+        "avoid_a": -7.326446056365967
+      }
+    },
+    {
+      "seed": 2026111202,
+      "arm": "family-value-on",
+      "mirror_z": true,
+      "index": 163,
+      "tick": 763,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "Ingest:B",
+      "ablated_manipulation": "Ingest:B",
+      "actual_representative": "Ingest:B",
+      "ablated_representative": "Ingest:B",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": -4.647812366485596,
+        "ingest_b": 4.1490912437438965,
+        "ingest_a_minus_b": -8.796903610229492,
+        "approach_a": 1.7597399950027466,
+        "avoid_a": -7.326668739318848
+      },
+      "ablated_scores": {
+        "ingest_a": 3.994927167892456,
+        "ingest_b": 3.9598567485809326,
+        "ingest_a_minus_b": 0.03507041931152344,
+        "approach_a": 1.7597399950027466,
+        "avoid_a": -7.326668739318848
+      }
+    },
+    {
+      "seed": 2026111202,
+      "arm": "family-value-on",
+      "mirror_z": true,
+      "index": 180,
+      "tick": 780,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "Ingest:B",
+      "ablated_manipulation": "Ingest:B",
+      "actual_representative": "Ingest:B",
+      "ablated_representative": "Ingest:B",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": -3.4285030364990234,
+        "ingest_b": 4.106517791748047,
+        "ingest_a_minus_b": -7.53502082824707,
+        "approach_a": 1.891879916191101,
+        "avoid_a": -7.32240629196167
+      },
+      "ablated_scores": {
+        "ingest_a": 4.054311752319336,
+        "ingest_b": 3.917391300201416,
+        "ingest_a_minus_b": 0.13692045211791992,
+        "approach_a": 1.891879916191101,
+        "avoid_a": -7.32240629196167
+      }
+    },
+    {
+      "seed": 2026111202,
+      "arm": "family-value-on",
+      "mirror_z": true,
+      "index": 192,
+      "tick": 792,
+      "after_harm": true,
+      "held_a": true,
+      "actual_manipulation": "none",
+      "ablated_manipulation": "Ingest:A",
+      "actual_representative": "Rest:other",
+      "ablated_representative": "Ingest:A",
+      "sampled_choice_changed": true,
+      "ablation_to_ingest_a": true,
+      "actual_scores": {
+        "ingest_a": -3.5944650173187256,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": 1.730949878692627,
+        "avoid_a": -7.322971820831299
+      },
+      "ablated_scores": {
+        "ingest_a": 3.883559226989746,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": 1.730949878692627,
+        "avoid_a": -7.322971820831299
+      }
+    },
+    {
+      "seed": 2026111202,
+      "arm": "family-value-on",
+      "mirror_z": true,
+      "index": 200,
+      "tick": 800,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "Ingest:B",
+      "ablated_manipulation": "Ingest:B",
+      "actual_representative": "Ingest:B",
+      "ablated_representative": "Ingest:B",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": -3.5655746459960938,
+        "ingest_b": 4.071420669555664,
+        "ingest_a_minus_b": -7.636995315551758,
+        "approach_a": 1.7419637441635132,
+        "avoid_a": -7.323654651641846
+      },
+      "ablated_scores": {
+        "ingest_a": 3.9087419509887695,
+        "ingest_b": 3.892153739929199,
+        "ingest_a_minus_b": 0.016588211059570312,
+        "approach_a": 1.7419637441635132,
+        "avoid_a": -7.323654651641846
+      }
+    },
+    {
+      "seed": 2026111202,
+      "arm": "family-value-on",
+      "mirror_z": true,
+      "index": 221,
+      "tick": 821,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "Ingest:B",
+      "ablated_manipulation": "none",
+      "actual_representative": "Ingest:B",
+      "ablated_representative": "Approach:B",
+      "sampled_choice_changed": true,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": -3.4691152572631836,
+        "ingest_b": 4.050911903381348,
+        "ingest_a_minus_b": -7.520027160644531,
+        "approach_a": 1.886573314666748,
+        "avoid_a": -7.322066307067871
+      },
+      "ablated_scores": {
+        "ingest_a": 3.9910857677459717,
+        "ingest_b": 3.866605043411255,
+        "ingest_a_minus_b": 0.1244807243347168,
+        "approach_a": 1.886573314666748,
+        "avoid_a": -7.322066307067871
+      }
+    },
+    {
+      "seed": 2026111202,
+      "arm": "family-value-on",
+      "mirror_z": true,
+      "index": 224,
+      "tick": 824,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "none",
+      "ablated_manipulation": "Ingest:A",
+      "actual_representative": "Approach:A",
+      "ablated_representative": "Ingest:A",
+      "sampled_choice_changed": true,
+      "ablation_to_ingest_a": true,
+      "actual_scores": {
+        "ingest_a": -4.26317834854126,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": 1.892201542854309,
+        "avoid_a": -7.326390743255615
+      },
+      "ablated_scores": {
+        "ingest_a": 3.931161880493164,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": 1.892201542854309,
+        "avoid_a": -7.326390743255615
+      }
+    },
+    {
+      "seed": 2026111202,
+      "arm": "family-value-on",
+      "mirror_z": true,
+      "index": 238,
+      "tick": 838,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "Ingest:B",
+      "ablated_manipulation": "Ingest:B",
+      "actual_representative": "Ingest:B",
+      "ablated_representative": "Ingest:B",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": -4.227038860321045,
+        "ingest_b": 4.007879257202148,
+        "ingest_a_minus_b": -8.234918594360352,
+        "approach_a": 1.885425329208374,
+        "avoid_a": -7.323616027832031
+      },
+      "ablated_scores": {
+        "ingest_a": 3.9560177326202393,
+        "ingest_b": 3.823547124862671,
+        "ingest_a_minus_b": 0.13247060775756836,
+        "approach_a": 1.885425329208374,
+        "avoid_a": -7.323616027832031
+      }
+    },
+    {
+      "seed": 2026111203,
+      "arm": "family-value-off",
+      "mirror_z": false,
+      "index": 0,
+      "tick": 600,
+      "after_harm": false,
+      "held_a": false,
+      "actual_manipulation": "Contact:B",
+      "ablated_manipulation": "Contact:B",
+      "actual_representative": "Contact:B",
+      "ablated_representative": "Contact:B",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": 1.5756292343139648,
+        "ingest_b": 1.5756292343139648,
+        "ingest_a_minus_b": 0.0,
+        "approach_a": 0.8152666091918945,
+        "avoid_a": -1.4740755558013916
+      },
+      "ablated_scores": {
+        "ingest_a": 1.5756292343139648,
+        "ingest_b": 1.5756292343139648,
+        "ingest_a_minus_b": 0.0,
+        "approach_a": 0.8152666091918945,
+        "avoid_a": -1.4740755558013916
+      }
+    },
+    {
+      "seed": 2026111203,
+      "arm": "family-value-off",
+      "mirror_z": false,
+      "index": 1,
+      "tick": 601,
+      "after_harm": false,
+      "held_a": false,
+      "actual_manipulation": "Ingest:B",
+      "ablated_manipulation": "Ingest:B",
+      "actual_representative": "Ingest:B",
+      "ablated_representative": "Ingest:B",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": 1.8276796340942383,
+        "ingest_b": 1.8274625539779663,
+        "ingest_a_minus_b": 0.00021708011627197266,
+        "approach_a": 1.2740837335586548,
+        "avoid_a": -2.085186243057251
+      },
+      "ablated_scores": {
+        "ingest_a": 1.8276796340942383,
+        "ingest_b": 1.8274625539779663,
+        "ingest_a_minus_b": 0.00021708011627197266,
+        "approach_a": 1.2740837335586548,
+        "avoid_a": -2.085186243057251
+      }
+    },
+    {
+      "seed": 2026111203,
+      "arm": "family-value-off",
+      "mirror_z": false,
+      "index": 7,
+      "tick": 607,
+      "after_harm": false,
+      "held_a": true,
+      "actual_manipulation": "Ingest:A",
+      "ablated_manipulation": "Ingest:A",
+      "actual_representative": "Ingest:A",
+      "ablated_representative": "Ingest:A",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": 2.9914541244506836,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": 1.7901898622512817,
+        "avoid_a": -4.7016801834106445
+      },
+      "ablated_scores": {
+        "ingest_a": 2.9914541244506836,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": 1.7901898622512817,
+        "avoid_a": -4.7016801834106445
+      }
+    },
+    {
+      "seed": 2026111203,
+      "arm": "family-value-off",
+      "mirror_z": false,
+      "index": 21,
+      "tick": 621,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "Ingest:B",
+      "ablated_manipulation": "Ingest:B",
+      "actual_representative": "Ingest:B",
+      "ablated_representative": "Ingest:B",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": null,
+        "ingest_b": 3.2055587768554688,
+        "ingest_a_minus_b": null,
+        "approach_a": null,
+        "avoid_a": null
+      },
+      "ablated_scores": {
+        "ingest_a": null,
+        "ingest_b": 3.2055587768554688,
+        "ingest_a_minus_b": null,
+        "approach_a": null,
+        "avoid_a": null
+      }
+    },
+    {
+      "seed": 2026111203,
+      "arm": "family-value-off",
+      "mirror_z": false,
+      "index": 23,
+      "tick": 623,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "none",
+      "ablated_manipulation": "none",
+      "actual_representative": "Avoid:A",
+      "ablated_representative": "Avoid:A",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": -2.71346378326416,
+        "ingest_b": 3.567915439605713,
+        "ingest_a_minus_b": -6.281379222869873,
+        "approach_a": -1.4126052856445312,
+        "avoid_a": 5.770919322967529
+      },
+      "ablated_scores": {
+        "ingest_a": -2.71346378326416,
+        "ingest_b": 3.567915439605713,
+        "ingest_a_minus_b": -6.281379222869873,
+        "approach_a": -1.4126052856445312,
+        "avoid_a": 5.770919322967529
+      }
+    },
+    {
+      "seed": 2026111203,
+      "arm": "family-value-off",
+      "mirror_z": false,
+      "index": 24,
+      "tick": 624,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "Ingest:B",
+      "ablated_manipulation": "Ingest:B",
+      "actual_representative": "Ingest:B",
+      "ablated_representative": "Ingest:B",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": -1.0435857772827148,
+        "ingest_b": 3.6662395000457764,
+        "ingest_a_minus_b": -4.70982551574707,
+        "approach_a": -0.6334576606750488,
+        "avoid_a": 2.5375704765319824
+      },
+      "ablated_scores": {
+        "ingest_a": -1.0435857772827148,
+        "ingest_b": 3.6662395000457764,
+        "ingest_a_minus_b": -4.70982551574707,
+        "approach_a": -0.6334576606750488,
+        "avoid_a": 2.5375704765319824
+      }
+    },
+    {
+      "seed": 2026111203,
+      "arm": "family-value-off",
+      "mirror_z": false,
+      "index": 32,
+      "tick": 632,
+      "after_harm": true,
+      "held_a": true,
+      "actual_manipulation": "none",
+      "ablated_manipulation": "none",
+      "actual_representative": "Idle:other",
+      "ablated_representative": "Idle:other",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": 0.25504231452941895,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": -0.14762043952941895,
+        "avoid_a": -0.04167652130126953
+      },
+      "ablated_scores": {
+        "ingest_a": 0.25504231452941895,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": -0.14762043952941895,
+        "avoid_a": -0.04167652130126953
+      }
+    },
+    {
+      "seed": 2026111203,
+      "arm": "family-value-off",
+      "mirror_z": false,
+      "index": 34,
+      "tick": 634,
+      "after_harm": true,
+      "held_a": true,
+      "actual_manipulation": "Ingest:A",
+      "ablated_manipulation": "Ingest:A",
+      "actual_representative": "Ingest:A",
+      "ablated_representative": "Ingest:A",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": 0.1117706298828125,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": -0.15621352195739746,
+        "avoid_a": 0.24623584747314453
+      },
+      "ablated_scores": {
+        "ingest_a": 0.1117706298828125,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": -0.15621352195739746,
+        "avoid_a": 0.24623584747314453
+      }
+    },
+    {
+      "seed": 2026111203,
+      "arm": "family-value-off",
+      "mirror_z": false,
+      "index": 41,
+      "tick": 641,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "Ingest:B",
+      "ablated_manipulation": "Ingest:B",
+      "actual_representative": "Ingest:B",
+      "ablated_representative": "Ingest:B",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": null,
+        "ingest_b": 4.10982084274292,
+        "ingest_a_minus_b": null,
+        "approach_a": null,
+        "avoid_a": null
+      },
+      "ablated_scores": {
+        "ingest_a": null,
+        "ingest_b": 4.109726428985596,
+        "ingest_a_minus_b": null,
+        "approach_a": null,
+        "avoid_a": null
+      }
+    },
+    {
+      "seed": 2026111203,
+      "arm": "family-value-off",
+      "mirror_z": false,
+      "index": 61,
+      "tick": 661,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "Ingest:B",
+      "ablated_manipulation": "Ingest:B",
+      "actual_representative": "Ingest:B",
+      "ablated_representative": "Ingest:B",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": -0.6421995162963867,
+        "ingest_b": 4.2828898429870605,
+        "ingest_a_minus_b": -4.925089359283447,
+        "approach_a": -0.6127200126647949,
+        "avoid_a": 1.4191279411315918
+      },
+      "ablated_scores": {
+        "ingest_a": -0.638575553894043,
+        "ingest_b": 4.282794952392578,
+        "ingest_a_minus_b": -4.921370506286621,
+        "approach_a": -0.6127200126647949,
+        "avoid_a": 1.4191279411315918
+      }
+    },
+    {
+      "seed": 2026111203,
+      "arm": "family-value-off",
+      "mirror_z": false,
+      "index": 64,
+      "tick": 664,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "none",
+      "ablated_manipulation": "none",
+      "actual_representative": "Idle:other",
+      "ablated_representative": "Idle:other",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": -0.7405800819396973,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": -0.6361863613128662,
+        "avoid_a": 1.4537992477416992
+      },
+      "ablated_scores": {
+        "ingest_a": -0.7369370460510254,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": -0.6361863613128662,
+        "avoid_a": 1.4537992477416992
+      }
+    },
+    {
+      "seed": 2026111203,
+      "arm": "family-value-off",
+      "mirror_z": false,
+      "index": 81,
+      "tick": 681,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "Ingest:B",
+      "ablated_manipulation": "Ingest:B",
+      "actual_representative": "Ingest:B",
+      "ablated_representative": "Ingest:B",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": -0.6687884330749512,
+        "ingest_b": 4.108476638793945,
+        "ingest_a_minus_b": -4.7772650718688965,
+        "approach_a": -0.6003525257110596,
+        "avoid_a": 1.4677109718322754
+      },
+      "ablated_scores": {
+        "ingest_a": -0.6651453971862793,
+        "ingest_b": 4.108386516571045,
+        "ingest_a_minus_b": -4.773531913757324,
+        "approach_a": -0.6003525257110596,
+        "avoid_a": 1.4677109718322754
+      }
+    },
+    {
+      "seed": 2026111203,
+      "arm": "family-value-off",
+      "mirror_z": false,
+      "index": 88,
+      "tick": 688,
+      "after_harm": true,
+      "held_a": true,
+      "actual_manipulation": "Ingest:A",
+      "ablated_manipulation": "Ingest:A",
+      "actual_representative": "Ingest:A",
+      "ablated_representative": "Ingest:A",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": 3.8913185596466064,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": 1.6757875680923462,
+        "avoid_a": -7.396832466125488
+      },
+      "ablated_scores": {
+        "ingest_a": 3.894958257675171,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": 1.6757875680923462,
+        "avoid_a": -7.396832466125488
+      }
+    },
+    {
+      "seed": 2026111203,
+      "arm": "family-value-on",
+      "mirror_z": false,
+      "index": 0,
+      "tick": 600,
+      "after_harm": false,
+      "held_a": false,
+      "actual_manipulation": "Contact:B",
+      "ablated_manipulation": "Contact:B",
+      "actual_representative": "Contact:B",
+      "ablated_representative": "Contact:B",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": 1.5756292343139648,
+        "ingest_b": 1.5756292343139648,
+        "ingest_a_minus_b": 0.0,
+        "approach_a": 0.8152666091918945,
+        "avoid_a": -1.4740755558013916
+      },
+      "ablated_scores": {
+        "ingest_a": 1.5756292343139648,
+        "ingest_b": 1.5756292343139648,
+        "ingest_a_minus_b": 0.0,
+        "approach_a": 0.8152666091918945,
+        "avoid_a": -1.4740755558013916
+      }
+    },
+    {
+      "seed": 2026111203,
+      "arm": "family-value-on",
+      "mirror_z": false,
+      "index": 1,
+      "tick": 601,
+      "after_harm": false,
+      "held_a": false,
+      "actual_manipulation": "Ingest:B",
+      "ablated_manipulation": "Ingest:B",
+      "actual_representative": "Ingest:B",
+      "ablated_representative": "Ingest:B",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": 1.8276796340942383,
+        "ingest_b": 1.8274625539779663,
+        "ingest_a_minus_b": 0.00021708011627197266,
+        "approach_a": 1.2740837335586548,
+        "avoid_a": -2.085186243057251
+      },
+      "ablated_scores": {
+        "ingest_a": 1.8276796340942383,
+        "ingest_b": 1.8274625539779663,
+        "ingest_a_minus_b": 0.00021708011627197266,
+        "approach_a": 1.2740837335586548,
+        "avoid_a": -2.085186243057251
+      }
+    },
+    {
+      "seed": 2026111203,
+      "arm": "family-value-on",
+      "mirror_z": false,
+      "index": 7,
+      "tick": 607,
+      "after_harm": false,
+      "held_a": true,
+      "actual_manipulation": "Ingest:A",
+      "ablated_manipulation": "Ingest:A",
+      "actual_representative": "Ingest:A",
+      "ablated_representative": "Ingest:A",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": 2.9859611988067627,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": 1.7901898622512817,
+        "avoid_a": -4.7016801834106445
+      },
+      "ablated_scores": {
+        "ingest_a": 2.9914541244506836,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": 1.7901898622512817,
+        "avoid_a": -4.7016801834106445
+      }
+    },
+    {
+      "seed": 2026111203,
+      "arm": "family-value-on",
+      "mirror_z": false,
+      "index": 21,
+      "tick": 621,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "Ingest:B",
+      "ablated_manipulation": "Ingest:B",
+      "actual_representative": "Ingest:B",
+      "ablated_representative": "Ingest:B",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": null,
+        "ingest_b": 3.388380527496338,
+        "ingest_a_minus_b": null,
+        "approach_a": null,
+        "avoid_a": null
+      },
+      "ablated_scores": {
+        "ingest_a": null,
+        "ingest_b": 3.2055587768554688,
+        "ingest_a_minus_b": null,
+        "approach_a": null,
+        "avoid_a": null
+      }
+    },
+    {
+      "seed": 2026111203,
+      "arm": "family-value-on",
+      "mirror_z": false,
+      "index": 23,
+      "tick": 623,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "none",
+      "ablated_manipulation": "none",
+      "actual_representative": "Avoid:A",
+      "ablated_representative": "Avoid:A",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": -8.35308837890625,
+        "ingest_b": 3.7484536170959473,
+        "ingest_a_minus_b": -12.101541519165039,
+        "approach_a": -1.4126064777374268,
+        "avoid_a": 5.770924091339111
+      },
+      "ablated_scores": {
+        "ingest_a": -2.7134652137756348,
+        "ingest_b": 3.567915916442871,
+        "ingest_a_minus_b": -6.281381130218506,
+        "approach_a": -1.4126064777374268,
+        "avoid_a": 5.770924091339111
+      }
+    },
+    {
+      "seed": 2026111203,
+      "arm": "family-value-on",
+      "mirror_z": false,
+      "index": 24,
+      "tick": 624,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "Ingest:B",
+      "ablated_manipulation": "Ingest:B",
+      "actual_representative": "Ingest:B",
+      "ablated_representative": "Ingest:B",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": -8.264192581176758,
+        "ingest_b": 3.848062753677368,
+        "ingest_a_minus_b": -12.112255096435547,
+        "approach_a": -0.6334576606750488,
+        "avoid_a": 2.537569999694824
+      },
+      "ablated_scores": {
+        "ingest_a": -1.0435855388641357,
+        "ingest_b": 3.6662399768829346,
+        "ingest_a_minus_b": -4.70982551574707,
+        "approach_a": -0.6334576606750488,
+        "avoid_a": 2.537569999694824
+      }
+    },
+    {
+      "seed": 2026111203,
+      "arm": "family-value-on",
+      "mirror_z": false,
+      "index": 32,
+      "tick": 632,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "none",
+      "ablated_manipulation": "Ingest:A",
+      "actual_representative": "Avoid:A",
+      "ablated_representative": "Ingest:A",
+      "sampled_choice_changed": true,
+      "ablation_to_ingest_a": true,
+      "actual_scores": {
+        "ingest_a": -7.922950267791748,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": -0.6220238208770752,
+        "avoid_a": 1.6843852996826172
+      },
+      "ablated_scores": {
+        "ingest_a": -0.6655335426330566,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": -0.6220238208770752,
+        "avoid_a": 1.6843852996826172
+      }
+    },
+    {
+      "seed": 2026111203,
+      "arm": "family-value-on",
+      "mirror_z": false,
+      "index": 44,
+      "tick": 644,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "Ingest:B",
+      "ablated_manipulation": "Ingest:B",
+      "actual_representative": "Ingest:B",
+      "ablated_representative": "Ingest:B",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": -8.078383445739746,
+        "ingest_b": 4.016295433044434,
+        "ingest_a_minus_b": -12.09467887878418,
+        "approach_a": -0.60273277759552,
+        "avoid_a": 2.1022777557373047
+      },
+      "ablated_scores": {
+        "ingest_a": -0.8248598575592041,
+        "ingest_b": 3.834981918334961,
+        "ingest_a_minus_b": -4.659841537475586,
+        "approach_a": -0.60273277759552,
+        "avoid_a": 2.1022777557373047
+      }
+    },
+    {
+      "seed": 2026111203,
+      "arm": "family-value-on",
+      "mirror_z": false,
+      "index": 64,
+      "tick": 664,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "Ingest:B",
+      "ablated_manipulation": "Ingest:B",
+      "actual_representative": "Ingest:B",
+      "ablated_representative": "Ingest:B",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": -4.835330963134766,
+        "ingest_b": 3.999837636947632,
+        "ingest_a_minus_b": -8.835168838500977,
+        "approach_a": 1.7434207201004028,
+        "avoid_a": -6.774163246154785
+      },
+      "ablated_scores": {
+        "ingest_a": 3.829082727432251,
+        "ingest_b": 3.8098607063293457,
+        "ingest_a_minus_b": 0.019222021102905273,
+        "approach_a": 1.7434207201004028,
+        "avoid_a": -6.774163246154785
+      }
+    },
+    {
+      "seed": 2026111203,
+      "arm": "family-value-on",
+      "mirror_z": false,
+      "index": 81,
+      "tick": 681,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "Ingest:B",
+      "ablated_manipulation": "Ingest:A",
+      "actual_representative": "Ingest:B",
+      "ablated_representative": "Ingest:A",
+      "sampled_choice_changed": true,
+      "ablation_to_ingest_a": true,
+      "actual_scores": {
+        "ingest_a": -4.753934860229492,
+        "ingest_b": 4.025107383728027,
+        "ingest_a_minus_b": -8.77904224395752,
+        "approach_a": 1.7887189388275146,
+        "avoid_a": -6.924424648284912
+      },
+      "ablated_scores": {
+        "ingest_a": 3.892108678817749,
+        "ingest_b": 3.840092658996582,
+        "ingest_a_minus_b": 0.05201601982116699,
+        "approach_a": 1.7887189388275146,
+        "avoid_a": -6.924424648284912
+      }
+    },
+    {
+      "seed": 2026111203,
+      "arm": "family-value-on",
+      "mirror_z": false,
+      "index": 96,
+      "tick": 696,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "none",
+      "ablated_manipulation": "Ingest:A",
+      "actual_representative": "Approach:other",
+      "ablated_representative": "Ingest:A",
+      "sampled_choice_changed": true,
+      "ablation_to_ingest_a": true,
+      "actual_scores": {
+        "ingest_a": -4.525349140167236,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": 1.8427925109863281,
+        "avoid_a": -7.325505256652832
+      },
+      "ablated_scores": {
+        "ingest_a": 4.107901573181152,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": 1.8427925109863281,
+        "avoid_a": -7.325505256652832
+      }
+    },
+    {
+      "seed": 2026111203,
+      "arm": "family-value-on",
+      "mirror_z": false,
+      "index": 102,
+      "tick": 702,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "Ingest:B",
+      "ablated_manipulation": "Ingest:B",
+      "actual_representative": "Ingest:B",
+      "ablated_representative": "Ingest:B",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": -4.597887992858887,
+        "ingest_b": 4.140454292297363,
+        "ingest_a_minus_b": -8.73834228515625,
+        "approach_a": 1.8271961212158203,
+        "avoid_a": -7.183450698852539
+      },
+      "ablated_scores": {
+        "ingest_a": 4.032487392425537,
+        "ingest_b": 3.9492287635803223,
+        "ingest_a_minus_b": 0.08325862884521484,
+        "approach_a": 1.8271961212158203,
+        "avoid_a": -7.183450698852539
+      }
+    },
+    {
+      "seed": 2026111203,
+      "arm": "family-value-on",
+      "mirror_z": false,
+      "index": 119,
+      "tick": 719,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "Ingest:B",
+      "ablated_manipulation": "Ingest:B",
+      "actual_representative": "Ingest:B",
+      "ablated_representative": "Ingest:B",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": -4.620255947113037,
+        "ingest_b": 4.172829627990723,
+        "ingest_a_minus_b": -8.793085098266602,
+        "approach_a": 1.7352721691131592,
+        "avoid_a": -7.327023506164551
+      },
+      "ablated_scores": {
+        "ingest_a": 3.9997715950012207,
+        "ingest_b": 3.9823367595672607,
+        "ingest_a_minus_b": 0.01743483543395996,
+        "approach_a": 1.7352721691131592,
+        "avoid_a": -7.327023506164551
+      }
+    },
+    {
+      "seed": 2026111203,
+      "arm": "family-value-on",
+      "mirror_z": false,
+      "index": 128,
+      "tick": 728,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "Contact:A",
+      "ablated_manipulation": "Ingest:A",
+      "actual_representative": "Contact:A",
+      "ablated_representative": "Ingest:A",
+      "sampled_choice_changed": true,
+      "ablation_to_ingest_a": true,
+      "actual_scores": {
+        "ingest_a": -4.576732635498047,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": 1.8517767190933228,
+        "avoid_a": -7.327004909515381
+      },
+      "ablated_scores": {
+        "ingest_a": 4.035896301269531,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": 1.8517767190933228,
+        "avoid_a": -7.327004909515381
+      }
+    },
+    {
+      "seed": 2026111203,
+      "arm": "family-value-on",
+      "mirror_z": false,
+      "index": 160,
+      "tick": 760,
+      "after_harm": true,
+      "held_a": true,
+      "actual_manipulation": "none",
+      "ablated_manipulation": "Ingest:A",
+      "actual_representative": "Inspect:B",
+      "ablated_representative": "Ingest:A",
+      "sampled_choice_changed": true,
+      "ablation_to_ingest_a": true,
+      "actual_scores": {
+        "ingest_a": -4.986972808837891,
+        "ingest_b": 3.904269218444824,
+        "ingest_a_minus_b": -8.891242027282715,
+        "approach_a": 1.61957848072052,
+        "avoid_a": -6.76290225982666
+      },
+      "ablated_scores": {
+        "ingest_a": 3.6117382049560547,
+        "ingest_b": 3.7222416400909424,
+        "ingest_a_minus_b": -0.1105034351348877,
+        "approach_a": 1.61957848072052,
+        "avoid_a": -6.76290225982666
+      }
+    },
+    {
+      "seed": 2026111203,
+      "arm": "family-value-on",
+      "mirror_z": false,
+      "index": 169,
+      "tick": 769,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "Ingest:B",
+      "ablated_manipulation": "Ingest:A",
+      "actual_representative": "Ingest:B",
+      "ablated_representative": "Ingest:A",
+      "sampled_choice_changed": true,
+      "ablation_to_ingest_a": true,
+      "actual_scores": {
+        "ingest_a": -4.9631547927856445,
+        "ingest_b": 3.804292678833008,
+        "ingest_a_minus_b": -8.767447471618652,
+        "approach_a": 1.6405094861984253,
+        "avoid_a": -6.767058849334717
+      },
+      "ablated_scores": {
+        "ingest_a": 3.630751132965088,
+        "ingest_b": 3.6147022247314453,
+        "ingest_a_minus_b": 0.016048908233642578,
+        "approach_a": 1.6405094861984253,
+        "avoid_a": -6.767058849334717
+      }
+    },
+    {
+      "seed": 2026111203,
+      "arm": "family-value-on",
+      "mirror_z": false,
+      "index": 188,
+      "tick": 788,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "Ingest:B",
+      "ablated_manipulation": "Ingest:B",
+      "actual_representative": "Ingest:B",
+      "ablated_representative": "Ingest:B",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": -4.661418437957764,
+        "ingest_b": 4.048654079437256,
+        "ingest_a_minus_b": -8.71007251739502,
+        "approach_a": 1.7001640796661377,
+        "avoid_a": -7.330216407775879
+      },
+      "ablated_scores": {
+        "ingest_a": 3.92130708694458,
+        "ingest_b": 3.858980417251587,
+        "ingest_a_minus_b": 0.062326669692993164,
+        "approach_a": 1.7001640796661377,
+        "avoid_a": -7.330216407775879
+      }
+    },
+    {
+      "seed": 2026111203,
+      "arm": "family-value-on",
+      "mirror_z": false,
+      "index": 192,
+      "tick": 792,
+      "after_harm": true,
+      "held_a": true,
+      "actual_manipulation": "none",
+      "ablated_manipulation": "Ingest:A",
+      "actual_representative": "Approach:A",
+      "ablated_representative": "Ingest:A",
+      "sampled_choice_changed": true,
+      "ablation_to_ingest_a": true,
+      "actual_scores": {
+        "ingest_a": -4.793082237243652,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": 1.6172397136688232,
+        "avoid_a": -7.327272415161133
+      },
+      "ablated_scores": {
+        "ingest_a": 3.787726402282715,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": 1.6172397136688232,
+        "avoid_a": -7.327272415161133
+      }
+    },
+    {
+      "seed": 2026111203,
+      "arm": "family-value-on",
+      "mirror_z": false,
+      "index": 205,
+      "tick": 805,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "Ingest:B",
+      "ablated_manipulation": "Ingest:A",
+      "actual_representative": "Ingest:B",
+      "ablated_representative": "Ingest:A",
+      "sampled_choice_changed": true,
+      "ablation_to_ingest_a": true,
+      "actual_scores": {
+        "ingest_a": -4.7042622566223145,
+        "ingest_b": 4.002002239227295,
+        "ingest_a_minus_b": -8.70626449584961,
+        "approach_a": 1.687119960784912,
+        "avoid_a": -7.327668190002441
+      },
+      "ablated_scores": {
+        "ingest_a": 3.8683154582977295,
+        "ingest_b": 3.8125417232513428,
+        "ingest_a_minus_b": 0.05577373504638672,
+        "approach_a": 1.687119960784912,
+        "avoid_a": -7.327668190002441
+      }
+    },
+    {
+      "seed": 2026111203,
+      "arm": "family-value-on",
+      "mirror_z": false,
+      "index": 224,
+      "tick": 824,
+      "after_harm": true,
+      "held_a": true,
+      "actual_manipulation": "none",
+      "ablated_manipulation": "Ingest:A",
+      "actual_representative": "Inspect:B",
+      "ablated_representative": "Ingest:A",
+      "sampled_choice_changed": true,
+      "ablation_to_ingest_a": true,
+      "actual_scores": {
+        "ingest_a": -3.627708911895752,
+        "ingest_b": 4.0665202140808105,
+        "ingest_a_minus_b": -7.6942291259765625,
+        "approach_a": 1.6359859704971313,
+        "avoid_a": -7.325476169586182
+      },
+      "ablated_scores": {
+        "ingest_a": 3.7919161319732666,
+        "ingest_b": 3.88746976852417,
+        "ingest_a_minus_b": -0.09555363655090332,
+        "approach_a": 1.6359859704971313,
+        "avoid_a": -7.325476169586182
+      }
+    },
+    {
+      "seed": 2026111203,
+      "arm": "family-value-on",
+      "mirror_z": false,
+      "index": 244,
+      "tick": 844,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "Ingest:B",
+      "ablated_manipulation": "Ingest:B",
+      "actual_representative": "Ingest:B",
+      "ablated_representative": "Ingest:B",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": -4.783906936645508,
+        "ingest_b": 3.974365234375,
+        "ingest_a_minus_b": -8.758272171020508,
+        "approach_a": 1.5727397203445435,
+        "avoid_a": -7.329030513763428
+      },
+      "ablated_scores": {
+        "ingest_a": 3.7683846950531006,
+        "ingest_b": 3.784050226211548,
+        "ingest_a_minus_b": -0.015665531158447266,
+        "approach_a": 1.5727397203445435,
+        "avoid_a": -7.329030513763428
+      }
+    },
+    {
+      "seed": 2026111204,
+      "arm": "family-value-off",
+      "mirror_z": true,
+      "index": 0,
+      "tick": 600,
+      "after_harm": false,
+      "held_a": false,
+      "actual_manipulation": "Other:A",
+      "ablated_manipulation": "Other:A",
+      "actual_representative": "Other:A",
+      "ablated_representative": "Other:A",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": 1.5756292343139648,
+        "ingest_b": 1.5756292343139648,
+        "ingest_a_minus_b": 0.0,
+        "approach_a": 0.8152666091918945,
+        "avoid_a": -1.4740755558013916
+      },
+      "ablated_scores": {
+        "ingest_a": 1.5756292343139648,
+        "ingest_b": 1.5756292343139648,
+        "ingest_a_minus_b": 0.0,
+        "approach_a": 0.8152666091918945,
+        "avoid_a": -1.4740755558013916
+      }
+    },
+    {
+      "seed": 2026111204,
+      "arm": "family-value-off",
+      "mirror_z": true,
+      "index": 24,
+      "tick": 624,
+      "after_harm": false,
+      "held_a": true,
+      "actual_manipulation": "Ingest:A",
+      "ablated_manipulation": "Ingest:A",
+      "actual_representative": "Ingest:A",
+      "ablated_representative": "Ingest:A",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": 4.04866361618042,
+        "ingest_b": 4.042651653289795,
+        "ingest_a_minus_b": 0.006011962890625,
+        "approach_a": 1.7976199388504028,
+        "avoid_a": -6.75652551651001
+      },
+      "ablated_scores": {
+        "ingest_a": 4.04866361618042,
+        "ingest_b": 4.042651653289795,
+        "ingest_a_minus_b": 0.006011962890625,
+        "approach_a": 1.7976199388504028,
+        "avoid_a": -6.75652551651001
+      }
+    },
+    {
+      "seed": 2026111204,
+      "arm": "family-value-off",
+      "mirror_z": true,
+      "index": 38,
+      "tick": 638,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "Ingest:B",
+      "ablated_manipulation": "Ingest:B",
+      "actual_representative": "Ingest:B",
+      "ablated_representative": "Ingest:B",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": null,
+        "ingest_b": 3.9222939014434814,
+        "ingest_a_minus_b": null,
+        "approach_a": null,
+        "avoid_a": null
+      },
+      "ablated_scores": {
+        "ingest_a": null,
+        "ingest_b": 3.9222939014434814,
+        "ingest_a_minus_b": null,
+        "approach_a": null,
+        "avoid_a": null
+      }
+    },
+    {
+      "seed": 2026111204,
+      "arm": "family-value-off",
+      "mirror_z": true,
+      "index": 39,
+      "tick": 639,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "Ingest:B",
+      "ablated_manipulation": "Ingest:B",
+      "actual_representative": "Ingest:B",
+      "ablated_representative": "Ingest:B",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": null,
+        "ingest_b": 3.929361343383789,
+        "ingest_a_minus_b": null,
+        "approach_a": null,
+        "avoid_a": null
+      },
+      "ablated_scores": {
+        "ingest_a": null,
+        "ingest_b": 3.929361343383789,
+        "ingest_a_minus_b": null,
+        "approach_a": null,
+        "avoid_a": null
+      }
+    },
+    {
+      "seed": 2026111204,
+      "arm": "family-value-off",
+      "mirror_z": true,
+      "index": 40,
+      "tick": 640,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "none",
+      "ablated_manipulation": "none",
+      "actual_representative": "Avoid:A",
+      "ablated_representative": "Avoid:A",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": -0.8462474346160889,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": -0.6060129404067993,
+        "avoid_a": 2.2097063064575195
+      },
+      "ablated_scores": {
+        "ingest_a": -0.8462474346160889,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": -0.6060129404067993,
+        "avoid_a": 2.2097063064575195
+      }
+    },
+    {
+      "seed": 2026111204,
+      "arm": "family-value-off",
+      "mirror_z": true,
+      "index": 54,
+      "tick": 654,
+      "after_harm": true,
+      "held_a": true,
+      "actual_manipulation": "Ingest:A",
+      "ablated_manipulation": "Ingest:A",
+      "actual_representative": "Ingest:A",
+      "ablated_representative": "Ingest:A",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": 3.8748745918273926,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": 1.7167761325836182,
+        "avoid_a": -6.769846439361572
+      },
+      "ablated_scores": {
+        "ingest_a": 3.8748745918273926,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": 1.7167761325836182,
+        "avoid_a": -6.769846439361572
+      }
+    },
+    {
+      "seed": 2026111204,
+      "arm": "family-value-off",
+      "mirror_z": true,
+      "index": 59,
+      "tick": 659,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "Ingest:B",
+      "ablated_manipulation": "Ingest:B",
+      "actual_representative": "Ingest:B",
+      "ablated_representative": "Ingest:B",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": null,
+        "ingest_b": 4.338231563568115,
+        "ingest_a_minus_b": null,
+        "approach_a": null,
+        "avoid_a": null
+      },
+      "ablated_scores": {
+        "ingest_a": null,
+        "ingest_b": 4.338141441345215,
+        "ingest_a_minus_b": null,
+        "approach_a": null,
+        "avoid_a": null
+      }
+    },
+    {
+      "seed": 2026111204,
+      "arm": "family-value-off",
+      "mirror_z": true,
+      "index": 64,
+      "tick": 664,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "none",
+      "ablated_manipulation": "none",
+      "actual_representative": "Rest:other",
+      "ablated_representative": "Rest:other",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": null,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": null,
+        "avoid_a": null
+      },
+      "ablated_scores": {
+        "ingest_a": null,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": null,
+        "avoid_a": null
+      }
+    },
+    {
+      "seed": 2026111204,
+      "arm": "family-value-off",
+      "mirror_z": true,
+      "index": 96,
+      "tick": 696,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "none",
+      "ablated_manipulation": "none",
+      "actual_representative": "Approach:B",
+      "ablated_representative": "Approach:B",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": 3.7337698936462402,
+        "ingest_b": 3.9363293647766113,
+        "ingest_a_minus_b": -0.2025594711303711,
+        "approach_a": 4.953256607055664,
+        "avoid_a": -6.845946311950684
+      },
+      "ablated_scores": {
+        "ingest_a": 3.7368898391723633,
+        "ingest_b": 3.9362387657165527,
+        "ingest_a_minus_b": -0.19934892654418945,
+        "approach_a": 4.953256607055664,
+        "avoid_a": -6.845946311950684
+      }
+    },
+    {
+      "seed": 2026111204,
+      "arm": "family-value-off",
+      "mirror_z": true,
+      "index": 104,
+      "tick": 704,
+      "after_harm": true,
+      "held_a": false,
+      "actual_manipulation": "Ingest:B",
+      "ablated_manipulation": "Ingest:B",
+      "actual_representative": "Ingest:B",
+      "ablated_representative": "Ingest:B",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": 3.7564637660980225,
+        "ingest_b": 3.7668299674987793,
+        "ingest_a_minus_b": -0.010366201400756836,
+        "approach_a": 4.980826377868652,
+        "avoid_a": -6.841275691986084
+      },
+      "ablated_scores": {
+        "ingest_a": 3.759582042694092,
+        "ingest_b": 3.7667441368103027,
+        "ingest_a_minus_b": -0.0071620941162109375,
+        "approach_a": 4.980826377868652,
+        "avoid_a": -6.841275691986084
+      }
+    },
+    {
+      "seed": 2026111204,
+      "arm": "family-value-off",
+      "mirror_z": true,
+      "index": 107,
+      "tick": 707,
+      "after_harm": true,
+      "held_a": true,
+      "actual_manipulation": "Ingest:A",
+      "ablated_manipulation": "Ingest:A",
+      "actual_representative": "Ingest:A",
+      "ablated_representative": "Ingest:A",
+      "sampled_choice_changed": false,
+      "ablation_to_ingest_a": false,
+      "actual_scores": {
+        "ingest_a": -0.5528068542480469,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": -0.5046858787536621,
+        "avoid_a": 1.2838010787963867
+      },
+      "ablated_scores": {
+        "ingest_a": -0.54962158203125,
+        "ingest_b": null,
+        "ingest_a_minus_b": null,
+        "approach_a": -0.5046858787536621,
+        "avoid_a": 1.2838010787963867
+      }
+    }
+  ]
+}

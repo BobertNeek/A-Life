@@ -1,9 +1,12 @@
 # Episodic readout experiment and Astra handoff
 
-Status: source integration prepared locally. This is an opt-in fresh-founder
-research candidate, not a replacement for accepted or acquired brains. The new
-combined source has not been built locally. Its qualification must come from
-the exact published head's checks. No held-out replication has run yet.
+Status: the first published head 5e6784b passed hosted integration qualification.
+The separately reconstructed old-world held-out study attempted eight lives
+and validated seven before a reporting-schema failure. Its partial evidence,
+missing result and qualification boundaries are recorded in
+[hosted-results/RESULTS.md](hosted-results/RESULTS.md). The study is closed; no
+retry or replacement exposure is scheduled. This remains an opt-in research
+candidate, not a replacement for accepted or acquired brains.
 
 ## Why this is the next surgery
 
@@ -25,9 +28,9 @@ unchanged. Valid N2048 gain candidates have no cognitive channel or
 CognitiveContext decoder coordinates: the cognitive extension is admitted only
 for the separate N512 action-credit candidate. Source review therefore rules
 out a cognitive-scoring confound in this frozen N2048 factor. The integration
-adds an explicit regression assertion for that absence; it is not yet rerun.
-Genetic
-target fear/pain readouts were fixed in v11. V12 adds precisely 40 Ingest
+adds an explicit regression assertion for that absence; the assertion passed
+in the hosted integration qualification at 5e6784b.
+Genetic target fear/pain readouts were fixed in v11. V12 adds precisely 40 Ingest
 family-value readout weights, each 0 to 0.8, for an aggregate +32 coefficient.
 Those inherited weights read memory that ordinary experience updates. They are
 not weights learned by Adam, and no actor optimizer update is claimed.
@@ -96,13 +99,12 @@ not opened or migrated. Ordinary live-game N2048 admission still rejects this
 identity; the implementation exposes explicit CPU and direct GPU research
 admission only. It is not gameplay/default promotion.
 
-The proposed next test is eight new, paired fresh lives with frozen gene bytes,
-four new episode seeds and counterbalanced initial sides. The dose, safety
-limits, sleep rule, sampler and coefficients must remain fixed. No-exposure
-lives remain untested, and held-object deadlocks remain self-care failures.
-Local disk headroom cannot safely fit another assay link while retaining the
-agreed free-space floor, so a bounded hosted run is being assessed. No further
-cache deletion is part of this plan.
+The fixed eight-attempt hosted study is now closed, with seven validated
+outcomes and one unknown outcome. Three complete held-out pairs reinforce the
+local episodic-reader effect, while reproducing the held-object self-care
+failure. Do not convert the partial into a completed four-pair result. See
+[the results and source bindings](hosted-results/RESULTS.md). No local assay
+rebuild, cache deletion or extra exposure was used to recover its report.
 
 Before designing release circuitry, trace the exact profile's observability.
 Grab and release currently share a Contact candidate, and the ObjectSlots

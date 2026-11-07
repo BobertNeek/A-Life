@@ -1,0 +1,27 @@
+{
+  "asset_sha256": [
+    "ba006d31a7ceb1f75d22704893494871652b6bc0200ef1a0f31039bab11b1e6a",
+    "6edcd6dd1dc5bfedf8f7b73bf605bb480e36c0ba022a316840a6f0bd87629632"
+  ],
+  "base_commit": "f4cdbeed5147de0b52f95d1e4b484d7e5f03e0dc",
+  "bound_input_count": 476,
+  "build_flags": [
+    "jobs=1",
+    "incremental=0",
+    "dev-debug=0",
+    "test-debug=0",
+    "cpu-backend"
+  ],
+  "build_profile": "dev",
+  "effective_inputs_sha256": "69c8a4d0b45a223ebcff769809ec8717941f8e561cf7d4c513fff731c40c125d",
+  "episode_patch_sha256": "3eab280593c87f1c13ea175563def3f1f7788f8f47d8478887ffe4576b8df43e",
+  "executable_sha256": "9874c56962d7aa15e6c4f873f0c7fb9895a20484b877c898d1e02402e8ffe2b1",
+  "frozen_commit": "612c42015cdc894e80ebdee5d765c9f5a0d5bfa0",
+  "integration_head": "5e6784b95c7a6d68829201ff28ceec17c3b0e244",
+  "plan_sha256": "a7b6fd8952cb40d415f0de24de1a65c1c7b2b974daa665b73c0aa0b78e6698f3",
+  "reconstruction_sha256": "e100b5f6febee8d17e8177e39744167391aca24c4cfbf34b3995b4a8b2514e62",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1",
+  "schema": "hosted-transfer-build-v1",
+  "source_manifest_sha256": "5ed2f4194ccf176c29095184b3ffa9b744fa3206952fee2963bb6f066daf91ed",
+  "source_only_patch_role": "Declared episode-only delta against the hash-verified frozen 612c study closure."
+}

@@ -27,12 +27,15 @@ The original prepared-publication instructions are archived at
 frozen-publication-manifest.json README hash refers to that archived input,
 not this new front page.
 
-## Pending replication and next design
+## Partial held-out replication and next design
 
-[The hosted protocol](HOSTED-TRANSFER.md) defines eight new paired lives with
-unchanged gene bytes, fixed safety limits and explicitly reconstructed old
-geometry. Static Python validation has passed; compilation, hosted native tests
-and these eight lives have not yet run. A full study may show no benefit.
+[The hosted study](hosted-results/RESULTS.md) completed qualification, then
+validated seven of eight attempted lives before failing closed at the final
+reporting gate. Three complete pairs support less repeated harmful feeding
+with the fixed reader, but all three reader-on lives ended holding harmful A
+and failed safe-food attempts. The fourth reader-on outcome is unknown. The
+study is closed without rerun; this is not reliable self-care or promotion.
+[The protocol](HOSTED-TRANSFER.md) and exact sanitized partial are preserved.
 
 [Grounded grip context](GRIP-NEXT-DESIGN.md) is a separate, unimplemented next
 hypothesis. It does not add an automatic poison-aware drop reflex.
