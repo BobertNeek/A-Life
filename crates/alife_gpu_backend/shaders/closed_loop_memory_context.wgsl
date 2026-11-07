@@ -44,7 +44,8 @@ fn add_candidate_memory_context(@builtin(global_invocation_id) gid:vec3<u32>) {
   let plan = load_memory_channel_plan(memory_plan_offset);
   let decoder = load_decoder_plan(brain.decoder_plan_offset);
   let input_stride = decoder.flattened_input_lane_count;
-  let valid_plan = plan.schema_version == MEMORY_SCHEMA_VERSION
+  let valid_plan = ((plan.schema_version == MEMORY_SCHEMA_VERSION && plan.max_candidate_gain == 0.5)
+    || (plan.schema_version == 2u && plan.max_candidate_gain == 12.0 && plan.memory_decoder_synapse_count == 4096u))
     && plan.target_latent_lane_start == 24u
     && plan.family_value_lane_start == 32u
     && plan.decoder_input_stride == 36u

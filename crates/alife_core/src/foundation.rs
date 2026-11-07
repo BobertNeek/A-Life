@@ -478,6 +478,7 @@ impl FoundationId {
     pub const N512_READOUT_CANDIDATE_V1: Self = Self(0x4E35_3132_5243_0001);
     pub const N2048_V1: Self = Self(0x4E32_3034_385F_5631);
     pub const N2048_EXPERIMENTAL_GRAPH_V1: Self = Self(0x4E32_3034_3845_0001);
+    pub const N2048_MEMORY_GAIN_CANDIDATE_V1: Self = Self(0x4E32_3034_384D_0001);
 
     pub const fn raw(self) -> u64 {
         self.0
@@ -502,6 +503,7 @@ impl FoundationCompatibilityFamilyId {
     pub const N512_FOUNDATION: Self = Self(0x4E35_3132_5F00_FA11);
     pub const N2048_FOUNDATION: Self = Self(0x4E32_3034_385F_FA11);
     pub const N2048_EXPERIMENTAL_GRAPH: Self = Self(0x4E32_3034_3845_FA11);
+    pub const N2048_MEMORY_GAIN_CANDIDATE: Self = Self(0x4E32_3034_384D_FA11);
 
     pub const fn raw(self) -> u64 {
         self.0
@@ -707,7 +709,7 @@ impl FoundationManifest {
         weight_asset: FoundationWeightAssetRef,
     ) -> Result<Self, ScaffoldContractError> {
         let selection = phenotype.foundation_abi();
-        let experimental = selection.n2048_experimental_graph().is_some();
+        let experimental = selection.uses_n2048_experimental_graph();
         let selected_layout_digest = if experimental {
             layout_digest(phenotype.lobe_layout())
         } else {
@@ -719,8 +721,12 @@ impl FoundationManifest {
         let training_stage = TrainingStageManifest::bootstrap();
         let (foundation_id, compatibility_family_id) = if experimental {
             (
-                FoundationId::N2048_EXPERIMENTAL_GRAPH_V1,
-                FoundationCompatibilityFamilyId::N2048_EXPERIMENTAL_GRAPH,
+                selection
+                    .foundation_id()
+                    .ok_or(ScaffoldContractError::PhenotypeCompile)?,
+                selection
+                    .compatibility_family_id()
+                    .ok_or(ScaffoldContractError::PhenotypeCompile)?,
             )
         } else {
             foundation_identity_for_class(phenotype.brain_class_id())?
@@ -807,7 +813,7 @@ impl FoundationManifest {
         phenotype: &BrainPhenotype,
     ) -> Result<(), ScaffoldContractError> {
         let selection = phenotype.foundation_abi();
-        let experimental = selection.n2048_experimental_graph().is_some();
+        let experimental = selection.uses_n2048_experimental_graph();
         let selected_layout_digest = if experimental {
             layout_digest(phenotype.lobe_layout())
         } else {
@@ -820,8 +826,12 @@ impl FoundationManifest {
         self.promotion_receipt.validate(self.training_stage)?;
         let (foundation_id, compatibility_family_id) = if experimental {
             (
-                FoundationId::N2048_EXPERIMENTAL_GRAPH_V1,
-                FoundationCompatibilityFamilyId::N2048_EXPERIMENTAL_GRAPH,
+                selection
+                    .foundation_id()
+                    .ok_or(ScaffoldContractError::PhenotypeCompile)?,
+                selection
+                    .compatibility_family_id()
+                    .ok_or(ScaffoldContractError::PhenotypeCompile)?,
             )
         } else {
             foundation_identity_for_class(self.capacity_class_id)?
@@ -866,6 +876,10 @@ pub struct FoundationWeightAsset {
 }
 
 impl FoundationWeightAsset {
+    pub const fn is_n2048_memory_gain_candidate(&self) -> bool {
+        self.manifest.foundation_id.raw() == FoundationId::N2048_MEMORY_GAIN_CANDIDATE_V1.raw()
+    }
+
     pub const fn is_n2048_experimental_graph(&self) -> bool {
         self.manifest.foundation_id.raw() == FoundationId::N2048_EXPERIMENTAL_GRAPH_V1.raw()
     }
@@ -1209,21 +1223,30 @@ impl FoundationWeightAsset {
         self.manifest
             .promotion_receipt
             .validate(self.manifest.training_stage)?;
-        let (foundation_id, compatibility_family_id) = if self.is_n2048_experimental_graph() {
-            if self.manifest.capacity_class_id != BrainCapacityClass::N2048_ID
-                || self.manifest.layout_digest
-                    != layout_digest(&N2048FoundationLayoutV1::lobe_layout())
-                || self.weights.len() != 32768
-            {
-                return Err(ScaffoldContractError::PhenotypeCompile);
-            }
-            (
-                FoundationId::N2048_EXPERIMENTAL_GRAPH_V1,
-                FoundationCompatibilityFamilyId::N2048_EXPERIMENTAL_GRAPH,
-            )
-        } else {
-            foundation_identity_for_class(self.manifest.capacity_class_id)?
-        };
+        let (foundation_id, compatibility_family_id) =
+            if self.is_n2048_experimental_graph() || self.is_n2048_memory_gain_candidate() {
+                if self.manifest.capacity_class_id != BrainCapacityClass::N2048_ID
+                    || self.manifest.layout_digest
+                        != layout_digest(&N2048FoundationLayoutV1::lobe_layout())
+                    || self.weights.len() != 32768
+                {
+                    return Err(ScaffoldContractError::PhenotypeCompile);
+                }
+                (
+                    if self.is_n2048_memory_gain_candidate() {
+                        FoundationId::N2048_MEMORY_GAIN_CANDIDATE_V1
+                    } else {
+                        FoundationId::N2048_EXPERIMENTAL_GRAPH_V1
+                    },
+                    if self.is_n2048_memory_gain_candidate() {
+                        FoundationCompatibilityFamilyId::N2048_MEMORY_GAIN_CANDIDATE
+                    } else {
+                        FoundationCompatibilityFamilyId::N2048_EXPERIMENTAL_GRAPH
+                    },
+                )
+            } else {
+                foundation_identity_for_class(self.manifest.capacity_class_id)?
+            };
         if self.manifest.schema_version != 1
             || (self.manifest.foundation_id != foundation_id
                 && !self.is_nano512_readout_candidate())

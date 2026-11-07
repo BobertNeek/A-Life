@@ -80,9 +80,24 @@ pub enum FoundationAbiSelection {
     MigratedN2048FoundationV1(MigratedN2048FoundationV1Descriptor),
     Nano512ReadoutCandidateV1(crate::Nano512ReadoutCandidateV1),
     Nano512ActionCreditCandidateV2(crate::Nano512ActionCreditCandidateV2),
+    // Append variants so older binary enum tags keep their exact meaning.
+    N2048MemoryGainCandidateV1(crate::N2048MemoryGainCandidateV1),
 }
 
 impl FoundationAbiSelection {
+    pub const fn n2048_memory_gain_candidate(&self) -> Option<&crate::N2048MemoryGainCandidateV1> {
+        match self {
+            Self::N2048MemoryGainCandidateV1(value) => Some(value),
+            _ => None,
+        }
+    }
+    pub const fn uses_n2048_experimental_graph(&self) -> bool {
+        matches!(
+            self,
+            Self::N2048ExperimentalGraphV1(_) | Self::N2048MemoryGainCandidateV1(_)
+        )
+    }
+
     pub const fn n2048_experimental_graph(&self) -> Option<&crate::N2048ExperimentalGraphV1> {
         match self {
             Self::N2048ExperimentalGraphV1(recipe) => Some(recipe),
@@ -100,7 +115,7 @@ impl FoundationAbiSelection {
     pub const fn canonical_v2(&self) -> Option<&FoundationAbiBinding> {
         match self {
             Self::CanonicalV2(binding) => Some(binding),
-            Self::N2048ExperimentalGraphV1(_) => None,
+            Self::N2048ExperimentalGraphV1(_) | Self::N2048MemoryGainCandidateV1(_) => None,
             Self::LegacyNano512CompatibilityV1(_)
             | Self::MigratedN2048FoundationV1(_)
             | Self::Nano512ReadoutCandidateV1(_)
@@ -113,7 +128,7 @@ impl FoundationAbiSelection {
     ) -> Option<&LegacyNano512CompatibilityAbiDescriptor> {
         match self {
             Self::CanonicalV2(_) => None,
-            Self::N2048ExperimentalGraphV1(_) => None,
+            Self::N2048ExperimentalGraphV1(_) | Self::N2048MemoryGainCandidateV1(_) => None,
             Self::LegacyNano512CompatibilityV1(descriptor) => Some(descriptor),
             Self::MigratedN2048FoundationV1(_)
             | Self::Nano512ReadoutCandidateV1(_)
@@ -126,7 +141,7 @@ impl FoundationAbiSelection {
     ) -> Option<&MigratedN2048FoundationV1Descriptor> {
         match self {
             Self::MigratedN2048FoundationV1(descriptor) => Some(descriptor),
-            Self::N2048ExperimentalGraphV1(_) => None,
+            Self::N2048ExperimentalGraphV1(_) | Self::N2048MemoryGainCandidateV1(_) => None,
             Self::CanonicalV2(_)
             | Self::LegacyNano512CompatibilityV1(_)
             | Self::Nano512ReadoutCandidateV1(_)
@@ -163,6 +178,9 @@ impl FoundationAbiSelection {
             Self::N2048ExperimentalGraphV1(recipe) => {
                 recipe.validate_against(capacity, sensor_profile)
             }
+            Self::N2048MemoryGainCandidateV1(recipe) => {
+                recipe.validate_against(capacity, sensor_profile)
+            }
             Self::LegacyNano512CompatibilityV1(descriptor) => {
                 descriptor.validate_contract()?;
                 if capacity.id() != BrainCapacityClass::N512_ID
@@ -190,7 +208,9 @@ impl FoundationAbiSelection {
                 LanguageCodebookV1::canonical()
             }
             Self::CanonicalV2(binding) => binding.language_codebook().clone(),
-            Self::N2048ExperimentalGraphV1(_) => LanguageCodebookV1::canonical(),
+            Self::N2048ExperimentalGraphV1(_) | Self::N2048MemoryGainCandidateV1(_) => {
+                LanguageCodebookV1::canonical()
+            }
             Self::LegacyNano512CompatibilityV1(_) => LanguageCodebookV1::canonical(),
             Self::MigratedN2048FoundationV1(_) => LanguageCodebookV1::canonical(),
         }
@@ -202,7 +222,9 @@ impl FoundationAbiSelection {
                 BrainCapacityClass::N512_ID
             }
             Self::CanonicalV2(binding) => binding.capacity_class_id(),
-            Self::N2048ExperimentalGraphV1(_) => BrainCapacityClass::N2048_ID,
+            Self::N2048ExperimentalGraphV1(_) | Self::N2048MemoryGainCandidateV1(_) => {
+                BrainCapacityClass::N2048_ID
+            }
             Self::LegacyNano512CompatibilityV1(_) => BrainCapacityClass::N512_ID,
             Self::MigratedN2048FoundationV1(_) => BrainCapacityClass::N2048_ID,
         }
@@ -215,6 +237,9 @@ impl FoundationAbiSelection {
             }
             Self::CanonicalV2(binding) => binding.foundation_id(),
             Self::N2048ExperimentalGraphV1(_) => Some(FoundationId::N2048_EXPERIMENTAL_GRAPH_V1),
+            Self::N2048MemoryGainCandidateV1(_) => {
+                Some(FoundationId::N2048_MEMORY_GAIN_CANDIDATE_V1)
+            }
             Self::LegacyNano512CompatibilityV1(descriptor) => Some(descriptor.source_foundation_id),
             Self::MigratedN2048FoundationV1(descriptor) => Some(descriptor.source_foundation_id),
         }
@@ -226,7 +251,9 @@ impl FoundationAbiSelection {
                 Some(FoundationVersion::V1)
             }
             Self::CanonicalV2(binding) => binding.foundation_version(),
-            Self::N2048ExperimentalGraphV1(_) => Some(FoundationVersion::V1),
+            Self::N2048ExperimentalGraphV1(_) | Self::N2048MemoryGainCandidateV1(_) => {
+                Some(FoundationVersion::V1)
+            }
             Self::LegacyNano512CompatibilityV1(descriptor) => {
                 Some(descriptor.source_foundation_version)
             }
@@ -245,6 +272,9 @@ impl FoundationAbiSelection {
             Self::N2048ExperimentalGraphV1(_) => {
                 Some(FoundationCompatibilityFamilyId::N2048_EXPERIMENTAL_GRAPH)
             }
+            Self::N2048MemoryGainCandidateV1(_) => {
+                Some(FoundationCompatibilityFamilyId::N2048_MEMORY_GAIN_CANDIDATE)
+            }
             Self::LegacyNano512CompatibilityV1(descriptor) => {
                 Some(descriptor.source_compatibility_family_id)
             }
@@ -260,6 +290,7 @@ impl FoundationAbiSelection {
             Self::Nano512ReadoutCandidateV1(candidate) => Some(candidate.asset_ref()),
             Self::CanonicalV2(binding) => binding.foundation_weight_asset(),
             Self::N2048ExperimentalGraphV1(recipe) => recipe.asset_ref(),
+            Self::N2048MemoryGainCandidateV1(recipe) => recipe.asset_ref(),
             Self::LegacyNano512CompatibilityV1(descriptor) => Some(descriptor.source_weight_asset),
             Self::MigratedN2048FoundationV1(descriptor) => Some(descriptor.source_weight_asset),
         }
@@ -277,6 +308,10 @@ impl FoundationAbiSelection {
 
     pub(crate) fn write_canonical(&self, digest: &mut CanonicalDigestBuilder) {
         match self {
+            Self::N2048MemoryGainCandidateV1(recipe) => {
+                digest.write_u8(7);
+                recipe.write_canonical(digest);
+            }
             Self::N2048ExperimentalGraphV1(recipe) => {
                 digest.write_u8(6);
                 recipe.write_canonical(digest);

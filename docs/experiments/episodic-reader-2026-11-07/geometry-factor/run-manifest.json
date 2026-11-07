@@ -1,0 +1,92 @@
+{
+  "plan_sha256": "cdbf0471e192eebdf1ace6090406dbf606bf4180adad647a97b33157587ed514",
+  "source_comparison_sha256": "19b5cccfecbb8ce00cfbefd97c900cd83be555d89c8ecef9ae5f7377407135b6",
+  "base_commit": "de3ae7892d235b569e4abc72abaf9168812983cf",
+  "geometry_commit": "1571d8113da2b8bfdda38261e3ed6819d162d6a7",
+  "geometry_patch_sha256": "23b3922ef2e36a714f50049a10769858177ff0404a2d5fa94e89c44db9c033df",
+  "harness_sha256": "8c4a7ccd988895513c8b16beac7d68a298f969e1f281cf27d5d5989de1624cba",
+  "old_geometry_executable": {
+    "path": "v11-body-clearance-factor/old-geometry-executable",
+    "sha256": "06c2a27e25029ea23612281c3fa047478287b6f932bf7dc8b1e222c0fb15aa9c"
+  },
+  "new_geometry_executable": {
+    "path": "v11-body-clearance-factor/new-geometry-executable",
+    "sha256": "f70c8ae3f20a78a8e7de09b310c523aeece55b4836f443e43bfdb910f65ea856"
+  },
+  "world_source_changes": [
+    {
+      "path": "crates/alife_world/src/headless.rs",
+      "old": "d88ce8b701314e45f5f51d3576deface5f56c682266dc7839ee611ff1f9fe24f",
+      "new": "ed128d1af4c053920a4116f728cb319f3de6d4be9619db53998f3ed0db3dbfe8"
+    },
+    {
+      "path": "crates/alife_world/src/headless/body_clearance_tests.rs",
+      "old": null,
+      "new": "13fd2b112f8c44a2c7660fa087880d20017dfc89652705503d2b917e46901483"
+    },
+    {
+      "path": "crates/alife_world/src/headless/local_steering.rs",
+      "old": "decaea97336e67abd073041a55ee435658781875104683fec20ab4de0d40849b",
+      "new": "07da2a87214c859524b2cd45433aa373f3f7a4eea7d776b7cca52479698a4d17"
+    },
+    {
+      "path": "crates/alife_world/src/headless/player_hand.rs",
+      "old": "3db71d4e6f9dd1b5c97d37e50ee446ad3f2bde6cc1e6f4b2762cf920979b3ee3",
+      "new": "e145af00e664b3903412b97d76d98d392a37ed932681357f708affb9eb6f30c4"
+    }
+  ],
+  "common_hazard_corrected": true,
+  "memory_phase_fix_included": false,
+  "brains": [
+    "whole-care-v5",
+    "whole-care"
+  ],
+  "seed_start": 2026111101,
+  "seed_count": 4,
+  "scenes": [
+    "obstacle-food",
+    "far-food"
+  ],
+  "ticks": 120,
+  "initial_energy": 0.4,
+  "preparation_ticks": 0,
+  "hazard_pain": 0.0,
+  "execution_profile": "development",
+  "native_cpu_only": true,
+  "new_geometry_build_incremental": false,
+  "supersedes_pre_run_manifest": "manifest.json",
+  "old_geometry_source_base": "de3ae7892d235b569e4abc72abaf9168812983cf",
+  "old_geometry_source_clean": true,
+  "old_geometry_build_log_sha256": "2f51c32131c463ec3b9eb68d1444526e0c9ec0a11674334429ec45dd9c4af9b2",
+  "new_geometry_build_log_sha256": "3b8d5f318acbc548548b35eb2878fdc2bbdf52f8cfae49496c176b7cc456e439",
+  "analysis_script_sha256": "a3f17458a42fdb69579069e96478a2d947223671d9904c2836232b1309134cff",
+  "commands": {
+    "old-geometry": [
+      "/workspace/shared/brain-surgery-evidence/v11-body-clearance-factor/old-geometry-executable",
+      "/workspace/shared/brain-surgery-evidence/v11-body-clearance-factor/old-geometry",
+      "120",
+      "-8",
+      "contact",
+      "4",
+      "2026111101",
+      "obstacle-food,far-food",
+      ".4",
+      "0",
+      "0"
+    ],
+    "new-geometry": [
+      "/workspace/shared/brain-surgery-evidence/v11-body-clearance-factor/new-geometry-executable",
+      "/workspace/shared/brain-surgery-evidence/v11-body-clearance-factor/new-geometry",
+      "120",
+      "-8",
+      "contact",
+      "4",
+      "2026111101",
+      "obstacle-food,far-food",
+      ".4",
+      "0",
+      "0"
+    ]
+  },
+  "current_base_source_comparison_sha256": "6bb862be819c5429939b451dfa999c8e2a780906b404fa0cf20e0e85ca10e714"
+}

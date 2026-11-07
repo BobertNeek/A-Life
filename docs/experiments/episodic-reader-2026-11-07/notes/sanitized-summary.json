@@ -1,0 +1,635 @@
+{
+  "schema": "native-learning-sanitized-summary-v1",
+  "backend": "native-cpu",
+  "v10": {
+    "seed": 2026110901,
+    "original": {
+      "ticks": 42,
+      "A": 3,
+      "B": 3
+    },
+    "quarter": {
+      "ticks": 57,
+      "A": 3,
+      "B": 3
+    },
+    "result": "No sustained harmful-food avoidance."
+  },
+  "v11": {
+    "seed": 2026110901,
+    "reader_off_cap_half": {
+      "ticks": 57,
+      "A": 3,
+      "B": 3
+    },
+    "reader_on_cap_half": {
+      "ticks": 58,
+      "A": 3,
+      "B": 3
+    },
+    "reader_off_cap_twelve": {
+      "ticks": 57,
+      "A": 3,
+      "B": 3
+    },
+    "reader_on_cap_twelve": {
+      "ticks": 82,
+      "A": 3,
+      "B": 4
+    },
+    "result": "Causal target-memory effect but no sustained avoidance."
+  },
+  "v12": [
+    {
+      "phase": "phase-off",
+      "arm": "family-value-off",
+      "family_valence_reader": false,
+      "scene": "bitter",
+      "source_commit": "e4a4a8e487c7799d9e71e5a6942a73ab28c97d3c",
+      "asset_sha256": "ba006d31a7ceb1f75d22704893494871652b6bc0200ef1a0f31039bab11b1e6a",
+      "seed": 2026110901,
+      "steps": 24,
+      "decisions": 24,
+      "consumptions": [
+        0
+      ],
+      "stop_reason": "tick_budget",
+      "negative_a_meals": 0,
+      "post_harm_opportunities": {},
+      "sleep_consolidations": 0,
+      "post_sleep_decisions": 0,
+      "final_health": 1.0,
+      "final_injury": 0.0,
+      "final_energy": 0.39727601408958435,
+      "founder_optimizer_exact": true,
+      "cold_restore": {
+        "checkpoint_roundtrip_exact": true,
+        "next_checkpoint_exact": true,
+        "next_step": {
+          "completed": true,
+          "decisions": 1
+        }
+      },
+      "displacement_from_origin": 1.1610610485076904
+    },
+    {
+      "phase": "phase-off",
+      "arm": "family-value-off",
+      "family_valence_reader": false,
+      "scene": "far",
+      "source_commit": "e4a4a8e487c7799d9e71e5a6942a73ab28c97d3c",
+      "asset_sha256": "ba006d31a7ceb1f75d22704893494871652b6bc0200ef1a0f31039bab11b1e6a",
+      "seed": 2026110901,
+      "steps": 24,
+      "decisions": 24,
+      "consumptions": [
+        0
+      ],
+      "stop_reason": "tick_budget",
+      "negative_a_meals": 0,
+      "post_harm_opportunities": {},
+      "sleep_consolidations": 0,
+      "post_sleep_decisions": 0,
+      "final_health": 1.0,
+      "final_injury": 0.0,
+      "final_energy": 0.397285133600235,
+      "founder_optimizer_exact": true,
+      "cold_restore": {
+        "checkpoint_roundtrip_exact": true,
+        "next_checkpoint_exact": true,
+        "next_step": {
+          "completed": true,
+          "decisions": 1
+        }
+      },
+      "displacement_from_origin": 1.1126949787139893
+    },
+    {
+      "phase": "phase-off",
+      "arm": "family-value-off",
+      "family_valence_reader": false,
+      "scene": "learning",
+      "source_commit": "e4a4a8e487c7799d9e71e5a6942a73ab28c97d3c",
+      "asset_sha256": "ba006d31a7ceb1f75d22704893494871652b6bc0200ef1a0f31039bab11b1e6a",
+      "seed": 2026110901,
+      "steps": 82,
+      "decisions": 69,
+      "consumptions": [
+        3,
+        4
+      ],
+      "stop_reason": "vitality_safeguard",
+      "negative_a_meals": 3,
+      "post_harm_opportunities": {
+        "decisions": 50,
+        "A_visible_ingest_rows": 33,
+        "A_contact_ingest_rows": 21,
+        "A_selected_ingest_rows": 5,
+        "A_selected_avoid_rows": 12,
+        "B_visible_ingest_rows": 8,
+        "B_contact_ingest_rows": 7,
+        "B_selected_ingest_rows": 7,
+        "B_selected_avoid_rows": 0,
+        "both_contact_rows": 0
+      },
+      "sleep_consolidations": 1,
+      "post_sleep_decisions": 50,
+      "final_health": 0.7165724635124207,
+      "final_injury": 0.28342685103416443,
+      "final_energy": 0.4700733423233032,
+      "founder_optimizer_exact": true,
+      "cold_restore": {
+        "checkpoint_roundtrip_exact": true,
+        "next_checkpoint_exact": true,
+        "next_step": {
+          "completed": true,
+          "decisions": 1
+        }
+      },
+      "displacement_from_origin": 0.3794965178084607
+    },
+    {
+      "phase": "phase-off",
+      "arm": "family-value-off",
+      "family_valence_reader": false,
+      "scene": "positive",
+      "source_commit": "e4a4a8e487c7799d9e71e5a6942a73ab28c97d3c",
+      "asset_sha256": "ba006d31a7ceb1f75d22704893494871652b6bc0200ef1a0f31039bab11b1e6a",
+      "seed": 2026110901,
+      "steps": 24,
+      "decisions": 24,
+      "consumptions": [
+        1
+      ],
+      "stop_reason": "tick_budget",
+      "negative_a_meals": 0,
+      "post_harm_opportunities": {
+        "decisions": 21,
+        "A_visible_ingest_rows": 0,
+        "A_contact_ingest_rows": 0,
+        "A_selected_ingest_rows": 0,
+        "A_selected_avoid_rows": 0,
+        "both_contact_rows": 0
+      },
+      "sleep_consolidations": 0,
+      "post_sleep_decisions": 0,
+      "final_health": 1.0,
+      "final_injury": 0.0,
+      "final_energy": 0.5335409641265869,
+      "founder_optimizer_exact": true,
+      "cold_restore": {
+        "checkpoint_roundtrip_exact": true,
+        "next_checkpoint_exact": true,
+        "next_step": {
+          "completed": true,
+          "decisions": 1
+        }
+      },
+      "displacement_from_origin": 0.09708774089813232
+    },
+    {
+      "phase": "phase-off",
+      "arm": "family-value-on",
+      "family_valence_reader": true,
+      "scene": "bitter",
+      "source_commit": "e4a4a8e487c7799d9e71e5a6942a73ab28c97d3c",
+      "asset_sha256": "6edcd6dd1dc5bfedf8f7b73bf605bb480e36c0ba022a316840a6f0bd87629632",
+      "seed": 2026110901,
+      "steps": 24,
+      "decisions": 24,
+      "consumptions": [
+        0
+      ],
+      "stop_reason": "tick_budget",
+      "negative_a_meals": 0,
+      "post_harm_opportunities": {},
+      "sleep_consolidations": 0,
+      "post_sleep_decisions": 0,
+      "final_health": 1.0,
+      "final_injury": 0.0,
+      "final_energy": 0.39727601408958435,
+      "founder_optimizer_exact": true,
+      "cold_restore": {
+        "checkpoint_roundtrip_exact": true,
+        "next_checkpoint_exact": true,
+        "next_step": {
+          "completed": true,
+          "decisions": 1
+        }
+      },
+      "displacement_from_origin": 1.1610610485076904
+    },
+    {
+      "phase": "phase-off",
+      "arm": "family-value-on",
+      "family_valence_reader": true,
+      "scene": "far",
+      "source_commit": "e4a4a8e487c7799d9e71e5a6942a73ab28c97d3c",
+      "asset_sha256": "6edcd6dd1dc5bfedf8f7b73bf605bb480e36c0ba022a316840a6f0bd87629632",
+      "seed": 2026110901,
+      "steps": 24,
+      "decisions": 24,
+      "consumptions": [
+        0
+      ],
+      "stop_reason": "tick_budget",
+      "negative_a_meals": 0,
+      "post_harm_opportunities": {},
+      "sleep_consolidations": 0,
+      "post_sleep_decisions": 0,
+      "final_health": 1.0,
+      "final_injury": 0.0,
+      "final_energy": 0.397285133600235,
+      "founder_optimizer_exact": true,
+      "cold_restore": {
+        "checkpoint_roundtrip_exact": true,
+        "next_checkpoint_exact": true,
+        "next_step": {
+          "completed": true,
+          "decisions": 1
+        }
+      },
+      "displacement_from_origin": 1.1126949787139893
+    },
+    {
+      "phase": "phase-off",
+      "arm": "family-value-on",
+      "family_valence_reader": true,
+      "scene": "learning",
+      "source_commit": "e4a4a8e487c7799d9e71e5a6942a73ab28c97d3c",
+      "asset_sha256": "6edcd6dd1dc5bfedf8f7b73bf605bb480e36c0ba022a316840a6f0bd87629632",
+      "seed": 2026110901,
+      "steps": 128,
+      "decisions": 115,
+      "consumptions": [
+        3,
+        5
+      ],
+      "stop_reason": "vitality_safeguard",
+      "negative_a_meals": 3,
+      "post_harm_opportunities": {
+        "decisions": 96,
+        "A_visible_ingest_rows": 79,
+        "A_contact_ingest_rows": 40,
+        "A_selected_ingest_rows": 10,
+        "A_selected_avoid_rows": 16,
+        "B_visible_ingest_rows": 47,
+        "B_contact_ingest_rows": 29,
+        "B_selected_ingest_rows": 14,
+        "B_selected_avoid_rows": 0,
+        "both_contact_rows": 9
+      },
+      "sleep_consolidations": 1,
+      "post_sleep_decisions": 96,
+      "final_health": 0.7171337008476257,
+      "final_injury": 0.28286513686180115,
+      "final_energy": 0.47549939155578613,
+      "founder_optimizer_exact": true,
+      "cold_restore": {
+        "checkpoint_roundtrip_exact": true,
+        "next_checkpoint_exact": true,
+        "next_step": {
+          "completed": true,
+          "decisions": 1
+        }
+      },
+      "displacement_from_origin": 0.2276390110674626
+    },
+    {
+      "phase": "phase-off",
+      "arm": "family-value-on",
+      "family_valence_reader": true,
+      "scene": "positive",
+      "source_commit": "e4a4a8e487c7799d9e71e5a6942a73ab28c97d3c",
+      "asset_sha256": "6edcd6dd1dc5bfedf8f7b73bf605bb480e36c0ba022a316840a6f0bd87629632",
+      "seed": 2026110901,
+      "steps": 24,
+      "decisions": 24,
+      "consumptions": [
+        1
+      ],
+      "stop_reason": "tick_budget",
+      "negative_a_meals": 0,
+      "post_harm_opportunities": {
+        "decisions": 21,
+        "A_visible_ingest_rows": 0,
+        "A_contact_ingest_rows": 0,
+        "A_selected_ingest_rows": 0,
+        "A_selected_avoid_rows": 0,
+        "both_contact_rows": 0
+      },
+      "sleep_consolidations": 0,
+      "post_sleep_decisions": 0,
+      "final_health": 1.0,
+      "final_injury": 0.0,
+      "final_energy": 0.5335409641265869,
+      "founder_optimizer_exact": true,
+      "cold_restore": {
+        "checkpoint_roundtrip_exact": true,
+        "next_checkpoint_exact": true,
+        "next_step": {
+          "completed": true,
+          "decisions": 1
+        }
+      },
+      "displacement_from_origin": 0.09708774089813232
+    },
+    {
+      "phase": "phase-on",
+      "arm": "family-value-off",
+      "family_valence_reader": false,
+      "scene": "bitter",
+      "source_commit": "612c42015cdc894e80ebdee5d765c9f5a0d5bfa0",
+      "asset_sha256": "ba006d31a7ceb1f75d22704893494871652b6bc0200ef1a0f31039bab11b1e6a",
+      "seed": 2026110901,
+      "steps": 24,
+      "decisions": 24,
+      "consumptions": [
+        0
+      ],
+      "stop_reason": "tick_budget",
+      "negative_a_meals": 0,
+      "post_harm_opportunities": {},
+      "sleep_consolidations": 0,
+      "post_sleep_decisions": 0,
+      "final_health": 1.0,
+      "final_injury": 0.0,
+      "final_energy": 0.39727601408958435,
+      "founder_optimizer_exact": true,
+      "cold_restore": {
+        "checkpoint_roundtrip_exact": true,
+        "next_checkpoint_exact": true,
+        "next_step": {
+          "completed": true,
+          "decisions": 1
+        }
+      },
+      "displacement_from_origin": 1.1610610485076904
+    },
+    {
+      "phase": "phase-on",
+      "arm": "family-value-off",
+      "family_valence_reader": false,
+      "scene": "far",
+      "source_commit": "612c42015cdc894e80ebdee5d765c9f5a0d5bfa0",
+      "asset_sha256": "ba006d31a7ceb1f75d22704893494871652b6bc0200ef1a0f31039bab11b1e6a",
+      "seed": 2026110901,
+      "steps": 24,
+      "decisions": 24,
+      "consumptions": [
+        0
+      ],
+      "stop_reason": "tick_budget",
+      "negative_a_meals": 0,
+      "post_harm_opportunities": {},
+      "sleep_consolidations": 0,
+      "post_sleep_decisions": 0,
+      "final_health": 1.0,
+      "final_injury": 0.0,
+      "final_energy": 0.397285133600235,
+      "founder_optimizer_exact": true,
+      "cold_restore": {
+        "checkpoint_roundtrip_exact": true,
+        "next_checkpoint_exact": true,
+        "next_step": {
+          "completed": true,
+          "decisions": 1
+        }
+      },
+      "displacement_from_origin": 1.1126949787139893
+    },
+    {
+      "phase": "phase-on",
+      "arm": "family-value-off",
+      "family_valence_reader": false,
+      "scene": "learning",
+      "source_commit": "612c42015cdc894e80ebdee5d765c9f5a0d5bfa0",
+      "asset_sha256": "ba006d31a7ceb1f75d22704893494871652b6bc0200ef1a0f31039bab11b1e6a",
+      "seed": 2026110901,
+      "steps": 82,
+      "decisions": 69,
+      "consumptions": [
+        3,
+        4
+      ],
+      "stop_reason": "vitality_safeguard",
+      "negative_a_meals": 3,
+      "post_harm_opportunities": {
+        "decisions": 50,
+        "A_visible_ingest_rows": 33,
+        "A_contact_ingest_rows": 21,
+        "A_selected_ingest_rows": 5,
+        "A_selected_avoid_rows": 12,
+        "B_visible_ingest_rows": 8,
+        "B_contact_ingest_rows": 7,
+        "B_selected_ingest_rows": 7,
+        "B_selected_avoid_rows": 0,
+        "both_contact_rows": 0
+      },
+      "sleep_consolidations": 1,
+      "post_sleep_decisions": 50,
+      "final_health": 0.7165724635124207,
+      "final_injury": 0.28342685103416443,
+      "final_energy": 0.4700731933116913,
+      "founder_optimizer_exact": true,
+      "cold_restore": {
+        "checkpoint_roundtrip_exact": true,
+        "next_checkpoint_exact": true,
+        "next_step": {
+          "completed": true,
+          "decisions": 1
+        }
+      },
+      "displacement_from_origin": 0.3794965529531216
+    },
+    {
+      "phase": "phase-on",
+      "arm": "family-value-off",
+      "family_valence_reader": false,
+      "scene": "positive",
+      "source_commit": "612c42015cdc894e80ebdee5d765c9f5a0d5bfa0",
+      "asset_sha256": "ba006d31a7ceb1f75d22704893494871652b6bc0200ef1a0f31039bab11b1e6a",
+      "seed": 2026110901,
+      "steps": 24,
+      "decisions": 24,
+      "consumptions": [
+        1
+      ],
+      "stop_reason": "tick_budget",
+      "negative_a_meals": 0,
+      "post_harm_opportunities": {
+        "decisions": 21,
+        "A_visible_ingest_rows": 0,
+        "A_contact_ingest_rows": 0,
+        "A_selected_ingest_rows": 0,
+        "A_selected_avoid_rows": 0,
+        "both_contact_rows": 0
+      },
+      "sleep_consolidations": 0,
+      "post_sleep_decisions": 0,
+      "final_health": 1.0,
+      "final_injury": 0.0,
+      "final_energy": 0.5335409641265869,
+      "founder_optimizer_exact": true,
+      "cold_restore": {
+        "checkpoint_roundtrip_exact": true,
+        "next_checkpoint_exact": true,
+        "next_step": {
+          "completed": true,
+          "decisions": 1
+        }
+      },
+      "displacement_from_origin": 0.09708774089813232
+    },
+    {
+      "phase": "phase-on",
+      "arm": "family-value-on",
+      "family_valence_reader": true,
+      "scene": "bitter",
+      "source_commit": "612c42015cdc894e80ebdee5d765c9f5a0d5bfa0",
+      "asset_sha256": "6edcd6dd1dc5bfedf8f7b73bf605bb480e36c0ba022a316840a6f0bd87629632",
+      "seed": 2026110901,
+      "steps": 24,
+      "decisions": 24,
+      "consumptions": [
+        0
+      ],
+      "stop_reason": "tick_budget",
+      "negative_a_meals": 0,
+      "post_harm_opportunities": {},
+      "sleep_consolidations": 0,
+      "post_sleep_decisions": 0,
+      "final_health": 1.0,
+      "final_injury": 0.0,
+      "final_energy": 0.39727601408958435,
+      "founder_optimizer_exact": true,
+      "cold_restore": {
+        "checkpoint_roundtrip_exact": true,
+        "next_checkpoint_exact": true,
+        "next_step": {
+          "completed": true,
+          "decisions": 1
+        }
+      },
+      "displacement_from_origin": 1.1610610485076904
+    },
+    {
+      "phase": "phase-on",
+      "arm": "family-value-on",
+      "family_valence_reader": true,
+      "scene": "far",
+      "source_commit": "612c42015cdc894e80ebdee5d765c9f5a0d5bfa0",
+      "asset_sha256": "6edcd6dd1dc5bfedf8f7b73bf605bb480e36c0ba022a316840a6f0bd87629632",
+      "seed": 2026110901,
+      "steps": 24,
+      "decisions": 24,
+      "consumptions": [
+        0
+      ],
+      "stop_reason": "tick_budget",
+      "negative_a_meals": 0,
+      "post_harm_opportunities": {},
+      "sleep_consolidations": 0,
+      "post_sleep_decisions": 0,
+      "final_health": 1.0,
+      "final_injury": 0.0,
+      "final_energy": 0.397285133600235,
+      "founder_optimizer_exact": true,
+      "cold_restore": {
+        "checkpoint_roundtrip_exact": true,
+        "next_checkpoint_exact": true,
+        "next_step": {
+          "completed": true,
+          "decisions": 1
+        }
+      },
+      "displacement_from_origin": 1.1126949787139893
+    },
+    {
+      "phase": "phase-on",
+      "arm": "family-value-on",
+      "family_valence_reader": true,
+      "scene": "learning",
+      "source_commit": "612c42015cdc894e80ebdee5d765c9f5a0d5bfa0",
+      "asset_sha256": "6edcd6dd1dc5bfedf8f7b73bf605bb480e36c0ba022a316840a6f0bd87629632",
+      "seed": 2026110901,
+      "steps": 256,
+      "decisions": 243,
+      "consumptions": [
+        2,
+        8
+      ],
+      "stop_reason": "tick_budget",
+      "negative_a_meals": 2,
+      "post_harm_opportunities": {
+        "decisions": 224,
+        "A_visible_ingest_rows": 207,
+        "A_contact_ingest_rows": 182,
+        "A_selected_ingest_rows": 1,
+        "A_selected_avoid_rows": 57,
+        "B_visible_ingest_rows": 119,
+        "B_contact_ingest_rows": 114,
+        "B_selected_ingest_rows": 83,
+        "B_selected_avoid_rows": 0,
+        "both_contact_rows": 107
+      },
+      "sleep_consolidations": 1,
+      "post_sleep_decisions": 224,
+      "final_health": 0.8134785294532776,
+      "final_injury": 0.18651922047138214,
+      "final_energy": 0.4787578582763672,
+      "founder_optimizer_exact": true,
+      "cold_restore": {
+        "checkpoint_roundtrip_exact": true,
+        "next_checkpoint_exact": true,
+        "next_step": {
+          "completed": true,
+          "decisions": 1
+        }
+      },
+      "displacement_from_origin": 0.380574237854166
+    },
+    {
+      "phase": "phase-on",
+      "arm": "family-value-on",
+      "family_valence_reader": true,
+      "scene": "positive",
+      "source_commit": "612c42015cdc894e80ebdee5d765c9f5a0d5bfa0",
+      "asset_sha256": "6edcd6dd1dc5bfedf8f7b73bf605bb480e36c0ba022a316840a6f0bd87629632",
+      "seed": 2026110901,
+      "steps": 24,
+      "decisions": 24,
+      "consumptions": [
+        1
+      ],
+      "stop_reason": "tick_budget",
+      "negative_a_meals": 0,
+      "post_harm_opportunities": {
+        "decisions": 21,
+        "A_visible_ingest_rows": 0,
+        "A_contact_ingest_rows": 0,
+        "A_selected_ingest_rows": 0,
+        "A_selected_avoid_rows": 0,
+        "both_contact_rows": 0
+      },
+      "sleep_consolidations": 0,
+      "post_sleep_decisions": 0,
+      "final_health": 1.0,
+      "final_injury": 0.0,
+      "final_energy": 0.5335409641265869,
+      "founder_optimizer_exact": true,
+      "cold_restore": {
+        "checkpoint_roundtrip_exact": true,
+        "next_checkpoint_exact": true,
+        "next_step": {
+          "completed": true,
+          "decisions": 1
+        }
+      },
+      "displacement_from_origin": 0.09708774089813232
+    }
+  ],
+  "private_diagnostics_included": false,
+  "checkpoint_or_asset_files_included": false,
+  "limits": "Development seed only. No reversal, held-out result, sustained survival or GPU hardware claim."
+}
