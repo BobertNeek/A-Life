@@ -92,6 +92,8 @@ jobs:
         run: 'cargo test --locked -p alife_game_app --features production-voxel-frontend --lib production_voxel_renderer::care_dock::tests::help_feedback:: -- --test-threads=1 --color=never'
       - name: Run exact-head care accessibility CPU regressions
         run: 'cargo test --locked -p alife_game_app --features production-voxel-frontend --lib production_voxel_renderer::care_dock::tests::accessible_input:: -- --test-threads=1 --color=never'
+      - name: Run exact-head playback focus and key-repeat CPU regressions
+        run: 'cargo test --locked -p alife_game_app --features production-voxel-frontend --lib production_voxel_renderer::ux_input::tests:: -- --test-threads=1 --color=never'
       - name: Strict production frontend library and test Clippy
         run: cargo clippy --locked -p alife_game_app --features production-voxel-frontend --lib --tests -- -D warnings
 

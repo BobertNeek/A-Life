@@ -5574,7 +5574,6 @@ impl HeadlessWorld {
             return false;
         };
         food.kind == WorldObjectKind::Food
-            && food.hazard_pain == 0.0
             && food.carried_by.is_none()
             && self.player_held_object() != Some(target)
             && self.grasp_target_is_reachable(organism_id, agent_id, target)
@@ -8909,6 +8908,107 @@ mod task_6_factorized_motor_tests {
         assert_eq!(world.entity(agent).unwrap().position, before);
     }
 
+    #[test]
+    fn harmful_food_motor_acquisition_preserves_biology_and_portable_save_continuation() {
+        let (mut world, agent, food, mut bundle) = prepared_world();
+        // Express the inherited nociceptive graph through ordinary biology;
+        // this is a body fixture, not evidence of neural development/learning.
+        for _ in 0..600 {
+            world.try_advance_tick().unwrap();
+        }
+        bundle.tick = world.tick();
+        world.objects.get_mut(&food.raw()).unwrap().hazard_pain = 0.3;
+        world
+            .objects
+            .get_mut(&food.raw())
+            .unwrap()
+            .grounded_physical
+            .chemical[2] = -0.65;
+        bundle
+            .channels
+            .retain(|channel| channel.channel == MotorChannel::Manipulation);
+        let pickup = world.apply_registered_motor_bundle(&bundle, agent).unwrap();
+        assert!(pickup.succeeded);
+        assert_eq!(
+            pickup.channel_receipts[0].command.primitive,
+            HeadlessActionIds::EAT
+        );
+        assert_eq!(pickup.channel_receipts[0].phase, ActionPhase::Preparation);
+        assert_eq!(pickup.body_event.nutrition, 0.0);
+        assert_eq!(pickup.body_event.damage, 0.0);
+        assert_eq!(world.entity(food).unwrap().carried_by, Some(ORGANISM_ID));
+        world.try_advance_tick().unwrap();
+
+        // Retain the acquired object and the exact authoritative genome,
+        // embodiment and physiology, without a migration or reset.
+        let save = crate::PortableSaveFile::from_headless_world(
+            "harmful-food-continuation",
+            &world,
+            crate::RuntimeConfig::deterministic_default(
+                world.seed(),
+                alife_core::BrainScaleTier::Nano512,
+            ),
+            crate::AssetManifest::empty(),
+            Vec::new(),
+        )
+        .unwrap();
+        let mut restored =
+            crate::PortableSaveFile::from_json_str(&serde_json::to_string(&save).unwrap())
+                .unwrap()
+                .restore_headless_world()
+                .unwrap();
+        assert_eq!(world.object_snapshots(), restored.object_snapshots());
+        assert_eq!(
+            world.organism_registry().get(ORGANISM_ID),
+            restored.organism_registry().get(ORGANISM_ID)
+        );
+        bundle.tick = world.tick();
+        bundle.sequence_id = alife_core::ExperienceSequenceId(2);
+        let meal = world.apply_registered_motor_bundle(&bundle, agent).unwrap();
+        assert_eq!(
+            restored
+                .apply_registered_motor_bundle(&bundle, agent)
+                .unwrap(),
+            meal
+        );
+        assert!(meal.succeeded);
+        assert_eq!(meal.channel_receipts[0].phase, ActionPhase::Completed);
+        assert_eq!(
+            meal.channel_receipts[0].physical.contact,
+            PhysicalContactKind::Consumed
+        );
+        assert_eq!(meal.body_event.nutrition, 0.6);
+        assert_eq!(meal.body_event.damage, 0.3);
+        assert!(meal.biology_after.body.injury > meal.biology_before.body.injury);
+        assert!(
+            meal.biology_after.homeostasis.drives.pain
+                > meal.biology_before.homeostasis.drives.pain
+        );
+        assert_eq!(
+            world.ingestion_observations[&ORGANISM_ID.raw()].taste,
+            -0.65
+        );
+        assert_eq!(
+            meal.biology_after,
+            meal.biology_before
+                .advance(
+                    meal.outcome_tick,
+                    meal.body_event,
+                    world
+                        .organism_registry()
+                        .get(ORGANISM_ID)
+                        .unwrap()
+                        .phenotype(),
+                )
+                .unwrap()
+        );
+        assert_eq!(world.object_snapshots(), restored.object_snapshots());
+        assert_eq!(
+            world.organism_registry().get(ORGANISM_ID),
+            restored.organism_registry().get(ORGANISM_ID)
+        );
+    }
+
     fn posture_bundle(primitive: ActionId, target: Option<WorldEntityId>) -> MotorCommandBundle {
         let command = ChannelCommand::new(
             MotorChannel::Posture,
@@ -11896,6 +11996,79 @@ mod eat_possession_tests {
     }
 
     #[test]
+    fn food_harm_does_not_change_observed_cues_or_physical_acquisition() {
+        for profile in [
+            SensorProfile::GroundedObjectSlotsV1,
+            SensorProfile::GroundedTerrainVisionV1,
+        ] {
+            let (mut harmless, food) = world();
+            // In front and at tactile contact for either grounded profile.
+            harmless.objects.get_mut(&food.raw()).unwrap().position = Vec3f::new(0.4, 0.0, 0.0);
+            let mut harmful = harmless.clone();
+            harmful.objects.get_mut(&food.raw()).unwrap().hazard_pain = 0.3;
+            let observe = |world: &mut HeadlessWorld| {
+                world
+                    .perception_frame_draft(
+                        ORGANISM,
+                        world.tick(),
+                        profile,
+                        HomeostaticSnapshot::baseline(world.tick()),
+                    )
+                    .unwrap()
+            };
+            let benign_view = observe(&mut harmless);
+            let harmful_view = observe(&mut harmful);
+            assert!(!benign_view.grounded_object_slots().is_empty());
+            assert_eq!(
+                benign_view.grounded_object_slots(),
+                harmful_view.grounded_object_slots()
+            );
+            assert_eq!(benign_view.candidates(), harmful_view.candidates());
+            let selected = HeadlessWorldCommand::eat(ORGANISM, food).unwrap();
+            for (mut world, harm) in [(harmless, 0.0), (harmful, 0.3)] {
+                // Explicit Grab already permits this exact physical target.
+                let mut explicit = world.clone();
+                assert!(
+                    explicit
+                        .apply_command(&grab(food))
+                        .unwrap()
+                        .execution
+                        .succeeded
+                );
+                assert_eq!(world.check_action(&selected), ActionLegality::Legal);
+                let pickup = world.apply_command(&selected).unwrap();
+                assert!(pickup.execution.succeeded);
+                assert_eq!(pickup.command, selected);
+                assert_eq!(pickup.phase, ActionPhase::Preparation);
+                assert_eq!(pickup.body_event.nutrition, 0.0);
+                assert_eq!(pickup.body_event.damage, 0.0);
+                assert_eq!(pickup.grip_transfers[0].kind, GripTransferKind::Acquired);
+                assert_eq!(world.entity(food).unwrap().carried_by, Some(ORGANISM));
+                assert!(!world.entity(food).unwrap().consumed);
+                assert!(!world.ingestion_observations.contains_key(&ORGANISM.raw()));
+                world.advance_tick();
+                explicit.advance_tick();
+                let meal = world.apply_command(&selected).unwrap();
+                let explicit_meal = explicit.apply_command(&selected).unwrap();
+                assert!(meal.execution.succeeded);
+                assert_eq!(
+                    meal.execution.physical.contact,
+                    PhysicalContactKind::Consumed
+                );
+                assert_eq!(meal.body_event, explicit_meal.body_event);
+                assert_eq!(meal.body_event.nutrition, 0.6);
+                assert_eq!(meal.body_event.damage, harm);
+                assert_eq!(world.entity(food).unwrap().carried_by, None);
+                assert!(world.entity(food).unwrap().consumed);
+                assert_eq!(
+                    world.ingestion_observations[&ORGANISM.raw()].taste,
+                    world.entity(food).unwrap().grounded_physical.chemical[2]
+                );
+            }
+        }
+    }
+
+    #[test]
     fn another_creatures_held_food_cannot_be_eaten_or_stolen() {
         let (mut world, food) = world();
         world.objects.get_mut(&food.raw()).unwrap().carried_by = Some(OrganismId(2));
@@ -11965,14 +12138,13 @@ mod eat_possession_tests {
     }
 
     #[test]
-    fn eat_pickup_never_navigates_or_acquires_unsafe_nonfood_or_player_held_targets() {
-        for case in ["out_of_reach", "unsafe", "nonfood", "player_held"] {
+    fn eat_pickup_never_navigates_or_acquires_nonfood_or_player_held_targets() {
+        for case in ["out_of_reach", "nonfood", "player_held"] {
             let (mut world, food) = world();
             match case {
                 "out_of_reach" => {
                     world.objects.get_mut(&food.raw()).unwrap().position = Vec3f::new(4.0, 0.0, 0.0)
                 }
-                "unsafe" => world.objects.get_mut(&food.raw()).unwrap().hazard_pain = 0.3,
                 "nonfood" => {
                     world.objects.get_mut(&food.raw()).unwrap().kind = WorldObjectKind::Ball
                 }
@@ -12021,6 +12193,28 @@ mod eat_possession_tests {
         assert!(world.physical_contact_reachable(Vec3f::ZERO, world.entity(food).unwrap().position));
         assert_rejected(&mut world, food);
         assert_eq!(world.entity(food).unwrap().carried_by, None);
+        // Harm never bypasses this physical constraint either.
+        world.objects.get_mut(&food.raw()).unwrap().hazard_pain = 0.3;
+        assert_rejected(&mut world, food);
+        // A genuine body turn to the unobstructed lateral target resolves the
+        // grip path. Contact alone is not evidence of hand clearance.
+        let turn = HeadlessWorldCommand::structured(
+            ORGANISM,
+            HeadlessActionIds::TURN_LEFT,
+            ActionKind::Look,
+            None,
+            None,
+        )
+        .unwrap();
+        for _ in 0..2 {
+            assert!(world.apply_command(&turn).unwrap().execution.succeeded);
+            world.advance_tick();
+        }
+        let pickup = world
+            .apply_command(&HeadlessWorldCommand::eat(ORGANISM, food).unwrap())
+            .unwrap();
+        assert!(pickup.execution.succeeded);
+        assert_eq!(world.entity(food).unwrap().carried_by, Some(ORGANISM));
     }
 
     #[test]

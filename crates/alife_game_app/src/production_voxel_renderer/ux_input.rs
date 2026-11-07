@@ -1,6 +1,25 @@
 //! Production keyboard and pointer input translation into runtime and presentation commands.
 
 use super::*;
+use bevy::input::{keyboard::KeyboardInput, ButtonState};
+
+/// Read every event before any modal return. A repeated key can become an
+/// aggregate edge after focus loss, but it is never a new playback request.
+fn playback_toggle_requested<'a>(
+    keyboard: &ButtonInput<KeyCode>,
+    messages: impl Iterator<Item = &'a KeyboardInput>,
+    focused_window: Option<Entity>,
+) -> bool {
+    let mut requested = false;
+    for message in messages {
+        requested |= Some(message.window) == focused_window
+            && matches!(message.key_code, KeyCode::Space | KeyCode::KeyP)
+            && keyboard.just_pressed(message.key_code)
+            && message.state == ButtonState::Pressed
+            && !message.repeat;
+    }
+    requested
+}
 
 #[allow(
     clippy::too_many_arguments,
@@ -8,7 +27,8 @@ use super::*;
 )]
 pub(super) fn handle_fvr05_production_ux_input(
     keyboard: Res<ButtonInput<KeyCode>>,
-    mut windows: bevy::prelude::Query<&mut Window, With<PrimaryWindow>>,
+    mut key_events: MessageReader<KeyboardInput>,
+    mut windows: bevy::prelude::Query<(Entity, &mut Window), With<PrimaryWindow>>,
     frontend: Res<crate::bevy_shell::ProductionVoxelFrontendResource>,
     #[cfg(feature = "gpu-runtime")] conversation: Option<
         Res<crate::ProductionConversationLineageUiState>,
@@ -27,6 +47,15 @@ pub(super) fn handle_fvr05_production_ux_input(
     >,
     #[cfg(feature = "gpu-runtime")] mut load_request: ResMut<ProductionRuntimeLoadRequest>,
 ) {
+    let toggle_playback = playback_toggle_requested(
+        &keyboard,
+        key_events.read(),
+        windows
+            .single()
+            .ok()
+            .filter(|(_, window)| window.focused)
+            .map(|(entity, _)| entity),
+    );
     let selected_stable_id = selection
         .selected
         .and_then(|selected| selected.stable_id.map(|stable_id| stable_id.raw()));
@@ -40,7 +69,7 @@ pub(super) fn handle_fvr05_production_ux_input(
         let paused = schedule.is_paused();
         let mode = schedule.run_mode();
         ux.animation_speed = schedule.animation_speed();
-        for mut window in &mut windows {
+        for (_, mut window) in &mut windows {
             window.present_mode =
                 if mode == crate::ProductionRunMode::OneX && !frontend.summary.record_performance {
                     bevy::window::PresentMode::AutoVsync
@@ -159,7 +188,7 @@ pub(super) fn handle_fvr05_production_ux_input(
         ux.debug_mode = !ux.debug_mode;
         ux.settings.show_menu = ux.debug_mode;
     }
-    if keyboard.just_pressed(KeyCode::Space) || keyboard.just_pressed(KeyCode::KeyP) {
+    if toggle_playback {
         #[cfg(feature = "gpu-runtime")]
         if let Some(schedule) = schedule.as_deref_mut() {
             schedule.toggle_playback();
@@ -367,3 +396,6 @@ fn choose_or_move_food(
         }
     }
 }
+
+#[cfg(test)]
+mod tests;
