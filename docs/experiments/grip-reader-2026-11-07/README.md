@@ -170,3 +170,22 @@ validates both frames, and keeps all four own-profile/cross-profile upload
 assertions. Production frame validation and upload guards are unchanged. The
 corrected boundary test, detached reader/gradient fixtures and lint stages still
 need execution. This does not change the neural genes or enable a study.
+
+
+[Run 42421009116](https://github.com/BobertNeek/A-Life/actions/runs/42421009116)
+(job 128549216573) passed all 156 functional fixtures at exact head
+`f1e981cdc0ab01a9f524945ec00361d0450325dc`: 130 core, 18 world, both CPU
+continuation fixtures, three GPU upload/WGSL fixtures and three detached native
+reader/gradient fixtures. No functional test failed; the one pre-existing CPU
+recall microbenchmark remained the explicitly permitted ignored test. This
+qualifies those unit contracts, not autonomous performance or GPU device parity.
+
+The first strict Clippy stage then failed at the append-only wire test's
+`encode_to_vec` call (core test line 289). The sanitized diagnostic identifies
+the location but not its lint name. Source inspection found a redundant borrow
+of the Copy tuple passed to that generic function. The minimal test-only fix
+passes the same tuple by value, preserving its fields, order and byte-equality
+assertion. Other borrows keep non-Copy fixtures available for later assertions.
+Production code, inherited genes and preserved wire expectations are unchanged.
+The fix and all lint stages still require hosted execution; the overall
+qualification is not yet a pass. No autonomous exposure has run.

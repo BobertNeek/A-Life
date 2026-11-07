@@ -286,7 +286,7 @@ fn ownership_is_typed_and_bound_without_repurposing_object_lanes() {
     );
     assert_eq!(
         bytes,
-        bincode::serde::encode_to_vec(&append_only_sequence, bincode::config::standard()).unwrap()
+        bincode::serde::encode_to_vec(append_only_sequence, bincode::config::standard()).unwrap()
     );
     let (restored, used): (PerceptionFrameDraft, usize) =
         bincode::serde::decode_from_slice(&bytes, bincode::config::standard()).unwrap();
