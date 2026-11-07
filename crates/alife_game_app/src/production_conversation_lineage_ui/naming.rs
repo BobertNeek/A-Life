@@ -466,7 +466,7 @@ fn edit<'a>(
             if !state.naming.as_ref().unwrap().preedit.is_empty() {
                 continue;
             }
-            if message.key_code == KeyCode::Enter {
+            if is_enter_key(message.key_code) {
                 submit |= opening.is_none() && !ime_confirmation && !message.repeat;
                 if submit {
                     break;

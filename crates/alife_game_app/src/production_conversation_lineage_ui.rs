@@ -2019,7 +2019,7 @@ pub(crate) fn handle_production_conversation_lineage_input(
         return;
     }
     if !state.input_open {
-        if keyboard.just_pressed(KeyCode::Enter) {
+        if speech_enter_just_pressed(&keyboard) {
             state.open_player_speech_input();
             // Only raw text after this frame's opening Enter belongs to the composer.
             append_player_speech_key_text(&mut state.input, key_messages.read(), true);
@@ -2054,7 +2054,7 @@ pub(crate) fn handle_production_conversation_lineage_input(
         state.input_error = None;
     }
     if (pointer == Some(composer::Control::Send)
-        || (submit_enter && keyboard.just_pressed(KeyCode::Enter)))
+        || (submit_enter && speech_enter_just_pressed(&keyboard)))
         && !state.input.trim().is_empty()
     {
         if let Err(error) = send_player_speech(
@@ -2068,6 +2068,14 @@ pub(crate) fn handle_production_conversation_lineage_input(
             state.status = format!("Player speech failed: {error}");
         }
     }
+}
+
+fn is_enter_key(key: KeyCode) -> bool {
+    matches!(key, KeyCode::Enter | KeyCode::NumpadEnter)
+}
+
+fn speech_enter_just_pressed(keyboard: &ButtonInput<KeyCode>) -> bool {
+    keyboard.get_just_pressed().copied().any(is_enter_key)
 }
 
 // KeyboardInput retains order; ButtonInput's per-frame edge set does not.
@@ -2086,14 +2094,14 @@ fn append_player_speech_key_text<'a>(
             continue;
         }
         if !after_opening_enter {
-            after_opening_enter = message.key_code == KeyCode::Enter && !message.repeat;
+            after_opening_enter = is_enter_key(message.key_code) && !message.repeat;
             continue;
         }
         if message.key_code == KeyCode::Backspace {
             input.pop();
             continue;
         }
-        if !opened_this_frame && message.key_code == KeyCode::Enter && !message.repeat {
+        if !opened_this_frame && is_enter_key(message.key_code) && !message.repeat {
             submit_enter = true;
         }
         if let Some(text) = &message.text {
