@@ -380,6 +380,12 @@ fn collect_available_input(world: &mut World, open: bool, blocked: bool) {
                 .find_map(|(_, c, i)| (*i == Interaction::Pressed).then_some(*c))
         })
         .flatten();
+    // Speech Send is terminal for this batch. Naming has its own ordered IME
+    // confirmation reducer, so leave its control/edit policy unchanged.
+    let speech = world
+        .resource::<ProductionConversationLineageUiState>()
+        .naming
+        .is_none();
     for request in actions {
         if !open || blocked || !focused {
             continue;
@@ -387,12 +393,18 @@ fn collect_available_input(world: &mut World, open: bool, blocked: bool) {
         if request.action == AccessibleAction::Click {
             // Cancel from either source wins the entire drained batch, even if
             // a later accessibility request would otherwise replace it with Send.
-            if pending != Some(Control::Cancel) {
-                pending = controls
-                    .iter()
-                    .find_map(|(e, c, _)| (e.to_bits() == request.target.0).then_some(*c))
-                    .or(pending);
+            let clicked = controls
+                .iter()
+                .find_map(|(e, c, _)| (e.to_bits() == request.target.0).then_some(*c));
+            if clicked == Some(Control::Cancel)
+                || (pending != Some(Control::Cancel) && !(speech && pending == Some(Control::Send)))
+            {
+                pending = clicked.or(pending);
             }
+        } else if speech && matches!(pending, Some(Control::Send | Control::Cancel)) {
+            // Drain edits after the first Send without changing that utterance.
+            // A later Cancel is still processed above and wins the whole batch.
+            continue;
         } else if entry.is_some_and(|e| e.to_bits() == request.target.0)
             && request.action == AccessibleAction::Focus
         {

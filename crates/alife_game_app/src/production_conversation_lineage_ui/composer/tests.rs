@@ -602,3 +602,370 @@ mod cancel_batches {
         }
     }
 }
+
+/// The production collector's first speech Send is a terminal draft boundary.
+#[cfg(test)]
+mod submission_batches {
+    use super::*;
+
+    fn input_app(text: &str) -> App {
+        let mut app = App::new();
+        let mut state = state();
+        state.prepare_typed_speech_fixture(text);
+        app.insert_resource(state)
+            .init_resource::<InputState>()
+            .init_resource::<ButtonInput<MouseButton>>()
+            .add_message::<ActionRequest>();
+        for control in CONTROLS {
+            app.world_mut().spawn((control, Interaction::None));
+        }
+        app.world_mut().spawn(ProductionSpeechEntryPanel);
+        app
+    }
+
+    fn request(app: &mut App, action: AccessibleAction, target: Entity, value: Option<&str>) {
+        app.world_mut()
+            .write_message(ActionRequest(accesskit::ActionRequest {
+                action,
+                target: accesskit::NodeId(target.to_bits()),
+                data: value.map(|value| ActionData::Value(value.into())),
+            }));
+    }
+
+    fn click(app: &mut App, action: Control) {
+        let target = control(app.world_mut(), action);
+        request(app, AccessibleAction::Click, target, None);
+    }
+
+    fn set_value(app: &mut App, value: &str) {
+        let entry = app
+            .world_mut()
+            .query_filtered::<Entity, With<ProductionSpeechEntryPanel>>()
+            .single(app.world())
+            .unwrap();
+        request(app, AccessibleAction::SetValue, entry, Some(value));
+    }
+
+    fn key(key_code: KeyCode, text: Option<&str>, repeat: bool) -> KeyboardInput {
+        KeyboardInput {
+            key_code,
+            logical_key: bevy::input::keyboard::Key::Character(text.unwrap_or_default().into()),
+            state: ButtonState::Pressed,
+            text: text.map(Into::into),
+            repeat,
+            window: Entity::PLACEHOLDER,
+        }
+    }
+
+    fn edit_and_check_drained(
+        app: &mut App,
+        keys: &ButtonInput<KeyCode>,
+        events: Vec<KeyboardInput>,
+    ) -> bool {
+        let mut messages = Messages::default();
+        let mut reader = MessageCursor::default();
+        messages.write_batch(events);
+        let pending = app.world_mut().resource_mut::<InputState>().pending.take();
+        let mut state = app
+            .world_mut()
+            .resource_mut::<ProductionConversationLineageUiState>();
+        let submit = edit_player_speech_input(&mut state, keys, reader.read(&messages), pending);
+        assert!(
+            reader.is_empty(&messages),
+            "all raw keys must be consumed, including ignored edits"
+        );
+        assert!(
+            !edit_player_speech_input(
+                &mut state,
+                &ButtonInput::default(),
+                reader.read(&messages),
+                None
+            ),
+            "no repeated submission without new input"
+        );
+        submit
+    }
+
+    #[test]
+    fn accessible_send_freezes_mixed_keyboard_edits_and_addressing_even_when_blank() {
+        for text in ["Ada, come here é猫", "", " "] {
+            let mut app = input_app(text);
+            click(&mut app, Control::Send);
+            set_value(&mut app, "after Send");
+            let entry = app
+                .world_mut()
+                .query_filtered::<Entity, With<ProductionSpeechEntryPanel>>()
+                .single(app.world())
+                .unwrap();
+            request(&mut app, AccessibleAction::Focus, entry, None);
+            click(&mut app, Control::Address);
+            click(&mut app, Control::Help);
+            collect_available_input(app.world_mut(), true, false);
+            let mut keys = ButtonInput::default();
+            for code in [
+                KeyCode::Enter,
+                KeyCode::NumpadEnter,
+                KeyCode::Tab,
+                KeyCode::F1,
+            ] {
+                keys.press(code);
+            }
+            let submit = edit_and_check_drained(
+                &mut app,
+                &keys,
+                vec![
+                    key(KeyCode::KeyC, Some("before raw Enter"), false),
+                    key(KeyCode::Backspace, None, true),
+                    key(KeyCode::Enter, Some("\r"), false),
+                    key(KeyCode::NumpadEnter, Some("\r"), false),
+                    key(KeyCode::KeyC, Some("after raw Enter"), false),
+                ],
+            );
+            assert_eq!(submit, !text.trim().is_empty());
+            let state = app
+                .world()
+                .resource::<ProductionConversationLineageUiState>();
+            assert_eq!(state.input, text);
+            assert!(
+                state.address_selected,
+                "Tab must not change the captured Send destination"
+            );
+            assert!(!state.input_help_open);
+        }
+    }
+
+    #[test]
+    fn cancel_or_escape_wins_send_and_edits_without_replay_into_a_reopened_draft() {
+        for cancel_first in [false, true] {
+            for escape in [false, true] {
+                let mut app = input_app("discard me");
+                if cancel_first && !escape {
+                    click(&mut app, Control::Cancel);
+                }
+                click(&mut app, Control::Send);
+                set_value(&mut app, "never submit me");
+                if !cancel_first && !escape {
+                    click(&mut app, Control::Cancel);
+                }
+                collect_available_input(app.world_mut(), true, false);
+                let mut keys = ButtonInput::default();
+                keys.press(KeyCode::Enter);
+                if escape {
+                    keys.press(KeyCode::Escape);
+                }
+                assert!(!edit_and_check_drained(
+                    &mut app,
+                    &keys,
+                    vec![
+                        key(KeyCode::Enter, Some("\r"), false),
+                        key(KeyCode::KeyC, Some("no replay"), false),
+                    ]
+                ));
+                let mut state = app
+                    .world_mut()
+                    .resource_mut::<ProductionConversationLineageUiState>();
+                assert!(!state.input_open);
+                assert!(state.input.is_empty());
+                state.prepare_typed_speech_fixture("fresh draft");
+                collect_available_input(app.world_mut(), true, false);
+                assert!(!edit_and_check_drained(
+                    &mut app,
+                    &ButtonInput::default(),
+                    vec![]
+                ));
+                assert_eq!(
+                    app.world()
+                        .resource::<ProductionConversationLineageUiState>()
+                        .input,
+                    "fresh draft"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn failed_or_pending_dispatch_keeps_frozen_text_and_requires_a_fresh_request() {
+        for cue in [SpeechInputCue::Failed, SpeechInputCue::Pending] {
+            let mut app = input_app("at Send");
+            click(&mut app, Control::Send);
+            set_value(&mut app, "not submitted");
+            // Simulate a delayed reader still within Bevy's retained message batch.
+            app.world_mut()
+                .resource_mut::<Messages<ActionRequest>>()
+                .update();
+            collect_available_input(app.world_mut(), true, false);
+            assert!(edit_and_check_drained(
+                &mut app,
+                &ButtonInput::default(),
+                vec![key(KeyCode::KeyC, Some("not appended"), false),]
+            ));
+            app.world_mut()
+                .resource_mut::<ProductionConversationLineageUiState>()
+                .input_cue = cue;
+            collect_available_input(app.world_mut(), true, false);
+            assert!(!edit_and_check_drained(
+                &mut app,
+                &ButtonInput::default(),
+                vec![]
+            ));
+            assert_eq!(
+                app.world()
+                    .resource::<ProductionConversationLineageUiState>()
+                    .input,
+                "at Send"
+            );
+            set_value(&mut app, "a genuinely new edit");
+            collect_available_input(app.world_mut(), true, false);
+            assert!(!edit_and_check_drained(
+                &mut app,
+                &ButtonInput::default(),
+                vec![]
+            ));
+            click(&mut app, Control::Send);
+            collect_available_input(app.world_mut(), true, false);
+            assert!(edit_and_check_drained(
+                &mut app,
+                &ButtonInput::default(),
+                vec![]
+            ));
+            assert_eq!(
+                app.world()
+                    .resource::<ProductionConversationLineageUiState>()
+                    .input,
+                "a genuinely new edit"
+            );
+        }
+    }
+
+    #[test]
+    fn blocked_closed_and_unfocused_accessible_edits_and_sends_are_drained() {
+        for (open, blocked, focused) in [
+            (false, false, true),
+            (true, true, true),
+            (true, false, false),
+        ] {
+            let mut app = input_app("unchanged");
+            let window = app
+                .world_mut()
+                .spawn((
+                    Window {
+                        focused,
+                        ..default()
+                    },
+                    bevy::window::PrimaryWindow,
+                ))
+                .id();
+            set_value(&mut app, "stale value");
+            click(&mut app, Control::Send);
+            set_value(&mut app, "stale later value");
+            collect_available_input(app.world_mut(), open, blocked);
+            assert!(app.world().resource::<InputState>().pending.is_none());
+            app.world_mut().get_mut::<Window>(window).unwrap().focused = true;
+            app.world_mut()
+                .resource_mut::<ProductionConversationLineageUiState>()
+                .prepare_typed_speech_fixture("fresh draft");
+            collect_available_input(app.world_mut(), true, false);
+            assert!(!edit_and_check_drained(
+                &mut app,
+                &ButtonInput::default(),
+                vec![]
+            ));
+            assert_eq!(
+                app.world()
+                    .resource::<ProductionConversationLineageUiState>()
+                    .input,
+                "fresh draft"
+            );
+        }
+    }
+
+    #[test]
+    fn accessible_send_freezes_its_draft_and_cannot_be_replaced_by_later_controls() {
+        for text in ["Ada, come here é猫", "", " "] {
+            for later in [Control::Send, Control::Address, Control::Help] {
+                let mut app = input_app(text);
+                click(&mut app, Control::Send);
+                set_value(&mut app, "replacement after Send");
+                click(&mut app, later);
+                collect_available_input(app.world_mut(), true, false);
+                assert_eq!(
+                    app.world().resource::<InputState>().pending,
+                    Some(Control::Send)
+                );
+                assert_eq!(
+                    app.world()
+                        .resource::<ProductionConversationLineageUiState>()
+                        .input,
+                    text
+                );
+                collect_available_input(app.world_mut(), true, false);
+                assert!(app.world().resource::<InputState>().pending.is_none());
+                assert_eq!(
+                    app.world()
+                        .resource::<ProductionConversationLineageUiState>()
+                        .input,
+                    text
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn accessible_edits_before_send_are_filtered_bounded_and_included() {
+        let mut app = input_app("old");
+        set_value(&mut app, "é猫\r\n\t");
+        click(&mut app, Control::Send);
+        set_value(&mut app, "later");
+        collect_available_input(app.world_mut(), true, false);
+        assert_eq!(
+            app.world().resource::<InputState>().pending,
+            Some(Control::Send)
+        );
+        assert_eq!(
+            app.world()
+                .resource::<ProductionConversationLineageUiState>()
+                .input,
+            "é猫"
+        );
+
+        collect_available_input(app.world_mut(), true, false);
+        let bounded = "猫".repeat(MAX_TYPED_CHARS + 1);
+        set_value(&mut app, &bounded);
+        click(&mut app, Control::Send);
+        collect_available_input(app.world_mut(), true, false);
+        assert_eq!(
+            app.world()
+                .resource::<ProductionConversationLineageUiState>()
+                .input,
+            "猫".repeat(MAX_TYPED_CHARS)
+        );
+    }
+
+    #[test]
+    fn pointer_send_freezes_before_the_separate_accessibility_batch() {
+        let mut app = input_app("pointer boundary");
+        let send = control(app.world_mut(), Control::Send);
+        *app.world_mut().get_mut::<Interaction>(send).unwrap() = Interaction::Pressed;
+        app.world_mut()
+            .resource_mut::<ButtonInput<MouseButton>>()
+            .press(MouseButton::Left);
+        set_value(&mut app, "later replacement");
+        click(&mut app, Control::Help);
+        collect_available_input(app.world_mut(), true, false);
+        assert_eq!(
+            app.world().resource::<InputState>().pending,
+            Some(Control::Send)
+        );
+        assert_eq!(
+            app.world()
+                .resource::<ProductionConversationLineageUiState>()
+                .input,
+            "pointer boundary"
+        );
+        collect_available_input(app.world_mut(), true, false);
+        assert!(
+            app.world().resource::<InputState>().pending.is_none(),
+            "held pointer is not another Send"
+        );
+    }
+}
