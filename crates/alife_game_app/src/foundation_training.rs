@@ -28,6 +28,12 @@ pub use cohort_replay::{
 };
 pub(crate) use replay_worker::FoundationReplayWorker;
 mod comparison_identity;
+#[cfg(feature = "cpu-training")]
+mod retained_language;
+#[cfg(feature = "cpu-training")]
+pub use retained_language::{
+    reload_language_pilot_child, run_retained_language_pilot, LanguagePilotConfig,
+};
 pub(crate) mod diagnostics;
 pub use comparison_identity::{
     FoundationCheckpointAssessmentIdentityV1, FoundationProbeComparisonIdentityV1,
