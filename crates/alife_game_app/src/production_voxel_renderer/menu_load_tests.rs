@@ -16,7 +16,9 @@ fn key_frame(state: &mut MenuState, codes: &[KeyCode]) -> InputOutcome {
         &keys(codes),
         false,
         false,
-        codes.contains(&KeyCode::Enter),
+        codes
+            .iter()
+            .any(|code| matches!(code, KeyCode::Enter | KeyCode::NumpadEnter)),
         None,
         false,
         &[],
@@ -582,4 +584,350 @@ fn input_plugin_delivery_blocks_repeats_after_focus_reset_and_accepts_fresh_ente
         Some(Action::ConfirmLoad)
     );
     assert_eq!(app.world().resource::<ReaderRuns>().0, 1);
+}
+fn activate_play(code: KeyCode) {
+    let mut state = MenuState::default();
+    state.open(false); // Same ordinary launch path as install().
+    let outcome = key_frame(&mut state, &[code]);
+    assert_eq!(
+        state.screen,
+        Screen::Closed,
+        "{code:?} did not activate Play"
+    );
+    assert_eq!(outcome.resume, Some(true));
+    assert!(state.captured && state.release_gate);
+}
+
+fn navigate_speed(code: KeyCode) {
+    let mut state = MenuState::default();
+    key_frame(&mut state, &[KeyCode::Escape]);
+    for _ in 0..3 {
+        key_frame(&mut state, &[KeyCode::ArrowDown]);
+    }
+    key_frame(&mut state, &[code]);
+    assert_eq!(state.screen, Screen::Speed, "{code:?} did not open Speed");
+    key_frame(&mut state, &[KeyCode::ArrowDown]);
+    key_frame(&mut state, &[code]);
+    assert_eq!(state.pending, Some(Action::Max));
+}
+
+fn keypad_input_app() -> App {
+    let mut app = input_app();
+    app.add_plugins(bevy::input::InputPlugin);
+    app
+}
+
+fn load_confirmation_with_input_plugin(code: KeyCode) {
+    let mut app = keypad_input_app();
+    raw_frame(
+        &mut app,
+        &[
+            (KeyCode::KeyL, ButtonState::Pressed, false),
+            (code, ButtonState::Pressed, false),
+        ],
+    );
+    assert_eq!(
+        app.world().resource::<MenuState>().screen,
+        Screen::ConfirmLoad
+    );
+    assert_eq!(app.world().resource::<MenuState>().selected, 0);
+    assert_eq!(app.world().resource::<MenuState>().pending, None);
+    raw_frame(
+        &mut app,
+        &[
+            (KeyCode::KeyL, ButtonState::Released, false),
+            (code, ButtonState::Released, false),
+        ],
+    );
+    raw_frame(
+        &mut app,
+        &[(KeyCode::ArrowDown, ButtonState::Pressed, false)],
+    );
+    raw_frame(
+        &mut app,
+        &[(KeyCode::ArrowDown, ButtonState::Released, false)],
+    );
+    assert_eq!(app.world().resource::<MenuState>().selected, 1);
+    raw_frame(&mut app, &[(code, ButtonState::Pressed, true)]);
+    assert_eq!(app.world().resource::<MenuState>().pending, None);
+    app.world_mut()
+        .resource_mut::<Messages<bevy::input::keyboard::KeyboardFocusLost>>()
+        .write(bevy::input::keyboard::KeyboardFocusLost);
+    raw_frame(&mut app, &[]);
+    raw_frame(&mut app, &[(code, ButtonState::Pressed, true)]);
+    assert_eq!(app.world().resource::<MenuState>().pending, None);
+    raw_frame(&mut app, &[(code, ButtonState::Released, false)]);
+    raw_frame(&mut app, &[(code, ButtonState::Pressed, false)]);
+    assert_eq!(
+        app.world().resource::<MenuState>().pending,
+        Some(Action::ConfirmLoad),
+        "{code:?} fresh confirmation ignored"
+    );
+    raw_frame(&mut app, &[(KeyCode::Escape, ButtonState::Pressed, false)]);
+    assert_eq!(app.world().resource::<MenuState>().screen, Screen::Closed);
+    assert_eq!(app.world().resource::<MenuState>().pending, None);
+}
+
+fn load_cancel_with_input_plugin(code: KeyCode) {
+    let mut app = keypad_input_app();
+    raw_frame(&mut app, &[(KeyCode::KeyL, ButtonState::Pressed, false)]);
+    raw_frame(&mut app, &[(KeyCode::KeyL, ButtonState::Released, false)]);
+    raw_frame(&mut app, &[(code, ButtonState::Pressed, false)]);
+    assert_eq!(
+        app.world().resource::<MenuState>().screen,
+        Screen::Closed,
+        "{code:?} cannot activate default Cancel"
+    );
+    assert_eq!(app.world().resource::<MenuState>().pending, None);
+}
+
+#[test]
+fn main_enter_activates_initial_play() {
+    activate_play(KeyCode::Enter);
+}
+#[test]
+fn keypad_enter_activates_initial_play() {
+    activate_play(KeyCode::NumpadEnter);
+}
+#[test]
+fn main_enter_navigates_speed_menu() {
+    navigate_speed(KeyCode::Enter);
+}
+#[test]
+fn keypad_enter_navigates_speed_menu() {
+    navigate_speed(KeyCode::NumpadEnter);
+}
+#[test]
+fn main_enter_confirms_load_after_release_and_fresh_press() {
+    load_confirmation_with_input_plugin(KeyCode::Enter);
+}
+#[test]
+fn keypad_enter_confirms_load_after_release_and_fresh_press() {
+    load_confirmation_with_input_plugin(KeyCode::NumpadEnter);
+}
+#[test]
+fn main_enter_activates_default_cancel() {
+    load_cancel_with_input_plugin(KeyCode::Enter);
+}
+#[test]
+fn keypad_enter_activates_default_cancel() {
+    load_cancel_with_input_plugin(KeyCode::NumpadEnter);
+}
+
+#[test]
+fn mixed_enter_chord_activates_only_one_menu_row() {
+    let mut app = keypad_input_app();
+    app.world_mut().resource_mut::<MenuState>().open(false);
+    for _ in 0..3 {
+        raw_frame(
+            &mut app,
+            &[(KeyCode::ArrowDown, ButtonState::Pressed, false)],
+        );
+        raw_frame(
+            &mut app,
+            &[(KeyCode::ArrowDown, ButtonState::Released, false)],
+        );
+    }
+    raw_frame(
+        &mut app,
+        &[
+            (KeyCode::Enter, ButtonState::Pressed, false),
+            (KeyCode::NumpadEnter, ButtonState::Pressed, false),
+        ],
+    );
+    let state = app.world().resource::<MenuState>();
+    assert_eq!(state.screen, Screen::Speed);
+    assert_eq!(state.selected, 0);
+    assert_eq!(state.pending, None);
+    raw_frame(&mut app, &[]);
+    assert_eq!(app.world().resource::<MenuState>().pending, None);
+}
+
+#[test]
+fn mixed_opening_enters_require_complete_release_before_load_navigation() {
+    for released in [KeyCode::Enter, KeyCode::NumpadEnter] {
+        let held = if released == KeyCode::Enter {
+            KeyCode::NumpadEnter
+        } else {
+            KeyCode::Enter
+        };
+        let mut app = keypad_input_app();
+        raw_frame(
+            &mut app,
+            &[
+                (KeyCode::KeyL, ButtonState::Pressed, false),
+                (released, ButtonState::Pressed, false),
+                (held, ButtonState::Pressed, false),
+            ],
+        );
+        raw_frame(
+            &mut app,
+            &[
+                (KeyCode::KeyL, ButtonState::Released, false),
+                (released, ButtonState::Released, false),
+            ],
+        );
+        raw_frame(
+            &mut app,
+            &[
+                (KeyCode::ArrowDown, ButtonState::Pressed, false),
+                (released, ButtonState::Pressed, false),
+            ],
+        );
+        let state = app.world().resource::<MenuState>();
+        assert_eq!(state.screen, Screen::ConfirmLoad);
+        assert_eq!(state.selected, 0);
+        assert_eq!(state.pending, None);
+        assert!(state.release_gate);
+        raw_frame(
+            &mut app,
+            &[
+                (KeyCode::ArrowDown, ButtonState::Released, false),
+                (released, ButtonState::Released, false),
+                (held, ButtonState::Released, false),
+            ],
+        );
+        assert!(!app.world().resource::<MenuState>().release_gate);
+        raw_frame(
+            &mut app,
+            &[(KeyCode::ArrowDown, ButtonState::Pressed, false)],
+        );
+        assert_eq!(app.world().resource::<MenuState>().selected, 1);
+        assert_eq!(app.world().resource::<MenuState>().pending, None);
+    }
+}
+
+fn selected_load_app() -> App {
+    let mut app = keypad_input_app();
+    raw_frame(&mut app, &[(KeyCode::KeyL, ButtonState::Pressed, false)]);
+    raw_frame(&mut app, &[(KeyCode::KeyL, ButtonState::Released, false)]);
+    raw_frame(
+        &mut app,
+        &[(KeyCode::ArrowDown, ButtonState::Pressed, false)],
+    );
+    raw_frame(
+        &mut app,
+        &[(KeyCode::ArrowDown, ButtonState::Released, false)],
+    );
+    assert_eq!(app.world().resource::<MenuState>().selected, 1);
+    app
+}
+
+#[test]
+fn repeat_cannot_borrow_freshness_from_the_other_held_enter() {
+    for held in [KeyCode::Enter, KeyCode::NumpadEnter] {
+        let repeated = if held == KeyCode::Enter {
+            KeyCode::NumpadEnter
+        } else {
+            KeyCode::Enter
+        };
+        let mut app = selected_load_app();
+        raw_frame(&mut app, &[(held, ButtonState::Pressed, true)]);
+        assert_eq!(app.world().resource::<MenuState>().pending, None);
+        raw_frame(
+            &mut app,
+            &[
+                (held, ButtonState::Pressed, false),
+                (repeated, ButtonState::Pressed, true),
+            ],
+        );
+        assert!(!app
+            .world()
+            .resource::<ButtonInput<KeyCode>>()
+            .just_pressed(held));
+        assert!(app
+            .world()
+            .resource::<ButtonInput<KeyCode>>()
+            .just_pressed(repeated));
+        assert_eq!(app.world().resource::<MenuState>().pending, None);
+    }
+}
+
+#[test]
+fn released_enter_cannot_authorize_another_keys_repeat() {
+    for released in [KeyCode::Enter, KeyCode::NumpadEnter] {
+        let repeated = if released == KeyCode::Enter {
+            KeyCode::NumpadEnter
+        } else {
+            KeyCode::Enter
+        };
+        let mut app = selected_load_app();
+        raw_frame(
+            &mut app,
+            &[
+                (released, ButtonState::Released, false),
+                (repeated, ButtonState::Pressed, true),
+            ],
+        );
+        assert_eq!(app.world().resource::<MenuState>().pending, None);
+    }
+}
+
+#[test]
+fn escape_wins_over_either_fresh_enter_or_both_together() {
+    for codes in [
+        vec![KeyCode::Enter],
+        vec![KeyCode::NumpadEnter],
+        vec![KeyCode::Enter, KeyCode::NumpadEnter],
+    ] {
+        let mut app = selected_load_app();
+        let mut events = vec![(KeyCode::Escape, ButtonState::Pressed, false)];
+        events.extend(
+            codes
+                .into_iter()
+                .map(|code| (code, ButtonState::Pressed, false)),
+        );
+        raw_frame(&mut app, &events);
+        assert_eq!(app.world().resource::<MenuState>().screen, Screen::Closed);
+        assert_eq!(app.world().resource::<MenuState>().pending, None);
+    }
+}
+
+#[test]
+fn conversation_capture_prevents_both_enter_keys_activating_the_menu() {
+    for code in [KeyCode::Enter, KeyCode::NumpadEnter] {
+        let mut state = MenuState::default();
+        state.open(false);
+        state.input(
+            &keys(&[code]),
+            false,
+            false,
+            true,
+            None,
+            false,
+            &[],
+            false,
+            true,
+            LoadAvailability::Ready,
+        );
+        assert_eq!(state.screen, Screen::Main);
+        assert_eq!(state.pending, None);
+    }
+}
+
+#[test]
+fn gated_opening_batch_cannot_supply_later_confirmation() {
+    for code in [KeyCode::Enter, KeyCode::NumpadEnter] {
+        let mut app = input_app(); // Keep raw messages retained to exercise the reader cursor.
+        *app.world_mut().resource_mut::<ButtonInput<KeyCode>>() =
+            keys(&[KeyCode::KeyL, KeyCode::Enter, KeyCode::NumpadEnter]);
+        raw_frame(
+            &mut app,
+            &[
+                (KeyCode::Enter, ButtonState::Pressed, false),
+                (KeyCode::NumpadEnter, ButtonState::Pressed, false),
+            ],
+        );
+        assert_eq!(
+            app.world().resource::<MenuState>().screen,
+            Screen::ConfirmLoad
+        );
+        for codes in [&[][..], &[KeyCode::ArrowDown][..], &[code][..]] {
+            *app.world_mut().resource_mut::<ButtonInput<KeyCode>>() = keys(codes);
+            app.update();
+        }
+        assert_eq!(app.world().resource::<MenuState>().selected, 1);
+        assert_eq!(app.world().resource::<MenuState>().pending, None);
+        assert_eq!(app.world().resource::<Messages<KeyboardInput>>().len(), 2);
+    }
 }
