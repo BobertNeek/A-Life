@@ -88,9 +88,9 @@ impl HeadlessWorld {
                 .is_none_or(|owner| owner == command.organism_id)
             && self
                 .physical_contact_reachable(self.objects[&agent.raw()].position, object.position)
-            && (!mobile
-                || (self.grasp_target_is_reachable(command.organism_id, agent, target)
-                    && (already_held || object.hazard_pain == 0.0)));
+            // Validate physical capability, not hidden desirability. Ingesting
+            // harmful food retains its ordinary measured consequences.
+            && (!mobile || self.grasp_target_is_reachable(command.organism_id, agent, target));
         if !valid {
             return self.hand_preparation_failure(command, target).map(Some);
         }
@@ -448,8 +448,8 @@ mod tests {
     }
 
     #[test]
-    fn invalid_or_unsafe_requested_target_does_not_release_activity_possession() {
-        for case in ["reach", "other_owner", "player", "unsafe", "consumed"] {
+    fn invalid_requested_target_does_not_release_activity_possession() {
+        for case in ["reach", "other_owner", "player", "consumed"] {
             let (mut world, ball, food) = world();
             world
                 .apply_command(&command(HeadlessActionIds::PLAY, ball))
@@ -462,7 +462,6 @@ mod tests {
                 "player" => {
                     world.begin_player_hold(food).unwrap();
                 }
-                "unsafe" => world.objects.get_mut(&food.raw()).unwrap().hazard_pain = 0.5,
                 "consumed" => world.objects.get_mut(&food.raw()).unwrap().consumed = true,
                 _ => unreachable!(),
             }
@@ -474,6 +473,86 @@ mod tests {
             assert_no_activity(&result);
             assert_eq!(material_objects(&world), before, "{case}");
         }
+    }
+
+    #[test]
+    fn harmful_food_switch_preserves_preparation_and_portable_continuation() {
+        let (mut world, ball, food) = world();
+        world.objects.get_mut(&food.raw()).unwrap().hazard_pain = 0.3;
+        world
+            .objects
+            .get_mut(&food.raw())
+            .unwrap()
+            .grounded_physical
+            .chemical[2] = -0.65;
+        world
+            .apply_command(&command(HeadlessActionIds::PLAY, ball))
+            .unwrap();
+        let selected = command(HeadlessActionIds::EAT, food);
+        // A legal target permits placement, not a simultaneous pickup or meal.
+        let placed = world.apply_command(&selected).unwrap();
+        assert!(placed.execution.succeeded);
+        assert_eq!(placed.phase, ActionPhase::Preparation);
+        assert_eq!(placed.grip_transfers[0].kind, GripTransferKind::Placed);
+        assert_eq!(world.entity(ball).unwrap().carried_by, None);
+        assert_eq!(world.entity(food).unwrap().carried_by, None);
+        assert_no_activity(&placed);
+        world.advance_tick();
+        let pickup = world.apply_command(&selected).unwrap();
+        assert!(pickup.execution.succeeded);
+        assert_eq!(pickup.phase, ActionPhase::Preparation);
+        assert_eq!(pickup.grip_transfers[0].kind, GripTransferKind::Acquired);
+        assert_no_activity(&pickup);
+        world.advance_tick();
+        let mut restored = roundtrip(&world);
+        assert_eq!(restored.object_snapshots(), world.object_snapshots());
+        assert!(restored.entity(food).unwrap().activity_hold);
+        let meal = world.apply_command(&selected).unwrap();
+        assert_eq!(restored.apply_command(&selected).unwrap(), meal);
+        assert!(meal.execution.succeeded);
+        assert_eq!(meal.phase, ActionPhase::Completed);
+        assert_eq!(meal.body_event.nutrition, 0.6);
+        assert_eq!(meal.body_event.damage, 0.3);
+        assert_eq!(world.ingestion_observations[&ORGANISM.raw()].taste, -0.65);
+        assert_eq!(restored.object_snapshots(), world.object_snapshots());
+        assert!(world.entity(food).unwrap().consumed);
+        assert_eq!(world.entity(food).unwrap().carried_by, None);
+    }
+
+    #[test]
+    fn mobile_play_acquisition_uses_the_same_physical_checks_as_explicit_grab() {
+        let (mut world, ball, _) = world();
+        world.objects.get_mut(&ball.raw()).unwrap().hazard_pain = 0.3;
+        let mut explicit = world.clone();
+        assert!(
+            explicit
+                .apply_command(&command(HeadlessActionIds::GRAB, ball))
+                .unwrap()
+                .execution
+                .succeeded
+        );
+        let pickup = world
+            .apply_command(&command(HeadlessActionIds::PLAY, ball))
+            .unwrap();
+        assert!(pickup.execution.succeeded);
+        assert_eq!(pickup.phase, ActionPhase::Preparation);
+        assert_no_activity(&pickup);
+        assert_eq!(
+            world.entity(ball).unwrap().position,
+            explicit.entity(ball).unwrap().position
+        );
+        assert_eq!(world.entity(ball).unwrap().carried_by, Some(ORGANISM));
+        world.advance_tick();
+        explicit.advance_tick();
+        let selected = command(HeadlessActionIds::PLAY, ball);
+        let play = world.apply_command(&selected).unwrap();
+        assert!(play.execution.succeeded);
+        assert_eq!(play.phase, ActionPhase::Completed);
+        assert_eq!(
+            play.body_event,
+            explicit.apply_command(&selected).unwrap().body_event
+        );
+        assert!(play.body_event.play_stimulation > 0.0);
     }
 
     #[test]

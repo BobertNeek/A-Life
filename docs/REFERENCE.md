@@ -42,13 +42,18 @@ physical feature, including angular speed in lane 20. This changes the learned
 meaning of Play; older policies and replay do not automatically carry that meaning.
 See the [founder regression report](performance/20261020-founder-brain-corrections.md).
 
-Visibility does not authorize ingestion. For reachable, safe, unheld food,
+Visibility does not authorize ingestion. For reachable, unheld food,
 selected Eat executes a real pickup using ordinary Grab reach, grip-path,
 ownership, liveness, and manipulation-effector checks. Explicitly carried or
 unknown legacy possession is protected. A temporary activity-held object may be
 placed safely when switching to another legal hands-on target; this is a separate
-preparation interval before pickup or use. A player-held target cannot be taken. "Safe" here means Food with no authored hazard pain; this is
-world execution validation, never a candidate score or extra brain input.
+preparation interval before pickup or use. A player-held target cannot be taken.
+Acquisition validates physical capability, not future benefit or harm. Authored
+hazard pain does not veto Eat/Play preparation through an otherwise legal grip;
+the same target can already be acquired by explicit Grab. Ingesting harmful food
+still produces its ordinary nutrition, injury and taste. Aversion belongs to
+grounded sensing, physiological consequences and the creature's learning, rather
+than a hidden zero-harm acquisition rule (`AOA-WORLD-002`, `AOA-BODY-007/008`).
 Out-of-reach Eat fails without navigation. This first decision retains selected
 Eat identity, reports Touch and zero nutrition, and leaves the exact target
 unconsumed in the actor's grip. Only a later Eat while holding that same food
