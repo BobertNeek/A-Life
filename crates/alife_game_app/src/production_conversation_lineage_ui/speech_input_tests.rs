@@ -473,3 +473,135 @@ fn mixed_enter_keys_do_not_duplicate_submission_or_promote_repeats() {
         assert_eq!(input, "after");
     }
 }
+
+#[test]
+fn submission_freezes_the_draft_at_the_first_fresh_enter_and_drains_later_edits() {
+    for code in [KeyCode::Enter, KeyCode::NumpadEnter] {
+        for later in [
+            vec![character("not spoken")],
+            vec![backspace(false), backspace(true)],
+            vec![backspace(false), character("different"), enter(false)],
+        ] {
+            let mut messages = Messages::default();
+            let mut reader = MessageCursor::default();
+            let mut events = vec![
+                character("猫"),
+                key(code, ButtonState::Pressed, Some("\r"), false),
+            ];
+            events.extend(later);
+            messages.write_batch(events);
+            let mut input = "hello ".to_string();
+            assert!(append_player_speech_key_text(
+                &mut input,
+                reader.read(&messages),
+                false
+            ));
+            assert_eq!(
+                input, "hello 猫",
+                "only edits before submission belong to this utterance"
+            );
+            assert!(
+                reader.is_empty(&messages),
+                "post-submit edits must be drained"
+            );
+            messages.update();
+            input.clear();
+            assert!(!append_player_speech_key_text(
+                &mut input,
+                reader.read(&messages),
+                false
+            ));
+            assert!(
+                input.is_empty(),
+                "discarded edits cannot become a later draft"
+            );
+        }
+    }
+}
+
+#[test]
+fn empty_submission_cannot_send_text_typed_after_enter_in_the_same_frame() {
+    for code in [KeyCode::Enter, KeyCode::NumpadEnter] {
+        let mut app = App::new();
+        app.add_plugins(InputPlugin);
+        let events = [
+            key(code, ButtonState::Pressed, Some("\r"), false),
+            character("later"),
+        ];
+        write_keys(&mut app, events.clone());
+        app.update();
+        let mut input = String::new();
+        let submit = append_player_speech_key_text(&mut input, events.iter(), false)
+            && speech_enter_just_pressed(app.world().resource::<ButtonInput<KeyCode>>())
+            && !input.trim().is_empty();
+        assert!(!submit, "a blank Enter cannot submit later text");
+        assert!(input.is_empty());
+    }
+}
+
+#[test]
+fn enter_repeats_do_not_freeze_active_typing() {
+    for code in [KeyCode::Enter, KeyCode::NumpadEnter] {
+        let events = [
+            key(code, ButtonState::Pressed, Some("\r"), true),
+            character("猫"),
+            backspace(false),
+            character("later"),
+        ];
+        let mut input = "hello ".to_string();
+        assert!(!append_player_speech_key_text(
+            &mut input,
+            events.iter(),
+            false
+        ));
+        assert_eq!(input, "hello later");
+    }
+}
+
+#[test]
+fn bevy_submission_uses_preenter_text_once_and_cannot_replay_a_later_edit() {
+    for code in [KeyCode::Enter, KeyCode::NumpadEnter] {
+        let mut app = App::new();
+        app.add_plugins(InputPlugin);
+        let mut reader = MessageCursor::<KeyboardInput>::default();
+        let mut input = "hello ".to_string();
+        let mut utterances = Vec::new();
+        write_keys(
+            &mut app,
+            [
+                character("é猫"),
+                key(code, ButtonState::Pressed, Some("\r"), false),
+                backspace(false),
+                character("not spoken"),
+                enter(false),
+            ],
+        );
+        app.update();
+        let submit = append_player_speech_key_text(
+            &mut input,
+            reader.read(app.world().resource::<Messages<KeyboardInput>>()),
+            false,
+        ) && speech_enter_just_pressed(app.world().resource::<ButtonInput<KeyCode>>())
+            && !input.trim().is_empty();
+        if submit {
+            utterances.push(std::mem::take(&mut input));
+        }
+        assert_eq!(utterances, ["hello é猫"]);
+        assert!(reader.is_empty(app.world().resource::<Messages<KeyboardInput>>()));
+        app.update();
+        assert!(!append_player_speech_key_text(
+            &mut input,
+            reader.read(app.world().resource::<Messages<KeyboardInput>>()),
+            false,
+        ));
+        assert!(input.is_empty());
+        write_keys(&mut app, [character("next draft")]);
+        app.update();
+        assert!(!append_player_speech_key_text(
+            &mut input,
+            reader.read(app.world().resource::<Messages<KeyboardInput>>()),
+            false,
+        ));
+        assert_eq!(input, "next draft");
+    }
+}
