@@ -2,6 +2,25 @@
 
 use super::*;
 use crate::terrain_lighting::PRODUCTION_CAMERA_MAX_ZOOM;
+use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
+
+fn scroll_lines(event: &MouseWheel, scale_factor: f32) -> Option<f32> {
+    if !event.y.is_finite() {
+        return None;
+    }
+    let lines = match event.unit {
+        MouseScrollUnit::Line => event.y,
+        MouseScrollUnit::Pixel => {
+            if !scale_factor.is_finite() || scale_factor <= 0.0 {
+                return None;
+            }
+            // Winit supplies physical pixels. Use logical pixels and Bevy's
+            // approximate 100-pixel line equivalent; leave wheel lines unchanged.
+            event.y / scale_factor / MouseScrollUnit::SCROLL_UNIT_CONVERSION_FACTOR
+        }
+    };
+    lines.is_finite().then_some(lines)
+}
 
 fn zoom_scale(scale: f32, wheel: f32, terrain_viewport_height: Option<f32>) -> f32 {
     let maximum = terrain_viewport_height.map_or(PRODUCTION_CAMERA_MAX_ZOOM, |h| 1600.0 / h);
@@ -12,13 +31,23 @@ fn zoom_scale(scale: f32, wheel: f32, terrain_viewport_height: Option<f32>) -> f
 }
 
 pub(super) fn zoom_camera(
-    mut wheel: bevy::prelude::MessageReader<bevy::input::mouse::MouseWheel>,
-    windows: bevy::prelude::Query<&bevy::window::Window, With<bevy::window::PrimaryWindow>>,
+    mut wheel: bevy::prelude::MessageReader<MouseWheel>,
+    windows: bevy::prelude::Query<(Entity, &Window), With<PrimaryWindow>>,
     terrain: Option<Res<creature_grounding::SelectedTerrain>>,
     mut cameras: bevy::prelude::Query<&mut Projection, With<Fvr03ProductionVoxelCamera>>,
 ) {
-    let delta: f32 = wheel.read().map(|event| event.y).sum();
-    if delta == 0.0 || !windows.single().is_ok_and(|window| window.focused) {
+    let Ok((window_entity, window)) = windows.single() else {
+        wheel.clear();
+        return;
+    };
+    // Physical scroll deltas use the display scale, not an application UI override.
+    let scale_factor = window.resolution.base_scale_factor();
+    let delta: f32 = wheel
+        .read()
+        .filter(|event| event.window == window_entity && window.focused)
+        .filter_map(|event| scroll_lines(event, scale_factor))
+        .sum();
+    if delta == 0.0 || !delta.is_finite() {
         return;
     }
     for mut projection in &mut cameras {
@@ -126,6 +155,196 @@ pub(super) fn pan_camera(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bevy::{camera::OrthographicProjection, window::WindowResolution};
+
+    fn zoom_app(scale_factor: f32) -> (App, Entity, Entity) {
+        let mut app = App::new();
+        app.add_message::<MouseWheel>()
+            .add_systems(Update, zoom_camera);
+        let mut resolution = WindowResolution::new(1280, 720);
+        resolution.set_scale_factor(scale_factor);
+        let window = app
+            .world_mut()
+            .spawn((
+                Window {
+                    resolution,
+                    focused: true,
+                    ..default()
+                },
+                PrimaryWindow,
+            ))
+            .id();
+        let camera = app
+            .world_mut()
+            .spawn((
+                Projection::Orthographic(OrthographicProjection {
+                    scaling_mode: ScalingMode::FixedVertical {
+                        viewport_height: 30.0,
+                    },
+                    ..OrthographicProjection::default_3d()
+                }),
+                Fvr03ProductionVoxelCamera {
+                    mode: Fvr03ProductionVoxelCameraMode::OrthographicIsometric,
+                },
+            ))
+            .id();
+        (app, window, camera)
+    }
+
+    fn scroll(app: &mut App, window: Entity, events: &[(MouseScrollUnit, f32)]) {
+        for &(unit, y) in events {
+            app.world_mut().write_message(MouseWheel {
+                unit,
+                x: 0.0,
+                y,
+                window,
+            });
+        }
+        app.update();
+    }
+
+    fn camera_scale(app: &App, camera: Entity) -> f32 {
+        match app.world().get::<Projection>(camera).unwrap() {
+            Projection::Orthographic(projection) => projection.scale,
+            _ => panic!("expected orthographic camera"),
+        }
+    }
+
+    #[test]
+    fn wheel_lines_keep_existing_zoom_at_every_display_scale() {
+        for scale_factor in [1.0, 1.25, 2.0, 3.0] {
+            for y in [-1.0, -0.25, 0.0, 0.25, 1.0] {
+                let (mut app, window, camera) = zoom_app(scale_factor);
+                scroll(&mut app, window, &[(MouseScrollUnit::Line, y)]);
+                assert_eq!(camera_scale(&app, camera), zoom_scale(1.0, y, None));
+            }
+        }
+    }
+
+    #[test]
+    fn pixel_scroll_uses_logical_line_equivalents_across_display_scales() {
+        for scale_factor in [1.0, 1.25, 2.0, 3.0] {
+            for logical_pixels in [-100.0, -5.0, 5.0, 100.0] {
+                let (mut app, window, camera) = zoom_app(scale_factor);
+                scroll(
+                    &mut app,
+                    window,
+                    &[(MouseScrollUnit::Pixel, logical_pixels * scale_factor)],
+                );
+                assert_eq!(
+                    camera_scale(&app, camera),
+                    zoom_scale(1.0, logical_pixels / 100.0, None)
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn mixed_scroll_units_are_normalized_before_summing() {
+        let (mut app, window, camera) = zoom_app(2.0);
+        scroll(
+            &mut app,
+            window,
+            &[
+                (MouseScrollUnit::Line, 1.0),
+                (MouseScrollUnit::Pixel, -200.0),
+            ],
+        );
+        assert_eq!(camera_scale(&app, camera), 1.0);
+        scroll(
+            &mut app,
+            window,
+            &[
+                (MouseScrollUnit::Line, 0.25),
+                (MouseScrollUnit::Pixel, 100.0),
+            ],
+        );
+        assert_eq!(camera_scale(&app, camera), zoom_scale(1.0, 0.75, None));
+    }
+
+    #[test]
+    fn ui_scale_override_does_not_change_physical_scroll_conversion() {
+        let (mut app, window, camera) = zoom_app(2.0);
+        app.world_mut()
+            .get_mut::<Window>(window)
+            .unwrap()
+            .resolution
+            .set_scale_factor_override(Some(1.0));
+        scroll(&mut app, window, &[(MouseScrollUnit::Pixel, 200.0)]);
+        assert_eq!(camera_scale(&app, camera), zoom_scale(1.0, 1.0, None));
+    }
+
+    #[test]
+    fn other_windows_cannot_zoom_the_primary_camera() {
+        let (mut app, window, camera) = zoom_app(1.0);
+        let other_window = app.world_mut().spawn(Window::default()).id();
+        app.world_mut().write_message(MouseWheel {
+            unit: MouseScrollUnit::Line,
+            x: 0.0,
+            y: 100.0,
+            window: other_window,
+        });
+        scroll(&mut app, window, &[(MouseScrollUnit::Line, -1.0)]);
+        assert_eq!(camera_scale(&app, camera), zoom_scale(1.0, -1.0, None));
+    }
+
+    #[test]
+    fn invalid_scroll_samples_do_not_poison_valid_input() {
+        let (mut app, window, camera) = zoom_app(2.0);
+        scroll(
+            &mut app,
+            window,
+            &[
+                (MouseScrollUnit::Line, f32::NAN),
+                (MouseScrollUnit::Pixel, f32::INFINITY),
+                (MouseScrollUnit::Line, f32::NEG_INFINITY),
+                (MouseScrollUnit::Pixel, 100.0),
+            ],
+        );
+        assert_eq!(camera_scale(&app, camera), zoom_scale(1.0, 0.5, None));
+        for scale_factor in [0.0, -1.0, f32::NAN, f32::INFINITY, f32::MIN_POSITIVE] {
+            let (mut app, window, camera) = zoom_app(scale_factor);
+            scroll(
+                &mut app,
+                window,
+                &[
+                    (MouseScrollUnit::Pixel, f32::MAX),
+                    (MouseScrollUnit::Line, 1.0),
+                ],
+            );
+            assert_eq!(camera_scale(&app, camera), zoom_scale(1.0, 1.0, None));
+        }
+    }
+
+    #[test]
+    fn overflowing_scroll_batch_leaves_the_projection_valid() {
+        let (mut app, window, camera) = zoom_app(1.0);
+        scroll(
+            &mut app,
+            window,
+            &[
+                (MouseScrollUnit::Line, f32::MAX),
+                (MouseScrollUnit::Line, f32::MAX),
+            ],
+        );
+        assert_eq!(camera_scale(&app, camera), 1.0);
+    }
+
+    #[test]
+    fn unfocused_and_missing_windows_discard_scroll_without_replay() {
+        let (mut app, window, camera) = zoom_app(1.0);
+        app.world_mut().get_mut::<Window>(window).unwrap().focused = false;
+        scroll(&mut app, window, &[(MouseScrollUnit::Pixel, 100.0)]);
+        app.world_mut().get_mut::<Window>(window).unwrap().focused = true;
+        app.update();
+        assert_eq!(camera_scale(&app, camera), 1.0);
+
+        app.world_mut().entity_mut(window).remove::<PrimaryWindow>();
+        scroll(&mut app, window, &[(MouseScrollUnit::Line, 1.0)]);
+        app.world_mut().entity_mut(window).insert(PrimaryWindow);
+        app.update();
+        assert_eq!(camera_scale(&app, camera), 1.0);
+    }
 
     #[test]
     fn zoom_roundtrip_and_extremes_keep_a_valid_projection() {
