@@ -655,23 +655,46 @@ mod tests {
             let mut record =
                 WorldOrganismRecord::new(ORGANISM, agent, genome, phenotype, biology, Tick::ZERO)
                     .unwrap();
-            let mut embodiment = record.embodiment().clone();
-            embodiment
-                .replace_calibration(
-                    Tick::ZERO,
-                    embodiment.sensor_calibration().to_vec(),
-                    vec![0.0; embodiment.effector_controllability().len()],
-                    embodiment.body_schema().to_vec(),
-                )
+            // Zero calibration leaves an existing port at neutral gain 1.0.
+            // Model an absent effector by removing its port and aligned lanes,
+            // while preserving every other control in this fresh body fixture.
+            let mut value = serde_json::to_value(record.embodiment()).unwrap();
+            let ports = value["effectors"].as_array_mut().unwrap();
+            let index = ports
+                .iter()
+                .position(|port| port["capability"] == "Manipulation")
                 .unwrap();
-            record.replace_embodiment_state(embodiment).unwrap();
+            let start: usize = ports[..index]
+                .iter()
+                .map(|port| port["command_lanes"].as_u64().unwrap() as usize)
+                .sum();
+            let width = ports[index]["command_lanes"].as_u64().unwrap() as usize;
+            ports.remove(index);
+            value["effector_controllability"]
+                .as_array_mut()
+                .unwrap()
+                .drain(start..start + width);
+            value["revision"] = serde_json::json!(record.embodiment().revision() + 1);
+            record
+                .replace_embodiment_state(serde_json::from_value(value).unwrap())
+                .unwrap();
+            assert_eq!(
+                record
+                    .embodiment()
+                    .effector_gain(EffectorCapability::Manipulation),
+                0.0
+            );
             world.register_organism_record(record).unwrap();
             let operation = if held {
                 GripOperationV1::Release
             } else {
                 GripOperationV1::Close
             };
-            assert!(!execute(&mut world, a, operation).execution.succeeded);
+            // This fixture exercises the exact-frame physical research API;
+            // registered ABI admission is covered by the joint-dispatch tests.
+            let result = execute(&mut world, a, operation);
+            assert!(!result.execution.succeeded);
+            assert!(result.grip_transfers.is_empty());
             assert_eq!(
                 world.entity(a).unwrap().carried_by,
                 held.then_some(ORGANISM)

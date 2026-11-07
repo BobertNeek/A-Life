@@ -130,3 +130,15 @@ benchmark skip in that one suite, checking the observed name and counts against
 the inventory. All other skips, failures and zero-test runs still reject; the
 benchmark is not enabled. Production code and inherited genes are unchanged.
 World, CPU, GPU and lint stages still need execution on the corrected wrapper.
+
+[Run 42415822001](https://github.com/BobertNeek/A-Life/actions/runs/42415822001)
+passed the corrected wrapper, all 130 core tests and 17 world grip tests at
+head `ed1603134e510d539bf60e4b50fb5d8bb3657c26`. One world fixture failed:
+it had modeled a missing effector by zeroing calibration, which actually gives
+an existing port neutral gain 1. The test-only correction removes the real
+Manipulation port and its aligned calibration lanes, asserts gain zero, and
+retains failed Close/Release, no-transfer and unchanged-ownership checks for
+held and unheld targets. This exercises the exact-frame physical research API;
+registered dispatch is covered separately. Production safety gates and genes
+are unchanged. The corrected fixture and later CPU/GPU/lint stages still await
+actual hosted execution; no autonomous study has run.
