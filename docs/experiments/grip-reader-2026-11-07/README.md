@@ -159,3 +159,14 @@ It does not expose a production field, enable an extra feature or drop the order
 assertion. GPU fixtures, detached reader/gradient fixtures and Clippy still need
 actual execution after this correction. Shader device parity and autonomous
 release remain unmeasured.
+
+[Run 42418333660](https://github.com/BobertNeek/A-Life/actions/runs/42418333660)
+compiled the default-feature GPU test and passed its ordered-map/WGSL fixture
+at head `0489e951ec3a1bf96b82bfaa5f14954591434013`. The other GPU fixture failed
+because its legacy Other/Interact candidate had no object slot or target, which
+legacy grounded validation already rejects. The test-only correction supplies a
+real slot, matching candidate features/reference/entity target, explicitly
+validates both frames, and keeps all four own-profile/cross-profile upload
+assertions. Production frame validation and upload guards are unchanged. The
+corrected boundary test, detached reader/gradient fixtures and lint stages still
+need execution. This does not change the neural genes or enable a study.

@@ -135,6 +135,42 @@ fn grip_slots_reject_legacy_frames_even_when_numeric_action_matches_release() {
     }
     fn frame(profile: SensorProfile) -> PerceptionFrame {
         let tick = Tick::ZERO;
+        // The legacy raw action ID is permitted, but Other/Interact still needs
+        // ordinary object grounding. This must be a valid legacy frame before
+        // testing whether the new-profile slot rejects its ABI.
+        let grounded_slots = if profile == SensorProfile::GroundedObjectSlotsV1 {
+            vec![GroundedObjectSlotV1 {
+                slot_index: 0,
+                tracked_object_id: TrackedObjectId(77),
+                bearing: [0., 1.],
+                distance: 0.02,
+                relative_velocity: [0.; 3],
+                color: [0.2; 3],
+                material: [0.1; 3],
+                shape: [0.3; 3],
+                chemical: [0.; 3],
+                contact: 1.,
+                proprioception: [0.; 2],
+                temperature: 0.,
+                terrain: [0.; 2],
+                confidence: Confidence::new(1.).unwrap(),
+            }]
+        } else {
+            Vec::new()
+        };
+        let (observation, target, features) = if let Some(slot) = grounded_slots.first() {
+            (
+                CandidateObservationRef::ObjectSlot(slot.slot_index),
+                ActionTarget::new(Some(WorldEntityId(9)), None),
+                slot.candidate_features().unwrap(),
+            )
+        } else {
+            (
+                CandidateObservationRef::None,
+                ActionTarget::NONE,
+                CandidateFeatureVector::zero(),
+            )
+        };
         let (action, kind, family) = if profile == SensorProfile::GroundedObjectSlotsV1 {
             (
                 ActionId(2202),
@@ -170,9 +206,9 @@ fn grip_slots_reject_legacy_frames_even_when_numeric_action_matches_release() {
                 action,
                 kind,
                 family,
-                CandidateObservationRef::None,
-                ActionTarget::NONE,
-                CandidateFeatureVector::zero(),
+                observation,
+                target,
+                features,
                 Confidence::new(1.).unwrap(),
                 NormalizedScalar::new(0.).unwrap(),
                 DurationTicks::new(1),
@@ -180,7 +216,7 @@ fn grip_slots_reject_legacy_frames_even_when_numeric_action_matches_release() {
             )
             .unwrap()],
             SensorProfileProvenance::new(profile, SensoryAbiVersion::CURRENT, tick).unwrap(),
-            Vec::new(),
+            grounded_slots,
         )
         .unwrap()
         .finalize(PerceptionContextBlock::empty())
@@ -194,6 +230,8 @@ fn grip_slots_reject_legacy_frames_even_when_numeric_action_matches_release() {
     let new_slot = new_bucket.insert_phenotype(0, 1, &phenotype(true)).unwrap();
     let old_frame = frame(SensorProfile::GroundedObjectSlotsV1);
     let new_frame = frame(SensorProfile::GroundedGripObjectSlotsV1);
+    old_frame.validate().unwrap();
+    new_frame.validate().unwrap();
     assert!(GpuPerceptionUpload::try_from_frame(&old_frame, &old_slot, 0).is_ok());
     assert!(GpuPerceptionUpload::try_from_frame(&new_frame, &new_slot, 0).is_ok());
     assert!(GpuPerceptionUpload::try_from_frame(&old_frame, &new_slot, 0).is_err());
