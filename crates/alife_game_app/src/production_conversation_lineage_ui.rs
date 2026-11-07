@@ -2082,6 +2082,8 @@ fn speech_enter_just_pressed(keyboard: &ButtonInput<KeyCode>) -> bool {
 // Consume the entire opening frame so pre-Enter shortcuts cannot leak into typing.
 // Text and Backspace edits follow raw order, including repeated Backspace.
 // Only a fresh raw Enter in an already-open composer requests submission.
+// Freeze the submitted draft at that boundary, while draining the rest of the
+// batch so later edits cannot change this utterance or replay into another one.
 fn append_player_speech_key_text<'a>(
     input: &mut String,
     messages: impl Iterator<Item = &'a KeyboardInput>,
@@ -2090,7 +2092,7 @@ fn append_player_speech_key_text<'a>(
     let mut after_opening_enter = !opened_this_frame;
     let mut submit_enter = false;
     for message in messages {
-        if message.state != ButtonState::Pressed {
+        if message.state != ButtonState::Pressed || submit_enter {
             continue;
         }
         if !after_opening_enter {
@@ -2103,6 +2105,7 @@ fn append_player_speech_key_text<'a>(
         }
         if !opened_this_frame && is_enter_key(message.key_code) && !message.repeat {
             submit_enter = true;
+            continue;
         }
         if let Some(text) = &message.text {
             for character in text.chars().filter(|character| !character.is_control()) {
