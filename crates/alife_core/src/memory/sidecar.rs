@@ -33,6 +33,8 @@ pub struct PortableMemoryRecordV2 {
     pub salience_q16: u16,
     pub observation_count: u32,
     pub canonical_digest: [u64; 4],
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outcome_contact: Option<PhysicalContactKind>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -895,6 +897,7 @@ impl PortableMemoryRecordV2 {
         digest.write_f32(portable_float(self.confidence_bits)?)?;
         digest.write_u16(self.salience_q16);
         digest.write_u32(self.observation_count);
+        candidate_index::write_outcome_provenance(&mut digest, self.outcome_contact);
         Ok(digest.finish256())
     }
 
@@ -932,6 +935,8 @@ impl PortableMemoryRecordV2 {
             || family_value.len() != MEMORY_VALUE_V1_COUNT
             || target_bins(&query_features) != self.target_bins
             || !family.is_compatible_with(kind)
+            || (self.outcome_contact.is_some()
+                && (self.tracked_object_id_raw == 0 || family != CandidateActionFamily::Ingest))
             || !(0.0..=1.0).contains(&confidence)
             || self.canonical_digest != self.recompute_canonical_digest()?
         {
@@ -1052,6 +1057,7 @@ fn portable_bank_from_memory(
             salience_q16: record.salience_q16,
             observation_count: record.observation_count,
             canonical_digest: [0; 4],
+            outcome_contact: record.outcome_contact,
         };
         portable.canonical_digest = portable.recompute_canonical_digest()?;
         portable.validate_for(organism_id.raw(), profile)?;
@@ -1133,6 +1139,7 @@ fn memory_bank_from_portable(
             confidence: portable_float(portable.confidence_bits)?,
             salience_q16: portable.salience_q16,
             observation_count: portable.observation_count,
+            outcome_contact: portable.outcome_contact,
         };
         record.validate_contract()?;
         records.insert(record.memory_id.raw(), record);

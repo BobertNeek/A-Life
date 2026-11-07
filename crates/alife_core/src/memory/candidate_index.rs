@@ -62,9 +62,54 @@ pub(super) struct CandidateMemoryRecordV2 {
     pub(super) confidence: f32,
     pub(super) salience_q16: u16,
     pub(super) observation_count: u32,
+    /// Exact representative physical outcome, when grounded by its channel and
+    /// target. Absence is legacy/unknown, never inferred from consequence floats.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) outcome_contact: Option<PhysicalContactKind>,
 }
 
 impl CandidateMemoryRecordV2 {
+    pub(super) fn same_outcome_scope(&self, other: &Self) -> bool {
+        self.outcome_contact == other.outcome_contact
+    }
+
+    /// A newly grounded meal may teach an old save without relabeling its
+    /// unknown episodes. Preparations never gain this one-way privilege.
+    pub(super) fn consumption_supersedes_unknown(&self, older: &Self) -> bool {
+        self.outcome_contact == Some(PhysicalContactKind::Consumed)
+            && older.outcome_contact.is_none()
+            && self.identity() == older.identity()
+            && super::candidate_recall::family_similarity(
+                &self.query_features,
+                &older.query_features,
+            ) >= super::MEMORY_MERGE_SIMILARITY
+            && !super::candidate_recall::compatible_memory_consequences(self, older)
+    }
+
+    pub(super) fn outcome_scope_key(&self) -> u8 {
+        match self.outcome_contact {
+            None => 0,
+            Some(PhysicalContactKind::None) => 1,
+            Some(PhysicalContactKind::Touch) => 2,
+            Some(PhysicalContactKind::Collision) => 3,
+            Some(PhysicalContactKind::Blocked) => 4,
+            Some(PhysicalContactKind::Consumed) => 5,
+            Some(PhysicalContactKind::Moved) => 6,
+        }
+    }
+
+    fn ingest_recall_priority(&self) -> u8 {
+        if self.family_raw != u16::from(CandidateActionFamily::Ingest.raw())
+            || self.tracked_object_id_raw == 0
+        {
+            return 0;
+        }
+        match self.outcome_contact {
+            Some(PhysicalContactKind::Consumed) => 0,
+            None => 1,
+            Some(_) => 2,
+        }
+    }
     pub(super) fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
         if self.schema_version != MEMORY_RECALL_SCHEMA_VERSION
             || self.organism_id_raw == 0
@@ -80,6 +125,9 @@ impl CandidateMemoryRecordV2 {
             || !(0.0..=1.0).contains(&self.confidence)
             || self.observation_count == 0
             || self.first_tick.raw() > self.last_tick.raw()
+            || (self.outcome_contact.is_some()
+                && (self.tracked_object_id_raw == 0
+                    || self.family_raw != u16::from(CandidateActionFamily::Ingest.raw())))
         {
             return Err(ScaffoldContractError::InvalidMemoryQuery);
         }
@@ -153,7 +201,7 @@ pub(super) struct CandidateMemoryStoreV2 {
     pub(super) records: BTreeMap<u64, CandidateMemoryRecordV2>,
     pub(super) last_sequence_by_organism: BTreeMap<u64, u64>,
     #[serde(skip, default)]
-    pub(super) family_index: BTreeMap<MemoryBucketKey, Vec<MemoryId>>,
+    pub(super) family_index: BTreeMap<(MemoryBucketKey, u8), Vec<MemoryId>>,
     #[serde(skip, default)]
     pub(super) target_index: BTreeMap<TargetMemoryBucketKey, Vec<MemoryId>>,
     // Derived retrieval indices keep transient sensory bins out of the lookup
@@ -329,6 +377,7 @@ impl CandidateMemoryStoreV2 {
             digest.write_f32(record.confidence)?;
             digest.write_u16(record.salience_q16);
             digest.write_u32(record.observation_count);
+            write_outcome_provenance(&mut digest, record.outcome_contact);
         }
         digest.write_sequence_len(self.last_sequence_by_organism.len());
         for (organism, sequence) in &self.last_sequence_by_organism {
@@ -364,7 +413,7 @@ impl CandidateMemoryStoreV2 {
             if !target_ids.contains(&memory_id) {
                 target_ids.push(memory_id);
             }
-            self.rank_index_ids(&mut family_ids);
+            self.rank_scoped_index_ids(&mut family_ids, true);
             self.rank_index_ids(&mut target_ids);
             self.family_namespace_index
                 .insert(family_namespace, family_ids);
@@ -400,12 +449,16 @@ impl CandidateMemoryStoreV2 {
     }
 
     fn insert_family_index_id(&mut self, family_key: MemoryBucketKey, memory_id: MemoryId) {
-        let mut ids = self.family_index.remove(&family_key).unwrap_or_default();
+        let key = (
+            family_key,
+            self.records[&memory_id.raw()].outcome_scope_key(),
+        );
+        let mut ids = self.family_index.remove(&key).unwrap_or_default();
         if !ids.contains(&memory_id) {
             ids.push(memory_id);
         }
         self.rank_index_ids(&mut ids);
-        self.family_index.insert(family_key, ids);
+        self.family_index.insert(key, ids);
     }
 
     fn insert_target_index_id(&mut self, target_key: TargetMemoryBucketKey, memory_id: MemoryId) {
@@ -418,12 +471,22 @@ impl CandidateMemoryStoreV2 {
     }
 
     fn rank_index_ids(&self, ids: &mut [MemoryId]) {
+        self.rank_scoped_index_ids(ids, false);
+    }
+
+    fn rank_scoped_index_ids(&self, ids: &mut [MemoryId], prefer_meal: bool) {
         ids.sort_by(|left, right| {
             let left_record = &self.records[&left.raw()];
             let right_record = &self.records[&right.raw()];
-            right_record
-                .salience_q16
-                .cmp(&left_record.salience_q16)
+            let scope_order = if prefer_meal {
+                left_record
+                    .ingest_recall_priority()
+                    .cmp(&right_record.ingest_recall_priority())
+            } else {
+                std::cmp::Ordering::Equal
+            };
+            scope_order
+                .then_with(|| right_record.salience_q16.cmp(&left_record.salience_q16))
                 .then_with(|| {
                     right_record
                         .last_tick
@@ -468,10 +531,11 @@ impl CandidateMemoryStoreV2 {
                 self.family_namespace_index.remove(&family_namespace);
             }
         }
-        if let Some(ids) = self.family_index.get_mut(&family_key) {
+        let scoped_key = (family_key, record.outcome_scope_key());
+        if let Some(ids) = self.family_index.get_mut(&scoped_key) {
             ids.retain(|id| *id != record.memory_id);
             if ids.is_empty() {
-                self.family_index.remove(&family_key);
+                self.family_index.remove(&scoped_key);
             }
         }
         let target_key = record.target_key();
@@ -632,4 +696,25 @@ pub(super) fn has_category_cues(features: &[f32]) -> bool {
         })
         .count()
         >= 2
+}
+
+// Unknown emits no bytes: legacy record and bank digest streams stay exact.
+// Known provenance is a versioned extension, authenticated by both portable and
+// active-bank digests and therefore by the enclosing private-state seal.
+pub(super) fn write_outcome_provenance(
+    digest: &mut CanonicalDigestBuilder,
+    contact: Option<PhysicalContactKind>,
+) {
+    if let Some(contact) = contact {
+        digest.write_bytes(b"ALIFE-MEMORY-OUTCOME-PROVENANCE-V1");
+        digest.write_u16(1);
+        digest.write_u8(match contact {
+            PhysicalContactKind::None => 0,
+            PhysicalContactKind::Touch => 1,
+            PhysicalContactKind::Collision => 2,
+            PhysicalContactKind::Blocked => 3,
+            PhysicalContactKind::Consumed => 4,
+            PhysicalContactKind::Moved => 5,
+        });
+    }
 }

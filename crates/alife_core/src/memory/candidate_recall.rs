@@ -74,9 +74,55 @@ pub(super) fn candidate_record_from_patch_runtime(
         confidence: decision.confidence.raw(),
         salience_q16: (salience.clamp(0.0, 1.0) * f32::from(u16::MAX)).round() as u16,
         observation_count: 1,
+        outcome_contact: representative_outcome_contact(patch),
     };
     record.validate_contract()?;
     Ok(record)
+}
+
+/// An aggregate joint receipt may describe a different channel/target. Bind
+/// provenance to the representative command, or leave it unknown.
+fn representative_outcome_contact(patch: &ExperiencePatch) -> Option<PhysicalContactKind> {
+    let decision = patch.decision();
+    let query = decision.episodic_key()?.query();
+    // This correction supports the preparatory/consummatory phases of a
+    // tracked Ingest action. Other families retain their exact legacy rules.
+    if query.action_family() != CandidateActionFamily::Ingest || query.tracked_object_id().is_none()
+    {
+        return None;
+    }
+    matched_outcome_contact(
+        decision.selected_action.action_id,
+        decision.selected_action.target_entity,
+        decision.selected_bundle.as_ref(),
+        patch.outcome().physical,
+        patch.outcome().joint.as_ref(),
+    )
+}
+
+fn matched_outcome_contact(
+    action: ActionId,
+    target: Option<crate::WorldEntityId>,
+    bundle: Option<&crate::MotorCommandBundle>,
+    physical: crate::PhysicalActionOutcome,
+    joint: Option<&crate::JointPhysicalOutcome>,
+) -> Option<PhysicalContactKind> {
+    let target = target?;
+    if let Some(bundle) = bundle {
+        let mut matching = bundle.channels.iter().filter(|command| {
+            command.primitive == action
+                && command.target.and_then(|binding| binding.entity) == Some(target)
+        });
+        let command = matching.next()?;
+        if matching.next().is_some() {
+            return None;
+        }
+        let receipt = joint?.channel_outcomes.iter().find(|receipt| {
+            receipt.channel == command.channel && receipt.physical.target_entity == Some(target)
+        })?;
+        return Some(receipt.physical.contact);
+    }
+    (physical.target_entity == Some(target)).then_some(physical.contact)
 }
 
 pub(super) fn merge_candidate_records(
@@ -301,7 +347,7 @@ pub(super) fn recall_family_channel_with_budget(
             if query.tracked_object_id().is_some() {
                 store.family_namespace_index.get(key)
             } else {
-                store.family_index.get(key)
+                store.family_index.get(&(key.clone(), 0))
             }
         },
         store,
@@ -319,6 +365,26 @@ pub(super) fn recall_family_channel_with_budget(
             (score >= MEMORY_MIN_SIMILARITY).then_some((id, score))
         })
         .collect::<Vec<_>>();
+    if query.tracked_object_id().is_some() && query.action_family() == CandidateActionFamily::Ingest
+    {
+        // A painless pickup is not evidence that consuming the same object is
+        // safe. Only a genuine later consummation can reverse that expectation.
+        let preferred = if matches.iter().any(|(id, _)| {
+            store.records[&id.raw()].outcome_contact == Some(PhysicalContactKind::Consumed)
+        }) {
+            Some(Some(PhysicalContactKind::Consumed))
+        } else if matches
+            .iter()
+            .any(|(id, _)| store.records[&id.raw()].outcome_contact.is_none())
+        {
+            Some(None)
+        } else {
+            None
+        };
+        if let Some(preferred) = preferred {
+            matches.retain(|(id, _)| store.records[&id.raw()].outcome_contact == preferred);
+        }
+    }
     select_current_individual_outcome(store, &mut matches);
     let generalized =
         eligible == 0 && query.tracked_object_id().is_some() && has_category_cues(query.features());
@@ -595,6 +661,13 @@ pub(super) fn compatible_memory_outcomes(
 ) -> bool {
     // Repeated appearance/action is not evidence that conflicting consequences
     // are equivalent. Preserve reversals and painful individual exceptions.
+    left.same_outcome_scope(right) && compatible_memory_consequences(left, right)
+}
+
+pub(super) fn compatible_memory_consequences(
+    left: &CandidateMemoryRecordV2,
+    right: &CandidateMemoryRecordV2,
+) -> bool {
     left.family_value
         .iter()
         .zip(right.family_value)
@@ -732,4 +805,155 @@ fn select_current_individual_outcome(
     };
     let anchor = &store.records[&anchor.raw()];
     matches.retain(|(id, _)| compatible_memory_outcomes(anchor, &store.records[&id.raw()]));
+}
+
+#[cfg(test)]
+mod outcome_provenance_tests {
+    use super::*;
+    use crate::{
+        ActionTarget, ChannelCommand, DurationTicks, Intensity, JointPhysicalOutcome, MotorChannel,
+        MotorCommandBundle, PhysicalActionOutcome, Vec3f, WorldEntityId,
+    };
+
+    use crate::experience::ChannelPhysicalOutcome;
+
+    fn physical(
+        target: Option<WorldEntityId>,
+        contact: PhysicalContactKind,
+    ) -> PhysicalActionOutcome {
+        PhysicalActionOutcome {
+            contact,
+            target_entity: target,
+            displacement: Vec3f::ZERO,
+            collision_normal: None,
+            energy_cost: NormalizedScalar::new(0.).unwrap(),
+        }
+    }
+    fn command(channel: MotorChannel, primitive: u32, target: u64) -> ChannelCommand {
+        ChannelCommand::new(
+            channel,
+            ActionId(primitive),
+            Some(ActionTarget::new(Some(WorldEntityId(target)), None)),
+            Vec3f::ZERO,
+            Intensity::new(1.).unwrap(),
+            DurationTicks::new(1),
+            0.,
+            Confidence::new(1.).unwrap(),
+            0,
+        )
+        .unwrap()
+    }
+    fn bundle() -> MotorCommandBundle {
+        MotorCommandBundle::new(
+            OrganismId(1),
+            ExperienceSequenceId(1),
+            Tick::new(1),
+            vec![
+                command(MotorChannel::Manipulation, 210, 1),
+                command(MotorChannel::Locomotion, 207, 2),
+            ],
+        )
+        .unwrap()
+    }
+    #[test]
+    fn missing_or_mismatched_physical_target_is_not_object_provenance() {
+        assert_eq!(
+            matched_outcome_contact(
+                ActionId(210),
+                None,
+                None,
+                physical(None, PhysicalContactKind::Consumed),
+                None
+            ),
+            None
+        );
+        assert_eq!(
+            matched_outcome_contact(
+                ActionId(210),
+                Some(WorldEntityId(1)),
+                None,
+                physical(Some(WorldEntityId(2)), PhysicalContactKind::Consumed),
+                None
+            ),
+            None
+        );
+        assert_eq!(
+            matched_outcome_contact(
+                ActionId(210),
+                Some(WorldEntityId(1)),
+                None,
+                physical(Some(WorldEntityId(1)), PhysicalContactKind::Touch),
+                None
+            ),
+            Some(PhysicalContactKind::Touch)
+        );
+    }
+    #[test]
+    fn joint_provenance_uses_the_exact_representative_channel_and_target() {
+        let bundle = bundle();
+        let aggregate = physical(Some(WorldEntityId(2)), PhysicalContactKind::Consumed);
+        let mut joint = JointPhysicalOutcome::new(aggregate, vec![])
+            .unwrap()
+            .with_channel_outcomes(vec![
+                ChannelPhysicalOutcome::new(
+                    MotorChannel::Manipulation,
+                    physical(Some(WorldEntityId(1)), PhysicalContactKind::Touch),
+                )
+                .unwrap(),
+                ChannelPhysicalOutcome::new(MotorChannel::Locomotion, aggregate).unwrap(),
+            ])
+            .unwrap();
+        let read = |joint: &JointPhysicalOutcome| {
+            matched_outcome_contact(
+                ActionId(210),
+                Some(WorldEntityId(1)),
+                Some(&bundle),
+                aggregate,
+                Some(joint),
+            )
+        };
+        assert_eq!(read(&joint), Some(PhysicalContactKind::Touch));
+        joint.channel_outcomes[0].physical.target_entity = Some(WorldEntityId(2));
+        assert_eq!(
+            read(&joint),
+            None,
+            "another target's Consumed receipt is never borrowed"
+        );
+        joint.channel_outcomes.remove(0);
+        assert_eq!(read(&joint), None);
+        assert_eq!(
+            matched_outcome_contact(
+                ActionId(210),
+                Some(WorldEntityId(1)),
+                Some(&bundle),
+                aggregate,
+                None
+            ),
+            None
+        );
+    }
+    #[test]
+    fn ambiguous_joint_representative_remains_unknown() {
+        let mut bundle = bundle();
+        bundle.channels[1].primitive = ActionId(210);
+        bundle.channels[1].target = bundle.channels[0].target;
+        let p = physical(Some(WorldEntityId(1)), PhysicalContactKind::Consumed);
+        let joint = JointPhysicalOutcome::new(p, vec![])
+            .unwrap()
+            .with_channel_outcomes(vec![
+                ChannelPhysicalOutcome::new(MotorChannel::Manipulation, p).unwrap(),
+                ChannelPhysicalOutcome::new(MotorChannel::Locomotion, p).unwrap(),
+            ])
+            .unwrap();
+        assert_eq!(
+            matched_outcome_contact(
+                ActionId(210),
+                Some(WorldEntityId(1)),
+                Some(&bundle),
+                p,
+                Some(&joint)
+            ),
+            None
+        );
+    }
 }
