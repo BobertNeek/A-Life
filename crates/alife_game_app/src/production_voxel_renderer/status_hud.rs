@@ -35,6 +35,16 @@ impl Quantity {
             Self::PraiseSignal => "praise",
         }
     }
+    fn accessible_name(self) -> &'static str {
+        match self {
+            Self::Hunger => "Hunger",
+            Self::Energy => "Energy",
+            Self::Fatigue => "Fatigue",
+            Self::Calm => "Calm",
+            Self::SleepPressure => "Sleep pressure",
+            Self::PraiseSignal => "Praise signal",
+        }
+    }
     fn value(self, row: &WorldOrganismPresentationRow) -> Option<f32> {
         let h = &row.biochemistry.homeostasis;
         let raw = match self {
@@ -119,6 +129,8 @@ fn valid_row(
         && !row.object.consumed
         && row.lifecycle.is_alive()
 }
+#[derive(Component)]
+struct HudDecoration;
 #[derive(Component)]
 struct HudRoot;
 #[derive(Component)]
@@ -220,10 +232,24 @@ fn bevel(raised: bool) -> BorderColor {
         right: if raised { dark } else { light },
     }
 }
+fn accessible(role: accesskit::Role, label: &str) -> AccessibilityNode {
+    let mut node = accesskit::Node::new(role);
+    node.set_label(label);
+    // The final layout/visibility reconciliation exposes only visible HUD nodes.
+    node.set_hidden();
+    AccessibilityNode(node)
+}
+fn decorative() -> (HudDecoration, AccessibilityNode) {
+    (
+        HudDecoration,
+        accessible(accesskit::Role::GenericContainer, ""),
+    )
+}
 fn icon(world: &mut World, parent: Entity, handle: Handle<Image>, size: f32) -> Entity {
     world
         .spawn((
             ImageNode::new(handle),
+            decorative(),
             Node {
                 width: Val::Px(size),
                 height: Val::Px(size),
@@ -256,6 +282,10 @@ pub(super) fn spawn(world: &mut World) {
         .spawn((
             Name::new("Rendered creature count and playback"),
             StatusRoot,
+            accessible(
+                accesskit::Role::Group,
+                "Rendered creatures: 0. Playback: playing",
+            ),
             Node {
                 position_type: PositionType::Absolute,
                 left: Val::Px(16.0),
@@ -287,6 +317,7 @@ pub(super) fn spawn(world: &mut World) {
             ..default()
         },
         Count,
+        decorative(),
         V0PlayerStatusChip,
         ChildOf(status),
     ));
@@ -311,6 +342,7 @@ pub(super) fn spawn(world: &mut World) {
             bevel(true),
             GlobalZIndex(30),
             HudRoot,
+            accessible(accesskit::Role::Group, "Selected creature"),
             V0PlayerCreaturePanel,
             Visibility::Hidden,
         ))
@@ -319,6 +351,7 @@ pub(super) fn spawn(world: &mut World) {
         .spawn((
             Name::new("Actual selected stable identity, no portrait"),
             IdentityHeader,
+            accessible(accesskit::Role::GenericContainer, ""),
             Node {
                 width: Val::Percent(100.0),
                 height: Val::Px(HEADER_HEIGHT),
@@ -333,6 +366,7 @@ pub(super) fn spawn(world: &mut World) {
     icon(world, identity, image("selection"), 16.0);
     let identity_text = world
         .spawn((
+            accessible(accesskit::Role::GenericContainer, ""),
             Node {
                 min_width: Val::Px(0.0),
                 height: Val::Px(32.0),
@@ -378,6 +412,7 @@ pub(super) fn spawn(world: &mut World) {
             ..default()
         },
         Identity,
+        accessible(accesskit::Role::Label, ""),
         ChildOf(identity_text),
     ));
     let held_food = icon(world, identity, image("holding_food"), 22.0);
@@ -446,6 +481,7 @@ pub(super) fn spawn(world: &mut World) {
     let grid = world
         .spawn((
             QuantityGrid,
+            accessible(accesskit::Role::GenericContainer, ""),
             Node {
                 width: Val::Percent(100.0),
                 column_gap: Val::Px(8.0),
@@ -461,6 +497,7 @@ pub(super) fn spawn(world: &mut World) {
             .spawn((
                 Name::new(format!("{} measured quantity", quantity.name())),
                 quantity,
+                accessible(accesskit::Role::Meter, quantity.accessible_name()),
                 Node {
                     position_type: PositionType::Relative,
                     width: Val::Px(52.0),
@@ -520,6 +557,7 @@ pub(super) fn spawn(world: &mut World) {
                 ..default()
             },
             Unknown(quantity),
+            decorative(),
             ChildOf(card),
         ));
         world.spawn((
@@ -534,6 +572,7 @@ pub(super) fn spawn(world: &mut World) {
             },
             Visibility::Hidden,
             Warning(quantity),
+            decorative(),
             ChildOf(card),
         ));
     }
@@ -573,11 +612,12 @@ fn set_readout(world: &mut World, readout: Option<&Readout>, debug: bool) {
             *visible = next;
         }
     }
-    for mut text in world
-        .query_filtered::<&mut Text, With<Identity>>()
+    for (mut text, mut accessible) in world
+        .query_filtered::<(&mut Text, &mut AccessibilityNode), With<Identity>>()
         .iter_mut(world)
     {
         let next = readout.map_or_else(String::new, |r| format!("#{}", r.stable_id));
+        accessible.set_value(next.as_str());
         if text.0 != next {
             text.0 = next;
         }
@@ -623,6 +663,16 @@ fn set_readout(world: &mut World, readout: Option<&Readout>, debug: bool) {
         }
         *border = bevel(*interaction != Interaction::Pressed);
     }
+    for mut accessible in world
+        .query_filtered::<&mut AccessibilityNode, With<HudRoot>>()
+        .iter_mut(world)
+    {
+        if readout.is_some_and(|readout| readout.holding_food) {
+            accessible.set_description("Holding unconsumed food");
+        } else {
+            accessible.clear_description();
+        }
+    }
     let values = readout.map_or([None; 6], |r| r.values);
     for mut visibility in world
         .query_filtered::<&mut Visibility, With<HeldFood>>()
@@ -635,6 +685,29 @@ fn set_readout(world: &mut World, readout: Option<&Readout>, debug: bool) {
         };
     }
     let value = |quantity| values[QUANTITIES.iter().position(|q| *q == quantity).unwrap()];
+    for (quantity, mut accessible) in world
+        .query::<(&Quantity, &mut AccessibilityNode)>()
+        .iter_mut(world)
+    {
+        accessible.set_min_numeric_value(0.0);
+        accessible.set_max_numeric_value(100.0);
+        if let Some(amount) = value(*quantity) {
+            // Match the visible width's f32 conversion, rather than exposing
+            // an independently calculated or extrapolated physiology reading.
+            let percent = amount * 100.0;
+            accessible.set_numeric_value(f64::from(percent));
+            accessible.set_value(format!("{percent:.0}%"));
+            if quantity.warning(amount) {
+                accessible.set_description("Warning");
+            } else {
+                accessible.clear_description();
+            }
+        } else {
+            accessible.clear_numeric_value();
+            accessible.set_value("Unknown");
+            accessible.clear_description();
+        }
+    }
     for (fill, mut node, mut color) in world
         .query::<(&MeterFill, &mut Node, &mut BackgroundColor)>()
         .iter_mut(world)
@@ -766,6 +839,19 @@ fn selected_name(
         .map(|row| row.object.label.clone())
 }
 fn set_status(world: &mut World, count: usize, paused: bool, fast: bool) {
+    let playback = if paused {
+        "paused"
+    } else if fast {
+        "fast"
+    } else {
+        "playing"
+    };
+    for mut accessible in world
+        .query_filtered::<&mut AccessibilityNode, With<StatusRoot>>()
+        .iter_mut(world)
+    {
+        accessible.set_label(format!("Rendered creatures: {count}. Playback: {playback}"));
+    }
     let handle = world.resource::<Icons>().0[if paused {
         "paused"
     } else if fast {
@@ -820,6 +906,33 @@ fn adapt_bottom_controls_visibility(world: &mut World, size: Vec2, selected_visi
             *visible = Visibility::Hidden;
         }
     }
+
+    sync_accessibility_visibility(world);
+}
+fn sync_accessibility_visibility(world: &mut World) {
+    let roots = world
+        .query_filtered::<Entity, Or<(With<HudRoot>, With<StatusRoot>)>>()
+        .iter(world)
+        .collect::<Vec<_>>();
+    let mut pending = roots
+        .into_iter()
+        .map(|entity| (entity, true))
+        .collect::<Vec<_>>();
+    while let Some((entity, parent_visible)) = pending.pop() {
+        let visible =
+            parent_visible && world.get::<Visibility>(entity) != Some(&Visibility::Hidden);
+        if let Some(children) = world.get::<Children>(entity) {
+            pending.extend(children.iter().map(|child| (child, visible)));
+        }
+        let decorative = world.get::<HudDecoration>(entity).is_some();
+        if let Some(mut accessible) = world.get_mut::<AccessibilityNode>(entity) {
+            if visible && !decorative {
+                accessible.clear_hidden();
+            } else {
+                accessible.set_hidden();
+            }
+        }
+    }
 }
 pub(super) fn sync(world: &mut World) {
     let ux = world.resource::<Fvr05ProductionUxStateResource>();
@@ -857,3 +970,7 @@ mod data_tests;
 #[cfg(test)]
 #[path = "status_hud/layout_tests.rs"]
 mod layout_tests;
+
+#[cfg(test)]
+#[path = "status_hud/accessibility_tests.rs"]
+mod accessibility_tests;
