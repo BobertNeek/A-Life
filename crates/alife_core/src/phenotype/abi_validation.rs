@@ -166,9 +166,30 @@ pub(super) fn validate_decoder_synapse(
 
 pub(super) fn compute_abi_digests(
     capacity: &BrainCapacityClass,
+    selection: &crate::FoundationAbiSelection,
     projections: &[CompiledProjection],
     synapses: &[CompiledSynapse],
 ) -> (Blake3Digest, Blake3Digest) {
+    if selection.n2048_experimental_graph().is_some() {
+        use crate::blake3_digest::{domain_hasher, Blake3Write};
+        let mut route = domain_hasher(b"alife.n2048.experimental-route-abi.v1");
+        let mut plasticity = domain_hasher(b"alife.n2048.experimental-plasticity-abi.v1");
+        for word in crate::N2048ExperimentalGraphV1::recipe_digest() {
+            route.write_u64(word);
+            plasticity.write_u64(word);
+        }
+        for s in synapses {
+            route.write_u16(s.route_index());
+            route.write_u32(s.source());
+            route.write_u32(s.target());
+            plasticity.write_u32(s.alpha().to_bits());
+            plasticity.write_u16(s.receptor_index());
+        }
+        return (
+            Blake3Digest::from_hasher(route),
+            Blake3Digest::from_hasher(plasticity),
+        );
+    }
     if capacity.id() == BrainCapacityClass::N2048_ID {
         return (
             crate::N2048FoundationLayoutV1::route_abi_digest(),

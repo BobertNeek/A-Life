@@ -477,6 +477,7 @@ impl FoundationId {
     pub const N512_V1: Self = Self(0x004E_3531_325F_5631);
     pub const N512_READOUT_CANDIDATE_V1: Self = Self(0x4E35_3132_5243_0001);
     pub const N2048_V1: Self = Self(0x4E32_3034_385F_5631);
+    pub const N2048_EXPERIMENTAL_GRAPH_V1: Self = Self(0x4E32_3034_3845_0001);
 
     pub const fn raw(self) -> u64 {
         self.0
@@ -500,6 +501,7 @@ pub struct FoundationCompatibilityFamilyId(u64);
 impl FoundationCompatibilityFamilyId {
     pub const N512_FOUNDATION: Self = Self(0x4E35_3132_5F00_FA11);
     pub const N2048_FOUNDATION: Self = Self(0x4E32_3034_385F_FA11);
+    pub const N2048_EXPERIMENTAL_GRAPH: Self = Self(0x4E32_3034_3845_FA11);
 
     pub const fn raw(self) -> u64 {
         self.0
@@ -704,13 +706,25 @@ impl FoundationManifest {
         phenotype: &BrainPhenotype,
         weight_asset: FoundationWeightAssetRef,
     ) -> Result<Self, ScaffoldContractError> {
-        let foundation_abi = phenotype
-            .foundation_abi()
-            .canonical_v2()
-            .ok_or(ScaffoldContractError::PhenotypeCompile)?;
+        let selection = phenotype.foundation_abi();
+        let experimental = selection.n2048_experimental_graph().is_some();
+        let selected_layout_digest = if experimental {
+            layout_digest(phenotype.lobe_layout())
+        } else {
+            selection
+                .canonical_v2()
+                .ok_or(ScaffoldContractError::PhenotypeCompile)?
+                .layout_digest()
+        };
         let training_stage = TrainingStageManifest::bootstrap();
-        let (foundation_id, compatibility_family_id) =
-            foundation_identity_for_class(phenotype.brain_class_id())?;
+        let (foundation_id, compatibility_family_id) = if experimental {
+            (
+                FoundationId::N2048_EXPERIMENTAL_GRAPH_V1,
+                FoundationCompatibilityFamilyId::N2048_EXPERIMENTAL_GRAPH,
+            )
+        } else {
+            foundation_identity_for_class(phenotype.brain_class_id())?
+        };
         Ok(Self {
             schema_version: 1,
             foundation_id,
@@ -718,7 +732,7 @@ impl FoundationManifest {
             compatibility_family_id,
             capacity_class_id: phenotype.brain_class_id(),
             sensor_profile: phenotype.sensor_profile(),
-            layout_digest: foundation_abi.layout_digest(),
+            layout_digest: selected_layout_digest,
             language_codebook_digest: phenotype.language_codebook().canonical_digest(),
             action_decoder_digest: phenotype.candidate_decoder().canonical_digest(),
             speech_decoder_digest: phenotype
@@ -792,25 +806,37 @@ impl FoundationManifest {
         &self,
         phenotype: &BrainPhenotype,
     ) -> Result<(), ScaffoldContractError> {
-        let foundation_abi = phenotype
-            .foundation_abi()
-            .canonical_v2()
-            .ok_or(ScaffoldContractError::PhenotypeCompile)?;
+        let selection = phenotype.foundation_abi();
+        let experimental = selection.n2048_experimental_graph().is_some();
+        let selected_layout_digest = if experimental {
+            layout_digest(phenotype.lobe_layout())
+        } else {
+            selection
+                .canonical_v2()
+                .ok_or(ScaffoldContractError::PhenotypeCompile)?
+                .layout_digest()
+        };
         self.training_stage.validate()?;
         self.promotion_receipt.validate(self.training_stage)?;
-        let (foundation_id, compatibility_family_id) =
-            foundation_identity_for_class(self.capacity_class_id)?;
+        let (foundation_id, compatibility_family_id) = if experimental {
+            (
+                FoundationId::N2048_EXPERIMENTAL_GRAPH_V1,
+                FoundationCompatibilityFamilyId::N2048_EXPERIMENTAL_GRAPH,
+            )
+        } else {
+            foundation_identity_for_class(self.capacity_class_id)?
+        };
         if self.schema_version != 1
             || self.foundation_id != foundation_id
             || self.foundation_version != FoundationVersion::V1
             || self.compatibility_family_id != compatibility_family_id
             || self.capacity_class_id != phenotype.brain_class_id()
             || self.sensor_profile != phenotype.sensor_profile()
-            || self.layout_digest != foundation_abi.layout_digest()
-            || foundation_abi.foundation_id() != Some(self.foundation_id)
-            || foundation_abi.foundation_version() != Some(self.foundation_version)
-            || foundation_abi.compatibility_family_id() != Some(self.compatibility_family_id)
-            || foundation_abi.foundation_weight_asset() != Some(self.weight_asset)
+            || self.layout_digest != selected_layout_digest
+            || selection.foundation_id() != Some(self.foundation_id)
+            || selection.foundation_version() != Some(self.foundation_version)
+            || selection.compatibility_family_id() != Some(self.compatibility_family_id)
+            || selection.foundation_weight_asset() != Some(self.weight_asset)
             || self.language_codebook_digest != phenotype.language_codebook().canonical_digest()
             || self.action_decoder_digest != phenotype.candidate_decoder().canonical_digest()
             || self.speech_decoder_digest
@@ -840,6 +866,10 @@ pub struct FoundationWeightAsset {
 }
 
 impl FoundationWeightAsset {
+    pub const fn is_n2048_experimental_graph(&self) -> bool {
+        self.manifest.foundation_id.raw() == FoundationId::N2048_EXPERIMENTAL_GRAPH_V1.raw()
+    }
+
     pub const fn is_nano512_readout_candidate(&self) -> bool {
         self.manifest.foundation_id.raw() == FoundationId::N512_READOUT_CANDIDATE_V1.raw()
     }
@@ -1179,8 +1209,21 @@ impl FoundationWeightAsset {
         self.manifest
             .promotion_receipt
             .validate(self.manifest.training_stage)?;
-        let (foundation_id, compatibility_family_id) =
-            foundation_identity_for_class(self.manifest.capacity_class_id)?;
+        let (foundation_id, compatibility_family_id) = if self.is_n2048_experimental_graph() {
+            if self.manifest.capacity_class_id != BrainCapacityClass::N2048_ID
+                || self.manifest.layout_digest
+                    != layout_digest(&N2048FoundationLayoutV1::lobe_layout())
+                || self.weights.len() != 32768
+            {
+                return Err(ScaffoldContractError::PhenotypeCompile);
+            }
+            (
+                FoundationId::N2048_EXPERIMENTAL_GRAPH_V1,
+                FoundationCompatibilityFamilyId::N2048_EXPERIMENTAL_GRAPH,
+            )
+        } else {
+            foundation_identity_for_class(self.manifest.capacity_class_id)?
+        };
         if self.manifest.schema_version != 1
             || (self.manifest.foundation_id != foundation_id
                 && !self.is_nano512_readout_candidate())

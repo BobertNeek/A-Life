@@ -1,0 +1,2844 @@
+{
+  "first_frame_weight_equation_max_residual": null,
+  "backend": "native-cpu",
+  "experimental": true,
+  "promoted": false,
+  "ticks": 12,
+  "mode": "whole",
+  "gain": -8.0,
+  "receipt_sha256": "98c55a6b89dcf066f219498d19bf0c3f7e530fb99639fbea0bce941f702598ef",
+  "groups": [
+    {
+      "scene": "bitter-food",
+      "arm": "untouched",
+      "n": 2,
+      "consumed": 0,
+      "mean_final_energy": 0.39801061153411865,
+      "mean_ingest_selected_ticks": 0.0,
+      "executed_ingestions": 0,
+      "max_final_injury": 0.0,
+      "trials": [
+        {
+          "seed": 2026110701,
+          "encoded_hunger_plus_0_1_logit_delta": [
+            0.0
+          ],
+          "active_tiles": 96,
+          "candidate_digest": [
+            214,
+            117,
+            170,
+            169,
+            215,
+            7,
+            237,
+            79,
+            40,
+            129,
+            48,
+            234,
+            183,
+            191,
+            7,
+            203,
+            212,
+            175,
+            167,
+            242,
+            183,
+            104,
+            120,
+            107,
+            124,
+            160,
+            234,
+            135,
+            12,
+            193,
+            156,
+            128
+          ],
+          "consumed": false,
+          "final_energy": 0.39801979064941406,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.5387136936187744
+          ],
+          "first_tastes": [
+            -0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.2072737216949463
+        },
+        {
+          "seed": 2026110702,
+          "encoded_hunger_plus_0_1_logit_delta": [
+            0.0
+          ],
+          "active_tiles": 96,
+          "candidate_digest": [
+            132,
+            40,
+            243,
+            127,
+            204,
+            246,
+            24,
+            202,
+            195,
+            241,
+            95,
+            17,
+            206,
+            76,
+            172,
+            18,
+            73,
+            254,
+            56,
+            115,
+            184,
+            119,
+            61,
+            105,
+            204,
+            156,
+            223,
+            193,
+            57,
+            111,
+            122,
+            113
+          ],
+          "consumed": false,
+          "final_energy": 0.39800143241882324,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.390380382537842
+          ],
+          "first_tastes": [
+            -0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.1963497698307037
+        }
+      ]
+    },
+    {
+      "scene": "bitter-food",
+      "arm": "whole-care",
+      "n": 2,
+      "consumed": 0,
+      "mean_final_energy": 0.39802446961402893,
+      "mean_ingest_selected_ticks": 0.0,
+      "executed_ingestions": 0,
+      "max_final_injury": 0.0,
+      "trials": [
+        {
+          "seed": 2026110701,
+          "encoded_hunger_plus_0_1_logit_delta": [
+            0.0
+          ],
+          "active_tiles": 137,
+          "candidate_digest": [
+            169,
+            185,
+            142,
+            166,
+            97,
+            94,
+            40,
+            235,
+            89,
+            146,
+            45,
+            105,
+            133,
+            4,
+            217,
+            193,
+            33,
+            239,
+            59,
+            118,
+            187,
+            74,
+            142,
+            83,
+            39,
+            46,
+            115,
+            179,
+            232,
+            25,
+            89,
+            248
+          ],
+          "consumed": false,
+          "final_energy": 0.39802446961402893,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -4.295968532562256
+          ],
+          "first_tastes": [
+            -0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.0425079986453056
+        },
+        {
+          "seed": 2026110702,
+          "encoded_hunger_plus_0_1_logit_delta": [
+            0.0
+          ],
+          "active_tiles": 137,
+          "candidate_digest": [
+            169,
+            185,
+            142,
+            166,
+            97,
+            94,
+            40,
+            235,
+            89,
+            146,
+            45,
+            105,
+            133,
+            4,
+            217,
+            193,
+            33,
+            239,
+            59,
+            118,
+            187,
+            74,
+            142,
+            83,
+            39,
+            46,
+            115,
+            179,
+            232,
+            25,
+            89,
+            248
+          ],
+          "consumed": false,
+          "final_energy": 0.39802446961402893,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -4.295968532562256
+          ],
+          "first_tastes": [
+            -0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.0425079986453056
+        }
+      ]
+    },
+    {
+      "scene": "bitter-food",
+      "arm": "whole-care-no-need",
+      "n": 2,
+      "consumed": 0,
+      "mean_final_energy": 0.39802439510822296,
+      "mean_ingest_selected_ticks": 0.0,
+      "executed_ingestions": 0,
+      "max_final_injury": 0.0,
+      "trials": [
+        {
+          "seed": 2026110701,
+          "encoded_hunger_plus_0_1_logit_delta": [
+            0.0
+          ],
+          "active_tiles": 137,
+          "candidate_digest": [
+            29,
+            51,
+            211,
+            179,
+            0,
+            120,
+            152,
+            147,
+            61,
+            125,
+            97,
+            107,
+            31,
+            198,
+            100,
+            213,
+            76,
+            50,
+            45,
+            86,
+            28,
+            221,
+            126,
+            104,
+            133,
+            175,
+            109,
+            87,
+            103,
+            252,
+            91,
+            218
+          ],
+          "consumed": false,
+          "final_energy": 0.39802443981170654,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -4.295968532562256
+          ],
+          "first_tastes": [
+            -0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.0425079986453056
+        },
+        {
+          "seed": 2026110702,
+          "encoded_hunger_plus_0_1_logit_delta": [
+            0.0
+          ],
+          "active_tiles": 137,
+          "candidate_digest": [
+            29,
+            51,
+            211,
+            179,
+            0,
+            120,
+            152,
+            147,
+            61,
+            125,
+            97,
+            107,
+            31,
+            198,
+            100,
+            213,
+            76,
+            50,
+            45,
+            86,
+            28,
+            221,
+            126,
+            104,
+            133,
+            175,
+            109,
+            87,
+            103,
+            252,
+            91,
+            218
+          ],
+          "consumed": false,
+          "final_energy": 0.3980243504047394,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -4.295968532562256
+          ],
+          "first_tastes": [
+            -0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.0425079986453056
+        }
+      ]
+    },
+    {
+      "scene": "bitter-food",
+      "arm": "whole-care-no-reference",
+      "n": 2,
+      "consumed": 2,
+      "mean_final_energy": 0.5358369648456573,
+      "mean_ingest_selected_ticks": 1.5,
+      "executed_ingestions": 2,
+      "max_final_injury": 0.0,
+      "trials": [
+        {
+          "seed": 2026110701,
+          "encoded_hunger_plus_0_1_logit_delta": [
+            0.0
+          ],
+          "active_tiles": 137,
+          "candidate_digest": [
+            170,
+            238,
+            241,
+            4,
+            143,
+            164,
+            10,
+            218,
+            27,
+            84,
+            129,
+            252,
+            245,
+            212,
+            225,
+            12,
+            213,
+            45,
+            118,
+            161,
+            175,
+            234,
+            205,
+            57,
+            69,
+            77,
+            226,
+            18,
+            40,
+            178,
+            218,
+            176
+          ],
+          "consumed": true,
+          "final_energy": 0.5358512997627258,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 2,
+          "ingest_executed_ticks": 1,
+          "first_ingest_logits": [
+            2.0821616649627686
+          ],
+          "first_tastes": [
+            -0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.0425079986453056
+        },
+        {
+          "seed": 2026110702,
+          "encoded_hunger_plus_0_1_logit_delta": [
+            0.0
+          ],
+          "active_tiles": 137,
+          "candidate_digest": [
+            170,
+            238,
+            241,
+            4,
+            143,
+            164,
+            10,
+            218,
+            27,
+            84,
+            129,
+            252,
+            245,
+            212,
+            225,
+            12,
+            213,
+            45,
+            118,
+            161,
+            175,
+            234,
+            205,
+            57,
+            69,
+            77,
+            226,
+            18,
+            40,
+            178,
+            218,
+            176
+          ],
+          "consumed": true,
+          "final_energy": 0.5358226299285889,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 1,
+          "ingest_executed_ticks": 1,
+          "first_ingest_logits": [
+            2.0821616649627686
+          ],
+          "first_tastes": [
+            -0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.0425079986453056
+        }
+      ]
+    },
+    {
+      "scene": "bitter-food",
+      "arm": "whole-care-no-tonic",
+      "n": 2,
+      "consumed": 0,
+      "mean_final_energy": 0.39802446961402893,
+      "mean_ingest_selected_ticks": 0.0,
+      "executed_ingestions": 0,
+      "max_final_injury": 0.0,
+      "trials": [
+        {
+          "seed": 2026110701,
+          "encoded_hunger_plus_0_1_logit_delta": [
+            0.0
+          ],
+          "active_tiles": 137,
+          "candidate_digest": [
+            213,
+            55,
+            233,
+            0,
+            147,
+            130,
+            91,
+            141,
+            62,
+            212,
+            195,
+            199,
+            185,
+            222,
+            47,
+            253,
+            246,
+            99,
+            77,
+            47,
+            63,
+            151,
+            108,
+            57,
+            177,
+            104,
+            146,
+            99,
+            118,
+            247,
+            228,
+            55
+          ],
+          "consumed": false,
+          "final_energy": 0.39802446961402893,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -4.295968532562256
+          ],
+          "first_tastes": [
+            -0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.0425079986453056
+        },
+        {
+          "seed": 2026110702,
+          "encoded_hunger_plus_0_1_logit_delta": [
+            0.0
+          ],
+          "active_tiles": 137,
+          "candidate_digest": [
+            213,
+            55,
+            233,
+            0,
+            147,
+            130,
+            91,
+            141,
+            62,
+            212,
+            195,
+            199,
+            185,
+            222,
+            47,
+            253,
+            246,
+            99,
+            77,
+            47,
+            63,
+            151,
+            108,
+            57,
+            177,
+            104,
+            146,
+            99,
+            118,
+            247,
+            228,
+            55
+          ],
+          "consumed": false,
+          "final_energy": 0.39802446961402893,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -4.295968532562256
+          ],
+          "first_tastes": [
+            -0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.0425079986453056
+        }
+      ]
+    },
+    {
+      "scene": "bitter-food",
+      "arm": "zero-excitatory",
+      "n": 2,
+      "consumed": 0,
+      "mean_final_energy": 0.3980138897895813,
+      "mean_ingest_selected_ticks": 0.0,
+      "executed_ingestions": 0,
+      "max_final_injury": 0.0,
+      "trials": [
+        {
+          "seed": 2026110701,
+          "encoded_hunger_plus_0_1_logit_delta": [
+            0.0
+          ],
+          "active_tiles": 137,
+          "candidate_digest": [
+            15,
+            194,
+            235,
+            51,
+            86,
+            216,
+            223,
+            222,
+            251,
+            84,
+            94,
+            89,
+            156,
+            111,
+            224,
+            51,
+            13,
+            247,
+            115,
+            26,
+            51,
+            150,
+            180,
+            152,
+            120,
+            199,
+            14,
+            32,
+            119,
+            18,
+            44,
+            155
+          ],
+          "consumed": false,
+          "final_energy": 0.39798977971076965,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            0.0
+          ],
+          "first_tastes": [
+            -0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -1.9648631811141968
+        },
+        {
+          "seed": 2026110702,
+          "encoded_hunger_plus_0_1_logit_delta": [
+            0.0
+          ],
+          "active_tiles": 137,
+          "candidate_digest": [
+            15,
+            194,
+            235,
+            51,
+            86,
+            216,
+            223,
+            222,
+            251,
+            84,
+            94,
+            89,
+            156,
+            111,
+            224,
+            51,
+            13,
+            247,
+            115,
+            26,
+            51,
+            150,
+            180,
+            152,
+            120,
+            199,
+            14,
+            32,
+            119,
+            18,
+            44,
+            155
+          ],
+          "consumed": false,
+          "final_energy": 0.39803799986839294,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            0.0
+          ],
+          "first_tastes": [
+            -0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -1.9648631811141968
+        }
+      ]
+    },
+    {
+      "scene": "far-food",
+      "arm": "untouched",
+      "n": 2,
+      "consumed": 0,
+      "mean_final_energy": 0.39801982045173645,
+      "mean_ingest_selected_ticks": 0.0,
+      "executed_ingestions": 0,
+      "max_final_injury": 0.0,
+      "trials": [
+        {
+          "seed": 2026110701,
+          "encoded_hunger_plus_0_1_logit_delta": [
+            0.0
+          ],
+          "active_tiles": 96,
+          "candidate_digest": [
+            214,
+            117,
+            170,
+            169,
+            215,
+            7,
+            237,
+            79,
+            40,
+            129,
+            48,
+            234,
+            183,
+            191,
+            7,
+            203,
+            212,
+            175,
+            167,
+            242,
+            183,
+            104,
+            120,
+            107,
+            124,
+            160,
+            234,
+            135,
+            12,
+            193,
+            156,
+            128
+          ],
+          "consumed": false,
+          "final_energy": 0.39802446961402893,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.7259738445281982
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.2072737216949463
+        },
+        {
+          "seed": 2026110702,
+          "encoded_hunger_plus_0_1_logit_delta": [
+            0.0
+          ],
+          "active_tiles": 96,
+          "candidate_digest": [
+            132,
+            40,
+            243,
+            127,
+            204,
+            246,
+            24,
+            202,
+            195,
+            241,
+            95,
+            17,
+            206,
+            76,
+            172,
+            18,
+            73,
+            254,
+            56,
+            115,
+            184,
+            119,
+            61,
+            105,
+            204,
+            156,
+            223,
+            193,
+            57,
+            111,
+            122,
+            113
+          ],
+          "consumed": false,
+          "final_energy": 0.39801517128944397,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.527477979660034
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.1963497698307037
+        }
+      ]
+    },
+    {
+      "scene": "far-food",
+      "arm": "whole-care",
+      "n": 2,
+      "consumed": 0,
+      "mean_final_energy": 0.39813436567783356,
+      "mean_ingest_selected_ticks": 11.5,
+      "executed_ingestions": 0,
+      "max_final_injury": 0.0,
+      "trials": [
+        {
+          "seed": 2026110701,
+          "encoded_hunger_plus_0_1_logit_delta": [
+            0.0
+          ],
+          "active_tiles": 137,
+          "candidate_digest": [
+            169,
+            185,
+            142,
+            166,
+            97,
+            94,
+            40,
+            235,
+            89,
+            146,
+            45,
+            105,
+            133,
+            4,
+            217,
+            193,
+            33,
+            239,
+            59,
+            118,
+            187,
+            74,
+            142,
+            83,
+            39,
+            46,
+            115,
+            179,
+            232,
+            25,
+            89,
+            248
+          ],
+          "consumed": false,
+          "final_energy": 0.39813435077667236,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 11,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            3.4429781436920166
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.0425079986453056
+        },
+        {
+          "seed": 2026110702,
+          "encoded_hunger_plus_0_1_logit_delta": [
+            0.0
+          ],
+          "active_tiles": 137,
+          "candidate_digest": [
+            169,
+            185,
+            142,
+            166,
+            97,
+            94,
+            40,
+            235,
+            89,
+            146,
+            45,
+            105,
+            133,
+            4,
+            217,
+            193,
+            33,
+            239,
+            59,
+            118,
+            187,
+            74,
+            142,
+            83,
+            39,
+            46,
+            115,
+            179,
+            232,
+            25,
+            89,
+            248
+          ],
+          "consumed": false,
+          "final_energy": 0.39813438057899475,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 12,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            3.4429781436920166
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.0425079986453056
+        }
+      ]
+    },
+    {
+      "scene": "far-food",
+      "arm": "whole-care-no-need",
+      "n": 2,
+      "consumed": 0,
+      "mean_final_energy": 0.39813438057899475,
+      "mean_ingest_selected_ticks": 12.0,
+      "executed_ingestions": 0,
+      "max_final_injury": 0.0,
+      "trials": [
+        {
+          "seed": 2026110701,
+          "encoded_hunger_plus_0_1_logit_delta": [
+            0.0
+          ],
+          "active_tiles": 137,
+          "candidate_digest": [
+            29,
+            51,
+            211,
+            179,
+            0,
+            120,
+            152,
+            147,
+            61,
+            125,
+            97,
+            107,
+            31,
+            198,
+            100,
+            213,
+            76,
+            50,
+            45,
+            86,
+            28,
+            221,
+            126,
+            104,
+            133,
+            175,
+            109,
+            87,
+            103,
+            252,
+            91,
+            218
+          ],
+          "consumed": false,
+          "final_energy": 0.39813438057899475,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 12,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            3.4429781436920166
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.0425079986453056
+        },
+        {
+          "seed": 2026110702,
+          "encoded_hunger_plus_0_1_logit_delta": [
+            0.0
+          ],
+          "active_tiles": 137,
+          "candidate_digest": [
+            29,
+            51,
+            211,
+            179,
+            0,
+            120,
+            152,
+            147,
+            61,
+            125,
+            97,
+            107,
+            31,
+            198,
+            100,
+            213,
+            76,
+            50,
+            45,
+            86,
+            28,
+            221,
+            126,
+            104,
+            133,
+            175,
+            109,
+            87,
+            103,
+            252,
+            91,
+            218
+          ],
+          "consumed": false,
+          "final_energy": 0.39813438057899475,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 12,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            3.4429781436920166
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.0425079986453056
+        }
+      ]
+    },
+    {
+      "scene": "far-food",
+      "arm": "whole-care-no-reference",
+      "n": 2,
+      "consumed": 0,
+      "mean_final_energy": 0.3980279564857483,
+      "mean_ingest_selected_ticks": 0.0,
+      "executed_ingestions": 0,
+      "max_final_injury": 0.0,
+      "trials": [
+        {
+          "seed": 2026110701,
+          "encoded_hunger_plus_0_1_logit_delta": [
+            0.0
+          ],
+          "active_tiles": 137,
+          "candidate_digest": [
+            170,
+            238,
+            241,
+            4,
+            143,
+            164,
+            10,
+            218,
+            27,
+            84,
+            129,
+            252,
+            245,
+            212,
+            225,
+            12,
+            213,
+            45,
+            118,
+            161,
+            175,
+            234,
+            205,
+            57,
+            69,
+            77,
+            226,
+            18,
+            40,
+            178,
+            218,
+            176
+          ],
+          "consumed": false,
+          "final_energy": 0.39800596237182617,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -1.668736219406128
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.0425079986453056
+        },
+        {
+          "seed": 2026110702,
+          "encoded_hunger_plus_0_1_logit_delta": [
+            0.0
+          ],
+          "active_tiles": 137,
+          "candidate_digest": [
+            170,
+            238,
+            241,
+            4,
+            143,
+            164,
+            10,
+            218,
+            27,
+            84,
+            129,
+            252,
+            245,
+            212,
+            225,
+            12,
+            213,
+            45,
+            118,
+            161,
+            175,
+            234,
+            205,
+            57,
+            69,
+            77,
+            226,
+            18,
+            40,
+            178,
+            218,
+            176
+          ],
+          "consumed": false,
+          "final_energy": 0.3980499505996704,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -1.668736219406128
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.0425079986453056
+        }
+      ]
+    },
+    {
+      "scene": "far-food",
+      "arm": "whole-care-no-tonic",
+      "n": 2,
+      "consumed": 0,
+      "mean_final_energy": 0.3981640785932541,
+      "mean_ingest_selected_ticks": 4.0,
+      "executed_ingestions": 0,
+      "max_final_injury": 0.0,
+      "trials": [
+        {
+          "seed": 2026110701,
+          "encoded_hunger_plus_0_1_logit_delta": [
+            0.0
+          ],
+          "active_tiles": 137,
+          "candidate_digest": [
+            213,
+            55,
+            233,
+            0,
+            147,
+            130,
+            91,
+            141,
+            62,
+            212,
+            195,
+            199,
+            185,
+            222,
+            47,
+            253,
+            246,
+            99,
+            77,
+            47,
+            63,
+            151,
+            108,
+            57,
+            177,
+            104,
+            146,
+            99,
+            118,
+            247,
+            228,
+            55
+          ],
+          "consumed": false,
+          "final_energy": 0.3981754779815674,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 2,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            3.4429781436920166
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.0425079986453056
+        },
+        {
+          "seed": 2026110702,
+          "encoded_hunger_plus_0_1_logit_delta": [
+            0.0
+          ],
+          "active_tiles": 137,
+          "candidate_digest": [
+            213,
+            55,
+            233,
+            0,
+            147,
+            130,
+            91,
+            141,
+            62,
+            212,
+            195,
+            199,
+            185,
+            222,
+            47,
+            253,
+            246,
+            99,
+            77,
+            47,
+            63,
+            151,
+            108,
+            57,
+            177,
+            104,
+            146,
+            99,
+            118,
+            247,
+            228,
+            55
+          ],
+          "consumed": false,
+          "final_energy": 0.3981526792049408,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 6,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            3.4429781436920166
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.0425079986453056
+        }
+      ]
+    },
+    {
+      "scene": "far-food",
+      "arm": "zero-excitatory",
+      "n": 2,
+      "consumed": 0,
+      "mean_final_energy": 0.3980230540037155,
+      "mean_ingest_selected_ticks": 0.0,
+      "executed_ingestions": 0,
+      "max_final_injury": 0.0,
+      "trials": [
+        {
+          "seed": 2026110701,
+          "encoded_hunger_plus_0_1_logit_delta": [
+            0.0
+          ],
+          "active_tiles": 137,
+          "candidate_digest": [
+            15,
+            194,
+            235,
+            51,
+            86,
+            216,
+            223,
+            222,
+            251,
+            84,
+            94,
+            89,
+            156,
+            111,
+            224,
+            51,
+            13,
+            247,
+            115,
+            26,
+            51,
+            150,
+            180,
+            152,
+            120,
+            199,
+            14,
+            32,
+            119,
+            18,
+            44,
+            155
+          ],
+          "consumed": false,
+          "final_energy": 0.39800354838371277,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            0.0
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -1.9648631811141968
+        },
+        {
+          "seed": 2026110702,
+          "encoded_hunger_plus_0_1_logit_delta": [
+            0.0
+          ],
+          "active_tiles": 137,
+          "candidate_digest": [
+            15,
+            194,
+            235,
+            51,
+            86,
+            216,
+            223,
+            222,
+            251,
+            84,
+            94,
+            89,
+            156,
+            111,
+            224,
+            51,
+            13,
+            247,
+            115,
+            26,
+            51,
+            150,
+            180,
+            152,
+            120,
+            199,
+            14,
+            32,
+            119,
+            18,
+            44,
+            155
+          ],
+          "consumed": false,
+          "final_energy": 0.39804255962371826,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            0.0
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -1.9648631811141968
+        }
+      ]
+    },
+    {
+      "scene": "food",
+      "arm": "untouched",
+      "n": 2,
+      "consumed": 0,
+      "mean_final_energy": 0.398017480969429,
+      "mean_ingest_selected_ticks": 0.0,
+      "executed_ingestions": 0,
+      "max_final_injury": 0.0,
+      "trials": [
+        {
+          "seed": 2026110701,
+          "encoded_hunger_plus_0_1_logit_delta": [
+            0.0
+          ],
+          "active_tiles": 96,
+          "candidate_digest": [
+            214,
+            117,
+            170,
+            169,
+            215,
+            7,
+            237,
+            79,
+            40,
+            129,
+            48,
+            234,
+            183,
+            191,
+            7,
+            203,
+            212,
+            175,
+            167,
+            242,
+            183,
+            104,
+            120,
+            107,
+            124,
+            160,
+            234,
+            135,
+            12,
+            193,
+            156,
+            128
+          ],
+          "consumed": false,
+          "final_energy": 0.39801979064941406,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -3.080657720565796
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.2072737216949463
+        },
+        {
+          "seed": 2026110702,
+          "encoded_hunger_plus_0_1_logit_delta": [
+            0.0
+          ],
+          "active_tiles": 96,
+          "candidate_digest": [
+            132,
+            40,
+            243,
+            127,
+            204,
+            246,
+            24,
+            202,
+            195,
+            241,
+            95,
+            17,
+            206,
+            76,
+            172,
+            18,
+            73,
+            254,
+            56,
+            115,
+            184,
+            119,
+            61,
+            105,
+            204,
+            156,
+            223,
+            193,
+            57,
+            111,
+            122,
+            113
+          ],
+          "consumed": false,
+          "final_energy": 0.39801517128944397,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.94014573097229
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.1963497698307037
+        }
+      ]
+    },
+    {
+      "scene": "food",
+      "arm": "whole-care",
+      "n": 2,
+      "consumed": 2,
+      "mean_final_energy": 0.5357725024223328,
+      "mean_ingest_selected_ticks": 2.0,
+      "executed_ingestions": 2,
+      "max_final_injury": 0.0,
+      "trials": [
+        {
+          "seed": 2026110701,
+          "encoded_hunger_plus_0_1_logit_delta": [
+            0.0
+          ],
+          "active_tiles": 137,
+          "candidate_digest": [
+            169,
+            185,
+            142,
+            166,
+            97,
+            94,
+            40,
+            235,
+            89,
+            146,
+            45,
+            105,
+            133,
+            4,
+            217,
+            193,
+            33,
+            239,
+            59,
+            118,
+            187,
+            74,
+            142,
+            83,
+            39,
+            46,
+            115,
+            179,
+            232,
+            25,
+            89,
+            248
+          ],
+          "consumed": true,
+          "final_energy": 0.5357702374458313,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 2,
+          "ingest_executed_ticks": 1,
+          "first_ingest_logits": [
+            4.1408796310424805
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.0425079986453056
+        },
+        {
+          "seed": 2026110702,
+          "encoded_hunger_plus_0_1_logit_delta": [
+            0.0
+          ],
+          "active_tiles": 137,
+          "candidate_digest": [
+            169,
+            185,
+            142,
+            166,
+            97,
+            94,
+            40,
+            235,
+            89,
+            146,
+            45,
+            105,
+            133,
+            4,
+            217,
+            193,
+            33,
+            239,
+            59,
+            118,
+            187,
+            74,
+            142,
+            83,
+            39,
+            46,
+            115,
+            179,
+            232,
+            25,
+            89,
+            248
+          ],
+          "consumed": true,
+          "final_energy": 0.5357747673988342,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 2,
+          "ingest_executed_ticks": 1,
+          "first_ingest_logits": [
+            4.1408796310424805
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.0425079986453056
+        }
+      ]
+    },
+    {
+      "scene": "food",
+      "arm": "whole-care-no-need",
+      "n": 2,
+      "consumed": 2,
+      "mean_final_energy": 0.5357725024223328,
+      "mean_ingest_selected_ticks": 2.0,
+      "executed_ingestions": 2,
+      "max_final_injury": 0.0,
+      "trials": [
+        {
+          "seed": 2026110701,
+          "encoded_hunger_plus_0_1_logit_delta": [
+            0.0
+          ],
+          "active_tiles": 137,
+          "candidate_digest": [
+            29,
+            51,
+            211,
+            179,
+            0,
+            120,
+            152,
+            147,
+            61,
+            125,
+            97,
+            107,
+            31,
+            198,
+            100,
+            213,
+            76,
+            50,
+            45,
+            86,
+            28,
+            221,
+            126,
+            104,
+            133,
+            175,
+            109,
+            87,
+            103,
+            252,
+            91,
+            218
+          ],
+          "consumed": true,
+          "final_energy": 0.5357702374458313,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 2,
+          "ingest_executed_ticks": 1,
+          "first_ingest_logits": [
+            4.1408796310424805
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.0425079986453056
+        },
+        {
+          "seed": 2026110702,
+          "encoded_hunger_plus_0_1_logit_delta": [
+            0.0
+          ],
+          "active_tiles": 137,
+          "candidate_digest": [
+            29,
+            51,
+            211,
+            179,
+            0,
+            120,
+            152,
+            147,
+            61,
+            125,
+            97,
+            107,
+            31,
+            198,
+            100,
+            213,
+            76,
+            50,
+            45,
+            86,
+            28,
+            221,
+            126,
+            104,
+            133,
+            175,
+            109,
+            87,
+            103,
+            252,
+            91,
+            218
+          ],
+          "consumed": true,
+          "final_energy": 0.5357747673988342,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 2,
+          "ingest_executed_ticks": 1,
+          "first_ingest_logits": [
+            4.1408796310424805
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.0425079986453056
+        }
+      ]
+    },
+    {
+      "scene": "food",
+      "arm": "whole-care-no-reference",
+      "n": 2,
+      "consumed": 0,
+      "mean_final_energy": 0.39809751510620117,
+      "mean_ingest_selected_ticks": 0.0,
+      "executed_ingestions": 0,
+      "max_final_injury": 0.0,
+      "trials": [
+        {
+          "seed": 2026110701,
+          "encoded_hunger_plus_0_1_logit_delta": [
+            0.0
+          ],
+          "active_tiles": 137,
+          "candidate_digest": [
+            170,
+            238,
+            241,
+            4,
+            143,
+            164,
+            10,
+            218,
+            27,
+            84,
+            129,
+            252,
+            245,
+            212,
+            225,
+            12,
+            213,
+            45,
+            118,
+            161,
+            175,
+            234,
+            205,
+            57,
+            69,
+            77,
+            226,
+            18,
+            40,
+            178,
+            218,
+            176
+          ],
+          "consumed": false,
+          "final_energy": 0.39810648560523987,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.006993532180786
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.0425079986453056
+        },
+        {
+          "seed": 2026110702,
+          "encoded_hunger_plus_0_1_logit_delta": [
+            0.0
+          ],
+          "active_tiles": 137,
+          "candidate_digest": [
+            170,
+            238,
+            241,
+            4,
+            143,
+            164,
+            10,
+            218,
+            27,
+            84,
+            129,
+            252,
+            245,
+            212,
+            225,
+            12,
+            213,
+            45,
+            118,
+            161,
+            175,
+            234,
+            205,
+            57,
+            69,
+            77,
+            226,
+            18,
+            40,
+            178,
+            218,
+            176
+          ],
+          "consumed": false,
+          "final_energy": 0.3980885446071625,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.006993532180786
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.0425079986453056
+        }
+      ]
+    },
+    {
+      "scene": "food",
+      "arm": "whole-care-no-tonic",
+      "n": 2,
+      "consumed": 0,
+      "mean_final_energy": 0.39801064133644104,
+      "mean_ingest_selected_ticks": 1.0,
+      "executed_ingestions": 0,
+      "max_final_injury": 0.0,
+      "trials": [
+        {
+          "seed": 2026110701,
+          "encoded_hunger_plus_0_1_logit_delta": [
+            0.0
+          ],
+          "active_tiles": 137,
+          "candidate_digest": [
+            213,
+            55,
+            233,
+            0,
+            147,
+            130,
+            91,
+            141,
+            62,
+            212,
+            195,
+            199,
+            185,
+            222,
+            47,
+            253,
+            246,
+            99,
+            77,
+            47,
+            63,
+            151,
+            108,
+            57,
+            177,
+            104,
+            146,
+            99,
+            118,
+            247,
+            228,
+            55
+          ],
+          "consumed": false,
+          "final_energy": 0.39801064133644104,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 1,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            4.1408796310424805
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.0425079986453056
+        },
+        {
+          "seed": 2026110702,
+          "encoded_hunger_plus_0_1_logit_delta": [
+            0.0
+          ],
+          "active_tiles": 137,
+          "candidate_digest": [
+            213,
+            55,
+            233,
+            0,
+            147,
+            130,
+            91,
+            141,
+            62,
+            212,
+            195,
+            199,
+            185,
+            222,
+            47,
+            253,
+            246,
+            99,
+            77,
+            47,
+            63,
+            151,
+            108,
+            57,
+            177,
+            104,
+            146,
+            99,
+            118,
+            247,
+            228,
+            55
+          ],
+          "consumed": false,
+          "final_energy": 0.39801064133644104,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 1,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            4.1408796310424805
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.0425079986453056
+        }
+      ]
+    },
+    {
+      "scene": "food",
+      "arm": "zero-excitatory",
+      "n": 2,
+      "consumed": 0,
+      "mean_final_energy": 0.3980138897895813,
+      "mean_ingest_selected_ticks": 0.0,
+      "executed_ingestions": 0,
+      "max_final_injury": 0.0,
+      "trials": [
+        {
+          "seed": 2026110701,
+          "encoded_hunger_plus_0_1_logit_delta": [
+            0.0
+          ],
+          "active_tiles": 137,
+          "candidate_digest": [
+            15,
+            194,
+            235,
+            51,
+            86,
+            216,
+            223,
+            222,
+            251,
+            84,
+            94,
+            89,
+            156,
+            111,
+            224,
+            51,
+            13,
+            247,
+            115,
+            26,
+            51,
+            150,
+            180,
+            152,
+            120,
+            199,
+            14,
+            32,
+            119,
+            18,
+            44,
+            155
+          ],
+          "consumed": false,
+          "final_energy": 0.39798977971076965,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            0.0
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -1.9648631811141968
+        },
+        {
+          "seed": 2026110702,
+          "encoded_hunger_plus_0_1_logit_delta": [
+            0.0
+          ],
+          "active_tiles": 137,
+          "candidate_digest": [
+            15,
+            194,
+            235,
+            51,
+            86,
+            216,
+            223,
+            222,
+            251,
+            84,
+            94,
+            89,
+            156,
+            111,
+            224,
+            51,
+            13,
+            247,
+            115,
+            26,
+            51,
+            150,
+            180,
+            152,
+            120,
+            199,
+            14,
+            32,
+            119,
+            18,
+            44,
+            155
+          ],
+          "consumed": false,
+          "final_energy": 0.39803799986839294,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            0.0
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -1.9648631811141968
+        }
+      ]
+    },
+    {
+      "scene": "toy",
+      "arm": "untouched",
+      "n": 2,
+      "consumed": 0,
+      "mean_final_energy": 0.3980175256729126,
+      "mean_ingest_selected_ticks": 0.0,
+      "executed_ingestions": 0,
+      "max_final_injury": 0.0,
+      "trials": [
+        {
+          "seed": 2026110701,
+          "encoded_hunger_plus_0_1_logit_delta": [
+            0.0
+          ],
+          "active_tiles": 96,
+          "candidate_digest": [
+            214,
+            117,
+            170,
+            169,
+            215,
+            7,
+            237,
+            79,
+            40,
+            129,
+            48,
+            234,
+            183,
+            191,
+            7,
+            203,
+            212,
+            175,
+            167,
+            242,
+            183,
+            104,
+            120,
+            107,
+            124,
+            160,
+            234,
+            135,
+            12,
+            193,
+            156,
+            128
+          ],
+          "consumed": false,
+          "final_energy": 0.39802446961402893,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.5207936763763428
+          ],
+          "first_tastes": [
+            0.0
+          ],
+          "initial_ingest_motor_activation_sum": -2.2072737216949463
+        },
+        {
+          "seed": 2026110702,
+          "encoded_hunger_plus_0_1_logit_delta": [
+            0.0
+          ],
+          "active_tiles": 96,
+          "candidate_digest": [
+            132,
+            40,
+            243,
+            127,
+            204,
+            246,
+            24,
+            202,
+            195,
+            241,
+            95,
+            17,
+            206,
+            76,
+            172,
+            18,
+            73,
+            254,
+            56,
+            115,
+            184,
+            119,
+            61,
+            105,
+            204,
+            156,
+            223,
+            193,
+            57,
+            111,
+            122,
+            113
+          ],
+          "consumed": false,
+          "final_energy": 0.39801058173179626,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.4810197353363037
+          ],
+          "first_tastes": [
+            0.0
+          ],
+          "initial_ingest_motor_activation_sum": -2.1963497698307037
+        }
+      ]
+    },
+    {
+      "scene": "toy",
+      "arm": "whole-care",
+      "n": 2,
+      "consumed": 0,
+      "mean_final_energy": 0.39802446961402893,
+      "mean_ingest_selected_ticks": 0.0,
+      "executed_ingestions": 0,
+      "max_final_injury": 0.0,
+      "trials": [
+        {
+          "seed": 2026110701,
+          "encoded_hunger_plus_0_1_logit_delta": [
+            0.0
+          ],
+          "active_tiles": 137,
+          "candidate_digest": [
+            169,
+            185,
+            142,
+            166,
+            97,
+            94,
+            40,
+            235,
+            89,
+            146,
+            45,
+            105,
+            133,
+            4,
+            217,
+            193,
+            33,
+            239,
+            59,
+            118,
+            187,
+            74,
+            142,
+            83,
+            39,
+            46,
+            115,
+            179,
+            232,
+            25,
+            89,
+            248
+          ],
+          "consumed": false,
+          "final_energy": 0.39802446961402893,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -0.07754455506801605
+          ],
+          "first_tastes": [
+            0.0
+          ],
+          "initial_ingest_motor_activation_sum": -2.0425079986453056
+        },
+        {
+          "seed": 2026110702,
+          "encoded_hunger_plus_0_1_logit_delta": [
+            0.0
+          ],
+          "active_tiles": 137,
+          "candidate_digest": [
+            169,
+            185,
+            142,
+            166,
+            97,
+            94,
+            40,
+            235,
+            89,
+            146,
+            45,
+            105,
+            133,
+            4,
+            217,
+            193,
+            33,
+            239,
+            59,
+            118,
+            187,
+            74,
+            142,
+            83,
+            39,
+            46,
+            115,
+            179,
+            232,
+            25,
+            89,
+            248
+          ],
+          "consumed": false,
+          "final_energy": 0.39802446961402893,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -0.07754455506801605
+          ],
+          "first_tastes": [
+            0.0
+          ],
+          "initial_ingest_motor_activation_sum": -2.0425079986453056
+        }
+      ]
+    },
+    {
+      "scene": "toy",
+      "arm": "whole-care-no-need",
+      "n": 2,
+      "consumed": 0,
+      "mean_final_energy": 0.39802446961402893,
+      "mean_ingest_selected_ticks": 0.0,
+      "executed_ingestions": 0,
+      "max_final_injury": 0.0,
+      "trials": [
+        {
+          "seed": 2026110701,
+          "encoded_hunger_plus_0_1_logit_delta": [
+            0.0
+          ],
+          "active_tiles": 137,
+          "candidate_digest": [
+            29,
+            51,
+            211,
+            179,
+            0,
+            120,
+            152,
+            147,
+            61,
+            125,
+            97,
+            107,
+            31,
+            198,
+            100,
+            213,
+            76,
+            50,
+            45,
+            86,
+            28,
+            221,
+            126,
+            104,
+            133,
+            175,
+            109,
+            87,
+            103,
+            252,
+            91,
+            218
+          ],
+          "consumed": false,
+          "final_energy": 0.39802446961402893,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -0.07754455506801605
+          ],
+          "first_tastes": [
+            0.0
+          ],
+          "initial_ingest_motor_activation_sum": -2.0425079986453056
+        },
+        {
+          "seed": 2026110702,
+          "encoded_hunger_plus_0_1_logit_delta": [
+            0.0
+          ],
+          "active_tiles": 137,
+          "candidate_digest": [
+            29,
+            51,
+            211,
+            179,
+            0,
+            120,
+            152,
+            147,
+            61,
+            125,
+            97,
+            107,
+            31,
+            198,
+            100,
+            213,
+            76,
+            50,
+            45,
+            86,
+            28,
+            221,
+            126,
+            104,
+            133,
+            175,
+            109,
+            87,
+            103,
+            252,
+            91,
+            218
+          ],
+          "consumed": false,
+          "final_energy": 0.39802446961402893,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -0.07754455506801605
+          ],
+          "first_tastes": [
+            0.0
+          ],
+          "initial_ingest_motor_activation_sum": -2.0425079986453056
+        }
+      ]
+    },
+    {
+      "scene": "toy",
+      "arm": "whole-care-no-reference",
+      "n": 2,
+      "consumed": 0,
+      "mean_final_energy": 0.3980721980333328,
+      "mean_ingest_selected_ticks": 0.5,
+      "executed_ingestions": 0,
+      "max_final_injury": 0.0,
+      "trials": [
+        {
+          "seed": 2026110701,
+          "encoded_hunger_plus_0_1_logit_delta": [
+            0.0
+          ],
+          "active_tiles": 137,
+          "candidate_digest": [
+            170,
+            238,
+            241,
+            4,
+            143,
+            164,
+            10,
+            218,
+            27,
+            84,
+            129,
+            252,
+            245,
+            212,
+            225,
+            12,
+            213,
+            45,
+            118,
+            161,
+            175,
+            234,
+            205,
+            57,
+            69,
+            77,
+            226,
+            18,
+            40,
+            178,
+            218,
+            176
+          ],
+          "consumed": false,
+          "final_energy": 0.39805689454078674,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            0.03758414462208748
+          ],
+          "first_tastes": [
+            0.0
+          ],
+          "initial_ingest_motor_activation_sum": -2.0425079986453056
+        },
+        {
+          "seed": 2026110702,
+          "encoded_hunger_plus_0_1_logit_delta": [
+            0.0
+          ],
+          "active_tiles": 137,
+          "candidate_digest": [
+            170,
+            238,
+            241,
+            4,
+            143,
+            164,
+            10,
+            218,
+            27,
+            84,
+            129,
+            252,
+            245,
+            212,
+            225,
+            12,
+            213,
+            45,
+            118,
+            161,
+            175,
+            234,
+            205,
+            57,
+            69,
+            77,
+            226,
+            18,
+            40,
+            178,
+            218,
+            176
+          ],
+          "consumed": false,
+          "final_energy": 0.3980875015258789,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 1,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            0.03758414462208748
+          ],
+          "first_tastes": [
+            0.0
+          ],
+          "initial_ingest_motor_activation_sum": -2.0425079986453056
+        }
+      ]
+    },
+    {
+      "scene": "toy",
+      "arm": "whole-care-no-tonic",
+      "n": 2,
+      "consumed": 0,
+      "mean_final_energy": 0.39802446961402893,
+      "mean_ingest_selected_ticks": 0.0,
+      "executed_ingestions": 0,
+      "max_final_injury": 0.0,
+      "trials": [
+        {
+          "seed": 2026110701,
+          "encoded_hunger_plus_0_1_logit_delta": [
+            0.0
+          ],
+          "active_tiles": 137,
+          "candidate_digest": [
+            213,
+            55,
+            233,
+            0,
+            147,
+            130,
+            91,
+            141,
+            62,
+            212,
+            195,
+            199,
+            185,
+            222,
+            47,
+            253,
+            246,
+            99,
+            77,
+            47,
+            63,
+            151,
+            108,
+            57,
+            177,
+            104,
+            146,
+            99,
+            118,
+            247,
+            228,
+            55
+          ],
+          "consumed": false,
+          "final_energy": 0.39802446961402893,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -0.07754455506801605
+          ],
+          "first_tastes": [
+            0.0
+          ],
+          "initial_ingest_motor_activation_sum": -2.0425079986453056
+        },
+        {
+          "seed": 2026110702,
+          "encoded_hunger_plus_0_1_logit_delta": [
+            0.0
+          ],
+          "active_tiles": 137,
+          "candidate_digest": [
+            213,
+            55,
+            233,
+            0,
+            147,
+            130,
+            91,
+            141,
+            62,
+            212,
+            195,
+            199,
+            185,
+            222,
+            47,
+            253,
+            246,
+            99,
+            77,
+            47,
+            63,
+            151,
+            108,
+            57,
+            177,
+            104,
+            146,
+            99,
+            118,
+            247,
+            228,
+            55
+          ],
+          "consumed": false,
+          "final_energy": 0.39802446961402893,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -0.07754455506801605
+          ],
+          "first_tastes": [
+            0.0
+          ],
+          "initial_ingest_motor_activation_sum": -2.0425079986453056
+        }
+      ]
+    },
+    {
+      "scene": "toy",
+      "arm": "zero-excitatory",
+      "n": 2,
+      "consumed": 0,
+      "mean_final_energy": 0.39800935983657837,
+      "mean_ingest_selected_ticks": 0.0,
+      "executed_ingestions": 0,
+      "max_final_injury": 0.0,
+      "trials": [
+        {
+          "seed": 2026110701,
+          "encoded_hunger_plus_0_1_logit_delta": [
+            0.0
+          ],
+          "active_tiles": 137,
+          "candidate_digest": [
+            15,
+            194,
+            235,
+            51,
+            86,
+            216,
+            223,
+            222,
+            251,
+            84,
+            94,
+            89,
+            156,
+            111,
+            224,
+            51,
+            13,
+            247,
+            115,
+            26,
+            51,
+            150,
+            180,
+            152,
+            120,
+            199,
+            14,
+            32,
+            119,
+            18,
+            44,
+            155
+          ],
+          "consumed": false,
+          "final_energy": 0.3979853093624115,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            0.0
+          ],
+          "first_tastes": [
+            0.0
+          ],
+          "initial_ingest_motor_activation_sum": -1.9648631811141968
+        },
+        {
+          "seed": 2026110702,
+          "encoded_hunger_plus_0_1_logit_delta": [
+            0.0
+          ],
+          "active_tiles": 137,
+          "candidate_digest": [
+            15,
+            194,
+            235,
+            51,
+            86,
+            216,
+            223,
+            222,
+            251,
+            84,
+            94,
+            89,
+            156,
+            111,
+            224,
+            51,
+            13,
+            247,
+            115,
+            26,
+            51,
+            150,
+            180,
+            152,
+            120,
+            199,
+            14,
+            32,
+            119,
+            18,
+            44,
+            155
+          ],
+          "consumed": false,
+          "final_energy": 0.39803341031074524,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            0.0
+          ],
+          "first_tastes": [
+            0.0
+          ],
+          "initial_ingest_motor_activation_sum": -1.9648631811141968
+        }
+      ]
+    }
+  ]
+}

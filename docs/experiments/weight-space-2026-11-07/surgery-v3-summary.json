@@ -1,0 +1,1596 @@
+{
+  "first_frame_weight_equation_max_residual": 6.66192409326527e-06,
+  "backend": "native-cpu",
+  "experimental": true,
+  "promoted": false,
+  "ticks": 12,
+  "mode": "surgery",
+  "gain": -8.0,
+  "receipt_sha256": "533335d389ced03f66257583537e271a3b4bbdbe3435a52ed35f83566e98b25f",
+  "groups": [
+    {
+      "scene": "bitter-food",
+      "arm": "taste-readout",
+      "n": 8,
+      "consumed": 8,
+      "mean_final_energy": 0.5356766358017921,
+      "mean_ingest_selected_ticks": 2.0,
+      "executed_ingestions": 8,
+      "max_final_injury": 0.0,
+      "trials": [
+        {
+          "seed": 2026110701,
+          "consumed": true,
+          "final_energy": 0.5356967449188232,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 2,
+          "ingest_executed_ticks": 1,
+          "first_ingest_logits": [
+            -17.54817771911621
+          ],
+          "first_tastes": [
+            -0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.2072737216949463
+        },
+        {
+          "seed": 2026110702,
+          "consumed": true,
+          "final_energy": 0.5356636047363281,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 2,
+          "ingest_executed_ticks": 1,
+          "first_ingest_logits": [
+            -17.325559616088867
+          ],
+          "first_tastes": [
+            -0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.1963497698307037
+        },
+        {
+          "seed": 2026110703,
+          "consumed": true,
+          "final_energy": 0.5356784462928772,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 2,
+          "ingest_executed_ticks": 1,
+          "first_ingest_logits": [
+            -17.083276748657227
+          ],
+          "first_tastes": [
+            -0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.1678758412599564
+        },
+        {
+          "seed": 2026110704,
+          "consumed": true,
+          "final_energy": 0.5356876254081726,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 2,
+          "ingest_executed_ticks": 1,
+          "first_ingest_logits": [
+            -17.408472061157227
+          ],
+          "first_tastes": [
+            -0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.2164031118154526
+        },
+        {
+          "seed": 2026110705,
+          "consumed": true,
+          "final_energy": 0.5356507897377014,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 2,
+          "ingest_executed_ticks": 1,
+          "first_ingest_logits": [
+            -17.635360717773438
+          ],
+          "first_tastes": [
+            -0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.2217117249965668
+        },
+        {
+          "seed": 2026110706,
+          "consumed": true,
+          "final_energy": 0.5356875658035278,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 2,
+          "ingest_executed_ticks": 1,
+          "first_ingest_logits": [
+            -17.141220092773438
+          ],
+          "first_tastes": [
+            -0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.181685358285904
+        },
+        {
+          "seed": 2026110707,
+          "consumed": true,
+          "final_energy": 0.535658061504364,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 2,
+          "ingest_executed_ticks": 1,
+          "first_ingest_logits": [
+            -16.980648040771484
+          ],
+          "first_tastes": [
+            -0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.1591541469097137
+        },
+        {
+          "seed": 2026110708,
+          "consumed": true,
+          "final_energy": 0.5356902480125427,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 2,
+          "ingest_executed_ticks": 1,
+          "first_ingest_logits": [
+            -17.158525466918945
+          ],
+          "first_tastes": [
+            -0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.153555527329445
+        }
+      ]
+    },
+    {
+      "scene": "bitter-food",
+      "arm": "untouched",
+      "n": 8,
+      "consumed": 0,
+      "mean_final_energy": 0.3980037495493889,
+      "mean_ingest_selected_ticks": 0.0,
+      "executed_ingestions": 0,
+      "max_final_injury": 0.0,
+      "trials": [
+        {
+          "seed": 2026110701,
+          "consumed": false,
+          "final_energy": 0.39801979064941406,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.5387136936187744
+          ],
+          "first_tastes": [
+            -0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.2072737216949463
+        },
+        {
+          "seed": 2026110702,
+          "consumed": false,
+          "final_energy": 0.39800143241882324,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.390380382537842
+          ],
+          "first_tastes": [
+            -0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.1963497698307037
+        },
+        {
+          "seed": 2026110703,
+          "consumed": false,
+          "final_energy": 0.39800146222114563,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.341715097427368
+          ],
+          "first_tastes": [
+            -0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.1678758412599564
+        },
+        {
+          "seed": 2026110704,
+          "consumed": false,
+          "final_energy": 0.39800146222114563,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.336927890777588
+          ],
+          "first_tastes": [
+            -0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.2164031118154526
+        },
+        {
+          "seed": 2026110705,
+          "consumed": false,
+          "final_energy": 0.3979969024658203,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.5277180671691895
+          ],
+          "first_tastes": [
+            -0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.2217117249965668
+        },
+        {
+          "seed": 2026110706,
+          "consumed": false,
+          "final_energy": 0.39801058173179626,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.305758476257324
+          ],
+          "first_tastes": [
+            -0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.181685358285904
+        },
+        {
+          "seed": 2026110707,
+          "consumed": false,
+          "final_energy": 0.3979969024658203,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.2984044551849365
+          ],
+          "first_tastes": [
+            -0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.1591541469097137
+        },
+        {
+          "seed": 2026110708,
+          "consumed": false,
+          "final_energy": 0.39800146222114563,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.5143444538116455
+          ],
+          "first_tastes": [
+            -0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.153555527329445
+        }
+      ]
+    },
+    {
+      "scene": "bitter-food",
+      "arm": "wrong-sign",
+      "n": 8,
+      "consumed": 8,
+      "mean_final_energy": 0.5357934385538101,
+      "mean_ingest_selected_ticks": 2.0,
+      "executed_ingestions": 8,
+      "max_final_injury": 0.0,
+      "trials": [
+        {
+          "seed": 2026110701,
+          "consumed": true,
+          "final_energy": 0.5357963442802429,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 2,
+          "ingest_executed_ticks": 1,
+          "first_ingest_logits": [
+            12.470746994018555
+          ],
+          "first_tastes": [
+            -0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.2072737216949463
+        },
+        {
+          "seed": 2026110702,
+          "consumed": true,
+          "final_energy": 0.5357953906059265,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 2,
+          "ingest_executed_ticks": 1,
+          "first_ingest_logits": [
+            12.54479694366455
+          ],
+          "first_tastes": [
+            -0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.1963497698307037
+        },
+        {
+          "seed": 2026110703,
+          "consumed": true,
+          "final_energy": 0.5357891917228699,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 2,
+          "ingest_executed_ticks": 1,
+          "first_ingest_logits": [
+            12.399843215942383
+          ],
+          "first_tastes": [
+            -0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.1678758412599564
+        },
+        {
+          "seed": 2026110704,
+          "consumed": true,
+          "final_energy": 0.5358033180236816,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 2,
+          "ingest_executed_ticks": 1,
+          "first_ingest_logits": [
+            12.734613418579102
+          ],
+          "first_tastes": [
+            -0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.2164031118154526
+        },
+        {
+          "seed": 2026110705,
+          "consumed": true,
+          "final_energy": 0.5357926487922668,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 2,
+          "ingest_executed_ticks": 1,
+          "first_ingest_logits": [
+            12.57992172241211
+          ],
+          "first_tastes": [
+            -0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.2217117249965668
+        },
+        {
+          "seed": 2026110706,
+          "consumed": true,
+          "final_energy": 0.5357993245124817,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 2,
+          "ingest_executed_ticks": 1,
+          "first_ingest_logits": [
+            12.52970027923584
+          ],
+          "first_tastes": [
+            -0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.181685358285904
+        },
+        {
+          "seed": 2026110707,
+          "consumed": true,
+          "final_energy": 0.535764753818512,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 2,
+          "ingest_executed_ticks": 1,
+          "first_ingest_logits": [
+            12.383840560913086
+          ],
+          "first_tastes": [
+            -0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.1591541469097137
+        },
+        {
+          "seed": 2026110708,
+          "consumed": true,
+          "final_energy": 0.5358065366744995,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 2,
+          "ingest_executed_ticks": 1,
+          "first_ingest_logits": [
+            12.129829406738281
+          ],
+          "first_tastes": [
+            -0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.153555527329445
+        }
+      ]
+    },
+    {
+      "scene": "far-food",
+      "arm": "taste-readout",
+      "n": 8,
+      "consumed": 0,
+      "mean_final_energy": 0.39798997715115547,
+      "mean_ingest_selected_ticks": 3.0,
+      "executed_ingestions": 0,
+      "max_final_injury": 0.0,
+      "trials": [
+        {
+          "seed": 2026110701,
+          "consumed": false,
+          "final_energy": 0.3979877233505249,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 4,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            12.283489227294922
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.2072737216949463
+        },
+        {
+          "seed": 2026110702,
+          "consumed": false,
+          "final_energy": 0.3979877233505249,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 4,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            12.407698631286621
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.1963497698307037
+        },
+        {
+          "seed": 2026110703,
+          "consumed": false,
+          "final_energy": 0.39799225330352783,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 2,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            12.279973983764648
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.1678758412599564
+        },
+        {
+          "seed": 2026110704,
+          "consumed": false,
+          "final_energy": 0.3979831635951996,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 4,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            12.563688278198242
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.2164031118154526
+        },
+        {
+          "seed": 2026110705,
+          "consumed": false,
+          "final_energy": 0.3979831039905548,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 4,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            12.450284004211426
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.2217117249965668
+        },
+        {
+          "seed": 2026110706,
+          "consumed": false,
+          "final_energy": 0.39799222350120544,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 2,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            12.367399215698242
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.181685358285904
+        },
+        {
+          "seed": 2026110707,
+          "consumed": false,
+          "final_energy": 0.39799222350120544,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 2,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            12.217687606811523
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.1591541469097137
+        },
+        {
+          "seed": 2026110708,
+          "consumed": false,
+          "final_energy": 0.39800140261650085,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 2,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            12.19781494140625
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.153555527329445
+        }
+      ]
+    },
+    {
+      "scene": "far-food",
+      "arm": "untouched",
+      "n": 8,
+      "consumed": 0,
+      "mean_final_energy": 0.39801064506173134,
+      "mean_ingest_selected_ticks": 0.0,
+      "executed_ingestions": 0,
+      "max_final_injury": 0.0,
+      "trials": [
+        {
+          "seed": 2026110701,
+          "consumed": false,
+          "final_energy": 0.39802446961402893,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.7259738445281982
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.2072737216949463
+        },
+        {
+          "seed": 2026110702,
+          "consumed": false,
+          "final_energy": 0.39801517128944397,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.527477979660034
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.1963497698307037
+        },
+        {
+          "seed": 2026110703,
+          "consumed": false,
+          "final_energy": 0.39800146222114563,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.4615840911865234
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.1678758412599564
+        },
+        {
+          "seed": 2026110704,
+          "consumed": false,
+          "final_energy": 0.39801526069641113,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.5078511238098145
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.2164031118154526
+        },
+        {
+          "seed": 2026110705,
+          "consumed": false,
+          "final_energy": 0.39801064133644104,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.657353639602661
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.2217117249965668
+        },
+        {
+          "seed": 2026110706,
+          "consumed": false,
+          "final_energy": 0.39800605177879333,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.4680583477020264
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.181685358285904
+        },
+        {
+          "seed": 2026110707,
+          "consumed": false,
+          "final_energy": 0.39800146222114563,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.46455717086792
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.1591541469097137
+        },
+        {
+          "seed": 2026110708,
+          "consumed": false,
+          "final_energy": 0.39801064133644104,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.4463584423065186
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.153555527329445
+        }
+      ]
+    },
+    {
+      "scene": "far-food",
+      "arm": "wrong-sign",
+      "n": 8,
+      "consumed": 0,
+      "mean_final_energy": 0.3979625031352043,
+      "mean_ingest_selected_ticks": 5.5,
+      "executed_ingestions": 0,
+      "max_final_injury": 0.0,
+      "trials": [
+        {
+          "seed": 2026110701,
+          "consumed": false,
+          "final_energy": 0.39796948432922363,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 6,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -17.735437393188477
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.2072737216949463
+        },
+        {
+          "seed": 2026110702,
+          "consumed": false,
+          "final_energy": 0.3979785144329071,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 4,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -17.462661743164062
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.1963497698307037
+        },
+        {
+          "seed": 2026110703,
+          "consumed": false,
+          "final_energy": 0.39794647693634033,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 6,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -17.203144073486328
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.1678758412599564
+        },
+        {
+          "seed": 2026110704,
+          "consumed": false,
+          "final_energy": 0.3979739844799042,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 5,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -17.579391479492188
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.2164031118154526
+        },
+        {
+          "seed": 2026110705,
+          "consumed": false,
+          "final_energy": 0.39796480536460876,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 5,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -17.764991760253906
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.2217117249965668
+        },
+        {
+          "seed": 2026110706,
+          "consumed": false,
+          "final_energy": 0.3979555666446686,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 6,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -17.30352210998535
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.181685358285904
+        },
+        {
+          "seed": 2026110707,
+          "consumed": false,
+          "final_energy": 0.39796018600463867,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 5,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -17.146800994873047
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.1591541469097137
+        },
+        {
+          "seed": 2026110708,
+          "consumed": false,
+          "final_energy": 0.39795100688934326,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 7,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -17.090538024902344
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.153555527329445
+        }
+      ]
+    },
+    {
+      "scene": "food",
+      "arm": "taste-readout",
+      "n": 8,
+      "consumed": 4,
+      "mean_final_energy": 0.46689093485474586,
+      "mean_ingest_selected_ticks": 1.25,
+      "executed_ingestions": 4,
+      "max_final_injury": 0.0,
+      "trials": [
+        {
+          "seed": 2026110701,
+          "consumed": true,
+          "final_energy": 0.5357963442802429,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 2,
+          "ingest_executed_ticks": 1,
+          "first_ingest_logits": [
+            11.928802490234375
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.2072737216949463
+        },
+        {
+          "seed": 2026110702,
+          "consumed": true,
+          "final_energy": 0.5357770919799805,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 2,
+          "ingest_executed_ticks": 1,
+          "first_ingest_logits": [
+            11.995030403137207
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.1963497698307037
+        },
+        {
+          "seed": 2026110703,
+          "consumed": false,
+          "final_energy": 0.39800146222114563,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            11.896661758422852
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.1678758412599564
+        },
+        {
+          "seed": 2026110704,
+          "consumed": true,
+          "final_energy": 0.5357794761657715,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 2,
+          "ingest_executed_ticks": 1,
+          "first_ingest_logits": [
+            12.20644760131836
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.2164031118154526
+        },
+        {
+          "seed": 2026110705,
+          "consumed": true,
+          "final_energy": 0.5357733964920044,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 2,
+          "ingest_executed_ticks": 1,
+          "first_ingest_logits": [
+            12.010966300964355
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.2217117249965668
+        },
+        {
+          "seed": 2026110706,
+          "consumed": false,
+          "final_energy": 0.3979969024658203,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 1,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            12.020373344421387
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.181685358285904
+        },
+        {
+          "seed": 2026110707,
+          "consumed": false,
+          "final_energy": 0.39799681305885315,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 1,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            11.798409461975098
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.1591541469097137
+        },
+        {
+          "seed": 2026110708,
+          "consumed": false,
+          "final_energy": 0.39800599217414856,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            11.747269630432129
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.153555527329445
+        }
+      ]
+    },
+    {
+      "scene": "food",
+      "arm": "untouched",
+      "n": 8,
+      "consumed": 0,
+      "mean_final_energy": 0.39800603687763214,
+      "mean_ingest_selected_ticks": 0.0,
+      "executed_ingestions": 0,
+      "max_final_injury": 0.0,
+      "trials": [
+        {
+          "seed": 2026110701,
+          "consumed": false,
+          "final_energy": 0.39801979064941406,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -3.080657720565796
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.2072737216949463
+        },
+        {
+          "seed": 2026110702,
+          "consumed": false,
+          "final_energy": 0.39801517128944397,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.94014573097229
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.1963497698307037
+        },
+        {
+          "seed": 2026110703,
+          "consumed": false,
+          "final_energy": 0.39800146222114563,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.844895362854004
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.1678758412599564
+        },
+        {
+          "seed": 2026110704,
+          "consumed": false,
+          "final_energy": 0.39800146222114563,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.865093231201172
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.2164031118154526
+        },
+        {
+          "seed": 2026110705,
+          "consumed": false,
+          "final_energy": 0.3979969024658203,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -3.096673011779785
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.2217117249965668
+        },
+        {
+          "seed": 2026110706,
+          "consumed": false,
+          "final_energy": 0.39801058173179626,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.815084457397461
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.181685358285904
+        },
+        {
+          "seed": 2026110707,
+          "consumed": false,
+          "final_energy": 0.39800146222114563,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.883836269378662
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.1591541469097137
+        },
+        {
+          "seed": 2026110708,
+          "consumed": false,
+          "final_energy": 0.39800146222114563,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.8969037532806396
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.153555527329445
+        }
+      ]
+    },
+    {
+      "scene": "food",
+      "arm": "wrong-sign",
+      "n": 8,
+      "consumed": 8,
+      "mean_final_energy": 0.5356677696108818,
+      "mean_ingest_selected_ticks": 2.0,
+      "executed_ingestions": 8,
+      "max_final_injury": 0.0,
+      "trials": [
+        {
+          "seed": 2026110701,
+          "consumed": true,
+          "final_energy": 0.5356967449188232,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 2,
+          "ingest_executed_ticks": 1,
+          "first_ingest_logits": [
+            -18.09012222290039
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.2072737216949463
+        },
+        {
+          "seed": 2026110702,
+          "consumed": true,
+          "final_energy": 0.5356534719467163,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 2,
+          "ingest_executed_ticks": 1,
+          "first_ingest_logits": [
+            -17.87532615661621
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.1963497698307037
+        },
+        {
+          "seed": 2026110703,
+          "consumed": true,
+          "final_energy": 0.5356784462928772,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 2,
+          "ingest_executed_ticks": 1,
+          "first_ingest_logits": [
+            -17.586458206176758
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.1678758412599564
+        },
+        {
+          "seed": 2026110704,
+          "consumed": true,
+          "final_energy": 0.5356681942939758,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 2,
+          "ingest_executed_ticks": 1,
+          "first_ingest_logits": [
+            -17.936634063720703
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.2164031118154526
+        },
+        {
+          "seed": 2026110705,
+          "consumed": true,
+          "final_energy": 0.5356323719024658,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 2,
+          "ingest_executed_ticks": 1,
+          "first_ingest_logits": [
+            -18.204313278198242
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.2217117249965668
+        },
+        {
+          "seed": 2026110706,
+          "consumed": true,
+          "final_energy": 0.5356875658035278,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 2,
+          "ingest_executed_ticks": 1,
+          "first_ingest_logits": [
+            -17.65054702758789
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.181685358285904
+        },
+        {
+          "seed": 2026110707,
+          "consumed": true,
+          "final_energy": 0.5356534719467163,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 2,
+          "ingest_executed_ticks": 1,
+          "first_ingest_logits": [
+            -17.566078186035156
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.1591541469097137
+        },
+        {
+          "seed": 2026110708,
+          "consumed": true,
+          "final_energy": 0.5356718897819519,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 2,
+          "ingest_executed_ticks": 1,
+          "first_ingest_logits": [
+            -17.541086196899414
+          ],
+          "first_tastes": [
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.153555527329445
+        }
+      ]
+    },
+    {
+      "scene": "toy",
+      "arm": "taste-readout",
+      "n": 8,
+      "consumed": 0,
+      "mean_final_energy": 0.39800606295466423,
+      "mean_ingest_selected_ticks": 0.0,
+      "executed_ingestions": 0,
+      "max_final_injury": 0.0,
+      "trials": [
+        {
+          "seed": 2026110701,
+          "consumed": false,
+          "final_energy": 0.39802446961402893,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.5207936763763428
+          ],
+          "first_tastes": [
+            0.0
+          ],
+          "initial_ingest_motor_activation_sum": -2.2072737216949463
+        },
+        {
+          "seed": 2026110702,
+          "consumed": false,
+          "final_energy": 0.39801058173179626,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.4810197353363037
+          ],
+          "first_tastes": [
+            0.0
+          ],
+          "initial_ingest_motor_activation_sum": -2.1963497698307037
+        },
+        {
+          "seed": 2026110703,
+          "consumed": false,
+          "final_energy": 0.3979969024658203,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.373189687728882
+          ],
+          "first_tastes": [
+            0.0
+          ],
+          "initial_ingest_motor_activation_sum": -2.1678758412599564
+        },
+        {
+          "seed": 2026110704,
+          "consumed": false,
+          "final_energy": 0.3980060815811157,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.4061779975891113
+          ],
+          "first_tastes": [
+            0.0
+          ],
+          "initial_ingest_motor_activation_sum": -2.2164031118154526
+        },
+        {
+          "seed": 2026110705,
+          "consumed": false,
+          "final_energy": 0.3979969024658203,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.6365740299224854
+          ],
+          "first_tastes": [
+            0.0
+          ],
+          "initial_ingest_motor_activation_sum": -2.2217117249965668
+        },
+        {
+          "seed": 2026110706,
+          "consumed": false,
+          "final_energy": 0.39801058173179626,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.3803133964538574
+          ],
+          "first_tastes": [
+            0.0
+          ],
+          "initial_ingest_motor_activation_sum": -2.181685358285904
+        },
+        {
+          "seed": 2026110707,
+          "consumed": false,
+          "final_energy": 0.3979969024658203,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.308701992034912
+          ],
+          "first_tastes": [
+            0.0
+          ],
+          "initial_ingest_motor_activation_sum": -2.1591541469097137
+        },
+        {
+          "seed": 2026110708,
+          "consumed": false,
+          "final_energy": 0.3980060815811157,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.4773242473602295
+          ],
+          "first_tastes": [
+            0.0
+          ],
+          "initial_ingest_motor_activation_sum": -2.153555527329445
+        }
+      ]
+    },
+    {
+      "scene": "toy",
+      "arm": "untouched",
+      "n": 8,
+      "consumed": 0,
+      "mean_final_energy": 0.39800606295466423,
+      "mean_ingest_selected_ticks": 0.0,
+      "executed_ingestions": 0,
+      "max_final_injury": 0.0,
+      "trials": [
+        {
+          "seed": 2026110701,
+          "consumed": false,
+          "final_energy": 0.39802446961402893,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.5207936763763428
+          ],
+          "first_tastes": [
+            0.0
+          ],
+          "initial_ingest_motor_activation_sum": -2.2072737216949463
+        },
+        {
+          "seed": 2026110702,
+          "consumed": false,
+          "final_energy": 0.39801058173179626,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.4810197353363037
+          ],
+          "first_tastes": [
+            0.0
+          ],
+          "initial_ingest_motor_activation_sum": -2.1963497698307037
+        },
+        {
+          "seed": 2026110703,
+          "consumed": false,
+          "final_energy": 0.3979969024658203,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.373189687728882
+          ],
+          "first_tastes": [
+            0.0
+          ],
+          "initial_ingest_motor_activation_sum": -2.1678758412599564
+        },
+        {
+          "seed": 2026110704,
+          "consumed": false,
+          "final_energy": 0.3980060815811157,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.4061779975891113
+          ],
+          "first_tastes": [
+            0.0
+          ],
+          "initial_ingest_motor_activation_sum": -2.2164031118154526
+        },
+        {
+          "seed": 2026110705,
+          "consumed": false,
+          "final_energy": 0.3979969024658203,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.6365740299224854
+          ],
+          "first_tastes": [
+            0.0
+          ],
+          "initial_ingest_motor_activation_sum": -2.2217117249965668
+        },
+        {
+          "seed": 2026110706,
+          "consumed": false,
+          "final_energy": 0.39801058173179626,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.3803133964538574
+          ],
+          "first_tastes": [
+            0.0
+          ],
+          "initial_ingest_motor_activation_sum": -2.181685358285904
+        },
+        {
+          "seed": 2026110707,
+          "consumed": false,
+          "final_energy": 0.3979969024658203,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.308701992034912
+          ],
+          "first_tastes": [
+            0.0
+          ],
+          "initial_ingest_motor_activation_sum": -2.1591541469097137
+        },
+        {
+          "seed": 2026110708,
+          "consumed": false,
+          "final_energy": 0.3980060815811157,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.4773242473602295
+          ],
+          "first_tastes": [
+            0.0
+          ],
+          "initial_ingest_motor_activation_sum": -2.153555527329445
+        }
+      ]
+    },
+    {
+      "scene": "toy",
+      "arm": "wrong-sign",
+      "n": 8,
+      "consumed": 0,
+      "mean_final_energy": 0.39800606295466423,
+      "mean_ingest_selected_ticks": 0.0,
+      "executed_ingestions": 0,
+      "max_final_injury": 0.0,
+      "trials": [
+        {
+          "seed": 2026110701,
+          "consumed": false,
+          "final_energy": 0.39802446961402893,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.5207936763763428
+          ],
+          "first_tastes": [
+            0.0
+          ],
+          "initial_ingest_motor_activation_sum": -2.2072737216949463
+        },
+        {
+          "seed": 2026110702,
+          "consumed": false,
+          "final_energy": 0.39801058173179626,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.4810197353363037
+          ],
+          "first_tastes": [
+            0.0
+          ],
+          "initial_ingest_motor_activation_sum": -2.1963497698307037
+        },
+        {
+          "seed": 2026110703,
+          "consumed": false,
+          "final_energy": 0.3979969024658203,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.373189687728882
+          ],
+          "first_tastes": [
+            0.0
+          ],
+          "initial_ingest_motor_activation_sum": -2.1678758412599564
+        },
+        {
+          "seed": 2026110704,
+          "consumed": false,
+          "final_energy": 0.3980060815811157,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.4061779975891113
+          ],
+          "first_tastes": [
+            0.0
+          ],
+          "initial_ingest_motor_activation_sum": -2.2164031118154526
+        },
+        {
+          "seed": 2026110705,
+          "consumed": false,
+          "final_energy": 0.3979969024658203,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.6365740299224854
+          ],
+          "first_tastes": [
+            0.0
+          ],
+          "initial_ingest_motor_activation_sum": -2.2217117249965668
+        },
+        {
+          "seed": 2026110706,
+          "consumed": false,
+          "final_energy": 0.39801058173179626,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.3803133964538574
+          ],
+          "first_tastes": [
+            0.0
+          ],
+          "initial_ingest_motor_activation_sum": -2.181685358285904
+        },
+        {
+          "seed": 2026110707,
+          "consumed": false,
+          "final_energy": 0.3979969024658203,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.308701992034912
+          ],
+          "first_tastes": [
+            0.0
+          ],
+          "initial_ingest_motor_activation_sum": -2.1591541469097137
+        },
+        {
+          "seed": 2026110708,
+          "consumed": false,
+          "final_energy": 0.3980060815811157,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 0,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            -2.4773242473602295
+          ],
+          "first_tastes": [
+            0.0
+          ],
+          "initial_ingest_motor_activation_sum": -2.153555527329445
+        }
+      ]
+    }
+  ]
+}
