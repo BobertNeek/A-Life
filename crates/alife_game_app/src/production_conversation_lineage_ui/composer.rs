@@ -385,10 +385,14 @@ fn collect_available_input(world: &mut World, open: bool, blocked: bool) {
             continue;
         }
         if request.action == AccessibleAction::Click {
-            pending = controls
-                .iter()
-                .find_map(|(e, c, _)| (e.to_bits() == request.target.0).then_some(*c))
-                .or(pending);
+            // Cancel from either source wins the entire drained batch, even if
+            // a later accessibility request would otherwise replace it with Send.
+            if pending != Some(Control::Cancel) {
+                pending = controls
+                    .iter()
+                    .find_map(|(e, c, _)| (e.to_bits() == request.target.0).then_some(*c))
+                    .or(pending);
+            }
         } else if entry.is_some_and(|e| e.to_bits() == request.target.0)
             && request.action == AccessibleAction::Focus
         {
