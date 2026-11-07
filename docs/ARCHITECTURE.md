@@ -149,3 +149,46 @@ It cannot select actions, choose targets, inject reward, change weights, create 
 ## Failure semantics
 
 Neural dispatch failure makes that neural action unavailable. The Bevy shell currently records unavailable telemetry rather than necessarily closing the application. Documentation and UI must distinguish neural failure-stop from process termination.
+
+### Entity locomotion clearance
+
+Entity obstacles block body motion with a closed 3D swept sphere centered at the
+object's authored position, using authored obstacle radius plus the terrain's
+`LocomotionLimits.body_radius` (default 0.2 without terrain). The same expanded
+radius determines admission, initial overlap, tangency and earliest-surface
+contact, with entity-ID ties stable. Local steering uses authored obstacle radii
+plus the same body radius, or its existing larger conservative carrying envelope.
+This is an isotropic approximation: body radius changes vertical as well as
+horizontal clearance, including elevated obstacles and sloping trajectories.
+Terrain-AABB footprint validation remains separate and unchanged. Legacy
+hand/contact reach, tactile sensing, visual centers, hazard contact, and carried
+pose/sweep checks retain their own existing geometry; this does not introduce
+anatomical height or hand thickness. Save fields are unchanged, but restored
+worlds continue under the corrected motion clearance.
+
+Old saves and editor poses can already overlap an expanded entity sphere. A
+nonzero body move may escape a strict overlap only when squared center distance
+increases throughout the segment (initial radial dot product is nonnegative).
+At an exact boundary the move must point strictly outward; stationary, inward,
+and boundary-tangent moves remain blocked. Each obstacle is checked separately,
+including obstacles farther along the escape segment. Bounded local steering
+uses this same directional rule on each actual candidate displacement, including
+the exact original approach X/Z endpoint and terrain-projected endpoint height,
+without bypassing its view or detour limits,
+terrain checks, or conservative carrying envelope.
+
+Player placement uses a separate static rule for agents: new destinations may
+not create expanded body overlap with an entity obstacle. A preexisting overlap
+may be kept or improved, per obstacle, while air carrying stays endpoint-only.
+Initial pickup, unchanged projected ground, and release to the accepted ground
+remain available for recovery, including legacy held saves and editor geometry
+changes during a hold. Thus a released pose is not guaranteed overlap-free.
+Terrain support still uses the declared body limits, and item placement and
+carried-grip validation retain their existing geometry. No save migration or
+new persistent field is needed.
+
+Steering projects candidate endpoint heights with the immutable terrain height
+query before overlap escape classification. It does not run multiple terrain
+move validations: only the selected candidate receives the full authoritative
+support, slope, water and swept-path checks. Unsupported endpoints are not made
+legal by projection, and worlds without terrain retain their actual 3D candidate.

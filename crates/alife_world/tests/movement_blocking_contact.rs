@@ -4,6 +4,7 @@ use alife_core::{
 };
 use alife_world::{HeadlessActionIds, HeadlessScenarioBuilder, HeadlessWorld};
 
+// Fixtures place surfaces relative to the default 0.2 body envelope.
 fn step(world: &mut HeadlessWorld, intensity: f32) -> alife_world::HeadlessActionResult {
     let command = ActionCommand::structured(
         OrganismId(1),
@@ -27,7 +28,7 @@ fn blocked_step_reports_the_first_rock_surface_independently_of_spawn_order() {
     for reverse in [false, true] {
         let mut builder =
             HeadlessScenarioBuilder::new(4242).agent("creature", OrganismId(1), Vec3f::ZERO);
-        let mut rocks = [("far", 0.82), ("near", 0.77)];
+        let mut rocks = [("far", 1.02), ("near", 0.97)];
         if reverse {
             rocks.reverse();
         }
@@ -79,8 +80,8 @@ fn starting_on_a_surface_keeps_contact_at_the_start_of_the_step() {
     for intensity in [0.0, 1.0] {
         let mut world = HeadlessScenarioBuilder::new(4242)
             .agent("creature", OrganismId(1), Vec3f::ZERO)
-            .obstacle("far", Vec3f::new(0.82, 0.0, 0.0), 0.75)
-            .obstacle("touching", Vec3f::new(0.75, 0.0, 0.0), 0.75)
+            .obstacle("far", Vec3f::new(1.02, 0.0, 0.0), 0.75)
+            .obstacle("touching", Vec3f::new(0.95, 0.0, 0.0), 0.75)
             .build()
             .unwrap();
         let result = step(&mut world, intensity);
@@ -106,8 +107,8 @@ fn starting_on_a_surface_keeps_contact_at_the_start_of_the_step() {
 fn first_surface_can_belong_to_the_rock_with_the_more_distant_center() {
     let mut world = HeadlessScenarioBuilder::new(4242)
         .agent("creature", OrganismId(1), Vec3f::ZERO)
-        .obstacle("small", Vec3f::new(0.83, 0.0, 0.0), 0.75)
-        .obstacle("large", Vec3f::new(1.20, 0.0, 0.0), 1.15)
+        .obstacle("small", Vec3f::new(1.03, 0.0, 0.0), 0.75)
+        .obstacle("large", Vec3f::new(1.40, 0.0, 0.0), 1.15)
         .build()
         .unwrap();
     let result = step(&mut world, 1.0);
@@ -123,10 +124,10 @@ fn first_surface_can_belong_to_the_rock_with_the_more_distant_center() {
 
 fn assert_tangent_order(earlier_x: f32, radius: f32) {
     // Establish through the public API that both surfaces are independently
-    // admitted by the existing movement collision predicate.
+    // admitted by the expanded body movement collision predicate.
     for (name, center, obstacle_radius) in [
-        ("earlier", Vec3f::new(earlier_x, 0.0, 0.0), 0.75),
-        ("tangent", Vec3f::new(0.05, radius, 0.0), radius),
+        ("earlier", Vec3f::new(earlier_x + 0.2, 0.0, 0.0), 0.75),
+        ("tangent", Vec3f::new(0.05, radius + 0.2, 0.0), radius),
     ] {
         let mut world = HeadlessScenarioBuilder::new(4242)
             .agent("creature", OrganismId(1), Vec3f::ZERO)
@@ -147,8 +148,8 @@ fn assert_tangent_order(earlier_x: f32, radius: f32) {
         let mut builder =
             HeadlessScenarioBuilder::new(4242).agent("creature", OrganismId(1), Vec3f::ZERO);
         let mut rocks = [
-            ("earlier", Vec3f::new(earlier_x, 0.0, 0.0)),
-            ("tangent", Vec3f::new(0.05, radius, 0.0)),
+            ("earlier", Vec3f::new(earlier_x + 0.2, 0.0, 0.0)),
+            ("tangent", Vec3f::new(0.05, radius + 0.2, 0.0)),
         ];
         if reverse {
             rocks.reverse();
@@ -182,9 +183,10 @@ fn large_tangent_radius_does_not_move_contact_ahead_of_an_earlier_surface() {
 
 #[test]
 fn coincident_contacts_keep_id_order_even_without_displacement() {
-    let inside = Vec3f::ZERO;
-    let surface = Vec3f::new(0.75, 0.0, 0.0);
-    let ahead = Vec3f::new(0.8, 0.0, 0.0);
+    // Keep the forward step inward for overlapping contacts, not an escape.
+    let inside = Vec3f::new(0.1, 0.0, 0.0);
+    let surface = Vec3f::new(0.95, 0.0, 0.0);
+    let ahead = Vec3f::new(1.0, 0.0, 0.0);
     for (centers, intensity) in [
         ([inside, inside], 0.0),
         ([ahead, ahead], 1.0),
@@ -211,10 +213,10 @@ fn coincident_contacts_keep_id_order_even_without_displacement() {
 }
 
 #[test]
-fn tangent_and_clear_steps_keep_the_existing_collision_boundary() {
+fn tangent_and_clear_steps_use_the_expanded_body_collision_boundary() {
     for (height, expected) in [
-        (0.75, PhysicalContactKind::Blocked),
-        (0.76, PhysicalContactKind::Moved),
+        (0.95, PhysicalContactKind::Blocked),
+        (0.96, PhysicalContactKind::Moved),
     ] {
         let mut world = HeadlessScenarioBuilder::new(4242)
             .agent("creature", OrganismId(1), Vec3f::ZERO)

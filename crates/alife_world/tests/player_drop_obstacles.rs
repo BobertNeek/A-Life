@@ -106,9 +106,10 @@ fn grab_food(world: &mut HeadlessWorld) -> (WorldEntityId, WorldEntityId) {
 
 #[test]
 fn new_ground_must_leave_carried_food_outside_solid_rock() {
+    // Preserve the former .75 body surface: authored .55 plus default .2.
     for terrain in [false, true] {
         // The body alone fits here and can turn. Its held-food grip does not.
-        let mut control = fixture(terrain, 0.75);
+        let mut control = fixture(terrain, 0.55);
         let creature = control.entity_id("creature").unwrap();
         control.begin_player_hold(creature).unwrap();
         control.move_player_hold(Vec3f::new(1.2, 0.0, 0.0)).unwrap();
@@ -125,7 +126,7 @@ fn new_ground_must_leave_carried_food_outside_solid_rock() {
                 .succeeded
         );
 
-        let mut world = fixture(terrain, 0.75);
+        let mut world = fixture(terrain, 0.55);
         let (creature, food) = grab_food(&mut world);
         world.begin_player_hold(creature).unwrap();
         let before = world.canonical_signature_digest().unwrap();
@@ -149,8 +150,9 @@ fn new_ground_must_leave_carried_food_outside_solid_rock() {
 
 #[test]
 fn carried_reach_crossing_a_sphere_is_rejected_even_when_both_endpoints_fit() {
+    // Preserve the former .75 body surface: authored .55 plus default .2.
     for terrain in [false, true] {
-        let mut world = fixture(terrain, 0.75);
+        let mut world = fixture(terrain, 0.55);
         let rock = world.entity_id("rock").unwrap();
         world
             .editor_move_object(rock, Vec3f::new(1.45, 0.0, 0.74))
@@ -249,9 +251,16 @@ fn player_rejects_new_rock_overlaps_without_mutating_the_hold_or_world() {
                 let held = world.entity_id(label).unwrap();
                 world.begin_player_hold(held).unwrap();
                 let before = world.canonical_signature_digest().unwrap();
+                let effective = if label == "creature" {
+                    radius + 0.2
+                } else {
+                    radius.max(0.75)
+                };
+                // Neighbor inside avoids addition rounding at the translated boundary.
+                // Origin-centered exact boundaries are covered by body-clearance tests.
                 for destination in [
                     Vec3f::new(2.0, 0.0, 0.0),
-                    Vec3f::new(2.0 + radius.max(0.75), 0.0, 0.0),
+                    Vec3f::new((2.0 + effective).next_down(), 0.0, 0.0),
                 ] {
                     assert!(world.move_player_hold(destination).is_err());
                     assert_eq!(world.canonical_signature_digest().unwrap(), before);

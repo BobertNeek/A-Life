@@ -6284,61 +6284,26 @@ impl HeadlessWorld {
         })
     }
 
+    /// Terrain owns the declared locomotion limits; worlds without a heightfield
+    /// use the same default body envelope.
+    fn locomotion_body_radius(&self) -> f32 {
+        self.terrain
+            .as_ref()
+            .map_or(crate::LocomotionLimits::default().body_radius, |terrain| {
+                terrain.limits().body_radius
+            })
+    }
+
     fn first_motion_blocker(&self, start: Vec3f, end: Vec3f) -> Option<WorldEntityId> {
-        let delta = [
-            f64::from(end.x) - f64::from(start.x),
-            f64::from(end.y) - f64::from(start.y),
-            f64::from(end.z) - f64::from(start.z),
-        ];
-        let length_squared = delta.iter().map(|d| d * d).sum::<f64>();
+        let body_radius = self.locomotion_body_radius();
         self.objects
             .values()
-            // Retain the existing collision predicate, including tangencies.
-            .filter(|object| {
-                object.kind == WorldObjectKind::Obstacle
-                    && !object.consumed
-                    && object.blocks_segment(start, end)
+            .filter(|object| object.kind == WorldObjectKind::Obstacle && !object.consumed)
+            .filter_map(|object| {
+                motion_sphere_entry(start, end, object.position, object.radius + body_radius)
+                    .map(|entry| (entry, object.id))
             })
-            .map(|object| {
-                let entry = if length_squared == 0.0 || object.blocks_position(start) {
-                    0.0
-                } else {
-                    let offset = [
-                        f64::from(object.position.x) - f64::from(start.x),
-                        f64::from(object.position.y) - f64::from(start.y),
-                        f64::from(object.position.z) - f64::from(start.z),
-                    ];
-                    let middle =
-                        offset.iter().zip(delta).map(|(o, d)| o * d).sum::<f64>() / length_squared;
-                    // Rank in wider precision without the cancellation in a
-                    // f32 quadratic discriminant near a tangent. No admission
-                    // decision is made here: that remains the predicate above.
-                    let perpendicular_squared = offset
-                        .iter()
-                        .zip(delta)
-                        .map(|(o, d)| {
-                            let component = o - middle * d;
-                            component * component
-                        })
-                        .sum::<f64>();
-                    let radius = f64::from(object.radius.max(HEADLESS_CONTACT_RADIUS));
-                    // A rounding-only admitted contact keeps its closest point
-                    // rather than introducing a new collision tolerance.
-                    let half_span = ((radius * radius - perpendicular_squared).max(0.0)
-                        / length_squared)
-                        .sqrt();
-                    (middle - half_span).clamp(0.0, 1.0)
-                };
-                (entry, object.id)
-            })
-            .min_by(|a, b| {
-                let order = if a.0 == b.0 {
-                    std::cmp::Ordering::Equal
-                } else {
-                    a.0.total_cmp(&b.0)
-                };
-                order.then_with(|| a.1.raw().cmp(&b.1.raw()))
-            })
+            .min_by(|a, b| a.0.total_cmp(&b.0).then_with(|| a.1.raw().cmp(&b.1.raw())))
             .map(|(_, id)| id)
     }
 
@@ -9785,12 +9750,12 @@ mod task_6_factorized_motor_tests {
                 label: "blocker".to_string(),
                 kind: WorldObjectKind::Obstacle,
                 organism_id: None,
-                // Solid object reach is at least 0.75 units. Keep its
-                // surface ahead of the body, outside the lateral food path.
+                // Body motion expands this authored 0.55 radius by 0.2.
+                // Keep the surface ahead, outside the lateral food path.
                 position: Vec3f::new(0.8, 0.0, 0.0),
                 nutrition: 0.0,
                 hazard_pain: 0.0,
-                radius: 0.1,
+                radius: 0.55,
                 token_id: None,
             })
             .unwrap();
@@ -12252,3 +12217,67 @@ mod eat_possession_tests {
 
 #[cfg(test)]
 mod nonvisual_perception_tests;
+
+fn sphere_distance_squared(point: Vec3f, center: Vec3f) -> f64 {
+    (f64::from(point.x) - f64::from(center.x)).powi(2)
+        + (f64::from(point.y) - f64::from(center.y)).powi(2)
+        + (f64::from(point.z) - f64::from(center.z)).powi(2)
+}
+
+/// None means outside. Overlapping motion may only separate monotonically:
+/// squared distance has derivative 2*(radial_dot + t*|delta|²). Strictly
+/// interior orthogonal motion separates; at the boundary require outward motion.
+/// Shared by authoritative movement and bounded steering, not static placement.
+fn sphere_start_escape(start: Vec3f, delta: [f64; 3], center: Vec3f, radius: f32) -> Option<bool> {
+    let separation = sphere_distance_squared(start, center);
+    let radius_squared = f64::from(radius).powi(2);
+    if separation > radius_squared {
+        return None;
+    }
+    let radial_dot = (f64::from(start.x) - f64::from(center.x)) * delta[0]
+        + (f64::from(start.y) - f64::from(center.y)) * delta[1]
+        + (f64::from(start.z) - f64::from(center.z)) * delta[2];
+    let nonzero = delta.iter().any(|component| *component != 0.0);
+    Some(nonzero && (radial_dot > 0.0 || (separation < radius_squared && radial_dot == 0.0)))
+}
+
+/// Closed swept sphere for body motion only. The center remains the authored
+/// object position, including elevation. One expanded radius governs admission,
+/// overlap, tangency and ranking; existing overlap can only escape monotonically.
+/// f64 avoids f32 discriminant cancellation.
+fn motion_sphere_entry(start: Vec3f, end: Vec3f, center: Vec3f, radius: f32) -> Option<f64> {
+    let delta = [
+        f64::from(end.x) - f64::from(start.x),
+        f64::from(end.y) - f64::from(start.y),
+        f64::from(end.z) - f64::from(start.z),
+    ];
+    let offset = [
+        f64::from(center.x) - f64::from(start.x),
+        f64::from(center.y) - f64::from(start.y),
+        f64::from(center.z) - f64::from(start.z),
+    ];
+    let radius_squared = f64::from(radius).powi(2);
+    if let Some(escaping) = sphere_start_escape(start, delta, center, radius) {
+        return (!escaping).then_some(0.0);
+    }
+    let length_squared = delta.iter().map(|v| v * v).sum::<f64>();
+    if length_squared == 0.0 {
+        return None;
+    }
+    let middle = offset.iter().zip(delta).map(|(o, d)| o * d).sum::<f64>() / length_squared;
+    let squared_distance = |t: f64| {
+        offset
+            .iter()
+            .zip(delta)
+            .map(|(o, d)| (o - t * d).powi(2))
+            .sum::<f64>()
+    };
+    if squared_distance(middle.clamp(0.0, 1.0)) > radius_squared {
+        return None;
+    }
+    let half_span = ((radius_squared - squared_distance(middle)).max(0.0) / length_squared).sqrt();
+    Some((middle - half_span).clamp(0.0, 1.0))
+}
+
+#[cfg(test)]
+mod body_clearance_tests;
