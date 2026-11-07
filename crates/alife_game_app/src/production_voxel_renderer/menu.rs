@@ -1,9 +1,11 @@
 //! A small modal player menu. Debug rails remain separate; world truth stays in runtime.
 use super::*;
+use accesskit::{Action as AccessibleAction, Role};
+use bevy::a11y::{AccessibilityNode, ActionRequest};
 use bevy::ecs::message::MessageCursor;
 use bevy::input::{keyboard::KeyboardInput, ButtonState};
 use bevy::prelude::*;
-use bevy::ui::{BorderColor, BorderRadius, UiRect};
+use bevy::ui::{BorderColor, BorderRadius, FocusPolicy, UiRect};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 enum Screen {
@@ -86,7 +88,7 @@ struct InputOutcome {
     load_error: Option<&'static str>,
 }
 
-#[derive(Debug, Default, Resource)]
+#[derive(Default, Resource)]
 pub(crate) struct MenuState {
     screen: Screen,
     resume_on_close: bool,
@@ -101,6 +103,8 @@ pub(crate) struct MenuState {
     pointer_confirm_armed: bool,
     last_cursor: Option<Vec2>,
     key_reader: MessageCursor<KeyboardInput>,
+    accessible_reader: MessageCursor<ActionRequest>,
+    accessible_action: Option<Action>,
     pub(super) pending: Option<Action>,
     #[cfg(feature = "gpu-runtime")]
     quit: Option<QuitCheckpoint>,
@@ -264,6 +268,9 @@ impl MenuState {
         availability: LoadAvailability,
     ) -> InputOutcome {
         let mut outcome = InputOutcome::default();
+        // A request belongs to this snapshot only. Gated/busy requests cannot
+        // become consent after the modal or publication state changes.
+        let accessible_action = self.accessible_action.take();
         let gated = self.release_gate;
         if gated && !left_down && keyboard.get_pressed().next().is_none() {
             self.release_gate = false;
@@ -306,11 +313,13 @@ impl MenuState {
         if self.busy() || gated {
             return outcome;
         }
-        let mut action = clicks.iter().find_map(|&(screen, action)| {
-            (screen == self.screen
-                && (action != Action::ConfirmLoad
-                    || (self.pointer_confirm_armed && left_pressed && confirm_hit)))
-                .then_some(action)
+        let mut action = accessible_action.or_else(|| {
+            clicks.iter().find_map(|&(screen, action)| {
+                (screen == self.screen
+                    && (action != Action::ConfirmLoad
+                        || (self.pointer_confirm_armed && left_pressed && confirm_hit)))
+                    .then_some(action)
+            })
         });
         if keyboard.just_pressed(KeyCode::Escape) {
             if self.screen == Screen::Closed {
@@ -487,6 +496,19 @@ fn bevel(raised: bool) -> BorderColor {
         bottom: if raised { dark } else { light },
     }
 }
+fn accessible(role: Role, label: &str) -> AccessibilityNode {
+    let mut node = accesskit::Node::new(role);
+    node.set_label(label);
+    // Presentation starts hidden until sync_ui selects the active page.
+    node.set_hidden();
+    if role == Role::Button {
+        node.add_action(AccessibleAction::Click);
+    } else if role == Role::Dialog {
+        node.set_modal();
+    }
+    AccessibilityNode(node)
+}
+
 fn spawn_ui(world: &mut World) {
     for (screen, rows) in [
         (Screen::Main, MAIN.as_slice()),
@@ -512,6 +534,16 @@ fn spawn_ui(world: &mut World) {
             .with_children(|root| {
                 root.spawn((
                     MenuPanel(screen),
+                    accessible(
+                        Role::Dialog,
+                        match screen {
+                            Screen::Main => "Player menu",
+                            Screen::Speed => "Simulation speed",
+                            Screen::Settings => "Settings",
+                            Screen::ConfirmLoad => LOAD_WARNING,
+                            Screen::Closed => unreachable!(),
+                        },
+                    ),
                     panel_node(),
                     BackgroundColor(Color::srgb(0.13, 0.18, 0.20)),
                     bevel(true),
@@ -544,7 +576,16 @@ fn spawn_ui(world: &mut World) {
                                 } else {
                                     label.to_string()
                                 }),
-                                Button,
+                                Interaction::None,
+                                FocusPolicy::Block,
+                                accessible(
+                                    Role::Button,
+                                    if action == Action::ConfirmLoad {
+                                        "Load and discard unsaved changes"
+                                    } else {
+                                        label
+                                    },
+                                ),
                                 MenuButton {
                                     screen,
                                     action,
@@ -622,7 +663,11 @@ fn spawn_ui(world: &mut World) {
     world
         .spawn((
             Name::new("Open player menu"),
-            Button,
+            // The entry is wordless. Bevy's automatic Button pass derives
+            // labels only from Text children and would clear its explicit name.
+            Interaction::None,
+            FocusPolicy::Block,
+            accessible(Role::Button, "Open player menu"),
             MenuButton {
                 screen: Screen::Closed,
                 action: Action::Open,
@@ -708,6 +753,38 @@ fn handle_input_with_availability(world: &mut World, availability: LoadAvailabil
         })
         .map(|(button, _)| (button.screen, button.action))
         .collect::<Vec<_>>();
+    let controls = world
+        .query::<(Entity, &MenuButton)>()
+        .iter(world)
+        .map(|(entity, button)| (entity.to_bits(), button.screen, button.action))
+        .collect::<Vec<_>>();
+    let focused = world
+        .query_filtered::<&Window, With<PrimaryWindow>>()
+        .iter(world)
+        .next()
+        .is_none_or(|window| window.focused);
+    world.resource_scope(|world, mut state: Mut<MenuState>| {
+        let mut action = None;
+        let screen_before = state.screen;
+        if let Some(messages) = world.get_resource::<bevy::ecs::message::Messages<ActionRequest>>()
+        {
+            // Drain the whole batch even when blocked. Only controls on the
+            // page visible before this batch can activate, never the next page.
+            for request in state.accessible_reader.read(messages) {
+                if focused
+                    && !conversation_open
+                    && request.0.action == AccessibleAction::Click
+                    && action.is_none()
+                {
+                    action = controls.iter().find_map(|(entity, screen, action)| {
+                        (*entity == request.0.target.0 && *screen == screen_before)
+                            .then_some(*action)
+                    });
+                }
+            }
+        }
+        state.accessible_action = action;
+    });
     let paused = {
         #[cfg(feature = "gpu-runtime")]
         if let Some(schedule) = world.get_resource::<ProductionGpuBrainTickScheduleResource>() {
@@ -989,6 +1066,11 @@ fn button_color(interaction: Interaction, selected: bool, active: bool) -> Color
     }
 }
 
+#[allow(
+    clippy::too_many_arguments,
+    clippy::type_complexity,
+    reason = "Bevy injects independent UI queries."
+)]
 fn sync_ui(
     state: Res<MenuState>,
     ux: Res<Fvr05ProductionUxStateResource>,
@@ -997,7 +1079,47 @@ fn sync_ui(
     mut statuses: Query<&mut Text, (With<Status>, Without<StateLabel>)>,
     mut state_labels: Query<&mut Text, (With<StateLabel>, Without<Status>)>,
     mut lamps: Query<(&SelectionLamp, &mut Visibility)>,
+    mut accessibility: Query<
+        (
+            Option<&MenuPanel>,
+            Option<&MenuButton>,
+            &mut AccessibilityNode,
+        ),
+        Or<(With<MenuPanel>, With<MenuButton>)>,
+    >,
 ) {
+    for (panel, button, mut node) in &mut accessibility {
+        let screen = button
+            .map(|button| button.screen)
+            .or_else(|| panel.map(|panel| panel.0));
+        if screen == Some(state.screen) {
+            node.clear_hidden();
+        } else {
+            node.set_hidden();
+        }
+        if let Some(button) = button {
+            if state.busy() || state.conversation_capture || state.release_gate {
+                node.set_disabled();
+            } else {
+                node.clear_disabled();
+            }
+            let active = match button.action {
+                Action::OneX => Some(ux.settings.playback_mode() == crate::ProductionRunMode::OneX),
+                Action::Max => {
+                    Some(ux.settings.playback_mode() == crate::ProductionRunMode::MaxSpeed)
+                }
+                Action::Focus => Some(ux.settings.pause_on_focus_loss),
+                _ => None,
+            };
+            if let Some(active) = active {
+                node.set_toggled(if active {
+                    accesskit::Toggled::True
+                } else {
+                    accesskit::Toggled::False
+                });
+            }
+        }
+    }
     for (root, mut node) in &mut roots {
         let display = if root.0 == state.screen {
             Display::Flex

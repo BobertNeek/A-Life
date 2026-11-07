@@ -1015,3 +1015,407 @@ fn ordinary_menu_repeat_cannot_borrow_freshness_from_the_other_held_enter() {
         );
     }
 }
+
+mod accessible_input {
+    use super::*;
+    use accesskit::{Action as AccessibleAction, ActionRequest as KitActionRequest, NodeId, Role};
+    use bevy::a11y::{AccessibilityNode, ActionRequest};
+
+    fn app() -> App {
+        let mut app = input_app();
+        app.init_resource::<Messages<ActionRequest>>()
+            .add_systems(Update, sync_ui.after(ready_input));
+        app.world_mut().spawn((Window::default(), PrimaryWindow));
+        frame(&mut app, &[], false);
+        app
+    }
+    fn button(world: &mut World, screen: Screen, action: Action) -> Entity {
+        world
+            .query::<(Entity, &MenuButton)>()
+            .iter(world)
+            .find_map(|(entity, button)| {
+                (button.screen == screen && button.action == action).then_some(entity)
+            })
+            .unwrap()
+    }
+    fn request(app: &mut App, screen: Screen, action: Action) {
+        let target = button(app.world_mut(), screen, action);
+        app.world_mut()
+            .resource_mut::<Messages<ActionRequest>>()
+            .write(ActionRequest(KitActionRequest {
+                action: AccessibleAction::Click,
+                target: NodeId(target.to_bits()),
+                data: None,
+            }));
+    }
+    fn activate(app: &mut App, screen: Screen, action: Action) {
+        request(app, screen, action);
+        frame(app, &[], false);
+    }
+
+    #[test]
+    fn menu_entry_and_rows_expose_click_actions_and_only_the_active_page() {
+        let mut app = app();
+        install_cpu_ui(&mut app);
+        // Bevy's automatic accessibility pass must not erase wordless names.
+        frame(&mut app, &[], false);
+        frame(&mut app, &[], false);
+        for screen in [
+            Screen::Closed,
+            Screen::Main,
+            Screen::Speed,
+            Screen::Settings,
+            Screen::ConfirmLoad,
+        ] {
+            app.world_mut().resource_mut::<MenuState>().screen = screen;
+            frame(&mut app, &[], false);
+            for (button, node) in app
+                .world_mut()
+                .query::<(&MenuButton, &AccessibilityNode)>()
+                .iter(app.world())
+            {
+                assert_eq!(node.role(), Role::Button);
+                assert!(node.label().is_some_and(|label| !label.is_empty()));
+                assert!(node.supports_action(AccessibleAction::Click));
+                assert_eq!(node.is_hidden(), button.screen != screen);
+            }
+            let entry = button(app.world_mut(), Screen::Closed, Action::Open);
+            let node = app
+                .world()
+                .get::<AccessibilityNode>(entry)
+                .expect("the wordless menu entry needs an accessible name");
+            assert_eq!(node.label(), Some("Open player menu"));
+        }
+    }
+
+    #[test]
+    fn accessible_click_opens_navigates_saves_once_and_restores_world_input() {
+        let mut app = app();
+        let before = app.world().resource::<ReaderRuns>().0;
+        activate(&mut app, Screen::Closed, Action::Open);
+        assert_eq!(app.world().resource::<MenuState>().screen, Screen::Main);
+        assert_eq!(app.world().resource::<ReaderRuns>().0, before);
+        activate(&mut app, Screen::Main, Action::Save);
+        assert_eq!(
+            app.world_mut().resource_mut::<MenuState>().pending.take(),
+            Some(Action::Save)
+        );
+        frame(&mut app, &[], false);
+        assert_eq!(app.world().resource::<MenuState>().pending, None);
+        activate(&mut app, Screen::Main, Action::Speed);
+        assert_eq!(app.world().resource::<MenuState>().screen, Screen::Speed);
+        activate(&mut app, Screen::Speed, Action::Max);
+        assert_eq!(
+            app.world_mut().resource_mut::<MenuState>().pending.take(),
+            Some(Action::Max)
+        );
+        activate(&mut app, Screen::Speed, Action::Back);
+        activate(&mut app, Screen::Main, Action::Settings);
+        assert_eq!(app.world().resource::<MenuState>().screen, Screen::Settings);
+        activate(&mut app, Screen::Settings, Action::Focus);
+        assert_eq!(
+            app.world_mut().resource_mut::<MenuState>().pending.take(),
+            Some(Action::Focus)
+        );
+        activate(&mut app, Screen::Settings, Action::Back);
+        activate(&mut app, Screen::Main, Action::Play);
+        assert_eq!(app.world().resource::<MenuState>().screen, Screen::Closed);
+        assert_eq!(app.world().resource::<ReaderRuns>().0, before);
+        frame(&mut app, &[], false);
+        frame(&mut app, &[], false);
+        assert!(app.world().resource::<ReaderRuns>().0 > before);
+    }
+
+    #[test]
+    fn accessible_load_needs_a_separate_ready_confirmation_and_escape_wins() {
+        let mut app = app();
+        activate(&mut app, Screen::Closed, Action::Open);
+        request(&mut app, Screen::Main, Action::Load);
+        request(&mut app, Screen::ConfirmLoad, Action::ConfirmLoad);
+        frame(&mut app, &[], false);
+        assert_eq!(
+            app.world().resource::<MenuState>().screen,
+            Screen::ConfirmLoad
+        );
+        assert_eq!(app.world().resource::<MenuState>().selected, 0);
+        assert_eq!(app.world().resource::<MenuState>().pending, None);
+        // A request during the opening release boundary is discarded, not deferred.
+        activate(&mut app, Screen::ConfirmLoad, Action::ConfirmLoad);
+        assert_eq!(app.world().resource::<MenuState>().pending, None);
+        frame(&mut app, &[], false);
+        assert_eq!(app.world().resource::<MenuState>().pending, None);
+        activate(&mut app, Screen::ConfirmLoad, Action::ConfirmLoad);
+        assert_eq!(
+            app.world_mut().resource_mut::<MenuState>().pending.take(),
+            Some(Action::ConfirmLoad)
+        );
+        request(&mut app, Screen::ConfirmLoad, Action::ConfirmLoad);
+        frame(&mut app, &[KeyCode::Escape], false);
+        assert_eq!(app.world().resource::<MenuState>().screen, Screen::Main);
+        assert_eq!(app.world().resource::<MenuState>().pending, None);
+    }
+
+    #[test]
+    fn unfocused_busy_hidden_and_unknown_accessibility_requests_never_replay() {
+        let mut app = app();
+        app.world_mut().resource_mut::<MenuState>().open(false);
+        frame(&mut app, &[], false);
+        app.world_mut()
+            .query_filtered::<&mut Window, With<PrimaryWindow>>()
+            .single_mut(app.world_mut())
+            .unwrap()
+            .focused = false;
+        activate(&mut app, Screen::Main, Action::Quit);
+        assert_eq!(app.world().resource::<MenuState>().pending, None);
+        app.world_mut()
+            .query_filtered::<&mut Window, With<PrimaryWindow>>()
+            .single_mut(app.world_mut())
+            .unwrap()
+            .focused = true;
+        frame(&mut app, &[], false);
+        assert_eq!(app.world().resource::<MenuState>().pending, None);
+        activate(&mut app, Screen::Speed, Action::Max);
+        assert_eq!(app.world().resource::<MenuState>().pending, None);
+        let unknown = app.world_mut().spawn_empty().id();
+        app.world_mut()
+            .resource_mut::<Messages<ActionRequest>>()
+            .write(ActionRequest(KitActionRequest {
+                action: AccessibleAction::Click,
+                target: NodeId(unknown.to_bits()),
+                data: None,
+            }));
+        frame(&mut app, &[], false);
+        assert_eq!(app.world().resource::<MenuState>().pending, None);
+        app.world_mut().resource_mut::<MenuState>().load_phase = LoadPhase::Queued;
+        activate(&mut app, Screen::Main, Action::Save);
+        app.world_mut().resource_mut::<MenuState>().load_phase = LoadPhase::Idle;
+        frame(&mut app, &[], false);
+        assert_eq!(app.world().resource::<MenuState>().pending, None);
+    }
+
+    #[test]
+    fn menu_accessibility_updates_preserve_other_ui_and_report_busy_and_toggled_states() {
+        let mut app = app();
+        let other = app
+            .world_mut()
+            .spawn(AccessibilityNode(accesskit::Node::new(Role::Toolbar)))
+            .id();
+        {
+            let mut ux = app
+                .world_mut()
+                .resource_mut::<Fvr05ProductionUxStateResource>();
+            ux.settings.pause_on_focus_loss = true;
+        }
+        app.world_mut().resource_mut::<MenuState>().open(false);
+        frame(&mut app, &[], false);
+        assert!(!app
+            .world()
+            .get::<AccessibilityNode>(other)
+            .unwrap()
+            .is_hidden());
+        let focus = button(app.world_mut(), Screen::Settings, Action::Focus);
+        assert_eq!(
+            app.world()
+                .get::<AccessibilityNode>(focus)
+                .unwrap()
+                .toggled(),
+            Some(accesskit::Toggled::True)
+        );
+        let save = button(app.world_mut(), Screen::Main, Action::Save);
+        app.world_mut().resource_mut::<MenuState>().load_phase = LoadPhase::Queued;
+        frame(&mut app, &[], false);
+        assert!(app
+            .world()
+            .get::<AccessibilityNode>(save)
+            .unwrap()
+            .is_disabled());
+        assert!(!app
+            .world()
+            .get::<AccessibilityNode>(other)
+            .unwrap()
+            .is_hidden());
+        app.world_mut().resource_mut::<MenuState>().load_phase = LoadPhase::Idle;
+        app.world_mut()
+            .resource_mut::<Fvr05ProductionUxStateResource>()
+            .settings
+            .pause_on_focus_loss = false;
+        frame(&mut app, &[], false);
+        assert!(!app
+            .world()
+            .get::<AccessibilityNode>(save)
+            .unwrap()
+            .is_disabled());
+        assert_eq!(
+            app.world()
+                .get::<AccessibilityNode>(focus)
+                .unwrap()
+                .toggled(),
+            Some(accesskit::Toggled::False)
+        );
+    }
+
+    fn install_cpu_ui(app: &mut App) {
+        app.add_plugins((
+            bevy::app::TaskPoolPlugin::default(),
+            bevy::asset::AssetPlugin::default(),
+            bevy::text::TextPlugin,
+            bevy::ui::UiPlugin,
+        ))
+        .init_resource::<Assets<bevy::image::TextureAtlasLayout>>()
+        .init_resource::<Assets<Image>>()
+        .init_resource::<bevy::input::touch::Touches>()
+        .init_resource::<bevy::picking::hover::HoverMap>()
+        .init_resource::<bevy::picking::events::PointerState>()
+        .init_resource::<Messages<bevy::picking::pointer::PointerInput>>()
+        .init_resource::<Messages<bevy::picking::backend::PointerHits>>();
+    }
+
+    #[test]
+    fn actual_ui_focus_keeps_pointer_menu_open_and_save_functional() {
+        let mut app = app();
+        install_cpu_ui(&mut app);
+        app.world_mut().spawn((
+            Camera2d,
+            Camera {
+                computed: bevy::camera::ComputedCameraValues {
+                    target_info: Some(bevy::camera::RenderTargetInfo {
+                        physical_size: UVec2::new(1280, 720),
+                        scale_factor: 1.0,
+                    }),
+                    ..default()
+                },
+                viewport: Some(bevy::camera::Viewport {
+                    physical_size: UVec2::new(1280, 720),
+                    ..default()
+                }),
+                ..default()
+            },
+            bevy::camera::RenderTarget::default(),
+        ));
+        // Renderer-free fixture: supply ancestor visibility and hierarchy stack;
+        // geometry, cursor conversion and Interaction use actual Bevy systems.
+        fn stack(world: &mut World) {
+            fn walk(world: &World, entity: Entity, shown: bool, nodes: &mut Vec<(Entity, bool)>) {
+                let shown = shown
+                    && world
+                        .get::<Node>(entity)
+                        .is_none_or(|node| node.display != Display::None);
+                nodes.push((entity, shown));
+                if let Some(children) = world.get::<Children>(entity) {
+                    for child in children.iter() {
+                        walk(world, child, shown, nodes);
+                    }
+                }
+            }
+            let roots = world
+                .query_filtered::<Entity, With<MenuRoot>>()
+                .iter(world)
+                .collect::<Vec<_>>();
+            let mut nodes = vec![];
+            for root in roots {
+                walk(world, root, true, &mut nodes);
+            }
+            for &(entity, shown) in &nodes {
+                world.entity_mut(entity).insert(if shown {
+                    bevy::camera::visibility::InheritedVisibility::VISIBLE
+                } else {
+                    bevy::camera::visibility::InheritedVisibility::HIDDEN
+                });
+            }
+            world.insert_resource(bevy::ui::UiStack {
+                partition: std::iter::once(0..nodes.len()).collect(),
+                uinodes: nodes.into_iter().map(|(entity, _)| entity).collect(),
+            });
+        }
+        app.add_systems(
+            Update,
+            (stack, bevy::ui::ui_focus_system)
+                .chain()
+                .before(ready_input),
+        );
+        frame(&mut app, &[], false);
+        frame(&mut app, &[], false);
+        for (screen, action) in [(Screen::Closed, Action::Open), (Screen::Main, Action::Save)] {
+            let entity = button(app.world_mut(), screen, action);
+            let point = app
+                .world()
+                .get::<bevy::ui::UiGlobalTransform>(entity)
+                .unwrap()
+                .translation;
+            assert!(app.world().get::<ComputedNode>(entity).unwrap().size.x > 0.0);
+            app.world_mut()
+                .query_filtered::<&mut Window, With<PrimaryWindow>>()
+                .single_mut(app.world_mut())
+                .unwrap()
+                .set_cursor_position(Some(point));
+            app.world_mut()
+                .resource_mut::<ButtonInput<MouseButton>>()
+                .reset_all();
+            frame(&mut app, &[], false);
+            assert_eq!(
+                app.world().get::<Interaction>(entity),
+                Some(&Interaction::Hovered)
+            );
+            app.world_mut()
+                .resource_mut::<ButtonInput<MouseButton>>()
+                .press(MouseButton::Left);
+            frame(&mut app, &[], false);
+            assert_eq!(
+                app.world().get::<Interaction>(entity),
+                Some(&Interaction::Pressed)
+            );
+            assert_eq!(app.world().resource::<MenuState>().screen, Screen::Main);
+            if action == Action::Save {
+                assert_eq!(
+                    app.world_mut().resource_mut::<MenuState>().pending.take(),
+                    Some(Action::Save)
+                );
+                frame(&mut app, &[], false);
+                assert_eq!(app.world().resource::<MenuState>().pending, None);
+            }
+            app.world_mut()
+                .resource_mut::<ButtonInput<MouseButton>>()
+                .release(MouseButton::Left);
+            frame(&mut app, &[], false);
+        }
+    }
+
+    #[test]
+    fn menu_rows_have_direct_accessible_dialog_parent_with_load_warning() {
+        let mut app = app();
+        for screen in [
+            Screen::Main,
+            Screen::Speed,
+            Screen::Settings,
+            Screen::ConfirmLoad,
+        ] {
+            app.world_mut().resource_mut::<MenuState>().screen = screen;
+            frame(&mut app, &[], false);
+            for (entity, button, parent) in app
+                .world_mut()
+                .query::<(Entity, &MenuButton, &ChildOf)>()
+                .iter(app.world())
+            {
+                if button.screen != screen {
+                    continue;
+                }
+                // Bevy's AccessKit exporter uses the immediate accessible parent
+                // and immediate accessible children, not a search up the hierarchy.
+                let dialog = app
+                    .world()
+                    .get::<AccessibilityNode>(parent.parent())
+                    .expect("menu rows must not be orphaned from their dialog");
+                assert_eq!(dialog.role(), Role::Dialog);
+                assert!(dialog.is_modal() && !dialog.is_hidden());
+                assert!(app
+                    .world()
+                    .get::<Children>(parent.parent())
+                    .unwrap()
+                    .contains(&entity));
+                if screen == Screen::ConfirmLoad {
+                    assert_eq!(dialog.label(), Some(LOAD_WARNING));
+                }
+            }
+        }
+    }
+}
