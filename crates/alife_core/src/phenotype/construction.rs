@@ -58,7 +58,11 @@ fn compile_inner(
     let encoder =
         super::io_compile::compile_encoder(genome, development, &layout, inputs.sensor_profile())?;
     let (mut projections, mut synapses, mut receipts) =
-        super::topology_compile::compile_recurrent(genome, &layout, capacity)?;
+        if inputs.foundation_abi().n2048_experimental_graph().is_some() {
+            super::topology_compile::compile_n2048_experimental(genome, &layout, capacity)?
+        } else {
+            super::topology_compile::compile_recurrent(genome, &layout, capacity)?
+        };
     let decoders = super::io_compile::compile_decoders(
         genome,
         development,
@@ -284,7 +288,9 @@ fn compile_inner(
                 let projection = projections
                     .get(usize::from(synapse.route_index()))
                     .ok_or(ScaffoldContractError::PhenotypeCompile)?;
-                let delta = if inputs.n2048_candidate_asset().is_some() {
+                let delta = if inputs.n2048_candidate_asset().is_some()
+                    || inputs.foundation_abi().n2048_experimental_graph().is_some()
+                {
                     0.0
                 } else {
                     genome_weight_delta(
@@ -292,7 +298,8 @@ fn compile_inner(
                         global_index as u32,
                     )
                 };
-                let exact_candidate = inputs.n2048_candidate_asset().is_some();
+                let exact_candidate = inputs.n2048_candidate_asset().is_some()
+                    || inputs.foundation_abi().n2048_experimental_graph().is_some();
                 let mut composed = if exact_candidate {
                     *weight
                 } else {
