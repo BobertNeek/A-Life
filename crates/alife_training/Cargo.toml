@@ -44,3 +44,7 @@ required-features = ["receipt-lineage"]
 name = "experiment_connection_budget"
 path = "src/bin/experiment_connection_budget.rs"
 required-features = ["cpu-backend"]
+
+[[example]]
+name = "probe_weight_space_care"
+required-features = ["cpu-backend"]
