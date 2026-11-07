@@ -1764,6 +1764,102 @@ mod help_feedback {
         check_queued_care(Action::Praise);
     }
 
+    fn check_rejected_selection_guidance(action: Action) {
+        let selections: &[_] = if action == Action::Food {
+            &[None]
+        } else {
+            &[None, Some(reference(StableVoxelRefKind::Tile, None))]
+        };
+        for &selected in selections {
+            for paused in [false, true] {
+                let mut port = TestPort::new();
+                let error = dispatch_core(&mut port, action, selected).unwrap_err();
+                assert!(
+                    port.calls.is_empty(),
+                    "invalid targets must not receive care"
+                );
+                let (mut app, strip) = app();
+                {
+                    let mut ux = app
+                        .world_mut()
+                        .resource_mut::<Fvr05ProductionUxStateResource>();
+                    ux.show_help = true;
+                    ux.settings.paused = paused;
+                    // Preserve the error and status conversion used by dispatch.
+                    ux.last_error = Some(error.to_string());
+                    ux.last_action = format!(
+                        "{} rejected; world authority declined the request",
+                        action.label()
+                    );
+                }
+                app.update();
+                let text = &app.world().get::<Text>(strip).unwrap().0;
+                let guidance = if action == Action::Food {
+                    "Click a ground tile, then press E"
+                } else {
+                    "before giving care"
+                };
+                assert!(text.contains(guidance), "{action:?}: {text}");
+                assert!(!text.contains("The last action couldn't finish"));
+                assert!(!text.contains("Food wasn't placed"));
+                assert!(!text.contains("Food placed on"));
+                assert!(!text.contains("queued for the selected creature"));
+                assert!(!text.contains("Plaything offered"));
+                assert!(!text.contains("Resume with Space"));
+            }
+        }
+    }
+
+    #[test]
+    fn rejected_food_selection_shows_recovery_guidance_while_paused_or_running() {
+        check_rejected_selection_guidance(Action::Food);
+    }
+
+    #[test]
+    fn rejected_touch_selection_shows_recovery_guidance_while_paused_or_running() {
+        check_rejected_selection_guidance(Action::Touch);
+    }
+
+    #[test]
+    fn rejected_toy_selection_shows_recovery_guidance_while_paused_or_running() {
+        check_rejected_selection_guidance(Action::Toy);
+    }
+
+    #[test]
+    fn rejected_praise_selection_shows_recovery_guidance_while_paused_or_running() {
+        check_rejected_selection_guidance(Action::Praise);
+    }
+
+    #[test]
+    fn unrelated_care_errors_keep_generic_help_despite_stale_queued_status() {
+        let errors = [
+            GameAppShellError::InvalidProductionFrontend {
+                message: "world declined fixture".into(),
+            },
+            GameAppShellError::Io(std::io::Error::other("select a living creature first")),
+            GameAppShellError::Io(std::io::Error::other("select a visible terrain tile first")),
+        ];
+        for error in errors {
+            let (mut app, strip) = app();
+            {
+                let mut ux = app
+                    .world_mut()
+                    .resource_mut::<Fvr05ProductionUxStateResource>();
+                ux.show_help = true;
+                ux.settings.paused = true;
+                ux.last_error = Some(error.to_string());
+                ux.last_action = Action::Praise.queued_status();
+            }
+            app.update();
+            let text = &app.world().get::<Text>(strip).unwrap().0;
+            assert!(text.contains("The last action couldn't finish"));
+            assert!(!text.contains("before giving care"));
+            assert!(!text.contains("Click a ground tile, then press E"));
+            assert!(!text.contains("queued for the selected creature"));
+            assert!(!text.contains("Resume with Space"));
+        }
+    }
+
     #[test]
     fn failed_care_has_no_delivery_hint_and_closed_help_stays_hidden() {
         let (mut app, strip) = app();

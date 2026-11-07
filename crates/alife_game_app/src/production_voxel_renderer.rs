@@ -4707,10 +4707,12 @@ fn sync_v0_player_control_strip(
     } else if let Some(error) = ux.last_error.as_deref() {
         // Keep detailed errors and file paths in the debug panel.
         let message = match error {
-            "select a visible terrain tile first" => {
+            "select a visible terrain tile first"
+            | "invalid production voxel frontend launch: select a visible terrain tile first" => {
                 "Click a ground tile, then press E to place food."
             }
-            "select a living creature first" => {
+            "select a living creature first"
+            | "invalid production voxel frontend launch: select a living creature first" => {
                 "Click a creature, or press PgUp/PgDn, before giving care."
             }
             "GPU runtime unavailable" => "Care tools are unavailable. F3 has details.",
