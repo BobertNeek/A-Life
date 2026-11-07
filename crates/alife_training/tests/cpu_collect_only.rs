@@ -128,6 +128,54 @@ fn restore_trainer(
 }
 
 #[test]
+#[ignore = "Requires an externally captured fresh checkpoint from the pre-provenance release"]
+fn pre_outcome_provenance_release_restores_exactly_and_continues() {
+    let root =
+        PathBuf::from(std::env::var("ALIFE_OLD_NATIVE_FIXTURE").expect("old native fixture path"));
+    let inputs: PhenotypeCompilerInputs = load(root.join("inputs.json"));
+    let actor: FoundationTrainerCheckpoint = load(root.join("actor.json"));
+    let trainer = restore_trainer(&inputs, actor);
+    let before_actor = serde_json::to_vec(&trainer.checkpoint()).unwrap();
+    let bytes = fs::read(root.join("checkpoint.json")).unwrap();
+    let checkpoint: CpuCanonicalCheckpoint = serde_json::from_slice(&bytes).unwrap();
+    assert!(checkpoint
+        .residents
+        .iter()
+        .any(|resident| !resident.memory.records.is_empty()));
+    assert!(checkpoint
+        .residents
+        .iter()
+        .flat_map(|resident| &resident.memory.records)
+        .all(|record| record.outcome_contact.is_none()));
+    let mut hot = CpuCanonicalHost::from_checkpoint(checkpoint, &trainer).unwrap();
+    assert_eq!(
+        serde_json::to_vec(&hot.checkpoint(&trainer).unwrap()).unwrap(),
+        bytes
+    );
+    let mut cold =
+        CpuCanonicalHost::from_checkpoint(serde_json::from_slice(&bytes).unwrap(), &trainer)
+            .unwrap();
+    let hot_step = hot.step(&trainer, 0.9).unwrap();
+    let cold_step = cold.step(&trainer, 0.9).unwrap();
+    assert_eq!(
+        serde_json::to_vec(&hot_step.decisions).unwrap(),
+        fs::read(root.join("next-decisions.json")).unwrap()
+    );
+    assert_eq!(
+        serde_json::to_vec(&hot_step.decisions).unwrap(),
+        serde_json::to_vec(&cold_step.decisions).unwrap()
+    );
+    assert_eq!(
+        serde_json::to_vec(&hot.checkpoint(&trainer).unwrap()).unwrap(),
+        serde_json::to_vec(&cold.checkpoint(&trainer).unwrap()).unwrap()
+    );
+    assert_eq!(
+        serde_json::to_vec(&trainer.checkpoint()).unwrap(),
+        before_actor
+    );
+}
+
+#[test]
 fn fixture_collection_roundtrips_private_recovery_and_admits_without_optimizer_updates() {
     let root = FixtureDirectory::new();
     let seed = 0x62_1101;

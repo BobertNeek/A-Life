@@ -19,6 +19,9 @@ const TICK: Tick = Tick::new(40);
 #[path = "candidate_memory_retrieval/social_recognition.rs"]
 mod social_recognition;
 
+#[path = "candidate_memory_retrieval/outcome_phase.rs"]
+mod outcome_phase;
+
 fn slot(slot_index: u16, tracked: u64, distance: f32, color: [f32; 3]) -> GroundedObjectSlotV1 {
     GroundedObjectSlotV1 {
         slot_index,

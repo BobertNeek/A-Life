@@ -1214,13 +1214,14 @@ impl MemoryBank {
         for id in self
             .candidate_store
             .family_index
-            .get(&family_key)
+            .get(&(family_key.clone(), candidate_record.outcome_scope_key()))
             .into_iter()
             .flatten()
             .take(MEMORY_FAMILY_SEARCH_CAP)
         {
             let record = &self.candidate_store.records[&id.raw()];
             if record.identity() != candidate_record.identity()
+                || !record.same_outcome_scope(&candidate_record)
                 || family_similarity(&candidate_record.query_features, &record.query_features)
                     < MEMORY_MERGE_SIMILARITY
             {
@@ -1235,13 +1236,36 @@ impl MemoryBank {
                 *selected = Some(*id);
             }
         }
+        // Restored legacy records stay Unknown, but a later essentially same-context
+        // consumed outcome must still be able to teach at full capacity.
+        // Search its own bounded bucket; preparation density cannot hide it.
+        if candidate_record.outcome_contact == Some(PhysicalContactKind::Consumed) {
+            for id in self
+                .candidate_store
+                .family_index
+                .get(&(family_key.clone(), 0))
+                .into_iter()
+                .flatten()
+                .take(MEMORY_FAMILY_SEARCH_CAP)
+            {
+                let record = &self.candidate_store.records[&id.raw()];
+                if candidate_record.consumption_supersedes_unknown(record)
+                    && contradiction_id.is_none_or(|previous| id.raw() < previous.raw())
+                {
+                    contradiction_id = Some(*id);
+                }
+            }
+        }
         let first_matching_event = if query.tracked_object_id().is_some() {
             !self
                 .candidate_store
                 .family_namespace_index
                 .contains_key(&family_key.namespace_key())
         } else {
-            !self.candidate_store.family_index.contains_key(&family_key)
+            !self
+                .candidate_store
+                .family_index
+                .contains_key(&(family_key.clone(), candidate_record.outcome_scope_key()))
         };
 
         enum MutationPlan {
@@ -1568,19 +1592,33 @@ impl MemoryBank {
                 record.memory_id.raw(),
             ))
         });
-        let mut newer_by_identity =
-            std::collections::BTreeMap::<candidate_index::MemoryRecordIdentity, Vec<usize>>::new();
+        let mut newer_by_identity = std::collections::BTreeMap::<
+            (candidate_index::MemoryRecordIdentity, u8),
+            Vec<usize>,
+        >::new();
         let mut superseded = std::collections::BTreeSet::new();
         for (index, record) in folded.iter().enumerate() {
-            let newer = newer_by_identity.entry(record.identity()).or_default();
-            if newer.iter().any(|newer_index| {
-                let other = &folded[*newer_index];
-                !compatible_memory_outcomes(record, other)
-                    && family_similarity(&record.query_features, &other.query_features)
-                        >= MEMORY_MERGE_SIMILARITY
-            }) {
+            let key = (record.identity(), record.outcome_scope_key());
+            let same_scope_reversal = newer_by_identity.get(&key).is_some_and(|newer| {
+                newer.iter().any(|newer_index| {
+                    let other = &folded[*newer_index];
+                    !compatible_memory_outcomes(record, other)
+                        && family_similarity(&record.query_features, &other.query_features)
+                            >= MEMORY_MERGE_SIMILARITY
+                })
+            });
+            let grounded_legacy_reversal = record.outcome_contact.is_none()
+                && newer_by_identity
+                    .get(&(record.identity(), 5))
+                    .is_some_and(|newer| {
+                        newer.iter().any(|newer_index| {
+                            folded[*newer_index].consumption_supersedes_unknown(record)
+                        })
+                    });
+            if same_scope_reversal || grounded_legacy_reversal {
                 superseded.insert(record.memory_id.raw());
             }
+            let newer = newer_by_identity.entry(key).or_default();
             if newer.len() < MEMORY_FAMILY_SEARCH_CAP {
                 newer.push(index);
             }
