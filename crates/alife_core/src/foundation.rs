@@ -479,6 +479,7 @@ impl FoundationId {
     pub const N2048_V1: Self = Self(0x4E32_3034_385F_5631);
     pub const N2048_EXPERIMENTAL_GRAPH_V1: Self = Self(0x4E32_3034_3845_0001);
     pub const N2048_MEMORY_GAIN_CANDIDATE_V1: Self = Self(0x4E32_3034_384D_0001);
+    pub const N2048_GRIP_READER_CANDIDATE_V1: Self = Self(0x4E32_3034_3847_0001);
 
     pub const fn raw(self) -> u64 {
         self.0
@@ -504,6 +505,7 @@ impl FoundationCompatibilityFamilyId {
     pub const N2048_FOUNDATION: Self = Self(0x4E32_3034_385F_FA11);
     pub const N2048_EXPERIMENTAL_GRAPH: Self = Self(0x4E32_3034_3845_FA11);
     pub const N2048_MEMORY_GAIN_CANDIDATE: Self = Self(0x4E32_3034_384D_FA11);
+    pub const N2048_GRIP_READER_CANDIDATE: Self = Self(0x4E32_3034_3847_FA11);
 
     pub const fn raw(self) -> u64 {
         self.0
@@ -876,6 +878,10 @@ pub struct FoundationWeightAsset {
 }
 
 impl FoundationWeightAsset {
+    pub const fn is_n2048_grip_reader_candidate(&self) -> bool {
+        self.manifest.foundation_id.raw() == FoundationId::N2048_GRIP_READER_CANDIDATE_V1.raw()
+    }
+
     pub const fn is_n2048_memory_gain_candidate(&self) -> bool {
         self.manifest.foundation_id.raw() == FoundationId::N2048_MEMORY_GAIN_CANDIDATE_V1.raw()
     }
@@ -960,6 +966,9 @@ impl FoundationWeightAsset {
         sensor_profile: SensorProfile,
     ) -> Result<Self, ScaffoldContractError> {
         let bytes: &[u8] = match sensor_profile {
+            SensorProfile::GroundedGripObjectSlotsV1 => {
+                return Err(ScaffoldContractError::SensorProfileMismatch)
+            }
             SensorProfile::PrivilegedAffordanceV1 => include_bytes!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
                 "/../../assets/brain_foundations/n512-v1-privileged.alife-foundation"
@@ -977,6 +986,9 @@ impl FoundationWeightAsset {
 
     pub fn builtin_n2048_v1(sensor_profile: SensorProfile) -> Result<Self, ScaffoldContractError> {
         let bytes: &[u8] = match sensor_profile {
+            SensorProfile::GroundedGripObjectSlotsV1 => {
+                return Err(ScaffoldContractError::SensorProfileMismatch)
+            }
             SensorProfile::PrivilegedAffordanceV1 => include_bytes!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
                 "/../../assets/brain_foundations/n2048-v1-privileged.alife-foundation"
@@ -1223,30 +1235,41 @@ impl FoundationWeightAsset {
         self.manifest
             .promotion_receipt
             .validate(self.manifest.training_stage)?;
-        let (foundation_id, compatibility_family_id) =
-            if self.is_n2048_experimental_graph() || self.is_n2048_memory_gain_candidate() {
-                if self.manifest.capacity_class_id != BrainCapacityClass::N2048_ID
-                    || self.manifest.layout_digest
-                        != layout_digest(&N2048FoundationLayoutV1::lobe_layout())
-                    || self.weights.len() != 32768
-                {
-                    return Err(ScaffoldContractError::PhenotypeCompile);
-                }
-                (
-                    if self.is_n2048_memory_gain_candidate() {
-                        FoundationId::N2048_MEMORY_GAIN_CANDIDATE_V1
-                    } else {
-                        FoundationId::N2048_EXPERIMENTAL_GRAPH_V1
-                    },
-                    if self.is_n2048_memory_gain_candidate() {
-                        FoundationCompatibilityFamilyId::N2048_MEMORY_GAIN_CANDIDATE
-                    } else {
-                        FoundationCompatibilityFamilyId::N2048_EXPERIMENTAL_GRAPH
-                    },
-                )
-            } else {
-                foundation_identity_for_class(self.manifest.capacity_class_id)?
-            };
+        let (foundation_id, compatibility_family_id) = if self.is_n2048_experimental_graph()
+            || self.is_n2048_memory_gain_candidate()
+            || self.is_n2048_grip_reader_candidate()
+        {
+            if self.manifest.capacity_class_id != BrainCapacityClass::N2048_ID
+                || self.manifest.layout_digest
+                    != layout_digest(&N2048FoundationLayoutV1::lobe_layout())
+                || self.weights.len() != 32768
+            {
+                return Err(ScaffoldContractError::PhenotypeCompile);
+            }
+            (
+                if self.is_n2048_grip_reader_candidate() {
+                    FoundationId::N2048_GRIP_READER_CANDIDATE_V1
+                } else if self.is_n2048_memory_gain_candidate() {
+                    FoundationId::N2048_MEMORY_GAIN_CANDIDATE_V1
+                } else {
+                    FoundationId::N2048_EXPERIMENTAL_GRAPH_V1
+                },
+                if self.is_n2048_grip_reader_candidate() {
+                    FoundationCompatibilityFamilyId::N2048_GRIP_READER_CANDIDATE
+                } else if self.is_n2048_memory_gain_candidate() {
+                    FoundationCompatibilityFamilyId::N2048_MEMORY_GAIN_CANDIDATE
+                } else {
+                    FoundationCompatibilityFamilyId::N2048_EXPERIMENTAL_GRAPH
+                },
+            )
+        } else {
+            foundation_identity_for_class(self.manifest.capacity_class_id)?
+        };
+        if (self.manifest.sensor_profile == SensorProfile::GroundedGripObjectSlotsV1)
+            != self.is_n2048_grip_reader_candidate()
+        {
+            return Err(ScaffoldContractError::PhenotypeCompile);
+        }
         if self.manifest.schema_version != 1
             || (self.manifest.foundation_id != foundation_id
                 && !self.is_nano512_readout_candidate())

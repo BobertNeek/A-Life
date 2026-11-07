@@ -57,6 +57,9 @@ struct RecallKey {
     untracked_entity: Option<crate::WorldEntityId>,
     family: u8,
     action: u32,
+    // New grip readouts must not reuse an expectancy after current context
+    // changes. The old profiles deliberately keep their approximate cache.
+    grip_context: Option<[u32; crate::MEMORY_QUERY_V2_FEATURE_COUNT]>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -79,6 +82,19 @@ impl RecallKey {
                 .flatten(),
             family: query.action_family().raw(),
             action: query.action_id().raw(),
+            grip_context: query
+                .profile()
+                .profile()
+                .ok()
+                .and_then(|profile| {
+                    crate::GripOperationV1::for_candidate(
+                        profile,
+                        query.action_id(),
+                        query.action_kind(),
+                        query.action_family(),
+                    )
+                })
+                .map(|_| query.features().map(f32::to_bits)),
         }
     }
 }
@@ -88,6 +104,7 @@ impl RecallKey {
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct RuntimeMemoryRecallCache {
     owner: u64,
+    generation: u64,
     profile: Option<crate::SensorProfileIdentity>,
     entries: Vec<CachedCandidate>,
     attention: Vec<crate::FinalizedMemoryAttentionEvidence>,
@@ -100,6 +117,7 @@ impl RuntimeMemoryRecallCache {
 
     fn from_entries(
         owner: u64,
+        generation: u64,
         profile: crate::SensorProfileIdentity,
         entries: Vec<CachedCandidate>,
     ) -> Result<Self, ScaffoldContractError> {
@@ -114,6 +132,7 @@ impl RuntimeMemoryRecallCache {
             .collect::<Result<_, ScaffoldContractError>>()?;
         Ok(Self {
             owner,
+            generation,
             profile: Some(profile),
             entries,
             attention,
@@ -164,7 +183,17 @@ impl MemoryBank {
     {
         let profile = draft.profile_provenance().identity();
         let owner = draft.organism_id().raw();
-        let refresh = refresh || cache.owner != owner || cache.profile != Some(profile);
+        let grip_profile =
+            draft.sensor_profile() == crate::SensorProfile::GroundedGripObjectSlotsV1;
+        if grip_profile {
+            draft
+                .validate_contract()
+                .map_err(|_| ScaffoldContractError::InvalidMemoryQuery)?;
+        }
+        let refresh = refresh
+            || cache.owner != owner
+            || cache.profile != Some(profile)
+            || (grip_profile && cache.generation != self.candidate_store.generation);
 
         let mut queries = Vec::with_capacity(draft.candidates().len());
         let mut contexts = Vec::with_capacity(draft.candidates().len());
@@ -175,6 +204,8 @@ impl MemoryBank {
         let mut searched_any = refresh;
         for candidate in draft.candidates() {
             let query = MemoryQueryEncoderV2::encode_validated_candidate(draft, candidate)?;
+            let grip_ingest_query =
+                MemoryQueryEncoderV2::encode_grip_ingest_recall_candidate(draft, candidate)?;
             let key = RecallKey::from_candidate(&query, candidate);
             let (target_bucket, family_bucket) = keys_for_query(&query);
             let cached = (!refresh)
@@ -202,6 +233,7 @@ impl MemoryBank {
                     &query,
                     &family_bucket,
                     RUNTIME_MEMORY_SEARCH_CAP,
+                    grip_ingest_query.as_ref(),
                 )?;
                 evaluations += target.searched + family.searched;
                 (
@@ -236,6 +268,7 @@ impl MemoryBank {
             .then(|| {
                 RuntimeMemoryRecallCache::from_entries(
                     owner,
+                    self.candidate_store.generation,
                     profile,
                     queries
                         .iter()
@@ -308,6 +341,7 @@ mod tests {
                     untracked_entity: None,
                     family: CandidateActionFamily::Ingest.raw(),
                     action: 200,
+                    grip_context: None,
                 },
                 context: CandidateMemoryContextV1 {
                     candidate_index: index as u16,
@@ -328,7 +362,7 @@ mod tests {
             profile_schema_version: 1,
             sensory_abi_version: crate::SensoryAbiVersion::CURRENT.raw(),
         };
-        let cache = RuntimeMemoryRecallCache::from_entries(811, profile, entries).unwrap();
+        let cache = RuntimeMemoryRecallCache::from_entries(811, 0, profile, entries).unwrap();
         let cues = cache.attention_evidence();
         assert!(cues[1].salience.raw() > cues[0].salience.raw());
         assert_eq!(cues[0].confidence.raw(), 0.01);

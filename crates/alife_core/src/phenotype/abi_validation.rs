@@ -121,6 +121,11 @@ pub(super) fn validate_decoder_synapse(
             if projection_kind != ProjectionKind::MemoryDecoder
                 || plan.head() != DecoderHeadKind::MemoryContext
                 || u32::from(coordinate.input_lane()) < channel.target_latent_lane_start()
+                || !(coordinate.input_lane() < 36
+                    || (channel.is_grip_reader()
+                        && coordinate.input_lane()
+                            == crate::N2048GripReaderCandidateV1::OPERATION_VALUE_LANE
+                        && synapse.source() == episodic.start + 55))
                 || u32::from(coordinate.input_lane()) >= channel.decoder_input_stride()
                 || coordinate.motor_index() >= plan.output_width()
                 || coordinate.family().raw()

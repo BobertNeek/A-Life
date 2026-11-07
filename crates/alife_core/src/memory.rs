@@ -1006,12 +1006,18 @@ impl MemoryBank {
 
         for candidate in draft.candidates() {
             let query = MemoryQueryEncoderV2::encode_validated_candidate(draft, candidate)?;
+            let grip_ingest_query =
+                MemoryQueryEncoderV2::encode_grip_ingest_recall_candidate(draft, candidate)?;
             let (target_bucket, family_bucket) = keys_for_query(&query);
             let has_target = query.tracked_object_id().is_some();
             let slot = target_slot(candidate);
             let target_cache_key = (target_counts[slot] > 1)
                 .then(|| (target_bucket.clone(), target_recall_features(&query)));
-            let family_cache_key = (family_counts[slot][usize::from(candidate.family.raw())] > 1)
+            // A Close and an ordinary Contact can have identical stored-family
+            // keys/features but different read namespaces. Never share a routed
+            // grip family read through the legacy within-frame family cache.
+            let family_cache_key = (grip_ingest_query.is_none()
+                && family_counts[slot][usize::from(candidate.family.raw())] > 1)
                 .then(|| (family_bucket.clone(), query.features().map(f32::to_bits)));
             let (target, target_reused_from) = match target_cache_key
                 .as_ref()
@@ -1041,8 +1047,12 @@ impl MemoryBank {
             {
                 Some((index, result)) => (Clone::clone(result), Some(*index)),
                 None => {
-                    let result =
-                        recall_family_channel(&self.candidate_store, &query, &family_bucket)?;
+                    let result = recall_family_channel(
+                        &self.candidate_store,
+                        &query,
+                        &family_bucket,
+                        grip_ingest_query.as_ref(),
+                    )?;
                     exact_bucket_reads = exact_bucket_reads.saturating_add(1);
                     neighbor_bucket_reads = neighbor_bucket_reads.saturating_add(
                         neighbor_family_keys(&family_bucket).len().saturating_sub(1) as u32

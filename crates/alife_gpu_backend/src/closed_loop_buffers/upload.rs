@@ -196,7 +196,18 @@ impl GpuPhenotypeUpload {
             (
                 c.head().raw(),
                 c.family().raw(),
-                c.input_lane(),
+                if phenotype
+                    .foundation_abi()
+                    .n2048_grip_reader_candidate()
+                    .is_some()
+                    && c.head() == alife_core::DecoderHeadKind::MemoryContext
+                    && c.input_lane()
+                        == alife_core::N2048GripReaderCandidateV1::OPERATION_VALUE_LANE
+                {
+                    31
+                } else {
+                    c.input_lane()
+                },
                 c.motor_index(),
                 row.source(),
                 row.target(),

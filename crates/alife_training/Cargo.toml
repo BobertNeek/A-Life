@@ -52,3 +52,7 @@ required-features = ["cpu-backend"]
 [[example]]
 name = "probe_native_learning"
 required-features = ["cpu-backend"]
+
+[[example]]
+name = "probe_grip_reader"
+required-features = ["cpu-backend"]

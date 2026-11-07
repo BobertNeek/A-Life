@@ -1,5 +1,6 @@
 //! Deterministic, score-free action candidates derived from one sensory report.
 
+use alife_core::grip_research::GroundedGripSlotV1;
 use std::collections::BTreeSet;
 
 use alife_core::{
@@ -78,6 +79,7 @@ pub struct GroundedCandidateBinding {
     grounded: GroundedSensingFrame,
     profile: SensorProfile,
     active_contact: Option<WorldEntityId>,
+    grip_observations: Vec<GroundedGripSlotV1>,
 }
 
 impl GroundedCandidateBinding {
@@ -85,11 +87,13 @@ impl GroundedCandidateBinding {
         grounded: GroundedSensingFrame,
         profile: SensorProfile,
         active_contact: Option<WorldEntityId>,
+        grip_observations: Vec<GroundedGripSlotV1>,
     ) -> Self {
         Self {
             grounded,
             profile,
             active_contact,
+            grip_observations,
         }
     }
 
@@ -105,16 +109,23 @@ impl GroundedCandidateBinding {
             || draft.sensor_profile() != self.profile
             || draft.body() != self.grounded.body()
             || draft.grounded_object_slots() != self.grounded.slots()
+            || draft.grip_observations() != self.grip_observations
             || draft.candidates()
-                != enumerate_grounded_candidates(&self.grounded, self.profile, self.active_contact)?
+                != enumerate_grounded_candidates_with_grip(
+                    &self.grounded,
+                    self.profile,
+                    self.active_contact,
+                    &self.grip_observations,
+                )?
         {
             return Err(ScaffoldContractError::InvalidPerceptionFrame);
         }
-        enumerate_grounded_candidates_with_focus(
+        enumerate_grounded_candidates_inner(
             &self.grounded,
             self.profile,
             self.active_contact,
             focal_object,
+            &self.grip_observations,
         )
     }
 }
@@ -186,9 +197,44 @@ pub fn enumerate_grounded_candidates_with_focus(
     active_contact: Option<WorldEntityId>,
     focal_object: Option<TrackedObjectId>,
 ) -> Result<Vec<ActionCandidate>, ScaffoldContractError> {
+    enumerate_grounded_candidates_inner(grounded, profile, active_contact, focal_object, &[])
+}
+
+/// New-profile opportunities from the same authoritative ownership snapshot.
+pub fn enumerate_grounded_candidates_with_grip(
+    grounded: &GroundedSensingFrame,
+    profile: SensorProfile,
+    active_contact: Option<WorldEntityId>,
+    grip_observations: &[GroundedGripSlotV1],
+) -> Result<Vec<ActionCandidate>, ScaffoldContractError> {
+    enumerate_grounded_candidates_inner(grounded, profile, active_contact, None, grip_observations)
+}
+
+fn enumerate_grounded_candidates_inner(
+    grounded: &GroundedSensingFrame,
+    profile: SensorProfile,
+    active_contact: Option<WorldEntityId>,
+    focal_object: Option<TrackedObjectId>,
+    grip_observations: &[GroundedGripSlotV1],
+) -> Result<Vec<ActionCandidate>, ScaffoldContractError> {
+    let grip_profile = profile == SensorProfile::GroundedGripObjectSlotsV1;
+    if (grip_profile
+        && (grip_observations.len() != grounded.slots().len()
+            || grip_observations
+                .iter()
+                .zip(grounded.slots())
+                .any(|(grip, slot)| {
+                    grip.slot_index != slot.slot_index || grip.validate_contract().is_err()
+                })))
+        || (!grip_profile && !grip_observations.is_empty())
+    {
+        return Err(ScaffoldContractError::InvalidPerceptionFrame);
+    }
     if !matches!(
         profile,
-        SensorProfile::GroundedObjectSlotsV1 | SensorProfile::GroundedTerrainVisionV1
+        SensorProfile::GroundedObjectSlotsV1
+            | SensorProfile::GroundedTerrainVisionV1
+            | SensorProfile::GroundedGripObjectSlotsV1
     ) {
         return Err(ScaffoldContractError::SensorProfileMismatch);
     }
@@ -328,7 +374,19 @@ pub fn enumerate_grounded_candidates_with_focus(
             Some(transport.target_position),
         );
         let observation = CandidateObservationRef::ObjectSlot(slot.slot_index);
-        for (action_id, kind, family, effort) in OBJECT_ACTIONS {
+        for (mut action_id, kind, mut family, effort) in OBJECT_ACTIONS {
+            if grip_profile && action_id == HeadlessActionIds::GRAB {
+                let grip = &grip_observations[index];
+                let Some(operation) = grip
+                    .ownership
+                    .operation()
+                    .filter(|_| grip.confidence.raw() > 0.0)
+                else {
+                    continue;
+                };
+                action_id = operation.action_id();
+                family = operation.family();
+            }
             candidates.push(ActionCandidate::new(
                 u16::try_from(candidates.len())
                     .map_err(|_| ScaffoldContractError::InvalidActionCandidate)?,

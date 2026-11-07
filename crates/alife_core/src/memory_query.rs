@@ -495,6 +495,14 @@ impl MemoryQueryEncoderV2 {
         draft
             .validate_contract()
             .map_err(|_| ScaffoldContractError::InvalidMemoryQuery)?;
+        if draft.sensor_profile() == crate::SensorProfile::GroundedGripObjectSlotsV1
+            && draft
+                .candidates()
+                .get(usize::from(candidate.candidate_index))
+                != Some(candidate)
+        {
+            return Err(ScaffoldContractError::InvalidMemoryQuery);
+        }
         Self::encode_validated_candidate(draft, candidate)
     }
 
@@ -515,6 +523,42 @@ impl MemoryQueryEncoderV2 {
             draft.candidates().len(),
             candidate,
         )
+    }
+
+    /// Private read-only projection for the opt-in grip reader. This is never
+    /// used as a decision key or stored outcome. Re-encode the copied candidate
+    /// so action/family lanes and its feature digest agree with the Ingest query.
+    pub(crate) fn encode_grip_ingest_recall_candidate(
+        draft: &PerceptionFrameDraft,
+        candidate: &ActionCandidate,
+    ) -> Result<Option<CandidateMemoryQueryV2>, ScaffoldContractError> {
+        if crate::GripOperationV1::for_candidate(
+            draft.sensor_profile(),
+            candidate.action_id,
+            candidate.kind,
+            candidate.family,
+        )
+        .is_none()
+        {
+            return Ok(None);
+        }
+        if !matches!(
+            candidate.observation,
+            CandidateObservationRef::ObjectSlot(_)
+        ) || draft
+            .candidates()
+            .get(usize::from(candidate.candidate_index))
+            != Some(candidate)
+        {
+            return Err(ScaffoldContractError::InvalidMemoryQuery);
+        }
+        let mut ingest = *candidate;
+        // Ingest memory is family-scoped, not keyed by this synthetic action ID.
+        // Using the core canonical Interact ID avoids any world-ID dependency.
+        ingest.action_id = ActionKind::Interact.canonical_id();
+        ingest.kind = ActionKind::Interact;
+        ingest.family = CandidateActionFamily::Ingest;
+        Self::encode_validated_candidate(draft, &ingest).map(Some)
     }
 
     fn encode_from_frame(
@@ -602,6 +646,8 @@ fn encode_query(
         1 => features[MEMORY_PROFILE_RANGE.start] = 1.0,
         2 => features[MEMORY_PROFILE_RANGE.start + 1] = 1.0,
         3 => features[MEMORY_TERRAIN_VISION_PROFILE_LANE] = 1.0,
+        // A distinct opt-in profile, using the existing two lanes unchanged.
+        4 => features[MEMORY_PROFILE_RANGE].fill(1.0),
         _ => return Err(ScaffoldContractError::InvalidMemoryQuery),
     };
 
@@ -648,6 +694,19 @@ fn validate_query_fields(query: &CandidateMemoryQueryV2) -> Result<(), ScaffoldC
         .validate()
         .map_err(|_| ScaffoldContractError::InvalidMemoryQuery)?;
     if !query.action_family.is_compatible_with(query.action_kind) {
+        return Err(ScaffoldContractError::InvalidMemoryQuery);
+    }
+    if query.profile.profile_id.raw() == crate::SensorProfile::GroundedGripObjectSlotsV1.raw()
+        && crate::GripOperationV1::from_action_id(query.action_id).is_some()
+        && (query.tracked_object_id.is_none()
+            || crate::GripOperationV1::for_candidate(
+                crate::SensorProfile::GroundedGripObjectSlotsV1,
+                query.action_id,
+                query.action_kind,
+                query.action_family,
+            )
+            .is_none())
+    {
         return Err(ScaffoldContractError::InvalidMemoryQuery);
     }
     if let Some(tracked_object_id) = query.tracked_object_id {
@@ -699,6 +758,16 @@ fn validate_query_fields(query: &CandidateMemoryQueryV2) -> Result<(), ScaffoldC
     }
     if query.features[MEMORY_TERRAIN_VISION_PROFILE_LANE] != 0.0 {
         return Err(ScaffoldContractError::InvalidMemoryQuery);
+    }
+    if query.profile.profile_id.raw() == 4 {
+        return if query.features[MEMORY_PROFILE_RANGE]
+            .iter()
+            .all(|value| *value == 1.0)
+        {
+            Ok(())
+        } else {
+            Err(ScaffoldContractError::InvalidMemoryQuery)
+        };
     }
     let profile_index = match query.profile.profile_id.raw() {
         1 => 0,
@@ -913,5 +982,168 @@ impl EpisodicRetrievalContextV1 {
 impl Validate for EpisodicRetrievalContextV1 {
     fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
         Self::validate_contract(self)
+    }
+}
+
+#[cfg(test)]
+mod grip_projection_tests {
+    use super::*;
+    use crate::{
+        ActionTarget, CandidateFeatureVector, DurationTicks, EndocrineSnapshot, GripOperationV1,
+        GripOwnershipV1, GroundedGripSlotV1, GroundedObjectSlotV1, Pose, SensorProfile,
+        SensorProfileProvenance, SensoryAbiVersion, SensoryChannels, Vec3f, Velocity,
+        WorldEntityId,
+    };
+
+    fn draft(operation: GripOperationV1) -> PerceptionFrameDraft {
+        let owner = OrganismId(811);
+        let tick = Tick::new(40);
+        let profile = SensorProfile::GroundedGripObjectSlotsV1;
+        let slot = GroundedObjectSlotV1 {
+            slot_index: 0,
+            tracked_object_id: TrackedObjectId(71),
+            bearing: [0.0, 1.0],
+            distance: 0.4,
+            relative_velocity: [0.0; 3],
+            color: [0.0, 0.8, 0.9],
+            material: [0.2; 3],
+            shape: [0.4; 3],
+            chemical: [0.0; 3],
+            contact: 1.0,
+            proprioception: [0.0; 2],
+            temperature: 0.0,
+            terrain: [0.0; 2],
+            confidence: Confidence::new(0.9).unwrap(),
+        };
+        let candidate = ActionCandidate::new(
+            0,
+            operation.action_id(),
+            ActionKind::Interact,
+            operation.family(),
+            CandidateObservationRef::ObjectSlot(0),
+            ActionTarget::new(Some(WorldEntityId(9000)), Some(Vec3f::ZERO)),
+            slot.candidate_features().unwrap(),
+            Confidence::new(0.9).unwrap(),
+            NormalizedScalar::new(0.2).unwrap(),
+            DurationTicks::new(1),
+            DurationTicks::new(2),
+        )
+        .unwrap();
+        PerceptionFrameDraft::new_with_grip_observations(
+            owner,
+            tick,
+            profile,
+            SensorySnapshot::new(
+                owner,
+                tick,
+                Vec3f::ZERO,
+                SensoryChannels::ZERO,
+                Default::default(),
+            )
+            .unwrap(),
+            BodySnapshot {
+                pose: Pose::IDENTITY,
+                velocity: Velocity::ZERO,
+            },
+            HomeostaticSnapshot::new(
+                tick,
+                crate::DriveSnapshot::baseline(),
+                EndocrineSnapshot::baseline(),
+            )
+            .unwrap(),
+            vec![candidate],
+            SensorProfileProvenance::new(profile, SensoryAbiVersion::CURRENT, tick).unwrap(),
+            vec![slot],
+            vec![GroundedGripSlotV1 {
+                slot_index: 0,
+                ownership: if operation == GripOperationV1::Release {
+                    GripOwnershipV1::SelfHeld
+                } else {
+                    GripOwnershipV1::NotSelfHeld
+                },
+                confidence: Confidence::new(0.9).unwrap(),
+            }],
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn private_ingest_projection_reencodes_one_hots_and_preserves_the_real_query() {
+        for operation in [GripOperationV1::Close, GripOperationV1::Release] {
+            let draft = draft(operation);
+            let candidate = draft.candidates()[0];
+            let real = MemoryQueryEncoderV2::encode_candidate(&draft, &candidate).unwrap();
+            let bytes = serde_json::to_vec(&real).unwrap();
+            let projected =
+                MemoryQueryEncoderV2::encode_grip_ingest_recall_candidate(&draft, &candidate)
+                    .unwrap()
+                    .unwrap();
+            projected.validate_contract().unwrap();
+            assert_eq!(projected.action_family(), CandidateActionFamily::Ingest);
+            assert_eq!(projected.action_kind(), ActionKind::Interact);
+            assert_eq!(projected.action_id(), ActionKind::Interact.canonical_id());
+            assert_ne!(projected.canonical_digest(), real.canonical_digest());
+            assert_ne!(
+                projected.candidate_feature_digest(),
+                real.candidate_feature_digest()
+            );
+            assert_eq!(projected.tracked_object_id(), real.tracked_object_id());
+            assert_eq!(projected.organism_id(), real.organism_id());
+            assert_eq!(projected.tick(), real.tick());
+            assert_eq!(projected.profile(), real.profile());
+            assert_eq!(projected.base_frame_digest(), real.base_frame_digest());
+            let mut expected_features = *real.features();
+            expected_features[MEMORY_ACTION_FAMILY_RANGE].fill(0.0);
+            expected_features[MEMORY_ACTION_FAMILY_RANGE.start
+                + usize::from(CandidateActionFamily::Ingest.raw())] = 1.0;
+            assert_eq!(projected.features(), &expected_features);
+            assert_eq!(serde_json::to_vec(&real).unwrap(), bytes);
+            let frame = draft
+                .clone()
+                .finalize(PerceptionContextBlock::empty())
+                .unwrap();
+            assert!(
+                projected
+                    .validate_against_frame(&frame, &candidate)
+                    .is_err(),
+                "private reader projection must never validate as the real decision query"
+            );
+            real.validate_against_frame(&frame, &candidate).unwrap();
+            let mut wrong = candidate;
+            wrong.features = CandidateFeatureVector::zero();
+            assert!(
+                MemoryQueryEncoderV2::encode_grip_ingest_recall_candidate(&draft, &wrong).is_err()
+            );
+            assert!(MemoryQueryEncoderV2::encode_candidate(&draft, &wrong).is_err());
+        }
+    }
+
+    #[test]
+    fn grip_query_profile_bits_and_operation_fields_are_checked_independently_of_digest() {
+        let draft = draft(GripOperationV1::Release);
+        let query = MemoryQueryEncoderV2::encode_candidate(&draft, &draft.candidates()[0]).unwrap();
+        for bits in [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [1.0, 1.0, 1.0],
+        ] {
+            let mut invalid = query.clone();
+            invalid.features[MEMORY_PROFILE_RANGE].copy_from_slice(&bits[..2]);
+            invalid.features[MEMORY_TERRAIN_VISION_PROFILE_LANE] = bits[2];
+            invalid.canonical_digest = compute_query_digest(&invalid).unwrap();
+            assert!(invalid.validate_contract().is_err());
+            assert!(serde_json::from_value::<CandidateMemoryQueryV2>(
+                serde_json::to_value(&invalid).unwrap()
+            )
+            .is_err());
+        }
+        let mut invalid = query;
+        invalid.action_kind = ActionKind::Hold;
+        invalid.features[MEMORY_ACTION_KIND_RANGE].fill(0.0);
+        invalid.features[MEMORY_ACTION_KIND_RANGE.start + usize::from(ActionKind::Hold.raw())] =
+            1.0;
+        invalid.canonical_digest = compute_query_digest(&invalid).unwrap();
+        assert!(invalid.validate_contract().is_err());
     }
 }

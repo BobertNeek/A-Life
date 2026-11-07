@@ -29,9 +29,11 @@ use alife_core::{
     SENSORY_VISUAL_AFFORDANCE_CHANNEL_COUNT,
 };
 
+#[cfg(test)]
+use crate::candidate_enumerator::enumerate_grounded_candidates;
 use crate::candidate_enumerator::{
-    enumerate_grounded_candidates, enumerate_privileged_candidates, GroundedCandidateBinding,
-    HEADLESS_VISION_RADIUS,
+    enumerate_grounded_candidates_with_grip, enumerate_privileged_candidates,
+    GroundedCandidateBinding, HEADLESS_VISION_RADIUS,
 };
 use crate::ecology::{
     deterministic_zone_position, EcologyConfig, EcologyMetrics, EcologySensorySummary,
@@ -1345,6 +1347,7 @@ pub struct HeadlessWorld {
 
 mod hands;
 pub use hands::{ActionPhase, GripTransfer, GripTransferKind};
+mod grip_research;
 mod local_steering;
 mod mating_reach;
 pub use local_steering::LocalSteeringState;
@@ -3733,7 +3736,9 @@ impl HeadlessWorld {
                 )
                 .map(|draft| (draft, None))
             }
-            SensorProfile::GroundedObjectSlotsV1 | SensorProfile::GroundedTerrainVisionV1 => {
+            SensorProfile::GroundedObjectSlotsV1
+            | SensorProfile::GroundedTerrainVisionV1
+            | SensorProfile::GroundedGripObjectSlotsV1 => {
                 let terrain_vision = profile == SensorProfile::GroundedTerrainVisionV1;
                 let snapshot = match (index, terrain_vision) {
                     (Some(index), true) => {
@@ -3789,9 +3794,23 @@ impl HeadlessWorld {
                             .find(|(slot, _)| slot.contact > 0.0)
                             .map(|(_, transport)| transport.transport_entity)
                     });
-                let candidates = enumerate_grounded_candidates(&grounded, profile, active_contact)?;
-                let binding =
-                    GroundedCandidateBinding::new(grounded.clone(), profile, active_contact);
+                let grip_observations = if profile == SensorProfile::GroundedGripObjectSlotsV1 {
+                    self.research_grip_slots(organism_id, &grounded)?
+                } else {
+                    Vec::new()
+                };
+                let candidates = enumerate_grounded_candidates_with_grip(
+                    &grounded,
+                    profile,
+                    active_contact,
+                    &grip_observations,
+                )?;
+                let binding = GroundedCandidateBinding::new(
+                    grounded.clone(),
+                    profile,
+                    active_contact,
+                    grip_observations.clone(),
+                );
                 let (mut sensory, body, slots, transports) = grounded.into_parts();
                 // Bind only already observed bodies to personal recognition.
                 // Physical identity is not a friendly label or learned affinity.
@@ -3906,7 +3925,7 @@ impl HeadlessWorld {
                 }
                 sensory.language_context = language_context;
                 sensory.validate_contract()?;
-                PerceptionFrameDraft::new(
+                PerceptionFrameDraft::new_with_grip_observations(
                     organism_id,
                     tick,
                     profile,
@@ -3916,6 +3935,7 @@ impl HeadlessWorld {
                     candidates,
                     provenance,
                     slots,
+                    grip_observations,
                 )
                 .map(|draft| (draft, Some(binding)))
             }
@@ -4659,7 +4679,11 @@ impl HeadlessWorld {
         channels.sort_by_key(|command| motor_channel_order(command.channel));
         let mut executed = Vec::with_capacity(channels.len());
         for channel in &channels {
-            let command = legacy_action_for_motor_channel(bundle.organism_id, channel)?;
+            let command = action_for_motor_channel_with_grip(
+                bundle.organism_id,
+                channel,
+                self.has_grip_reader_abi(bundle.organism_id),
+            )?;
             let mut result = if channel.channel == MotorChannel::Vocal {
                 match decode_vocal_channel_payload(channel)? {
                     Some((payload, prompted)) => {
@@ -5238,6 +5262,13 @@ impl HeadlessWorld {
         &mut self,
         command: &ActionCommand,
     ) -> Result<HeadlessActionResult, ScaffoldContractError> {
+        // Only the distinct inherited ABI gives these IDs explicit semantics.
+        // Older organisms retain their exact unknown-Interact fallback.
+        if let Some(operation) = alife_core::GripOperationV1::from_action_id(command.action_id)
+            .filter(|_| self.has_grip_reader_abi(command.organism_id))
+        {
+            return self.execute_explicit_grip(operation, *command);
+        }
         let agent_id = self.agent_entity_id(command.organism_id)?;
         let action = classify_action(command);
         match action {
@@ -7449,9 +7480,18 @@ fn decode_vocal_channel_payload(
         .map(|payload| Some((payload, prompted)))
 }
 
+#[cfg(test)]
 fn legacy_action_for_motor_channel(
     organism_id: OrganismId,
     command: &ChannelCommand,
+) -> Result<ActionCommand, HeadlessMotorTransactionError> {
+    action_for_motor_channel_with_grip(organism_id, command, false)
+}
+
+fn action_for_motor_channel_with_grip(
+    organism_id: OrganismId,
+    command: &ChannelCommand,
+    grip_reader_abi: bool,
 ) -> Result<ActionCommand, HeadlessMotorTransactionError> {
     let (action_id, kind, target) = match command.channel {
         MotorChannel::Locomotion => (
@@ -7478,6 +7518,8 @@ fn legacy_action_for_motor_channel(
                 || command.primitive == HeadlessActionIds::GRAB
                 || command.primitive == HeadlessActionIds::PLAY
                 || command.primitive == HeadlessActionIds::NO_MANIPULATION
+                || (grip_reader_abi
+                    && alife_core::GripOperationV1::from_action_id(command.primitive).is_some())
             {
                 command.primitive
             } else {

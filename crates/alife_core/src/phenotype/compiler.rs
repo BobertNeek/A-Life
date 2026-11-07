@@ -13,6 +13,41 @@ use super::{BrainCapacityClass, BrainPhenotype, PhenotypeCompilerInputs};
 pub struct PhenotypeCompiler;
 
 impl PhenotypeCompiler {
+    pub fn compile_n2048_grip_reader_graph(
+        genome: BrainGenome,
+        development: DevelopmentState,
+        sensor_profile: SensorProfile,
+    ) -> Result<(BrainPhenotype, PhenotypeCompilerInputs), ScaffoldContractError> {
+        let capacity = BrainCapacityClass::n2048();
+        let inputs = PhenotypeCompilerInputs::try_new_with_foundation_selection(
+            genome,
+            &capacity,
+            development,
+            sensor_profile,
+            crate::FoundationAbiSelection::N2048GripReaderCandidateV1(
+                crate::N2048GripReaderCandidateV1::fresh(sensor_profile)?,
+            ),
+        )?;
+        Ok((Self::compile_validated(&inputs, &capacity)?, inputs))
+    }
+    pub fn compile_n2048_grip_reader_foundation_candidate(
+        genome: BrainGenome,
+        development: DevelopmentState,
+        asset: FoundationWeightAsset,
+    ) -> Result<(BrainPhenotype, PhenotypeCompilerInputs), ScaffoldContractError> {
+        let capacity = BrainCapacityClass::n2048();
+        let inputs = PhenotypeCompilerInputs::try_new_with_foundation_selection(
+            genome,
+            &capacity,
+            development,
+            asset.manifest().sensor_profile(),
+            crate::FoundationAbiSelection::N2048GripReaderCandidateV1(
+                crate::N2048GripReaderCandidateV1::for_asset(&asset)?,
+            ),
+        )?;
+        Ok((Self::compile_validated(&inputs, &capacity)?, inputs))
+    }
+
     pub fn compile_n2048_memory_gain_graph(
         genome: BrainGenome,
         development: DevelopmentState,
@@ -206,6 +241,15 @@ impl PhenotypeCompiler {
         inputs: &PhenotypeCompilerInputs,
         capacity: &BrainCapacityClass,
     ) -> Result<BrainPhenotype, ScaffoldContractError> {
+        if let Some(recipe) = inputs.foundation_abi().n2048_grip_reader_candidate() {
+            inputs.validate_against(capacity)?;
+            return match recipe.asset()? {
+                Some(asset) => {
+                    super::construction::compile_with_foundation_asset(inputs, capacity, &asset)
+                }
+                None => super::construction::compile(inputs, capacity),
+            };
+        }
         if let Some(recipe) = inputs.foundation_abi().n2048_memory_gain_candidate() {
             inputs.validate_against(capacity)?;
             return match recipe.asset()? {

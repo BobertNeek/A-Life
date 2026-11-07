@@ -166,6 +166,7 @@ pub struct GpuBrainSlot {
     counts: GpuTypedCounts,
     ranges: GpuSlotWordRanges,
     decoder_input_stride: u32,
+    sensor_profile_raw: u32,
     brain_slot_index: u32,
     bucket_ownership_token: u64,
 }
@@ -184,6 +185,9 @@ impl GpuBrainSlot {
     }
     pub const fn decoder_input_stride(&self) -> u32 {
         self.decoder_input_stride
+    }
+    pub const fn sensor_profile_raw(&self) -> u32 {
+        self.sensor_profile_raw
     }
     pub const fn brain_slot_index(&self) -> u32 {
         self.brain_slot_index
@@ -591,6 +595,7 @@ impl GpuClassBucketPlan {
             counts,
             ranges,
             decoder_input_stride: upload.decoder_plans[0].flattened_input_lane_count,
+            sensor_profile_raw: upload.encoder_plans[0].sensor_profile_raw,
             brain_slot_index: slot,
             bucket_ownership_token: self.bucket_ownership_token,
         };
@@ -1472,12 +1477,17 @@ fn validate_learning_slot_layout(
     )?;
     if !((memory_plan.schema_version == 1
         && memory_plan.max_candidate_gain.to_bits() == 0.5_f32.to_bits())
-        || (memory_plan.schema_version == 2
+        || ((memory_plan.schema_version == 2 || memory_plan.schema_version == 3)
             && memory_plan.max_candidate_gain.to_bits() == 12.0_f32.to_bits()
             && memory_plan.memory_decoder_synapse_count == 4096))
         || memory_plan.target_latent_lane_start != 24
         || memory_plan.family_value_lane_start != 32
-        || memory_plan.decoder_input_stride != 36
+        || memory_plan.decoder_input_stride
+            != if memory_plan.schema_version == 3 {
+                54
+            } else {
+                36
+            }
         || memory_plan.memory_decoder_synapse_count as usize != counts.memory_weight_indices
         || counts.memory_weight_indices < 96
         || !counts.memory_weight_indices.is_multiple_of(8)
@@ -1506,7 +1516,8 @@ fn validate_learning_slot_layout(
             || metadata.global_synapse_id != global_synapse_id
             || metadata.decoder_head != 2
             || metadata.family as usize != expected_family
-            || !(24..36).contains(&metadata.input_lane)
+            || !((24..36).contains(&metadata.input_lane)
+                || (memory_plan.schema_version == 3 && metadata.input_lane == 53))
         {
             return Err(GpuClosedLoopError::MalformedUpload);
         }
@@ -2844,6 +2855,7 @@ impl GpuFixedClassArenaPlan {
             counts,
             ranges: ranges.layout.clone(),
             decoder_input_stride: upload.decoder_plans[0].flattened_input_lane_count,
+            sensor_profile_raw: upload.encoder_plans[0].sensor_profile_raw,
             brain_slot_index: slot,
             bucket_ownership_token: self.arena_ownership_token,
         };

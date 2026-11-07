@@ -45,10 +45,11 @@ fn add_candidate_memory_context(@builtin(global_invocation_id) gid:vec3<u32>) {
   let decoder = load_decoder_plan(brain.decoder_plan_offset);
   let input_stride = decoder.flattened_input_lane_count;
   let valid_plan = ((plan.schema_version == MEMORY_SCHEMA_VERSION && plan.max_candidate_gain == 0.5)
-    || (plan.schema_version == 2u && plan.max_candidate_gain == 12.0 && plan.memory_decoder_synapse_count == 4096u))
+    || ((plan.schema_version == 2u || plan.schema_version == 3u) && plan.max_candidate_gain == 12.0 && plan.memory_decoder_synapse_count == 4096u))
     && plan.target_latent_lane_start == 24u
     && plan.family_value_lane_start == 32u
-    && plan.decoder_input_stride == 36u
+    && plan.decoder_input_stride == select(36u, 54u, plan.schema_version == 3u)
+    && (plan.schema_version != 3u || (header.profile_id == 4u && input_stride == 54u))
     && input_stride >= plan.decoder_input_stride
     && input_stride <= 64u
     && plan.memory_decoder_synapse_count >= MEMORY_FAMILY_COUNT * MEMORY_CHANNEL_WIDTH
@@ -79,6 +80,16 @@ fn add_candidate_memory_context(@builtin(global_invocation_id) gid:vec3<u32>) {
       header.decoder_learning_input_offset + gid.x * input_stride + input_lane
     ] = bitcast<u32>(sample);
   }
+  // Schema3 alone binds this previously unused N2048 contextual lane.
+  // Typed world/profile/frame validation precedes upload; operation identity is
+  // checked again here. Ordinary Other/Play/Vocal rows remain exact zero.
+  var grip_sample = 0.0;
+  if (plan.schema_version == 3u && candidate.kind == 5u
+      && (context.source_counts_packed >> 16u) > 0u && context.family_confidence > 0.0
+      && ((candidate.action_id == 2201u && candidate.family == 5u)
+          || (candidate.action_id == 2202u && candidate.family == 7u))) {
+    grip_sample = samples[8u];
+  }
   let direct_weight_banks = load_weight_bank_pair_direct(brain);
   let weight_bases = direct_weight_banks.active_bases;
   let rows_per_family = plan.memory_decoder_synapse_count / MEMORY_FAMILY_COUNT;
@@ -101,12 +112,18 @@ fn add_candidate_memory_context(@builtin(global_invocation_id) gid:vec3<u32>) {
       atomicOr(&mutable_state_words[brain.diagnostic_offset + MEMORY_CONTEXT_DIAGNOSTIC_LANE], CONTRACT_INVALID_DIAGNOSTIC_BIT);
       return;
     }
-    let channel = metadata.input_lane - plan.target_latent_lane_start;
+    let is_grip_port = plan.schema_version == 3u && metadata.input_lane == 53u;
+    if (!is_grip_port && metadata.input_lane >= 36u) {
+      atomicOr(&mutable_state_words[brain.diagnostic_offset + MEMORY_CONTEXT_DIAGNOSTIC_LANE], CONTRACT_INVALID_DIAGNOSTIC_BIT);
+      return;
+    }
+    var sample = grip_sample;
+    if (!is_grip_port) { sample = samples[metadata.input_lane - plan.target_latent_lane_start]; }
     let genetic = bitcast<f32>(immutable_weight_words[brain.genetic_weight_offset + local_synapse]);
     let alpha = bitcast<f32>(immutable_weight_words[brain.alpha_offset + local_synapse]);
     let lifetime = load_state_f32(weight_bases.lifetime + local_synapse);
     let fast = load_state_f32(weight_bases.fast + local_synapse);
-    delta += samples[channel] * (genetic + lifetime + alpha * fast);
+    delta += sample * (genetic + lifetime + alpha * fast);
     if (!finite_memory_value(delta)) {
       atomicOr(&mutable_state_words[brain.diagnostic_offset + MEMORY_CONTEXT_DIAGNOSTIC_LANE], CONTRACT_INVALID_DIAGNOSTIC_BIT);
       return;
@@ -172,6 +189,9 @@ fn add_candidate_memory_context(@builtin(global_invocation_id) gid:vec3<u32>) {
   } else if (cognitive.schema_version != 0u) {
     atomicOr(&mutable_state_words[brain.diagnostic_offset + MEMORY_CONTEXT_DIAGNOSTIC_LANE], CONTRACT_INVALID_DIAGNOSTIC_BIT);
     return;
+  }
+  if (plan.schema_version == 3u) {
+    frame_payload_words[header.decoder_learning_input_offset + gid.x * input_stride + 53u] = bitcast<u32>(grip_sample);
   }
   store_state_f32(logit_index,
     base_logit

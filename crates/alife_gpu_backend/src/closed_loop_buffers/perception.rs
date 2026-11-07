@@ -42,6 +42,11 @@ impl GpuPerceptionUpload {
         if active_activation_side > 1 {
             return Err(GpuClosedLoopError::MalformedUpload);
         }
+        if (slot.sensor_profile_raw() == 4 || frame.sensor_profile().raw() == 4)
+            && slot.sensor_profile_raw() != u32::from(frame.sensor_profile().raw())
+        {
+            return Err(GpuClosedLoopError::MalformedUpload);
+        }
         frame
             .validate()
             .map_err(|_| GpuClosedLoopError::MalformedUpload)?;

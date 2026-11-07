@@ -102,6 +102,9 @@ pub fn encode_cpu_frame(
             inputs[50] = cog.gap_match.raw();
             inputs[51] = cog.prior_residual.raw();
             inputs[52] = f32::from(cog.forecast_available);
+            // This profile's operation-only memory port is not a host score.
+            // It is confidence-weighted acquired evidence read by compiled genes.
+            inputs[53] = alife_core::grip_research::operation_value_input(frame, c, m)?;
             finite(&inputs)?;
             let family = p
                 .candidate_decoder()
