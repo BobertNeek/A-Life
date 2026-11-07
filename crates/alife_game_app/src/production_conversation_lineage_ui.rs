@@ -2035,28 +2035,7 @@ pub(crate) fn handle_production_conversation_lineage_input(
         return;
     }
 
-    if composer::apply_controls(&mut state, &keyboard, pointer) {
-        key_messages.clear();
-        return;
-    }
-    let previous_input = state.input.clone();
-    let mut backspace_pressed = false;
-    let submit_enter = append_player_speech_key_text(
-        &mut state.input,
-        key_messages.read().inspect(|message| {
-            backspace_pressed |=
-                message.state == ButtonState::Pressed && message.key_code == KeyCode::Backspace;
-        }),
-        false,
-    );
-    if state.input != previous_input || backspace_pressed {
-        state.input_help_open = false;
-        state.input_error = None;
-    }
-    if (pointer == Some(composer::Control::Send)
-        || (submit_enter && speech_enter_just_pressed(&keyboard)))
-        && !state.input.trim().is_empty()
-    {
+    if edit_player_speech_input(&mut state, &keyboard, key_messages.read(), pointer) {
         if let Err(error) = send_player_speech(
             &selection,
             &creatures,
@@ -2068,6 +2047,43 @@ pub(crate) fn handle_production_conversation_lineage_input(
             state.status = format!("Player speech failed: {error}");
         }
     }
+}
+
+/// Resolve one open speech-composer batch before the runtime dispatch boundary.
+/// Pointer/AccessKit collection precedes the separately ordered keyboard stream;
+/// a captured Send freezes the collected draft and drains those raw key copies.
+/// Cancel/Escape wins even over Send. Blank Send also drains, without dispatch.
+fn edit_player_speech_input<'a>(
+    state: &mut ProductionConversationLineageUiState,
+    keyboard: &ButtonInput<KeyCode>,
+    messages: impl Iterator<Item = &'a KeyboardInput>,
+    control: Option<composer::Control>,
+) -> bool {
+    if keyboard.just_pressed(KeyCode::Escape) || control == Some(composer::Control::Cancel) {
+        composer::apply_controls(state, keyboard, control);
+        messages.for_each(drop);
+        return false;
+    }
+    if control == Some(composer::Control::Send) {
+        messages.for_each(drop);
+        return !state.input.trim().is_empty();
+    }
+    composer::apply_controls(state, keyboard, control);
+    let previous_input = state.input.clone();
+    let mut backspace_pressed = false;
+    let submit_enter = append_player_speech_key_text(
+        &mut state.input,
+        messages.inspect(|message| {
+            backspace_pressed |=
+                message.state == ButtonState::Pressed && message.key_code == KeyCode::Backspace;
+        }),
+        false,
+    );
+    if state.input != previous_input || backspace_pressed {
+        state.input_help_open = false;
+        state.input_error = None;
+    }
+    submit_enter && speech_enter_just_pressed(keyboard) && !state.input.trim().is_empty()
 }
 
 fn is_enter_key(key: KeyCode) -> bool {
