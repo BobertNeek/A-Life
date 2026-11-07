@@ -4751,16 +4751,17 @@ fn sync_v0_player_control_strip(
             text.push_str("\nFood moved to the selected ground.");
         } else if ux.last_action == "Food move cancelled" {
             text.push_str("\nFood move cancelled.");
-        } else if ux.last_action.starts_with("Gentle touch offered") {
+        } else if ux.last_action == care_dock::Action::Touch.queued_status() {
             text.push_str("\nGentle touch queued for the selected creature.");
-        } else if ux.last_action.starts_with("Praise reward offered") {
+        } else if ux.last_action == care_dock::Action::Praise.queued_status() {
             text.push_str("\nPraise queued for the selected creature.");
         } else if ux.last_action.starts_with("Plaything offered") {
             text.push_str("\nPlaything offered. The creature can investigate or ignore it.");
         }
         if ux.settings.paused
-            && (ux.last_action.starts_with("Gentle touch offered")
-                || ux.last_action.starts_with("Praise reward offered"))
+            && [care_dock::Action::Touch, care_dock::Action::Praise]
+                .into_iter()
+                .any(|action| ux.last_action == action.queued_status())
         {
             text.push_str(" Resume with Space to deliver the stimulus.");
         }

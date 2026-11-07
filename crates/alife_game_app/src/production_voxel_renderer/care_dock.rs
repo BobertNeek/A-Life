@@ -51,6 +51,12 @@ impl Action {
             Self::Speech => "Speech",
         }
     }
+    pub(super) fn queued_status(self) -> String {
+        format!(
+            "{} offered; queued stimulus, effect unconfirmed",
+            self.label()
+        )
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -477,10 +483,7 @@ pub(super) fn dispatch(
                         "Plaything offered; physical ball placed, creature response unconfirmed"
                             .into()
                     }
-                    _ => format!(
-                        "{} offered; queued stimulus, effect unconfirmed",
-                        action.label()
-                    ),
+                    _ => action.queued_status(),
                 };
                 evidence
             }

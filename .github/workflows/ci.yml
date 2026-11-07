@@ -88,6 +88,8 @@ jobs:
         run: 'cargo test --locked -p alife_game_app --features production-voxel-frontend --lib production_conversation_lineage_ui:: -- --test-threads=1 --color=never'
       - name: Run exact-head menu opening-key and modal CPU regressions
         run: 'cargo test --locked -p alife_game_app --features production-voxel-frontend --lib production_voxel_renderer::menu:: -- --test-threads=1 --color=never'
+      - name: Run exact-head queued-care help CPU regressions
+        run: 'cargo test --locked -p alife_game_app --features production-voxel-frontend --lib production_voxel_renderer::care_dock::tests::help_feedback:: -- --test-threads=1 --color=never'
       - name: Strict production frontend library and test Clippy
         run: cargo clippy --locked -p alife_game_app --features production-voxel-frontend --lib --tests -- -D warnings
 

@@ -1711,3 +1711,86 @@ fn actual_cpu_ui_focus_hit_tests_buttons_gutter_and_modal_before_world_reader() 
     assert_eq!(app.world_mut().resource_mut::<State>().take_pending(), None);
     assert_eq!(app.world().resource::<WorldReaderRuns>().0, before);
 }
+
+mod help_feedback {
+    use super::*;
+
+    fn app() -> (App, Entity) {
+        let mut app = App::new();
+        app.insert_resource(ux())
+            .add_systems(Update, sync_v0_player_control_strip);
+        let strip = app
+            .world_mut()
+            .spawn((
+                Text::default(),
+                Visibility::Hidden,
+                Node::default(),
+                V0PlayerControlStrip,
+            ))
+            .id();
+        (app, strip)
+    }
+
+    fn check_queued_care(action: Action) {
+        let (mut app, strip) = app();
+        for paused in [true, false, true] {
+            {
+                let mut ux = app
+                    .world_mut()
+                    .resource_mut::<Fvr05ProductionUxStateResource>();
+                ux.show_help = true;
+                ux.settings.paused = paused;
+                // Use the status emitted by the real successful care dispatcher.
+                ux.last_action = action.queued_status();
+            }
+            app.update();
+            let text = &app.world().get::<Text>(strip).unwrap().0;
+            assert!(text.contains("queued for the selected creature"));
+            assert_eq!(text.contains("Resume with Space"), paused);
+            assert_eq!(
+                app.world().get::<Visibility>(strip),
+                Some(&Visibility::Inherited)
+            );
+        }
+    }
+
+    #[test]
+    fn touch_help_distinguishes_queued_care_from_paused_delivery() {
+        check_queued_care(Action::Touch);
+    }
+
+    #[test]
+    fn praise_help_distinguishes_queued_care_from_paused_delivery() {
+        check_queued_care(Action::Praise);
+    }
+
+    #[test]
+    fn failed_care_has_no_delivery_hint_and_closed_help_stays_hidden() {
+        let (mut app, strip) = app();
+        {
+            let mut ux = app
+                .world_mut()
+                .resource_mut::<Fvr05ProductionUxStateResource>();
+            ux.show_help = true;
+            ux.settings.paused = true;
+            ux.last_action = Action::Praise.queued_status();
+            ux.last_error = Some("select a living creature first".into());
+        }
+        app.update();
+        let text = &app.world().get::<Text>(strip).unwrap().0;
+        assert!(!text.contains("queued for the selected creature"));
+        assert!(!text.contains("Resume with Space"));
+        {
+            let mut ux = app
+                .world_mut()
+                .resource_mut::<Fvr05ProductionUxStateResource>();
+            ux.last_error = None;
+            ux.show_help = false;
+        }
+        app.update();
+        assert_eq!(
+            app.world().get::<Visibility>(strip),
+            Some(&Visibility::Hidden)
+        );
+    }
+}
