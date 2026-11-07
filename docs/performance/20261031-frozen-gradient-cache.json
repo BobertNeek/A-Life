@@ -1,0 +1,89 @@
+{
+  "scope": "Experimental cfg(gpu-tests) same actual PPO controller; software Vulkan correctness only; no throughput or physical GPU qualification",
+  "base_commit": "f1a3cad491bb2dfb80c7d68f6b6ffe77396e9b6c",
+  "identity": {
+    "source_commit": "c545cb209f39ac5da5388567024083c46f4f6638",
+    "source_tree": "cdb71ee6c0ff9b4663f1d23ad5f49bb476c6c5da",
+    "git_status": "",
+    "profile": "test [unoptimized]; correctness only",
+    "binary": "/workspace/A-Life-frozen-gradient-cache/target/frozen-tests/debug/deps/software_ppo_controller-a44c78ab37eadc71",
+    "binary_sha256": "ae1912c73f45883759269b3ec936f3b8ff39d412c910e374f2e22dcea130fcba",
+    "source_sha256": {
+      "crates/alife_training/src/ppo.rs": "b2334d9a182cd1952b553b9c173aa8331d64da1e86f54927ed2adeef9abc7a2c",
+      "crates/alife_training/src/trainer.rs": "a72ce26cd299aad4cbbe1d386fa3b920b6b9113c4761ad49fb63c462b8be929c",
+      "crates/alife_training/tests/software_ppo_controller.rs": "bb9ea2fd13db308039cdb2eb7a8a7dd021bf0287ea8fa218e9f4f5be932b7199",
+      "crates/alife_training/shaders/foundation_train.wgsl": "7fe3c0291d972077018e10c44a0cb6b89c0a19d8aca0de6c314f4420bcbb7ee9",
+      "crates/alife_training/shaders/foundation_ppo.wgsl": "d3f7c6d819e42c6d42cc789b2adee8370736cc2831aa077b10124ab52b2134e5"
+    }
+  },
+  "execution": {
+    "command": [
+      "/workspace/A-Life-frozen-gradient-cache/target/frozen-tests/debug/deps/software_ppo_controller-a44c78ab37eadc71",
+      "--ignored",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "wall_seconds": 35.584135446999426,
+    "whole_process_maxrss_kib": 217736
+  },
+  "requested_cache_bytes": {
+    "n2048_s32768_per_window": 139272,
+    "active_two_windows": 278544,
+    "maximum_eight_windows": 1114176,
+    "prototype_cap": 2097152,
+    "meaning": "requested copy-only GPU buffer bytes, not residency or VRAM"
+  },
+  "checks": {
+    "controller_tests": "5 passed, 0 failed",
+    "strict_clippy": "passed",
+    "normal_without_gpu_tests_check": "passed"
+  },
+  "commands": {
+    "build": "cargo test -p alife_training --features gpu-tests --test software_ppo_controller --no-run",
+    "clippy": "cargo clippy -p alife_training --features gpu-tests --all-targets -- -D warnings",
+    "default_check": "cargo check -p alife_training"
+  },
+  "environment": {
+    "adapter": "llvmpipe (LLVM 19.1.7, 256 bits)",
+    "device_type": "Cpu",
+    "backend": "Vulkan",
+    "driver": "Mesa 25.0.7-2+deb13u1 (LLVM 19.1.7)",
+    "profile": "test unoptimized, not release",
+    "dedicated_target": "/workspace/A-Life-frozen-gradient-cache/target/frozen-tests",
+    "vulkan_env": "/workspace/vulkan-assay/env.sh",
+    "lp_num_threads": 2
+  },
+  "provenance_notes": [
+    "Dedicated target copied from completed CPU validation target; local training fingerprints/artifacts and controller binaries removed before build. First build visibly rebuilt core/storage/world/backend/runtime/training; only two test closure index type inference errors failed. Final source adds explicit usize indices and nonzero critic warm history. Final test target build succeeded.",
+    "No ALIFE_SOFTWARE_PPO_CAPTURE_DIR was set. Original nine-window invariants passed but no new external legacy JSON comparison was performed. New active cases compare normal/experimental exact semantic maps within the same binary after full checkpoint rewinds.",
+    "No real checkpoint, PC work, shader change, CLI/default enable, PpoConfig/schema change, or PR. Immutable bit-identical repeated loader data is an explicit contract, not verified with a content digest."
+  ],
+  "logs": {
+    "initial_forced_build": {
+      "path": "/tmp/alife-frozen-gradient-build.log",
+      "sha256": "7de8f46bb7d4d33a40bfb736f2644f985b0177ad437845032960a5d97ce246ee",
+      "text": "   Compiling alife_core v0.1.0 (/workspace/A-Life-frozen-gradient-cache/crates/alife_core)\n   Compiling alife_storage v0.1.0 (/workspace/A-Life-frozen-gradient-cache/crates/alife_storage)\n   Compiling alife_world v0.1.0 (/workspace/A-Life-frozen-gradient-cache/crates/alife_world)\n   Compiling alife_gpu_backend v0.1.0 (/workspace/A-Life-frozen-gradient-cache/crates/alife_gpu_backend)\n   Compiling alife_runtime v0.1.0 (/workspace/A-Life-frozen-gradient-cache/crates/alife_runtime)\n   Compiling alife_training v0.1.0 (/workspace/A-Life-frozen-gradient-cache/crates/alife_training)\nerror[E0282]: type annotations needed\n   --> crates/alife_training/tests/software_ppo_controller.rs:678:12\n    |\n678 |         Ok(windows[index].clone())\n    |            ^^^^^^^^^^^^^^ cannot infer type\n\nerror[E0282]: type annotations needed\n   --> crates/alife_training/tests/software_ppo_controller.rs:973:20\n    |\n973 |                 Ok(collected[index].clone())\n    |                    ^^^^^^^^^^^^^^^^ cannot infer type\n\nFor more information about this error, try `rustc --explain E0282`.\nerror: could not compile `alife_training` (test \"software_ppo_controller\") due to 2 previous errors\n"
+    },
+    "final_test_build": {
+      "path": "/tmp/alife-frozen-gradient-build-final.log",
+      "sha256": "b1a28a6de9b0e0d67162901b7df3d6b69c825eb753ecf1cd8f1fc45b42e11185",
+      "text": "   Compiling alife_training v0.1.0 (/workspace/A-Life-frozen-gradient-cache/crates/alife_training)\n    Finished `test` profile [unoptimized] target(s) in 0.69s\n  Executable tests/software_ppo_controller.rs (target/frozen-tests/debug/deps/software_ppo_controller-a44c78ab37eadc71)\n"
+    },
+    "tests": {
+      "path": "/tmp/alife-frozen-gradient-tests.log",
+      "sha256": "9cf808b8ca277fd48b03bb2d17bcb2227a19ac017bb5be3103511a62cfdd8950",
+      "text": "\nrunning 5 tests\ntest actual_controller_batches_restores_and_rejects_before_updates ... actual_controller_adapter=AdapterInfo { name: \"llvmpipe (LLVM 19.1.7, 256 bits)\", vendor: 65541, device: 0, device_type: Cpu, device_pci_bus_id: \"\", driver: \"llvmpipe\", driver_info: \"Mesa 25.0.7-2+deb13u1 (LLVM 19.1.7)\", backend: Vulkan, subgroup_min_size: 8, subgroup_max_size: 8, transient_saves_memory: false }; neurons=2048; synapses=32768; trainable_weights=1; masked_weight=25728\nsoftware full PPO value_coefficient=0: 9 unequal windows (3/4 loss rows), effective batch8, final actor optimizer_step=4, changed masked weight, exact restore, late frozen rejection and KL cancellation passed\nactual_controller_adapter=AdapterInfo { name: \"llvmpipe (LLVM 19.1.7, 256 bits)\", vendor: 65541, device: 0, device_type: Cpu, device_pci_bus_id: \"\", driver: \"llvmpipe\", driver_info: \"Mesa 25.0.7-2+deb13u1 (LLVM 19.1.7)\", backend: Vulkan, subgroup_min_size: 8, subgroup_max_size: 8, transient_saves_memory: false }; neurons=2048; synapses=32768; trainable_weights=1; masked_weight=25728\nsoftware full PPO value_coefficient=0.5: 9 unequal windows (3/4 loss rows), effective batch8, final actor optimizer_step=4, changed masked weight, exact restore, late frozen rejection and KL cancellation passed\nok\ntest frozen_gradients_defer_numeric_faults_and_preserve_loader_failures ... actual_controller_adapter=AdapterInfo { name: \"llvmpipe (LLVM 19.1.7, 256 bits)\", vendor: 65541, device: 0, device_type: Cpu, device_pci_bus_id: \"\", driver: \"llvmpipe\", driver_info: \"Mesa 25.0.7-2+deb13u1 (LLVM 19.1.7)\", backend: Vulkan, subgroup_min_size: 8, subgroup_max_size: 8, transient_saves_memory: false }; neurons=2048; synapses=32768; trainable_weights=1; masked_weight=25728\nfrozen-gradient faults: late old-probability rejection precedes earlier raw-norm overflow; valid-probability overflow control and fallible repeated loader preserve persistent bits and cancellation\nok\ntest frozen_gradients_fall_back_for_more_than_one_effective_batch ... actual_controller_adapter=AdapterInfo { name: \"llvmpipe (LLVM 19.1.7, 256 bits)\", vendor: 65541, device: 0, device_type: Cpu, device_pci_bus_id: \"\", driver: \"llvmpipe\", driver_info: \"Mesa 25.0.7-2+deb13u1 (LLVM 19.1.7)\", backend: Vulkan, subgroup_min_size: 8, subgroup_max_size: 8, transient_saves_memory: false }; neurons=2048; synapses=32768; trainable_weights=1; masked_weight=25728\nfrozen-gradient >8-window fallback matches actual original controller with no cache allocation or reuse\nok\ntest frozen_gradients_match_actual_controller_epochs_and_shared_restore ... actual_controller_adapter=AdapterInfo { name: \"llvmpipe (LLVM 19.1.7, 256 bits)\", vendor: 65541, device: 0, device_type: Cpu, device_pci_bus_id: \"\", driver: \"llvmpipe\", driver_info: \"Mesa 25.0.7-2+deb13u1 (LLVM 19.1.7)\", backend: Vulkan, subgroup_min_size: 8, subgroup_max_size: 8, transient_saves_memory: false }; neurons=2048; synapses=32768; trainable_weights=1; masked_weight=25728\nfrozen-gradient full PPO oracle: epochs=1, value_coefficient=0, loss_rows=3+4, raw_cached=2, reused=2, later_epochs_fresh, owned/shared checkpoint restore and all captured words exact\nactual_controller_adapter=AdapterInfo { name: \"llvmpipe (LLVM 19.1.7, 256 bits)\", vendor: 65541, device: 0, device_type: Cpu, device_pci_bus_id: \"\", driver: \"llvmpipe\", driver_info: \"Mesa 25.0.7-2+deb13u1 (LLVM 19.1.7)\", backend: Vulkan, subgroup_min_size: 8, subgroup_max_size: 8, transient_saves_memory: false }; neurons=2048; synapses=32768; trainable_weights=1; masked_weight=25728\nfrozen-gradient full PPO oracle: epochs=2, value_coefficient=0, loss_rows=3+4, raw_cached=2, reused=2, later_epochs_fresh, owned/shared checkpoint restore and all captured words exact\nactual_controller_adapter=AdapterInfo { name: \"llvmpipe (LLVM 19.1.7, 256 bits)\", vendor: 65541, device: 0, device_type: Cpu, device_pci_bus_id: \"\", driver: \"llvmpipe\", driver_info: \"Mesa 25.0.7-2+deb13u1 (LLVM 19.1.7)\", backend: Vulkan, subgroup_min_size: 8, subgroup_max_size: 8, transient_saves_memory: false }; neurons=2048; synapses=32768; trainable_weights=1; masked_weight=25728\nfrozen-gradient full PPO oracle: epochs=1, value_coefficient=0.5, loss_rows=3+4, raw_cached=2, reused=2, later_epochs_fresh, owned/shared checkpoint restore and all captured words exact\nactual_controller_adapter=AdapterInfo { name: \"llvmpipe (LLVM 19.1.7, 256 bits)\", vendor: 65541, device: 0, device_type: Cpu, device_pci_bus_id: \"\", driver: \"llvmpipe\", driver_info: \"Mesa 25.0.7-2+deb13u1 (LLVM 19.1.7)\", backend: Vulkan, subgroup_min_size: 8, subgroup_max_size: 8, transient_saves_memory: false }; neurons=2048; synapses=32768; trainable_weights=1; masked_weight=25728\nfrozen-gradient full PPO oracle: epochs=2, value_coefficient=0.5, loss_rows=3+4, raw_cached=2, reused=2, later_epochs_fresh, owned/shared checkpoint restore and all captured words exact\nok\ntest frozen_gradients_preserve_kl_cancellation_and_restart ... actual_controller_adapter=AdapterInfo { name: \"llvmpipe (LLVM 19.1.7, 256 bits)\", vendor: 65541, device: 0, device_type: Cpu, device_pci_bus_id: \"\", driver: \"llvmpipe\", driver_info: \"Mesa 25.0.7-2+deb13u1 (LLVM 19.1.7)\", backend: Vulkan, subgroup_min_size: 8, subgroup_max_size: 8, transient_saves_memory: false }; neurons=2048; synapses=32768; trainable_weights=1; masked_weight=25728\nfrozen-gradient KL stop leaves persistent bits unchanged; explicit begin/cancel and accepted restart match original controller\nok\n\ntest result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 35.57s\n\n"
+    },
+    "strict_clippy": {
+      "path": "/tmp/alife-frozen-gradient-clippy.log",
+      "sha256": "bf9ea191c55762fe627795789194ff3cf91c0ccccfe792ef60349db68a9f542f",
+      "text": "    Checking alife_core v0.1.0 (/workspace/A-Life-frozen-gradient-cache/crates/alife_core)\n    Checking alife_storage v0.1.0 (/workspace/A-Life-frozen-gradient-cache/crates/alife_storage)\n    Checking alife_world v0.1.0 (/workspace/A-Life-frozen-gradient-cache/crates/alife_world)\n    Checking alife_gpu_backend v0.1.0 (/workspace/A-Life-frozen-gradient-cache/crates/alife_gpu_backend)\n    Checking alife_runtime v0.1.0 (/workspace/A-Life-frozen-gradient-cache/crates/alife_runtime)\n    Checking alife_training v0.1.0 (/workspace/A-Life-frozen-gradient-cache/crates/alife_training)\n    Finished `dev` profile [unoptimized] target(s) in 17.93s\n"
+    },
+    "default_check": {
+      "path": "/tmp/alife-frozen-gradient-default-check.log",
+      "sha256": "db53f5b4aa0ee0eb094ac3e3f605c959a8ae6679724649a088501f9baf393f0e",
+      "text": "    Checking alife_core v0.1.0 (/workspace/A-Life-frozen-gradient-cache/crates/alife_core)\n    Checking alife_storage v0.1.0 (/workspace/A-Life-frozen-gradient-cache/crates/alife_storage)\n    Checking alife_gpu_backend v0.1.0 (/workspace/A-Life-frozen-gradient-cache/crates/alife_gpu_backend)\n    Checking alife_world v0.1.0 (/workspace/A-Life-frozen-gradient-cache/crates/alife_world)\n    Checking alife_runtime v0.1.0 (/workspace/A-Life-frozen-gradient-cache/crates/alife_runtime)\n    Checking alife_training v0.1.0 (/workspace/A-Life-frozen-gradient-cache/crates/alife_training)\n    Finished `dev` profile [unoptimized] target(s) in 16.41s\n"
+    }
+  }
+}
