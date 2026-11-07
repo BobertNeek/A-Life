@@ -1,6 +1,9 @@
 //! Wordless player care controls. Feedback distinguishes queued care, physical
 //! placement, and rejection; queued stimuli do not establish a creature response.
 use super::*;
+use accesskit::{Action as AccessibleAction, Role};
+use bevy::a11y::{AccessibilityNode, ActionRequest};
+use bevy::ecs::message::MessageCursor;
 use bevy::image::{CompressedImageFormats, ImageSampler, ImageType};
 use bevy::prelude::*;
 use bevy::ui::{BorderColor, BorderRadius, FocusPolicy, UiRect};
@@ -51,6 +54,15 @@ impl Action {
             Self::Speech => "Speech",
         }
     }
+    fn accessible_label(self) -> &'static str {
+        match self {
+            Self::Food => "Place food. Select ground first. E.",
+            Self::Touch => "Offer gentle touch. Select a living creature first. C.",
+            Self::Toy => "Offer a toy. Select a living creature first. J.",
+            Self::Praise => "Offer praise. Select a living creature first. K.",
+            Self::Speech => "Open speech composer. Enter.",
+        }
+    }
     pub(super) fn queued_status(self) -> String {
         format!(
             "{} offered; queued stimulus, effect unconfirmed",
@@ -77,6 +89,7 @@ pub(crate) struct State {
     release_gate: bool,
     pressed: [bool; 5],
     pub(crate) speech_opened: bool,
+    accessible_reader: MessageCursor<ActionRequest>,
     selected: Option<StableVoxelObjectRef>,
     evidence: [Evidence; 5],
 }
@@ -109,6 +122,17 @@ struct Marker(Action);
 struct ErrorMarker;
 #[derive(Resource)]
 struct Icons(BTreeMap<&'static str, Handle<Image>>);
+
+fn accessible(role: Role, label: &str) -> AccessibilityNode {
+    let mut node = accesskit::Node::new(role);
+    node.set_label(label);
+    AccessibilityNode(node)
+}
+fn decoration_accessibility() -> AccessibilityNode {
+    let mut node = accessible(Role::Image, "");
+    node.set_hidden();
+    node
+}
 
 const HEIGHT: f32 = 72.0;
 const BOTTOM: f32 = 12.0;
@@ -181,7 +205,8 @@ pub(super) fn spawn(world: &mut World) {
         .spawn((
             Name::new("Player care dock"),
             DockRoot,
-            Button,
+            Interaction::None,
+            accessible(Role::Toolbar, "Player care"),
             Node {
                 position_type: PositionType::Absolute,
                 width: Val::Px(WIDTH),
@@ -202,10 +227,16 @@ pub(super) fn spawn(world: &mut World) {
         ))
         .id();
     for action in ACTIONS {
+        let mut node = accessible(Role::Button, action.accessible_label());
+        node.add_action(AccessibleAction::Click);
         let button = world
             .spawn((
                 Name::new(format!("Player {}", action.icon())),
-                Button,
+                // Explicit Interaction preserves wordless labels: Bevy's
+                // automatic Button label is derived from child Text only.
+                Interaction::None,
+                FocusPolicy::Block,
+                node,
                 action,
                 Node {
                     width: Val::Px(48.0),
@@ -224,6 +255,7 @@ pub(super) fn spawn(world: &mut World) {
             .id();
         world.spawn((
             Glyph(action),
+            decoration_accessibility(),
             ImageNode::new(icons[action.icon()].clone()),
             Node {
                 width: Val::Px(32.0),
@@ -236,6 +268,7 @@ pub(super) fn spawn(world: &mut World) {
         ));
         world.spawn((
             Marker(action),
+            decoration_accessibility(),
             ImageNode::new(icons["unavailable"].clone()),
             Node {
                 position_type: PositionType::Absolute,
@@ -253,6 +286,7 @@ pub(super) fn spawn(world: &mut World) {
     }
     world.spawn((
         ErrorMarker,
+        decoration_accessibility(),
         ImageNode::new(icons["failed"].clone()),
         Node {
             position_type: PositionType::Absolute,
@@ -300,7 +334,37 @@ pub(crate) fn collect_input(world: &mut World) {
     let click = ACTIONS.into_iter().find(|a| {
         left_down && !state.release_gate && pressed[a.index()] && !state.pressed[a.index()]
     });
-    let blocked = menu_blocked || conversation_blocked || debug;
+    let focused = world
+        .query_filtered::<&Window, With<PrimaryWindow>>()
+        .iter(world)
+        .next()
+        .is_none_or(|window| window.focused);
+    let blocked = menu_blocked || conversation_blocked || debug || !focused;
+    // Drain even blocked/unknown requests, so a stale activation cannot become
+    // care after returning from a menu, composer, debug view, or focus loss.
+    let controls = world
+        .query::<(Entity, &Action)>()
+        .iter(world)
+        .map(|(entity, action)| (entity.to_bits(), *action))
+        .collect::<Vec<_>>();
+    let accessible_click = world.resource_scope(|world, mut state: Mut<State>| {
+        let mut action = None;
+        if let Some(messages) = world.get_resource::<bevy::ecs::message::Messages<ActionRequest>>()
+        {
+            for request in state.accessible_reader.read(messages) {
+                if !blocked && request.0.action == AccessibleAction::Click {
+                    action = controls
+                        .iter()
+                        .find_map(|(entity, action)| {
+                            (*entity == request.0.target.0).then_some(*action)
+                        })
+                        .or(action);
+                }
+            }
+        }
+        action
+    });
+    let click = click.or(accessible_click);
     {
         let mut state = world.resource_mut::<State>();
         state.speech_opened = false;
@@ -308,17 +372,18 @@ pub(crate) fn collect_input(world: &mut World) {
         if !left_down {
             state.release_gate = false;
         }
-        if !blocked && click.is_some() {
+        if !blocked && click.is_some() && left_down {
             state.release_gate = true;
         }
-        state.captured = (!blocked && pointer) || state.release_gate;
+        state.captured =
+            (!blocked && (pointer || accessible_click.is_some())) || state.release_gate;
         if !blocked {
             state.pending = click.filter(|a| *a != Action::Speech);
         } else {
             state.pending = None;
         }
     }
-    if !blocked && (pointer || world.resource::<State>().release_gate) {
+    if !blocked && (pointer || click.is_some() || world.resource::<State>().release_gate) {
         god_hand::cancel_for_menu(world);
     }
     if !blocked && click == Some(Action::Speech) {
@@ -563,11 +628,16 @@ pub(super) fn sync(world: &mut World) {
         .map_or(Vec2::new(1280.0, 720.0), |w| {
             Vec2::new(w.width(), w.height())
         });
-    for (mut node, mut visible) in world
-        .query_filtered::<(&mut Node, &mut Visibility), With<DockRoot>>()
+    for (mut node, mut visible, mut accessible) in world
+        .query_filtered::<(&mut Node, &mut Visibility, &mut AccessibilityNode), With<DockRoot>>()
         .iter_mut(world)
     {
         node.left = Val::Px(((size.x - WIDTH) / 2.0).max(0.0));
+        if debug {
+            accessible.set_hidden();
+        } else {
+            accessible.clear_hidden();
+        }
         *visible = if debug {
             Visibility::Hidden
         } else {

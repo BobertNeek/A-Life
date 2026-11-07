@@ -1956,3 +1956,236 @@ mod help_feedback {
         );
     }
 }
+
+mod accessible_input {
+    use super::*;
+    use accesskit::{Action as AccessibleAction, ActionRequest as KitActionRequest, NodeId, Role};
+    use bevy::a11y::{AccessibilityNode, ActionRequest};
+
+    fn request(app: &mut App, target: Entity, action: AccessibleAction) {
+        app.world_mut()
+            .resource_mut::<Messages<ActionRequest>>()
+            .write(ActionRequest(KitActionRequest {
+                action,
+                target: NodeId(target.to_bits()),
+                data: None,
+            }));
+    }
+
+    fn app() -> App {
+        let mut app = input_app();
+        app.init_resource::<Messages<ActionRequest>>();
+        app.world_mut().spawn((Window::default(), PrimaryWindow));
+        app
+    }
+
+    #[test]
+    fn wordless_care_controls_have_distinct_accessible_names_and_click_actions() {
+        let mut app = app();
+        app.add_plugins((
+            bevy::app::TaskPoolPlugin::default(),
+            bevy::asset::AssetPlugin::default(),
+            bevy::text::TextPlugin,
+            bevy::ui::UiPlugin,
+        ))
+        .init_resource::<Assets<bevy::image::TextureAtlasLayout>>()
+        .init_resource::<bevy::input::touch::Touches>()
+        .init_resource::<bevy::picking::hover::HoverMap>()
+        .init_resource::<bevy::picking::events::PointerState>()
+        .init_resource::<Messages<bevy::picking::pointer::PointerInput>>()
+        .init_resource::<Messages<bevy::picking::backend::PointerHits>>();
+        // Run Bevy's actual automatic accessibility pass, not just spawn-time
+        // metadata: icon controls must retain their names after UI updates.
+        app.update();
+        app.update();
+        let mut labels = std::collections::BTreeSet::new();
+        for action in ACTIONS {
+            let entity = action_entity(app.world_mut(), action);
+            let node = app.world().get::<AccessibilityNode>(entity).unwrap();
+            assert_eq!(node.role(), Role::Button);
+            assert!(node.label().is_some_and(|label| !label.is_empty()));
+            assert!(labels.insert(node.label().unwrap().to_owned()));
+            assert!(node.supports_action(AccessibleAction::Click));
+            assert!(
+                app.world().get::<Button>(entity).is_none(),
+                "Bevy's text-only Button label pass must not erase the icon label"
+            );
+        }
+        for entity in app
+            .world_mut()
+            .query_filtered::<Entity, Or<(With<Glyph>, With<Marker>, With<ErrorMarker>)>>()
+            .iter(app.world())
+        {
+            assert!(app
+                .world()
+                .get::<AccessibilityNode>(entity)
+                .unwrap()
+                .is_hidden());
+        }
+    }
+
+    #[test]
+    fn accessible_care_click_uses_existing_queue_once_and_captures_the_frame() {
+        for action in [Action::Food, Action::Touch, Action::Toy, Action::Praise] {
+            let mut app = app();
+            let entity = action_entity(app.world_mut(), action);
+            request(&mut app, entity, AccessibleAction::Click);
+            app.update();
+            assert_eq!(
+                app.world_mut().resource_mut::<State>().take_pending(),
+                Some(action)
+            );
+            assert!(app.world().resource::<State>().captured);
+            assert_eq!(app.world().resource::<WorldReaderRuns>().0, 0);
+            assert!(
+                !app.world().resource::<State>().release_gate,
+                "an accessible click must not synthesize a held mouse gesture"
+            );
+            app.update();
+            assert_eq!(app.world_mut().resource_mut::<State>().take_pending(), None);
+            assert!(!app.world().resource::<State>().captured);
+            assert_eq!(app.world().resource::<WorldReaderRuns>().0, 1);
+        }
+    }
+
+    #[test]
+    fn same_frame_accessible_pointer_and_keyboard_care_still_requests_one_dispatch() {
+        let mut app = app();
+        let entity = action_entity(app.world_mut(), Action::Touch);
+        request(&mut app, entity, AccessibleAction::Click);
+        request(&mut app, entity, AccessibleAction::Click);
+        app.world_mut()
+            .entity_mut(entity)
+            .insert(Interaction::Pressed);
+        app.world_mut()
+            .resource_mut::<ButtonInput<MouseButton>>()
+            .press(MouseButton::Left);
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(Action::Touch.key());
+        app.update();
+        let pointer = app.world_mut().resource_mut::<State>().take_pending();
+        let keyboard = app.world().resource::<ButtonInput<KeyCode>>();
+        assert_eq!(
+            ACTIONS
+                .into_iter()
+                .filter(|action| requested(*action, pointer, keyboard, false))
+                .count(),
+            1
+        );
+        assert_eq!(app.world_mut().resource_mut::<State>().take_pending(), None);
+    }
+
+    #[cfg(feature = "gpu-runtime")]
+    #[test]
+    fn composer_capture_discards_accessible_care_until_the_composer_closes() {
+        let mut app = app();
+        let mut conversation = conversation_state();
+        conversation.prepare_recorded_speech_capture();
+        app.insert_resource(conversation);
+        let entity = action_entity(app.world_mut(), Action::Praise);
+        request(&mut app, entity, AccessibleAction::Click);
+        app.update();
+        assert_eq!(app.world_mut().resource_mut::<State>().take_pending(), None);
+        app.world_mut()
+            .resource_mut::<ProductionConversationLineageUiState>()
+            .clear_recorded_capture();
+        app.update();
+        assert_eq!(app.world_mut().resource_mut::<State>().take_pending(), None);
+        request(&mut app, entity, AccessibleAction::Click);
+        app.update();
+        assert_eq!(
+            app.world_mut().resource_mut::<State>().take_pending(),
+            Some(Action::Praise)
+        );
+    }
+
+    #[test]
+    fn accessible_speech_click_uses_the_existing_composer_opening_path() {
+        let mut app = app();
+        #[cfg(feature = "gpu-runtime")]
+        app.insert_resource(conversation_state());
+        let entity = action_entity(app.world_mut(), Action::Speech);
+        request(&mut app, entity, AccessibleAction::Click);
+        app.update();
+        assert_eq!(app.world_mut().resource_mut::<State>().take_pending(), None);
+        assert!(app.world().resource::<State>().captured);
+        #[cfg(feature = "gpu-runtime")]
+        {
+            assert!(app.world().resource::<State>().speech_opened);
+            assert!(app
+                .world()
+                .resource::<ProductionConversationLineageUiState>()
+                .blocks_world_shortcuts());
+        }
+        #[cfg(not(feature = "gpu-runtime"))]
+        assert_eq!(
+            app.world().resource::<State>().evidence[Action::Speech.index()],
+            Evidence::Unavailable
+        );
+    }
+
+    #[test]
+    fn blocked_accessible_clicks_are_drained_and_unknown_targets_never_queue_care() {
+        for blocked in ["debug", "menu", "focus"] {
+            let mut app = app();
+            let entity = action_entity(app.world_mut(), Action::Touch);
+            match blocked {
+                "debug" => {
+                    app.world_mut()
+                        .resource_mut::<Fvr05ProductionUxStateResource>()
+                        .debug_mode = true
+                }
+                "menu" => {
+                    app.world_mut()
+                        .resource_mut::<ButtonInput<KeyCode>>()
+                        .press(KeyCode::Escape);
+                    menu::handle_input(app.world_mut());
+                    app.world_mut()
+                        .resource_mut::<ButtonInput<KeyCode>>()
+                        .reset_all();
+                }
+                _ => {
+                    app.world_mut()
+                        .query_filtered::<&mut Window, With<PrimaryWindow>>()
+                        .single_mut(app.world_mut())
+                        .unwrap()
+                        .focused = false;
+                }
+            }
+            request(&mut app, entity, AccessibleAction::Click);
+            app.update();
+            assert_eq!(
+                app.world_mut().resource_mut::<State>().take_pending(),
+                None,
+                "{blocked}"
+            );
+            app.world_mut()
+                .resource_mut::<Fvr05ProductionUxStateResource>()
+                .debug_mode = false;
+            app.insert_resource(menu::MenuState::default());
+            app.world_mut()
+                .query_filtered::<&mut Window, With<PrimaryWindow>>()
+                .single_mut(app.world_mut())
+                .unwrap()
+                .focused = true;
+            app.update();
+            assert_eq!(
+                app.world_mut().resource_mut::<State>().take_pending(),
+                None,
+                "blocked requests must not be replayed after {blocked}"
+            );
+            let unknown = app.world_mut().spawn_empty().id();
+            request(&mut app, unknown, AccessibleAction::Click);
+            request(&mut app, entity, AccessibleAction::Focus);
+            app.update();
+            assert_eq!(app.world_mut().resource_mut::<State>().take_pending(), None);
+            request(&mut app, entity, AccessibleAction::Click);
+            app.update();
+            assert_eq!(
+                app.world_mut().resource_mut::<State>().take_pending(),
+                Some(Action::Touch)
+            );
+        }
+    }
+}
