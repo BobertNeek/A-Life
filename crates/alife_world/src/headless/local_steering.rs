@@ -65,13 +65,13 @@ impl HeadlessWorld {
 
     /// Only nearest physical clearance ranges leave this bounded sensor query.
     /// Optical transparency does not turn a solid surface into free space.
-    fn local_clearance_ranges(&self, observer: &WorldObject, bearing: f32) -> [f32; 9] {
-        let body_radius = self
-            .terrain
-            .as_ref()
-            .map_or(crate::LocomotionLimits::default().body_radius, |terrain| {
-                terrain.limits().body_radius
-            });
+    fn local_clearance_ranges(
+        &self,
+        observer: &WorldObject,
+        bearing: f32,
+        candidates: &[Vec3f; 9],
+    ) -> [f32; 9] {
+        let body_radius = self.locomotion_body_radius();
         // Conservative swept envelope while carrying. Ordinary grip-arc and
         // terrain checks still validate the one selected step before mutation.
         let radius = self
@@ -100,11 +100,28 @@ impl HeadlessWorld {
                 .values()
                 .filter(|object| object.kind == WorldObjectKind::Obstacle && !object.consumed)
             {
+                match sphere_start_escape(
+                    observer.position,
+                    [
+                        f64::from(candidates[index].x) - f64::from(observer.position.x),
+                        f64::from(candidates[index].y) - f64::from(observer.position.y),
+                        f64::from(candidates[index].z) - f64::from(observer.position.z),
+                    ],
+                    object.position,
+                    object.radius + radius,
+                ) {
+                    Some(true) => continue,
+                    Some(false) => {
+                        nearest = 0.0;
+                        continue;
+                    }
+                    None => {}
+                }
                 if let Some(hit) = sight_sphere_hit(
                     observer.position,
                     direction,
                     object.position,
-                    object.radius.max(HEADLESS_CONTACT_RADIUS) + radius,
+                    object.radius + radius,
                     nearest,
                 ) {
                     nearest = nearest.min(hit);
@@ -145,26 +162,23 @@ impl HeadlessWorld {
             return Ok(Some((original, false)));
         }
         let bearing = relative.z.atan2(relative.x);
-        let ranges = self.local_clearance_ranges(observer, bearing);
+        let mut candidates = local_step_candidates(observer.position, original, bearing, step);
+        if let Some(terrain) = &self.terrain {
+            for candidate in &mut candidates {
+                // Match resolve_move's endpoint projection without searching or
+                // validating nine routes. The sole selected step still receives
+                // full terrain support, slope, water and sweep validation.
+                if let Some(height) = terrain.surface().height(candidate.x, candidate.z) {
+                    candidate.y = height;
+                }
+            }
+        }
+        let ranges = self.local_clearance_ranges(observer, bearing, &candidates);
         let exhausted = observer.local_steering.is_some_and(|state| {
             state.target == target && state.non_progress_steps >= MAX_NON_PROGRESS_STEPS
         });
-        Ok(select_clearance_step(ranges, step, exhausted).map(|index| {
-            if index == 0 {
-                // Keep step_toward's exact endpoint snap. Reconstructing an
-                // unobstructed step through trigonometry can move it by an ULP.
-                return (original, false);
-            }
-            let yaw = bearing + STEERING_ANGLES[index].to_radians();
-            (
-                Vec3f::new(
-                    observer.position.x + yaw.cos() * step,
-                    original.y,
-                    observer.position.z + yaw.sin() * step,
-                ),
-                true,
-            )
-        }))
+        Ok(select_clearance_step(ranges, step, exhausted)
+            .map(|index| (candidates[index], index != 0)))
     }
 
     pub(super) fn commit_local_steering(
@@ -217,6 +231,24 @@ impl HeadlessWorld {
             Vec::new(),
         )
     }
+}
+
+/// Construct once for both clearance and execution. In particular, preserve
+/// step_toward's exact original endpoint: rebuilding its direction with trig
+/// can add an inward lateral component to an otherwise perpendicular escape.
+fn local_step_candidates(start: Vec3f, original: Vec3f, bearing: f32, step: f32) -> [Vec3f; 9] {
+    std::array::from_fn(|index| {
+        if index == 0 {
+            original
+        } else {
+            let yaw = bearing + STEERING_ANGLES[index].to_radians();
+            Vec3f::new(
+                start.x + yaw.cos() * step,
+                original.y,
+                start.z + yaw.sin() * step,
+            )
+        }
+    })
 }
 
 /// Pure bounded actuator choice. It cannot query geometry, target objects,
@@ -844,5 +876,56 @@ mod tests {
                 .local_steering,
             Some(state)
         );
+    }
+}
+
+#[cfg(test)]
+mod body_radius_tests {
+    use super::*;
+
+    #[test]
+    fn unladen_clearance_uses_authored_radius_and_shared_body_limit() {
+        for (obstacle_radius, body_radius) in [(0.25, 0.0), (0.25, 0.2), (0.75, 0.5), (1.0, 0.8)] {
+            let mut world = HeadlessScenarioBuilder::new(702)
+                .agent("actor", OrganismId(1), Vec3f::ZERO)
+                .obstacle("solid", Vec3f::new(1.0, 0.0, 0.0), obstacle_radius)
+                .build()
+                .unwrap();
+            world.terrain = Some(
+                crate::WorldTerrain::new(
+                    crate::TerrainData {
+                        width: 3,
+                        depth: 3,
+                        origin_x: -4.0,
+                        origin_z: -4.0,
+                        spacing: 4.0,
+                        heights: vec![0.0; 9],
+                        obstacles: vec![],
+                        water_level: None,
+                    },
+                    crate::LocomotionLimits {
+                        body_radius,
+                        ..Default::default()
+                    },
+                )
+                .unwrap(),
+            );
+            let candidates =
+                local_step_candidates(Vec3f::ZERO, Vec3f::new(MOVE_STEP, 0.0, 0.0), 0.0, MOVE_STEP);
+            let range = world.local_clearance_ranges(
+                world.agent_for(OrganismId(1)).unwrap(),
+                0.0,
+                &candidates,
+            )[0];
+            let entry = motion_sphere_entry(
+                Vec3f::ZERO,
+                Vec3f::new(LOCAL_HORIZON, 0.0, 0.0),
+                Vec3f::new(1.0, 0.0, 0.0),
+                obstacle_radius + body_radius,
+            )
+            .unwrap();
+            assert!((f64::from(range) - entry * f64::from(LOCAL_HORIZON)).abs() < 0.000001);
+            assert!((range - (1.0 - obstacle_radius - body_radius).max(0.0)).abs() < 0.000001);
+        }
     }
 }

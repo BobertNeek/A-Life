@@ -90,14 +90,29 @@ impl HeadlessWorld {
         // Keep initial pickup and unchanged projected ground available for
         // recovery. Check only the destination, allowing carrying across rocks.
         if !initial_pickup && ground != hold.last_ground {
-            if self
-                .objects
-                .values()
-                .any(|object| object.blocks_position(ground))
-            {
+            let object = self.entity(id).ok_or(ScaffoldContractError::InvalidId)?;
+            let blocked = if object.kind == WorldObjectKind::Agent {
+                // Air carrying is endpoint-only. An old save/editor overlap may
+                // be rescued without deepening it or creating another overlap.
+                // Do not use the escape-aware motion query for static placement.
+                let body_radius = self.locomotion_body_radius();
+                self.objects.values().any(|obstacle| {
+                    if obstacle.kind != WorldObjectKind::Obstacle || obstacle.consumed {
+                        return false;
+                    }
+                    let radius_squared = f64::from(obstacle.radius + body_radius).powi(2);
+                    let previous = sphere_distance_squared(hold.last_ground, obstacle.position);
+                    let next = sphere_distance_squared(ground, obstacle.position);
+                    next <= radius_squared && (previous > radius_squared || next < previous)
+                })
+            } else {
+                self.objects
+                    .values()
+                    .any(|obstacle| obstacle.blocks_position(ground))
+            };
+            if blocked {
                 return Err(ScaffoldContractError::InvalidId);
             }
-            let object = self.entity(id).ok_or(ScaffoldContractError::InvalidId)?;
             if let Some(owner) = object.organism_id {
                 let carries = self
                     .objects

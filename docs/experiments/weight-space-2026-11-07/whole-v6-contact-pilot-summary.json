@@ -1,0 +1,266 @@
+{
+  "first_frame_weight_equation_max_residual": null,
+  "backend": "native-cpu",
+  "experimental": true,
+  "promoted": false,
+  "ticks": 120,
+  "mode": "contact",
+  "gain": -8.0,
+  "receipt_sha256": "2ccaa41df654f34578faf2ccf5718bb332bcee4e635d684a8ed211aec9b72480",
+  "groups": [
+    {
+      "scene": "obstacle-food",
+      "arm": "whole-care",
+      "n": 1,
+      "consumed": 1,
+      "mean_final_energy": 0.5176501274108887,
+      "mean_ingest_selected_ticks": 10.0,
+      "executed_ingestions": 1,
+      "max_final_injury": 0.0,
+      "trials": [
+        {
+          "seed": 2026110901,
+          "initial_biological_development": {
+            "age_ticks": 0,
+            "biochemical_expression": 0.0,
+            "critical_period_active": false,
+            "critical_period_plasticity_bias": 0.0,
+            "last_update_tick": 0,
+            "maturation": 0.0,
+            "migration_ready": false,
+            "puberty_reached": false,
+            "sleep_maturation_ready": false
+          },
+          "initial_homeostasis": {
+            "drives": {
+              "brain_atp": 0.75,
+              "curiosity": 0.0,
+              "extension": [
+                0.0,
+                0.0
+              ],
+              "fatigue": 0.0,
+              "fear": 0.0,
+              "hunger": 0.0,
+              "loneliness": 0.0,
+              "pain": 0.0,
+              "reproductive_drive": 0.0,
+              "temperature_stress": 0.0
+            },
+            "hormones": {
+              "acetylcholine": 0.0,
+              "adrenaline": 0.0,
+              "cortisol": 0.0,
+              "developmental_hormone": 0.0,
+              "dopamine": 0.0,
+              "extension": [
+                0.0,
+                0.0
+              ],
+              "learning_modulator": 0.0,
+              "oxytocin": 0.0,
+              "serotonin": 0.0,
+              "sleep_pressure": 0.0
+            },
+            "schema_version": 3,
+            "tick": 0
+          },
+          "initial_body_energy": 0.4000000059604645,
+          "preparation_ticks": 0,
+          "encoded_hunger_plus_0_1_logit_delta": [
+            0.0,
+            0.0
+          ],
+          "encoded_hunger_3_frozen_frames_delta": [
+            0.09110069274902344,
+            0.010442495346069336
+          ],
+          "peak_effective_genetic_lesion_weight": null,
+          "final_position": {
+            "x": 1.6529521942138672,
+            "y": 0.0,
+            "z": 0.892038106918335
+          },
+          "final_target_carrier": null,
+          "mean_measured_weighted_work": 58793.291666666664,
+          "active_tiles": 137,
+          "candidate_digest": [
+            104,
+            161,
+            34,
+            251,
+            133,
+            56,
+            73,
+            148,
+            210,
+            207,
+            177,
+            83,
+            111,
+            71,
+            252,
+            1,
+            103,
+            168,
+            99,
+            157,
+            64,
+            254,
+            22,
+            104,
+            191,
+            38,
+            102,
+            160,
+            149,
+            161,
+            215,
+            34
+          ],
+          "consumed": true,
+          "final_energy": 0.5176501274108887,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 10,
+          "ingest_executed_ticks": 1,
+          "first_ingest_logits": [
+            3.4429781436920166,
+            0.39465606212615967
+          ],
+          "first_tastes": [
+            0.1576470583677292,
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.0425079986453056
+        }
+      ]
+    },
+    {
+      "scene": "obstacle-food",
+      "arm": "whole-care-v5",
+      "n": 1,
+      "consumed": 0,
+      "mean_final_energy": 0.3800733983516693,
+      "mean_ingest_selected_ticks": 60.0,
+      "executed_ingestions": 0,
+      "max_final_injury": 0.0,
+      "trials": [
+        {
+          "seed": 2026110901,
+          "initial_biological_development": {
+            "age_ticks": 0,
+            "biochemical_expression": 0.0,
+            "critical_period_active": false,
+            "critical_period_plasticity_bias": 0.0,
+            "last_update_tick": 0,
+            "maturation": 0.0,
+            "migration_ready": false,
+            "puberty_reached": false,
+            "sleep_maturation_ready": false
+          },
+          "initial_homeostasis": {
+            "drives": {
+              "brain_atp": 0.75,
+              "curiosity": 0.0,
+              "extension": [
+                0.0,
+                0.0
+              ],
+              "fatigue": 0.0,
+              "fear": 0.0,
+              "hunger": 0.0,
+              "loneliness": 0.0,
+              "pain": 0.0,
+              "reproductive_drive": 0.0,
+              "temperature_stress": 0.0
+            },
+            "hormones": {
+              "acetylcholine": 0.0,
+              "adrenaline": 0.0,
+              "cortisol": 0.0,
+              "developmental_hormone": 0.0,
+              "dopamine": 0.0,
+              "extension": [
+                0.0,
+                0.0
+              ],
+              "learning_modulator": 0.0,
+              "oxytocin": 0.0,
+              "serotonin": 0.0,
+              "sleep_pressure": 0.0
+            },
+            "schema_version": 3,
+            "tick": 0
+          },
+          "initial_body_energy": 0.4000000059604645,
+          "preparation_ticks": 0,
+          "encoded_hunger_plus_0_1_logit_delta": [
+            0.0,
+            0.0
+          ],
+          "encoded_hunger_3_frozen_frames_delta": [
+            0.09110069274902344,
+            0.010442495346069336
+          ],
+          "peak_effective_genetic_lesion_weight": null,
+          "final_position": {
+            "x": 2.1270852088928223,
+            "y": 0.0,
+            "z": -0.30179905891418457
+          },
+          "final_target_carrier": null,
+          "mean_measured_weighted_work": 58010.075,
+          "active_tiles": 137,
+          "candidate_digest": [
+            219,
+            95,
+            155,
+            1,
+            43,
+            241,
+            50,
+            175,
+            53,
+            218,
+            141,
+            237,
+            159,
+            4,
+            39,
+            9,
+            114,
+            77,
+            33,
+            216,
+            25,
+            17,
+            77,
+            46,
+            85,
+            180,
+            124,
+            51,
+            36,
+            81,
+            147,
+            164
+          ],
+          "consumed": false,
+          "final_energy": 0.3800733983516693,
+          "final_injury": 0.0,
+          "ingest_selected_ticks": 60,
+          "ingest_executed_ticks": 0,
+          "first_ingest_logits": [
+            3.4429781436920166,
+            0.39465606212615967
+          ],
+          "first_tastes": [
+            0.1576470583677292,
+            0.8500000238418579
+          ],
+          "initial_ingest_motor_activation_sum": -2.0425079986453056
+        }
+      ]
+    }
+  ]
+}

@@ -254,6 +254,7 @@ impl BrainPhenotype {
             PersistentAddressMap::compile(&self.lobe_layout, &self.projections, &self.synapses)?;
         (self.route_abi_digest, self.plasticity_abi_digest) = compute_abi_digests(
             &BrainCapacityClass::n512(),
+            &self.foundation_abi_selection,
             &self.projections,
             &self.synapses,
         );
@@ -491,7 +492,7 @@ impl BrainPhenotype {
         let persistent_address_map =
             PersistentAddressMap::compile(&lobe_layout, &projections, &synapses)?;
         let (route_abi_digest, plasticity_abi_digest) =
-            compute_abi_digests(capacity, &projections, &synapses);
+            compute_abi_digests(capacity, inputs.foundation_abi(), &projections, &synapses);
         let foundation_abi_selection = inputs.foundation_abi_selection().clone();
         let cognitive_channel_plan = inputs
             .cognitive_channel_extension()
@@ -684,6 +685,13 @@ impl BrainPhenotype {
         capacity.validate_contract()?;
         self.foundation_abi_selection
             .validate_against(capacity, self.sensor_profile)?;
+        if self
+            .foundation_abi_selection
+            .n2048_experimental_graph()
+            .is_some()
+        {
+            super::topology_compile::validate_n2048_experimental_coordinates(self, capacity)?;
+        }
         self.language_codebook.validate_contract()?;
         let execution = capacity.execution();
         if self.schema_version != PHENOTYPE_SCHEMA_VERSION
@@ -765,28 +773,28 @@ impl BrainPhenotype {
                             projection.target_lobe().raw(),
                         )) =>
                 {
-                    return Err(ScaffoldContractError::PhenotypeCompile)
+                    return Err(ScaffoldContractError::PhenotypeCompile);
                 }
                 ProjectionKind::ActionAndSpeechDecoder
                     if projection.source_lobe() != crate::LobeKind::ActionPlanning
                         || projection.target_lobe() != crate::LobeKind::ActionPlanning
                         || projection.projection_type() != crate::ProjectionType::MotorProposal =>
                 {
-                    return Err(ScaffoldContractError::PhenotypeCompile)
+                    return Err(ScaffoldContractError::PhenotypeCompile);
                 }
                 ProjectionKind::MemoryDecoder
                     if projection.source_lobe() != crate::LobeKind::MemoryInterface
                         || projection.target_lobe() != crate::LobeKind::TemporalPredictive
                         || projection.projection_type() != crate::ProjectionType::Feedback =>
                 {
-                    return Err(ScaffoldContractError::PhenotypeCompile)
+                    return Err(ScaffoldContractError::PhenotypeCompile);
                 }
                 ProjectionKind::CognitiveDecoder
                     if projection.source_lobe() != crate::LobeKind::MemoryInterface
                         || projection.target_lobe() != crate::LobeKind::TemporalPredictive
                         || projection.projection_type() != crate::ProjectionType::Feedback =>
                 {
-                    return Err(ScaffoldContractError::PhenotypeCompile)
+                    return Err(ScaffoldContractError::PhenotypeCompile);
                 }
                 _ => {}
             }
@@ -804,13 +812,13 @@ impl BrainPhenotype {
                 }
                 match projection.projection_type() {
                     crate::ProjectionType::LateralInhibition if synapse.genetic_weight() >= 0.0 => {
-                        return Err(ScaffoldContractError::PhenotypeCompile)
+                        return Err(ScaffoldContractError::PhenotypeCompile);
                     }
                     crate::ProjectionType::Homeostatic | crate::ProjectionType::MotorProposal
                         if synapse.kind() == CompiledSynapseKind::Recurrent
                             && synapse.genetic_weight() < 0.0 =>
                     {
-                        return Err(ScaffoldContractError::PhenotypeCompile)
+                        return Err(ScaffoldContractError::PhenotypeCompile);
                     }
                     _ => {}
                 }
@@ -935,8 +943,12 @@ impl BrainPhenotype {
             }
             _ => false,
         };
-        let (route_abi_digest, plasticity_abi_digest) =
-            compute_abi_digests(capacity, &self.projections, &self.synapses);
+        let (route_abi_digest, plasticity_abi_digest) = compute_abi_digests(
+            capacity,
+            &self.foundation_abi_selection,
+            &self.projections,
+            &self.synapses,
+        );
         let plasticity_plan_digest = super::learning::compute_plasticity_plan_digest(
             &self.plasticity_receptors,
             &self.replay_capture_plan,

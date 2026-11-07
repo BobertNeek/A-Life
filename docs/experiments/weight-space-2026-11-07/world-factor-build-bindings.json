@@ -1,0 +1,15 @@
+{
+  "base_commit": "f8f96cece93360dd775ee215c0fb065c819a65dc",
+  "world_owner_commit": "97a8226af99dc92b16001db301b7881c38bb47e3",
+  "world_patch_sha256": "587fd6a7fdaa996c1defb85299514d18fef19a6f084b38ccfbdd8cb83c73e731",
+  "world_sources": {
+    "crates/alife_world/src/headless.rs": "d88ce8b701314e45f5f51d3576deface5f56c682266dc7839ee611ff1f9fe24f",
+    "crates/alife_world/src/headless/hands.rs": "013dc8fad8edf672c8e895b81200e0b62837b99387763293e6c7a01671681541"
+  },
+  "harness_sha256": "2c239fe3a6f14accd58976af371f4aa4564b8e76ce57c6dfe4f57d02c8e906a5",
+  "old_world_executable_sha256": "626ec4aa91b317f94cc4d15eea2ca23b473bc0f9297f7492d7d9b8345478e7df",
+  "new_world_executable_sha256": "dd6e3edf0b944011f1e9ed9a93fa5ffb8210ed91f0a5fcf276470f68d6cf7b67",
+  "other_semantic_source_changes": false,
+  "published_world_pr": "https://github.com/BobertNeek/A-Life/pull/297",
+  "published_world_head": "7074833564c8f7bc081fb5adfec58f79363db382"
+}

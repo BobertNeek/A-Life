@@ -31,6 +31,7 @@ pub mod ids;
 pub mod language;
 pub mod learning;
 mod legacy_nano512_compatibility;
+mod n2048_experimental_graph;
 mod nano512_readout_candidate;
 pub use cognitive_channel::{
     CognitiveChannelExtensionV1, CognitiveChannelPlanV1,
@@ -45,6 +46,7 @@ pub use factorized_selection::{
     normalized_motor_bundle_digest, JointActionSelectionV1, VOCAL_CHANNEL_PAYLOAD_MAGIC_V1,
 };
 pub use genome::ActionCandidateCreditProfileV1;
+pub use n2048_experimental_graph::N2048ExperimentalGraphV1;
 pub use nano512_readout_candidate::{Nano512ActionCreditCandidateV2, Nano512ReadoutCandidateV1};
 pub mod lobe;
 pub mod math;

@@ -1,0 +1,140 @@
+//! Disposable exploratory direct-weight probe. CPU only; never reads a life.
+use alife_core::*;
+use alife_runtime::canonical_preparation::foundation_construction_development;
+use alife_training::{cpu::*, AdamWConfig, StageTrainableMask, TrainingSequence};
+use alife_world::*;
+use serde_json::json;
+use std::error::Error;
+type Result<T> = std::result::Result<T, Box<dyn Error>>;
+
+fn source(seed: u64) -> Result<(CanonicalNewGameConfig, BrainPhenotype, FoundationWeightAsset)> {
+    let mut config = CanonicalNewGameConfig::phase3(seed, 1)?;
+    config.brain_class = BrainScaleTier::Standard2048;
+    let asset = FoundationWeightAsset::builtin_n2048_v1(config.sensor_profile)?;
+    let game = create_canonical_new_game_with_n2048_candidate(&config, &asset)?;
+    let r = game.world.organism_registry().iter().next().unwrap();
+    let capacity = BrainCapacityClass::n2048();
+    let genome = r.phenotype().brain_genome.clone();
+    let development = foundation_construction_development(&genome,&capacity,&r.phenotype().development_state_at(Tick::ZERO)?)?;
+    let p = PhenotypeCompiler::compile(&genome,&capacity,&development,config.sensor_profile)?;
+    let asset=FoundationWeightAsset::from_trained_weights(&p,p.synapses().iter().map(|s|s.genetic_weight()).collect(),asset.manifest().training_stage())?;
+    let (p,_) = PhenotypeCompiler::compile_n2048_foundation_candidate(genome,development,asset.clone())?;
+    Ok((config,p,asset))
+}
+// Directly programmed, from-zero care scaffold on the existing native graph.
+// No rollout, gradient or reward enters this construction.
+fn whole_care(p: &BrainPhenotype) -> Result<(Vec<f32>, Vec<serde_json::Value>)> {
+    let mut w=vec![0.;p.synapses().len()];
+    let reserve=p.lobe_layout().region(LobeKind::FlexibleReserve).ok_or("reserve missing")?;
+    let mut used=std::collections::BTreeSet::new();
+    let mut circuits=Vec::new();
+    for (family,lane) in [(CandidateActionFamily::Ingest,0),(CandidateActionFamily::Approach,0),(CandidateActionFamily::Rest,1),(CandidateActionFamily::Avoid,3),(CandidateActionFamily::Inspect,5),(CandidateActionFamily::Contact,5)] {
+        let input=p.sensor_encoder().assignments().iter().filter(|a|a.source_group()==SensorEncoderSourceGroup::Homeostasis && a.source_index()==lane).map(|a|a.target_neuron()).collect::<Vec<_>>();
+        let motors=p.synapses().iter().filter_map(|s|match s.kind() {CompiledSynapseKind::Decoder(c) if c.head()==DecoderHeadKind::ActionCandidate && c.family()==family=>Some(s.source()),_=>None}).collect::<std::collections::BTreeSet<_>>();
+        let path=p.synapses().iter().enumerate().filter(|(_,s)|s.kind()==CompiledSynapseKind::Recurrent && motors.contains(&s.target()) && reserve.contains_neuron(s.source()) && !used.contains(&s.source())).find_map(|(j,s)|p.synapses().iter().enumerate().find(|(_,a)|a.kind()==CompiledSynapseKind::Recurrent && input.contains(&a.source()) && a.target()==s.source()).map(|(i,a)|(i,j,a.source(),s.source(),s.target()))).ok_or("native need-to-motor path unavailable")?;
+        used.insert(path.3);w[path.0]=2.;w[path.1]=2.;
+        for (i,s) in p.synapses().iter().enumerate() {
+            if let CompiledSynapseKind::Decoder(c)=s.kind() {
+                if c.head()==DecoderHeadKind::ActionCandidate && c.family()==family && s.source()==path.4 {
+                    w[i]=match (family,c.input_lane()) {
+                        (CandidateActionFamily::Ingest,15)=>12.,
+                        (CandidateActionFamily::Ingest,2)=>-6.,
+                        (CandidateActionFamily::Approach,2)=>-2.,
+                        (CandidateActionFamily::Approach,18)=>-5.,
+                        (CandidateActionFamily::Approach,0|1)=>0.,
+                        (CandidateActionFamily::Approach,6|7|8)=>1.,
+                        (CandidateActionFamily::Rest,23)=>8.,
+                        (CandidateActionFamily::Avoid,15)=>-10.,
+                        (CandidateActionFamily::Inspect,18)=>2.,
+                        (CandidateActionFamily::Contact,15)=>2.,
+                        _=>0.,
+                    };
+                }
+            }
+        }
+        circuits.push(json!({"family":family,"homeostatic_lane":lane,"source_neuron":path.2,"reserve_neuron":path.3,"motor_neuron":path.4,"recurrent_synapses":[path.0,path.1]}));
+    }
+    Ok((w,circuits))
+}
+fn trial(seed:u64, arm:&str, gain:f32, scene:&str, ticks:usize) -> Result<serde_json::Value> {
+    let (config,p,source)=source(seed)?;
+    let mut weights=p.synapses().iter().map(|s|s.genetic_weight()).collect::<Vec<_>>();
+    let mut edits=Vec::new();
+    if arm=="whole-care" || arm=="whole-care-no-need" {
+        let (whole,circuits)=whole_care(&p)?;weights=whole;edits=circuits;
+        if arm=="whole-care-no-need" { for (i,s) in p.synapses().iter().enumerate() { if s.kind()==CompiledSynapseKind::Recurrent {weights[i]=0.;} } }
+    } else if gain!=0. {
+        for (i,s) in p.synapses().iter().enumerate() {
+            if matches!(s.kind(), CompiledSynapseKind::Decoder(c) if c.head()==DecoderHeadKind::ActionCandidate && c.family()==CandidateActionFamily::Ingest && c.input_lane()==15) {
+                weights[i]+=gain;
+                edits.push(json!({"index":i,"source":s.source(),"before":s.genetic_weight(),"after":weights[i]}));
+            }
+        }
+    }
+    let asset=if arm=="untouched" {source.clone()} else {FoundationWeightAsset::from_trained_weights(&p,weights,source.manifest().training_stage())?};
+    let mut game=create_canonical_new_game_with_n2048_candidate(&config,&asset)?;
+    let old=game.world.organism_registry().iter().next().unwrap().clone();
+    let cap=BrainCapacityClass::n2048();
+    let development=foundation_construction_development(&old.phenotype().brain_genome,&cap,&old.phenotype().development_state_at(Tick::ZERO)?)?;
+    let (p,_)=PhenotypeCompiler::compile_n2048_foundation_candidate(old.phenotype().brain_genome.clone(),development,asset.clone())?;
+    let mask=StageTrainableMask::recurrent_only(&p)?;
+    let trainer=CpuFoundationTrainer::new(p,asset,mask,AdamWConfig::default())?;
+    let before=serde_json::to_vec(&trainer.checkpoint())?;
+    let own=old.organism_id();
+    let side=1.;
+    let distance=if scene=="far-food" {2.5} else {0.25};
+    let mut world=HeadlessScenarioBuilder::new(seed).agent("learner",own,Vec3f::ZERO).build()?;
+    let object=if scene=="toy" {world.spawn_toy("target",Vec3f::new(side*distance,0.,0.),true)?} else {
+        world.editor_spawn_object(WorldEditorSpawnSpec {label:"target".into(),kind:WorldObjectKind::Food,organism_id:None,position:Vec3f::new(side*distance,0.,0.),nutrition:0.6,hazard_pain:0.,radius:0.5,token_id:None})?
+    };
+    let mut physical=world.entity(object).unwrap().grounded_physical;
+    physical.chemical[0]=if scene=="bitter-food" {-0.85} else if scene=="toy" {0.} else {0.85};
+    world.set_grounded_physical_properties(object,physical)?;
+    let mut chemistry=*old.biochemistry();
+    chemistry.body.set_energy(0.4)?;
+    world.register_organism_record(WorldOrganismRecord::new(own,world.entity_id("learner").unwrap(),old.genome().clone(),old.phenotype().clone(),chemistry,old.birth_tick())?)?;
+    game.world=world;
+    let mut host=CpuCanonicalHost::new_cohort(game,&trainer,(seed^(seed>>32))as u32)?;
+    let mut rows=Vec::new();
+    for tick in 0..ticks {
+        let step=host.step(&trainer,1.)?;
+        for row in step.decisions {
+            let eval=trainer.evaluate_replay(&TrainingSequence {phenotype_hash:trainer.phenotype().phenotype_hash(),initial:row.initial.clone(),ticks:vec![row.replay_tick.clone()],burn_in_ticks:0,memory_candidate_gain:trainer.phenotype().candidate_decoder().memory_channel().map_or(0.,|m|m.max_candidate_gain())})?;
+            let frame=row.patch.pre_action().perception();
+            let outcome=row.patch.outcome();
+            rows.push(json!({"tick":tick,"counter":row.sampling_counter,"action":row.action,"candidates":frame.candidates(),"logits":eval.candidate_logits[0],"outcome":outcome,"reward":row.biological_reward}));
+        }
+    }
+    assert_eq!(before,serde_json::to_vec(&trainer.checkpoint())?);
+    let ck=host.checkpoint(&trainer)?;
+    let bytes=serde_json::to_vec(&ck)?;
+    let mut cold=CpuCanonicalHost::from_checkpoint(serde_json::from_slice(&bytes)?,&trainer)?;
+    assert_eq!(bytes,serde_json::to_vec(&cold.checkpoint(&trainer)?)?);
+    let hot=host.snapshot().step(&trainer,1.)?;
+    let fresh=cold.step(&trainer,1.)?;
+    assert_eq!(serde_json::to_vec(&hot.decisions)?,serde_json::to_vec(&fresh.decisions)?);
+    let mut hot_host=host.snapshot();hot_host.step(&trainer,1.)?;
+    assert_eq!(serde_json::to_vec(&hot_host.checkpoint(&trainer)?)?,serde_json::to_vec(&cold.checkpoint(&trainer)?)?);
+    let r=host.world().organism_registry().get(own).unwrap();
+    Ok(json!({"seed":seed,"arm":arm,"scene":scene,"edits":edits,"source_digest":source.digest(),"optimizer_unchanged":true,"cold_next_step_exact":true,"target_active":!host.world().entity(object).unwrap().consumed,"final_body":r.biochemistry().body,"final_homeostasis":r.biochemistry().homeostasis,"rows":rows}))
+}
+fn main()->Result<()> {
+    let args=std::env::args().collect::<Vec<_>>();
+    let path=args.get(1).ok_or("output JSON required")?;
+    let ticks=args.get(2).map_or(Ok(12),|s|s.parse())?;
+    let gain=args.get(3).map_or(Ok(0.5),|s|s.parse())?;
+    let mut results=Vec::new();
+    for seed in [2026110701,2026110702] {
+        for scene in ["food","bitter-food","toy","far-food"] {
+            for (arm,gain) in [("untouched",0.),("taste-readout",gain),("whole-care",0.),("whole-care-no-need",0.)] {
+                let r=trial(seed,arm,gain,scene,ticks)?;
+                eprintln!("{seed} {scene} {arm} energy={} active={}",r["final_body"]["energy"],r["target_active"]);
+                results.push(r);
+            }
+        }
+    }
+    use std::io::Write;
+    let mut output=std::fs::OpenOptions::new().write(true).create_new(true).open(path)?;
+    output.write_all(&serde_json::to_vec(&json!({"backend":"native-cpu","experimental":true,"promoted":false,"results":results}))?)?;output.sync_all()?;
+    Ok(())
+}
