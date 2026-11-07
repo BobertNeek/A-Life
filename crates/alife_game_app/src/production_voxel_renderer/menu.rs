@@ -333,9 +333,9 @@ impl MenuState {
             if keyboard.just_pressed(KeyCode::ArrowUp) {
                 self.selected = (self.selected + count - 1) % count;
             }
-            if keyboard.any_just_pressed([KeyCode::Enter, KeyCode::NumpadEnter])
-                && (self.screen != Screen::ConfirmLoad || fresh_enter)
-            {
+            // Focus loss clears Bevy's held keys, so an OS repeat can look like a
+            // new edge. Every row, including Play and Quit, needs a fresh press.
+            if fresh_enter && keyboard.any_just_pressed([KeyCode::Enter, KeyCode::NumpadEnter]) {
                 action = Some(self.rows()[self.selected].0);
             }
             if self.screen != Screen::ConfirmLoad {

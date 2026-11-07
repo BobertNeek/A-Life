@@ -931,3 +931,87 @@ fn gated_opening_batch_cannot_supply_later_confirmation() {
         assert_eq!(app.world().resource::<Messages<KeyboardInput>>().len(), 2);
     }
 }
+
+#[test]
+fn focus_reset_enter_repeats_cannot_activate_ordinary_menu_rows() {
+    for code in [KeyCode::Enter, KeyCode::NumpadEnter] {
+        for (screen, rows) in [
+            (Screen::Main, MAIN.as_slice()),
+            (Screen::Speed, SPEED.as_slice()),
+            (Screen::Settings, SETTINGS.as_slice()),
+        ] {
+            for (selected, &(action, _)) in rows.iter().enumerate() {
+                let mut app = keypad_input_app();
+                // Hold Enter before opening the modal, as when opening it by pointer.
+                raw_frame(&mut app, &[(code, ButtonState::Pressed, false)]);
+                {
+                    let mut state = app.world_mut().resource_mut::<MenuState>();
+                    state.open(true);
+                    state.screen = screen;
+                    state.selected = selected;
+                }
+                raw_frame(&mut app, &[]);
+                app.world_mut()
+                    .resource_mut::<Messages<bevy::input::keyboard::KeyboardFocusLost>>()
+                    .write(bevy::input::keyboard::KeyboardFocusLost);
+                raw_frame(&mut app, &[]);
+                for _ in 0..2 {
+                    raw_frame(&mut app, &[(code, ButtonState::Pressed, true)]);
+                    let state = app.world().resource::<MenuState>();
+                    assert_eq!(state.screen, screen, "repeat activated {action:?}");
+                    assert_eq!(state.selected, selected);
+                    assert_eq!(state.pending, None, "repeat queued {action:?}");
+                    assert!(state.captured);
+                }
+                // Release and a new physical press must still activate that exact row.
+                raw_frame(&mut app, &[(code, ButtonState::Released, false)]);
+                raw_frame(&mut app, &[(code, ButtonState::Pressed, false)]);
+                let state = app.world().resource::<MenuState>();
+                match action {
+                    Action::Play => assert_eq!(state.screen, Screen::Closed),
+                    Action::Load => assert_eq!(state.screen, Screen::ConfirmLoad),
+                    Action::Speed => assert_eq!(state.screen, Screen::Speed),
+                    Action::Settings => assert_eq!(state.screen, Screen::Settings),
+                    Action::Back => assert_eq!(state.screen, Screen::Main),
+                    _ => assert_eq!(state.pending, Some(action)),
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn ordinary_menu_repeat_cannot_borrow_freshness_from_the_other_held_enter() {
+    for held in [KeyCode::Enter, KeyCode::NumpadEnter] {
+        let repeated = if held == KeyCode::Enter {
+            KeyCode::NumpadEnter
+        } else {
+            KeyCode::Enter
+        };
+        let mut app = keypad_input_app();
+        raw_frame(&mut app, &[(held, ButtonState::Pressed, false)]);
+        {
+            let mut state = app.world_mut().resource_mut::<MenuState>();
+            state.open(true);
+            state.selected = MAIN.len() - 1; // Quit must require a real new activation.
+        }
+        raw_frame(&mut app, &[]);
+        raw_frame(
+            &mut app,
+            &[
+                (held, ButtonState::Pressed, false),
+                (repeated, ButtonState::Pressed, true),
+            ],
+        );
+        let keyboard = app.world().resource::<ButtonInput<KeyCode>>();
+        assert!(!keyboard.just_pressed(held));
+        assert!(keyboard.just_pressed(repeated));
+        assert_eq!(app.world().resource::<MenuState>().pending, None);
+        raw_frame(&mut app, &[(repeated, ButtonState::Released, false)]);
+        raw_frame(&mut app, &[(repeated, ButtonState::Pressed, false)]);
+        assert_eq!(
+            app.world().resource::<MenuState>().pending,
+            Some(Action::Quit)
+        );
+    }
+}
