@@ -333,7 +333,7 @@ impl MenuState {
             if keyboard.just_pressed(KeyCode::ArrowUp) {
                 self.selected = (self.selected + count - 1) % count;
             }
-            if keyboard.just_pressed(KeyCode::Enter)
+            if keyboard.any_just_pressed([KeyCode::Enter, KeyCode::NumpadEnter])
                 && (self.screen != Screen::ConfirmLoad || fresh_enter)
             {
                 action = Some(self.rows()[self.selected].0);
@@ -747,7 +747,8 @@ fn handle_input_with_availability(world: &mut World, availability: LoadAvailabil
         if let Some(messages) = world.get_resource::<bevy::ecs::message::Messages<KeyboardInput>>()
         {
             for message in state.key_reader.read(messages) {
-                fresh_enter |= message.key_code == KeyCode::Enter
+                fresh_enter |= matches!(message.key_code, KeyCode::Enter | KeyCode::NumpadEnter)
+                    && keyboard.just_pressed(message.key_code)
                     && message.state == ButtonState::Pressed
                     && !message.repeat;
             }
