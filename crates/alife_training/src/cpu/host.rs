@@ -189,7 +189,9 @@ impl CpuCanonicalHost {
                 || record.sleep_cycle_id() != 0
                 || record.birth_tick() != world.tick()
             {
-                return Err(CpuHostError::State("fresh cohort requires newborn canonical organism records; use exact restore for existing individuals"));
+                return Err(CpuHostError::State(
+                    "fresh cohort requires newborn canonical organism records; use exact restore for existing individuals",
+                ));
             }
             validate_record_founder(record, founder)?;
             let id = record.organism_id();
@@ -361,7 +363,9 @@ impl CpuCanonicalHost {
         if self.phenotype_hash != founder.phenotype().phenotype_hash()
             || self.founder_weight_digest != weight_digest(founder)?
         {
-            return Err(CpuHostError::State("living collector policy changed: export/recompile a fresh cohort or explicitly rebase a simulator branch"));
+            return Err(CpuHostError::State(
+                "living collector policy changed: export/recompile a fresh cohort or explicitly rebase a simulator branch",
+            ));
         }
         Ok(())
     }
@@ -463,7 +467,9 @@ impl CpuCanonicalHost {
         founder: &CpuFoundationTrainer,
     ) -> Result<Self, CpuHostError> {
         if checkpoint.schema_version == 1 {
-            return Err(CpuHostError::State("version1 CPU checkpoint lacks tracked-object identity; exact private-life restore requires version2"));
+            return Err(CpuHostError::State(
+                "version1 CPU checkpoint lacks tracked-object identity; exact private-life restore requires version2",
+            ));
         }
         if checkpoint.schema_version != 2
             || checkpoint.world.config.brain_policy.policy != PolicyBackend::NeuralClosedLoopCpu
@@ -1351,13 +1357,23 @@ pub(super) fn validate_record_founder(
             .phenotype()
             .development_state_at(record.biochemistry().tick)?,
     )?;
-    let (compiled, _) = PhenotypeCompiler::compile_n2048_foundation_candidate(
-        genome.clone(),
-        development,
-        founder.source_foundation.clone(),
-    )?;
+    let (compiled, _) = if p.foundation_abi().n2048_experimental_graph().is_some() {
+        PhenotypeCompiler::compile_n2048_experimental_foundation_candidate(
+            genome.clone(),
+            development,
+            founder.source_foundation.clone(),
+        )?
+    } else {
+        PhenotypeCompiler::compile_n2048_foundation_candidate(
+            genome.clone(),
+            development,
+            founder.source_foundation.clone(),
+        )?
+    };
     if compiled.phenotype_hash() != p.phenotype_hash() {
-        return Err(CpuHostError::State("organism compiler identity differs from CPU founder; heterogeneous graphs require per-row compilation"));
+        return Err(CpuHostError::State(
+            "organism compiler identity differs from CPU founder; heterogeneous graphs require per-row compilation",
+        ));
     }
     let inherited =
         record

@@ -79,7 +79,27 @@ pub fn create_canonical_new_game(
 
 /// Explicit N2048 experiment using the same ecology and inherited physiology.
 /// The asset remains bound into each genome for archive and exact restore.
+pub fn create_canonical_new_game_with_n2048_experimental_candidate(
+    config: &CanonicalNewGameConfig,
+    foundation: &FoundationWeightAsset,
+) -> Result<CanonicalNewGame, ScaffoldContractError> {
+    if !foundation.is_n2048_experimental_graph() {
+        return Err(ScaffoldContractError::PhenotypeCompile);
+    }
+    create_n2048_candidate_inner(config, foundation)
+}
+
 pub fn create_canonical_new_game_with_n2048_candidate(
+    config: &CanonicalNewGameConfig,
+    foundation: &FoundationWeightAsset,
+) -> Result<CanonicalNewGame, ScaffoldContractError> {
+    if foundation.is_n2048_experimental_graph() {
+        return Err(ScaffoldContractError::PhenotypeCompile);
+    }
+    create_n2048_candidate_inner(config, foundation)
+}
+
+fn create_n2048_candidate_inner(
     config: &CanonicalNewGameConfig,
     foundation: &FoundationWeightAsset,
 ) -> Result<CanonicalNewGame, ScaffoldContractError> {
@@ -107,7 +127,8 @@ pub fn create_canonical_foundation_training_group(
     foundation: &FoundationWeightAsset,
 ) -> Result<CanonicalNewGame, ScaffoldContractError> {
     let mut config = CanonicalNewGameConfig::phase3(world_seed, 1)?;
-    if founder_seed_base == 0
+    if foundation.is_n2048_experimental_graph()
+        || founder_seed_base == 0
         || foundation.manifest().capacity_class_id() != BrainCapacityClass::N2048_ID
     {
         return Err(ScaffoldContractError::PhenotypeCompile);

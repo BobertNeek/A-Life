@@ -322,6 +322,138 @@ fn compile_n2048_foundation(
     Ok((projections, synapses, receipts))
 }
 
+/// Versioned fresh graph only. The canonical V1 generator above is unchanged.
+pub(super) fn compile_n2048_experimental(
+    genome: &BrainGenome,
+    layout: &LobeLayout,
+    capacity: &BrainCapacityClass,
+) -> Result<RecurrentCompilation, ScaffoldContractError> {
+    let (mut projections, mut synapses, mut receipts) =
+        compile_recurrent(genome, layout, capacity)?;
+    if capacity.id() != BrainCapacityClass::N2048_ID {
+        return Err(compile_error());
+    }
+    for (index, projection) in projections.iter_mut().enumerate() {
+        let spec = crate::N2048FoundationLayoutV1::route_specs()[index];
+        let source = layout
+            .region(spec.source_lobe())
+            .ok_or_else(compile_error)?;
+        let target = layout
+            .region(spec.target_lobe())
+            .ok_or_else(compile_error)?;
+        let (start, count) = projection.synapse_range();
+        let range = start as usize..(start + count) as usize;
+        let mut tiles: BTreeSet<(u32, u32)> = match index {
+            // Every sensory/social/interoceptive source can reach its hub.
+            0 | 1 | 2 | 3 => (0..source.len / 16).map(|s| (s, 0)).collect(),
+            // Temporal source coverage and direct hub access to all motor families.
+            5 => (0..source.len / 16)
+                .map(|s| (s, 0))
+                .chain((0..target.len / 16).map(|t| (0, t)))
+                .collect(),
+            _ => synapses[range.clone()]
+                .iter()
+                .map(|s| {
+                    (
+                        (s.source() - source.start) / 16,
+                        (s.target() - target.start) / 16,
+                    )
+                })
+                .collect(),
+        };
+        // Explicit closed recurrent paths for working context, memory and
+        // association. Preserve each other route's tile and synapse counts.
+        if !tiles.contains(&(0, 0)) {
+            let last = *tiles.last().ok_or_else(compile_error)?;
+            tiles.remove(&last);
+            tiles.insert((0, 0));
+        }
+        let tile_count = tiles.len() as u32;
+        if count / tile_count < 16 || count.div_ceil(tile_count) > 256 {
+            return Err(compile_error());
+        }
+        let mut rows = Vec::with_capacity(count as usize);
+        for (ordinal, (st, tt)) in tiles.into_iter().enumerate() {
+            let n = count / tile_count + u32::from((ordinal as u32) < count % tile_count);
+            for k in 0..n {
+                // First 16 pairs cover both ends; later diagonals add bounded
+                // alternatives without duplicate coordinates or empty neurons.
+                rows.push((
+                    source.start + st * 16 + k % 16,
+                    target.start + tt * 16 + (k % 16 + k / 16) % 16,
+                ));
+            }
+        }
+        rows.sort_unstable();
+        let route = RoutingMask::new(
+            spec.source_lobe(),
+            spec.target_lobe(),
+            spec.projection_type(),
+            spec.active_tile_policy(),
+            spec.update_cadence(),
+            spec.priority(),
+        );
+        for (slot, (from, to)) in synapses[range].iter_mut().zip(rows) {
+            *slot = CompiledSynapse::new(
+                from,
+                to,
+                genetic_weight(
+                    genome.genetic_prior_seed,
+                    index as u16,
+                    from,
+                    to,
+                    spec.projection_type(),
+                ),
+                alpha_for(genome, route, from, to, target.start),
+                index as u16,
+                CompiledSynapseKind::Recurrent,
+            );
+        }
+        *projection = CompiledProjection::new(
+            index as u16,
+            spec.source_lobe(),
+            spec.target_lobe(),
+            spec.projection_type(),
+            spec.active_tile_policy(),
+            spec.update_cadence(),
+            spec.priority(),
+            0,
+            start,
+            count,
+            tile_count,
+        );
+        receipts[index].active_tiles = tile_count;
+        receipts[index].tile_ceiling = tile_count;
+    }
+    if receipts.iter().map(|r| r.active_tiles).sum::<u32>()
+        > capacity.execution().max_active_tiles()
+    {
+        return Err(compile_error());
+    }
+    Ok((projections, synapses, receipts))
+}
+
+pub(super) fn validate_n2048_experimental_coordinates(
+    phenotype: &super::BrainPhenotype,
+    capacity: &BrainCapacityClass,
+) -> Result<(), ScaffoldContractError> {
+    let genome = BrainGenome::scaffold(1, capacity.id());
+    let (projections, synapses, _) =
+        compile_n2048_experimental(&genome, phenotype.lobe_layout(), capacity)?;
+    if phenotype.projections().get(..projections.len()) != Some(projections.as_slice())
+        || phenotype.synapses().len() != 32768
+        || synapses.iter().zip(phenotype.synapses()).any(|(a, b)| {
+            a.source() != b.source()
+                || a.target() != b.target()
+                || a.kind() != b.kind()
+                || a.route_index() != b.route_index()
+        })
+    {
+        return Err(compile_error());
+    }
+    Ok(())
+}
+
 pub(super) fn decoder_alpha(genome: &BrainGenome, motor_start: u32, neuron: u32) -> f32 {
     let route = RoutingMask::new(
         LobeKind::ActionPlanning,
