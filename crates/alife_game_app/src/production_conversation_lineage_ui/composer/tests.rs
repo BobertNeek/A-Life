@@ -455,3 +455,150 @@ fn accepted_worker_completion_preserves_reopened_failed_or_cancelled_drafts() {
     assert!(!state.input_open);
     assert!(state.input.is_empty());
 }
+
+/// Exercise the production action collector without rendering or a runtime.
+#[cfg(test)]
+mod cancel_batches {
+    use super::*;
+
+    fn input_app() -> App {
+        let mut app = App::new();
+        let mut state = state();
+        state.prepare_typed_speech_fixture("Ada, come here é猫");
+        app.insert_resource(state)
+            .init_resource::<InputState>()
+            .init_resource::<ButtonInput<MouseButton>>()
+            .add_message::<ActionRequest>();
+        for control in CONTROLS {
+            app.world_mut().spawn((control, Interaction::None));
+        }
+        app
+    }
+
+    fn request(app: &mut App, action: Control) {
+        let target = control(app.world_mut(), action);
+        app.world_mut()
+            .write_message(ActionRequest(accesskit::ActionRequest {
+                action: AccessibleAction::Click,
+                target: accesskit::NodeId(target.to_bits()),
+                data: None,
+            }));
+    }
+
+    fn cancel_and_check_fresh_reopen(app: &mut App) {
+        collect_available_input(app.world_mut(), true, false);
+        let pending = app.world_mut().resource_mut::<InputState>().pending.take();
+        assert_eq!(pending, Some(Control::Cancel));
+        let mut state = app
+            .world_mut()
+            .resource_mut::<ProductionConversationLineageUiState>();
+        let mut keyboard = ButtonInput::default();
+        for key in [
+            KeyCode::Enter,
+            KeyCode::NumpadEnter,
+            KeyCode::Tab,
+            KeyCode::F1,
+        ] {
+            keyboard.press(key);
+        }
+        let address_selected = state.address_selected;
+        assert!(apply_controls(&mut state, &keyboard, pending));
+        assert_eq!(state.address_selected, address_selected);
+        assert!(!state.input_open);
+        assert!(state.input.is_empty());
+        assert_eq!(state.input_cue, SpeechInputCue::None);
+        state.open_player_speech_input();
+        state.input = "new draft".into();
+        collect_available_input(app.world_mut(), true, false);
+        assert!(
+            app.world().resource::<InputState>().pending.is_none(),
+            "the drained Send must not replay into the next draft"
+        );
+        assert_eq!(
+            app.world()
+                .resource::<ProductionConversationLineageUiState>()
+                .input,
+            "new draft"
+        );
+        request(app, Control::Send);
+        collect_available_input(app.world_mut(), true, false);
+        assert_eq!(
+            app.world().resource::<InputState>().pending,
+            Some(Control::Send),
+            "a genuinely new Send remains usable"
+        );
+    }
+
+    #[test]
+    fn accessible_cancel_wins_every_mixed_control_batch_in_either_order() {
+        for other in [Control::Send, Control::Address, Control::Help] {
+            for cancel_first in [false, true] {
+                let mut app = input_app();
+                let batch = if cancel_first {
+                    [Control::Cancel, other]
+                } else {
+                    [other, Control::Cancel]
+                };
+                for action in batch {
+                    request(&mut app, action);
+                }
+                cancel_and_check_fresh_reopen(&mut app);
+            }
+        }
+    }
+
+    #[test]
+    fn pointer_and_accessible_cancel_win_mixed_input_without_replay() {
+        for pointer in [Control::Cancel, Control::Send] {
+            let mut app = input_app();
+            let target = control(app.world_mut(), pointer);
+            *app.world_mut().get_mut::<Interaction>(target).unwrap() = Interaction::Pressed;
+            app.world_mut()
+                .resource_mut::<ButtonInput<MouseButton>>()
+                .press(MouseButton::Left);
+            request(
+                &mut app,
+                if pointer == Control::Cancel {
+                    Control::Send
+                } else {
+                    Control::Cancel
+                },
+            );
+            cancel_and_check_fresh_reopen(&mut app);
+        }
+    }
+
+    #[test]
+    fn blocked_cancel_send_batches_are_drained_before_a_new_draft() {
+        for (open, blocked, focused) in [
+            (false, false, true),
+            (true, true, true),
+            (true, false, false),
+        ] {
+            let mut app = input_app();
+            let window = app
+                .world_mut()
+                .spawn((
+                    Window {
+                        focused,
+                        ..default()
+                    },
+                    bevy::window::PrimaryWindow,
+                ))
+                .id();
+            request(&mut app, Control::Cancel);
+            request(&mut app, Control::Send);
+            collect_available_input(app.world_mut(), open, blocked);
+            assert!(app.world().resource::<InputState>().pending.is_none());
+            app.world_mut().get_mut::<Window>(window).unwrap().focused = true;
+            collect_available_input(app.world_mut(), true, false);
+            assert!(app.world().resource::<InputState>().pending.is_none());
+            request(&mut app, Control::Send);
+            collect_available_input(app.world_mut(), true, false);
+            assert_eq!(
+                app.world().resource::<InputState>().pending,
+                Some(Control::Send)
+            );
+        }
+    }
+}
