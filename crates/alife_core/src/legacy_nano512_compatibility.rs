@@ -266,10 +266,7 @@ impl FoundationAbiSelection {
     }
 
     pub fn foundation_payload_digest(&self) -> Option<Blake3Digest> {
-        match self.foundation_weight_asset() {
-            Some(asset) => Some(asset.digest()),
-            None => None,
-        }
+        self.foundation_weight_asset().map(|asset| asset.digest())
     }
 
     pub fn selector_digest(&self) -> [u64; 4] {

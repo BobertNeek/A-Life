@@ -55,7 +55,7 @@ fn source(
         PhenotypeCompiler::compile_n2048_foundation_candidate(genome, development, asset.clone())?;
     Ok((config, p, asset))
 }
-// Whole-weight revision 4. Feedback-informed: explicit signed tonic/need circuits
+// Whole-weight revision 5. Feedback-informed: explicit signed tonic/need circuits
 // and a native reference motor population; never an external action policy.
 fn whole_care(p: &BrainPhenotype) -> Result<(Vec<f32>, Vec<serde_json::Value>)> {
     use std::collections::BTreeSet;
@@ -111,7 +111,7 @@ fn whole_care(p: &BrainPhenotype) -> Result<(Vec<f32>, Vec<serde_json::Value>)> 
         .iter()
         .find(|&&i| p.synapses()[i].route_index() == 2 && p.synapses()[i].target() == tonic_reserve)
         .ok_or("tonic input route absent")?;
-    let mut family_motors = std::collections::BTreeMap::new();
+    let mut need_axes = std::collections::BTreeMap::<u16, (u32, u32)>::new();
     for (family, lanes) in [
         (CandidateActionFamily::Ingest, vec![0]),
         (CandidateActionFamily::Approach, vec![0]),
@@ -148,12 +148,27 @@ fn whole_care(p: &BrainPhenotype) -> Result<(Vec<f32>, Vec<serde_json::Value>)> 
             let mut found = None;
             'paths: for &first in &outgoing[input as usize] {
                 let first_edge = &p.synapses()[first];
-                if first_edge.route_index() != 2 || first_edge.target() == tonic_reserve {
+                if first_edge.route_index() != 2
+                    || first_edge.target() == tonic_reserve
+                    || need_axes
+                        .iter()
+                        .any(|(other, (r, _))| *other != lane && *r == first_edge.target())
+                    || need_axes
+                        .get(&lane)
+                        .is_some_and(|(r, _)| *r != first_edge.target())
+                {
                     continue;
                 }
                 for &second in &outgoing[first_edge.target() as usize] {
                     let second_edge = &p.synapses()[second];
-                    if second_edge.route_index() != 3 {
+                    if second_edge.route_index() != 3
+                        || need_axes
+                            .iter()
+                            .any(|(other, (_, t))| *other != lane && *t == second_edge.target())
+                        || need_axes
+                            .get(&lane)
+                            .is_some_and(|(_, t)| *t != second_edge.target())
+                    {
                         continue;
                     }
                     let Some(&tonic_second) = outgoing[tonic_reserve as usize].iter().find(|&&i| {
@@ -176,6 +191,10 @@ fn whole_care(p: &BrainPhenotype) -> Result<(Vec<f32>, Vec<serde_json::Value>)> 
             }
             let (first, second, third, tonic_second, motor) =
                 found.ok_or("compatible tonic and need circuit absent")?;
+            need_axes.insert(
+                lane,
+                (p.synapses()[first].target(), p.synapses()[second].target()),
+            );
             w[first] = 2.;
             w[second] = 2.;
             w[third] = 4.;
@@ -200,7 +219,7 @@ fn whole_care(p: &BrainPhenotype) -> Result<(Vec<f32>, Vec<serde_json::Value>)> 
                 (CandidateActionFamily::Approach, 18) => -5.,
                 (CandidateActionFamily::Rest, 23) => 2.,
                 (CandidateActionFamily::Avoid, 15) => -10.,
-                (CandidateActionFamily::Inspect, 6 | 7 | 8) => 0.5,
+                (CandidateActionFamily::Inspect, 6..=8) => 0.5,
                 (CandidateActionFamily::Contact, 15) => 2.,
                 _ => 0.,
             };
@@ -208,22 +227,41 @@ fn whole_care(p: &BrainPhenotype) -> Result<(Vec<f32>, Vec<serde_json::Value>)> 
                 w[i] = coefficient;
             }
             if synapse.source() == reference {
-                w[i] = -5. * selected.len() as f32 * coefficient;
+                let reference_gain = match family {
+                    CandidateActionFamily::Approach | CandidateActionFamily::Inspect => 5.,
+                    CandidateActionFamily::Rest => -1.,
+                    _ => -5.,
+                };
+                if coefficient != 0. {
+                    w[i] = reference_gain * selected.len() as f32 * coefficient;
+                }
             }
         }
         circuits.push(json!({"role":"reference","family":family,"reference_motor":reference,"signal_motors":selected}));
-        family_motors.insert(family.raw(), reference);
     }
     Ok((w, circuits))
 }
-fn trial(
+struct TrialSpec<'a> {
     seed: u64,
-    arm: &str,
+    arm: &'a str,
     gain: f32,
-    scene: &str,
+    scene: &'a str,
     ticks: usize,
-    receipt_root: &str,
-) -> Result<serde_json::Value> {
+    receipt_root: &'a str,
+    write_asset: bool,
+    initial_energy: f32,
+}
+fn trial(spec: TrialSpec<'_>) -> Result<serde_json::Value> {
+    let TrialSpec {
+        seed,
+        arm,
+        gain,
+        scene,
+        ticks,
+        receipt_root,
+        write_asset,
+        initial_energy,
+    } = spec;
     let experimental = arm == "zero-excitatory" || arm.starts_with("whole-care");
     let (config, p, source) = source(seed, experimental)?;
     let mut weights = p
@@ -292,7 +330,7 @@ fn trial(
             source.manifest().training_stage(),
         )?
     };
-    if scene == "food" {
+    if write_asset {
         use std::io::Write;
         let mut file = std::fs::OpenOptions::new()
             .write(true)
@@ -343,19 +381,41 @@ fn trial(
     let trainer = CpuFoundationTrainer::new(p, asset, mask, AdamWConfig::default())?;
     let before = serde_json::to_vec(&trainer.checkpoint())?;
     let own = old.organism_id();
-    let side = 1.;
-    let distance = if scene == "far-food" { 2.5 } else { 0.25 };
+    let distance = if scene.starts_with("far-") || scene == "obstacle-food" {
+        2.5
+    } else {
+        0.25
+    };
+    let target_position = if scene.ends_with("-left") {
+        Vec3f::new(0., 0., distance)
+    } else if scene.ends_with("-back") {
+        Vec3f::new(-distance, 0., 0.)
+    } else {
+        Vec3f::new(distance, 0., 0.)
+    };
     let mut world = HeadlessScenarioBuilder::new(seed)
         .agent("learner", own, Vec3f::ZERO)
         .build()?;
+    if scene == "obstacle-food" {
+        world.editor_spawn_object(WorldEditorSpawnSpec {
+            label: "obstacle".into(),
+            kind: WorldObjectKind::Obstacle,
+            organism_id: None,
+            position: Vec3f::new(1.25, 0., 0.),
+            nutrition: 0.,
+            hazard_pain: 0.,
+            radius: 0.35,
+            token_id: None,
+        })?;
+    }
     let object = if scene == "toy" {
-        world.spawn_toy("target", Vec3f::new(side * distance, 0., 0.), true)?
+        world.spawn_toy("target", target_position, true)?
     } else {
         world.editor_spawn_object(WorldEditorSpawnSpec {
             label: "target".into(),
             kind: WorldObjectKind::Food,
             organism_id: None,
-            position: Vec3f::new(side * distance, 0., 0.),
+            position: target_position,
             nutrition: 0.6,
             hazard_pain: 0.,
             radius: 0.5,
@@ -363,7 +423,7 @@ fn trial(
         })?
     };
     let mut physical = world.entity(object).unwrap().grounded_physical;
-    physical.chemical[0] = if scene == "bitter-food" {
+    physical.chemical[0] = if scene.starts_with("bitter-food") {
         -0.85
     } else if scene == "toy" {
         0.
@@ -372,7 +432,7 @@ fn trial(
     };
     world.set_grounded_physical_properties(object, physical)?;
     let mut chemistry = *old.biochemistry();
-    chemistry.body.set_energy(0.4)?;
+    chemistry.body.set_energy(initial_energy)?;
     world.register_organism_record(WorldOrganismRecord::new(
         own,
         world.entity_id("learner").unwrap(),
@@ -400,7 +460,11 @@ fn trial(
             })?;
             let frame = row.patch.pre_action().perception();
             if tick == 0 && scene != "toy" {
-                let expected = if scene == "bitter-food" { -0.85 } else { 0.85 };
+                let expected = if scene.starts_with("bitter-food") {
+                    -0.85
+                } else {
+                    0.85
+                };
                 assert!(frame
                     .candidates()
                     .iter()
@@ -447,8 +511,73 @@ fn trial(
             } else {
                 None
             };
+            let mut debug_neurons = std::collections::BTreeSet::new();
+            let mut bridge_ids = std::collections::BTreeSet::new();
+            for circuit in &edits {
+                for key in ["source_neuron", "motor_neuron", "reference_motor"] {
+                    if let Some(n) = circuit[key].as_u64() {
+                        debug_neurons.insert(n as u32);
+                    }
+                }
+                if let Some(indices) = circuit["bridge_synapses"].as_array() {
+                    for i in indices {
+                        let i = i.as_u64().unwrap() as usize;
+                        bridge_ids.insert(i);
+                        debug_neurons.insert(trainer.phenotype().synapses()[i].target());
+                    }
+                }
+            }
+            let debug_activations = debug_neurons
+                .into_iter()
+                .map(|n| (n, eval.final_activations[0][n as usize]))
+                .collect::<std::collections::BTreeMap<_, _>>();
+            let effective_bridges=bridge_ids.into_iter().map(|i|json!({"index":i,"genetic":trainer.phenotype().synapses()[i].genetic_weight(),"offset":row.replay_tick.effective_weight_offsets[i],"effective":trainer.phenotype().synapses()[i].genetic_weight()+row.replay_tick.effective_weight_offsets[i]})).collect::<Vec<_>>();
+            let hunger_three_frames = if tick == 0 {
+                let frozen = vec![row.replay_tick.clone(); 3];
+                let mut changed = frozen.clone();
+                for t in &mut changed {
+                    for a in trainer
+                        .phenotype()
+                        .sensor_encoder()
+                        .assignments()
+                        .iter()
+                        .filter(|a| {
+                            a.source_group() == SensorEncoderSourceGroup::Homeostasis
+                                && a.source_index() == 0
+                        })
+                    {
+                        t.encoded_inputs[a.target_neuron() as usize] += 0.1;
+                    }
+                }
+                let sequence = |ticks| TrainingSequence {
+                    phenotype_hash: trainer.phenotype().phenotype_hash(),
+                    initial: row.initial.clone(),
+                    ticks,
+                    burn_in_ticks: 0,
+                    memory_candidate_gain: trainer
+                        .phenotype()
+                        .candidate_decoder()
+                        .memory_channel()
+                        .map_or(0., |m| m.max_candidate_gain()),
+                };
+                let baseline = trainer.evaluate_replay(&sequence(frozen))?;
+                let response = trainer.evaluate_replay(&sequence(changed))?;
+                Some(
+                    frame
+                        .candidates()
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, c)| c.family == CandidateActionFamily::Ingest)
+                        .map(|(i, _)| {
+                            response.candidate_logits[2][i] - baseline.candidate_logits[2][i]
+                        })
+                        .collect::<Vec<_>>(),
+                )
+            } else {
+                None
+            };
             let outcome = row.patch.outcome();
-            rows.push(json!({"tick":tick,"counter":row.sampling_counter,"action":row.action,"candidates":frame.candidates(),"logits":eval.candidate_logits[0],"ingest_taste_motors":motors,"encoded_hunger_plus_0_1_logit_delta":hunger_probe,"outcome":outcome,"reward":row.biological_reward}));
+            rows.push(json!({"tick":tick,"counter":row.sampling_counter,"action":row.action,"candidates":frame.candidates(),"logits":eval.candidate_logits[0],"ingest_taste_motors":motors,"encoded_hunger_plus_0_1_logit_delta":hunger_probe,"encoded_hunger_3_frozen_frames_delta":hunger_three_frames,"constructed_neuron_activations":debug_activations,"effective_bridges":effective_bridges,"enabled_routes":row.replay_tick.enabled_routes,"outcome":outcome,"reward":row.biological_reward}));
         }
     }
     assert_eq!(before, serde_json::to_vec(&trainer.checkpoint())?);
@@ -470,7 +599,7 @@ fn trial(
     );
     let r = host.world().organism_registry().get(own).unwrap();
     Ok(
-        json!({"seed":seed,"arm":arm,"scene":scene,"edits":edits,"source_digest":source.digest(),"candidate_digest":candidate_digest,"changed_weights":changed_weights,"experimental_graph":experimental,"active_tiles":trainer.phenotype().budgets().global.active_tiles,"microstep_count":trainer.phenotype().microstep_count(),"total_synapses":trainer.phenotype().synapses().len(),"optimizer_unchanged":true,"cold_next_step_exact":true,"target_active":!host.world().entity(object).unwrap().consumed,"final_body":r.biochemistry().body,"final_homeostasis":r.biochemistry().homeostasis,"rows":rows}),
+        json!({"seed":seed,"arm":arm,"scene":scene,"edits":edits,"source_digest":source.digest(),"candidate_digest":candidate_digest,"changed_weights":changed_weights,"experimental_graph":experimental,"active_tiles":trainer.phenotype().budgets().global.active_tiles,"microstep_count":trainer.phenotype().microstep_count(),"total_synapses":trainer.phenotype().synapses().len(),"optimizer_unchanged":true,"cold_next_step_exact":true,"target_active":!host.world().entity(object).unwrap().consumed,"final_position":host.world().entity(host.world().entity_id("learner").unwrap()).unwrap().position,"final_target_carrier":host.world().entity(object).unwrap().carried_by,"final_body":r.biochemistry().body,"final_homeostasis":r.biochemistry().homeostasis,"rows":rows}),
     )
 }
 fn graph_report(p: &BrainPhenotype) -> serde_json::Value {
@@ -525,6 +654,36 @@ fn main() -> Result<()> {
     let gain: f32 = args.get(3).map_or(Ok(-8.), |s| s.parse())?;
     let mode = args.get(4).map_or("surgery", String::as_str);
     let seeds: usize = args.get(5).map_or(Ok(8), |s| s.parse())?;
+    let seed_start: u64 = args.get(6).map_or(Ok(2026110701), |s| s.parse())?;
+    let scenes = args
+        .get(7)
+        .map_or("food,bitter-food,toy,far-food", String::as_str)
+        .split(',')
+        .collect::<Vec<_>>();
+    let initial_energy: f32 = args.get(8).map_or(Ok(0.4), |s| s.parse())?;
+    if seed_start.checked_add(seeds as u64).is_none()
+        || scenes.is_empty()
+        || scenes.len() > 10
+        || scenes.iter().any(|s| {
+            ![
+                "food",
+                "bitter-food",
+                "toy",
+                "far-food",
+                "food-left",
+                "bitter-food-left",
+                "food-back",
+                "far-food-left",
+                "far-food-back",
+                "obstacle-food",
+            ]
+            .contains(s)
+        })
+        || !initial_energy.is_finite()
+        || !(0.1..=1.).contains(&initial_energy)
+    {
+        return Err("invalid bounded seed, scene or energy".into());
+    }
     if !(1..=120).contains(&ticks)
         || !(1..=32).contains(&seeds)
         || !gain.is_finite()
@@ -538,6 +697,7 @@ fn main() -> Result<()> {
             ("taste-readout", gain),
             ("wrong-sign", -gain),
         ],
+        "validate" => vec![("untouched", 0.), ("whole-care", 0.)],
         "whole" => vec![
             ("untouched", 0.),
             ("zero-excitatory", 0.),
@@ -546,15 +706,24 @@ fn main() -> Result<()> {
             ("whole-care-no-tonic", 0.),
             ("whole-care-no-reference", 0.),
         ],
-        _ => return Err("mode must be surgery or whole".into()),
+        _ => return Err("mode must be surgery, whole or validate".into()),
     };
     // Reserve a new output directory before any simulation. Never overwrite a prior receipt.
     std::fs::create_dir(path)?;
     let mut results = Vec::new();
-    for seed in (2026110701..).take(seeds) {
-        for scene in ["food", "bitter-food", "toy", "far-food"] {
+    for seed in (seed_start..).take(seeds) {
+        for (scene_index, &scene) in scenes.iter().enumerate() {
             for &(arm, gain) in &arms {
-                let r = trial(seed, arm, gain, scene, ticks, path)?;
+                let r = trial(TrialSpec {
+                    seed,
+                    arm,
+                    gain,
+                    scene,
+                    ticks,
+                    receipt_root: path,
+                    write_asset: scene_index == 0,
+                    initial_energy,
+                })?;
                 use std::io::Write;
                 let mut receipt = std::fs::OpenOptions::new()
                     .write(true)
@@ -575,7 +744,53 @@ fn main() -> Result<()> {
         .write(true)
         .create_new(true)
         .open(format!("{path}/receipt.json"))?;
-    output.write_all(&serde_json::to_vec(&json!({"backend":"native-cpu","experimental":true,"promoted":false,"initial_energy":0.4,"newborn_homeostasis_unchanged":true,"gain":gain,"ticks":ticks,"mode":mode,"results":results}))?)?;
+    output.write_all(&serde_json::to_vec(&json!({"backend":"native-cpu","experimental":true,"promoted":false,"initial_energy":initial_energy,"seed_start":seed_start,"scenes":scenes,"newborn_homeostasis_unchanged":true,"gain":gain,"ticks":ticks,"mode":mode,"results":results}))?)?;
     output.sync_all()?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn static_weight_builder_preserves_signs_and_separates_need_axes() {
+        let (_, p, source) = source(2026110711, true).unwrap();
+        let (weights, circuits) = whole_care(&p).unwrap();
+        assert_eq!(weights.len(), 32768);
+        for (s, w) in p.synapses().iter().zip(&weights) {
+            assert!(w.is_finite());
+            if s.kind() == CompiledSynapseKind::Recurrent {
+                match p.projections()[s.route_index() as usize].projection_type() {
+                    ProjectionType::LateralInhibition => assert!(*w < 0.),
+                    ProjectionType::Homeostatic | ProjectionType::MotorProposal => {
+                        assert!(*w >= 0.)
+                    }
+                    _ => {}
+                }
+            }
+        }
+        let mut axes = std::collections::BTreeMap::new();
+        for c in circuits.iter().filter(|c| c["role"] == "need") {
+            let lane = c["homeostatic_lane"].as_u64().unwrap();
+            let indices = c["bridge_synapses"].as_array().unwrap();
+            let reserve = p.synapses()[indices[0].as_u64().unwrap() as usize].target();
+            let temporal = p.synapses()[indices[1].as_u64().unwrap() as usize].target();
+            if let Some(old) = axes.insert(lane, (reserve, temporal)) {
+                assert_eq!(old, (reserve, temporal));
+            }
+        }
+        let values = axes.values().collect::<Vec<_>>();
+        for (i, a) in values.iter().enumerate() {
+            for b in &values[i + 1..] {
+                assert_ne!(a.0, b.0);
+                assert_ne!(a.1, b.1);
+            }
+        }
+        FoundationWeightAsset::from_trained_weights(
+            &p,
+            weights,
+            source.manifest().training_stage(),
+        )
+        .unwrap();
+    }
 }

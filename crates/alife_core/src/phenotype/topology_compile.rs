@@ -345,7 +345,7 @@ pub(super) fn compile_n2048_experimental(
         let range = start as usize..(start + count) as usize;
         let mut tiles: BTreeSet<(u32, u32)> = match index {
             // Every sensory/social/interoceptive source can reach its hub.
-            0 | 1 | 2 | 3 => (0..source.len / 16).map(|s| (s, 0)).collect(),
+            0..=3 => (0..source.len / 16).map(|s| (s, 0)).collect(),
             // Temporal source coverage and direct hub access to all motor families.
             5 => (0..source.len / 16)
                 .map(|s| (s, 0))

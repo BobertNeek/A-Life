@@ -263,7 +263,7 @@ Profile limitation: GroundedObjectSlotsV1 exposes raw object chemistry even at
 2.5m. Only GroundedTerrainVisionV1 applies contact/chemistry calibration. The
 far-food scene here is a reach/navigation condition, not a hidden-taste or
 zero-contact-chemical control. Terrain-only HeardLanguage/SemanticPrior coverage
-is unqualified in the137-tile recipe. A future separately identified147-tile
+is unqualified in the 137-tile recipe. A future separately identified 147-tile
 recipe could add Multimodal→Temporal source coverage; it first needs a real
 Hearing-enabled fixture and separate validation.
 
@@ -275,3 +275,55 @@ solely responsible for a family. A future revision should reserve independent
 intermediates and add per-need ablations before claiming selective motivational
 wiring. The reference motor is not a constant: inherited inhibition and future
 biochemical changes can change its operating point.
+
+## Completed revision4 pilot and revision5 rationale
+
+[Revision4 summary](whole-v4-summary.json) covers all 48 trials × 12 steps. The full
+candidate consumed positive food2/2 and bitter food0/2. The initial-genetic no-need
+lesion had the same counts. Removing tonic bridges or reference readouts prevented
+positive-food consumption0/2; removing the reference also led to bitter-food
+consumption2/2. These are narrow fresh-founder CPU results, not learned taste,
+broad survival or independent hunger control. Distant food was not consumed.
+
+Navigation diagnosis: at the first far-food frame, Approach's signal and reference
+activations were approximately+0.563918/+0.563083, giving a logit of−6.247900 under
+the universal signal−5×reference rule. Ingest started negative, where that rule
+had the intended sign. Native birth dendrites cover only the first 64 motor neurons
+(Idle/Rest/Inspect/Approach), with positive inputs, negative threshold and gain6.
+They explain why a single reference sign cannot work for every family. Therefore
+“from-zero” refers to the complete **static compiled synapse array**. Native birth
+dendrite weights, thresholds, gains, neuron dynamics and physiology were retained;
+this was never a reset of every parameter in every neural subsystem.
+
+Revision5 uses +5×reference for the positive-baseline Approach/Inspect families,
+−1×reference for the fatigue-sensitive Rest family, and retains−5×reference for
+the negative-baseline families. It reserves distinct reserve and temporal neurons
+for each need axis (reuse is allowed for the same axis across relevant families).
+This is a new, feedback-informed weight proposal, not a reclassification of the
+original candidate. Candidate output remains entirely native.
+
+All somatic plasticity remains active. A genetic-zero bridge lesion is not a
+permanent disconnection: lifetime/fast offsets can reopen it. Revision5 logs the
+actual effective value at every constructed bridge on every step, including the
+lesions. The one-frame hunger sensitivity was zero because cadence delayed the
+signal; a second detached probe repeats the same frozen context for three frames
+and measures the last-frame response. Neither probe performs a learning update.
+
+The predeclared next evaluations use new seeds: a two-seed six-arm ablation suite,
+eight-seed positive/bitter transfer at forward/left positions, and four-seed
+48-step navigation at forward/left/back positions plus an obstacle. Failures and
+retained controls will remain in the results. No biological-learning or production
+promotion claim follows from completing these tests.
+
+Revision5 frozen source SHA-256 is
+`2fc87f1cc19da79dc02dde1c12130842f6721dca18bc936a32ab32010e08476e`,
+executable SHA-256 is
+`06713b67d5772b82daba72a20e0da8da8ed933931acf0c6c79d606544861fb39`.
+The current example also contains builder invariants and style-only cleanups;
+the [frozen runtime source](frozen/whole-v5-family.rs.txt) identifies the exact run.
+
+Configured microsteps and executed microsteps differ: the first revision4 work
+receipt contains6,144 neural updates (2,048 × 3 executed steps), although the
+phenotype allows4. Its576 dendritic operations also confirm participation of the
+64 inherited branches. ATP/runtime policy and per-route cadence must be accounted
+for when predicting how many frames a signal needs.
