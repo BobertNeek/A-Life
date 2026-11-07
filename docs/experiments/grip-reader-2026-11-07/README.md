@@ -101,3 +101,21 @@ plasticity; effective port weights and inputs must be recorded per decision.
 Actual meals, harmful meals, hold duration, release and reacquisition, safe-food
 throughput, failed commands, target identity and applied intervention are needed.
 Do not compare historical geometry runs as if grip alone caused a change.
+
+## First hosted qualification and fixture correction
+
+[Run 42413885085](https://github.com/BobertNeek/A-Life/actions/runs/42413885085)
+qualified exact initial head `0ab8eff21a1db0a8b0547f0a631b9cfff82057f2`.
+Compilation and 129 core fixtures passed, including the new profile/wire/ABI
+contracts and frozen N2048/N512 compatibility suites. One new memory fixture
+failed, so the runner stopped before world, CPU, GPU and Clippy stages. This is
+a partial qualification, not a behavioral or complete preservation pass.
+
+Source inspection identified an obsolete test assertion: it expected a legacy
+profile to reject action ID 2202, while the required preservation fix correctly
+keeps arbitrary nonzero legacy IDs valid. The next change is test-only: accept
+that legacy frame and verify that Ingest evidence does not cross into its family
+recall, then verify its own real operation namespace is retained. Malformed
+profile-4 operations must still reject. No production guard is weakened and no
+new inherited weight is changed. The corrected test and all later stages still
+need actual hosted execution. No autonomous study or replacement life ran.

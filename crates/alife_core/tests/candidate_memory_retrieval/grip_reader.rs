@@ -364,9 +364,8 @@ fn only_validated_tracked_grip_operations_route_ingest_family_memory() {
     .unwrap();
     let object = slot(0, 71, 0.4, [0.0, 0.8, 0.9]);
     let good = draft(2, 71, Some(GripOperationV1::Release)).candidates()[0];
-    for fault in 0..5 {
+    for fault in 0..4 {
         let mut bad = good;
-        let mut profile = PROFILE;
         let mut ownership = GripOwnershipV1::SelfHeld;
         match fault {
             0 => bad.family = CandidateActionFamily::Contact,
@@ -376,12 +375,56 @@ fn only_validated_tracked_grip_operations_route_ingest_family_memory() {
                 bad.target = ActionTarget::NONE;
                 bad.features = alife_core::CandidateFeatureVector::zero();
             }
-            3 => profile = SensorProfile::GroundedObjectSlotsV1,
-            4 => ownership = GripOwnershipV1::NotSelfHeld,
+            3 => ownership = GripOwnershipV1::NotSelfHeld,
             _ => unreachable!(),
         }
-        assert!(custom_draft(profile, 2, object, bad, ownership).is_err());
+        assert!(custom_draft(PROFILE, 2, object, bad, ownership).is_err());
     }
+    // Action numbers alone acquire no new semantics in a legacy profile. Such
+    // frames stay valid and their family channel must retain its ordinary key.
+    let legacy = custom_draft(
+        SensorProfile::GroundedObjectSlotsV1,
+        2,
+        object,
+        good,
+        GripOwnershipV1::SelfHeld,
+    )
+    .unwrap();
+    let mut legacy_bank = empty_bank();
+    let meal = observation_patch(
+        &empty_bank(),
+        1,
+        1,
+        object,
+        CandidateActionFamily::Ingest,
+        -0.9,
+        0.9,
+        |outcome| outcome.physical.target_entity = Some(WorldEntityId(9000)),
+    );
+    legacy_bank.observe_sealed_patch(&meal).unwrap();
+    let recalled = legacy_bank.recall_frame(&legacy).unwrap();
+    assert!(recalled.context().candidates[0].target_source_count > 0);
+    assert_eq!(
+        recalled.context().candidates[0].family_source_count,
+        0,
+        "legacy action 2202 must not route same-profile Ingest memory"
+    );
+    let legacy_other =
+        observation_from_draft(&legacy_bank, 2, legacy.clone(), 0.8, 0.0, |outcome| {
+            outcome.physical.target_entity = Some(WorldEntityId(9000));
+            outcome.physical.contact = PhysicalContactKind::Touch;
+        });
+    legacy_bank.observe_sealed_patch(&legacy_other).unwrap();
+    assert!(
+        legacy_bank
+            .recall_frame(&legacy)
+            .unwrap()
+            .context()
+            .candidates[0]
+            .family_value[0]
+            > 0.7,
+        "legacy action 2202 retains its own Other-family expectation"
+    );
     let mut ordinary = good;
     ordinary.action_id = ActionId(9876);
     let ordinary = custom_draft(PROFILE, 2, object, ordinary, GripOwnershipV1::SelfHeld).unwrap();
