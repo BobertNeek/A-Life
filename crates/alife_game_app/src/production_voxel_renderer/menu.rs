@@ -271,7 +271,9 @@ impl MenuState {
         self.captured = self.screen != Screen::Closed || self.release_gate || self.busy();
         let conversation_capture = conversation_open
             || (self.screen == Screen::Closed
-                && (keyboard.just_pressed(KeyCode::Enter) || keyboard.just_pressed(KeyCode::KeyY)));
+                && (keyboard.just_pressed(KeyCode::Enter)
+                    || keyboard.just_pressed(KeyCode::NumpadEnter)
+                    || keyboard.just_pressed(KeyCode::KeyY)));
         outcome.opening = conversation_capture && !self.conversation_capture;
         self.conversation_capture = conversation_capture;
         if !self.initialized {
@@ -1147,6 +1149,30 @@ mod load_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn either_speech_enter_captures_the_opening_frame_before_world_input() {
+        for code in [KeyCode::Enter, KeyCode::NumpadEnter] {
+            let mut state = MenuState::default();
+            let mut keyboard = ButtonInput::default();
+            keyboard.press(code);
+            let outcome = state.input(
+                &keyboard,
+                false,
+                false,
+                true,
+                None,
+                false,
+                &[],
+                false,
+                false,
+                LoadAvailability::Unavailable,
+            );
+            assert!(outcome.opening);
+            assert!(is_captured(&state));
+            assert_eq!(state.screen, Screen::Closed);
+            assert!(state.pending.is_none());
+        }
+    }
     #[test]
     fn escape_restores_only_menu_owned_pause_and_back_stays_modal() {
         for paused in [false, true] {

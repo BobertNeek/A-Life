@@ -8,7 +8,7 @@ fn key(key_code: KeyCode, state: ButtonState, text: Option<&str>, repeat: bool) 
     KeyboardInput {
         key_code,
         logical_key: match key_code {
-            KeyCode::Enter => Key::Enter,
+            KeyCode::Enter | KeyCode::NumpadEnter => Key::Enter,
             KeyCode::Backspace => Key::Backspace,
             _ => Key::Character(text.unwrap_or_default().into()),
         },
@@ -378,4 +378,98 @@ fn ordered_backspace_and_text_keep_the_character_limit_without_replaying_rejecte
     );
     assert_eq!(input.chars().count(), MAX_TYPED_CHARS);
     assert!(input.ends_with("é猫"));
+}
+
+#[test]
+fn both_enter_locations_share_opening_order_and_submission_edges() {
+    for code in [KeyCode::Enter, KeyCode::NumpadEnter] {
+        let mut app = App::new();
+        app.add_plugins(InputPlugin);
+        let events = [
+            character("before"),
+            key(code, ButtonState::Pressed, Some("\r"), false),
+            character("hello"),
+        ];
+        write_keys(&mut app, events.clone());
+        app.update();
+        assert!(speech_enter_just_pressed(
+            app.world().resource::<ButtonInput<KeyCode>>()
+        ));
+        let mut input = String::new();
+        assert!(!append_player_speech_key_text(
+            &mut input,
+            events.iter(),
+            true
+        ));
+        assert_eq!(input, "hello");
+        write_keys(&mut app, [key(code, ButtonState::Released, None, false)]);
+        app.update();
+        let events = [key(code, ButtonState::Pressed, Some("\r"), false)];
+        write_keys(&mut app, events.clone());
+        app.update();
+        assert!(append_player_speech_key_text(
+            &mut input,
+            events.iter(),
+            false
+        ));
+        assert!(speech_enter_just_pressed(
+            app.world().resource::<ButtonInput<KeyCode>>()
+        ));
+        assert_eq!(input, "hello");
+    }
+}
+
+#[test]
+fn mixed_enter_keys_do_not_duplicate_submission_or_promote_repeats() {
+    let mut app = App::new();
+    app.add_plugins(InputPlugin);
+    let mut input = "hello".to_string();
+    let mut submissions = 0;
+    for repeat in [false, true, true] {
+        if repeat {
+            // Reset-like aggregate edges must still reject raw key repeats.
+            app.world_mut()
+                .resource_mut::<ButtonInput<KeyCode>>()
+                .reset_all();
+        }
+        let events = [
+            key(
+                KeyCode::NumpadEnter,
+                ButtonState::Pressed,
+                Some("\r"),
+                repeat,
+            ),
+            key(KeyCode::Enter, ButtonState::Pressed, Some("\r"), repeat),
+        ];
+        write_keys(&mut app, events.clone());
+        app.update();
+        let submit = append_player_speech_key_text(&mut input, events.iter(), false)
+            && speech_enter_just_pressed(app.world().resource::<ButtonInput<KeyCode>>());
+        assert_eq!(submit, !repeat);
+        submissions += usize::from(submit);
+    }
+    assert_eq!(submissions, 1);
+    assert_eq!(input, "hello");
+
+    for first in [KeyCode::Enter, KeyCode::NumpadEnter] {
+        let other = if first == KeyCode::Enter {
+            KeyCode::NumpadEnter
+        } else {
+            KeyCode::Enter
+        };
+        let events = [
+            character("before"),
+            key(other, ButtonState::Pressed, None, true),
+            key(first, ButtonState::Pressed, None, false),
+            character("after"),
+            key(other, ButtonState::Pressed, None, false),
+        ];
+        let mut input = String::new();
+        assert!(!append_player_speech_key_text(
+            &mut input,
+            events.iter(),
+            true
+        ));
+        assert_eq!(input, "after");
+    }
 }

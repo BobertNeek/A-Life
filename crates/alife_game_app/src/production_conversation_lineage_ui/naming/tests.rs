@@ -64,7 +64,10 @@ fn state(world: &HeadlessWorld, opening: Option<bool>) -> ProductionConversation
 fn key(code: KeyCode, text: Option<&str>, repeat: bool) -> KeyboardInput {
     KeyboardInput {
         key_code: code,
-        logical_key: Key::Character(text.unwrap_or_default().into()),
+        logical_key: match code {
+            KeyCode::Enter | KeyCode::NumpadEnter => Key::Enter,
+            _ => Key::Character(text.unwrap_or_default().into()),
+        },
         state: ButtonState::Pressed,
         text: text.map(Into::into),
         repeat,
@@ -85,6 +88,12 @@ fn selected(id: WorldEntityId) -> Fvr03ProductionVoxelSelectionResource {
 
 #[test]
 fn opening_order_repeats_unicode_and_confirm_are_captured_without_speech() {
+    for enter in [KeyCode::Enter, KeyCode::NumpadEnter] {
+        naming_keyboard_contract(enter);
+    }
+}
+
+fn naming_keyboard_contract(enter: KeyCode) {
     let world = world();
     let mut state = state(&world, Some(true));
     let keys = ButtonInput::default();
@@ -96,7 +105,7 @@ fn opening_order_repeats_unicode_and_confirm_are_captured_without_speech() {
             key(KeyCode::F2, None, true),
             key(KeyCode::F2, None, false),
             key(KeyCode::KeyC, Some("é猫"), false),
-            key(KeyCode::Enter, Some("\r"), false)
+            key(enter, Some("\r"), false)
         ]
         .iter(),
         None
@@ -107,7 +116,7 @@ fn opening_order_repeats_unicode_and_confirm_are_captured_without_speech() {
         &mut state,
         &keys,
         [
-            key(KeyCode::Enter, None, true),
+            key(enter, None, true),
             key(KeyCode::Backspace, None, true),
             key(KeyCode::KeyC, Some("🐾"), true)
         ]
@@ -119,9 +128,9 @@ fn opening_order_repeats_unicode_and_confirm_are_captured_without_speech() {
         &mut state,
         &keys,
         [
-            key(KeyCode::Enter, None, false),
+            key(enter, None, false),
             key(KeyCode::KeyC, Some("must not leak"), false),
-            key(KeyCode::Enter, None, false)
+            key(enter, None, false)
         ]
         .iter(),
         None
@@ -468,6 +477,12 @@ fn pending_edit(app: &mut App, pointer: Option<composer::Control>) -> bool {
 
 #[test]
 fn ime_unicode_commit_is_real_draft_text_and_composition_enter_never_confirms() {
+    for enter in [KeyCode::Enter, KeyCode::NumpadEnter] {
+        naming_ime_contract(enter);
+    }
+}
+
+fn naming_ime_contract(enter: KeyCode) {
     // Some backends deliver the candidate Enter before Commit; others after.
     for enter_before_commit in [false, true] {
         let (mut app, window) = ime_app(false);
@@ -505,7 +520,7 @@ fn ime_unicode_commit_is_real_draft_text_and_composition_enter_never_confirms() 
             .input
             .is_empty());
         if enter_before_commit {
-            window_event(&mut app, window_key(window, KeyCode::Enter, None));
+            window_event(&mut app, window_key(window, enter, None));
         }
         window_event(
             &mut app,
@@ -523,7 +538,7 @@ fn ime_unicode_commit_is_real_draft_text_and_composition_enter_never_confirms() 
             },
         );
         if !enter_before_commit {
-            window_event(&mut app, window_key(window, KeyCode::Enter, None));
+            window_event(&mut app, window_key(window, enter, None));
         }
         composer::collect_input(app.world_mut());
         assert!(!pending_edit(&mut app, None));
@@ -538,7 +553,7 @@ fn ime_unicode_commit_is_real_draft_text_and_composition_enter_never_confirms() 
             !pending_edit(&mut app, None),
             "empty combined stream must not replay typed Enter copies"
         );
-        window_event(&mut app, window_key(window, KeyCode::Enter, None));
+        window_event(&mut app, window_key(window, enter, None));
         composer::collect_input(app.world_mut());
         assert!(pending_edit(&mut app, None));
         let mut canonical = world();
@@ -825,5 +840,70 @@ fn ime_opening_frame_commits_are_drained_and_speech_drafts_are_untouched() {
             "ordinary speech"
         );
         assert!(!app.world().get::<Window>(window).unwrap().ime_enabled);
+    }
+}
+
+#[test]
+fn mixed_enter_locations_keep_name_confirmation_atomic_and_escape_wins() {
+    for first in [KeyCode::Enter, KeyCode::NumpadEnter] {
+        let other = if first == KeyCode::Enter {
+            KeyCode::NumpadEnter
+        } else {
+            KeyCode::Enter
+        };
+        let mut canonical = world();
+        let before = canonical.canonical_signature_digest().unwrap();
+        let mut state = state(&canonical, Some(true));
+        let mut keys = ButtonInput::default();
+        assert!(!edit(
+            &mut state,
+            &keys,
+            [
+                key(KeyCode::KeyC, Some("old shortcut"), false),
+                key(KeyCode::F2, None, false),
+                key(KeyCode::KeyC, Some("Élan"), false),
+                key(first, None, false),
+                key(other, None, false),
+            ]
+            .iter(),
+            None,
+        ));
+        assert_eq!(state.input, "Élan");
+        assert!(!edit(
+            &mut state,
+            &keys,
+            [key(first, None, true), key(other, None, true)].iter(),
+            None,
+        ));
+        let confirm = [
+            key(first, None, false),
+            key(KeyCode::KeyC, Some("must not leak"), false),
+            key(other, None, false),
+        ];
+        assert!(edit(&mut state, &keys, confirm.iter(), None));
+        assert_eq!(state.input, "Élan");
+        assert_eq!(canonical.canonical_signature_digest().unwrap(), before);
+        let result = canonical.rename_agent(state.naming.as_ref().unwrap().stable_id, &state.input);
+        complete(&mut state, result);
+        assert_eq!(canonical.entity_id("Élan"), Some(WorldEntityId(1)));
+        assert!(canonical.audible_utterances().is_empty());
+        assert!(state.naming.is_none());
+
+        let canonical = world();
+        let before_cancel = canonical.canonical_signature_digest().unwrap();
+        open(&mut state, draft(&canonical, None));
+        state.input = "must not save".into();
+        keys.press(KeyCode::Escape);
+        assert!(!edit(
+            &mut state,
+            &keys,
+            confirm.iter(),
+            Some(composer::Control::Send)
+        ));
+        assert!(state.naming.is_none() && state.input.is_empty());
+        assert_eq!(
+            canonical.canonical_signature_digest().unwrap(),
+            before_cancel
+        );
     }
 }
