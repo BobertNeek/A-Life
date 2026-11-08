@@ -1,0 +1,314 @@
+//! Weight-only operating-point candidate. No deployment, world steps or learning.
+#[allow(dead_code)]
+#[path = "support/motor_balance_assay.rs"]
+mod assay;
+#[path = "support/motor_operating_point.rs"]
+mod operating;
+use alife_core::*;
+use alife_gpu_backend::GpuV11CausalState;
+use alife_training::{
+    cpu::*, AdamWConfig, StageTrainableMask, TrainingReplayEvaluation, TrainingSequence,
+};
+use serde_json::{json, Value};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    error::Error,
+};
+type Result<T> = std::result::Result<T, Box<dyn Error>>;
+// Bind changed weights to their own fresh, explicit asset identity. Never relax
+// validation against the old asset-bound phenotype or rewrite acquired state.
+fn bind_candidate(seed: u64, asset: &FoundationWeightAsset) -> Result<BrainPhenotype> {
+    let mut config = alife_world::CanonicalNewGameConfig::phase3(seed, 1)?;
+    config.brain_class = BrainScaleTier::Standard2048;
+    let builtin = FoundationWeightAsset::builtin_n2048_v1(config.sensor_profile)?;
+    let game = alife_world::create_canonical_new_game_with_n2048_candidate(&config, &builtin)?;
+    let record = game.world.organism_registry().iter().next().unwrap();
+    let genome = record.phenotype().brain_genome.clone();
+    let development = alife_runtime::canonical_preparation::foundation_construction_development(
+        &genome,
+        &BrainCapacityClass::n2048(),
+        &record.phenotype().development_state_at(Tick::ZERO)?,
+    )?;
+    Ok(
+        PhenotypeCompiler::compile_n2048_experimental_foundation_candidate(
+            genome,
+            development,
+            asset.clone(),
+        )?
+        .0,
+    )
+}
+const CONTEXTS: [&str; 3] = ["nutritious_contact", "aversive_contact", "distant"];
+fn combined_sequence(
+    p: &BrainPhenotype,
+    base: [f32; 11],
+    changed: [f32; 11],
+    d: &DendriticBranchSet,
+    cut: bool,
+) -> TrainingSequence {
+    let mut q = assay::sequence(p, base, changed, CONTEXTS[0], d, cut);
+    let mut candidates = vec![];
+    for context in CONTEXTS {
+        candidates.extend(
+            assay::sequence(p, base, base, context, d, false).ticks[0]
+                .candidates
+                .clone(),
+        );
+    }
+    for tick in &mut q.ticks {
+        tick.candidates = candidates.clone();
+    }
+    q
+}
+fn motor_ids(p: &BrainPhenotype) -> BTreeSet<usize> {
+    p.synapses()
+        .iter()
+        .filter_map(|s| match s.kind() {
+            CompiledSynapseKind::Decoder(c) if c.head() == DecoderHeadKind::ActionCandidate => {
+                Some(s.source() as usize)
+            }
+            _ => None,
+        })
+        .collect()
+}
+/// A native replay of the identical prefix ending before microstep 4 exposes
+/// its exact old-state input. Reconstruct just that last step and check it.
+fn baseline_components(
+    trainer: &CpuFoundationTrainer,
+    p: &BrainPhenotype,
+    w: &[f32],
+    q: &TrainingSequence,
+    baseline: &TrainingReplayEvaluation,
+) -> Result<Value> {
+    assert_eq!(p.microstep_count(), 4);
+    assert!(q
+        .ticks
+        .iter()
+        .all(|t| t.microstep_count == 4 && t.structural_synapses.is_empty()));
+    let mut prefix = q.clone();
+    prefix.ticks.last_mut().unwrap().microstep_count = 3;
+    let pre = trainer.evaluate_replay(&prefix)?;
+    let t = q.ticks.len() - 1;
+    let previous = &pre.final_activations[t];
+    let metabolism = &pre.final_metabolic_load[t];
+    let tick = &q.ticks[t];
+    let mut rows = vec![];
+    for target in motor_ids(p) {
+        let mut recurrent = 0.;
+        for (i, s) in p.synapses().iter().enumerate() {
+            if s.kind() == CompiledSynapseKind::Recurrent
+                && s.target() as usize == target
+                && tick.enabled_routes[s.route_index() as usize]
+                && p.projections()[s.route_index() as usize]
+                    .update_cadence()
+                    .raw()
+                    == 0
+            {
+                recurrent +=
+                    previous[s.source() as usize] * (w[i] + tick.effective_weight_offsets[i]);
+            }
+        }
+        let mut dendritic = 0.;
+        for b in &q.initial.dendrites.branches()[q.initial.dendrites.target_span(target as u32)] {
+            let sum = b
+                .inputs
+                .iter()
+                .map(|i| previous[i.source as usize] * i.weight)
+                .sum::<f32>();
+            dendritic += (sum - b.threshold).max(0.).tanh() * b.output_gain;
+        }
+        let n = &p.neuron_dynamics()[target];
+        let homeostatic = -n.homeostatic_gain() * metabolism[target];
+        let z = n.bias()
+            + tick.encoded_inputs[target]
+            + tick.projection_gain * (recurrent + dendritic)
+            + homeostatic
+            - tick.local_threshold_shift;
+        let act = match n.activation().raw() {
+            0 => z,
+            1 => z.max(0.),
+            2 => z.tanh(),
+            3 => 1. / (1. + (-z).exp()),
+            _ => return Err("unsupported activation".into()),
+        };
+        let reconstructed = (1. - n.leak()) * previous[target] + n.leak() * act;
+        let native = baseline.final_activations[t][target];
+        assert!(
+            (native - reconstructed).abs() < 1e-6,
+            "last-step audit differs at {target}"
+        );
+        rows.push(json!({"motor":target,"old_activation":previous[target],"bias":n.bias(),"encoded":tick.encoded_inputs[target],"recurrent_sum":recurrent,"dendritic_sum":dendritic,"homeostatic":homeostatic,"projection_gain":tick.projection_gain,"preactivation":z,"native_activation":native,"reconstructed_activation":reconstructed}));
+    }
+    Ok(json!({"frame":64,"microstep":4,"native_prefix_microsteps":3,"rows":rows}))
+}
+fn run() -> Result<Value> {
+    let (_, p, source) = assay::frozen::source(7, true)?;
+    let (_, default_p, _) = assay::frozen::source(7, false)?;
+    let (original, circuits) = assay::frozen::whole_care(&p)?;
+    let d = GpuV11CausalState::for_phenotype(&p)?
+        .dendritic_branches()
+        .clone();
+    let base = [0.1, 0.1, 0., 0., 0.1, 0.45, 0.75, 0., 0.1, 0.1, 0.];
+    let mut conditions = vec![("balanced", base)];
+    for (i, name) in assay::LABELS.iter().enumerate() {
+        let mut a = base;
+        a[i] = if i == 6 { 0.1 } else { 0.9 };
+        conditions.push((*name, a));
+    }
+    for (name, axes) in [
+        ("hunger_fatigue", vec![0, 1]),
+        ("hunger_pain", vec![0, 3]),
+        ("fatigue_boredom", vec![1, 9]),
+        ("hunger_low_atp", vec![0, 6]),
+        ("fatigue_low_atp", vec![1, 6]),
+        ("triple", vec![0, 1, 6]),
+    ] {
+        let mut a = base;
+        for i in axes {
+            a[i] = if i == 6 { 0.1 } else { 0.9 };
+        }
+        conditions.push((name, a));
+    }
+    let mut arms = vec![];
+    let mut reference_traces = BTreeMap::new();
+    for (name, gain, differential) in [
+        ("frozen_v6", 0., false),
+        ("differential_only", 0., true),
+        ("tonic4_only", 4., false),
+        ("tonic6_only", 6., false),
+        ("tonic8_only", 8., false),
+        ("combined4", 4., true),
+        ("combined6", 6., true),
+        ("combined8", 8., true),
+    ] {
+        let (w, edits) = operating::counterbalance(&p, &original, &circuits, gain, differential)?;
+        let candidate = FoundationWeightAsset::from_trained_weights(
+            &p,
+            w.clone(),
+            source.manifest().training_stage(),
+        )?;
+        let candidate_p = bind_candidate(7, &candidate)?;
+        candidate.validate_against(&candidate_p)?;
+        assert_eq!(p.neuron_dynamics(), candidate_p.neuron_dynamics());
+        assert_eq!(p.sensor_encoder(), candidate_p.sensor_encoder());
+        assert_eq!(p.candidate_decoder(), candidate_p.candidate_decoder());
+        assert_eq!(p.projections(), candidate_p.projections());
+        assert_eq!(
+            GpuV11CausalState::for_phenotype(&candidate_p)?.dendritic_branches(),
+            &d
+        );
+        let p = candidate_p;
+        assert!(candidate.validate_against(&default_p).is_err());
+        let mask =
+            StageTrainableMask::from_synapse_indices(&p, &(0..w.len() as u32).collect::<Vec<_>>())?;
+        let trainer =
+            CpuFoundationTrainer::new(p.clone(), candidate.clone(), mask, AdamWConfig::default())?;
+        assert_eq!(trainer.weights(), w.as_slice());
+        let before = serde_json::to_vec(&trainer.checkpoint())?;
+        let baseline_q = combined_sequence(&p, base, base, &d, false);
+        let baseline = trainer.evaluate_replay(&baseline_q)?;
+        let components = baseline_components(&trainer, &p, &w, &baseline_q, &baseline)?;
+        let convergence=[31,47].map(|start|json!({"from_frame":start+1,"to_frame":64,"all_neuron_max_abs_difference":baseline.final_activations[start].iter().zip(&baseline.final_activations[63]).map(|(a,b)|(a-b).abs()).fold(0_f32,f32::max),"motor_max_abs_difference":motor_ids(&p).iter().map(|&m|(baseline.final_activations[start][m]-baseline.final_activations[63][m]).abs()).fold(0_f32,f32::max)}));
+        let mut rows = vec![];
+        for (condition, a) in &conditions {
+            let q = combined_sequence(&p, base, *a, &d, false);
+            assert_eq!(q.initial.dendrites, d);
+            assert_eq!(combined_sequence(&p, base, *a, &d, true), baseline_q);
+            let eval = trainer.evaluate_replay(&q)?;
+            let key = (gain.to_bits(), condition.to_string());
+            if differential {
+                assert_eq!(
+                    &eval.final_activations,
+                    reference_traces.get(&key).ok_or("missing matched trace")?
+                );
+            } else {
+                reference_traces.insert(key, eval.final_activations.clone());
+            }
+            for (context_index, context) in CONTEXTS.iter().enumerate() {
+                let range = context_index * 8..context_index * 8 + 8;
+                let samples=[1,2,4,8,16,32].into_iter().map(|frame|{
+                    let t=assay::BURN+frame-1;
+                    let innate=p.candidate_decoder().families().iter().map(|f|f.innate_contribution(assay::drives(*a),assay::features(f.family(),context))).collect::<Vec<_>>();
+                    let logits=&eval.candidate_logits[t][range.clone()];
+                    let baseline_logits=&baseline.candidate_logits[t][range.clone()];
+                    let delta=logits.iter().zip(baseline_logits).map(|(a,b)|a-b).collect::<Vec<_>>();
+                    let total=logits.iter().zip(&innate).map(|(n,i)|n+i).collect::<Vec<_>>();
+                    let motors=p.candidate_decoder().families().iter().map(|f|{
+                        let ids=p.synapses().iter().filter_map(|s|match s.kind(){CompiledSynapseKind::Decoder(c)if c.head()==DecoderHeadKind::ActionCandidate&&c.family()==f.family()=>Some(s.source()as usize),_=>None}).collect::<BTreeSet<_>>();
+                        json!({"family":f.family(),"motor_ids":ids,"activation":ids.iter().map(|&m|eval.final_activations[t][m]).collect::<Vec<_>>(),"baseline_activation":ids.iter().map(|&m|baseline.final_activations[t][m]).collect::<Vec<_>>()})
+                    }).collect::<Vec<_>>();
+                    json!({"frame":frame,"baseline_logits":baseline_logits,"neural_logits":logits,"neural_delta":delta,"innate":innate,"total":total,"motors":motors})
+                }).collect::<Vec<_>>();
+                rows.push(
+                    json!({"context":context,"condition":condition,"drives":a,"samples":samples}),
+                );
+            }
+        }
+        assert_eq!(before, serde_json::to_vec(&trainer.checkpoint())?);
+        eprintln!("completed {name}");
+        arms.push(json!({"arm":name,"counterbalance_gain":gain,"differential_readout":differential,"candidate_asset_digest":candidate.digest(),"candidate_phenotype_hash":p.phenotype_hash(),"edits":edits,"rows":rows,"baseline_components":components,"baseline_convergence":convergence,"default_graph_rejected":true,"dendrites_preserved":true,"optimizer_preserved":true,"input_cut_sequences_exact":true,"differential_pair_activation_trace_exact":true}));
+    }
+    Ok(
+        json!({"schema":"motor_operating_point_candidate_v1","seed":7,"backend":"native_cpu_replay","source_phenotype":p.phenotype_hash(),"base_compiled_asset":source.digest(),"world_steps":0,"learning_steps":0,"biochemistry":"fixed context, no cadence/receptor adaptation","candidate_probes":"24 simultaneous fixed decoder probes; recurrent evolution does not depend on candidate features","families":p.candidate_decoder().families().iter().map(|f|f.family()).collect::<Vec<_>>(),"arms":arms}),
+    )
+}
+fn main() -> Result<()> {
+    println!("{}", serde_json::to_string_pretty(&run()?)?);
+    Ok(())
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn zero_intervention_preserves_frozen_weights_and_differential_only_preserves_recurrence() {
+        let (_, p, _) = assay::frozen::source(7, true).unwrap();
+        let (w, c) = assay::frozen::whole_care(&p).unwrap();
+        assert_eq!(
+            operating::counterbalance(&p, &w, &c, 0., false).unwrap().0,
+            w
+        );
+        let (changed, _) = operating::counterbalance(&p, &w, &c, 0., true).unwrap();
+        for (i, s) in p.synapses().iter().enumerate() {
+            if s.kind() == CompiledSynapseKind::Recurrent {
+                assert_eq!(w[i], changed[i]);
+            }
+        }
+    }
+    #[test]
+    fn counterbalance_keeps_positive_motor_edges_and_rejects_invalid_gain() {
+        let (_, p, _) = assay::frozen::source(7, true).unwrap();
+        let (w, c) = assay::frozen::whole_care(&p).unwrap();
+        assert!(operating::counterbalance(&p, &w, &c, f32::NAN, true).is_err());
+        let (changed, edits) = operating::counterbalance(&p, &w, &c, 6., true).unwrap();
+        assert!(edits.iter().any(|e| e["role"] == "tonic_counterbalance"));
+        for (i, s) in p.synapses().iter().enumerate() {
+            if s.kind() == CompiledSynapseKind::Recurrent
+                && p.projections()[s.route_index() as usize].projection_type()
+                    == ProjectionType::MotorProposal
+            {
+                assert!(changed[i] >= 0.);
+            }
+        }
+    }
+    #[test]
+    fn changed_asset_requires_fresh_matching_phenotype() {
+        let (_, p, source) = assay::frozen::source(7, true).unwrap();
+        let (w, c) = assay::frozen::whole_care(&p).unwrap();
+        let (w, _) = operating::counterbalance(&p, &w, &c, 6., true).unwrap();
+        let candidate =
+            FoundationWeightAsset::from_trained_weights(&p, w, source.manifest().training_stage())
+                .unwrap();
+        assert!(candidate.validate_against(&p).is_err());
+        let bound = bind_candidate(7, &candidate).unwrap();
+        candidate.validate_against(&bound).unwrap();
+        assert_ne!(p.phenotype_hash(), bound.phenotype_hash());
+        assert_eq!(
+            GpuV11CausalState::for_phenotype(&p)
+                .unwrap()
+                .dendritic_branches(),
+            GpuV11CausalState::for_phenotype(&bound)
+                .unwrap()
+                .dendritic_branches()
+        );
+    }
+}

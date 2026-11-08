@@ -1,0 +1,635 @@
+[
+  {
+    "differential": false,
+    "gain": 0.0,
+    "reservoir": 1967,
+    "samples": [
+      {
+        "frame": 1,
+        "neurons": [
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 383
+          },
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 898
+          },
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 911
+          },
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 1967
+          }
+        ]
+      },
+      {
+        "frame": 2,
+        "neurons": [
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 383
+          },
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 898
+          },
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 911
+          },
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 1967
+          }
+        ]
+      },
+      {
+        "frame": 4,
+        "neurons": [
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 383
+          },
+          {
+            "activation": 2.3704538421043253e-07,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 898
+          },
+          {
+            "activation": 2.3704538421043253e-07,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 911
+          },
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 1967
+          }
+        ]
+      },
+      {
+        "frame": 8,
+        "neurons": [
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 383
+          },
+          {
+            "activation": 7.496241778426338e-07,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 898
+          },
+          {
+            "activation": 7.496241778426338e-07,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 911
+          },
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 1967
+          }
+        ]
+      },
+      {
+        "frame": 16,
+        "neurons": [
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 383
+          },
+          {
+            "activation": 7.935437338346674e-07,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 898
+          },
+          {
+            "activation": 7.935437338346674e-07,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 911
+          },
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 1967
+          }
+        ]
+      },
+      {
+        "frame": 32,
+        "neurons": [
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 383
+          },
+          {
+            "activation": 7.935693133731547e-07,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 898
+          },
+          {
+            "activation": 7.935693133731547e-07,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 911
+          },
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 1967
+          }
+        ]
+      },
+      {
+        "frame": 64,
+        "neurons": [
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 383
+          },
+          {
+            "activation": 7.935693133731547e-07,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 898
+          },
+          {
+            "activation": 7.935693133731547e-07,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 911
+          },
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 1967
+          }
+        ]
+      }
+    ],
+    "source": 383
+  },
+  {
+    "differential": false,
+    "gain": 6.0,
+    "reservoir": 1967,
+    "samples": [
+      {
+        "frame": 1,
+        "neurons": [
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 383
+          },
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 898
+          },
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 911
+          },
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 1967
+          }
+        ]
+      },
+      {
+        "frame": 2,
+        "neurons": [
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 383
+          },
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 898
+          },
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 911
+          },
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 1967
+          }
+        ]
+      },
+      {
+        "frame": 4,
+        "neurons": [
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 383
+          },
+          {
+            "activation": 2.3704538421043253e-07,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 898
+          },
+          {
+            "activation": 2.3704538421043253e-07,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 911
+          },
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 1967
+          }
+        ]
+      },
+      {
+        "frame": 8,
+        "neurons": [
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 383
+          },
+          {
+            "activation": 7.496241778426338e-07,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 898
+          },
+          {
+            "activation": 7.496241778426338e-07,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 911
+          },
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 1967
+          }
+        ]
+      },
+      {
+        "frame": 16,
+        "neurons": [
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 383
+          },
+          {
+            "activation": 7.935437338346674e-07,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 898
+          },
+          {
+            "activation": 7.935437338346674e-07,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 911
+          },
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 1967
+          }
+        ]
+      },
+      {
+        "frame": 32,
+        "neurons": [
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 383
+          },
+          {
+            "activation": 7.935693133731547e-07,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 898
+          },
+          {
+            "activation": 7.935693133731547e-07,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 911
+          },
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 1967
+          }
+        ]
+      },
+      {
+        "frame": 64,
+        "neurons": [
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 383
+          },
+          {
+            "activation": 7.935693133731547e-07,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 898
+          },
+          {
+            "activation": 7.935693133731547e-07,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 911
+          },
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 1967
+          }
+        ]
+      }
+    ],
+    "source": 383
+  },
+  {
+    "differential": true,
+    "gain": 6.0,
+    "reservoir": 1967,
+    "samples": [
+      {
+        "frame": 1,
+        "neurons": [
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 383
+          },
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 898
+          },
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 911
+          },
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 1967
+          }
+        ]
+      },
+      {
+        "frame": 2,
+        "neurons": [
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 383
+          },
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 898
+          },
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 911
+          },
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 1967
+          }
+        ]
+      },
+      {
+        "frame": 4,
+        "neurons": [
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 383
+          },
+          {
+            "activation": 2.3704538421043253e-07,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 898
+          },
+          {
+            "activation": 2.3704538421043253e-07,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 911
+          },
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 1967
+          }
+        ]
+      },
+      {
+        "frame": 8,
+        "neurons": [
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 383
+          },
+          {
+            "activation": 7.496241778426338e-07,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 898
+          },
+          {
+            "activation": 7.496241778426338e-07,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 911
+          },
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 1967
+          }
+        ]
+      },
+      {
+        "frame": 16,
+        "neurons": [
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 383
+          },
+          {
+            "activation": 7.935437338346674e-07,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 898
+          },
+          {
+            "activation": 7.935437338346674e-07,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 911
+          },
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 1967
+          }
+        ]
+      },
+      {
+        "frame": 32,
+        "neurons": [
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 383
+          },
+          {
+            "activation": 7.935693133731547e-07,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 898
+          },
+          {
+            "activation": 7.935693133731547e-07,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 911
+          },
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 1967
+          }
+        ]
+      },
+      {
+        "frame": 64,
+        "neurons": [
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 383
+          },
+          {
+            "activation": 7.935693133731547e-07,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 898
+          },
+          {
+            "activation": 7.935693133731547e-07,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 911
+          },
+          {
+            "activation": 0.0,
+            "bias": 0.0,
+            "encoded_input": 0.0,
+            "id": 1967
+          }
+        ]
+      }
+    ],
+    "source": 383
+  }
+]

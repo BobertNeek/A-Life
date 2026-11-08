@@ -15,6 +15,29 @@ use std::{
     error::Error,
 };
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
+// Bind changed weights to their own fresh, explicit asset identity. Never relax
+// validation against the old asset-bound phenotype or rewrite acquired state.
+fn bind_candidate(seed: u64, asset: &FoundationWeightAsset) -> Result<BrainPhenotype> {
+    let mut config = alife_world::CanonicalNewGameConfig::phase3(seed, 1)?;
+    config.brain_class = BrainScaleTier::Standard2048;
+    let builtin = FoundationWeightAsset::builtin_n2048_v1(config.sensor_profile)?;
+    let game = alife_world::create_canonical_new_game_with_n2048_candidate(&config, &builtin)?;
+    let record = game.world.organism_registry().iter().next().unwrap();
+    let genome = record.phenotype().brain_genome.clone();
+    let development = alife_runtime::canonical_preparation::foundation_construction_development(
+        &genome,
+        &BrainCapacityClass::n2048(),
+        &record.phenotype().development_state_at(Tick::ZERO)?,
+    )?;
+    Ok(
+        PhenotypeCompiler::compile_n2048_experimental_foundation_candidate(
+            genome,
+            development,
+            asset.clone(),
+        )?
+        .0,
+    )
+}
 const CONTEXTS: [&str; 3] = ["nutritious_contact", "aversive_contact", "distant"];
 fn combined_sequence(
     p: &BrainPhenotype,
@@ -58,6 +81,10 @@ fn baseline_components(
     baseline: &TrainingReplayEvaluation,
 ) -> Result<Value> {
     assert_eq!(p.microstep_count(), 4);
+    assert!(q
+        .ticks
+        .iter()
+        .all(|t| t.microstep_count == 4 && t.structural_synapses.is_empty()));
     let mut prefix = q.clone();
     prefix.ticks.last_mut().unwrap().microstep_count = 3;
     let pre = trainer.evaluate_replay(&prefix)?;
@@ -160,15 +187,23 @@ fn run() -> Result<Value> {
             w.clone(),
             source.manifest().training_stage(),
         )?;
-        candidate.validate_against(&p)?;
+        let candidate_p = bind_candidate(7, &candidate)?;
+        candidate.validate_against(&candidate_p)?;
+        assert_eq!(p.neuron_dynamics(), candidate_p.neuron_dynamics());
+        assert_eq!(p.sensor_encoder(), candidate_p.sensor_encoder());
+        assert_eq!(p.candidate_decoder(), candidate_p.candidate_decoder());
+        assert_eq!(p.projections(), candidate_p.projections());
+        assert_eq!(
+            GpuV11CausalState::for_phenotype(&candidate_p)?.dendritic_branches(),
+            &d
+        );
+        let p = candidate_p;
         assert!(candidate.validate_against(&default_p).is_err());
         let mask =
             StageTrainableMask::from_synapse_indices(&p, &(0..w.len() as u32).collect::<Vec<_>>())?;
-        let mut trainer =
-            CpuFoundationTrainer::new(p.clone(), source.clone(), mask, AdamWConfig::default())?;
-        let mut cp = trainer.checkpoint();
-        cp.weights = w.clone();
-        trainer.restore_checkpoint(cp)?;
+        let trainer =
+            CpuFoundationTrainer::new(p.clone(), candidate.clone(), mask, AdamWConfig::default())?;
+        assert_eq!(trainer.weights(), w.as_slice());
         let before = serde_json::to_vec(&trainer.checkpoint())?;
         let baseline_q = combined_sequence(&p, base, base, &d, false);
         let baseline = trainer.evaluate_replay(&baseline_q)?;
@@ -211,7 +246,7 @@ fn run() -> Result<Value> {
         }
         assert_eq!(before, serde_json::to_vec(&trainer.checkpoint())?);
         eprintln!("completed {name}");
-        arms.push(json!({"arm":name,"counterbalance_gain":gain,"differential_readout":differential,"candidate_asset_digest":candidate.digest(),"edits":edits,"rows":rows,"baseline_components":components,"baseline_convergence":convergence,"default_graph_rejected":true,"dendrites_preserved":true,"optimizer_preserved":true,"input_cut_sequences_exact":true,"differential_pair_activation_trace_exact":true}));
+        arms.push(json!({"arm":name,"counterbalance_gain":gain,"differential_readout":differential,"candidate_asset_digest":candidate.digest(),"candidate_phenotype_hash":p.phenotype_hash(),"edits":edits,"rows":rows,"baseline_components":components,"baseline_convergence":convergence,"default_graph_rejected":true,"dendrites_preserved":true,"optimizer_preserved":true,"input_cut_sequences_exact":true,"differential_pair_activation_trace_exact":true}));
     }
     Ok(
         json!({"schema":"motor_operating_point_candidate_v1","seed":7,"backend":"native_cpu_replay","source_phenotype":p.phenotype_hash(),"base_compiled_asset":source.digest(),"world_steps":0,"learning_steps":0,"biochemistry":"fixed context, no cadence/receptor adaptation","candidate_probes":"24 simultaneous fixed decoder probes; recurrent evolution does not depend on candidate features","families":p.candidate_decoder().families().iter().map(|f|f.family()).collect::<Vec<_>>(),"arms":arms}),
@@ -253,6 +288,119 @@ mod tests {
             {
                 assert!(changed[i] >= 0.);
             }
+        }
+    }
+    #[test]
+    fn changed_asset_requires_fresh_matching_phenotype() {
+        let (_, p, source) = assay::frozen::source(7, true).unwrap();
+        let (w, c) = assay::frozen::whole_care(&p).unwrap();
+        let (w, _) = operating::counterbalance(&p, &w, &c, 6., true).unwrap();
+        let candidate =
+            FoundationWeightAsset::from_trained_weights(&p, w, source.manifest().training_stage())
+                .unwrap();
+        assert!(candidate.validate_against(&p).is_err());
+        let bound = bind_candidate(7, &candidate).unwrap();
+        candidate.validate_against(&bound).unwrap();
+        assert_ne!(p.phenotype_hash(), bound.phenotype_hash());
+        assert_eq!(
+            GpuV11CausalState::for_phenotype(&p)
+                .unwrap()
+                .dendritic_branches(),
+            GpuV11CausalState::for_phenotype(&bound)
+                .unwrap()
+                .dendritic_branches()
+        );
+    }
+    #[test]
+    fn all_candidate_coordinates_and_dynamics_match_the_frozen_graph() {
+        let (_, p, source) = assay::frozen::source(7, true).unwrap();
+        let (w, c) = assay::frozen::whole_care(&p).unwrap();
+        for gain in [0., 4., 6., 8.] {
+            for differential in [false, true] {
+                let (changed, _) =
+                    operating::counterbalance(&p, &w, &c, gain, differential).unwrap();
+                let asset = FoundationWeightAsset::from_trained_weights(
+                    &p,
+                    changed,
+                    source.manifest().training_stage(),
+                )
+                .unwrap();
+                let bound = bind_candidate(7, &asset).unwrap();
+                assert_eq!(p.synapses().len(), bound.synapses().len());
+                for (a, b) in p.synapses().iter().zip(bound.synapses()) {
+                    assert_eq!(
+                        (a.source(), a.target(), a.route_index(), a.kind()),
+                        (b.source(), b.target(), b.route_index(), b.kind())
+                    );
+                }
+                assert_eq!(p.projections(), bound.projections());
+                assert_eq!(p.neuron_dynamics(), bound.neuron_dynamics());
+                assert_eq!(p.sensor_encoder(), bound.sensor_encoder());
+                assert_eq!(p.candidate_decoder(), bound.candidate_decoder());
+                assert_eq!(
+                    GpuV11CausalState::for_phenotype(&p)
+                        .unwrap()
+                        .dendritic_branches(),
+                    GpuV11CausalState::for_phenotype(&bound)
+                        .unwrap()
+                        .dendritic_branches()
+                );
+            }
+        }
+    }
+    #[test]
+    fn measure_actual_tonic_source_and_relays_in_fixed_context() {
+        let (_, p, source) = assay::frozen::source(7, true).unwrap();
+        let (w, c) = assay::frozen::whole_care(&p).unwrap();
+        let (_, paths) = operating::counterbalance(&p, &w, &c, 6., false).unwrap();
+        let first = paths
+            .iter()
+            .find(|e| e["role"] == "tonic_counterbalance")
+            .unwrap()["first"]
+            .as_u64()
+            .unwrap() as usize;
+        let source_neuron = p.synapses()[first].source() as usize;
+        let reservoir = p.synapses()[first].target() as usize;
+        let mut ids = BTreeSet::from([source_neuron, reservoir]);
+        ids.extend(
+            paths
+                .iter()
+                .filter(|e| e["role"] == "tonic_counterbalance")
+                .map(|e| e["relay"].as_u64().unwrap() as usize),
+        );
+        let base = [0.1, 0.1, 0., 0., 0.1, 0.45, 0.75, 0., 0.1, 0.1, 0.];
+        for (gain, differential) in [(0., false), (6., false), (6., true)] {
+            let (changed, _) = operating::counterbalance(&p, &w, &c, gain, differential).unwrap();
+            let asset = FoundationWeightAsset::from_trained_weights(
+                &p,
+                changed,
+                source.manifest().training_stage(),
+            )
+            .unwrap();
+            let bound = bind_candidate(7, &asset).unwrap();
+            let d = GpuV11CausalState::for_phenotype(&bound)
+                .unwrap()
+                .dendritic_branches()
+                .clone();
+            let mask = StageTrainableMask::from_synapse_indices(
+                &bound,
+                &(0..w.len() as u32).collect::<Vec<_>>(),
+            )
+            .unwrap();
+            let trainer =
+                CpuFoundationTrainer::new(bound.clone(), asset, mask, AdamWConfig::default())
+                    .unwrap();
+            let q = combined_sequence(&bound, base, base, &d, false);
+            let eval = trainer.evaluate_replay(&q).unwrap();
+            assert!(eval
+                .final_activations
+                .iter()
+                .all(|a| a[source_neuron] == 0. && a[reservoir] == 0.));
+            let samples=[1,2,4,8,16,32,64].map(|frame|json!({"frame":frame,"neurons":ids.iter().map(|&id|json!({"id":id,"bias":bound.neuron_dynamics()[id].bias(),"encoded_input":q.ticks[frame-1].encoded_inputs[id],"activation":eval.final_activations[frame-1][id]})).collect::<Vec<_>>()}));
+            println!(
+                "TONIC_TRACE {}",
+                json!({"gain":gain,"differential":differential,"source":source_neuron,"reservoir":reservoir,"samples":samples})
+            );
         }
     }
 }

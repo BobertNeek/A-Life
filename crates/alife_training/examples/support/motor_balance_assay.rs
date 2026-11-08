@@ -3,13 +3,10 @@
 #[path = "multidrive_frozen.rs"]
 pub mod frozen;
 use alife_core::*;
-use alife_gpu_backend::GpuV11CausalState;
 use alife_training::{
-    cpu::*, AdamWConfig, StageTrainableMask, TrainingInitialState, TrainingReplayCandidate,
-    TrainingReplayTick, TrainingSequence,
+    TrainingInitialState, TrainingReplayCandidate, TrainingReplayTick, TrainingSequence,
 };
 use serde_json::{json, Value};
-use sha2::{Digest, Sha256};
 use std::{
     collections::{BTreeSet, VecDeque},
     error::Error,

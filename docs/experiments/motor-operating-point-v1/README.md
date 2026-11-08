@@ -1,4 +1,4 @@
-# Motor operating-point candidate V1 (prospective)
+# Motor operating-point candidate V1
 
 This independent weight-only candidate follows the measured detached multi-drive routing assay. It does not modify or re-label frozen whole-care6, the default ABI, existing assets or learned creature state. It preserves all 64 inherited dendritic branches. Each candidate receives a separately computed immutable foundation-asset digest; the default graph must reject its explicit research-graph coordinates.
 
@@ -9,7 +9,7 @@ The first factorial experiment separates two effects:
 
 Original, readout-only, three tonic-only, and three combined arms use matched conditions and preserve optimizer state. The supported scope is hunger/fatigue/ATP and their conflicts with the same frozen sensor/receptor context as the routing assay. ATP is measured as a negative availability perturbation but is not yet rewired by this operating-point candidate; zero ATP sensitivity remains a known limitation. Recurrent competition will be a separately tested factor, not hidden inside this correction.
 
-The candidate is not a complete biological policy: social, thermal and reproductive opportunity grounding remain unresolved. Contact remains generic object grabbing, not a social remedy. No autonomous world run, learning or promotion is authorized by an assay result. This document is prospective until a separate receipt/results file records actual tests.
+The candidate is not a complete biological policy: social, thermal and reproductive opportunity grounding remain unresolved. Contact remains generic object grabbing, not a social remedy. No autonomous world run, learning or promotion is authorized by an assay result. The measured outcome and qualification are recorded in RESULTS.md and receipt.json.
 
 ## Strengthened controls before the first run
 

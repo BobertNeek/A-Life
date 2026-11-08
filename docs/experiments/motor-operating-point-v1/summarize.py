@@ -14,11 +14,30 @@ baseline = read(sys.argv[2])
 assert candidate['schema'] == 'motor_operating_point_candidate_v1'
 assert baseline['schema'] == 'detached_multidrive_routing_v1'
 assert candidate['world_steps'] == candidate['learning_steps'] == 0
+expected_arms = {'frozen_v6','differential_only','tonic4_only','tonic6_only','tonic8_only','combined4','combined6','combined8'}
+assert len(candidate['arms']) == 8 and {a['arm'] for a in candidate['arms']} == expected_arms
+assert len(candidate['families']) == 8
+for arm in candidate['arms']:
+    assert len(arm['rows']) == 54
+    assert len({(r['context'],r['condition']) for r in arm['rows']}) == 54
+    for row in arm['rows']:
+        assert len(row['samples']) == 6
+        assert [s['frame'] for s in row['samples']] == [1,2,4,8,16,32]
+        for sample in row['samples']:
+            assert len(sample['motors']) == 8
+            assert [m['family'] for m in sample['motors']] == candidate['families']
+            for key in ['neural_logits','baseline_logits','neural_delta','innate','total']:
+                assert len(sample[key]) == 8
+            for m in sample['motors']:
+                assert len(m['motor_ids']) == len(m['activation']) == len(m['baseline_activation']) == 16
 frozen = next(a for a in candidate['arms'] if a['arm'] == 'frozen_v6')
 original = next(a for a in baseline['arms'] if a['arm'] == 'whole_care6')
+assert len(original['rows']) == 45
+assert original['families'] == candidate['families']
 lookup = {(r['context'],r['condition']):r for r in frozen['rows']}
 checks = 0
 for r in original['rows']:
+    assert len(r['samples']) == 6
     compared = lookup[r['context'],r['perturbation']]
     assert compared['drives'] == r['drives']
     for a,b in zip(compared['samples'],r['samples']):
@@ -27,11 +46,13 @@ for r in original['rows']:
         assert a['baseline_logits'] == b['baseline_neural_logits']
         assert a['neural_delta'] == b['neural_delta']
         assert a['innate'] == b['direct_innate']
+        assert len(b['motor_deltas']) == 8
         for m,n in zip(a['motors'],b['motor_deltas']):
             assert m['family'] == n['family'] and m['motor_ids'] == n['motor_ids']
             assert m['activation'] == n['activation']
             assert m['baseline_activation'] == n['baseline_activation']
         checks += 1
+assert checks == 270
 summary = {'schema':candidate['schema'], 'families':candidate['families'], 'frozen_baseline_exact_snapshot_checks':checks, 'arms':[]}
 for arm in candidate['arms']:
     for flag in ['default_graph_rejected','dendrites_preserved','optimizer_preserved','input_cut_sequences_exact','differential_pair_activation_trace_exact']:
