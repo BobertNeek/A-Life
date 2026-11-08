@@ -52,3 +52,7 @@ required-features = ["cpu-backend"]
 [[example]]
 name = "probe_multidrive_routing"
 required-features = ["cpu-backend"]
+
+[[example]]
+name = "probe_motor_operating_point"
+required-features = ["cpu-backend"]
