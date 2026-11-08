@@ -142,10 +142,7 @@ fn assert_identical(
 fn prepared_motor_adapter_matches_old_bytes_all_channels_and_record_states() {
     let channels = [
         (MotorChannel::Posture, ActionKind::Rest.canonical_id()),
-        (
-            MotorChannel::Manipulation,
-            ActionKind::Inspect.canonical_id(),
-        ),
+        (MotorChannel::Posture, ActionKind::Inspect.canonical_id()),
         (MotorChannel::Locomotion, HeadlessActionIds::NO_LOCOMOTION),
         (MotorChannel::Locomotion, HeadlessActionIds::STEP_FORWARD),
         (MotorChannel::Locomotion, HeadlessActionIds::APPROACH),

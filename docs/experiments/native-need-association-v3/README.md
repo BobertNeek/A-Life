@@ -1,3 +1,9 @@
+Completed status: this source was qualified, then its single 12-decision fixture
+stored five Rest intervals and naturally recalled four own-history rows. It
+stored no Inspect source and failed the declared observed-pair goal. See
+[the exact bounded results](RESULTS-v3.md) and [role erratum](ROLE-ERRATUM.md).
+No policy or nonzero need-value claim follows.
+
 # Native need association V3: exact requested and adapted commands
 
 V2's single seed 2026111301 completed 12 decisions and stored no source records.

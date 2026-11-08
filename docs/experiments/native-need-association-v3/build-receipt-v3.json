@@ -1,0 +1,48 @@
+{
+  "study": "need-association-admission-v3",
+  "source_revision": "requested-adapted-binding-v3",
+  "base_commit": "c775c8c92e8f5e625f8a3e861ef79200199b54df",
+  "source_input_count": 709,
+  "source_input_root_sha256": "f1d59b52588a9a78dc84aa02e492a52b7872458c461d590ca994bea7be62d09d",
+  "source_patch_sha256": "96603245789828fdc3bcbe4fd6d60c5923d181ccc3a82895426020806773372e",
+  "source_correction_patch_sha256": "bd59702628d861b7bfdf2f6896121d4222686100368ab38eaa0d79be6d24bf1d",
+  "plan_sha256": "8181d4e1f283aebefb7f0749b8af54886bc2aa460ea6cc0cf51020a32a038a87",
+  "executable_path": "/workspace/shared/native-need-association-v3-evidence/native-admission-v3.bin",
+  "executable_sha256": "3b0c0537f6e132aea3f4237a5149e2791fabbcd3c3ad2a98098e654600ca6a0d",
+  "preserved_executable_outside_cargo_target": true,
+  "asset_sha256": "1d2978cbd857a7ca99dc1b2cf65be9f6ff417a6f78199282e0431b94332c9377",
+  "toolchain": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+  "toolchain_executable_hashes": {
+    "rustc": "b53b780f77f952062f8ca8a3b70aef2390b1e45ad91939be94afdc9543026853",
+    "cargo": "a670e02cfa39ac2e53f77a2d911ca1fc9e2c479b0603ec956625be1daf24e3af"
+  },
+  "cargo_locked": true,
+  "build_jobs": 1,
+  "incremental": false,
+  "debug_symbols": false,
+  "tests": {
+    "core_native": 10,
+    "source_context": 16,
+    "adapter": 4,
+    "no_step_host": 1,
+    "strict_world_clippy": true,
+    "strict_cpu_clippy": true
+  },
+  "preflight": {
+    "candidates": 12,
+    "reader_rows": 4,
+    "extra_atp_q16": 178,
+    "ordinary_atp_q16": 1774,
+    "available_atp_q16": 49151
+  },
+  "logs": {
+    "source-tests-final-v3.log": "5b08001a1e370832594d7c29786ec593578a84d29184643311b286ddea320492",
+    "preflight-final-v3.log": "462e2553159d1c048c794354f57f47a31dec7833c9ad1d025a6b2260b84915f3",
+    "adapter-tests-final-v3.log": "b26744ff1a8add2b65bc1b9917da23927a439d07ab35b89991d3206868d1b5a1",
+    "core-tests-final-v3.log": "d11b0790a48550f31ec4ad6f466c08075ab5216756d0f062634e08165c054726",
+    "clippy-world-final-v3.log": "fee1a82f8df2e0cdcd06321a51e52894a005b8662ce8485b3c0643a1cbc2abe9",
+    "clippy-training-final-v3.log": "c189d27ab9848a40ee9d5ac6a315da59b3b74c91ed95d08a0806b9daee821978"
+  },
+  "before_exposure": true,
+  "created_utc": "2026-11-08T11:56:15.037102+00:00"
+}

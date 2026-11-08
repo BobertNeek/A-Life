@@ -1,0 +1,954 @@
+{
+  "study": "need-association-admission-v3",
+  "source_revision": "requested-adapted-binding-v3",
+  "construction_seed": 2026111301,
+  "sampling_seed": 2026111302,
+  "native_decisions": 12,
+  "result": "completed_observed_admission_null_with_genuine_own_recall",
+  "stop": "decision_budget",
+  "exit_code": 101,
+  "source_status_counts": {
+    "Unsupported:unsupported_representative": 1,
+    "Unsupported:additional_meaningful_command": 6,
+    "Stored": 5
+  },
+  "selected_family_counts": {
+    "Approach": 1,
+    "Inspect": 3,
+    "Rest": 8
+  },
+  "stored_own_intervals": 5,
+  "stored_observed_intervals": 0,
+  "paired_observed_support_rows": 0,
+  "paired_candidate_support_rows": 4,
+  "first_natural_pair": {
+    "query_sequence": 9,
+    "query_tick": 8,
+    "family": "Rest",
+    "action_source_sequence": 8,
+    "reference_source_sequence": 8,
+    "native_readout": 0.0,
+    "raw_action_equals_reference": true
+  },
+  "changed_candidate_logits": 0,
+  "nonzero_native_readouts": 0,
+  "founder_optimizer_exact": true,
+  "requested_vs_adapted_commands_changed": 11,
+  "all_before_record_world_equal": true,
+  "all_measured_before_world_equal": true,
+  "all_measured_after_final_host_equal": true,
+  "all_world_after_different_from_final_host": true,
+  "all_seven_valued_drive_deltas_zero": true,
+  "claims": {
+    "observed_action_reference_reachability": false,
+    "own_action_reference_reachability": true,
+    "policy_competence": false,
+    "retention": false,
+    "gpu_parity": false
+  },
+  "diagnostic_note": "Context mismatch labels are grouped differing-field diagnostics, not a proof that every listed field separately exceeded its bound. Observed support is absent because no Inspect source was admitted.",
+  "source_input_root_sha256": "f1d59b52588a9a78dc84aa02e492a52b7872458c461d590ca994bea7be62d09d",
+  "source_patch_sha256": "96603245789828fdc3bcbe4fd6d60c5923d181ccc3a82895426020806773372e",
+  "plan_sha256": "8181d4e1f283aebefb7f0749b8af54886bc2aa460ea6cc0cf51020a32a038a87",
+  "executable_sha256": "3b0c0537f6e132aea3f4237a5149e2791fabbcd3c3ad2a98098e654600ca6a0d",
+  "asset_sha256": "1d2978cbd857a7ca99dc1b2cf65be9f6ff417a6f78199282e0431b94332c9377",
+  "rows": [
+    {
+      "sequence": 1,
+      "tick": 0,
+      "selected_family": "Approach",
+      "selected_action": 103,
+      "source_status": "Unsupported:unsupported_representative",
+      "channels": [
+        {
+          "channel": "Locomotion",
+          "requested_primitive": 103,
+          "executed_primitive": 103,
+          "requested_intensity": 1.0,
+          "adapted_intensity": 1.0,
+          "phase": "Completed",
+          "contact": "None",
+          "displacement_length": 0.0,
+          "physical_energy_cost": 0.0,
+          "measured_intensity": 0.0
+        }
+      ],
+      "biology_checks": {
+        "before_record_equals_world": true,
+        "measured_before_equals_world": true,
+        "measured_after_equals_final_host": true,
+        "world_after_equals_final_host": false
+      },
+      "reader_summaries": [
+        {
+          "family": "Inspect",
+          "action_sequence": null,
+          "reference_sequence": null,
+          "action_confidence": 0.0,
+          "reference_confidence": 0.0,
+          "action_mismatch_fields": [
+            "no source in namespace"
+          ],
+          "reference_mismatch_fields": [
+            "no own-reference source"
+          ],
+          "base_logit": 4.512239456176758,
+          "final_logit": 4.512239456176758,
+          "native_readout": 0.0
+        },
+        {
+          "family": "Rest",
+          "action_sequence": null,
+          "reference_sequence": null,
+          "action_confidence": 0.0,
+          "reference_confidence": 0.0,
+          "action_mismatch_fields": [
+            "no source in namespace"
+          ],
+          "reference_mismatch_fields": [
+            "no own-reference source"
+          ],
+          "base_logit": 4.536093711853027,
+          "final_logit": 4.536093711853027,
+          "native_readout": 0.0
+        }
+      ],
+      "lookup_record_evaluations": 0
+    },
+    {
+      "sequence": 2,
+      "tick": 1,
+      "selected_family": "Inspect",
+      "selected_action": 4,
+      "source_status": "Unsupported:additional_meaningful_command",
+      "channels": [
+        {
+          "channel": "Locomotion",
+          "requested_primitive": 101,
+          "executed_primitive": 101,
+          "requested_intensity": 1.0,
+          "adapted_intensity": 0.9998121857643127,
+          "phase": "Completed",
+          "contact": "Moved",
+          "displacement_length": 0.09998130798339844,
+          "physical_energy_cost": 0.07999999821186066,
+          "measured_intensity": 0.9998130798339844
+        },
+        {
+          "channel": "Posture",
+          "requested_primitive": 4,
+          "executed_primitive": 4,
+          "requested_intensity": 1.0,
+          "adapted_intensity": 1.0,
+          "phase": "Completed",
+          "contact": "Touch",
+          "displacement_length": 0.0,
+          "physical_energy_cost": 0.019999999552965164,
+          "measured_intensity": null
+        }
+      ],
+      "biology_checks": {
+        "before_record_equals_world": true,
+        "measured_before_equals_world": true,
+        "measured_after_equals_final_host": true,
+        "world_after_equals_final_host": false
+      },
+      "reader_summaries": [
+        {
+          "family": "Inspect",
+          "action_sequence": null,
+          "reference_sequence": null,
+          "action_confidence": 0.0,
+          "reference_confidence": 0.0,
+          "action_mismatch_fields": [
+            "no source in namespace"
+          ],
+          "reference_mismatch_fields": [
+            "no own-reference source"
+          ],
+          "base_logit": 6.296153545379639,
+          "final_logit": 6.296153545379639,
+          "native_readout": 0.0
+        },
+        {
+          "family": "Rest",
+          "action_sequence": null,
+          "reference_sequence": null,
+          "action_confidence": 0.0,
+          "reference_confidence": 0.0,
+          "action_mismatch_fields": [
+            "no source in namespace"
+          ],
+          "reference_mismatch_fields": [
+            "no own-reference source"
+          ],
+          "base_logit": 6.436788558959961,
+          "final_logit": 6.436788558959961,
+          "native_readout": 0.0
+        }
+      ],
+      "lookup_record_evaluations": 0
+    },
+    {
+      "sequence": 3,
+      "tick": 2,
+      "selected_family": "Rest",
+      "selected_action": 3,
+      "source_status": "Stored",
+      "channels": [
+        {
+          "channel": "Locomotion",
+          "requested_primitive": 103,
+          "executed_primitive": 103,
+          "requested_intensity": 1.0,
+          "adapted_intensity": 0.9995691776275635,
+          "phase": "Completed",
+          "contact": "None",
+          "displacement_length": 0.0,
+          "physical_energy_cost": 0.0,
+          "measured_intensity": 0.0
+        },
+        {
+          "channel": "Posture",
+          "requested_primitive": 3,
+          "executed_primitive": 3,
+          "requested_intensity": 1.0,
+          "adapted_intensity": 1.0,
+          "phase": "Completed",
+          "contact": "None",
+          "displacement_length": 0.0,
+          "physical_energy_cost": 0.0,
+          "measured_intensity": null
+        }
+      ],
+      "biology_checks": {
+        "before_record_equals_world": true,
+        "measured_before_equals_world": true,
+        "measured_after_equals_final_host": true,
+        "world_after_equals_final_host": false
+      },
+      "reader_summaries": [
+        {
+          "family": "Inspect",
+          "action_sequence": null,
+          "reference_sequence": null,
+          "action_confidence": 0.0,
+          "reference_confidence": 0.0,
+          "action_mismatch_fields": [
+            "no source in namespace"
+          ],
+          "reference_mismatch_fields": [
+            "no own-reference source"
+          ],
+          "base_logit": 6.803918838500977,
+          "final_logit": 6.803918838500977,
+          "native_readout": 0.0
+        },
+        {
+          "family": "Rest",
+          "action_sequence": null,
+          "reference_sequence": null,
+          "action_confidence": 0.0,
+          "reference_confidence": 0.0,
+          "action_mismatch_fields": [
+            "no source in namespace"
+          ],
+          "reference_mismatch_fields": [
+            "no own-reference source"
+          ],
+          "base_logit": 7.182110786437988,
+          "final_logit": 7.182110786437988,
+          "native_readout": 0.0
+        }
+      ],
+      "lookup_record_evaluations": 0
+    },
+    {
+      "sequence": 4,
+      "tick": 3,
+      "selected_family": "Inspect",
+      "selected_action": 4,
+      "source_status": "Unsupported:additional_meaningful_command",
+      "channels": [
+        {
+          "channel": "Locomotion",
+          "requested_primitive": 101,
+          "executed_primitive": 101,
+          "requested_intensity": 1.0,
+          "adapted_intensity": 0.9993813633918762,
+          "phase": "Completed",
+          "contact": "Moved",
+          "displacement_length": 0.09993815422058105,
+          "physical_energy_cost": 0.07999999821186066,
+          "measured_intensity": 0.9993815422058105
+        },
+        {
+          "channel": "Posture",
+          "requested_primitive": 4,
+          "executed_primitive": 4,
+          "requested_intensity": 1.0,
+          "adapted_intensity": 1.0,
+          "phase": "Completed",
+          "contact": "Touch",
+          "displacement_length": 0.0,
+          "physical_energy_cost": 0.019999999552965164,
+          "measured_intensity": null
+        }
+      ],
+      "biology_checks": {
+        "before_record_equals_world": true,
+        "measured_before_equals_world": true,
+        "measured_after_equals_final_host": true,
+        "world_after_equals_final_host": false
+      },
+      "reader_summaries": [
+        {
+          "family": "Inspect",
+          "action_sequence": null,
+          "reference_sequence": null,
+          "action_confidence": 0.0,
+          "reference_confidence": 0.0,
+          "action_mismatch_fields": [
+            "no source in namespace"
+          ],
+          "reference_mismatch_fields": [
+            "body pose/velocity",
+            "observed slots/geometry",
+            "organ/reserve locality or injury/thermal/sleep",
+            "drive locality",
+            "hormone locality",
+            "development expression"
+          ],
+          "base_logit": 6.805426120758057,
+          "final_logit": 6.805426120758057,
+          "native_readout": 0.0
+        },
+        {
+          "family": "Rest",
+          "action_sequence": null,
+          "reference_sequence": null,
+          "action_confidence": 0.0,
+          "reference_confidence": 0.0,
+          "action_mismatch_fields": [
+            "body pose/velocity",
+            "observed slots/geometry",
+            "organ/reserve locality or injury/thermal/sleep",
+            "drive locality",
+            "hormone locality",
+            "development expression"
+          ],
+          "reference_mismatch_fields": [
+            "body pose/velocity",
+            "observed slots/geometry",
+            "organ/reserve locality or injury/thermal/sleep",
+            "drive locality",
+            "hormone locality",
+            "development expression"
+          ],
+          "base_logit": 7.459456920623779,
+          "final_logit": 7.459456920623779,
+          "native_readout": 0.0
+        }
+      ],
+      "lookup_record_evaluations": 8
+    },
+    {
+      "sequence": 5,
+      "tick": 4,
+      "selected_family": "Rest",
+      "selected_action": 3,
+      "source_status": "Unsupported:additional_meaningful_command",
+      "channels": [
+        {
+          "channel": "Locomotion",
+          "requested_primitive": 101,
+          "executed_primitive": 101,
+          "requested_intensity": 1.0,
+          "adapted_intensity": 0.999138355255127,
+          "phase": "Completed",
+          "contact": "Moved",
+          "displacement_length": 8.058547973632812e-05,
+          "physical_energy_cost": 0.07999999821186066,
+          "measured_intensity": 0.0008058547973632812
+        },
+        {
+          "channel": "Posture",
+          "requested_primitive": 3,
+          "executed_primitive": 3,
+          "requested_intensity": 1.0,
+          "adapted_intensity": 1.0,
+          "phase": "Completed",
+          "contact": "None",
+          "displacement_length": 0.0,
+          "physical_energy_cost": 0.0,
+          "measured_intensity": null
+        }
+      ],
+      "biology_checks": {
+        "before_record_equals_world": true,
+        "measured_before_equals_world": true,
+        "measured_after_equals_final_host": true,
+        "world_after_equals_final_host": false
+      },
+      "reader_summaries": [
+        {
+          "family": "Inspect",
+          "action_sequence": null,
+          "reference_sequence": null,
+          "action_confidence": 0.0,
+          "reference_confidence": 0.0,
+          "action_mismatch_fields": [
+            "no source in namespace"
+          ],
+          "reference_mismatch_fields": [
+            "body pose/velocity",
+            "observed slots/geometry",
+            "sensory channels"
+          ],
+          "base_logit": 6.66113805770874,
+          "final_logit": 6.66113805770874,
+          "native_readout": 0.0
+        },
+        {
+          "family": "Rest",
+          "action_sequence": null,
+          "reference_sequence": null,
+          "action_confidence": 0.0,
+          "reference_confidence": 0.0,
+          "action_mismatch_fields": [
+            "body pose/velocity",
+            "observed slots/geometry",
+            "sensory channels"
+          ],
+          "reference_mismatch_fields": [
+            "body pose/velocity",
+            "observed slots/geometry",
+            "sensory channels"
+          ],
+          "base_logit": 7.559503078460693,
+          "final_logit": 7.559503078460693,
+          "native_readout": 0.0
+        }
+      ],
+      "lookup_record_evaluations": 8
+    },
+    {
+      "sequence": 6,
+      "tick": 5,
+      "selected_family": "Inspect",
+      "selected_action": 4,
+      "source_status": "Unsupported:additional_meaningful_command",
+      "channels": [
+        {
+          "channel": "Locomotion",
+          "requested_primitive": 101,
+          "executed_primitive": 101,
+          "requested_intensity": 1.0,
+          "adapted_intensity": 0.9989064335823059,
+          "phase": "Completed",
+          "contact": "Moved",
+          "displacement_length": 0.0,
+          "physical_energy_cost": 0.07999999821186066,
+          "measured_intensity": 0.0
+        },
+        {
+          "channel": "Posture",
+          "requested_primitive": 4,
+          "executed_primitive": 4,
+          "requested_intensity": 1.0,
+          "adapted_intensity": 1.0,
+          "phase": "Completed",
+          "contact": "Touch",
+          "displacement_length": 0.0,
+          "physical_energy_cost": 0.019999999552965164,
+          "measured_intensity": null
+        }
+      ],
+      "biology_checks": {
+        "before_record_equals_world": true,
+        "measured_before_equals_world": true,
+        "measured_after_equals_final_host": true,
+        "world_after_equals_final_host": false
+      },
+      "reader_summaries": [
+        {
+          "family": "Inspect",
+          "action_sequence": null,
+          "reference_sequence": null,
+          "action_confidence": 0.0,
+          "reference_confidence": 0.0,
+          "action_mismatch_fields": [
+            "no source in namespace"
+          ],
+          "reference_mismatch_fields": [
+            "body pose/velocity",
+            "observed slots/geometry",
+            "sensory channels"
+          ],
+          "base_logit": 6.4979777336120605,
+          "final_logit": 6.4979777336120605,
+          "native_readout": 0.0
+        },
+        {
+          "family": "Rest",
+          "action_sequence": null,
+          "reference_sequence": null,
+          "action_confidence": 0.0,
+          "reference_confidence": 0.0,
+          "action_mismatch_fields": [
+            "body pose/velocity",
+            "observed slots/geometry",
+            "sensory channels"
+          ],
+          "reference_mismatch_fields": [
+            "body pose/velocity",
+            "observed slots/geometry",
+            "sensory channels"
+          ],
+          "base_logit": 7.5950798988342285,
+          "final_logit": 7.5950798988342285,
+          "native_readout": 0.0
+        }
+      ],
+      "lookup_record_evaluations": 8
+    },
+    {
+      "sequence": 7,
+      "tick": 6,
+      "selected_family": "Rest",
+      "selected_action": 3,
+      "source_status": "Stored",
+      "channels": [
+        {
+          "channel": "Locomotion",
+          "requested_primitive": 103,
+          "executed_primitive": 103,
+          "requested_intensity": 1.0,
+          "adapted_intensity": 0.9986587166786194,
+          "phase": "Completed",
+          "contact": "None",
+          "displacement_length": 0.0,
+          "physical_energy_cost": 0.0,
+          "measured_intensity": 0.0
+        },
+        {
+          "channel": "Posture",
+          "requested_primitive": 3,
+          "executed_primitive": 3,
+          "requested_intensity": 1.0,
+          "adapted_intensity": 1.0,
+          "phase": "Completed",
+          "contact": "None",
+          "displacement_length": 0.0,
+          "physical_energy_cost": 0.0,
+          "measured_intensity": null
+        }
+      ],
+      "biology_checks": {
+        "before_record_equals_world": true,
+        "measured_before_equals_world": true,
+        "measured_after_equals_final_host": true,
+        "world_after_equals_final_host": false
+      },
+      "reader_summaries": [
+        {
+          "family": "Inspect",
+          "action_sequence": null,
+          "reference_sequence": null,
+          "action_confidence": 0.0,
+          "reference_confidence": 0.0,
+          "action_mismatch_fields": [
+            "no source in namespace"
+          ],
+          "reference_mismatch_fields": [
+            "body pose/velocity",
+            "observed slots/geometry",
+            "sensory channels"
+          ],
+          "base_logit": 6.352296352386475,
+          "final_logit": 6.352296352386475,
+          "native_readout": 0.0
+        },
+        {
+          "family": "Rest",
+          "action_sequence": null,
+          "reference_sequence": null,
+          "action_confidence": 0.0,
+          "reference_confidence": 0.0,
+          "action_mismatch_fields": [
+            "body pose/velocity",
+            "observed slots/geometry",
+            "sensory channels"
+          ],
+          "reference_mismatch_fields": [
+            "body pose/velocity",
+            "observed slots/geometry",
+            "sensory channels"
+          ],
+          "base_logit": 7.607649803161621,
+          "final_logit": 7.607649803161621,
+          "native_readout": 0.0
+        }
+      ],
+      "lookup_record_evaluations": 8
+    },
+    {
+      "sequence": 8,
+      "tick": 7,
+      "selected_family": "Rest",
+      "selected_action": 3,
+      "source_status": "Stored",
+      "channels": [
+        {
+          "channel": "Locomotion",
+          "requested_primitive": 103,
+          "executed_primitive": 103,
+          "requested_intensity": 1.0,
+          "adapted_intensity": 0.9984707832336426,
+          "phase": "Completed",
+          "contact": "None",
+          "displacement_length": 0.0,
+          "physical_energy_cost": 0.0,
+          "measured_intensity": 0.0
+        },
+        {
+          "channel": "Posture",
+          "requested_primitive": 3,
+          "executed_primitive": 3,
+          "requested_intensity": 1.0,
+          "adapted_intensity": 1.0,
+          "phase": "Completed",
+          "contact": "None",
+          "displacement_length": 0.0,
+          "physical_energy_cost": 0.0,
+          "measured_intensity": null
+        }
+      ],
+      "biology_checks": {
+        "before_record_equals_world": true,
+        "measured_before_equals_world": true,
+        "measured_after_equals_final_host": true,
+        "world_after_equals_final_host": false
+      },
+      "reader_summaries": [
+        {
+          "family": "Inspect",
+          "action_sequence": null,
+          "reference_sequence": null,
+          "action_confidence": 0.0,
+          "reference_confidence": 0.0,
+          "action_mismatch_fields": [
+            "no source in namespace"
+          ],
+          "reference_mismatch_fields": [
+            "organ/reserve locality or injury/thermal/sleep",
+            "drive locality",
+            "hormone locality",
+            "development expression"
+          ],
+          "base_logit": 6.232287883758545,
+          "final_logit": 6.232287883758545,
+          "native_readout": 0.0
+        },
+        {
+          "family": "Rest",
+          "action_sequence": null,
+          "reference_sequence": null,
+          "action_confidence": 0.0,
+          "reference_confidence": 0.0,
+          "action_mismatch_fields": [
+            "organ/reserve locality or injury/thermal/sleep",
+            "drive locality",
+            "hormone locality",
+            "development expression"
+          ],
+          "reference_mismatch_fields": [
+            "organ/reserve locality or injury/thermal/sleep",
+            "drive locality",
+            "hormone locality",
+            "development expression"
+          ],
+          "base_logit": 7.6120686531066895,
+          "final_logit": 7.6120686531066895,
+          "native_readout": 0.0
+        }
+      ],
+      "lookup_record_evaluations": 16
+    },
+    {
+      "sequence": 9,
+      "tick": 8,
+      "selected_family": "Rest",
+      "selected_action": 3,
+      "source_status": "Unsupported:additional_meaningful_command",
+      "channels": [
+        {
+          "channel": "Locomotion",
+          "requested_primitive": 101,
+          "executed_primitive": 101,
+          "requested_intensity": 1.0,
+          "adapted_intensity": 0.9982829093933105,
+          "phase": "Completed",
+          "contact": "Moved",
+          "displacement_length": 0.0,
+          "physical_energy_cost": 0.07999999821186066,
+          "measured_intensity": 0.0
+        },
+        {
+          "channel": "Posture",
+          "requested_primitive": 3,
+          "executed_primitive": 3,
+          "requested_intensity": 1.0,
+          "adapted_intensity": 1.0,
+          "phase": "Completed",
+          "contact": "None",
+          "displacement_length": 0.0,
+          "physical_energy_cost": 0.0,
+          "measured_intensity": null
+        }
+      ],
+      "biology_checks": {
+        "before_record_equals_world": true,
+        "measured_before_equals_world": true,
+        "measured_after_equals_final_host": true,
+        "world_after_equals_final_host": false
+      },
+      "reader_summaries": [
+        {
+          "family": "Inspect",
+          "action_sequence": null,
+          "reference_sequence": 8,
+          "action_confidence": 0.0,
+          "reference_confidence": 1.0,
+          "action_mismatch_fields": [
+            "no source in namespace"
+          ],
+          "reference_mismatch_fields": [],
+          "base_logit": 6.1374101638793945,
+          "final_logit": 6.1374101638793945,
+          "native_readout": 0.0
+        },
+        {
+          "family": "Rest",
+          "action_sequence": 8,
+          "reference_sequence": 8,
+          "action_confidence": 1.0,
+          "reference_confidence": 1.0,
+          "action_mismatch_fields": [],
+          "reference_mismatch_fields": [],
+          "base_logit": 7.613614082336426,
+          "final_logit": 7.613614082336426,
+          "native_readout": 0.0
+        }
+      ],
+      "lookup_record_evaluations": 24
+    },
+    {
+      "sequence": 10,
+      "tick": 9,
+      "selected_family": "Rest",
+      "selected_action": 3,
+      "source_status": "Unsupported:additional_meaningful_command",
+      "channels": [
+        {
+          "channel": "Locomotion",
+          "requested_primitive": 101,
+          "executed_primitive": 101,
+          "requested_intensity": 1.0,
+          "adapted_intensity": 0.9980509281158447,
+          "phase": "Completed",
+          "contact": "Moved",
+          "displacement_length": 0.0,
+          "physical_energy_cost": 0.07999999821186066,
+          "measured_intensity": 0.0
+        },
+        {
+          "channel": "Posture",
+          "requested_primitive": 3,
+          "executed_primitive": 3,
+          "requested_intensity": 1.0,
+          "adapted_intensity": 1.0,
+          "phase": "Completed",
+          "contact": "None",
+          "displacement_length": 0.0,
+          "physical_energy_cost": 0.0,
+          "measured_intensity": null
+        }
+      ],
+      "biology_checks": {
+        "before_record_equals_world": true,
+        "measured_before_equals_world": true,
+        "measured_after_equals_final_host": true,
+        "world_after_equals_final_host": false
+      },
+      "reader_summaries": [
+        {
+          "family": "Inspect",
+          "action_sequence": null,
+          "reference_sequence": 8,
+          "action_confidence": 0.0,
+          "reference_confidence": 1.0,
+          "action_mismatch_fields": [
+            "no source in namespace"
+          ],
+          "reference_mismatch_fields": [],
+          "base_logit": 6.064263820648193,
+          "final_logit": 6.064263820648193,
+          "native_readout": 0.0
+        },
+        {
+          "family": "Rest",
+          "action_sequence": 8,
+          "reference_sequence": 8,
+          "action_confidence": 1.0,
+          "reference_confidence": 1.0,
+          "action_mismatch_fields": [],
+          "reference_mismatch_fields": [],
+          "base_logit": 7.614142894744873,
+          "final_logit": 7.614142894744873,
+          "native_readout": 0.0
+        }
+      ],
+      "lookup_record_evaluations": 24
+    },
+    {
+      "sequence": 11,
+      "tick": 10,
+      "selected_family": "Rest",
+      "selected_action": 3,
+      "source_status": "Stored",
+      "channels": [
+        {
+          "channel": "Locomotion",
+          "requested_primitive": 103,
+          "executed_primitive": 103,
+          "requested_intensity": 1.0,
+          "adapted_intensity": 0.9978188276290894,
+          "phase": "Completed",
+          "contact": "None",
+          "displacement_length": 0.0,
+          "physical_energy_cost": 0.0,
+          "measured_intensity": 0.0
+        },
+        {
+          "channel": "Posture",
+          "requested_primitive": 3,
+          "executed_primitive": 3,
+          "requested_intensity": 1.0,
+          "adapted_intensity": 1.0,
+          "phase": "Completed",
+          "contact": "None",
+          "displacement_length": 0.0,
+          "physical_energy_cost": 0.0,
+          "measured_intensity": null
+        }
+      ],
+      "biology_checks": {
+        "before_record_equals_world": true,
+        "measured_before_equals_world": true,
+        "measured_after_equals_final_host": true,
+        "world_after_equals_final_host": false
+      },
+      "reader_summaries": [
+        {
+          "family": "Inspect",
+          "action_sequence": null,
+          "reference_sequence": 8,
+          "action_confidence": 0.0,
+          "reference_confidence": 1.0,
+          "action_mismatch_fields": [
+            "no source in namespace"
+          ],
+          "reference_mismatch_fields": [],
+          "base_logit": 6.0087199211120605,
+          "final_logit": 6.0087199211120605,
+          "native_readout": 0.0
+        },
+        {
+          "family": "Rest",
+          "action_sequence": 8,
+          "reference_sequence": 8,
+          "action_confidence": 1.0,
+          "reference_confidence": 1.0,
+          "action_mismatch_fields": [],
+          "reference_mismatch_fields": [],
+          "base_logit": 7.614320278167725,
+          "final_logit": 7.614320278167725,
+          "native_readout": 0.0
+        }
+      ],
+      "lookup_record_evaluations": 24
+    },
+    {
+      "sequence": 12,
+      "tick": 11,
+      "selected_family": "Rest",
+      "selected_action": 3,
+      "source_status": "Stored",
+      "channels": [
+        {
+          "channel": "Locomotion",
+          "requested_primitive": 103,
+          "executed_primitive": 103,
+          "requested_intensity": 1.0,
+          "adapted_intensity": 0.9976309537887573,
+          "phase": "Completed",
+          "contact": "None",
+          "displacement_length": 0.0,
+          "physical_energy_cost": 0.0,
+          "measured_intensity": 0.0
+        },
+        {
+          "channel": "Posture",
+          "requested_primitive": 3,
+          "executed_primitive": 3,
+          "requested_intensity": 1.0,
+          "adapted_intensity": 1.0,
+          "phase": "Completed",
+          "contact": "None",
+          "displacement_length": 0.0,
+          "physical_energy_cost": 0.0,
+          "measured_intensity": null
+        }
+      ],
+      "biology_checks": {
+        "before_record_equals_world": true,
+        "measured_before_equals_world": true,
+        "measured_after_equals_final_host": true,
+        "world_after_equals_final_host": false
+      },
+      "reader_summaries": [
+        {
+          "family": "Inspect",
+          "action_sequence": null,
+          "reference_sequence": 11,
+          "action_confidence": 0.0,
+          "reference_confidence": 1.0,
+          "action_mismatch_fields": [
+            "no source in namespace"
+          ],
+          "reference_mismatch_fields": [],
+          "base_logit": 5.966866493225098,
+          "final_logit": 5.966866493225098,
+          "native_readout": 0.0
+        },
+        {
+          "family": "Rest",
+          "action_sequence": 11,
+          "reference_sequence": 11,
+          "action_confidence": 1.0,
+          "reference_confidence": 1.0,
+          "action_mismatch_fields": [],
+          "reference_mismatch_fields": [],
+          "base_logit": 7.614375591278076,
+          "final_logit": 7.614375591278076,
+          "native_readout": 0.0
+        }
+      ],
+      "lookup_record_evaluations": 32
+    }
+  ],
+  "no_retry": true,
+  "raw_runtime_vectors_excluded": true,
+  "candidate_not_joint_prediction": "Candidate-level Rest association does not validate a subsequently sampled multi-command bundle."
+}

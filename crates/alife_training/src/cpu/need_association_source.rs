@@ -407,6 +407,7 @@ pub(super) fn qualify_native_interval(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alife_core::cognitive_work::{CognitiveWorkCostPolicy, CognitiveWorkCounters};
     fn noop() -> HeadlessMotorChannelReceipt {
         HeadlessMotorChannelReceipt {
             command: ChannelCommand::new(

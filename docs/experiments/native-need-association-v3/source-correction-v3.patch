@@ -1,0 +1,26 @@
+diff --git a/crates/alife_training/src/cpu/need_association_source.rs b/crates/alife_training/src/cpu/need_association_source.rs
+--- a/crates/alife_training/src/cpu/need_association_source.rs
++++ b/crates/alife_training/src/cpu/need_association_source.rs
+@@ -407,6 +407,7 @@
+ #[cfg(test)]
+ mod tests {
+     use super::*;
++    use alife_core::cognitive_work::{CognitiveWorkCostPolicy, CognitiveWorkCounters};
+     fn noop() -> HeadlessMotorChannelReceipt {
+         HeadlessMotorChannelReceipt {
+             command: ChannelCommand::new(
+diff --git a/crates/alife_world/src/headless/prepared_motor_adapter_tests.rs b/crates/alife_world/src/headless/prepared_motor_adapter_tests.rs
+--- a/crates/alife_world/src/headless/prepared_motor_adapter_tests.rs
++++ b/crates/alife_world/src/headless/prepared_motor_adapter_tests.rs
+@@ -142,10 +142,7 @@
+ fn prepared_motor_adapter_matches_old_bytes_all_channels_and_record_states() {
+     let channels = [
+         (MotorChannel::Posture, ActionKind::Rest.canonical_id()),
+-        (
+-            MotorChannel::Manipulation,
+-            ActionKind::Inspect.canonical_id(),
+-        ),
++        (MotorChannel::Posture, ActionKind::Inspect.canonical_id()),
+         (MotorChannel::Locomotion, HeadlessActionIds::NO_LOCOMOTION),
+         (MotorChannel::Locomotion, HeadlessActionIds::STEP_FORWARD),
+         (MotorChannel::Locomotion, HeadlessActionIds::APPROACH),
