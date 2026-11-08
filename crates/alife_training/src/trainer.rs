@@ -969,10 +969,68 @@ impl FoundationTrainer {
     /// normalization. Scratch reallocations preserve this persistent buffer.
     pub fn accumulate_replay_gradients(
         &mut self,
+        encoder: wgpu::CommandEncoder,
+        adjoints: &wgpu::Buffer,
+        adjoint_offset: u64,
+        scale: f32,
+    ) -> Result<u32, TrainingError> {
+        self.accumulate_replay_gradients_inner(
+            encoder,
+            adjoints,
+            adjoint_offset,
+            scale,
+            #[cfg(feature = "gpu-tests")]
+            None,
+        )
+    }
+
+    /// Records raw gradients without advancing the optimizer or effective batch.
+    #[cfg(feature = "gpu-tests")]
+    pub(crate) fn encode_cache_raw_replay_gradients(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        adjoints: &wgpu::Buffer,
+        cache: &wgpu::Buffer,
+        offset: u64,
+    ) -> Result<(), TrainingError> {
+        self.encode_replay_gradients(encoder, adjoints, 0)?;
+        let bytes = self.phenotype.synapses().len() as u64 * 4;
+        encoder.copy_buffer_to_buffer(
+            &self.gpu.gradients,
+            u64::from(self.gpu.layout.weight_gradients) * 4,
+            cache,
+            offset,
+            bytes,
+        );
+        encoder.copy_buffer_to_buffer(
+            &self.gpu.outputs,
+            u64::from(self.gpu.layout.metrics + 2) * 4,
+            cache,
+            offset + bytes,
+            4,
+        );
+        Ok(())
+    }
+
+    #[cfg(feature = "gpu-tests")]
+    pub(crate) fn accumulate_cached_replay_gradients(
+        &mut self,
+        encoder: wgpu::CommandEncoder,
+        adjoints: &wgpu::Buffer,
+        scale: f32,
+        cache: &wgpu::Buffer,
+        offset: u64,
+    ) -> Result<u32, TrainingError> {
+        self.accumulate_replay_gradients_inner(encoder, adjoints, 0, scale, Some((cache, offset)))
+    }
+
+    fn accumulate_replay_gradients_inner(
+        &mut self,
         mut encoder: wgpu::CommandEncoder,
         adjoints: &wgpu::Buffer,
         adjoint_offset: u64,
         scale: f32,
+        #[cfg(feature = "gpu-tests")] cached: Option<(&wgpu::Buffer, u64)>,
     ) -> Result<u32, TrainingError> {
         let (expected, count) = self
             .accumulation
@@ -997,6 +1055,27 @@ impl FoundationTrainer {
         )?;
         let (_, queue) = self.session.backend().offline_training_device_queue()?;
         queue.write_buffer(&self.gpu.step_headers, 0, bytemuck::cast_slice(&headers));
+        #[cfg(feature = "gpu-tests")]
+        if let Some((cache, offset)) = cached {
+            let bytes = self.phenotype.synapses().len() as u64 * 4;
+            encoder.copy_buffer_to_buffer(
+                cache,
+                offset,
+                &self.gpu.gradients,
+                u64::from(layout.weight_gradients) * 4,
+                bytes,
+            );
+            encoder.copy_buffer_to_buffer(
+                cache,
+                offset + bytes,
+                &self.gpu.outputs,
+                u64::from(layout.metrics + 2) * 4,
+                4,
+            );
+        } else {
+            self.encode_replay_gradients(&mut encoder, adjoints, adjoint_offset)?;
+        }
+        #[cfg(not(feature = "gpu-tests"))]
         self.encode_replay_gradients(&mut encoder, adjoints, adjoint_offset)?;
         let bytes = self.phenotype.synapses().len() as u64 * 4;
         encoder.copy_buffer_to_buffer(
