@@ -1,0 +1,64 @@
+{
+  "asset_sha256": "6edcd6dd1dc5bfedf8f7b73bf605bb480e36c0ba022a316840a6f0bd87629632",
+  "brain_arms": 1,
+  "case_order": [
+    "s1_old_world",
+    "s1_new_world",
+    "s2_new_world",
+    "s2_old_world"
+  ],
+  "closed_prior_seeds": [
+    2026112201,
+    2026112202
+  ],
+  "comparison": "bundled_world_effect_only",
+  "construction_seed": 2026110901,
+  "lives": 4,
+  "natural_sleep_only": true,
+  "ordinary_internal_plasticity": true,
+  "paired_preparation_barrier": true,
+  "primary_ticks_per_life": 256,
+  "prohibited_changes": [
+    "weights",
+    "scene tuning",
+    "teacher actions",
+    "forced sleep",
+    "Adam training",
+    "replacement lives",
+    "horizon extensions"
+  ],
+  "public_output_cap_bytes": 16777216,
+  "representation": "curated_scientific_protocol_not_byte_identical_original_plan",
+  "rerun_after_attempt": false,
+  "safety_stops": {
+    "death": true,
+    "harmful_meal_count": 3,
+    "health_below": 0.7,
+    "injury_above": 0.25
+  },
+  "scalar_prefix": {
+    "aggregate_file_cap_bytes": 8388608,
+    "completed_case_admission_unchanged": true,
+    "format": "header_then_existing_ROW_jsonl",
+    "incomplete_even_at_256_rows": true,
+    "record_cap_bytes": 65536,
+    "retention_requires_strict_validation": true
+  },
+  "schema": 1,
+  "seed_provenance": {
+    "bounded_freshness_not_global_proof": true,
+    "choice": "predeclared in read-only freshness assignment before v3 receipt-fixture outcomes",
+    "reserved_seed_exposure_at_source_preparation": 0,
+    "written_reservation": "created after old-arm v3 scripted N512 receipt result was known"
+  },
+  "seeds": [
+    2026112301,
+    2026112302
+  ],
+  "sensor_profile": "GroundedObjectSlotsV1",
+  "status": "source_only_pre_execution_unrun",
+  "total_preparation_ticks": 2400,
+  "total_primary_ticks_max": 1024,
+  "world_arms": 2,
+  "world_only_preparation_ticks_per_life": 600
+}

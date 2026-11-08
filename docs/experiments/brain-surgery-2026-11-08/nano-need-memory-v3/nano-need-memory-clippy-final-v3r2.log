@@ -1,0 +1,18 @@
+    Checking alife_gpu_backend v0.1.0 (/workspace/scratch/ee5e08a3ca9b/nano-need-memory-gate-v3/crates/alife_gpu_backend)
+    Checking alife_core v0.1.0 (/workspace/scratch/ee5e08a3ca9b/nano-need-memory-gate-v3/crates/alife_core)
+    Finished `dev` profile [unoptimized] target(s) in 20.50s
+Diff in /workspace/scratch/ee5e08a3ca9b/nano-need-memory-gate-v3/crates/alife_gpu_backend/tests/need_memory_port.rs:66:
+     assert_eq!(b.memory_weight_indices.len(), 104);
+     let recurrent = b.source_indices.len() as u32;
+     let mut unique = std::collections::BTreeSet::new();
+-    for (family, rows) in b.memory_weight_indices.as_chunks::<13>().0.iter().enumerate() {
++    for (family, rows) in b
++        .memory_weight_indices
++        .as_chunks::<13>()
++        .0
++        .iter()
++        .enumerate()
++    {
+         let mut heads = [0; 2];
+         for &global in rows {
+             assert!(unique.insert(global));

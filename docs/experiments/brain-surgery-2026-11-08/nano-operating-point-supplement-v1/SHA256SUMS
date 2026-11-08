@@ -1,0 +1,11 @@
+beca63aedfa193d6cf3220709a0d1f451cad0930f0045acd6999597487ef83d6  ./01-encoder-equivalence.log
+1ae7ed4f9c1da66008bb57943885d9728e99a04588560649c0dd59efcb745d3a  ./02-encoder-equivalence.log
+1db8170cd93aa4c55fc1f0a14675ef08dc84b175500fab961da97a1a2afcbd56  ./03-operating-point.log
+e731245ebd6c20a5f4390927a4429397dd964bf5906d8b974d73cd2cbe622c75  ./OPERATING_POINT_FINDINGS.md
+b8d1a98a380cf18eacc521261e307c2a590a07e67e5fe25fa7ba0d6481b74b9d  ./README.md
+93d5c88feccb802b6ad5986c8447574082b79a2b1707bd06825d5a27c7168fe7  ./V3_ERRATA_AND_NEXT_PLAN.md
+b62d99aeeda8da6fa5482d989c8a405567bd6080cc461992f65e1c6abb7238d0  ./input.sha256
+a4c99757d097f57664718cd9dd18abf34f37b1a241c6819f3107d0616a7620ae  ./nano-need-memory-software-kernel-v3.log
+ac277b133cd520121a0e714579aec5668050054ae52f55b85af7a3afade39f85  ./operating-point-diagnostic.patch
+dac69ecf41de601a06e80b178d8ca3966f575379d7f4c4ebc52d29c321400358  ./operating-point-summary.json
+71d6d23257b60d6d090fb9f1ebc5c7a5d7ad199fa21948b6e0b17737dfe137e8  ./source-before-run.sha256

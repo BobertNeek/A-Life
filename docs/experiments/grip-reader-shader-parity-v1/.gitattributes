@@ -1,0 +1,7 @@
+# Frozen payload bytes; these patterns apply only within this evidence package.
+README.txt -text
+fixture-*.rs -text
+manifest.json -text
+# Captured EOFs and unified-diff context are historical evidence.
+*.log -text -whitespace
+*.patch -text -whitespace

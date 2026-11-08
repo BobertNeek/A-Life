@@ -1,0 +1,7 @@
+# Bounded repeated regression: genuine worker gate ownership
+
+Frozen source192ea624c839b409979da368c9faedcab54bd20c/tree6c04b7b36b283ba4ef9825dd61b1444aa8cbfb68. Only the test file changes relative270cee7: first poll the actual submitted GPU capture into Worker, verify the original start gate has been consumed, then install the follow-up worker gate. A new local directory label preserves both failed runs. Production/candidate logic, recipe, seed31118, all assertions and one-decision/two-interval budget are unchanged. The gate-adoption wait and old-publication wait share the original90-second deadline; no timeout extension.
+
+Prior actual run270cee7/executable8e9d0426 reached genuine retry acknowledgment, then timed out transaction2/checkpoint_tick1 in encoding/worker after97.67 seconds overall. The real first worker had consumed the prematurely installed follow-up gate. This is a fixture-order diagnosis, not proof of runtime publication success or an epoch defect. Both earlier source/executable/logs and generated assets remain frozen.
+
+Patch reflex-epoch-v11-gate-ownership-repair.patch SHA256dd88938afa46ebab0584f1ba0319d320a118ea432c8a1085e675747018d2c562. Compile a distinct executable, record its hash, execute only the same exact software-runtime fixture once, and retain any failure. No direct snapshot publication, simulated acknowledgment, additional policy interval, relaxed dirty/authority/restore assertion, or autonomous cohort is allowed by this plan.

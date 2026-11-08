@@ -193,6 +193,11 @@ impl GpuMemoryContextUpload {
             return Err(GpuClosedLoopError::InvalidOffsetDomain);
         }
         let record = slot.record();
+        if (slot.sensor_profile_raw() == 4 || frame.sensor_profile().raw() == 4)
+            && slot.sensor_profile_raw() != u32::from(frame.sensor_profile().raw())
+        {
+            return Err(GpuClosedLoopError::MalformedUpload);
+        }
         let profile = frame.profile_provenance().identity();
         let candidate_count = u16::try_from(frame.candidates().len())
             .map_err(|_| GpuClosedLoopError::CapacityExceeded)?;
@@ -309,6 +314,11 @@ impl GpuMemoryContextUpload {
         slot: &GpuBrainSlot,
     ) -> Result<Self, GpuClosedLoopError> {
         let record = slot.record();
+        if (slot.sensor_profile_raw() == 4 || frame.sensor_profile().raw() == 4)
+            && slot.sensor_profile_raw() != u32::from(frame.sensor_profile().raw())
+        {
+            return Err(GpuClosedLoopError::MalformedUpload);
+        }
         let profile = frame.profile_provenance().identity();
         let candidate_count = u16::try_from(frame.candidates().len())
             .map_err(|_| GpuClosedLoopError::CapacityExceeded)?;

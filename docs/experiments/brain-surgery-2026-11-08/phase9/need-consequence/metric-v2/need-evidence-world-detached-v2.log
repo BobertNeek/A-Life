@@ -1,0 +1,24 @@
+   Compiling alife_world v0.1.0 (/workspace/scratch/ee5e08a3ca9b/need-consequence-evidence-v1/crates/alife_world)
+    Finished `test` profile [unoptimized] target(s) in 1m 31s
+     Running unittests src/lib.rs (/workspace/shared/grip-integration-qualification-20261108/grip-candidate-qualification/target/debug/deps/alife_world-5c9ccab29d8984f3)
+
+running 1 test
+test headless::need_consequence_evidence_tests::standalone_need_evidence_records_real_contact_not_a_target_label ... initial biological context: case=0 age=600 maturation=0.32894737 puberty=false puberty_tick=1113 expression=1 loneliness=0.15 energy=0.7925 health=1 injury=0 sleeping=false ticks_per_second=20 metabolism_cadence=6 development_cadence=60 before_tick=600 after_tick=601 passive_loneliness_delta=-0.007499993
+actual next-world recall: case=0 unknown=true same_target=true same_family=true before_need=0.15 next_need=0.14250001
+detached V2 proposal: case=0 score=0.9998837 distance=0.00011628866 original_confidence=0.9 original_delta=-0.007499993
+detached V2 artificial pressure query: case=0 pressure=0.16000001 score=None
+controlled need evidence: case=0 loneliness_delta=-0.007499993 dose=0.0125 source_bytes=[16241] store_bytes=18027
+initial biological context: case=1 age=600 maturation=0.32894737 puberty=false puberty_tick=1113 expression=1 loneliness=0.15 energy=0.7925 health=1 injury=0 sleeping=false ticks_per_second=20 metabolism_cadence=6 development_cadence=60 before_tick=600 after_tick=601 passive_loneliness_delta=0
+actual next-world recall: case=1 unknown=true same_target=true same_family=true before_need=0.15 next_need=0.15
+detached V2 proposal: case=1 score=0.99988747 distance=0.00011253357 original_confidence=0.9 original_delta=0
+detached V2 artificial pressure query: case=1 pressure=0.16000001 score=None
+controlled need evidence: case=1 loneliness_delta=0 dose=0 source_bytes=[15949] store_bytes=17701
+initial biological context: case=2 age=600 maturation=0.32894737 puberty=false puberty_tick=1113 expression=1 loneliness=0.15 energy=0.7925 health=1 injury=0 sleeping=false ticks_per_second=20 metabolism_cadence=6 development_cadence=60 before_tick=600 after_tick=601 passive_loneliness_delta=0
+actual next-world recall: case=2 unknown=true same_target=true same_family=true before_need=0.15 next_need=0.15
+detached V2 proposal: case=2 score=0.99987394 distance=0.00012606382 original_confidence=0.75 original_delta=0
+detached V2 artificial pressure query: case=2 pressure=0.16000001 score=None
+controlled need evidence: case=2 loneliness_delta=0 dose=0 source_bytes=[16130] store_bytes=17916
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 234 filtered out; finished in 0.03s
+

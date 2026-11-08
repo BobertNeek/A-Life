@@ -1,0 +1,140 @@
+diff --git a/crates/alife_game_app/src/gpu_live_runtime.rs b/crates/alife_game_app/src/gpu_live_runtime.rs
+index 32bfd0371445e03f9d24f1e154f9a22c8ce073b4..cc27edff4a9d879d8c6bf24e67c672895e6e5e66 100644
+--- a/crates/alife_game_app/src/gpu_live_runtime.rs
++++ b/crates/alife_game_app/src/gpu_live_runtime.rs
+@@ -50,6 +50,7 @@ mod persistence_response_comparison;
+ mod recovery_sleep_tests;
+ #[cfg(test)]
+ mod resident_sync_tests;
++mod restore_reconciliation;
+ pub(crate) mod semantic_prior;
+ #[cfg(all(test, feature = "gpu-tests"))]
+ mod sleep_atomicity_tests;
+@@ -4870,11 +4871,17 @@ impl GpuLiveBrainRuntime {
+             .iter()
+             .filter_map(|creature| creature.gpu_brain.clone())
+             .collect::<Vec<_>>();
+-        let requires_checkpoint_reconciliation = checkpoints.len() != save.creatures.len()
+-            || checkpoints.iter().any(|state| {
+-                state.pending_eligibility.is_some()
+-                    || state.pending_experience_transaction.is_some()
+-            });
++        let requires_checkpoint_reconciliation =
++            restore_reconciliation::population_requires_reconciliation(
++                save.creatures.len(),
++                checkpoints
++                    .iter()
++                    .map(|state| restore_reconciliation::CheckpointShape {
++                        pending_eligibility: state.pending_eligibility.is_some(),
++                        pending_transaction: state.pending_experience_transaction.is_some(),
++                        retained_credit: state.memory.retained_learning.is_some(),
++                    }),
++            );
+         let mut runtime = Self::restore_with_checkpoints(
+             backend,
+             world,
+@@ -4925,7 +4932,11 @@ impl GpuLiveBrainRuntime {
+         }
+         runtime.admit_restored_durable_completed_recommit(rollback_journal)?;
+         if requires_checkpoint_reconciliation {
+-            runtime.persist_sleep_checkpoint_boundary()?;
++            // A mixed population may still own valid retained credit. Immutable
++            // population capture preserves that pending state; the synchronous
++            // sleep-replay capture correctly refuses it. The bounded loop below
++            // drains actual publication before restore returns.
++            runtime.request_exact_population_checkpoint()?;
+         }
+         // Restoring a Completed sleep checkpoint can hand the durable boundary
+         // to a recommit worker. Return only after that worker gives it back:
+diff --git a/crates/alife_game_app/src/gpu_live_runtime/arousal_epoch_runtime_tests.rs b/crates/alife_game_app/src/gpu_live_runtime/arousal_epoch_runtime_tests.rs
+index ec871fcabf850ff539cd176b3fe6699460886eed..988a5eee7393892d23c87c429460c53bd62b841c 100644
+--- a/crates/alife_game_app/src/gpu_live_runtime/arousal_epoch_runtime_tests.rs
++++ b/crates/alife_game_app/src/gpu_live_runtime/arousal_epoch_runtime_tests.rs
+@@ -94,7 +94,7 @@ fn setup_clear_interruption(runtime: &mut GpuLiveBrainRuntime) {
+ 
+ #[test]
+ fn arousal_epoch_software_real_rejected_credit_retry_and_same_tick_older_capture() {
+-    let (root, mut runtime) = fixture("retry-same-tick-count-v12");
++    let (root, mut runtime) = fixture("retry-same-tick-restore-v13");
+     setup_clear_interruption(&mut runtime);
+     let handle = runtime.handle_for(OrganismId(1)).unwrap();
+     let start_sequence = runtime.residents[&1].next_sequence;
+diff --git a/crates/alife_game_app/src/gpu_live_runtime/restore_reconciliation.rs b/crates/alife_game_app/src/gpu_live_runtime/restore_reconciliation.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..933bd7a3cb2f48dc252cd7b2878bdf43e7fac1bf
+--- /dev/null
++++ b/crates/alife_game_app/src/gpu_live_runtime/restore_reconciliation.rs
+@@ -0,0 +1,73 @@
++//! Classify already validated checkpoint state after restore. Retained sealed
++//! credit is preserved; unsealed pending work is discarded and must be saved.
++#[derive(Clone, Copy)]
++pub(super) struct CheckpointShape {
++    pub pending_eligibility: bool,
++    pub pending_transaction: bool,
++    pub retained_credit: bool,
++}
++
++pub(super) fn population_requires_reconciliation(
++    expected_population: usize,
++    checkpoints: impl IntoIterator<Item = CheckpointShape>,
++) -> bool {
++    let mut count = 0;
++    let mut discarded_pending = false;
++    for state in checkpoints {
++        count += 1;
++        discarded_pending |=
++            state.pending_transaction || (state.pending_eligibility && !state.retained_credit);
++    }
++    count != expected_population || discarded_pending
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    const QUIET: CheckpointShape = CheckpointShape {
++        pending_eligibility: false,
++        pending_transaction: false,
++        retained_credit: false,
++    };
++    const RETAINED: CheckpointShape = CheckpointShape {
++        pending_eligibility: true,
++        retained_credit: true,
++        ..QUIET
++    };
++    const UNSEALED: CheckpointShape = CheckpointShape {
++        pending_eligibility: true,
++        pending_transaction: true,
++        ..QUIET
++    };
++
++    #[test]
++    fn preserved_retained_credit_and_quiet_population_do_not_republish() {
++        assert!(!population_requires_reconciliation(1, [RETAINED]));
++        assert!(!population_requires_reconciliation(2, [RETAINED, QUIET]));
++        assert!(!population_requires_reconciliation(1, [QUIET]));
++    }
++
++    #[test]
++    fn discarded_unsealed_pending_and_missing_residents_require_exact_reconciliation() {
++        assert!(population_requires_reconciliation(1, [UNSEALED]));
++        assert!(population_requires_reconciliation(2, [RETAINED, UNSEALED]));
++        assert!(population_requires_reconciliation(2, [RETAINED]));
++        assert!(population_requires_reconciliation(1, []));
++        assert!(population_requires_reconciliation(
++            1,
++            [CheckpointShape {
++                pending_eligibility: true,
++                ..QUIET
++            }]
++        ));
++        // Classification is not admission: impossible shapes must still be
++        // rejected by save/restore validation, never silently treated as quiet.
++        assert!(population_requires_reconciliation(
++            1,
++            [CheckpointShape {
++                retained_credit: true,
++                ..UNSEALED
++            }]
++        ));
++    }
++}

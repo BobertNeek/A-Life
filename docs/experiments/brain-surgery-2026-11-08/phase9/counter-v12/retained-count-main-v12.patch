@@ -1,0 +1,132 @@
+diff --git a/crates/alife_runtime/src/checkpoint_assets/state_codec.rs b/crates/alife_runtime/src/checkpoint_assets/state_codec.rs
+index e1357f0618dd425a8cbb32dcf7027420409cb5a5..0e306bbaa42971c93160eca4fbd057f14afd37b9 100644
+--- a/crates/alife_runtime/src/checkpoint_assets/state_codec.rs
++++ b/crates/alife_runtime/src/checkpoint_assets/state_codec.rs
+@@ -291,6 +291,7 @@ impl GpuExactCheckpointTransactionContextV1 {
+ pub struct RetainedLearningCapture<'a> {
+     pub sealed_patch: &'a ExperiencePatch,
+     pub neural_receptors: &'a NeuralReceptorFrame,
++    /// Saturating count of failed retries, excluding the initial rejection.
+     pub attempts: u8,
+     pub last_error_code: &'static str,
+ }
+@@ -299,6 +300,7 @@ pub struct RetainedLearningCapture<'a> {
+ pub struct RestoredRetainedLearning {
+     pub sealed_patch: ExperiencePatch,
+     pub neural_receptors: NeuralReceptorFrame,
++    /// Saturating count of failed retries, excluding the initial rejection.
+     pub attempts: u8,
+     pub last_error_code: String,
+ }
+@@ -796,8 +798,6 @@ impl GpuCheckpointAssetStore {
+                 if recovery.sealed_patch.pre_action().organism_id != handle.organism_id()
+                     || recovery.sealed_patch.header().sensor_profile.identity()
+                         != sidecars.sensor_profile
+-                    || recovery.attempts == 0
+-                    || recovery.attempts > 3
+                     || !matches!(
+                         recovery.last_error_code,
+                         "learning-evidence-mismatch"
+diff --git a/crates/alife_world/src/persistence/gpu_brain.rs b/crates/alife_world/src/persistence/gpu_brain.rs
+index 06793bfd564a47af15b499dae7c82cad4518cf7e..81c618a70b73710e61b69df83619e9331a039dd4 100644
+--- a/crates/alife_world/src/persistence/gpu_brain.rs
++++ b/crates/alife_world/src/persistence/gpu_brain.rs
+@@ -355,6 +355,8 @@ pub struct RetainedLearningRecoverySaveState {
+     pub pending: PendingEligibilityCheckpoint,
+     pub sealed_patch_asset: GpuBrainAssetRef,
+     pub neural_receptor_frame_asset: GpuBrainAssetRef,
++    /// Saturating failed-retry count; zero denotes the initial rejected credit.
++    /// This is recovery progress, not a limit on which states can be saved.
+     pub attempts: u8,
+     pub last_error_code: String,
+ }
+@@ -366,7 +368,6 @@ impl RetainedLearningRecoverySaveState {
+         self.neural_receptor_frame_asset.validate()?;
+         if self.schema_version != RETAINED_LEARNING_RECOVERY_SAVE_SCHEMA_VERSION
+             || self.organism_id_raw != organism_id.raw()
+-            || !(1..=3).contains(&self.attempts)
+             || !matches!(
+                 self.last_error_code.as_str(),
+                 "learning-evidence-mismatch"
+diff --git a/crates/alife_world/tests/gpu_brain_persistence.rs b/crates/alife_world/tests/gpu_brain_persistence.rs
+index 38f06052784fe0cb41ca460217b77a691f0442e5..10a2492f1231f1bc98642fcfde005c9b2a0e2835 100644
+--- a/crates/alife_world/tests/gpu_brain_persistence.rs
++++ b/crates/alife_world/tests/gpu_brain_persistence.rs
+@@ -395,7 +395,7 @@ fn every_sleep_phase_roundtrips_without_duplicate_consolidation() {
+ }
+ 
+ #[test]
+-fn retained_learning_attempt_counts_zero_through_three_roundtrip_without_sidecar_replay() {
++fn retained_learning_failed_retry_counts_roundtrip_without_sidecar_replay() {
+     let base = save_for_sleep(sleep_state(
+         SleepPhase::ForcedRecoverySleep,
+         ConsolidationState::None,
+@@ -407,7 +407,7 @@ fn retained_learning_attempt_counts_zero_through_three_roundtrip_without_sidecar
+     assert_eq!(decoded.memory, base.memory);
+     assert_eq!(decoded.topology, base.topology);
+ 
+-    for attempts in 1..=3 {
++    for attempts in 0..=u8::MAX {
+         let mut save = base.clone();
+         let pending = pending_eligibility();
+         save.pending_eligibility = Some(pending);
+@@ -442,6 +442,59 @@ fn retained_learning_attempt_counts_zero_through_three_roundtrip_without_sidecar
+             asset("retained-learning-sealed-patch")
+         );
+         assert_eq!(decoded.sleep.phase, SleepPhase::ForcedRecoverySleep);
++
++        // Counts do not authorize missing or mismatched recovery evidence.
++        let mut invalid = save.clone();
++        invalid
++            .memory
++            .retained_learning
++            .as_mut()
++            .unwrap()
++            .organism_id_raw += 1;
++        assert!(invalid.validate().is_err());
++        let mut invalid = save.clone();
++        invalid
++            .memory
++            .retained_learning
++            .as_mut()
++            .unwrap()
++            .last_error_code = "unknown".into();
++        assert!(invalid.validate().is_err());
++        let mut invalid = save.clone();
++        invalid.pending_eligibility = None;
++        assert!(invalid.validate().is_err());
++        let mut invalid = save.clone();
++        invalid
++            .memory
++            .retained_learning
++            .as_mut()
++            .unwrap()
++            .schema_version += 1;
++        assert!(invalid.validate().is_err());
++        let mut missing = serde_json::to_value(&save).unwrap();
++        missing["memory"]["retained_learning"]
++            .as_object_mut()
++            .unwrap()
++            .remove("attempts");
++        assert!(serde_json::from_value::<GpuBrainSaveState>(missing).is_err());
++        for invalid_count in [
++            serde_json::Value::Null,
++            serde_json::json!(-1),
++            serde_json::json!(256),
++        ] {
++            let mut invalid = serde_json::to_value(&save).unwrap();
++            invalid["memory"]["retained_learning"]["attempts"] = invalid_count;
++            assert!(serde_json::from_value::<GpuBrainSaveState>(invalid).is_err());
++        }
++        let mut invalid = save.clone();
++        invalid
++            .memory
++            .retained_learning
++            .as_mut()
++            .unwrap()
++            .pending
++            .originating_tick = Tick(99);
++        assert!(invalid.validate().is_err());
+     }
+ }
+ 

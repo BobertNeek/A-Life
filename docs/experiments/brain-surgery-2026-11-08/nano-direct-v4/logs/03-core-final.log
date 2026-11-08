@@ -1,0 +1,11 @@
+   Compiling alife_core v0.1.0 (/workspace/scratch/ee5e08a3ca9b/nano-direct-need-gate-v4/crates/alife_core)
+    Finished `test` profile [unoptimized] target(s) in 10.73s
+     Running tests/nano_direct_need_memory_gate.rs (/workspace/shared/grip-integration-qualification-20261108/grip-candidate-qualification/target/debug/deps/nano_direct_need_memory_gate-68caeb6bef898da8)
+
+running 3 tests
+test direct_controls_append_bound_heads_and_preserve_old_prefix_and_birth_branches ... ok
+test direct_identity_binds_constants_while_all_earlier_selector_bytes_remain_exact ... ok
+test direct_recipe_rejects_unsigned_profile_and_changed_source_and_keeps_v3_exact ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 9.46s
+

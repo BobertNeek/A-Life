@@ -1,0 +1,414 @@
+{
+  "events_sha256": "1d286f0e3ec594b5735aa32f65fdf5782b7cc1d8992551fefa4a1492f967f13a",
+  "public_bytes": 17273866,
+  "records": 7889,
+  "partial_final_line": false,
+  "invocation_complete": true,
+  "failures": [],
+  "lives": [
+    {
+      "seed": 2026112601,
+      "arm": "OFF",
+      "attempted": true,
+      "prep_attempts": 600,
+      "prep_returns": 600,
+      "primary_attempts": 256,
+      "primary_returns": 256,
+      "public_steps": 256,
+      "complete": [
+        {
+          "arm": "OFF",
+          "decisions": 256,
+          "kind": "life_complete",
+          "meals_h_s": [
+            1,
+            13
+          ],
+          "preparation_ticks": 600,
+          "primary_steps": 256,
+          "seed": 2026112601,
+          "stop": "tick_budget"
+        }
+      ],
+      "final_energy": 0.5204988121986389,
+      "min_energy": 0.3985486924648285,
+      "min_health": 0.9052957892417908,
+      "max_injury": 0.0947042778134346,
+      "meals_h_s": [
+        1,
+        13
+      ],
+      "alive": true,
+      "decisions": 256,
+      "actual_operations": {
+        "102:s": 1,
+        "210:h": 3,
+        "101:s": 27,
+        "101:h": 177,
+        "210:s": 26,
+        "103:none": 44,
+        "3:none": 18,
+        "212:none": 11,
+        "1:none": 7,
+        "104:none": 13,
+        "400:none": 10,
+        "102:h": 7,
+        "2201:h": 8,
+        "4:h": 31,
+        "213:h": 4,
+        "2202:h": 5
+      },
+      "failed_operations": {
+        "400:none": 10,
+        "213:h": 4
+      },
+      "transfers": {
+        "h:acquired": 10,
+        "s:acquired": 13,
+        "h:placed": 4,
+        "s:consumed": 13,
+        "h:consumed": 1,
+        "h:released": 5
+      },
+      "held_ticks": {
+        "h:activity": 3,
+        "H_held_S_contact_reachable": 15,
+        "s:activity": 35,
+        "h:deliberate": 44
+      },
+      "rest_motion": {
+        "Rest_with_locomotion": 13
+      },
+      "safe_to_harm_swaps": 0,
+      "nonzero_operation_inputs": {
+        "2202:h": 47,
+        "2202:s": 35,
+        "2201:h": 193,
+        "2201:s": 25
+      },
+      "safe_meal_contiguous_contact_opportunity_ticks": [
+        10,
+        2,
+        15,
+        2,
+        2,
+        4,
+        2,
+        3,
+        3,
+        7,
+        2,
+        9,
+        2
+      ],
+      "h_held_safe_reachable_hunger_range": [
+        0.6114346981048584,
+        0.7004728317260742
+      ]
+    },
+    {
+      "seed": 2026112601,
+      "arm": "gain_1_16",
+      "attempted": true,
+      "prep_attempts": 600,
+      "prep_returns": 600,
+      "primary_attempts": 256,
+      "primary_returns": 256,
+      "public_steps": 256,
+      "complete": [
+        {
+          "arm": "gain_1_16",
+          "decisions": 256,
+          "kind": "life_complete",
+          "meals_h_s": [
+            1,
+            13
+          ],
+          "preparation_ticks": 600,
+          "primary_steps": 256,
+          "seed": 2026112601,
+          "stop": "tick_budget"
+        }
+      ],
+      "final_energy": 0.5204886198043823,
+      "min_energy": 0.3985486924648285,
+      "min_health": 0.9052957892417908,
+      "max_injury": 0.0947042778134346,
+      "meals_h_s": [
+        1,
+        13
+      ],
+      "alive": true,
+      "decisions": 256,
+      "actual_operations": {
+        "102:s": 1,
+        "210:h": 3,
+        "101:s": 27,
+        "101:h": 177,
+        "210:s": 26,
+        "103:none": 44,
+        "3:none": 17,
+        "212:none": 11,
+        "1:none": 7,
+        "104:none": 13,
+        "400:none": 11,
+        "102:h": 7,
+        "2201:h": 8,
+        "4:h": 31,
+        "213:h": 4,
+        "2202:h": 5
+      },
+      "failed_operations": {
+        "400:none": 11,
+        "213:h": 4
+      },
+      "transfers": {
+        "h:acquired": 10,
+        "s:acquired": 13,
+        "h:placed": 4,
+        "s:consumed": 13,
+        "h:consumed": 1,
+        "h:released": 5
+      },
+      "held_ticks": {
+        "h:activity": 3,
+        "H_held_S_contact_reachable": 15,
+        "s:activity": 35,
+        "h:deliberate": 44
+      },
+      "rest_motion": {
+        "Rest_with_locomotion": 12
+      },
+      "safe_to_harm_swaps": 0,
+      "nonzero_operation_inputs": {
+        "2202:h": 47,
+        "2202:s": 35,
+        "2201:h": 193,
+        "2201:s": 25
+      },
+      "safe_meal_contiguous_contact_opportunity_ticks": [
+        10,
+        2,
+        15,
+        2,
+        2,
+        4,
+        2,
+        3,
+        3,
+        7,
+        2,
+        9,
+        2
+      ],
+      "h_held_safe_reachable_hunger_range": [
+        0.6114397644996643,
+        0.7004728317260742
+      ]
+    },
+    {
+      "seed": 2026112602,
+      "arm": "OFF",
+      "attempted": true,
+      "prep_attempts": 600,
+      "prep_returns": 600,
+      "primary_attempts": 256,
+      "primary_returns": 256,
+      "public_steps": 256,
+      "complete": [
+        {
+          "arm": "OFF",
+          "decisions": 256,
+          "kind": "life_complete",
+          "meals_h_s": [
+            1,
+            13
+          ],
+          "preparation_ticks": 600,
+          "primary_steps": 256,
+          "seed": 2026112602,
+          "stop": "tick_budget"
+        }
+      ],
+      "final_energy": 0.521587073802948,
+      "min_energy": 0.3983900547027588,
+      "min_health": 0.905276358127594,
+      "max_injury": 0.094723641872406,
+      "meals_h_s": [
+        1,
+        13
+      ],
+      "alive": true,
+      "decisions": 256,
+      "actual_operations": {
+        "102:s": 1,
+        "210:s": 29,
+        "103:none": 48,
+        "101:h": 166,
+        "210:h": 3,
+        "101:s": 28,
+        "400:none": 9,
+        "3:none": 16,
+        "104:none": 9,
+        "1:none": 10,
+        "212:none": 9,
+        "4:h": 22,
+        "102:h": 13,
+        "213:h": 9,
+        "2201:h": 9,
+        "2202:h": 3,
+        "4:s": 3
+      },
+      "failed_operations": {
+        "400:none": 9,
+        "213:h": 9
+      },
+      "transfers": {
+        "s:acquired": 16,
+        "s:placed": 3,
+        "h:acquired": 11,
+        "h:placed": 7,
+        "s:consumed": 13,
+        "h:consumed": 1,
+        "h:released": 3
+      },
+      "held_ticks": {
+        "s:activity": 41,
+        "h:activity": 5,
+        "H_held_S_contact_reachable": 12,
+        "h:deliberate": 59
+      },
+      "rest_motion": {
+        "Rest_with_locomotion": 8
+      },
+      "safe_to_harm_swaps": 3,
+      "nonzero_operation_inputs": {
+        "2202:s": 41,
+        "2202:h": 64,
+        "2201:s": 33,
+        "2201:h": 173
+      },
+      "safe_meal_contiguous_contact_opportunity_ticks": [
+        12,
+        2,
+        6,
+        15,
+        7,
+        5,
+        2,
+        2,
+        5,
+        6,
+        5,
+        2,
+        6
+      ],
+      "h_held_safe_reachable_hunger_range": [
+        0.6130345463752747,
+        0.700525164604187
+      ]
+    },
+    {
+      "seed": 2026112602,
+      "arm": "gain_1_16",
+      "attempted": true,
+      "prep_attempts": 600,
+      "prep_returns": 600,
+      "primary_attempts": 256,
+      "primary_returns": 256,
+      "public_steps": 256,
+      "complete": [
+        {
+          "arm": "gain_1_16",
+          "decisions": 256,
+          "kind": "life_complete",
+          "meals_h_s": [
+            1,
+            13
+          ],
+          "preparation_ticks": 600,
+          "primary_steps": 256,
+          "seed": 2026112602,
+          "stop": "tick_budget"
+        }
+      ],
+      "final_energy": 0.5215964913368225,
+      "min_energy": 0.3983900547027588,
+      "min_health": 0.905276358127594,
+      "max_injury": 0.094723641872406,
+      "meals_h_s": [
+        1,
+        13
+      ],
+      "alive": true,
+      "decisions": 256,
+      "actual_operations": {
+        "102:s": 1,
+        "210:s": 29,
+        "103:none": 45,
+        "101:h": 168,
+        "210:h": 3,
+        "101:s": 29,
+        "400:none": 5,
+        "3:none": 19,
+        "104:none": 9,
+        "1:none": 11,
+        "212:none": 9,
+        "4:h": 19,
+        "102:h": 13,
+        "213:h": 8,
+        "2201:h": 9,
+        "2202:h": 3,
+        "4:s": 1
+      },
+      "failed_operations": {
+        "400:none": 5,
+        "213:h": 8
+      },
+      "transfers": {
+        "s:acquired": 16,
+        "s:placed": 3,
+        "h:acquired": 11,
+        "h:placed": 7,
+        "s:consumed": 13,
+        "h:consumed": 1,
+        "h:released": 3
+      },
+      "held_ticks": {
+        "s:activity": 41,
+        "h:activity": 5,
+        "H_held_S_contact_reachable": 13,
+        "h:deliberate": 51
+      },
+      "rest_motion": {
+        "Rest_with_locomotion": 10
+      },
+      "safe_to_harm_swaps": 3,
+      "nonzero_operation_inputs": {
+        "2202:s": 41,
+        "2202:h": 56,
+        "2201:s": 32,
+        "2201:h": 181
+      },
+      "safe_meal_contiguous_contact_opportunity_ticks": [
+        12,
+        2,
+        6,
+        15,
+        7,
+        5,
+        2,
+        2,
+        5,
+        6,
+        5,
+        3,
+        4
+      ],
+      "h_held_safe_reachable_hunger_range": [
+        0.6065492630004883,
+        0.700525164604187
+      ]
+    }
+  ]
+}

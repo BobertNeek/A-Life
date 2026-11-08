@@ -192,9 +192,10 @@ pub(super) fn compile_decoders(
     capacity: &BrainCapacityClass,
     route_index: u16,
     start: u32,
+    grip_reader: bool,
 ) -> Result<CompiledDecoderSet, ScaffoldContractError> {
     if capacity.id() == BrainCapacityClass::N2048_ID {
-        return compile_n2048_decoders(genome, layout, route_index, start);
+        return compile_n2048_decoders(genome, layout, route_index, start, grip_reader);
     }
     let motor = layout
         .region(LobeKind::ActionPlanning)
@@ -411,6 +412,7 @@ fn compile_n2048_decoders(
     layout: &LobeLayout,
     action_route_index: u16,
     start: u32,
+    grip_reader: bool,
 ) -> Result<CompiledDecoderSet, ScaffoldContractError> {
     let motor = layout
         .region(LobeKind::ActionPlanning)
@@ -471,9 +473,15 @@ fn compile_n2048_decoders(
     if candidate_count != crate::N2048FoundationLayoutV1::CANDIDATE_DECODER_SYNAPSE_COUNT {
         return Err(compile_error());
     }
-    let memory_channel = super::MemoryChannelPlan::try_new_v1(
-        crate::N2048FoundationLayoutV1::MEMORY_DECODER_SYNAPSE_COUNT,
-    )?;
+    let memory_channel = if grip_reader {
+        super::MemoryChannelPlan::try_new_grip_reader(
+            crate::N2048FoundationLayoutV1::MEMORY_DECODER_SYNAPSE_COUNT,
+        )?
+    } else {
+        super::MemoryChannelPlan::try_new_v1(
+            crate::N2048FoundationLayoutV1::MEMORY_DECODER_SYNAPSE_COUNT,
+        )?
+    };
     let candidate = CandidateDecoderPlan::try_new(
         motor.start,
         u16::try_from(motor.len).map_err(|_| compile_error())?,
@@ -580,9 +588,16 @@ fn compile_n2048_decoders(
                         CompiledSynapseKind::Decoder(DecoderSynapseCoordinate::new(
                             DecoderHeadKind::MemoryContext,
                             family,
-                            u16::try_from(memory_channel.target_latent_lane_start())
-                                .map_err(|_| compile_error())?
-                                + channel,
+                            // Each old lane retains at least 32 copies. Only
+                            // the last zero-inherited prediction-error duplicate
+                            // is retargeted; endpoints and array length stay fixed.
+                            if grip_reader && channel == 7 && input_index == 55 {
+                                crate::N2048GripReaderCandidateV1::OPERATION_VALUE_LANE
+                            } else {
+                                u16::try_from(memory_channel.target_latent_lane_start())
+                                    .map_err(|_| compile_error())?
+                                    + channel
+                            },
                             output_index,
                         )),
                     ));

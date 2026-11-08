@@ -1,0 +1,26 @@
+   Compiling alife_training v0.1.0 (/workspace/scratch/ee5e08a3ca9b/grip-reader-shader-parity-v1/crates/alife_training)
+    Finished `test` profile [unoptimized] target(s) in 12.47s
+     Running unittests src/lib.rs (/workspace/scratch/ee5e08a3ca9b/grip-reader-parity-target-v1/debug/deps/alife_training-502a712293fe7df2)
+
+running 1 test
+test cpu::organism::grip_reader_shader_parity::software_vulkan_matches_cpu_grip_reader_logits_features_and_eligibility ... grip_reader_adapter=AdapterInfo { name: "SwiftShader Device (Subzero)", vendor: 6880, device: 49374, device_type: Cpu, device_pci_bus_id: "", driver: "SwiftShader driver", driver_info: "", backend: Vulkan, subgroup_min_size: 4, subgroup_max_size: 4, transient_saves_memory: false }; synthetic=true; hardware_qualification=false
+grip_reader_case schema=3 action=2201 sign=-1 evidence=true saturated=false logit=-0.11453135 features=54 memory_eligibility_rows=4096 decoder_rows=8192 max_eligibility_error=0 logit_error=0.000000059604645
+grip_reader_case schema=3 action=2201 sign=1 evidence=true saturated=false logit=-0.11453126 features=54 memory_eligibility_rows=4096 decoder_rows=8192 max_eligibility_error=0 logit_error=0.000000059604645
+grip_reader_case schema=3 action=2201 sign=-1 evidence=false saturated=false logit=0 features=54 memory_eligibility_rows=4096 decoder_rows=8192 max_eligibility_error=0 logit_error=0
+grip_reader_case schema=3 action=2202 sign=-1 evidence=true saturated=false logit=-0.069921896 features=54 memory_eligibility_rows=4096 decoder_rows=8192 max_eligibility_error=0 logit_error=0
+grip_reader_case schema=3 action=2202 sign=1 evidence=true saturated=false logit=0.09882811 features=54 memory_eligibility_rows=4096 decoder_rows=8192 max_eligibility_error=0 logit_error=0
+grip_reader_case schema=3 action=2202 sign=-1 evidence=false saturated=false logit=0 features=54 memory_eligibility_rows=4096 decoder_rows=8192 max_eligibility_error=0 logit_error=0
+grip_reader_case schema=3 action=212 sign=-1 evidence=true saturated=false logit=-0.060546875 features=54 memory_eligibility_rows=4096 decoder_rows=8192 max_eligibility_error=0 logit_error=0
+grip_reader_case schema=3 action=212 sign=1 evidence=true saturated=false logit=0.0894531 features=54 memory_eligibility_rows=4096 decoder_rows=8192 max_eligibility_error=0 logit_error=0
+grip_reader_case schema=3 action=212 sign=-1 evidence=false saturated=false logit=0 features=54 memory_eligibility_rows=4096 decoder_rows=8192 max_eligibility_error=0 logit_error=0
+grip_reader_case schema=1 action=2202 sign=-1 evidence=true saturated=true logit=-0.5 features=36 memory_eligibility_rows=4096 decoder_rows=8192 max_eligibility_error=0 logit_error=0
+grip_reader_case schema=2 action=2202 sign=-1 evidence=true saturated=true logit=-12 features=36 memory_eligibility_rows=4096 decoder_rows=8192 max_eligibility_error=0 logit_error=0
+grip_reader_case schema=3 action=2202 sign=-1 evidence=true saturated=true logit=-12 features=54 memory_eligibility_rows=4096 decoder_rows=8192 max_eligibility_error=0 logit_error=0
+grip_reader_case schema=1 action=2202 sign=1 evidence=true saturated=true logit=0.5 features=36 memory_eligibility_rows=4096 decoder_rows=8192 max_eligibility_error=0 logit_error=0
+grip_reader_case schema=2 action=2202 sign=1 evidence=true saturated=true logit=12 features=36 memory_eligibility_rows=4096 decoder_rows=8192 max_eligibility_error=0 logit_error=0
+grip_reader_case schema=3 action=2202 sign=1 evidence=true saturated=true logit=12 features=54 memory_eligibility_rows=4096 decoder_rows=8192 max_eligibility_error=0 logit_error=0
+grip_reader_parity_complete cases=15; native_CPU_forward_and_staging=true; unchanged_WGSL_execution=true; cognitive_decoder_absent=true; synthetic=true
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 130 filtered out; finished in 9.44s
+

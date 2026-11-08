@@ -1,0 +1,520 @@
+{
+  "run_id": 42421770180,
+  "job_id": 128551520795,
+  "source_revision": "260ca86bb6a2f5723fc8700628e74473a4183420",
+  "projection": [
+    {
+      "source_revision": "260ca86bb6a2f5723fc8700628e74473a4183420",
+      "scope": "compilation_and_unit_fixtures_only"
+    },
+    {
+      "gate": "qualification_static_contracts",
+      "status": "passed"
+    },
+    {
+      "gate": "closed_study_static_contracts",
+      "status": "passed"
+    },
+    {
+      "gate": "core_boundaries",
+      "status": "passed"
+    },
+    {
+      "gate": "format/crates/alife_core/src/foundation.rs",
+      "status": "passed"
+    },
+    {
+      "gate": "format/crates/alife_core/src/grip_research.rs",
+      "status": "passed"
+    },
+    {
+      "gate": "format/crates/alife_core/src/legacy_nano512_compatibility.rs",
+      "status": "passed"
+    },
+    {
+      "gate": "format/crates/alife_core/src/lib.rs",
+      "status": "passed"
+    },
+    {
+      "gate": "format/crates/alife_core/src/memory.rs",
+      "status": "passed"
+    },
+    {
+      "gate": "format/crates/alife_core/src/memory/candidate_recall.rs",
+      "status": "passed"
+    },
+    {
+      "gate": "format/crates/alife_core/src/memory/runtime.rs",
+      "status": "passed"
+    },
+    {
+      "gate": "format/crates/alife_core/src/memory_query.rs",
+      "status": "passed"
+    },
+    {
+      "gate": "format/crates/alife_core/src/n2048_grip_reader_candidate.rs",
+      "status": "passed"
+    },
+    {
+      "gate": "format/crates/alife_core/src/perception.rs",
+      "status": "passed"
+    },
+    {
+      "gate": "format/crates/alife_core/src/phenotype/abi_validation.rs",
+      "status": "passed"
+    },
+    {
+      "gate": "format/crates/alife_core/src/phenotype/compiler.rs",
+      "status": "passed"
+    },
+    {
+      "gate": "format/crates/alife_core/src/phenotype/construction.rs",
+      "status": "passed"
+    },
+    {
+      "gate": "format/crates/alife_core/src/phenotype/decoder.rs",
+      "status": "passed"
+    },
+    {
+      "gate": "format/crates/alife_core/src/phenotype/io_compile.rs",
+      "status": "passed"
+    },
+    {
+      "gate": "format/crates/alife_core/src/phenotype/memory_channel.rs",
+      "status": "passed"
+    },
+    {
+      "gate": "format/crates/alife_core/src/phenotype/record.rs",
+      "status": "passed"
+    },
+    {
+      "gate": "format/crates/alife_core/tests/candidate_memory_retrieval.rs",
+      "status": "passed"
+    },
+    {
+      "gate": "format/crates/alife_core/tests/candidate_memory_retrieval/grip_reader.rs",
+      "status": "passed"
+    },
+    {
+      "gate": "format/crates/alife_core/tests/n2048_grip_reader_candidate.rs",
+      "status": "passed"
+    },
+    {
+      "gate": "format/crates/alife_game_app/src/gpu_evidence.rs",
+      "status": "passed"
+    },
+    {
+      "gate": "format/crates/alife_game_app/src/gpu_evidence/soak.rs",
+      "status": "passed"
+    },
+    {
+      "gate": "format/crates/alife_gpu_backend/src/closed_loop_buffers/bucket.rs",
+      "status": "passed"
+    },
+    {
+      "gate": "format/crates/alife_gpu_backend/src/closed_loop_buffers/perception.rs",
+      "status": "passed"
+    },
+    {
+      "gate": "format/crates/alife_gpu_backend/src/closed_loop_buffers/upload.rs",
+      "status": "passed"
+    },
+    {
+      "gate": "format/crates/alife_gpu_backend/src/closed_loop_memory.rs",
+      "status": "passed"
+    },
+    {
+      "gate": "format/crates/alife_gpu_backend/tests/n2048_grip_reader_candidate.rs",
+      "status": "passed"
+    },
+    {
+      "gate": "format/crates/alife_runtime/src/canonical_preparation.rs",
+      "status": "passed"
+    },
+    {
+      "gate": "format/crates/alife_training/examples/probe_grip_reader.rs",
+      "status": "passed"
+    },
+    {
+      "gate": "format/crates/alife_training/src/cpu/host.rs",
+      "status": "passed"
+    },
+    {
+      "gate": "format/crates/alife_training/src/cpu/input.rs",
+      "status": "passed"
+    },
+    {
+      "gate": "format/crates/alife_training/tests/cpu_grip_reader_candidate.rs",
+      "status": "passed"
+    },
+    {
+      "gate": "format/crates/alife_world/src/candidate_enumerator.rs",
+      "status": "passed"
+    },
+    {
+      "gate": "format/crates/alife_world/src/headless.rs",
+      "status": "passed"
+    },
+    {
+      "gate": "format/crates/alife_world/src/headless/grip_research.rs",
+      "status": "passed"
+    },
+    {
+      "gate": "format/crates/alife_world/src/new_game.rs",
+      "status": "passed"
+    },
+    {
+      "gate": "format/crates/alife_world/tests/gpu_memory_grounding_persistence.rs",
+      "status": "passed"
+    },
+    {
+      "gate": "alife_core/n2048_grip_reader_candidate/compile",
+      "status": "passed"
+    },
+    {
+      "gate": "alife_core/n2048_grip_reader_candidate/fixtures",
+      "failed_tests": [],
+      "ignored_tests": [],
+      "status": "passed",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0,
+      "ignored_inventory_valid": true
+    },
+    {
+      "gate": "alife_core/n2048_foundation_abi/compile",
+      "status": "passed"
+    },
+    {
+      "gate": "alife_core/n2048_foundation_abi/fixtures",
+      "failed_tests": [],
+      "ignored_tests": [],
+      "status": "passed",
+      "passed": 15,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0,
+      "ignored_inventory_valid": true
+    },
+    {
+      "gate": "alife_core/n2048_experimental_graph/compile",
+      "status": "passed"
+    },
+    {
+      "gate": "alife_core/n2048_experimental_graph/fixtures",
+      "failed_tests": [],
+      "ignored_tests": [],
+      "status": "passed",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0,
+      "ignored_inventory_valid": true
+    },
+    {
+      "gate": "alife_core/n2048_memory_gain_candidate/compile",
+      "status": "passed"
+    },
+    {
+      "gate": "alife_core/n2048_memory_gain_candidate/fixtures",
+      "failed_tests": [],
+      "ignored_tests": [],
+      "status": "passed",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0,
+      "ignored_inventory_valid": true
+    },
+    {
+      "gate": "alife_core/n512_foundation_abi/compile",
+      "status": "passed"
+    },
+    {
+      "gate": "alife_core/n512_foundation_abi/fixtures",
+      "failed_tests": [],
+      "ignored_tests": [],
+      "status": "passed",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0,
+      "ignored_inventory_valid": true
+    },
+    {
+      "gate": "alife_core/n512_legacy_compatibility_abi/compile",
+      "status": "passed"
+    },
+    {
+      "gate": "alife_core/n512_legacy_compatibility_abi/fixtures",
+      "failed_tests": [],
+      "ignored_tests": [],
+      "status": "passed",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0,
+      "ignored_inventory_valid": true
+    },
+    {
+      "gate": "alife_core/n512_curated_founder_compatibility/compile",
+      "status": "passed"
+    },
+    {
+      "gate": "alife_core/n512_curated_founder_compatibility/fixtures",
+      "failed_tests": [],
+      "ignored_tests": [],
+      "status": "passed",
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0,
+      "ignored_inventory_valid": true
+    },
+    {
+      "gate": "alife_core/abi_validation_errors/compile",
+      "status": "passed"
+    },
+    {
+      "gate": "alife_core/abi_validation_errors/fixtures",
+      "failed_tests": [],
+      "ignored_tests": [],
+      "status": "passed",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0,
+      "ignored_inventory_valid": true
+    },
+    {
+      "gate": "alife_core/perception_digest_golden/compile",
+      "status": "passed"
+    },
+    {
+      "gate": "alife_core/perception_digest_golden/fixtures",
+      "failed_tests": [],
+      "ignored_tests": [],
+      "status": "passed",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0,
+      "ignored_inventory_valid": true
+    },
+    {
+      "gate": "alife_core/memory_query/compile",
+      "status": "passed"
+    },
+    {
+      "gate": "alife_core/memory_query/fixtures",
+      "failed_tests": [],
+      "ignored_tests": [],
+      "status": "passed",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 41,
+      "ignored_inventory_valid": true
+    },
+    {
+      "gate": "alife_core/candidate_memory_queries/compile",
+      "status": "passed"
+    },
+    {
+      "gate": "alife_core/candidate_memory_queries/fixtures",
+      "failed_tests": [],
+      "ignored_tests": [],
+      "status": "passed",
+      "passed": 7,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0,
+      "ignored_inventory_valid": true
+    },
+    {
+      "gate": "alife_core/candidate_memory_retrieval/compile",
+      "status": "passed"
+    },
+    {
+      "gate": "alife_core/candidate_memory_retrieval/fixtures",
+      "failed_tests": [],
+      "ignored_tests": [
+        "memory_cpu_recall_microbenchmark"
+      ],
+      "status": "passed",
+      "passed": 74,
+      "failed": 0,
+      "ignored": 1,
+      "filtered": 0,
+      "ignored_inventory_valid": true
+    },
+    {
+      "gate": "alife_world/grip_research/compile",
+      "status": "passed"
+    },
+    {
+      "gate": "alife_world/grip_research/fixtures",
+      "failed_tests": [],
+      "ignored_tests": [],
+      "status": "passed",
+      "passed": 18,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 217,
+      "ignored_inventory_valid": true
+    },
+    {
+      "gate": "alife_training/cpu_grip_reader_candidate/compile",
+      "status": "passed"
+    },
+    {
+      "gate": "alife_training/cpu_grip_reader_candidate/fixtures",
+      "failed_tests": [],
+      "ignored_tests": [],
+      "status": "passed",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0,
+      "ignored_inventory_valid": true
+    },
+    {
+      "gate": "alife_training/cpu_memory_gain_candidate/compile",
+      "status": "passed"
+    },
+    {
+      "gate": "alife_training/cpu_memory_gain_candidate/fixtures",
+      "failed_tests": [],
+      "ignored_tests": [],
+      "status": "passed",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0,
+      "ignored_inventory_valid": true
+    },
+    {
+      "gate": "alife_gpu_backend/n2048_grip_reader_candidate/compile",
+      "status": "passed"
+    },
+    {
+      "gate": "alife_gpu_backend/n2048_grip_reader_candidate/fixtures",
+      "failed_tests": [],
+      "ignored_tests": [],
+      "status": "passed",
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0,
+      "ignored_inventory_valid": true
+    },
+    {
+      "gate": "alife_gpu_backend/n2048_memory_gain_candidate/compile",
+      "status": "passed"
+    },
+    {
+      "gate": "alife_gpu_backend/n2048_memory_gain_candidate/fixtures",
+      "failed_tests": [],
+      "ignored_tests": [],
+      "status": "passed",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0,
+      "ignored_inventory_valid": true
+    },
+    {
+      "gate": "alife_training/probe_grip_reader/compile",
+      "status": "passed"
+    },
+    {
+      "gate": "alife_training/probe_grip_reader/fixtures",
+      "failed_tests": [],
+      "ignored_tests": [],
+      "status": "passed",
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "filtered": 0,
+      "ignored_inventory_valid": true
+    },
+    {
+      "gate": "alife_core/n2048_grip_reader_candidate/clippy",
+      "status": "passed"
+    },
+    {
+      "gate": "alife_core/n2048_foundation_abi/clippy",
+      "status": "passed"
+    },
+    {
+      "gate": "alife_core/n2048_experimental_graph/clippy",
+      "status": "passed"
+    },
+    {
+      "gate": "alife_core/n2048_memory_gain_candidate/clippy",
+      "status": "passed"
+    },
+    {
+      "gate": "alife_core/n512_foundation_abi/clippy",
+      "status": "passed"
+    },
+    {
+      "gate": "alife_core/n512_legacy_compatibility_abi/clippy",
+      "status": "passed"
+    },
+    {
+      "gate": "alife_core/n512_curated_founder_compatibility/clippy",
+      "status": "passed"
+    },
+    {
+      "gate": "alife_core/abi_validation_errors/clippy",
+      "status": "passed"
+    },
+    {
+      "gate": "alife_core/perception_digest_golden/clippy",
+      "status": "passed"
+    },
+    {
+      "gate": "alife_core/memory_query/clippy",
+      "status": "passed"
+    },
+    {
+      "gate": "alife_core/candidate_memory_queries/clippy",
+      "status": "passed"
+    },
+    {
+      "gate": "alife_core/candidate_memory_retrieval/clippy",
+      "status": "passed"
+    },
+    {
+      "gate": "alife_world/grip_research/clippy",
+      "status": "passed"
+    },
+    {
+      "gate": "alife_training/cpu_grip_reader_candidate/clippy",
+      "status": "passed"
+    },
+    {
+      "gate": "alife_training/cpu_memory_gain_candidate/clippy",
+      "status": "passed"
+    },
+    {
+      "gate": "alife_gpu_backend/n2048_grip_reader_candidate/clippy",
+      "status": "passed"
+    },
+    {
+      "gate": "alife_gpu_backend/n2048_memory_gain_candidate/clippy",
+      "status": "passed"
+    },
+    {
+      "gate": "alife_training/probe_grip_reader/clippy",
+      "status": "passed"
+    },
+    {
+      "qualification": "passed",
+      "native_study": "not_run",
+      "hardware_execution": "not_run"
+    }
+  ]
+}

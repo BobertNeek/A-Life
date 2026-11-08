@@ -186,7 +186,7 @@ pub fn route_observed_focal_candidates(
         return route_focal_candidates(draft, attention);
     };
     let candidates = binding.candidates_for_focus(draft, Some(*focal_object))?;
-    let observed = PerceptionFrameDraft::new(
+    let observed = PerceptionFrameDraft::new_with_grip_observations(
         draft.organism_id(),
         draft.tick(),
         draft.sensor_profile(),
@@ -196,6 +196,7 @@ pub fn route_observed_focal_candidates(
         candidates,
         draft.profile_provenance(),
         draft.grounded_object_slots().to_vec(),
+        draft.grip_observations().to_vec(),
     )?;
     route_focal_candidates(&observed, attention)
 }
@@ -234,7 +235,7 @@ pub fn route_focal_candidates(
             u16::try_from(index).map_err(|_| ScaffoldContractError::InvalidActionCandidate)?;
     }
 
-    PerceptionFrameDraft::new(
+    PerceptionFrameDraft::new_with_grip_observations(
         draft.organism_id(),
         draft.tick(),
         draft.sensor_profile(),
@@ -244,6 +245,7 @@ pub fn route_focal_candidates(
         candidates,
         draft.profile_provenance(),
         draft.grounded_object_slots().to_vec(),
+        draft.grip_observations().to_vec(),
     )
 }
 
@@ -538,9 +540,9 @@ pub fn grounded_successor_state(
         .entity(world_entity_id)
         .ok_or(ScaffoldContractError::InvalidId)?;
     let velocity = match profile {
-        SensorProfile::GroundedObjectSlotsV1 | SensorProfile::GroundedTerrainVisionV1 => {
-            object.grounded_physical.velocity
-        }
+        SensorProfile::GroundedObjectSlotsV1
+        | SensorProfile::GroundedTerrainVisionV1
+        | SensorProfile::GroundedGripObjectSlotsV1 => object.grounded_physical.velocity,
         SensorProfile::PrivilegedAffordanceV1 => Vec3f::ZERO,
     };
     let position = if profile == SensorProfile::GroundedTerrainVisionV1 {

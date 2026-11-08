@@ -30,6 +30,8 @@ pub enum SensorProfile {
     PrivilegedAffordanceV1 = 1,
     GroundedObjectSlotsV1 = 2,
     GroundedTerrainVisionV1 = 3,
+    /// Explicit fresh research profile with candidate-bound grip ownership.
+    GroundedGripObjectSlotsV1 = 4,
 }
 
 impl SensorProfile {
@@ -42,6 +44,7 @@ impl SensorProfile {
             1 => Ok(Self::PrivilegedAffordanceV1),
             2 => Ok(Self::GroundedObjectSlotsV1),
             3 => Ok(Self::GroundedTerrainVisionV1),
+            4 => Ok(Self::GroundedGripObjectSlotsV1),
             _ => Err(ScaffoldContractError::SensorProfileMismatch),
         }
     }
@@ -353,6 +356,9 @@ pub struct PerceptionFrameDraft {
     profile_provenance: SensorProfileProvenance,
     grounded_object_slots: Vec<GroundedObjectSlotV1>,
     base_digest: PerceptionBaseDigest,
+    // Append-only: preserve every legacy positional and numeric-map field index.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    grip_observations: Vec<crate::GroundedGripSlotV1>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -383,6 +389,33 @@ impl PerceptionFrameDraft {
         profile_provenance: SensorProfileProvenance,
         grounded_object_slots: Vec<GroundedObjectSlotV1>,
     ) -> Result<Self, ScaffoldContractError> {
+        Self::new_with_grip_observations(
+            organism_id,
+            tick,
+            sensor_profile,
+            sensory,
+            body,
+            homeostasis,
+            candidates,
+            profile_provenance,
+            grounded_object_slots,
+            Vec::new(),
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_with_grip_observations(
+        organism_id: OrganismId,
+        tick: Tick,
+        sensor_profile: SensorProfile,
+        sensory: SensorySnapshot,
+        body: BodySnapshot,
+        homeostasis: HomeostaticSnapshot,
+        candidates: Vec<ActionCandidate>,
+        profile_provenance: SensorProfileProvenance,
+        grounded_object_slots: Vec<GroundedObjectSlotV1>,
+        grip_observations: Vec<crate::GroundedGripSlotV1>,
+    ) -> Result<Self, ScaffoldContractError> {
         let schema_version = SchemaVersions::CURRENT.perception.raw();
         validate_frame_base(
             schema_version,
@@ -395,6 +428,7 @@ impl PerceptionFrameDraft {
             &candidates,
             profile_provenance,
             &grounded_object_slots,
+            &grip_observations,
         )?;
         let base_digest = compute_base_digest(
             schema_version,
@@ -407,6 +441,7 @@ impl PerceptionFrameDraft {
             &candidates,
             profile_provenance,
             &grounded_object_slots,
+            &grip_observations,
         );
         Ok(Self {
             schema_version,
@@ -419,6 +454,7 @@ impl PerceptionFrameDraft {
             candidates,
             profile_provenance,
             grounded_object_slots,
+            grip_observations,
             base_digest,
         })
     }
@@ -463,6 +499,10 @@ impl PerceptionFrameDraft {
         &self.grounded_object_slots
     }
 
+    pub fn grip_observations(&self) -> &[crate::GroundedGripSlotV1] {
+        &self.grip_observations
+    }
+
     pub const fn base_digest(&self) -> PerceptionBaseDigest {
         self.base_digest
     }
@@ -490,7 +530,7 @@ impl PerceptionFrameDraft {
         context: Option<crate::SemanticContextRef>,
     ) -> Result<Self, ScaffoldContractError> {
         self.sensory.semantic_context = context;
-        Self::new(
+        Self::new_with_grip_observations(
             self.organism_id,
             self.tick,
             self.sensor_profile,
@@ -500,12 +540,13 @@ impl PerceptionFrameDraft {
             self.candidates,
             self.profile_provenance,
             self.grounded_object_slots,
+            self.grip_observations,
         )
     }
 
     pub fn with_remembered_novelty(mut self, novelty: f32) -> Result<Self, ScaffoldContractError> {
         self.sensory.channels.novelty_signal = crate::NormalizedScalar::new(novelty)?;
-        Self::new(
+        Self::new_with_grip_observations(
             self.organism_id,
             self.tick,
             self.sensor_profile,
@@ -515,6 +556,7 @@ impl PerceptionFrameDraft {
             self.candidates,
             self.profile_provenance,
             self.grounded_object_slots,
+            self.grip_observations,
         )
     }
 }
@@ -532,6 +574,7 @@ impl Validate for PerceptionFrameDraft {
             &self.candidates,
             self.profile_provenance,
             &self.grounded_object_slots,
+            &self.grip_observations,
         )?;
         let expected = compute_base_digest(
             self.schema_version,
@@ -544,6 +587,7 @@ impl Validate for PerceptionFrameDraft {
             &self.candidates,
             self.profile_provenance,
             &self.grounded_object_slots,
+            &self.grip_observations,
         );
         if expected == self.base_digest {
             Ok(())
@@ -571,9 +615,87 @@ impl<'de> Deserialize<'de> for PerceptionFrameDraft {
             profile_provenance: SensorProfileProvenance,
             grounded_object_slots: Vec<GroundedObjectSlotV1>,
             base_digest: PerceptionBaseDigest,
+            #[serde(default)]
+            grip_observations: Vec<crate::GroundedGripSlotV1>,
         }
 
-        let wire = Wire::deserialize(deserializer)?;
+        // Preserve the exact old binary sequence and numeric-map field indices:
+        // the extension follows all eleven old fields and is absent for old
+        // profiles. A derived sequence visitor could consume a following parent
+        // field as the absent extension in non-self-describing codecs.
+        struct BinaryVisitor;
+        impl<'de> serde::de::Visitor<'de> for BinaryVisitor {
+            type Value = Wire;
+            fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str("a profile-bound perception draft")
+            }
+            fn visit_map<A: serde::de::MapAccess<'de>>(self, map: A) -> Result<Wire, A::Error> {
+                Wire::deserialize(serde::de::value::MapAccessDeserializer::new(map))
+            }
+            fn visit_seq<A: serde::de::SeqAccess<'de>>(self, mut seq: A) -> Result<Wire, A::Error> {
+                macro_rules! next {
+                    ($index:expr) => {
+                        seq.next_element()?
+                            .ok_or_else(|| serde::de::Error::invalid_length($index, &self))?
+                    };
+                }
+                let schema_version = next!(0);
+                let organism_id = next!(1);
+                let tick = next!(2);
+                let sensor_profile: SensorProfile = next!(3);
+                let sensory = next!(4);
+                let body = next!(5);
+                let homeostasis = next!(6);
+                let candidates = next!(7);
+                let profile_provenance = next!(8);
+                let grounded_object_slots: Vec<GroundedObjectSlotV1> = next!(9);
+                let base_digest = next!(10);
+                let grip_observations = if sensor_profile
+                    == SensorProfile::GroundedGripObjectSlotsV1
+                    && !grounded_object_slots.is_empty()
+                {
+                    next!(11)
+                } else {
+                    Vec::new()
+                };
+                Ok(Wire {
+                    schema_version,
+                    organism_id,
+                    tick,
+                    sensor_profile,
+                    sensory,
+                    body,
+                    homeostasis,
+                    candidates,
+                    profile_provenance,
+                    grounded_object_slots,
+                    grip_observations,
+                    base_digest,
+                })
+            }
+        }
+        let wire = if deserializer.is_human_readable() {
+            Wire::deserialize(deserializer)?
+        } else {
+            deserializer.deserialize_struct(
+                "PerceptionFrameDraft",
+                &[
+                    "schema_version",
+                    "organism_id",
+                    "tick",
+                    "sensor_profile",
+                    "sensory",
+                    "body",
+                    "homeostasis",
+                    "candidates",
+                    "profile_provenance",
+                    "grounded_object_slots",
+                    "base_digest",
+                    "grip_observations",
+                ],
+                BinaryVisitor,
+            )?
+        };
         validate_frame_base(
             wire.schema_version,
             wire.organism_id,
@@ -585,6 +707,7 @@ impl<'de> Deserialize<'de> for PerceptionFrameDraft {
             &wire.candidates,
             wire.profile_provenance,
             &wire.grounded_object_slots,
+            &wire.grip_observations,
         )
         .map_err(D::Error::custom)?;
         let expected = compute_base_digest(
@@ -598,6 +721,7 @@ impl<'de> Deserialize<'de> for PerceptionFrameDraft {
             &wire.candidates,
             wire.profile_provenance,
             &wire.grounded_object_slots,
+            &wire.grip_observations,
         );
         if expected != wire.base_digest {
             return Err(D::Error::custom("perception base digest mismatch"));
@@ -613,6 +737,7 @@ impl<'de> Deserialize<'de> for PerceptionFrameDraft {
             candidates: wire.candidates,
             profile_provenance: wire.profile_provenance,
             grounded_object_slots: wire.grounded_object_slots,
+            grip_observations: wire.grip_observations,
             base_digest: wire.base_digest,
         })
     }
@@ -773,6 +898,10 @@ impl PerceptionFrame {
         &self.context
     }
 
+    pub fn grip_observations(&self) -> &[crate::GroundedGripSlotV1] {
+        self.base.grip_observations()
+    }
+
     pub const fn base_digest(&self) -> PerceptionBaseDigest {
         self.base.base_digest
     }
@@ -855,6 +984,7 @@ fn validate_frame_base(
     candidates: &[ActionCandidate],
     profile_provenance: SensorProfileProvenance,
     grounded_object_slots: &[GroundedObjectSlotV1],
+    grip_observations: &[crate::GroundedGripSlotV1],
 ) -> Result<(), ScaffoldContractError> {
     ensure_current_version(SchemaKind::Perception, schema_version)
         .map_err(|_| ScaffoldContractError::InvalidPerceptionFrame)?;
@@ -896,6 +1026,40 @@ fn validate_frame_base(
             return Err(ScaffoldContractError::InvalidActionCandidate);
         }
     }
+    if sensor_profile == SensorProfile::GroundedGripObjectSlotsV1 {
+        if grip_observations.len() != grounded_object_slots.len() {
+            return Err(ScaffoldContractError::InvalidPerceptionFrame);
+        }
+        for (slot, grip) in grounded_object_slots.iter().zip(grip_observations) {
+            grip.validate_contract()?;
+            if grip.slot_index != slot.slot_index {
+                return Err(ScaffoldContractError::InvalidPerceptionFrame);
+            }
+        }
+        for candidate in candidates {
+            if candidate.action_id.raw() == 211 {
+                return Err(ScaffoldContractError::InvalidActionCandidate);
+            }
+            if let Some(operation) = crate::GripOperationV1::from_action_id(candidate.action_id) {
+                let CandidateObservationRef::ObjectSlot(index) = candidate.observation else {
+                    return Err(ScaffoldContractError::InvalidActionCandidate);
+                };
+                let grip = grip_observations
+                    .get(usize::from(index))
+                    .ok_or(ScaffoldContractError::InvalidPerceptionFrame)?;
+                if grip.ownership.operation() != Some(operation)
+                    || grip.confidence.raw() <= 0.0
+                    || candidate.family != operation.family()
+                    || candidate.kind != ActionKind::Interact
+                    || candidate.target.entity.is_none()
+                {
+                    return Err(ScaffoldContractError::InvalidActionCandidate);
+                }
+            }
+        }
+    } else if !grip_observations.is_empty() {
+        return Err(ScaffoldContractError::InvalidPerceptionFrame);
+    }
     match sensor_profile {
         SensorProfile::PrivilegedAffordanceV1 => {
             if !grounded_object_slots.is_empty()
@@ -906,13 +1070,17 @@ fn validate_frame_base(
                 return Err(ScaffoldContractError::InvalidPerceptionFrame);
             }
         }
-        SensorProfile::GroundedObjectSlotsV1 | SensorProfile::GroundedTerrainVisionV1 => {
-            if (sensor_profile == SensorProfile::GroundedObjectSlotsV1
-                && sensory
-                    .channels
-                    .visual_affordance
-                    .iter()
-                    .any(|value| *value != 0.0))
+        SensorProfile::GroundedObjectSlotsV1
+        | SensorProfile::GroundedTerrainVisionV1
+        | SensorProfile::GroundedGripObjectSlotsV1 => {
+            if (matches!(
+                sensor_profile,
+                SensorProfile::GroundedObjectSlotsV1 | SensorProfile::GroundedGripObjectSlotsV1
+            ) && sensory
+                .channels
+                .visual_affordance
+                .iter()
+                .any(|value| *value != 0.0))
                 || sensory.channels.nearby_affordances.raw() != 0
             {
                 return Err(ScaffoldContractError::InvalidPerceptionFrame);
@@ -1063,6 +1231,7 @@ fn compute_base_digest(
     candidates: &[ActionCandidate],
     profile_provenance: SensorProfileProvenance,
     grounded_object_slots: &[GroundedObjectSlotV1],
+    grip_observations: &[crate::GroundedGripSlotV1],
 ) -> PerceptionBaseDigest {
     let mut builder = CanonicalDigestBuilder::new(PERCEPTION_BASE_DOMAIN);
     builder.write_u16(schema_version);
@@ -1085,6 +1254,17 @@ fn compute_base_digest(
     for slot in grounded_object_slots {
         encode_grounded_object_slot(&mut builder, slot)
             .expect("validated grounded object slots have canonical finite fields");
+    }
+    if sensor_profile == SensorProfile::GroundedGripObjectSlotsV1 {
+        builder.write_bytes(b"alife.grounded-grip-slots.v1");
+        builder.write_sequence_len(grip_observations.len());
+        for grip in grip_observations {
+            builder.write_u16(grip.slot_index);
+            builder.write_u8(grip.ownership as u8);
+            builder
+                .write_f32(grip.confidence.raw())
+                .expect("validated grip confidence");
+        }
     }
     PerceptionBaseDigest(builder.finish256())
 }

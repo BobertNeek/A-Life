@@ -1,0 +1,7 @@
+# Actual retained retry continuation
+
+Source7d565b7231c8c86f6f25c6f2e4f85e94188e74ca/tree6086c63a9ba7deafdc82bafcf951c7d66bcfc8b4. Parent40eebc5. Only a test was added; no production changes. Executable SHA256124993fae9420f9f08c0deae505ddb12d1a890a68338e8c57c7a5cc8c44d8de3. Plan SHA256ca119997a1c1c644105cd9accb18f7d38cabd2fc1022fce3a501e86a1df375ff.
+
+One actual explicit SwiftShader Cpu/Vulkan fixture passed, exit0,10.21seconds. It made one genuine decision and six world interval calls. An injected initial credit rejection was captured and published by the real immutable worker at failed-retry count0. Real restore preserved its neural authority and sealed credit. Four ordinary retry-only calls, with genuine fault injection, continued counts1,2,3,4 without new decisions or memory/topology updates. A second real immutable publication/restore preserved count4, neural authority and sealed credit. A successful retry on that restored state produced exactly one acknowledgment and cleared pending credit, without a new policy batch or duplicate memory/topology updates. Final publication drained normally.
+
+This is a fixed disposable regression, not a behavioral cohort. The fixture starts in a real core interrupted-clear state; it does not test automatic pain arousal or Awake-to-recovery threshold behavior. No mixed population, Completed startup, ordinary hardware admission, or shared awake motor/reflex budget claim. Generated saves, assets, executable and learned arrays are excluded from the deliverable.

@@ -1,0 +1,18 @@
+{
+  "crates/alife_core/src/biochemistry.rs": {
+    "scope": "production prefix before first cfg(test); excludes private test-call signature maintenance",
+    "sha256": "11962704ab63874d47aae5abeeda16f5b1d590ce6918bdf965c6a26685133621"
+  },
+  "crates/alife_world/src/organism.rs": {
+    "scope": "whole production source file",
+    "sha256": "75882ae1e5042ea16e2603782821ebb0aede49de5602308b9ad107ebe71f55cb"
+  },
+  "crates/alife_world/src/headless.rs": {
+    "scope": "whole production source file",
+    "sha256": "76ed15c5b2713c57bd7349ce56eac5891e46ee04d372f89c6de3b07b3f5c5db4"
+  },
+  "crates/alife_world/src/headless/thermal_contact_candidate.rs": {
+    "scope": "whole production source file",
+    "sha256": "199d379838726d3a2f9bb21daa4d7628efbd02dc0428196bbce8f513412ee768"
+  }
+}

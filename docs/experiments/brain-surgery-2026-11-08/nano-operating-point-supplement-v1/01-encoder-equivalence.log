@@ -1,0 +1,71 @@
+   Compiling alife_core v0.1.0 (/workspace/scratch/ee5e08a3ca9b/nano-native-operating-point-v1/crates/alife_core)
+   Compiling alife_storage v0.1.0 (/workspace/scratch/ee5e08a3ca9b/nano-native-operating-point-v1/crates/alife_storage)
+   Compiling alife_gpu_backend v0.1.0 (/workspace/scratch/ee5e08a3ca9b/nano-native-operating-point-v1/crates/alife_gpu_backend)
+   Compiling alife_world v0.1.0 (/workspace/scratch/ee5e08a3ca9b/nano-native-operating-point-v1/crates/alife_world)
+   Compiling alife_runtime v0.1.0 (/workspace/scratch/ee5e08a3ca9b/nano-native-operating-point-v1/crates/alife_runtime)
+   Compiling alife_training v0.1.0 (/workspace/scratch/ee5e08a3ca9b/nano-native-operating-point-v1/crates/alife_training)
+error[E0596]: cannot borrow `game.world` as mutable, as `game` is not declared as mutable
+  --> crates/alife_training/tests/cpu_encoder_inputs.rs:81:22
+   |
+81 |       let (draft, _) = game
+   |  ______________________^
+82 | |         .world
+   | |______________^ cannot borrow as mutable
+   |
+help: consider changing this to be mutable
+   |
+79 |     let (p, mut game) = fixture();
+   |             +++
+
+error[E0502]: cannot borrow `game.world` as mutable because it is also borrowed as immutable
+  --> crates/alife_training/tests/cpu_encoder_inputs.rs:81:22
+   |
+80 |       let record = game.world.organism_registry().get(OrganismId(1)).unwrap();
+   |                    ---------- immutable borrow occurs here
+81 |       let (draft, _) = game
+   |  ______________________^
+82 | |         .world
+83 | |         .perception_frame_draft_with_bindings(
+84 | |             record.organism_id(),
+...  |
+87 | |             record.biochemistry().homeostasis,
+88 | |         )
+   | |_________^ mutable borrow occurs here
+...
+92 |           &record
+   |            ------ immutable borrow later used here
+
+error[E0596]: cannot borrow `game.world` as mutable, as `game` is not declared as mutable
+   --> crates/alife_training/tests/cpu_encoder_inputs.rs:146:28
+    |
+146 |       let (draft, binding) = game
+    |  ____________________________^
+147 | |         .world
+    | |______________^ cannot borrow as mutable
+    |
+help: consider changing this to be mutable
+    |
+144 |     let (p, mut game) = fixture();
+    |             +++
+
+error[E0502]: cannot borrow `game.world` as mutable because it is also borrowed as immutable
+   --> crates/alife_training/tests/cpu_encoder_inputs.rs:146:28
+    |
+145 |       let record = game.world.organism_registry().get(OrganismId(1)).unwrap();
+    |                    ---------- immutable borrow occurs here
+146 |       let (draft, binding) = game
+    |  ____________________________^
+147 | |         .world
+148 | |         .perception_frame_draft_with_bindings(
+149 | |             record.organism_id(),
+...   |
+152 | |             record.biochemistry().homeostasis,
+153 | |         )
+    | |_________^ mutable borrow occurs here
+...
+157 |           record.organism_id(),
+    |           ------ immutable borrow later used here
+
+Some errors have detailed explanations: E0502, E0596.
+For more information about an error, try `rustc --explain E0502`.
+error: could not compile `alife_training` (test "cpu_encoder_inputs") due to 4 previous errors

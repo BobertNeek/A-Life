@@ -26,7 +26,9 @@ pub mod experience;
 mod factorized_selection;
 pub mod foundation;
 pub mod genome;
+pub mod grip_research;
 pub mod grounding;
+pub use grip_research::{GripObservationV1, GripOperationV1, GripOwnershipV1, GroundedGripSlotV1};
 pub mod ids;
 pub mod language;
 pub mod learning;
@@ -47,6 +49,8 @@ pub use factorized_selection::{
 };
 pub use genome::ActionCandidateCreditProfileV1;
 pub use n2048_experimental_graph::N2048ExperimentalGraphV1;
+mod n2048_grip_reader_candidate;
+pub use n2048_grip_reader_candidate::N2048GripReaderCandidateV1;
 mod n2048_memory_gain_candidate;
 pub use n2048_memory_gain_candidate::N2048MemoryGainCandidateV1;
 pub use nano512_readout_candidate::{Nano512ActionCreditCandidateV2, Nano512ReadoutCandidateV1};

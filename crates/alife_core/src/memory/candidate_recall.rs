@@ -331,8 +331,15 @@ pub(super) fn recall_family_channel(
     store: &CandidateMemoryStoreV2,
     query: &CandidateMemoryQueryV2,
     exact_key: &MemoryBucketKey,
+    grip_ingest_query: Option<&CandidateMemoryQueryV2>,
 ) -> Result<FamilyRecallResult, ScaffoldContractError> {
-    recall_family_channel_with_budget(store, query, exact_key, MEMORY_FAMILY_SEARCH_CAP)
+    recall_family_channel_with_budget(
+        store,
+        query,
+        exact_key,
+        MEMORY_FAMILY_SEARCH_CAP,
+        grip_ingest_query,
+    )
 }
 
 pub(super) fn recall_family_channel_with_budget(
@@ -340,7 +347,13 @@ pub(super) fn recall_family_channel_with_budget(
     query: &CandidateMemoryQueryV2,
     exact_key: &MemoryBucketKey,
     search_cap: usize,
+    grip_ingest_query: Option<&CandidateMemoryQueryV2>,
 ) -> Result<FamilyRecallResult, ScaffoldContractError> {
+    // Only the private family read changes namespace. Target recall, audited
+    // candidate identity and eventual storage continue to use the real query.
+    let routed_key = grip_ingest_query.map(|query| keys_for_query(query).1);
+    let exact_key = routed_key.as_ref().unwrap_or(exact_key);
+    let query = grip_ingest_query.unwrap_or(query);
     let ids = collect_shortlist(
         &neighbor_family_keys(exact_key),
         |key| {
@@ -386,8 +399,10 @@ pub(super) fn recall_family_channel_with_budget(
         }
     }
     select_current_individual_outcome(store, &mut matches);
-    let generalized =
-        eligible == 0 && query.tracked_object_id().is_some() && has_category_cues(query.features());
+    let generalized = grip_ingest_query.is_none()
+        && eligible == 0
+        && query.tracked_object_id().is_some()
+        && has_category_cues(query.features());
     if generalized {
         let key = exact_key.category_key(query.features());
         let category_ids = store.family_category_index.get(&key);

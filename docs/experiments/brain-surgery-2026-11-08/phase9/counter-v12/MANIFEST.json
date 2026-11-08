@@ -1,0 +1,12 @@
+{
+  "QUALIFICATION.json": "d85f00895da2d4ac575a157245a7ecbc8506b0b6a233ecb5978b121832c2a7c2",
+  "retained-count-main-v12.patch": "38018a0bd7cfb1cd9cb5a16fdcbbf77b3dc3ce8742d1f7c0a2274c70d2abf957",
+  "retained-count-v12-actual-worker.log": "83a60ab13734afa07d7bcc15eb4b82b4cab546fdd1210693e74bf9c8bef56143",
+  "retained-count-v12-prerepair-test.patch": "c97414ed196a14acc69a9568c5efd77f1cb18747a7f8f46550a358d95df2829b",
+  "retained-count-v12-prerepair.log": "065feb7b17209003e7a26f576b7febd9fe149016adb5b172953606a6c5c32695",
+  "retained-count-v12-worker-build.log": "199578efc1c879c5d78cd253090a511f9e80a976d2fdedeb7471a03d6542af53",
+  "retained-count-v12-worker-plan.md": "465b7ac239ced24d40784e11408cae14a614e49df38866531b5b7fd50734567b",
+  "retained-count-v12-world.log": "cce19e95c0f85ecc2b125cc7948148d8596f1540fca750fd0d5f40301b68faa1",
+  "source.patch": "953f65ae4ebda203b4921b66ce2d327058e95e478673d1b15badef7553a9677d",
+  "tree.txt": "3c89766c2e0378009d77dd05aeb309132d41ab9cb6ab583d584f6fdc92e72cce"
+}

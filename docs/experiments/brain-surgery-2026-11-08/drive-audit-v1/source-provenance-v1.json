@@ -1,0 +1,17 @@
+{
+  "baseline_commit": "2da9dd323ad6f074556a851174a2edbc9e34e216",
+  "baseline_tree": "e402bcb5d5fc034ac0244e78d49fa1a0da25ede3",
+  "changed_tracked_files": [
+    "crates/alife_core/src/foundation.rs",
+    "crates/alife_core/src/legacy_nano512_compatibility.rs",
+    "crates/alife_core/src/lib.rs",
+    "crates/alife_core/src/phenotype/compiler.rs",
+    "crates/alife_core/src/phenotype/construction.rs",
+    "crates/alife_core/src/phenotype/decoder.rs",
+    "crates/alife_gpu_backend/src/closed_loop_v11.rs",
+    "crates/alife_training/Cargo.toml",
+    "crates/alife_training/src/cpu/host.rs",
+    "crates/alife_world/src/new_game.rs"
+  ],
+  "missing_tracked_files": []
+}

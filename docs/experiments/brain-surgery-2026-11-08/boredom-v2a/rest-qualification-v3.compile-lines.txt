@@ -1,0 +1,3 @@
+   Compiling alife_core v0.1.0 ($FROZEN_SOURCE/crates/alife_core)
+   Compiling alife_world v0.1.0 ($FROZEN_SOURCE/crates/alife_world)
+    Finished `test` profile [unoptimized] target(s) in 2m 14s

@@ -1,0 +1,2 @@
+COMMAND: cargo fmt --all --check
+PASS: workspace fmt and git diff checks

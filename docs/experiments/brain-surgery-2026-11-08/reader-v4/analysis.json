@@ -1,0 +1,62 @@
+{
+  "events_sha256": "a524cfa794374c91f24008ff8611e1c52aa9cc753121cc0d9d35a03e3e4a805b",
+  "public_bytes": 230232,
+  "records": 2405,
+  "partial_final_line": false,
+  "invocation_complete": false,
+  "failures": [
+    {
+      "arm": "pair",
+      "error": "pair_complete_prepared_world",
+      "kind": "invocation_failed",
+      "retry_permitted": false,
+      "stage": "paired_initial_validation"
+    }
+  ],
+  "lives": [
+    {
+      "seed": 2026112501,
+      "arm": "OFF",
+      "attempted": true,
+      "prep_attempts": 600,
+      "prep_returns": 600,
+      "primary_attempts": 0,
+      "primary_returns": 0,
+      "public_steps": 0,
+      "complete": []
+    },
+    {
+      "seed": 2026112501,
+      "arm": "gain_1_16",
+      "attempted": true,
+      "prep_attempts": 600,
+      "prep_returns": 600,
+      "primary_attempts": 0,
+      "primary_returns": 0,
+      "public_steps": 0,
+      "complete": []
+    },
+    {
+      "seed": 2026112502,
+      "arm": "OFF",
+      "attempted": false,
+      "prep_attempts": 0,
+      "prep_returns": 0,
+      "primary_attempts": 0,
+      "primary_returns": 0,
+      "public_steps": 0,
+      "complete": []
+    },
+    {
+      "seed": 2026112502,
+      "arm": "gain_1_16",
+      "attempted": false,
+      "prep_attempts": 0,
+      "prep_returns": 0,
+      "primary_attempts": 0,
+      "primary_returns": 0,
+      "public_steps": 0,
+      "complete": []
+    }
+  ]
+}

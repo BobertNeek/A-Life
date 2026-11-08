@@ -1,0 +1,20 @@
+{
+  "pr": 310,
+  "url": "https://github.com/BobertNeek/A-Life/pull/310",
+  "head": "5163e3ff7d54b262b73eaafd6db9fb52bc473b4b",
+  "tree": "85e2ef5f2509a78db11393914fbe1bc921e3aa41",
+  "parent": "550f79ad1f765132c634e7a272da56b521b57ec0",
+  "local_publication_commit": "88c08727039fb0c582dfb0744c1961a770e892cf",
+  "native_source": "493bb172da46add5f6d5da43dd375d5387116473",
+  "all_source_files_equal_native": true,
+  "verified_remote_paths": 10,
+  "draft": true,
+  "native_tests_passed": 98,
+  "failed": 0,
+  "existing_ignored": 1,
+  "strict_checks": "pass",
+  "hosted_ci": "pending",
+  "default_or_reader_attachment": false,
+  "approximate_metric_included": false,
+  "private_payloads": false
+}

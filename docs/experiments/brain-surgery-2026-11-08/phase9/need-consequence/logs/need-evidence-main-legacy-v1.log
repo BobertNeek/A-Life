@@ -1,0 +1,119 @@
+   Compiling alife_core v0.1.0 (/workspace/scratch/ee5e08a3ca9b/need-consequence-main-v1/crates/alife_core)
+    Finished `test` profile [unoptimized] target(s) in 1m 43s
+     Running tests/candidate_memory_queries.rs (/workspace/shared/grip-integration-qualification-20261108/grip-candidate-qualification/target/debug/deps/candidate_memory_queries-27517c582dc89433)
+
+running 7 tests
+test finalized_frame_validation_reencodes_the_exact_candidate_query ... ok
+test late_drive_hormone_action_and_target_strata_survive_full_input ... ok
+test opposite_families_with_the_same_action_kind_have_different_queries ... ok
+test retrieval_context_emits_exact_candidate_local_gpu_rows_without_source_ids ... ok
+test retrieval_context_rejects_noncontiguous_rows_and_nonfinite_values ... ok
+test serialized_queries_recompute_and_authenticate_every_private_field ... ok
+test target_and_action_change_queries_but_transport_entity_id_does_not ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/candidate_memory_retrieval.rs (/workspace/shared/grip-integration-qualification-20261108/grip-candidate-qualification/target/debug/deps/candidate_memory_retrieval-66232a214890f28b)
+
+running 68 tests
+test boring_ticks_do_not_fill_or_refresh_memory_and_remain_replay_guarded ... ok
+test bounded_index_reports_eligible_records_above_the_similarity_search_cap ... ok
+test bounded_index_retrieves_the_only_match_after_memory_id_sixty_four ... ok
+test changed_context_cannot_replace_a_known_individual_exception_with_category_reward ... ok
+test compaction_is_prepared_offline_committed_once_and_replay_safe ... ok
+test consecutive_sleep_compactions_do_not_require_an_intervening_memory_write ... ok
+test contradictory_outcomes_keep_distinct_episodes_through_compaction ... ok
+test corroborated_retrieval_refreshes_retention_without_amplifying_belief ... ok
+test decision_deserialization_rejects_evidence_detached_from_episodic_key ... ok
+test deserialization_rejects_a_mixed_legacy_and_candidate_bank ... ok
+test duplicate_sealed_sequence_is_rejected_without_mutating_memory ... ok
+test empty_portable_bank_preserves_ignored_sequence_and_rejects_replay ... ok
+test empty_recall_finalizes_exact_candidate_keys_and_rejects_a_changed_draft ... ok
+test later_approach_does_not_erase_ingest_target_evidence ... ok
+test legacy_diagnostic_and_candidate_memory_modes_cannot_mix ... ok
+test legacy_memory_id_overflow_rejects_without_mutating_loaded_state ... ok
+test low_value_events_cannot_displace_a_bank_of_strong_outcomes ... ok
+test measured_meal_and_blocked_attempt_keep_biological_value_in_memory ... ok
+test memory_bank_roundtrip_rebuilds_indices_and_preserves_recall ... ok
+test memory_cpu_recall_microbenchmark ... ignored, CPU memory microbenchmark; run explicitly with --ignored --nocapture
+test outcome_phase::a_genuine_later_meal_can_reverse_both_directions ... ok
+test outcome_phase::actual_consumption_teaches_a_saturated_legacy_bank_without_relabeling ... ok
+test outcome_phase::all_unknown_legacy_bytes_and_digest_streams_are_frozen ... ok
+test outcome_phase::compaction_cannot_resurrect_unknown_harm_over_a_newer_grounded_safe_meal ... ok
+test outcome_phase::known_phases_survive_compaction_portable_restore_and_are_authenticated ... ok
+test outcome_phase::legacy_meal_reversal_keeps_the_existing_nearby_context_similarity_rule ... ok
+test outcome_phase::legacy_unknown_meal_survives_new_preparation_but_can_be_reversed_by_real_consumption ... ok
+test outcome_phase::many_newer_preparations_do_not_hide_a_real_reversal_from_sleep_compaction ... ok
+test outcome_phase::many_preparations_cannot_hide_a_consumption_from_bounded_runtime_or_write_search ... ok
+test outcome_phase::other_families_keep_unknown_provenance_and_legacy_outcome_selection ... ok
+test outcome_phase::painless_ingest_pickup_does_not_reverse_a_harmful_meal ... ok
+test outcome_phase::preparation_at_capacity_cannot_take_the_direct_consumption_reversal_shortcut ... ok
+test outcome_phase::preparation_still_recalls_before_the_first_meal_and_does_not_merge_with_it ... ok
+test outcome_phase::provenance_outside_supported_tracked_ingest_scope_is_rejected ... ok
+test outcome_phase::same_tick_consumption_reversal_uses_causal_sequence_order ... ok
+test outcome_phase::tracked_object_slot_without_a_concrete_action_target_never_gains_contact_provenance ... ok
+test outcome_phase::untracked_ingest_keeps_legacy_unknown_reversal_rules ... ok
+test perceptual_category_fallback_preserves_individual_poison_and_does_not_equate_fruit ... ok
+test poisoned_target_memory_is_candidate_and_target_specific ... ok
+test populated_recall_keys_match_singular_queries_and_reject_changed_context ... ok
+test portable_memory_assets_roundtrip_private_indices_and_reject_tampering ... ok
+test portable_memory_restore_finishes_each_crash_phase_exactly_once ... ok
+test prepared_attention_and_finalization_reject_changed_draft_and_cognitive_owner ... ok
+test prepared_attention_preserves_finalized_evidence_across_candidates_and_memory_states ... ok
+test repeated_candidate_recall_is_isolated_between_organisms_and_calls ... ok
+test repeated_candidates_reuse_evidence_without_changing_candidate_keys ... ok
+test repeated_untracked_look_is_not_perpetually_novel ... ok
+test retained_context_encoding_preserves_populated_audited_and_cached_runtime_frames ... ok
+test runtime_memory_export_restore_keeps_every_learned_record_and_real_checksum ... ok
+test runtime_recall_keeps_untracked_object_expectancies_separate ... ok
+test runtime_recall_reuses_values_but_rebinds_current_decision_keys ... ok
+test same_tick_outcome_order_uses_causal_sequence_after_merging ... ok
+test saturated_bank_accepts_a_direct_reversal_without_displacing_unrelated_harm ... ok
+test saturation_merge_evict_and_compaction_are_bounded_and_deterministic ... ok
+test sealed_neural_decision_accepts_only_its_selected_finalized_memory_key ... ok
+test social_recognition::cached_runtime_recognition_keeps_learned_cues_but_requires_current_visibility ... ok
+test social_recognition::duplicate_individual_queries_keep_one_paired_signal_independent_of_action_order ... ok
+test social_recognition::memory_roundtrip_and_failed_biology_retry_preserve_exact_once_consequence ... ok
+test social_recognition::multiple_individuals_choose_one_signal_and_unseen_or_unattended_friends_emit_none ... ok
+test social_recognition::recognition_of_liked_individual_survives_an_idle_action_winner ... ok
+test social_recognition::recognition_reuses_the_existing_sixty_four_record_search_cap ... ok
+test social_recognition::signed_social_history_is_combined_before_the_positive_part ... ok
+test social_recognition::stranger_category_borrowing_and_static_affinity_do_not_create_a_bond ... ok
+test social_recognition::unknown_negative_avoidance_and_ingestion_evidence_do_not_create_affection ... ok
+test sparse_large_memory_ids_survive_index_rebuild ... ok
+test stopped_meal_recall_preserves_identity_and_similarity_boundaries ... ok
+test stopped_meal_recall_survives_motion_changes_and_persistence_rebuild ... ok
+test unused_low_value_evidence_fades_but_strong_danger_and_reward_survive ... ok
+
+test result: ok. 67 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 2.62s
+
+     Running tests/experience_three_phase.rs (/workspace/shared/grip-integration-qualification-20261108/grip-candidate-qualification/target/debug/deps/experience_three_phase-d24fb1be72774ccf)
+
+running 8 tests
+test builder_rejects_missing_and_unordered_phases ... ok
+test incompatible_versions_and_invalid_learning_values_are_rejected ... ok
+test invalid_action_decisions_are_rejected_before_sealing ... ok
+test mismatched_creature_ids_and_non_monotonic_ticks_are_rejected ... ok
+test sealed_header_carries_exact_sensor_profile_provenance ... ok
+test unknown_header_profile_id_is_rejected_during_decode ... ok
+test unprofiled_v2_patch_migrates_to_profiled_current_schema ... ok
+test valid_three_phase_patch_preserves_causal_evidence ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/measured_physiology_v2.rs (/workspace/shared/grip-integration-qualification-20261108/grip-candidate-qualification/target/debug/deps/measured_physiology_v2-54dee750f1d71ef0)
+
+running 2 tests
+test harm_signal_counts_fresh_change_once_and_does_not_punish_unchanged_pain ... ok
+test physiology_transition_is_derived_from_authoritative_before_and_after_states ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/perception_digest_golden.rs (/workspace/shared/grip-integration-qualification-20261108/grip-candidate-qualification/target/debug/deps/perception_digest_golden-4e94a4aa4ca70773)
+
+running 2 tests
+test digest_enum_raw_mappings_are_stable_and_reject_unknown_values ... ok
+test perception_digest_golden_vectors_are_stable ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

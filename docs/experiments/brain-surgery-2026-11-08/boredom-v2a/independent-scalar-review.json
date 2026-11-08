@@ -1,0 +1,620 @@
+{
+  "scope": "Independent read-only public scalar/hash review; no native execution or private evidence access",
+  "all_manifest_hashes_match": true,
+  "exact_allowlist": true,
+  "episodes": 60,
+  "intervals": 2016,
+  "all_counted_primitives_targets_receipts_match_analysis": true,
+  "optimizer_and_roundtrip_flags_true": true,
+  "port53_zero": true,
+  "counts": [
+    {
+      "file": "baseline-17.json",
+      "scene": "toy-low",
+      "intervals": 24,
+      "play": 0,
+      "failed": 0,
+      "rest": 8,
+      "consumed_decisions": [],
+      "boredom_end": 0.10400006920099258
+    },
+    {
+      "file": "baseline-17.json",
+      "scene": "toy-mid",
+      "intervals": 24,
+      "play": 0,
+      "failed": 0,
+      "rest": 8,
+      "consumed_decisions": [],
+      "boredom_end": 0.4540000557899475
+    },
+    {
+      "file": "baseline-17.json",
+      "scene": "toy-high",
+      "intervals": 24,
+      "play": 0,
+      "failed": 0,
+      "rest": 8,
+      "consumed_decisions": [],
+      "boredom_end": 0.8039994835853577
+    },
+    {
+      "file": "baseline-17.json",
+      "scene": "matched-nonplayable-high",
+      "intervals": 24,
+      "play": 0,
+      "failed": 0,
+      "rest": 6,
+      "consumed_decisions": [],
+      "boredom_end": 0.8041994571685791
+    },
+    {
+      "file": "baseline-17.json",
+      "scene": "toy-high-tired",
+      "intervals": 24,
+      "play": 0,
+      "failed": 0,
+      "rest": 23,
+      "consumed_decisions": [],
+      "boredom_end": 0.8019997477531433
+    },
+    {
+      "file": "baseline-17.json",
+      "scene": "toy-unreachable-high",
+      "intervals": 24,
+      "play": 0,
+      "failed": 0,
+      "rest": 7,
+      "consumed_decisions": [],
+      "boredom_end": 0.8039994835853577
+    },
+    {
+      "file": "baseline-29.json",
+      "scene": "toy-low",
+      "intervals": 24,
+      "play": 2,
+      "failed": 0,
+      "rest": 4,
+      "consumed_decisions": [],
+      "boredom_end": 0.0
+    },
+    {
+      "file": "baseline-29.json",
+      "scene": "toy-mid",
+      "intervals": 24,
+      "play": 2,
+      "failed": 0,
+      "rest": 4,
+      "consumed_decisions": [],
+      "boredom_end": 0.1708667278289795
+    },
+    {
+      "file": "baseline-29.json",
+      "scene": "toy-high",
+      "intervals": 24,
+      "play": 2,
+      "failed": 0,
+      "rest": 4,
+      "consumed_decisions": [],
+      "boredom_end": 0.5208661556243896
+    },
+    {
+      "file": "baseline-29.json",
+      "scene": "matched-nonplayable-high",
+      "intervals": 24,
+      "play": 0,
+      "failed": 2,
+      "rest": 4,
+      "consumed_decisions": [],
+      "boredom_end": 0.8041994571685791
+    },
+    {
+      "file": "baseline-29.json",
+      "scene": "toy-high-tired",
+      "intervals": 24,
+      "play": 0,
+      "failed": 0,
+      "rest": 24,
+      "consumed_decisions": [],
+      "boredom_end": 0.8021997213363647
+    },
+    {
+      "file": "baseline-29.json",
+      "scene": "toy-unreachable-high",
+      "intervals": 24,
+      "play": 0,
+      "failed": 0,
+      "rest": 4,
+      "consumed_decisions": [],
+      "boredom_end": 0.8041994571685791
+    },
+    {
+      "file": "full-17.json",
+      "scene": "toy-low",
+      "intervals": 24,
+      "play": 0,
+      "failed": 0,
+      "rest": 8,
+      "consumed_decisions": [],
+      "boredom_end": 0.10440007597208023
+    },
+    {
+      "file": "full-17.json",
+      "scene": "toy-mid",
+      "intervals": 24,
+      "play": 0,
+      "failed": 0,
+      "rest": 7,
+      "consumed_decisions": [],
+      "boredom_end": 0.45440006256103516
+    },
+    {
+      "file": "full-17.json",
+      "scene": "toy-high",
+      "intervals": 24,
+      "play": 2,
+      "failed": 0,
+      "rest": 6,
+      "consumed_decisions": [],
+      "boredom_end": 0.5212661027908325
+    },
+    {
+      "file": "full-17.json",
+      "scene": "matched-nonplayable-high",
+      "intervals": 24,
+      "play": 0,
+      "failed": 1,
+      "rest": 8,
+      "consumed_decisions": [],
+      "boredom_end": 0.8043994307518005
+    },
+    {
+      "file": "full-17.json",
+      "scene": "toy-high-tired",
+      "intervals": 24,
+      "play": 1,
+      "failed": 0,
+      "rest": 23,
+      "consumed_decisions": [],
+      "boredom_end": 0.8019997477531433
+    },
+    {
+      "file": "full-17.json",
+      "scene": "toy-unreachable-high",
+      "intervals": 24,
+      "play": 0,
+      "failed": 0,
+      "rest": 8,
+      "consumed_decisions": [],
+      "boredom_end": 0.8039994835853577
+    },
+    {
+      "file": "full-29.json",
+      "scene": "toy-low",
+      "intervals": 24,
+      "play": 0,
+      "failed": 0,
+      "rest": 6,
+      "consumed_decisions": [],
+      "boredom_end": 0.10420007258653641
+    },
+    {
+      "file": "full-29.json",
+      "scene": "toy-mid",
+      "intervals": 24,
+      "play": 2,
+      "failed": 0,
+      "rest": 7,
+      "consumed_decisions": [],
+      "boredom_end": 0.2040000557899475
+    },
+    {
+      "file": "full-29.json",
+      "scene": "toy-high",
+      "intervals": 24,
+      "play": 5,
+      "failed": 0,
+      "rest": 6,
+      "consumed_decisions": [],
+      "boredom_end": 0.05273296684026718
+    },
+    {
+      "file": "full-29.json",
+      "scene": "matched-nonplayable-high",
+      "intervals": 24,
+      "play": 0,
+      "failed": 1,
+      "rest": 7,
+      "consumed_decisions": [],
+      "boredom_end": 0.8043994307518005
+    },
+    {
+      "file": "full-29.json",
+      "scene": "toy-high-tired",
+      "intervals": 24,
+      "play": 0,
+      "failed": 0,
+      "rest": 24,
+      "consumed_decisions": [],
+      "boredom_end": 0.8021997213363647
+    },
+    {
+      "file": "full-29.json",
+      "scene": "toy-unreachable-high",
+      "intervals": 24,
+      "play": 0,
+      "failed": 1,
+      "rest": 6,
+      "consumed_decisions": [],
+      "boredom_end": 0.8039994835853577
+    },
+    {
+      "file": "hunger-baseline-17.json",
+      "scene": "hungry-toy-and-food",
+      "intervals": 24,
+      "play": 1,
+      "failed": 0,
+      "rest": 7,
+      "consumed_decisions": [
+        1
+      ],
+      "boredom_end": 0.8043994307518005
+    },
+    {
+      "file": "hunger-baseline-29.json",
+      "scene": "hungry-toy-and-food",
+      "intervals": 24,
+      "play": 1,
+      "failed": 0,
+      "rest": 5,
+      "consumed_decisions": [
+        1
+      ],
+      "boredom_end": 0.7041994333267212
+    },
+    {
+      "file": "hunger-full-17.json",
+      "scene": "hungry-toy-and-food",
+      "intervals": 24,
+      "play": 4,
+      "failed": 0,
+      "rest": 4,
+      "consumed_decisions": [
+        1
+      ],
+      "boredom_end": 0.2612663805484772
+    },
+    {
+      "file": "hunger-full-29.json",
+      "scene": "hungry-toy-and-food",
+      "intervals": 24,
+      "play": 1,
+      "failed": 0,
+      "rest": 6,
+      "consumed_decisions": [
+        1
+      ],
+      "boredom_end": 0.7039994597434998
+    },
+    {
+      "file": "long-baseline-17.json",
+      "scene": "toy-high",
+      "intervals": 96,
+      "play": 4,
+      "failed": 1,
+      "rest": 27,
+      "consumed_decisions": [],
+      "boredom_end": 0.08409911394119263
+    },
+    {
+      "file": "long-baseline-29.json",
+      "scene": "toy-high",
+      "intervals": 96,
+      "play": 6,
+      "failed": 1,
+      "rest": 25,
+      "consumed_decisions": [],
+      "boredom_end": 0.005799999926239252
+    },
+    {
+      "file": "long-full-17.json",
+      "scene": "toy-high",
+      "intervals": 96,
+      "play": 9,
+      "failed": 1,
+      "rest": 27,
+      "consumed_decisions": [],
+      "boredom_end": 0.0066000004298985004
+    },
+    {
+      "file": "long-full-29.json",
+      "scene": "toy-high",
+      "intervals": 96,
+      "play": 10,
+      "failed": 1,
+      "rest": 23,
+      "consumed_decisions": [],
+      "boredom_end": 0.005799999926239252
+    },
+    {
+      "file": "long-no-drive-17.json",
+      "scene": "toy-high",
+      "intervals": 96,
+      "play": 8,
+      "failed": 1,
+      "rest": 29,
+      "consumed_decisions": [],
+      "boredom_end": 0.0066000004298985004
+    },
+    {
+      "file": "long-no-drive-29.json",
+      "scene": "toy-high",
+      "intervals": 96,
+      "play": 11,
+      "failed": 1,
+      "rest": 21,
+      "consumed_decisions": [],
+      "boredom_end": 0.0027999994345009327
+    },
+    {
+      "file": "long-no-memory-17.json",
+      "scene": "toy-high",
+      "intervals": 96,
+      "play": 6,
+      "failed": 1,
+      "rest": 25,
+      "consumed_decisions": [],
+      "boredom_end": 0.006200000178068876
+    },
+    {
+      "file": "long-no-memory-29.json",
+      "scene": "toy-high",
+      "intervals": 96,
+      "play": 7,
+      "failed": 1,
+      "rest": 28,
+      "consumed_decisions": [],
+      "boredom_end": 0.005799999926239252
+    },
+    {
+      "file": "no-drive-17.json",
+      "scene": "toy-low",
+      "intervals": 24,
+      "play": 0,
+      "failed": 0,
+      "rest": 8,
+      "consumed_decisions": [],
+      "boredom_end": 0.10400006920099258
+    },
+    {
+      "file": "no-drive-17.json",
+      "scene": "toy-mid",
+      "intervals": 24,
+      "play": 0,
+      "failed": 0,
+      "rest": 8,
+      "consumed_decisions": [],
+      "boredom_end": 0.4540000557899475
+    },
+    {
+      "file": "no-drive-17.json",
+      "scene": "toy-high",
+      "intervals": 24,
+      "play": 0,
+      "failed": 0,
+      "rest": 8,
+      "consumed_decisions": [],
+      "boredom_end": 0.8039994835853577
+    },
+    {
+      "file": "no-drive-17.json",
+      "scene": "matched-nonplayable-high",
+      "intervals": 24,
+      "play": 0,
+      "failed": 0,
+      "rest": 6,
+      "consumed_decisions": [],
+      "boredom_end": 0.8041994571685791
+    },
+    {
+      "file": "no-drive-17.json",
+      "scene": "toy-high-tired",
+      "intervals": 24,
+      "play": 0,
+      "failed": 0,
+      "rest": 23,
+      "consumed_decisions": [],
+      "boredom_end": 0.8019997477531433
+    },
+    {
+      "file": "no-drive-17.json",
+      "scene": "toy-unreachable-high",
+      "intervals": 24,
+      "play": 0,
+      "failed": 0,
+      "rest": 8,
+      "consumed_decisions": [],
+      "boredom_end": 0.8039994835853577
+    },
+    {
+      "file": "no-drive-29.json",
+      "scene": "toy-low",
+      "intervals": 24,
+      "play": 2,
+      "failed": 0,
+      "rest": 6,
+      "consumed_decisions": [],
+      "boredom_end": 0.00039999998989515007
+    },
+    {
+      "file": "no-drive-29.json",
+      "scene": "toy-mid",
+      "intervals": 24,
+      "play": 2,
+      "failed": 0,
+      "rest": 6,
+      "consumed_decisions": [],
+      "boredom_end": 0.22066673636436462
+    },
+    {
+      "file": "no-drive-29.json",
+      "scene": "toy-high",
+      "intervals": 24,
+      "play": 2,
+      "failed": 0,
+      "rest": 6,
+      "consumed_decisions": [],
+      "boredom_end": 0.5706661343574524
+    },
+    {
+      "file": "no-drive-29.json",
+      "scene": "matched-nonplayable-high",
+      "intervals": 24,
+      "play": 0,
+      "failed": 1,
+      "rest": 6,
+      "consumed_decisions": [],
+      "boredom_end": 0.8039994835853577
+    },
+    {
+      "file": "no-drive-29.json",
+      "scene": "toy-high-tired",
+      "intervals": 24,
+      "play": 0,
+      "failed": 0,
+      "rest": 24,
+      "consumed_decisions": [],
+      "boredom_end": 0.8021997213363647
+    },
+    {
+      "file": "no-drive-29.json",
+      "scene": "toy-unreachable-high",
+      "intervals": 24,
+      "play": 0,
+      "failed": 1,
+      "rest": 6,
+      "consumed_decisions": [],
+      "boredom_end": 0.8039994835853577
+    },
+    {
+      "file": "no-memory-17.json",
+      "scene": "toy-low",
+      "intervals": 24,
+      "play": 0,
+      "failed": 0,
+      "rest": 8,
+      "consumed_decisions": [],
+      "boredom_end": 0.10440007597208023
+    },
+    {
+      "file": "no-memory-17.json",
+      "scene": "toy-mid",
+      "intervals": 24,
+      "play": 0,
+      "failed": 0,
+      "rest": 7,
+      "consumed_decisions": [],
+      "boredom_end": 0.45440006256103516
+    },
+    {
+      "file": "no-memory-17.json",
+      "scene": "toy-high",
+      "intervals": 24,
+      "play": 2,
+      "failed": 0,
+      "rest": 6,
+      "consumed_decisions": [],
+      "boredom_end": 0.5212661027908325
+    },
+    {
+      "file": "no-memory-17.json",
+      "scene": "matched-nonplayable-high",
+      "intervals": 24,
+      "play": 0,
+      "failed": 7,
+      "rest": 4,
+      "consumed_decisions": [],
+      "boredom_end": 0.804599404335022
+    },
+    {
+      "file": "no-memory-17.json",
+      "scene": "toy-high-tired",
+      "intervals": 24,
+      "play": 1,
+      "failed": 0,
+      "rest": 23,
+      "consumed_decisions": [],
+      "boredom_end": 0.8019997477531433
+    },
+    {
+      "file": "no-memory-17.json",
+      "scene": "toy-unreachable-high",
+      "intervals": 24,
+      "play": 0,
+      "failed": 0,
+      "rest": 7,
+      "consumed_decisions": [],
+      "boredom_end": 0.8039994835853577
+    },
+    {
+      "file": "no-memory-29.json",
+      "scene": "toy-low",
+      "intervals": 24,
+      "play": 1,
+      "failed": 0,
+      "rest": 7,
+      "consumed_decisions": [],
+      "boredom_end": 0.00039999998989515007
+    },
+    {
+      "file": "no-memory-29.json",
+      "scene": "toy-mid",
+      "intervals": 24,
+      "play": 2,
+      "failed": 0,
+      "rest": 6,
+      "consumed_decisions": [],
+      "boredom_end": 0.1708667278289795
+    },
+    {
+      "file": "no-memory-29.json",
+      "scene": "toy-high",
+      "intervals": 24,
+      "play": 3,
+      "failed": 0,
+      "rest": 7,
+      "consumed_decisions": [],
+      "boredom_end": 0.3875327706336975
+    },
+    {
+      "file": "no-memory-29.json",
+      "scene": "matched-nonplayable-high",
+      "intervals": 24,
+      "play": 0,
+      "failed": 4,
+      "rest": 6,
+      "consumed_decisions": [],
+      "boredom_end": 0.8043994307518005
+    },
+    {
+      "file": "no-memory-29.json",
+      "scene": "toy-high-tired",
+      "intervals": 24,
+      "play": 0,
+      "failed": 0,
+      "rest": 24,
+      "consumed_decisions": [],
+      "boredom_end": 0.8021997213363647
+    },
+    {
+      "file": "no-memory-29.json",
+      "scene": "toy-unreachable-high",
+      "intervals": 24,
+      "play": 0,
+      "failed": 0,
+      "rest": 4,
+      "consumed_decisions": [],
+      "boredom_end": 0.8041994571685791
+    }
+  ]
+}

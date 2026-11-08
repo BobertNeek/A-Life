@@ -281,6 +281,22 @@ impl CandidateDecoderPlan {
         {
             return Err(ScaffoldContractError::PhenotypeCompile);
         }
+        if self
+            .memory_channel
+            .as_ref()
+            .is_some_and(|plan| plan.is_grip_reader())
+            != phenotype
+                .foundation_abi()
+                .n2048_grip_reader_candidate()
+                .is_some()
+            || (phenotype
+                .foundation_abi()
+                .n2048_grip_reader_candidate()
+                .is_some()
+                && phenotype.cognitive_channel_plan().is_some())
+        {
+            return Err(ScaffoldContractError::PhenotypeCompile);
+        }
         self.factorized_motor_channels(phenotype)?;
         let capacity = crate::BrainCapacityClass::supported_for_id(phenotype.brain_class_id())?;
         let execution = capacity.execution();

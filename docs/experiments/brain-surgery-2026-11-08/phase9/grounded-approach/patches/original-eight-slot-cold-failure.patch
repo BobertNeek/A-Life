@@ -1,0 +1,637 @@
+diff --git a/crates/alife_world/src/headless.rs b/crates/alife_world/src/headless.rs
+index e743de4..fd2267a 100644
+--- a/crates/alife_world/src/headless.rs
++++ b/crates/alife_world/src/headless.rs
+@@ -13042,3 +13042,6 @@ mod body_clearance_tests;
+ 
+ #[cfg(test)]
+ mod need_consequence_evidence_tests;
++
++#[cfg(test)]
++mod grounded_approach_need_tests;
+diff --git a/crates/alife_world/src/headless/grounded_approach_need_tests.rs b/crates/alife_world/src/headless/grounded_approach_need_tests.rs
+new file mode 100644
+index 0000000..ff4efad
+--- /dev/null
++++ b/crates/alife_world/src/headless/grounded_approach_need_tests.rs
+@@ -0,0 +1,407 @@
++//! Eight prescribed physical intervals, not a neural selection or learned policy.
++//! No fake neural provenance envelope is constructed to satisfy store admission.
++use super::*;
++use alife_core::*;
++use serde_json::{json, Value};
++use std::io::Write;
++
++const SEED: u64 = 921_412;
++const SUBJECT: OrganismId = OrganismId(1);
++const TARGET_POSITION: Vec3f = Vec3f::new(0.8, 0.0, 0.0);
++const CASES: [&str; 4] = [
++    "peer_approach",
++    "toy_approach",
++    "peer_passive",
++    "peer_blocked",
++];
++
++struct Setup {
++    world: HeadlessWorld,
++    actor: WorldEntityId,
++    target: WorldEntityId,
++    frame: PerceptionFrame,
++    candidate: ActionCandidate,
++    before: BiochemistryState,
++    pressure: f32,
++    case: &'static str,
++}
++
++// Fixture initialization only. These are freshly constructed public-genome
++// concentrations, not loaded life/checkpoint state. Change the chemical source,
++// then rederive the canonical projection; never change just the drive view.
++fn initialize_loneliness(phenotype: &CreaturePhenotype, pressure: f32) -> BiochemistryState {
++    let initial = BiochemistryState::new_with_age(phenotype, Tick(600), Tick(600)).unwrap();
++    let chemistry = &phenotype.chemistry.biochemical;
++    let receptor = chemistry
++        .receptors()
++        .iter()
++        .find(|receptor| {
++            receptor.target == BiochemicalTargetLocus::Drive(BiochemicalDriveChannel::Loneliness)
++        })
++        .unwrap();
++    assert_eq!(receptor.threshold, 0.0);
++    assert_eq!(receptor.gain, 1.0);
++    assert!(!receptor.digital);
++    let index = chemistry
++        .species()
++        .iter()
++        .position(|species| species.id == receptor.source)
++        .unwrap();
++    let mut fresh_wire = serde_json::to_value(initial).unwrap();
++    fresh_wire["graph_state"]["concentrations"][index] = json!(pressure);
++    let state: BiochemicalGraphState =
++        serde_json::from_value(fresh_wire["graph_state"].clone()).unwrap();
++    fresh_wire["homeostasis"] =
++        serde_json::to_value(state.derive_homeostasis(chemistry).unwrap()).unwrap();
++    let biology: BiochemistryState = serde_json::from_value(fresh_wire).unwrap();
++    biology.validate_against(phenotype).unwrap();
++    assert_eq!(
++        biology.homeostasis,
++        biology.graph_state().derive_homeostasis(chemistry).unwrap()
++    );
++    assert_eq!(
++        biology.homeostasis.drives.loneliness.to_bits(),
++        pressure.to_bits()
++    );
++    let original = initial.homeostasis.drives.to_array();
++    let changed = biology.homeostasis.drives.to_array();
++    for index in 0..11 {
++        if index != 4 {
++            assert_eq!(original[index].to_bits(), changed[index].to_bits());
++        }
++    }
++    assert_eq!(biology.body, initial.body);
++    assert_eq!(biology.development, initial.development);
++    biology
++}
++
++fn setups(pressure: f32) -> Vec<Setup> {
++    let genome = CreatureGenome::early_mammal_founder(
++        SEED,
++        FoundationGeneticIdentity::new(10, 1, 7, BrainCapacityClass::N512_ID).unwrap(),
++    )
++    .unwrap();
++    let phenotype = genome.express().unwrap();
++    let before = initialize_loneliness(&phenotype, pressure);
++    let mut peer = HeadlessScenarioBuilder::new(SEED)
++        .agent("subject", SUBJECT, Vec3f::ZERO)
++        .build()
++        .unwrap();
++    peer.tick = Tick(600);
++    let actor = peer.entity_id("subject").unwrap();
++    let target = peer
++        .spawn_social_agent("target", OrganismId(2), TARGET_POSITION, 0.0)
++        .unwrap();
++    peer.set_grounded_physical_properties(
++        target,
++        GroundedPhysicalProperties::deterministic_for_kind(WorldObjectKind::ActivityToy, 2),
++    )
++    .unwrap();
++    peer.register_organism_record(
++        crate::WorldOrganismRecord::new(SUBJECT, actor, genome, phenotype, before, Tick::ZERO)
++            .unwrap(),
++    )
++    .unwrap();
++    let mut result = Vec::new();
++    for case in CASES {
++        // Each arm is an isolated fork of the same unadvanced body/scene.
++        let mut world = peer.clone();
++        if case == "toy_approach" {
++            let object = world.objects.get_mut(&target.raw()).unwrap();
++            object.kind = WorldObjectKind::ActivityToy;
++            object.organism_id = None;
++            // All pose/radius/material/chemical observables remain matched.
++        }
++        if case == "peer_blocked" {
++            for (label, position) in [
++                ("cage_east", Vec3f::new(0.4, 0.0, 0.0)),
++                ("cage_west", Vec3f::new(-0.4, 0.0, 0.0)),
++                ("cage_north", Vec3f::new(0.0, 0.0, 0.4)),
++                ("cage_south", Vec3f::new(0.0, 0.0, -0.4)),
++            ] {
++                let obstacle = world
++                    .insert_object(SpawnSpec {
++                        label,
++                        kind: WorldObjectKind::Obstacle,
++                        organism_id: None,
++                        position,
++                        nutrition: 0.0,
++                        hazard_pain: 0.0,
++                        token_id: None,
++                        social_affinity: 0.0,
++                        teacher_channel: None,
++                    })
++                    .unwrap();
++                let obstacle = world.objects.get_mut(&obstacle.raw()).unwrap();
++                obstacle.radius = 0.2;
++                obstacle.optical_opacity = 0.0;
++            }
++        }
++        world.validate_organism_bindings().unwrap();
++        let frame = world
++            .perception_frame(
++                SUBJECT,
++                Tick(600),
++                SensorProfile::GroundedObjectSlotsV1,
++                before.homeostasis,
++            )
++            .unwrap();
++        println!("cold candidate diagnostics pressure={pressure} case={case} target={} slots={} candidates={:?}", target.raw(), frame.grounded_object_slots().len(), frame.candidates().iter().map(|candidate| (candidate.action_id.raw(), candidate.kind, candidate.family, candidate.target.entity.map(WorldEntityId::raw))).collect::<Vec<_>>());
++        let candidate = *frame
++            .candidates()
++            .iter()
++            .find(|candidate| {
++                candidate.action_id == HeadlessActionIds::APPROACH
++                    && candidate.target.entity == Some(target)
++            })
++            .expect(
++                "frozen setup must expose a grounded Approach candidate; do not retune if absent",
++            );
++        assert_eq!(candidate.family, CandidateActionFamily::Approach);
++        assert!(matches!(
++            candidate.observation,
++            CandidateObservationRef::ObjectSlot(_)
++        ));
++        assert!(!world.body_contacts_at(actor, Vec3f::ZERO).1);
++        assert_eq!(frame.homeostasis(), &before.homeostasis);
++        result.push(Setup {
++            world,
++            actor,
++            target,
++            frame,
++            candidate,
++            before,
++            pressure,
++            case,
++        });
++    }
++    result
++}
++
++fn execute(setup: Setup) -> Value {
++    let Setup {
++        mut world,
++        actor,
++        target,
++        frame,
++        candidate,
++        before,
++        pressure,
++        case,
++    } = setup;
++    let fork = format!("grounded-approach-need-v1/pressure-{pressure}/{case}");
++    let start = world.entity(actor).unwrap().position;
++    let initial_touch = world.body_contacts_at(actor, start).1;
++    let initial_yaw = world.entity(actor).unwrap().body_yaw;
++    let query = NeedConsequenceQueryV1::from_frame(&frame, &candidate).unwrap();
++    let store = NeedConsequenceStoreV1::new(SUBJECT, 2).unwrap();
++    let mut operation = json!({"kind": "passive_world_tick", "selected_command_count": 0});
++    let after;
++    let physical_displacement;
++    let operation_succeeded;
++    let body_event;
++    if case == "peer_passive" {
++        world.try_advance_tick().unwrap();
++        after = *world
++            .organism_registry()
++            .get(SUBJECT)
++            .unwrap()
++            .biochemistry();
++        physical_displacement = subtract(world.entity(actor).unwrap().position, start);
++        operation_succeeded = true;
++        // No action receipt exists for passive biology. This is a verified
++        // zero ambient-input control, not a fabricated receipt or action source.
++        body_event =
++            json!({"source": "no-action control, no contact/mating/care", "social_contact": 0.0});
++    } else {
++        // Selection is prescribed by this experiment. Confidence=1 states that
++        // prescription only; it is not a learned-policy or causal confidence.
++        let command = candidate
++            .to_command(SUBJECT, Confidence::new(1.0).unwrap())
++            .unwrap();
++        assert_eq!(command.action_id, HeadlessActionIds::APPROACH);
++        assert_eq!(command.intensity.raw(), 1.0);
++        let receipt = world
++            .apply_registered_command(&command, actor, Tick(601))
++            .unwrap();
++        assert_eq!(receipt.biology_before, before);
++        assert_eq!(receipt.action_result.command, command);
++        after = receipt.biology_after;
++        physical_displacement = receipt.action_result.execution.physical.displacement;
++        operation_succeeded = receipt.action_result.execution.succeeded;
++        body_event = serde_json::to_value(receipt.action_result.body_event).unwrap();
++        operation = json!({
++            "kind": "prescribed_registered_Approach",
++            "selected_command_count": 1,
++            "primitive": command.action_id.raw(),
++            "action_kind": format!("{:?}", command.kind),
++            "family": format!("{:?}", candidate.family),
++            "target_entity": command.target_entity.unwrap().raw(),
++            "command_intensity": command.intensity.raw(),
++            "prescription_confidence_not_neural": command.confidence.raw(),
++            "receipt_succeeded": operation_succeeded,
++            "receipt_failure": format!("{:?}", receipt.action_result.execution.failure),
++            "receipt_phase": format!("{:?}", receipt.action_result.phase),
++            "physical": receipt.action_result.execution.physical,
++        });
++        world.try_advance_tick().unwrap();
++        assert_eq!(
++            *world
++                .organism_registry()
++                .get(SUBJECT)
++                .unwrap()
++                .biochemistry(),
++            after,
++            "world finalization must not run the already committed biology twice"
++        );
++    }
++    assert_eq!(world.tick(), Tick(601));
++    assert_eq!(before.tick, Tick(600));
++    assert_eq!(after.tick, Tick(601));
++    assert_eq!(after.development.age_ticks, Tick(601));
++    let end = world.entity(actor).unwrap().position;
++    assert_eq!(physical_displacement, subtract(end, start));
++    let final_touch = world.body_contacts_at(actor, end).1;
++    let next_frame = world
++        .perception_frame(
++            SUBJECT,
++            Tick(601),
++            SensorProfile::GroundedObjectSlotsV1,
++            after.homeostasis,
++        )
++        .unwrap();
++    let next_candidate = next_frame.candidates().iter().find(|candidate| {
++        candidate.action_id == HeadlessActionIds::APPROACH
++            && candidate.target.entity == Some(target)
++    });
++    let same_source = store.recall(&query, Tick(601), 1, 2).unwrap();
++    assert!(matches!(
++        same_source.evidence,
++        NeedConsequenceEvidenceV1::Unknown
++    ));
++    let next_lookup = next_candidate.map(|candidate| {
++        let next_query = NeedConsequenceQueryV1::from_frame(&next_frame, candidate).unwrap();
++        let recall = store.recall(&next_query, Tick(601), 1, 2).unwrap();
++        assert!(matches!(
++            recall.evidence,
++            NeedConsequenceEvidenceV1::Unknown
++        ));
++        json!({"evidence": "Unknown", "records_inspected": recall.inspected_records,
++            "same_exact_context_key": query == next_query,
++            "same_tracked_target": query.tracked_target() == next_query.tracked_target(),
++            "same_family": query.action_family() == next_query.action_family()})
++    });
++    let before_drives = before.homeostasis.drives.to_array();
++    let after_drives = after.homeostasis.drives.to_array();
++    let delta: [f32; 11] = std::array::from_fn(|i| after_drives[i] - before_drives[i]);
++    let condition_met = match case {
++        "peer_approach" => {
++            operation_succeeded && !initial_touch && final_touch && distance(start, end) > 0.0
++        }
++        "toy_approach" => {
++            operation_succeeded && !initial_touch && !final_touch && distance(start, end) > 0.0
++        }
++        "peer_passive" => !initial_touch && !final_touch && start == end,
++        "peer_blocked" => !operation_succeeded && !initial_touch && !final_touch && start == end,
++        _ => unreachable!(),
++    };
++    let mut row = json!({
++        "fixture_fork_namespace": fork,
++        "world_binding_limit": "namespace is external fixture ownership, not a runtime world/life epoch API",
++        "world_seed": SEED, "organism": SUBJECT.raw(), "actor_entity": actor.raw(),
++        "genome_id": before.source_genome_id, "source_sequence": null,
++        "source_origin": "prescribed physical interval, no neural decision or sealed neural patch",
++        "source_frame_digest": frame.frame_digest().0, "next_frame_digest": next_frame.frame_digest().0,
++        "source_tracked_target": format!("{:?}", query.tracked_target()),
++        "case": case, "initial_loneliness": pressure, "intended_condition_met": condition_met,
++        "ticks": [before.tick.raw(), after.tick.raw()], "world_ticks_per_second": WORLD_TICKS_PER_SECOND,
++        "biology_updates": 1, "development_before": before.development, "development_after": after.development,
++        "cadence": before.cadence, "start": start, "end": end,
++        "initial_yaw": initial_yaw, "final_yaw": world.entity(actor).unwrap().body_yaw,
++        "target_start": TARGET_POSITION, "target_end": world.entity(target).unwrap().position,
++        "per_segment_displacements": [physical_displacement], "travel": distance(start, end),
++        "initial_peer_contact": initial_touch, "final_peer_contact": final_touch,
++        "operation": operation, "body_event": body_event,
++    });
++    let biology_and_evidence = json!({
++        "source_before_drives": before_drives, "final_after_drives": after_drives,
++        "raw_eleven_deltas": delta, "body_energy_before": before.body.energy, "body_energy_after": after.body.energy,
++        "biochemical_work": after.biochemical_work(),
++        "sensor_confidence": candidate.sensor_confidence.raw(),
++        "measured_store_confidence": null, "causal_confidence": null,
++        "store_admission": "not attempted: authentic neural decision required; no fabricated envelope",
++        "store_records": store.len(),
++        "exact_same_source_lookup": {"evidence": "Unknown", "records_inspected": same_source.inspected_records},
++        "actual_next_source_lookup": next_lookup,
++        "interpretation": "joint physical interval observation only; not scalar reward, policy, or learned self-care",
++    });
++    row.as_object_mut()
++        .unwrap()
++        .extend(biology_and_evidence.as_object().unwrap().clone());
++    row
++}
++
++#[test]
++fn grounded_approach_fixture_preflight_no_intervals() {
++    for pressure in [0.0_f32, 0.15] {
++        for setup in setups(pressure) {
++            println!("preflight pressure={} case={} candidate={} observed={:?} target={} radius={} body_radius={} sensor_confidence={}",
++                pressure, setup.case, setup.candidate.action_id.raw(), setup.candidate.observation,
++                setup.target.raw(), setup.world.entity(setup.target).unwrap().radius,
++                setup.world.locomotion_body_radius(), setup.candidate.sensor_confidence.raw());
++        }
++    }
++}
++
++#[test]
++#[ignore = "explicit eight-world-interval budget; requires fresh output directory and must not rerun"]
++fn grounded_approach_need_eight_prescribed_intervals() {
++    let directory = std::env::var_os("ALIFE_GROUNDED_APPROACH_RUN_DIR")
++        .expect("explicit run directory required");
++    let directory = std::path::PathBuf::from(directory);
++    std::fs::create_dir_all(&directory).unwrap();
++    let mut started = std::fs::OpenOptions::new()
++        .create_new(true)
++        .write(true)
++        .open(directory.join("started.json"))
++        .expect("never rerun this budget: started marker already exists");
++    writeln!(
++        started,
++        "{{\"budget\":8,\"status\":\"started\",\"source\":\"frozen before execution\"}}"
++    )
++    .unwrap();
++    started.sync_all().unwrap();
++    let mut output = std::fs::OpenOptions::new()
++        .create_new(true)
++        .write(true)
++        .open(directory.join("outcomes.jsonl"))
++        .unwrap();
++    let mut count = 0;
++    for pressure in [0.0_f32, 0.15] {
++        for setup in setups(pressure) {
++            // Persist intent before every interval. An interrupted outcome is
++            // uncertain, not permission to replay or reclaim its budget slot.
++            writeln!(
++                started,
++                "{{\"interval\":{},\"pressure\":{},\"case\":\"{}\"}}",
++                count + 1,
++                pressure,
++                setup.case
++            )
++            .unwrap();
++            started.sync_all().unwrap();
++            let row = execute(setup);
++            writeln!(output, "{row}").unwrap();
++            output.sync_all().unwrap();
++            println!("grounded_approach_outcome {row}");
++            count += 1;
++        }
++    }
++    assert_eq!(count, 8);
++    writeln!(
++        started,
++        "{{\"completed_intervals\":8,\"budget_remaining\":0}}"
++    )
++    .unwrap();
++    started.sync_all().unwrap();
++}
+diff --git a/docs/experiments/grounded-approach-need-v1/FROZEN_PLAN.md b/docs/experiments/grounded-approach-need-v1/FROZEN_PLAN.md
+new file mode 100644
+index 0000000..2279bc8
+--- /dev/null
++++ b/docs/experiments/grounded-approach-need-v1/FROZEN_PLAN.md
+@@ -0,0 +1,116 @@
++# Grounded Approach / need consequences: fixed eight-interval plan
++
++Frozen before native physical execution. This is a physical source/attribution
++fixture, not a learned neural policy, trained brain or scalar reward experiment.
++
++## Source and budget
++
++Ordinary-main ancestor: `550f79ad1f765132c634e7a272da56b521b57ec0`.
++Qualified opt-in source: PR #310 head
++`5163e3ff7d54b262b73eaafd6db9fb52bc473b4b`, tree
++`85e2ef5f2509a78db11393914fbe1bc921e3aa41`.
++The new patch contains only test code and this experiment's documentation.
++No production store, biology, policy, genetic asset, interface or default changes.
++
++Exactly four arms at each of initial loneliness 0 and .15. At most eight actual
++world intervals, one interval per disposable fork, from tick600 to601 at20Hz.
++No autonomous selector, neural inference, training, GPU/device, existing acquired
++state, private checkpoint, repeated observation, extension, or post-result tuning.
++A cold setup check and detached exact queries are not world intervals. A separate
++create-new run marker records each intent before execution; interruption consumes
++an uncertain slot and does not authorize replay. The test is ignored by default.
++
++## Frozen initialization and arms
++
++All subjects use genome seed921412, foundation identity(10,1,7,N512), freshly
++constructed biology at biological age600 and world tick600. Age600 is initialized,
++not lived history; report actual maturation/puberty/expression. The loneliness
++receptor's underlying chemical concentration is initialized to0 or.15 through a
++fresh in-memory serialized value, then the authoritative graph derives the whole
++homeostatic projection. This is neither a loaded private state nor a query-only
++mutation. The genome, all other initial drive readings, organs and development
++are unchanged. Preserve the original genotype and reference chemistry baseline.
++
++Subject is at(0,0,0), yaw0. Target is at(.8,0,0), radius.75, with identical grounded
++material properties in every arm. The unregistered static peer is organism2;
++its role is a physical peer-contact source, not a second simulated private brain.
++Each case is an isolated fork of the same unadvanced base body/scene:
++
++1. peer_approach: prescribed observed Approach to peer, ActionId101, familyApproach,
++   intensity1, only one command. Registered real execution and local steering own
++   movement. The nominal .1 step should enter the .75 contact region.
++2. toy_approach: the same physical target becomes an ActivityToy without organism
++   identity. Pose, radius and grounded material properties stay fixed. Prescribe
++   the same actual Approach primitive and intensity.
++3. peer_passive: the identical peer scene advances one ordinary tick without a
++   command. It starts outside contact and must remain stationary. It produces no
++   fictitious action memory or action receipt.
++4. peer_blocked: same prescribed peer Approach with four transparent solid sphere
++   obstacles at(±.4,0,0),(0,0,±.4), each radius.2. The intended physical cage leaves
++   the target visible but blocks travel. These obstacles are the declared
++   experimental difference, including their perceptual consequences.
++
++Measure the actual trajectory and endpoint touch. Do not infer contact from the
++primitive, target class, nominal geometry, or instruction. If the cage fails,
++there is no legal retry with changed geometry. Record intended_condition_met=false
++and keep that result. No other condition may be silently retuned after outcomes.
++
++## Evidence and ownership boundary
++
++Use actual registered-command receipts and canonical before/final-after biology.
++World finalization must preserve the receipt's already advanced biology exactly.
++Record pre/post pose, single movement segment, endpoint contacts, physical cost,
++body event, all eleven source-before/after/delta scalars, developmental state,
++timebase, entity and frame provenance. These are bodily measurements, not exported
++neural source vectors. No full sensory frame, sealed source JSON, memory store,
++private bank, optimizer, model activation or checkpoint is written to disk.
++
++The action is prescribed. Do not call its origin NeuralClosedLoopCpu or fabricate
++logit/work/confidence to pass the opt-in store's neural-origin admission guard.
++Command confidence1 only expresses the explicit test prescription; sensor
++confidence remains separate. There is no measured store/causal confidence.
++V1 provides no authentic prescribed-source adapter, so these operation receipts
++are not passed to observe() through a fake envelope. Exact same-source and actual
++next-source queries each run against an independent empty owner store and report
++Unknown; do not describe these as retrieval failures of a retained source.
++Record exact key equality separately to expose context changes independent of
++admission. No approximate match or arbitrary-pressure relief is admitted.
++
++Fixture fork names are explicit external ownership namespaces. Identical numeric
++seed/organism IDs across cloned controls do not establish a runtime world/life
++namespace. No observations are pooled between forks. There is no invented source
++sequence or sealed neural receipt digest. Prior Inspect observations are not
++relabeled as Approach observations.
++
++## What can and cannot be learned
++
++This could demonstrate an Approach-associated physical contact transition,
++eleven-drive differences from no-contact controls, and correct biology timing.
++It cannot demonstrate a learned action policy, neural causal credit, usable
++production memory admission, navigation, generalization or learned self-care.
++At pressure0, physiological baseline drift may make the next reading positive;
++measure it rather than assuming the zero-pressure arm has a zero interval delta.
++
++The controlling architecture distinguishes body-owned physical facts, canonical
++biology, non-reward drives, observed provenance and personal evidence
++(§§5–7,11.2–11.4,15–17). The preceding detached need-reader design remains separate.
++
++## Weight-space work rationale for Astra
++
++Original source: [Sparks of Weight-Space Programming](https://rikiyat.github.io/blog/weight-space-programming/),
++2November2026; checked8November2026.
++
++- Experiment4 edits an existing failing Kinetix car controller after inspecting
++  weights, the scene and one episode. It motivates specific failure diagnosis,
++  not treating a prescribed physical interval as a learned repair.
++- Experiment5 writes zero-initialized small MinAtar controllers with no feedback
++  before evaluation. This ongoing iterative A-Life work is not that zero-shot
++  regime and must not borrow its success claims.
++- Experiment6 constructs a larger Go controller with explicit, limited forward
++  evaluation budgets and iterative edits. It motivates our declared accounting,
++  but our eight physical intervals are not Go rollouts or neural forward passes.
++
++A-Life also has recurrent physiology, private lifetime state, uncertain memory
++and world-owned action validation. This fixture measures whether appropriate
++physical consequence evidence exists before any weight-level policy claim. It
++neither edits weights nor proves that the separate reader can use this source.
+diff --git a/docs/experiments/grounded-approach-need-v1/PRIOR_INSPECT_PROVENANCE_ERRATUM.md b/docs/experiments/grounded-approach-need-v1/PRIOR_INSPECT_PROVENANCE_ERRATUM.md
+new file mode 100644
+index 0000000..5786d14
+--- /dev/null
++++ b/docs/experiments/grounded-approach-need-v1/PRIOR_INSPECT_PROVENANCE_ERRATUM.md
+@@ -0,0 +1,41 @@
++# Prior Inspect fixture: precise provenance clarification
++
++Applies to the inherited PR310 source and documentation, not a rerun or a change
++to its measured physical outcomes. The prior fixture really executed registered
++Inspect intervals and measured canonical before/after biology. Its passive clones
++really matched the social relief, so it did not isolate Inspect causality.
++
++However, `headless/need_consequence_evidence_tests.rs::measured_fixture` manually
++constructs `NeuralActionSelection` with logit0, confidence.9 and zero active tiles
++and synapses, then calls `DecisionSnapshot::from_cpu_neural_selection`. That is a
++prescribed action-envelope **contract fixture**, not an actual CPU neural decision.
++The matching `PreActionSnapshot::from_cpu_neural_frame` also gives a schema label,
++not evidence that any forward/select pass took place. Structural validation of
++that label does not authenticate its provenance.
++
++Exact wording to read with this qualification:
++
++- `NEED_EVIDENCE_RESULTS_V1.md`, “All11 stored deltas match the actual measured
++  physiology bitwise. Measured zero remains known.” These are storage/lookup
++  results for prescribed contract envelopes containing real biological samples.
++  They do not show that a genuine neural producer supplied admitted evidence.
++- Same file, “Actual next-world queries miss in all3 cases.” The query frames
++  came from the real successor worlds; the stored source used the synthetic
++  neural-labeled envelope just described. This is an exact-matcher compatibility
++  limit in that contract fixture, not an autonomous creature's recall result.
++- `README.md`, “Exact source-context recall and byte-exact restore pass.” This is
++  a valid contract-level pass only. The nearby “real selection” future gate is
++  still open and must not be omitted from later summaries.
++- `README.md`, “Only a validated sealed observation with measured physiology and
++  an observed representative target can be admitted.” Add: V1 also requires the
++  neural-origin schema. Its producer must supply genuine neural provenance;
++  validation alone cannot establish that the producer actually ran a network.
++- `NEED_EVIDENCE_INTERFACE.md`, “Tests explicitly distinguish synthetic contract
++  fixtures from actual registered-world measurements.” Both can coexist in one
++  fixture: the body measurements are actual, while its neural decision envelope
++  is synthetic. This sentence must not imply an actual neural-origin collection.
++
++The new Approach fixture does not repeat that envelope construction. It retains
++real operation/physiology evidence as prescribed observations, leaves the
++neural-only store empty, and labels exact-source and next-source recalls Unknown.
++No admission rule is relaxed and no additional neural policy run is authorized.
+diff --git a/docs/experiments/grounded-approach-need-v1/summarize.py b/docs/experiments/grounded-approach-need-v1/summarize.py
+new file mode 100644
+index 0000000..52ea166
+--- /dev/null
++++ b/docs/experiments/grounded-approach-need-v1/summarize.py
+@@ -0,0 +1,38 @@
++#!/usr/bin/env python3
++"""Summarize public scalar rows only; never load a brain or run a world."""
++import json
++import sys
++from pathlib import Path
++
++rows = [json.loads(line) for line in Path(sys.argv[1]).read_text().splitlines() if line.strip()]
++assert len(rows) == 8
++assert len({(row["initial_loneliness"], row["case"]) for row in rows}) == 8
++lanes = ["hunger", "fatigue", "fear", "pain", "loneliness", "curiosity", "brain_atp", "temperature_stress", "reproductive_drive", "extension0", "extension1"]
++for row in rows:
++    assert row["biology_updates"] == 1
++    assert row["ticks"] == [600, 601]
++    assert row["store_records"] == 0
++    assert row["exact_same_source_lookup"]["evidence"] == "Unknown"
++    assert row["source_sequence"] is None
++    assert len(row["raw_eleven_deltas"]) == 11
++contrasts = []
++for pressure in sorted({row["initial_loneliness"] for row in rows}):
++    arms = {row["case"]: row for row in rows if row["initial_loneliness"] == pressure}
++    peer = arms["peer_approach"]
++    for control in ["toy_approach", "peer_passive", "peer_blocked"]:
++        other = arms[control]
++        differences = [a - b for a, b in zip(peer["raw_eleven_deltas"], other["raw_eleven_deltas"])]
++        contrasts.append({"initial_loneliness": pressure, "comparison": f"peer_approach minus {control}", "raw_delta_difference": dict(zip(lanes, differences)), "interpretation": "between-fork contrast, not isolated motor credit or a stored effect"})
++summary = {
++    "actual_world_intervals": len(rows), "budget_remaining": 0,
++    "all_intended_physical_conditions_met": all(row["intended_condition_met"] for row in rows),
++    "neural_forward_passes": 0, "selected_policy_actions": 0,
++    "admitted_neural_sources": 0,
++    "exact_same_source_unknown_count": sum(row["exact_same_source_lookup"]["evidence"] == "Unknown" for row in rows),
++    "actual_next_source_unknown_count": sum(row["actual_next_source_lookup"] is not None and row["actual_next_source_lookup"]["evidence"] == "Unknown" for row in rows),
++    "actual_next_source_key_equality_count": sum(row["actual_next_source_lookup"] is not None and row["actual_next_source_lookup"]["same_exact_context_key"] for row in rows),
++    "rows": [{key: row[key] for key in ["case", "initial_loneliness", "intended_condition_met", "travel", "initial_peer_contact", "final_peer_contact", "body_event", "raw_eleven_deltas", "body_energy_before", "body_energy_after", "sensor_confidence"]} for row in rows],
++    "contrasts": contrasts,
++    "store_result": "Unknown because authentic neural evidence was not produced; not a retained-source recall failure",
++}
++print(json.dumps(summary, indent=2, sort_keys=True))

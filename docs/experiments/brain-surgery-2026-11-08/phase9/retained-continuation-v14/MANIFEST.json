@@ -1,0 +1,13 @@
+{
+  "QUALIFICATION.json": "6ac072d78212020a6eb2482bdf22d92c15f66edd1bb38b2c4a5197e4bcb89144",
+  "retained-continuation-v14-actual.log": "ebcaff8da421cd68eb9e266076cd51abf0b10c78f7ef228a98eb60da6210e2b7",
+  "retained-continuation-v14-build.log": "ca4c0aaa802e1409ce32cb46ed5892d524df936e6858ed51e79a7ddd55e0ce7f",
+  "retained-continuation-v14-clippy-stale-metadata.log": "cb7ad830a197e0509d1afe24efe9613f2cb54d57167d4922b6f5bd6f42b4b625",
+  "retained-continuation-v14-clippy.log": "aa777232382eef043b84fc6a7f10dfd7c228d232c6d2f1ae6deb8f8952a9a1d3",
+  "retained-continuation-v14-fmt.log": "966e97e61b83663b14bfa5d30e25dd97040b625b86310a8c8243299f24297689",
+  "retained-continuation-v14-plan.md": "ca119997a1c1c644105cd9accb18f7d38cabd2fc1022fce3a501e86a1df375ff",
+  "retained-continuation-v14-results.md": "10ad2617bdc081b8b4f5641828e7287d45f66c113eb849895fd39bc02daf7699",
+  "source/crates/alife_game_app/src/gpu_live_runtime/arousal_epoch_runtime_tests.rs": "b671d3d8b9c96a3cc40ea36c60d788e4359b036c08db6d1b737c1694e98b4f04",
+  "source.patch": "787247ca0f00699235ac14cb15b9820d644fd0bc2485b6562ab3aefd380ad5ca",
+  "tree.txt": "7f179728f6170542dfb53d14d34c77f6c73d68a822f3f989607abc17a779d490"
+}

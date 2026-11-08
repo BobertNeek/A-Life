@@ -1,0 +1,137 @@
+{
+  "attempts": 2,
+  "bindings": {
+    "new_world": {
+      "common_patch_sha256": "6e9e74226bac2309fa876cd327011366d9a6d2e1c865b889a1270835ffe6c257",
+      "executable_sha256": "5bf8755fa01cd9c413afe0d139cdc30eac1edff66ba49a94e802dced6b264b0b",
+      "plan_sha256": "595c5072c3ea8c6146c73c539d781dd7cefb233d93776e9b503a71e063539c99",
+      "source_closure_sha256": "3266a734d5a2550d65732b538ac1388eb90a92ebe2abec7ee049da3413242c94",
+      "source_tree": "22d62b98d51048afe0296fb724724df1d5ac4139",
+      "world_patch_sha256": "5cc4ea55ff8505bff852291ad0037bf05b7d1b1010a8db59cd264584332b4b2c"
+    },
+    "old_world": {
+      "common_patch_sha256": "6e9e74226bac2309fa876cd327011366d9a6d2e1c865b889a1270835ffe6c257",
+      "executable_sha256": "fa168b5388d4fd4d52ecdaac4dba3ac8b1dddead6f462a9fc3604d54b0ec0dd3",
+      "plan_sha256": "595c5072c3ea8c6146c73c539d781dd7cefb233d93776e9b503a71e063539c99",
+      "source_closure_sha256": "618849851cb7a4962daad7b6b7d12625c387049e9a728e32aa10ea8f178799db",
+      "source_tree": "dd7677378b2c3f22c7be96874b751c3b8660c898",
+      "world_patch_sha256": "5cc4ea55ff8505bff852291ad0037bf05b7d1b1010a8db59cd264584332b4b2c"
+    }
+  },
+  "case_sets": {
+    "attempted": [
+      "s1_old_world",
+      "s1_new_world"
+    ],
+    "construction_started": [
+      "s1_old_world",
+      "s1_new_world"
+    ],
+    "dispatched": [
+      "s1_old_world",
+      "s1_new_world"
+    ],
+    "native_process_started": [
+      "s1_old_world",
+      "s1_new_world"
+    ],
+    "native_returned": [],
+    "prepared": [
+      "s1_old_world",
+      "s1_new_world"
+    ],
+    "primary_started": [
+      "s1_old_world"
+    ],
+    "rejected": [
+      "s1_old_world"
+    ],
+    "start_requested": [
+      "s1_old_world"
+    ],
+    "unknown": [
+      "s1_new_world"
+    ],
+    "unstarted": [
+      "s2_new_world",
+      "s2_old_world"
+    ],
+    "validated": []
+  },
+  "common_patch_sha256": "6e9e74226bac2309fa876cd327011366d9a6d2e1c865b889a1270835ffe6c257",
+  "complete_validated_pairs": 0,
+  "date": "2026-11-08",
+  "exact_preparation_ticks_total": 1200,
+  "exposure_bounds": {
+    "s1_new_world": {
+      "preparation_exact": true,
+      "preparation_maximum_ticks": 600,
+      "preparation_minimum_ticks": 600,
+      "primary_exact": true,
+      "primary_maximum_ticks": 0,
+      "primary_minimum_ticks": 0
+    },
+    "s1_old_world": {
+      "preparation_exact": true,
+      "preparation_maximum_ticks": 600,
+      "preparation_minimum_ticks": 600,
+      "primary_exact": false,
+      "primary_maximum_ticks": 256,
+      "primary_minimum_ticks": 0
+    },
+    "s2_new_world": {
+      "preparation_exact": true,
+      "preparation_maximum_ticks": 0,
+      "preparation_minimum_ticks": 0,
+      "primary_exact": true,
+      "primary_maximum_ticks": 0,
+      "primary_minimum_ticks": 0
+    },
+    "s2_old_world": {
+      "preparation_exact": true,
+      "preparation_maximum_ticks": 0,
+      "preparation_minimum_ticks": 0,
+      "primary_exact": true,
+      "primary_maximum_ticks": 0,
+      "primary_minimum_ticks": 0
+    }
+  },
+  "inference": "No world-effect, meal, avoidance or learning comparison is supported.",
+  "initial_pair_equality_passed": true,
+  "initial_pair_equality_scope": "s1_old_world and s1_new_world after exactly 600 preparation ticks per arm",
+  "native_returned_summaries": 0,
+  "observed_failure_event": null,
+  "observed_failure_tick": null,
+  "original_lost_package_recovered": false,
+  "plan_sha256": "595c5072c3ea8c6146c73c539d781dd7cefb233d93776e9b503a71e063539c99",
+  "planned_lives": 4,
+  "planned_seeds": [
+    2026112201,
+    2026112202
+  ],
+  "primary_ticks_exact": false,
+  "primary_ticks_maximum": 256,
+  "primary_ticks_minimum": 0,
+  "private_state_included": false,
+  "public_files_sha256": {
+    "SHA256SUMS": "c2a49d4ff6c400097cf70948a91c9f96548516bbaf5da38cad29e140a162d102",
+    "checks.json": "9fb9791c94fed627debc8a1c8d5d98335ec57a0e9f28f5d181ba4cd54ac258a4",
+    "common-audit-kernel.patch": "6e9e74226bac2309fa876cd327011366d9a6d2e1c865b889a1270835ffe6c257",
+    "report.md": "34e48a2329ba1fe66bdb7524fbce5bb31016635b271d7a8f3d1e5e7777a02a73",
+    "rows.json": "84d8b3c73e49869e9b3024a6be127c95e45a47e9b9eb7d17ac4b40025634bd74",
+    "source-bindings.json": "9ac4ce41e8f049187a37a34a7d56a928c1d5303b20df70eb8c7de0adba448454",
+    "summary.json": "9f401f0684f07967b6b26c53046e7b6d2359fd3d4fc802a39f032015d6803bfa",
+    "world-factor.patch": "5cc4ea55ff8505bff852291ad0037bf05b7d1b1010a8db59cd264584332b4b2c"
+  },
+  "record_kind": "failed_reserved_world_comparison",
+  "reserved_retry_performed": false,
+  "schema_version": 1,
+  "source_base_commit": "20bcb45104e5bec688b01abefa96cdf95bdcee60",
+  "source_reconstruction": "new v2 reconstruction; not recovered original lost package",
+  "source_record_sha256": "529aca213e6b63c4e78655458a3ae12fa0f2fd8fe8470ca2a640d369df1f5403",
+  "status": "closed_without_retry",
+  "terminal_gate": "native_rejected",
+  "validated_outcomes": 0,
+  "world_patch_sha256": "5cc4ea55ff8505bff852291ad0037bf05b7d1b1010a8db59cd264584332b4b2c",
+  "world_source_head": "30efe5ee3bb5a5cdf270288eb603b227d6c5cdfd"
+}

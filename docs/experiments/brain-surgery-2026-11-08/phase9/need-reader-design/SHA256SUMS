@@ -1,0 +1,4 @@
+556ec62a30da8dca23304f9bbc402259f059a76d7591b24369b3461d51c6bbd1  STATUS.txt
+0a2d3e0b3e1414e98121f63a81200db1409fd04c4bd20deecb3f46c7372f1f9f  source-design.patch
+d6f2d4959b7ae2bd4992f1e7fafbe89c9afde0f7a645196609193b9c16ce997b  docs/experiments/need-specific-reader-v1/DESIGN.md
+1dc36b721009e7da25cbc70f2ec8c1d1ef2fe9c3f7b7b19dbdcaee103a81932d  docs/experiments/need-specific-reader-v1/reader_algebra.rs

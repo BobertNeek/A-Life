@@ -1,0 +1,22 @@
+{
+  "2026112601:OFF": {
+    "candidates": 3360,
+    "operation_candidates": 304,
+    "memory_cap_active": 15
+  },
+  "2026112601:gain_1_16": {
+    "candidates": 3360,
+    "operation_candidates": 304,
+    "memory_cap_active": 15
+  },
+  "2026112602:gain_1_16": {
+    "candidates": 3426,
+    "operation_candidates": 315,
+    "memory_cap_active": 28
+  },
+  "2026112602:OFF": {
+    "candidates": 3432,
+    "operation_candidates": 316,
+    "memory_cap_active": 28
+  }
+}

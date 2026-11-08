@@ -1,0 +1,46 @@
+diff --git a/crates/alife_world/tests/gpu_brain_persistence.rs b/crates/alife_world/tests/gpu_brain_persistence.rs
+index 4523b33..69a3758 100644
+--- a/crates/alife_world/tests/gpu_brain_persistence.rs
++++ b/crates/alife_world/tests/gpu_brain_persistence.rs
+@@ -395,7 +395,7 @@ fn every_sleep_phase_roundtrips_without_duplicate_consolidation() {
+ }
+ 
+ #[test]
+-fn retained_learning_attempt_counts_zero_through_three_roundtrip_without_sidecar_replay() {
++fn retained_learning_failed_retry_counts_roundtrip_without_sidecar_replay() {
+     let base = save_for_sleep(sleep_state(
+         SleepPhase::ForcedRecoverySleep,
+         ConsolidationState::None,
+@@ -407,7 +407,7 @@ fn retained_learning_attempt_counts_zero_through_three_roundtrip_without_sidecar
+     assert_eq!(decoded.memory, base.memory);
+     assert_eq!(decoded.topology, base.topology);
+ 
+-    for attempts in 1..=3 {
++    for attempts in 0..=u8::MAX {
+         let mut save = base.clone();
+         let pending = pending_eligibility();
+         save.pending_eligibility = Some(pending);
+@@ -442,6 +442,23 @@ fn retained_learning_attempt_counts_zero_through_three_roundtrip_without_sidecar
+             asset("retained-learning-sealed-patch")
+         );
+         assert_eq!(decoded.sleep.phase, SleepPhase::ForcedRecoverySleep);
++
++        // Counts do not authorize missing or mismatched recovery evidence.
++        let mut invalid = save.clone();
++        invalid.memory.retained_learning.as_mut().unwrap().organism_id_raw += 1;
++        assert!(invalid.validate().is_err());
++        let mut invalid = save.clone();
++        invalid.memory.retained_learning.as_mut().unwrap().last_error_code = "unknown".into();
++        assert!(invalid.validate().is_err());
++        let mut invalid = save.clone();
++        invalid.pending_eligibility = None;
++        assert!(invalid.validate().is_err());
++        let mut invalid = save.clone();
++        invalid.memory.retained_learning.as_mut().unwrap().schema_version += 1;
++        assert!(invalid.validate().is_err());
++        let mut missing = serde_json::to_value(&save).unwrap();
++        missing["memory"]["retained_learning"].as_object_mut().unwrap().remove("attempts");
++        assert!(serde_json::from_value::<GpuBrainSaveState>(missing).is_err());
+     }
+ }
+ 

@@ -1,0 +1,1578 @@
+diff --git a/OPERATING_POINT_FINDINGS.md b/OPERATING_POINT_FINDINGS.md
+new file mode 100644
+index 0000000..eeb21fe
+--- /dev/null
++++ b/OPERATING_POINT_FINDINGS.md
+@@ -0,0 +1,39 @@
++# Native Nano operating point, diagnostic only
++
++Based on frozen V3 commit `27c01b6f258604a307c5c359ad41c7e91ae3ae0b` and closed local fixture artifact SHA256 `6f0e21260fec2885bee195cd32b9b7955579fd96e4fd68a49106aa7e27e98a92`.
++
++## What was verified
++
++- All 384 saved frames: consecutive ticks, actual before/after biology validated against the same seed-41 inherited phenotype, matching genome/source and frame homeostasis, exact compiled source/phenotype/input digests, and recorded dendrites matching birth branches.
++- Shared native input encoder extraction: two tests passed, including bitwise equivalence to the frozen pre-extraction implementation under native and non-neutral receptor effects. The full frame encoder uses the helper unchanged.
++- No new world interval, action, host/cohort, neural replay, optimizer update, or private-state restoration. Deterministic birth-record construction was used only to recover expressed chemistry identity.
++
++## Mechanism
++
++At the last frame, native interoceptive and regional gains are both 0.5, projection gain is 0.5, and local threshold subtraction is 0.25. The global encoded offset is -0.025 for the toy fixture and -0.0247334 for the peer fixture. The peer's small difference comes from the recorded serotonin/consolidation receptor effect, not an assumed neutral context.
++
++All eleven drive-source neurons (64, 67, 68, 65, 69, 70, 71, 66, 72, 73, 74) have zero compiled recurrent inputs and zero recorded dendritic inputs. Their bias is zero. With these recorded effects, the preactivation upper bound before nonnegative metabolic subtraction is:
++
++- Toy: 0.25 * pressure - 0.275.
++- Peer: 0.25 * pressure - 0.2747334.
++
++At raw pressures 0, 0.1, 0.8, and 1, all bounds remain negative. Across the actual 384 rows, the largest corresponding drive-source base was -0.075. Thus the positive-input first-hop branches cannot respond from the documented fresh zero neural state in these fixed contexts. This is a sign/operating-point failure shared by the eleven new relay inputs, not evidence that the drives lack biological meaning or all other drive paths are absent.
++
++The loneliness path is source 69 -> reserve 500 -> reader 344. Reserve 500 also retains an older recurrent input from source 64 (hunger), genetic weight +0.0676881224, alpha 0.25, Hot10To30Hz cadence. Its acquired weight and instantaneous activation were not captured, so this diagnostic does not invent them or claim the reserve's complete current is known. The new first-hop branch contribution is bounded at zero under the conditions above. Dendritic branches evaluate every executed microstep; the recurrent route has its own cadence.
++
++Reader 344 has no compiled recurrent input. Its new +0.25 bias cancels the +0.25 local threshold, but not the negative encoded offset or metabolic subtraction. Assuming its incoming positive branch is closed, the local equilibrium solves a = tanh(base - a²). This predicts:
++
++- New head controls, toy: -0.0256524235; saved long detached probe: -0.0256524198.
++- New head controls, peer: -0.0253716707; saved long detached probe: -0.0253716651.
++- Unused original reader reference, toy: -0.430009127; saved long probe: -0.430008590.
++- Unused original reader reference, peer: -0.429282844; saved long probe: -0.429282367.
++
++The new-head comparisons differ by at most 5.59e-9. These are analytical consistency checks against saved detached probes, not reconstructed actual neural state. The negative reader closes max(source, 0), explaining the absent new memory-port contribution.
++
++## Boundaries and correction
++
++The prior V3 pressure probes changed nominal raw input contributions without applying native interoceptive/regional gains. They must be labeled nominal raw-input probes, not exact re-encoding. Here, pressure substitutions run the shared native encoder with the recorded before-chemistry effects held fixed. They are input-only counterfactuals, not new physiological trajectories.
++
++The artifact lacks neural initial activations, metabolic loads, somatic offsets, enabled-route flags and structural edges. None were reconstructed or defaulted. No learned memory was manufactured. No need-gain change, V4 candidate or promotion was made.
++
++Compact scalar results: `operating-point-summary.json`. Detailed local-only derived output and build logs remain outside the source commit. The original raw receipt remains local. The first test compile failed only on test-fixture borrow declarations; that log is retained, the declarations were corrected, and the two tests passed on rerun.
+diff --git a/crates/alife_training/Cargo.toml b/crates/alife_training/Cargo.toml
+index ff6f88a..fef4248 100644
+--- a/crates/alife_training/Cargo.toml
++++ b/crates/alife_training/Cargo.toml
+@@ -52,3 +52,7 @@ required-features = ["cpu-backend"]
+ [[example]]
+ name = "probe_nano_drive_routing"
+ required-features = ["cpu-backend"]
++
++[[example]]
++name = "probe_nano_operating_point"
++required-features = ["cpu-backend"]
+diff --git a/crates/alife_training/examples/probe_nano_operating_point.rs b/crates/alife_training/examples/probe_nano_operating_point.rs
+new file mode 100644
+index 0000000..bc21601
+--- /dev/null
++++ b/crates/alife_training/examples/probe_nano_operating_point.rs
+@@ -0,0 +1,296 @@
++//! Reads a closed public fixture artifact. No world intervals, optimizer, private
++//! checkpoint restore, synthesized recall, or candidate parameters are changed.
++use alife_core::*;
++use alife_gpu_backend::GpuV11CausalState;
++use alife_training::cpu::encode_cpu_neural_inputs;
++use alife_world::*;
++use serde_json::{json, Value};
++use sha2::{Digest, Sha256};
++use std::io::Write;
++type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
++const DRIVE_NAMES: [&str; 11] = [
++    "hunger",
++    "fatigue",
++    "fear",
++    "pain",
++    "loneliness",
++    "curiosity",
++    "brain_atp",
++    "temperature_stress",
++    "reproductive_drive",
++    "extension0",
++    "extension1",
++];
++
++fn substituted_frame(
++    frame: &PerceptionFrame,
++    lane: usize,
++    pressure: f32,
++) -> Result<PerceptionFrame> {
++    let mut h = *frame.homeostasis();
++    match lane {
++        0 => h.drives.hunger = pressure,
++        1 => h.drives.fatigue = pressure,
++        2 => h.drives.fear = pressure,
++        3 => h.drives.pain = pressure,
++        4 => h.drives.loneliness = pressure,
++        5 => h.drives.curiosity = pressure,
++        6 => h.drives.brain_atp = pressure,
++        7 => h.drives.temperature_stress = pressure,
++        8 => h.drives.reproductive_drive = pressure,
++        9 | 10 => h.drives.extension[lane - 9] = pressure,
++        _ => return Err("invalid drive lane".into()),
++    }
++    // This is only an encoder counterfactual. No recall/context receipt from the
++    // old frame is attached to the changed base, and chemistry effects stay fixed.
++    Ok(PerceptionFrame::new(
++        frame.organism_id(),
++        frame.tick(),
++        frame.sensor_profile(),
++        frame.sensory().clone(),
++        frame.body(),
++        h,
++        frame.candidates().to_vec(),
++        frame.profile_provenance(),
++        frame.grounded_object_slots().to_vec(),
++    )?)
++}
++
++fn node_terms(
++    p: &BrainPhenotype,
++    branches: &DendriticBranchSet,
++    effects: &NeuralReceptorEffects,
++    encoded: &[f32],
++    id: u32,
++) -> Value {
++    let d = &p.neuron_dynamics()[id as usize];
++    let incoming = p.synapses().iter().enumerate().filter_map(|(index, s)| {
++        if s.target() != id || !matches!(s.kind(), CompiledSynapseKind::Recurrent) { return None; }
++        Some(json!({"global_synapse":index,"source":s.source(),"genetic_weight":s.genetic_weight(),
++            "alpha":s.alpha(),"route":s.route_index(),"cadence":p.projections()[s.route_index() as usize].update_cadence(),
++            "somatic_offset":"not recorded; no claim to know actual effective weight"}))
++    }).collect::<Vec<_>>();
++    let base = d.bias() + encoded[id as usize] - effects.local_threshold_shift;
++    json!({"id":id,"dynamics":d,"encoded_input":encoded[id as usize],
++        "bias_plus_encoded_minus_local_threshold":base,
++        "preactivation_interval_if_recurrent_and_dendritic_sums_zero":[base-d.homeostatic_gain(),base],
++        "compiled_recurrent_inputs":incoming,
++        "recorded_dendritic_branches":branches.branches().iter().filter(|b| b.target==id).collect::<Vec<_>>(),
++        "native_update":"a_next=(1-leak)*a+leak*tanh(bias+encoded+projection_gain*(recurrent+dendritic)-homeostatic_gain*metabolic-local_threshold); metabolic_next=clamp(decay*metabolic+(1-decay)*a_next^2,0,1)",
++        "cadence_note":"compiled recurrent route cadence varies; dendritic branches are evaluated every executed microstep"})
++}
++
++fn scalar_fixed_point(base: f32, gain: f32) -> Option<f32> {
++    // A local analytical consistency check only, for a closed branch with no
++    // recurrent sum. At equilibrium m=a^2. Find roots by sign-bracketed bisection.
++    let f = |a: f32| a - (base - gain * a * a).tanh();
++    let mut roots = Vec::new();
++    for i in 0..2000 {
++        let mut lo = -1. + i as f32 / 1000.;
++        let mut hi = lo + 0.001;
++        if f(lo) * f(hi) > 0. {
++            continue;
++        }
++        for _ in 0..32 {
++            let mid = (lo + hi) * 0.5;
++            if f(lo) * f(mid) <= 0. {
++                hi = mid;
++            } else {
++                lo = mid;
++            }
++        }
++        roots.push((lo + hi) * 0.5);
++    }
++    roots.into_iter().min_by(|a, b| a.abs().total_cmp(&b.abs()))
++}
++
++fn main() -> Result<()> {
++    let args = std::env::args().collect::<Vec<_>>();
++    if args.len() != 3 {
++        return Err("usage: probe_nano_operating_point CLOSED_ARTIFACT OUTPUT_NEW_JSON".into());
++    }
++    let raw = std::fs::read(&args[1])?;
++    let input_sha256 = format!("{:x}", Sha256::digest(&raw));
++    assert_eq!(
++        input_sha256,
++        "6f0e21260fec2885bee195cd32b9b7955579fd96e4fd68a49106aa7e27e98a92"
++    );
++    let artifact: Value = serde_json::from_slice(&raw)?;
++    let profile = SensorProfile::GroundedObjectSlotsV1;
++    let builtin = FoundationWeightAsset::builtin_nano512_v1(profile)?;
++    let (old, _, _) =
++        PhenotypeCompiler::compile_fixed_legacy_nano512_compatibility_asset(profile, &builtin)?
++            .into_runtime_parts();
++    let asset = FoundationWeightAsset::from_nano512_readout_candidate(
++        &old,
++        old.synapses().iter().map(|s| s.genetic_weight()).collect(),
++        TrainingStageManifest::new(1, 1, 1),
++    )?;
++    assert_eq!(
++        artifact["source_asset"],
++        serde_json::to_value(asset.digest())?
++    );
++    assert_eq!(artifact["source"], "nano-need-memory-gate-v3");
++    let contexts = artifact["results"].as_array().ok_or("missing results")?;
++    assert_eq!(contexts.len(), 12);
++    let mut results = Vec::new();
++    for context in contexts {
++        let factor: Option<NanoDriveRoutingV1> = serde_json::from_value(context["factor"].clone())?;
++        assert!(factor.is_none() || factor.is_some_and(NanoDriveRoutingV1::uses_need_memory_gate));
++        let mut recipe = Nano512ActionCreditCandidateV2::new(
++            &asset,
++            ActionCandidateCreditProfileV1::SignedChoiceReadouts,
++        )?;
++        if let Some(f) = factor {
++            recipe = recipe.with_drive_routing(f);
++        }
++        let (p, inputs) = PhenotypeCompiler::compile_nano512_action_credit_candidate(&recipe)?;
++        assert_eq!(
++            context["phenotype_hash"],
++            serde_json::to_value(p.phenotype_hash())?
++        );
++        assert_eq!(
++            context["inputs_digest"],
++            serde_json::to_value(inputs.canonical_digest())?
++        );
++        // Instantiate only the deterministic birth record to recover expressed
++        // chemistry/receptor identity. No host is constructed or world advanced.
++        let game = create_canonical_new_game_with_nociceptive_candidate(
++            &CanonicalNewGameConfig::phase3(41, 1)?,
++            &recipe,
++        )?;
++        let record = game
++            .world
++            .organism_registry()
++            .get(OrganismId(1))
++            .ok_or("missing birth record")?;
++        record.validate_contract()?;
++        let receptor_phenotype = NeuralReceptorPhenotype::compile(&p)?;
++        let born = GpuV11CausalState::for_phenotype(&p)?;
++        let rows = context["rows"].as_array().ok_or("missing rows")?;
++        assert_eq!(rows.len(), 32);
++        let sources = (0..11)
++            .map(|lane| {
++                p.sensor_encoder()
++                    .assignments()
++                    .iter()
++                    .find(|a| {
++                        a.source_group() == SensorEncoderSourceGroup::Homeostasis
++                            && a.source_index() == lane
++                            && a.scale() != 0.
++                    })
++                    .map(|a| a.target_neuron())
++                    .ok_or("missing drive port")
++            })
++            .collect::<std::result::Result<Vec<_>, _>>()?;
++        let reserve = p
++            .lobe_layout()
++            .region(LobeKind::FlexibleReserve)
++            .ok_or("missing reserve")?
++            .start;
++        let gate = p
++            .lobe_layout()
++            .region(LobeKind::MemoryInterface)
++            .ok_or("missing memory")?
++            .start
++            + 8;
++        let mut all_row_terms = Vec::new();
++        for (index, row) in rows.iter().enumerate() {
++            let frame: PerceptionFrame = serde_json::from_value(row["frame"].clone())?;
++            let outcome: PostActionOutcome = serde_json::from_value(row["outcome"].clone())?;
++            let measured = outcome
++                .measured_physiology
++                .ok_or("missing measured physiology")?;
++            measured.validate_contract()?;
++            measured.before.validate_against(record.phenotype())?;
++            measured.after.validate_against(record.phenotype())?;
++            assert_eq!(
++                measured.before.source_genome_id,
++                record.biochemistry().source_genome_id
++            );
++            assert_eq!(frame.tick().raw(), index as u64);
++            assert_eq!(frame.organism_id(), record.organism_id());
++            assert_eq!(measured.before.tick, frame.tick());
++            assert_eq!(measured.before.homeostasis, *frame.homeostasis());
++            let branches: DendriticBranchSet =
++                serde_json::from_value(row["replay_dendrites"].clone())?;
++            branches.validate_for_neuron_count(p.neuron_count())?;
++            assert_eq!(&branches, born.dendritic_branches());
++            let receptors = measured.before.neural_receptor_frame(record.phenotype())?;
++            let effects = NeuralReceptorEffects::from_frame(&receptors, &receptor_phenotype)?;
++            let encoded = encode_cpu_neural_inputs(&p, &frame, &effects)?;
++            let source_base = sources
++                .iter()
++                .map(|&id| {
++                    p.neuron_dynamics()[id as usize].bias() + encoded[id as usize]
++                        - effects.local_threshold_shift
++                })
++                .collect::<Vec<_>>();
++            all_row_terms.push(json!({"tick":frame.tick(),"microsteps":row["microsteps"],"effects":effects,"all_drive_base_terms":source_base}));
++            if index != rows.len() - 1 {
++                continue;
++            }
++            let mut probes = Vec::new();
++            for (lane, &source) in sources.iter().enumerate() {
++                for pressure in [
++                    frame.homeostasis().drives.to_array()[lane],
++                    0.,
++                    0.1,
++                    0.8,
++                    1.,
++                ] {
++                    let changed = substituted_frame(&frame, lane, pressure)?;
++                    let x = encode_cpu_neural_inputs(&p, &changed, &effects)?;
++                    let (lo, hi) = p
++                        .sensor_encoder()
++                        .assignments()
++                        .iter()
++                        .find(|a| {
++                            a.source_group() == SensorEncoderSourceGroup::Homeostasis
++                                && a.source_index() as usize == lane
++                                && a.target_neuron() == source
++                        })
++                        .ok_or("missing source assignment")?
++                        .clamp_range();
++                    let assignments=p.sensor_encoder().assignments().iter().filter(|a|a.target_neuron()==source).map(|a|json!({"group":a.source_group(),"lane":a.source_index(),"scale":a.scale(),"bias":a.bias(),"clamp":a.clamp_range()})).collect::<Vec<_>>();
++                    let source_base = p.neuron_dynamics()[source as usize].bias()
++                        + x[source as usize]
++                        - effects.local_threshold_shift;
++                    let isolated_target_max = source_base.tanh();
++                    let first_branch_max = (isolated_target_max.max(0.)).tanh() * 0.25;
++                    probes.push(json!({"lane":lane,"name":DRIVE_NAMES[lane],"substituted_raw_pressure":pressure,"source_assignments":assignments,"assignment_clamp":[lo,hi],
++                        "source":node_terms(&p,&branches,&effects,&x,source),"reserve":node_terms(&p,&branches,&effects,&x,reserve+lane as u32),
++                        "isolated_source_activation_target_upper_bound_metabolic_zero":isolated_target_max,
++                        "first_hop_upper_bound_if_no_other_incoming_inputs":first_branch_max,
++                        "bound_caveat":"conditional on zero other inputs; inspect listed recurrent inputs and branches. This is not a reconstructed actual activation.",
++                        "memory_reader":if lane==4 {node_terms(&p,&branches,&effects,&x,gate)} else {Value::Null}}));
++                }
++            }
++            let d = &p.neuron_dynamics()[gate as usize];
++            let base = d.bias() + encoded[gate as usize] - effects.local_threshold_shift;
++            let fixed = scalar_fixed_point(base, d.homeostatic_gain());
++            let saved = context["detached_counterfactuals"]
++                .as_array()
++                .ok_or("missing closed probes")?;
++            let gate_records=saved.iter().map(|v|json!({"nominal_pressure":v["pressure"],"frames":v["frames"],"gate_input_off":v["gate_input_off"],"clear_lane32":v["clear_lane32"],"recorded_gate":v["final_gate_activation"]})).collect::<Vec<_>>();
++            results.push(json!({"factor":factor,"peer_body_fixture":context["peer_body_fixture"],"requested_initial_loneliness":context["requested_loneliness"],
++                "validated_phenotype_hash":p.phenotype_hash(),"validated_source_genome_id":measured.before.source_genome_id,
++                "frame_tick":frame.tick(),"frame_digest":frame.frame_digest(),"before_chemistry_tick":measured.before.tick,
++                "actual_drives":frame.homeostasis().drives,"receptors":receptors,"receptor_expression":receptor_phenotype,"effects":effects,
++                "global_encoded_offset":((effects.structural_growth_gate+effects.sleep_gate+effects.consolidation_gate)/3.-0.5)*0.05,
++                "all_11_lane_encoder_probes":probes,"reader_actual_encoder_terms":node_terms(&p,&branches,&effects,&encoded,gate),
++                "reader_closed_input_scalar_equilibrium_nearest_zero":fixed,
++                "scalar_equilibrium_scope":"analytical consistency only: tanh(base-homeostatic_gain*a^2)=a, assumes zero recurrent+dendritic sum; not actual neural-state reconstruction",
++                "previous_v3_nominal_raw_input_probes":gate_records,
++                "all_recorded_row_encoder_terms":all_row_terms}));
++        }
++    }
++    std::fs::OpenOptions::new().write(true).create_new(true).open(&args[2])?.write_all(&serde_json::to_vec_pretty(&json!({
++        "scope":"closed artifact encoder/receptor reconstruction and conditional analytical bounds only; no world intervals or neural replay",
++        "base_commit":"27c01b6f258604a307c5c359ad41c7e91ae3ae0b","source_artifact":args[1],"source_artifact_sha256":input_sha256,"source_asset":asset.digest(),
++        "counterfactual_scope":"one raw homeostatic lane substituted in detached validated frame; chemistry-derived receptor effects held at recorded before-state values, not a new biological trajectory",
++        "missing_state":"artifact has no neural initial activations, metabolic loads, somatic weights, enabled-route flags or structural edges; none reconstructed or silently defaulted",
++        "v3_probe_correction":"V3 detached pressure probes changed nominal raw encoder contribution without native interoceptive/regional gains; these are not exact re-encodings",
++        "results":results}))?)?;
++    Ok(())
++}
+diff --git a/crates/alife_training/src/cpu/input.rs b/crates/alife_training/src/cpu/input.rs
+index d2c8671..2297079 100644
+--- a/crates/alife_training/src/cpu/input.rs
++++ b/crates/alife_training/src/cpu/input.rs
+@@ -21,47 +21,8 @@ pub fn encode_cpu_frame(
+     {
+         return Err(invalid());
+     }
+-    let sensory = frame.sensory().channels.as_flat_array();
+-    let body = frame.body().neural_projection(frame.sensor_profile());
+-    let t = body.pose.translation;
+-    let r = body.pose.rotation;
+-    let v = body.velocity.linear;
+-    let a = body.velocity.angular;
+-    let body = [
+-        t.x, t.y, t.z, r.x, r.y, r.z, r.w, v.x, v.y, v.z, a.x, a.y, a.z,
+-    ];
++    let encoded = encode_cpu_neural_inputs(p, frame, effects)?;
+     let homeostasis = frame.homeostasis();
+-    let home = homeostasis
+-        .drives
+-        .to_array()
+-        .into_iter()
+-        .chain(homeostasis.hormones.to_array())
+-        .collect::<Vec<_>>();
+-    let language = frame.sensory().language_prior_neural_lanes();
+-    let mut encoded = vec![0.; p.neuron_count() as usize];
+-    for assignment in p.sensor_encoder().assignments() {
+-        let index = assignment.source_index() as usize;
+-        let source = match assignment.source_group() {
+-            SensorEncoderSourceGroup::SensoryChannel => {
+-                sensory.get(index).map(|x| x * effects.attention_gain)
+-            }
+-            SensorEncoderSourceGroup::Body => body.get(index).copied(),
+-            SensorEncoderSourceGroup::Homeostasis => {
+-                home.get(index).map(|x| x * effects.interoceptive_gain)
+-            }
+-            SensorEncoderSourceGroup::HeardLanguage => language.get(index).copied(),
+-            SensorEncoderSourceGroup::SemanticPrior => language.get(128 + index).copied(),
+-        }
+-        .ok_or_else(invalid)?;
+-        let (min, max) = assignment.clamp_range();
+-        encoded[assignment.target_neuron() as usize] +=
+-            (source * assignment.scale() + assignment.bias()).clamp(min, max);
+-    }
+-    let gate =
+-        (effects.structural_growth_gate + effects.sleep_gate + effects.consolidation_gate) / 3.;
+-    for value in &mut encoded {
+-        *value = (*value * effects.regional_excitability + (gate - 0.5) * 0.05).clamp(-1., 1.);
+-    }
+     let projection = recall
+         .cognitive_context()
+         .and_then(|c| c.cognitive_projection.as_ref())
+@@ -128,6 +89,63 @@ pub fn encode_cpu_frame(
+         candidates,
+     })
+ }
++/// Native neuron-input encoding without memory/decoder inputs or recurrent state.
++/// This uses the frame's actual homeostasis and supplied chemistry-derived effects.
++/// Detached callers must identify any substituted frame as a counterfactual.
++pub fn encode_cpu_neural_inputs(
++    p: &BrainPhenotype,
++    frame: &PerceptionFrame,
++    effects: &NeuralReceptorEffects,
++) -> Result<Vec<f32>, TrainingError> {
++    effects.validate_contract()?;
++    if effects.source_tick != frame.tick() || frame.sensor_profile() != p.sensor_profile() {
++        return Err(invalid());
++    }
++    let sensory = frame.sensory().channels.as_flat_array();
++    let body = frame.body().neural_projection(frame.sensor_profile());
++    let t = body.pose.translation;
++    let r = body.pose.rotation;
++    let v = body.velocity.linear;
++    let a = body.velocity.angular;
++    let body = [
++        t.x, t.y, t.z, r.x, r.y, r.z, r.w, v.x, v.y, v.z, a.x, a.y, a.z,
++    ];
++    let homeostasis = frame.homeostasis();
++    let home = homeostasis
++        .drives
++        .to_array()
++        .into_iter()
++        .chain(homeostasis.hormones.to_array())
++        .collect::<Vec<_>>();
++    let language = frame.sensory().language_prior_neural_lanes();
++    let mut encoded = vec![0.; p.neuron_count() as usize];
++    for assignment in p.sensor_encoder().assignments() {
++        let index = assignment.source_index() as usize;
++        let source = match assignment.source_group() {
++            SensorEncoderSourceGroup::SensoryChannel => {
++                sensory.get(index).map(|x| x * effects.attention_gain)
++            }
++            SensorEncoderSourceGroup::Body => body.get(index).copied(),
++            SensorEncoderSourceGroup::Homeostasis => {
++                home.get(index).map(|x| x * effects.interoceptive_gain)
++            }
++            SensorEncoderSourceGroup::HeardLanguage => language.get(index).copied(),
++            SensorEncoderSourceGroup::SemanticPrior => language.get(128 + index).copied(),
++        }
++        .ok_or_else(invalid)?;
++        let (min, max) = assignment.clamp_range();
++        encoded[assignment.target_neuron() as usize] +=
++            (source * assignment.scale() + assignment.bias()).clamp(min, max);
++    }
++    let gate =
++        (effects.structural_growth_gate + effects.sleep_gate + effects.consolidation_gate) / 3.;
++    for value in &mut encoded {
++        *value = (*value * effects.regional_excitability + (gate - 0.5) * 0.05).clamp(-1., 1.);
++    }
++    finite(&encoded)?;
++    Ok(encoded)
++}
++
+ fn motor_slot(kind: ActionKind) -> Option<u8> {
+     match kind {
+         ActionKind::Move => Some(0),
+diff --git a/crates/alife_training/tests/cpu_encoder_inputs.rs b/crates/alife_training/tests/cpu_encoder_inputs.rs
+new file mode 100644
+index 0000000..a8aa62f
+--- /dev/null
++++ b/crates/alife_training/tests/cpu_encoder_inputs.rs
+@@ -0,0 +1,224 @@
++#![cfg(feature = "cpu-backend")]
++//! Extraction equivalence only, no world intervals or neural training.
++use alife_core::*;
++use alife_runtime::canonical_preparation::*;
++use alife_training::cpu::{encode_cpu_frame, encode_cpu_neural_inputs};
++use alife_world::*;
++#[path = "support/need_memory_port.rs"]
++#[allow(dead_code)]
++mod support;
++
++// Frozen spelling from 27c01b6 input.rs, retained only as an independent oracle.
++fn previous_encoder(
++    p: &BrainPhenotype,
++    frame: &PerceptionFrame,
++    effects: &NeuralReceptorEffects,
++) -> Vec<f32> {
++    let sensory = frame.sensory().channels.as_flat_array();
++    let body = frame.body().neural_projection(frame.sensor_profile());
++    let t = body.pose.translation;
++    let r = body.pose.rotation;
++    let v = body.velocity.linear;
++    let a = body.velocity.angular;
++    let body = [
++        t.x, t.y, t.z, r.x, r.y, r.z, r.w, v.x, v.y, v.z, a.x, a.y, a.z,
++    ];
++    let homeostasis = frame.homeostasis();
++    let home = homeostasis
++        .drives
++        .to_array()
++        .into_iter()
++        .chain(homeostasis.hormones.to_array())
++        .collect::<Vec<_>>();
++    let language = frame.sensory().language_prior_neural_lanes();
++    let mut encoded = vec![0.; p.neuron_count() as usize];
++    for assignment in p.sensor_encoder().assignments() {
++        let index = assignment.source_index() as usize;
++        let source = match assignment.source_group() {
++            SensorEncoderSourceGroup::SensoryChannel => {
++                sensory.get(index).map(|x| x * effects.attention_gain)
++            }
++            SensorEncoderSourceGroup::Body => body.get(index).copied(),
++            SensorEncoderSourceGroup::Homeostasis => {
++                home.get(index).map(|x| x * effects.interoceptive_gain)
++            }
++            SensorEncoderSourceGroup::HeardLanguage => language.get(index).copied(),
++            SensorEncoderSourceGroup::SemanticPrior => language.get(128 + index).copied(),
++        }
++        .unwrap();
++        let (min, max) = assignment.clamp_range();
++        encoded[assignment.target_neuron() as usize] +=
++            (source * assignment.scale() + assignment.bias()).clamp(min, max);
++    }
++    let gate =
++        (effects.structural_growth_gate + effects.sleep_gate + effects.consolidation_gate) / 3.;
++    for value in &mut encoded {
++        *value = (*value * effects.regional_excitability + (gate - 0.5) * 0.05).clamp(-1., 1.);
++    }
++    encoded
++}
++
++fn fixture() -> (BrainPhenotype, CanonicalNewGame) {
++    let (p, asset) = support::fixture();
++    let recipe = Nano512ActionCreditCandidateV2::new(
++        &asset,
++        ActionCandidateCreditProfileV1::SignedChoiceReadouts,
++    )
++    .unwrap()
++    .with_drive_routing(NanoDriveRoutingV1::NeedMemoryGate);
++    let game = create_canonical_new_game_with_nociceptive_candidate(
++        &CanonicalNewGameConfig::phase3(41, 1).unwrap(),
++        &recipe,
++    )
++    .unwrap();
++    (p, game)
++}
++
++#[test]
++fn extracted_encoder_is_bit_identical_with_non_neutral_receptors_and_pressure() {
++    let (p, mut game) = fixture();
++    let record = game
++        .world
++        .organism_registry()
++        .get(OrganismId(1))
++        .unwrap()
++        .clone();
++    let (draft, _) = game
++        .world
++        .perception_frame_draft_with_bindings(
++            record.organism_id(),
++            game.world.tick(),
++            p.sensor_profile(),
++            record.biochemistry().homeostasis,
++        )
++        .unwrap();
++    let frame = draft.finalize(PerceptionContextBlock::empty()).unwrap();
++    let native = NeuralReceptorEffects::from_frame(
++        &record
++            .biochemistry()
++            .neural_receptor_frame(record.phenotype())
++            .unwrap(),
++        &NeuralReceptorPhenotype::compile(&p).unwrap(),
++    )
++    .unwrap();
++    let varied = NeuralReceptorEffects {
++        interoceptive_gain: 1.2,
++        regional_excitability: 0.83,
++        projection_gain: 0.72,
++        local_threshold_shift: -0.13,
++        attention_gain: 1.34,
++        structural_growth_gate: 0.2,
++        sleep_gate: 0.7,
++        consolidation_gate: 0.4,
++        ..native
++    };
++    for effects in [native, varied] {
++        for pressure in [0., 0.1, 0.8, 1.] {
++            let mut h = *frame.homeostasis();
++            h.drives.loneliness = pressure;
++            let changed = PerceptionFrame::new(
++                frame.organism_id(),
++                frame.tick(),
++                frame.sensor_profile(),
++                frame.sensory().clone(),
++                frame.body(),
++                h,
++                frame.candidates().to_vec(),
++                frame.profile_provenance(),
++                frame.grounded_object_slots().to_vec(),
++            )
++            .unwrap();
++            let expected = previous_encoder(&p, &changed, &effects);
++            let observed = encode_cpu_neural_inputs(&p, &changed, &effects).unwrap();
++            assert_eq!(
++                expected.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
++                observed.iter().map(|v| v.to_bits()).collect::<Vec<_>>()
++            );
++        }
++    }
++    let mut wrong_tick = native;
++    wrong_tick.source_tick = Tick::new(1);
++    assert!(encode_cpu_neural_inputs(&p, &frame, &wrong_tick).is_err());
++    let mut invalid = native;
++    invalid.regional_excitability = f32::NAN;
++    assert!(encode_cpu_neural_inputs(&p, &frame, &invalid).is_err());
++}
++
++#[test]
++fn full_frame_encoder_calls_shared_helper_on_canonical_preparation() {
++    let (p, mut game) = fixture();
++    let record = game
++        .world
++        .organism_registry()
++        .get(OrganismId(1))
++        .unwrap()
++        .clone();
++    let (draft, binding) = game
++        .world
++        .perception_frame_draft_with_bindings(
++            record.organism_id(),
++            game.world.tick(),
++            p.sensor_profile(),
++            record.biochemistry().homeostasis,
++        )
++        .unwrap();
++    let identity = draft.profile_provenance().identity();
++    let memory = MemorySidecarState::new_profiled(
++        record.organism_id(),
++        identity,
++        MemoryBankConfig::new(256, 64, 4, 0.72, Confidence::new(0.).unwrap()).unwrap(),
++    )
++    .unwrap();
++    let topology = TopologySidecar::new_profiled(
++        record.organism_id(),
++        identity,
++        TopologicalMapConfig::default(),
++    )
++    .unwrap();
++    let predictor = predictor_for_phenotype(&p).unwrap();
++    let receptors = record
++        .biochemistry()
++        .neural_receptor_frame(record.phenotype())
++        .unwrap();
++    let effects = NeuralReceptorEffects::from_frame(
++        &receptors,
++        &NeuralReceptorPhenotype::compile(&p).unwrap(),
++    )
++    .unwrap();
++    let input = CanonicalPreparationInput {
++        draft,
++        candidate_binding: binding,
++        sequence_id: ExperienceSequenceId(1),
++        homeostasis: record.biochemistry().homeostasis,
++        hysteresis: HysteresisState::default(),
++        policy: attention_selection_policy_for(&p),
++        neural_receptors: receptors,
++        receptor_effects: effects,
++    };
++    let prepared = prepare_canonical_frame(&input, &memory, &topology, &predictor, false)
++        .result
++        .unwrap();
++    let native = encode_cpu_frame(
++        &p,
++        &prepared.frame,
++        &prepared.memory_recall,
++        &effects,
++        vec![true; p.projections().len()],
++        vec![],
++    )
++    .unwrap();
++    let extracted = encode_cpu_neural_inputs(&p, &prepared.frame, &effects).unwrap();
++    assert_eq!(native.encoded_inputs, extracted);
++    assert_eq!(
++        native.encoded_inputs,
++        previous_encoder(&p, &prepared.frame, &effects)
++    );
++    assert_eq!(
++        native.projection_gain.to_bits(),
++        effects.projection_gain.to_bits()
++    );
++    assert_eq!(
++        native.local_threshold_shift.to_bits(),
++        effects.local_threshold_shift.to_bits()
++    );
++}
+diff --git a/operating-point-summary.json b/operating-point-summary.json
+new file mode 100644
+index 0000000..31cbebe
+--- /dev/null
++++ b/operating-point-summary.json
+@@ -0,0 +1,866 @@
++{
++  "base_commit": "27c01b6f258604a307c5c359ad41c7e91ae3ae0b",
++  "source_artifact_sha256": "6f0e21260fec2885bee195cd32b9b7955579fd96e4fd68a49106aa7e27e98a92",
++  "source_asset": [
++    154,
++    227,
++    106,
++    250,
++    73,
++    100,
++    254,
++    235,
++    23,
++    178,
++    13,
++    196,
++    98,
++    3,
++    186,
++    86,
++    248,
++    251,
++    247,
++    25,
++    185,
++    207,
++    218,
++    44,
++    53,
++    209,
++    229,
++    211,
++    207,
++    35,
++    219,
++    66
++  ],
++  "scope": "closed artifact encoder/receptor reconstruction and conditional analytical bounds only; no world intervals or neural replay",
++  "counterfactual_scope": "one raw homeostatic lane substituted in detached validated frame; chemistry-derived receptor effects held at recorded before-state values, not a new biological trajectory",
++  "missing_state": "artifact has no neural initial activations, metabolic loads, somatic weights, enabled-route flags or structural edges; none reconstructed or silently defaulted",
++  "v3_probe_correction": "V3 detached pressure probes changed nominal raw encoder contribution without native interoceptive/regional gains; these are not exact re-encodings",
++  "validated_frames": 384,
++  "new_world_intervals": 0,
++  "neural_replay_runs": 0,
++  "encoder_equivalence_tests_passed": 2,
++  "all11_source_neurons_have_no_recurrent_or_dendritic_inputs": true,
++  "source_node_dynamics": {
++    "activation": "Tanh",
++    "activity_ema_decay": 0.949999988079071,
++    "bias": 0.0,
++    "homeostatic_gain": 1.0,
++    "leak": 0.25,
++    "metabolic_decay": 0.009999999776482582
++  },
++  "lane_inventory": [
++    {
++      "lane": 0,
++      "name": "hunger",
++      "source": 64,
++      "reserve": 496,
++      "reserve_inherited_recurrent": {
++        "alpha": 0.25,
++        "cadence": "Hot10To30Hz",
++        "genetic_weight": 0.06185343116521835,
++        "global_synapse": 287,
++        "route": 1,
++        "somatic_offset": "not recorded; no claim to know actual effective weight",
++        "source": 64
++      }
++    },
++    {
++      "lane": 1,
++      "name": "fatigue",
++      "source": 67,
++      "reserve": 497,
++      "reserve_inherited_recurrent": {
++        "alpha": 0.25,
++        "cadence": "Hot10To30Hz",
++        "genetic_weight": 0.12260507047176361,
++        "global_synapse": 288,
++        "route": 1,
++        "somatic_offset": "not recorded; no claim to know actual effective weight",
++        "source": 64
++      }
++    },
++    {
++      "lane": 2,
++      "name": "fear",
++      "source": 68,
++      "reserve": 498,
++      "reserve_inherited_recurrent": {
++        "alpha": 0.25,
++        "cadence": "Hot10To30Hz",
++        "genetic_weight": 0.21103809773921967,
++        "global_synapse": 289,
++        "route": 1,
++        "somatic_offset": "not recorded; no claim to know actual effective weight",
++        "source": 64
++      }
++    },
++    {
++      "lane": 3,
++      "name": "pain",
++      "source": 65,
++      "reserve": 499,
++      "reserve_inherited_recurrent": {
++        "alpha": 0.25,
++        "cadence": "Hot10To30Hz",
++        "genetic_weight": 0.15965065360069275,
++        "global_synapse": 290,
++        "route": 1,
++        "somatic_offset": "not recorded; no claim to know actual effective weight",
++        "source": 64
++      }
++    },
++    {
++      "lane": 4,
++      "name": "loneliness",
++      "source": 69,
++      "reserve": 500,
++      "reserve_inherited_recurrent": {
++        "alpha": 0.25,
++        "cadence": "Hot10To30Hz",
++        "genetic_weight": 0.06768812239170074,
++        "global_synapse": 291,
++        "route": 1,
++        "somatic_offset": "not recorded; no claim to know actual effective weight",
++        "source": 64
++      }
++    },
++    {
++      "lane": 5,
++      "name": "curiosity",
++      "source": 70,
++      "reserve": 501,
++      "reserve_inherited_recurrent": {
++        "alpha": 0.25,
++        "cadence": "Hot10To30Hz",
++        "genetic_weight": 0.15013307332992554,
++        "global_synapse": 292,
++        "route": 1,
++        "somatic_offset": "not recorded; no claim to know actual effective weight",
++        "source": 64
++      }
++    },
++    {
++      "lane": 6,
++      "name": "brain_atp",
++      "source": 71,
++      "reserve": 502,
++      "reserve_inherited_recurrent": {
++        "alpha": 0.25,
++        "cadence": "Hot10To30Hz",
++        "genetic_weight": 0.09220990538597107,
++        "global_synapse": 293,
++        "route": 1,
++        "somatic_offset": "not recorded; no claim to know actual effective weight",
++        "source": 64
++      }
++    },
++    {
++      "lane": 7,
++      "name": "temperature_stress",
++      "source": 66,
++      "reserve": 503,
++      "reserve_inherited_recurrent": {
++        "alpha": 0.25,
++        "cadence": "Hot10To30Hz",
++        "genetic_weight": 0.17353381216526031,
++        "global_synapse": 294,
++        "route": 1,
++        "somatic_offset": "not recorded; no claim to know actual effective weight",
++        "source": 64
++      }
++    },
++    {
++      "lane": 8,
++      "name": "reproductive_drive",
++      "source": 72,
++      "reserve": 504,
++      "reserve_inherited_recurrent": {
++        "alpha": 0.25,
++        "cadence": "Hot10To30Hz",
++        "genetic_weight": 0.23994800448417664,
++        "global_synapse": 295,
++        "route": 1,
++        "somatic_offset": "not recorded; no claim to know actual effective weight",
++        "source": 64
++      }
++    },
++    {
++      "lane": 9,
++      "name": "extension0",
++      "source": 73,
++      "reserve": 505,
++      "reserve_inherited_recurrent": {
++        "alpha": 0.25,
++        "cadence": "Hot10To30Hz",
++        "genetic_weight": 0.22129657864570618,
++        "global_synapse": 296,
++        "route": 1,
++        "somatic_offset": "not recorded; no claim to know actual effective weight",
++        "source": 64
++      }
++    },
++    {
++      "lane": 10,
++      "name": "extension1",
++      "source": 74,
++      "reserve": 506,
++      "reserve_inherited_recurrent": {
++        "alpha": 0.25,
++        "cadence": "Hot10To30Hz",
++        "genetic_weight": 0.17237797379493713,
++        "global_synapse": 297,
++        "route": 1,
++        "somatic_offset": "not recorded; no claim to know actual effective weight",
++        "source": 64
++      }
++    }
++  ],
++  "pressure_tables": {
++    "toy": [
++      {
++        "raw_pressure": 0.0,
++        "native_encoded": -0.02500000037252903,
++        "source_base_before_nonnegative_metabolic_subtraction": -0.2750000059604645,
++        "positive_first_hop_bound": 0.0
++      },
++      {
++        "raw_pressure": 0.10000000149011612,
++        "native_encoded": 0.0,
++        "source_base_before_nonnegative_metabolic_subtraction": -0.25,
++        "positive_first_hop_bound": 0.0
++      },
++      {
++        "raw_pressure": 0.800000011920929,
++        "native_encoded": 0.17499999701976776,
++        "source_base_before_nonnegative_metabolic_subtraction": -0.07500000298023224,
++        "positive_first_hop_bound": 0.0
++      },
++      {
++        "raw_pressure": 1.0,
++        "native_encoded": 0.22499999403953552,
++        "source_base_before_nonnegative_metabolic_subtraction": -0.025000005960464478,
++        "positive_first_hop_bound": 0.0
++      }
++    ],
++    "peer": [
++      {
++        "raw_pressure": 0.0,
++        "native_encoded": -0.024733399972319603,
++        "source_base_before_nonnegative_metabolic_subtraction": -0.27473339438438416,
++        "positive_first_hop_bound": 0.0
++      },
++      {
++        "raw_pressure": 0.10000000149011612,
++        "native_encoded": 0.0002666004002094269,
++        "source_base_before_nonnegative_metabolic_subtraction": -0.24973340332508087,
++        "positive_first_hop_bound": 0.0
++      },
++      {
++        "raw_pressure": 0.800000011920929,
++        "native_encoded": 0.17526660859584808,
++        "source_base_before_nonnegative_metabolic_subtraction": -0.07473339140415192,
++        "positive_first_hop_bound": 0.0
++      },
++      {
++        "raw_pressure": 1.0,
++        "native_encoded": 0.22526660561561584,
++        "source_base_before_nonnegative_metabolic_subtraction": -0.024733394384384155,
++        "positive_first_hop_bound": 0.0
++      }
++    ]
++  },
++  "contexts": [
++    {
++      "factor": null,
++      "peer_body_fixture": false,
++      "requested_initial_loneliness": 0.10000000149011612,
++      "phenotype_hash": [
++        14322243790955299590,
++        14821385561489304028,
++        1103649265945386601,
++        3685927001501906662
++      ],
++      "source_genome_id": 1452063907989915510,
++      "last_frame_tick": 31,
++      "frame_digest": [
++        16751797935656898538,
++        17139741826488655697,
++        11276544188183369192,
++        13691226629557725942
++      ],
++      "effects": {
++        "attention_gain": 0.5,
++        "consolidation_gate": 0.0,
++        "interoceptive_gain": 0.5,
++        "local_threshold_shift": 0.25,
++        "plasticity_appetitive": 0.0,
++        "plasticity_aversive": 0.0,
++        "projection_gain": 0.5,
++        "regional_excitability": 0.5,
++        "sleep_gate": 0.0,
++        "source_chemistry_version": 3,
++        "source_tick": 31,
++        "structural_growth_gate": 0.0
++      },
++      "global_encoded_offset": -0.02500000037252903,
++      "all_recorded_drives_base_max": -0.08750000596046448,
++      "actual_last_loneliness": 0.028210319578647614,
++      "reader": {
++        "id": 344,
++        "bias": 0.0,
++        "base": -0.2750000059604645,
++        "recurrent_input_count": 0,
++        "dendritic_input_branch_count": 0,
++        "closed_input_equilibrium": -0.430009126663208,
++        "recorded_32_frame_probe_gate_range": [
++          -0.43000859022140503,
++          -0.43000859022140503
++        ],
++        "maximum_equilibrium_error": 5.364418029785156e-07
++      }
++    },
++    {
++      "factor": null,
++      "peer_body_fixture": false,
++      "requested_initial_loneliness": 0.800000011920929,
++      "phenotype_hash": [
++        14322243790955299590,
++        14821385561489304028,
++        1103649265945386601,
++        3685927001501906662
++      ],
++      "source_genome_id": 1452063907989915510,
++      "last_frame_tick": 31,
++      "frame_digest": [
++        10761551439208993838,
++        8651602895634232747,
++        5664543191105252759,
++        18172029642711172690
++      ],
++      "effects": {
++        "attention_gain": 0.5,
++        "consolidation_gate": 0.0,
++        "interoceptive_gain": 0.5,
++        "local_threshold_shift": 0.25,
++        "plasticity_appetitive": 0.0,
++        "plasticity_aversive": 0.0,
++        "projection_gain": 0.5,
++        "regional_excitability": 0.5,
++        "sleep_gate": 0.0,
++        "source_chemistry_version": 3,
++        "source_tick": 31,
++        "structural_growth_gate": 0.0
++      },
++      "global_encoded_offset": -0.02500000037252903,
++      "all_recorded_drives_base_max": -0.07500000298023224,
++      "actual_last_loneliness": 0.2256825566291809,
++      "reader": {
++        "id": 344,
++        "bias": 0.0,
++        "base": -0.2750000059604645,
++        "recurrent_input_count": 0,
++        "dendritic_input_branch_count": 0,
++        "closed_input_equilibrium": -0.430009126663208,
++        "recorded_32_frame_probe_gate_range": [
++          -0.43000859022140503,
++          -0.43000859022140503
++        ],
++        "maximum_equilibrium_error": 5.364418029785156e-07
++      }
++    },
++    {
++      "factor": null,
++      "peer_body_fixture": true,
++      "requested_initial_loneliness": 0.10000000149011612,
++      "phenotype_hash": [
++        14322243790955299590,
++        14821385561489304028,
++        1103649265945386601,
++        3685927001501906662
++      ],
++      "source_genome_id": 1452063907989915510,
++      "last_frame_tick": 31,
++      "frame_digest": [
++        6730094648175010479,
++        4057309618005737735,
++        703002354737150618,
++        12614820141640366472
++      ],
++      "effects": {
++        "attention_gain": 0.5,
++        "consolidation_gate": 0.015995988622307777,
++        "interoceptive_gain": 0.5,
++        "local_threshold_shift": 0.25,
++        "plasticity_appetitive": 0.0,
++        "plasticity_aversive": 0.0,
++        "projection_gain": 0.5,
++        "regional_excitability": 0.5,
++        "sleep_gate": 0.0,
++        "source_chemistry_version": 3,
++        "source_tick": 31,
++        "structural_growth_gate": 0.0
++      },
++      "global_encoded_offset": -0.024733399972319603,
++      "all_recorded_drives_base_max": -0.08723339438438416,
++      "actual_last_loneliness": 0.0,
++      "reader": {
++        "id": 344,
++        "bias": 0.0,
++        "base": -0.27473339438438416,
++        "recurrent_input_count": 0,
++        "dendritic_input_branch_count": 0,
++        "closed_input_equilibrium": -0.4292828440666199,
++        "recorded_32_frame_probe_gate_range": [
++          -0.42928236722946167,
++          -0.42928236722946167
++        ],
++        "maximum_equilibrium_error": 4.76837158203125e-07
++      }
++    },
++    {
++      "factor": null,
++      "peer_body_fixture": true,
++      "requested_initial_loneliness": 0.800000011920929,
++      "phenotype_hash": [
++        14322243790955299590,
++        14821385561489304028,
++        1103649265945386601,
++        3685927001501906662
++      ],
++      "source_genome_id": 1452063907989915510,
++      "last_frame_tick": 31,
++      "frame_digest": [
++        6060871743607132763,
++        1977271697460358830,
++        12876606083703602480,
++        3360721298845261579
++      ],
++      "effects": {
++        "attention_gain": 0.5,
++        "consolidation_gate": 0.015995988622307777,
++        "interoceptive_gain": 0.5,
++        "local_threshold_shift": 0.25,
++        "plasticity_appetitive": 0.0,
++        "plasticity_aversive": 0.0,
++        "projection_gain": 0.5,
++        "regional_excitability": 0.5,
++        "sleep_gate": 0.0,
++        "source_chemistry_version": 3,
++        "source_tick": 31,
++        "structural_growth_gate": 0.0
++      },
++      "global_encoded_offset": -0.024733399972319603,
++      "all_recorded_drives_base_max": -0.07500000298023224,
++      "actual_last_loneliness": 0.09107694029808044,
++      "reader": {
++        "id": 344,
++        "bias": 0.0,
++        "base": -0.27473339438438416,
++        "recurrent_input_count": 0,
++        "dendritic_input_branch_count": 0,
++        "closed_input_equilibrium": -0.4292828440666199,
++        "recorded_32_frame_probe_gate_range": [
++          -0.42928236722946167,
++          -0.42928236722946167
++        ],
++        "maximum_equilibrium_error": 4.76837158203125e-07
++      }
++    },
++    {
++      "factor": "ZeroNeedMemoryGate",
++      "peer_body_fixture": false,
++      "requested_initial_loneliness": 0.10000000149011612,
++      "phenotype_hash": [
++        10134582292771944108,
++        371105542661257961,
++        5534145305591481105,
++        3510158324470094859
++      ],
++      "source_genome_id": 1452063907989915510,
++      "last_frame_tick": 31,
++      "frame_digest": [
++        16758928831952131880,
++        18022328007173407328,
++        404242474282298434,
++        4818098058417780849
++      ],
++      "effects": {
++        "attention_gain": 0.5,
++        "consolidation_gate": 0.0,
++        "interoceptive_gain": 0.5,
++        "local_threshold_shift": 0.25,
++        "plasticity_appetitive": 0.0,
++        "plasticity_aversive": 0.0,
++        "projection_gain": 0.5,
++        "regional_excitability": 0.5,
++        "sleep_gate": 0.0,
++        "source_chemistry_version": 3,
++        "source_tick": 31,
++        "structural_growth_gate": 0.0
++      },
++      "global_encoded_offset": -0.02500000037252903,
++      "all_recorded_drives_base_max": -0.08750000596046448,
++      "actual_last_loneliness": 0.028210319578647614,
++      "reader": {
++        "id": 344,
++        "bias": 0.25,
++        "base": -0.025000005960464478,
++        "recurrent_input_count": 0,
++        "dendritic_input_branch_count": 1,
++        "closed_input_equilibrium": -0.02565242350101471,
++        "recorded_32_frame_probe_gate_range": [
++          -0.02565241977572441,
++          -0.02565241977572441
++        ],
++        "maximum_equilibrium_error": 3.725290298461914e-09
++      }
++    },
++    {
++      "factor": "ZeroNeedMemoryGate",
++      "peer_body_fixture": false,
++      "requested_initial_loneliness": 0.800000011920929,
++      "phenotype_hash": [
++        10134582292771944108,
++        371105542661257961,
++        5534145305591481105,
++        3510158324470094859
++      ],
++      "source_genome_id": 1452063907989915510,
++      "last_frame_tick": 31,
++      "frame_digest": [
++        14244384739916456492,
++        15708087598631802997,
++        3818596866259741508,
++        15192947271638954576
++      ],
++      "effects": {
++        "attention_gain": 0.5,
++        "consolidation_gate": 0.0,
++        "interoceptive_gain": 0.5,
++        "local_threshold_shift": 0.25,
++        "plasticity_appetitive": 0.0,
++        "plasticity_aversive": 0.0,
++        "projection_gain": 0.5,
++        "regional_excitability": 0.5,
++        "sleep_gate": 0.0,
++        "source_chemistry_version": 3,
++        "source_tick": 31,
++        "structural_growth_gate": 0.0
++      },
++      "global_encoded_offset": -0.02500000037252903,
++      "all_recorded_drives_base_max": -0.07500000298023224,
++      "actual_last_loneliness": 0.2256825566291809,
++      "reader": {
++        "id": 344,
++        "bias": 0.25,
++        "base": -0.025000005960464478,
++        "recurrent_input_count": 0,
++        "dendritic_input_branch_count": 1,
++        "closed_input_equilibrium": -0.02565242350101471,
++        "recorded_32_frame_probe_gate_range": [
++          -0.02565241977572441,
++          -0.02565241977572441
++        ],
++        "maximum_equilibrium_error": 3.725290298461914e-09
++      }
++    },
++    {
++      "factor": "ZeroNeedMemoryGate",
++      "peer_body_fixture": true,
++      "requested_initial_loneliness": 0.10000000149011612,
++      "phenotype_hash": [
++        10134582292771944108,
++        371105542661257961,
++        5534145305591481105,
++        3510158324470094859
++      ],
++      "source_genome_id": 1452063907989915510,
++      "last_frame_tick": 31,
++      "frame_digest": [
++        8426998348870013415,
++        5929308022861582482,
++        17364298408173415607,
++        11899848443754383922
++      ],
++      "effects": {
++        "attention_gain": 0.5,
++        "consolidation_gate": 0.015995988622307777,
++        "interoceptive_gain": 0.5,
++        "local_threshold_shift": 0.25,
++        "plasticity_appetitive": 0.0,
++        "plasticity_aversive": 0.0,
++        "projection_gain": 0.5,
++        "regional_excitability": 0.5,
++        "sleep_gate": 0.0,
++        "source_chemistry_version": 3,
++        "source_tick": 31,
++        "structural_growth_gate": 0.0
++      },
++      "global_encoded_offset": -0.024733399972319603,
++      "all_recorded_drives_base_max": -0.08723339438438416,
++      "actual_last_loneliness": 0.0,
++      "reader": {
++        "id": 344,
++        "bias": 0.25,
++        "base": -0.024733394384384155,
++        "recurrent_input_count": 0,
++        "dendritic_input_branch_count": 1,
++        "closed_input_equilibrium": -0.025371670722961426,
++        "recorded_32_frame_probe_gate_range": [
++          -0.025371665135025975,
++          -0.025371665135025975
++        ],
++        "maximum_equilibrium_error": 5.587935451162318e-09
++      }
++    },
++    {
++      "factor": "ZeroNeedMemoryGate",
++      "peer_body_fixture": true,
++      "requested_initial_loneliness": 0.800000011920929,
++      "phenotype_hash": [
++        10134582292771944108,
++        371105542661257961,
++        5534145305591481105,
++        3510158324470094859
++      ],
++      "source_genome_id": 1452063907989915510,
++      "last_frame_tick": 31,
++      "frame_digest": [
++        15373513997988827678,
++        11284024072070982892,
++        15097744289142563237,
++        11086869896716434409
++      ],
++      "effects": {
++        "attention_gain": 0.5,
++        "consolidation_gate": 0.015995988622307777,
++        "interoceptive_gain": 0.5,
++        "local_threshold_shift": 0.25,
++        "plasticity_appetitive": 0.0,
++        "plasticity_aversive": 0.0,
++        "projection_gain": 0.5,
++        "regional_excitability": 0.5,
++        "sleep_gate": 0.0,
++        "source_chemistry_version": 3,
++        "source_tick": 31,
++        "structural_growth_gate": 0.0
++      },
++      "global_encoded_offset": -0.024733399972319603,
++      "all_recorded_drives_base_max": -0.07500000298023224,
++      "actual_last_loneliness": 0.09107694029808044,
++      "reader": {
++        "id": 344,
++        "bias": 0.25,
++        "base": -0.024733394384384155,
++        "recurrent_input_count": 0,
++        "dendritic_input_branch_count": 1,
++        "closed_input_equilibrium": -0.025371670722961426,
++        "recorded_32_frame_probe_gate_range": [
++          -0.025371665135025975,
++          -0.025371665135025975
++        ],
++        "maximum_equilibrium_error": 5.587935451162318e-09
++      }
++    },
++    {
++      "factor": "NeedMemoryGate",
++      "peer_body_fixture": false,
++      "requested_initial_loneliness": 0.10000000149011612,
++      "phenotype_hash": [
++        14982965626741524185,
++        15867917781179225093,
++        11855271576240960682,
++        11838999402718089236
++      ],
++      "source_genome_id": 1452063907989915510,
++      "last_frame_tick": 31,
++      "frame_digest": [
++        16758928831952131880,
++        18022328007173407328,
++        404242474282298434,
++        4818098058417780849
++      ],
++      "effects": {
++        "attention_gain": 0.5,
++        "consolidation_gate": 0.0,
++        "interoceptive_gain": 0.5,
++        "local_threshold_shift": 0.25,
++        "plasticity_appetitive": 0.0,
++        "plasticity_aversive": 0.0,
++        "projection_gain": 0.5,
++        "regional_excitability": 0.5,
++        "sleep_gate": 0.0,
++        "source_chemistry_version": 3,
++        "source_tick": 31,
++        "structural_growth_gate": 0.0
++      },
++      "global_encoded_offset": -0.02500000037252903,
++      "all_recorded_drives_base_max": -0.08750000596046448,
++      "actual_last_loneliness": 0.028210319578647614,
++      "reader": {
++        "id": 344,
++        "bias": 0.25,
++        "base": -0.025000005960464478,
++        "recurrent_input_count": 0,
++        "dendritic_input_branch_count": 1,
++        "closed_input_equilibrium": -0.02565242350101471,
++        "recorded_32_frame_probe_gate_range": [
++          -0.02565241977572441,
++          -0.02565241977572441
++        ],
++        "maximum_equilibrium_error": 3.725290298461914e-09
++      }
++    },
++    {
++      "factor": "NeedMemoryGate",
++      "peer_body_fixture": false,
++      "requested_initial_loneliness": 0.800000011920929,
++      "phenotype_hash": [
++        14982965626741524185,
++        15867917781179225093,
++        11855271576240960682,
++        11838999402718089236
++      ],
++      "source_genome_id": 1452063907989915510,
++      "last_frame_tick": 31,
++      "frame_digest": [
++        14244384739916456492,
++        15708087598631802997,
++        3818596866259741508,
++        15192947271638954576
++      ],
++      "effects": {
++        "attention_gain": 0.5,
++        "consolidation_gate": 0.0,
++        "interoceptive_gain": 0.5,
++        "local_threshold_shift": 0.25,
++        "plasticity_appetitive": 0.0,
++        "plasticity_aversive": 0.0,
++        "projection_gain": 0.5,
++        "regional_excitability": 0.5,
++        "sleep_gate": 0.0,
++        "source_chemistry_version": 3,
++        "source_tick": 31,
++        "structural_growth_gate": 0.0
++      },
++      "global_encoded_offset": -0.02500000037252903,
++      "all_recorded_drives_base_max": -0.07500000298023224,
++      "actual_last_loneliness": 0.2256825566291809,
++      "reader": {
++        "id": 344,
++        "bias": 0.25,
++        "base": -0.025000005960464478,
++        "recurrent_input_count": 0,
++        "dendritic_input_branch_count": 1,
++        "closed_input_equilibrium": -0.02565242350101471,
++        "recorded_32_frame_probe_gate_range": [
++          -0.02565241977572441,
++          -0.02565241977572441
++        ],
++        "maximum_equilibrium_error": 3.725290298461914e-09
++      }
++    },
++    {
++      "factor": "NeedMemoryGate",
++      "peer_body_fixture": true,
++      "requested_initial_loneliness": 0.10000000149011612,
++      "phenotype_hash": [
++        14982965626741524185,
++        15867917781179225093,
++        11855271576240960682,
++        11838999402718089236
++      ],
++      "source_genome_id": 1452063907989915510,
++      "last_frame_tick": 31,
++      "frame_digest": [
++        8426998348870013415,
++        5929308022861582482,
++        17364298408173415607,
++        11899848443754383922
++      ],
++      "effects": {
++        "attention_gain": 0.5,
++        "consolidation_gate": 0.015995988622307777,
++        "interoceptive_gain": 0.5,
++        "local_threshold_shift": 0.25,
++        "plasticity_appetitive": 0.0,
++        "plasticity_aversive": 0.0,
++        "projection_gain": 0.5,
++        "regional_excitability": 0.5,
++        "sleep_gate": 0.0,
++        "source_chemistry_version": 3,
++        "source_tick": 31,
++        "structural_growth_gate": 0.0
++      },
++      "global_encoded_offset": -0.024733399972319603,
++      "all_recorded_drives_base_max": -0.08723339438438416,
++      "actual_last_loneliness": 0.0,
++      "reader": {
++        "id": 344,
++        "bias": 0.25,
++        "base": -0.024733394384384155,
++        "recurrent_input_count": 0,
++        "dendritic_input_branch_count": 1,
++        "closed_input_equilibrium": -0.025371670722961426,
++        "recorded_32_frame_probe_gate_range": [
++          -0.025371665135025975,
++          -0.025371665135025975
++        ],
++        "maximum_equilibrium_error": 5.587935451162318e-09
++      }
++    },
++    {
++      "factor": "NeedMemoryGate",
++      "peer_body_fixture": true,
++      "requested_initial_loneliness": 0.800000011920929,
++      "phenotype_hash": [
++        14982965626741524185,
++        15867917781179225093,
++        11855271576240960682,
++        11838999402718089236
++      ],
++      "source_genome_id": 1452063907989915510,
++      "last_frame_tick": 31,
++      "frame_digest": [
++        15373513997988827678,
++        11284024072070982892,
++        15097744289142563237,
++        11086869896716434409
++      ],
++      "effects": {
++        "attention_gain": 0.5,
++        "consolidation_gate": 0.015995988622307777,
++        "interoceptive_gain": 0.5,
++        "local_threshold_shift": 0.25,
++        "plasticity_appetitive": 0.0,
++        "plasticity_aversive": 0.0,
++        "projection_gain": 0.5,
++        "regional_excitability": 0.5,
++        "sleep_gate": 0.0,
++        "source_chemistry_version": 3,
++        "source_tick": 31,
++        "structural_growth_gate": 0.0
++      },
++      "global_encoded_offset": -0.024733399972319603,
++      "all_recorded_drives_base_max": -0.07500000298023224,
++      "actual_last_loneliness": 0.09107694029808044,
++      "reader": {
++        "id": 344,
++        "bias": 0.25,
++        "base": -0.024733394384384155,
++        "recurrent_input_count": 0,
++        "dendritic_input_branch_count": 1,
++        "closed_input_equilibrium": -0.025371670722961426,
++        "recorded_32_frame_probe_gate_range": [
++          -0.025371665135025975,
++          -0.025371665135025975
++        ],
++        "maximum_equilibrium_error": 5.587935451162318e-09
++      }
++    }
++  ]
++}

@@ -1,0 +1,22 @@
+{
+  "QUALIFICATION.json": "4a5b3d066c7cc754ad71e7f3bba618e2be20c0b1ee2ed5e728532c6b0c5bf190",
+  "qualified-retained-only/source/crates/alife_game_app/src/gpu_live_runtime/arousal_epoch_runtime_tests.rs": "9ef4f65c2787313ab066d08abb492ae2395052e071d5d037e0c15c774d7d9368",
+  "qualified-retained-only/source/crates/alife_game_app/src/gpu_live_runtime/restore_reconciliation.rs": "d155f9ce2a8b46b42b1b4dc689b42f6b49983b12721e5950a91e3c65040c011e",
+  "qualified-retained-only/source/crates/alife_game_app/src/gpu_live_runtime.rs": "9da5a583746ee1c64d28527e044c6980ae80395be57afaee3f07657c0127e3a6",
+  "qualified-retained-only/source.patch": "39a9f409c8dc63623bc269220baa0a9e5f9658173b996819d7d922a3c07cdfc4",
+  "qualified-retained-only/tree.txt": "ad7f137309bcefb1481847de7e9095bcb5f37743fedfeacfe82c48c899d9f6df",
+  "retained-only-v13r2-actual-worker.log": "620fd181c4cee0303baa2622da814574caaf153c494008a798900077251bcb28",
+  "retained-only-v13r2-clippy.log": "cf194de9f27a73aa34496e3496947be171e4ef9abe12d88476e571ecda4af43a",
+  "retained-only-v13r2-fmt.log": "966e97e61b83663b14bfa5d30e25dd97040b625b86310a8c8243299f24297689",
+  "retained-only-v13r2-host.log": "b4223ef2ec994c5859358825e8df2d3c97b40913ae18fa1af0f428879c1a77c4",
+  "retained-only-v13r2-main.patch": "9daefccfab08e4b0762100d400f09997abf723515c81046314acc7d581068d90",
+  "retained-only-v13r2-plan.md": "3615e3a229fc97a029d4f550469e5d21517c901ac4c250f61c76e6711a1536d0",
+  "retained-only-v13r2-results.md": "0336e7c93b1f7a9da96e1e428b3c15cabfc7e9c75d1c717149db7b8d6f51a16b",
+  "retained-restore-v13-host.log": "06f19156710b441bcf29ce444e8ce3fb67ba2a52c2f5e5041d89587f3b666962",
+  "retained-restore-v13-worker-plan.md": "9bc2c89dd3c0e1dbaf52fab0c22d709e034eb46e12f8f786140e9a8cbc10a215",
+  "unqualified-broad-route/source/crates/alife_game_app/src/gpu_live_runtime/arousal_epoch_runtime_tests.rs": "29464a236d22e2b0feb02adc242353180b6c8bcd06033efd9663fb7d0e84d7f0",
+  "unqualified-broad-route/source/crates/alife_game_app/src/gpu_live_runtime/restore_reconciliation.rs": "18bf5df921a0f869ae720d9ba75933da2d29e0c2bfa1401a207810b42c3b9093",
+  "unqualified-broad-route/source/crates/alife_game_app/src/gpu_live_runtime.rs": "8982955e133e6fc324d414881ea304e6470ad1cadadc127748859edecbc2a011",
+  "unqualified-broad-route/source.patch": "cf819d377f8ce93e994f2652c17a4945c6ae3f0812cf1e414c9cc092d04aabab",
+  "unqualified-broad-route/tree.txt": "85b3dc14a52843e0d5718ea35b6f4e82451f2d687ac884a7cbc9d5604c21b023"
+}

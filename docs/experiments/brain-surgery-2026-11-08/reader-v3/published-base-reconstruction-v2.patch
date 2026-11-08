@@ -1,0 +1,2622 @@
+diff --git a/crates/alife_training/Cargo.toml b/crates/alife_training/Cargo.toml
+index 278d2357314b6541fe2afea870a01d11e8614a24..60d999434a8e0988221bae3d303ba005f9aed109 100644
+--- a/crates/alife_training/Cargo.toml
++++ b/crates/alife_training/Cargo.toml
+@@ -56,3 +56,7 @@ required-features = ["cpu-backend"]
+ [[example]]
+ name = "probe_grip_reader"
+ required-features = ["cpu-backend"]
++
++[[example]]
++name = "probe_grip_shadow"
++required-features = ["cpu-backend"]
+diff --git a/crates/alife_training/examples/probe_grip_reader.rs b/crates/alife_training/examples/probe_grip_reader.rs
+index 976436fe5d2584bef1778b4d74b721267e5106e3..11f35dcd9229ecfc154bb4e943da0b4093e263ae 100644
+--- a/crates/alife_training/examples/probe_grip_reader.rs
++++ b/crates/alife_training/examples/probe_grip_reader.rs
+@@ -5,6 +5,9 @@
+ #[allow(dead_code)]
+ mod care_candidate;
+ #[cfg(test)]
++#[path = "support/world_swap_legacy_v12.rs"]
++mod world_swap_legacy_v12;
++#[cfg(test)]
+ use alife_core::*;
+ #[cfg(test)]
+ use alife_runtime::canonical_preparation::foundation_construction_development;
+@@ -15,6 +18,14 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+ /// Fresh inherited genes only. No acquired life, optimizer or private file input.
+ #[cfg(test)]
+ fn candidate(seed: u64, grip_reader: bool) -> Result<(BrainPhenotype, FoundationWeightAsset)> {
++    candidate_gain(seed, if grip_reader { 4. } else { 0. })
++}
++
++#[cfg(test)]
++fn candidate_gain(
++    seed: u64,
++    per_gene_gain: f32,
++) -> Result<(BrainPhenotype, FoundationWeightAsset)> {
+     let mut config = CanonicalNewGameConfig::phase3(seed, 1)?;
+     config.brain_class = BrainScaleTier::Standard2048;
+     let builtin = FoundationWeightAsset::builtin_n2048_v1(config.sensor_profile)?;
+@@ -67,8 +78,8 @@ fn candidate(seed: u64, grip_reader: bool) -> Result<(BrainPhenotype, Foundation
+             (CandidateActionFamily::Approach | CandidateActionFamily::Contact, 26) => -32.,
+             (CandidateActionFamily::Avoid, 25) => 16.,
+             (CandidateActionFamily::Avoid, 26) => 128.,
+-            (CandidateActionFamily::Contact, 53) if grip_reader => 32.,
+-            (CandidateActionFamily::Other, 53) if grip_reader => -32.,
++            (CandidateActionFamily::Contact, 53) => 8. * per_gene_gain,
++            (CandidateActionFamily::Other, 53) if per_gene_gain != 0. => -8. * per_gene_gain,
+             _ => 0.,
+         };
+         *weight = total / counts[&(c.family().raw(), c.input_lane())] as f32;
+@@ -247,4 +258,522 @@ mod tests {
+         let control = trainer.probe_replay_gradients(&q, &[vec![0., 1.]]).unwrap();
+         assert!(ids.iter().all(|id| control.gradients[*id as usize] == 0.));
+     }
++
++    // Constructed causal fixtures: task priors and projected memories are supplied,
++    // not learned. No autonomous-life claim or persistent brain input is made.
++    #[test]
++    fn matched_reader_utility_counterexamples_and_controls() {
++        use alife_core::grip_research::GripOperationV1;
++        let (off, off_asset) = candidate(2026110901, false).unwrap();
++        let (on, on_asset) = candidate(2026110901, true).unwrap();
++        assert_eq!(off.projections(), on.projections());
++        assert_eq!(off.neuron_dynamics(), on.neuron_dynamics());
++        assert_eq!(off.plasticity_receptors(), on.plasticity_receptors());
++        let trainers = [(&off, off_asset), (&on, on_asset)].map(|(p, a)| {
++            CpuFoundationTrainer::new(
++                p.clone(),
++                a,
++                StageTrainableMask::recurrent_only(p).unwrap(),
++                AdamWConfig::default(),
++            )
++            .unwrap()
++        });
++        // name, operation, lane53, target pain delta, held, operation task prior,
++        // ordinary-Other task prior. Task labels are observer-only, not new policy.
++        let cases = [
++            (
++                "aversive_ingestion_pickup",
++                GripOperationV1::Close,
++                -0.25,
++                0.,
++                false,
++                1.,
++                0.,
++            ),
++            (
++                "safe_food_pickup",
++                GripOperationV1::Close,
++                0.25,
++                0.,
++                false,
++                1.,
++                0.,
++            ),
++            (
++                "useful_harmless_aversive_object_pickup",
++                GripOperationV1::Close,
++                -0.25,
++                0.,
++                false,
++                1.,
++                0.,
++            ),
++            (
++                "useful_aversive_object_transport_hold",
++                GripOperationV1::Release,
++                -0.25,
++                0.,
++                true,
++                0.,
++                1.,
++            ),
++            (
++                "aversive_object_release_at_destination",
++                GripOperationV1::Release,
++                -0.25,
++                0.,
++                true,
++                1.,
++                0.,
++            ),
++            (
++                "safe_food_release_at_destination",
++                GripOperationV1::Release,
++                0.25,
++                0.,
++                true,
++                1.,
++                0.,
++            ),
++            (
++                "other_target_no_ingestion_evidence",
++                GripOperationV1::Close,
++                0.,
++                0.,
++                false,
++                1.,
++                0.,
++            ),
++            (
++                "unrelated_pain_no_target_evidence",
++                GripOperationV1::Close,
++                0.,
++                0.,
++                false,
++                1.,
++                0.,
++            ),
++            (
++                "empty_memory",
++                GripOperationV1::Close,
++                0.,
++                0.,
++                false,
++                1.,
++                0.,
++            ),
++            (
++                "unknown_memory_zero_projection",
++                GripOperationV1::Release,
++                0.,
++                0.,
++                true,
++                1.,
++                0.,
++            ),
++            (
++                "own_family_only_negative",
++                GripOperationV1::Close,
++                0.,
++                0.,
++                false,
++                1.,
++                0.,
++            ),
++            (
++                "target_pain_existing_route",
++                GripOperationV1::Close,
++                0.,
++                0.125,
++                false,
++                1.,
++                0.,
++            ),
++        ];
++        let mut rows = Vec::new();
++        for (name, operation, port, target_pain, held, prior, other_prior) in cases {
++            for (arm, trainer) in trainers.iter().enumerate() {
++                let p = trainer.phenotype();
++                let family = if operation == GripOperationV1::Close {
++                    CandidateActionFamily::Contact
++                } else {
++                    CandidateActionFamily::Other
++                };
++                let mut q = sequence(
++                    p,
++                    &[
++                        (family, -0.25, port),
++                        (CandidateActionFamily::Other, -0.25, 0.),
++                    ],
++                );
++                q.ticks[0].candidates[0].innate_bias = prior;
++                q.ticks[0].candidates[1].innate_bias = other_prior;
++                q.ticks[0].candidates[0].decoder_inputs[26] = target_pain;
++                // Independent bodily signal is common to both arms and does not
++                // masquerade as a target consequence or operation recall.
++                if name == "unrelated_pain_no_target_evidence" {
++                    q.ticks[0].encoded_inputs[0] = 0.125;
++                }
++                let before = serde_json::to_vec(&trainer.checkpoint()).unwrap();
++                let scores = trainer.evaluate_replay(&q).unwrap().candidate_logits[0].clone();
++                assert_eq!(serde_json::to_vec(&trainer.checkpoint()).unwrap(), before);
++                let port_component = if arm == 0 {
++                    0.
++                } else if operation == GripOperationV1::Close {
++                    32. * port
++                } else {
++                    -32. * port
++                };
++                let target_component = if operation == GripOperationV1::Close {
++                    -32. * target_pain
++                } else {
++                    0.
++                };
++                let memory_component = (port_component + target_component).clamp(-12., 12.);
++                assert!((scores[0] - (prior + memory_component)).abs() < 0.00001);
++                assert_eq!(scores[1], other_prior);
++                let selected_operation = scores[0] > scores[1]; // fixture argmax, not production stochastic sampling
++                let organism = OrganismId(7);
++                let mut world = HeadlessScenarioBuilder::new(0xfeed_2400)
++                    .agent("fixture", organism, Vec3f::ZERO)
++                    .food("object", Vec3f::new(0.5, 0., 0.), 0.4)
++                    .food("destination", Vec3f::new(4., 0., 0.), 0.4)
++                    .build()
++                    .unwrap();
++                let target = world.entity_id("object").unwrap();
++                let execute = |world: &mut HeadlessWorld, op: GripOperationV1| {
++                    let draft = world
++                        .perception_frame_draft(
++                            organism,
++                            world.tick(),
++                            SensorProfile::GroundedGripObjectSlotsV1,
++                            HomeostaticSnapshot::baseline(world.tick()),
++                        )
++                        .unwrap();
++                    let observation = world.observe_research_grip(&draft, target).unwrap();
++                    let command = ActionCommand::structured(
++                        organism,
++                        op.action_id(),
++                        ActionKind::Interact,
++                        ActionTarget::new(Some(target), None),
++                        Intensity::new(1.).unwrap(),
++                        DurationTicks::new(1),
++                        Confidence::new(1.).unwrap(),
++                        0,
++                        None,
++                        None,
++                        None,
++                    )
++                    .unwrap();
++                    world
++                        .execute_research_grip(&draft, &observation, op, command)
++                        .unwrap()
++                };
++                if held {
++                    assert!(
++                        execute(&mut world, GripOperationV1::Close)
++                            .execution
++                            .succeeded
++                    );
++                }
++                let origin_x = world.entity(target).unwrap().position.x;
++                let movement = ActionCommand::structured(
++                    organism,
++                    ActionKind::Move.canonical_id(),
++                    ActionKind::Move,
++                    ActionTarget::new(None, Some(Vec3f::new(3., 0., 0.))),
++                    Intensity::new(1.).unwrap(),
++                    DurationTicks::new(1),
++                    Confidence::new(1.).unwrap(),
++                    0,
++                    None,
++                    None,
++                    None,
++                )
++                .unwrap();
++                if name.ends_with("at_destination") {
++                    for _ in 0..2 {
++                        let moved = world.apply_command(&movement).unwrap();
++                        assert!(moved.execution.succeeded);
++                        world.try_advance_tick().unwrap();
++                    }
++                    assert!(world.entity(target).unwrap().position.x > origin_x);
++                }
++                let held_before = world.entity(target).unwrap().carried_by.is_some();
++                let succeeded = if selected_operation {
++                    execute(&mut world, operation).execution.succeeded
++                } else {
++                    world
++                        .apply_command(&HeadlessWorldCommand::idle(organism).unwrap())
++                        .unwrap()
++                        .execution
++                        .succeeded
++                };
++                if name == "useful_aversive_object_transport_hold" {
++                    for _ in 0..2 {
++                        let moved = world.apply_command(&movement).unwrap();
++                        assert!(moved.execution.succeeded);
++                        world.try_advance_tick().unwrap();
++                    }
++                    assert_eq!(
++                        world.entity(target).unwrap().position.x > origin_x,
++                        arm == 0
++                    );
++                }
++                let held_after = world.entity(target).unwrap().carried_by.is_some();
++                assert!(succeeded);
++                assert_eq!(held_before, held);
++                assert_eq!(
++                    held_after,
++                    if selected_operation {
++                        operation == GripOperationV1::Close
++                    } else {
++                        held
++                    }
++                );
++                rows.push(serde_json::json!({"case":name,"arm":if arm==0 {"off"} else {"on"},"action_id":operation.action_id().0,"lane53":port,"own_family_lane32":-0.25,"own_family_contribution":0.,"target_lane26":target_pain,"target_contribution":target_component,"operation_contribution":port_component,"memory_clamped":memory_component,"task_prior":prior,"ordinary_other_prior":other_prior,"logits":scores,"fixture_argmax":if selected_operation {"operation"} else {"ordinary_other_idle"},"held_before":held_before,"held_after":held_after,"reachable":true,"physical_success":succeeded,"origin_x":origin_x,"final_x":world.entity(target).unwrap().position.x,"consumed":world.entity(target).unwrap().consumed}));
++            }
++        }
++        println!(
++            "UTILITY_FIXTURE_JSON={}",
++            serde_json::to_string(&rows).unwrap()
++        );
++        assert_eq!(rows.len(), 24);
++        // Explicitly preserve the negative result: aversive valence suppresses a
++        // useful pickup and premature release defeats holding during transport.
++        assert_eq!(rows[4]["held_after"], true);
++        assert_eq!(rows[5]["held_after"], false);
++        assert_eq!(rows[6]["held_after"], true);
++        assert_eq!(rows[7]["held_after"], false);
++        assert_eq!(rows[10]["held_after"], false);
++        assert_eq!(rows[11]["held_after"], true);
++    }
++
++    #[test]
++    fn reconstructed_v12_identity_and_all_coordinate_changes_are_accounted_for() {
++        let inherited = world_swap_legacy_v12::construct().unwrap();
++        let hex = |d: Blake3Digest| {
++            d.bytes()
++                .iter()
++                .map(|b| format!("{b:02x}"))
++                .collect::<String>()
++        };
++        use sha2::{Digest, Sha256};
++        let inherited_sha256 = format!(
++            "{:x}",
++            Sha256::digest(inherited.encode_canonical().unwrap())
++        );
++        assert_eq!(
++            inherited_sha256,
++            "6edcd6dd1dc5bfedf8f7b73bf605bb480e36c0ba022a316840a6f0bd87629632"
++        );
++        let (_, old, _) = care_candidate::source_memory_gain(2026110901).unwrap();
++        let (off, off_asset) = candidate(2026110901, false).unwrap();
++        let (on, on_asset) = candidate(2026110901, true).unwrap();
++        assert_eq!(inherited.weights().len(), off_asset.weights().len());
++        assert!(inherited
++            .weights()
++            .iter()
++            .zip(off_asset.weights())
++            .all(|(a, b)| a.to_bits() == b.to_bits()));
++        let mut retargeted = Vec::new();
++        for (index, (a, b)) in old.synapses().iter().zip(off.synapses()).enumerate() {
++            assert_eq!(a.source(), b.source());
++            assert_eq!(a.target(), b.target());
++            assert_eq!(a.route_index(), b.route_index());
++            assert_eq!(a.alpha(), b.alpha());
++            assert_eq!(a.receptor_index(), b.receptor_index());
++            if a.kind() != b.kind() {
++                let (CompiledSynapseKind::Decoder(a), CompiledSynapseKind::Decoder(b)) =
++                    (a.kind(), b.kind())
++                else {
++                    panic!("nondecoder change")
++                };
++                assert_eq!(a.head(), DecoderHeadKind::MemoryContext);
++                assert_eq!(a.head(), b.head());
++                assert_eq!(a.family(), b.family());
++                assert_eq!(a.motor_index(), b.motor_index());
++                assert_eq!(a.input_lane(), 31);
++                assert_eq!(b.input_lane(), 53);
++                assert_eq!(off_asset.weights()[index], 0.);
++                retargeted.push(index);
++            }
++        }
++        assert_eq!(retargeted.len(), 64);
++        assert!(off.cognitive_channel_plan().is_none());
++        assert_eq!(off.projections(), on.projections());
++        // Family/head/row endpoint identity and every non-weight synapse field
++        // are identical between the two new arms.
++        for (a, b) in off.synapses().iter().zip(on.synapses()) {
++            assert_eq!(a.source(), b.source());
++            assert_eq!(a.target(), b.target());
++            assert_eq!(a.kind(), b.kind());
++            assert_eq!(a.route_index(), b.route_index());
++            assert_eq!(a.alpha(), b.alpha());
++            assert_eq!(a.receptor_index(), b.receptor_index());
++        }
++        println!(
++            "IDENTITY_FIXTURE_JSON={}",
++            serde_json::json!({"legacy_v12_sha256":inherited_sha256,"legacy_v12_blake3_digest":hex(inherited.digest()),"off_digest":hex(off_asset.digest()),"on_digest":hex(on_asset.digest()),"legacy_to_off_weight_bit_changes":0,"legacy_to_off_coordinate_changes":retargeted,"off_to_on_weight_changes":16,"synapses":32768,"cognitive_decoder":false})
++        );
++    }
++
++    #[test]
++    fn detached_gain_ladder_exact_v1_contexts() {
++        let inputs: Vec<serde_json::Value> =
++            serde_json::from_str(include_str!("support/grip_utility_contexts_v1.json")).unwrap();
++        assert_eq!(inputs.len(), 24);
++        let (baseline, baseline_asset) = candidate_gain(2026110901, 0.).unwrap();
++        let mut output = Vec::new();
++        for gain in [0., 1. / 16., 1. / 4., 1., 4.] {
++            let (p, asset) = candidate_gain(2026110901, gain).unwrap();
++            let mut changes = 0;
++            for ((base, new), synapse) in baseline_asset
++                .weights()
++                .iter()
++                .zip(asset.weights())
++                .zip(p.synapses())
++            {
++                if base.to_bits() != new.to_bits() {
++                    let CompiledSynapseKind::Decoder(c) = synapse.kind() else {
++                        panic!("unexpected change")
++                    };
++                    assert_eq!(c.head(), DecoderHeadKind::MemoryContext);
++                    assert_eq!(c.input_lane(), 53);
++                    assert_eq!(*base, 0.);
++                    assert_eq!(
++                        *new,
++                        if c.family() == CandidateActionFamily::Contact {
++                            gain
++                        } else {
++                            assert_eq!(c.family(), CandidateActionFamily::Other);
++                            -gain
++                        }
++                    );
++                    changes += 1;
++                }
++            }
++            assert_eq!(changes, if gain == 0. { 0 } else { 16 });
++            assert_eq!(p.projections(), baseline.projections());
++            assert_eq!(p.neuron_dynamics(), baseline.neuron_dynamics());
++            for (a, b) in p.synapses().iter().zip(baseline.synapses()) {
++                assert_eq!(a.kind(), b.kind());
++                assert_eq!(a.source(), b.source());
++                assert_eq!(a.target(), b.target());
++            }
++            let asset_hex = asset
++                .digest()
++                .bytes()
++                .iter()
++                .map(|b| format!("{b:02x}"))
++                .collect::<String>();
++            let weights = asset.weights().to_vec();
++            let trainer = CpuFoundationTrainer::new(
++                p.clone(),
++                asset,
++                StageTrainableMask::recurrent_only(&p).unwrap(),
++                AdamWConfig::default(),
++            )
++            .unwrap();
++            let before = serde_json::to_vec(&trainer.checkpoint()).unwrap();
++            for (row_index, input) in inputs.iter().enumerate() {
++                let number = |key: &str| input[key].as_f64().unwrap() as f32;
++                let close = input["action_id"] == 2201;
++                let family = if close {
++                    CandidateActionFamily::Contact
++                } else {
++                    CandidateActionFamily::Other
++                };
++                let port = number("lane53");
++                let mut q = sequence(
++                    &p,
++                    &[
++                        (family, number("own_family_lane32"), port),
++                        (CandidateActionFamily::Other, -0.25, 0.),
++                    ],
++                );
++                q.ticks[0].candidates[0].decoder_inputs[26] = number("target_lane26");
++                q.ticks[0].candidates[0].innate_bias = number("task_prior");
++                q.ticks[0].candidates[1].innate_bias = number("ordinary_other_prior");
++                if input["case"] == "unrelated_pain_no_target_evidence" {
++                    q.ticks[0].encoded_inputs[0] = 0.125;
++                }
++                let evaluation = trainer.evaluate_replay(&q).unwrap();
++                let logits = &evaluation.candidate_logits[0];
++                let mut memory_raw = 0.;
++                let mut port_raw = 0.;
++                let mut coefficient = 0.;
++                let mut own_family = 0.;
++                let mut target = 0.;
++                for (synapse, weight) in p.synapses().iter().zip(&weights) {
++                    if let CompiledSynapseKind::Decoder(c) = synapse.kind() {
++                        if c.head() == DecoderHeadKind::MemoryContext && c.family() == family {
++                            let value = q.ticks[0].candidates[0].decoder_inputs
++                                [c.input_lane() as usize]
++                                * weight;
++                            memory_raw += value;
++                            if c.input_lane() == 53 {
++                                port_raw += value;
++                                coefficient += weight;
++                            }
++                            if c.input_lane() == 32 {
++                                own_family += value;
++                            }
++                            if c.input_lane() == 26 {
++                                target += value;
++                            }
++                        }
++                    }
++                }
++                let memory_clamped = memory_raw.clamp(-12., 12.);
++                let measured_memory = logits[0] - number("task_prior");
++                assert!((measured_memory - memory_clamped).abs() < 0.00001);
++                assert_eq!(logits[1], number("ordinary_other_prior"));
++                assert!((port_raw - coefficient * port).abs() < 0.00001);
++                let selected = if logits[0] > logits[1] {
++                    "operation"
++                } else {
++                    "ordinary_other_idle"
++                };
++                if gain == 0. || gain == 4. {
++                    let matching = &inputs[(row_index / 2) * 2 + usize::from(gain == 4.)];
++                    for j in 0..2 {
++                        assert_eq!(logits[j], matching["logits"][j].as_f64().unwrap() as f32);
++                    }
++                    assert_eq!(selected, matching["fixture_argmax"]);
++                }
++                output.push(serde_json::json!({"source_row":row_index,"original_arm":input["arm"],"case":input["case"],"per_gene_gain":gain,"action_id":input["action_id"],"input53":port,"summed_operation_coefficient":coefficient,"operation_component":port_raw,"own_family_component":own_family,"target_component":target,"memory_raw":memory_raw,"memory_clamped":memory_clamped,"measured_memory_component":measured_memory,"cap_active":memory_raw!=memory_clamped,"logits":logits,"fixture_argmax":selected,"task_prior":input["task_prior"],"ordinary_other_prior":input["ordinary_other_prior"],"held_before":input["held_before"],"physical_dispatch":false,"asset_blake3":asset_hex}));
++            }
++            assert_eq!(serde_json::to_vec(&trainer.checkpoint()).unwrap(), before);
++        }
++        println!(
++            "GAIN_LADDER_JSON={}",
++            serde_json::to_string(&output).unwrap()
++        );
++        assert_eq!(output.len(), 120);
++    }
++    #[test]
++    fn detached_gain_ladder_memory_contract_bounds() {
++        let mut context = CandidateMemoryContextV1 {
++            candidate_index: 0,
++            target_latent: [0.; 8],
++            family_value: [0.; 4],
++            target_confidence: Confidence::new(0.).unwrap(),
++            family_confidence: Confidence::new(1.).unwrap(),
++            target_source_count: 0,
++            family_source_count: 1,
++            best_target_source: None,
++            best_family_source: Some(MemoryId(1)),
++        };
++        for value in [-1., 0., 1.] {
++            context.family_value[0] = value;
++            assert!(context.validate_contract().is_ok());
++        }
++        for value in [-1.0001, 1.0001, f32::INFINITY, f32::NAN] {
++            context.family_value[0] = value;
++            assert!(context.validate_contract().is_err());
++        }
++        assert!(Confidence::new(1.0001).is_err());
++        assert!(Confidence::new(-0.0001).is_err());
++    }
+ }
+diff --git a/crates/alife_training/examples/probe_grip_shadow.rs b/crates/alife_training/examples/probe_grip_shadow.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..1310a40ff9e521b39d3745bc997ceccef495f563
+--- /dev/null
++++ b/crates/alife_training/examples/probe_grip_shadow.rs
+@@ -0,0 +1,908 @@
++//! Fresh bounded passive shadow score probe. No shadow action is applied.
++//! One fixed OFF grip brain, two fresh sampling identities, one merged world.
++#![allow(dead_code)]
++use alife_core::*;
++use alife_runtime::canonical_preparation::foundation_construction_development;
++use alife_training::{cpu::*, AdamWConfig, StageTrainableMask, TrainingSequence};
++use alife_world::*;
++use serde::Serialize;
++use sha2::{Digest, Sha256};
++#[path = "support/care_candidate.rs"]
++mod care_candidate;
++type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
++const PREPARATION_TICKS: u16 = 600;
++const PRIMARY_TICKS: u16 = 256;
++const TEMPERATURE: f32 = 1.0;
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++struct Scene {
++    seed: u64,
++    harmful_slot: usize,
++    appearance: [usize; 2],
++    spawn_order: [usize; 2],
++}
++const SCENES: [Scene; 2] = [
++    Scene {
++        seed: 2026112401,
++        harmful_slot: 0,
++        appearance: [0, 1],
++        spawn_order: [0, 1],
++    },
++    Scene {
++        seed: 2026112402,
++        harmful_slot: 1,
++        appearance: [0, 1],
++        spawn_order: [0, 1],
++    },
++];
++fn bytes<T: Serialize>(x: &T) -> Result<Vec<u8>> {
++    Ok(serde_json::to_vec(x)?)
++}
++fn digest(b: &[u8]) -> String {
++    format!("{:x}", Sha256::digest(b))
++}
++#[derive(Debug)]
++struct Gate(&'static str);
++impl std::fmt::Display for Gate {
++    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
++        write!(f, "{}", self.0)
++    }
++}
++impl std::error::Error for Gate {}
++fn require(ok: bool, code: &'static str) -> Result<()> {
++    if ok {
++        Ok(())
++    } else {
++        Err(Box::new(Gate(code)))
++    }
++}
++struct Life {
++    host: CpuCanonicalHost,
++    trainer: CpuFoundationTrainer,
++    own: OrganismId,
++    targets: [WorldEntityId; 2],
++    initial_body_biology: Vec<u8>,
++    initial_scene: Vec<u8>,
++    sampling_seed: u32,
++    shadows: Vec<(f32, CpuFoundationTrainer)>,
++}
++fn body_biology(world: &HeadlessWorld, own: OrganismId) -> Result<Vec<u8>> {
++    let r = world
++        .organism_registry()
++        .get(own)
++        .ok_or("missing_organism")?;
++    let p = r.phenotype();
++    bytes(&(
++        r.organism_id(),
++        r.birth_tick(),
++        &p.body,
++        &p.chemistry,
++        &p.development,
++        &p.reproduction,
++        &p.predisposition,
++        r.embodiment(),
++        r.biochemistry(),
++        r.lifecycle(),
++    ))
++}
++fn preparation_guard(alive: bool, health: f32, injury: f32) -> bool {
++    alive && health.is_finite() && injury.is_finite() && health >= 0.70 && injury <= 0.25
++}
++fn preparation_world_guard(world: &HeadlessWorld, own: OrganismId) -> Result<()> {
++    let r = world
++        .organism_registry()
++        .get(own)
++        .ok_or("preparation organism")?;
++    require(
++        preparation_guard(
++            r.lifecycle().is_alive(),
++            r.biochemistry().body.health,
++            r.biochemistry().body.injury,
++        ),
++        "preparation safeguard",
++    )
++}
++fn make_life<const PREPARE: u16>(
++    scene: Scene,
++    frozen_asset: &FoundationWeightAsset,
++) -> Result<Life> {
++    make_life_observed::<PREPARE>(scene, frozen_asset, |_| Ok(()))
++}
++fn make_life_observed<const PREPARE: u16>(
++    scene: Scene,
++    frozen_asset: &FoundationWeightAsset,
++    mut preparation_progress: impl FnMut(bool) -> Result<()>,
++) -> Result<Life> {
++    let asset = frozen_asset.clone();
++    let mut config = CanonicalNewGameConfig::phase3(scene.seed, 1)?;
++    config.brain_class = BrainScaleTier::Standard2048;
++    config.sensor_profile = SensorProfile::GroundedGripObjectSlotsV1;
++    let mut game = create_canonical_new_game_with_n2048_grip_reader_candidate(&config, &asset)?;
++    let original = game
++        .world
++        .organism_registry()
++        .iter()
++        .next()
++        .ok_or("missing_founder")?
++        .clone();
++    let genome = original.phenotype().brain_genome.clone();
++    let development = foundation_construction_development(
++        &genome,
++        &BrainCapacityClass::n2048(),
++        &original.phenotype().development_state_at(Tick::ZERO)?,
++    )?;
++    let (p, _) = PhenotypeCompiler::compile_n2048_grip_reader_foundation_candidate(
++        genome.clone(),
++        development.clone(),
++        asset.clone(),
++    )?;
++    let trainer = CpuFoundationTrainer::new(
++        p.clone(),
++        asset,
++        StageTrainableMask::recurrent_only(&p)?,
++        AdamWConfig::default(),
++    )?;
++    let mut shadows = Vec::new();
++    for gain in [0., 1. / 16., 1. / 4., 1., 4.] {
++        let mut weights = trainer.weights().to_vec();
++        let mut differences = 0;
++        for (synapse, weight) in p.synapses().iter().zip(&mut weights) {
++            if let CompiledSynapseKind::Decoder(c) = synapse.kind() {
++                if c.head() == DecoderHeadKind::MemoryContext && c.input_lane() == 53 {
++                    let next: f32 = match c.family() {
++                        CandidateActionFamily::Contact => gain,
++                        CandidateActionFamily::Other if gain != 0. => -gain,
++                        _ => 0.,
++                    };
++                    differences += usize::from(weight.to_bits() != next.to_bits());
++                    *weight = next;
++                }
++            }
++        }
++        require(
++            differences == if gain == 0. { 0 } else { 16 },
++            "genetic_difference",
++        )?;
++        let shadow_asset = FoundationWeightAsset::from_trained_weights(
++            &p,
++            weights,
++            TrainingStageManifest::bootstrap(),
++        )?;
++        let (shadow_p, _) = PhenotypeCompiler::compile_n2048_grip_reader_foundation_candidate(
++            genome.clone(),
++            development.clone(),
++            shadow_asset.clone(),
++        )?;
++        require(
++            shadow_p.projections() == p.projections()
++                && shadow_p.neuron_dynamics() == p.neuron_dynamics(),
++            "shadow_graph",
++        )?;
++        for (a, b) in p.synapses().iter().zip(shadow_p.synapses()) {
++            require(
++                a.kind() == b.kind()
++                    && a.source() == b.source()
++                    && a.target() == b.target()
++                    && a.alpha() == b.alpha()
++                    && a.route_index() == b.route_index()
++                    && a.receptor_index() == b.receptor_index(),
++                "shadow_coordinates",
++            )?;
++        }
++        let shadow = CpuFoundationTrainer::new(
++            shadow_p.clone(),
++            shadow_asset,
++            StageTrainableMask::recurrent_only(&shadow_p)?,
++            AdamWConfig::default(),
++        )?;
++        if gain == 0. {
++            require(
++                bytes(&shadow.checkpoint())? == bytes(&trainer.checkpoint())?,
++                "off_trainer_identity",
++            )?;
++        }
++        shadows.push((gain, shadow));
++    }
++    let own = original.organism_id();
++    let mut world = HeadlessScenarioBuilder::new(scene.seed)
++        .agent("learner", own, Vec3f::ZERO)
++        .terrain_zone(
++            1,
++            "assay",
++            TerrainZoneKind::Meadow,
++            Vec3f::ZERO,
++            12.0,
++            0.0,
++            0.0,
++        )
++        .build()?;
++    let common = GroundedPhysicalProperties {
++        velocity: Vec3f::ZERO,
++        color: [0.9, 0.2, 0.2],
++        material: [0.35, 0.15, 0.65],
++        shape: [0.2, 0.8, 0.2],
++        chemical: [0.85, 0.1, 0.2],
++        surface_temperature: 0.1,
++        terrain: [0.5, 0.25],
++    };
++    let mut slots = [None, None];
++    for slot in scene.spawn_order {
++        let id = world.editor_spawn_object(WorldEditorSpawnSpec {
++            label: format!("resource_{slot}"),
++            kind: WorldObjectKind::Food,
++            organism_id: None,
++            position: Vec3f::new(0.35, 0.0, if slot == 0 { -0.35 } else { 0.35 }),
++            nutrition: 0.05,
++            hazard_pain: if slot == scene.harmful_slot {
++                0.35
++            } else {
++                0.0
++            },
++            radius: 0.5,
++            token_id: None,
++        })?;
++        let mut physical = common;
++        if scene.appearance[slot] == 1 {
++            physical.color = [0.2, 0.2, 0.9];
++        }
++        world.set_grounded_physical_properties(id, physical)?;
++        world.track_resource_lifecycle(id, EcologyZoneId(1), 16, 512)?;
++        slots[slot] = Some(id);
++    }
++    let mut chemistry = *original.biochemistry();
++    chemistry.body.set_energy(0.4)?;
++    world.register_organism_record(WorldOrganismRecord::new(
++        own,
++        world.entity_id("learner").ok_or("missing_body")?,
++        original.genome().clone(),
++        original.phenotype().clone(),
++        chemistry,
++        original.birth_tick(),
++    )?)?;
++    let targets = [
++        slots[scene.harmful_slot].ok_or("missing_h")?,
++        slots[1 - scene.harmful_slot].ok_or("missing_s")?,
++    ];
++    game.world = world;
++    let sampling_seed = (scene.seed ^ (scene.seed >> 32)) as u32;
++    let (host, _) =
++        CpuCanonicalHost::new_prepared_cohort(game, &trainer, sampling_seed, |world| {
++            preparation_world_guard(world, own)?;
++            for _ in 0..PREPARE {
++                preparation_progress(false)?;
++                world.try_advance_tick()?;
++                preparation_progress(true)?;
++                preparation_world_guard(world, own)?;
++            }
++            Ok::<_, Box<dyn std::error::Error>>(())
++        })?;
++    let initial_body_biology = body_biology(host.world(), own)?;
++    let initial_scene = bytes(
++        &targets
++            .iter()
++            .map(|&id| {
++                WorldObjectSaveState::from(host.world().entity(id).expect("new resource").clone())
++            })
++            .collect::<Vec<_>>(),
++    )?;
++    require(
++        host.checkpoint(&trainer)?
++            .residents
++            .iter()
++            .all(|r| r.memory.records.is_empty()),
++        "nonempty_initial_memory",
++    )?;
++    Ok(Life {
++        host,
++        trainer,
++        own,
++        targets,
++        initial_body_biology,
++        initial_scene,
++        sampling_seed,
++        shadows,
++    })
++}
++
++fn candidate_gain(
++    seed: u64,
++    per_gene_gain: f32,
++) -> Result<(BrainPhenotype, FoundationWeightAsset)> {
++    let mut config = CanonicalNewGameConfig::phase3(seed, 1)?;
++    config.brain_class = BrainScaleTier::Standard2048;
++    let builtin = FoundationWeightAsset::builtin_n2048_v1(config.sensor_profile)?;
++    let game = create_canonical_new_game_with_n2048_candidate(&config, &builtin)?;
++    let record = game
++        .world
++        .organism_registry()
++        .iter()
++        .next()
++        .ok_or("no fresh founder")?;
++    let genome = record.phenotype().brain_genome.clone();
++    let development = foundation_construction_development(
++        &genome,
++        &BrainCapacityClass::n2048(),
++        &record.phenotype().development_state_at(Tick::ZERO)?,
++    )?;
++    let (p, _) = PhenotypeCompiler::compile_n2048_grip_reader_graph(
++        genome.clone(),
++        development.clone(),
++        SensorProfile::GroundedGripObjectSlotsV1,
++    )?;
++    let (mut weights, _) = care_candidate::whole_care(&p)?;
++    let mut counts = std::collections::BTreeMap::new();
++    for synapse in p.synapses() {
++        if let CompiledSynapseKind::Decoder(c) = synapse.kind() {
++            if c.head() == DecoderHeadKind::MemoryContext {
++                *counts
++                    .entry((c.family().raw(), c.input_lane()))
++                    .or_insert(0usize) += 1;
++            }
++        }
++    }
++    for (synapse, weight) in p.synapses().iter().zip(&mut weights) {
++        let CompiledSynapseKind::Decoder(c) = synapse.kind() else {
++            continue;
++        };
++        if c.head() == DecoderHeadKind::ActionCandidate {
++            *weight *= 0.25;
++        }
++        if c.head() != DecoderHeadKind::MemoryContext {
++            continue;
++        }
++        // Preserve the v12 inherited target-reader and Ingest-family coefficients.
++        // Its source file and historical assets are not edited or loaded here.
++        let total = match (c.family(), c.input_lane()) {
++            (CandidateActionFamily::Ingest, 25) => -16.,
++            (CandidateActionFamily::Ingest, 26) => -64.,
++            (CandidateActionFamily::Ingest, 32) => 32.,
++            (CandidateActionFamily::Approach | CandidateActionFamily::Contact, 25) => -8.,
++            (CandidateActionFamily::Approach | CandidateActionFamily::Contact, 26) => -32.,
++            (CandidateActionFamily::Avoid, 25) => 16.,
++            (CandidateActionFamily::Avoid, 26) => 128.,
++            (CandidateActionFamily::Contact, 53) => 8. * per_gene_gain,
++            (CandidateActionFamily::Other, 53) if per_gene_gain != 0. => -8. * per_gene_gain,
++            _ => 0.,
++        };
++        *weight = total / counts[&(c.family().raw(), c.input_lane())] as f32;
++    }
++    let asset = FoundationWeightAsset::from_trained_weights(
++        &p,
++        weights,
++        TrainingStageManifest::bootstrap(),
++    )?;
++    let (bound, _) = PhenotypeCompiler::compile_n2048_grip_reader_foundation_candidate(
++        genome,
++        development,
++        asset.clone(),
++    )?;
++    Ok((bound, asset))
++}
++
++use serde_json::{json, Value};
++use std::io::Write;
++struct Sink {
++    file: std::fs::File,
++    written: usize,
++    deadline: std::time::Instant,
++    stage: &'static str,
++}
++impl Sink {
++    fn emit(&mut self, value: Value) -> Result<()> {
++        require(self.deadline.elapsed().as_secs() < 1800, "deadline")?;
++        let mut raw = serde_json::to_vec(&value)?;
++        raw.push(b'\n');
++        require(
++            raw.len() <= 512 * 1024 && self.written + raw.len() <= 64 * 1024 * 1024,
++            "output_bound",
++        )?;
++        self.file.write_all(&raw)?;
++        self.file.sync_data()?;
++        self.written += raw.len();
++        Ok(())
++    }
++}
++fn role(life: &Life, target: Option<WorldEntityId>) -> &'static str {
++    match target {
++        Some(t) if t == life.targets[0] => "h",
++        Some(t) if t == life.targets[1] => "s",
++        None => "none",
++        _ => "other",
++    }
++}
++fn finite(x: f32) -> Result<f32> {
++    require(x.is_finite(), "nonfinite")?;
++    Ok(x)
++}
++fn probability(logits: &[f32], index: usize, mask: u32) -> f32 {
++    if mask & (1 << index) == 0 {
++        return 0.;
++    }
++    let max = logits
++        .iter()
++        .enumerate()
++        .filter(|(i, _)| mask & (1 << i) != 0)
++        .map(|(_, v)| *v)
++        .fold(f32::NEG_INFINITY, f32::max);
++    let total: f32 = logits
++        .iter()
++        .enumerate()
++        .filter(|(i, _)| mask & (1 << i) != 0)
++        .map(|(_, v)| (*v - max).exp())
++        .sum();
++    (logits[index] - max).exp() / total
++}
++struct Components {
++    memory: f32,
++    cognitive: f32,
++    action: f32,
++    op: f32,
++    target: f32,
++    family: f32,
++    inherited_coeff: [f32; 3],
++    effective_coeff: [f32; 3],
++    family_bias: f32,
++    total: f32,
++}
++fn components(
++    p: &BrainPhenotype,
++    weights: &[f32],
++    tick: &alife_training::TrainingReplayTick,
++    activations: &[f32],
++    index: usize,
++) -> Result<Components> {
++    let input = &tick.candidates[index];
++    let family_bias = p
++        .candidate_decoder()
++        .families()
++        .iter()
++        .find(|f| f.family() == input.family)
++        .ok_or("family")?
++        .bias();
++    let mut total = family_bias + input.innate_bias;
++    let mut memory = 0.;
++    let mut cognitive = 0.;
++    let mut action = 0.;
++    let mut op = 0.;
++    let mut target = 0.;
++    let mut family = 0.;
++    let mut inherited_coeff = [0.; 3];
++    let mut effective_coeff = [0.; 3];
++    for (j, synapse) in p.synapses().iter().enumerate() {
++        let CompiledSynapseKind::Decoder(c) = synapse.kind() else {
++            continue;
++        };
++        if c.family() != input.family {
++            continue;
++        }
++        let effective = weights[j] + tick.effective_weight_offsets[j];
++        let v = input.decoder_inputs[c.input_lane() as usize] * effective;
++        match c.head() {
++            DecoderHeadKind::MemoryContext => {
++                memory += v;
++                if c.input_lane() == 53 {
++                    op += v;
++                }
++                if [25, 26].contains(&c.input_lane()) {
++                    target += v;
++                }
++                if c.input_lane() == 32 {
++                    family += v;
++                }
++                for (k, lane) in [25, 26, 53].into_iter().enumerate() {
++                    if c.input_lane() == lane {
++                        inherited_coeff[k] += weights[j];
++                        effective_coeff[k] += effective;
++                    }
++                }
++            }
++            DecoderHeadKind::CognitiveContext => cognitive += v,
++            DecoderHeadKind::ActionCandidate => {
++                let contribution = activations[synapse.source() as usize] * v;
++                action += contribution;
++                total += contribution;
++            }
++            _ => {}
++        }
++    }
++    total += memory.clamp(-12., 12.) + cognitive.clamp(-12., 12.);
++    Ok(Components {
++        memory,
++        cognitive,
++        action,
++        op,
++        target,
++        family,
++        inherited_coeff,
++        effective_coeff,
++        family_bias,
++        total,
++    })
++}
++fn project(life: &Life, row: &CpuCollectedDecision, audit: &CpuSwapAudit) -> Result<Value> {
++    let host_before = bytes(&life.host.checkpoint(&life.trainer)?)?;
++    let trainer_before = bytes(&life.trainer.checkpoint())?;
++    let frame = row.patch.pre_action().perception();
++    require(
++        frame.frame_digest() == audit.frame_digest
++            && audit.candidates.len() == frame.candidates().len(),
++        "audit_binding",
++    )?;
++    require(frame.candidates().len() <= 32, "candidate_bound")?;
++    let mut variant_rows = Vec::new();
++    let mut baseline_final = None;
++    for (gain, trainer) in &life.shadows {
++        let checkpoint_before = bytes(&trainer.checkpoint())?;
++        require(
++            bytes(&life.host.checkpoint(&life.trainer)?)? == host_before
++                && bytes(&life.trainer.checkpoint())? == trainer_before,
++            "before_shadow_preservation",
++        )?;
++        let p = trainer.phenotype();
++        let q = TrainingSequence {
++            phenotype_hash: p.phenotype_hash(),
++            initial: row.initial.clone(),
++            ticks: vec![row.replay_tick.clone()],
++            burn_in_ticks: 0,
++            memory_candidate_gain: 12.,
++        };
++        let output = trainer.evaluate_replay(&q)?;
++        let logits = &output.candidate_logits[0];
++        let choice = sample_cpu_joint_action(
++            p,
++            frame,
++            logits,
++            life.sampling_seed,
++            row.sampling_counter.ok_or("counter")?,
++            TEMPERATURE,
++        )?;
++        if *gain == 0. {
++            require(
++                bytes(&choice)? == bytes(&row.action)?,
++                "actual_replay_mismatch",
++            )?;
++            baseline_final = Some(bytes(&(
++                &output.final_activations,
++                &output.final_activity_ema,
++                &output.final_metabolic_load,
++            ))?);
++        } else {
++            require(
++                Some(bytes(&(
++                    &output.final_activations,
++                    &output.final_activity_ema,
++                    &output.final_metabolic_load,
++                ))?) == baseline_final,
++                "recurrent_shadow_mismatch",
++            )?;
++        }
++        let mut candidates = Vec::new();
++        for (i, (candidate, input)) in frame
++            .candidates()
++            .iter()
++            .zip(&row.replay_tick.candidates)
++            .enumerate()
++        {
++            let evidence = &audit.candidates[i];
++            require(
++                evidence.candidate_index as usize == i
++                    && evidence.world_target == candidate.target.entity,
++                "candidate_binding",
++            )?;
++            let Components {
++                memory,
++                cognitive,
++                action,
++                op,
++                target,
++                family,
++                inherited_coeff,
++                effective_coeff,
++                family_bias,
++                total,
++            } = components(
++                p,
++                trainer.weights(),
++                &row.replay_tick,
++                &output.final_activations[0],
++                i,
++            )?;
++            require(
++                total.to_bits() == logits[i].to_bits(),
++                "score_decomposition",
++            )?;
++            let motor_probability: Vec<f32> = choice
++                .motor_masks
++                .iter()
++                .map(|mask| probability(logits, i, *mask))
++                .collect();
++            for v in logits
++                .iter()
++                .chain(inherited_coeff.iter())
++                .chain(effective_coeff.iter())
++                .chain(motor_probability.iter())
++                .chain([memory, cognitive, action, op, target, family, total].iter())
++            {
++                finite(*v)?;
++            }
++            let source = evidence.best_family_source.as_ref();
++            candidates.push(json!({"index":i,"target":role(life,candidate.target.entity),"action":candidate.action_id.0,"family":candidate.family.raw(),"input53":finite(input.decoder_inputs[53])?,"input25":finite(input.decoder_inputs[25])?,"input26":finite(input.decoder_inputs[26])?,"input32":finite(input.decoder_inputs[32])?,"memory_raw":memory,"memory_clamped":memory.clamp(-12.,12.),"operation_component":op,"target25_26_component":target,"family32_component":family,"action_component":action,"cognitive_raw":cognitive,"cognitive_clamped":cognitive.clamp(-12.,12.),"innate":input.innate_bias,"family_bias":family_bias,"logit":logits[i],"inherited_coeff25_26_53":inherited_coeff,"effective_coeff25_26_53":effective_coeff,"representative_probability":finite(probability(logits,i,choice.representative_mask))?,"motor_conditional_probabilities":motor_probability,"selected_motor_slots":choice.motor_candidates.map(|c|c==Some(i as u16)),"selected_representative":choice.representative==i as u16,"family_confidence":evidence.family_confidence,"target_confidence":evidence.target_confidence,"family_sources":evidence.family_source_count,"target_sources":evidence.target_source_count,"source_sequence":source.map(|s|s.sequence),"source_ingest_family":source.is_some_and(|s|s.family==u16::from(CandidateActionFamily::Ingest.raw())),"source_exact_consumed":source.is_some_and(|s|s.contact==Some(PhysicalContactKind::Consumed)),"source_same_tracked_target":source.is_some_and(|s|Some(TrackedObjectId(s.tracked_target))==evidence.tracked_target),"held":evidence.physical.owner==SwapOwner::ThisOrganism,"held_count":evidence.physical.self_held_object_count,"contact_reachable":evidence.physical.physical_contact_reachable,"grasp_reachable":evidence.physical.grasp_reachable}));
++        }
++        variant_rows.push(json!({"gain":gain,"representative":choice.representative,"motor_candidates":choice.motor_candidates,"joint_log_probability":finite(choice.old_joint_log_probability)?,"candidates":candidates}));
++        require(
++            bytes(&trainer.checkpoint())? == checkpoint_before
++                && bytes(&life.host.checkpoint(&life.trainer)?)? == host_before
++                && bytes(&life.trainer.checkpoint())? == trainer_before,
++            "after_shadow_preservation",
++        )?;
++    }
++    let physical:Vec<Value>=audit.motor.channel_receipts.iter().map(|c|json!({"action":c.command.primitive.0,"target":role(life,c.command.target.and_then(|t|t.entity)),"succeeded":c.succeeded,"contact_consumed":c.physical.contact==PhysicalContactKind::Consumed,"displacement":[c.physical.displacement.x,c.physical.displacement.y,c.physical.displacement.z],"transfers":c.grip_transfers.iter().map(|t|json!({"target":role(life,Some(t.object)),"kind":match t.kind {GripTransferKind::Acquired=>"acquired",GripTransferKind::Released=>"released",GripTransferKind::Placed=>"placed",GripTransferKind::Consumed=>"consumed"}})).collect::<Vec<_>>()})).collect();
++    require(
++        bytes(&life.host.checkpoint(&life.trainer)?)? == host_before
++            && bytes(&life.trainer.checkpoint())? == trainer_before,
++        "projection_preservation",
++    )?;
++    Ok(
++        json!({"sequence":audit.sequence.raw(),"sampling_counter":row.sampling_counter,"baseline_replay_matches_actual":true,"preservation":true,"variants":variant_rows,"actual_physical":physical}),
++    )
++}
++fn run(scene: Scene, asset: &FoundationWeightAsset, sink: &mut Sink) -> Result<Value> {
++    sink.stage = "construction";
++    sink.emit(json!({"kind":"life_attempt","seed":scene.seed}))?;
++    let mut prep_attempts = 0u16;
++    let mut prep_returned = 0u16;
++    let mut life = make_life_observed::<PREPARATION_TICKS>(scene, asset, |returned| {
++        if returned {
++            prep_returned += 1;
++        } else {
++            prep_attempts += 1;
++        }
++        sink.stage = "preparation";
++        sink.emit(json!({"kind":"preparation_progress","seed":scene.seed,"attempted":prep_attempts,"returned":prep_returned}))
++    })?;
++    require(
++        prep_attempts == 600 && prep_returned == 600,
++        "preparation_count",
++    )?;
++    let mut meals = [0u16; 2];
++    let mut steps = 0u16;
++    let mut decisions = 0u16;
++    let mut stop = "tick_budget";
++    let founder_before = bytes(&life.trainer.checkpoint())?;
++    sink.emit(json!({"kind":"life_prepared","seed":scene.seed,"world_tick":life.host.world().tick().raw(),"sampling_seed":life.sampling_seed,"initial_body_sha256":digest(&life.initial_body_biology),"initial_scene_sha256":digest(&life.initial_scene),"off_asset_sha256":digest(&asset.encode_canonical()?)}))?;
++    for index in 0..PRIMARY_TICKS {
++        sink.stage = "host_step";
++        sink.emit(json!({"kind":"step_attempt","seed":scene.seed,"primary_step":index+1,"returned_steps":steps}))?;
++        let step = life.host.step_with_swap_audit(&life.trainer, TEMPERATURE)?;
++        steps += 1;
++        sink.emit(json!({"kind":"step_returned","seed":scene.seed,"primary_step":steps}))?;
++        require(
++            step.decisions.len() <= 1 && step.decisions.len() == step.swap_audits.len(),
++            "population",
++        )?;
++        let mut projections = Vec::new();
++        for (row, audit) in step.decisions.iter().zip(&step.swap_audits) {
++            decisions += 1;
++            sink.stage = "passive_replay";
++            projections.push(project(&life, row, audit)?);
++            for (i, target) in life.targets.iter().enumerate() {
++                if audit.motor.channel_receipts.iter().any(|c| {
++                    c.physical.contact == PhysicalContactKind::Consumed
++                        && c.physical.target_entity == Some(*target)
++                }) {
++                    meals[i] += 1;
++                }
++            }
++        }
++        require(
++            bytes(&life.trainer.checkpoint())? == founder_before,
++            "founder_mutation",
++        )?;
++        let record = life
++            .host
++            .world()
++            .organism_registry()
++            .get(life.own)
++            .ok_or("organism")?;
++        let body = record.biochemistry().body;
++        let alive = record.lifecycle().is_alive();
++        finite(body.health)?;
++        finite(body.injury)?;
++        finite(body.energy)?;
++        sink.stage = "public_projection";
++        sink.emit(json!({"kind":"step","seed":scene.seed,"primary_step":steps,"world_tick":life.host.world().tick().raw(),"health":body.health,"injury":body.injury,"energy":body.energy,"alive":alive,"sleeping":step.sleeping_organisms,"consolidations":step.sleep_consolidations,"meals_h_s":meals,"decisions":projections}))?;
++        if !alive {
++            stop = "death";
++            break;
++        }
++        if body.health < 0.70 {
++            stop = "health";
++            break;
++        }
++        if body.injury > 0.25 {
++            stop = "injury";
++            break;
++        }
++        if meals[0] >= 3 {
++            stop = "third_harmful_meal";
++            break;
++        }
++    }
++    let summary = json!({"kind":"life_complete","seed":scene.seed,"preparation_ticks":prep_returned,"primary_steps":steps,"decisions":decisions,"meals_h_s":meals,"stop":stop});
++    sink.emit(summary.clone())?;
++    Ok(summary)
++}
++fn execute() -> Result<()> {
++    let root = std::env::args().nth(1).ok_or("output_path")?;
++    std::fs::create_dir(&root)?;
++    let file = std::fs::OpenOptions::new()
++        .create_new(true)
++        .write(true)
++        .open(std::path::Path::new(&root).join("events.ndjson"))?;
++    let mut sink = Sink {
++        file,
++        written: 0,
++        deadline: std::time::Instant::now(),
++        stage: "asset_construction",
++    };
++    sink.emit(json!({"kind":"invocation","seeds":[2026112401u64,2026112402u64],"gains":[0.,0.0625,0.25,1.,4.],"max_lives":2,"max_preparation_per_life":600,"max_primary_per_life":256,"max_public_bytes":64*1024*1024,"backend":"CPU","variant_actions_applied":false}))?;
++    let result = (|| -> Result<()> {
++        let (_, asset) = candidate_gain(2026110901, 0.)?;
++        for scene in SCENES {
++            run(scene, &asset, &mut sink)?;
++        }
++        Ok(())
++    })();
++    match result {
++        Ok(()) => {
++            sink.emit(json!({"kind":"invocation_complete"}))?;
++            println!("shadow_probe_complete");
++            Ok(())
++        }
++        Err(error) => {
++            let stage = sink.stage;
++            let code = error
++                .downcast_ref::<Gate>()
++                .map_or("closed_native_failure", |e| e.0);
++            let _=sink.emit(json!({"kind":"invocation_failed","stage":stage,"error":code,"retry_permitted":false}));
++            Err("closed_native_failure".into())
++        }
++    }
++}
++fn main() {
++    std::panic::set_hook(Box::new(|_| eprintln!("closed_native_panic")));
++    if execute().is_err() {
++        eprintln!("closed_shadow_failure");
++        std::process::exit(1);
++    }
++}
++#[cfg(test)]
++mod tests {
++    use super::*;
++    #[test]
++    fn bounded_scalar_probability() {
++        assert_eq!(probability(&[0., 0.], 0, 3), 0.5);
++        assert_eq!(probability(&[0., 0.], 1, 1), 0.);
++        assert_eq!(probability(&[0., 0.], 0, 1), 1.);
++    }
++    #[test]
++    fn detached_nonzero_components_offsets_and_gain_identity() -> Result<()> {
++        use alife_training::{TrainingInitialState, TrainingReplayCandidate, TrainingReplayTick};
++        let (base, base_asset) = candidate_gain(2026110901, 0.)?;
++        let mut baseline_recurrent = None;
++        let mut cap_seen = false;
++        for gain in [0., 0.0625, 4.] {
++            let (p, asset) = candidate_gain(2026110901, gain)?;
++            let repacked = FoundationWeightAsset::from_trained_weights(
++                &p,
++                asset.weights().to_vec(),
++                TrainingStageManifest::bootstrap(),
++            )?;
++            assert_eq!(repacked.digest(), asset.digest());
++            let changed = base_asset
++                .weights()
++                .iter()
++                .zip(asset.weights())
++                .filter(|(a, b)| a.to_bits() != b.to_bits())
++                .count();
++            assert_eq!(changed, if gain == 0. { 0 } else { 16 });
++            assert_eq!(p.projections(), base.projections());
++            for (a, b) in p.synapses().iter().zip(base.synapses()) {
++                assert_eq!(a.kind(), b.kind());
++                assert_eq!(a.source(), b.source());
++                assert_eq!(a.target(), b.target());
++            }
++            let n = p.neuron_count() as usize;
++            let q = TrainingSequence {
++                phenotype_hash: p.phenotype_hash(),
++                initial: TrainingInitialState {
++                    activations: vec![0.13; n],
++                    activity_ema: vec![0.11; n],
++                    metabolic_load: vec![0.01; n],
++                    dendrites: DendriticBranchSet::new(Vec::new())?,
++                },
++                ticks: vec![TrainingReplayTick {
++                    encoded_inputs: vec![0.02; n],
++                    projection_gain: 1.,
++                    local_threshold_shift: 0.,
++                    microstep_count: u32::from(p.microstep_count()),
++                    enabled_routes: vec![true; p.projections().len()],
++                    effective_weight_offsets: p
++                        .synapses()
++                        .iter()
++                        .map(|s| {
++                            if matches!(s.kind(), CompiledSynapseKind::Decoder(_)) {
++                                0.0137
++                            } else {
++                                0.
++                            }
++                        })
++                        .collect(),
++                    structural_synapses: Vec::new(),
++                    candidates: [
++                        CandidateActionFamily::Contact,
++                        CandidateActionFamily::Other,
++                        CandidateActionFamily::Ingest,
++                    ]
++                    .iter()
++                    .map(|family| {
++                        let mut inputs = [0.; 54];
++                        for (i, v) in inputs.iter_mut().enumerate() {
++                            *v = (i as f32 - 10.) * 0.01;
++                        }
++                        inputs[53] = if *family == CandidateActionFamily::Ingest {
++                            0.
++                        } else {
++                            0.9
++                        };
++                        TrainingReplayCandidate {
++                            family: *family,
++                            decoder_inputs: inputs,
++                            innate_bias: 0.17,
++                        }
++                    })
++                    .collect(),
++                }],
++                burn_in_ticks: 0,
++                memory_candidate_gain: 12.,
++            };
++            let trainer = CpuFoundationTrainer::new(
++                p.clone(),
++                asset,
++                StageTrainableMask::recurrent_only(&p)?,
++                AdamWConfig::default(),
++            )?;
++            let before = bytes(&trainer.checkpoint())?;
++            let output = trainer.evaluate_replay(&q)?;
++            let recurrence = bytes(&(
++                &output.final_activations,
++                &output.final_activity_ema,
++                &output.final_metabolic_load,
++            ))?;
++            if gain == 0. {
++                baseline_recurrent = Some(recurrence);
++            } else {
++                assert_eq!(Some(recurrence), baseline_recurrent);
++            }
++            for i in 0..3 {
++                let c = components(
++                    &p,
++                    trainer.weights(),
++                    &q.ticks[0],
++                    &output.final_activations[0],
++                    i,
++                )?;
++                assert_eq!(c.total.to_bits(), output.candidate_logits[0][i].to_bits());
++                assert_ne!(c.action, 0.);
++                assert_ne!(c.memory, 0.);
++                assert_ne!(c.family, 0.);
++                if i < 2 {
++                    assert_ne!(c.effective_coeff[2], c.inherited_coeff[2]);
++                }
++                cap_seen |= c.memory.abs() > 12.;
++            }
++            assert_eq!(bytes(&trainer.checkpoint())?, before);
++        }
++        assert!(cap_seen);
++        Ok(())
++    }
++}
+diff --git a/crates/alife_training/examples/support/grip_utility_contexts_v1.json b/crates/alife_training/examples/support/grip_utility_contexts_v1.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..e50687b61fb5a7e82e1e70d6ebe6ab1631512518
+--- /dev/null
++++ b/crates/alife_training/examples/support/grip_utility_contexts_v1.json
+@@ -0,0 +1,626 @@
++[
++  {
++    "action_id": 2201,
++    "arm": "off",
++    "case": "aversive_ingestion_pickup",
++    "consumed": false,
++    "final_x": 0.5,
++    "fixture_argmax": "operation",
++    "held_after": true,
++    "held_before": false,
++    "lane53": -0.25,
++    "logits": [
++      1.0,
++      0.0
++    ],
++    "memory_clamped": 0.0,
++    "operation_contribution": 0.0,
++    "ordinary_other_prior": 0.0,
++    "origin_x": 0.5,
++    "own_family_contribution": 0.0,
++    "own_family_lane32": -0.25,
++    "physical_success": true,
++    "reachable": true,
++    "target_contribution": -0.0,
++    "target_lane26": 0.0,
++    "task_prior": 1.0
++  },
++  {
++    "action_id": 2201,
++    "arm": "on",
++    "case": "aversive_ingestion_pickup",
++    "consumed": false,
++    "final_x": 0.5,
++    "fixture_argmax": "ordinary_other_idle",
++    "held_after": false,
++    "held_before": false,
++    "lane53": -0.25,
++    "logits": [
++      -7.0,
++      0.0
++    ],
++    "memory_clamped": -8.0,
++    "operation_contribution": -8.0,
++    "ordinary_other_prior": 0.0,
++    "origin_x": 0.5,
++    "own_family_contribution": 0.0,
++    "own_family_lane32": -0.25,
++    "physical_success": true,
++    "reachable": true,
++    "target_contribution": -0.0,
++    "target_lane26": 0.0,
++    "task_prior": 1.0
++  },
++  {
++    "action_id": 2201,
++    "arm": "off",
++    "case": "safe_food_pickup",
++    "consumed": false,
++    "final_x": 0.5,
++    "fixture_argmax": "operation",
++    "held_after": true,
++    "held_before": false,
++    "lane53": 0.25,
++    "logits": [
++      1.0,
++      0.0
++    ],
++    "memory_clamped": 0.0,
++    "operation_contribution": 0.0,
++    "ordinary_other_prior": 0.0,
++    "origin_x": 0.5,
++    "own_family_contribution": 0.0,
++    "own_family_lane32": -0.25,
++    "physical_success": true,
++    "reachable": true,
++    "target_contribution": -0.0,
++    "target_lane26": 0.0,
++    "task_prior": 1.0
++  },
++  {
++    "action_id": 2201,
++    "arm": "on",
++    "case": "safe_food_pickup",
++    "consumed": false,
++    "final_x": 0.5,
++    "fixture_argmax": "operation",
++    "held_after": true,
++    "held_before": false,
++    "lane53": 0.25,
++    "logits": [
++      9.0,
++      0.0
++    ],
++    "memory_clamped": 8.0,
++    "operation_contribution": 8.0,
++    "ordinary_other_prior": 0.0,
++    "origin_x": 0.5,
++    "own_family_contribution": 0.0,
++    "own_family_lane32": -0.25,
++    "physical_success": true,
++    "reachable": true,
++    "target_contribution": -0.0,
++    "target_lane26": 0.0,
++    "task_prior": 1.0
++  },
++  {
++    "action_id": 2201,
++    "arm": "off",
++    "case": "useful_harmless_aversive_object_pickup",
++    "consumed": false,
++    "final_x": 0.5,
++    "fixture_argmax": "operation",
++    "held_after": true,
++    "held_before": false,
++    "lane53": -0.25,
++    "logits": [
++      1.0,
++      0.0
++    ],
++    "memory_clamped": 0.0,
++    "operation_contribution": 0.0,
++    "ordinary_other_prior": 0.0,
++    "origin_x": 0.5,
++    "own_family_contribution": 0.0,
++    "own_family_lane32": -0.25,
++    "physical_success": true,
++    "reachable": true,
++    "target_contribution": -0.0,
++    "target_lane26": 0.0,
++    "task_prior": 1.0
++  },
++  {
++    "action_id": 2201,
++    "arm": "on",
++    "case": "useful_harmless_aversive_object_pickup",
++    "consumed": false,
++    "final_x": 0.5,
++    "fixture_argmax": "ordinary_other_idle",
++    "held_after": false,
++    "held_before": false,
++    "lane53": -0.25,
++    "logits": [
++      -7.0,
++      0.0
++    ],
++    "memory_clamped": -8.0,
++    "operation_contribution": -8.0,
++    "ordinary_other_prior": 0.0,
++    "origin_x": 0.5,
++    "own_family_contribution": 0.0,
++    "own_family_lane32": -0.25,
++    "physical_success": true,
++    "reachable": true,
++    "target_contribution": -0.0,
++    "target_lane26": 0.0,
++    "task_prior": 1.0
++  },
++  {
++    "action_id": 2202,
++    "arm": "off",
++    "case": "useful_aversive_object_transport_hold",
++    "consumed": false,
++    "final_x": 0.699999988079071,
++    "fixture_argmax": "ordinary_other_idle",
++    "held_after": true,
++    "held_before": true,
++    "lane53": -0.25,
++    "logits": [
++      0.0,
++      1.0
++    ],
++    "memory_clamped": 0.0,
++    "operation_contribution": 0.0,
++    "ordinary_other_prior": 1.0,
++    "origin_x": 0.5,
++    "own_family_contribution": 0.0,
++    "own_family_lane32": -0.25,
++    "physical_success": true,
++    "reachable": true,
++    "target_contribution": 0.0,
++    "target_lane26": 0.0,
++    "task_prior": 0.0
++  },
++  {
++    "action_id": 2202,
++    "arm": "on",
++    "case": "useful_aversive_object_transport_hold",
++    "consumed": false,
++    "final_x": 0.5,
++    "fixture_argmax": "operation",
++    "held_after": false,
++    "held_before": true,
++    "lane53": -0.25,
++    "logits": [
++      8.0,
++      1.0
++    ],
++    "memory_clamped": 8.0,
++    "operation_contribution": 8.0,
++    "ordinary_other_prior": 1.0,
++    "origin_x": 0.5,
++    "own_family_contribution": 0.0,
++    "own_family_lane32": -0.25,
++    "physical_success": true,
++    "reachable": true,
++    "target_contribution": 0.0,
++    "target_lane26": 0.0,
++    "task_prior": 0.0
++  },
++  {
++    "action_id": 2202,
++    "arm": "off",
++    "case": "aversive_object_release_at_destination",
++    "consumed": false,
++    "final_x": 0.699999988079071,
++    "fixture_argmax": "operation",
++    "held_after": false,
++    "held_before": true,
++    "lane53": -0.25,
++    "logits": [
++      1.0,
++      0.0
++    ],
++    "memory_clamped": 0.0,
++    "operation_contribution": 0.0,
++    "ordinary_other_prior": 0.0,
++    "origin_x": 0.5,
++    "own_family_contribution": 0.0,
++    "own_family_lane32": -0.25,
++    "physical_success": true,
++    "reachable": true,
++    "target_contribution": 0.0,
++    "target_lane26": 0.0,
++    "task_prior": 1.0
++  },
++  {
++    "action_id": 2202,
++    "arm": "on",
++    "case": "aversive_object_release_at_destination",
++    "consumed": false,
++    "final_x": 0.699999988079071,
++    "fixture_argmax": "operation",
++    "held_after": false,
++    "held_before": true,
++    "lane53": -0.25,
++    "logits": [
++      9.0,
++      0.0
++    ],
++    "memory_clamped": 8.0,
++    "operation_contribution": 8.0,
++    "ordinary_other_prior": 0.0,
++    "origin_x": 0.5,
++    "own_family_contribution": 0.0,
++    "own_family_lane32": -0.25,
++    "physical_success": true,
++    "reachable": true,
++    "target_contribution": 0.0,
++    "target_lane26": 0.0,
++    "task_prior": 1.0
++  },
++  {
++    "action_id": 2202,
++    "arm": "off",
++    "case": "safe_food_release_at_destination",
++    "consumed": false,
++    "final_x": 0.699999988079071,
++    "fixture_argmax": "operation",
++    "held_after": false,
++    "held_before": true,
++    "lane53": 0.25,
++    "logits": [
++      1.0,
++      0.0
++    ],
++    "memory_clamped": 0.0,
++    "operation_contribution": 0.0,
++    "ordinary_other_prior": 0.0,
++    "origin_x": 0.5,
++    "own_family_contribution": 0.0,
++    "own_family_lane32": -0.25,
++    "physical_success": true,
++    "reachable": true,
++    "target_contribution": 0.0,
++    "target_lane26": 0.0,
++    "task_prior": 1.0
++  },
++  {
++    "action_id": 2202,
++    "arm": "on",
++    "case": "safe_food_release_at_destination",
++    "consumed": false,
++    "final_x": 0.699999988079071,
++    "fixture_argmax": "ordinary_other_idle",
++    "held_after": true,
++    "held_before": true,
++    "lane53": 0.25,
++    "logits": [
++      -7.0,
++      0.0
++    ],
++    "memory_clamped": -8.0,
++    "operation_contribution": -8.0,
++    "ordinary_other_prior": 0.0,
++    "origin_x": 0.5,
++    "own_family_contribution": 0.0,
++    "own_family_lane32": -0.25,
++    "physical_success": true,
++    "reachable": true,
++    "target_contribution": 0.0,
++    "target_lane26": 0.0,
++    "task_prior": 1.0
++  },
++  {
++    "action_id": 2201,
++    "arm": "off",
++    "case": "other_target_no_ingestion_evidence",
++    "consumed": false,
++    "final_x": 0.5,
++    "fixture_argmax": "operation",
++    "held_after": true,
++    "held_before": false,
++    "lane53": 0.0,
++    "logits": [
++      1.0,
++      0.0
++    ],
++    "memory_clamped": 0.0,
++    "operation_contribution": 0.0,
++    "ordinary_other_prior": 0.0,
++    "origin_x": 0.5,
++    "own_family_contribution": 0.0,
++    "own_family_lane32": -0.25,
++    "physical_success": true,
++    "reachable": true,
++    "target_contribution": -0.0,
++    "target_lane26": 0.0,
++    "task_prior": 1.0
++  },
++  {
++    "action_id": 2201,
++    "arm": "on",
++    "case": "other_target_no_ingestion_evidence",
++    "consumed": false,
++    "final_x": 0.5,
++    "fixture_argmax": "operation",
++    "held_after": true,
++    "held_before": false,
++    "lane53": 0.0,
++    "logits": [
++      1.0,
++      0.0
++    ],
++    "memory_clamped": 0.0,
++    "operation_contribution": 0.0,
++    "ordinary_other_prior": 0.0,
++    "origin_x": 0.5,
++    "own_family_contribution": 0.0,
++    "own_family_lane32": -0.25,
++    "physical_success": true,
++    "reachable": true,
++    "target_contribution": -0.0,
++    "target_lane26": 0.0,
++    "task_prior": 1.0
++  },
++  {
++    "action_id": 2201,
++    "arm": "off",
++    "case": "unrelated_pain_no_target_evidence",
++    "consumed": false,
++    "final_x": 0.5,
++    "fixture_argmax": "operation",
++    "held_after": true,
++    "held_before": false,
++    "lane53": 0.0,
++    "logits": [
++      1.0,
++      0.0
++    ],
++    "memory_clamped": 0.0,
++    "operation_contribution": 0.0,
++    "ordinary_other_prior": 0.0,
++    "origin_x": 0.5,
++    "own_family_contribution": 0.0,
++    "own_family_lane32": -0.25,
++    "physical_success": true,
++    "reachable": true,
++    "target_contribution": -0.0,
++    "target_lane26": 0.0,
++    "task_prior": 1.0
++  },
++  {
++    "action_id": 2201,
++    "arm": "on",
++    "case": "unrelated_pain_no_target_evidence",
++    "consumed": false,
++    "final_x": 0.5,
++    "fixture_argmax": "operation",
++    "held_after": true,
++    "held_before": false,
++    "lane53": 0.0,
++    "logits": [
++      1.0,
++      0.0
++    ],
++    "memory_clamped": 0.0,
++    "operation_contribution": 0.0,
++    "ordinary_other_prior": 0.0,
++    "origin_x": 0.5,
++    "own_family_contribution": 0.0,
++    "own_family_lane32": -0.25,
++    "physical_success": true,
++    "reachable": true,
++    "target_contribution": -0.0,
++    "target_lane26": 0.0,
++    "task_prior": 1.0
++  },
++  {
++    "action_id": 2201,
++    "arm": "off",
++    "case": "empty_memory",
++    "consumed": false,
++    "final_x": 0.5,
++    "fixture_argmax": "operation",
++    "held_after": true,
++    "held_before": false,
++    "lane53": 0.0,
++    "logits": [
++      1.0,
++      0.0
++    ],
++    "memory_clamped": 0.0,
++    "operation_contribution": 0.0,
++    "ordinary_other_prior": 0.0,
++    "origin_x": 0.5,
++    "own_family_contribution": 0.0,
++    "own_family_lane32": -0.25,
++    "physical_success": true,
++    "reachable": true,
++    "target_contribution": -0.0,
++    "target_lane26": 0.0,
++    "task_prior": 1.0
++  },
++  {
++    "action_id": 2201,
++    "arm": "on",
++    "case": "empty_memory",
++    "consumed": false,
++    "final_x": 0.5,
++    "fixture_argmax": "operation",
++    "held_after": true,
++    "held_before": false,
++    "lane53": 0.0,
++    "logits": [
++      1.0,
++      0.0
++    ],
++    "memory_clamped": 0.0,
++    "operation_contribution": 0.0,
++    "ordinary_other_prior": 0.0,
++    "origin_x": 0.5,
++    "own_family_contribution": 0.0,
++    "own_family_lane32": -0.25,
++    "physical_success": true,
++    "reachable": true,
++    "target_contribution": -0.0,
++    "target_lane26": 0.0,
++    "task_prior": 1.0
++  },
++  {
++    "action_id": 2202,
++    "arm": "off",
++    "case": "unknown_memory_zero_projection",
++    "consumed": false,
++    "final_x": 0.5,
++    "fixture_argmax": "operation",
++    "held_after": false,
++    "held_before": true,
++    "lane53": 0.0,
++    "logits": [
++      1.0,
++      0.0
++    ],
++    "memory_clamped": 0.0,
++    "operation_contribution": 0.0,
++    "ordinary_other_prior": 0.0,
++    "origin_x": 0.5,
++    "own_family_contribution": 0.0,
++    "own_family_lane32": -0.25,
++    "physical_success": true,
++    "reachable": true,
++    "target_contribution": 0.0,
++    "target_lane26": 0.0,
++    "task_prior": 1.0
++  },
++  {
++    "action_id": 2202,
++    "arm": "on",
++    "case": "unknown_memory_zero_projection",
++    "consumed": false,
++    "final_x": 0.5,
++    "fixture_argmax": "operation",
++    "held_after": false,
++    "held_before": true,
++    "lane53": 0.0,
++    "logits": [
++      1.0,
++      0.0
++    ],
++    "memory_clamped": 0.0,
++    "operation_contribution": -0.0,
++    "ordinary_other_prior": 0.0,
++    "origin_x": 0.5,
++    "own_family_contribution": 0.0,
++    "own_family_lane32": -0.25,
++    "physical_success": true,
++    "reachable": true,
++    "target_contribution": 0.0,
++    "target_lane26": 0.0,
++    "task_prior": 1.0
++  },
++  {
++    "action_id": 2201,
++    "arm": "off",
++    "case": "own_family_only_negative",
++    "consumed": false,
++    "final_x": 0.5,
++    "fixture_argmax": "operation",
++    "held_after": true,
++    "held_before": false,
++    "lane53": 0.0,
++    "logits": [
++      1.0,
++      0.0
++    ],
++    "memory_clamped": 0.0,
++    "operation_contribution": 0.0,
++    "ordinary_other_prior": 0.0,
++    "origin_x": 0.5,
++    "own_family_contribution": 0.0,
++    "own_family_lane32": -0.25,
++    "physical_success": true,
++    "reachable": true,
++    "target_contribution": -0.0,
++    "target_lane26": 0.0,
++    "task_prior": 1.0
++  },
++  {
++    "action_id": 2201,
++    "arm": "on",
++    "case": "own_family_only_negative",
++    "consumed": false,
++    "final_x": 0.5,
++    "fixture_argmax": "operation",
++    "held_after": true,
++    "held_before": false,
++    "lane53": 0.0,
++    "logits": [
++      1.0,
++      0.0
++    ],
++    "memory_clamped": 0.0,
++    "operation_contribution": 0.0,
++    "ordinary_other_prior": 0.0,
++    "origin_x": 0.5,
++    "own_family_contribution": 0.0,
++    "own_family_lane32": -0.25,
++    "physical_success": true,
++    "reachable": true,
++    "target_contribution": -0.0,
++    "target_lane26": 0.0,
++    "task_prior": 1.0
++  },
++  {
++    "action_id": 2201,
++    "arm": "off",
++    "case": "target_pain_existing_route",
++    "consumed": false,
++    "final_x": 0.5,
++    "fixture_argmax": "ordinary_other_idle",
++    "held_after": false,
++    "held_before": false,
++    "lane53": 0.0,
++    "logits": [
++      -2.9999983310699463,
++      0.0
++    ],
++    "memory_clamped": -4.0,
++    "operation_contribution": 0.0,
++    "ordinary_other_prior": 0.0,
++    "origin_x": 0.5,
++    "own_family_contribution": 0.0,
++    "own_family_lane32": -0.25,
++    "physical_success": true,
++    "reachable": true,
++    "target_contribution": -4.0,
++    "target_lane26": 0.125,
++    "task_prior": 1.0
++  },
++  {
++    "action_id": 2201,
++    "arm": "on",
++    "case": "target_pain_existing_route",
++    "consumed": false,
++    "final_x": 0.5,
++    "fixture_argmax": "ordinary_other_idle",
++    "held_after": false,
++    "held_before": false,
++    "lane53": 0.0,
++    "logits": [
++      -2.9999983310699463,
++      0.0
++    ],
++    "memory_clamped": -4.0,
++    "operation_contribution": 0.0,
++    "ordinary_other_prior": 0.0,
++    "origin_x": 0.5,
++    "own_family_contribution": 0.0,
++    "own_family_lane32": -0.25,
++    "physical_success": true,
++    "reachable": true,
++    "target_contribution": -4.0,
++    "target_lane26": 0.125,
++    "task_prior": 1.0
++  }
++]
+diff --git a/crates/alife_training/examples/support/world_swap_legacy_v12.rs b/crates/alife_training/examples/support/world_swap_legacy_v12.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..a165a69075e691bfbcb9b3554cb5394fa8c2e772
+--- /dev/null
++++ b/crates/alife_training/examples/support/world_swap_legacy_v12.rs
+@@ -0,0 +1,71 @@
++//! Reconstructed wrapper; constructor body verified exact against published source.
++use super::care_candidate;
++use alife_core::*;
++type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
++pub fn construct() -> Result<FoundationWeightAsset> {
++    candidate_with_readouts(2026110901, 0.25, true, 12., true)
++}
++
++fn candidate_with_readouts(
++    seed: u64,
++    gain: f32,
++    reader: bool,
++    memory_gain: f32,
++    family_valence_reader: bool,
++) -> Result<FoundationWeightAsset> {
++    if family_valence_reader && (!reader || memory_gain != 12.) {
++        return Err("the family-value factor requires the frozen target reader and cap 12".into());
++    }
++    let (_, p, source) = if memory_gain == 12. {
++        care_candidate::source_memory_gain(seed)?
++    } else if memory_gain == 0.5 {
++        care_candidate::source(seed, true)?
++    } else {
++        return Err("unsupported memory gain".into());
++    };
++    let (mut weights, _) = care_candidate::whole_care(&p)?;
++    for (synapse, weight) in p.synapses().iter().zip(&mut weights) {
++        if matches!(synapse.kind(), CompiledSynapseKind::Decoder(c)
++            if c.head() == DecoderHeadKind::ActionCandidate)
++        {
++            *weight *= gain;
++        }
++    }
++    if reader {
++        let mut memory_counts = std::collections::BTreeMap::new();
++        for synapse in p.synapses() {
++            if let CompiledSynapseKind::Decoder(c) = synapse.kind() {
++                if c.head() == DecoderHeadKind::MemoryContext {
++                    *memory_counts
++                        .entry((c.family().raw(), c.input_lane()))
++                        .or_insert(0usize) += 1;
++                }
++            }
++        }
++        for (i, synapse) in p.synapses().iter().enumerate() {
++            let CompiledSynapseKind::Decoder(c) = synapse.kind() else {
++                continue;
++            };
++            if c.head() != DecoderHeadKind::MemoryContext {
++                continue;
++            }
++            let total = match (c.family(), c.input_lane()) {
++                (CandidateActionFamily::Ingest, 25) => -16.,
++                (CandidateActionFamily::Ingest, 26) => -64.,
++                (CandidateActionFamily::Ingest, 32) if family_valence_reader => 32.,
++                (CandidateActionFamily::Approach | CandidateActionFamily::Contact, 25) => -8.,
++                (CandidateActionFamily::Approach | CandidateActionFamily::Contact, 26) => -32.,
++                (CandidateActionFamily::Avoid, 25) => 16.,
++                (CandidateActionFamily::Avoid, 26) => 128.,
++                _ => 0.,
++            };
++            let copies = memory_counts[&(c.family().raw(), c.input_lane())];
++            weights[i] = total / copies as f32;
++        }
++    }
++    Ok(FoundationWeightAsset::from_trained_weights(
++        &p,
++        weights,
++        source.manifest().training_stage(),
++    )?)
++}
+diff --git a/crates/alife_training/src/cpu/host.rs b/crates/alife_training/src/cpu/host.rs
+index bf6695e58298b03bb7735104a09cc63cd3d0ef83..837c38be1aeb764de9b16c5b0a408dbe4ae8d17b 100644
+--- a/crates/alife_training/src/cpu/host.rs
++++ b/crates/alife_training/src/cpu/host.rs
+@@ -15,6 +15,8 @@ use alife_world::{
+     PortableSaveFile, RuntimeConfig,
+ };
+ use std::collections::BTreeMap;
++mod swap_audit;
++pub use swap_audit::*;
+ 
+ #[derive(Debug, thiserror::Error)]
+ pub enum CpuHostError {
+@@ -141,6 +143,8 @@ pub struct CpuCollectedDecision {
+     pub patch: ExperiencePatch,
+ }
+ pub struct CpuCanonicalStep {
++    /// Opt-in transient output, not part of checkpoints or learning.
++    pub swap_audits: Vec<CpuSwapAudit>,
+     pub tick_before: Tick,
+     pub tick_after: Tick,
+     pub decisions: Vec<CpuCollectedDecision>,
+@@ -645,6 +649,25 @@ impl CpuCanonicalHost {
+     /// Host rollback does not roll back an external provider. Its owner archives
+     /// that state and reconciles a failed episode instead of retrying its seed.
+     pub fn step_with_preparation(
++        &mut self,
++        founder: &CpuFoundationTrainer,
++        temperature: f32,
++        prepare: impl FnMut(
++            PerceptionFrameDraft,
++            ExperienceSequenceId,
++        ) -> Result<PerceptionFrameDraft, ScaffoldContractError>,
++    ) -> Result<CpuCanonicalStep, CpuHostError> {
++        self.step_with_optional_swap_audit(founder, temperature, prepare, false)
++    }
++    /// Native path with opt-in read-only physical and recall diagnostics.
++    pub fn step_with_swap_audit(
++        &mut self,
++        founder: &CpuFoundationTrainer,
++        temperature: f32,
++    ) -> Result<CpuCanonicalStep, CpuHostError> {
++        self.step_with_optional_swap_audit(founder, temperature, |draft, _| Ok(draft), true)
++    }
++    fn step_with_optional_swap_audit(
+         &mut self,
+         founder: &CpuFoundationTrainer,
+         temperature: f32,
+@@ -652,6 +675,7 @@ impl CpuCanonicalHost {
+             PerceptionFrameDraft,
+             ExperienceSequenceId,
+         ) -> Result<PerceptionFrameDraft, ScaffoldContractError>,
++        swap_audit: bool,
+     ) -> Result<CpuCanonicalStep, CpuHostError> {
+         self.validate_founder(founder)?;
+         for (&raw, r) in &self.residents {
+@@ -672,7 +696,7 @@ impl CpuCanonicalHost {
+         for resident in next.residents.values_mut() {
+             resident.sealed_authority = None;
+         }
+-        let result = next.step_inner(founder, temperature, &mut prepare)?;
++        let result = next.step_inner(founder, temperature, &mut prepare, swap_audit)?;
+         *self = next;
+         Ok(result)
+     }
+@@ -684,10 +708,12 @@ impl CpuCanonicalHost {
+             PerceptionFrameDraft,
+             ExperienceSequenceId,
+         ) -> Result<PerceptionFrameDraft, ScaffoldContractError>,
++        swap_audit: bool,
+     ) -> Result<CpuCanonicalStep, CpuHostError> {
+         let p = founder.phenotype();
+         let tick = self.world.tick();
+         let mut decisions = Vec::new();
++        let mut swap_audits = Vec::new();
+         let mut sleeping = 0;
+         let mut consolidations = 0;
+         let mut body_events = BTreeMap::new();
+@@ -1077,6 +1103,18 @@ impl CpuCanonicalHost {
+                         .map(|s| (entity, s.salience.novelty.raw()))
+                 })
+                 .collect::<Vec<_>>();
++            let audit_candidates = if swap_audit {
++                Some(swap_audit::swap_candidates(
++                    &self.world,
++                    &perception_world,
++                    &frame,
++                    &recall.context().candidates,
++                    &r.memory.export_active_bank()?.records,
++                )?)
++            } else {
++                None
++            };
++            let audit_owners_before = swap_audit.then(|| self.world.research_swap_owners(id));
+             let receipt = self
+                 .world
+                 .apply_registered_motor_bundle_with_perceived_novelty_in_staged_tick(
+@@ -1087,6 +1125,28 @@ impl CpuCanonicalHost {
+                     &object_novelty,
+                 )
+                 .map_err(|_| CpuHostError::State("canonical motor transaction rejected"))?;
++            if let Some(candidates) = audit_candidates {
++                let after = candidates
++                    .iter()
++                    .map(|c| {
++                        self.world.research_swap_physical_facts(
++                            id,
++                            c.physical.primitive,
++                            c.world_target,
++                        )
++                    })
++                    .collect();
++                swap_audits.push(CpuSwapAudit {
++                    sequence,
++                    frame_digest: frame.frame_digest(),
++                    current_pain: receipt.biology_before.homeostasis.drives.pain,
++                    candidates,
++                    motor: receipt.clone(),
++                    after,
++                    owners_before: audit_owners_before.unwrap_or_default(),
++                    owners_after: self.world.research_swap_owners(id),
++                });
++            }
+             let successor = grounded_successor_state(
+                 &self.world,
+                 record.world_entity_id(),
+@@ -1290,6 +1350,7 @@ impl CpuCanonicalHost {
+             .try_advance_tick_with_body_events_in_staged_tick(&body_events)?;
+         self.seal_all_residents()?;
+         Ok(CpuCanonicalStep {
++            swap_audits,
+             tick_before: tick,
+             tick_after,
+             decisions,
+diff --git a/crates/alife_training/src/cpu/host/swap_audit.rs b/crates/alife_training/src/cpu/host/swap_audit.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..6d9c088039f7a02564f2cc06ad15b46619ed40ef
+--- /dev/null
++++ b/crates/alife_training/src/cpu/host/swap_audit.rs
+@@ -0,0 +1,116 @@
++//! Reconstructed transient audit. No Serialize/checkpoint/learning field and no writeback.
++use super::*;
++use alife_world::{HeadlessMotorTransactionReceipt, SwapOwnership, SwapPhysicalFacts};
++#[derive(Debug, Clone)]
++pub struct CpuSwapMemorySource {
++    pub memory_id: u64,
++    pub sequence: u64,
++    pub tracked_target: u64,
++    pub action: u32,
++    pub family: u16,
++    pub contact: Option<PhysicalContactKind>,
++}
++#[derive(Debug, Clone)]
++pub struct CpuSwapCandidateAudit {
++    pub candidate_index: u16,
++    pub world_target: Option<WorldEntityId>,
++    pub tracked_target: Option<TrackedObjectId>,
++    pub slot_index: Option<u16>,
++    pub physical: SwapPhysicalFacts,
++    pub target_source_count: u16,
++    pub family_source_count: u16,
++    pub target_confidence: f32,
++    pub family_confidence: f32,
++    pub family_valence: f32,
++    pub best_family_source: Option<CpuSwapMemorySource>,
++}
++#[derive(Debug, Clone)]
++pub struct CpuSwapAudit {
++    pub sequence: ExperienceSequenceId,
++    pub frame_digest: PerceptionFrameDigest,
++    pub current_pain: f32,
++    pub candidates: Vec<CpuSwapCandidateAudit>,
++    pub motor: HeadlessMotorTransactionReceipt,
++    pub owners_before: Vec<SwapOwnership>,
++    pub owners_after: Vec<SwapOwnership>,
++    pub after: Vec<SwapPhysicalFacts>,
++}
++pub(super) fn swap_candidates(
++    world: &HeadlessWorld,
++    perception_world: &HeadlessWorld,
++    frame: &PerceptionFrame,
++    contexts: &[CandidateMemoryContextV1],
++    records: &[PortableMemoryRecordV2],
++) -> Result<Vec<CpuSwapCandidateAudit>, CpuHostError> {
++    frame.validate_contract()?;
++    let own = frame.organism_id();
++    frame
++        .candidates()
++        .iter()
++        .enumerate()
++        .map(|(i, candidate)| {
++            let index =
++                u16::try_from(i).map_err(|_| CpuHostError::State("audit candidate index"))?;
++            let (slot_index, tracked) = match candidate.observation {
++                CandidateObservationRef::None => (None, None),
++                CandidateObservationRef::ObjectSlot(slot_index) => {
++                    let slot = frame
++                        .grounded_object_slots()
++                        .iter()
++                        .find(|s| s.slot_index == slot_index)
++                        .ok_or(CpuHostError::State("audit slot binding"))?;
++                    let target = candidate
++                        .target
++                        .entity
++                        .ok_or(CpuHostError::State("audit missing target"))?;
++                    let object = perception_world
++                        .entity(target)
++                        .ok_or(CpuHostError::State("audit target binding"))?;
++                    let record = perception_world
++                        .tracked_objects()
++                        .records_for(own)
++                        .and_then(|mut records| {
++                            records.find(|r| r.tracking_key == object.tracking_key)
++                        })
++                        .ok_or(CpuHostError::State("audit tracking binding"))?;
++                    if record.tracked_object_id != slot.tracked_object_id {
++                        return Err(CpuHostError::State("audit tracked slot mismatch"));
++                    }
++                    (Some(slot_index), Some(slot.tracked_object_id))
++                }
++            };
++            let context = contexts
++                .iter()
++                .find(|c| c.candidate_index == index)
++                .ok_or(CpuHostError::State("audit recall context missing"))?;
++            context.validate_contract()?;
++            Ok(CpuSwapCandidateAudit {
++                candidate_index: index,
++                world_target: candidate.target.entity,
++                tracked_target: tracked,
++                slot_index,
++                physical: world.research_swap_physical_facts(
++                    own,
++                    candidate.action_id,
++                    candidate.target.entity,
++                ),
++                target_source_count: context.target_source_count,
++                family_source_count: context.family_source_count,
++                target_confidence: context.target_confidence.raw(),
++                family_confidence: context.family_confidence.raw(),
++                family_valence: context.family_value[0],
++                best_family_source: context
++                    .best_family_source
++                    .and_then(|id| records.iter().find(|r| r.memory_id_raw == id.raw()))
++                    .map(|r| CpuSwapMemorySource {
++                        memory_id: r.memory_id_raw,
++                        sequence: r.sealed_sequence_id_raw,
++                        tracked_target: r.tracked_object_id_raw,
++                        action: r.action_id_raw,
++                        family: r.family_raw,
++                        contact: r.outcome_contact,
++                    }),
++            })
++        })
++        .collect()
++}
+diff --git a/crates/alife_world/src/headless.rs b/crates/alife_world/src/headless.rs
+index aa66a17ca643e83ae0842115f3ae212f892ab485..c3151db229786f0f780b380f34f1d8cf03a6754b 100644
+--- a/crates/alife_world/src/headless.rs
++++ b/crates/alife_world/src/headless.rs
+@@ -1221,6 +1221,10 @@ pub struct HeadlessActionBiologyReceipt {
+ 
+ #[derive(Debug, Clone, PartialEq)]
+ pub struct HeadlessMotorChannelReceipt {
++    /// Exact per-channel executor success; observation remains locomotion-only.
++    pub succeeded: bool,
++    /// Actual transient execution category, not a persistent or cognitive input.
++    pub failure: Option<ReferenceActionFailure>,
+     pub command: ChannelCommand,
+     pub phase: ActionPhase,
+     pub grip_transfers: Vec<GripTransfer>,
+@@ -1348,6 +1352,8 @@ pub struct HeadlessWorld {
+ mod hands;
+ pub use hands::{ActionPhase, GripTransfer, GripTransferKind};
+ mod grip_research;
++mod swap_audit;
++pub use swap_audit::*;
+ mod local_steering;
+ mod mating_reach;
+ pub use local_steering::LocalSteeringState;
+@@ -4793,6 +4799,8 @@ impl HeadlessWorld {
+             }
+             channel_outcomes.push(ChannelPhysicalOutcome::new(channel.channel, physical)?);
+             channel_receipts.push(HeadlessMotorChannelReceipt {
++                succeeded: result.execution.succeeded,
++                failure: result.execution.failure,
+                 command: channel.clone(),
+                 phase: result.phase,
+                 grip_transfers: result.grip_transfers.clone(),
+diff --git a/crates/alife_world/src/headless/swap_audit.rs b/crates/alife_world/src/headless/swap_audit.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..448a2b57217c47f14b8c2cd01226bf1f5bfb7fdf
+--- /dev/null
++++ b/crates/alife_world/src/headless/swap_audit.rs
+@@ -0,0 +1,129 @@
++//! Reconstructed opt-in transient facts, never legality counterfactuals or policy inputs.
++use super::*;
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub enum SwapOwner {
++    Missing,
++    Consumed,
++    Nobody,
++    ThisOrganism,
++    OtherOrganism,
++    Player,
++}
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub enum SwapGripMode {
++    None,
++    Activity,
++    Deliberate,
++}
++#[derive(Debug, Clone, PartialEq)]
++pub struct SwapOwnership {
++    pub target: WorldEntityId,
++    pub active: bool,
++    pub owner: SwapOwner,
++    pub mode: SwapGripMode,
++    pub position: Vec3f,
++}
++#[derive(Debug, Clone, PartialEq)]
++pub struct SwapPhysicalFacts {
++    pub tick: Tick,
++    pub organism: OrganismId,
++    pub target: Option<WorldEntityId>,
++    pub primitive: ActionId,
++    pub owner: SwapOwner,
++    pub mode: SwapGripMode,
++    pub active: bool,
++    pub self_held_object_count: usize,
++    pub actor_alive: bool,
++    pub manipulation_effector: bool,
++    pub physical_contact_reachable: Option<bool>,
++    pub grasp_reachable: Option<bool>,
++}
++impl HeadlessWorld {
++    fn swap_owner(&self, organism: OrganismId, object: &WorldObject) -> SwapOwner {
++        if object.consumed {
++            SwapOwner::Consumed
++        } else if self.player_held_object() == Some(object.id) {
++            SwapOwner::Player
++        } else if object.carried_by == Some(organism) {
++            SwapOwner::ThisOrganism
++        } else if object.carried_by.is_some() {
++            SwapOwner::OtherOrganism
++        } else {
++            SwapOwner::Nobody
++        }
++    }
++    pub fn research_swap_owners(&self, organism: OrganismId) -> Vec<SwapOwnership> {
++        self.objects
++            .values()
++            .map(|o| SwapOwnership {
++                target: o.id,
++                active: !o.consumed,
++                owner: self.swap_owner(organism, o),
++                mode: if o.consumed || o.carried_by.is_none() {
++                    SwapGripMode::None
++                } else if o.activity_hold {
++                    SwapGripMode::Activity
++                } else {
++                    SwapGripMode::Deliberate
++                },
++                position: o.position,
++            })
++            .collect()
++    }
++    pub fn research_swap_physical_facts(
++        &self,
++        organism: OrganismId,
++        primitive: ActionId,
++        target: Option<WorldEntityId>,
++    ) -> SwapPhysicalFacts {
++        let record = self.organism_registry.get(organism);
++        let agent = self.agent_entity_id(organism).ok();
++        let alive = agent
++            .and_then(|id| self.objects.get(&id.raw()))
++            .is_some_and(|a| !a.consumed && record.is_none_or(|r| r.lifecycle().is_alive()));
++        let effector = record.is_none_or(|r| {
++            r.embodiment()
++                .effector_gain(EffectorCapability::Manipulation)
++                > 0.
++        });
++        let mut facts = SwapPhysicalFacts {
++            tick: self.tick,
++            organism,
++            target,
++            primitive,
++            owner: SwapOwner::Missing,
++            mode: SwapGripMode::None,
++            active: false,
++            self_held_object_count: self
++                .objects
++                .values()
++                .filter(|o| !o.consumed && o.carried_by == Some(organism))
++                .count(),
++            actor_alive: alive,
++            manipulation_effector: effector,
++            physical_contact_reachable: None,
++            grasp_reachable: None,
++        };
++        let Some(id) = target else { return facts };
++        let Some(object) = self.objects.get(&id.raw()) else {
++            return facts;
++        };
++        facts.owner = self.swap_owner(organism, object);
++        facts.active = !object.consumed;
++        facts.mode = if object.consumed || object.carried_by.is_none() {
++            SwapGripMode::None
++        } else if object.activity_hold {
++            SwapGripMode::Activity
++        } else {
++            SwapGripMode::Deliberate
++        };
++        if let Some(agent) = agent {
++            if let Some(body) = self.objects.get(&agent.raw()) {
++                facts.physical_contact_reachable =
++                    Some(self.physical_contact_reachable(body.position, object.position));
++                facts.grasp_reachable = Some(self.grasp_target_is_reachable(organism, agent, id));
++            }
++        }
++        facts
++    }
++}

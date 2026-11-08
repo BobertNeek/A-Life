@@ -1,0 +1,42 @@
+{
+  "kind": "additive source/scalar evidence archive",
+  "packages": [
+    {
+      "directory": "nano-need-memory-v3",
+      "archive_sha256": "024d17bcd1f8cc57cbef18aa87389c3488df4d67f1a7b668d865cb74c726eabc",
+      "selected_files": 11,
+      "omitted_duplicate_source_files": 0
+    },
+    {
+      "directory": "nano-operating-point-supplement-v1",
+      "archive_sha256": "de4c65f0882ff1cc66d286dbba0bdf78281d0cb732eb4f732e21548418c1e563",
+      "selected_files": 12,
+      "omitted_duplicate_source_files": 0
+    },
+    {
+      "directory": "sleep-journal-v8",
+      "archive_sha256": "f7bc52ba07ec5de37677da90e787239fef79baa8c35f6231dd90050acc0abc1d",
+      "selected_files": 17,
+      "omitted_duplicate_source_files": 0
+    },
+    {
+      "directory": "thermal-contact-v1",
+      "archive_sha256": "f6c003eeadb396bb3a61217748c7c43ceff63e023365a05f9b0ff6ce5e6bde52",
+      "selected_files": 13,
+      "omitted_duplicate_source_files": 6
+    },
+    {
+      "directory": "thermal-contact-v2",
+      "archive_sha256": "4f7fd3ab0c92e7108278e2f6a0008ee742b07a49fba200b5412f62f27566c177",
+      "selected_files": 9,
+      "omitted_duplicate_source_files": 7
+    }
+  ],
+  "exclusions": [
+    "executables",
+    "private checkpoints",
+    "acquired banks",
+    "whole learned/neural/optimizer arrays",
+    "raw 31MB Nano receipt"
+  ]
+}

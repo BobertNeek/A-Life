@@ -1,0 +1,17 @@
+--- a/crates/alife_training/examples/probe_world_swap.rs
++++ b/crates/alife_training/examples/probe_world_swap.rs
+@@ -564,5 +564,12 @@
+     })
+ }
+ fn main() -> Result<()> {
+-    Err("disabled source-only proposal; fresh matched v5 has no study dispatch".into())
+-}
++    let args: Vec<String> = std::env::args().collect();
++    let parsed = parse_reviewed_args(&args)?;
++    qualified_entry(
++        parsed.root,
++        &parsed.binding_path,
++        parsed.scene_index,
++        parsed.variant,
++    )
++}

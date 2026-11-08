@@ -1,0 +1,7 @@
+# Curated drive-audit source and results
+
+Read CORRECTIONS-v2.md before interpreting the historical README. The source patch applies to commit 2da9dd323ad6f074556a851174a2edbc9e34e216, tree e402bcb5d5fc034ac0244e78d49fa1a0da25ede3. The original source, summary and matrix bytes are preserved here. actions-v2.json.gz decompresses to the exact separately projected public-safe actions-v2.json named by manifest-v2.json. It contains generated disposable fixture IDs and selected/physical scalar fields, not neural arrays, private checkpoints or biochemical banks.
+
+The larger original evidence archive (SHA-256 11104d6de9f93c1785b013fe5ef68fe25fa86227b5669bb2fe59901bad0dd608) is retained separately. Raw diagnostic trajectories, executables and inherited asset bytes are deliberately not included in this curated publication. The projection script requires those original recorded fixture JSON inputs; this bundle supplies their hashes, not a claim that it independently reruns the simulation.
+
+Independent read-only review verified source reconstruction of 22 delivered files, all 85 result-table entries, the eleven encoder mappings, printed matrix deltas and actual posture Rest counts. It did not rerun the native simulation or inspect private diagnostic arrays. Distinguish that review from the implementer-run native fixtures and prior 69 identity/preservation guards. No default change or promotion is made by archiving these files.

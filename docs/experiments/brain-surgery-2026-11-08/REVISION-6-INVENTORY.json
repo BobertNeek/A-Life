@@ -1,0 +1,64 @@
+{
+  "schema": "brain-daily-handoff-inventory-v1",
+  "parent": "e98a6f416acac56e893515d62a45bf4e41613abd",
+  "scope": "Additive source and bounded fixed-fixture scalar evidence only",
+  "files": [
+    {
+      "path": "docs/experiments/brain-surgery-2026-11-08/DAILY-HANDOFF-REVISION-6.md",
+      "bytes": 9513,
+      "sha256": "f77df47f722ecd8e1ebce93133bbeb115b89aa128e14950db701200e9df2a809"
+    },
+    {
+      "path": "docs/experiments/brain-surgery-2026-11-08/cognitive-v7/CPU-QUALIFICATION.md",
+      "bytes": 3906,
+      "sha256": "5c1a1e4c1346f9f3b59c1b0fd15a074218e5e7c967ad37ef5c1e385c7cd66c72"
+    },
+    {
+      "path": "docs/experiments/brain-surgery-2026-11-08/cognitive-v7/FAILURE-STAGES.md",
+      "bytes": 1221,
+      "sha256": "7f00b560b13aacefae89af63ff058c985becead373f4ff0130ba78c257fcad94"
+    },
+    {
+      "path": "docs/experiments/brain-surgery-2026-11-08/cognitive-v7/README.md",
+      "bytes": 1692,
+      "sha256": "dc773f12852c2b7cdf2befee36cd2ea9ee9a99f04ba08560c9aa88839d08890b"
+    },
+    {
+      "path": "docs/experiments/brain-surgery-2026-11-08/cognitive-v7/artifact-review.json",
+      "bytes": 598,
+      "sha256": "1d008189a7885bcfbf78e61da3a2194cb620e64776ca40316ef7cc62e406dc0f"
+    },
+    {
+      "path": "docs/experiments/brain-surgery-2026-11-08/cognitive-v7/bindings.json",
+      "bytes": 1772,
+      "sha256": "9429ad06c44666743b238348c5d9dda8c230e761da3e869e525dbcf240313118"
+    },
+    {
+      "path": "docs/experiments/brain-surgery-2026-11-08/cognitive-v7/source-and-qualification.tar.gz",
+      "bytes": 310377,
+      "sha256": "e4192ef96aa45d88080def7991390bc72b0b7a2731e4c181a6ea80aafd54bca7"
+    },
+    {
+      "path": "docs/experiments/brain-surgery-2026-11-08/thermal-reproductive-audit/AUDIT.md",
+      "bytes": 7627,
+      "sha256": "9797c928745ae84b207da922e3bdc49c4e12b6dfeaeb35ff809c2539e2d66af9"
+    },
+    {
+      "path": "docs/experiments/brain-surgery-2026-11-08/thermal-reproductive-audit/BINDINGS.json",
+      "bytes": 957,
+      "sha256": "873c4930381e0325e98d192e0622b637bc75ebe8443142138acc511ca0b23167"
+    },
+    {
+      "path": "docs/experiments/brain-surgery-2026-11-08/thermal-reproductive-audit/core-tests.log",
+      "bytes": 1678,
+      "sha256": "36923bfeafff732298a1681e62c5ed86f2d38ebd6301fabdd61cf6c0a6eb06e6"
+    },
+    {
+      "path": "docs/experiments/brain-surgery-2026-11-08/thermal-reproductive-audit/disposable-core-tests.patch",
+      "bytes": 3421,
+      "sha256": "e0f6c71bda79bec88188f31722c29e3ca5b2a29a3948d3bd67158d72fff4da3d"
+    }
+  ],
+  "native_study_reactivated": false,
+  "promotion": false
+}

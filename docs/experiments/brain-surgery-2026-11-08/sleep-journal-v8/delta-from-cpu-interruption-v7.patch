@@ -1,0 +1,678 @@
+diff --git a/crates/alife_runtime/src/checkpoint_assets/durable_manifest.rs b/crates/alife_runtime/src/checkpoint_assets/durable_manifest.rs
+index 148b7fe..222ea18 100644
+--- a/crates/alife_runtime/src/checkpoint_assets/durable_manifest.rs
++++ b/crates/alife_runtime/src/checkpoint_assets/durable_manifest.rs
+@@ -25,8 +25,10 @@ static SAVE_CAS_NONCE: AtomicU64 = AtomicU64::new(1);
+ #[cfg(test)]
+ static AUTHORITY_TEST_FAILURE_STAGE: AtomicU64 = AtomicU64::new(0);
+ pub const GPU_SLEEP_TRANSACTION_JOURNAL_SCHEMA_VERSION: u16 = 2;
++pub const GPU_SLEEP_INTERRUPTION_JOURNAL_SCHEMA_VERSION: u16 = 3;
+ pub const GPU_SLEEP_TRANSACTION_JOURNAL_MAX_ENTRIES: usize = 4096;
+ const SLEEP_JOURNAL_DIGEST_DOMAIN: &[u8] = b"alife.gpu.sleep-transaction-journal.v2";
++const SLEEP_INTERRUPTION_JOURNAL_DIGEST_DOMAIN: &[u8] = b"alife.gpu.sleep-transaction-journal.v3";
+ const GPU_CHECKPOINT_AUTHORITY_FIELD: &str = "gpu_checkpoint_authority";
+ const GPU_CHECKPOINT_AUTHORITY_SCHEMA: &str = "alife.gpu-checkpoint-authority";
+ const GPU_CHECKPOINT_AUTHORITY_SCHEMA_VERSION: u16 = 1;
+@@ -113,6 +115,22 @@ pub struct GpuSleepTransactionJournalEntryV2 {
+ }
+ 
+ impl GpuSleepTransactionJournalEntryV2 {
++    /// The existing serialized state version explicitly distinguishes new edges;
++    /// no field is appended to the legacy nested entry sequence.
++    pub fn journal_schema_version(&self) -> u16 {
++        if self.source.schema_version == alife_core::SLEEP_INTERRUPTION_SCHEMA_VERSION
++            || self.target.schema_version == alife_core::SLEEP_INTERRUPTION_SCHEMA_VERSION
++        {
++            GPU_SLEEP_INTERRUPTION_JOURNAL_SCHEMA_VERSION
++        } else {
++            GPU_SLEEP_TRANSACTION_JOURNAL_SCHEMA_VERSION
++        }
++    }
++
++    pub fn is_interruption_edge(&self) -> bool {
++        canonical_interruption_phase_edge(self.source, self.target, self.transition_tick)
++    }
++
+     pub fn try_new(
+         organism_id: OrganismId,
+         transition_tick: Tick,
+@@ -147,34 +165,36 @@ impl GpuSleepTransactionJournalEntryV2 {
+         self.organism_id.validate()?;
+         self.source.validate_contract()?;
+         self.target.validate_contract()?;
+-        let permitted = matches!(
+-            (self.source.consolidation, self.target.consolidation),
+-            (ConsolidationState::None, ConsolidationState::None)
+-                | (ConsolidationState::None, ConsolidationState::Pending { .. })
+-                | (
+-                    ConsolidationState::Pending { .. },
+-                    ConsolidationState::Prepared { .. }
+-                )
+-                | (
+-                    ConsolidationState::Prepared { .. },
+-                    ConsolidationState::Submitted { .. }
+-                )
+-                | (
+-                    ConsolidationState::Completed { .. },
+-                    ConsolidationState::Committed { .. }
+-                )
+-                | (
+-                    ConsolidationState::Committed { .. },
+-                    ConsolidationState::Committed { .. }
+-                )
+-                | (
+-                    ConsolidationState::Committed { .. },
+-                    ConsolidationState::None
+-                )
+-        );
++        let interruption = self.is_interruption_edge();
++        let permitted = interruption
++            || matches!(
++                (self.source.consolidation, self.target.consolidation),
++                (ConsolidationState::None, ConsolidationState::None)
++                    | (ConsolidationState::None, ConsolidationState::Pending { .. })
++                    | (
++                        ConsolidationState::Pending { .. },
++                        ConsolidationState::Prepared { .. }
++                    )
++                    | (
++                        ConsolidationState::Prepared { .. },
++                        ConsolidationState::Submitted { .. }
++                    )
++                    | (
++                        ConsolidationState::Completed { .. },
++                        ConsolidationState::Committed { .. }
++                    )
++                    | (
++                        ConsolidationState::Committed { .. },
++                        ConsolidationState::Committed { .. }
++                    )
++                    | (
++                        ConsolidationState::Committed { .. },
++                        ConsolidationState::None
++                    )
++            );
+         if !permitted
+             || !self.rollback_to_exact_base
+-            || self.transition_ordinal > 1
++            || self.transition_ordinal > if interruption { 2 } else { 1 }
+             || self.transition_tick.raw() == 0
+             || self.source.phase_started_tick.raw() > self.transition_tick.raw()
+             || self.target.phase_started_tick.raw() > self.transition_tick.raw()
+@@ -182,6 +202,18 @@ impl GpuSleepTransactionJournalEntryV2 {
+         {
+             return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+         }
++        if interruption {
++            return Ok(());
++        }
++        if self.journal_schema_version() == GPU_SLEEP_INTERRUPTION_JOURNAL_SCHEMA_VERSION
++            && !canonical_version3_non_interruption_edge(
++                self.source,
++                self.target,
++                self.transition_tick,
++            )
++        {
++            return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
++        }
+         match (self.source.consolidation, self.target.consolidation) {
+             (ConsolidationState::None, ConsolidationState::None)
+                 if canonical_pre_pending_phase_edge(self.source, self.target) => {}
+@@ -228,8 +260,9 @@ impl GpuSleepTransactionJournalEntryV2 {
+     }
+ 
+     fn recompute_digest(&self) -> Result<[u64; 4], ScaffoldContractError> {
+-        let mut digest = CanonicalDigestBuilder::new(SLEEP_JOURNAL_DIGEST_DOMAIN);
+-        digest.write_u16(GPU_SLEEP_TRANSACTION_JOURNAL_SCHEMA_VERSION);
++        let version = self.journal_schema_version();
++        let mut digest = CanonicalDigestBuilder::new(journal_digest_domain(version));
++        digest.write_u16(version);
+         digest.write_u64(self.organism_id.raw());
+         digest.write_u64(self.transition_tick.raw());
+         digest.write_u8(self.transition_ordinal);
+@@ -240,6 +273,76 @@ impl GpuSleepTransactionJournalEntryV2 {
+     }
+ }
+ 
++fn journal_digest_domain(version: u16) -> &'static [u8] {
++    if version == GPU_SLEEP_INTERRUPTION_JOURNAL_SCHEMA_VERSION {
++        SLEEP_INTERRUPTION_JOURNAL_DIGEST_DOMAIN
++    } else {
++        SLEEP_JOURNAL_DIGEST_DOMAIN
++    }
++}
++
++fn canonical_interruption_phase_edge(source: SleepState, target: SleepState, tick: Tick) -> bool {
++    if target.schema_version != alife_core::SLEEP_INTERRUPTION_SCHEMA_VERSION {
++        return false;
++    }
++    let Ok(mut controller) = alife_core::SleepController::restore(
++        alife_core::SleepConsolidationConfig::reference(),
++        source,
++    ) else {
++        return false;
++    };
++    let result = if source.phase.is_interrupted() {
++        controller.resume_interrupted_sleep(tick)
++    } else {
++        controller.interrupt_for_acute_pain(tick)
++    };
++    matches!(result, Ok(Some(_))) && controller.state() == target
++}
++
++fn canonical_version3_non_interruption_edge(
++    source: SleepState,
++    target: SleepState,
++    tick: Tick,
++) -> bool {
++    use alife_core::SleepPhase;
++    if source.schema_version != alife_core::SLEEP_INTERRUPTION_SCHEMA_VERSION
++        || target.schema_version != source.schema_version
++    {
++        return false;
++    }
++    match (source.consolidation, target.consolidation) {
++        (ConsolidationState::None, ConsolidationState::None) => {
++            target.phase_started_tick == tick && canonical_pre_pending_phase_edge(source, target)
++        }
++        (ConsolidationState::None, ConsolidationState::Pending { .. })
++        | (ConsolidationState::Pending { .. }, ConsolidationState::Prepared { .. })
++        | (ConsolidationState::Prepared { .. }, ConsolidationState::Submitted { .. })
++        | (ConsolidationState::Completed { .. }, ConsolidationState::Committed { .. }) => {
++            sleep_identity_unchanged_except_consolidation(source, target)
++        }
++        (ConsolidationState::Committed { .. }, ConsolidationState::Committed { .. }) => {
++            source.phase == SleepPhase::Consolidating
++                && target.phase == SleepPhase::Waking
++                && target.phase_started_tick == tick
++                && source.entered_sleep_tick == target.entered_sleep_tick
++                && source.last_trigger == target.last_trigger
++                && source.active_cycle_id == target.active_cycle_id
++                && sleep_cycle_fields_match(source, target)
++        }
++        (ConsolidationState::Committed { .. }, ConsolidationState::None) => {
++            source.phase == SleepPhase::Waking
++                && target.phase == SleepPhase::Awake
++                && target.phase_started_tick == tick
++                && target.entered_sleep_tick.is_none()
++                && target.active_cycle_id == 0
++                && target.last_consolidated_cycle_id == source.active_cycle_id
++                && target.cycles_completed == source.cycles_completed.saturating_add(1)
++                && target.last_trigger == source.last_trigger
++        }
++        _ => false,
++    }
++}
++
+ fn canonical_pre_pending_phase_edge(source: SleepState, target: SleepState) -> bool {
+     use alife_core::SleepPhase::{Awake, Consolidating, EnteringSleep, ForcedRecoverySleep};
+ 
+@@ -324,8 +427,15 @@ impl GpuSleepTransactionJournalV2 {
+         if entries.len() > GPU_SLEEP_TRANSACTION_JOURNAL_MAX_ENTRIES {
+             return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+         }
++        let schema_version = if entries.iter().any(|entry| {
++            entry.journal_schema_version() == GPU_SLEEP_INTERRUPTION_JOURNAL_SCHEMA_VERSION
++        }) {
++            GPU_SLEEP_INTERRUPTION_JOURNAL_SCHEMA_VERSION
++        } else {
++            GPU_SLEEP_TRANSACTION_JOURNAL_SCHEMA_VERSION
++        };
+         let mut journal = Self {
+-            schema_version: GPU_SLEEP_TRANSACTION_JOURNAL_SCHEMA_VERSION,
++            schema_version,
+             exact_base_manifest_digest,
+             exact_base_checkpoint_tick,
+             entries,
+@@ -360,13 +470,19 @@ impl GpuSleepTransactionJournalV2 {
+                     let Some(previous) = previous_entry else {
+                         return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+                     };
+-                    if !matches!(
+-                        (previous.source.consolidation, previous.target.consolidation),
+-                        (ConsolidationState::None, ConsolidationState::None)
+-                    ) || !matches!(
+-                        (entry.source.consolidation, entry.target.consolidation),
+-                        (ConsolidationState::None, ConsolidationState::Pending { .. })
+-                    ) {
++                    let final_interruption = self.schema_version
++                        == GPU_SLEEP_INTERRUPTION_JOURNAL_SCHEMA_VERSION
++                        && entry.is_interruption_edge()
++                        && !previous.is_interruption_edge();
++                    if !final_interruption
++                        && (!matches!(
++                            (previous.source.consolidation, previous.target.consolidation),
++                            (ConsolidationState::None, ConsolidationState::None)
++                        ) || !matches!(
++                            (entry.source.consolidation, entry.target.consolidation),
++                            (ConsolidationState::None, ConsolidationState::Pending { .. })
++                        ) || previous.is_interruption_edge())
++                    {
+                         return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+                     }
+                 }
+@@ -383,7 +499,20 @@ impl GpuSleepTransactionJournalV2 {
+             previous_key = Some(key);
+             previous_entry = Some(entry);
+         }
+-        if self.schema_version != GPU_SLEEP_TRANSACTION_JOURNAL_SCHEMA_VERSION
++        if !matches!(
++            self.schema_version,
++            GPU_SLEEP_TRANSACTION_JOURNAL_SCHEMA_VERSION
++                | GPU_SLEEP_INTERRUPTION_JOURNAL_SCHEMA_VERSION
++        ) || (self.schema_version == GPU_SLEEP_TRANSACTION_JOURNAL_SCHEMA_VERSION
++            && self
++                .entries
++                .iter()
++                .any(|entry| entry.journal_schema_version() != self.schema_version))
++            || (self.schema_version == GPU_SLEEP_INTERRUPTION_JOURNAL_SCHEMA_VERSION
++                && !self
++                    .entries
++                    .iter()
++                    .any(|entry| entry.journal_schema_version() == self.schema_version))
+             || PortableAssetDigest(self.exact_base_manifest_digest.clone())
+                 .validate_format()
+                 .is_err()
+@@ -396,7 +525,7 @@ impl GpuSleepTransactionJournalV2 {
+     }
+ 
+     fn recompute_digest(&self) -> Result<[u64; 4], ScaffoldContractError> {
+-        let mut digest = CanonicalDigestBuilder::new(SLEEP_JOURNAL_DIGEST_DOMAIN);
++        let mut digest = CanonicalDigestBuilder::new(journal_digest_domain(self.schema_version));
+         digest.write_u16(self.schema_version);
+         digest.write_utf8(&self.exact_base_manifest_digest);
+         digest.write_u64(self.exact_base_checkpoint_tick.raw());
+@@ -630,7 +759,11 @@ impl GpuCheckpointAuthorityPointerV1 {
+             || self.save.save_schema_version == 0
+             || !valid_authority_artifact_file_name(&self.save.file_name)
+             || self.journal.size_bytes == 0
+-            || self.journal.journal_schema_version != GPU_SLEEP_TRANSACTION_JOURNAL_SCHEMA_VERSION
++            || !matches!(
++                self.journal.journal_schema_version,
++                GPU_SLEEP_TRANSACTION_JOURNAL_SCHEMA_VERSION
++                    | GPU_SLEEP_INTERRUPTION_JOURNAL_SCHEMA_VERSION
++            )
+             || !valid_authority_artifact_file_name(&self.journal.file_name)
+             || self.authority_digest != self.recompute_digest()
+         {
+@@ -930,6 +1063,9 @@ impl GpuDurableSaveManifest {
+         }
+         let journal: GpuSleepTransactionJournalV2 = serde_json::from_slice(&bytes)?;
+         journal.validate()?;
++        if journal.schema_version != pointer.journal.journal_schema_version {
++            return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
++        }
+         let base_sleep_states = exact_base_sleep_states(save)?;
+         let exact_save_anchor = PortableAssetDigest::for_bytes(&serde_json::to_vec_pretty(save)?);
+         if validate_journal_against_exact_base(
+@@ -1082,7 +1218,7 @@ impl GpuDurableSaveManifest {
+                 file_name: journal_file_name,
+                 digest: journal_digest,
+                 size_bytes: u64::try_from(journal_bytes.len()).unwrap_or(u64::MAX),
+-                journal_schema_version: GPU_SLEEP_TRANSACTION_JOURNAL_SCHEMA_VERSION,
++                journal_schema_version: journal.schema_version,
+             },
+         )?;
+         record_elapsed_ns(&mut timing.pointer_build_validation_wall_ns, started);
+@@ -1146,7 +1282,7 @@ impl GpuDurableSaveManifest {
+                 file_name: journal_file_name,
+                 digest: journal_digest,
+                 size_bytes: u64::try_from(journal_bytes.len()).unwrap_or(u64::MAX),
+-                journal_schema_version: GPU_SLEEP_TRANSACTION_JOURNAL_SCHEMA_VERSION,
++                journal_schema_version: journal.schema_version,
+             },
+         )?;
+         record_elapsed_ns(&mut timing.pointer_build_validation_wall_ns, started);
+@@ -1827,6 +1963,27 @@ mod tests {
+         }
+     }
+ 
++    #[test]
++    fn version3_container_cannot_relabel_legacy_entries_or_empty_journal() {
++        let source = committed_sleep(SleepPhase::Consolidating, 2);
++        let target = committed_sleep(SleepPhase::Waking, 3);
++        let entry =
++            GpuSleepTransactionJournalEntryV2::try_new(OrganismId(1), Tick::new(3), source, target)
++                .unwrap();
++        for entries in [vec![], vec![entry]] {
++            let mut journal = GpuSleepTransactionJournalV2::try_new(
++                "fnv1a64:0123456789abcdef".to_string(),
++                Tick::new(1),
++                entries,
++            )
++            .unwrap();
++            assert_eq!(journal.schema_version, 2);
++            journal.schema_version = 3;
++            journal.journal_digest = journal.recompute_digest().unwrap();
++            assert!(journal.validate().is_err());
++        }
++    }
++
+     #[test]
+     fn journal_rejects_malformed_base_digest() {
+         assert!(GpuSleepTransactionJournalV2::try_new(
+diff --git a/crates/alife_runtime/tests/fixtures/sleep_journal_legacy_v2.json b/crates/alife_runtime/tests/fixtures/sleep_journal_legacy_v2.json
+new file mode 100644
+index 0000000..e54ca63
+--- /dev/null
++++ b/crates/alife_runtime/tests/fixtures/sleep_journal_legacy_v2.json
+@@ -0,0 +1 @@
++[{"schema_version":2,"exact_base_manifest_digest":"fnv1a64:0123456789abcdef","exact_base_checkpoint_tick":2,"entries":[{"organism_id":1,"transition_tick":3,"transition_ordinal":0,"source":{"schema_version":2,"phase":"ForcedRecoverySleep","phase_started_tick":2,"entered_sleep_tick":2,"cycles_completed":0,"last_trigger":"RecoveryProtocol","active_cycle_id":1,"last_consolidated_cycle_id":0,"consolidation":"None"},"target":{"schema_version":2,"phase":"Consolidating","phase_started_tick":3,"entered_sleep_tick":2,"cycles_completed":0,"last_trigger":"RecoveryProtocol","active_cycle_id":1,"last_consolidated_cycle_id":0,"consolidation":"None"},"rollback_to_exact_base":true,"entry_digest":[6823492176043118430,4543274371608288374,16109533840771836509,14059586419952838971]},{"organism_id":1,"transition_tick":3,"transition_ordinal":1,"source":{"schema_version":2,"phase":"Consolidating","phase_started_tick":3,"entered_sleep_tick":2,"cycles_completed":0,"last_trigger":"RecoveryProtocol","active_cycle_id":1,"last_consolidated_cycle_id":0,"consolidation":"None"},"target":{"schema_version":2,"phase":"Consolidating","phase_started_tick":3,"entered_sleep_tick":2,"cycles_completed":0,"last_trigger":"RecoveryProtocol","active_cycle_id":1,"last_consolidated_cycle_id":0,"consolidation":{"Pending":{"intent":{"cycle_id":1},"replay_digest":[9,9,9,9],"replay_event_count":1,"replay_eligibility_sample_count":0}}},"rollback_to_exact_base":true,"entry_digest":[16050444601803069382,11572087677693614092,5083396159514670908,4864283644392778562]}],"journal_digest":[644127779116373564,5206718606531806566,6963889105430595835,9811416905222875115]},42]
+\ No newline at end of file
+diff --git a/crates/alife_runtime/tests/sleep_journal_wire_v3.rs b/crates/alife_runtime/tests/sleep_journal_wire_v3.rs
+new file mode 100644
+index 0000000..64c6482
+--- /dev/null
++++ b/crates/alife_runtime/tests/sleep_journal_wire_v3.rs
+@@ -0,0 +1,311 @@
++//! Exact legacy JSON storage bytes and a parent sentinel, captured before the
++//! version3 implementation. The emitter refuses to overwrite an existing path.
++use alife_core::{
++    ConsolidationIntent, ConsolidationState, OrganismId, SleepPhase, SleepState, SleepTrigger,
++    Tick, SLEEP_CONSOLIDATION_SCHEMA_VERSION,
++};
++use alife_runtime::{GpuSleepTransactionJournalEntryV2, GpuSleepTransactionJournalV2};
++
++fn legacy_fixture() -> GpuSleepTransactionJournalV2 {
++    let source = SleepState {
++        schema_version: SLEEP_CONSOLIDATION_SCHEMA_VERSION,
++        phase: SleepPhase::ForcedRecoverySleep,
++        phase_started_tick: Tick::new(2),
++        entered_sleep_tick: Some(Tick::new(2)),
++        cycles_completed: 0,
++        last_trigger: Some(SleepTrigger::RecoveryProtocol),
++        active_cycle_id: 1,
++        last_consolidated_cycle_id: 0,
++        consolidation: ConsolidationState::None,
++    };
++    let middle = SleepState {
++        phase: SleepPhase::Consolidating,
++        phase_started_tick: Tick::new(3),
++        ..source
++    };
++    let target = SleepState {
++        consolidation: ConsolidationState::Pending {
++            intent: ConsolidationIntent { cycle_id: 1 },
++            replay_digest: [9; 4],
++            replay_event_count: 1,
++            replay_eligibility_sample_count: 0,
++        },
++        ..middle
++    };
++    let entries = vec![
++        GpuSleepTransactionJournalEntryV2::try_new_with_ordinal(
++            OrganismId(1),
++            Tick::new(3),
++            0,
++            source,
++            middle,
++        )
++        .unwrap(),
++        GpuSleepTransactionJournalEntryV2::try_new_with_ordinal(
++            OrganismId(1),
++            Tick::new(3),
++            1,
++            middle,
++            target,
++        )
++        .unwrap(),
++    ];
++    GpuSleepTransactionJournalV2::try_new(
++        "fnv1a64:0123456789abcdef".to_string(),
++        Tick::new(2),
++        entries,
++    )
++    .unwrap()
++}
++
++#[test]
++fn legacy_v2_journal_storage_bytes_and_nested_sentinel_are_preserved() {
++    let journal = legacy_fixture();
++    assert_eq!(journal.schema_version, 2);
++    journal.validate().unwrap();
++    let bytes = serde_json::to_vec(&(journal.clone(), 42_u8)).unwrap();
++    if let Ok(path) = std::env::var("ALIFE_EMIT_LEGACY_JOURNAL_FIXTURE") {
++        use std::io::Write;
++        let mut file = std::fs::OpenOptions::new()
++            .write(true)
++            .create_new(true)
++            .open(path)
++            .unwrap();
++        file.write_all(&bytes).unwrap();
++        println!(
++            "captured legacy version2 journal fixture: {} bytes",
++            bytes.len()
++        );
++        return;
++    }
++    assert_eq!(
++        bytes.as_slice(),
++        include_bytes!("fixtures/sleep_journal_legacy_v2.json")
++    );
++    let (decoded, sentinel): (GpuSleepTransactionJournalV2, u8) =
++        serde_json::from_slice(include_bytes!("fixtures/sleep_journal_legacy_v2.json")).unwrap();
++    decoded.validate().unwrap();
++    assert_eq!(decoded, journal);
++    assert_eq!(sentinel, 42);
++}
++use alife_core::{
++    ConsolidationJobId, ConsolidationStagedOutput, GpuConsolidationRequest, PhenotypeHash,
++    GPU_CONSOLIDATION_REQUEST_SCHEMA_VERSION,
++};
++// Source-only pending tests. Append after the native legacy fixture is captured.
++#[test]
++fn interrupted_journal_edges_preserve_frozen_payload_and_reject_downgrade() {
++    use alife_core::{SleepConsolidationConfig, SleepController};
++    let legacy = legacy_fixture();
++    let request = valid_request_for(1, [9; 4]);
++    let staged = valid_staged(&request);
++    let base = legacy.entries[0].target;
++    let stages = [
++        legacy.entries[0].source,
++        base,
++        legacy.entries[1].target,
++        SleepState {
++            consolidation: ConsolidationState::Prepared { request },
++            ..base
++        },
++        SleepState {
++            consolidation: ConsolidationState::Submitted {
++                request,
++                job_id: staged.job_id,
++            },
++            ..base
++        },
++        SleepState {
++            consolidation: ConsolidationState::Completed { request, staged },
++            ..base
++        },
++        SleepState {
++            consolidation: ConsolidationState::Committed {
++                cycle_id: 1,
++                output_generation: staged.output_generation,
++                output_digest: staged.output_digest,
++            },
++            ..base
++        },
++        SleepState {
++            phase: SleepPhase::Waking,
++            consolidation: ConsolidationState::Committed {
++                cycle_id: 1,
++                output_generation: staged.output_generation,
++                output_digest: staged.output_digest,
++            },
++            ..base
++        },
++    ];
++    for source in stages {
++        let mut controller =
++            SleepController::restore(SleepConsolidationConfig::reference(), source).unwrap();
++        controller
++            .interrupt_for_acute_pain(Tick::new(4))
++            .unwrap()
++            .unwrap();
++        let interrupted = controller.state();
++        assert_eq!(interrupted.consolidation, source.consolidation);
++        let entry = GpuSleepTransactionJournalEntryV2::try_new(
++            OrganismId(1),
++            Tick::new(4),
++            source,
++            interrupted,
++        )
++        .unwrap();
++        let journal = GpuSleepTransactionJournalV2::try_new(
++            "fnv1a64:0123456789abcdef".to_string(),
++            Tick::new(2),
++            vec![entry],
++        )
++        .unwrap();
++        assert_eq!(journal.schema_version, 3);
++        let mut downgraded = journal.clone();
++        downgraded.schema_version = 2;
++        assert!(downgraded.validate().is_err());
++        let bytes = serde_json::to_vec(&(journal.clone(), 42_u8)).unwrap();
++        let (decoded, sentinel): (GpuSleepTransactionJournalV2, u8) =
++            serde_json::from_slice(&bytes).unwrap();
++        assert_eq!(decoded, journal);
++        assert_eq!(sentinel, 42);
++        decoded.validate().unwrap();
++        controller
++            .resume_interrupted_sleep(Tick::new(5))
++            .unwrap()
++            .unwrap();
++        let resumed = controller.state();
++        assert_eq!(resumed.consolidation, source.consolidation);
++        assert_eq!(resumed.active_cycle_id, source.active_cycle_id);
++        GpuSleepTransactionJournalEntryV2::try_new(
++            OrganismId(1),
++            Tick::new(5),
++            interrupted,
++            resumed,
++        )
++        .unwrap();
++        let mut rewritten = interrupted;
++        rewritten.last_trigger = Some(SleepTrigger::ForcedRequest);
++        assert!(GpuSleepTransactionJournalEntryV2::try_new(
++            OrganismId(1),
++            Tick::new(4),
++            source,
++            rewritten
++        )
++        .is_err());
++    }
++}
++
++#[test]
++fn same_tick_journal_prefix_accepts_one_final_interrupt_not_a_second_edge() {
++    use alife_core::{SleepConsolidationConfig, SleepController};
++    let mut journal = legacy_fixture();
++    let source = journal.entries[1].target;
++    let mut controller =
++        SleepController::restore(SleepConsolidationConfig::reference(), source).unwrap();
++    controller
++        .interrupt_for_acute_pain(Tick::new(3))
++        .unwrap()
++        .unwrap();
++    let interrupted = controller.state();
++    let edge = GpuSleepTransactionJournalEntryV2::try_new_with_ordinal(
++        OrganismId(1),
++        Tick::new(3),
++        2,
++        source,
++        interrupted,
++    )
++    .unwrap();
++    journal.entries.push(edge);
++    let accepted = GpuSleepTransactionJournalV2::try_new(
++        journal.exact_base_manifest_digest.clone(),
++        journal.exact_base_checkpoint_tick,
++        journal.entries.clone(),
++    )
++    .unwrap();
++    assert_eq!(accepted.schema_version, 3);
++    controller
++        .resume_interrupted_sleep(Tick::new(3))
++        .unwrap()
++        .unwrap();
++    assert!(GpuSleepTransactionJournalEntryV2::try_new_with_ordinal(
++        OrganismId(1),
++        Tick::new(3),
++        3,
++        interrupted,
++        controller.state()
++    )
++    .is_err());
++    let mut ordinal_gap = journal.entries;
++    ordinal_gap.remove(1);
++    assert!(GpuSleepTransactionJournalV2::try_new(
++        accepted.exact_base_manifest_digest,
++        accepted.exact_base_checkpoint_tick,
++        ordinal_gap
++    )
++    .is_err());
++}
++
++fn valid_request_for(cycle_id: u64, replay_digest: [u64; 4]) -> GpuConsolidationRequest {
++    let mut request = GpuConsolidationRequest {
++        schema_version: GPU_CONSOLIDATION_REQUEST_SCHEMA_VERSION,
++        request_flags: 0,
++        cycle_id,
++        phenotype_hash: PhenotypeHash([1, 2, 3, 4]),
++        input_generation: 9,
++        expected_output_generation: 10,
++        input_digest: [5, 6, 7, 8],
++        replay_digest,
++        max_replay_events: 8,
++        max_replay_eligibility_samples: 32,
++        request_digest: [0; 4],
++    };
++    request.request_digest = request.recompute_request_digest().unwrap();
++    request
++}
++
++fn valid_staged(request: &GpuConsolidationRequest) -> ConsolidationStagedOutput {
++    let mut staged = ConsolidationStagedOutput {
++        job_id: ConsolidationJobId::try_from_raw(3).unwrap(),
++        output_generation: request.expected_output_generation,
++        output_weight_bank: 1,
++        output_digest: [13, 14, 15, 16],
++        eligibility_reset_generation: 8,
++        output_eligibility_bank: 0,
++        eligibility_output_digest: [17, 18, 19, 20],
++        replay_journal_generation: 7,
++        replay_journal_cursor: 0,
++        replay_journal_event_count: 0,
++        replay_journal_output_digest: [21, 22, 23, 24],
++        staging_digest: [0; 4],
++        promoted_fast_l1_bits: 0.5_f32.to_bits(),
++        replay_induced_fast_l1_bits: 0.25_f32.to_bits(),
++    };
++    staged.staging_digest = staged.recompute_staging_digest(request, 1, 1).unwrap();
++    staged
++}
++
++#[test]
++fn version3_phase_edge_requires_actual_transition_tick_without_changing_version2() {
++    let legacy = legacy_fixture();
++    let source = legacy.entries[0].source;
++    let target = legacy.entries[0].target;
++    GpuSleepTransactionJournalEntryV2::try_new(OrganismId(1), Tick::new(4), source, target)
++        .unwrap();
++    let source = SleepState {
++        schema_version: 3,
++        ..source
++    };
++    let target = SleepState {
++        schema_version: 3,
++        ..target
++    };
++    assert!(GpuSleepTransactionJournalEntryV2::try_new(
++        OrganismId(1),
++        Tick::new(4),
++        source,
++        target
++    )
++    .is_err());
++    GpuSleepTransactionJournalEntryV2::try_new(OrganismId(1), Tick::new(3), source, target)
++        .unwrap();
++}

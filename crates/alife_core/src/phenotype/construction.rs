@@ -70,6 +70,10 @@ fn compile_inner(
         capacity,
         u16::try_from(projections.len()).map_err(|_| compile_error())?,
         u32::try_from(synapses.len()).map_err(|_| compile_error())?,
+        inputs
+            .foundation_abi()
+            .n2048_grip_reader_candidate()
+            .is_some(),
     )?;
     if inputs
         .foundation_abi()

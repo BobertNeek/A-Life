@@ -1,0 +1,12 @@
+{
+  "status": "frozen before matrix exposure; candidate not promoted",
+  "inherited_config_seed": 2026110901,
+  "sampling_streams": [17, 29],
+  "coefficients": {"signal": 4.0, "reference": 2.0, "tonic": -3.0},
+  "common_world_patch_sha256": "c394e2fbfadcf2fea7e7ecba15ad44ba7f757e0d366a06b7f8e50871010169dc",
+  "matrix": {"arms": ["full", "no-drive", "no-memory", "baseline"], "scenes": ["toy-low", "toy-mid", "toy-high", "matched-nonplayable-high", "toy-high-tired", "toy-unreachable-high"], "ticks_per_episode": 24, "controlled_policy_episodes": 48},
+  "long_controls": {"arms": ["full", "no-drive", "no-memory", "baseline"], "scene": "toy-high", "ticks_per_episode": 96, "controlled_policy_episodes": 8},
+  "hunger_controls": {"arms": ["full", "baseline"], "scene": "hungry-toy-and-food", "ticks_per_episode": 24, "controlled_policy_episodes": 4},
+  "replication_limit": "Two sampling streams of one fixed inherited candidate. Not independent genetic replications or an autonomous cohort.",
+  "control_requirement": "Before matched inference, equal sensory channels, body, chemistry and all candidate neural features including contact must pass; actual Play must succeed only on the toy, with no food/praise or damage event in either matched control."
+}

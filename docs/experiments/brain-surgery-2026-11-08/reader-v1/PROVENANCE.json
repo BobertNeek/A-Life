@@ -1,0 +1,21 @@
+{
+  "original_archive_sha256": "f68ff5f3374eec7434db8fde2dc5685b87d80c99ab8380fcd2f2ccc034afe1ed",
+  "original_archive_filename": "grip-reader-utility-fixtures-source-and-results.tar.gz",
+  "curation": "Exact bytes retained for the six allowlisted source/scalar/identity/binding files. Original archive is not republished. No native execution was performed to prepare this archive.",
+  "retained_files": {
+    "candidate-fixtures.patch": "bd18870e7874b383bba93cabb5174d0ff443a1550544483a97828556449605a2",
+    "outcomes.json": "eb3b0bf55bb3ad0bf65ec2822c03dadbdf30466930ba56be463df827cc0d3d42",
+    "identity.json": "62d76aa1c80278b7f120fdeaa75cd67b085a1a23b920dc1cbbddcea1397547e5",
+    "bindings.json": "6d18ea152aea0b5cd87ac0853a1416309b2ec0b01b239b57105839089bbcd1aa",
+    "source/crates/alife_training/examples/probe_grip_reader.rs": "dace9a3db9b6e4e9141fcf3e5eca55f743af11a389ff2aaab03433556e4dcf1b",
+    "source/crates/alife_training/examples/support/world_swap_legacy_v12.rs": "a462c4f9a348ce9699e394109a56cf65c278c84f39ed500754b7281298237e20"
+  },
+  "omitted_original_files": {
+    "PLAN.md": "855afd51b8ae99a0ea8ef5779c8fc4867807a9aba9441043441122efcffedcf2",
+    "FINDINGS.md": "d5078e88a5e88f16421a774be20ce5addea871ec5794c4748b9c1b8d078a1f81",
+    "CHECKS.md": "1cb978f55346c803c0e41c4f85600f15006d146474332836e236d5fb847f42a4",
+    "source-closure.json": "f8050815c4b427abbe9a6d9633bd9ef050ada5761c3086789061798fc52d3acb",
+    "SHA256SUMS": "6bfa9dfc0b9aa2258b38ed29e304f0e2e93e3823dc91280090f40ce9df6a8bdf"
+  },
+  "omission_reason": "Original narratives contain execution-coordination details; replaced with a public technical summary. The broad source-closure manifest includes unrelated source metadata and is omitted; its original digest remains in bindings.json. The old checksum list is superseded for this curated set. No trained checkpoint, private memory bank, raw run log, executable, asset, credential, or permission record is included."
+}

@@ -1,0 +1,19 @@
+   Compiling alife_core v0.1.0 (/workspace/scratch/ee5e08a3ca9b/need-consequence-evidence-v1/crates/alife_core)
+error[E0433]: cannot find type `ChannelPhysicalOutcome` in this scope
+    --> crates/alife_core/src/need_consequence.rs:1264:25
+     |
+1264 |                         ChannelPhysicalOutcome::new(
+     |                         ^^^^^^^^^^^^^^^^^^^^^^ use of undeclared type `ChannelPhysicalOutcome`
+     |
+help: a struct with a similar name exists
+     |
+1264 -                         ChannelPhysicalOutcome::new(
+1264 +                         JointPhysicalOutcome::new(
+     |
+help: consider importing this struct
+     |
+ 598 +     use crate::experience::ChannelPhysicalOutcome;
+     |
+
+For more information about this error, try `rustc --explain E0433`.
+error: could not compile `alife_core` (lib test) due to 1 previous error

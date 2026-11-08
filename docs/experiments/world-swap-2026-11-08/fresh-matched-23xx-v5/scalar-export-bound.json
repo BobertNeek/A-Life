@@ -1,0 +1,27 @@
+{
+  "all_case_summaries_receipts_and_prefix_counts_preserved": true,
+  "case_assignment_patterns": 16,
+  "conservative_mandatory_bytes": 857326,
+  "host_steps": 0,
+  "max_actual_summary_only_bytes": 233648,
+  "package_manifest_sha256": "f572f8b715737cdb8b2be0303e35cc818f04ec5a35cda16d3968f6c714371145",
+  "per_file_conservative_bytes": {
+    "SHA256SUMS": 573,
+    "checks.json": 289812,
+    "common-audit-kernel.patch": 146685,
+    "report.md": 8192,
+    "rows.json": 17557,
+    "source-bindings.json": 12584,
+    "summary.json": 313767,
+    "world-factor.patch": 68156
+  },
+  "preparation_ticks": 0,
+  "public_cap_bytes": 16777216,
+  "replays": 0,
+  "report_byte_envelope": 8192,
+  "scalar_leaf_serialized_byte_envelope": 1026,
+  "schema_version": 1,
+  "scope": "source_scalar_only_not_study",
+  "script_sha256": "43d3378e33e5dd3ec928f119bdae6b1aa71fa64df9488965b5558074ca53d785",
+  "source_patch_bytes": 214841
+}

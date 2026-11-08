@@ -1,0 +1,33 @@
+{
+  "source": "7d565b7231c8c86f6f25c6f2e4f85e94188e74ca",
+  "tree": "6086c63a9ba7deafdc82bafcf951c7d66bcfc8b4",
+  "base": "40eebc5f3f88ee06b83e859b1b511e295624e445",
+  "production_changes": false,
+  "exe_sha256": "124993fae9420f9f08c0deae505ddb12d1a890a68338e8c57c7a5cc8c44d8de3",
+  "actual_pass": 1,
+  "seconds": 10.21,
+  "decisions": 1,
+  "world_intervals": 6,
+  "real_restores": 2,
+  "restored_retry_counts": [
+    0,
+    4
+  ],
+  "injected_initial_rejections": 1,
+  "injected_failed_retries": 4,
+  "strict_clippy": "pass after touching copied source inputs; initial stale-main metadata failure preserved",
+  "fmt_diff": "pass",
+  "excluded": [
+    "executables",
+    "generated checkpoints/assets",
+    "private arrays"
+  ],
+  "not_claimed": [
+    "automatic pain arousal",
+    "Awake recovery threshold",
+    "mixed populations",
+    "Completed startup",
+    "ordinary hardware admission",
+    "awake shared actuator budget"
+  ]
+}

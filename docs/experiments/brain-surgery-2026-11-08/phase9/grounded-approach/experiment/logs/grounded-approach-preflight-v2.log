@@ -1,0 +1,17 @@
+   Compiling alife_world v0.1.0 (/workspace/scratch/ee5e08a3ca9b/grounded-approach-need-v1/crates/alife_world)
+error[E0308]: mismatched types
+   --> crates/alife_world/src/headless/grounded_approach_need_tests.rs:38:75
+    |
+ 38 |         .find(|receptor| receptor.target == BiochemicalTargetLocus::Drive(DriveChannel::Loneliness))
+    |                                             ----------------------------- ^^^^^^^^^^^^^^^^^^^^^^^^ expected `BiochemicalDriveChannel`, found `DriveChannel`
+    |                                             |
+    |                                             arguments to this enum variant are incorrect
+    |
+note: tuple variant defined here
+   --> crates/alife_core/src/biochemical_graph.rs:249:5
+    |
+249 |     Drive(DriveChannel),
+    |     ^^^^^
+
+For more information about this error, try `rustc --explain E0308`.
+error: could not compile `alife_world` (lib test) due to 1 previous error

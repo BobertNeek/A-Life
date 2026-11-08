@@ -1,0 +1,11 @@
+{
+  "QUALIFICATION.json": "805e0d8b71525f9977a3e671b8060f16bc4a896c2883adb3a89384b219bceab4",
+  "retained-only-main-app-tests-v13r2.log": "7e76afce5467a8d74e24d296bf4716c21f203fbb838b614553c3b4f0abdd097c",
+  "retained-only-main-clippy-v13r2.log": "b50f4b1433ab205b42988ab49bfa875cd2543a3649dc7d5512610fbe1ba97d8e",
+  "retained-only-main-fmt-v13r2.log": "966e97e61b83663b14bfa5d30e25dd97040b625b86310a8c8243299f24297689",
+  "retained-only-main-restore-v13r2.log": "bf651ca614a420af765d5f4289e9ed582683681eed84ae107ce47bb28b237472",
+  "source/crates/alife_game_app/src/gpu_live_runtime/restore_reconciliation.rs": "d155f9ce2a8b46b42b1b4dc689b42f6b49983b12721e5950a91e3c65040c011e",
+  "source/crates/alife_game_app/src/gpu_live_runtime.rs": "9d8d4018659f211a30bc62014e4684c06ad5bf75a2b525376f9efb6ca77ecc97",
+  "source.patch": "3e213f127eccdc268bf21c3718121dfb562b483ea2c0d21c52c9f6bf52d3aeb7",
+  "tree.txt": "c16c8dde87d9554e5aaf2c2d7894956fb6fc0220bee2d945f258bb77a48a0f03"
+}

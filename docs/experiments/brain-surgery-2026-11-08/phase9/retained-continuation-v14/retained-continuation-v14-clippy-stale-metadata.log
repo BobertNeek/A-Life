@@ -1,0 +1,204 @@
+    Checking alife_storage v0.1.0 (/workspace/scratch/ee5e08a3ca9b/motor-reflex-retained-continuation-v14/crates/alife_storage)
+    Checking alife_world v0.1.0 (/workspace/scratch/ee5e08a3ca9b/motor-reflex-retained-continuation-v14/crates/alife_world)
+error[E0432]: unresolved import `alife_core::grip_research`
+ --> crates/alife_world/src/candidate_enumerator.rs:3:17
+  |
+3 | use alife_core::grip_research::GroundedGripSlotV1;
+  |                 ^^^^^^^^^^^^^ could not find `grip_research` in `alife_core`
+
+error[E0432]: unresolved import `alife_core::grip_research`
+ --> crates/alife_world/src/headless/grip_research.rs:8:17
+  |
+8 | use alife_core::grip_research::{
+  |                 ^^^^^^^^^^^^^ could not find `grip_research` in `alife_core`
+
+error[E0433]: cannot find `ContactWithdrawalEvidence` in `alife_core`
+  --> crates/alife_world/src/headless/contact_withdrawal.rs:99:40
+   |
+99 |         if sources.len() > alife_core::ContactWithdrawalEvidence::MAX_SOURCES {
+   |                                        ^^^^^^^^^^^^^^^^^^^^^^^^^ could not find `ContactWithdrawalEvidence` in `alife_core`
+
+error[E0433]: cannot find `GripOperationV1` in `alife_core`
+    --> crates/alife_world/src/headless.rs:5462:46
+     |
+5462 |         if let Some(operation) = alife_core::GripOperationV1::from_action_id(command.action_id)
+     |                                              ^^^^^^^^^^^^^^^ could not find `GripOperationV1` in `alife_core`
+
+error[E0433]: cannot find `GripOperationV1` in `alife_core`
+    --> crates/alife_world/src/headless.rs:7730:36
+     |
+7730 |                     && alife_core::GripOperationV1::from_action_id(command.primitive).is_some())
+     |                                    ^^^^^^^^^^^^^^^ could not find `GripOperationV1` in `alife_core`
+
+error[E0599]: no method named `grip_observations` found for reference `&alife_core::PerceptionFrameDraft` in the current scope
+   --> crates/alife_world/src/candidate_enumerator.rs:112:22
+    |
+112 |             || draft.grip_observations() != self.grip_observations
+    |                      ^^^^^^^^^^^^^^^^^ method not found in `&alife_core::PerceptionFrameDraft`
+
+error[E0599]: no variant, associated function, or constant named `GroundedGripObjectSlotsV1` found for enum `alife_core::SensorProfile` in the current scope
+   --> crates/alife_world/src/candidate_enumerator.rs:220:50
+    |
+220 |     let grip_profile = profile == SensorProfile::GroundedGripObjectSlotsV1;
+    |                                                  ^^^^^^^^^^^^^^^^^^^^^^^^^ variant, associated function, or constant not found in `alife_core::SensorProfile`
+    |
+help: there is a variant with a similar name
+    |
+220 -     let grip_profile = profile == SensorProfile::GroundedGripObjectSlotsV1;
+220 +     let grip_profile = profile == SensorProfile::GroundedObjectSlotsV1;
+    |
+
+error[E0599]: no variant, associated function, or constant named `GroundedGripObjectSlotsV1` found for enum `alife_core::SensorProfile` in the current scope
+   --> crates/alife_world/src/candidate_enumerator.rs:237:30
+    |
+237 |             | SensorProfile::GroundedGripObjectSlotsV1
+    |                              ^^^^^^^^^^^^^^^^^^^^^^^^^ variant, associated function, or constant not found in `alife_core::SensorProfile`
+    |
+help: there is a variant with a similar name
+    |
+237 -             | SensorProfile::GroundedGripObjectSlotsV1
+237 +             | SensorProfile::GroundedObjectSlotsV1
+    |
+
+error[E0599]: no method named `is_n2048_grip_reader_candidate` found for reference `&alife_core::FoundationWeightAsset` in the current scope
+  --> crates/alife_world/src/headless/grip_research.rs:31:23
+   |
+31 |                 asset.is_n2048_grip_reader_candidate()
+   |                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ method not found in `&alife_core::FoundationWeightAsset`
+
+error[E0599]: no variant, associated function, or constant named `GroundedGripObjectSlotsV1` found for enum `alife_core::SensorProfile` in the current scope
+  --> crates/alife_world/src/headless/grip_research.rs:32:76
+   |
+32 |                     && asset.manifest().sensor_profile() == SensorProfile::GroundedGripObjectSlotsV1
+   |                                                                            ^^^^^^^^^^^^^^^^^^^^^^^^^ variant, associated function, or constant not found in `alife_core::SensorProfile`
+   |
+help: there is a variant with a similar name
+   |
+32 -                     && asset.manifest().sensor_profile() == SensorProfile::GroundedGripObjectSlotsV1
+32 +                     && asset.manifest().sensor_profile() == SensorProfile::GroundedObjectSlotsV1
+   |
+
+error[E0599]: no variant, associated function, or constant named `GroundedGripObjectSlotsV1` found for enum `alife_core::SensorProfile` in the current scope
+  --> crates/alife_world/src/headless/grip_research.rs:85:57
+   |
+85 |             || draft.sensor_profile() != SensorProfile::GroundedGripObjectSlotsV1
+   |                                                         ^^^^^^^^^^^^^^^^^^^^^^^^^ variant, associated function, or constant not found in `alife_core::SensorProfile`
+   |
+help: there is a variant with a similar name
+   |
+85 -             || draft.sensor_profile() != SensorProfile::GroundedGripObjectSlotsV1
+85 +             || draft.sensor_profile() != SensorProfile::GroundedObjectSlotsV1
+   |
+
+error[E0599]: no method named `grip_observations` found for reference `&alife_core::PerceptionFrameDraft` in the current scope
+   --> crates/alife_world/src/headless/grip_research.rs:122:14
+    |
+121 |           let confidence = draft
+    |  __________________________-
+122 | |             .grip_observations()
+    | |             -^^^^^^^^^^^^^^^^^ method not found in `&alife_core::PerceptionFrameDraft`
+    | |_____________|
+    |
+
+error[E0599]: no variant, associated function, or constant named `GroundedGripObjectSlotsV1` found for enum `alife_core::SensorProfile` in the current scope
+   --> crates/alife_world/src/headless/grip_research.rs:151:53
+    |
+151 |         if draft.sensor_profile() != SensorProfile::GroundedGripObjectSlotsV1
+    |                                                     ^^^^^^^^^^^^^^^^^^^^^^^^^ variant, associated function, or constant not found in `alife_core::SensorProfile`
+    |
+help: there is a variant with a similar name
+    |
+151 -         if draft.sensor_profile() != SensorProfile::GroundedGripObjectSlotsV1
+151 +         if draft.sensor_profile() != SensorProfile::GroundedObjectSlotsV1
+    |
+
+error[E0599]: no variant, associated function, or constant named `GroundedGripObjectSlotsV1` found for enum `alife_core::SensorProfile` in the current scope
+    --> crates/alife_world/src/headless.rs:3835:30
+     |
+3835 |             | SensorProfile::GroundedGripObjectSlotsV1 => {
+     |                              ^^^^^^^^^^^^^^^^^^^^^^^^^ variant, associated function, or constant not found in `alife_core::SensorProfile`
+     |
+help: there is a variant with a similar name
+     |
+3835 -             | SensorProfile::GroundedGripObjectSlotsV1 => {
+3835 +             | SensorProfile::GroundedObjectSlotsV1 => {
+     |
+
+error[E0599]: no variant, associated function, or constant named `GroundedGripObjectSlotsV1` found for enum `alife_core::SensorProfile` in the current scope
+    --> crates/alife_world/src/headless.rs:3891:70
+     |
+3891 |                 let grip_observations = if profile == SensorProfile::GroundedGripObjectSlotsV1 {
+     |                                                                      ^^^^^^^^^^^^^^^^^^^^^^^^^ variant, associated function, or constant not found in `alife_core::SensorProfile`
+     |
+help: there is a variant with a similar name
+     |
+3891 -                 let grip_observations = if profile == SensorProfile::GroundedGripObjectSlotsV1 {
+3891 +                 let grip_observations = if profile == SensorProfile::GroundedObjectSlotsV1 {
+     |
+
+error[E0599]: no associated function or constant named `new_with_grip_observations` found for struct `alife_core::PerceptionFrameDraft` in the current scope
+    --> crates/alife_world/src/headless.rs:4022:39
+     |
+4022 |                 PerceptionFrameDraft::new_with_grip_observations(
+     |                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^ associated function or constant not found in `alife_core::PerceptionFrameDraft`
+     |
+note: if you're trying to build a new `alife_core::PerceptionFrameDraft`, consider using `alife_core::PerceptionFrameDraft::new` which returns `std::result::Result<alife_core::PerceptionFrameDraft, alife_core::ScaffoldContractError>`
+    --> crates/alife_core/src/perception.rs:375:4
+
+error[E0599]: no method named `is_n2048_grip_reader_candidate` found for reference `&alife_core::FoundationWeightAsset` in the current scope
+  --> crates/alife_world/src/new_game.rs:86:20
+   |
+86 |     if !foundation.is_n2048_grip_reader_candidate()
+   |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ method not found in `&alife_core::FoundationWeightAsset`
+
+error[E0599]: no variant, associated function, or constant named `GroundedGripObjectSlotsV1` found for enum `alife_core::SensorProfile` in the current scope
+  --> crates/alife_world/src/new_game.rs:87:52
+   |
+87 |         || config.sensor_profile != SensorProfile::GroundedGripObjectSlotsV1
+   |                                                    ^^^^^^^^^^^^^^^^^^^^^^^^^ variant, associated function, or constant not found in `alife_core::SensorProfile`
+   |
+help: there is a variant with a similar name
+   |
+87 -         || config.sensor_profile != SensorProfile::GroundedGripObjectSlotsV1
+87 +         || config.sensor_profile != SensorProfile::GroundedObjectSlotsV1
+   |
+
+error[E0599]: no method named `is_n2048_memory_gain_candidate` found for reference `&alife_core::FoundationWeightAsset` in the current scope
+  --> crates/alife_world/src/new_game.rs:98:20
+   |
+98 |     if !foundation.is_n2048_memory_gain_candidate() {
+   |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ method not found in `&alife_core::FoundationWeightAsset`
+
+error[E0599]: no method named `is_n2048_memory_gain_candidate` found for reference `&alife_core::FoundationWeightAsset` in the current scope
+   --> crates/alife_world/src/new_game.rs:118:23
+    |
+118 |         || foundation.is_n2048_memory_gain_candidate()
+    |                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ method not found in `&alife_core::FoundationWeightAsset`
+
+error[E0599]: no method named `is_n2048_grip_reader_candidate` found for reference `&alife_core::FoundationWeightAsset` in the current scope
+   --> crates/alife_world/src/new_game.rs:119:23
+    |
+119 |         || foundation.is_n2048_grip_reader_candidate()
+    |                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ method not found in `&alife_core::FoundationWeightAsset`
+
+error[E0599]: no method named `is_n2048_memory_gain_candidate` found for reference `&alife_core::FoundationWeightAsset` in the current scope
+   --> crates/alife_world/src/new_game.rs:155:23
+    |
+155 |         || foundation.is_n2048_memory_gain_candidate()
+    |                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ method not found in `&alife_core::FoundationWeightAsset`
+
+error[E0599]: no method named `is_n2048_grip_reader_candidate` found for reference `&alife_core::FoundationWeightAsset` in the current scope
+   --> crates/alife_world/src/new_game.rs:156:23
+    |
+156 |         || foundation.is_n2048_grip_reader_candidate())
+    |                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ method not found in `&alife_core::FoundationWeightAsset`
+
+error[E0599]: no variant named `CommittedAfterArousal` found for enum `alife_core::ConsolidationState`
+    --> crates/alife_world/src/persistence/gpu_brain.rs:1331:33
+     |
+1331 |             ConsolidationState::CommittedAfterArousal {
+     |                                 ^^^^^^^^^^^^^^^^^^^^^ variant not found in `alife_core::ConsolidationState`
+
+Some errors have detailed explanations: E0432, E0433, E0599.
+For more information about an error, try `rustc --explain E0432`.
+error: could not compile `alife_world` (lib) due to 24 previous errors

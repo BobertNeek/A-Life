@@ -1,0 +1,15 @@
+{
+  "pr": "https://github.com/BobertNeek/A-Life/pull/312",
+  "head": "bd73d47eb9222a4af98bc9a0cb8b62f52c3c5513",
+  "tree": "fae2efd2663bc77c2fc54407baf4f988ef9be50b",
+  "local_head": "21c0277227cc41c6d70dc365ea91402fa6344804",
+  "base": "550f79ad1f765132c634e7a272da56b521b57ec0",
+  "draft": true,
+  "native_tests": 19,
+  "existing_primitive_tests": 15,
+  "unique_total": 34,
+  "hardware": "not_run",
+  "world_intervals": 0,
+  "confidence_support_gate": "diagnostic_only",
+  "CSV_transport_note": "WorktreeCRLF blob d67fbd0d was created successfully but not referenced. Published CSV uses canonical committed LF blob515c3951, same numerical cells."
+}

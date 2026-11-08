@@ -1,0 +1,230 @@
+diff --git a/NEED_RETRIEVAL_DETACHED_PLAN_V2.md b/NEED_RETRIEVAL_DETACHED_PLAN_V2.md
+new file mode 100644
+index 0000000..aba1407
+--- /dev/null
++++ b/NEED_RETRIEVAL_DETACHED_PLAN_V2.md
+@@ -0,0 +1,9 @@
++# Frozen test-only near-context retrieval comparison V2
++
++No production store/decoder changes, new life, new action type or additional world conditions. Reuse the three prescribed conditions and their passive clones from V1's fixed unit test. This is an ordinary unit rerun, not a V4 policy allocation.
++
++Compare exact V1 lookup with a separately named test-only eligibility rule: hard exact organism/profile/action ID/kind/family/tracked target/entity; source after-tick no more than one tick old and not in the future; bounded one-source comparison. Reuse the existing family-query96-feature encoder and existing weighted cosine segments (.30×0..40 + .10×40..49 + .20×49..57 + .35×57..81 + .05×81..83) and existing .72 cutoff. These are pre-existing constants, not fitted to this fixture's outcomes. Return the raw score/distance and original evidence/confidence; do not average, select favorable signs, fabricate zero, or change source provenance.
++
++Measure actual next-world queries, plus explicit query-only wrong entity, wrong family, wrong profile and stale clock controls. Print a higher-loneliness artificial query's score separately, without creating an observation or an alternate lived state. Preserve both real negative peer delta and real zero toy/separated deltas. The test-only rule is a retrieval hypothesis; it does not establish useful distant-context generalization, safety under changed target attributes, policy scoring/credit, persistence admission or CPU/GPU integration. V1 storage/strict lookup remains unchanged.
++
++Parent-requested finite R3 disclosure, frozen before measurement: add one artificial loneliness=1 query at the actual next tick/context per same observation. Report its score/distance or rejection without tuning the .72 rule, adding actions, changing observations or inferring reward. R2 corrected the earlier .16 query clock; R1 future-source rejection is preserved.
+diff --git a/crates/alife_world/src/headless/need_consequence_evidence_tests.rs b/crates/alife_world/src/headless/need_consequence_evidence_tests.rs
+index 0a60d37..31e3ec5 100644
+--- a/crates/alife_world/src/headless/need_consequence_evidence_tests.rs
++++ b/crates/alife_world/src/headless/need_consequence_evidence_tests.rs
+@@ -289,6 +289,115 @@ fn standalone_need_evidence_records_real_contact_not_a_target_label() {
+             query.tracked_target() == actual_next_query.tracked_target(),
+             query.action_family() == actual_next_query.action_family(),
+             frame.homeostasis().drives.loneliness, next_frame.homeostasis().drives.loneliness);
++        let near = detached_near_context_score_v2(
++            &frame,
++            &candidate,
++            measured.after.tick,
++            &next_frame,
++            &next_candidate,
++        )
++        .expect("same trusted target/family near-context fixture");
++        println!("detached V2 proposal: case={kind} score={near} distance={} original_confidence={} original_delta={}",
++            1. - near, observation.confidence.raw(), observation.drive_deltas[4]);
++        let wrong_family = next_frame
++            .candidates()
++            .iter()
++            .find(|c| c.family != next_candidate.family)
++            .unwrap();
++        assert!(detached_near_context_score_v2(
++            &frame,
++            &candidate,
++            measured.after.tick,
++            &next_frame,
++            wrong_family
++        )
++        .is_none());
++        let mut wrong_candidates = next_frame.candidates().to_vec();
++        wrong_candidates[next_candidate.candidate_index as usize]
++            .target
++            .entity = Some(WorldEntityId(9999));
++        let wrong = altered_query_frame(
++            &next_frame,
++            wrong_candidates,
++            next_frame.tick(),
++            next_frame.sensor_profile(),
++        );
++        assert!(detached_near_context_score_v2(
++            &frame,
++            &candidate,
++            measured.after.tick,
++            &wrong,
++            &wrong.candidates()[next_candidate.candidate_index as usize]
++        )
++        .is_none());
++        let wrong_profile = altered_query_frame(
++            &next_frame,
++            next_frame.candidates().to_vec(),
++            next_frame.tick(),
++            SensorProfile::GroundedTerrainVisionV1,
++        );
++        assert!(detached_near_context_score_v2(
++            &frame,
++            &candidate,
++            measured.after.tick,
++            &wrong_profile,
++            &wrong_profile.candidates()[next_candidate.candidate_index as usize]
++        )
++        .is_none());
++        let stale = altered_query_frame(
++            &next_frame,
++            next_frame.candidates().to_vec(),
++            Tick(603),
++            next_frame.sensor_profile(),
++        );
++        assert!(detached_near_context_score_v2(
++            &frame,
++            &candidate,
++            measured.after.tick,
++            &stale,
++            &stale.candidates()[next_candidate.candidate_index as usize]
++        )
++        .is_none());
++        let changed_at_current_tick = altered_query_frame(
++            &changed,
++            changed.candidates().to_vec(),
++            next_frame.tick(),
++            changed.sensor_profile(),
++        );
++        let high_pressure_score = detached_near_context_score_v2(
++            &frame,
++            &candidate,
++            measured.after.tick,
++            &changed_at_current_tick,
++            &candidate,
++        );
++        println!("detached V2 artificial pressure query: case={kind} pressure={} score={high_pressure_score:?}",
++            changed.homeostasis().drives.loneliness);
++        let mut materially_changed_h = *next_frame.homeostasis();
++        materially_changed_h.drives.loneliness = 1.;
++        let materially_changed = PerceptionFrameDraft::new(
++            next_frame.organism_id(),
++            next_frame.tick(),
++            next_frame.sensor_profile(),
++            next_frame.sensory().clone(),
++            next_frame.body(),
++            materially_changed_h,
++            next_frame.candidates().to_vec(),
++            next_frame.profile_provenance(),
++            next_frame.grounded_object_slots().to_vec(),
++        )
++        .unwrap()
++        .finalize(next_frame.context().clone())
++        .unwrap();
++        let materially_changed_score = detached_near_context_score_v2(
++            &frame,
++            &candidate,
++            measured.after.tick,
++            &materially_changed,
++            &next_candidate,
++        );
++        println!("detached V2 material pressure query: case={kind} pressure=1 score={materially_changed_score:?} distance={:?}",
++            materially_changed_score.map(|score| 1. - score));
+         let encoded = store.to_json().unwrap();
+         let restored = NeedConsequenceStoreV1::from_json(&encoded).unwrap();
+         assert_eq!(restored.recall(&query, Tick(601), 10, 2).unwrap(), recalled);
+@@ -304,3 +413,94 @@ fn standalone_need_evidence_records_real_contact_not_a_target_label() {
+     assert!(deltas[0] < deltas[1]);
+     assert_eq!(deltas[1].to_bits(), deltas[2].to_bits());
+ }
++
++// Separately frozen research comparison, not a production store API.
++fn detached_near_context_score_v2(
++    source_frame: &PerceptionFrame,
++    source_candidate: &ActionCandidate,
++    source_after: Tick,
++    current_frame: &PerceptionFrame,
++    current_candidate: &ActionCandidate,
++) -> Option<f32> {
++    let source = NeedConsequenceQueryV1::from_frame(source_frame, source_candidate).unwrap();
++    let current = NeedConsequenceQueryV1::from_frame(current_frame, current_candidate).unwrap();
++    if source.organism_id() != current.organism_id()
++        || source.profile() != current.profile()
++        || source.action_family() != current.action_family()
++        || source.tracked_target().is_none()
++        || source.tracked_target() != current.tracked_target()
++        || source.target_entity() != current.target_entity()
++        || source_candidate.action_id != current_candidate.action_id
++        || source_candidate.kind != current_candidate.kind
++        || current_frame.tick().raw().checked_sub(source_after.raw())? > 1
++    {
++        return None;
++    }
++    let encode = |frame: &PerceptionFrame, candidate: &ActionCandidate| {
++        let draft = PerceptionFrameDraft::new(
++            frame.organism_id(),
++            frame.tick(),
++            frame.sensor_profile(),
++            frame.sensory().clone(),
++            frame.body(),
++            *frame.homeostasis(),
++            frame.candidates().to_vec(),
++            frame.profile_provenance(),
++            frame.grounded_object_slots().to_vec(),
++        )
++        .unwrap();
++        MemoryQueryEncoderV2::encode_candidate(&draft, candidate).unwrap()
++    };
++    let a = encode(source_frame, source_candidate);
++    let b = encode(current_frame, current_candidate);
++    let cosine = |range: std::ops::Range<usize>| {
++        let (mut dot, mut aa, mut bb) = (0.0_f32, 0.0_f32, 0.0_f32);
++        for i in range {
++            let x = a.features()[i];
++            let y = b.features()[i];
++            dot += x * y;
++            aa += x * x;
++            bb += y * y;
++        }
++        if aa == 0. && bb == 0. {
++            1.
++        } else if aa == 0. || bb == 0. {
++            0.
++        } else {
++            (dot / (aa.sqrt() * bb.sqrt())).clamp(-1., 1.)
++        }
++    };
++    let score = 0.30 * cosine(0..40)
++        + 0.10 * cosine(40..49)
++        + 0.20 * cosine(49..57)
++        + 0.35 * cosine(57..81)
++        + 0.05 * cosine(81..83);
++    (score >= alife_core::memory::MEMORY_MIN_SIMILARITY).then_some(score)
++}
++
++fn altered_query_frame(
++    frame: &PerceptionFrame,
++    candidates: Vec<ActionCandidate>,
++    tick: Tick,
++    profile: SensorProfile,
++) -> PerceptionFrame {
++    let mut sensory = frame.sensory().clone();
++    sensory.tick = tick;
++    let mut h = *frame.homeostasis();
++    h.tick = tick;
++    let provenance = SensorProfileProvenance::new(profile, sensory.abi_version, tick).unwrap();
++    PerceptionFrameDraft::new(
++        frame.organism_id(),
++        tick,
++        profile,
++        sensory,
++        frame.body(),
++        h,
++        candidates,
++        provenance,
++        frame.grounded_object_slots().to_vec(),
++    )
++    .unwrap()
++    .finalize(frame.context().clone())
++    .unwrap()
++}

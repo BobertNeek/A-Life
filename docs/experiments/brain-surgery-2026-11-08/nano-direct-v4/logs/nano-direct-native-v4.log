@@ -1,0 +1,2 @@
+    Finished `dev` profile [unoptimized] target(s) in 0.14s
+     Running `/workspace/shared/grip-integration-qualification-20261108/grip-candidate-qualification/target/debug/examples/probe_nano_direct_need_routing /workspace/scratch/ee5e08a3ca9b/nano-direct-native-v4.json`

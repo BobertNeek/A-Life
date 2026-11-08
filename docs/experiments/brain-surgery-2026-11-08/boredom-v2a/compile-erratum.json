@@ -1,0 +1,14 @@
+{
+  "affected_file": "source/docs/experiments/boredom-loop-candidate-2026-11-08/results.md",
+  "affected_file_sha256": "daaf0ce84b85afae4b3a3486457869417ea0a16e794f969c0b7867928b63a50f",
+  "scope": "Full arm, sampling stream 29, toy-high, 24 world intervals",
+  "incorrect_reported_value": 0.052666,
+  "correct_exact_receipt_value": 0.05273296684026718,
+  "correct_six_decimal_value": "0.052733",
+  "correct_stream17_value_unchanged": 0.5212661027908325,
+  "evidence_receipt": "receipts/full-29.json",
+  "evidence_receipt_sha256": "e9f9662404ca1800fb93c075fbddb595cca5bb5015353eb0e0a3b2c75a1d5e60",
+  "field": "episodes[name=toy-high].final.homeostasis.drives.boredom",
+  "impact": "Report transcription error only. No policy, episode, receipt, count, matrix analysis, source, plan or conclusion is changed.",
+  "closed_v2a_bytes_preserved": true
+}

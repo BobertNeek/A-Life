@@ -1,0 +1,7 @@
+
+running 2 tests
+test gpu_live_runtime::durability_hold::arousal_gate_tests::candidate_gate_requires_durable_clear_entry_and_unchanged_interrupted_phase ... ok
+test gpu_live_runtime::durability_hold::arousal_gate_tests::legacy_recovery_is_unchanged_and_interrupted_phases_do_not_earn_sleep ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 268 filtered out; finished in 0.00s
+

@@ -1,0 +1,7143 @@
+{
+  "scope": "Static gene coordinates relative to the already-recalibrated drive-balance source; not learned state",
+  "arms": {
+    "full": {
+      "changed_gene_count": 86,
+      "relative_to_source": [
+        {
+          "after": 2.0,
+          "before": 0.0,
+          "id": 6729,
+          "synapse": {
+            "alpha": 0.13415998220443726,
+            "genetic_weight": 0.0,
+            "kind": "Recurrent",
+            "receptor_index": 1,
+            "route_index": 2,
+            "source": 265,
+            "target": 1961
+          }
+        },
+        {
+          "after": 2.0,
+          "before": 0.0,
+          "id": 7781,
+          "synapse": {
+            "alpha": 0.13415998220443726,
+            "genetic_weight": 0.0,
+            "kind": "Recurrent",
+            "receptor_index": 1,
+            "route_index": 3,
+            "source": 1961,
+            "target": 898
+          }
+        },
+        {
+          "after": -3.0,
+          "before": 0.0,
+          "id": 7843,
+          "synapse": {
+            "alpha": 0.13415998220443726,
+            "genetic_weight": 0.0,
+            "kind": "Recurrent",
+            "receptor_index": 1,
+            "route_index": 3,
+            "source": 1967,
+            "target": 898
+          }
+        },
+        {
+          "after": 4.0,
+          "before": 0.0,
+          "id": 9647,
+          "synapse": {
+            "alpha": 0.13415998220443726,
+            "genetic_weight": 0.0,
+            "kind": "Recurrent",
+            "receptor_index": 1,
+            "route_index": 5,
+            "source": 898,
+            "target": 1842
+          }
+        },
+        {
+          "after": 4.0,
+          "before": 0.0,
+          "id": 27554,
+          "synapse": {
+            "alpha": 0.13415998220443726,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "ActionCandidate",
+                "input_lane": 18,
+                "motor_index": 114
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 15,
+            "source": 1842,
+            "target": 1842
+          }
+        },
+        {
+          "after": 2.0,
+          "before": 0.0,
+          "id": 27567,
+          "synapse": {
+            "alpha": 0.13415998220443726,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "ActionCandidate",
+                "input_lane": 18,
+                "motor_index": 127
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 15,
+            "source": 1855,
+            "target": 1855
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32608,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 7
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1352,
+            "target": 903
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32609,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 7
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1364,
+            "target": 903
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32610,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 7
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1376,
+            "target": 903
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32611,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 7
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1388,
+            "target": 903
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32612,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 7
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1400,
+            "target": 903
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32613,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 15
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1352,
+            "target": 911
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32614,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 15
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1364,
+            "target": 911
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32615,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 15
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1376,
+            "target": 911
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32616,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 15
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1388,
+            "target": 911
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32617,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 15
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1400,
+            "target": 911
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32618,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 23
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1352,
+            "target": 919
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32619,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 23
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1364,
+            "target": 919
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32620,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 23
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1376,
+            "target": 919
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32621,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 23
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1388,
+            "target": 919
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32622,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 23
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1400,
+            "target": 919
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32623,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 31
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1352,
+            "target": 927
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32624,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 31
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1364,
+            "target": 927
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32625,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 31
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1376,
+            "target": 927
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32626,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 31
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1388,
+            "target": 927
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32627,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 31
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1400,
+            "target": 927
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32628,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 39
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1352,
+            "target": 935
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32629,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 39
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1364,
+            "target": 935
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32630,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 39
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1376,
+            "target": 935
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32631,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 39
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1388,
+            "target": 935
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32632,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 39
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1400,
+            "target": 935
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32633,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 47
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1352,
+            "target": 943
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32634,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 47
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1364,
+            "target": 943
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32635,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 47
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1376,
+            "target": 943
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32636,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 47
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1388,
+            "target": 943
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32637,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 47
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1400,
+            "target": 943
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32638,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 55
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1352,
+            "target": 951
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32639,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 55
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1364,
+            "target": 951
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32640,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 55
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1376,
+            "target": 951
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32641,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 55
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1388,
+            "target": 951
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32642,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 55
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1400,
+            "target": 951
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32643,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 63
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1352,
+            "target": 959
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32644,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 63
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1364,
+            "target": 959
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32645,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 63
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1376,
+            "target": 959
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32646,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 63
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1388,
+            "target": 959
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32647,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 63
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1400,
+            "target": 959
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32688,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 7
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1354,
+            "target": 903
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32689,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 7
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1366,
+            "target": 903
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32690,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 7
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1378,
+            "target": 903
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32691,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 7
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1390,
+            "target": 903
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32692,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 7
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1402,
+            "target": 903
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32693,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 15
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1354,
+            "target": 911
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32694,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 15
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1366,
+            "target": 911
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32695,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 15
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1378,
+            "target": 911
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32696,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 15
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1390,
+            "target": 911
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32697,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 15
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1402,
+            "target": 911
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32698,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 23
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1354,
+            "target": 919
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32699,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 23
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1366,
+            "target": 919
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32700,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 23
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1378,
+            "target": 919
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32701,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 23
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1390,
+            "target": 919
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32702,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 23
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1402,
+            "target": 919
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32703,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 31
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1354,
+            "target": 927
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32704,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 31
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1366,
+            "target": 927
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32705,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 31
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1378,
+            "target": 927
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32706,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 31
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1390,
+            "target": 927
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32707,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 31
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1402,
+            "target": 927
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32708,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 39
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1354,
+            "target": 935
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32709,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 39
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1366,
+            "target": 935
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32710,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 39
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1378,
+            "target": 935
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32711,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 39
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1390,
+            "target": 935
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32712,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 39
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1402,
+            "target": 935
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32713,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 47
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1354,
+            "target": 943
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32714,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 47
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1366,
+            "target": 943
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32715,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 47
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1378,
+            "target": 943
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32716,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 47
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1390,
+            "target": 943
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32717,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 47
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1402,
+            "target": 943
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32718,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 55
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1354,
+            "target": 951
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32719,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 55
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1366,
+            "target": 951
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32720,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 55
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1378,
+            "target": 951
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32721,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 55
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1390,
+            "target": 951
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32722,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 55
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1402,
+            "target": 951
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32723,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 63
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1354,
+            "target": 959
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32724,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 63
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1366,
+            "target": 959
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32725,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 63
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1378,
+            "target": 959
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32726,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 63
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1390,
+            "target": 959
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32727,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 63
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1402,
+            "target": 959
+          }
+        }
+      ],
+      "relative_to_full": []
+    },
+    "no-drive": {
+      "changed_gene_count": 80,
+      "relative_to_source": [
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32608,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 7
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1352,
+            "target": 903
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32609,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 7
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1364,
+            "target": 903
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32610,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 7
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1376,
+            "target": 903
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32611,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 7
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1388,
+            "target": 903
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32612,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 7
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1400,
+            "target": 903
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32613,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 15
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1352,
+            "target": 911
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32614,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 15
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1364,
+            "target": 911
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32615,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 15
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1376,
+            "target": 911
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32616,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 15
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1388,
+            "target": 911
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32617,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 15
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1400,
+            "target": 911
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32618,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 23
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1352,
+            "target": 919
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32619,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 23
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1364,
+            "target": 919
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32620,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 23
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1376,
+            "target": 919
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32621,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 23
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1388,
+            "target": 919
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32622,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 23
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1400,
+            "target": 919
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32623,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 31
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1352,
+            "target": 927
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32624,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 31
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1364,
+            "target": 927
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32625,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 31
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1376,
+            "target": 927
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32626,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 31
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1388,
+            "target": 927
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32627,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 31
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1400,
+            "target": 927
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32628,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 39
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1352,
+            "target": 935
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32629,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 39
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1364,
+            "target": 935
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32630,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 39
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1376,
+            "target": 935
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32631,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 39
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1388,
+            "target": 935
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32632,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 39
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1400,
+            "target": 935
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32633,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 47
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1352,
+            "target": 943
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32634,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 47
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1364,
+            "target": 943
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32635,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 47
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1376,
+            "target": 943
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32636,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 47
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1388,
+            "target": 943
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32637,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 47
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1400,
+            "target": 943
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32638,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 55
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1352,
+            "target": 951
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32639,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 55
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1364,
+            "target": 951
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32640,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 55
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1376,
+            "target": 951
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32641,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 55
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1388,
+            "target": 951
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32642,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 55
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1400,
+            "target": 951
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32643,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 63
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1352,
+            "target": 959
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32644,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 63
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1364,
+            "target": 959
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32645,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 63
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1376,
+            "target": 959
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32646,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 63
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1388,
+            "target": 959
+          }
+        },
+        {
+          "after": 0.30000001192092896,
+          "before": 0.0,
+          "id": 32647,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 63
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1400,
+            "target": 959
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32688,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 7
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1354,
+            "target": 903
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32689,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 7
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1366,
+            "target": 903
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32690,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 7
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1378,
+            "target": 903
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32691,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 7
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1390,
+            "target": 903
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32692,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 7
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1402,
+            "target": 903
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32693,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 15
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1354,
+            "target": 911
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32694,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 15
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1366,
+            "target": 911
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32695,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 15
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1378,
+            "target": 911
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32696,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 15
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1390,
+            "target": 911
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32697,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 15
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1402,
+            "target": 911
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32698,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 23
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1354,
+            "target": 919
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32699,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 23
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1366,
+            "target": 919
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32700,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 23
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1378,
+            "target": 919
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32701,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 23
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1390,
+            "target": 919
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32702,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 23
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1402,
+            "target": 919
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32703,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 31
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1354,
+            "target": 927
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32704,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 31
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1366,
+            "target": 927
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32705,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 31
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1378,
+            "target": 927
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32706,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 31
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1390,
+            "target": 927
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32707,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 31
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1402,
+            "target": 927
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32708,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 39
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1354,
+            "target": 935
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32709,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 39
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1366,
+            "target": 935
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32710,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 39
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1378,
+            "target": 935
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32711,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 39
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1390,
+            "target": 935
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32712,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 39
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1402,
+            "target": 935
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32713,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 47
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1354,
+            "target": 943
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32714,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 47
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1366,
+            "target": 943
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32715,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 47
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1378,
+            "target": 943
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32716,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 47
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1390,
+            "target": 943
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32717,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 47
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1402,
+            "target": 943
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32718,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 55
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1354,
+            "target": 951
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32719,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 55
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1366,
+            "target": 951
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32720,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 55
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1378,
+            "target": 951
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32721,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 55
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1390,
+            "target": 951
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32722,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 55
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1402,
+            "target": 951
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32723,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 63
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1354,
+            "target": 959
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32724,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 63
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1366,
+            "target": 959
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32725,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 63
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1378,
+            "target": 959
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32726,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 63
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1390,
+            "target": 959
+          }
+        },
+        {
+          "after": -0.4000000059604645,
+          "before": 0.0,
+          "id": 32727,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 63
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1402,
+            "target": 959
+          }
+        }
+      ],
+      "relative_to_full": [
+        {
+          "id": 6729,
+          "full_value": 2.0,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 0.13415998220443726,
+            "genetic_weight": 0.0,
+            "kind": "Recurrent",
+            "receptor_index": 1,
+            "route_index": 2,
+            "source": 265,
+            "target": 1961
+          }
+        },
+        {
+          "id": 7781,
+          "full_value": 2.0,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 0.13415998220443726,
+            "genetic_weight": 0.0,
+            "kind": "Recurrent",
+            "receptor_index": 1,
+            "route_index": 3,
+            "source": 1961,
+            "target": 898
+          }
+        },
+        {
+          "id": 7843,
+          "full_value": -3.0,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 0.13415998220443726,
+            "genetic_weight": 0.0,
+            "kind": "Recurrent",
+            "receptor_index": 1,
+            "route_index": 3,
+            "source": 1967,
+            "target": 898
+          }
+        },
+        {
+          "id": 9647,
+          "full_value": 4.0,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 0.13415998220443726,
+            "genetic_weight": 0.0,
+            "kind": "Recurrent",
+            "receptor_index": 1,
+            "route_index": 5,
+            "source": 898,
+            "target": 1842
+          }
+        },
+        {
+          "id": 27554,
+          "full_value": 4.0,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 0.13415998220443726,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "ActionCandidate",
+                "input_lane": 18,
+                "motor_index": 114
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 15,
+            "source": 1842,
+            "target": 1842
+          }
+        },
+        {
+          "id": 27567,
+          "full_value": 2.0,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 0.13415998220443726,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "ActionCandidate",
+                "input_lane": 18,
+                "motor_index": 127
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 15,
+            "source": 1855,
+            "target": 1855
+          }
+        }
+      ]
+    },
+    "no-memory": {
+      "changed_gene_count": 6,
+      "relative_to_source": [
+        {
+          "after": 2.0,
+          "before": 0.0,
+          "id": 6729,
+          "synapse": {
+            "alpha": 0.13415998220443726,
+            "genetic_weight": 0.0,
+            "kind": "Recurrent",
+            "receptor_index": 1,
+            "route_index": 2,
+            "source": 265,
+            "target": 1961
+          }
+        },
+        {
+          "after": 2.0,
+          "before": 0.0,
+          "id": 7781,
+          "synapse": {
+            "alpha": 0.13415998220443726,
+            "genetic_weight": 0.0,
+            "kind": "Recurrent",
+            "receptor_index": 1,
+            "route_index": 3,
+            "source": 1961,
+            "target": 898
+          }
+        },
+        {
+          "after": -3.0,
+          "before": 0.0,
+          "id": 7843,
+          "synapse": {
+            "alpha": 0.13415998220443726,
+            "genetic_weight": 0.0,
+            "kind": "Recurrent",
+            "receptor_index": 1,
+            "route_index": 3,
+            "source": 1967,
+            "target": 898
+          }
+        },
+        {
+          "after": 4.0,
+          "before": 0.0,
+          "id": 9647,
+          "synapse": {
+            "alpha": 0.13415998220443726,
+            "genetic_weight": 0.0,
+            "kind": "Recurrent",
+            "receptor_index": 1,
+            "route_index": 5,
+            "source": 898,
+            "target": 1842
+          }
+        },
+        {
+          "after": 4.0,
+          "before": 0.0,
+          "id": 27554,
+          "synapse": {
+            "alpha": 0.13415998220443726,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "ActionCandidate",
+                "input_lane": 18,
+                "motor_index": 114
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 15,
+            "source": 1842,
+            "target": 1842
+          }
+        },
+        {
+          "after": 2.0,
+          "before": 0.0,
+          "id": 27567,
+          "synapse": {
+            "alpha": 0.13415998220443726,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "ActionCandidate",
+                "input_lane": 18,
+                "motor_index": 127
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 15,
+            "source": 1855,
+            "target": 1855
+          }
+        }
+      ],
+      "relative_to_full": [
+        {
+          "id": 32608,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 7
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1352,
+            "target": 903
+          }
+        },
+        {
+          "id": 32609,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 7
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1364,
+            "target": 903
+          }
+        },
+        {
+          "id": 32610,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 7
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1376,
+            "target": 903
+          }
+        },
+        {
+          "id": 32611,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 7
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1388,
+            "target": 903
+          }
+        },
+        {
+          "id": 32612,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 7
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1400,
+            "target": 903
+          }
+        },
+        {
+          "id": 32613,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 15
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1352,
+            "target": 911
+          }
+        },
+        {
+          "id": 32614,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 15
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1364,
+            "target": 911
+          }
+        },
+        {
+          "id": 32615,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 15
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1376,
+            "target": 911
+          }
+        },
+        {
+          "id": 32616,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 15
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1388,
+            "target": 911
+          }
+        },
+        {
+          "id": 32617,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 15
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1400,
+            "target": 911
+          }
+        },
+        {
+          "id": 32618,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 23
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1352,
+            "target": 919
+          }
+        },
+        {
+          "id": 32619,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 23
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1364,
+            "target": 919
+          }
+        },
+        {
+          "id": 32620,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 23
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1376,
+            "target": 919
+          }
+        },
+        {
+          "id": 32621,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 23
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1388,
+            "target": 919
+          }
+        },
+        {
+          "id": 32622,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 23
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1400,
+            "target": 919
+          }
+        },
+        {
+          "id": 32623,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 31
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1352,
+            "target": 927
+          }
+        },
+        {
+          "id": 32624,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 31
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1364,
+            "target": 927
+          }
+        },
+        {
+          "id": 32625,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 31
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1376,
+            "target": 927
+          }
+        },
+        {
+          "id": 32626,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 31
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1388,
+            "target": 927
+          }
+        },
+        {
+          "id": 32627,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 31
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1400,
+            "target": 927
+          }
+        },
+        {
+          "id": 32628,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 39
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1352,
+            "target": 935
+          }
+        },
+        {
+          "id": 32629,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 39
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1364,
+            "target": 935
+          }
+        },
+        {
+          "id": 32630,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 39
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1376,
+            "target": 935
+          }
+        },
+        {
+          "id": 32631,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 39
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1388,
+            "target": 935
+          }
+        },
+        {
+          "id": 32632,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 39
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1400,
+            "target": 935
+          }
+        },
+        {
+          "id": 32633,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 47
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1352,
+            "target": 943
+          }
+        },
+        {
+          "id": 32634,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 47
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1364,
+            "target": 943
+          }
+        },
+        {
+          "id": 32635,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 47
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1376,
+            "target": 943
+          }
+        },
+        {
+          "id": 32636,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 47
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1388,
+            "target": 943
+          }
+        },
+        {
+          "id": 32637,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 47
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1400,
+            "target": 943
+          }
+        },
+        {
+          "id": 32638,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 55
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1352,
+            "target": 951
+          }
+        },
+        {
+          "id": 32639,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 55
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1364,
+            "target": 951
+          }
+        },
+        {
+          "id": 32640,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 55
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1376,
+            "target": 951
+          }
+        },
+        {
+          "id": 32641,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 55
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1388,
+            "target": 951
+          }
+        },
+        {
+          "id": 32642,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 55
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1400,
+            "target": 951
+          }
+        },
+        {
+          "id": 32643,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 63
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1352,
+            "target": 959
+          }
+        },
+        {
+          "id": 32644,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 63
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1364,
+            "target": 959
+          }
+        },
+        {
+          "id": 32645,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 63
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1376,
+            "target": 959
+          }
+        },
+        {
+          "id": 32646,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 63
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1388,
+            "target": 959
+          }
+        },
+        {
+          "id": 32647,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 63
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1400,
+            "target": 959
+          }
+        },
+        {
+          "id": 32688,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 7
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1354,
+            "target": 903
+          }
+        },
+        {
+          "id": 32689,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 7
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1366,
+            "target": 903
+          }
+        },
+        {
+          "id": 32690,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 7
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1378,
+            "target": 903
+          }
+        },
+        {
+          "id": 32691,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 7
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1390,
+            "target": 903
+          }
+        },
+        {
+          "id": 32692,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 7
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1402,
+            "target": 903
+          }
+        },
+        {
+          "id": 32693,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 15
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1354,
+            "target": 911
+          }
+        },
+        {
+          "id": 32694,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 15
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1366,
+            "target": 911
+          }
+        },
+        {
+          "id": 32695,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 15
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1378,
+            "target": 911
+          }
+        },
+        {
+          "id": 32696,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 15
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1390,
+            "target": 911
+          }
+        },
+        {
+          "id": 32697,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 15
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1402,
+            "target": 911
+          }
+        },
+        {
+          "id": 32698,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 23
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1354,
+            "target": 919
+          }
+        },
+        {
+          "id": 32699,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 23
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1366,
+            "target": 919
+          }
+        },
+        {
+          "id": 32700,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 23
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1378,
+            "target": 919
+          }
+        },
+        {
+          "id": 32701,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 23
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1390,
+            "target": 919
+          }
+        },
+        {
+          "id": 32702,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 23
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1402,
+            "target": 919
+          }
+        },
+        {
+          "id": 32703,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 31
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1354,
+            "target": 927
+          }
+        },
+        {
+          "id": 32704,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 31
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1366,
+            "target": 927
+          }
+        },
+        {
+          "id": 32705,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 31
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1378,
+            "target": 927
+          }
+        },
+        {
+          "id": 32706,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 31
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1390,
+            "target": 927
+          }
+        },
+        {
+          "id": 32707,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 31
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1402,
+            "target": 927
+          }
+        },
+        {
+          "id": 32708,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 39
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1354,
+            "target": 935
+          }
+        },
+        {
+          "id": 32709,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 39
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1366,
+            "target": 935
+          }
+        },
+        {
+          "id": 32710,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 39
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1378,
+            "target": 935
+          }
+        },
+        {
+          "id": 32711,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 39
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1390,
+            "target": 935
+          }
+        },
+        {
+          "id": 32712,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 39
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1402,
+            "target": 935
+          }
+        },
+        {
+          "id": 32713,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 47
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1354,
+            "target": 943
+          }
+        },
+        {
+          "id": 32714,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 47
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1366,
+            "target": 943
+          }
+        },
+        {
+          "id": 32715,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 47
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1378,
+            "target": 943
+          }
+        },
+        {
+          "id": 32716,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 47
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1390,
+            "target": 943
+          }
+        },
+        {
+          "id": 32717,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 47
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1402,
+            "target": 943
+          }
+        },
+        {
+          "id": 32718,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 55
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1354,
+            "target": 951
+          }
+        },
+        {
+          "id": 32719,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 55
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1366,
+            "target": 951
+          }
+        },
+        {
+          "id": 32720,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 55
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1378,
+            "target": 951
+          }
+        },
+        {
+          "id": 32721,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 55
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1390,
+            "target": 951
+          }
+        },
+        {
+          "id": 32722,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 55
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1402,
+            "target": 951
+          }
+        },
+        {
+          "id": 32723,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 63
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1354,
+            "target": 959
+          }
+        },
+        {
+          "id": 32724,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 63
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1366,
+            "target": 959
+          }
+        },
+        {
+          "id": 32725,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 63
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1378,
+            "target": 959
+          }
+        },
+        {
+          "id": 32726,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 63
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1390,
+            "target": 959
+          }
+        },
+        {
+          "id": 32727,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 63
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1402,
+            "target": 959
+          }
+        }
+      ]
+    },
+    "baseline": {
+      "changed_gene_count": 0,
+      "relative_to_source": [],
+      "relative_to_full": [
+        {
+          "id": 6729,
+          "full_value": 2.0,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 0.13415998220443726,
+            "genetic_weight": 0.0,
+            "kind": "Recurrent",
+            "receptor_index": 1,
+            "route_index": 2,
+            "source": 265,
+            "target": 1961
+          }
+        },
+        {
+          "id": 7781,
+          "full_value": 2.0,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 0.13415998220443726,
+            "genetic_weight": 0.0,
+            "kind": "Recurrent",
+            "receptor_index": 1,
+            "route_index": 3,
+            "source": 1961,
+            "target": 898
+          }
+        },
+        {
+          "id": 7843,
+          "full_value": -3.0,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 0.13415998220443726,
+            "genetic_weight": 0.0,
+            "kind": "Recurrent",
+            "receptor_index": 1,
+            "route_index": 3,
+            "source": 1967,
+            "target": 898
+          }
+        },
+        {
+          "id": 9647,
+          "full_value": 4.0,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 0.13415998220443726,
+            "genetic_weight": 0.0,
+            "kind": "Recurrent",
+            "receptor_index": 1,
+            "route_index": 5,
+            "source": 898,
+            "target": 1842
+          }
+        },
+        {
+          "id": 27554,
+          "full_value": 4.0,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 0.13415998220443726,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "ActionCandidate",
+                "input_lane": 18,
+                "motor_index": 114
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 15,
+            "source": 1842,
+            "target": 1842
+          }
+        },
+        {
+          "id": 27567,
+          "full_value": 2.0,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 0.13415998220443726,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "ActionCandidate",
+                "input_lane": 18,
+                "motor_index": 127
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 15,
+            "source": 1855,
+            "target": 1855
+          }
+        },
+        {
+          "id": 32608,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 7
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1352,
+            "target": 903
+          }
+        },
+        {
+          "id": 32609,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 7
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1364,
+            "target": 903
+          }
+        },
+        {
+          "id": 32610,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 7
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1376,
+            "target": 903
+          }
+        },
+        {
+          "id": 32611,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 7
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1388,
+            "target": 903
+          }
+        },
+        {
+          "id": 32612,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 7
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1400,
+            "target": 903
+          }
+        },
+        {
+          "id": 32613,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 15
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1352,
+            "target": 911
+          }
+        },
+        {
+          "id": 32614,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 15
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1364,
+            "target": 911
+          }
+        },
+        {
+          "id": 32615,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 15
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1376,
+            "target": 911
+          }
+        },
+        {
+          "id": 32616,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 15
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1388,
+            "target": 911
+          }
+        },
+        {
+          "id": 32617,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 15
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1400,
+            "target": 911
+          }
+        },
+        {
+          "id": 32618,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 23
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1352,
+            "target": 919
+          }
+        },
+        {
+          "id": 32619,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 23
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1364,
+            "target": 919
+          }
+        },
+        {
+          "id": 32620,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 23
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1376,
+            "target": 919
+          }
+        },
+        {
+          "id": 32621,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 23
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1388,
+            "target": 919
+          }
+        },
+        {
+          "id": 32622,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 23
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1400,
+            "target": 919
+          }
+        },
+        {
+          "id": 32623,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 31
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1352,
+            "target": 927
+          }
+        },
+        {
+          "id": 32624,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 31
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1364,
+            "target": 927
+          }
+        },
+        {
+          "id": 32625,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 31
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1376,
+            "target": 927
+          }
+        },
+        {
+          "id": 32626,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 31
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1388,
+            "target": 927
+          }
+        },
+        {
+          "id": 32627,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 31
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1400,
+            "target": 927
+          }
+        },
+        {
+          "id": 32628,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 39
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1352,
+            "target": 935
+          }
+        },
+        {
+          "id": 32629,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 39
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1364,
+            "target": 935
+          }
+        },
+        {
+          "id": 32630,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 39
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1376,
+            "target": 935
+          }
+        },
+        {
+          "id": 32631,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 39
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1388,
+            "target": 935
+          }
+        },
+        {
+          "id": 32632,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 39
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1400,
+            "target": 935
+          }
+        },
+        {
+          "id": 32633,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 47
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1352,
+            "target": 943
+          }
+        },
+        {
+          "id": 32634,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 47
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1364,
+            "target": 943
+          }
+        },
+        {
+          "id": 32635,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 47
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1376,
+            "target": 943
+          }
+        },
+        {
+          "id": 32636,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 47
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1388,
+            "target": 943
+          }
+        },
+        {
+          "id": 32637,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 47
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1400,
+            "target": 943
+          }
+        },
+        {
+          "id": 32638,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 55
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1352,
+            "target": 951
+          }
+        },
+        {
+          "id": 32639,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 55
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1364,
+            "target": 951
+          }
+        },
+        {
+          "id": 32640,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 55
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1376,
+            "target": 951
+          }
+        },
+        {
+          "id": 32641,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 55
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1388,
+            "target": 951
+          }
+        },
+        {
+          "id": 32642,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 55
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1400,
+            "target": 951
+          }
+        },
+        {
+          "id": 32643,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 63
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1352,
+            "target": 959
+          }
+        },
+        {
+          "id": 32644,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 63
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1364,
+            "target": 959
+          }
+        },
+        {
+          "id": 32645,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 63
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1376,
+            "target": 959
+          }
+        },
+        {
+          "id": 32646,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 63
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1388,
+            "target": 959
+          }
+        },
+        {
+          "id": 32647,
+          "full_value": 0.30000001192092896,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 32,
+                "motor_index": 63
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1400,
+            "target": 959
+          }
+        },
+        {
+          "id": 32688,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 7
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1354,
+            "target": 903
+          }
+        },
+        {
+          "id": 32689,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 7
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1366,
+            "target": 903
+          }
+        },
+        {
+          "id": 32690,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 7
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1378,
+            "target": 903
+          }
+        },
+        {
+          "id": 32691,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 7
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1390,
+            "target": 903
+          }
+        },
+        {
+          "id": 32692,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 7
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1402,
+            "target": 903
+          }
+        },
+        {
+          "id": 32693,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 15
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1354,
+            "target": 911
+          }
+        },
+        {
+          "id": 32694,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 15
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1366,
+            "target": 911
+          }
+        },
+        {
+          "id": 32695,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 15
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1378,
+            "target": 911
+          }
+        },
+        {
+          "id": 32696,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 15
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1390,
+            "target": 911
+          }
+        },
+        {
+          "id": 32697,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 15
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1402,
+            "target": 911
+          }
+        },
+        {
+          "id": 32698,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 23
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1354,
+            "target": 919
+          }
+        },
+        {
+          "id": 32699,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 23
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1366,
+            "target": 919
+          }
+        },
+        {
+          "id": 32700,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 23
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1378,
+            "target": 919
+          }
+        },
+        {
+          "id": 32701,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 23
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1390,
+            "target": 919
+          }
+        },
+        {
+          "id": 32702,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 23
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1402,
+            "target": 919
+          }
+        },
+        {
+          "id": 32703,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 31
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1354,
+            "target": 927
+          }
+        },
+        {
+          "id": 32704,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 31
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1366,
+            "target": 927
+          }
+        },
+        {
+          "id": 32705,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 31
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1378,
+            "target": 927
+          }
+        },
+        {
+          "id": 32706,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 31
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1390,
+            "target": 927
+          }
+        },
+        {
+          "id": 32707,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 31
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1402,
+            "target": 927
+          }
+        },
+        {
+          "id": 32708,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 39
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1354,
+            "target": 935
+          }
+        },
+        {
+          "id": 32709,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 39
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1366,
+            "target": 935
+          }
+        },
+        {
+          "id": 32710,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 39
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1378,
+            "target": 935
+          }
+        },
+        {
+          "id": 32711,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 39
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1390,
+            "target": 935
+          }
+        },
+        {
+          "id": 32712,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 39
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1402,
+            "target": 935
+          }
+        },
+        {
+          "id": 32713,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 47
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1354,
+            "target": 943
+          }
+        },
+        {
+          "id": 32714,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 47
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1366,
+            "target": 943
+          }
+        },
+        {
+          "id": 32715,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 47
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1378,
+            "target": 943
+          }
+        },
+        {
+          "id": 32716,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 47
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1390,
+            "target": 943
+          }
+        },
+        {
+          "id": 32717,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 47
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1402,
+            "target": 943
+          }
+        },
+        {
+          "id": 32718,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 55
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1354,
+            "target": 951
+          }
+        },
+        {
+          "id": 32719,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 55
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1366,
+            "target": 951
+          }
+        },
+        {
+          "id": 32720,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 55
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1378,
+            "target": 951
+          }
+        },
+        {
+          "id": 32721,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 55
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1390,
+            "target": 951
+          }
+        },
+        {
+          "id": 32722,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 55
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1402,
+            "target": 951
+          }
+        },
+        {
+          "id": 32723,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 63
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1354,
+            "target": 959
+          }
+        },
+        {
+          "id": 32724,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 63
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1366,
+            "target": 959
+          }
+        },
+        {
+          "id": 32725,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 63
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1378,
+            "target": 959
+          }
+        },
+        {
+          "id": 32726,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 63
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1390,
+            "target": 959
+          }
+        },
+        {
+          "id": 32727,
+          "full_value": -0.4000000059604645,
+          "arm_value": 0.0,
+          "synapse": {
+            "alpha": 1.0,
+            "genetic_weight": 0.0,
+            "kind": {
+              "Decoder": {
+                "family": "Other",
+                "head": "MemoryContext",
+                "input_lane": 34,
+                "motor_index": 63
+              }
+            },
+            "receptor_index": 3,
+            "route_index": 16,
+            "source": 1402,
+            "target": 959
+          }
+        }
+      ]
+    }
+  }
+}

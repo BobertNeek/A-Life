@@ -1,0 +1,441 @@
+diff --git a/crates/alife_game_app/src/gpu_live_runtime.rs b/crates/alife_game_app/src/gpu_live_runtime.rs
+index 851d158..32bfd03 100644
+--- a/crates/alife_game_app/src/gpu_live_runtime.rs
++++ b/crates/alife_game_app/src/gpu_live_runtime.rs
+@@ -13,6 +13,8 @@ mod action_credit_food_tests;
+ mod adaptive_exploration_causality;
+ mod appearance;
+ mod arousal_epoch;
++#[cfg(all(test, feature = "gpu-tests"))]
++mod arousal_epoch_runtime_tests;
+ use arousal_epoch::{
+     preserved_completed_payload_phase_change, same_neural_authority, ArousalEpochTracker,
+ };
+@@ -62,7 +64,8 @@ pub use semantic_prior::SemanticPriorMetrics;
+ 
+ use appearance::CreatureAppearanceCache;
+ use durability_hold::{
+-    brain_atp_world_tick_mode, motor_eligible, sleep_recovery_body_event_due, BrainAtpWorldTickMode,
++    brain_atp_world_tick_mode, candidate_interrupted_dispatch_allowed, motor_eligible,
++    sleep_recovery_body_event_due, BrainAtpWorldTickMode,
+ };
+ use neural_receptor_cache::ResidentNeuralReceptors;
+ 
+diff --git a/crates/alife_game_app/src/gpu_live_runtime/arousal_epoch_runtime_tests.rs b/crates/alife_game_app/src/gpu_live_runtime/arousal_epoch_runtime_tests.rs
+new file mode 100644
+index 0000000..e5fc2a3
+--- /dev/null
++++ b/crates/alife_game_app/src/gpu_live_runtime/arousal_epoch_runtime_tests.rs
+@@ -0,0 +1,241 @@
++//! Fresh, bounded actual software-runtime fixtures. Never ordinary hardware
++//! admission or a claim that automatic pain-to-cognitive-wake is enabled.
++use super::*;
++
++fn fixture(label: &str) -> (PathBuf, GpuLiveBrainRuntime) {
++    let root = std::env::temp_dir().join(format!(
++        "alife-arousal-epoch-{}-{label}",
++        std::process::id()
++    ));
++    assert!(!root.exists(), "preserve disposable fixture evidence");
++    std::fs::create_dir_all(root.join("assets")).unwrap();
++    let mut config =
++        alife_world::RuntimeConfig::deterministic_default(31_118, BrainScaleTier::Nano512);
++    config.features.gpu_backend_enabled = true;
++    let runtime = crate::new_game_lifecycle::create_canonical_new_game_software_runtime_test(
++        crate::CanonicalNewGameLaunchRequest {
++            world_seed: 31_118,
++            population: 1,
++            disable_age_death: false,
++            save_path: root.join("live.json"),
++            asset_root: root.join("assets"),
++            config,
++            assets: AssetManifest::empty(),
++        },
++    )
++    .unwrap()
++    .runtime;
++    assert!(runtime.backend.backend().is_software_runtime_test());
++    assert!(!runtime.backend.backend().is_software_training_test());
++    let info = runtime
++        .backend
++        .backend()
++        .software_runtime_test_adapter_info()
++        .unwrap();
++    assert_eq!(format!("{:?}", info.device_type), "Cpu");
++    assert_eq!(format!("{:?}", info.backend), "Vulkan");
++    println!("AROUSAL_EPOCH_EXPLICIT_OFFLINE_ADAPTER={info:?}");
++    assert!(runtime.checkpoint_durability.is_some());
++    (root, runtime)
++}
++
++fn finish_publication(runtime: &mut GpuLiveBrainRuntime) {
++    let deadline = Instant::now() + std::time::Duration::from_secs(90);
++    while !runtime.persistence_idle_for_shutdown() {
++        assert!(
++            Instant::now() < deadline,
++            "{}",
++            runtime.persistence_shutdown_diagnostics()
++        );
++        runtime.poll_persistence_for_shutdown().unwrap();
++        assert!(!runtime.persistence_failed_for_shutdown());
++        std::thread::sleep(std::time::Duration::from_millis(1));
++    }
++}
++
++fn restore_published(runtime: &mut GpuLiveBrainRuntime, root: &Path) -> GpuLiveBrainRuntime {
++    // Read the real worker's publication, never publish a replacement snapshot.
++    let (manifest, loaded) =
++        GpuDurableSaveManifest::open_loaded(root.join("live.json"), root.join("assets")).unwrap();
++    let seed = loaded.save.deterministic_seed;
++    GpuLiveBrainRuntime::restore_loaded_save(
++        runtime.new_staging_like_live().unwrap(),
++        manifest,
++        loaded,
++        seed,
++        BrainScaleTier::Nano512,
++    )
++    .unwrap()
++}
++
++fn setup_clear_interruption(runtime: &mut GpuLiveBrainRuntime) {
++    let tick = runtime.world.tick();
++    let scheduler = &mut runtime.residents.get_mut(&1).unwrap().sleep_scheduler;
++    scheduler.force_recovery_sleep(tick).unwrap();
++    scheduler.interrupt_for_acute_pain(tick).unwrap().unwrap();
++    let state = scheduler.state();
++    assert!(state.phase.is_interrupted());
++    assert_eq!(state.consolidation, ConsolidationState::None);
++    let mut record = runtime
++        .world
++        .organism_registry()
++        .get(OrganismId(1))
++        .unwrap()
++        .clone();
++    record
++        .seal_sleep_phase(state.phase, state.active_cycle_id, tick, 0)
++        .unwrap();
++    runtime.world.replace_organism_record_exact(record).unwrap();
++    // Fixture setup uses the real core transition and a genuine exact baseline.
++    // This does not claim that world pain caused the transition automatically.
++    runtime.request_exact_population_checkpoint().unwrap();
++    finish_publication(runtime);
++}
++
++#[test]
++fn arousal_epoch_software_real_rejected_credit_retry_and_same_tick_older_capture() {
++    let (root, mut runtime) = fixture("retry-same-tick");
++    setup_clear_interruption(&mut runtime);
++    let handle = runtime.handle_for(OrganismId(1)).unwrap();
++    let start_sequence = runtime.residents[&1].next_sequence;
++    let start_patches = runtime.sealed_patch_count;
++    let initial = capture_sleep_journal_neural_authority(&mut runtime.backend, handle).unwrap();
++
++    // These are the existing real worker-start and real sealed-credit rejection
++    // hooks. Senders drop before runtime on panic, so teardown cannot deadlock.
++    let (old_release, old_gate) = mpsc::sync_channel(1);
++    runtime.next_checkpoint_worker_start_gate = Some(old_gate);
++    runtime.force_learning_rejections_for_test(1);
++    let summaries = runtime
++        .tick_with_contact_withdrawal_candidate_for_test()
++        .unwrap();
++    assert_eq!(summaries.len(), 1);
++    assert_eq!(runtime.world.tick(), Tick(1));
++    assert_eq!(runtime.sealed_patch_count, start_patches + 1);
++    assert_eq!(runtime.residents[&1].next_sequence, start_sequence + 1);
++    assert_eq!(runtime.retained_learning.len(), 1);
++    assert!(runtime.last_learning_receipts.is_empty());
++    assert_eq!(runtime.last_post_seal_learning_failures.len(), 1);
++    assert!(runtime.arousal_neural_epochs.is_dirty(1));
++    assert!(runtime.exact_checkpoint_coordinator.is_active());
++    let inference = capture_sleep_journal_neural_authority(&mut runtime.backend, handle).unwrap();
++    assert!(!same_neural_authority(&initial, &inference));
++    let pending = runtime.backend.pending_eligibility(handle).unwrap();
++    assert!(pending.is_some());
++
++    let (new_release, new_gate) = mpsc::sync_channel(1);
++    runtime.next_checkpoint_worker_start_gate = Some(new_gate);
++    // Ordinary tick: no new aroused candidate batch. The real retained-credit
++    // retry acknowledges at tick1, the same tick as the older immutable capture.
++    assert!(matches!(
++        runtime.tick_outcome().unwrap(),
++        GpuLiveTickOutcome::Progressed(_)
++    ));
++    assert_eq!(runtime.world.tick(), Tick(2));
++    assert!(runtime.retained_learning.is_empty());
++    assert_eq!(runtime.last_learning_receipts.len(), 1);
++    assert_eq!(runtime.sealed_patch_count, start_patches + 1);
++    assert_eq!(runtime.residents[&1].next_sequence, start_sequence + 1);
++    assert!(runtime.last_gpu_authority_receipts.is_empty());
++    assert!(runtime
++        .backend
++        .pending_eligibility(handle)
++        .unwrap()
++        .is_none());
++    let credited = capture_sleep_journal_neural_authority(&mut runtime.backend, handle).unwrap();
++    assert!(
++        credited.compact.active_weight_generation() > inference.compact.active_weight_generation()
++    );
++    assert!(!same_neural_authority(&inference, &credited));
++    assert!(runtime.arousal_neural_epochs.is_dirty(1));
++
++    drop(old_release);
++    let deadline = Instant::now() + std::time::Duration::from_secs(90);
++    while runtime
++        .checkpoint_durability
++        .as_ref()
++        .unwrap()
++        .published
++        .save
++        .world
++        .tick
++        < Tick(1)
++    {
++        assert!(
++            Instant::now() < deadline,
++            "{}",
++            runtime.persistence_shutdown_diagnostics()
++        );
++        runtime.poll_persistence_for_shutdown().unwrap();
++        assert!(!runtime.persistence_failed_for_shutdown());
++        std::thread::sleep(std::time::Duration::from_millis(1));
++    }
++    assert_eq!(
++        runtime
++            .checkpoint_durability
++            .as_ref()
++            .unwrap()
++            .published
++            .save
++            .world
++            .tick,
++        Tick(1)
++    );
++    assert!(
++        runtime.arousal_neural_epochs.is_dirty(1),
++        "older same-tick capture cleared newer credit"
++    );
++    let mut old = restore_published(&mut runtime, &root);
++    let old_handle = old.handle_for(OrganismId(1)).unwrap();
++    let old_authority =
++        capture_sleep_journal_neural_authority(&mut old.backend, old_handle).unwrap();
++    assert!(
++        same_neural_authority(&inference, &old_authority),
++        "old publication did not restore its captured authority"
++    );
++    assert_eq!(old.retained_learning.len(), 1);
++    drop(old);
++
++    drop(new_release);
++    finish_publication(&mut runtime);
++    assert!(!runtime.arousal_neural_epochs.is_dirty(1));
++    assert_eq!(
++        runtime
++            .checkpoint_durability
++            .as_ref()
++            .unwrap()
++            .published
++            .save
++            .world
++            .tick,
++        Tick(2)
++    );
++    let expected_sleep = runtime.residents[&1].sleep_scheduler.state();
++    let expected_world = runtime.world.canonical_signature_digest().unwrap();
++    let mut restored = restore_published(&mut runtime, &root);
++    let restored_handle = restored.handle_for(OrganismId(1)).unwrap();
++    let restored_authority =
++        capture_sleep_journal_neural_authority(&mut restored.backend, restored_handle).unwrap();
++    assert!(
++        same_neural_authority(&credited, &restored_authority),
++        "new publication lost actual acknowledged authority"
++    );
++    assert_eq!(
++        restored.world.canonical_signature_digest().unwrap(),
++        expected_world
++    );
++    assert_eq!(
++        restored.residents[&1].sleep_scheduler.state(),
++        expected_sleep
++    );
++    assert_eq!(restored.residents[&1].next_sequence, start_sequence + 1);
++    assert!(restored.retained_learning.is_empty());
++    assert_eq!(
++        restored.residents[&1]
++            .sleep_scheduler
++            .state()
++            .cycles_completed,
++        0
++    );
++    println!("AROUSAL_EPOCH_REAL_WORKER_PASS decisions=1 intervals=2 genuine_rejected_credit=1 retry_ack_no_batch=1 old_same_tick_capture_rejected=1 exact_restores=2 fabricated_publications=0");
++}
+diff --git a/crates/alife_game_app/src/gpu_live_runtime/durability_hold.rs b/crates/alife_game_app/src/gpu_live_runtime/durability_hold.rs
+index 8b8308f..fb6116c 100644
+--- a/crates/alife_game_app/src/gpu_live_runtime/durability_hold.rs
++++ b/crates/alife_game_app/src/gpu_live_runtime/durability_hold.rs
+@@ -1,4 +1,4 @@
+-use alife_core::SleepPhase;
++use alife_core::{SleepPhase, SleepState};
+ 
+ #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+ pub(crate) enum BrainAtpWorldTickMode {
+@@ -15,7 +15,7 @@ pub(crate) fn brain_atp_world_tick_mode(
+         BrainAtpWorldTickMode::DurabilityHold
+     } else {
+         BrainAtpWorldTickMode::Charge {
+-            recover: phase_before != SleepPhase::Awake || !schedule_sleep,
++            recover: phase_before.is_physical_sleep() || !schedule_sleep,
+         }
+     }
+ }
+@@ -24,9 +24,129 @@ pub(crate) fn sleep_recovery_body_event_due(
+     phase_before: SleepPhase,
+     completed_waiting_for_durable_permit: bool,
+ ) -> bool {
+-    phase_before != SleepPhase::Awake && !completed_waiting_for_durable_permit
++    phase_before.is_physical_sleep() && !completed_waiting_for_durable_permit
+ }
+ 
+ pub(crate) fn motor_eligible(phase: SleepPhase) -> bool {
+     phase == SleepPhase::Awake
+ }
++
++/// Explicit research mode only; ordinary dispatch remains Awake-only. Both
++/// boundaries must already permit activity, so draining a frozen job cannot
++/// immediately become a new aroused write in that same interval.
++pub(crate) fn candidate_interrupted_dispatch_allowed(
++    enabled: bool,
++    durable: bool,
++    before: SleepState,
++    after: SleepState,
++) -> bool {
++    enabled
++        && durable
++        && before.phase.is_interrupted()
++        && before.phase == after.phase
++        && before.permits_neural_activity()
++        && after.permits_neural_activity()
++}
++
++#[cfg(test)]
++mod arousal_gate_tests {
++    use super::*;
++    use alife_core::{ConsolidationIntent, ConsolidationState, SleepTrigger, Tick, Validate};
++    #[test]
++    fn candidate_gate_requires_durable_clear_entry_and_unchanged_interrupted_phase() {
++        let clear = SleepState {
++            schema_version: 3,
++            phase: SleepPhase::InterruptedConsolidating,
++            phase_started_tick: Tick(1),
++            entered_sleep_tick: Some(Tick(0)),
++            cycles_completed: 0,
++            last_trigger: Some(SleepTrigger::RecoveryProtocol),
++            active_cycle_id: 1,
++            last_consolidated_cycle_id: 0,
++            consolidation: ConsolidationState::None,
++        };
++        clear.validate_contract().unwrap();
++        assert!(candidate_interrupted_dispatch_allowed(
++            true, true, clear, clear
++        ));
++        assert!(!candidate_interrupted_dispatch_allowed(
++            false, true, clear, clear
++        ));
++        assert!(!candidate_interrupted_dispatch_allowed(
++            true, false, clear, clear
++        ));
++        let committed = SleepState {
++            consolidation: ConsolidationState::Committed {
++                cycle_id: 1,
++                output_generation: 10,
++                output_digest: [1; 4],
++            },
++            ..clear
++        };
++        committed.validate_contract().unwrap();
++        assert!(candidate_interrupted_dispatch_allowed(
++            true, true, committed, committed
++        ));
++        let pending = SleepState {
++            consolidation: ConsolidationState::Pending {
++                intent: ConsolidationIntent { cycle_id: 1 },
++                replay_digest: [2; 4],
++                replay_event_count: 1,
++                replay_eligibility_sample_count: 0,
++            },
++            ..clear
++        };
++        pending.validate_contract().unwrap();
++        assert!(!candidate_interrupted_dispatch_allowed(
++            true, true, pending, committed
++        ));
++        let resumed = SleepState {
++            phase: SleepPhase::Consolidating,
++            ..committed
++        };
++        assert!(!candidate_interrupted_dispatch_allowed(
++            true, true, committed, resumed
++        ));
++        let awake = SleepState::awake_at(Tick(1));
++        assert!(!candidate_interrupted_dispatch_allowed(
++            true, true, awake, awake
++        ));
++    }
++    #[test]
++    fn legacy_recovery_is_unchanged_and_interrupted_phases_do_not_earn_sleep() {
++        for phase in [
++            SleepPhase::Awake,
++            SleepPhase::EnteringSleep,
++            SleepPhase::Consolidating,
++            SleepPhase::Waking,
++            SleepPhase::ForcedRecoverySleep,
++        ] {
++            assert_eq!(
++                brain_atp_world_tick_mode(phase, true, false),
++                BrainAtpWorldTickMode::Charge {
++                    recover: phase != SleepPhase::Awake
++                }
++            );
++            assert_eq!(
++                sleep_recovery_body_event_due(phase, false),
++                phase != SleepPhase::Awake
++            );
++        }
++        for phase in [
++            SleepPhase::InterruptedEnteringSleep,
++            SleepPhase::InterruptedConsolidating,
++            SleepPhase::InterruptedWaking,
++            SleepPhase::InterruptedForcedRecoverySleep,
++        ] {
++            assert_eq!(
++                brain_atp_world_tick_mode(phase, true, false),
++                BrainAtpWorldTickMode::Charge { recover: false }
++            );
++            assert!(!sleep_recovery_body_event_due(phase, false));
++            assert_eq!(
++                brain_atp_world_tick_mode(phase, true, true),
++                BrainAtpWorldTickMode::DurabilityHold
++            );
++        }
++    }
++}
+diff --git a/crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs b/crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs
+index 77c4723..40280f6 100644
+--- a/crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs
++++ b/crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs
+@@ -513,8 +513,14 @@ impl GpuLiveBrainRuntime {
+             checkpoint_publication_wall_ns = checkpoint_publication_wall_ns
+                 .saturating_add(checkpoint_preparation_started.map_or(0, elapsed_ns));
+             let remains_dispatchable = !self.arousal_neural_epochs.is_dirty(raw)
+-                && phase_before == SleepPhase::Awake
+-                && sleep_event.phase == SleepPhase::Awake
++                && ((phase_before == SleepPhase::Awake && sleep_event.phase == SleepPhase::Awake)
++                    || candidate_interrupted_dispatch_allowed(
++                        self.contact_withdrawal_candidate,
++                        self.checkpoint_durability.is_some(),
++                        sleep_before,
++                        resident.sleep_scheduler.state(),
++                    ))
++                && sleep_event.motor_eligible
+                 && sleep_event.transition.is_none();
+             if !remains_dispatchable || retained_learning_pending {
+                 summaries_by_organism.insert(

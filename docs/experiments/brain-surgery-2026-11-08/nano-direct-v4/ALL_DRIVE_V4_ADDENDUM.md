@@ -1,0 +1,23 @@
+# All-drive interpretation and bounded correction priorities
+
+This addendum supersedes pending-status sentences in the historical ALL_DRIVE_FINDINGS, not its preserved failed experiments. The V4 no-world report contains every lane's actual native encoder contrast and latency. The V4 native512 report closes the acted fixture with no sampled behavioral change. None of these experiments changes production defaults.
+
+All eleven drives are sensed and enter acquired-memory query features12..23. Fixed-recall tests intentionally exclude that indirect route. Query presence is not proof of useful learned policy. The default compiled recurrent route alone is disconnected from readout; tiny hunger birth-dendrite access and possible later structural growth qualify that statement. Normal GPU selection additionally modulates novelty/gap exploration with curiosity and emergency urgency; the CPU fixture's masked-softmax sampler does not reproduce that separate gameplay arbitration.
+
+| Lane/neuron | Correct interpretation and current relief | Tested path / correction priority |
+|---|---|---|
+| Hunger0/64 | Deficit; ingestion supplies actual nutrients/ATP | Food-cued innate Approach/Ingest plus tiny birth path. Preserve signs, reach/food validation and resource conservation. Need-specific target consequence already represented, but target pooling across families limits action-specific credit. |
+| Fatigue1/67 | Deficit; stationary Rest/sleep, developmental expression gates chemistry | Innate Rest; separate fresh-only wake/recovery calibration addresses time scale. Expression0 newborn rest is not evidence of active fatigue relief. No extra ATP manufacture. |
+| Fear2/68 | Aversive pressure; grounded safety/danger removal | Innate danger mask and independent contact protection. No ungrounded directional refuge or universal avoid instruction. |
+| Pain3/65 | Aversive damage; actual tissue/contact recovery | Innate danger and separate physical withdrawal. Keep pain relief tied to world outcomes, not neural score changes. |
+| Loneliness4/69 | Regulated social pressure, actual contact relief | V4 explicit fresh direct source now yields signed aggregate-memory coupling;512 intervals show no sampled change. Pursue bounded source/readout scale and family-specific consequences without hidden peer labels. |
+| Curiosity5/70 | Appetitive urge, not generic utility deficit; generic drive utility weight0 | Novelty/investigation feedback plus GPU adaptive exploration. Do not use uniform negative drive utility or force inspection. |
+| ATP6/71 | Resource availability, not pressure | Actual food supply and neural cost constrain action. No universal relief-seeking mapping; do not invert availability. |
+| Thermal7/66 | Unsigned stress; grounded exposure/recovery | Innate danger has no refuge direction. Separate opt-in thermal world prototype addresses event delivery. Policy needs observed spatial alternatives before directed relief can be claimed. |
+| Reproduction8/72 | Appetitive maturity/opportunity urge; generic utility weight0 | Existing maturity/energy/opportunity gates, no complete ordinary mating affordance. Do not route to generic contact or treat reducing urge as universal reward. |
+| Boredom9/73 (Extension0) | Founder-assigned unmet stimulation, negative utility weight | Actual play lowers it; separate boredom candidate owns targeted policy tests. Endocrine Extension0 is praise, not this drive. |
+| Reserved10/74 (Extension1) | No assigned biological need | Preserve capacity and encoding; do not invent an emotion or uniform relief objective. |
+
+For all11 the qualified native zero-to-one encoder increment is+.25 under the measured receptor context. Except calibrated loneliness, signed source activations remain negative at the tested natural operating point; negative activation retains information and does not itself imply every effective behavior path is absent. A rectifying new reader cannot use it without an explicit appropriate operating-point design. The old native128-microstep diagnostic and V4 actual3-step cadence tests must not be conflated.
+
+Priority is to retain demonstrated ordinary world fixes, separate physiology time scales from neural scoring, and test biologically appropriate readouts one mechanism at a time. A single positive aggregate family-valence scalar cannot prove hunger versus loneliness versus fatigue-specific reconciliation. Full action-family-conditioned per-need consequences would require explicit versioned storage and restore guards; existing candidate records do not retain every needed distinction. No arbitrary all-drive-to-all-action wiring or new storage expansion is part of V4.

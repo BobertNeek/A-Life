@@ -1,0 +1,7 @@
+   Compiling alife_core v0.1.0 ($FROZEN_SOURCE/crates/alife_core)
+   Compiling alife_storage v0.1.0 ($FROZEN_SOURCE/crates/alife_storage)
+   Compiling alife_gpu_backend v0.1.0 ($FROZEN_SOURCE/crates/alife_gpu_backend)
+   Compiling alife_world v0.1.0 ($FROZEN_SOURCE/crates/alife_world)
+   Compiling alife_runtime v0.1.0 ($FROZEN_SOURCE/crates/alife_runtime)
+   Compiling alife_training v0.1.0 ($FROZEN_SOURCE/crates/alife_training)
+    Finished `test` profile [unoptimized] target(s) in 3m 15s

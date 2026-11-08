@@ -1,0 +1,19 @@
+   Compiling alife_core v0.1.0 (/workspace/scratch/ee5e08a3ca9b/grounded-approach-need-v1/crates/alife_core)
+   Compiling alife_storage v0.1.0 (/workspace/scratch/ee5e08a3ca9b/grounded-approach-need-v1/crates/alife_storage)
+   Compiling alife_world v0.1.0 (/workspace/scratch/ee5e08a3ca9b/grounded-approach-need-v1/crates/alife_world)
+error: recursion limit reached while expanding `$crate::json_internal!`
+   --> crates/alife_world/src/headless/grounded_approach_need_tests.rs:305:5
+    |
+305 | /     json!({
+306 | |         "fixture_fork_namespace": fork,
+307 | |         "world_binding_limit": "namespace is external fixture ownership, not a runtime world/life epoch API",
+308 | |         "world_seed": SEED, "organism": SUBJECT.raw(), "actor_entity": actor.raw(),
+...   |
+331 | |         "interpretation": "joint physical interval observation only; not scalar reward, policy, or learned self-care",
+332 | |     })
+    | |______^
+    |
+    = help: consider increasing the recursion limit by adding a `#![recursion_limit = "256"]` attribute to your crate (`alife_world`)
+    = note: this error originates in the macro `$crate::json_internal` which comes from the expansion of the macro `json` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: could not compile `alife_world` (lib test) due to 1 previous error

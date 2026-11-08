@@ -845,7 +845,20 @@ impl BrainPhenotype {
                             route,
                             coordinate.head().raw(),
                             coordinate.family().raw(),
-                            coordinate.input_lane(),
+                            // Schema3 preserves physical storage order while
+                            // explicitly retargeting the source55/lane31 duplicates.
+                            if self
+                                .foundation_abi_selection
+                                .n2048_grip_reader_candidate()
+                                .is_some()
+                                && coordinate.head() == DecoderHeadKind::MemoryContext
+                                && coordinate.input_lane()
+                                    == crate::N2048GripReaderCandidateV1::OPERATION_VALUE_LANE
+                            {
+                                31
+                            } else {
+                                coordinate.input_lane()
+                            },
                             coordinate.motor_index(),
                             synapse.source(),
                             synapse.target(),
@@ -953,6 +966,28 @@ impl BrainPhenotype {
             &self.replay_capture_plan,
             &self.sleep_consolidation_plan,
         )?;
+        if self
+            .foundation_abi_selection
+            .n2048_grip_reader_candidate()
+            .is_some()
+        {
+            let mut ports = [0_u16; 8];
+            for synapse in &self.synapses {
+                if let CompiledSynapseKind::Decoder(coordinate) = synapse.kind() {
+                    if coordinate.head() == DecoderHeadKind::MemoryContext
+                        && coordinate.input_lane() == 53
+                    {
+                        ports[usize::from(coordinate.family().raw())] += 1;
+                    }
+                }
+            }
+            if ports != [crate::N2048GripReaderCandidateV1::RETARGETED_DUPLICATES_PER_FAMILY; 8]
+                || self.cognitive_decoder.is_some()
+                || self.cognitive_channel_plan.is_some()
+            {
+                return Err(ScaffoldContractError::PhenotypeCompile);
+            }
+        }
         let n2048 = capacity.id() == BrainCapacityClass::N2048_ID;
         let n4096 = capacity.id() == BrainCapacityClass::N4096_RESEARCH_ID;
         let cognitive_count = self

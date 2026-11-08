@@ -1,0 +1,57 @@
+{
+  "commit": "3e7239c6cd9b4a34d199a4e513ea2559cb7d748b",
+  "tree": "8fd3ca2375e4613b2dea5997b8b3964ba7c6b633",
+  "base_commit": "68eaeaed2b9e4f5c07f3fb129f6ddd4afd417913",
+  "full_patch_base_commit": "2da9dd323ad6f074556a851174a2edbc9e34e216",
+  "executable_bindings": {
+    "gpu_sleep_contracts-beeab62465a7bd4d": {
+      "sha256": "0bb29470b3e4db51e2d7b40258fcdaf4325f6d277618a1915b7832756e9f9466",
+      "bytes": 1957208,
+      "included": false
+    },
+    "automatic_sleep_scheduler-cfbb25873eca2912": {
+      "sha256": "e434adbb96e88c2d8756e405aaa3923757811436770f9def57198d3896caa7bb",
+      "bytes": 4673512,
+      "included": false
+    },
+    "cpu_collector-a2643aa43bc47c1a": {
+      "sha256": "07df83056c7c7b1efe82b63813f39794a382f3e9a6a4e519e645c5ef1a602ea5",
+      "bytes": 40388304,
+      "included": false
+    }
+  },
+  "source_root": "/workspace/scratch/ee5e08a3ca9b/motor-reflex-cognitive-v7",
+  "toolchain": "Rust1.99.1 official isolated",
+  "build": {
+    "jobs": 1,
+    "incremental": 0,
+    "test_debug": 0,
+    "dev_debug": 0,
+    "offline": true,
+    "target": "/workspace/scratch/ee5e08a3ca9b/motor-reflex-target-v1"
+  },
+  "native_results": {
+    "core_sleep_contracts": {
+      "passed": 14,
+      "failed": 0,
+      "ignored": 0
+    },
+    "runtime_scheduler": {
+      "passed": 9,
+      "failed": 0,
+      "ignored": 0,
+      "driver": "deterministic fixture, not GPU device"
+    },
+    "cpu_collector": {
+      "passed": 32,
+      "failed": 0,
+      "ignored": 1,
+      "ignore": "existing explicit native replay benchmark"
+    }
+  },
+  "strict_clippy": "core/runtime/training lib+tests cpu-backend passed",
+  "workspace_fmt_diff": "passed",
+  "default_activation": false,
+  "gpu_cognitive_activation": false,
+  "private_state_access": false
+}

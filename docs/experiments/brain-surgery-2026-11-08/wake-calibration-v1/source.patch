@@ -1,0 +1,307 @@
+diff --git a/crates/alife_core/src/biochemical_graph.rs b/crates/alife_core/src/biochemical_graph.rs
+index 07657b2..027f2b4 100644
+--- a/crates/alife_core/src/biochemical_graph.rs
++++ b/crates/alife_core/src/biochemical_graph.rs
+@@ -909,6 +909,32 @@ impl BiochemicalPhenotype {
+         Ok(value)
+     }
+ 
++    /// Explicit construction-only calibration. Parameters are stored in emitter
++    /// genes, so ordinary genome serialization/identity binds the actual recipe.
++    /// This does not edit concentrations or install itself in existing founders.
++    pub(crate) fn with_waking_recovery_calibration(
++        self,
++        awake_gain: f32,
++        recovery_gain: f32,
++    ) -> Result<Self, ScaffoldContractError> {
++        validate_finite_values(&[awake_gain, recovery_gain])?;
++        if !(0.0..=1.0).contains(&awake_gain) || !(0.0..=1.0).contains(&recovery_gain) {
++            return Err(ScaffoldContractError::ScalarOutOfRange);
++        }
++        let mut value = self.with_waking_recovery()?;
++        for row in &mut value.emitters {
++            if matches!(row.target, ids::FATIGUE | ids::SLEEP_PRESSURE) {
++                match row.source {
++                    BiochemicalSourceLocus::Awake => row.gain = awake_gain,
++                    BiochemicalSourceLocus::SleepRecovery => row.gain = -recovery_gain,
++                    _ => {}
++                }
++            }
++        }
++        value.compile()?;
++        Ok(value)
++    }
++
+     /// Install an explicit inherited waking/recovery circuit. Legacy reference
+     /// recipes and loaded concentrations remain unchanged until callers opt in.
+     pub(crate) fn with_waking_recovery(mut self) -> Result<Self, ScaffoldContractError> {
+diff --git a/crates/alife_core/src/evolutionary_genetics.rs b/crates/alife_core/src/evolutionary_genetics.rs
+index fa743e6..49d3bd3 100644
+--- a/crates/alife_core/src/evolutionary_genetics.rs
++++ b/crates/alife_core/src/evolutionary_genetics.rs
+@@ -532,6 +532,25 @@ impl BiochemicalGraphChromosome {
+         self.validate_contract()?;
+         Ok(self)
+     }
++    /// Opt-in waking/recovery construction genes; never repairs a loaded body.
++    /// `awake_gain` is per awake chemistry tick; `recovery_gain` is per unit
++    /// recovery event. Both are scaled by inherited developmental expression.
++    pub fn with_waking_recovery_calibration(
++        mut self,
++        side: AlleleSide,
++        awake_gain: f32,
++        recovery_gain: f32,
++    ) -> Result<Self, ScaffoldContractError> {
++        let homolog = match side {
++            AlleleSide::Maternal => &mut self.maternal,
++            AlleleSide::Paternal => &mut self.paternal,
++        };
++        *homolog = homolog
++            .clone()
++            .with_waking_recovery_calibration(awake_gain, recovery_gain)?;
++        self.validate_contract()?;
++        Ok(self)
++    }
+     /// Inherit valuation alongside the chemistry graph, never lifetime rewards.
+     pub fn with_value_profile(
+         mut self,
+diff --git a/crates/alife_core/tests/waking_recovery_calibration.rs b/crates/alife_core/tests/waking_recovery_calibration.rs
+new file mode 100644
+index 0000000..07406c7
+--- /dev/null
++++ b/crates/alife_core/tests/waking_recovery_calibration.rs
+@@ -0,0 +1,234 @@
++//! Disposable chemistry/body fixtures, not autonomous lifetimes or policy evidence.
++use alife_core::*;
++
++fn genome(gain: Option<f32>) -> CreatureGenome {
++    let mut g = CreatureGenome::early_mammal_founder(
++        0xE10_8001,
++        FoundationGeneticIdentity::new(10, 1, 7, BrainCapacityClass::N512_ID).unwrap(),
++    )
++    .unwrap();
++    for side in [AlleleSide::Maternal, AlleleSide::Paternal] {
++        g.chemistry.graph = match gain {
++            Some(gain) => g
++                .chemistry
++                .graph
++                .with_waking_recovery_calibration(side, gain, 0.01),
++            None => g.chemistry.graph.with_waking_recovery(side),
++        }
++        .unwrap();
++    }
++    g
++}
++
++#[test]
++fn calibration_is_explicit_serialized_and_rejects_invalid_parameters() {
++    let old = genome(None);
++    let candidate = genome(Some(0.001));
++    let bytes = serde_json::to_vec(&candidate).unwrap();
++    assert_ne!(serde_json::to_vec(&old).unwrap(), bytes);
++    let restored: CreatureGenome = serde_json::from_slice(&bytes).unwrap();
++    assert_eq!(bytes, serde_json::to_vec(&restored).unwrap());
++    assert_eq!(
++        candidate.express().unwrap().chemistry.biochemical,
++        restored.express().unwrap().chemistry.biochemical
++    );
++    for (wake, recovery) in [
++        (f32::NAN, 0.01),
++        (-0.1, 0.01),
++        (1.1, 0.01),
++        (0.001, f32::INFINITY),
++        (0.001, -0.1),
++    ] {
++        assert!(old
++            .chemistry
++            .graph
++            .clone()
++            .with_waking_recovery_calibration(AlleleSide::Maternal, wake, recovery)
++            .is_err());
++    }
++    let phenotype = old.express().unwrap();
++    let state = BiochemistryState::new(&phenotype, Tick(600)).unwrap();
++    let saved = serde_json::to_vec(&state).unwrap();
++    let loaded: BiochemistryState = serde_json::from_slice(&saved).unwrap();
++    assert_eq!(saved, serde_json::to_vec(&loaded).unwrap());
++    assert_eq!(
++        serde_json::to_vec(&old).unwrap(),
++        serde_json::to_vec(&genome(None)).unwrap()
++    );
++}
++
++#[test]
++fn bounded_gain_grid_reaches_pressure_before_lifetime_without_one_tick_recovery() {
++    // Analytic proposal: a .4 pressure rise over ~400 mature ticks (20 seconds)
++    // needs .001/tick; .01 recovery/event takes tens of events rather than one.
++    // Bracket gains by 2x each way rather than optimizing a policy outcome.
++    for gain in [0.0005, 0.001, 0.002] {
++        let p = genome(Some(gain)).express().unwrap();
++        let graph = &p.chemistry.biochemical;
++        let mut body = BiochemistryState::new(&p, Tick::ZERO).unwrap().body;
++        body.set_energy(0.8).unwrap();
++        for expression in [0.25, 0.5, 1.0] {
++            let mut state = BiochemicalGraphState::new(graph, Tick::ZERO, expression).unwrap();
++            let mut entry = None;
++            for t in 1..=5472 {
++                // lifespan envelope: 1824 * (2 + lifespan_scale), scale <= 1
++                state = state
++                    .advance(
++                        Tick(t),
++                        body,
++                        BodyEventDelta::zero(),
++                        None,
++                        graph,
++                        expression,
++                    )
++                    .unwrap()
++                    .0;
++                if state
++                    .derive_homeostasis(graph)
++                    .unwrap()
++                    .hormones
++                    .sleep_pressure
++                    >= 0.6
++                {
++                    entry = Some(t);
++                    break;
++                }
++            }
++            println!("gain={gain} expression={expression} first_pressure_0.6={entry:?}");
++            if gain >= 0.001 {
++                assert!(entry.unwrap() < 3648);
++            }
++            if let Some(t) = entry {
++                let before = state.derive_homeostasis(graph).unwrap();
++                body.sleeping = true;
++                state = state
++                    .advance(
++                        Tick(t + 1),
++                        body,
++                        BodyEventDelta {
++                            sleep_recovery: 1.0,
++                            ..BodyEventDelta::zero()
++                        },
++                        None,
++                        graph,
++                        expression,
++                    )
++                    .unwrap()
++                    .0;
++                let after = state.derive_homeostasis(graph).unwrap();
++                assert!(after.hormones.sleep_pressure < before.hormones.sleep_pressure);
++                assert!(after.hormones.sleep_pressure > 0.55);
++                for offset in 2..=200 {
++                    state = state
++                        .advance(
++                            Tick(t + offset),
++                            body,
++                            BodyEventDelta {
++                                sleep_recovery: 1.0,
++                                ..BodyEventDelta::zero()
++                            },
++                            None,
++                            graph,
++                            expression,
++                        )
++                        .unwrap()
++                        .0;
++                }
++                let recovered = state.derive_homeostasis(graph).unwrap();
++                assert!(recovered.hormones.sleep_pressure < 0.6);
++                assert!(recovered.drives.fatigue < 0.9);
++                body.sleeping = false;
++            }
++        }
++    }
++}
++
++#[test]
++fn rest_does_not_manufacture_reserve_or_direct_atp_and_preserves_food_independence() {
++    let p = genome(Some(0.001)).express().unwrap();
++    let graph = &p.chemistry.biochemical;
++    assert!(!graph
++        .emitters()
++        .iter()
++        .any(|e| e.source == BiochemicalSourceLocus::SleepRecovery
++            && e.target == ChemicalSpeciesId(7)));
++    let mut start = BiochemistryState::new(&p, Tick(600)).unwrap();
++    start.body.set_energy(0.8).unwrap();
++    let mut awake = start;
++    for t in 601..=900 {
++        awake = awake.advance(Tick(t), BodyEventDelta::zero(), &p).unwrap();
++    }
++    let tired = awake;
++    let mut rested = tired;
++    for t in 901..=960 {
++        rested = rested
++            .advance(
++                Tick(t),
++                BodyEventDelta {
++                    sleep_recovery: 1.0,
++                    ..BodyEventDelta::zero()
++                },
++                &p,
++            )
++            .unwrap();
++        awake = awake.advance(Tick(t), BodyEventDelta::zero(), &p).unwrap();
++    }
++    assert!(rested.body.energy <= tired.body.energy);
++    assert!(rested.body.energy > awake.body.energy);
++    assert!(rested.homeostasis.drives.fatigue < tired.homeostasis.drives.fatigue);
++    let meal = tired
++        .advance(
++            Tick(901),
++            BodyEventDelta {
++                nutrition: 0.2,
++                ..BodyEventDelta::zero()
++            },
++            &p,
++        )
++        .unwrap();
++    let no_meal = tired
++        .advance(Tick(901), BodyEventDelta::zero(), &p)
++        .unwrap();
++    assert_eq!(
++        meal.homeostasis.drives.fatigue,
++        no_meal.homeostasis.drives.fatigue
++    );
++    assert!(meal.body.energy > no_meal.body.energy);
++}
++
++#[test]
++fn fresh_developing_bodies_reach_normal_sleep_gate_across_expressed_lifespans() {
++    for lifespan in [0.0, 0.475, 1.0] {
++        let mut g = genome(Some(0.001));
++        g.body.lifespan = ContinuousLocus::mean(lifespan, lifespan).unwrap();
++        let p = g.express().unwrap();
++        let max_age = PassiveBodyUpkeepPolicy::maximum_lifespan_ticks(&p);
++        let mut state = BiochemistryState::new(&p, Tick::ZERO).unwrap();
++        let mut config = SleepConsolidationConfig::reference();
++        // The separate actual N2048 canonical fixture reports .6. This core
++        // fixture deliberately verifies that measured gate, not a brain policy.
++        config.sleep_pressure_threshold = NormalizedScalar::new(0.6).unwrap();
++        let mut controller = SleepController::new(config).unwrap();
++        let mut entry = None;
++        for t in 1..=max_age {
++            // Controlled adequate reserves. This is not a free-feeding policy or
++            // survival assay; body metabolism still executes on every tick.
++            state.body.set_energy(0.8).unwrap();
++            state = state.advance(Tick(t), BodyEventDelta::zero(), &p).unwrap();
++            let transition = controller
++                .evaluate_homeostasis(
++                    &state.homeostasis,
++                    p.chemistry.endocrine.parameters,
++                    Tick(t),
++                )
++                .unwrap();
++            if transition.is_some() {
++                assert_eq!(controller.state().phase, SleepPhase::EnteringSleep);
++                entry = Some(t);
++                break;
++            }
++        }
++        println!("lifespan={max_age} developing_body_sleep_entry={entry:?}");
++        assert!(entry.unwrap() < max_age / 2);
++    }
++}

@@ -1,0 +1,54 @@
+{
+  "logs": [
+    {
+      "path": "grip-passive-shadow-v3/build.log",
+      "sha256": "e973089a76dd34b7c9066e9b6a01056a4810295882f4fe697f6eba69d81a8209",
+      "project_compile_lines": [
+        "   Compiling alife_world v0.1.0 (/workspace/scratch/ee5e08a3ca9b/grip-passive-shadow-v3/source/crates/alife_world)",
+        "   Compiling alife_runtime v0.1.0 (/workspace/scratch/ee5e08a3ca9b/grip-passive-shadow-v3/source/crates/alife_runtime)",
+        "   Compiling alife_training v0.1.0 (/workspace/scratch/ee5e08a3ca9b/grip-passive-shadow-v3/source/crates/alife_training)"
+      ]
+    },
+    {
+      "path": "grip-passive-shadow-v3/build-v2.log",
+      "sha256": "acd67f697f647f0c89056df24a1a325741b6083c36f4288384d4946c3c904960",
+      "project_compile_lines": [
+        "   Compiling alife_training v0.1.0 (/workspace/scratch/ee5e08a3ca9b/grip-passive-shadow-v3/source/crates/alife_training)"
+      ]
+    },
+    {
+      "path": "grip-passive-shadow-v3/build-final.log",
+      "sha256": "6dc6a8f8fc35bec1f721b790f14cf45624b294905534c7cafbe7070e397dd034",
+      "project_compile_lines": [
+        "   Compiling alife_training v0.1.0 (/workspace/scratch/ee5e08a3ca9b/grip-passive-shadow-v3/source/crates/alife_training)"
+      ]
+    },
+    {
+      "path": "grip-passive-shadow-v3/helper-tests.log",
+      "sha256": "c849297bd8c55afe97b556c5a6196e52609a9c8cee1432bfceacbc8fc38bdbc4",
+      "project_compile_lines": [
+        "   Compiling alife_world v0.1.0 (/workspace/scratch/ee5e08a3ca9b/grip-passive-shadow-v3/source/crates/alife_world)",
+        "   Compiling alife_runtime v0.1.0 (/workspace/scratch/ee5e08a3ca9b/grip-passive-shadow-v3/source/crates/alife_runtime)",
+        "   Compiling alife_training v0.1.0 (/workspace/scratch/ee5e08a3ca9b/grip-passive-shadow-v3/source/crates/alife_training)"
+      ]
+    },
+    {
+      "path": "grip-passive-shadow-v3/identity-tests.log",
+      "sha256": "052329ac6494dd7c3297d4ecbfc05aa781df3c43688bd7423b38e48218d29d12",
+      "project_compile_lines": [
+        "   Compiling alife_training v0.1.0 (/workspace/scratch/ee5e08a3ca9b/grip-passive-shadow-v3/source/crates/alife_training)"
+      ]
+    },
+    {
+      "path": "grip-passive-shadow-v3/clippy.log",
+      "sha256": "c44c1d2e70d01ac860c02bbdc1ce9bec803bede98558b534e229c19025de24a5",
+      "project_compile_lines": []
+    }
+  ],
+  "all_dependencies_recompiled_proven": false,
+  "core_recompile_logged": false,
+  "shared_target_reused": true,
+  "closed_allocation_no_rerun": true,
+  "source_archive_sha256": "2408b6fbbdbd990acd1d4311f9dd939b4ec03186d56265421141f7373a88a574",
+  "executable_sha256": "e94f2a12116c2dc28b747924a3690933063cb67026b8c7bcf1b9ed648dc9c83d"
+}

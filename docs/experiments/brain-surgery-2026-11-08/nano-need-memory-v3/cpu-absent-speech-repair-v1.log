@@ -1,0 +1,12 @@
+   Compiling alife_training v0.1.0 (/workspace/scratch/ee5e08a3ca9b/nano-need-memory-gate-v3/crates/alife_training)
+    Finished `test` profile [unoptimized] target(s) in 15.24s
+     Running tests/cpu_absent_speech.rs (/workspace/shared/grip-integration-qualification-20261108/grip-candidate-qualification/target/debug/deps/cpu_absent_speech-d1889fca23ca9caa)
+
+running 4 tests
+test absent_speech_head_returns_no_receipt_without_mutating_founder ... ok
+test absent_speech_receipt_preserves_selected_vocal_action_and_world_failure ... ok
+test partial_or_unbound_speech_head_cannot_be_admitted_as_absent ... ok
+test present_speech_head_keeps_shape_and_finite_guards ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.25s
+

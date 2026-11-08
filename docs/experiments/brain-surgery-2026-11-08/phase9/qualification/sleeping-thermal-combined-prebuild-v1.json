@@ -1,0 +1,12 @@
+{
+  "scope": "Fixed selected-sleeper physical response plus explicit thermal configuration, no autonomous decisions/lives",
+  "sleeping_remote_head": "bf60fb8b5f69b40da3f1e78e3e1c7623f1448fa9",
+  "thermal_remote_head": "fd118a9ce7b50f513c2cde37fb3b366bf56f22b5",
+  "source_sha256": {
+    "crates/alife_world/src/headless.rs": "727b3a7a37468ef3f5d31c7b5f899969d421c1909a8b01b8338b22f9dee59395",
+    "crates/alife_world/src/headless/thermal_contact_candidate/tests.rs": "bbf42f3f666205eec2462c294b53a3df948a5e57fdd1832f7b405df911d7b2c9",
+    "crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs": "e3f618afd1dad9dd8f26a7f1e6e4cf72d05909693c48d2f9b1c6711d272e750d",
+    "crates/alife_game_app/src/gpu_live_runtime/sleeping_body_contact_tests.rs": "77491bb3c706a1e9e51f3b44b1230ed91e45ab0069db62cf20a217745723a4d6"
+  },
+  "expected": "selected set gates only physical response, not configured thermal dose; once-only final receipt, exact actual software runtime compatibility"
+}

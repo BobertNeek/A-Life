@@ -1,0 +1,51 @@
+{
+  "as_run_provenance_sha256": "3cd01f22ad36f63f9b8d1462d7c74c19b639b447b1aad1b050280b2c5f315622",
+  "original_checksum_payload_count": 7,
+  "original_public_file_count": 8,
+  "original_public_files": {
+    "SHA256SUMS": {
+      "bytes": 573,
+      "git_blob_sha1": "f71b276d5e7ab9c88828d765c565a525a53219f9",
+      "sha256": "c2a49d4ff6c400097cf70948a91c9f96548516bbaf5da38cad29e140a162d102"
+    },
+    "checks.json": {
+      "bytes": 1853,
+      "git_blob_sha1": "c66d334701fd22c03b2e44429b647589f6048c5d",
+      "sha256": "9fb9791c94fed627debc8a1c8d5d98335ec57a0e9f28f5d181ba4cd54ac258a4"
+    },
+    "common-audit-kernel.patch": {
+      "bytes": 74987,
+      "git_blob_sha1": "c780bb00479d03998a06ae9928ef88f110d829dd",
+      "sha256": "6e9e74226bac2309fa876cd327011366d9a6d2e1c865b889a1270835ffe6c257"
+    },
+    "report.md": {
+      "bytes": 671,
+      "git_blob_sha1": "b4280dec83fb93c79d4554601891ca0f9116180f",
+      "sha256": "34e48a2329ba1fe66bdb7524fbce5bb31016635b271d7a8f3d1e5e7777a02a73"
+    },
+    "rows.json": {
+      "bytes": 13,
+      "git_blob_sha1": "ad9e5e420e729b471ed25e4673479d667bfd7176",
+      "sha256": "84d8b3c73e49869e9b3024a6be127c95e45a47e9b9eb7d17ac4b40025634bd74"
+    },
+    "source-bindings.json": {
+      "bytes": 1016,
+      "git_blob_sha1": "0e2a1456f62bb133566129c67d8bebda96f7495b",
+      "sha256": "9ac4ce41e8f049187a37a34a7d56a928c1d5303b20df70eb8c7de0adba448454"
+    },
+    "summary.json": {
+      "bytes": 33,
+      "git_blob_sha1": "f459ff5a0d31b8073f07cbee9a81e8c9721d3cb4",
+      "sha256": "9f401f0684f07967b6b26c53046e7b6d2359fd3d4fc802a39f032015d6803bfa"
+    },
+    "world-factor.patch": {
+      "bytes": 68156,
+      "git_blob_sha1": "d883583bccc182c1869f2ceac4bae603e7af5541",
+      "sha256": "5cc4ea55ff8505bff852291ad0037bf05b7d1b1010a8db59cd264584332b4b2c"
+    }
+  },
+  "original_public_total_bytes": 147302,
+  "purpose": "Byte-preservation inventory for the eight original public files; not a new experiment or validation of behavioral outcomes.",
+  "schema_version": 1,
+  "unchanged_from_original": true
+}

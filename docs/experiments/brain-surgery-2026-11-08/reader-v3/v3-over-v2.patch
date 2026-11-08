@@ -1,0 +1,1343 @@
+--- a/crates/alife_game_app/src/production_voxel_renderer/hearthling.rs
++++ b/crates/alife_game_app/src/production_voxel_renderer/hearthling.rs
+@@ -906,6 +906,8 @@
+             alife_core::channel_command_for_action(alife_core::MotorChannel::Manipulation, &eat)
+                 .unwrap();
+         let receipt = alife_world::HeadlessMotorChannelReceipt {
++            succeeded: true,
++            failure: None,
+             command: command.clone(),
+             phase: alife_world::headless::ActionPhase::Completed,
+             grip_transfers: Vec::new(),
+--- a/crates/alife_training/Cargo.toml
++++ b/crates/alife_training/Cargo.toml
+@@ -56,3 +56,7 @@
+ [[example]]
+ name = "probe_grip_reader"
+ required-features = ["cpu-backend"]
++
++[[example]]
++name = "probe_grip_shadow"
++required-features = ["cpu-backend"]
+--- /dev/null
++++ b/crates/alife_training/examples/probe_grip_shadow.rs
+@@ -0,0 +1,908 @@
++//! Fresh bounded passive shadow score probe. No shadow action is applied.
++//! One fixed OFF grip brain, two fresh sampling identities, one merged world.
++#![allow(dead_code)]
++use alife_core::*;
++use alife_runtime::canonical_preparation::foundation_construction_development;
++use alife_training::{cpu::*, AdamWConfig, StageTrainableMask, TrainingSequence};
++use alife_world::*;
++use serde::Serialize;
++use sha2::{Digest, Sha256};
++#[path = "support/care_candidate.rs"]
++mod care_candidate;
++type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
++const PREPARATION_TICKS: u16 = 600;
++const PRIMARY_TICKS: u16 = 256;
++const TEMPERATURE: f32 = 1.0;
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++struct Scene {
++    seed: u64,
++    harmful_slot: usize,
++    appearance: [usize; 2],
++    spawn_order: [usize; 2],
++}
++const SCENES: [Scene; 2] = [
++    Scene {
++        seed: 2026112401,
++        harmful_slot: 0,
++        appearance: [0, 1],
++        spawn_order: [0, 1],
++    },
++    Scene {
++        seed: 2026112402,
++        harmful_slot: 1,
++        appearance: [0, 1],
++        spawn_order: [0, 1],
++    },
++];
++fn bytes<T: Serialize>(x: &T) -> Result<Vec<u8>> {
++    Ok(serde_json::to_vec(x)?)
++}
++fn digest(b: &[u8]) -> String {
++    format!("{:x}", Sha256::digest(b))
++}
++#[derive(Debug)]
++struct Gate(&'static str);
++impl std::fmt::Display for Gate {
++    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
++        write!(f, "{}", self.0)
++    }
++}
++impl std::error::Error for Gate {}
++fn require(ok: bool, code: &'static str) -> Result<()> {
++    if ok {
++        Ok(())
++    } else {
++        Err(Box::new(Gate(code)))
++    }
++}
++struct Life {
++    host: CpuCanonicalHost,
++    trainer: CpuFoundationTrainer,
++    own: OrganismId,
++    targets: [WorldEntityId; 2],
++    initial_body_biology: Vec<u8>,
++    initial_scene: Vec<u8>,
++    sampling_seed: u32,
++    shadows: Vec<(f32, CpuFoundationTrainer)>,
++}
++fn body_biology(world: &HeadlessWorld, own: OrganismId) -> Result<Vec<u8>> {
++    let r = world
++        .organism_registry()
++        .get(own)
++        .ok_or("missing_organism")?;
++    let p = r.phenotype();
++    bytes(&(
++        r.organism_id(),
++        r.birth_tick(),
++        &p.body,
++        &p.chemistry,
++        &p.development,
++        &p.reproduction,
++        &p.predisposition,
++        r.embodiment(),
++        r.biochemistry(),
++        r.lifecycle(),
++    ))
++}
++fn preparation_guard(alive: bool, health: f32, injury: f32) -> bool {
++    alive && health.is_finite() && injury.is_finite() && health >= 0.70 && injury <= 0.25
++}
++fn preparation_world_guard(world: &HeadlessWorld, own: OrganismId) -> Result<()> {
++    let r = world
++        .organism_registry()
++        .get(own)
++        .ok_or("preparation organism")?;
++    require(
++        preparation_guard(
++            r.lifecycle().is_alive(),
++            r.biochemistry().body.health,
++            r.biochemistry().body.injury,
++        ),
++        "preparation safeguard",
++    )
++}
++fn make_life<const PREPARE: u16>(
++    scene: Scene,
++    frozen_asset: &FoundationWeightAsset,
++) -> Result<Life> {
++    make_life_observed::<PREPARE>(scene, frozen_asset, |_| Ok(()))
++}
++fn make_life_observed<const PREPARE: u16>(
++    scene: Scene,
++    frozen_asset: &FoundationWeightAsset,
++    mut preparation_progress: impl FnMut(bool) -> Result<()>,
++) -> Result<Life> {
++    let asset = frozen_asset.clone();
++    let mut config = CanonicalNewGameConfig::phase3(scene.seed, 1)?;
++    config.brain_class = BrainScaleTier::Standard2048;
++    config.sensor_profile = SensorProfile::GroundedGripObjectSlotsV1;
++    let mut game = create_canonical_new_game_with_n2048_grip_reader_candidate(&config, &asset)?;
++    let original = game
++        .world
++        .organism_registry()
++        .iter()
++        .next()
++        .ok_or("missing_founder")?
++        .clone();
++    let genome = original.phenotype().brain_genome.clone();
++    let development = foundation_construction_development(
++        &genome,
++        &BrainCapacityClass::n2048(),
++        &original.phenotype().development_state_at(Tick::ZERO)?,
++    )?;
++    let (p, _) = PhenotypeCompiler::compile_n2048_grip_reader_foundation_candidate(
++        genome.clone(),
++        development.clone(),
++        asset.clone(),
++    )?;
++    let trainer = CpuFoundationTrainer::new(
++        p.clone(),
++        asset,
++        StageTrainableMask::recurrent_only(&p)?,
++        AdamWConfig::default(),
++    )?;
++    let mut shadows = Vec::new();
++    for gain in [0., 1. / 16., 1. / 4., 1., 4.] {
++        let mut weights = trainer.weights().to_vec();
++        let mut differences = 0;
++        for (synapse, weight) in p.synapses().iter().zip(&mut weights) {
++            if let CompiledSynapseKind::Decoder(c) = synapse.kind() {
++                if c.head() == DecoderHeadKind::MemoryContext && c.input_lane() == 53 {
++                    let next: f32 = match c.family() {
++                        CandidateActionFamily::Contact => gain,
++                        CandidateActionFamily::Other if gain != 0. => -gain,
++                        _ => 0.,
++                    };
++                    differences += usize::from(weight.to_bits() != next.to_bits());
++                    *weight = next;
++                }
++            }
++        }
++        require(
++            differences == if gain == 0. { 0 } else { 16 },
++            "genetic_difference",
++        )?;
++        let shadow_asset = FoundationWeightAsset::from_trained_weights(
++            &p,
++            weights,
++            TrainingStageManifest::bootstrap(),
++        )?;
++        let (shadow_p, _) = PhenotypeCompiler::compile_n2048_grip_reader_foundation_candidate(
++            genome.clone(),
++            development.clone(),
++            shadow_asset.clone(),
++        )?;
++        require(
++            shadow_p.projections() == p.projections()
++                && shadow_p.neuron_dynamics() == p.neuron_dynamics(),
++            "shadow_graph",
++        )?;
++        for (a, b) in p.synapses().iter().zip(shadow_p.synapses()) {
++            require(
++                a.kind() == b.kind()
++                    && a.source() == b.source()
++                    && a.target() == b.target()
++                    && a.alpha() == b.alpha()
++                    && a.route_index() == b.route_index()
++                    && a.receptor_index() == b.receptor_index(),
++                "shadow_coordinates",
++            )?;
++        }
++        let shadow = CpuFoundationTrainer::new(
++            shadow_p.clone(),
++            shadow_asset,
++            StageTrainableMask::recurrent_only(&shadow_p)?,
++            AdamWConfig::default(),
++        )?;
++        if gain == 0. {
++            require(
++                bytes(&shadow.checkpoint())? == bytes(&trainer.checkpoint())?,
++                "off_trainer_identity",
++            )?;
++        }
++        shadows.push((gain, shadow));
++    }
++    let own = original.organism_id();
++    let mut world = HeadlessScenarioBuilder::new(scene.seed)
++        .agent("learner", own, Vec3f::ZERO)
++        .terrain_zone(
++            1,
++            "assay",
++            TerrainZoneKind::Meadow,
++            Vec3f::ZERO,
++            12.0,
++            0.0,
++            0.0,
++        )
++        .build()?;
++    let common = GroundedPhysicalProperties {
++        velocity: Vec3f::ZERO,
++        color: [0.9, 0.2, 0.2],
++        material: [0.35, 0.15, 0.65],
++        shape: [0.2, 0.8, 0.2],
++        chemical: [0.85, 0.1, 0.2],
++        surface_temperature: 0.1,
++        terrain: [0.5, 0.25],
++    };
++    let mut slots = [None, None];
++    for slot in scene.spawn_order {
++        let id = world.editor_spawn_object(WorldEditorSpawnSpec {
++            label: format!("resource_{slot}"),
++            kind: WorldObjectKind::Food,
++            organism_id: None,
++            position: Vec3f::new(0.35, 0.0, if slot == 0 { -0.35 } else { 0.35 }),
++            nutrition: 0.05,
++            hazard_pain: if slot == scene.harmful_slot {
++                0.35
++            } else {
++                0.0
++            },
++            radius: 0.5,
++            token_id: None,
++        })?;
++        let mut physical = common;
++        if scene.appearance[slot] == 1 {
++            physical.color = [0.2, 0.2, 0.9];
++        }
++        world.set_grounded_physical_properties(id, physical)?;
++        world.track_resource_lifecycle(id, EcologyZoneId(1), 16, 512)?;
++        slots[slot] = Some(id);
++    }
++    let mut chemistry = *original.biochemistry();
++    chemistry.body.set_energy(0.4)?;
++    world.register_organism_record(WorldOrganismRecord::new(
++        own,
++        world.entity_id("learner").ok_or("missing_body")?,
++        original.genome().clone(),
++        original.phenotype().clone(),
++        chemistry,
++        original.birth_tick(),
++    )?)?;
++    let targets = [
++        slots[scene.harmful_slot].ok_or("missing_h")?,
++        slots[1 - scene.harmful_slot].ok_or("missing_s")?,
++    ];
++    game.world = world;
++    let sampling_seed = (scene.seed ^ (scene.seed >> 32)) as u32;
++    let (host, _) =
++        CpuCanonicalHost::new_prepared_cohort(game, &trainer, sampling_seed, |world| {
++            preparation_world_guard(world, own)?;
++            for _ in 0..PREPARE {
++                preparation_progress(false)?;
++                world.try_advance_tick()?;
++                preparation_progress(true)?;
++                preparation_world_guard(world, own)?;
++            }
++            Ok::<_, Box<dyn std::error::Error>>(())
++        })?;
++    let initial_body_biology = body_biology(host.world(), own)?;
++    let initial_scene = bytes(
++        &targets
++            .iter()
++            .map(|&id| {
++                WorldObjectSaveState::from(host.world().entity(id).expect("new resource").clone())
++            })
++            .collect::<Vec<_>>(),
++    )?;
++    require(
++        host.checkpoint(&trainer)?
++            .residents
++            .iter()
++            .all(|r| r.memory.records.is_empty()),
++        "nonempty_initial_memory",
++    )?;
++    Ok(Life {
++        host,
++        trainer,
++        own,
++        targets,
++        initial_body_biology,
++        initial_scene,
++        sampling_seed,
++        shadows,
++    })
++}
++
++fn candidate_gain(
++    seed: u64,
++    per_gene_gain: f32,
++) -> Result<(BrainPhenotype, FoundationWeightAsset)> {
++    let mut config = CanonicalNewGameConfig::phase3(seed, 1)?;
++    config.brain_class = BrainScaleTier::Standard2048;
++    let builtin = FoundationWeightAsset::builtin_n2048_v1(config.sensor_profile)?;
++    let game = create_canonical_new_game_with_n2048_candidate(&config, &builtin)?;
++    let record = game
++        .world
++        .organism_registry()
++        .iter()
++        .next()
++        .ok_or("no fresh founder")?;
++    let genome = record.phenotype().brain_genome.clone();
++    let development = foundation_construction_development(
++        &genome,
++        &BrainCapacityClass::n2048(),
++        &record.phenotype().development_state_at(Tick::ZERO)?,
++    )?;
++    let (p, _) = PhenotypeCompiler::compile_n2048_grip_reader_graph(
++        genome.clone(),
++        development.clone(),
++        SensorProfile::GroundedGripObjectSlotsV1,
++    )?;
++    let (mut weights, _) = care_candidate::whole_care(&p)?;
++    let mut counts = std::collections::BTreeMap::new();
++    for synapse in p.synapses() {
++        if let CompiledSynapseKind::Decoder(c) = synapse.kind() {
++            if c.head() == DecoderHeadKind::MemoryContext {
++                *counts
++                    .entry((c.family().raw(), c.input_lane()))
++                    .or_insert(0usize) += 1;
++            }
++        }
++    }
++    for (synapse, weight) in p.synapses().iter().zip(&mut weights) {
++        let CompiledSynapseKind::Decoder(c) = synapse.kind() else {
++            continue;
++        };
++        if c.head() == DecoderHeadKind::ActionCandidate {
++            *weight *= 0.25;
++        }
++        if c.head() != DecoderHeadKind::MemoryContext {
++            continue;
++        }
++        // Preserve the v12 inherited target-reader and Ingest-family coefficients.
++        // Its source file and historical assets are not edited or loaded here.
++        let total = match (c.family(), c.input_lane()) {
++            (CandidateActionFamily::Ingest, 25) => -16.,
++            (CandidateActionFamily::Ingest, 26) => -64.,
++            (CandidateActionFamily::Ingest, 32) => 32.,
++            (CandidateActionFamily::Approach | CandidateActionFamily::Contact, 25) => -8.,
++            (CandidateActionFamily::Approach | CandidateActionFamily::Contact, 26) => -32.,
++            (CandidateActionFamily::Avoid, 25) => 16.,
++            (CandidateActionFamily::Avoid, 26) => 128.,
++            (CandidateActionFamily::Contact, 53) => 8. * per_gene_gain,
++            (CandidateActionFamily::Other, 53) if per_gene_gain != 0. => -8. * per_gene_gain,
++            _ => 0.,
++        };
++        *weight = total / counts[&(c.family().raw(), c.input_lane())] as f32;
++    }
++    let asset = FoundationWeightAsset::from_trained_weights(
++        &p,
++        weights,
++        TrainingStageManifest::bootstrap(),
++    )?;
++    let (bound, _) = PhenotypeCompiler::compile_n2048_grip_reader_foundation_candidate(
++        genome,
++        development,
++        asset.clone(),
++    )?;
++    Ok((bound, asset))
++}
++
++use serde_json::{json, Value};
++use std::io::Write;
++struct Sink {
++    file: std::fs::File,
++    written: usize,
++    deadline: std::time::Instant,
++    stage: &'static str,
++}
++impl Sink {
++    fn emit(&mut self, value: Value) -> Result<()> {
++        require(self.deadline.elapsed().as_secs() < 1800, "deadline")?;
++        let mut raw = serde_json::to_vec(&value)?;
++        raw.push(b'\n');
++        require(
++            raw.len() <= 512 * 1024 && self.written + raw.len() <= 64 * 1024 * 1024,
++            "output_bound",
++        )?;
++        self.file.write_all(&raw)?;
++        self.file.sync_data()?;
++        self.written += raw.len();
++        Ok(())
++    }
++}
++fn role(life: &Life, target: Option<WorldEntityId>) -> &'static str {
++    match target {
++        Some(t) if t == life.targets[0] => "h",
++        Some(t) if t == life.targets[1] => "s",
++        None => "none",
++        _ => "other",
++    }
++}
++fn finite(x: f32) -> Result<f32> {
++    require(x.is_finite(), "nonfinite")?;
++    Ok(x)
++}
++fn probability(logits: &[f32], index: usize, mask: u32) -> f32 {
++    if mask & (1 << index) == 0 {
++        return 0.;
++    }
++    let max = logits
++        .iter()
++        .enumerate()
++        .filter(|(i, _)| mask & (1 << i) != 0)
++        .map(|(_, v)| *v)
++        .fold(f32::NEG_INFINITY, f32::max);
++    let total: f32 = logits
++        .iter()
++        .enumerate()
++        .filter(|(i, _)| mask & (1 << i) != 0)
++        .map(|(_, v)| (*v - max).exp())
++        .sum();
++    (logits[index] - max).exp() / total
++}
++struct Components {
++    memory: f32,
++    cognitive: f32,
++    action: f32,
++    op: f32,
++    target: f32,
++    family: f32,
++    inherited_coeff: [f32; 3],
++    effective_coeff: [f32; 3],
++    family_bias: f32,
++    total: f32,
++}
++fn components(
++    p: &BrainPhenotype,
++    weights: &[f32],
++    tick: &alife_training::TrainingReplayTick,
++    activations: &[f32],
++    index: usize,
++) -> Result<Components> {
++    let input = &tick.candidates[index];
++    let family_bias = p
++        .candidate_decoder()
++        .families()
++        .iter()
++        .find(|f| f.family() == input.family)
++        .ok_or("family")?
++        .bias();
++    let mut total = family_bias + input.innate_bias;
++    let mut memory = 0.;
++    let mut cognitive = 0.;
++    let mut action = 0.;
++    let mut op = 0.;
++    let mut target = 0.;
++    let mut family = 0.;
++    let mut inherited_coeff = [0.; 3];
++    let mut effective_coeff = [0.; 3];
++    for (j, synapse) in p.synapses().iter().enumerate() {
++        let CompiledSynapseKind::Decoder(c) = synapse.kind() else {
++            continue;
++        };
++        if c.family() != input.family {
++            continue;
++        }
++        let effective = weights[j] + tick.effective_weight_offsets[j];
++        let v = input.decoder_inputs[c.input_lane() as usize] * effective;
++        match c.head() {
++            DecoderHeadKind::MemoryContext => {
++                memory += v;
++                if c.input_lane() == 53 {
++                    op += v;
++                }
++                if [25, 26].contains(&c.input_lane()) {
++                    target += v;
++                }
++                if c.input_lane() == 32 {
++                    family += v;
++                }
++                for (k, lane) in [25, 26, 53].into_iter().enumerate() {
++                    if c.input_lane() == lane {
++                        inherited_coeff[k] += weights[j];
++                        effective_coeff[k] += effective;
++                    }
++                }
++            }
++            DecoderHeadKind::CognitiveContext => cognitive += v,
++            DecoderHeadKind::ActionCandidate => {
++                let contribution = activations[synapse.source() as usize] * v;
++                action += contribution;
++                total += contribution;
++            }
++            _ => {}
++        }
++    }
++    total += memory.clamp(-12., 12.) + cognitive.clamp(-12., 12.);
++    Ok(Components {
++        memory,
++        cognitive,
++        action,
++        op,
++        target,
++        family,
++        inherited_coeff,
++        effective_coeff,
++        family_bias,
++        total,
++    })
++}
++fn project(life: &Life, row: &CpuCollectedDecision, audit: &CpuSwapAudit) -> Result<Value> {
++    let host_before = bytes(&life.host.checkpoint(&life.trainer)?)?;
++    let trainer_before = bytes(&life.trainer.checkpoint())?;
++    let frame = row.patch.pre_action().perception();
++    require(
++        frame.frame_digest() == audit.frame_digest
++            && audit.candidates.len() == frame.candidates().len(),
++        "audit_binding",
++    )?;
++    require(frame.candidates().len() <= 32, "candidate_bound")?;
++    let mut variant_rows = Vec::new();
++    let mut baseline_final = None;
++    for (gain, trainer) in &life.shadows {
++        let checkpoint_before = bytes(&trainer.checkpoint())?;
++        require(
++            bytes(&life.host.checkpoint(&life.trainer)?)? == host_before
++                && bytes(&life.trainer.checkpoint())? == trainer_before,
++            "before_shadow_preservation",
++        )?;
++        let p = trainer.phenotype();
++        let q = TrainingSequence {
++            phenotype_hash: p.phenotype_hash(),
++            initial: row.initial.clone(),
++            ticks: vec![row.replay_tick.clone()],
++            burn_in_ticks: 0,
++            memory_candidate_gain: 12.,
++        };
++        let output = trainer.evaluate_replay(&q)?;
++        let logits = &output.candidate_logits[0];
++        let choice = sample_cpu_joint_action(
++            p,
++            frame,
++            logits,
++            life.sampling_seed,
++            row.sampling_counter.ok_or("counter")?,
++            TEMPERATURE,
++        )?;
++        if *gain == 0. {
++            require(
++                bytes(&choice)? == bytes(&row.action)?,
++                "actual_replay_mismatch",
++            )?;
++            baseline_final = Some(bytes(&(
++                &output.final_activations,
++                &output.final_activity_ema,
++                &output.final_metabolic_load,
++            ))?);
++        } else {
++            require(
++                Some(bytes(&(
++                    &output.final_activations,
++                    &output.final_activity_ema,
++                    &output.final_metabolic_load,
++                ))?) == baseline_final,
++                "recurrent_shadow_mismatch",
++            )?;
++        }
++        let mut candidates = Vec::new();
++        for (i, (candidate, input)) in frame
++            .candidates()
++            .iter()
++            .zip(&row.replay_tick.candidates)
++            .enumerate()
++        {
++            let evidence = &audit.candidates[i];
++            require(
++                evidence.candidate_index as usize == i
++                    && evidence.world_target == candidate.target.entity,
++                "candidate_binding",
++            )?;
++            let Components {
++                memory,
++                cognitive,
++                action,
++                op,
++                target,
++                family,
++                inherited_coeff,
++                effective_coeff,
++                family_bias,
++                total,
++            } = components(
++                p,
++                trainer.weights(),
++                &row.replay_tick,
++                &output.final_activations[0],
++                i,
++            )?;
++            require(
++                total.to_bits() == logits[i].to_bits(),
++                "score_decomposition",
++            )?;
++            let motor_probability: Vec<f32> = choice
++                .motor_masks
++                .iter()
++                .map(|mask| probability(logits, i, *mask))
++                .collect();
++            for v in logits
++                .iter()
++                .chain(inherited_coeff.iter())
++                .chain(effective_coeff.iter())
++                .chain(motor_probability.iter())
++                .chain([memory, cognitive, action, op, target, family, total].iter())
++            {
++                finite(*v)?;
++            }
++            let source = evidence.best_family_source.as_ref();
++            candidates.push(json!({"index":i,"target":role(life,candidate.target.entity),"action":candidate.action_id.0,"family":candidate.family.raw(),"input53":finite(input.decoder_inputs[53])?,"input25":finite(input.decoder_inputs[25])?,"input26":finite(input.decoder_inputs[26])?,"input32":finite(input.decoder_inputs[32])?,"memory_raw":memory,"memory_clamped":memory.clamp(-12.,12.),"operation_component":op,"target25_26_component":target,"family32_component":family,"action_component":action,"cognitive_raw":cognitive,"cognitive_clamped":cognitive.clamp(-12.,12.),"innate":input.innate_bias,"family_bias":family_bias,"logit":logits[i],"inherited_coeff25_26_53":inherited_coeff,"effective_coeff25_26_53":effective_coeff,"representative_probability":finite(probability(logits,i,choice.representative_mask))?,"motor_conditional_probabilities":motor_probability,"selected_motor_slots":choice.motor_candidates.map(|c|c==Some(i as u16)),"selected_representative":choice.representative==i as u16,"family_confidence":evidence.family_confidence,"target_confidence":evidence.target_confidence,"family_sources":evidence.family_source_count,"target_sources":evidence.target_source_count,"source_sequence":source.map(|s|s.sequence),"source_ingest_family":source.is_some_and(|s|s.family==u16::from(CandidateActionFamily::Ingest.raw())),"source_exact_consumed":source.is_some_and(|s|s.contact==Some(PhysicalContactKind::Consumed)),"source_same_tracked_target":source.is_some_and(|s|Some(TrackedObjectId(s.tracked_target))==evidence.tracked_target),"held":evidence.physical.owner==SwapOwner::ThisOrganism,"held_count":evidence.physical.self_held_object_count,"contact_reachable":evidence.physical.physical_contact_reachable,"grasp_reachable":evidence.physical.grasp_reachable}));
++        }
++        variant_rows.push(json!({"gain":gain,"representative":choice.representative,"motor_candidates":choice.motor_candidates,"joint_log_probability":finite(choice.old_joint_log_probability)?,"candidates":candidates}));
++        require(
++            bytes(&trainer.checkpoint())? == checkpoint_before
++                && bytes(&life.host.checkpoint(&life.trainer)?)? == host_before
++                && bytes(&life.trainer.checkpoint())? == trainer_before,
++            "after_shadow_preservation",
++        )?;
++    }
++    let physical:Vec<Value>=audit.motor.channel_receipts.iter().map(|c|json!({"action":c.command.primitive.0,"target":role(life,c.command.target.and_then(|t|t.entity)),"succeeded":c.succeeded,"contact_consumed":c.physical.contact==PhysicalContactKind::Consumed,"displacement":[c.physical.displacement.x,c.physical.displacement.y,c.physical.displacement.z],"transfers":c.grip_transfers.iter().map(|t|json!({"target":role(life,Some(t.object)),"kind":match t.kind {GripTransferKind::Acquired=>"acquired",GripTransferKind::Released=>"released",GripTransferKind::Placed=>"placed",GripTransferKind::Consumed=>"consumed"}})).collect::<Vec<_>>()})).collect();
++    require(
++        bytes(&life.host.checkpoint(&life.trainer)?)? == host_before
++            && bytes(&life.trainer.checkpoint())? == trainer_before,
++        "projection_preservation",
++    )?;
++    Ok(
++        json!({"sequence":audit.sequence.raw(),"sampling_counter":row.sampling_counter,"baseline_replay_matches_actual":true,"preservation":true,"variants":variant_rows,"actual_physical":physical}),
++    )
++}
++fn run(scene: Scene, asset: &FoundationWeightAsset, sink: &mut Sink) -> Result<Value> {
++    sink.stage = "construction";
++    sink.emit(json!({"kind":"life_attempt","seed":scene.seed}))?;
++    let mut prep_attempts = 0u16;
++    let mut prep_returned = 0u16;
++    let mut life = make_life_observed::<PREPARATION_TICKS>(scene, asset, |returned| {
++        if returned {
++            prep_returned += 1;
++        } else {
++            prep_attempts += 1;
++        }
++        sink.stage = "preparation";
++        sink.emit(json!({"kind":"preparation_progress","seed":scene.seed,"attempted":prep_attempts,"returned":prep_returned}))
++    })?;
++    require(
++        prep_attempts == 600 && prep_returned == 600,
++        "preparation_count",
++    )?;
++    let mut meals = [0u16; 2];
++    let mut steps = 0u16;
++    let mut decisions = 0u16;
++    let mut stop = "tick_budget";
++    let founder_before = bytes(&life.trainer.checkpoint())?;
++    sink.emit(json!({"kind":"life_prepared","seed":scene.seed,"world_tick":life.host.world().tick().raw(),"sampling_seed":life.sampling_seed,"initial_body_sha256":digest(&life.initial_body_biology),"initial_scene_sha256":digest(&life.initial_scene),"off_asset_sha256":digest(&asset.encode_canonical()?)}))?;
++    for index in 0..PRIMARY_TICKS {
++        sink.stage = "host_step";
++        sink.emit(json!({"kind":"step_attempt","seed":scene.seed,"primary_step":index+1,"returned_steps":steps}))?;
++        let step = life.host.step_with_swap_audit(&life.trainer, TEMPERATURE)?;
++        steps += 1;
++        sink.emit(json!({"kind":"step_returned","seed":scene.seed,"primary_step":steps}))?;
++        require(
++            step.decisions.len() <= 1 && step.decisions.len() == step.swap_audits.len(),
++            "population",
++        )?;
++        let mut projections = Vec::new();
++        for (row, audit) in step.decisions.iter().zip(&step.swap_audits) {
++            decisions += 1;
++            sink.stage = "passive_replay";
++            projections.push(project(&life, row, audit)?);
++            for (i, target) in life.targets.iter().enumerate() {
++                if audit.motor.channel_receipts.iter().any(|c| {
++                    c.physical.contact == PhysicalContactKind::Consumed
++                        && c.physical.target_entity == Some(*target)
++                }) {
++                    meals[i] += 1;
++                }
++            }
++        }
++        require(
++            bytes(&life.trainer.checkpoint())? == founder_before,
++            "founder_mutation",
++        )?;
++        let record = life
++            .host
++            .world()
++            .organism_registry()
++            .get(life.own)
++            .ok_or("organism")?;
++        let body = record.biochemistry().body;
++        let alive = record.lifecycle().is_alive();
++        finite(body.health)?;
++        finite(body.injury)?;
++        finite(body.energy)?;
++        sink.stage = "public_projection";
++        sink.emit(json!({"kind":"step","seed":scene.seed,"primary_step":steps,"world_tick":life.host.world().tick().raw(),"health":body.health,"injury":body.injury,"energy":body.energy,"alive":alive,"sleeping":step.sleeping_organisms,"consolidations":step.sleep_consolidations,"meals_h_s":meals,"decisions":projections}))?;
++        if !alive {
++            stop = "death";
++            break;
++        }
++        if body.health < 0.70 {
++            stop = "health";
++            break;
++        }
++        if body.injury > 0.25 {
++            stop = "injury";
++            break;
++        }
++        if meals[0] >= 3 {
++            stop = "third_harmful_meal";
++            break;
++        }
++    }
++    let summary = json!({"kind":"life_complete","seed":scene.seed,"preparation_ticks":prep_returned,"primary_steps":steps,"decisions":decisions,"meals_h_s":meals,"stop":stop});
++    sink.emit(summary.clone())?;
++    Ok(summary)
++}
++fn execute() -> Result<()> {
++    let root = std::env::args().nth(1).ok_or("output_path")?;
++    std::fs::create_dir(&root)?;
++    let file = std::fs::OpenOptions::new()
++        .create_new(true)
++        .write(true)
++        .open(std::path::Path::new(&root).join("events.ndjson"))?;
++    let mut sink = Sink {
++        file,
++        written: 0,
++        deadline: std::time::Instant::now(),
++        stage: "asset_construction",
++    };
++    sink.emit(json!({"kind":"invocation","seeds":[2026112401u64,2026112402u64],"gains":[0.,0.0625,0.25,1.,4.],"max_lives":2,"max_preparation_per_life":600,"max_primary_per_life":256,"max_public_bytes":64*1024*1024,"backend":"CPU","variant_actions_applied":false}))?;
++    let result = (|| -> Result<()> {
++        let (_, asset) = candidate_gain(2026110901, 0.)?;
++        for scene in SCENES {
++            run(scene, &asset, &mut sink)?;
++        }
++        Ok(())
++    })();
++    match result {
++        Ok(()) => {
++            sink.emit(json!({"kind":"invocation_complete"}))?;
++            println!("shadow_probe_complete");
++            Ok(())
++        }
++        Err(error) => {
++            let stage = sink.stage;
++            let code = error
++                .downcast_ref::<Gate>()
++                .map_or("closed_native_failure", |e| e.0);
++            let _=sink.emit(json!({"kind":"invocation_failed","stage":stage,"error":code,"retry_permitted":false}));
++            Err("closed_native_failure".into())
++        }
++    }
++}
++fn main() {
++    std::panic::set_hook(Box::new(|_| eprintln!("closed_native_panic")));
++    if execute().is_err() {
++        eprintln!("closed_shadow_failure");
++        std::process::exit(1);
++    }
++}
++#[cfg(test)]
++mod tests {
++    use super::*;
++    #[test]
++    fn bounded_scalar_probability() {
++        assert_eq!(probability(&[0., 0.], 0, 3), 0.5);
++        assert_eq!(probability(&[0., 0.], 1, 1), 0.);
++        assert_eq!(probability(&[0., 0.], 0, 1), 1.);
++    }
++    #[test]
++    fn detached_nonzero_components_offsets_and_gain_identity() -> Result<()> {
++        use alife_training::{TrainingInitialState, TrainingReplayCandidate, TrainingReplayTick};
++        let (base, base_asset) = candidate_gain(2026110901, 0.)?;
++        let mut baseline_recurrent = None;
++        let mut cap_seen = false;
++        for gain in [0., 0.0625, 4.] {
++            let (p, asset) = candidate_gain(2026110901, gain)?;
++            let repacked = FoundationWeightAsset::from_trained_weights(
++                &p,
++                asset.weights().to_vec(),
++                TrainingStageManifest::bootstrap(),
++            )?;
++            assert_eq!(repacked.digest(), asset.digest());
++            let changed = base_asset
++                .weights()
++                .iter()
++                .zip(asset.weights())
++                .filter(|(a, b)| a.to_bits() != b.to_bits())
++                .count();
++            assert_eq!(changed, if gain == 0. { 0 } else { 16 });
++            assert_eq!(p.projections(), base.projections());
++            for (a, b) in p.synapses().iter().zip(base.synapses()) {
++                assert_eq!(a.kind(), b.kind());
++                assert_eq!(a.source(), b.source());
++                assert_eq!(a.target(), b.target());
++            }
++            let n = p.neuron_count() as usize;
++            let q = TrainingSequence {
++                phenotype_hash: p.phenotype_hash(),
++                initial: TrainingInitialState {
++                    activations: vec![0.13; n],
++                    activity_ema: vec![0.11; n],
++                    metabolic_load: vec![0.01; n],
++                    dendrites: DendriticBranchSet::new(Vec::new())?,
++                },
++                ticks: vec![TrainingReplayTick {
++                    encoded_inputs: vec![0.02; n],
++                    projection_gain: 1.,
++                    local_threshold_shift: 0.,
++                    microstep_count: u32::from(p.microstep_count()),
++                    enabled_routes: vec![true; p.projections().len()],
++                    effective_weight_offsets: p
++                        .synapses()
++                        .iter()
++                        .map(|s| {
++                            if matches!(s.kind(), CompiledSynapseKind::Decoder(_)) {
++                                0.0137
++                            } else {
++                                0.
++                            }
++                        })
++                        .collect(),
++                    structural_synapses: Vec::new(),
++                    candidates: [
++                        CandidateActionFamily::Contact,
++                        CandidateActionFamily::Other,
++                        CandidateActionFamily::Ingest,
++                    ]
++                    .iter()
++                    .map(|family| {
++                        let mut inputs = [0.; 54];
++                        for (i, v) in inputs.iter_mut().enumerate() {
++                            *v = (i as f32 - 10.) * 0.01;
++                        }
++                        inputs[53] = if *family == CandidateActionFamily::Ingest {
++                            0.
++                        } else {
++                            0.9
++                        };
++                        TrainingReplayCandidate {
++                            family: *family,
++                            decoder_inputs: inputs,
++                            innate_bias: 0.17,
++                        }
++                    })
++                    .collect(),
++                }],
++                burn_in_ticks: 0,
++                memory_candidate_gain: 12.,
++            };
++            let trainer = CpuFoundationTrainer::new(
++                p.clone(),
++                asset,
++                StageTrainableMask::recurrent_only(&p)?,
++                AdamWConfig::default(),
++            )?;
++            let before = bytes(&trainer.checkpoint())?;
++            let output = trainer.evaluate_replay(&q)?;
++            let recurrence = bytes(&(
++                &output.final_activations,
++                &output.final_activity_ema,
++                &output.final_metabolic_load,
++            ))?;
++            if gain == 0. {
++                baseline_recurrent = Some(recurrence);
++            } else {
++                assert_eq!(Some(recurrence), baseline_recurrent);
++            }
++            for i in 0..3 {
++                let c = components(
++                    &p,
++                    trainer.weights(),
++                    &q.ticks[0],
++                    &output.final_activations[0],
++                    i,
++                )?;
++                assert_eq!(c.total.to_bits(), output.candidate_logits[0][i].to_bits());
++                assert_ne!(c.action, 0.);
++                assert_ne!(c.memory, 0.);
++                assert_ne!(c.family, 0.);
++                if i < 2 {
++                    assert_ne!(c.effective_coeff[2], c.inherited_coeff[2]);
++                }
++                cap_seen |= c.memory.abs() > 12.;
++            }
++            assert_eq!(bytes(&trainer.checkpoint())?, before);
++        }
++        assert!(cap_seen);
++        Ok(())
++    }
++}
+--- /dev/null
++++ b/crates/alife_training/src/cpu/host/swap_audit.rs
+@@ -0,0 +1,116 @@
++//! Reconstructed transient audit. No Serialize/checkpoint/learning field and no writeback.
++use super::*;
++use alife_world::{HeadlessMotorTransactionReceipt, SwapOwnership, SwapPhysicalFacts};
++#[derive(Debug, Clone)]
++pub struct CpuSwapMemorySource {
++    pub memory_id: u64,
++    pub sequence: u64,
++    pub tracked_target: u64,
++    pub action: u32,
++    pub family: u16,
++    pub contact: Option<PhysicalContactKind>,
++}
++#[derive(Debug, Clone)]
++pub struct CpuSwapCandidateAudit {
++    pub candidate_index: u16,
++    pub world_target: Option<WorldEntityId>,
++    pub tracked_target: Option<TrackedObjectId>,
++    pub slot_index: Option<u16>,
++    pub physical: SwapPhysicalFacts,
++    pub target_source_count: u16,
++    pub family_source_count: u16,
++    pub target_confidence: f32,
++    pub family_confidence: f32,
++    pub family_valence: f32,
++    pub best_family_source: Option<CpuSwapMemorySource>,
++}
++#[derive(Debug, Clone)]
++pub struct CpuSwapAudit {
++    pub sequence: ExperienceSequenceId,
++    pub frame_digest: PerceptionFrameDigest,
++    pub current_pain: f32,
++    pub candidates: Vec<CpuSwapCandidateAudit>,
++    pub motor: HeadlessMotorTransactionReceipt,
++    pub owners_before: Vec<SwapOwnership>,
++    pub owners_after: Vec<SwapOwnership>,
++    pub after: Vec<SwapPhysicalFacts>,
++}
++pub(super) fn swap_candidates(
++    world: &HeadlessWorld,
++    perception_world: &HeadlessWorld,
++    frame: &PerceptionFrame,
++    contexts: &[CandidateMemoryContextV1],
++    records: &[PortableMemoryRecordV2],
++) -> Result<Vec<CpuSwapCandidateAudit>, CpuHostError> {
++    frame.validate_contract()?;
++    let own = frame.organism_id();
++    frame
++        .candidates()
++        .iter()
++        .enumerate()
++        .map(|(i, candidate)| {
++            let index =
++                u16::try_from(i).map_err(|_| CpuHostError::State("audit candidate index"))?;
++            let (slot_index, tracked) = match candidate.observation {
++                CandidateObservationRef::None => (None, None),
++                CandidateObservationRef::ObjectSlot(slot_index) => {
++                    let slot = frame
++                        .grounded_object_slots()
++                        .iter()
++                        .find(|s| s.slot_index == slot_index)
++                        .ok_or(CpuHostError::State("audit slot binding"))?;
++                    let target = candidate
++                        .target
++                        .entity
++                        .ok_or(CpuHostError::State("audit missing target"))?;
++                    let object = perception_world
++                        .entity(target)
++                        .ok_or(CpuHostError::State("audit target binding"))?;
++                    let record = perception_world
++                        .tracked_objects()
++                        .records_for(own)
++                        .and_then(|mut records| {
++                            records.find(|r| r.tracking_key == object.tracking_key)
++                        })
++                        .ok_or(CpuHostError::State("audit tracking binding"))?;
++                    if record.tracked_object_id != slot.tracked_object_id {
++                        return Err(CpuHostError::State("audit tracked slot mismatch"));
++                    }
++                    (Some(slot_index), Some(slot.tracked_object_id))
++                }
++            };
++            let context = contexts
++                .iter()
++                .find(|c| c.candidate_index == index)
++                .ok_or(CpuHostError::State("audit recall context missing"))?;
++            context.validate_contract()?;
++            Ok(CpuSwapCandidateAudit {
++                candidate_index: index,
++                world_target: candidate.target.entity,
++                tracked_target: tracked,
++                slot_index,
++                physical: world.research_swap_physical_facts(
++                    own,
++                    candidate.action_id,
++                    candidate.target.entity,
++                ),
++                target_source_count: context.target_source_count,
++                family_source_count: context.family_source_count,
++                target_confidence: context.target_confidence.raw(),
++                family_confidence: context.family_confidence.raw(),
++                family_valence: context.family_value[0],
++                best_family_source: context
++                    .best_family_source
++                    .and_then(|id| records.iter().find(|r| r.memory_id_raw == id.raw()))
++                    .map(|r| CpuSwapMemorySource {
++                        memory_id: r.memory_id_raw,
++                        sequence: r.sealed_sequence_id_raw,
++                        tracked_target: r.tracked_object_id_raw,
++                        action: r.action_id_raw,
++                        family: r.family_raw,
++                        contact: r.outcome_contact,
++                    }),
++            })
++        })
++        .collect()
++}
+--- a/crates/alife_training/src/cpu/host.rs
++++ b/crates/alife_training/src/cpu/host.rs
+@@ -15,6 +15,8 @@
+     PortableSaveFile, RuntimeConfig,
+ };
+ use std::collections::BTreeMap;
++mod swap_audit;
++pub use swap_audit::*;
+ 
+ #[derive(Debug, thiserror::Error)]
+ pub enum CpuHostError {
+@@ -141,6 +143,8 @@
+     pub patch: ExperiencePatch,
+ }
+ pub struct CpuCanonicalStep {
++    /// Opt-in transient output, not part of checkpoints or learning.
++    pub swap_audits: Vec<CpuSwapAudit>,
+     pub tick_before: Tick,
+     pub tick_after: Tick,
+     pub decisions: Vec<CpuCollectedDecision>,
+@@ -648,10 +652,30 @@
+         &mut self,
+         founder: &CpuFoundationTrainer,
+         temperature: f32,
++        prepare: impl FnMut(
++            PerceptionFrameDraft,
++            ExperienceSequenceId,
++        ) -> Result<PerceptionFrameDraft, ScaffoldContractError>,
++    ) -> Result<CpuCanonicalStep, CpuHostError> {
++        self.step_with_optional_swap_audit(founder, temperature, prepare, false)
++    }
++    /// Native path with opt-in read-only physical and recall diagnostics.
++    pub fn step_with_swap_audit(
++        &mut self,
++        founder: &CpuFoundationTrainer,
++        temperature: f32,
++    ) -> Result<CpuCanonicalStep, CpuHostError> {
++        self.step_with_optional_swap_audit(founder, temperature, |draft, _| Ok(draft), true)
++    }
++    fn step_with_optional_swap_audit(
++        &mut self,
++        founder: &CpuFoundationTrainer,
++        temperature: f32,
+         mut prepare: impl FnMut(
+             PerceptionFrameDraft,
+             ExperienceSequenceId,
+         ) -> Result<PerceptionFrameDraft, ScaffoldContractError>,
++        swap_audit: bool,
+     ) -> Result<CpuCanonicalStep, CpuHostError> {
+         self.validate_founder(founder)?;
+         for (&raw, r) in &self.residents {
+@@ -672,7 +696,7 @@
+         for resident in next.residents.values_mut() {
+             resident.sealed_authority = None;
+         }
+-        let result = next.step_inner(founder, temperature, &mut prepare)?;
++        let result = next.step_inner(founder, temperature, &mut prepare, swap_audit)?;
+         *self = next;
+         Ok(result)
+     }
+@@ -684,10 +708,12 @@
+             PerceptionFrameDraft,
+             ExperienceSequenceId,
+         ) -> Result<PerceptionFrameDraft, ScaffoldContractError>,
++        swap_audit: bool,
+     ) -> Result<CpuCanonicalStep, CpuHostError> {
+         let p = founder.phenotype();
+         let tick = self.world.tick();
+         let mut decisions = Vec::new();
++        let mut swap_audits = Vec::new();
+         let mut sleeping = 0;
+         let mut consolidations = 0;
+         let mut body_events = BTreeMap::new();
+@@ -1077,6 +1103,18 @@
+                         .map(|s| (entity, s.salience.novelty.raw()))
+                 })
+                 .collect::<Vec<_>>();
++            let audit_candidates = if swap_audit {
++                Some(swap_audit::swap_candidates(
++                    &self.world,
++                    &perception_world,
++                    &frame,
++                    &recall.context().candidates,
++                    &r.memory.export_active_bank()?.records,
++                )?)
++            } else {
++                None
++            };
++            let audit_owners_before = swap_audit.then(|| self.world.research_swap_owners(id));
+             let receipt = self
+                 .world
+                 .apply_registered_motor_bundle_with_perceived_novelty_in_staged_tick(
+@@ -1087,6 +1125,28 @@
+                     &object_novelty,
+                 )
+                 .map_err(|_| CpuHostError::State("canonical motor transaction rejected"))?;
++            if let Some(candidates) = audit_candidates {
++                let after = candidates
++                    .iter()
++                    .map(|c| {
++                        self.world.research_swap_physical_facts(
++                            id,
++                            c.physical.primitive,
++                            c.world_target,
++                        )
++                    })
++                    .collect();
++                swap_audits.push(CpuSwapAudit {
++                    sequence,
++                    frame_digest: frame.frame_digest(),
++                    current_pain: receipt.biology_before.homeostasis.drives.pain,
++                    candidates,
++                    motor: receipt.clone(),
++                    after,
++                    owners_before: audit_owners_before.unwrap_or_default(),
++                    owners_after: self.world.research_swap_owners(id),
++                });
++            }
+             let successor = grounded_successor_state(
+                 &self.world,
+                 record.world_entity_id(),
+@@ -1290,6 +1350,7 @@
+             .try_advance_tick_with_body_events_in_staged_tick(&body_events)?;
+         self.seal_all_residents()?;
+         Ok(CpuCanonicalStep {
++            swap_audits,
+             tick_before: tick,
+             tick_after,
+             decisions,
+--- /dev/null
++++ b/crates/alife_world/src/headless/swap_audit.rs
+@@ -0,0 +1,129 @@
++//! Reconstructed opt-in transient facts, never legality counterfactuals or policy inputs.
++use super::*;
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub enum SwapOwner {
++    Missing,
++    Consumed,
++    Nobody,
++    ThisOrganism,
++    OtherOrganism,
++    Player,
++}
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub enum SwapGripMode {
++    None,
++    Activity,
++    Deliberate,
++}
++#[derive(Debug, Clone, PartialEq)]
++pub struct SwapOwnership {
++    pub target: WorldEntityId,
++    pub active: bool,
++    pub owner: SwapOwner,
++    pub mode: SwapGripMode,
++    pub position: Vec3f,
++}
++#[derive(Debug, Clone, PartialEq)]
++pub struct SwapPhysicalFacts {
++    pub tick: Tick,
++    pub organism: OrganismId,
++    pub target: Option<WorldEntityId>,
++    pub primitive: ActionId,
++    pub owner: SwapOwner,
++    pub mode: SwapGripMode,
++    pub active: bool,
++    pub self_held_object_count: usize,
++    pub actor_alive: bool,
++    pub manipulation_effector: bool,
++    pub physical_contact_reachable: Option<bool>,
++    pub grasp_reachable: Option<bool>,
++}
++impl HeadlessWorld {
++    fn swap_owner(&self, organism: OrganismId, object: &WorldObject) -> SwapOwner {
++        if object.consumed {
++            SwapOwner::Consumed
++        } else if self.player_held_object() == Some(object.id) {
++            SwapOwner::Player
++        } else if object.carried_by == Some(organism) {
++            SwapOwner::ThisOrganism
++        } else if object.carried_by.is_some() {
++            SwapOwner::OtherOrganism
++        } else {
++            SwapOwner::Nobody
++        }
++    }
++    pub fn research_swap_owners(&self, organism: OrganismId) -> Vec<SwapOwnership> {
++        self.objects
++            .values()
++            .map(|o| SwapOwnership {
++                target: o.id,
++                active: !o.consumed,
++                owner: self.swap_owner(organism, o),
++                mode: if o.consumed || o.carried_by.is_none() {
++                    SwapGripMode::None
++                } else if o.activity_hold {
++                    SwapGripMode::Activity
++                } else {
++                    SwapGripMode::Deliberate
++                },
++                position: o.position,
++            })
++            .collect()
++    }
++    pub fn research_swap_physical_facts(
++        &self,
++        organism: OrganismId,
++        primitive: ActionId,
++        target: Option<WorldEntityId>,
++    ) -> SwapPhysicalFacts {
++        let record = self.organism_registry.get(organism);
++        let agent = self.agent_entity_id(organism).ok();
++        let alive = agent
++            .and_then(|id| self.objects.get(&id.raw()))
++            .is_some_and(|a| !a.consumed && record.is_none_or(|r| r.lifecycle().is_alive()));
++        let effector = record.is_none_or(|r| {
++            r.embodiment()
++                .effector_gain(EffectorCapability::Manipulation)
++                > 0.
++        });
++        let mut facts = SwapPhysicalFacts {
++            tick: self.tick,
++            organism,
++            target,
++            primitive,
++            owner: SwapOwner::Missing,
++            mode: SwapGripMode::None,
++            active: false,
++            self_held_object_count: self
++                .objects
++                .values()
++                .filter(|o| !o.consumed && o.carried_by == Some(organism))
++                .count(),
++            actor_alive: alive,
++            manipulation_effector: effector,
++            physical_contact_reachable: None,
++            grasp_reachable: None,
++        };
++        let Some(id) = target else { return facts };
++        let Some(object) = self.objects.get(&id.raw()) else {
++            return facts;
++        };
++        facts.owner = self.swap_owner(organism, object);
++        facts.active = !object.consumed;
++        facts.mode = if object.consumed || object.carried_by.is_none() {
++            SwapGripMode::None
++        } else if object.activity_hold {
++            SwapGripMode::Activity
++        } else {
++            SwapGripMode::Deliberate
++        };
++        if let Some(agent) = agent {
++            if let Some(body) = self.objects.get(&agent.raw()) {
++                facts.physical_contact_reachable =
++                    Some(self.physical_contact_reachable(body.position, object.position));
++                facts.grasp_reachable = Some(self.grasp_target_is_reachable(organism, agent, id));
++            }
++        }
++        facts
++    }
++}
+--- a/crates/alife_world/src/headless.rs
++++ b/crates/alife_world/src/headless.rs
+@@ -1221,6 +1221,10 @@
+ 
+ #[derive(Debug, Clone, PartialEq)]
+ pub struct HeadlessMotorChannelReceipt {
++    /// Exact per-channel executor success; observation remains locomotion-only.
++    pub succeeded: bool,
++    /// Actual transient execution category, not a persistent or cognitive input.
++    pub failure: Option<ReferenceActionFailure>,
+     pub command: ChannelCommand,
+     pub phase: ActionPhase,
+     pub grip_transfers: Vec<GripTransfer>,
+@@ -1348,6 +1352,8 @@
+ mod hands;
+ pub use hands::{ActionPhase, GripTransfer, GripTransferKind};
+ mod grip_research;
++mod swap_audit;
++pub use swap_audit::*;
+ mod local_steering;
+ mod mating_reach;
+ pub use local_steering::LocalSteeringState;
+@@ -4793,6 +4799,8 @@
+             }
+             channel_outcomes.push(ChannelPhysicalOutcome::new(channel.channel, physical)?);
+             channel_receipts.push(HeadlessMotorChannelReceipt {
++                succeeded: result.execution.succeeded,
++                failure: result.execution.failure,
+                 command: channel.clone(),
+                 phase: result.phase,
+                 grip_transfers: result.grip_transfers.clone(),

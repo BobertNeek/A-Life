@@ -1,0 +1,110 @@
+{
+  "schema_version": 1,
+  "status": "completed_closed",
+  "seeds": [
+    2026112401,
+    2026112402
+  ],
+  "native_invocations": 1,
+  "autonomous_lives": 2,
+  "preparation_ticks": 1200,
+  "primary_steps": 512,
+  "actual_decisions": 512,
+  "shadow_replays": 2560,
+  "candidate_scores_per_gain": 6594,
+  "all_gain_candidate_scores": 32970,
+  "observed_meals_h_s": [
+    [
+      1,
+      14
+    ],
+    [
+      1,
+      14
+    ]
+  ],
+  "stops": [
+    "tick_budget",
+    "tick_budget"
+  ],
+  "baseline_replay_matches_actual_all": true,
+  "byte_preservation_all": true,
+  "bitwise_component_reconstruction_all": true,
+  "recurrent_shadow_equality_all": true,
+  "instantaneous_perturbation_bounds_checked": true,
+  "variant_actions_applied": false,
+  "retry_count": 0,
+  "source_binding": {
+    "source_base_commit": "2da9dd323ad6f074556a851174a2edbc9e34e216",
+    "prerequisite_v2_archive_sha256": "c16a15a28c2e0141f519f8898fb6f1807fcb201e22af521c6565ad90f2ede407",
+    "source_patch_sha256": "6f818ebf3e296ee58d0cc3f1df326aab4691c0309b5d5800da66a81937fb3c52",
+    "source_closure_file_sha256": "ba94fe127bbf2ab8d6dc8a914d069fff7ec867974bc2a63c7cb4e903e1e73760",
+    "plan_sha256": "fb31ce35f4a181491379bf39095a8af3594fd4c75ea2c2a4fa1a740de91b621b",
+    "executable_sha256": "e94f2a12116c2dc28b747924a3690933063cb67026b8c7bcf1b9ed648dc9c83d",
+    "off_asset_blake3": "0bf3400adc03e001be609717a5a325232bc8f86a734cf60ff7a740cab29de7f1",
+    "gains": [
+      0,
+      0.0625,
+      0.25,
+      1,
+      4
+    ],
+    "seeds": [
+      2026112401,
+      2026112402
+    ],
+    "backend": "CPU",
+    "toolchain": "Rust1.99.1",
+    "jobs": 1,
+    "incremental": false,
+    "debug": 0,
+    "rust_min_stack": 33554432,
+    "max_lives": 2,
+    "preparation_per_life": 600,
+    "max_primary_per_life": 256,
+    "max_public_bytes": 67108864,
+    "max_wallclock_seconds": 1800,
+    "source_files_changed": [
+      "crates/alife_game_app/src/production_voxel_renderer/hearthling.rs",
+      "crates/alife_training/Cargo.toml",
+      "crates/alife_training/examples/probe_grip_shadow.rs",
+      "crates/alife_training/src/cpu/host/swap_audit.rs",
+      "crates/alife_training/src/cpu/host.rs",
+      "crates/alife_world/src/headless/swap_audit.rs",
+      "crates/alife_world/src/headless.rs"
+    ]
+  },
+  "prepared_identities": [
+    {
+      "initial_body_sha256": "4d13b03783453a0d645db9bf121c31d125f1ea5db30bdc66ca5ecc136bd802f2",
+      "initial_scene_sha256": "b49330ec2a63c38c377edd83bb863a7dd50ff817d074d4c93e7508be6555d411",
+      "kind": "life_prepared",
+      "off_asset_sha256": "dfde200b82be966c20e3a873532069b1dc4a181afba0dc26ef49edcb96df78fb",
+      "sampling_seed": 2026112401,
+      "seed": 2026112401,
+      "world_tick": 600
+    },
+    {
+      "initial_body_sha256": "c573bb27d8a5cfed99e9f9009a8c472f86fd16b31f0532fee458ea1184a3b541",
+      "initial_scene_sha256": "2b01cc27a9e832141cb1cf403add7c4e1d50818fb646665ba135853512d3f5f0",
+      "kind": "life_prepared",
+      "off_asset_sha256": "dfde200b82be966c20e3a873532069b1dc4a181afba0dc26ef49edcb96df78fb",
+      "sampling_seed": 2026112402,
+      "seed": 2026112402,
+      "world_tick": 600
+    }
+  ],
+  "run_returned": {
+    "native_returncode": 0,
+    "killed_reason": null,
+    "elapsed_seconds": 619.0631228009988,
+    "stdout_stderr_bytes": 22,
+    "retry_permitted": false
+  },
+  "public_bytes": 37094628,
+  "public_record_count": 3944,
+  "public_sha256": "8bab0839e5a39389392cba5e2d68863eb5332d6bdbd8564e2ab444bd63fa4dc7",
+  "analysis_sha256": "6cabf2a9fff1c60a0106ebb00591fe4f57f33a4fe9241565948aa481647df363",
+  "prior_v1_archive_unchanged": true,
+  "prior_v2_archive_unchanged": true
+}

@@ -1,0 +1,62 @@
+[
+  {
+    "field": "world.subject.genome.n2048_foundation_candidate.weights",
+    "reason": "Exact16 treatment, all other bits equal",
+    "validation": "Native exact own-restore plus explicit source checks in world_projection/genetic_pair and full byte comparisons; see IDENTITY-AUDIT.md."
+  },
+  {
+    "field": "world.subject.genome.n2048_foundation_candidate.digest",
+    "reason": "Derived canonical asset digest",
+    "validation": "Native exact own-restore plus explicit source checks in world_projection/genetic_pair and full byte comparisons; see IDENTITY-AUDIT.md."
+  },
+  {
+    "field": "world.subject.genome.n2048_foundation_candidate.manifest.weight_asset.digest",
+    "reason": "Same asset reference",
+    "validation": "Native exact own-restore plus explicit source checks in world_projection/genetic_pair and full byte comparisons; see IDENTITY-AUDIT.md."
+  },
+  {
+    "field": "world.subject.state_graph.genetics_development.content_digest",
+    "reason": "Derived from genotype",
+    "validation": "Native exact own-restore plus explicit source checks in world_projection/genetic_pair and full byte comparisons; see IDENTITY-AUDIT.md."
+  },
+  {
+    "field": "world.subject.state_graph.brain.content_digest",
+    "reason": "Native seal includes phenotype-bound private state; exact own-restore verified",
+    "validation": "Native exact own-restore plus explicit source checks in world_projection/genetic_pair and full byte comparisons; see IDENTITY-AUDIT.md."
+  },
+  {
+    "field": "residents[].neural.phenotype_hash",
+    "reason": "Legitimate compiled phenotype identity; all other resident bytes compared",
+    "validation": "Native exact own-restore plus explicit source checks in world_projection/genetic_pair and full byte comparisons; see IDENTITY-AUDIT.md."
+  },
+  {
+    "field": "optimizer.phenotype_hash",
+    "reason": "Same compiled identity",
+    "validation": "Native exact own-restore plus explicit source checks in world_projection/genetic_pair and full byte comparisons; see IDENTITY-AUDIT.md."
+  },
+  {
+    "field": "optimizer.source_foundation_digest",
+    "reason": "Legitimate admitted source asset",
+    "validation": "Native exact own-restore plus explicit source checks in world_projection/genetic_pair and full byte comparisons; see IDENTITY-AUDIT.md."
+  },
+  {
+    "field": "optimizer.weights",
+    "reason": "Separately checked exact16 treatment",
+    "validation": "Native exact own-restore plus explicit source checks in world_projection/genetic_pair and full byte comparisons; see IDENTITY-AUDIT.md."
+  },
+  {
+    "field": "checkpoint.phenotype_hash",
+    "reason": "Validated legitimate phenotype identity, not equality-normalized or restored across arms",
+    "validation": "Native exact own-restore plus explicit source checks in world_projection/genetic_pair and full byte comparisons; see IDENTITY-AUDIT.md."
+  },
+  {
+    "field": "checkpoint.founder_weight_digest",
+    "reason": "Native founder digest validated by own exact restore; declared16 genes differ",
+    "validation": "Native exact own-restore plus explicit source checks in world_projection/genetic_pair and full byte comparisons; see IDENTITY-AUDIT.md."
+  },
+  {
+    "field": "world.creatures[0].weights.genetic_fixed_digest",
+    "reason": "Validated FNV1a64 of actual serialized full subject genome before projection",
+    "validation": "Native exact own-restore plus explicit source checks in world_projection/genetic_pair and full byte comparisons; see IDENTITY-AUDIT.md."
+  }
+]

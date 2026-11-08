@@ -1,0 +1,130 @@
+{
+  "QUALIFICATION.json": {
+    "bytes": 3614,
+    "sha256": "cecbff6c5bde473161b7e3e0b75157fc2648cc215d6a29a6c3aebc9e8f8607f5"
+  },
+  "README.md": {
+    "bytes": 1806,
+    "sha256": "7037378f8036e6cb1758e2abff4d4d63dafae0785f3cd67323a47e8824e51b9d"
+  },
+  "first/delta-from-v10.patch": {
+    "bytes": 17957,
+    "sha256": "146f2e8fd0db161bf9e0baa3ee3b96f8bf55c55dca077ed47c713f7e08e510d6"
+  },
+  "first/source/crates/alife_game_app/src/gpu_live_runtime/arousal_epoch_runtime_tests.rs": {
+    "bytes": 9480,
+    "sha256": "36e9d23f26344d6f1824efb423abd8dd466b514b468b0e068994c1c22d5c49a1"
+  },
+  "first/source/crates/alife_game_app/src/gpu_live_runtime/durability_hold.rs": {
+    "bytes": 5148,
+    "sha256": "da182d86262bbaf595e9d55212416f17244795373502b0e37ee9f28c6abda172"
+  },
+  "first/source/crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs": {
+    "bytes": 69425,
+    "sha256": "dacdbbe41b48791bc59dbc0908fb9826f01c2ae9b02bf829ac080c225adbd028"
+  },
+  "first/source/crates/alife_game_app/src/gpu_live_runtime.rs": {
+    "bytes": 592756,
+    "sha256": "67484a062bd5c4b401f2a1bc93f9dd472634b37211b6be6db7d8b22a518ff056"
+  },
+  "first/tree.txt": {
+    "bytes": 133978,
+    "sha256": "13bcbc0c261334ba046e002726106adb7e802c47073fe34d578f471315c7aa53"
+  },
+  "gate_order/delta-from-v10.patch": {
+    "bytes": 19100,
+    "sha256": "545af58c0f0933099c7ac954fd7b764bce040ba244c2bd2ac0075814837dcd69"
+  },
+  "gate_order/source/crates/alife_game_app/src/gpu_live_runtime/arousal_epoch_runtime_tests.rs": {
+    "bytes": 10606,
+    "sha256": "3126ef68bda1cf2ad7db3a6483ca556e9fe73e6ddd5ac704a9586f032737465b"
+  },
+  "gate_order/source/crates/alife_game_app/src/gpu_live_runtime/durability_hold.rs": {
+    "bytes": 5148,
+    "sha256": "da182d86262bbaf595e9d55212416f17244795373502b0e37ee9f28c6abda172"
+  },
+  "gate_order/source/crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs": {
+    "bytes": 69425,
+    "sha256": "dacdbbe41b48791bc59dbc0908fb9826f01c2ae9b02bf829ac080c225adbd028"
+  },
+  "gate_order/source/crates/alife_game_app/src/gpu_live_runtime.rs": {
+    "bytes": 592756,
+    "sha256": "67484a062bd5c4b401f2a1bc93f9dd472634b37211b6be6db7d8b22a518ff056"
+  },
+  "gate_order/tree.txt": {
+    "bytes": 133978,
+    "sha256": "4a928c5a6c1b3901cf80e689081c15311d190b8889801c579b0752f30e36f6f1"
+  },
+  "polling/delta-from-v10.patch": {
+    "bytes": 18187,
+    "sha256": "dded11dbc3955ac04b49d87d4eca4fd2db0fe7d0079305120f87c7ac25366a00"
+  },
+  "polling/source/crates/alife_game_app/src/gpu_live_runtime/arousal_epoch_runtime_tests.rs": {
+    "bytes": 9712,
+    "sha256": "65d894a1d67de82790421e05e507c4a30f2fa2e6e3204377cd27678e909c8be4"
+  },
+  "polling/source/crates/alife_game_app/src/gpu_live_runtime/durability_hold.rs": {
+    "bytes": 5148,
+    "sha256": "da182d86262bbaf595e9d55212416f17244795373502b0e37ee9f28c6abda172"
+  },
+  "polling/source/crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs": {
+    "bytes": 69425,
+    "sha256": "dacdbbe41b48791bc59dbc0908fb9826f01c2ae9b02bf829ac080c225adbd028"
+  },
+  "polling/source/crates/alife_game_app/src/gpu_live_runtime.rs": {
+    "bytes": 592756,
+    "sha256": "67484a062bd5c4b401f2a1bc93f9dd472634b37211b6be6db7d8b22a518ff056"
+  },
+  "polling/tree.txt": {
+    "bytes": 133978,
+    "sha256": "9500177217dfffcb8cad21414944cbf788055670322c4ddc2e96eb56fae3a5b4"
+  },
+  "reflex-epoch-first-fixture-actual-v11.log": {
+    "bytes": 1067,
+    "sha256": "75fb42348d0bf6da8bb4faa0cc88110a8c4ea73d749b7a1fd880ef814c5e4f7b"
+  },
+  "reflex-epoch-first-fixture-build-v11.log": {
+    "bytes": 1457,
+    "sha256": "f3b1eec0e4fdafe7c86166e6cc797368c712c9d07d543d0a7bf41e6f1a1b869f"
+  },
+  "reflex-epoch-first-fixture-check-v11.log": {
+    "bytes": 1313,
+    "sha256": "a5879c942f319ee11232cb28178ccd6d2941765722a493567989f5adf77522af"
+  },
+  "reflex-epoch-first-fixture-launch-v11.txt": {
+    "bytes": 359,
+    "sha256": "b7eb7772a97657f7a368bf9416517a9cbc8de01b13a6384ea0c14f5bbcdd8405"
+  },
+  "reflex-epoch-first-fixture-plan-v11.md": {
+    "bytes": 3088,
+    "sha256": "124465d325058d0eadad6d2ddd2d7866694928b50abb3e510e9f50626be59e3c"
+  },
+  "reflex-epoch-gate-ownership-actual-v11.log": {
+    "bytes": 1160,
+    "sha256": "17f1fe09b97f645c292d072a7298062d943e07361b193bc9d37b88080690f990"
+  },
+  "reflex-epoch-gate-ownership-build-v11.log": {
+    "bytes": 332,
+    "sha256": "ce3ca598dd58e108cff7561530af2b6573ec3878930b3450f1ace4e81a1da674"
+  },
+  "reflex-epoch-gate-ownership-plan-v11.md": {
+    "bytes": 1480,
+    "sha256": "c9d47a34d0fa0fc212f092f928003bda9cdcf76cf1ee01c4abcc07091ec51e73"
+  },
+  "reflex-epoch-host-gates-v11.log": {
+    "bytes": 395,
+    "sha256": "248aad82f6d54e3dec220cf972385fee57bfcb03b96ca7f1e8e918261b2e7486"
+  },
+  "reflex-epoch-polling-repair-actual-v11.log": {
+    "bytes": 1277,
+    "sha256": "42c87de92f37bed8f398ee1134153206e007e5b9ba023d2f487e1325f6421b02"
+  },
+  "reflex-epoch-polling-repair-build-v11.log": {
+    "bytes": 332,
+    "sha256": "ecc8463f893315a6c7ff792c02a1e58d0654d3591640c50bbc7f84feb1ed4bc6"
+  },
+  "reflex-epoch-polling-repair-plan-v11.md": {
+    "bytes": 1690,
+    "sha256": "c7cdab2644c45e198c3e327450227d477998b453eb8a7c87891ee0e9bfe4ea7a"
+  }
+}

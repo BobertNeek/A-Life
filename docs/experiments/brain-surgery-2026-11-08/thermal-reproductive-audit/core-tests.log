@@ -1,0 +1,41 @@
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.45
+   Compiling unicode-ident v1.0.24
+   Compiling syn v2.0.117
+   Compiling serde_core v1.0.228
+   Compiling find-msvc-tools v0.1.9
+   Compiling shlex v2.0.1
+   Compiling cc v1.2.63
+   Compiling serde v1.0.228
+   Compiling blake3 v1.8.5
+   Compiling serde_derive v1.0.228
+   Compiling thiserror v2.0.18
+   Compiling zmij v1.0.21
+   Compiling thiserror-impl v2.0.18
+   Compiling bytemuck_derive v1.10.2
+   Compiling arrayvec v0.7.6
+   Compiling arrayref v0.3.9
+   Compiling virtue v0.0.18
+   Compiling constant_time_eq v0.4.2
+   Compiling serde_json v1.0.150
+   Compiling cpufeatures v0.3.0
+   Compiling cfg-if v1.0.4
+   Compiling bincode_derive v2.0.1
+   Compiling bytemuck v1.25.0
+   Compiling bitflags v2.13.0
+   Compiling itoa v1.0.18
+   Compiling smallvec v1.15.1
+   Compiling unty v0.0.4
+   Compiling memchr v2.8.1
+   Compiling bincode v2.0.1
+   Compiling alife_core v0.1.0 (/workspace/scratch/ee5e08a3ca9b/thermal-reproductive-audit-v1/crates/alife_core)
+    Finished `test` profile [unoptimized] target(s) in 54.92s
+     Running tests/thermal_reproductive_drive_audit.rs (/workspace/scratch/ee5e08a3ca9b/thermal-reproductive-target-v1/debug/deps/thermal_reproductive_drive_audit-55d38f81b16bffcd)
+
+running 2 tests
+test adult_mating_readiness_rechecks_live_atp_and_juvenile_gate ... reproductive juvenile=0 adult=0.95000005; adult ATP=0.64920074
+ok
+test supplied_thermal_exposure_reaches_drive_and_recovery_reduces_body_load ... thermal body passive=0.495 recovered=0.29500002; drive passive=1 recovered=0.94386005
+ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

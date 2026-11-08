@@ -1,0 +1,15 @@
+{
+  "archive_sha256": "e4192ef96aa45d88080def7991390bc72b0b7a2731e4c181a6ea80aafd54bca7",
+  "tree": "8fd3ca2375e4613b2dea5997b8b3964ba7c6b633",
+  "source_blobs_verified": 10,
+  "tracked_files": 1256,
+  "manifest_verified": true,
+  "cpu_passed": 32,
+  "cpu_existing_ignored": 1,
+  "core_passed": 14,
+  "scheduler_passed": 9,
+  "strict_clippy": "passed owner logs",
+  "review_scope": "read-only exact frozen source/scalar logs; CPU mode-switch fix and phase permission reviewed; no native execution/private state",
+  "gpu_activation_qualified": false,
+  "ordinary_main_extraction_qualified": false
+}

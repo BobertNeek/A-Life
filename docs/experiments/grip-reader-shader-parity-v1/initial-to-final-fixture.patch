@@ -1,0 +1,53 @@
+--- fixture-initial-success-reconstructed.rs
++++ fixture-final.rs
+@@ -2,6 +2,10 @@
+ //! Runs the unchanged production memory and decoder-eligibility entry points on
+ //! CPU Vulkan. Selection is explicitly seeded; this is not a runtime admission,
+ //! recurrent-network, memory retrieval, or outcome/publication test.
++//!
++//! Opt in with `--features cpu-backend,gpu-tests --lib` and the full test name,
++//! then `-- --ignored --nocapture`. Set VK_ICD_FILENAMES to a CPU Vulkan ICD.
++//! This unit fixture does not alter the fixed integration-qualifier inventory.
+ use super::*;
+ use alife_core::*;
+ use alife_gpu_backend::*;
+@@ -395,6 +399,11 @@
+                 } else {
+                     ((i % 13) as f32 - 6.) / 64.
+                 };
++                if !saturated && coord.input_lane() == 53 {
++                    // Keep Close and Release logit probes causally sensitive to
++                    // this port even if other signed memory rows cancel.
++                    cpu.checkpoint.lifetime[i] += 0.125;
++                }
+                 cpu.checkpoint.fast[i] = if saturated {
+                     0.
+                 } else {
+@@ -642,11 +651,24 @@
+ #[ignore = "explicit synthetic CPU Vulkan parity; not hardware or learned-behavior evidence"]
+ fn software_vulkan_matches_cpu_grip_reader_logits_features_and_eligibility() {
+     let device = Device::new();
+-    for action in [2201, 2202, 212] {
+-        for sign in [-1., 1.] {
+-            run_case(&device, 3, action, sign, true, false);
++    let mut logits = [[0.; 2]; 3];
++    for (i, action) in [2201, 2202, 212].into_iter().enumerate() {
++        for (j, sign) in [-1., 1.].into_iter().enumerate() {
++            logits[i][j] = run_case(&device, 3, action, sign, true, false);
+         }
+         assert_eq!(run_case(&device, 3, action, -1., false, false), 0.);
++    }
++    for pair in &logits[..2] {
++        assert!(
++            pair[0] < 0. && pair[1] > 0.,
++            "operation must affect the probe logit"
++        );
++    }
++    for (release, ordinary) in logits[1].iter().zip(&logits[2]) {
++        assert_ne!(
++            release, ordinary,
++            "Release and ordinary Other must not share the operation port"
++        );
+     }
+     for sign in [-1., 1.] {
+         assert!((run_case(&device, 1, 2202, sign, true, true) - sign * 0.5).abs() < 1e-6);

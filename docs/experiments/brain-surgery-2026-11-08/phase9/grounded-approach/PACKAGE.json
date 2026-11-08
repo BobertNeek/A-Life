@@ -1,0 +1,156 @@
+{
+  "schema": 1,
+  "status": "completed_closed_no_rerun",
+  "base_component": "5163e3ff7d54b262b73eaafd6db9fb52bc473b4b",
+  "tested_source": "e94592cbeede35a3e812093fcdea673410205e2f",
+  "tested_source_tree": "8753ed65934b7af638ad4bf54ec57889d30afddc",
+  "final_archive_commit": "039a1141e453915b345e157c7a03d3ab081c9cc0",
+  "final_archive_tree": "d508aac2a0c21f470954ab134b73fdba240ca457",
+  "actual_world_intervals": 6,
+  "two_unavailable_slots_closed": true,
+  "gpu_or_neural_forward_passes": 0,
+  "no_authentic_neural_sources_admitted": true,
+  "excluded": "private brains, checkpoints, banks, neural source vectors, acquired source JSON, optimizer or activations",
+  "files": {
+    "experiment/FROZEN_PLAN.md": {
+      "sha256": "4e141cc20afdb0f9bd9226fefb98568c806a80ef426bc74fe424c8003672ea15",
+      "bytes": 7129
+    },
+    "experiment/PREFLIGHT_REVISION.md": {
+      "sha256": "86072d845ade38a00e60feb403493538166749c0089cc8aaab4fdb9803fd1b05",
+      "bytes": 1908
+    },
+    "experiment/PRIOR_INSPECT_PROVENANCE_ERRATUM.md": {
+      "sha256": "5edfab441c18d0e078f5ba7e6d5a567ab75d419b78d4b093ec42fc53726e0644",
+      "bytes": 2794
+    },
+    "experiment/QUALIFICATION.json": {
+      "sha256": "58e66487ba1d33c4ea800cb1cd40a3ce1ff05f45e269c9c06d8afd3199ad6cde",
+      "bytes": 6992
+    },
+    "experiment/README.md": {
+      "sha256": "d7d3a96ca330fab53ef4ce524b769f7f9cf07c5bd97233173a723a3bb18904b7",
+      "bytes": 2543
+    },
+    "experiment/RESULTS.md": {
+      "sha256": "98202c390593ecfe723e247ef3a55e83e7eeadf76a09f7ac12fab5edac00ba5a",
+      "bytes": 6581
+    },
+    "experiment/SOURCE_BINDING.json": {
+      "sha256": "c91c68644e97931297204d8b490b827ff866a47b60594a7a3d9fdc2491a4bc28",
+      "bytes": 1651
+    },
+    "experiment/logs/grounded-approach-preflight-v1.log": {
+      "sha256": "879e9846e6a75441b112a5d303216e42b3632e85e1ad3aaff297bc7eadf21f7b",
+      "bytes": 1333
+    },
+    "experiment/logs/grounded-approach-preflight-v2.log": {
+      "sha256": "c66f86002fb2ac61b077ecb55c75fc540c5a5dc47fab10cc38d74c0f6f058f28",
+      "bytes": 932
+    },
+    "experiment/logs/grounded-approach-preflight-v3.log": {
+      "sha256": "8e4f9473e2a5be95ffd128fdb8aa2a863b90e24dfb069bd19f05890eac71d301",
+      "bytes": 1083
+    },
+    "experiment/logs/grounded-approach-preflight-v4.log": {
+      "sha256": "3d5292e8e63ee4db8fbdf65cb6d418da4c2cb83f5e5a025931f736b0b73eea00",
+      "bytes": 3442
+    },
+    "experiment/logs/grounded-approach-preflight-v5.log": {
+      "sha256": "f29c317449297ec553638654bfe4a9d9a5fadaf6f4c0ada0cf16436d7416616b",
+      "bytes": 6357
+    },
+    "experiment/logs/grounded-approach-six-boundaries-v1.log": {
+      "sha256": "edfe0c3e3b80dbafbf4ad79877ba2d98759b5a4c0c44c77b711ce4411ecbb571",
+      "bytes": 42
+    },
+    "experiment/logs/grounded-approach-six-boundaries-v2.log": {
+      "sha256": "b6554fa6b151aea699671a9b5cad329ec249203f6fa858015600843929aff070",
+      "bytes": 34
+    },
+    "experiment/logs/grounded-approach-six-clippy-v1.log": {
+      "sha256": "63974c56d65dc5d89f791c8a13f5ae5175bad3968eb32f43714fa70e9ccb037a",
+      "bytes": 396
+    },
+    "experiment/logs/grounded-approach-six-fmt-v1.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "experiment/logs/grounded-approach-six-native-v1.log": {
+      "sha256": "79f2f54f386d93f44739b30bbc4b77527e9ce83da0bd3f111772d532d4ac585e",
+      "bytes": 26895
+    },
+    "experiment/outcomes.jsonl": {
+      "sha256": "98e42f847bc6bcdb413943b0eee4479c939ba8cd67680bc7896b21e3927bad90",
+      "bytes": 21316
+    },
+    "experiment/run-ledger.jsonl": {
+      "sha256": "2ff4e5ab97f4afb040c6e7464798daf6c57d230aafab3d6194be99b470b398b1",
+      "bytes": 450
+    },
+    "experiment/summarize.py": {
+      "sha256": "8da0dce7c2cb2a4105cf385467dbda9327a4bd5cb5c548ae7ebe4c828cf70736",
+      "bytes": 2925
+    },
+    "experiment/summary.json": {
+      "sha256": "4f6ada5b7220b623b069b40cd2c60903e94b90c40b030c8f131807b016e72885",
+      "bytes": 8251
+    },
+    "patches/closed-six-interval-source-and-evidence.patch": {
+      "sha256": "ddc8dcab30a0a09a3442ab0b7ade095a5d030301affbc8ed22293d37cb2e85f4",
+      "bytes": 129587
+    },
+    "patches/original-eight-slot-cold-failure.patch": {
+      "sha256": "f4dd60a2cf33d8634ea6a2f7ae60c1bc3efcc1fae3e71d1b4110a2b74f092439",
+      "bytes": 32123
+    },
+    "patches/prospective-six-interval-source.patch": {
+      "sha256": "ffef02feb9d6a3ab7f8cea2cfbe74184d13c470db181fd4b42c54f49ddce4e74",
+      "bytes": 35266
+    },
+    "raw-logs/grounded-approach-preflight-v1.log": {
+      "sha256": "879e9846e6a75441b112a5d303216e42b3632e85e1ad3aaff297bc7eadf21f7b",
+      "bytes": 1333
+    },
+    "raw-logs/grounded-approach-preflight-v2.log": {
+      "sha256": "c66f86002fb2ac61b077ecb55c75fc540c5a5dc47fab10cc38d74c0f6f058f28",
+      "bytes": 932
+    },
+    "raw-logs/grounded-approach-preflight-v3.log": {
+      "sha256": "5d3f54825a8dbcac7a21f480112e1327a04dbb4606be1b89c57172b0d14bed61",
+      "bytes": 1084
+    },
+    "raw-logs/grounded-approach-preflight-v4.log": {
+      "sha256": "3d5292e8e63ee4db8fbdf65cb6d418da4c2cb83f5e5a025931f736b0b73eea00",
+      "bytes": 3442
+    },
+    "raw-logs/grounded-approach-preflight-v5.log": {
+      "sha256": "0e3aa221461e8f89192feb396d6fe109398d85ff2438696ab0acbfb6687d6045",
+      "bytes": 6358
+    },
+    "raw-logs/grounded-approach-six-boundaries-v1.log": {
+      "sha256": "edfe0c3e3b80dbafbf4ad79877ba2d98759b5a4c0c44c77b711ce4411ecbb571",
+      "bytes": 42
+    },
+    "raw-logs/grounded-approach-six-boundaries-v2.log": {
+      "sha256": "b6554fa6b151aea699671a9b5cad329ec249203f6fa858015600843929aff070",
+      "bytes": 34
+    },
+    "raw-logs/grounded-approach-six-clippy-v1.log": {
+      "sha256": "63974c56d65dc5d89f791c8a13f5ae5175bad3968eb32f43714fa70e9ccb037a",
+      "bytes": 396
+    },
+    "raw-logs/grounded-approach-six-fmt-v1.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "raw-logs/grounded-approach-six-native-v1.log": {
+      "sha256": "42d390cab9abc188d4068804d4c108b9929e21a0e795248f60f2b674db0a6608",
+      "bytes": 26896
+    },
+    "source/grounded_approach_need_tests.rs": {
+      "sha256": "0c3bbb7137a8d995836e77c7a4efd125c1acdb5b28b7e841bb0cfe540d158fe5",
+      "bytes": 18063
+    }
+  }
+}

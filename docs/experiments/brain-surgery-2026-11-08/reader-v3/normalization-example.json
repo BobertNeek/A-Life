@@ -1,0 +1,176 @@
+{
+  "seed": 2026112401,
+  "primary_step": 41,
+  "interpretation": "Instantaneous normalization/arbitration change only; no shadow action executed or alternative future observed.",
+  "off_representative": 9,
+  "shadow_representative": 10,
+  "off_motor_candidates": [
+    9,
+    null,
+    null,
+    null,
+    null,
+    null
+  ],
+  "shadow_motor_candidates": [
+    1,
+    null,
+    10,
+    null,
+    null,
+    null
+  ],
+  "relevant_candidates": [
+    {
+      "off": {
+        "index": 1,
+        "action": 101,
+        "target": "h",
+        "input53": 0.0,
+        "memory_raw": -0.01684015989303589,
+        "memory_clamped": -0.01684015989303589,
+        "operation_component": 0.0,
+        "logit": 1.8821947574615479,
+        "representative_probability": 0.44763705134391785,
+        "held": false,
+        "source_ingest_family": false,
+        "source_exact_consumed": false,
+        "source_same_tracked_target": true
+      },
+      "gain_1_over_16": {
+        "index": 1,
+        "action": 101,
+        "target": "h",
+        "input53": 0.0,
+        "memory_raw": -0.01684015989303589,
+        "memory_clamped": -0.01684015989303589,
+        "operation_component": 0.0,
+        "logit": 1.8821947574615479,
+        "representative_probability": 0.45269575715065,
+        "held": false,
+        "source_ingest_family": false,
+        "source_exact_consumed": false,
+        "source_same_tracked_target": true
+      }
+    },
+    {
+      "off": {
+        "index": 4,
+        "action": 2201,
+        "target": "h",
+        "input53": -0.26616713404655457,
+        "memory_raw": 0.015271726995706558,
+        "memory_clamped": 0.015271726995706558,
+        "operation_component": 0.0,
+        "logit": 0.2744382917881012,
+        "representative_probability": 0.08967806398868561,
+        "held": false,
+        "source_ingest_family": true,
+        "source_exact_consumed": true,
+        "source_same_tracked_target": true
+      },
+      "gain_1_over_16": {
+        "index": 4,
+        "action": 2201,
+        "target": "h",
+        "input53": -0.26616713404655457,
+        "memory_raw": -0.11781173944473267,
+        "memory_clamped": -0.11781173944473267,
+        "operation_component": -0.13308356702327728,
+        "logit": 0.14135482907295227,
+        "representative_probability": 0.07939063012599945,
+        "held": false,
+        "source_ingest_family": true,
+        "source_exact_consumed": true,
+        "source_same_tracked_target": true
+      }
+    },
+    {
+      "off": {
+        "index": 9,
+        "action": 103,
+        "target": "none",
+        "input53": 0.0,
+        "memory_raw": 0.0029035713523626328,
+        "memory_clamped": 0.0029035713523626328,
+        "operation_component": 0.0,
+        "logit": 0.0028739431872963905,
+        "representative_probability": 0.0683513879776001,
+        "held": false,
+        "source_ingest_family": false,
+        "source_exact_consumed": false,
+        "source_same_tracked_target": false
+      },
+      "gain_1_over_16": {
+        "index": 9,
+        "action": 103,
+        "target": "none",
+        "input53": 0.0,
+        "memory_raw": 0.0029035713523626328,
+        "memory_clamped": 0.0029035713523626328,
+        "operation_component": 0.0,
+        "logit": 0.0028739431872963905,
+        "representative_probability": 0.06912382692098618,
+        "held": false,
+        "source_ingest_family": false,
+        "source_exact_consumed": false,
+        "source_same_tracked_target": false
+      }
+    },
+    {
+      "off": {
+        "index": 10,
+        "action": 212,
+        "target": "none",
+        "input53": 0.0,
+        "memory_raw": 0.003102000104263425,
+        "memory_clamped": 0.003102000104263425,
+        "operation_component": 0.0,
+        "logit": -0.4543794095516205,
+        "representative_probability": 0.04326779767870903,
+        "held": false,
+        "source_ingest_family": false,
+        "source_exact_consumed": false,
+        "source_same_tracked_target": false
+      },
+      "gain_1_over_16": {
+        "index": 10,
+        "action": 212,
+        "target": "none",
+        "input53": 0.0,
+        "memory_raw": 0.003102000104263425,
+        "memory_clamped": 0.003102000104263425,
+        "operation_component": 0.0,
+        "logit": -0.4543794095516205,
+        "representative_probability": 0.04375676438212395,
+        "held": false,
+        "source_ingest_family": false,
+        "source_exact_consumed": false,
+        "source_same_tracked_target": false
+      }
+    }
+  ],
+  "actual_physical": [
+    {
+      "action": 103,
+      "contact_consumed": false,
+      "displacement": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "succeeded": true,
+      "target": "none",
+      "transfers": []
+    }
+  ],
+  "action_ids": {
+    "101": "APPROACH",
+    "103": "NO_LOCOMOTION",
+    "104": "NO_POSTURE",
+    "212": "NO_MANIPULATION",
+    "213": "PLAY",
+    "2201": "CLOSE",
+    "2202": "RELEASE"
+  }
+}

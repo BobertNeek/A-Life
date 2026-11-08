@@ -1,0 +1,18 @@
+{
+  "baseline_commit": "2da9dd323ad6f074556a851174a2edbc9e34e216",
+  "baseline_tree": "e402bcb5d5fc034ac0244e78d49fa1a0da25ede3",
+  "frozen_evidence_archive_sha256": "11104d6de9f93c1785b013fe5ef68fe25fa86227b5669bb2fe59901bad0dd608",
+  "frozen_source_patch_sha256": "63931a176cae358dba3fcf638d80756c2b743b2f4c7a1117e0ac45f1195dd9a5",
+  "source_and_record_sha256": {
+    "crates/alife_core/src/motor.rs": "9c4a3f5b0cbbd8b8d9c129e289264281a3abcc687579f9737ac1170210506e16",
+    "crates/alife_training/examples/probe_drive_world.rs": "d9dcab28761f6d364310cf77a7314db604bc622038695f03207c4e4165ea6784",
+    "crates/alife_training/examples/support/drive_balance_candidate.rs": "3a7b7da76591bf76992db700d4e3cef9d57488fc0b8c6ca2a92eeaba4f6dfed6",
+    "drive-matrix-v1.json": "ef09abc3ad7b2579407d41db72b26f35af03b7a01f953bf5ede9a852c252e591",
+    "world-baseline-v2.json": "1ada174667693f7dc3df955a4073fcd388055fd83adc608f5ed04e2b416f11b0",
+    "world-candidate-v2.json": "29e06876579f859e06722d46fb835e4b56115061c51bdad8a05af473f2d3a0dc",
+    "world-distance-v1.json": "7471e8bdd89ce60878e9cc4945e4ee50e27929c56a8f90ecbb5fbb7be51ece67",
+    "world-geometry-v2.json": "8ad80b73477b0348bf46acbe667ed8ced5d014da5789febc859427c249530bb1",
+    "world-recalibrated-v2.json": "6686663301fbf66a9fdfa6564885c9453c59bc9d8e1875c6c3cdedef76b7dc08",
+    "world-summary-v1.json": "d3b99f81ec37a125bdebc67d0538c63616759c4e48b92e538523956c46200f21"
+  }
+}

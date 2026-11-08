@@ -1,0 +1,103 @@
+{
+  "archive_sha256": "f6c003eeadb396bb3a61217748c7c43ceff63e023365a05f9b0ff6ce5e6bde52",
+  "archive_files_selected": [
+    {
+      "path": "THERMAL_CONTACT_CANDIDATE_DESIGN.md",
+      "bytes": 7162,
+      "sha256": "2cbfda0f256ee6c2248beeb47e0bcfed907ac34292040cadb0039047fbac00f4"
+    },
+    {
+      "path": "manifest.json",
+      "bytes": 3461,
+      "sha256": "41df2de2f8478439f7c91981d4107a9a732df4c5250330cb60f46f721915b3c7"
+    },
+    {
+      "path": "README.md",
+      "bytes": 1051,
+      "sha256": "f3466b788d2570e3cd1971212ea7b666ad5b710d60d309fb79efa3973689c6c6"
+    },
+    {
+      "path": "THERMAL_CONTACT_V1_RESULTS.md",
+      "bytes": 3589,
+      "sha256": "b5771ecfa8efe0c94efc37f9d3363f7b3c98eceb92294c99b6c9e1446bc00bad"
+    },
+    {
+      "path": "evidence/thermal-contact-final-lint-v1.log",
+      "bytes": 796,
+      "sha256": "088ff965bdfb9190e1ea902019785804d4eafa065cad7d658d35ff40095ab68f"
+    },
+    {
+      "path": "evidence/thermal-contact-v1-frozen-production-scope.json",
+      "bytes": 786,
+      "sha256": "b2d2d5da1998984c9c22d8536fb006a073c4ab58f16f6ac785093b6a9a3f08b0"
+    },
+    {
+      "path": "evidence/thermal-contact-candidate-v1-source.patch",
+      "bytes": 37844,
+      "sha256": "6252896f34f3dcc0ffbe7e8dd0807efcef1a1169737bdf42803338269c3bd331"
+    },
+    {
+      "path": "evidence/thermal-contact-final-checks-v2.log",
+      "bytes": 34701,
+      "sha256": "dd5d4f35b3692adabb3576a6055ed52fe7555778f45618bb2f7199bb393509b0"
+    },
+    {
+      "path": "evidence/run-thermal-contact-final-checks-v1.sh",
+      "bytes": 968,
+      "sha256": "ef8fa4e3d78a4b097e6b5812a61e98b253089cc76ffe5d097887c16c4950a769"
+    },
+    {
+      "path": "evidence/thermal-contact-candidate-pretest-v7.sha256",
+      "bytes": 566,
+      "sha256": "bc00b59d0fe9a419630654ed4297d6f862a2bcaa6ba20ad3a185b0b69700772b"
+    },
+    {
+      "path": "evidence/thermal-reproductive-audit-v1.sha256",
+      "bytes": 592,
+      "sha256": "8fbc60a122797b85c5b6483754967451666a3757e983fbf4fea69adce03ea380"
+    },
+    {
+      "path": "evidence/thermal-contact-candidate-pretest-v8.sha256",
+      "bytes": 692,
+      "sha256": "203e30d1c7acdd08bc318fc584f08d3f617d801c500d96fbe71270664c232eb7"
+    },
+    {
+      "path": "evidence/thermal-contact-v1-hot-rest-control.log",
+      "bytes": 376,
+      "sha256": "92b41a46c05d687e814e3ac7b32c112fea22e470a345577c0e1532ae2da2cada"
+    }
+  ],
+  "omitted_duplicate_source_files": [
+    {
+      "path": "source/crates/alife_core/src/biochemistry.rs",
+      "bytes": 49741,
+      "sha256": "12a19b02a42e6d007f125740d5e1a650208a6f7cf4ba76ef87d8a6f5e0b113f9"
+    },
+    {
+      "path": "source/crates/alife_core/tests/thermal_reproductive_drive_audit.rs",
+      "bytes": 3011,
+      "sha256": "1ca0ab3f018a655cdb32f1ab69ba5c9e061ae825d4b3b523642876160af0ba56"
+    },
+    {
+      "path": "source/crates/alife_world/src/headless/thermal_contact_candidate.rs",
+      "bytes": 6104,
+      "sha256": "199d379838726d3a2f9bb21daa4d7628efbd02dc0428196bbce8f513412ee768"
+    },
+    {
+      "path": "source/crates/alife_world/src/headless/thermal_contact_candidate/tests.rs",
+      "bytes": 18406,
+      "sha256": "c18f15f5c7f36fcc583763ccda197eb1bb8d3c78f98a77a8db8ab3b561dd27e4"
+    },
+    {
+      "path": "source/crates/alife_world/src/organism.rs",
+      "bytes": 82965,
+      "sha256": "75882ae1e5042ea16e2603782821ebb0aede49de5602308b9ad107ebe71f55cb"
+    },
+    {
+      "path": "source/crates/alife_world/src/headless.rs",
+      "bytes": 479483,
+      "sha256": "76ed15c5b2713c57bd7349ce56eac5891e46ee04d372f89c6de3b07b3f5c5db4"
+    }
+  ],
+  "source_reconstruction": "Thermal full source is recoverable from pinned ordinary-main base plus the included full patch; original manifest retains hashes of omitted duplicate source copies."
+}

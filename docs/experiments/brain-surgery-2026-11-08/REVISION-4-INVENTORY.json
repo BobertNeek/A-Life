@@ -1,0 +1,143 @@
+{
+  "schema": "brain-surgery-daily-additive-v4",
+  "date_utc": "2026-11-08",
+  "parent_remote_commit": "b851f3d66636f60e239b2df3b4a9848fc5e58da0",
+  "original_reference": "https://rikiyat.github.io/blog/weight-space-programming/",
+  "closed_allocations": [
+    {
+      "name": "reader-v4",
+      "seeds": [
+        2026112501,
+        2026112502
+      ],
+      "primary_decisions": 0,
+      "result": "paired_preparation_failed_closed"
+    },
+    {
+      "name": "reader-v5",
+      "seeds": [
+        2026112601,
+        2026112602
+      ],
+      "completed_lives": 4,
+      "preparation_ticks": 2400,
+      "primary_decisions": 1024,
+      "result": "no_observed_feeding_or_safety_benefit"
+    }
+  ],
+  "exclusions": [
+    "executables",
+    "private checkpoints and memory banks",
+    "raw private runtime journals or diagnostics beyond the declared finite scalar evidence",
+    "whole private learned weight arrays"
+  ],
+  "files": [
+    {
+      "path": "DAILY-HANDOFF-REVISION-4.md",
+      "bytes": 8903,
+      "sha256": "2f2d8ef210869dd1c942b3106d4f597083358eeec947dbcaeafeea162b07c154"
+    },
+    {
+      "path": "YAW-REST-ASSESSMENT.md",
+      "bytes": 6289,
+      "sha256": "ae52d7aa03751946285e749101a68a4e20bffe6d312c82717e9f4e1601a296c2"
+    },
+    {
+      "path": "reader-v4/EXCLUSION-MANIFEST.json",
+      "bytes": 1449,
+      "sha256": "bdb8c6f9b20ea491c1281869ee9edb002e80a3f1af66a86aee0463f436cf5d70"
+    },
+    {
+      "path": "reader-v4/FINDINGS.md",
+      "bytes": 5235,
+      "sha256": "3f0a055d6da05856deab3e1015180e423cc64e0ca9de3c5bf6d043e911d4a04e"
+    },
+    {
+      "path": "reader-v4/PLAN.md",
+      "bytes": 8678,
+      "sha256": "002e1a638e575f43e3a8fc6c6e52ff1888fe04daa5f168e521dc9543c8340c5b"
+    },
+    {
+      "path": "reader-v4/analysis.json",
+      "bytes": 1400,
+      "sha256": "55576ff4990146840af58ae0d08bc1d0bb6d66fa5b54c409493a07fb959adfa6"
+    },
+    {
+      "path": "reader-v4/bindings.json",
+      "bytes": 1430,
+      "sha256": "37c6c112f55da3f5eb8412501909a0ed82f5948974b8b3ed245cde2fc5e1bcf0"
+    },
+    {
+      "path": "reader-v4/grip-low-gain-matched-v4-source-and-results.tar.gz",
+      "bytes": 125264,
+      "sha256": "5e0c05bdae79274961557457f48450fd90aa71e2671b59ad449e85bfbe24a23c"
+    },
+    {
+      "path": "reader-v4/source-closure.json",
+      "bytes": 156153,
+      "sha256": "8a5a4209261d6c9e71b972be82aa3e98eb61fdf8139ac73b9ce2e57f00a5cbb9"
+    },
+    {
+      "path": "reader-v5/EXCLUSION-MANIFEST.json",
+      "bytes": 3499,
+      "sha256": "7e31949c45ad60c3b99d74de338cc86549faf60eef1750aef060c599ba388ee8"
+    },
+    {
+      "path": "reader-v5/FINDINGS.md",
+      "bytes": 7361,
+      "sha256": "371e988969348066ec14f1da3ac32270212fbc9863ceb3592cdad6bd42c94a72"
+    },
+    {
+      "path": "reader-v5/IDENTITY-AUDIT.md",
+      "bytes": 3905,
+      "sha256": "dfa8e22de42a5b140e865c5a669b55772d7ccc90c0f123666c94070c5c62399b"
+    },
+    {
+      "path": "reader-v5/NEXT-HYPOTHESIS.md",
+      "bytes": 3974,
+      "sha256": "253036f4727b42390a3cb7b22f3d893513f3f1f784cceaa78f520e1ebacc3479"
+    },
+    {
+      "path": "reader-v5/PLAN.md",
+      "bytes": 4814,
+      "sha256": "2bc1d730f4f40b8812ce39a96ba0cb3aad23821c92d2a6682278e9ec1c7f5622"
+    },
+    {
+      "path": "reader-v5/analysis.json",
+      "bytes": 8984,
+      "sha256": "3f3664a0a3176c2f528fdad79ecae301e7ab3acdc44d30b1173e027f7630963e"
+    },
+    {
+      "path": "reader-v5/bindings.json",
+      "bytes": 1429,
+      "sha256": "6857d6ce08f6297a10336bb4f057f04dcb7986ffcefc9f3d548ddd4f7dbed530"
+    },
+    {
+      "path": "reader-v5/cap-and-check-accounting.json",
+      "bytes": 463,
+      "sha256": "edec40ba13e7c316629f6c2ebedbcde8bd8a96f81c8bdc104cf10b87872407bd"
+    },
+    {
+      "path": "reader-v5/choice-differences.csv",
+      "bytes": 3590,
+      "sha256": "02fcaed84677e0fa983eba56ed917fdaf6fcf6f17240b1d74088740dc65f9742"
+    },
+    {
+      "path": "reader-v5/grip-low-gain-matched-v5-source-and-results.tar.gz",
+      "bytes": 1642173,
+      "sha256": "d7f210cdeed3a1d7005ac21a46d6df498fed298ee9ae81cdddde44e71de5e15f"
+    },
+    {
+      "path": "reader-v5/paired-analysis.json",
+      "bytes": 24039,
+      "sha256": "d353f3e3bfee00799edf9425a8a853a6a200d92acf99c82707659678e6a05123"
+    },
+    {
+      "path": "reader-v5/source-closure.json",
+      "bytes": 156153,
+      "sha256": "507d7f838748659fbe7f3a235d8a5716902548afb847a248662d847b568c1dfd"
+    }
+  ],
+  "presentation_note": "The separately readable choice-differences.csv normalizes CRLF to LF only. The closed source-and-results archive retains original bytes and hash.",
+  "build_provenance_note": "Archives retain project Cargo compilation/test logs and artifact records as source/build provenance. They are not claimed to exclude all compiler output; native stderr/stdout contains only the bounded static completion marker."
+}

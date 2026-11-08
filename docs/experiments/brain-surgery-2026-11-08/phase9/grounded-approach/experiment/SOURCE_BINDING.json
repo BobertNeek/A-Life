@@ -1,0 +1,32 @@
+{
+  "schema": 1,
+  "base_main": "550f79ad1f765132c634e7a272da56b521b57ec0",
+  "qualified_component": "5163e3ff7d54b262b73eaafd6db9fb52bc473b4b",
+  "qualified_component_tree": "85e2ef5f2509a78db11393914fbe1bc921e3aa41",
+  "original_eight_slot_source": "ebd4b6244aa4158341cfac5d72e96f3968ebe140",
+  "prospective_six_interval_source": "e94592cbeede35a3e812093fcdea673410205e2f",
+  "prospective_six_interval_tree": "8753ed65934b7af638ad4bf54ec57889d30afddc",
+  "world_intervals_executed_at_freeze": 0,
+  "planned_actual_world_intervals": 6,
+  "original_maximum_world_intervals": 8,
+  "blocked_slots_unavailable": 2,
+  "unused_budget_closed": true,
+  "files": {
+    "crates/alife_world/src/headless.rs": "ca5a709f69f0d7e7bd6ff5eb1f8207cca2234cd909962e8d78942f85835555ac",
+    "crates/alife_world/src/headless/grounded_approach_need_tests.rs": "0c3bbb7137a8d995836e77c7a4efd125c1acdb5b28b7e841bb0cfe540d158fe5",
+    "docs/experiments/grounded-approach-need-v1/FROZEN_PLAN.md": "4e141cc20afdb0f9bd9226fefb98568c806a80ef426bc74fe424c8003672ea15",
+    "docs/experiments/grounded-approach-need-v1/PREFLIGHT_REVISION.md": "86072d845ade38a00e60feb403493538166749c0089cc8aaab4fdb9803fd1b05",
+    "docs/experiments/grounded-approach-need-v1/summarize.py": "8da0dce7c2cb2a4105cf385467dbda9327a4bd5cb5c548ae7ebe4c828cf70736"
+  },
+  "provenance": "prescribed real physical/biological operations; no neural producer or sealed neural envelope",
+  "excluded": [
+    "autonomous selector",
+    "neural forward pass",
+    "learned policy",
+    "GPU/device",
+    "existing acquired/private state",
+    "source vectors",
+    "private banks",
+    "post-result retuning"
+  ]
+}

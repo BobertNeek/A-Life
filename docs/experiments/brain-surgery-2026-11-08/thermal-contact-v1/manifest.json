@@ -1,0 +1,52 @@
+{
+  "factor": "thermal-contact-research-v1",
+  "promotion": "none",
+  "ordinary_main_commit": "b0b4e5ab85473f1ace63f0629ecf4704e7b0fb81",
+  "base_tree": "0a34d588488c09f9a7fd4d8bc6115be61bdcd750",
+  "local_matching_commit": "7a15a2f8ceffb871947ca7df819095d2cab99327",
+  "source_directory": "/workspace/scratch/ee5e08a3ca9b/thermal-reproductive-audit-v1",
+  "build_target": "/workspace/scratch/ee5e08a3ca9b/thermal-reproductive-target-v1",
+  "rust": "1.99.1",
+  "build_jobs": 1,
+  "incremental": false,
+  "debug_symbols": false,
+  "checks": {
+    "world_unit_pass": 243,
+    "world_unit_ignored": 2,
+    "world_integrations_pass": 42,
+    "core_integrations_pass": 15,
+    "clippy_all_targets": "pass",
+    "format": "pass",
+    "diff_whitespace": "pass",
+    "patch_apply_check": "pass"
+  },
+  "original_audit_archive": {
+    "path": "/workspace/scratch/ee5e08a3ca9b/thermal-reproductive-original-audit-v1.tar.gz",
+    "sha256": "6ad84c18d75d051da72809b1401834d378c0e184c89e42a156d7fc2c7ba303b5"
+  },
+  "limits": [
+    "Explicit candidate only; ordinary descriptors/defaults unchanged.",
+    "Endpoint contact geometry, not mesh thermodynamics.",
+    "Rest cancels continuing hot/cold exposure in V1; retained measured limitation.",
+    "No GPU, autonomous cohort, private bank, acquired checkpoint or promotion."
+  ],
+  "files": {
+    "THERMAL_CONTACT_CANDIDATE_DESIGN.md": "2cbfda0f256ee6c2248beeb47e0bcfed907ac34292040cadb0039047fbac00f4",
+    "THERMAL_CONTACT_V1_RESULTS.md": "b5771ecfa8efe0c94efc37f9d3363f7b3c98eceb92294c99b6c9e1446bc00bad",
+    "evidence/run-thermal-contact-final-checks-v1.sh": "ef8fa4e3d78a4b097e6b5812a61e98b253089cc76ffe5d097887c16c4950a769",
+    "evidence/thermal-contact-candidate-pretest-v7.sha256": "bc00b59d0fe9a419630654ed4297d6f862a2bcaa6ba20ad3a185b0b69700772b",
+    "evidence/thermal-contact-candidate-pretest-v8.sha256": "203e30d1c7acdd08bc318fc584f08d3f617d801c500d96fbe71270664c232eb7",
+    "evidence/thermal-contact-candidate-v1-source.patch": "6252896f34f3dcc0ffbe7e8dd0807efcef1a1169737bdf42803338269c3bd331",
+    "evidence/thermal-contact-final-checks-v2.log": "dd5d4f35b3692adabb3576a6055ed52fe7555778f45618bb2f7199bb393509b0",
+    "evidence/thermal-contact-final-lint-v1.log": "088ff965bdfb9190e1ea902019785804d4eafa065cad7d658d35ff40095ab68f",
+    "evidence/thermal-contact-v1-frozen-production-scope.json": "b2d2d5da1998984c9c22d8536fb006a073c4ab58f16f6ac785093b6a9a3f08b0",
+    "evidence/thermal-contact-v1-hot-rest-control.log": "92b41a46c05d687e814e3ac7b32c112fea22e470a345577c0e1532ae2da2cada",
+    "evidence/thermal-reproductive-audit-v1.sha256": "8fbc60a122797b85c5b6483754967451666a3757e983fbf4fea69adce03ea380",
+    "source/crates/alife_core/src/biochemistry.rs": "12a19b02a42e6d007f125740d5e1a650208a6f7cf4ba76ef87d8a6f5e0b113f9",
+    "source/crates/alife_core/tests/thermal_reproductive_drive_audit.rs": "1ca0ab3f018a655cdb32f1ab69ba5c9e061ae825d4b3b523642876160af0ba56",
+    "source/crates/alife_world/src/headless/thermal_contact_candidate/tests.rs": "c18f15f5c7f36fcc583763ccda197eb1bb8d3c78f98a77a8db8ab3b561dd27e4",
+    "source/crates/alife_world/src/headless/thermal_contact_candidate.rs": "199d379838726d3a2f9bb21daa4d7628efbd02dc0428196bbce8f513412ee768",
+    "source/crates/alife_world/src/headless.rs": "76ed15c5b2713c57bd7349ce56eac5891e46ee04d372f89c6de3b07b3f5c5db4",
+    "source/crates/alife_world/src/organism.rs": "75882ae1e5042ea16e2603782821ebb0aede49de5602308b9ad107ebe71f55cb"
+  }
+}

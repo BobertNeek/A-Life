@@ -1,0 +1,20 @@
+{
+  "source": "665633bc1f4dafb3fd51eddd68d4eafdb4a4730c",
+  "tree": "321bfa22a4671c5adab6a44348c5ea0064e9b7fc",
+  "base_count_tree": "49f28080ba70e19fdb708b2af0e8e0979ad5b8ec",
+  "base_main": "550f79ad1f765132c634e7a272da56b521b57ec0",
+  "tests": {
+    "app_pass": 201,
+    "app_fail": 0,
+    "app_existing_timing_ignores": 4,
+    "checkpoint_restore_pass": 1
+  },
+  "strict_clippy_fmt_diff": "pass",
+  "scope": "classification only; original required-reconciliation route unchanged",
+  "unresolved": [
+    "mixed retained/unsealed or missing resident reconciliation",
+    "Completed startup transaction and restored staging recapture"
+  ],
+  "no_device_execution": true,
+  "no_research_cognition_dependencies": true
+}

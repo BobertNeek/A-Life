@@ -1,0 +1,24 @@
+   Compiling alife_core v0.1.0 (/workspace/scratch/ee5e08a3ca9b/motor-reflex-retained-count-v12/crates/alife_core)
+   Compiling alife_storage v0.1.0 (/workspace/scratch/ee5e08a3ca9b/motor-reflex-retained-count-v12/crates/alife_storage)
+   Compiling alife_world v0.1.0 (/workspace/scratch/ee5e08a3ca9b/motor-reflex-retained-count-v12/crates/alife_world)
+    Finished `test` profile [unoptimized] target(s) in 1m 59s
+     Running tests/gpu_brain_persistence.rs (/workspace/scratch/ee5e08a3ca9b/arousal-lineage-check-target-v9/debug/deps/gpu_brain_persistence-e61ba13f9ce40b3c)
+
+running 1 test
+test retained_learning_failed_retry_counts_roundtrip_without_sidecar_replay ... FAILED
+
+failures:
+
+---- retained_learning_failed_retry_counts_roundtrip_without_sidecar_replay stdout ----
+
+thread 'retained_learning_failed_retry_counts_roundtrip_without_sidecar_replay' (149) panicked at crates/alife_world/tests/gpu_brain_persistence.rs:423:25:
+called `Result::unwrap()` on an `Err` value: Contract(LearningEvidenceMismatch)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    retained_learning_failed_retry_counts_roundtrip_without_sidecar_replay
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p alife_world --test gpu_brain_persistence`

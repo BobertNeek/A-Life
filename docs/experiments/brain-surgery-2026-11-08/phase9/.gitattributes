@@ -1,0 +1,6 @@
+# Frozen source/evidence archive: preserve original bytes, including CSV CRLF.
+* -text
+# Unified-diff context and captured EOFs are evidence, not new source whitespace.
+*.patch -whitespace
+*.log -whitespace
+*.csv whitespace=cr-at-eol

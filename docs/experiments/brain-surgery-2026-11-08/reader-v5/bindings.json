@@ -1,0 +1,31 @@
+{
+  "source_base_commit": "2da9dd323ad6f074556a851174a2edbc9e34e216",
+  "source_closure_file_sha256": "507d7f838748659fbe7f3a235d8a5716902548afb847a248662d847b568c1dfd",
+  "source_patch_sha256": "e6c0c4215310dbd4e367a463217fc80ba938caf86397c2802f650d611e5904db",
+  "plan_sha256": "2bc1d730f4f40b8812ce39a96ba0cb3aad23821c92d2a6682278e9ec1c7f5622",
+  "executable_sha256": "f3f0f3caebda4a40214e827543648b0d9681a777e7ca83b31b7d892424b5eeeb",
+  "runner_sha256": "53b38bc1714471c67387899fd5dba041101ef2814c882ec7d9bc306aa048a23d",
+  "common_world_sha256": "e3444b35833119cda5c990df0bc8ce4de0fab93565a244728734be3a86aca763",
+  "off_asset_blake3": "0bf3400adc03e001be609717a5a325232bc8f86a734cf60ff7a740cab29de7f1",
+  "on_asset_blake3": "d66071901ed92bf55506d1ac6a35de484627ae23a3a4f677cf0211ba47b0718f",
+  "gains": [
+    0,
+    0.0625
+  ],
+  "seeds": [
+    2026112601,
+    2026112602
+  ],
+  "max_lives": 4,
+  "max_preparation_per_life": 600,
+  "max_primary_per_life": 256,
+  "max_public_bytes": 67108864,
+  "max_wallclock_seconds": 1800,
+  "backend": "CPU",
+  "toolchain": "Rust1.99.1",
+  "jobs": 1,
+  "freshness_file_sha256": "d363579fb89f735f93eb2706477b373572c3baf39c8c267b4a515bb35cd5949a",
+  "compiled_artifacts_sha256": "a79d09caa3b6ba42351ea1b49aba8a5e0b298335bff804ad9d5cbfbef5d5027c",
+  "frozen_unix": 1794115670.895731,
+  "prerequisite_v4_archive_sha256": "5e0c05bdae79274961557457f48450fd90aa71e2671b59ad449e85bfbe24a23c"
+}

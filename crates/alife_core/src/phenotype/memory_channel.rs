@@ -54,6 +54,19 @@ impl MemoryChannelPlan {
         value.canonical_digest = value.recompute_digest()?;
         Ok(value)
     }
+    pub(super) fn try_new_grip_reader(count: u32) -> Result<Self, ScaffoldContractError> {
+        let mut value = Self::try_new_memory_gain_candidate(count)?;
+        value.schema_version = 3;
+        value.decoder_input_stride = 54;
+        value.validate_shape()?;
+        value.canonical_digest = value.recompute_digest()?;
+        Ok(value)
+    }
+
+    pub const fn is_grip_reader(&self) -> bool {
+        self.schema_version == 3
+    }
+
     pub const fn schema_version(&self) -> u16 {
         self.schema_version
     }
@@ -89,19 +102,24 @@ impl MemoryChannelPlan {
 
     fn validate_shape(&self) -> Result<(), ScaffoldContractError> {
         let lane_width = Self::TARGET_LATENT_WIDTH + Self::FAMILY_VALUE_WIDTH;
-        if !matches!(self.schema_version, MEMORY_CHANNEL_SCHEMA_VERSION | 2)
+        if !matches!(self.schema_version, MEMORY_CHANNEL_SCHEMA_VERSION | 2 | 3)
             || self.target_latent_lane_start != CANDIDATE_FEATURE_COUNT as u32
             || self.family_value_lane_start
                 != self.target_latent_lane_start + Self::TARGET_LATENT_WIDTH
-            || self.decoder_input_stride != self.target_latent_lane_start + lane_width
+            || self.decoder_input_stride
+                != if self.schema_version == 3 {
+                    54
+                } else {
+                    self.target_latent_lane_start + lane_width
+                }
             || self.max_candidate_gain.to_bits()
-                != (if self.schema_version == 2 {
+                != (if self.schema_version >= 2 {
                     12.0_f32
                 } else {
                     0.5_f32
                 })
                 .to_bits()
-            || (self.schema_version == 2 && self.memory_decoder_synapse_count != 4096)
+            || (self.schema_version >= 2 && self.memory_decoder_synapse_count != 4096)
             || self.memory_decoder_synapse_count < Self::MINIMUM_SYNAPSE_COUNT
             || !self
                 .memory_decoder_synapse_count
@@ -145,6 +163,7 @@ impl<'de> Deserialize<'de> for MemoryChannelPlan {
         let expected = match wire.schema_version {
             1 => Self::try_new_v1(wire.memory_decoder_synapse_count),
             2 => Self::try_new_memory_gain_candidate(wire.memory_decoder_synapse_count),
+            3 => Self::try_new_grip_reader(wire.memory_decoder_synapse_count),
             _ => Err(ScaffoldContractError::PhenotypeCompile),
         }
         .map_err(D::Error::custom)?;

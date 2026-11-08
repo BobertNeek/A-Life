@@ -1,0 +1,15 @@
+{
+  "scope": "Two fixed disposable core physiology tests and source audit; no production change",
+  "base_commit": "b0b4e5ab85473f1ace63f0629ecf4704e7b0fb81",
+  "base_tree": "0a34d588488c09f9a7fd4d8bc6115be61bdcd750",
+  "local_equal_tree_base": "7a15a2f8ceffb871947ca7df819095d2cab99327",
+  "original_report_sha256": "9797c928745ae84b207da922e3bdc49c4e12b6dfeaeb35ff809c2539e2d66af9",
+  "presentation_change": "None; original report already distinguishes native core fixtures from GPU/world closed loop",
+  "patch_sha256": "e0f6c71bda79bec88188f31722c29e3ca5b2a29a3948d3bd67158d72fff4da3d",
+  "log_sha256": "36923bfeafff732298a1681e62c5ed86f2d38ebd6301fabdd61cf6c0a6eb06e6",
+  "passed": 2,
+  "failed": 0,
+  "world_exposure_prototype_included": false,
+  "original_log_sha256": "5d4547700788b20e2d7bf1c6695ff5090e528a686319280a4ac144527b1662ca",
+  "log_presentation_change": "Removed one trailing blank line only; all compilation and result text unchanged"
+}
