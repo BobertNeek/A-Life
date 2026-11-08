@@ -19,11 +19,15 @@ may reject it. No food, injury, hazard, label or target value is consulted here.
 The new menu replaces Grab 211 with explicit Close 2201/Contact on NotSelfHeld,
 and Release 2202/Other on SelfHeld. Both are Interact/Manipulation and travel
 through ordinary factorized selection, joint execution and outcome recording.
-Close cannot release. Release cannot acquire on a stale/repeated command. The
-world checks actual owner, target existence, player hold, contact and effector.
+Close never releases its selected target. On the merged atomic-swap world,
+Close on a different target can place the previous held object before acquiring
+the new one; failed validation or placement preserves the previous hold.
+Release cannot acquire on a stale/repeated command. The world checks actual
+owner, target existence, player hold, contact and effector.
 Release detaches in place using ordinary physical release, with no invented safe
-placement search. The legacy ID meanings and legacy Grab behavior remain intact;
-new dispatch is gated by the organism's bound grip foundation identity/profile.
+placement search. Legacy ID, profile and ABI meanings remain intact; PR #302
+intentionally changes targeted hand replacement in both old and new interfaces.
+New dispatch is gated by the organism's bound grip foundation identity/profile.
 
 Valid carried poses remain in range and are reserved in the existing object and
 candidate slot selection, so a held object remains releasable behind gaze,
@@ -86,11 +90,13 @@ non-human-readable numeric-key map fixture exercises this field mapping directly
 It does not qualify another binary codec; other binary formats remain unqualified. GPU source alignment is not measured
 GPU hardware parity.
 
-No Rust target has been compiled or executed locally for this candidate because
-of the disk reserve. Local checks are formatting, whitespace and bounded
-source-only Python tests. Hosted fixture results must be reviewed before any
-new bounded exposure plan is authorized. Unit success alone does not establish
-actual meals, autonomous release, retention, avoidance or safe throughput.
+Initial local compilation was blocked by the former disk reserve. After workspace
+recovery, [combined-world local qualification](ATOMIC-SWAP-QUALIFICATION.md)
+passed all 160 fixed functional fixtures and 18 strict Clippy targets on the
+separately identified PR #302 world merge. The historical hosted results below
+keep their original source identities. Unit success alone does not establish
+actual meals, autonomous release, retention, avoidance or safe throughput, or
+authorize a new exposure plan.
 
 A later matched study must use the same current world and initial biology/body,
 with identity differences explicitly checked. Controls should separate old menu,

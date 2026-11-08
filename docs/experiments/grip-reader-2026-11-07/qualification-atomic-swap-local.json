@@ -1,0 +1,348 @@
+{
+  "schema": "grip-atomic-swap-local-qualification-v1",
+  "date_utc": "2026-11-08",
+  "qualification": "passed",
+  "scope": "compilation_and_fixed_disposable_unit_fixtures_only",
+  "source": {
+    "tested_local_commit": "4b99eaf3693674b6d42735b53496b290a32f38ff",
+    "tested_tree": "af9120f4cb345d1528c55d9a76151cfbcd667526",
+    "parents": [
+      "20bcb45104e5bec688b01abefa96cdf95bdcee60",
+      "ebc2b0ff8969d87751e62d34cf8d26906dbbda4b"
+    ],
+    "world_change_pr": 302,
+    "world_source_commit": "30efe5ee3bb5a5cdf270288eb603b227d6c5cdfd",
+    "pre_overlay_merge_tree": "5e07b1509000fa1f01ff92380a2f27a7e8945e7e",
+    "crates_subtree": "6e9559dd51529c2edc5f9b72f085e5fddf030286",
+    "scripts_subtree": "ea8aed5d227d40826b55e5c7081e4c25da2eb446",
+    "cargo_lock_sha256": "a8323d85b09d781596a62e7f383e2dc36cd57628c002f4dfcd75a8b49b4031eb",
+    "post_qualification_changes": "documentation_only",
+    "remote_equal_tree_anchor": {
+      "commit": "fec6065d2d973f59450c42c356eb52ed73ce7aec",
+      "tree": "af9120f4cb345d1528c55d9a76151cfbcd667526",
+      "parents": [
+        "20bcb45104e5bec688b01abefa96cdf95bdcee60",
+        "ebc2b0ff8969d87751e62d34cf8d26906dbbda4b"
+      ],
+      "relationship": "same_complete_git_tree_as_tested_local_commit",
+      "qualification_identity": "original_local_tested_commit_and_tree_retained",
+      "verified": "remote_commit_fetched_and_tree_and_parent_objects_compared"
+    }
+  },
+  "overlay": {
+    "identity": "reconstructed-grip-swap-overlay-v2",
+    "recovered_original_bytes": false,
+    "input_patch_sha256": "6d5bc37545e18da9cc63e3e0ec430a5d003ae8aaefb1d7629ebde655768dd53f",
+    "full_file_rustfmt_derivative_sha256": "ce908debd6726ad5f90b6335b73d6028e87c86a76f1aef0ab817879896c805cd",
+    "tested_grip_research_file_sha256": "32ea66dee1e383fe4da786d12428c160970c7f9c0d673878fc8f761ebdad75b1",
+    "added_fixed_fixtures": 4,
+    "production_prefix_unchanged_from_pr301": true,
+    "prior_test_bodies_unchanged": true,
+    "one_obsolete_test_comment_corrected": true
+  },
+  "execution": {
+    "mode": "local_direct_locked_cargo",
+    "github_event_gate": "not_invoked_or_impersonated",
+    "rust": "1.99.1",
+    "cargo_profile": "dev",
+    "jobs": 1,
+    "incremental": false,
+    "debug_symbols": false,
+    "test_threads": 1,
+    "rust_min_stack_bytes": 33554432,
+    "vulkan_icd_disabled": true,
+    "fresh_build_target": true
+  },
+  "stages": {
+    "qualification_static_contracts": {
+      "status": "passed",
+      "tests": 39
+    },
+    "closed_study_static_contracts": {
+      "status": "passed",
+      "tests": 38
+    },
+    "static_core_boundaries": {
+      "status": "passed"
+    },
+    "changed_source_rustfmt": {
+      "status": "passed",
+      "files": 38
+    },
+    "explicit_compile_and_inventory": {
+      "status": "passed",
+      "targets": 18
+    },
+    "functional_fixtures": {
+      "status": "passed",
+      "expected": 160,
+      "passed": 160,
+      "failed": 0,
+      "ignored": 1
+    },
+    "strict_clippy": {
+      "status": "passed",
+      "targets": 18
+    }
+  },
+  "fixture_groups": {
+    "core": 130,
+    "world_grip": 22,
+    "cpu_continuation": 2,
+    "gpu_upload_and_naga": 3,
+    "detached_reader_and_gradient": 3
+  },
+  "suites": [
+    {
+      "package": "alife_core",
+      "target": "n2048_grip_reader_candidate",
+      "kind": "test",
+      "test_filter": "",
+      "compile": "passed",
+      "inventory_count": 6,
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0,
+      "ignored_tests": [],
+      "status": "passed"
+    },
+    {
+      "package": "alife_core",
+      "target": "n2048_foundation_abi",
+      "kind": "test",
+      "test_filter": "",
+      "compile": "passed",
+      "inventory_count": 15,
+      "passed": 15,
+      "failed": 0,
+      "ignored": 0,
+      "ignored_tests": [],
+      "status": "passed"
+    },
+    {
+      "package": "alife_core",
+      "target": "n2048_experimental_graph",
+      "kind": "test",
+      "test_filter": "",
+      "compile": "passed",
+      "inventory_count": 3,
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "ignored_tests": [],
+      "status": "passed"
+    },
+    {
+      "package": "alife_core",
+      "target": "n2048_memory_gain_candidate",
+      "kind": "test",
+      "test_filter": "",
+      "compile": "passed",
+      "inventory_count": 2,
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "ignored_tests": [],
+      "status": "passed"
+    },
+    {
+      "package": "alife_core",
+      "target": "n512_foundation_abi",
+      "kind": "test",
+      "test_filter": "",
+      "compile": "passed",
+      "inventory_count": 5,
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0,
+      "ignored_tests": [],
+      "status": "passed"
+    },
+    {
+      "package": "alife_core",
+      "target": "n512_legacy_compatibility_abi",
+      "kind": "test",
+      "test_filter": "",
+      "compile": "passed",
+      "inventory_count": 2,
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "ignored_tests": [],
+      "status": "passed"
+    },
+    {
+      "package": "alife_core",
+      "target": "n512_curated_founder_compatibility",
+      "kind": "test",
+      "test_filter": "",
+      "compile": "passed",
+      "inventory_count": 8,
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0,
+      "ignored_tests": [],
+      "status": "passed"
+    },
+    {
+      "package": "alife_core",
+      "target": "abi_validation_errors",
+      "kind": "test",
+      "test_filter": "",
+      "compile": "passed",
+      "inventory_count": 4,
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "ignored_tests": [],
+      "status": "passed"
+    },
+    {
+      "package": "alife_core",
+      "target": "perception_digest_golden",
+      "kind": "test",
+      "test_filter": "",
+      "compile": "passed",
+      "inventory_count": 2,
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "ignored_tests": [],
+      "status": "passed"
+    },
+    {
+      "package": "alife_core",
+      "target": "memory_query",
+      "kind": "lib",
+      "test_filter": "memory_query::",
+      "compile": "passed",
+      "inventory_count": 2,
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "ignored_tests": [],
+      "status": "passed"
+    },
+    {
+      "package": "alife_core",
+      "target": "candidate_memory_queries",
+      "kind": "test",
+      "test_filter": "",
+      "compile": "passed",
+      "inventory_count": 7,
+      "passed": 7,
+      "failed": 0,
+      "ignored": 0,
+      "ignored_tests": [],
+      "status": "passed"
+    },
+    {
+      "package": "alife_core",
+      "target": "candidate_memory_retrieval",
+      "kind": "test",
+      "test_filter": "",
+      "compile": "passed",
+      "inventory_count": 75,
+      "passed": 74,
+      "failed": 0,
+      "ignored": 1,
+      "ignored_tests": [
+        "memory_cpu_recall_microbenchmark"
+      ],
+      "status": "passed"
+    },
+    {
+      "package": "alife_world",
+      "target": "grip_research",
+      "kind": "lib",
+      "test_filter": "headless::grip_research::tests::",
+      "compile": "passed",
+      "inventory_count": 22,
+      "passed": 22,
+      "failed": 0,
+      "ignored": 0,
+      "ignored_tests": [],
+      "status": "passed"
+    },
+    {
+      "package": "alife_training",
+      "target": "cpu_grip_reader_candidate",
+      "kind": "test",
+      "test_filter": "",
+      "compile": "passed",
+      "inventory_count": 1,
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "ignored_tests": [],
+      "status": "passed"
+    },
+    {
+      "package": "alife_training",
+      "target": "cpu_memory_gain_candidate",
+      "kind": "test",
+      "test_filter": "",
+      "compile": "passed",
+      "inventory_count": 1,
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "ignored_tests": [],
+      "status": "passed"
+    },
+    {
+      "package": "alife_gpu_backend",
+      "target": "n2048_grip_reader_candidate",
+      "kind": "test",
+      "test_filter": "",
+      "compile": "passed",
+      "inventory_count": 2,
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "ignored_tests": [],
+      "status": "passed"
+    },
+    {
+      "package": "alife_gpu_backend",
+      "target": "n2048_memory_gain_candidate",
+      "kind": "test",
+      "test_filter": "",
+      "compile": "passed",
+      "inventory_count": 1,
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "ignored_tests": [],
+      "status": "passed"
+    },
+    {
+      "package": "alife_training",
+      "target": "probe_grip_reader",
+      "kind": "example",
+      "test_filter": "tests::",
+      "compile": "passed",
+      "inventory_count": 3,
+      "passed": 3,
+      "failed": 0,
+      "ignored": 0,
+      "ignored_tests": [],
+      "status": "passed"
+    }
+  ],
+  "ignored_policy": {
+    "only_allowed_test": "memory_cpu_recall_microbenchmark",
+    "executed": false
+  },
+  "not_run": [
+    "autonomous_study",
+    "example_main",
+    "existing_private_life_or_checkpoint_input",
+    "gpu_device_execution",
+    "full_workspace_test_suite"
+  ],
+  "historical_evidence_unchanged": {
+    "file": "qualification-260ca86b.json",
+    "sha256": "4f307e8474e11c46e3e8783d0f1aa030aeb430428e0e3fe9fd370188ff6ce279"
+  }
+}
