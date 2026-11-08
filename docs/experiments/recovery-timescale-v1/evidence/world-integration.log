@@ -1,0 +1,93 @@
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+   Compiling serde_core v1.0.228
+   Compiling serde v1.0.228
+   Compiling serde_json v1.0.150
+   Compiling alife_core v0.1.0 (<workspace>/recovery-drive-timescale-v1/crates/alife_core)
+   Compiling alife_world v0.1.0 (<workspace>/recovery-drive-timescale-v1/crates/alife_world)
+    Finished `test` profile [unoptimized] target(s) in 4m 59s
+     Running tests/atomic_portable_save.rs (<workspace>/recovery-timescale-target-v1/debug/deps/atomic_portable_save-1ab97293bfa8fe3c)
+
+running 3 tests
+test failed_save_publication_preserves_destination_and_cleans_its_staged_file ... ok
+test failed_save_write_keeps_previous_save_readable_and_releases_staging_budget ... ok
+test save_creation_and_replacement_preserve_exact_world_state_and_budget ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/awake_rest_legacy_wire.rs (<workspace>/recovery-timescale-target-v1/debug/deps/awake_rest_legacy_wire-12670af10047bf45)
+
+running 1 test
+test awake_rest_legacy_wire_baseline ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running tests/canonical_new_game.rs (<workspace>/recovery-timescale-target-v1/debug/deps/canonical_new_game-dbba1c6c4ee046fe)
+
+running 9 tests
+test canonical_new_game_binds_every_subsystem_before_admission ... ok
+test canonical_new_game_contains_live_ecology_not_frontend_fixtures ... ok
+test canonical_new_game_creates_exact_requested_population ... ok
+test canonical_new_game_founders_compile_against_the_checked_nano512_foundation ... ok
+test canonical_new_game_is_deterministic_and_rejects_the_wrong_foundation ... ok
+test canonical_new_game_meadow_is_safe_until_actual_hazard_contact ... ok
+test canonical_new_game_rejects_population_outside_phase3_bounds ... ok
+test food_and_toy_variants_have_physical_gene_controlled_and_persistent_effects ... ok
+test player_care_is_local_gene_controlled_and_survives_pending_save ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.60s
+
+     Running tests/developmental_rest_recovery.rs (<workspace>/recovery-timescale-target-v1/debug/deps/developmental_rest_recovery-b4997050ed7d959a)
+
+running 2 tests
+test canonical_development_rest_idle_and_moving_controls ... ok
+test exact_portable_continuation_across_development_boundary ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/save_load_roundtrip.rs (<workspace>/recovery-timescale-target-v1/debug/deps/save_load_roundtrip-673da9e93ee19f08)
+
+running 21 tests
+test appearance_schema_v1_migrates_and_schema_v2_roundtrips_in_saves ... ok
+test asset_manifest_validates_required_optional_and_digest_mismatch ... ok
+test committed_legacy_p34_save_fails_closed_without_authoritative_v3_state ... ok
+test composite_genome_foundation_and_nonzero_lifetime_state_survive_portable_restore ... ok
+test current_runtime_config_round_trips_both_explicit_policies ... ok
+test current_world_objects_reject_tampered_or_partial_tracking_identity ... ok
+test habitat_authority_round_trips_with_membership_and_transfer_provenance ... ok
+test incompatible_schemas_reject_without_silent_migration ... ok
+test json_asset_digest_is_stable_across_line_endings ... ok
+test learning_values_and_genetic_lifetime_boundaries_validate ... ok
+test legacy_save_without_habitats_defaults_every_creature_to_wild ... ok
+test legacy_world_objects_migrate_by_canonical_order_and_resave_current_identity ... ok
+test portable_save_rejects_retired_backend_config ... ok
+test present_but_incomplete_habitat_state_is_not_treated_as_legacy ... ok
+test runtime_config_defaults_are_deterministic_and_invalid_combinations_reject ... ok
+test runtime_config_rejects_retired_backend_flags_with_or_without_current_policy ... ok
+test runtime_config_requires_explicit_current_policy ... ok
+test stable_id_remap_rejects_invalid_or_duplicate_world_ids ... ok
+test tiny_save_load_round_trip_restores_stable_world_and_summaries ... ok
+test typed_unavailable_gpu_runtime_state_is_valid_and_stops_learned_actions ... ok
+test v2_portable_restore_invokes_architecture_migration_and_fails_without_authority ... ok
+
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.22s
+
+     Running tests/world_organism_registry_persistence.rs (<workspace>/recovery-timescale-target-v1/debug/deps/world_organism_registry_persistence-2b7ff4c8ee6c87ac)
+
+running 13 tests
+test absent_registry_field_is_legacy_empty_without_changing_world_object_identity ... ok
+test declared_creatures_cannot_lose_records_through_typed_restore_or_legacy_habitat_migration ... ok
+test external_actor_cohort_roundtrips_without_permitting_missing_biology ... ok
+test failed_snapshot_replacement_leaves_the_entire_save_unchanged ... ok
+test malformed_present_registry_records_are_rejected_before_restore ... ok
+test old_complete_registry_remains_restorable_without_external_actor_metadata ... ok
+test portable_save_round_trip_binds_creature_summary_to_world_record ... ok
+test present_empty_registry_is_authoritative_and_rejects_declared_creatures ... ok
+test registered_agents_survive_portable_json_restore_with_exact_identity_and_signature ... ok
+test registered_creatures_restore_with_an_unregistered_embodied_teacher ... ok
+test registry_insertion_order_has_identical_json_and_restored_identity ... ok
+test rename_round_trip_preserves_identity_and_acquired_world_state ... ok
+test replacing_headless_world_snapshot_retains_registry_records_and_archive_links ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.49s
