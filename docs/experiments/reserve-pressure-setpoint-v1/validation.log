@@ -1,0 +1,9 @@
+   Compiling alife_core v0.1.0 (/workspace/scratch/ee5e08a3ca9b/reserve-pressure-setpoint-v1/crates/alife_core)
+    Finished `test` profile [unoptimized] target(s) in 55.53s
+     Running tests/reserve_pressure_setpoint.rs (/workspace/shared/grip-integration-qualification-20261108/grip-candidate-qualification/target/debug/deps/reserve_pressure_setpoint-5016626d647d0f85)
+
+running 1 test
+test inherited_threshold_is_validated_diploid_and_default_preserving ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+

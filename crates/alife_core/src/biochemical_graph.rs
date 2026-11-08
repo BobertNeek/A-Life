@@ -879,6 +879,21 @@ impl BiochemicalPhenotype {
         Ok(value)
     }
 
+    pub(crate) fn with_emitter_threshold(
+        &self,
+        emitter_index: usize,
+        threshold: f32,
+    ) -> Result<Self, ScaffoldContractError> {
+        let mut value = self.clone();
+        value
+            .emitters
+            .get_mut(emitter_index)
+            .ok_or(ScaffoldContractError::InvalidGeneticBounds)?
+            .threshold = threshold;
+        value.compile()?;
+        Ok(value)
+    }
+
     pub(crate) fn with_emitter_gain(
         &self,
         emitter_index: usize,

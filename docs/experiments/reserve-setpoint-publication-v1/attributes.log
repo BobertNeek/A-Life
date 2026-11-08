@@ -1,0 +1,7 @@
+docs/experiments/biological-initialization-drift-v1/fmt-initial.log: whitespace: unset
+docs/experiments/reserve-pressure-setpoint-v1/composition-addendum/run.log: whitespace: unset
+docs/experiments/reserve-pressure-setpoint-v1/RESULTS.md: whitespace: unspecified
+crates/alife_core/src/biochemical_graph.rs: whitespace: unspecified
+crates/alife_core/tests/reserve_pressure_setpoint.rs: whitespace: unspecified
+
+COMMAND_EXIT_STATUS=0

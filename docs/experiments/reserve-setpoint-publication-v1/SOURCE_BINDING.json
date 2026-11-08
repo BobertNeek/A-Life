@@ -1,0 +1,167 @@
+{
+  "frozen_import_source": "a2081cc6a9a2bebbefed46153787186dc807db84",
+  "verified_imported_files": 38,
+  "files": {
+    "crates/alife_core/src/biochemical_graph.rs": {
+      "sha256": "99d03b331ce25b2c89aeaa9ccc2dc59c85cc8c16640a60b70007e0e65d70842b",
+      "bytes": 77915
+    },
+    "crates/alife_core/src/evolutionary_genetics.rs": {
+      "sha256": "6e6be1509a04a68d1277b101264b0e35a427017c16fef86736e5eae9e0041a53",
+      "bytes": 102724
+    },
+    "crates/alife_core/tests/biological_initialization_drift.rs": {
+      "sha256": "828cca2d62c8de68cbf19562adfb919cf314839e1122459bf3fdb31d557fa8e6",
+      "bytes": 13923
+    },
+    "crates/alife_core/tests/reserve_pressure_composition.rs": {
+      "sha256": "6e33373d080ac8c0835a77f9ed1bc1f4b7328321bc30f225aa20ae66064dd2cd",
+      "bytes": 7826
+    },
+    "crates/alife_core/tests/reserve_pressure_setpoint.rs": {
+      "sha256": "03eb1add6d06b33735c8a3eb9b2ba8331066f2b711c38f5c5be6c647d07b3649",
+      "bytes": 13996
+    },
+    "docs/experiments/biological-initialization-drift-v1/FROZEN_PLAN.md": {
+      "sha256": "27a4f30a53728466c6ec99abd5cbce253ecc59a00b38b17c5ae38ffa9d6094d1",
+      "bytes": 3248
+    },
+    "docs/experiments/biological-initialization-drift-v1/QUALIFICATION.json": {
+      "sha256": "96d0dbf2759b157b70954b26f67bcd1d35a4b9499071aa5ca852865984450bd6",
+      "bytes": 1182
+    },
+    "docs/experiments/biological-initialization-drift-v1/RESULTS.md": {
+      "sha256": "761146ceca82548c937f159a426e7de67307807d602ae6977da659042205d396",
+      "bytes": 13871
+    },
+    "docs/experiments/biological-initialization-drift-v1/RUN_ONCE.txt": {
+      "sha256": "47e89d5f1a0fbc72db452f6b0406651b84da04b83ca205ca7e84d5cba1f7e388",
+      "bytes": 180
+    },
+    "docs/experiments/biological-initialization-drift-v1/clippy-final.log": {
+      "sha256": "573487ab71aa99bfef1d3458003bc414b5fd40248a7733701a3afe218230b7a1",
+      "bytes": 178
+    },
+    "docs/experiments/biological-initialization-drift-v1/clippy-initial.log": {
+      "sha256": "09501ed156a4e5dcc4bc71503ddb26b9d19ef3d27129107e7a347293014b8e8f",
+      "bytes": 757
+    },
+    "docs/experiments/biological-initialization-drift-v1/clippy.log": {
+      "sha256": "09501ed156a4e5dcc4bc71503ddb26b9d19ef3d27129107e7a347293014b8e8f",
+      "bytes": 757
+    },
+    "docs/experiments/biological-initialization-drift-v1/compile-final.log": {
+      "sha256": "b4dfbe00be67a7b9ebb11deb6a2d00f58509a4e57a9936f19618e8104a21dda5",
+      "bytes": 389
+    },
+    "docs/experiments/biological-initialization-drift-v1/compile-frozen.log": {
+      "sha256": "f60698c9ce81b2eca77da8aad19aab1675447ab58e2e90207721859999496a93",
+      "bytes": 389
+    },
+    "docs/experiments/biological-initialization-drift-v1/compile.log": {
+      "sha256": "c6a3ddc23c7a00e968251219b552291cc975bbf82da813de7fb402dcef0abd85",
+      "bytes": 390
+    },
+    "docs/experiments/biological-initialization-drift-v1/fmt-final.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "docs/experiments/biological-initialization-drift-v1/fmt-initial.log": {
+      "sha256": "81415d404832a336690e3a712b3efdcb1067c451f402ffe32296483a02e3108f",
+      "bytes": 23106
+    },
+    "docs/experiments/biological-initialization-drift-v1/fmt-lint-cleanup.log": {
+      "sha256": "c226cbcc9079d578ef5c231ca127379e0b31016da05bfc182ba455878656f0f2",
+      "bytes": 626
+    },
+    "docs/experiments/biological-initialization-drift-v1/outcomes.jsonl": {
+      "sha256": "ddeedf8da8a12c94c07838c6b1d598a46760a8412f55fa4be93f183328bb99f3",
+      "bytes": 17004
+    },
+    "docs/experiments/biological-initialization-drift-v1/run.log": {
+      "sha256": "69a505543bb1e50887f0d7179ae801e83bf087c971c1b2a6497a5b2cd66403b5",
+      "bytes": 17703
+    },
+    "docs/experiments/reserve-pressure-setpoint-v1/CANDIDATE.json": {
+      "sha256": "7cfa3e55adb37cb4ba473ab4dda56327f78c1be1af53b66b5255599512a1c7c3",
+      "bytes": 821
+    },
+    "docs/experiments/reserve-pressure-setpoint-v1/FROZEN_PLAN.md": {
+      "sha256": "d602948fe43fadaee2bc474dcab5665b4cf48aa4e99bef90ae2d38798cc17993",
+      "bytes": 3398
+    },
+    "docs/experiments/reserve-pressure-setpoint-v1/QUALIFICATION.json": {
+      "sha256": "7d30cbeb1994cbeaa64b267f638c26dcaac0ce449200e68ace7c1bf99911f2e8",
+      "bytes": 1798
+    },
+    "docs/experiments/reserve-pressure-setpoint-v1/RESULTS.md": {
+      "sha256": "59b5f948d3d944cf50d5245f469e966723fa298a161daf10be2a7717b7a83c36",
+      "bytes": 8816
+    },
+    "docs/experiments/reserve-pressure-setpoint-v1/RUN_ONCE.txt": {
+      "sha256": "0fab8e4d905d0a95429a265a200c68fe7555b5882f2afa2fe04bd143549d40ba",
+      "bytes": 177
+    },
+    "docs/experiments/reserve-pressure-setpoint-v1/clippy.log": {
+      "sha256": "cdcc704320ef1ae2f87d2ddcf2aa585fa9f9067c9c1aafe4236c078eb5bae4e8",
+      "bytes": 173
+    },
+    "docs/experiments/reserve-pressure-setpoint-v1/composition-addendum/FROZEN_PLAN.md": {
+      "sha256": "41da958d3155c757a442c3706eebec53cdb1e70dabcf0363ff6aa826911e122a",
+      "bytes": 2148
+    },
+    "docs/experiments/reserve-pressure-setpoint-v1/composition-addendum/QUALIFICATION.json": {
+      "sha256": "f33e4a0b09145877b4048e0e68d5124f6b0b5caba9de4213d41fd50a1582db36",
+      "bytes": 2998
+    },
+    "docs/experiments/reserve-pressure-setpoint-v1/composition-addendum/RESULTS.md": {
+      "sha256": "e91becb0d139d8287f4192211c947358859353a233cfa438d76aa7fa9af7a88c",
+      "bytes": 5949
+    },
+    "docs/experiments/reserve-pressure-setpoint-v1/composition-addendum/RUN_ONCE.txt": {
+      "sha256": "7b95cd9dac11e827558fb346d36ed3cc3147bc47ea831ac665bbbb13fc03b97c",
+      "bytes": 171
+    },
+    "docs/experiments/reserve-pressure-setpoint-v1/composition-addendum/clippy.log": {
+      "sha256": "8493213239c75e0dd40c0126a33fd1fd8960469fe46ae60b4a11478df79c159d",
+      "bytes": 172
+    },
+    "docs/experiments/reserve-pressure-setpoint-v1/composition-addendum/compile.log": {
+      "sha256": "759be2f6d945043b24b21efaf57894a1d30e557c9157e3647443d4ed15514867",
+      "bytes": 377
+    },
+    "docs/experiments/reserve-pressure-setpoint-v1/composition-addendum/fmt.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "docs/experiments/reserve-pressure-setpoint-v1/composition-addendum/run.log": {
+      "sha256": "827d24d59a2d7382d6da31844f2f4a780f08180bf075a7b415ec2f09a3205cbb",
+      "bytes": 1047
+    },
+    "docs/experiments/reserve-pressure-setpoint-v1/fmt.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "docs/experiments/reserve-pressure-setpoint-v1/outcomes.jsonl": {
+      "sha256": "c887c0ef4341852b0e9fe4bf56130922900a4358f7744d928af25535e6dc8832",
+      "bytes": 28064
+    },
+    "docs/experiments/reserve-pressure-setpoint-v1/run.log": {
+      "sha256": "b0f3a23e4d4ccff423a3c334cf75db60ba0c5bf627d51191b145d2b5feee2ccf",
+      "bytes": 29024
+    },
+    "docs/experiments/reserve-pressure-setpoint-v1/validation.log": {
+      "sha256": "7b37adf3f971c9c9af0f6b98baeeab0b33cd8a1a006a12c0daff1929dc6baa43",
+      "bytes": 560
+    }
+  },
+  "accepted_base_local": "f83be325d47b435c9e8889d70ea64496f2b382b4",
+  "accepted_base_tree": "da127f8d53fd615f3df18e01a5cbff8c2232738c",
+  "accepted_remote_main": "c775c8c92e8f5e625f8a3e861ef79200199b54df",
+  "executed_code_commit": "b05f34620c31b733d126b754a6517820ea56241c",
+  "executed_tree": "e29c7dbc5400a4a2e2d97aabd015f03bca4f5d7d",
+  "implementation_changes": [
+    "crates/alife_core/src/biochemical_graph.rs",
+    "crates/alife_core/src/evolutionary_genetics.rs"
+  ]
+}

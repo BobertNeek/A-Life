@@ -1,0 +1,2 @@
+One core-only audit invocation reserved. Source bc0bd4a0cebfd8301fee0b9827fb8add729b14c1. Maximum 870 core advance calls, zero world intervals. No automatic replay.
+Exit status: 0

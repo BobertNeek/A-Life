@@ -1,0 +1,88 @@
+{
+  "executed_implementation_commit": "b05f34620c31b733d126b754a6517820ea56241c",
+  "executed_implementation_tree": "e29c7dbc5400a4a2e2d97aabd015f03bca4f5d7d",
+  "normal_tests_passed": 48,
+  "normal_tests_failed": 0,
+  "candidate_grid_ignored": true,
+  "initialization_audit_invoked": false,
+  "world_intervals": 0,
+  "neural_forward_passes": 0,
+  "device_runs": 0,
+  "checks": {
+    "strict_core_lib_tests_clippy": "passed",
+    "workspace_format": "passed",
+    "core_boundaries": "passed",
+    "full_diff": "passed with only two package-local captured-log attributes",
+    "imported_files_byte_identical": 38
+  },
+  "test_binaries": [
+    {
+      "binary": "tests/abi_validation_errors",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "binary": "tests/biochemical_graph_v2",
+      "passed": 11,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "binary": "tests/biochemical_valuation",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "binary": "tests/chemistry_homeostasis",
+      "passed": 9,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "binary": "tests/n512_foundation_abi",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "binary": "tests/reserve_pressure_composition",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "binary": "tests/reserve_pressure_setpoint",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 1
+    },
+    {
+      "binary": "tests/sensory_abi_contexts",
+      "passed": 6,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "binary": "tests/signed_decoder_foundations",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0
+    }
+  ],
+  "files": {
+    "FROZEN_PLAN.md": "9e9f7bd683561779c021116e7cf6dbc7be914817132a559ea188181dd55c306b",
+    "PREFLIGHT_NOTE.md": "34d106e04fe9854b5095fc68ec62396f726fa788874d4089652bc566ceb559f0",
+    "SOURCE_BINDING.json": "1db30b91fe98790f5539639c449d4cbf5966fcac041f4b03896c2d08d1160bf6",
+    "RUN_ONCE.txt": "f504b79e6b05ce94f3e1b706ef47ca1fa03e2c7b20c5708e43085449cec568a0",
+    "tests.log": "d64670d6fec5bc2ca06c0315d61f454e29f1e79357484497fb68f4bc8d0fbfcf",
+    "fmt.log": "ab7addccef7bda119afddc2ae8ecc295ac76413cd2a73bb098e54b5a57008d44",
+    "clippy.log": "efed6e86de2d0f719d12c9d5f2bd84a50cc220d10d9b9dad788c1cd4ceca1835",
+    "boundaries.log": "00b70d4f2fba03b992fbd90e2550a66e1d8d06fe67e1ee665283533e7d3b57e7",
+    "diff-check.log": "ab7addccef7bda119afddc2ae8ecc295ac76413cd2a73bb098e54b5a57008d44",
+    "attributes.log": "898e9502f721ffaebefb3fc5ddd14e763751bba32835f83c9e0702593e105530",
+    "initial-diff-diagnostics.json": "5e218f842e18ba9abb0f89382bc19e1bb8a75e0b5711362a22adf5bbf3fe79d8",
+    "RESULTS.md": "5440d849e5ff51a47930dc55f950e2be2f682fcf8a4819c73ce44358f1da4706"
+  }
+}

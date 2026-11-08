@@ -1,0 +1,11 @@
+Diff in /workspace/scratch/ee5e08a3ca9b/biological-initialization-drift-v1/crates/alife_core/tests/biological_initialization_drift.rs:219:
+                 .unwrap();
+             let retention = f64::from(species.decay_retention);
+             let expected = f64::from(species.baseline)
+-                + gain
+-                    * f64::from(1.0 - initial.body.energy)
+-                    * (1.0 - retention.powi(step as i32))
++                + gain * f64::from(1.0 - initial.body.energy) * (1.0 - retention.powi(step as i32))
+                     / (1.0 - retention);
+             close(
+                 drives[index],

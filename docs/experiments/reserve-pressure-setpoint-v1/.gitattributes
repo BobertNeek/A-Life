@@ -1,0 +1,2 @@
+# Captured tool output remains byte-exact; source, tests and prose stay strict.
+*.log -whitespace

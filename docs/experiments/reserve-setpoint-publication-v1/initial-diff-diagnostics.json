@@ -1,0 +1,25 @@
+{
+  "initial_status": 2,
+  "diagnostics": [
+    "docs/experiments/biological-initialization-drift-v1/fmt-initial.log:3: trailing whitespace.",
+    "+ ",
+    "docs/experiments/biological-initialization-drift-v1/fmt-initial.log:25: trailing whitespace.",
+    "+ ",
+    "docs/experiments/biological-initialization-drift-v1/fmt-initial.log:179: trailing whitespace.",
+    "+ ",
+    "docs/experiments/biological-initialization-drift-v1/fmt-initial.log:217: trailing whitespace.",
+    "+ ",
+    "docs/experiments/biological-initialization-drift-v1/fmt-initial.log:312: trailing whitespace.",
+    "+ ",
+    "docs/experiments/biological-initialization-drift-v1/fmt-initial.log:494: trailing whitespace.",
+    "+ ",
+    "docs/experiments/biological-initialization-drift-v1/fmt-initial.log:523: trailing whitespace.",
+    "+ ",
+    "docs/experiments/biological-initialization-drift-v1/fmt-initial.log:523: new blank line at EOF.",
+    "docs/experiments/biological-initialization-drift-v1/run.log:54: new blank line at EOF.",
+    "docs/experiments/reserve-pressure-setpoint-v1/composition-addendum/run.log:15: new blank line at EOF.",
+    "docs/experiments/reserve-pressure-setpoint-v1/run.log:69: new blank line at EOF.",
+    "docs/experiments/reserve-pressure-setpoint-v1/validation.log:9: new blank line at EOF."
+  ],
+  "resolution": "Two package-local captured-log attributes, no original bytes altered"
+}

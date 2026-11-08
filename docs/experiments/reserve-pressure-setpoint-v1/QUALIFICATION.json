@@ -1,0 +1,38 @@
+{
+  "base": "550f79ad1f765132c634e7a272da56b521b57ec0",
+  "sealed_baseline_audit": "9b41dd90bb44a43ab95cdd788c6e58fd2d194ee8",
+  "executed_source": "f3602c25929b099c1a04c10aa2fb7ea4a87eef79",
+  "advance_calls": {
+    "fixed_reserve_grid": 3584,
+    "full_sleep_dose": 6,
+    "expression_zero": 4,
+    "body_integrating": 32,
+    "total": 3626
+  },
+  "world_intervals": 0,
+  "neural_emissions": 0,
+  "biochemical_work": 246568,
+  "checks": {
+    "zero_advance_validation_roundtrip": "1 passed",
+    "fixed_ignored_grid": "1 passed, one invocation",
+    "format": "passed",
+    "strict_targeted_clippy": "passed",
+    "diff_check": "passed",
+    "full_core_world_gpu_suites": "not run"
+  },
+  "files": {
+    "FROZEN_PLAN.md": "d602948fe43fadaee2bc474dcab5665b4cf48aa4e99bef90ae2d38798cc17993",
+    "run.log": "b0f3a23e4d4ccff423a3c334cf75db60ba0c5bf627d51191b145d2b5feee2ccf",
+    "outcomes.jsonl": "c887c0ef4341852b0e9fe4bf56130922900a4358f7744d928af25535e6dc8832",
+    "RUN_ONCE.txt": "0fab8e4d905d0a95429a265a200c68fe7555b5882f2afa2fe04bd143549d40ba",
+    "validation.log": "7b37adf3f971c9c9af0f6b98baeeab0b33cd8a1a006a12c0daff1929dc6baa43",
+    "clippy.log": "cdcc704320ef1ae2f87d2ddcf2aa585fa9f9067c9c1aafe4236c078eb5bae4e8",
+    "fmt.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "CANDIDATE.json": "7cfa3e55adb37cb4ba473ab4dda56327f78c1be1af53b66b5255599512a1c7c3"
+  },
+  "code_sha256": {
+    "crates/alife_core/src/biochemical_graph.rs": "99d03b331ce25b2c89aeaa9ccc2dc59c85cc8c16640a60b70007e0e65d70842b",
+    "crates/alife_core/src/evolutionary_genetics.rs": "6e6be1509a04a68d1277b101264b0e35a427017c16fef86736e5eae9e0041a53",
+    "crates/alife_core/tests/reserve_pressure_setpoint.rs": "03eb1add6d06b33735c8a3eb9b2ba8331066f2b711c38f5c5be6c647d07b3649"
+  }
+}
