@@ -355,6 +355,8 @@ pub struct RetainedLearningRecoverySaveState {
     pub pending: PendingEligibilityCheckpoint,
     pub sealed_patch_asset: GpuBrainAssetRef,
     pub neural_receptor_frame_asset: GpuBrainAssetRef,
+    /// Saturating failed-retry count; zero denotes the initial rejected credit.
+    /// This is recovery progress, not a limit on which states can be saved.
     pub attempts: u8,
     pub last_error_code: String,
 }
@@ -366,7 +368,6 @@ impl RetainedLearningRecoverySaveState {
         self.neural_receptor_frame_asset.validate()?;
         if self.schema_version != RETAINED_LEARNING_RECOVERY_SAVE_SCHEMA_VERSION
             || self.organism_id_raw != organism_id.raw()
-            || !(1..=3).contains(&self.attempts)
             || !matches!(
                 self.last_error_code.as_str(),
                 "learning-evidence-mismatch"
