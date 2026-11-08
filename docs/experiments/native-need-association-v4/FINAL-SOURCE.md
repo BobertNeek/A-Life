@@ -1,0 +1,13 @@
+# Frozen V4 source and matched protocol
+
+This preserves the final pre-exposure source separately from [proposal 01](source-proposal-01/manifest.json). The full patch SHA-256 is 91ecc1f927285d4622c5e8ffeca731ccd531b30969915c89173e98fd41a6b863. All 719 declared source/public-literal inputs match [the final manifest](source-final-v4/manifest.json), root 5df9112366055e7190e9f5edaa0d10a8864e736526e38d6c7e189935ca9bef6d. Added publication notes are not runtime inputs.
+
+Corrected core qualification passed 19 controls, CPU source qualification 21 controls, and three fixed preparation/mechanism integration tests passed. Strict Clippy passed after preserving and correcting a needless-lifetime lint. A final serial fixture batch is being completed. This source backup does not claim that the prospective two-arm run occurred or succeeded; its actual executable, attempt and results must be recorded separately.
+
+The fixed 600-tick preparation yields a healthy juvenile with fatigue 0.0370525 and ATP 0.645888. Actual Rest transaction fatigue becomes zero; exact Noop leaves 0.0371306. The complete detached reader preview prices 7,362 Q16 ATP units (0.112335), versus ordinary 1,777, so a full trajectory must account for affordability. These are physical/forward diagnostics without a neural decision or source write, not learned behavior.
+
+The prospective protocol uses a fixed asset/construction seed and matched gain 0 versus 0.35, sampling seed 2026111303, ordinary preparation, at most twelve native intervals per arm and explicit health/injury/reserve/affordability/controller-sleep/error stops. Other actions remain available; no horizon extension, replacement or retry is permitted by this protocol. The source includes the actual reserved plan and bounded seed-history check. Only real compatible OwnRest and OwnNoop evidence can support an effect claim; self-reference equality and missing support remain null results.
+
+Prior body sleeping is not simply an erroneous awake flag: latent SleepState/metabolic regulation can remain causal, and GPU scheduling has a separate dependency. The conservative V4 context gate is retained. Immutable binding/context/scratch work is fully priced; a future cache must identify a separate revision and preserve physiology validation, not make current work free.
+
+The Astra reference remains [Sparks of Weight-Space Programming](https://rikiyat.github.io/blog/weight-space-programming/), experiments 4–6. Keep the original candidate, failed assertions/lint, exact final source and eventual observed outcome distinct while iterating. Existing acquired lives, assets, optimizer state, checkpoint formats and accepted defaults remain untouched.

@@ -71,7 +71,7 @@ macro_rules! scalar {
         }
     };
 }
-impl<'a> ser::Serializer for &'a mut Encoder {
+impl ser::Serializer for &mut Encoder {
     type Ok = ();
     type Error = Error;
     type SerializeSeq = Self;

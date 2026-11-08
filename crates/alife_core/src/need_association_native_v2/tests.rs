@@ -480,7 +480,17 @@ fn native_need_v2_seven_axes_and_work_match_frozen_v1() {
                         a.confidence_product_gated_readout,
                         b.confidence_product_gated_readout
                     );
-                    assert_eq!(a.work, b.work);
+                    // Boredom 0.2 exceeds only the zero knot in each of the
+                    // two successor circuits. That changes activation, not
+                    // evaluated work: every branch and input still executes.
+                    assert_eq!(
+                        b.work.dendritic.gated_branches,
+                        a.work.dendritic.gated_branches + 2
+                    );
+                    let mut activation_independent_work = b.work.clone();
+                    activation_independent_work.dendritic.gated_branches =
+                        a.work.dendritic.gated_branches;
+                    assert_eq!(a.work, activation_independent_work);
                 }
             }
             // V1 continues to suppress boredom; its old validator still forbids it.

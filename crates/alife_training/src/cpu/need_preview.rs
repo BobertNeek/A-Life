@@ -37,6 +37,8 @@ pub struct CpuNeedFeasibilityPreviewV4 {
     pub input_drives: [f32; 11],
     pub body_energy: f32,
     pub body_health: f32,
+    pub metabolic_turnover: f32,
+    pub brain_atp_efficiency: f32,
     pub biochemical_expression: f32,
     pub planned_brain_work: BrainWorkCounters,
     pub reader_work: Option<BrainWorkCounters>,
@@ -72,12 +74,14 @@ fn probabilities(logits: &[f32], mask: u32, temperature: f32) -> Vec<f64> {
     let sum: f64 = values.iter().sum();
     values.into_iter().map(|x| x / sum).collect()
 }
+type PreviewProbabilities = (Vec<f64>, Vec<Vec<f64>>, f64, f64);
+
 pub(super) fn preview_probabilities(
     phenotype: &BrainPhenotype,
     frame: &PerceptionFrame,
     logits: &[f32],
     temperature: f32,
-) -> Result<(Vec<f64>, Vec<Vec<f64>>, f64, f64), CpuHostError> {
+) -> Result<PreviewProbabilities, CpuHostError> {
     // Masks and forced-channel semantics come from the real sampler. This draw
     // is discarded and does not use or advance the host's live sampling state.
     let shape = super::sample_cpu_joint_action(phenotype, frame, logits, 1, 0, temperature)?;
@@ -96,20 +100,17 @@ pub(super) fn preview_probabilities(
                     | alife_world::HeadlessActionIds::NO_POSTURE
             )
     };
-    let own_noop = |c: &ActionCandidate| {
-        c.target == ActionTarget::NONE
-            && ((c.kind == ActionKind::Move
-                && c.action_id == alife_world::HeadlessActionIds::NO_LOCOMOTION)
-                || (c.kind == ActionKind::Hold
-                    && c.action_id == alife_world::HeadlessActionIds::NO_POSTURE))
-    };
     let mut rest = 0.;
     let mut noop = 0.;
     for (i, c) in frame.candidates().iter().enumerate() {
-        let is_rest = c.kind == ActionKind::Rest && c.target == ActionTarget::NONE;
-        if !is_rest && !own_noop(c) {
-            continue;
-        }
+        use super::need_association_source::{
+            candidate_subject, AssociationSubjectV1, SelfActionV1,
+        };
+        let action = match candidate_subject(frame, c) {
+            Ok(AssociationSubjectV1::SelfAction { action, .. }) => action,
+            _ => continue,
+        };
+        let is_rest = action == SelfActionV1::Rest;
         let mut p = global[i];
         for (slot, probabilities) in motor.iter().enumerate() {
             if shape.forced_slots[i] == Some(slot as u8) || shape.motor_masks[slot] == 0 {

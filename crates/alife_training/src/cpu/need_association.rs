@@ -126,17 +126,83 @@ impl StationaryContext {
         if !physiological_locality(self.physiology, other.physiology) {
             let a = self.physiology;
             let b = other.physiology;
-            if a.body != b.body {
-                fields.push("organ/reserve locality or injury/thermal/sleep".into());
+            let close = |x: f32, y: f32| {
+                x.is_finite() && y.is_finite() && (x - y).abs() <= MAX_PHYSIOLOGY_DRIFT
+            };
+            for (same, label) in [
+                (
+                    a.source_genome_id == b.source_genome_id,
+                    "physiology genome",
+                ),
+                (a.cadence == b.cadence, "physiology cadence"),
+                (a.body.health == b.body.health, "body health"),
+                (a.body.injury == b.body.injury, "body injury"),
+                (
+                    a.body.temperature_stress == b.body.temperature_stress,
+                    "body thermal state",
+                ),
+                (a.body.sleeping == b.body.sleeping, "body sleeping"),
+                (close(a.body.energy, b.body.energy), "body reserve locality"),
+                (
+                    a.development.puberty_reached == b.development.puberty_reached,
+                    "puberty state",
+                ),
+                (
+                    a.development.critical_period_active == b.development.critical_period_active,
+                    "critical-period state",
+                ),
+                (
+                    a.development.critical_period_plasticity_bias
+                        == b.development.critical_period_plasticity_bias,
+                    "critical-period bias",
+                ),
+                (
+                    a.development.biochemical_expression == b.development.biochemical_expression,
+                    "biochemical expression",
+                ),
+                (
+                    a.development.migration_ready == b.development.migration_ready,
+                    "migration state",
+                ),
+            ] {
+                if !same {
+                    fields.push(label.into());
+                }
             }
-            if a.homeostasis.drives != b.homeostasis.drives {
-                fields.push("drive locality".into());
+            for (i, (x, y)) in a.body.organs().iter().zip(b.body.organs()).enumerate() {
+                if !close(x.energy, y.energy) {
+                    fields.push(format!("organ {i} reserve locality"));
+                }
+                let (mut x, mut y) = (*x, *y);
+                x.energy = 0.;
+                y.energy = 0.;
+                if x != y {
+                    fields.push(format!("organ {i} non-energy state"));
+                }
             }
-            if a.homeostasis.hormones != b.homeostasis.hormones {
-                fields.push("hormone locality".into());
+            for (i, (x, y)) in a
+                .homeostasis
+                .drives
+                .to_array()
+                .into_iter()
+                .zip(b.homeostasis.drives.to_array())
+                .enumerate()
+            {
+                if !close(x, y) {
+                    fields.push(format!("drive {i} locality"));
+                }
             }
-            if a.development != b.development {
-                fields.push("development expression".into());
+            for (i, (x, y)) in a
+                .homeostasis
+                .hormones
+                .to_array()
+                .into_iter()
+                .zip(b.homeostasis.hormones.to_array())
+                .enumerate()
+            {
+                if !close(x, y) {
+                    fields.push(format!("hormone {i} locality"));
+                }
             }
         }
         fields
@@ -414,6 +480,7 @@ pub struct CpuNeedCandidateReceiptV4 {
     pub family: CandidateActionFamily,
     pub support: CpuNeedAssociationSupportV4,
     pub native: NativeNeedAssociationOutputV2,
+    pub scratch_memory_ops: u64,
     pub base_logit: f32,
     pub final_logit: f32,
 }
@@ -429,6 +496,19 @@ pub struct CpuNeedDecisionReceiptV4 {
     pub candidates: Vec<CpuNeedCandidateReceiptV4>,
     pub source_observation: CpuNeedObservationStatusV4,
     pub source_audit: Option<CpuNeedSourceAuditV4>,
+    pub sampling_audit: Option<CpuNeedSamplingAuditV4>,
+}
+/// Lab diagnostics from the same actual forward and sampler masks. Recording
+/// these values performs no alternative world step or neural forward.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct CpuNeedSamplingAuditV4 {
+    pub representative: u16,
+    pub candidate_logits: Vec<f32>,
+    pub representative_probabilities: Vec<f64>,
+    pub motor_probabilities: Vec<Vec<f64>>,
+    pub pure_rest_selection_probability: f64,
+    pub pure_noop_selection_probability: f64,
+    pub neural_activation_range: [f32; 2],
 }
 #[derive(Debug, Clone)]
 pub(super) struct CpuNeedPreparedV4 {
@@ -529,10 +609,12 @@ impl CpuNeedAssociationPortV4 {
                     },
                 )
                 .map_err(|_| CpuHostError::State("native association execution rejected"))?;
-            accumulate_work(
-                &mut work,
-                native.work.brain_work_counters(support.lookup_records),
-            )?;
+            let scratch_memory_ops = scratch_memory_ops(&native.work)?;
+            let memory_ops = support
+                .lookup_records
+                .checked_add(scratch_memory_ops)
+                .ok_or(CpuHostError::State("scratch work overflow"))?;
+            accumulate_work(&mut work, native.work.brain_work_counters(memory_ops))?;
             work.decoder_candidate_ops += 1;
             dendritic_ops += u64::from(native.work.dendritic.branches_evaluated)
                 + u64::from(native.work.dendritic.inputs_evaluated);
@@ -542,6 +624,7 @@ impl CpuNeedAssociationPortV4 {
                 family: candidate.family,
                 support,
                 native,
+                scratch_memory_ops,
                 base_logit: 0.,
                 final_logit: 0.,
             });
@@ -558,12 +641,35 @@ impl CpuNeedAssociationPortV4 {
                 candidates,
                 source_observation: CpuNeedObservationStatusV4::Unsupported("not_observed"),
                 source_audit: None,
+                sampling_audit: None,
             },
             work,
             dendritic_ops,
             contexts,
         })
     }
+}
+/// V4 prices the explicitly measured non-arithmetic scratch touches as memory
+/// operations too. The frozen V1 conversion stays unchanged. Allocation/zeroing
+/// and active-coordinate bookkeeping are neither free nor fake neural updates.
+fn scratch_memory_ops(w: &NativeNeedAssociationWorkV1) -> Result<u64, CpuHostError> {
+    [
+        w.previous_activation_copies,
+        w.cleared_accumulator_cells,
+        w.stale_activation_clears,
+        w.stale_previous_activation_clears,
+        w.finalizer_coordinate_checks,
+        w.input_activation_writes,
+        w.initialized_coordinate_cells,
+        w.coordinate_tracking_copies,
+        w.coordinate_membership_probes,
+        w.initialized_scratch_float_cells,
+    ]
+    .into_iter()
+    .try_fold(0u64, |sum, n| {
+        sum.checked_add(u64::from(n))
+            .ok_or(CpuHostError::State("scratch work overflow"))
+    })
 }
 /// Explicit V4 semantic tariff: each encoded value, each 8-byte hash chunk,
 /// each receptor evaluation/comparison/copy and each validation traversal call
@@ -895,5 +1001,16 @@ mod tests {
             "v4_binding_work {}",
             serde_json::to_string(&on.receipt).unwrap()
         );
+    }
+    #[test]
+    fn sleeping_context_mismatch_does_not_blame_allowed_raw_drive_drift() {
+        let (a, _, _) = fixture();
+        let mut b = a.clone();
+        b.physiology.body.sleeping = !a.physiology.body.sleeping;
+        b.physiology.homeostasis.drives.fatigue += 0.001;
+        let fields = a.mismatch_fields(&b, true);
+        assert!(fields.iter().any(|x| x == "body sleeping"));
+        assert!(!fields.iter().any(|x| x.starts_with("drive ")));
+        assert!(!a.same_stationary_scene(&b));
     }
 }

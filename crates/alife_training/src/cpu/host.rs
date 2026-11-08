@@ -371,6 +371,8 @@ impl CpuCanonicalHost {
                 input_drives: record.biochemistry().homeostasis.drives.to_array(),
                 body_energy: record.biochemistry().body.energy,
                 body_health: record.biochemistry().body.health,
+                metabolic_turnover: record.phenotype().body.metabolic_turnover,
+                brain_atp_efficiency: record.phenotype().chemistry.brain_atp_efficiency,
                 biochemical_expression: record.biochemistry().development.biochemical_expression,
                 planned_brain_work: activity.work,
                 reader_work: port.as_ref().map(|p| p.work),
@@ -1291,6 +1293,28 @@ impl CpuCanonicalHost {
                 sampling_counter,
                 temperature,
             )?;
+            if let Some(prepared) = &mut need_prepared {
+                let (representative_probabilities, motor_probabilities, rest, noop) =
+                    super::need_preview::preview_probabilities(
+                        p,
+                        &frame,
+                        &output.candidate_logits,
+                        temperature,
+                    )?;
+                let a = &r.neural.neural_state().activations;
+                prepared.receipt.sampling_audit = Some(CpuNeedSamplingAuditV4 {
+                    representative: action.representative,
+                    candidate_logits: output.candidate_logits.clone(),
+                    representative_probabilities,
+                    motor_probabilities,
+                    pure_rest_selection_probability: rest,
+                    pure_noop_selection_probability: noop,
+                    neural_activation_range: [
+                        a.iter().copied().fold(f32::INFINITY, f32::min),
+                        a.iter().copied().fold(f32::NEG_INFINITY, f32::max),
+                    ],
+                });
+            }
             self.sampling_counter = self
                 .sampling_counter
                 .checked_add(1)

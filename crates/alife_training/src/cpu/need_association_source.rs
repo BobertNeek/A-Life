@@ -53,6 +53,7 @@ pub enum SelfActionV1 {
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct CpuNeedSourceAuditV4 {
     pub requested_channels: Vec<ChannelCommand>,
+    pub body_event: BodyEventDelta,
     pub executed_channels: Vec<CpuNeedChannelAuditV4>,
     pub before_record_equals_world: bool,
     pub measured_before_equals_world: bool,
@@ -73,6 +74,7 @@ pub struct CpuNeedBiologyCostV4 {
     pub fatigue: f32,
     pub brain_atp: f32,
     pub boredom: f32,
+    pub sleeping: bool,
 }
 impl CpuNeedBiologyCostV4 {
     pub fn from_biology(b: &BiochemistryState) -> Self {
@@ -85,6 +87,7 @@ impl CpuNeedBiologyCostV4 {
             fatigue: b.homeostasis.drives.fatigue,
             brain_atp: b.homeostasis.drives.brain_atp,
             boredom: b.homeostasis.drives.to_array()[9],
+            sleeping: b.body.sleeping,
         }
     }
 }
@@ -104,6 +107,7 @@ pub(super) fn source_audit(
     let measured = patch.outcome().measured_physiology.as_ref();
     CpuNeedSourceAuditV4 {
         requested_channels: receipt.bundle.channels.clone(),
+        body_event: receipt.body_event,
         executed_channels: receipt
             .channel_receipts
             .iter()
