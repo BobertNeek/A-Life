@@ -1,0 +1,26 @@
+{
+  "ordinary_main_commit": "b0b4e5ab85473f1ace63f0629ecf4704e7b0fb81",
+  "ordinary_main_tree": "0a34d588488c09f9a7fd4d8bc6115be61bdcd750",
+  "local_equal_tree_base": "7a15a2f8ceffb871947ca7df819095d2cab99327",
+  "scope": "Absent speech head emits no payload, not fabricated speech or replacement choice",
+  "source": {
+    "crates/alife_training/src/cpu/input.rs": "c5bb166edbe0c119aa64a201c5349d87b8b04012fb8ed778ac4ceb6049a1e37c",
+    "crates/alife_training/tests/cpu_absent_speech.rs": "c7287e6beb6b2f8be63b0e786459f88b8d0b15c5f0eacbc72579eff5743bd383"
+  },
+  "results": {
+    "focused_pass": 4,
+    "cpu_collector_pass": 25,
+    "cpu_collector_existing_benchmark_ignored": 1,
+    "strict_clippy": "passed",
+    "fmt": "passed"
+  },
+  "logs": {
+    "native.log": "ba1bdcebf2e7d4064ebc7b61e7d999e4f9f8d978ed0409b5ee3aae27e96847f0",
+    "clippy.log": "25dde0a7791c890ce1b607701354979fd68ede40be594baf46d04cfcd76effb9",
+    "fmt.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "actual_compiling_source": "/workspace/scratch/ee5e08a3ca9b/cpu-absent-speech-main-v1",
+  "retained_state_access": false,
+  "wire_change": false,
+  "experimental_head_included": false
+}
