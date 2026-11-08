@@ -38,6 +38,7 @@ jobs:
       CARGO_PROFILE_TEST_DEBUG: '0'
       CARGO_PROFILE_DEV_DEBUG: '0'
       RUST_TEST_THREADS: '1'
+      RUST_MIN_STACK: '33554432'
       LP_NUM_THREADS: '2'
       EXPECTED_SOURCE_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
@@ -117,3 +118,19 @@ jobs:
           run_fixture alife_training \
             actual_controller_batches_restores_and_rejects_before_updates \
             --test software_ppo_controller
+
+      - name: Exercise sleeping physical response and exact runtime restore
+        run: |
+          set -euo pipefail
+          # Fresh fixed founders only. Truthful Cpu/Vulkan runtime fixture,
+          # never a required-hardware fallback or an autonomous study.
+          log="$RUNNER_TEMP/offline-sleeping-body-runtime.log"
+          cargo test --locked -p alife_game_app --features gpu-tests --lib \
+            gpu_live_runtime::sleeping_body_contact_tests:: \
+            -- --nocapture --test-threads=1 2>&1 | tee "$log"
+          grep -Eq '^test result: ok\. 10 passed; 0 failed; 0 ignored;' "$log"
+          log="$RUNNER_TEMP/offline-software-runtime-boundary.log"
+          cargo test --locked -p alife_gpu_backend --features gpu-tests --lib \
+            closed_loop_runtime::software_training_test::tests::software_runtime_test_marker_survives_staging_and_device_loss \
+            -- --ignored --exact --nocapture --test-threads=1 2>&1 | tee "$log"
+          grep -Eq '^test result: ok\. 1 passed; 0 failed; 0 ignored;' "$log"

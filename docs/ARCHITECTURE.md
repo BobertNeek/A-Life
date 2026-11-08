@@ -95,8 +95,27 @@ This check is translation-only. An in-place body turn changes body yaw and may
 move a carried object, but currently reports zero organism displacement, so
 `Turn` plus `Rest` can still receive recovery. Head/gaze orientation is distinct
 from body turning. A future yaw rule must use realized body rotation and preserve
-blocked-turn semantics, rather than rejecting a selected command. Stationary
-pain and sleep interruption also require separate handling.
+blocked-turn semantics, rather than rejecting a selected command.
+
+Scheduled sleeping/no-decision intervals admit a separate physical contact
+response for their explicit organism IDs. Fresh damaging contact suppresses
+physical recovery even when withdrawal is blocked. Localized sources determine
+an outward direction; fresh unlocalized damage uses bounded backwards translation
+without changing body yaw. Quiet sleep and chronic pain without fresh damage do
+not trigger this response. Awake residents with no selection are not included,
+and a Completed consolidation held for durability remains eligible even though
+it receives no recovery dose.
+
+This body response neither wakes cognition nor creates a voluntary episode or
+learning credit. The scheduler, consolidation payload and neural writes retain
+their ordinary progression and capture obligations. The enclosing staged tick
+owns rollback; each due body advances biology once, and bodies already advanced
+by a voluntary transaction are skipped. Current body state is available through
+normal later perception. The host regression fixtures use scalar driver identities
+and do not prove device execution. Separate `sleeping_body_software_runtime_`
+fixtures use an explicitly injected CPU Vulkan test backend to exercise runtime
+code and exact capture/restore. They do not qualify ordinary hardware admission,
+which continues rejecting software adapters.
 
 The `rest_motion_` world regressions cover moving rest with and without a held
 object, stationary and blocked rest, energy parity with movement alone, one

@@ -1794,7 +1794,7 @@ impl HeadlessWorld {
         &mut self,
         body_events: &BTreeMap<u64, BodyEventDelta>,
     ) -> Result<Tick, ScaffoldContractError> {
-        self.advance_body_events_with_contact_mode(body_events, None)
+        self.advance_body_events_with_contact_mode(body_events, None, None)
     }
 
     /// Explicit body-only candidate. A real contact dose can withdraw the body
@@ -1818,7 +1818,43 @@ impl HeadlessWorld {
     ) -> Result<BodyOnlyContactIntervalReceipt, ScaffoldContractError> {
         let mut responses = Vec::new();
         let outcome_tick =
-            self.advance_body_events_with_contact_mode(body_events, Some(&mut responses))?;
+            self.advance_body_events_with_contact_mode(body_events, None, Some(&mut responses))?;
+        Ok(BodyOnlyContactIntervalReceipt {
+            schema_version: 1,
+            outcome_tick,
+            responses,
+        })
+    }
+
+    /// Advances the ordinary body interval, allowing contact withdrawal only for
+    /// the explicit scheduled, non-decision organisms selected by the caller.
+    /// This set is independent of recovery doses: a completed sleep transaction
+    /// held for durability can still have a due body without a recovery event.
+    /// The caller owns the full enclosing world rollback transaction. Organisms
+    /// already advanced by a voluntary action are never advanced or moved twice.
+    #[doc(hidden)]
+    pub fn try_advance_tick_with_selected_body_contacts_in_staged_tick(
+        &mut self,
+        body_events: &BTreeMap<u64, BodyEventDelta>,
+        contact_organisms: &BTreeSet<u64>,
+    ) -> Result<BodyOnlyContactIntervalReceipt, ScaffoldContractError> {
+        for &raw in contact_organisms {
+            let id = OrganismId(raw);
+            id.validate()?;
+            let record = self
+                .organism_registry
+                .get(id)
+                .ok_or(ScaffoldContractError::InvalidId)?;
+            if !record.lifecycle().is_alive() {
+                return Err(ScaffoldContractError::InvalidId);
+            }
+        }
+        let mut responses = Vec::new();
+        let outcome_tick = self.advance_body_events_with_contact_mode(
+            body_events,
+            Some(contact_organisms),
+            Some(&mut responses),
+        )?;
         Ok(BodyOnlyContactIntervalReceipt {
             schema_version: 1,
             outcome_tick,
@@ -1829,6 +1865,7 @@ impl HeadlessWorld {
     fn advance_body_events_with_contact_mode(
         &mut self,
         body_events: &BTreeMap<u64, BodyEventDelta>,
+        contact_organisms: Option<&BTreeSet<u64>>,
         mut contact_responses: Option<&mut Vec<BodyOnlyContactResponse>>,
     ) -> Result<Tick, ScaffoldContractError> {
         let candidate = self;
@@ -1933,7 +1970,9 @@ impl HeadlessWorld {
                     let mut body_event = hazard_contact.map_or(body_event, |(_, pain)| {
                         merge_hazard_contact_body_event(body_event, pain)
                     });
-                    if let Some(responses) = contact_responses.as_deref_mut() {
+                    if let Some(responses) = contact_responses.as_deref_mut().filter(|_| {
+                        contact_organisms.is_none_or(|ids| ids.contains(&organism_id.raw()))
+                    }) {
                         let (event, response) = candidate.apply_body_only_contact_response(
                             organism_id,
                             entity,

@@ -15,6 +15,23 @@ impl GpuClosedLoopBackend {
     pub fn new_software_vulkan_training_test(
         profile: GpuRuntimeProfile,
     ) -> Result<Self, ScaffoldContractError> {
+        Self::new_software_vulkan_fixture(profile, false)
+    }
+
+    /// Explicit OFFLINE RUNTIME TEST only. Uses a truthful CPU Vulkan device to
+    /// exercise fixed runtime/capture fixtures, never normal hardware admission.
+    /// Available only with `gpu-tests`; callers must not use this constructor as
+    /// gameplay fallback or report the result as hardware qualification.
+    pub fn new_software_vulkan_runtime_test(
+        profile: GpuRuntimeProfile,
+    ) -> Result<Self, ScaffoldContractError> {
+        Self::new_software_vulkan_fixture(profile, true)
+    }
+
+    fn new_software_vulkan_fixture(
+        profile: GpuRuntimeProfile,
+        runtime_fixture: bool,
+    ) -> Result<Self, ScaffoldContractError> {
         profile.validate_contract()?;
         let mut descriptor = wgpu::InstanceDescriptor::new_without_display_handle();
         descriptor.backends = wgpu::Backends::VULKAN;
@@ -33,7 +50,11 @@ impl GpuClosedLoopBackend {
             let (device, queue) = WgpuDeviceFactory.request_device(
                 &adapter,
                 &wgpu::DeviceDescriptor {
-                    label: Some("alife-explicit-software-offline-training-test"),
+                    label: Some(if runtime_fixture {
+                        "alife-explicit-software-offline-runtime-test"
+                    } else {
+                        "alife-explicit-software-offline-training-test"
+                    }),
                     required_features,
                     required_limits: required_limits.clone(),
                     experimental_features: wgpu::ExperimentalFeatures::disabled(),
@@ -62,7 +83,8 @@ impl GpuClosedLoopBackend {
                 },
                 profile,
             )?;
-            backend.offline_software_training_test = true;
+            backend.offline_software_training_test = !runtime_fixture;
+            backend.offline_software_runtime_test = runtime_fixture;
             return Ok(backend);
         }
         Err(ScaffoldContractError::NeuralBackendUnavailable)
@@ -71,6 +93,17 @@ impl GpuClosedLoopBackend {
     /// Marks test context, never a production-hardware qualification.
     pub const fn is_software_training_test(&self) -> bool {
         self.offline_software_training_test
+    }
+
+    /// Distinct from the restricted offline-training constructor. This marker
+    /// survives restore staging and is never used to claim hardware admission.
+    pub const fn is_software_runtime_test(&self) -> bool {
+        self.offline_software_runtime_test
+    }
+
+    pub fn software_runtime_test_adapter_info(&self) -> Option<wgpu::AdapterInfo> {
+        self.offline_software_runtime_test
+            .then(|| self.adapter.get_info())
     }
 
     /// Actual adapter identity, including `DeviceType::Cpu`; never relabelled.
@@ -102,6 +135,34 @@ mod tests {
             wgpu::DeviceType::Cpu,
             wgpu::Backend::Gl
         ));
+    }
+
+    #[test]
+    #[ignore = "explicit offline software-runtime fixture; not hardware qualification"]
+    fn software_runtime_test_marker_survives_staging_and_device_loss() {
+        let mut backend = GpuClosedLoopBackend::new_software_vulkan_runtime_test(
+            GpuRuntimeProfile::production_v1(),
+        )
+        .unwrap();
+        let info = backend.software_runtime_test_adapter_info().unwrap();
+        assert_eq!(info.device_type, wgpu::DeviceType::Cpu);
+        assert_eq!(info.backend, wgpu::Backend::Vulkan);
+        assert!(backend.is_software_runtime_test());
+        assert!(!backend.is_software_training_test());
+        assert_eq!(
+            backend.hardware_receipt().adapter_name,
+            truncate_utf8(&info.name, 256)
+        );
+        backend.ensure_ready().unwrap();
+        let mut staging = backend.new_staging_like_live().unwrap();
+        assert!(staging.is_software_runtime_test());
+        assert_eq!(staging.software_runtime_test_adapter_info().unwrap(), info);
+        assert_ne!(staging.backend_instance_id, backend.backend_instance_id);
+        staging.ensure_ready().unwrap();
+        backend.device_lost.store(true, Ordering::Release);
+        assert!(backend.ensure_ready().is_err());
+        assert!(staging.ensure_ready().is_err());
+        assert!(backend.new_staging_like_live().is_err());
     }
 
     #[test]

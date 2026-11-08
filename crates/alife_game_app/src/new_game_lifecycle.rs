@@ -184,6 +184,39 @@ fn create_canonical_new_game_runtime_inner(
     founder: NewGameFounderSelection,
     force_late_failure_for_test: bool,
 ) -> Result<CanonicalNewGameLaunchResult, GameAppShellError> {
+    create_canonical_new_game_runtime_using_backend(
+        request,
+        founder,
+        force_late_failure_for_test,
+        || GpuClosedLoopBackend::new_required(GpuRuntimeProfile::production_v1()),
+    )
+}
+
+/// Explicit fixed-fixture seam. Absent from non-test app builds; normal New
+/// Game keeps its required-hardware constructor and never falls back here.
+#[cfg(all(test, feature = "gpu-tests"))]
+pub(crate) fn create_canonical_new_game_software_runtime_test(
+    request: CanonicalNewGameLaunchRequest,
+) -> Result<CanonicalNewGameLaunchResult, GameAppShellError> {
+    create_canonical_new_game_runtime_using_backend(
+        request,
+        NewGameFounderSelection::default(),
+        false,
+        || {
+            GpuClosedLoopBackend::new_software_vulkan_runtime_test(
+                GpuRuntimeProfile::production_v1(),
+            )
+        },
+    )
+}
+
+#[cfg(feature = "gpu-runtime")]
+fn create_canonical_new_game_runtime_using_backend(
+    request: CanonicalNewGameLaunchRequest,
+    founder: NewGameFounderSelection,
+    force_late_failure_for_test: bool,
+    create_backend: impl FnOnce() -> Result<GpuClosedLoopBackend, alife_core::ScaffoldContractError>,
+) -> Result<CanonicalNewGameLaunchResult, GameAppShellError> {
     let brain_class = match &founder {
         NewGameFounderSelection::N2048Candidate { .. } => BrainScaleTier::Standard2048,
         _ => BrainScaleTier::Nano512,
@@ -212,8 +245,8 @@ fn create_canonical_new_game_runtime_inner(
     let gpu_assets_before = NewGameGpuAssetSnapshot::capture(&asset_root)?;
     let mut final_created = false;
     let result = (|| {
-        let backend = GpuClosedLoopBackend::new_required(GpuRuntimeProfile::production_v1())
-            .map_err(|error| GameAppShellError::NeuralBackendUnavailable {
+        let backend =
+            create_backend().map_err(|error| GameAppShellError::NeuralBackendUnavailable {
                 message: error.to_string(),
             })?;
         let mut runtime = GpuLiveBrainRuntime::new_profiled_archived(
