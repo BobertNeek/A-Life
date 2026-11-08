@@ -4910,6 +4910,37 @@ impl HeadlessWorld {
             .fold(BodyEventDelta::zero(), |total, (_, result)| {
                 combine_body_event(total, result.body_event)
             });
+        if let Some(state) = translation.as_deref_mut() {
+            // Only fresh action damage is unlocalized. A harmful held object
+            // is not an escapable source. Ingestion has already consumed and
+            // released the food, so its new internal dose permits fallback.
+            let acute_damage = executed
+                .iter()
+                .filter(|(_, result)| {
+                    !result
+                        .execution
+                        .physical
+                        .target_entity
+                        .is_some_and(|target| {
+                            self.objects.get(&target.raw()).is_some_and(|object| {
+                                object.kind == WorldObjectKind::Hazard
+                                    && object.carried_by == Some(bundle.organism_id)
+                            })
+                        })
+                })
+                .map(|(_, result)| result.body_event.damage)
+                .fold(0.0_f32, f32::max);
+            let voluntary_displacement = executed.iter().fold(Vec3f::ZERO, |sum, (_, result)| {
+                add(sum, result.execution.physical.displacement)
+            });
+            state.finish_late_response(
+                self,
+                bundle.organism_id,
+                world_entity_id,
+                acute_damage,
+                voluntary_displacement,
+            )?;
+        }
         let final_position = self
             .objects
             .get(&world_entity_id.raw())

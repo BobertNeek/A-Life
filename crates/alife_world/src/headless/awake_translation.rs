@@ -199,6 +199,48 @@ impl AwakeTranslationState {
         Ok(())
     }
 
+    pub(super) fn finish_late_response(
+        &mut self,
+        world: &mut HeadlessWorld,
+        organism: OrganismId,
+        own: WorldEntityId,
+        acute_damage: f32,
+        voluntary_displacement: Vec3f,
+    ) -> Result<(), ScaffoldContractError> {
+        if self.withdrawal.is_some() {
+            return Ok(());
+        }
+        let budget = self
+            .budget
+            .as_mut()
+            .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
+        let remaining = 1.0 - budget.spent_time;
+        let carried = world.carried_interval_positions(organism, None);
+        self.withdrawal = world.apply_contact_withdrawal_for_interval(
+            organism,
+            own,
+            self.capacity,
+            self.gain,
+            acute_damage,
+            remaining,
+            None,
+        )?;
+        if let Some(reflex) = &self.withdrawal {
+            self.reflex_time = remaining;
+            budget.consume(
+                MOVE_STEP * self.capacity.unwrap_or(1.0).clamp(0.0, 1.0) * self.gain,
+                remaining,
+                self.time_metric.path_length(reflex.displacement),
+            )?;
+            world.commit_current_interval_velocity(
+                organism,
+                add(voluntary_displacement, reflex.displacement),
+            )?;
+            world.commit_carried_interval_velocity(organism, &carried);
+        }
+        Ok(())
+    }
+
     pub(super) fn observe_voluntary(
         &mut self,
         command: &ActionCommand,
@@ -274,18 +316,60 @@ impl HeadlessWorld {
         Ok(result)
     }
 
-    /// Candidate initial and swept external-contact priority. Late internal
-    /// injury and ordinary sealed CPU/GPU credit are not integrated here.
+    /// Candidate initial/swept contact and fresh late-action damage priority.
+    /// Ordinary sealed CPU/GPU credit is not integrated by this world API.
     /// Existing ordinary APIs and physical defaults are unchanged.
     pub fn apply_registered_motor_bundle_with_shared_contact_priority(
         &mut self,
         bundle: &MotorCommandBundle,
         entity: WorldEntityId,
     ) -> Result<AwakeTranslationIntervalReceipt, HeadlessMotorTransactionError> {
+        self.apply_shared_contact_bundle(bundle, entity, None, None)
+    }
+
+    /// Explicit staged-host variant preserving ordinary neural emissions and
+    /// perceived novelty. The enclosing host owns its whole-state commit.
+    pub fn apply_registered_motor_bundle_with_shared_contact_priority_and_perceived_novelty(
+        &mut self,
+        bundle: &MotorCommandBundle,
+        entity: WorldEntityId,
+        neural: &NeuralEmissionFrame,
+        novelty: f32,
+        object_novelty: &[(WorldEntityId, f32)],
+    ) -> Result<AwakeTranslationIntervalReceipt, HeadlessMotorTransactionError> {
+        if !novelty.is_finite()
+            || !(0.0..=1.0).contains(&novelty)
+            || object_novelty.len() > bundle.channels.len()
+            || object_novelty.iter().any(|(id, value)| {
+                id.raw() == 0 || !value.is_finite() || !(0.0..=1.0).contains(value)
+            })
+        {
+            return Err(ScaffoldContractError::ScalarOutOfRange.into());
+        }
+        self.apply_shared_contact_bundle(
+            bundle,
+            entity,
+            Some(neural),
+            Some((novelty, object_novelty)),
+        )
+    }
+
+    fn apply_shared_contact_bundle(
+        &mut self,
+        bundle: &MotorCommandBundle,
+        entity: WorldEntityId,
+        neural: Option<&NeuralEmissionFrame>,
+        novelty: Option<(f32, &[(WorldEntityId, f32)])>,
+    ) -> Result<AwakeTranslationIntervalReceipt, HeadlessMotorTransactionError> {
         let before = self.clone();
         let mut state = AwakeTranslationState::default();
-        let result =
-            self.apply_registered_motor_bundle_inner(bundle, entity, None, None, Some(&mut state));
+        let result = self.apply_registered_motor_bundle_inner(
+            bundle,
+            entity,
+            neural,
+            novelty,
+            Some(&mut state),
+        );
         match result {
             Err(error) => {
                 *self = before;

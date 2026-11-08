@@ -30,7 +30,7 @@ pub struct CpuOrganismCheckpoint {
     pub active_activation_side: u8,
 }
 /// Identity of the actual selected decision, bound before world execution.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CpuDecisionBinding {
     pub sequence_id: ExperienceSequenceId,
     pub frame_digest: PerceptionFrameDigest,
@@ -330,6 +330,49 @@ impl CpuOrganismState {
         pending.binding = Some(binding);
         Ok(())
     }
+    /// Consume host-verified physical intervention without action-causal credit.
+    /// No ExperiencePatch or replay sequence is issued. The enclosing host
+    /// binds the physical receipt and seals the completed inference/body state.
+    pub(super) fn consume_intervened_selection(
+        &mut self,
+        founder: &CpuFoundationTrainer,
+        binding: &CpuDecisionBinding,
+        outcome_tick: alife_core::Tick,
+    ) -> Result<(), TrainingError> {
+        let p = founder.phenotype();
+        let pending = self.pending.as_ref().ok_or_else(invalid)?;
+        if self.checkpoint.phenotype_hash != p.phenotype_hash()
+            || founder
+                .weights()
+                .iter()
+                .zip(p.synapses())
+                .any(|(w, s)| w.to_bits() != s.genetic_weight().to_bits())
+            || pending.binding.as_ref() != Some(binding)
+            || pending.staged.is_none()
+            || pending.representative.is_none()
+            || outcome_tick.raw() < pending.tick
+            || binding.dispatch_generation != self.checkpoint.dispatch_generation
+            || binding.active_activation_side != self.checkpoint.active_activation_side
+        {
+            return Err(invalid());
+        }
+        binding.joint_selection.validate()?;
+        let elapsed = self
+            .checkpoint
+            .last_decision_tick
+            .map_or(0, |old| pending.tick - old);
+        // Preserve historical trace decay; discard every new selected-action
+        // increment. Fast/lifetime weights and optimizer ages stay unchanged.
+        for (eligibility, synapse) in self.checkpoint.eligibility.iter_mut().zip(p.synapses()) {
+            let receptor = &p.plasticity_receptors()[synapse.receptor_index() as usize];
+            *eligibility *= decay(receptor.eligibility_decay(), elapsed);
+        }
+        self.checkpoint.last_decision_tick = Some(pending.tick);
+        self.checkpoint.last_outcome_tick = Some(outcome_tick.raw());
+        self.pending = None;
+        Ok(())
+    }
+
     /// Apply only canonical sealed credit with the receptor frame from its real
     /// chemistry tick. No raw reward scalar API is exposed.
     pub fn apply_credit(

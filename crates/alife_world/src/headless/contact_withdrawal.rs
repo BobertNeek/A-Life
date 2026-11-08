@@ -176,6 +176,11 @@ impl HeadlessWorld {
             direction = Vec3f::new(-yaw.cos(), 0.0, -yaw.sin());
             receipt.direction_basis = WithdrawalDirectionBasis::AcuteDamageHeadingFallback;
         }
+        // A directional protective response with no remaining actuator time
+        // is blocked, not a successful zero-distance move.
+        if interval_fraction == 0.0 {
+            return Ok(Some(receipt));
+        }
         let norm = direction.x.hypot(direction.z);
         let capacity =
             locomotor_capacity.unwrap_or(1.0).clamp(0.0, 1.0) * effector_gain.clamp(0.0, 1.0);

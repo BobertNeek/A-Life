@@ -147,6 +147,20 @@ pub struct CpuCanonicalStep {
     pub sleeping_organisms: usize,
     pub sleep_consolidations: usize,
 }
+/// Physical intervention is not an on-policy experience or replay row.
+/// Its reserved experience sequence has not been issued as an ExperiencePatch.
+pub struct CpuIntervenedDecision {
+    pub organism_id: OrganismId,
+    pub sampling_counter: u32,
+    pub dispatch_generation: u64,
+    pub selected: DecisionSnapshot,
+    pub physical: alife_world::AwakeTranslationIntervalReceipt,
+    pub cognitive_work: CognitiveWorkReceipt,
+}
+pub struct CpuSharedContactStep {
+    pub ordinary: CpuCanonicalStep,
+    pub interventions: Vec<CpuIntervenedDecision>,
+}
 fn weight_digest(founder: &CpuFoundationTrainer) -> Result<[u64; 4], ScaffoldContractError> {
     let mut d = CanonicalDigestBuilder::new(b"ALIFE-CPU-FOUNDER-WEIGHTS-V1");
     for &w in founder.weights() {
@@ -653,6 +667,29 @@ impl CpuCanonicalHost {
             ExperienceSequenceId,
         ) -> Result<PerceptionFrameDraft, ScaffoldContractError>,
     ) -> Result<CpuCanonicalStep, CpuHostError> {
+        self.step_with_preparation_mode(founder, temperature, false, &mut prepare)
+            .map(|result| result.ordinary)
+    }
+
+    /// Explicit research caller. No ordinary/default activation.
+    pub fn step_with_shared_contact_priority(
+        &mut self,
+        founder: &CpuFoundationTrainer,
+        temperature: f32,
+    ) -> Result<CpuSharedContactStep, CpuHostError> {
+        self.step_with_preparation_mode(founder, temperature, true, &mut |draft, _| Ok(draft))
+    }
+
+    fn step_with_preparation_mode(
+        &mut self,
+        founder: &CpuFoundationTrainer,
+        temperature: f32,
+        shared_contact: bool,
+        prepare: &mut impl FnMut(
+            PerceptionFrameDraft,
+            ExperienceSequenceId,
+        ) -> Result<PerceptionFrameDraft, ScaffoldContractError>,
+    ) -> Result<CpuSharedContactStep, CpuHostError> {
         self.validate_founder(founder)?;
         for (&raw, r) in &self.residents {
             let record = self
@@ -672,9 +709,19 @@ impl CpuCanonicalHost {
         for resident in next.residents.values_mut() {
             resident.sealed_authority = None;
         }
-        let result = next.step_inner(founder, temperature, &mut prepare)?;
+        let mut interventions = Vec::new();
+        let ordinary = next.step_inner(
+            founder,
+            temperature,
+            prepare,
+            shared_contact,
+            &mut interventions,
+        )?;
         *self = next;
-        Ok(result)
+        Ok(CpuSharedContactStep {
+            ordinary,
+            interventions,
+        })
     }
     fn step_inner(
         &mut self,
@@ -684,6 +731,8 @@ impl CpuCanonicalHost {
             PerceptionFrameDraft,
             ExperienceSequenceId,
         ) -> Result<PerceptionFrameDraft, ScaffoldContractError>,
+        shared_contact: bool,
+        interventions: &mut Vec<CpuIntervenedDecision>,
     ) -> Result<CpuCanonicalStep, CpuHostError> {
         let p = founder.phenotype();
         let tick = self.world.tick();
@@ -1014,20 +1063,17 @@ impl CpuCanonicalHost {
                 command,
             )?
             .with_finalized_memory_recall(&frame, &recall, index)?;
-            r.neural.stage_selection(
-                p,
-                &action,
-                CpuDecisionBinding {
-                    sequence_id: sequence,
-                    frame_digest: frame.frame_digest(),
-                    action_id: candidate.action_id,
-                    candidate_feature_digest: candidate.feature_digest()?,
-                    dispatch_generation: output.dispatch_generation,
-                    active_activation_side: output.active_activation_side,
-                    joint_selection: joint,
-                },
-                speech.is_some(),
-            )?;
+            let binding = CpuDecisionBinding {
+                sequence_id: sequence,
+                frame_digest: frame.frame_digest(),
+                action_id: candidate.action_id,
+                candidate_feature_digest: candidate.feature_digest()?,
+                dispatch_generation: output.dispatch_generation,
+                active_activation_side: output.active_activation_side,
+                joint_selection: joint,
+            };
+            r.neural
+                .stage_selection(p, &action, binding.clone(), speech.is_some())?;
             let mut cognitive = recall
                 .cognitive_context()
                 .cloned()
@@ -1077,16 +1123,30 @@ impl CpuCanonicalHost {
                         .map(|s| (entity, s.salience.novelty.raw()))
                 })
                 .collect::<Vec<_>>();
-            let receipt = self
-                .world
-                .apply_registered_motor_bundle_with_perceived_novelty_in_staged_tick(
-                    &bundle,
-                    record.world_entity_id(),
-                    &emissions,
-                    frame.sensory().channels.novelty_signal.raw(),
-                    &object_novelty,
-                )
-                .map_err(|_| CpuHostError::State("canonical motor transaction rejected"))?;
+            let intervention_receipt = if shared_contact {
+                Some(self.world.apply_registered_motor_bundle_with_shared_contact_priority_and_perceived_novelty(
+                    &bundle, record.world_entity_id(), &emissions,
+                    frame.sensory().channels.novelty_signal.raw(), &object_novelty,
+                ).map_err(|_| CpuHostError::State("shared actuator transaction rejected"))?)
+            } else {
+                None
+            };
+            let receipt = if let Some(actual) = &intervention_receipt {
+                actual.voluntary.clone()
+            } else {
+                self.world
+                    .apply_registered_motor_bundle_with_perceived_novelty_in_staged_tick(
+                        &bundle,
+                        record.world_entity_id(),
+                        &emissions,
+                        frame.sensory().channels.novelty_signal.raw(),
+                        &object_novelty,
+                    )
+                    .map_err(|_| CpuHostError::State("canonical motor transaction rejected"))?
+            };
+            let intervened = intervention_receipt
+                .as_ref()
+                .is_some_and(|r| r.withdrawal.is_some());
             let successor = grounded_successor_state(
                 &self.world,
                 record.world_entity_id(),
@@ -1103,13 +1163,20 @@ impl CpuCanonicalHost {
                 motor_condition,
                 successor,
             )?;
-            let prediction = r.predictor.observe_frozen(&target, &forecast)?;
-            let error = apply_prediction_evidence(
-                &mut cognitive,
-                &target,
-                &prediction.error,
-                prediction.prediction.category_coverage,
-            )?;
+            let (error, prediction_work) = if intervened {
+                // Forecasting already ran. Account for that work, but do not
+                // teach a voluntary motor predictor using a reflex outcome.
+                (0.0, forecast.predicted_successor.len() as u64)
+            } else {
+                let prediction = r.predictor.observe_frozen(&target, &forecast)?;
+                let error = apply_prediction_evidence(
+                    &mut cognitive,
+                    &target,
+                    &prediction.error,
+                    prediction.prediction.category_coverage,
+                )?;
+                (error, prediction.error.len() as u64)
+            };
             let memory = recall.receipt();
             let dendritic_work = r
                 .v11
@@ -1148,9 +1215,11 @@ impl CpuCanonicalHost {
                     + u64::from(memory.similarity_evaluations),
                 cognitive.concept.active_concepts.len() as u64,
                 cognitive.gap.active_gaps.len() as u64,
-                prediction.error.len() as u64,
+                prediction_work,
                 0,
                 structural_work,
+                // Selection eligibility was actually staged even if a reflex
+                // later discards it. This accounts for work, not a weight update.
                 1,
                 0,
             )?
@@ -1162,6 +1231,28 @@ impl CpuCanonicalHost {
                 .cloned()
                 .ok_or(CpuHostError::State("missing post-action organism"))?;
             after.account_cognitive_work(work, CognitiveWorkCostPolicy::enabled(1.0e-6)?)?;
+            if intervened {
+                r.neural
+                    .consume_intervened_selection(founder, &binding, receipt.outcome_tick)?;
+                let checkpoint = r.neural.checkpoint()?;
+                after.seal_cognitive_subsystems(
+                    receipt.outcome_tick,
+                    json_digest(b"ALIFE-CPU-NEURAL-STATE-V1", &checkpoint)?,
+                    r.memory.export_active_bank()?.active_bank_digest,
+                )?;
+                self.world.replace_organism_record_exact(after)?;
+                interventions.push(CpuIntervenedDecision {
+                    organism_id: id,
+                    sampling_counter,
+                    dispatch_generation: output.dispatch_generation,
+                    selected: decision,
+                    physical: intervention_receipt.unwrap(),
+                    cognitive_work: work,
+                });
+                // No experience was issued. Its sequence and action-observation
+                // watermarks stay unchanged; dispatch/tick authority advances.
+                continue;
+            }
             after.stage_prediction_residual_pulse(
                 sequence,
                 output.dispatch_generation,
