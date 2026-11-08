@@ -1,0 +1,7 @@
+# Separate common world planner proposal
+
+Extract endpoint correction into a world-private pure planning helper taking start, terrain-resolved desired endpoint, planned duration, actual speed and spatial/ground metric. Invoke before collision/contact/carry checks for both ordinary and opt-in routes. Preserve the pre-coordinate explicit duration plan and actual effort policy; no change to budget/tolerance or persistent bytes. A common correction is ordinary selected execution, not external intervention; keep monotonic intervention marking for real preemption/clipping/rejection differences.
+
+Controls before promotion: ordinary and candidate X128/X1000 full/half/tiny/negative translations, actual Consumed meal and receipt/world equality, goal-arrival, blockers/water/carry/terrain, rollback and checkpoint continuation; genuine CPU meal credit parity separately. Test no-contact ordinary motion independently of awake opt-in. Preserve old source/evidence rather than relabel V21 as ordinary qualification. Rounded reflex and curved swept-prefix fixes remain distinct.
+
+World-only extraction uses headless.rs, awake_translation.rs, translation_budget.rs and contact_withdrawal.rs (prior zero-time effort fix), with no core/training source dependency. Bind exact current PR315/main blobs before applying, and qualify extracted world independently. Do not transfer research CPU claims to extraction.

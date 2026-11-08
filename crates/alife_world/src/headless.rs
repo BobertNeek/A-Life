@@ -6199,6 +6199,14 @@ impl HeadlessWorld {
             };
             destination = grounded;
         }
+        if let Some(state) = translation.as_deref_mut() {
+            let Some(bounded) =
+                state.bounded_voluntary_endpoint(self, start, destination, max_step)
+            else {
+                return self.blocked_local_move(command);
+            };
+            destination = bounded;
+        }
         if let Some(blocker) = self.first_motion_blocker(start, destination) {
             return self.finish_action(
                 command,
@@ -9100,7 +9108,7 @@ mod task_6_factorized_motor_tests {
     }
 
     #[test]
-    fn awake_duration_translated_steps_preserve_time_and_known_path_limit() {
+    fn awake_endpoint_translated_steps_preserve_time_and_mark_contraction() {
         for origin in [0.0, 3.0, 1000.0] {
             for intensity in [0.5, 1.0] {
                 let (mut world, agent, food, mut bundle) = prepared_world();
@@ -9119,23 +9127,19 @@ mod task_6_factorized_motor_tests {
                 let expected = ordinary
                     .apply_registered_motor_bundle(&bundle, agent)
                     .unwrap();
-                let before = serde_json::to_vec(&world.save_state()).unwrap();
                 let result = world
                     .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent);
                 if origin == 1000.0 && intensity == 0.5 {
-                    let error = match result {
-                        Err(error) => error,
-                        Ok(_) => panic!("known upward-rounded endpoint limit unexpectedly changed"),
-                    };
-                    eprintln!("V20_KNOWN_ENDPOINT_LIMIT origin={origin} intensity={intensity} error={error:?}");
-                    assert!(matches!(
-                        error,
-                        HeadlessMotorTransactionError::Contract(
-                            ScaffoldContractError::ScalarOutOfRange
-                        )
-                    ));
-                    assert!(ordinary.entity(food).unwrap().consumed);
-                    assert!(serde_json::to_vec(&world.save_state()).unwrap() == before);
+                    let actual = result.expect("bounded representable endpoint");
+                    assert!(actual.voluntary_execution_altered);
+                    assert!(!actual.exhausted_late_no_effect);
+                    assert_eq!(actual.voluntary_time_allocated, 1.0);
+                    assert_eq!(actual.reflex_time_allocated, 0.0);
+                    assert!(world.entity(food).unwrap().consumed);
+                    assert!(actual.voluntary_path <= 0.050456252);
+                    let reflex = actual.withdrawal.as_ref().unwrap();
+                    assert_eq!(reflex.displacement, Vec3f::ZERO);
+                    assert_eq!(reflex.energy_cost, 0.0);
                     continue;
                 }
                 let actual = result.unwrap_or_else(|error| {
@@ -9160,6 +9164,120 @@ mod task_6_factorized_motor_tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn awake_endpoint_quantization_must_not_reject_a_bounded_full_interval() {
+        let (mut candidate, agent) = withdrawal_world(Vec3f::new(8.0, 0.0, 0.0), 0.4);
+        for object in candidate.objects.values_mut() {
+            object.position.x += 128.0;
+        }
+        let mut ordinary = candidate.clone();
+        let bundle = initial_priority_bundle(false);
+        let ordinary_receipt = ordinary
+            .apply_registered_motor_bundle(&bundle, agent)
+            .unwrap();
+        assert!(
+            ordinary_receipt.joint.execution.displacement.x > MOVE_STEP,
+            "fixture no longer reproduces upward f32 endpoint rounding"
+        );
+        let receipt = candidate
+            .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
+            .expect("representable endpoint should be contracted, not reject the full interval");
+        assert_eq!(receipt.voluntary_time_allocated, 1.0);
+        assert!(receipt.voluntary_path <= MOVE_STEP);
+        assert!(receipt.withdrawal.is_none());
+    }
+
+    #[test]
+    fn awake_endpoint_signed_coordinates_speeds_and_quiet_parity() {
+        for origin in [-1000.0, -128.0, 0.0, 3.0, 128.0, 1000.0] {
+            for intensity in [0.0, 0.00001, 0.5, 1.0] {
+                let (mut world, agent) = withdrawal_world(Vec3f::new(8.0, 0.0, 0.0), 0.4);
+                for object in world.objects.values_mut() {
+                    object.position.x += origin;
+                }
+                let mut bundle = initial_priority_bundle(false);
+                bundle.channels[0].intensity = Intensity::new(intensity).unwrap();
+                let embodiment = world
+                    .organism_registry
+                    .get(ORGANISM_ID)
+                    .unwrap()
+                    .embodiment();
+                let speed = MOVE_STEP
+                    * (intensity
+                        * embodiment.effector_gain(EffectorCapability::Translation)
+                        * embodiment.proprioceptive_gain())
+                    .clamp(0.0, 1.0);
+                let mut ordinary = world.clone();
+                let expected = ordinary
+                    .apply_registered_motor_bundle(&bundle, agent)
+                    .unwrap();
+                let actual = world
+                    .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
+                    .unwrap_or_else(|e| panic!("origin={origin}, intensity={intensity}: {e:?}"));
+                assert!(actual.withdrawal.is_none());
+                assert_eq!(actual.reflex_time_allocated, 0.0);
+                if actual.voluntary_execution_altered {
+                    assert!(actual.voluntary_path <= speed);
+                    assert!(!actual.exhausted_late_no_effect);
+                } else {
+                    assert!(actual.voluntary == expected);
+                    assert!(
+                        serde_json::to_vec(&world.save_state()).unwrap()
+                            == serde_json::to_vec(&ordinary.save_state()).unwrap()
+                    );
+                }
+                assert!(actual.voluntary_path <= speed + 1e-6);
+            }
+        }
+    }
+
+    #[test]
+    fn awake_endpoint_contraction_revalidates_ground_and_carried_pose() {
+        let (mut world, agent, food, _) = prepared_world();
+        for object in world.objects.values_mut() {
+            object.position.x += 128.0;
+        }
+        hold_food_for_meal(&mut world, food);
+        world.terrain = Some(
+            crate::WorldTerrain::new(
+                crate::TerrainData {
+                    width: 3,
+                    depth: 3,
+                    origin_x: 127.0,
+                    origin_z: -1.0,
+                    spacing: 1.0,
+                    heights: vec![-0.2, 0.0, 0.2, -0.2, 0.0, 0.2, -0.2, 0.0, 0.2],
+                    obstacles: vec![],
+                    water_level: None,
+                },
+                crate::LocomotionLimits::default(),
+            )
+            .unwrap(),
+        );
+        let start = world.entity(agent).unwrap().position;
+        let receipt = world
+            .apply_registered_motor_bundle_with_shared_contact_priority(
+                &initial_priority_bundle(false),
+                agent,
+            )
+            .unwrap();
+        assert!(receipt.voluntary_execution_altered);
+        assert_eq!(receipt.voluntary_time_allocated, 1.0);
+        let end = world.entity(agent).unwrap().position;
+        assert_eq!(
+            world.terrain.as_ref().unwrap().resolve_move(start, end),
+            Some(end)
+        );
+        assert!(subtract(end, start).x.hypot(subtract(end, start).z) <= MOVE_STEP);
+        assert_eq!(world.entity(food).unwrap().carried_by, Some(ORGANISM_ID));
+        assert!(world.carried_pose_reachable(
+            ORGANISM_ID,
+            end,
+            world.entity(agent).unwrap().body_yaw
+        ));
+        assert!(receipt.withdrawal.is_none());
     }
 
     #[test]

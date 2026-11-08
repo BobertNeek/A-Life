@@ -1,0 +1,23 @@
+commit 11d323c982c37604bf451e6aabf65b3d70122dfc
+Author:     Codex <codex@openai.com>
+AuthorDate: Sun Nov 8 06:18:40 2026 -0700
+Commit:     Codex <codex@openai.com>
+CommitDate: Sun Nov 8 06:18:40 2026 -0700
+
+    Add signed speed matrix and grounded carry endpoint controls
+
+commit 70dd4464046c2b5af53e7d4eed4518d5363cd3c0
+Author:     Codex <codex@openai.com>
+AuthorDate: Sun Nov 8 06:06:23 2026 -0700
+Commit:     Codex <codex@openai.com>
+CommitDate: Sun Nov 8 06:06:23 2026 -0700
+
+    Prepare candidate-only bounded representable voluntary endpoint correction
+
+commit b27d642bbbc9ba1daf1f080376b2aa6dae3e9bb6
+Author:     Codex <codex@openai.com>
+AuthorDate: Sun Nov 8 05:29:19 2026 -0700
+Commit:     Codex <codex@openai.com>
+CommitDate: Sun Nov 8 06:05:22 2026 -0700
+
+    Preserve separate X128 representable-endpoint regression before correction

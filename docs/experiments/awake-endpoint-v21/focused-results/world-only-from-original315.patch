@@ -1,0 +1,1065 @@
+diff --git a/crates/alife_world/src/headless.rs b/crates/alife_world/src/headless.rs
+index b44c1d26..68ddd0ad 100644
+--- a/crates/alife_world/src/headless.rs
++++ b/crates/alife_world/src/headless.rs
+@@ -4,7 +4,9 @@
+ 
+ mod awake_translation;
+ mod contact_withdrawal;
+-pub use awake_translation::{AwakeTranslationIntervalReceipt, TranslationTimeMetric};
++pub use awake_translation::{
++    AwakeTranslationIntervalReceipt, TranslationTimeMetric, VoluntaryTimeProvenance,
++};
+ 
+ use std::{
+     cell::{Ref, RefCell},
+@@ -4910,6 +4912,37 @@ impl HeadlessWorld {
+             .fold(BodyEventDelta::zero(), |total, (_, result)| {
+                 combine_body_event(total, result.body_event)
+             });
++        if let Some(state) = translation.as_deref_mut() {
++            // Only fresh action damage is unlocalized. A harmful held object
++            // is not an escapable source. Ingestion has already consumed and
++            // released the food, so its new internal dose permits fallback.
++            let acute_damage = executed
++                .iter()
++                .filter(|(_, result)| {
++                    !result
++                        .execution
++                        .physical
++                        .target_entity
++                        .is_some_and(|target| {
++                            self.objects.get(&target.raw()).is_some_and(|object| {
++                                object.kind == WorldObjectKind::Hazard
++                                    && object.carried_by == Some(bundle.organism_id)
++                            })
++                        })
++                })
++                .map(|(_, result)| result.body_event.damage)
++                .fold(0.0_f32, f32::max);
++            let voluntary_displacement = executed.iter().fold(Vec3f::ZERO, |sum, (_, result)| {
++                add(sum, result.execution.physical.displacement)
++            });
++            state.finish_late_response(
++                self,
++                bundle.organism_id,
++                world_entity_id,
++                acute_damage,
++                voluntary_displacement,
++            )?;
++        }
+         let final_position = self
+             .objects
+             .get(&world_entity_id.raw())
+@@ -4939,6 +4972,12 @@ impl HeadlessWorld {
+         if let Some((novelty, _)) = novelty {
+             body_event.perceived_novelty = novelty;
+         }
++        let ordinary_body_event = normalize_sleep_recovery_for_motion(
++            body_event,
++            executed
++                .iter()
++                .map(|(_, result)| result.execution.physical.displacement),
++        );
+         if let Some(state) = translation.as_ref() {
+             if let Some(reflex) = &state.withdrawal {
+                 body_event.energy = (body_event.energy - reflex.energy_cost).clamp(-1.0, 1.0);
+@@ -4964,6 +5003,9 @@ impl HeadlessWorld {
+                         .map(|r| r.displacement),
+                 ),
+         );
++        if let Some(state) = translation.as_deref_mut() {
++            state.bind_ordinary_body_equivalence(ordinary_body_event, body_event);
++        }
+         let final_thermal = self
+             .thermal_contact_severity_at(world_entity_id, final_position)
+             .max(translation.as_ref().map_or(0.0, |state| state.thermal_peak));
+@@ -6048,7 +6090,7 @@ impl HeadlessWorld {
+         command: ActionCommand,
+         agent_id: WorldEntityId,
+         intent: MoveIntent,
+-        translation: Option<&mut awake_translation::AwakeTranslationState>,
++        mut translation: Option<&mut awake_translation::AwakeTranslationState>,
+     ) -> Result<HeadlessActionResult, ScaffoldContractError> {
+         if self.player_held_object() == Some(agent_id) {
+             return self.finish_action(
+@@ -6073,6 +6115,7 @@ impl HeadlessWorld {
+         }
+         let mut observed_goal = None;
+         let max_step = MOVE_STEP * command.intensity.raw();
++        let mut planned_time = awake_translation::PlannedTranslationTime::full(max_step);
+         let destination = match intent {
+             MoveIntent::Forward => {
+                 let yaw = self
+@@ -6085,19 +6128,31 @@ impl HeadlessWorld {
+                     Vec3f::new(yaw.cos() * max_step, 0.0, yaw.sin() * max_step),
+                 ))
+             }
+-            MoveIntent::Absolute if command.target_position.is_some() => command
+-                .target_position
+-                .map(|target| step_toward(start, target, max_step)),
++            MoveIntent::Absolute if command.target_position.is_some() => {
++                command.target_position.map(|target| {
++                    planned_time = awake_translation::PlannedTranslationTime::toward(
++                        subtract(target, start),
++                        max_step,
++                    );
++                    step_toward(start, target, max_step)
++                })
++            }
+             MoveIntent::Absolute | MoveIntent::Approach => {
+                 let Some(target) = command.target_entity else {
+                     return self.invalid_target(command, None);
+                 };
+                 if let Some(relative) = self.visible_motion_target(command.organism_id, target)? {
+                     observed_goal = Some((target, relative));
++                    planned_time =
++                        awake_translation::PlannedTranslationTime::toward(relative, max_step);
+                     Some(step_toward(start, add(start, relative), max_step))
+                 } else if let Some(remembered) = command.target_position {
+                     // A creature-supplied remembered point permits a straight
+                     // movement only. It cannot authorize a local detour.
++                    planned_time = awake_translation::PlannedTranslationTime::toward(
++                        subtract(remembered, start),
++                        max_step,
++                    );
+                     Some(step_toward(start, remembered, max_step))
+                 } else {
+                     return self.blocked_local_move(command);
+@@ -6118,6 +6173,9 @@ impl HeadlessWorld {
+             return self.invalid_target(command, command.target_entity);
+         };
+         destination.validate()?;
++        if let Some(state) = translation.as_deref_mut() {
++            state.set_planned_time(planned_time);
++        }
+         let mut detour = false;
+         if let Some((target, relative)) = observed_goal {
+             let Some((selected, diverted)) =
+@@ -6141,6 +6199,14 @@ impl HeadlessWorld {
+             };
+             destination = grounded;
+         }
++        if let Some(state) = translation.as_deref_mut() {
++            let Some(bounded) =
++                state.bounded_voluntary_endpoint(self, start, destination, max_step)
++            else {
++                return self.blocked_local_move(command);
++            };
++            destination = bounded;
++        }
+         if let Some(blocker) = self.first_motion_blocker(start, destination) {
+             return self.finish_action(
+                 command,
+@@ -6161,6 +6227,11 @@ impl HeadlessWorld {
+             state.swept_contact_plan(self, &command, agent_id, start, destination)
+         });
+         if let Some(plan) = &contact_plan {
++            // From this point onward, even a fail-closed terrain/carry return
++            // is candidate intervention, not the ordinary selected execution.
++            if let Some(state) = translation.as_deref_mut() {
++                state.mark_voluntary_execution_altered();
++            }
+             if let Some(terrain) = &self.terrain {
+                 // Never place a clipped swept contact above/below the actual
+                 // ground. Until the path is grounded exactly, reject this
+@@ -8875,6 +8946,518 @@ mod task_6_factorized_motor_tests {
+         assert!((actual.allocated_translation_time - 1.0).abs() < 1e-6);
+     }
+ 
++    fn terrain_rejected_prefix_case(toxic: bool) {
++        let (mut world, agent, food, mut bundle) = prepared_world();
++        hold_food_for_meal(&mut world, food);
++        world.objects.get_mut(&food.raw()).unwrap().hazard_pain = if toxic { 0.4 } else { 0.0 };
++        bundle
++            .channels
++            .retain(|c| c.channel != MotorChannel::Locomotion);
++        bundle
++            .channels
++            .push(initial_priority_bundle(false).channels[0].clone());
++        let profile = (0..32)
++            .map(|i| if i == 11 { 0.01 } else { 0.0 })
++            .collect::<Vec<_>>();
++        world.terrain = Some(
++            crate::WorldTerrain::new(
++                crate::TerrainData {
++                    width: 32,
++                    depth: 32,
++                    origin_x: -0.5,
++                    origin_z: -0.8,
++                    spacing: 0.05,
++                    heights: profile.repeat(32),
++                    obstacles: vec![],
++                    water_level: None,
++                },
++                crate::LocomotionLimits::default(),
++            )
++            .unwrap(),
++        );
++        world
++            .editor_spawn_object(WorldEditorSpawnSpec {
++                label: "v19-curved-ground-contact".into(),
++                kind: WorldObjectKind::Hazard,
++                organism_id: None,
++                position: Vec3f::new(0.14, 0.0, 0.0),
++                nutrition: 0.0,
++                hazard_pain: 0.2,
++                radius: 0.1,
++                token_id: None,
++            })
++            .unwrap();
++        let mut ordinary = world.clone();
++        let expected = ordinary
++            .apply_registered_motor_bundle(&bundle, agent)
++            .unwrap();
++        assert!(
++            expected.joint.execution.displacement.x > 0.09,
++            "ordinary fixture move must remain legal"
++        );
++        let actual = world
++            .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
++            .unwrap();
++        assert!(
++            world.entity(food).unwrap().consumed,
++            "fixture must execute the toxic meal"
++        );
++        assert_eq!(actual.voluntary.joint.execution.displacement, Vec3f::ZERO);
++        assert!(actual.voluntary_execution_altered);
++        if toxic {
++            assert!(actual.reflex_budget_exhausted);
++        } else {
++            assert!(
++                actual.withdrawal.is_none(),
++                "nonpainful rejection invented a reflex"
++            );
++        }
++        assert!(
++            !actual.exhausted_late_no_effect,
++            "candidate-only terrain rejection was falsely labeled ordinary-equivalent"
++        );
++    }
++
++    #[test]
++    fn awake_terrain_rejected_prefix_is_not_ordinary_equivalent_after_late_meal() {
++        terrain_rejected_prefix_case(true);
++    }
++
++    #[test]
++    fn awake_terrain_rejected_prefix_remains_intervention_without_withdrawal() {
++        terrain_rejected_prefix_case(false);
++    }
++
++    #[test]
++    fn awake_late_internal_damage_uses_only_remaining_translation_time() {
++        for moving in [false, true] {
++            let (mut world, agent, food, mut bundle) = prepared_world();
++            hold_food_for_meal(&mut world, food);
++            world.objects.get_mut(&food.raw()).unwrap().hazard_pain = 0.4;
++            bundle
++                .channels
++                .retain(|c| c.channel != MotorChannel::Locomotion);
++            if moving {
++                bundle
++                    .channels
++                    .push(initial_priority_bundle(false).channels[0].clone());
++            }
++            let before = world.organism_registry.get(ORGANISM_ID).unwrap().clone();
++            let mut ordinary = world.clone();
++            let expected = ordinary
++                .apply_registered_motor_bundle(&bundle, agent)
++                .unwrap();
++            let receipt = world
++                .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
++                .unwrap();
++            assert!(world.entity(food).unwrap().consumed);
++            let reflex = receipt
++                .withdrawal
++                .as_ref()
++                .expect("fresh toxic ingestion lacked response");
++            assert_eq!(
++                reflex.direction_basis,
++                WithdrawalDirectionBasis::AcuteDamageHeadingFallback
++            );
++            assert!(
++                reflex.sources.is_empty(),
++                "food was invented as external pain geometry"
++            );
++            assert_eq!(receipt.reflex_budget_exhausted, moving);
++            assert_eq!(receipt.exhausted_late_no_effect, moving);
++            if moving {
++                assert!(
++                    receipt.voluntary == expected,
++                    "exhausted meal voluntary receipt changed"
++                );
++                assert!(
++                    world.save_state() == ordinary.save_state(),
++                    "exhausted meal world state changed"
++                );
++                assert!(
++                    serde_json::to_vec(&world.save_state()).unwrap()
++                        == serde_json::to_vec(&ordinary.save_state()).unwrap(),
++                    "exhausted meal world bytes changed"
++                );
++                assert!(!receipt.voluntary_execution_altered);
++                assert!(
++                    reflex.blocked,
++                    "exhausted interval must not report successful withdrawal"
++                );
++                assert_eq!(reflex.displacement, Vec3f::ZERO);
++                assert_eq!(reflex.energy_cost, 0.0);
++                assert_eq!(receipt.reflex_time_allocated, 0.0);
++            } else {
++                assert!(!reflex.blocked);
++                assert!(reflex.displacement.x < 0.0);
++                assert_eq!(receipt.reflex_time_allocated, 1.0);
++            }
++            let expected = before
++                .biochemistry()
++                .advance(
++                    receipt.voluntary.outcome_tick,
++                    receipt.voluntary.body_event,
++                    before.phenotype(),
++                )
++                .unwrap();
++            assert!(
++                receipt.voluntary.biology_after == expected,
++                "toxic response duplicated biology"
++            );
++        }
++    }
++
++    #[test]
++    fn awake_endpoint_translated_steps_preserve_time_and_mark_contraction() {
++        for origin in [0.0, 3.0, 1000.0] {
++            for intensity in [0.5, 1.0] {
++                let (mut world, agent, food, mut bundle) = prepared_world();
++                for object in world.objects.values_mut() {
++                    object.position.x += origin;
++                }
++                hold_food_for_meal(&mut world, food);
++                world.objects.get_mut(&food.raw()).unwrap().hazard_pain = 0.4;
++                bundle
++                    .channels
++                    .retain(|c| c.channel != MotorChannel::Locomotion);
++                let mut movement = initial_priority_bundle(false).channels[0].clone();
++                movement.intensity = Intensity::new(intensity).unwrap();
++                bundle.channels.push(movement);
++                let mut ordinary = world.clone();
++                let expected = ordinary
++                    .apply_registered_motor_bundle(&bundle, agent)
++                    .unwrap();
++                let result = world
++                    .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent);
++                if origin == 1000.0 && intensity == 0.5 {
++                    let actual = result.expect("bounded representable endpoint");
++                    assert!(actual.voluntary_execution_altered);
++                    assert!(!actual.exhausted_late_no_effect);
++                    assert_eq!(actual.voluntary_time_allocated, 1.0);
++                    assert_eq!(actual.reflex_time_allocated, 0.0);
++                    assert!(world.entity(food).unwrap().consumed);
++                    assert!(actual.voluntary_path <= 0.050456252);
++                    let reflex = actual.withdrawal.as_ref().unwrap();
++                    assert_eq!(reflex.displacement, Vec3f::ZERO);
++                    assert_eq!(reflex.energy_cost, 0.0);
++                    continue;
++                }
++                let actual = result.unwrap_or_else(|error| {
++                    panic!("origin={origin} intensity={intensity}: {error:?}")
++                });
++                assert_eq!(
++                    actual.voluntary_time_allocated, 1.0,
++                    "origin={origin}, intensity={intensity}"
++                );
++                assert_eq!(actual.reflex_time_allocated, 0.0);
++                assert!(actual.exhausted_late_no_effect);
++                let reflex = actual.withdrawal.as_ref().unwrap();
++                assert!(
++                    reflex.blocked
++                        && reflex.displacement == Vec3f::ZERO
++                        && reflex.energy_cost == 0.0
++                );
++                assert!(actual.voluntary == expected);
++                assert!(
++                    serde_json::to_vec(&world.save_state()).unwrap()
++                        == serde_json::to_vec(&ordinary.save_state()).unwrap()
++                );
++            }
++        }
++    }
++
++    #[test]
++    fn awake_endpoint_quantization_must_not_reject_a_bounded_full_interval() {
++        let (mut candidate, agent) = withdrawal_world(Vec3f::new(8.0, 0.0, 0.0), 0.4);
++        for object in candidate.objects.values_mut() {
++            object.position.x += 128.0;
++        }
++        let mut ordinary = candidate.clone();
++        let bundle = initial_priority_bundle(false);
++        let ordinary_receipt = ordinary
++            .apply_registered_motor_bundle(&bundle, agent)
++            .unwrap();
++        assert!(
++            ordinary_receipt.joint.execution.displacement.x > MOVE_STEP,
++            "fixture no longer reproduces upward f32 endpoint rounding"
++        );
++        let receipt = candidate
++            .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
++            .expect("representable endpoint should be contracted, not reject the full interval");
++        assert_eq!(receipt.voluntary_time_allocated, 1.0);
++        assert!(receipt.voluntary_path <= MOVE_STEP);
++        assert!(receipt.withdrawal.is_none());
++    }
++
++    #[test]
++    fn awake_endpoint_signed_coordinates_speeds_and_quiet_parity() {
++        for origin in [-1000.0, -128.0, 0.0, 3.0, 128.0, 1000.0] {
++            for intensity in [0.0, 0.00001, 0.5, 1.0] {
++                let (mut world, agent) = withdrawal_world(Vec3f::new(8.0, 0.0, 0.0), 0.4);
++                for object in world.objects.values_mut() {
++                    object.position.x += origin;
++                }
++                let mut bundle = initial_priority_bundle(false);
++                bundle.channels[0].intensity = Intensity::new(intensity).unwrap();
++                let embodiment = world
++                    .organism_registry
++                    .get(ORGANISM_ID)
++                    .unwrap()
++                    .embodiment();
++                let speed = MOVE_STEP
++                    * (intensity
++                        * embodiment.effector_gain(EffectorCapability::Translation)
++                        * embodiment.proprioceptive_gain())
++                    .clamp(0.0, 1.0);
++                let mut ordinary = world.clone();
++                let expected = ordinary
++                    .apply_registered_motor_bundle(&bundle, agent)
++                    .unwrap();
++                let actual = world
++                    .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
++                    .unwrap_or_else(|e| panic!("origin={origin}, intensity={intensity}: {e:?}"));
++                assert!(actual.withdrawal.is_none());
++                assert_eq!(actual.reflex_time_allocated, 0.0);
++                if actual.voluntary_execution_altered {
++                    assert!(actual.voluntary_path <= speed);
++                    assert!(!actual.exhausted_late_no_effect);
++                } else {
++                    assert!(actual.voluntary == expected);
++                    assert!(
++                        serde_json::to_vec(&world.save_state()).unwrap()
++                            == serde_json::to_vec(&ordinary.save_state()).unwrap()
++                    );
++                }
++                assert!(actual.voluntary_path <= speed + 1e-6);
++            }
++        }
++    }
++
++    #[test]
++    fn awake_endpoint_contraction_revalidates_ground_and_carried_pose() {
++        let (mut world, agent, food, _) = prepared_world();
++        for object in world.objects.values_mut() {
++            object.position.x += 128.0;
++        }
++        hold_food_for_meal(&mut world, food);
++        world.terrain = Some(
++            crate::WorldTerrain::new(
++                crate::TerrainData {
++                    width: 3,
++                    depth: 3,
++                    origin_x: 127.0,
++                    origin_z: -1.0,
++                    spacing: 1.0,
++                    heights: vec![-0.2, 0.0, 0.2, -0.2, 0.0, 0.2, -0.2, 0.0, 0.2],
++                    obstacles: vec![],
++                    water_level: None,
++                },
++                crate::LocomotionLimits::default(),
++            )
++            .unwrap(),
++        );
++        let start = world.entity(agent).unwrap().position;
++        let receipt = world
++            .apply_registered_motor_bundle_with_shared_contact_priority(
++                &initial_priority_bundle(false),
++                agent,
++            )
++            .unwrap();
++        assert!(receipt.voluntary_execution_altered);
++        assert_eq!(receipt.voluntary_time_allocated, 1.0);
++        let end = world.entity(agent).unwrap().position;
++        assert_eq!(
++            world.terrain.as_ref().unwrap().resolve_move(start, end),
++            Some(end)
++        );
++        assert!(subtract(end, start).x.hypot(subtract(end, start).z) <= MOVE_STEP);
++        assert_eq!(world.entity(food).unwrap().carried_by, Some(ORGANISM_ID));
++        assert!(world.carried_pose_reachable(
++            ORGANISM_ID,
++            end,
++            world.entity(agent).unwrap().body_yaw
++        ));
++        assert!(receipt.withdrawal.is_none());
++    }
++
++    #[test]
++    fn awake_duration_goal_arrival_and_zero_speed_keep_real_remaining_time() {
++        for (origin, goal, intensity, provenance) in [
++            (0.0, 0.025, 1.0, VoluntaryTimeProvenance::GoalArrival),
++            (3.0, 0.025, 1.0, VoluntaryTimeProvenance::GoalArrival),
++            (0.0, 0.5, 0.0, VoluntaryTimeProvenance::ZeroSpeed),
++        ] {
++            let (mut world, agent, food, mut bundle) = prepared_world();
++            for object in world.objects.values_mut() {
++                object.position.x += origin;
++            }
++            hold_food_for_meal(&mut world, food);
++            world.objects.get_mut(&food.raw()).unwrap().hazard_pain = 0.4;
++            bundle
++                .channels
++                .retain(|c| c.channel != MotorChannel::Locomotion);
++            let target = Vec3f::new(origin + goal, 0.0, 0.0);
++            bundle.channels.push(
++                ChannelCommand::new(
++                    MotorChannel::Locomotion,
++                    ActionKind::Move.canonical_id(),
++                    Some(alife_core::ActionTarget::new(None, Some(target))),
++                    target,
++                    Intensity::new(intensity).unwrap(),
++                    alife_core::DurationTicks::new(1),
++                    0.0,
++                    Confidence::new(1.0).unwrap(),
++                    0,
++                )
++                .unwrap(),
++            );
++            let before = world.organism_registry.get(ORGANISM_ID).unwrap().clone();
++            let receipt = world
++                .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
++                .unwrap();
++            assert!(world.entity(food).unwrap().consumed);
++            assert_eq!(receipt.voluntary_time_provenance, provenance);
++            assert_eq!(
++                receipt.voluntary_time_allocated,
++                receipt.planned_voluntary_time
++            );
++            if intensity > 0.0 {
++                assert!((receipt.voluntary_time_allocated - 0.25).abs() < 1e-4);
++            } else {
++                assert_eq!(receipt.voluntary_time_allocated, 0.0);
++            }
++            assert_eq!(
++                receipt.voluntary_time_allocated + receipt.reflex_time_allocated,
++                1.0
++            );
++            assert!(!receipt.exhausted_late_no_effect);
++            let reflex = receipt.withdrawal.as_ref().unwrap();
++            assert!(!reflex.blocked && reflex.energy_cost > 0.0 && reflex.displacement.x < 0.0);
++            assert!(receipt.voluntary_path + receipt.reflex_path <= MOVE_STEP + 1e-5);
++            let biology = before
++                .biochemistry()
++                .advance(
++                    receipt.voluntary.outcome_tick,
++                    receipt.voluntary.body_event,
++                    before.phenotype(),
++                )
++                .unwrap();
++            assert!(receipt.voluntary.biology_after == biology);
++        }
++    }
++
++    #[test]
++    fn awake_duration_blocked_meal_has_no_invented_acute_response() {
++        let (mut world, agent, food, mut bundle) = prepared_world();
++        hold_food_for_meal(&mut world, food);
++        world.objects.get_mut(&food.raw()).unwrap().hazard_pain = 0.4;
++        bundle
++            .channels
++            .retain(|c| c.channel != MotorChannel::Locomotion);
++        bundle
++            .channels
++            .push(initial_priority_bundle(false).channels[0].clone());
++        world
++            .editor_spawn_object(WorldEditorSpawnSpec {
++                label: "ordinary-blocker".into(),
++                kind: WorldObjectKind::Obstacle,
++                organism_id: None,
++                position: Vec3f::new(0.15, 0.0, 0.0),
++                nutrition: 0.0,
++                hazard_pain: 0.0,
++                radius: 0.1,
++                token_id: None,
++            })
++            .unwrap();
++        let mut ordinary = world.clone();
++        let expected = ordinary
++            .apply_registered_motor_bundle(&bundle, agent)
++            .unwrap();
++        let receipt = world
++            .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
++            .unwrap();
++        assert_eq!(
++            receipt.voluntary_time_provenance,
++            VoluntaryTimeProvenance::BlockedAttempt
++        );
++        assert_eq!(receipt.voluntary_time_allocated, 1.0);
++        assert!(
++            !world.entity(food).unwrap().consumed,
++            "blocked reach unexpectedly consumed meal"
++        );
++        assert!(receipt.withdrawal.is_none() && !receipt.voluntary_execution_altered);
++        assert!(!receipt.exhausted_late_no_effect);
++        assert!(receipt.voluntary == expected);
++        assert!(
++            serde_json::to_vec(&world.save_state()).unwrap()
++                == serde_json::to_vec(&ordinary.save_state()).unwrap()
++        );
++    }
++
++    #[test]
++    fn awake_duration_ordinary_blocked_attempt_has_no_phantom_late_effort() {
++        let (mut world, agent, food, mut bundle) = prepared_world();
++        hold_food_for_meal(&mut world, food);
++        world.objects.get_mut(&food.raw()).unwrap().hazard_pain = 0.4;
++        bundle
++            .channels
++            .retain(|c| c.channel != MotorChannel::Locomotion);
++        let target = Vec3f::new(-1.0, 0.0, 0.0);
++        bundle.channels.push(
++            ChannelCommand::new(
++                MotorChannel::Locomotion,
++                ActionKind::Move.canonical_id(),
++                Some(alife_core::ActionTarget::new(None, Some(target))),
++                target,
++                Intensity::new(1.0).unwrap(),
++                alife_core::DurationTicks::new(1),
++                0.0,
++                Confidence::new(1.0).unwrap(),
++                0,
++            )
++            .unwrap(),
++        );
++        world
++            .editor_spawn_object(WorldEditorSpawnSpec {
++                label: "ordinary-blocker".into(),
++                kind: WorldObjectKind::Obstacle,
++                organism_id: None,
++                position: Vec3f::new(-1.25, 0.0, 0.0),
++                nutrition: 0.0,
++                hazard_pain: 0.0,
++                radius: 1.0,
++                token_id: None,
++            })
++            .unwrap();
++        let start = world.entity(agent).unwrap().position;
++        assert!(world.physical_contact_reachable(start, world.entity(food).unwrap().position));
++        assert!(world
++            .first_motion_blocker(start, Vec3f::new(-0.1, 0.0, 0.0))
++            .is_some());
++        let mut ordinary = world.clone();
++        let expected = ordinary
++            .apply_registered_motor_bundle(&bundle, agent)
++            .unwrap();
++        let receipt = world
++            .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
++            .unwrap();
++        assert_eq!(
++            receipt.voluntary_time_provenance,
++            VoluntaryTimeProvenance::BlockedAttempt
++        );
++        assert_eq!(receipt.voluntary_time_allocated, 1.0);
++        assert!(
++            world.entity(food).unwrap().consumed,
++            "opposite blocked move must leave held meal reachable"
++        );
++        assert!(receipt.exhausted_late_no_effect && !receipt.voluntary_execution_altered);
++        assert!(receipt.voluntary == expected);
++        assert!(
++            serde_json::to_vec(&world.save_state()).unwrap()
++                == serde_json::to_vec(&ordinary.save_state()).unwrap()
++        );
++    }
++
+     #[test]
+     fn awake_ground_priority_quiet_slope_preserves_existing_planar_walking() {
+         let (mut candidate, agent) = withdrawal_world(Vec3f::new(8.0, 0.0, 0.0), 0.4);
+@@ -9132,6 +9715,7 @@ mod task_6_factorized_motor_tests {
+             .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
+             .unwrap();
+         let reflex = receipt.withdrawal.as_ref().unwrap();
++        assert!(!receipt.exhausted_late_no_effect);
+         assert_eq!(reflex.sources.len(), 2);
+         assert!(reflex.blocked);
+         assert_eq!(reflex.displacement, Vec3f::ZERO);
+@@ -9195,6 +9779,8 @@ mod task_6_factorized_motor_tests {
+             )
+             .unwrap();
+         let reflex = receipt.withdrawal.as_ref().unwrap();
++        assert!(!receipt.exhausted_late_no_effect);
++        assert!(receipt.voluntary_execution_altered);
+         assert!(reflex.blocked);
+         assert_eq!(receipt.actual_displacement, Vec3f::ZERO);
+         assert_eq!(receipt.allocated_translation_time, 1.0);
+diff --git a/crates/alife_world/src/headless/awake_translation.rs b/crates/alife_world/src/headless/awake_translation.rs
+index 3ee5a24f..634dda78 100644
+--- a/crates/alife_world/src/headless/awake_translation.rs
++++ b/crates/alife_world/src/headless/awake_translation.rs
+@@ -20,6 +20,55 @@ impl TranslationTimeMetric {
+     }
+ }
+ 
++/// Ephemeral provenance for actual voluntary actuator time, never inferred
++/// from rounded final world-coordinate subtraction.
++#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
++pub enum VoluntaryTimeProvenance {
++    #[default]
++    NoTranslation,
++    InitialPreemption,
++    FullInterval,
++    GoalArrival,
++    ZeroSpeed,
++    BlockedAttempt,
++    SweptContact,
++}
++
++#[derive(Debug, Clone, Copy)]
++pub(super) struct PlannedTranslationTime {
++    duration: f32,
++    provenance: VoluntaryTimeProvenance,
++}
++impl PlannedTranslationTime {
++    pub(super) fn full(speed: f32) -> Self {
++        if speed > 0.0 {
++            Self {
++                duration: 1.0,
++                provenance: VoluntaryTimeProvenance::FullInterval,
++            }
++        } else {
++            Self {
++                duration: 0.0,
++                provenance: VoluntaryTimeProvenance::ZeroSpeed,
++            }
++        }
++    }
++    pub(super) fn toward(relative: Vec3f, speed: f32) -> Self {
++        if speed <= 0.0 {
++            return Self::full(speed);
++        }
++        let length = distance(Vec3f::ZERO, relative);
++        if length >= speed {
++            Self::full(speed)
++        } else {
++            Self {
++                duration: length / speed,
++                provenance: VoluntaryTimeProvenance::GoalArrival,
++            }
++        }
++    }
++}
++
+ /// The voluntary receipt retains selected intent and actual per-channel motion.
+ /// Its body event/biology include the reflex once; `actual_displacement` also
+ /// includes the separately identified involuntary movement. This wrapper is not
+@@ -32,8 +81,16 @@ pub struct AwakeTranslationIntervalReceipt {
+     pub allocated_translation_time: f32,
+     pub translation_time_metric: TranslationTimeMetric,
+     pub voluntary_time_allocated: f32,
++    pub planned_voluntary_time: f32,
++    pub voluntary_time_provenance: VoluntaryTimeProvenance,
+     pub reflex_time_allocated: f32,
+     pub reflex_budget_exhausted: bool,
++    /// Only a late zero-time/effort/motion response with the same normalized
++    /// body event as ordinary execution qualifies. Initial/swept responses do not.
++    pub exhausted_late_no_effect: bool,
++    /// Monotonic: candidate-only preemption, clipping or rejection occurred.
++    /// This remains true even if no withdrawal could be executed.
++    pub voluntary_execution_altered: bool,
+     pub reflex_path: f32,
+     pub voluntary_path: f32,
+     pub voluntary_translation_energy: f32,
+@@ -50,7 +107,12 @@ pub(super) struct AwakeTranslationState {
+     time_metric: TranslationTimeMetric,
+     pub(super) thermal_peak: f32,
+     voluntary_time: f32,
++    planned_time: Option<PlannedTranslationTime>,
++    voluntary_time_provenance: VoluntaryTimeProvenance,
+     reflex_time: f32,
++    late_response: bool,
++    exhausted_late_no_effect: bool,
++    voluntary_execution_altered: bool,
+ }
+ 
+ pub(super) struct SweptContactPlan {
+@@ -82,6 +144,8 @@ impl AwakeTranslationState {
+         let mut budget = TranslationIntervalBudget::new(MOVE_STEP * physical_capacity)?;
+         self.withdrawal = world.apply_contact_withdrawal(organism, entity, capacity, gain, 0.0)?;
+         if let Some(reflex) = &self.withdrawal {
++            self.voluntary_execution_altered = true;
++            self.voluntary_time_provenance = VoluntaryTimeProvenance::InitialPreemption;
+             self.reflex_time = 1.0;
+             // Even a blocked protective attempt owns this interval. A voluntary
+             // translation cannot undo the response or receive a second allowance.
+@@ -141,7 +205,7 @@ impl AwakeTranslationState {
+         if sources.is_empty() {
+             return None;
+         }
+-        let duration = (self.time_metric.path_length(delta) * fraction / speed).clamp(0.0, 1.0);
++        let duration = self.planned_time?.duration * fraction.clamp(0.0, 1.0);
+         Some(SweptContactPlan {
+             position,
+             sources,
+@@ -175,6 +239,7 @@ impl AwakeTranslationState {
+         result.observation.energy_delta = SignedValence::new(result.body_event.energy)?;
+         result.observation.homeostatic_delta.drives.brain_atp *= plan.duration;
+         self.voluntary_time = plan.duration;
++        self.voluntary_time_provenance = VoluntaryTimeProvenance::SweptContact;
+         self.voluntary_path += distance(Vec3f::ZERO, displacement);
+         self.voluntary_translation_energy += result.body_event.energy;
+         self.thermal_peak = world.thermal_contact_severity_at(own, plan.position);
+@@ -199,6 +264,120 @@ impl AwakeTranslationState {
+         Ok(())
+     }
+ 
++    pub(super) fn finish_late_response(
++        &mut self,
++        world: &mut HeadlessWorld,
++        organism: OrganismId,
++        own: WorldEntityId,
++        acute_damage: f32,
++        voluntary_displacement: Vec3f,
++    ) -> Result<(), ScaffoldContractError> {
++        if self.withdrawal.is_some() {
++            return Ok(());
++        }
++        let budget = self
++            .budget
++            .as_mut()
++            .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
++        let remaining = 1.0 - budget.spent_time;
++        let carried = world.carried_interval_positions(organism, None);
++        self.withdrawal = world.apply_contact_withdrawal_for_interval(
++            organism,
++            own,
++            self.capacity,
++            self.gain,
++            acute_damage,
++            remaining,
++            None,
++        )?;
++        if let Some(reflex) = &self.withdrawal {
++            self.late_response = true;
++            self.reflex_time = remaining;
++            budget.consume(
++                MOVE_STEP * self.capacity.unwrap_or(1.0).clamp(0.0, 1.0) * self.gain,
++                remaining,
++                self.time_metric.path_length(reflex.displacement),
++            )?;
++            world.commit_current_interval_velocity(
++                organism,
++                add(voluntary_displacement, reflex.displacement),
++            )?;
++            world.commit_carried_interval_velocity(organism, &carried);
++        }
++        Ok(())
++    }
++
++    /// Correct only representational overshoot of a planned voluntary endpoint.
++    /// Never expands the existing allowance or changes allocated actuator time.
++    pub(super) fn bounded_voluntary_endpoint(
++        &mut self,
++        world: &HeadlessWorld,
++        start: Vec3f,
++        end: Vec3f,
++        speed: f32,
++    ) -> Option<Vec3f> {
++        let duration = self.planned_time?.duration;
++        let allowance = speed * duration;
++        let tolerance = 1e-6 * self.budget?.full_speed_distance().max(1.0);
++        if self.time_metric.path_length(subtract(end, start)) <= allowance + tolerance {
++            return Some(end);
++        }
++        self.mark_voluntary_execution_altered();
++        let mut candidate = end;
++        // A fixed bound prevents a precision repair from becoming a path search.
++        // Larger projection/path defects remain fail-closed, separately diagnosed.
++        for _ in 0..8 {
++            fn toward(value: f32, origin: f32) -> f32 {
++                if value > origin {
++                    value.next_down().max(origin)
++                } else if value < origin {
++                    value.next_up().min(origin)
++                } else {
++                    value
++                }
++            }
++            candidate.x = toward(candidate.x, start.x);
++            candidate.z = toward(candidate.z, start.z);
++            if world.terrain.is_none() {
++                candidate.y = toward(candidate.y, start.y);
++            }
++            if let Some(terrain) = &world.terrain {
++                candidate = terrain.resolve_move(start, candidate)?;
++            }
++            if self.time_metric.path_length(subtract(candidate, start)) <= allowance {
++                return Some(candidate);
++            }
++        }
++        None
++    }
++
++    pub(super) fn set_planned_time(&mut self, time: PlannedTranslationTime) {
++        self.planned_time = Some(time);
++    }
++
++    pub(super) fn mark_voluntary_execution_altered(&mut self) {
++        self.voluntary_execution_altered = true;
++    }
++
++    pub(super) fn bind_ordinary_body_equivalence(
++        &mut self,
++        ordinary: BodyEventDelta,
++        actual: BodyEventDelta,
++    ) {
++        self.exhausted_late_no_effect = self.late_response
++            && !self.voluntary_execution_altered
++            && self.reflex_time == 0.0
++            && self.withdrawal.as_ref().is_some_and(|r| {
++                r.blocked && r.displacement == Vec3f::ZERO && r.energy_cost == 0.0
++            })
++            && ordinary == actual
++            // Only these fields can change above the normalization boundary.
++            // Do not call signed-zero changes byte-exact equivalence.
++            && ordinary.energy.to_bits() == actual.energy.to_bits()
++            && ordinary.damage.to_bits() == actual.damage.to_bits()
++            && ordinary.sleep_recovery.to_bits() == actual.sleep_recovery.to_bits();
++    }
++
+     pub(super) fn observe_voluntary(
+         &mut self,
+         command: &ActionCommand,
+@@ -219,11 +398,14 @@ impl AwakeTranslationState {
+         let path = self.time_metric.path_length(displacement);
+         let speed = MOVE_STEP * command.intensity.raw();
+         let time = if !result.execution.succeeded {
++            self.voluntary_time_provenance = VoluntaryTimeProvenance::BlockedAttempt;
+             1.0
+-        } else if speed > 0.0 {
+-            (path / speed).clamp(0.0, 1.0)
+         } else {
+-            0.0
++            let planned = self
++                .planned_time
++                .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
++            self.voluntary_time_provenance = planned.provenance;
++            planned.duration
+         };
+         self.budget
+             .as_mut()
+@@ -274,18 +456,60 @@ impl HeadlessWorld {
+         Ok(result)
+     }
+ 
+-    /// Candidate initial and swept external-contact priority. Late internal
+-    /// injury and ordinary sealed CPU/GPU credit are not integrated here.
++    /// Candidate initial/swept contact and fresh late-action damage priority.
++    /// Ordinary sealed CPU/GPU credit is not integrated by this world API.
+     /// Existing ordinary APIs and physical defaults are unchanged.
+     pub fn apply_registered_motor_bundle_with_shared_contact_priority(
+         &mut self,
+         bundle: &MotorCommandBundle,
+         entity: WorldEntityId,
++    ) -> Result<AwakeTranslationIntervalReceipt, HeadlessMotorTransactionError> {
++        self.apply_shared_contact_bundle(bundle, entity, None, None)
++    }
++
++    /// Explicit staged-host variant preserving ordinary neural emissions and
++    /// perceived novelty. The enclosing host owns its whole-state commit.
++    pub fn apply_registered_motor_bundle_with_shared_contact_priority_and_perceived_novelty(
++        &mut self,
++        bundle: &MotorCommandBundle,
++        entity: WorldEntityId,
++        neural: &NeuralEmissionFrame,
++        novelty: f32,
++        object_novelty: &[(WorldEntityId, f32)],
++    ) -> Result<AwakeTranslationIntervalReceipt, HeadlessMotorTransactionError> {
++        if !novelty.is_finite()
++            || !(0.0..=1.0).contains(&novelty)
++            || object_novelty.len() > bundle.channels.len()
++            || object_novelty.iter().any(|(id, value)| {
++                id.raw() == 0 || !value.is_finite() || !(0.0..=1.0).contains(value)
++            })
++        {
++            return Err(ScaffoldContractError::ScalarOutOfRange.into());
++        }
++        self.apply_shared_contact_bundle(
++            bundle,
++            entity,
++            Some(neural),
++            Some((novelty, object_novelty)),
++        )
++    }
++
++    fn apply_shared_contact_bundle(
++        &mut self,
++        bundle: &MotorCommandBundle,
++        entity: WorldEntityId,
++        neural: Option<&NeuralEmissionFrame>,
++        novelty: Option<(f32, &[(WorldEntityId, f32)])>,
+     ) -> Result<AwakeTranslationIntervalReceipt, HeadlessMotorTransactionError> {
+         let before = self.clone();
+         let mut state = AwakeTranslationState::default();
+-        let result =
+-            self.apply_registered_motor_bundle_inner(bundle, entity, None, None, Some(&mut state));
++        let result = self.apply_registered_motor_bundle_inner(
++            bundle,
++            entity,
++            neural,
++            novelty,
++            Some(&mut state),
++        );
+         match result {
+             Err(error) => {
+                 *self = before;
+@@ -303,8 +527,12 @@ impl HeadlessWorld {
+                     ),
+                     voluntary,
+                     reflex_budget_exhausted: state.withdrawal.is_some() && state.reflex_time == 0.0,
++                    exhausted_late_no_effect: state.exhausted_late_no_effect,
++                    voluntary_execution_altered: state.voluntary_execution_altered,
+                     withdrawal: state.withdrawal,
+                     voluntary_time_allocated: state.voluntary_time,
++                    planned_voluntary_time: state.planned_time.map_or(0.0, |p| p.duration),
++                    voluntary_time_provenance: state.voluntary_time_provenance,
+                     reflex_time_allocated: state.reflex_time,
+                     allocated_translation_time: state.budget.map_or(0.0, |b| b.spent_time),
+                     translation_time_metric: state.time_metric,
+diff --git a/crates/alife_world/src/headless/contact_withdrawal.rs b/crates/alife_world/src/headless/contact_withdrawal.rs
+index 93464c57..4a935ccd 100644
+--- a/crates/alife_world/src/headless/contact_withdrawal.rs
++++ b/crates/alife_world/src/headless/contact_withdrawal.rs
+@@ -176,6 +176,11 @@ impl HeadlessWorld {
+             direction = Vec3f::new(-yaw.cos(), 0.0, -yaw.sin());
+             receipt.direction_basis = WithdrawalDirectionBasis::AcuteDamageHeadingFallback;
+         }
++        // A directional protective response with no remaining actuator time
++        // is blocked, not a successful zero-distance move.
++        if interval_fraction == 0.0 {
++            return Ok(Some(receipt));
++        }
+         let norm = direction.x.hypot(direction.z);
+         let capacity =
+             locomotor_capacity.unwrap_or(1.0).clamp(0.0, 1.0) * effector_gain.clamp(0.0, 1.0);
+diff --git a/crates/alife_world/src/headless/translation_budget.rs b/crates/alife_world/src/headless/translation_budget.rs
+index 964020ed..1e2a7c06 100644
+--- a/crates/alife_world/src/headless/translation_budget.rs
++++ b/crates/alife_world/src/headless/translation_budget.rs
+@@ -22,6 +22,10 @@ impl TranslationIntervalBudget {
+         })
+     }
+ 
++    pub(super) fn full_speed_distance(self) -> f32 {
++        self.full_speed_distance
++    }
++
+     /// Record one staged, physically executed segment/attempt. `speed_distance`
+     /// is that route's distance at its actual bounded speed for one full tick.
+     /// `duration` is its allocated fraction of the same tick, not a second tick.

@@ -22,6 +22,10 @@ impl TranslationIntervalBudget {
         })
     }
 
+    pub(super) fn full_speed_distance(self) -> f32 {
+        self.full_speed_distance
+    }
+
     /// Record one staged, physically executed segment/attempt. `speed_distance`
     /// is that route's distance at its actual bounded speed for one full tick.
     /// `duration` is its allocated fraction of the same tick, not a second tick.

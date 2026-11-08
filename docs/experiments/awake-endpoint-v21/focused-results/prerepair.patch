@@ -1,0 +1,34 @@
+diff --git a/crates/alife_world/src/headless.rs b/crates/alife_world/src/headless.rs
+index 00ac9117..61dac493 100644
+--- a/crates/alife_world/src/headless.rs
++++ b/crates/alife_world/src/headless.rs
+@@ -9162,6 +9162,29 @@ mod task_6_factorized_motor_tests {
+         }
+     }
+ 
++    #[test]
++    fn awake_endpoint_quantization_must_not_reject_a_bounded_full_interval() {
++        let (mut candidate, agent) = withdrawal_world(Vec3f::new(8.0, 0.0, 0.0), 0.4);
++        for object in candidate.objects.values_mut() {
++            object.position.x += 128.0;
++        }
++        let mut ordinary = candidate.clone();
++        let bundle = initial_priority_bundle(false);
++        let ordinary_receipt = ordinary
++            .apply_registered_motor_bundle(&bundle, agent)
++            .unwrap();
++        assert!(
++            ordinary_receipt.joint.execution.displacement.x > MOVE_STEP,
++            "fixture no longer reproduces upward f32 endpoint rounding"
++        );
++        let receipt = candidate
++            .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
++            .expect("representable endpoint should be contracted, not reject the full interval");
++        assert_eq!(receipt.voluntary_time_allocated, 1.0);
++        assert!(receipt.voluntary_path <= MOVE_STEP);
++        assert!(receipt.withdrawal.is_none());
++    }
++
+     #[test]
+     fn awake_duration_goal_arrival_and_zero_speed_keep_real_remaining_time() {
+         for (origin, goal, intensity, provenance) in [

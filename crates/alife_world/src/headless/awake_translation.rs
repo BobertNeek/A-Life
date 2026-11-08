@@ -307,6 +307,50 @@ impl AwakeTranslationState {
         Ok(())
     }
 
+    /// Correct only representational overshoot of a planned voluntary endpoint.
+    /// Never expands the existing allowance or changes allocated actuator time.
+    pub(super) fn bounded_voluntary_endpoint(
+        &mut self,
+        world: &HeadlessWorld,
+        start: Vec3f,
+        end: Vec3f,
+        speed: f32,
+    ) -> Option<Vec3f> {
+        let duration = self.planned_time?.duration;
+        let allowance = speed * duration;
+        let tolerance = 1e-6 * self.budget?.full_speed_distance().max(1.0);
+        if self.time_metric.path_length(subtract(end, start)) <= allowance + tolerance {
+            return Some(end);
+        }
+        self.mark_voluntary_execution_altered();
+        let mut candidate = end;
+        // A fixed bound prevents a precision repair from becoming a path search.
+        // Larger projection/path defects remain fail-closed, separately diagnosed.
+        for _ in 0..8 {
+            fn toward(value: f32, origin: f32) -> f32 {
+                if value > origin {
+                    value.next_down().max(origin)
+                } else if value < origin {
+                    value.next_up().min(origin)
+                } else {
+                    value
+                }
+            }
+            candidate.x = toward(candidate.x, start.x);
+            candidate.z = toward(candidate.z, start.z);
+            if world.terrain.is_none() {
+                candidate.y = toward(candidate.y, start.y);
+            }
+            if let Some(terrain) = &world.terrain {
+                candidate = terrain.resolve_move(start, candidate)?;
+            }
+            if self.time_metric.path_length(subtract(candidate, start)) <= allowance {
+                return Some(candidate);
+            }
+        }
+        None
+    }
+
     pub(super) fn set_planned_time(&mut self, time: PlannedTranslationTime) {
         self.planned_time = Some(time);
     }
