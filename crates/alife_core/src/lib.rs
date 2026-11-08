@@ -54,7 +54,13 @@ pub mod memory;
 pub mod memory_query;
 pub mod migration_v2;
 pub mod motor;
+pub mod need_association_native;
 pub mod neural;
+pub use need_association_native::*;
+
+/// Protected phenotype-bound CPU need-reader V2, never a default or GPU route.
+pub mod need_association_native_v2;
+pub use need_association_native_v2::*;
 pub mod neural_receptors;
 pub mod packed_log;
 pub mod perception;

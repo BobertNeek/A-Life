@@ -4,6 +4,9 @@
 
 mod contact_withdrawal;
 
+#[cfg(test)]
+mod prepared_motor_adapter_tests;
+
 use std::{
     cell::{Ref, RefCell},
     collections::{BTreeMap, BTreeSet},
@@ -4770,31 +4773,12 @@ impl HeadlessWorld {
         novelty: Option<(f32, &[(WorldEntityId, f32)])>,
     ) -> Result<HeadlessMotorTransactionReceipt, HeadlessMotorTransactionError> {
         let outcome_tick = self.validate_registered_motor_bundle(bundle, world_entity_id)?;
-        let embodiment = self
+        let record = self
             .organism_registry
             .get(bundle.organism_id)
-            .ok_or(ScaffoldContractError::InvalidId)?
-            .embodiment()
-            .clone();
-        let biology_before = *self
-            .organism_registry
-            .get(bundle.organism_id)
-            .ok_or(ScaffoldContractError::InvalidId)?
-            .biochemistry();
-        let phenotype = self
-            .organism_registry
-            .get(bundle.organism_id)
-            .ok_or(ScaffoldContractError::InvalidId)?
-            .phenotype();
-        let locomotor_capacity = biology_before
-            .graph_state()
-            .locomotor_capacity(&phenotype.chemistry.biochemical)?
-            .map(|chemical| {
-                let organ = biology_before.body.organ(alife_core::OrganKind::Locomotor);
-                let reserve = (organ.energy / (0.5 + 0.5 * phenotype.body.metabolic_efficiency))
-                    .clamp(0.0, 1.0);
-                chemical * reserve * organ.integrity
-            });
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        let motor_adapter = PreparedMotorChannelAdapter::from_record(record)?;
+        let biology_before = *record.biochemistry();
         let initial_position = self
             .objects
             .get(&world_entity_id.raw())
@@ -4815,9 +4799,7 @@ impl HeadlessWorld {
         let mut channels = bundle
             .channels
             .iter()
-            .map(|command| {
-                adapt_motor_channel_to_embodiment(command, &embodiment, locomotor_capacity)
-            })
+            .map(|command| motor_adapter.adapt(command))
             .collect::<Result<Vec<_>, _>>()?;
         channels.sort_by_key(|command| motor_channel_order(command.channel));
         let mut executed = Vec::with_capacity(channels.len());
@@ -7572,6 +7554,50 @@ fn conception_trial(seed: u64, maternal: OrganismId, paternal: OrganismId, tick:
     bits = (bits ^ (bits >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
     bits ^= bits >> 31;
     (bits >> 40) as f32 / (1_u32 << 24) as f32
+}
+
+/// Immutable motor adaptation prepared from one exact pre-action organism record.
+///
+/// Preparation snapshots embodiment and evaluates biological locomotor capacity
+/// once, as world bundle execution does. Adapting multiple channels does not
+/// re-evaluate chemistry. Only intensity can change; this adapter neither selects
+/// a primitive nor decides world legality or proves the record's provenance.
+/// Callers comparing execution receipts must bind this record to the receipt's
+/// actual pre-action physiology and compare the complete adapted command.
+#[derive(Debug, Clone)]
+pub struct PreparedMotorChannelAdapter {
+    embodiment: EmbodimentState,
+    locomotor_capacity: Option<f32>,
+}
+
+impl PreparedMotorChannelAdapter {
+    pub fn from_record(
+        record: &WorldOrganismRecord,
+    ) -> Result<Self, HeadlessMotorTransactionError> {
+        let embodiment = record.embodiment().clone();
+        let biology_before = record.biochemistry();
+        let phenotype = record.phenotype();
+        let locomotor_capacity = biology_before
+            .graph_state()
+            .locomotor_capacity(&phenotype.chemistry.biochemical)?
+            .map(|chemical| {
+                let organ = biology_before.body.organ(alife_core::OrganKind::Locomotor);
+                let reserve = (organ.energy / (0.5 + 0.5 * phenotype.body.metabolic_efficiency))
+                    .clamp(0.0, 1.0);
+                chemical * reserve * organ.integrity
+            });
+        Ok(Self {
+            embodiment,
+            locomotor_capacity,
+        })
+    }
+
+    pub fn adapt(
+        &self,
+        command: &ChannelCommand,
+    ) -> Result<ChannelCommand, HeadlessMotorTransactionError> {
+        adapt_motor_channel_to_embodiment(command, &self.embodiment, self.locomotor_capacity)
+    }
 }
 
 fn adapt_motor_channel_to_embodiment(

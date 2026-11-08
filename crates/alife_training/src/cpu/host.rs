@@ -1,5 +1,6 @@
 //! Canonical CPU collector. Biology, legality, perception, sleep and episodic
 //! evidence are organism-owned; only founder parameters/optimizer are shared.
+use super::need_association::{accumulate_work, CpuNeedAssociationPortV4};
 use super::*;
 use alife_core::cognitive_work::{CognitiveWorkCostPolicy, CognitiveWorkCounters};
 use alife_core::predictive::GroundedSuccessorPredictor;
@@ -50,6 +51,7 @@ struct Resident {
     next_sequence: u64,
     replay: Vec<CpuReplayEvent>,
     language_grounding: LanguageGroundingLedger,
+    need_association: Option<CpuNeedAssociationPortV4>,
 }
 #[derive(Clone, Copy)]
 struct ResidentAuthority {
@@ -124,6 +126,7 @@ pub struct CpuCanonicalHost {
     residents: BTreeMap<u64, Resident>,
     sampling_seed: u32,
     sampling_counter: u32,
+    need_receipts: Vec<CpuNeedDecisionReceiptV4>,
 }
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct CpuCollectedDecision {
@@ -167,6 +170,227 @@ fn json_digest<T: serde::Serialize>(domain: &[u8], v: &T) -> Result<[u64; 4], Cp
     Ok(d.finish256())
 }
 impl CpuCanonicalHost {
+    /// Detached forward inspection of a fresh, not-yet-dispatched host. It uses
+    /// genuine current perception and native arithmetic on a private neural clone,
+    /// but creates no experience envelope and executes no world action.
+    pub fn preview_need_feasibility(
+        &self,
+        founder: &CpuFoundationTrainer,
+        temperature: f32,
+    ) -> Result<Vec<CpuNeedFeasibilityPreviewV4>, CpuHostError> {
+        self.validate_founder(founder)?;
+        let p = founder.phenotype();
+        let mut world = self.world.clone();
+        let mut result = Vec::new();
+        for (&raw, r) in &self.residents {
+            let checkpoint = r.neural.checkpoint()?;
+            if r.next_sequence != 1 || checkpoint.dispatch_generation != 0 {
+                return Err(CpuHostError::State(
+                    "feasibility preview requires an undispatched fresh host",
+                ));
+            }
+            let id = OrganismId(raw);
+            let record = self
+                .world
+                .organism_registry()
+                .get(id)
+                .ok_or(CpuHostError::State("missing preview organism"))?;
+            let tick = self.world.tick();
+            let receptors = record
+                .biochemistry()
+                .neural_receptor_frame(record.phenotype())?;
+            let effects = NeuralReceptorEffects::from_frame(
+                &receptors,
+                &NeuralReceptorPhenotype::compile(p)?,
+            )?;
+            let (draft, candidate_binding) = world.perception_frame_draft_with_bindings(
+                id,
+                tick,
+                p.sensor_profile(),
+                record.biochemistry().homeostasis,
+            )?;
+            let prepared = prepare_canonical_frame(
+                &CanonicalPreparationInput {
+                    draft,
+                    candidate_binding,
+                    sequence_id: ExperienceSequenceId(1),
+                    homeostasis: record.biochemistry().homeostasis,
+                    hysteresis: r.hysteresis,
+                    policy: attention_selection_policy_for(p),
+                    neural_receptors: receptors,
+                    receptor_effects: effects,
+                },
+                &r.memory,
+                &r.topology,
+                &r.predictor,
+                false,
+            )
+            .result?;
+            let frame = prepared.frame;
+            let mut activity = cpu_activity_budget(
+                p,
+                CpuActivityAnchor {
+                    organism_id: id,
+                    tick,
+                    sequence_cursor: 1,
+                    previous_dispatch_generation: 0,
+                    source_frame_digest: r.activity.source_frame_digest,
+                    frame_digest: frame.frame_digest().0,
+                },
+                record.biochemistry().homeostasis.drives.brain_atp,
+                frame.candidates().len() as u32,
+                prepared.memory_recall.context().candidates.len() as u32,
+            )?;
+            let mut port = r
+                .need_association
+                .as_ref()
+                .map(|port| port.prepare(&frame, record))
+                .transpose()?;
+            if let Some(port) = &port {
+                accumulate_work(&mut activity.work, port.work)?;
+                let policy = BrainActivityPolicyV1::production_v1();
+                activity.debit_atp_q16 = policy
+                    .cost
+                    .q24_to_atp_q16_round_half_up(policy.cost.neural_cost_q24(&activity.work)?)?;
+            }
+            let mut context = encode_cpu_frame(
+                p,
+                &frame,
+                &prepared.memory_recall,
+                &effects,
+                activity.enabled_routes.clone(),
+                r.v11
+                    .sparse_spans()
+                    .iter()
+                    .flat_map(|s| {
+                        s.edges.iter().map(|e| crate::TrainingFrozenSynapse {
+                            source: e.source,
+                            target: e.target,
+                            route: e.route,
+                            cadence: u32::from(
+                                p.projections()[e.route as usize].update_cadence().raw(),
+                            ),
+                            effective_weight: e.weight,
+                        })
+                    })
+                    .collect(),
+            )?;
+            context.microstep_count = u32::from(activity.microsteps);
+            let mut detached = r.neural.clone();
+            let output = if let Some(port) = &mut port {
+                detached.advance_with_need_association(founder, context, &effects, port)?
+            } else {
+                detached.advance(founder, context, &effects)?
+            };
+            let activations = &detached.neural_state().activations;
+            let (global, motor, rest, noop) = super::need_preview::preview_probabilities(
+                p,
+                &frame,
+                &output.candidate_logits,
+                temperature,
+            )?;
+            let mut candidates = Vec::new();
+            for (i, c) in frame.candidates().iter().enumerate() {
+                let input = &output.replay_tick.candidates[i];
+                let family = p
+                    .candidate_decoder()
+                    .families()
+                    .iter()
+                    .find(|f| f.family() == c.family)
+                    .ok_or(CpuHostError::State("preview family missing"))?;
+                let mut action = 0.;
+                let mut memory = 0.;
+                let mut cognitive = 0.;
+                let mut minimum = f32::INFINITY;
+                let mut maximum = f32::NEG_INFINITY;
+                let mut aggregate = 0.;
+                let mut weighted = 0.;
+                for (j, s) in p.synapses().iter().enumerate() {
+                    let CompiledSynapseKind::Decoder(d) = s.kind() else {
+                        continue;
+                    };
+                    if d.family() != c.family {
+                        continue;
+                    }
+                    let weight =
+                        founder.weights()[j] + output.replay_tick.effective_weight_offsets[j];
+                    let value = input.decoder_inputs[d.input_lane() as usize] * weight;
+                    match d.head() {
+                        DecoderHeadKind::ActionCandidate => {
+                            let activation = activations[s.source() as usize];
+                            action += activation * value;
+                            minimum = minimum.min(activation);
+                            maximum = maximum.max(activation);
+                            if d.input_lane() == 23 {
+                                aggregate += founder.weights()[j];
+                                weighted += activation * weight;
+                            }
+                        }
+                        DecoderHeadKind::MemoryContext => memory += value,
+                        DecoderHeadKind::CognitiveContext => cognitive += value,
+                        _ => {}
+                    }
+                }
+                let cap = p
+                    .candidate_decoder()
+                    .memory_channel()
+                    .map_or(0., |x| x.max_candidate_gain());
+                candidates.push(CpuNeedCandidatePreviewV4 {
+                    index: c.candidate_index,
+                    action_id: c.action_id,
+                    kind: c.kind,
+                    family: c.family,
+                    intrinsic_basis: c.features.0[23],
+                    effort: c.required_effort.raw(),
+                    logit: output.candidate_logits[i],
+                    representative_probability: global[i],
+                    motor_probabilities: std::array::from_fn(|slot| {
+                        let sum: f64 = motor[slot].iter().sum();
+                        (sum > 0. && motor[slot][i] > 0.).then_some(motor[slot][i])
+                    }),
+                    inherited_bias: family.bias() + input.innate_bias,
+                    action_readout: action,
+                    memory_readout: memory.clamp(-cap, cap),
+                    cognitive_readout: cognitive.clamp(-cap, cap),
+                    motor_source_activation_min: if minimum.is_finite() { minimum } else { 0. },
+                    motor_source_activation_max: if maximum.is_finite() { maximum } else { 0. },
+                    lane23_genetic_aggregate: aggregate,
+                    lane23_activation_weighted_coefficient: weighted,
+                });
+            }
+            result.push(CpuNeedFeasibilityPreviewV4 {
+                tick,
+                organism: id,
+                world_steps: 0,
+                live_dispatches: 0,
+                counterfactual_only: true,
+                enabled_motor_channels: p.candidate_decoder().factorized_motor_channels(p)?,
+                candidates,
+                pure_rest_selection_probability: rest,
+                pure_supported_noop_selection_probability: noop,
+                input_drives: record.biochemistry().homeostasis.drives.to_array(),
+                body_energy: record.biochemistry().body.energy,
+                body_health: record.biochemistry().body.health,
+                biochemical_expression: record.biochemistry().development.biochemical_expression,
+                planned_brain_work: activity.work,
+                reader_work: port.as_ref().map(|p| p.work),
+                binding_work: port.as_ref().map(|p| p.receipt.binding_work.clone()),
+                binding_memory_ops: port.as_ref().map_or(0, |p| p.receipt.binding_memory_ops),
+                context_memory_ops: port.as_ref().map_or(0, |p| p.receipt.context_memory_ops),
+                planned_atp_q16: activity.debit_atp_q16,
+                available_atp_q16: activity.available_atp_q16,
+                detached_neural_activation_min: activations
+                    .iter()
+                    .copied()
+                    .fold(f32::INFINITY, f32::min),
+                detached_neural_activation_max: activations
+                    .iter()
+                    .copied()
+                    .fold(f32::NEG_INFINITY, f32::max),
+            });
+        }
+        Ok(result)
+    }
     /// Fresh cohort only. Resuming an existing individual requires from_checkpoint;
     /// existing somatic state is never inferred from a founder asset.
     pub fn new_cohort(
@@ -235,6 +459,7 @@ impl CpuCanonicalHost {
                     next_sequence: 1,
                     replay: Vec::new(),
                     language_grounding: LanguageGroundingLedger::default(),
+                    need_association: None,
                 },
             );
         }
@@ -251,6 +476,7 @@ impl CpuCanonicalHost {
             residents,
             sampling_seed,
             sampling_counter: 0,
+            need_receipts: Vec::new(),
         };
         host.seal_all_residents()?;
         Ok(host)
@@ -394,11 +620,89 @@ impl CpuCanonicalHost {
         *self = next;
         Ok(())
     }
+    /// Fresh-only CPU port. This process-local scaffold cannot be exported
+    /// through legacy checkpoints, replay, PPO or GPU deployment APIs.
+    pub fn enable_need_association_port_v4(
+        &mut self,
+        founder: &CpuFoundationTrainer,
+        plan: CpuNeedAssociationPlanV4,
+    ) -> Result<(), CpuHostError> {
+        self.validate_founder(founder)?;
+        if self.residents.values().any(|r| {
+            r.next_sequence != 1
+                || r.neural
+                    .checkpoint()
+                    .map_or(true, |s| s.dispatch_generation != 0)
+                || r.need_association.is_some()
+        }) {
+            return Err(CpuHostError::State(
+                "association port requires a fresh unexecuted host",
+            ));
+        }
+        let mut next = self.clone();
+        for (&id, r) in &mut next.residents {
+            r.need_association = Some(CpuNeedAssociationPortV4::new(
+                OrganismId(id),
+                next.world
+                    .organism_registry()
+                    .get(OrganismId(id))
+                    .ok_or(CpuHostError::State("association owner missing"))?
+                    .phenotype(),
+                plan,
+            )?);
+        }
+        next.seal_all_residents()?;
+        *self = next;
+        Ok(())
+    }
+    /// Dedicated native sampling output deliberately excludes legacy replay ticks.
+    pub fn step_need_association_port_v4(
+        &mut self,
+        founder: &CpuFoundationTrainer,
+        temperature: f32,
+    ) -> Result<CpuNeedAssociationStepV4, CpuHostError> {
+        if self
+            .residents
+            .values()
+            .any(|r| r.need_association.is_none())
+        {
+            return Err(CpuHostError::State("missing explicit association port"));
+        }
+        let result =
+            self.step_with_preparation_inner(founder, temperature, |draft, _| Ok(draft), true)?;
+        let decisions = result
+            .decisions
+            .into_iter()
+            .zip(self.need_receipts.iter().cloned())
+            .map(|(row, port)| CpuNeedAssociationDecisionV4 {
+                organism_id: row.organism_id,
+                action: row.action,
+                patch: row.patch,
+                brain_work: row.brain_work,
+                biological_reward: row.biological_reward,
+                port,
+            })
+            .collect();
+        Ok(CpuNeedAssociationStepV4 {
+            tick_before: result.tick_before,
+            tick_after: result.tick_after,
+            decisions,
+            sleeping_organisms: result.sleeping_organisms,
+            sleep_consolidations: result.sleep_consolidations,
+        })
+    }
     pub fn checkpoint(
         &self,
         founder: &CpuFoundationTrainer,
     ) -> Result<CpuCanonicalCheckpoint, CpuHostError> {
         self.validate_founder(founder)?;
+        if self
+            .residents
+            .values()
+            .any(|r| r.need_association.is_some())
+        {
+            return Err(CpuHostError::State("association port requires a dedicated checkpoint envelope; legacy export is forbidden"));
+        }
         let mut config =
             RuntimeConfig::deterministic_default(self.world.seed(), BrainScaleTier::Standard2048);
         config.brain_policy = BrainPolicyConfig::offline_cpu_training();
@@ -578,6 +882,7 @@ impl CpuCanonicalHost {
                 next_sequence: r.next_sequence,
                 replay: r.replay,
                 language_grounding: r.language_grounding,
+                need_association: None,
             };
             resident.sealed_authority = Some(validate_resident_authority(
                 record,
@@ -606,6 +911,7 @@ impl CpuCanonicalHost {
             residents,
             sampling_seed: checkpoint.sampling_seed,
             sampling_counter: checkpoint.sampling_counter,
+            need_receipts: Vec::new(),
         };
         host.validate_founder(founder)?;
         Ok(host)
@@ -648,11 +954,33 @@ impl CpuCanonicalHost {
         &mut self,
         founder: &CpuFoundationTrainer,
         temperature: f32,
-        mut prepare: impl FnMut(
+        prepare: impl FnMut(
             PerceptionFrameDraft,
             ExperienceSequenceId,
         ) -> Result<PerceptionFrameDraft, ScaffoldContractError>,
     ) -> Result<CpuCanonicalStep, CpuHostError> {
+        self.step_with_preparation_inner(founder, temperature, prepare, false)
+    }
+    fn step_with_preparation_inner(
+        &mut self,
+        founder: &CpuFoundationTrainer,
+        temperature: f32,
+        mut prepare: impl FnMut(
+            PerceptionFrameDraft,
+            ExperienceSequenceId,
+        ) -> Result<PerceptionFrameDraft, ScaffoldContractError>,
+        allow_need: bool,
+    ) -> Result<CpuCanonicalStep, CpuHostError> {
+        if !allow_need
+            && self
+                .residents
+                .values()
+                .any(|r| r.need_association.is_some())
+        {
+            return Err(CpuHostError::State(
+                "association session requires its dedicated native step API",
+            ));
+        }
         self.validate_founder(founder)?;
         for (&raw, r) in &self.residents {
             let record = self
@@ -688,6 +1016,7 @@ impl CpuCanonicalHost {
         let p = founder.phenotype();
         let tick = self.world.tick();
         let mut decisions = Vec::new();
+        self.need_receipts.clear();
         let mut sleeping = 0;
         let mut consolidations = 0;
         let mut body_events = BTreeMap::new();
@@ -894,7 +1223,12 @@ impl CpuCanonicalHost {
             }
             let frame = prepared.frame;
             let recall = prepared.memory_recall;
-            let activity = cpu_activity_budget(
+            let mut need_prepared = r
+                .need_association
+                .as_ref()
+                .map(|port| port.prepare(&frame, &record))
+                .transpose()?;
+            let mut activity = cpu_activity_budget(
                 p,
                 CpuActivityAnchor {
                     frame_digest: frame.frame_digest().0,
@@ -904,6 +1238,14 @@ impl CpuCanonicalHost {
                 frame.candidates().len() as u32,
                 recall.context().candidates.len() as u32,
             )?;
+            if let Some(port) = &need_prepared {
+                accumulate_work(&mut activity.work, port.work)?;
+                let policy = BrainActivityPolicyV1::production_v1();
+                activity.debit_atp_q16 = policy
+                    .cost
+                    .q24_to_atp_q16_round_half_up(policy.cost.neural_cost_q24(&activity.work)?)?;
+                activity.affordable = activity.available_atp_q16 >= activity.debit_atp_q16;
+            }
             if !activity.affordable {
                 return Err(CpuHostError::State(
                     "CPU neural work exceeds canonical ATP availability",
@@ -932,7 +1274,12 @@ impl CpuCanonicalHost {
                     .collect(),
             )?;
             context.microstep_count = u32::from(activity.microsteps);
-            let output = r.neural.advance(founder, context, &effects)?;
+            let output = if let Some(port) = &mut need_prepared {
+                r.neural
+                    .advance_with_need_association(founder, context, &effects, port)?
+            } else {
+                r.neural.advance(founder, context, &effects)?
+            };
             r.activity.remaining_atp_q16 = activity.available_atp_q16 - activity.debit_atp_q16;
             r.activity.source_frame_digest = frame.frame_digest().0;
             let sampling_counter = self.sampling_counter;
@@ -994,8 +1341,26 @@ impl CpuCanonicalHost {
                 development.clone(),
                 frame.clone(),
             )?;
-            let work_neurons = activity.work.neuron_updates;
-            let work_synapses = activity.work.synapse_ops;
+            let port_branches = need_prepared.as_ref().map_or(0, |p| {
+                p.receipt
+                    .candidates
+                    .iter()
+                    .map(|r| u64::from(r.native.work.dendritic.branches_evaluated))
+                    .sum::<u64>()
+            });
+            let port_inputs = need_prepared.as_ref().map_or(0, |p| {
+                p.receipt
+                    .candidates
+                    .iter()
+                    .map(|r| u64::from(r.native.work.dendritic.inputs_evaluated))
+                    .sum::<u64>()
+            });
+            let work_neurons = activity.work.neuron_updates - port_branches;
+            // Count the typed final mix once per row, even if the value is zero.
+            let work_synapses = activity.work.synapse_ops - port_inputs
+                + need_prepared
+                    .as_ref()
+                    .map_or(0, |p| p.receipt.candidates.len() as u64);
             let decision = DecisionSnapshot::from_cpu_neural_selection(
                 sequence,
                 p.phenotype_hash(),
@@ -1141,11 +1506,14 @@ impl CpuCanonicalHost {
             let work = CognitiveWorkCounters::new(
                 work_neurons,
                 work_synapses,
-                dendritic_work,
+                dendritic_work + need_prepared.as_ref().map_or(0, |p| p.dendritic_ops),
                 cognitive.attention.budget_receipt.work_units,
                 u64::from(memory.exact_bucket_reads)
                     + u64::from(memory.neighbor_bucket_reads)
-                    + u64::from(memory.similarity_evaluations),
+                    + u64::from(memory.similarity_evaluations)
+                    + need_prepared
+                        .as_ref()
+                        .map_or(0, |p| p.work.memory_context_ops),
                 cognitive.concept.active_concepts.len() as u64,
                 cognitive.gap.active_gaps.len() as u64,
                 prediction.error.len() as u64,
@@ -1186,7 +1554,7 @@ impl CpuCanonicalHost {
             )?
             .with_measured_physiology(physiology)?;
             outcome.contradiction_observed = !receipt.succeeded;
-            outcome = outcome.with_v12_joint(receipt.joint, work)?;
+            outcome = outcome.with_v12_joint(receipt.joint.clone(), work)?;
             let patch = ExperiencePatch::new_v12_with_decision(
                 pre,
                 decision,
@@ -1196,6 +1564,22 @@ impl CpuCanonicalHost {
                 work,
                 pre_context,
             )?;
+            if let (Some(port), Some(prepared)) = (&mut r.need_association, &mut need_prepared) {
+                prepared.receipt.source_observation = port.state.observe(
+                    &patch,
+                    &receipt,
+                    &record,
+                    after.biochemistry(),
+                    &prepared.contexts,
+                )?;
+                prepared.receipt.source_audit = Some(super::need_association_source::source_audit(
+                    &patch,
+                    &receipt,
+                    &record,
+                    after.biochemistry(),
+                ));
+                self.need_receipts.push(prepared.receipt.clone());
+            }
             let credit_receptors = receptors;
             r.neural.apply_credit(
                 founder,
@@ -1289,6 +1673,16 @@ impl CpuCanonicalHost {
             .world
             .try_advance_tick_with_body_events_in_staged_tick(&body_events)?;
         self.seal_all_residents()?;
+        if self
+            .residents
+            .values()
+            .any(|r| r.need_association.is_some())
+            && decisions.len() != self.need_receipts.len()
+        {
+            return Err(CpuHostError::State(
+                "association decision receipt count mismatch",
+            ));
+        }
         Ok(CpuCanonicalStep {
             tick_before: tick,
             tick_after,
@@ -1396,7 +1790,7 @@ fn resident_digest(
     sampling_seed: u32,
     sampling_counter: u32,
 ) -> Result<[u64; 4], CpuHostError> {
-    json_digest(
+    let original = json_digest(
         b"ALIFE-CPU-CANONICAL-PRIVATE-STATE-V1",
         &(
             r.neural.checkpoint()?,
@@ -1415,7 +1809,20 @@ fn resident_digest(
             sampling_seed,
             sampling_counter,
         ),
-    )
+    )?;
+    if let Some(port) = &r.need_association {
+        json_digest(
+            b"ALIFE-CPU-NEED-ASSOCIATION-PRIVATE-V1",
+            &(
+                original,
+                port.circuit.recipe(),
+                port.circuit.identity(),
+                &port.state,
+            ),
+        )
+    } else {
+        Ok(original)
+    }
 }
 fn validate_resident_authority(
     record: &alife_world::WorldOrganismRecord,

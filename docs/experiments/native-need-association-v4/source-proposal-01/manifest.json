@@ -1,0 +1,26 @@
+{
+  "status": "source proposal; initial detached V1 preview passed; new V2 core and V4 integration uncompiled; no native decisions",
+  "base_commit": "c775c8c92e8f5e625f8a3e861ef79200199b54df",
+  "files": {
+    "crates/alife_core/src/lib.rs": "b3deddd88754fd3dfafe904500b4e0a980b5cea88f7ec585c744105eda4b5e86",
+    "crates/alife_core/src/need_association_native.rs": "a487a016cd725052770cd934cc0ff9f400045dbbb244a8773b4269ddd1162729",
+    "crates/alife_core/src/need_association_native_v2.rs": "ad6e05cb3685dee2a60bb99e53b7a645ddafe294f134f65b99165ed9e027e33e",
+    "crates/alife_core/src/need_association_native_v2/binding.rs": "1639941163cff79702fa8ea4cc5e7ffc984347c11b360b91e7691d3dbaad75e3",
+    "crates/alife_core/src/need_association_native_v2/binding/encoding.rs": "53f713c0784edbd68040aca85f16dfb32f3f388bd9f248545345d289a74f5d6e",
+    "crates/alife_core/src/need_association_native_v2/tests.rs": "e151095e8498cdbae2e38f0dd4a16a149a1715b422d11ff4bbbfd34487e66e4b",
+    "crates/alife_training/src/cpu/host.rs": "ec407988f05d0c7660b639150cb0f4919339140c719e3106b9a73197f435884b",
+    "crates/alife_training/src/cpu/mod.rs": "79e18fc03a5ab049a7fa8e5903d1d04b1c1e740d09cd31608e2ed878bb985a6b",
+    "crates/alife_training/src/cpu/need_association.rs": "e58eef3dde8e7423678af13eef9dc7d15d4cc7d2301b1b9e156d7afbd9a20366",
+    "crates/alife_training/src/cpu/need_association_source.rs": "6dac32dfd05f64be7c47948ed817b070e17bc407a4c82e1188f84649fff8d42a",
+    "crates/alife_training/src/cpu/need_preview.rs": "f1655f8ab7fad88436b666566b20953e67b56b4f9c763b9b77a1520c7d0ed8ff",
+    "crates/alife_training/src/cpu/organism.rs": "aac86e83356a09a9872c1acf92a8e3ea23446da33482e9faf05aa8510aeb232f",
+    "crates/alife_training/tests/cpu_need_association.rs": "7ab55006f0942073e81070b6a97373dba2e812cdf2a9212c42bd5492c9f90c89",
+    "crates/alife_world/src/headless.rs": "bf691b6d098f7f2880845dc07807de41efd2c5130859ea7a5d5ea81337c018d2",
+    "crates/alife_world/src/headless/prepared_motor_adapter_tests.rs": "ed3147332ee06a99367968c0325eba2e8139019433ab9ad0f848d78d62e2d50b",
+    "docs/experiments/native-need-association-v2/README.md": "74979aa778af53e04b617833b327b1afb25dc980492b678155bc98c521c7b104",
+    "docs/experiments/native-need-association-v3/README.md": "06c8cf7452fc9f33b7dd58c07470e3585d9d5501f92853ab8fcdbea737c1a6dd",
+    "docs/experiments/native-need-association-v4/DESIGN.md": "db8da25e777949e529b96f46646f780c1aa79db0ac1790eb31f6ade4aa73013e"
+  },
+  "patch_sha256": "4bd77b2211fefdaa1e161c42adf2919f80ba16e65f6b0d9c6e09587d5ab87050",
+  "frozen_candidate_sha256": "1d2978cbd857a7ca99dc1b2cf65be9f6ff417a6f78199282e0431b94332c9377"
+}

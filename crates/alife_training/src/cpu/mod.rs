@@ -12,6 +12,9 @@ mod cooperative_source;
 mod fresh_founder;
 mod host;
 mod input;
+mod need_association;
+mod need_association_source;
+mod need_preview;
 mod objective;
 mod organism;
 mod private_checkpoint;
@@ -28,6 +31,11 @@ pub use cooperative_source::*;
 pub use fresh_founder::{initialize_cpu_untrained_founder, CPU_UNTRAINED_FOUNDER_MODE};
 pub use host::*;
 pub use input::*;
+pub use need_association::*;
+pub use need_association_source::{
+    CpuNeedBiologyCostV4, CpuNeedChannelAuditV4, CpuNeedSourceAuditV4, SelfActionV1,
+};
+pub use need_preview::*;
 pub use objective::*;
 pub use organism::*;
 pub use private_checkpoint::*;

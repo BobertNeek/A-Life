@@ -244,6 +244,19 @@ impl CpuOrganismState {
             active_activation_side: self.checkpoint.active_activation_side,
         })
     }
+    /// Distinct CPU-only native port; the ordinary forward and private banks
+    /// remain intact. Only the validated comparative circuit adds this readout.
+    pub(super) fn advance_with_need_association(
+        &mut self,
+        founder: &CpuFoundationTrainer,
+        context: TrainingReplayTick,
+        effects: &NeuralReceptorEffects,
+        port: &mut super::need_association::CpuNeedPreparedV4,
+    ) -> Result<CpuDecisionOutput, TrainingError> {
+        let mut output = self.advance(founder, context, effects)?;
+        port.mix_native_logits(&mut output.candidate_logits)?;
+        Ok(output)
+    }
     /// Eligibility is staged after actual joint selection, before world outcome.
     /// Repeated joint candidates contribute once. Speech credit requires the
     /// matching payload-selection receipt supplied by the collector.
