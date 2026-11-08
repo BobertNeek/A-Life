@@ -1,6 +1,12 @@
 use super::*;
 use crate::{AdamWConfig, StageTrainableMask};
 fn fixture(bounded: bool) -> (CpuCanonicalHost, CpuFoundationTrainer) {
+    fixture_with_history(bounded, false)
+}
+fn fixture_with_history(
+    bounded: bool,
+    prepared_history: bool,
+) -> (CpuCanonicalHost, CpuFoundationTrainer) {
     let mut config = alife_world::CanonicalNewGameConfig::phase3(7, 1).unwrap();
     config.brain_class = BrainScaleTier::Standard2048;
     let builtin = FoundationWeightAsset::builtin_n2048_v1(config.sensor_profile).unwrap();
@@ -42,8 +48,23 @@ fn fixture(bounded: bool) -> (CpuCanonicalHost, CpuFoundationTrainer) {
         &(0..p.synapses().len() as u32).collect::<Vec<_>>(),
     )
     .unwrap();
-    let trainer =
+    let mut trainer =
         CpuFoundationTrainer::new(p, asset.clone(), mask, AdamWConfig::default()).unwrap();
+    if prepared_history {
+        // Authored disposable sentinels, not naturally learned Adam history.
+        let mut history = trainer.checkpoint();
+        let last = history.weights.len() - 1;
+        history.optimizer_step = 7;
+        history.first_moment[0] = 0.125;
+        history.second_moment[0] = 0.25;
+        history.update_ages[0] = 5;
+        history.first_moment[last] = -0.0625;
+        history.second_moment[last] = 0.125;
+        history.update_ages[last] = 3;
+        assert!(history.weights.iter().any(|w| *w != 0.));
+        trainer.restore_checkpoint(history.clone()).unwrap();
+        assert_eq!(trainer.checkpoint(), history);
+    }
     let game =
         alife_world::create_canonical_new_game_with_n2048_experimental_candidate(&config, &asset)
             .unwrap();
@@ -54,7 +75,14 @@ fn fixture(bounded: bool) -> (CpuCanonicalHost, CpuFoundationTrainer) {
 }
 #[test]
 fn bounded_host_admits_restores_acquired_fixture_and_continues_exactly() {
-    let (mut host, trainer) = fixture(true);
+    check_host_continuation(false);
+}
+#[test]
+fn bounded_host_preserves_prepared_nonzero_optimizer_history() {
+    check_host_continuation(true);
+}
+fn check_host_continuation(prepared_history: bool) {
+    let (mut host, trainer) = fixture_with_history(true, prepared_history);
     let (old, old_trainer) = fixture(false);
     let sentinel = serde_json::to_vec(&trainer.checkpoint()).unwrap();
     host.step(&trainer, 1.).unwrap();

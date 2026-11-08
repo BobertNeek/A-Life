@@ -1,0 +1,32 @@
+{
+  "schema": "bounded_founder_prepared_history_supplement_v1",
+  "runtime_source_commit": "27ca6a0ee647b9f12e95c96794848d4fbf5f6fdc",
+  "prior_measured_packet": "5997ce7c890b6495e787142fe553e63ed595f46f",
+  "source_sha256": "dca081ae5bb95e88c6ee33a2ec62561a21ef4afeed6c9db6bd0c314af8e17abd",
+  "test_executable_sha256": "622148dc86909f47e52aa048103838008be806f0e6d7d3dccdf1088dbfe8813d",
+  "tests_passed": 1,
+  "strict_clippy": "training --lib --tests, -D warnings",
+  "prepared_optimizer_step": 7,
+  "prepared_update_ages": [
+    5,
+    3
+  ],
+  "world_step_calls": 4,
+  "gpu_dispatches": 0,
+  "artifacts": {
+    "test.log": {
+      "sha256": "22f494e17b06d35eb682408bc7e57bdc0d0adb1b60c9f55052a30f3ee90ddb44",
+      "bytes": 531
+    },
+    "RESULTS.md": {
+      "sha256": "f167f6b20e3310610c50d0b60e0e5517f24354e8f4eecceacf6391f9f6b20f6e",
+      "bytes": 1587
+    },
+    "clippy.log": {
+      "sha256": "73e78a0788f381617c791e709a884acad8b94bfed0142a295b1b5cbda36d5c83",
+      "bytes": 176
+    }
+  },
+  "optimizer_update_calls": 0,
+  "biological_scope": "Ordinary host step behavior, including any normal somatic updates, is not claimed disabled."
+}

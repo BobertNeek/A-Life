@@ -1,0 +1,9 @@
+   Compiling alife_training v0.1.0 (/workspace/scratch/ee5e08a3ca9b/fresh-founder-branch-v1/crates/alife_training)
+    Finished `test` profile [unoptimized] target(s) in 3m 30s
+     Running unittests src/lib.rs (/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/alife_training-4a8651734d104723)
+
+running 1 test
+test cpu::host::bounded_founder_tests::bounded_host_preserves_prepared_nonzero_optimizer_history ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 127 filtered out; finished in 5.18s
+
