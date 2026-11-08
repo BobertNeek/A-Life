@@ -2,6 +2,8 @@
 //!
 //! Owns physical state, perception, action legality, and organism biology.
 
+mod contact_withdrawal;
+
 use std::{
     cell::{Ref, RefCell},
     collections::{BTreeMap, BTreeSet},
@@ -1242,6 +1244,46 @@ pub struct HeadlessMotorTransactionReceipt {
     pub biology_after: BiochemistryState,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WithdrawalDirectionBasis {
+    LocalizedContact,
+    AcuteDamageHeadingFallback,
+}
+
+/// Bounded, nonpersistent physical reflex evidence for the body-only candidate.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ContactWithdrawalReceipt {
+    pub direction_basis: WithdrawalDirectionBasis,
+    pub sources: Vec<WorldEntityId>,
+    pub displacement: Vec3f,
+    pub blocked: bool,
+    pub energy_cost: f32,
+}
+
+impl ContactWithdrawalReceipt {
+    /// Maximum external contact sources admitted by one physical response.
+    pub const MAX_SOURCES: usize = 256;
+}
+
+/// Body-only evidence has no voluntary command or policy-credit identity.
+#[derive(Debug, Clone, PartialEq)]
+pub struct BodyOnlyContactResponse {
+    pub schema_version: u16,
+    pub organism_id: OrganismId,
+    pub outcome_tick: Tick,
+    pub withdrawal: Option<ContactWithdrawalReceipt>,
+    pub requested_sleep_recovery: f32,
+    pub sleep_recovery_interrupted: bool,
+    pub applied_body_event: BodyEventDelta,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct BodyOnlyContactIntervalReceipt {
+    pub schema_version: u16,
+    pub outcome_tick: Tick,
+    pub responses: Vec<BodyOnlyContactResponse>,
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum HeadlessMotorTransactionError {
     Contract(ScaffoldContractError),
@@ -1752,6 +1794,43 @@ impl HeadlessWorld {
         &mut self,
         body_events: &BTreeMap<u64, BodyEventDelta>,
     ) -> Result<Tick, ScaffoldContractError> {
+        self.advance_body_events_with_contact_mode(body_events, None)
+    }
+
+    /// Explicit body-only candidate. A real contact dose can withdraw the body
+    /// and interrupt physical recovery without manufacturing a cognitive action.
+    pub fn try_advance_tick_with_body_contact_candidate(
+        &mut self,
+        body_events: &BTreeMap<u64, BodyEventDelta>,
+    ) -> Result<BodyOnlyContactIntervalReceipt, ScaffoldContractError> {
+        let mut candidate = self.clone();
+        let receipt =
+            candidate.try_advance_tick_with_body_contact_candidate_in_staged_tick(body_events)?;
+        *self = candidate;
+        Ok(receipt)
+    }
+
+    /// Caller owns the full enclosing world rollback transaction.
+    #[doc(hidden)]
+    pub fn try_advance_tick_with_body_contact_candidate_in_staged_tick(
+        &mut self,
+        body_events: &BTreeMap<u64, BodyEventDelta>,
+    ) -> Result<BodyOnlyContactIntervalReceipt, ScaffoldContractError> {
+        let mut responses = Vec::new();
+        let outcome_tick =
+            self.advance_body_events_with_contact_mode(body_events, Some(&mut responses))?;
+        Ok(BodyOnlyContactIntervalReceipt {
+            schema_version: 1,
+            outcome_tick,
+            responses,
+        })
+    }
+
+    fn advance_body_events_with_contact_mode(
+        &mut self,
+        body_events: &BTreeMap<u64, BodyEventDelta>,
+        mut contact_responses: Option<&mut Vec<BodyOnlyContactResponse>>,
+    ) -> Result<Tick, ScaffoldContractError> {
         let candidate = self;
         let current_tick = candidate.tick;
         let next_tick = Tick::new(
@@ -1848,11 +1927,25 @@ impl HeadlessWorld {
                             .remove(&organism_id.raw())
                             .unwrap_or_else(BodyEventDelta::zero),
                     );
+                    let unlocalized_damage = body_event.damage;
                     // Stationary/body-only intervals receive the same actual
                     // surface-contact dose as action intervals, exactly once.
-                    let body_event = hazard_contact.map_or(body_event, |(_, pain)| {
+                    let mut body_event = hazard_contact.map_or(body_event, |(_, pain)| {
                         merge_hazard_contact_body_event(body_event, pain)
                     });
+                    if let Some(responses) = contact_responses.as_deref_mut() {
+                        let (event, response) = candidate.apply_body_only_contact_response(
+                            organism_id,
+                            entity,
+                            next_tick,
+                            body_event,
+                            unlocalized_damage,
+                        )?;
+                        body_event = event;
+                        if let Some(response) = response {
+                            responses.push(response);
+                        }
+                    }
                     candidate
                         .organism_registry
                         .advance_biology(organism_id, next_tick, body_event)
@@ -8528,6 +8621,471 @@ mod task_6_factorized_motor_tests {
         )
         .unwrap();
         (world, agent, food, bundle)
+    }
+
+    fn withdrawal_world(hazard: Vec3f, pain: f32) -> (HeadlessWorld, WorldEntityId) {
+        let mut world = HeadlessScenarioBuilder::new(36_002)
+            .agent("agent", ORGANISM_ID, Vec3f::ZERO)
+            .hazard("hazard", hazard, pain)
+            .build()
+            .unwrap();
+        let agent = world.entity_id("agent").unwrap();
+        world.register_organism_record(record(agent)).unwrap();
+        (world, agent)
+    }
+
+    #[test]
+    fn body_only_withdrawal_kernel_acute_heading_fallback_is_bounded() {
+        let (mut world, agent) = withdrawal_world(Vec3f::new(8.0, 0.0, 0.0), 0.4);
+        let before = world.entity(agent).unwrap().position;
+        let yaw = world.entity(agent).unwrap().body_yaw;
+        let reflex = world
+            .apply_contact_withdrawal(ORGANISM_ID, agent, None, 1.0, 0.3)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            reflex.direction_basis,
+            WithdrawalDirectionBasis::AcuteDamageHeadingFallback
+        );
+        assert!(!reflex.blocked);
+        assert!((reflex.displacement.x + MOVE_STEP * yaw.cos()).abs() < 1e-6);
+        assert_eq!(world.entity(agent).unwrap().body_yaw, yaw);
+        assert_eq!(
+            world.entity(agent).unwrap().position,
+            add(before, reflex.displacement)
+        );
+        assert!(world
+            .apply_contact_withdrawal(ORGANISM_ID, agent, None, 1.0, 0.0)
+            .unwrap()
+            .is_none());
+    }
+
+    #[test]
+    fn body_only_withdrawal_kernel_opposed_sources_and_obstacles_block() {
+        let (mut world, agent) = withdrawal_world(Vec3f::new(0.2, 0.0, 0.0), 0.4);
+        let hazard = world.entity_id("hazard").unwrap();
+        let mut other = world.objects[&hazard.raw()].clone();
+        other.id = WorldEntityId(100);
+        other.label = "opposed".into();
+        other.position.x = -0.2;
+        world.objects.insert(100, other);
+        let reflex = world
+            .apply_contact_withdrawal(ORGANISM_ID, agent, None, 1.0, 0.0)
+            .unwrap()
+            .unwrap();
+        assert!(reflex.blocked);
+        world.objects.get_mut(&100).unwrap().kind = WorldObjectKind::Obstacle;
+        let reflex = world
+            .apply_contact_withdrawal(ORGANISM_ID, agent, None, 1.0, 0.0)
+            .unwrap()
+            .unwrap();
+        assert!(reflex.blocked);
+        assert_eq!(world.entity(agent).unwrap().position, Vec3f::ZERO);
+    }
+
+    #[test]
+    fn body_only_withdrawal_kernel_terrain_water_peers_and_capacity_are_physical_limits() {
+        for water in [false, true] {
+            let (mut world, agent) = withdrawal_world(Vec3f::new(0.2, 0.0, 0.0), 0.4);
+            world.terrain = Some(
+                crate::WorldTerrain::new(
+                    crate::TerrainData {
+                        width: 3,
+                        depth: 3,
+                        origin_x: -1.0,
+                        origin_z: -1.0,
+                        spacing: 1.0,
+                        heights: vec![0.0; 9],
+                        obstacles: if water {
+                            vec![]
+                        } else {
+                            vec![[-0.3, -0.5, -0.02, 0.5, -1.0, 1.0]]
+                        },
+                        water_level: water.then_some(3.0),
+                    },
+                    crate::LocomotionLimits::default(),
+                )
+                .unwrap(),
+            );
+            let reflex = world
+                .apply_contact_withdrawal(ORGANISM_ID, agent, None, 1.0, 0.0)
+                .unwrap()
+                .unwrap();
+            assert!(reflex.blocked);
+            assert_eq!(reflex.displacement, Vec3f::ZERO);
+        }
+        let (mut world, agent) = withdrawal_world(Vec3f::new(0.2, 0.0, 0.0), 0.4);
+        let hazard = world.entity_id("hazard").unwrap();
+        let mut peer = world.objects[&hazard.raw()].clone();
+        peer.id = WorldEntityId(100);
+        peer.label = "peer".into();
+        peer.kind = WorldObjectKind::Agent;
+        peer.position.x = -0.2;
+        world.objects.insert(100, peer);
+        assert!(
+            world
+                .apply_contact_withdrawal(ORGANISM_ID, agent, None, 1.0, 0.0)
+                .unwrap()
+                .unwrap()
+                .blocked
+        );
+        world.objects.remove(&100);
+        assert!(
+            world
+                .apply_contact_withdrawal(ORGANISM_ID, agent, Some(0.0), 1.0, 0.0)
+                .unwrap()
+                .unwrap()
+                .blocked
+        );
+    }
+
+    #[test]
+    fn body_only_withdrawal_kernel_preserves_carry_and_ignores_carried_source() {
+        let (mut world, agent, food, _) = prepared_world();
+        hold_food_for_meal(&mut world, food);
+        let old_food = world.entity(food).unwrap().position;
+        let reflex = world
+            .apply_contact_withdrawal(ORGANISM_ID, agent, None, 1.0, 0.3)
+            .unwrap()
+            .unwrap();
+        assert!(!reflex.blocked);
+        assert_eq!(world.entity(food).unwrap().carried_by, Some(ORGANISM_ID));
+        assert!(
+            distance(
+                world.entity(food).unwrap().position,
+                add(old_food, reflex.displacement)
+            ) < 1e-6
+        );
+        let mut obstacle = world.objects[&food.raw()].clone();
+        obstacle.id = WorldEntityId(100);
+        obstacle.label = "carry-stop".into();
+        obstacle.kind = WorldObjectKind::Obstacle;
+        obstacle.carried_by = None;
+        obstacle.position.x -= MOVE_STEP;
+        obstacle.radius = 0.02;
+        world.objects.insert(100, obstacle);
+        let before_body = world.entity(agent).unwrap().position;
+        let before_food = world.entity(food).unwrap().position;
+        let blocked = world
+            .apply_contact_withdrawal(ORGANISM_ID, agent, None, 1.0, 0.3)
+            .unwrap()
+            .unwrap();
+        assert!(blocked.blocked);
+        assert_eq!(world.entity(agent).unwrap().position, before_body);
+        assert_eq!(world.entity(food).unwrap().position, before_food);
+        assert_eq!(world.entity(food).unwrap().carried_by, Some(ORGANISM_ID));
+        world.objects.remove(&100);
+        let held = world.objects.get_mut(&food.raw()).unwrap();
+        held.kind = WorldObjectKind::Hazard;
+        held.hazard_pain = 0.4;
+        held.radius = 1.0;
+        assert!(world
+            .apply_contact_withdrawal(ORGANISM_ID, agent, None, 1.0, 0.0)
+            .unwrap()
+            .is_none());
+    }
+
+    #[test]
+    fn body_only_candidate_does_not_flee_a_self_carried_source() {
+        let (mut world, agent, food, _) = prepared_world();
+        hold_food_for_meal(&mut world, food);
+        let source = world.objects.get_mut(&food.raw()).unwrap();
+        source.kind = WorldObjectKind::Hazard;
+        source.hazard_pain = 0.4;
+        source.radius = 1.0;
+        let position = world.entity(agent).unwrap().position;
+        let events = BTreeMap::from([(
+            ORGANISM_ID.raw(),
+            BodyEventDelta {
+                sleep_recovery: 1.0,
+                ..BodyEventDelta::zero()
+            },
+        )]);
+        let receipt = world
+            .try_advance_tick_with_body_contact_candidate(&events)
+            .unwrap();
+        let response = &receipt.responses[0];
+        assert!(response.withdrawal.is_none());
+        assert!(response.sleep_recovery_interrupted);
+        assert_eq!(world.entity(agent).unwrap().position, position);
+        assert_eq!(world.entity(food).unwrap().carried_by, Some(ORGANISM_ID));
+    }
+
+    #[test]
+    fn body_only_candidate_late_failure_rolls_back_motion_and_biology() {
+        let (mut world, _) = withdrawal_world(Vec3f::new(0.2, 0.0, 0.0), 0.4);
+        world.injected_tick_late_failure_after_first_organism = true;
+        let before = world.save_state();
+        let events = BTreeMap::from([(
+            ORGANISM_ID.raw(),
+            BodyEventDelta {
+                sleep_recovery: 1.0,
+                ..BodyEventDelta::zero()
+            },
+        )]);
+        assert!(world
+            .try_advance_tick_with_body_contact_candidate(&events)
+            .is_err());
+        assert_eq!(world.save_state(), before);
+    }
+
+    fn overlap_peer_world(position: Vec3f) -> (HeadlessWorld, WorldEntityId, WorldEntityId) {
+        let (mut world, agent) = withdrawal_world(Vec3f::new(-0.1, 0.0, 0.0), 0.4);
+        let peer = world
+            .editor_spawn_object(WorldEditorSpawnSpec {
+                label: "overlap-peer".into(),
+                kind: WorldObjectKind::Agent,
+                organism_id: Some(OrganismId(8)),
+                position,
+                nutrition: 0.0,
+                hazard_pain: 0.0,
+                radius: 0.3,
+                token_id: None,
+            })
+            .unwrap();
+        assert_eq!(
+            world.objects[&peer.raw()].radius + world.locomotion_body_radius(),
+            0.5
+        );
+        (world, agent, peer)
+    }
+
+    fn overlap_recovery_event() -> BTreeMap<u64, BodyEventDelta> {
+        BTreeMap::from([(
+            ORGANISM_ID.raw(),
+            BodyEventDelta {
+                sleep_recovery: 1.0,
+                ..BodyEventDelta::zero()
+            },
+        )])
+    }
+
+    #[test]
+    fn body_only_overlap_peer_outward_escape_keeps_one_biology_interval() {
+        for position in [
+            Vec3f::new(-0.2, 0.0, 0.0),
+            Vec3f::new(-0.5, 0.0, 0.0),
+            Vec3f::new(0.0, 0.0, 0.4),
+            Vec3f::ZERO,
+        ] {
+            let (mut world, agent, peer) = overlap_peer_world(position);
+            let before = world.organism_registry.get(ORGANISM_ID).unwrap().clone();
+            let yaw = world.entity(agent).unwrap().body_yaw;
+            let interval = world
+                .try_advance_tick_with_body_contact_candidate(&overlap_recovery_event())
+                .unwrap();
+            let response = &interval.responses[0];
+            let reflex = response.withdrawal.as_ref().unwrap();
+            assert!(
+                !reflex.blocked,
+                "outward escape blocked by peer at {position:?}"
+            );
+            assert!(reflex.displacement.x > 0.0 && reflex.displacement.x <= MOVE_STEP);
+            assert!(
+                distance(world.entity(agent).unwrap().position, position)
+                    > distance(Vec3f::ZERO, position)
+            );
+            assert_eq!(world.entity(peer).unwrap().position, position);
+            assert_eq!(world.entity(agent).unwrap().body_yaw, yaw);
+            assert_eq!(response.applied_body_event.damage, 0.4);
+            assert_eq!(response.applied_body_event.energy, -reflex.energy_cost);
+            assert!(response.sleep_recovery_interrupted);
+            assert_eq!(
+                *world
+                    .organism_registry
+                    .get(ORGANISM_ID)
+                    .unwrap()
+                    .biochemistry(),
+                before
+                    .biochemistry()
+                    .advance(
+                        interval.outcome_tick,
+                        response.applied_body_event,
+                        before.phenotype()
+                    )
+                    .unwrap()
+            );
+        }
+    }
+
+    #[test]
+    fn body_only_overlap_peer_inward_boundary_tangent_and_new_entries_still_block() {
+        for position in [
+            Vec3f::new(0.2, 0.0, 0.0),  // Deepens existing overlap.
+            Vec3f::new(0.5, 0.0, 0.0),  // Enters from the closed boundary.
+            Vec3f::new(0.0, 0.0, 0.5),  // Boundary tangent is not outward escape.
+            Vec3f::new(0.55, 0.0, 0.0), // New entry along the segment.
+            Vec3f::new(0.05, 0.0, 0.5), // Swept tangent with both endpoints outside.
+        ] {
+            let (mut world, agent, peer) = overlap_peer_world(position);
+            let before = world.save_state();
+            let reflex = world
+                .apply_contact_withdrawal(ORGANISM_ID, agent, None, 1.0, 0.0)
+                .unwrap()
+                .unwrap();
+            assert!(
+                reflex.blocked,
+                "unsafe movement allowed by peer at {position:?}"
+            );
+            assert_eq!(reflex.displacement, Vec3f::ZERO);
+            assert_eq!(world.entity(peer).unwrap().position, position);
+            assert_eq!(world.save_state(), before);
+        }
+    }
+
+    #[test]
+    fn body_only_overlap_unrelated_hazard_sweep_still_blocks_new_contact() {
+        let (mut world, agent) = withdrawal_world(Vec3f::new(-0.1, 0.0, 0.0), 0.4);
+        let crossing = world
+            .editor_spawn_object(WorldEditorSpawnSpec {
+                label: "crossing-hazard".into(),
+                kind: WorldObjectKind::Hazard,
+                organism_id: None,
+                position: Vec3f::new(0.05, 0.0, 0.0),
+                nutrition: 0.0,
+                hazard_pain: 0.3,
+                radius: 0.1,
+                token_id: None,
+            })
+            .unwrap();
+        // A small authored source missed by both endpoints, but crossed by the sweep.
+        world.objects.get_mut(&crossing.raw()).unwrap().radius = 0.02;
+        let before = world.save_state();
+        let reflex = world
+            .apply_contact_withdrawal(ORGANISM_ID, agent, None, 1.0, 0.0)
+            .unwrap()
+            .unwrap();
+        assert!(!reflex.sources.contains(&crossing));
+        assert!(reflex.blocked);
+        assert_eq!(reflex.displacement, Vec3f::ZERO);
+        assert_eq!(world.save_state(), before);
+    }
+
+    fn own_carried_hazard_withdrawal_world() -> (HeadlessWorld, WorldEntityId, WorldEntityId) {
+        let (mut world, agent, held, _) = prepared_world();
+        hold_food_for_meal(&mut world, held);
+        let object = world.objects.get_mut(&held.raw()).unwrap();
+        object.kind = WorldObjectKind::Hazard;
+        object.hazard_pain = 0.2;
+        object.radius = 1.0;
+        world
+            .editor_spawn_object(WorldEditorSpawnSpec {
+                label: "external-left-hazard".into(),
+                kind: WorldObjectKind::Hazard,
+                organism_id: None,
+                position: Vec3f::new(-0.1, 0.0, 0.0),
+                nutrition: 0.0,
+                hazard_pain: 0.4,
+                radius: 0.6,
+                token_id: None,
+            })
+            .unwrap();
+        (world, agent, held)
+    }
+
+    #[test]
+    fn body_only_overlap_own_carried_hazard_does_not_block_external_withdrawal() {
+        let (mut world, agent, held) = own_carried_hazard_withdrawal_world();
+        let before = world.organism_registry.get(ORGANISM_ID).unwrap().clone();
+        let held_before = world.entity(held).unwrap().position;
+        assert_eq!(held_before, Vec3f::new(0.5, 0.0, 0.0));
+        let yaw = world.entity(agent).unwrap().body_yaw;
+        let interval = world
+            .try_advance_tick_with_body_contact_candidate(&overlap_recovery_event())
+            .unwrap();
+        let response = &interval.responses[0];
+        let reflex = response.withdrawal.as_ref().unwrap();
+        assert!(
+            !reflex.blocked,
+            "own carried hazard blocked an external withdrawal"
+        );
+        assert!(!reflex.sources.contains(&held));
+        assert_eq!(reflex.sources.len(), 1);
+        assert!(reflex.displacement.x > 0.0);
+        assert!(
+            distance(
+                world.entity(held).unwrap().position,
+                add(held_before, reflex.displacement)
+            ) < 1e-6
+        );
+        assert_eq!(world.entity(held).unwrap().carried_by, Some(ORGANISM_ID));
+        assert_eq!(world.entity(agent).unwrap().body_yaw, yaw);
+        assert_eq!(response.applied_body_event.damage, 0.4);
+        assert_eq!(response.applied_body_event.energy, -reflex.energy_cost);
+        assert!(response.sleep_recovery_interrupted);
+        assert_eq!(
+            *world
+                .organism_registry
+                .get(ORGANISM_ID)
+                .unwrap()
+                .biochemistry(),
+            before
+                .biochemistry()
+                .advance(
+                    interval.outcome_tick,
+                    response.applied_body_event,
+                    before.phenotype()
+                )
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn body_only_overlap_carried_hazard_still_respects_grip_blockers_and_rollback() {
+        let (mut blocked, agent, held) = own_carried_hazard_withdrawal_world();
+        blocked
+            .editor_spawn_object(WorldEditorSpawnSpec {
+                label: "grip-only-blocker".into(),
+                kind: WorldObjectKind::Obstacle,
+                organism_id: None,
+                position: Vec3f::new(0.61, 0.0, 0.0),
+                nutrition: 0.0,
+                hazard_pain: 0.0,
+                radius: 0.1,
+                token_id: None,
+            })
+            .unwrap();
+        assert!(blocked
+            .first_motion_blocker(Vec3f::ZERO, Vec3f::new(MOVE_STEP, 0.0, 0.0))
+            .is_none());
+        assert!(!blocked.carried_pose_reachable(ORGANISM_ID, Vec3f::new(MOVE_STEP, 0.0, 0.0), 0.0));
+        let before = blocked.organism_registry.get(ORGANISM_ID).unwrap().clone();
+        let held_before = blocked.entity(held).unwrap().position;
+        let interval = blocked
+            .try_advance_tick_with_body_contact_candidate(&overlap_recovery_event())
+            .unwrap();
+        let response = &interval.responses[0];
+        assert!(response.withdrawal.as_ref().unwrap().blocked);
+        assert_eq!(
+            response.withdrawal.as_ref().unwrap().displacement,
+            Vec3f::ZERO
+        );
+        assert_eq!(blocked.entity(agent).unwrap().position, Vec3f::ZERO);
+        assert_eq!(blocked.entity(held).unwrap().position, held_before);
+        assert_eq!(blocked.entity(held).unwrap().carried_by, Some(ORGANISM_ID));
+        assert!(response.sleep_recovery_interrupted);
+        assert_eq!(
+            *blocked
+                .organism_registry
+                .get(ORGANISM_ID)
+                .unwrap()
+                .biochemistry(),
+            before
+                .biochemistry()
+                .advance(
+                    interval.outcome_tick,
+                    response.applied_body_event,
+                    before.phenotype()
+                )
+                .unwrap()
+        );
+        let (mut rollback, _, _) = own_carried_hazard_withdrawal_world();
+        rollback.injected_tick_late_failure_after_first_organism = true;
+        let before = rollback.save_state();
+        assert!(rollback
+            .try_advance_tick_with_body_contact_candidate(&overlap_recovery_event())
+            .is_err());
+        assert_eq!(rollback.save_state(), before);
     }
 
     // Establish actual possession before the biology transaction being tested.
