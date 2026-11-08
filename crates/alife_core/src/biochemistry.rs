@@ -422,6 +422,44 @@ pub struct ThermalBalanceCandidate {
     pub suppress_sleep_thermal_relief: bool,
 }
 
+/// Ephemeral V1 research body event, deliberately outside the legacy wire ABI.
+/// It carries no energy, food, reward or sleep dose. The inherited emitter owns
+/// its biochemical effect; ordinary biology entry points always supply NONE.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct AwakeRestEventV1 {
+    dose: f32,
+}
+
+impl AwakeRestEventV1 {
+    pub const NONE: Self = Self { dose: 0.0 };
+
+    /// World-measured, integrated dose for one authorized biological interval.
+    pub fn new(dose: f32) -> Result<Self, ScaffoldContractError> {
+        validate_unit_values(&[dose])?;
+        Ok(Self { dose })
+    }
+
+    pub fn dose(self) -> f32 {
+        self.dose
+    }
+
+    pub(crate) fn validate_for(
+        self,
+        event: BodyEventDelta,
+        phenotype: &crate::BiochemicalPhenotype,
+    ) -> Result<(), ScaffoldContractError> {
+        validate_unit_values(&[self.dose])?;
+        if self.dose > 0.0
+            && (event.sleep_recovery != 0.0
+                || event.damage != 0.0
+                || !phenotype.supports_awake_rest_recovery_v1())
+        {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct BodyEventDelta {
     pub energy: f32,
@@ -864,6 +902,30 @@ impl BiochemistryState {
         phenotype: &CreaturePhenotype,
         thermal_balance: ThermalBalanceCandidate,
     ) -> Result<Self, ScaffoldContractError> {
+        self.advance_with_body_research_events_v1(
+            next_tick,
+            next_age,
+            event,
+            neural,
+            phenotype,
+            thermal_balance,
+            AwakeRestEventV1::NONE,
+        )
+    }
+
+    /// Additive explicit research input. No persistent switch or phase rewrite.
+    #[allow(clippy::too_many_arguments)]
+    pub fn advance_with_body_research_events_v1(
+        &self,
+        next_tick: Tick,
+        next_age: Tick,
+        event: BodyEventDelta,
+        neural: Option<&NeuralEmissionFrame>,
+        phenotype: &CreaturePhenotype,
+        thermal_balance: ThermalBalanceCandidate,
+        awake_rest: AwakeRestEventV1,
+    ) -> Result<Self, ScaffoldContractError> {
+        awake_rest.validate_for(event, &phenotype.chemistry.biochemical)?;
         validate_unit_values(&[thermal_balance.passive_relief])?;
         self.validate_against(phenotype)?;
         event.validate_contract()?;
@@ -965,13 +1027,14 @@ impl BiochemistryState {
                 )
             })
             .transpose()?;
-        let (graph_state, biochemical_work) = self.graph_state.advance(
+        let (graph_state, biochemical_work) = self.graph_state.advance_with_awake_rest_event_v1(
             next_tick,
             body,
             event,
             pending_frame.as_ref().or(neural),
             &phenotype.chemistry.biochemical,
             biochemical_expression,
+            awake_rest,
         )?;
         let homeostasis = graph_state.derive_homeostasis(&phenotype.chemistry.biochemical)?;
         let reproduction = if reproduction_steps > 0 {

@@ -77,6 +77,16 @@ pub fn create_canonical_new_game(
     create_new_game_inner(config, foundation, None, false)
 }
 
+/// Fresh opt-in physiology fixture. This does not admit a new neural action or
+/// alter any existing founder, saved phenotype, acquired state or default recipe.
+pub fn create_canonical_new_game_with_awake_rest_research_v1(
+    config: &CanonicalNewGameConfig,
+) -> Result<CanonicalNewGame, ScaffoldContractError> {
+    let foundation = FoundationWeightAsset::builtin_nano512_v1(config.sensor_profile)?;
+    validate_phase3_inputs(config, &foundation)?;
+    create_new_game_with_identity_and_research(config, &foundation, None, false, 1, true)
+}
+
 /// Explicit N2048 experiment using the same ecology and inherited physiology.
 /// The asset remains bound into each genome for archive and exact restore.
 pub fn create_canonical_new_game_with_n2048_experimental_candidate(
@@ -186,6 +196,24 @@ fn create_new_game_with_identity(
     training_group: bool,
     first_organism_id: u64,
 ) -> Result<CanonicalNewGame, ScaffoldContractError> {
+    create_new_game_with_identity_and_research(
+        config,
+        foundation,
+        candidate,
+        training_group,
+        first_organism_id,
+        false,
+    )
+}
+
+fn create_new_game_with_identity_and_research(
+    config: &CanonicalNewGameConfig,
+    foundation: &FoundationWeightAsset,
+    candidate: Option<&alife_core::Nano512ActionCreditCandidateV2>,
+    training_group: bool,
+    first_organism_id: u64,
+    awake_rest_research_v1: bool,
+) -> Result<CanonicalNewGame, ScaffoldContractError> {
     let manifest = foundation.manifest();
     let foundation_identity = FoundationGeneticIdentity::new(
         manifest.foundation_id().raw(),
@@ -236,6 +264,13 @@ fn create_new_game_with_identity(
         )?;
         calibrate_inherited_founder_biochemistry(&mut genome)?;
         enable_inherited_newborn_nociception(&mut genome)?;
+        if awake_rest_research_v1 {
+            genome.chemistry.graph = genome
+                .chemistry
+                .graph
+                .with_awake_rest_recovery_v1(alife_core::AlleleSide::Maternal)?
+                .with_awake_rest_recovery_v1(alife_core::AlleleSide::Paternal)?;
+        }
         if let Some(candidate) = candidate {
             genome = genome.with_nano512_action_credit_candidate(candidate.clone())?;
         }

@@ -122,6 +122,14 @@ object, stationary and blocked rest, energy parity with movement alone, one
 biology advance, rollback, and cancelled-path normalization. Run them with
 `cargo test -p alife_world --lib rest_motion_ -- --test-threads=1`.
 
+A separate [awake-rest V1 research mechanism](experiments/awake-rest-recovery/RESULTS.md)
+uses a fresh inherited fatigue-only emitter and an explicit typed world request.
+It is outside ordinary neural action enumeration and preserves all existing
+Rest/NO_POSTURE behavior. The measured non-breeding fixture relieves fatigue
+without a sleep dose or added SleepPressure clearance. The event-gated successor
+retains otherwise-valid mutant inheritance while keeping inactive rows inert;
+seeded construction checks do not qualify a breeding population or neural use.
+
 ## Inherited biochemical learning signals
 
 Chemical dynamics remain in the inherited sparse graph: species baselines and

@@ -110,9 +110,10 @@ pub use biochemical_graph::{
     MAX_NEURAL_RECEPTOR_ACTIVATIONS,
 };
 pub use biochemistry::{
-    BiochemistryCadence, BiochemistryState, BodyEventDelta, BodyState, DevelopmentReadiness,
-    OrganKind, OrganPhysiology, PassiveBodyUpkeepPolicy, ReproductionReadiness,
-    ThermalBalanceCandidate, MAX_BIOCHEMISTRY_CATCH_UP_STEPS, ORGAN_KIND_COUNT,
+    AwakeRestEventV1, BiochemistryCadence, BiochemistryState, BodyEventDelta, BodyState,
+    DevelopmentReadiness, OrganKind, OrganPhysiology, PassiveBodyUpkeepPolicy,
+    ReproductionReadiness, ThermalBalanceCandidate, MAX_BIOCHEMISTRY_CATCH_UP_STEPS,
+    ORGAN_KIND_COUNT,
 };
 pub use blake3_digest::Blake3Digest;
 pub use brain_class::{BrainClassSpec, BrainComputeBudget, BrainScaleTier};

@@ -789,6 +789,23 @@ impl WorldOrganismRecord {
         neural: Option<&NeuralEmissionFrame>,
         thermal_balance: alife_core::ThermalBalanceCandidate,
     ) -> Result<(), OrganismRegistryError> {
+        self.advance_biology_body_research_v1(
+            next_tick,
+            event,
+            neural,
+            thermal_balance,
+            alife_core::AwakeRestEventV1::NONE,
+        )
+    }
+
+    pub(crate) fn advance_biology_body_research_v1(
+        &mut self,
+        next_tick: Tick,
+        event: BodyEventDelta,
+        neural: Option<&NeuralEmissionFrame>,
+        thermal_balance: alife_core::ThermalBalanceCandidate,
+        awake_rest: alife_core::AwakeRestEventV1,
+    ) -> Result<(), OrganismRegistryError> {
         if !self.lifecycle.is_alive() {
             return Err(OrganismRegistryError::DeadOrganism(self.organism_id));
         }
@@ -797,13 +814,14 @@ impl WorldOrganismRecord {
         let original_state_graph = self.state_graph.clone();
         let next_age = self.age_at(next_tick)?;
         let result = (|| -> Result<(), ScaffoldContractError> {
-            self.biochemistry = self.biochemistry.advance_with_thermal_balance_candidate(
+            self.biochemistry = self.biochemistry.advance_with_body_research_events_v1(
                 next_tick,
                 next_age,
                 event,
                 neural,
                 &self.phenotype,
                 thermal_balance,
+                awake_rest,
             )?;
             self.advance_body_state_ref()?;
             self.validate_contract()
@@ -1403,6 +1421,21 @@ impl WorldOrganismRegistry {
             .get_mut(&organism_id.raw())
             .ok_or(OrganismRegistryError::UnknownOrganism(organism_id))?
             .advance_biology_thermal_candidate(next_tick, event, neural, thermal_balance)
+    }
+
+    pub(crate) fn advance_biology_body_research_v1(
+        &mut self,
+        organism_id: OrganismId,
+        next_tick: Tick,
+        event: BodyEventDelta,
+        neural: Option<&NeuralEmissionFrame>,
+        thermal_balance: alife_core::ThermalBalanceCandidate,
+        awake_rest: alife_core::AwakeRestEventV1,
+    ) -> Result<(), OrganismRegistryError> {
+        self.records_by_organism
+            .get_mut(&organism_id.raw())
+            .ok_or(OrganismRegistryError::UnknownOrganism(organism_id))?
+            .advance_biology_body_research_v1(next_tick, event, neural, thermal_balance, awake_rest)
     }
 
     pub fn account_cognitive_work(
