@@ -1134,7 +1134,7 @@ pub struct WorldObject {
     pub consumed: bool,
     pub carried_by: Option<OrganismId>,
     /// Temporary possession acquired while preparing a hands-on activity.
-    /// False also conservatively protects possession restored from older saves.
+    /// Historical provenance only; legacy false values do not veto a safe swap.
     pub activity_hold: bool,
     /// Bounded actuator non-progress state; contains no route or hidden pose.
     pub local_steering: Option<LocalSteeringState>,
@@ -5589,12 +5589,10 @@ impl HeadlessWorld {
         target: WorldEntityId,
     ) -> bool {
         self.grasp_target_is_reachable(organism_id, agent_id, target)
+            // Corrupt extra possession must not prevent detaching this exact
+            // legacy hold. Capacity constrains acquisition, not release.
             && (self.objects[&target.raw()].carried_by == Some(organism_id)
-                || !self.objects.values().any(|object| {
-                    !object.consumed
-                        && object.carried_by == Some(organism_id)
-                        && object.id != target
-                }))
+                || self.activity_grip_available(organism_id, target))
     }
 
     fn eat_can_pick_up(&self, organism_id: OrganismId, target: WorldEntityId) -> bool {
@@ -5632,21 +5630,32 @@ impl HeadlessWorld {
                 Vec::new(),
             );
         }
-        let object = self
-            .objects
-            .get_mut(&target.raw())
-            .ok_or(ScaffoldContractError::InvalidId)?;
-        // Contact is reversible: the same legal target releases what this
-        // organism already holds. A painful carried object must be escapable.
-        object.carried_by = if target_carried_by == Some(command.organism_id) {
-            None
-        } else {
-            Some(command.organism_id)
-        };
-        object.activity_hold = false;
         if target_carried_by != Some(command.organism_id) {
-            self.sync_carried_pose(command.organism_id)?;
+            let held = self
+                .objects
+                .values()
+                .find(|object| !object.consumed && object.carried_by == Some(command.organism_id))
+                .map(|object| object.id);
+            let placement = if let Some(held) = held {
+                let Some(position) = self.hand_placement(command.organism_id, held, Some(target))
+                else {
+                    return self.finish_action(
+                        command,
+                        false,
+                        Some(ReferenceActionFailure::MissingAffordance),
+                        physical(PhysicalContactKind::None, Some(target), Vec3f::ZERO, 0.06)?,
+                        OutcomeProfile::missing_affordance(),
+                        Vec::new(),
+                    );
+                };
+                Some((held, position))
+            } else {
+                None
+            };
+            return self.commit_hand_transition(command, agent_id, target, placement, true);
         }
+        // Same-target legacy Grab is still release, never a swap. Construct
+        // the receipt before detaching so a contract error preserves the hold.
         let mut result = self.finish_action(
             command,
             true,
@@ -5655,17 +5664,19 @@ impl HeadlessWorld {
             OutcomeProfile::grab(),
             vec![target],
         )?;
+        let object = self
+            .objects
+            .get_mut(&target.raw())
+            .expect("validated held target exists");
+        object.carried_by = None;
+        object.activity_hold = false;
         result.grip_transfers.push(GripTransfer {
             object: target,
             previous_owner: target_carried_by,
-            new_owner: self.objects[&target.raw()].carried_by,
+            new_owner: None,
             previous_position,
-            new_position: self.objects[&target.raw()].position,
-            kind: if target_carried_by == Some(command.organism_id) {
-                GripTransferKind::Released
-            } else {
-                GripTransferKind::Acquired
-            },
+            new_position: previous_position,
+            kind: GripTransferKind::Released,
         });
         Ok(result)
     }
@@ -6035,7 +6046,6 @@ impl HeadlessWorld {
         profile: OutcomeProfile,
         touched_entities: Vec<WorldEntityId>,
     ) -> Result<HeadlessActionResult, ScaffoldContractError> {
-        self.commit_current_interval_velocity(command.organism_id, physical.displacement)?;
         let execution = if succeeded {
             ReferenceActionExecution::succeeded(physical)?
         } else {
@@ -6054,7 +6064,7 @@ impl HeadlessWorld {
             NormalizedScalar::new(profile.prediction_error)?,
         )?;
         observation.contradiction_observed = profile.contradiction || !succeeded;
-        Ok(HeadlessActionResult {
+        let result = HeadlessActionResult {
             command,
             phase: if succeeded {
                 ActionPhase::Completed
@@ -6067,7 +6077,9 @@ impl HeadlessWorld {
             touched_entities,
             grip_transfers: Vec::new(),
             emitted_utterance: None,
-        })
+        };
+        self.commit_current_interval_velocity(command.organism_id, physical.displacement)?;
+        Ok(result)
     }
 
     fn require_target(
@@ -7228,6 +7240,7 @@ impl crate::ActionLegalityChecker for HeadlessWorld {
             };
             if object.kind != WorldObjectKind::Food
                 || object.consumed
+                || !self.grab_target_is_legal(action.organism_id, agent.id, target)
                 || (object.carried_by != Some(action.organism_id)
                     && !self.eat_can_pick_up(action.organism_id, target))
                 || !self.physical_contact_reachable(agent.position, object.position)
@@ -12117,7 +12130,7 @@ mod eat_possession_tests {
     }
 
     #[test]
-    fn possession_of_a_different_target_does_not_authorize_eating_loose_food() {
+    fn possession_of_a_different_target_prepares_an_atomic_swap_not_consumption() {
         let (mut world, food) = world();
         let other = world
             .insert_object(SpawnSpec {
@@ -12139,9 +12152,17 @@ mod eat_possession_tests {
                 .execution
                 .succeeded
         );
-        assert_rejected(&mut world, food);
-        assert_eq!(world.entity(other).unwrap().carried_by, Some(ORGANISM));
+        let selected = HeadlessWorldCommand::eat(ORGANISM, food).unwrap();
+        assert_eq!(world.check_action(&selected), ActionLegality::Legal);
+        let swap = world.apply_command(&selected).unwrap();
+        assert!(swap.execution.succeeded);
+        assert_eq!(swap.phase, ActionPhase::Preparation);
+        assert_eq!(swap.body_event.nutrition, 0.0);
+        assert_eq!(swap.grip_transfers.len(), 2);
+        assert_eq!(world.entity(other).unwrap().carried_by, None);
+        assert_eq!(world.entity(food).unwrap().carried_by, Some(ORGANISM));
         assert!(!world.entity(other).unwrap().consumed);
+        assert!(!world.entity(food).unwrap().consumed);
     }
 
     #[test]

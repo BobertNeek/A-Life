@@ -458,8 +458,8 @@ mod tests {
     fn release_detaches_in_place_without_searching_for_ground_placement() {
         let (mut world, a, _) = world();
         execute(&mut world, a, GripOperationV1::Close);
-        // Deliberate holds never authorize automatic activity placement. Release
-        // nevertheless opens this exact physical grip and preserves its pose.
+        // Release directly opens this exact physical grip and preserves its
+        // pose, independently of automatic placement during a later pickup.
         assert!(!world.entity(a).unwrap().activity_hold);
         let before = world.entity(a).unwrap().position;
         assert!(
@@ -987,5 +987,324 @@ mod tests {
         let (mut world, a, _) = world();
         let frame = legacy_draft(&mut world);
         assert!(world.observe_research_grip(&frame, a).is_err());
+    }
+
+    // Reconstructed compatibility tests, not recovered bytes of the lost overlay.
+    mod atomic_swap_overlay_v2 {
+        use super::*;
+
+        fn register_grip_fixture(world: &mut HeadlessWorld) -> WorldEntityId {
+            let agent = world.agent_entity_id(ORGANISM).unwrap();
+            let brain =
+                alife_core::BrainGenome::scaffold(2202, alife_core::BrainCapacityClass::N2048_ID);
+            let development = alife_core::DevelopmentState::new(
+                brain.id,
+                Tick::ZERO,
+                NormalizedScalar::new(1.0).unwrap(),
+            );
+            let compiled = alife_core::PhenotypeCompiler::compile_n2048_grip_reader_graph(
+                brain,
+                development,
+                SensorProfile::GroundedGripObjectSlotsV1,
+            )
+            .unwrap()
+            .0;
+            let asset =
+                alife_core::FoundationWeightAsset::from_phenotype_for_genetic_birth(&compiled)
+                    .unwrap();
+            let manifest = asset.manifest();
+            let identity = alife_core::FoundationGeneticIdentity::new(
+                manifest.foundation_id().raw(),
+                manifest.foundation_version().raw() as u16,
+                manifest.compatibility_family_id().raw(),
+                alife_core::BrainCapacityClass::N2048_ID,
+            )
+            .unwrap();
+            let genome = alife_core::CreatureGenome::early_mammal_founder(2202, identity)
+                .unwrap()
+                .with_n2048_foundation_candidate(asset)
+                .unwrap();
+            let phenotype = genome.express().unwrap();
+            let biology = BiochemistryState::new(&phenotype, Tick::ZERO).unwrap();
+            world
+                .register_organism_record(
+                    WorldOrganismRecord::new(
+                        ORGANISM,
+                        agent,
+                        genome,
+                        phenotype,
+                        biology,
+                        Tick::ZERO,
+                    )
+                    .unwrap(),
+                )
+                .unwrap();
+            assert!(world.has_grip_reader_abi(ORGANISM));
+            agent
+        }
+
+        #[test]
+        fn explicit_close_swaps_exact_targets_without_becoming_a_release_toggle() {
+            let (mut world, a, b) = world();
+            assert!(
+                execute(&mut world, a, GripOperationV1::Close)
+                    .execution
+                    .succeeded
+            );
+            assert!(!world.entity(a).unwrap().activity_hold);
+            let a_before = world.entity(a).unwrap().position;
+            let b_before = world.entity(b).unwrap().position;
+            let result = execute(&mut world, b, GripOperationV1::Close);
+            assert!(result.execution.succeeded);
+            assert_eq!(result.command, command(b, GripOperationV1::Close));
+            assert_eq!(result.phase, ActionPhase::Completed);
+            assert_eq!(
+                result.execution.physical.contact,
+                PhysicalContactKind::Touch
+            );
+            assert_eq!(result.execution.physical.target_entity, Some(b));
+            assert_eq!(result.touched_entities, vec![a, b]);
+            assert_eq!(result.body_event.nutrition, 0.0);
+            assert_eq!(result.body_event.damage, 0.0);
+            assert_eq!(result.grip_transfers.len(), 2);
+            let placed = &result.grip_transfers[0];
+            assert_eq!(placed.object, a);
+            assert_eq!(placed.kind, GripTransferKind::Placed);
+            assert_eq!(placed.previous_owner, Some(ORGANISM));
+            assert_eq!(placed.new_owner, None);
+            assert_eq!(placed.previous_position, a_before);
+            assert_eq!(placed.new_position, world.entity(a).unwrap().position);
+            let acquired = &result.grip_transfers[1];
+            assert_eq!(acquired.object, b);
+            assert_eq!(acquired.kind, GripTransferKind::Acquired);
+            assert_eq!(acquired.previous_owner, None);
+            assert_eq!(acquired.new_owner, Some(ORGANISM));
+            assert_eq!(acquired.previous_position, b_before);
+            assert_eq!(acquired.new_position, world.entity(b).unwrap().position);
+            assert_eq!(world.entity(a).unwrap().carried_by, None);
+            assert_eq!(world.entity(b).unwrap().carried_by, Some(ORGANISM));
+            let repeated = execute(&mut world, b, GripOperationV1::Close);
+            assert!(!repeated.execution.succeeded);
+            assert!(repeated.grip_transfers.is_empty());
+            assert_eq!(world.entity(b).unwrap().carried_by, Some(ORGANISM));
+        }
+
+        #[test]
+        fn explicit_close_failed_swap_preserves_the_previous_constraint() {
+            for case in ["other_owner", "player", "no_placement"] {
+                let (mut world, a, b) = world();
+                assert!(
+                    execute(&mut world, a, GripOperationV1::Close)
+                        .execution
+                        .succeeded
+                );
+                match case {
+                    "other_owner" => {
+                        world.objects.get_mut(&b.raw()).unwrap().carried_by = Some(OrganismId(8));
+                    }
+                    "player" => {
+                        world.begin_player_hold(b).unwrap();
+                    }
+                    "no_placement" => {
+                        // The actor fits, but neither the ring nor feet can support
+                        // the held food's larger footprint. B is still reachable.
+                        world.terrain = Some(
+                            crate::WorldTerrain::new(
+                                crate::TerrainData {
+                                    width: 3,
+                                    depth: 3,
+                                    origin_x: -0.25,
+                                    origin_z: -0.25,
+                                    spacing: 0.25,
+                                    heights: vec![0.0; 9],
+                                    obstacles: vec![],
+                                    water_level: None,
+                                },
+                                crate::LocomotionLimits::default(),
+                            )
+                            .unwrap(),
+                        );
+                        world.objects.get_mut(&b.raw()).unwrap().position =
+                            Vec3f::new(0.1, 0.0, 0.0);
+                        let actor = world.agent_entity_id(ORGANISM).unwrap();
+                        assert!(world.terrain.as_ref().unwrap().walkable(0.0, 0.0));
+                        assert!(world.grasp_target_is_reachable(ORGANISM, actor, b));
+                        assert_eq!(world.hand_placement(ORGANISM, a, Some(b)), None);
+                    }
+                    _ => unreachable!(),
+                }
+                // End the prior motion interval before comparing complete poses.
+                world
+                    .apply_command(&HeadlessWorldCommand::rest(ORGANISM).unwrap())
+                    .unwrap();
+                let before = world.object_snapshots();
+                let player_before = world.player_held_object();
+                let result = execute(&mut world, b, GripOperationV1::Close);
+                assert!(!result.execution.succeeded, "{case}");
+                assert!(result.grip_transfers.is_empty(), "{case}");
+                assert_eq!(result.execution.physical.contact, PhysicalContactKind::None);
+                assert_eq!(result.body_event.nutrition, 0.0);
+                assert_eq!(result.body_event.damage, 0.0);
+                assert_eq!(world.object_snapshots(), before, "{case}");
+                assert_eq!(world.player_held_object(), player_before);
+                assert_eq!(world.entity(a).unwrap().carried_by, Some(ORGANISM));
+            }
+        }
+
+        #[test]
+        fn registered_close_swap_and_repeated_release_remain_distinct_operations() {
+            let (mut world, a, b) = world();
+            assert!(
+                execute(&mut world, a, GripOperationV1::Close)
+                    .execution
+                    .succeeded
+            );
+            let agent = register_grip_fixture(&mut world);
+            let operations = [
+                GripOperationV1::Close,
+                GripOperationV1::Release,
+                GripOperationV1::Release,
+            ];
+            for (index, operation) in operations.into_iter().enumerate() {
+                let channel = ChannelCommand::new(
+                    MotorChannel::Manipulation,
+                    operation.action_id(),
+                    Some(alife_core::ActionTarget::new(Some(b), None)),
+                    Vec3f::ZERO,
+                    Intensity::new(1.0).unwrap(),
+                    alife_core::DurationTicks::new(1),
+                    0.0,
+                    Confidence::new(1.0).unwrap(),
+                    0,
+                )
+                .unwrap();
+                let bundle = MotorCommandBundle::new(
+                    ORGANISM,
+                    alife_core::ExperienceSequenceId::new(index as u64 + 1).unwrap(),
+                    world.tick(),
+                    vec![channel],
+                )
+                .unwrap();
+                let receipt = world.apply_registered_motor_bundle(&bundle, agent).unwrap();
+                assert_eq!(receipt.channel_receipts.len(), 1);
+                let physical = &receipt.channel_receipts[0];
+                assert_eq!(physical.command.channel, MotorChannel::Manipulation);
+                assert_eq!(physical.command.primitive, operation.action_id());
+                assert_eq!(physical.command.target.unwrap().entity, Some(b));
+                assert_eq!(receipt.succeeded, index < 2);
+                let expected = match index {
+                    0 => vec![
+                        (a, GripTransferKind::Placed),
+                        (b, GripTransferKind::Acquired),
+                    ],
+                    1 => vec![(b, GripTransferKind::Released)],
+                    _ => vec![],
+                };
+                assert_eq!(
+                    physical
+                        .grip_transfers
+                        .iter()
+                        .map(|t| (t.object, t.kind))
+                        .collect::<Vec<_>>(),
+                    expected
+                );
+                assert_eq!(receipt.grip_transfers, physical.grip_transfers);
+                assert_eq!(world.entity(a).unwrap().carried_by, None);
+                assert_eq!(
+                    world.entity(b).unwrap().carried_by,
+                    (index == 0).then_some(ORGANISM)
+                );
+                if index == 2 {
+                    assert_eq!(physical.physical.contact, PhysicalContactKind::None);
+                }
+                world.try_advance_tick().unwrap();
+            }
+            // A stale exact-frame Release is rejected before physical dispatch,
+            // while a newly observed repeat is a failed attempt, never acquisition.
+            let (mut world, a, _) = super::world();
+            assert!(
+                execute(&mut world, a, GripOperationV1::Close)
+                    .execution
+                    .succeeded
+            );
+            let frame = draft(&mut world);
+            let observation = world.observe_research_grip(&frame, a).unwrap();
+            let release = command(a, GripOperationV1::Release);
+            assert!(
+                world
+                    .execute_research_grip(&frame, &observation, GripOperationV1::Release, release)
+                    .unwrap()
+                    .execution
+                    .succeeded
+            );
+            let before = world.object_snapshots();
+            assert!(world
+                .execute_research_grip(&frame, &observation, GripOperationV1::Release, release)
+                .is_err());
+            assert_eq!(world.object_snapshots(), before);
+            let repeated = execute(&mut world, a, GripOperationV1::Release);
+            assert!(!repeated.execution.succeeded);
+            assert!(repeated.grip_transfers.is_empty());
+            assert_eq!(world.entity(a).unwrap().carried_by, None);
+        }
+
+        #[test]
+        fn explicit_release_remains_escapable_with_corrupt_multiple_holds() {
+            let (mut world, a, b) = world();
+            assert!(
+                execute(&mut world, a, GripOperationV1::Close)
+                    .execution
+                    .succeeded
+            );
+            // Deliberately corrupt only this disposable fixture; valid saves reject
+            // multiple holds. Detaching A must not acquire A or detach B on retries.
+            let a_position = world.entity(a).unwrap().position;
+            let extra_hold = world.objects.get_mut(&b.raw()).unwrap();
+            extra_hold.carried_by = Some(ORGANISM);
+            extra_hold.position = a_position;
+            world
+                .apply_command(&HeadlessWorldCommand::rest(ORGANISM).unwrap())
+                .unwrap();
+            let a_position = world.entity(a).unwrap().position;
+            let b_before = world.entity(b).unwrap().clone();
+            // Test the operation's physical boundary directly: the world is already
+            // invalid, so this case does not assert perception/save admission.
+            let release = world
+                .execute_explicit_grip(
+                    GripOperationV1::Release,
+                    command(a, GripOperationV1::Release),
+                )
+                .unwrap();
+            assert!(release.execution.succeeded);
+            assert_eq!(release.grip_transfers.len(), 1);
+            assert_eq!(release.grip_transfers[0].object, a);
+            assert_eq!(release.grip_transfers[0].kind, GripTransferKind::Released);
+            assert_eq!(release.grip_transfers[0].previous_owner, Some(ORGANISM));
+            assert_eq!(release.grip_transfers[0].new_owner, None);
+            assert_eq!(world.entity(a).unwrap().position, a_position);
+            assert_eq!(world.entity(a).unwrap().carried_by, None);
+            assert_eq!(world.entity(b).unwrap(), &b_before);
+            let repeated = world
+                .execute_explicit_grip(
+                    GripOperationV1::Release,
+                    command(a, GripOperationV1::Release),
+                )
+                .unwrap();
+            assert!(!repeated.execution.succeeded);
+            assert!(repeated.grip_transfers.is_empty());
+            assert_eq!(world.entity(a).unwrap().carried_by, None);
+            assert_eq!(world.entity(b).unwrap(), &b_before);
+            assert!(
+                world
+                    .execute_explicit_grip(
+                        GripOperationV1::Release,
+                        command(b, GripOperationV1::Release)
+                    )
+                    .unwrap()
+                    .execution
+                    .succeeded
+            );
+            assert_eq!(world.entity(b).unwrap().carried_by, None);
+        }
     }
 }
