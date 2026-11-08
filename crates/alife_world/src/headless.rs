@@ -4,6 +4,7 @@
 
 mod awake_translation;
 mod contact_withdrawal;
+mod grounded_path;
 mod translation_endpoint;
 pub use awake_translation::{
     AwakeTranslationIntervalReceipt, TranslationTimeMetric, VoluntaryTimeProvenance,
@@ -6236,9 +6237,12 @@ impl HeadlessWorld {
             );
         }
 
-        let contact_plan = translation.as_ref().and_then(|state| {
-            state.swept_contact_plan(self, &command, agent_id, start, destination)
-        });
+        let contact_plan = match translation.as_ref() {
+            Some(state) => {
+                state.swept_contact_plan(self, &command, agent_id, start, destination)?
+            }
+            None => None,
+        };
         if let Some(plan) = &contact_plan {
             // From this point onward, even a fail-closed terrain/carry return
             // is candidate intervention, not the ordinary selected execution.
@@ -6258,18 +6262,34 @@ impl HeadlessWorld {
             }
             destination = plan.position;
         }
+        // The dose and the reflex now use the same real grounded trajectory.
+        // Ordinary movement adopts this physical law too; no neural action is added.
+        let grounded_hazards =
+            self.grounded_hazard_contacts(command.organism_id, start, destination)?;
         let mut touched = self
             .objects
             .iter()
             .filter(|(id, object)| {
                 **id != agent_id.raw()
                     && !object.consumed
-                    && (distance(object.position, destination) <= object.radius
-                        || (object.kind == WorldObjectKind::Hazard
-                            && distance(
-                                object.position,
-                                closest_point_on_segment(object.position, start, destination),
-                            ) <= object.radius))
+                    && (if object.kind == WorldObjectKind::Hazard {
+                        match &grounded_hazards {
+                            Some(contacts) => contacts.contains(&object.id),
+                            None => {
+                                distance(object.position, destination) <= object.radius
+                                    || distance(
+                                        object.position,
+                                        closest_point_on_segment(
+                                            object.position,
+                                            start,
+                                            destination,
+                                        ),
+                                    ) <= object.radius
+                            }
+                        }
+                    } else {
+                        distance(object.position, destination) <= object.radius
+                    })
             })
             .map(|(id, _)| WorldEntityId(*id))
             .collect::<Vec<_>>();
@@ -8961,47 +8981,7 @@ mod task_6_factorized_motor_tests {
 
     #[test]
     fn curved_prefix_diagnostic_separates_ground_legality_from_chord_contact() {
-        let toxic = false;
-        let (mut world, agent, food, mut bundle) = prepared_world();
-        hold_food_for_meal(&mut world, food);
-        world.objects.get_mut(&food.raw()).unwrap().hazard_pain = if toxic { 0.4 } else { 0.0 };
-        bundle
-            .channels
-            .retain(|c| c.channel != MotorChannel::Locomotion);
-        bundle
-            .channels
-            .push(initial_priority_bundle(false).channels[0].clone());
-        let profile = (0..32)
-            .map(|i| if i == 11 { 0.01 } else { 0.0 })
-            .collect::<Vec<_>>();
-        world.terrain = Some(
-            crate::WorldTerrain::new(
-                crate::TerrainData {
-                    width: 32,
-                    depth: 32,
-                    origin_x: -0.5,
-                    origin_z: -0.8,
-                    spacing: 0.05,
-                    heights: profile.repeat(32),
-                    obstacles: vec![],
-                    water_level: None,
-                },
-                crate::LocomotionLimits::default(),
-            )
-            .unwrap(),
-        );
-        world
-            .editor_spawn_object(WorldEditorSpawnSpec {
-                label: "v19-curved-ground-contact".into(),
-                kind: WorldObjectKind::Hazard,
-                organism_id: None,
-                position: Vec3f::new(0.14, 0.0, 0.0),
-                nutrition: 0.0,
-                hazard_pain: 0.2,
-                radius: 0.1,
-                token_id: None,
-            })
-            .unwrap();
+        let (mut world, agent, _, bundle) = curved_contact_fixture(false);
         let start = world.entity(agent).unwrap().position;
         let hazard = world.entity_id("v19-curved-ground-contact").unwrap();
         let object = world.entity(hazard).unwrap();
@@ -9052,13 +9032,431 @@ mod task_6_factorized_motor_tests {
         let actual = world
             .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
             .unwrap();
-        assert_eq!(actual.voluntary_path, 0.0);
+        assert!(actual.voluntary_path > 0.04);
         assert!(actual.voluntary_execution_altered);
-        assert!(actual.withdrawal.is_none());
+        assert!(actual.withdrawal.is_some());
         eprintln!("CURVED_PREFIX_DIAGNOSTIC chord_x={} grounded_y={} projected_source_distance={} radius={} legal_later_x={} legal_later_source_distance={} ordinary_x={}", chord.x, grounded.y, distance(grounded,center), radius, later.x, distance(later,center), expected.joint.execution.displacement.x);
     }
 
-    fn terrain_rejected_prefix_case(toxic: bool) {
+    #[test]
+    fn grounded_contact_outside_true_route_must_not_create_chord_injury() {
+        let (mut world, agent, _, bundle) = curved_contact_fixture(false);
+        let hazard = world.entity_id("v19-curved-ground-contact").unwrap();
+        let object = world.objects.get_mut(&hazard.raw()).unwrap();
+        object.position = Vec3f::new(0.05, 0.0, 0.0);
+        object.radius = 0.002;
+        let start = world.entity(agent).unwrap().position;
+        let end = Vec3f::new(0.1, 0.0, 0.0);
+        let segments = world
+            .terrain
+            .as_ref()
+            .unwrap()
+            .grounded_move_segments(start, end)
+            .unwrap();
+        assert!(segments
+            .iter()
+            .all(|segment| grounded_path::grounded_segment_sphere_entry(
+                segment.start,
+                segment.end,
+                Vec3f::new(0.05, 0.0, 0.0),
+                0.002
+            )
+            .is_none()));
+        let mut ordinary = world.clone();
+        let expected = ordinary
+            .apply_registered_motor_bundle(&bundle, agent)
+            .unwrap();
+        let actual = world
+            .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
+            .unwrap();
+        assert_eq!(
+            expected.body_event.damage, 0.0,
+            "ordinary chord must not invent injury below the true ground route"
+        );
+        assert_eq!(actual.voluntary.body_event.damage, 0.0);
+        assert!(actual.withdrawal.is_none());
+        assert!(!actual.voluntary_execution_altered);
+        assert!(actual.voluntary == expected);
+    }
+
+    #[test]
+    fn grounded_contact_old_off_surface_pose_keeps_legacy_transition_after_restore() {
+        let (mut world, agent) = withdrawal_world(Vec3f::new(8.0, 0.0, 0.0), 0.4);
+        world.objects.get_mut(&agent.raw()).unwrap().position.y = 0.25;
+        world.terrain = Some(
+            crate::WorldTerrain::new(
+                crate::TerrainData {
+                    width: 3,
+                    depth: 3,
+                    origin_x: -1.0,
+                    origin_z: -1.0,
+                    spacing: 1.0,
+                    heights: vec![0.0; 9],
+                    obstacles: vec![],
+                    water_level: None,
+                },
+                crate::LocomotionLimits::default(),
+            )
+            .unwrap(),
+        );
+        let saved = serde_json::to_vec(&world.save_state()).unwrap();
+        let mut restored =
+            HeadlessWorld::from_save_state(&serde_json::from_slice(&saved).unwrap()).unwrap();
+        let bundle = initial_priority_bundle(false);
+        let expected = world.apply_registered_motor_bundle(&bundle, agent).unwrap();
+        let actual = restored
+            .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
+            .unwrap();
+        assert!(actual.voluntary == expected);
+        assert_eq!(actual.voluntary_time_allocated, 1.0);
+        assert_eq!(actual.actual_displacement.y, -0.25);
+        assert!(actual.withdrawal.is_none());
+        assert!(!actual.voluntary_execution_altered);
+    }
+
+    #[test]
+    fn grounded_contact_near_miss_is_not_a_secondary_source() {
+        let (mut world, agent, _, bundle) = curved_contact_fixture(false);
+        let start = world.entity(agent).unwrap().position;
+        let mut control = world.clone();
+        let baseline = control
+            .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
+            .unwrap();
+        let prefix = add(start, baseline.voluntary.joint.execution.displacement);
+        let radius = 0.1; // Editor minimum, verified below rather than assumed.
+        let center = Vec3f::new(prefix.x, prefix.y, radius + 0.000005);
+        let miss = world
+            .editor_spawn_object(WorldEditorSpawnSpec {
+                label: "near-miss-not-source".into(),
+                kind: WorldObjectKind::Hazard,
+                organism_id: None,
+                position: center,
+                nutrition: 0.0,
+                hazard_pain: 1.0,
+                radius,
+                token_id: None,
+            })
+            .unwrap();
+        assert_eq!(world.entity(miss).unwrap().radius, radius);
+        let actual_center = world.entity(miss).unwrap().position;
+        let segments = world
+            .terrain
+            .as_ref()
+            .unwrap()
+            .grounded_move_segments(start, Vec3f::new(0.1, 0.0, 0.0))
+            .unwrap();
+        assert!(segments
+            .iter()
+            .all(|segment| grounded_path::grounded_segment_sphere_entry(
+                segment.start,
+                segment.end,
+                actual_center,
+                radius
+            )
+            .is_none()));
+        assert!(
+            distance(prefix, actual_center) > radius
+                && distance(prefix, actual_center) <= radius + 1e-5
+        );
+        let actual = world
+            .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
+            .unwrap();
+        assert!(
+            !actual.withdrawal.as_ref().unwrap().sources.contains(&miss),
+            "never-intersected nearby hazard became a secondary cause"
+        );
+        assert_eq!(actual.withdrawal, baseline.withdrawal);
+        assert_eq!(
+            actual.voluntary.body_event.damage,
+            baseline.voluntary.body_event.damage
+        );
+    }
+
+    fn grounded_matrix_world(
+        origin: f32,
+        concave: bool,
+    ) -> (HeadlessWorld, WorldEntityId, WorldEntityId) {
+        let (template, _, _, _) = curved_contact_fixture(false);
+        let (mut world, agent) = withdrawal_world(Vec3f::new(0.14, 0.0, 0.0), 0.2);
+        let hazard = world.entity_id("hazard").unwrap();
+        world.objects.get_mut(&hazard.raw()).unwrap().radius = 0.1;
+        let state = template.terrain.unwrap().state();
+        let mut data = state.data;
+        data.origin_x += origin;
+        if concave {
+            for h in &mut data.heights {
+                *h = -*h;
+            }
+        }
+        world.terrain = Some(crate::WorldTerrain::new(data, state.locomotion).unwrap());
+        for object in world.objects.values_mut() {
+            object.position.x += origin;
+        }
+        (world, agent, hazard)
+    }
+
+    #[test]
+    fn grounded_contact_convex_concave_diagonal_translated_point_time_bounds() {
+        for origin in [0.0, -128.0, 128.0, -1000.0, 1000.0] {
+            for concave in [false, true] {
+                for diagonal in [false, true] {
+                    let (mut world, agent, hazard) = grounded_matrix_world(origin, concave);
+                    let start = world.entity(agent).unwrap().position;
+                    let mut bundle = initial_priority_bundle(false);
+                    if diagonal {
+                        let target = Vec3f::new(origin + 0.1, 0.0, 0.1);
+                        bundle.channels[0] = ChannelCommand::new(
+                            MotorChannel::Locomotion,
+                            ActionKind::Move.canonical_id(),
+                            Some(alife_core::ActionTarget::new(None, Some(target))),
+                            target,
+                            Intensity::new(1.0).unwrap(),
+                            alife_core::DurationTicks::new(1),
+                            0.0,
+                            Confidence::new(1.0).unwrap(),
+                            0,
+                        )
+                        .unwrap();
+                    }
+                    let actual = world
+                        .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
+                        .unwrap_or_else(|e| {
+                            panic!("origin={origin} concave={concave} diagonal={diagonal}: {e:?}")
+                        });
+                    let prefix = add(start, actual.voluntary.joint.execution.displacement);
+                    let surface = world.terrain.as_ref().unwrap().surface();
+                    assert_eq!(surface.height(prefix.x, prefix.z), Some(prefix.y));
+                    let source = world.entity(hazard).unwrap();
+                    assert_eq!(
+                        actual.voluntary.body_event.damage, 0.2,
+                        "actual pain dose origin={origin} concave={concave} diagonal={diagonal}"
+                    );
+                    let movement = actual
+                        .voluntary
+                        .channel_receipts
+                        .iter()
+                        .find(|receipt| receipt.command.channel == MotorChannel::Locomotion)
+                        .unwrap();
+                    assert_eq!(movement.physical.contact, PhysicalContactKind::Collision);
+                    assert_eq!(movement.physical.target_entity, Some(hazard));
+                    assert!(distance(prefix, source.position) <= source.radius + 1e-5);
+                    let planar = actual
+                        .voluntary
+                        .joint
+                        .execution
+                        .displacement
+                        .x
+                        .hypot(actual.voluntary.joint.execution.displacement.z);
+                    assert!(planar <= MOVE_STEP * actual.voluntary_time_allocated + 1e-6);
+                    assert_eq!(actual.allocated_translation_time, 1.0);
+                    assert!(actual
+                        .withdrawal
+                        .as_ref()
+                        .unwrap()
+                        .sources
+                        .contains(&hazard));
+                    eprintln!("GROUNDED_POINT_TIME origin={origin} concave={concave} diagonal={diagonal} planar={planar} time={}",actual.voluntary_time_allocated);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn grounded_contact_full_represented_endpoint_has_exact_full_time() {
+        for origin in [-1000.0, -128.0, 128.0, 1000.0] {
+            let (mut world, agent, hazard) = grounded_matrix_world(origin, false);
+            world.objects.get_mut(&hazard.raw()).unwrap().position.x = origin + 8.0;
+            let bundle = initial_priority_bundle(false);
+            let mut quiet = world.clone();
+            quiet.apply_registered_motor_bundle(&bundle, agent).unwrap();
+            let end = quiet.entity(agent).unwrap().position;
+            let source = world.objects.get_mut(&hazard.raw()).unwrap();
+            source.radius = 0.125;
+            source.position = Vec3f::new(end.x + 0.125, end.y, end.z);
+            let actual = world
+                .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
+                .unwrap();
+            assert_eq!(actual.voluntary_time_allocated, 1.0, "origin={origin}");
+            assert_eq!(actual.reflex_time_allocated, 0.0);
+            assert_eq!(
+                actual.withdrawal.as_ref().unwrap().displacement,
+                Vec3f::ZERO
+            );
+            assert_eq!(actual.withdrawal.as_ref().unwrap().energy_cost, 0.0);
+        }
+    }
+
+    #[test]
+    fn grounded_contact_carried_hazard_has_constant_body_relative_separation() {
+        for radius in [0.45, 0.6] {
+            let (mut world, agent, held, mut bundle) = curved_contact_fixture(false);
+            let external = world.entity_id("v19-curved-ground-contact").unwrap();
+            world.editor_remove_object(external).unwrap();
+            let object = world.objects.get_mut(&held.raw()).unwrap();
+            object.kind = WorldObjectKind::Hazard;
+            object.hazard_pain = 0.4;
+            object.radius = radius;
+            bundle
+                .channels
+                .retain(|c| c.channel == MotorChannel::Locomotion);
+            let mut ordinary = world.clone();
+            let expected = ordinary
+                .apply_registered_motor_bundle(&bundle, agent)
+                .unwrap();
+            let actual = world
+                .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
+                .unwrap();
+            assert_eq!(world.entity(held).unwrap().carried_by, Some(ORGANISM_ID));
+            assert!(actual.voluntary == expected);
+            assert!(actual.voluntary_path > 0.09);
+            assert_eq!(actual.reflex_time_allocated, 0.0);
+            assert!(!actual.voluntary_execution_altered);
+            assert_eq!(
+                actual.voluntary.body_event.damage,
+                if radius < 0.5 { 0.0 } else { 0.4 }
+            );
+            if let Some(reflex) = actual.withdrawal {
+                assert!(!reflex.sources.contains(&held));
+                assert_eq!(reflex.displacement, Vec3f::ZERO);
+            }
+            assert_eq!(
+                distance(
+                    world.entity(agent).unwrap().position,
+                    world.entity(held).unwrap().position
+                ),
+                0.5
+            );
+        }
+    }
+
+    #[test]
+    fn grounded_contact_thin_triangle_peak_is_not_undersampled() {
+        let spacing = 1.0 / 1024.0;
+        let (mut world, agent) = withdrawal_world(Vec3f::new(spacing, 1.0 / 4096.0, 0.0), 0.2);
+        let hazard = world.entity_id("hazard").unwrap();
+        world.objects.get_mut(&hazard.raw()).unwrap().radius = 1.0 / 8192.0;
+        let mut heights = vec![0.0; 128 * 3];
+        for row in 0..3 {
+            heights[row * 128 + 1] = 1.0 / 4096.0;
+        }
+        world.terrain = Some(
+            crate::WorldTerrain::new(
+                crate::TerrainData {
+                    width: 128,
+                    depth: 3,
+                    origin_x: 0.0,
+                    origin_z: -spacing,
+                    spacing,
+                    heights,
+                    obstacles: vec![],
+                    water_level: None,
+                },
+                crate::LocomotionLimits::default(),
+            )
+            .unwrap(),
+        );
+        let bundle = initial_priority_bundle(false);
+        let mut ordinary = world.clone();
+        let expected = ordinary
+            .apply_registered_motor_bundle(&bundle, agent)
+            .unwrap();
+        assert_eq!(expected.body_event.damage, 0.2);
+        let actual = world
+            .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
+            .unwrap();
+        assert!(actual.voluntary_time_allocated > 0.0 && actual.voluntary_time_allocated < 0.02);
+        assert!(actual
+            .withdrawal
+            .as_ref()
+            .unwrap()
+            .sources
+            .contains(&hazard));
+        assert_eq!(actual.allocated_translation_time, 1.0);
+    }
+
+    #[test]
+    fn grounded_contact_flat_route_is_exact_legacy_and_competing_sources_remain_real() {
+        let (mut flat, agent, _, bundle) = curved_contact_fixture(false);
+        let state = flat.terrain.as_ref().unwrap().state();
+        let mut data = state.data;
+        data.heights.fill(0.0);
+        flat.terrain = Some(crate::WorldTerrain::new(data, state.locomotion).unwrap());
+        let mut legacy = flat.clone();
+        legacy.terrain = None;
+        let a = flat
+            .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
+            .unwrap();
+        let b = legacy
+            .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
+            .unwrap();
+        assert!(a.voluntary == b.voluntary);
+        assert_eq!(a.withdrawal, b.withdrawal);
+        assert_eq!(a.voluntary_time_allocated, b.voluntary_time_allocated);
+        assert_eq!(a.reflex_time_allocated, b.reflex_time_allocated);
+        assert_eq!(a.actual_displacement, b.actual_displacement);
+        let (mut curved, agent, _, bundle) = curved_contact_fixture(false);
+        let first = curved.entity_id("v19-curved-ground-contact").unwrap();
+        let second = curved
+            .editor_spawn_object(WorldEditorSpawnSpec {
+                label: "same-real-contact".into(),
+                kind: WorldObjectKind::Hazard,
+                organism_id: None,
+                position: Vec3f::new(0.14, 0.0, 0.0),
+                nutrition: 0.0,
+                hazard_pain: 0.2,
+                radius: 0.1,
+                token_id: None,
+            })
+            .unwrap();
+        let actual = curved
+            .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
+            .unwrap();
+        let sources = &actual.withdrawal.as_ref().unwrap().sources;
+        assert!(sources.contains(&first) && sources.contains(&second));
+        assert_eq!(actual.voluntary.body_event.damage, 0.2);
+        assert_eq!(actual.allocated_translation_time, 1.0);
+    }
+
+    #[test]
+    fn grounded_contact_closed_tangent_and_near_outside_geometry_are_distinct() {
+        let start = [0.0, 0.0, 0.0];
+        let end = [1.0, 0.0, 0.0];
+        assert_eq!(
+            grounded_path::grounded_segment_sphere_entry(
+                start,
+                end,
+                Vec3f::new(0.5, 0.25, 0.0),
+                0.25
+            ),
+            Some(0.5)
+        );
+        assert!(grounded_path::grounded_segment_sphere_entry(
+            start,
+            end,
+            Vec3f::new(0.5, 0.25_f32.next_up(), 0.0),
+            0.25
+        )
+        .is_none());
+        assert!(
+            grounded_path::grounded_segment_sphere_entry(
+                start,
+                end,
+                Vec3f::new(0.5, 0.25_f32.next_down(), 0.0),
+                0.25
+            )
+            .unwrap()
+                < 0.5
+        );
+    }
+
+    fn curved_contact_fixture(
+        toxic: bool,
+    ) -> (
+        HeadlessWorld,
+        WorldEntityId,
+        WorldEntityId,
+        MotorCommandBundle,
+    ) {
         let (mut world, agent, food, mut bundle) = prepared_world();
         hold_food_for_meal(&mut world, food);
         world.objects.get_mut(&food.raw()).unwrap().hazard_pain = if toxic { 0.4 } else { 0.0 };
@@ -9099,6 +9497,11 @@ mod task_6_factorized_motor_tests {
                 token_id: None,
             })
             .unwrap();
+        (world, agent, food, bundle)
+    }
+
+    fn terrain_rejected_prefix_case(toxic: bool) {
+        let (mut world, agent, food, bundle) = curved_contact_fixture(toxic);
         let mut ordinary = world.clone();
         let expected = ordinary
             .apply_registered_motor_bundle(&bundle, agent)
@@ -9114,16 +9517,17 @@ mod task_6_factorized_motor_tests {
             world.entity(food).unwrap().consumed,
             "fixture must execute the toxic meal"
         );
-        assert_eq!(actual.voluntary.joint.execution.displacement, Vec3f::ZERO);
+        assert!(actual.voluntary_path > 0.04 && actual.voluntary_path < 0.05);
         assert!(actual.voluntary_execution_altered);
-        if toxic {
-            assert!(actual.reflex_budget_exhausted);
-        } else {
-            assert!(
-                actual.withdrawal.is_none(),
-                "nonpainful rejection invented a reflex"
-            );
-        }
+        let reflex = actual
+            .withdrawal
+            .as_ref()
+            .expect("real ground contact triggers withdrawal");
+        assert!(reflex
+            .sources
+            .contains(&world.entity_id("v19-curved-ground-contact").unwrap()));
+        assert!(actual.voluntary_time_allocated > 0.4 && actual.voluntary_time_allocated < 0.5);
+        assert_eq!(actual.allocated_translation_time, 1.0);
         assert!(
             !actual.exhausted_late_no_effect,
             "candidate-only terrain rejection was falsely labeled ordinary-equivalent"
@@ -9131,12 +9535,12 @@ mod task_6_factorized_motor_tests {
     }
 
     #[test]
-    fn awake_terrain_rejected_prefix_is_not_ordinary_equivalent_after_late_meal() {
+    fn awake_grounded_prefix_preserves_intervention_after_late_meal() {
         terrain_rejected_prefix_case(true);
     }
 
     #[test]
-    fn awake_terrain_rejected_prefix_remains_intervention_without_withdrawal() {
+    fn awake_grounded_prefix_finds_real_hazard_without_meal_pain() {
         terrain_rejected_prefix_case(false);
     }
 
