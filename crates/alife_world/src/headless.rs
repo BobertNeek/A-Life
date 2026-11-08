@@ -1318,6 +1318,7 @@ impl IngestionObservation {
 pub struct HeadlessWorld {
     seed: u64,
     disable_age_death: bool,
+    thermal_contact_candidate: Option<ThermalContactCandidate>,
     terrain: Option<crate::WorldTerrain>,
     tick: Tick,
     next_entity_id: u64,
@@ -1342,6 +1343,9 @@ pub struct HeadlessWorld {
     #[cfg(test)]
     injected_tick_late_failure_after_first_organism: bool,
 }
+
+mod thermal_contact_candidate;
+pub use thermal_contact_candidate::ThermalContactCandidate;
 
 mod hands;
 pub use hands::{ActionPhase, GripTransfer, GripTransferKind};
@@ -1537,6 +1541,7 @@ impl HeadlessWorld {
         Self {
             seed,
             disable_age_death: false,
+            thermal_contact_candidate: None,
             terrain: None,
             tick: Tick::ZERO,
             next_entity_id: DEFAULT_ENTITY_ID_START,
@@ -1853,10 +1858,16 @@ impl HeadlessWorld {
                     let body_event = hazard_contact.map_or(body_event, |(_, pain)| {
                         merge_hazard_contact_body_event(body_event, pain)
                     });
-                    candidate
-                        .organism_registry
-                        .advance_biology(organism_id, next_tick, body_event)
-                        .map_err(map_organism_registry_error)?;
+                    let thermal = candidate.thermal_contact_severity_at(entity, position);
+                    let (body_event, relief) =
+                        candidate.thermal_interval_event(body_event, thermal);
+                    candidate.advance_biology_with_thermal_candidate(
+                        organism_id,
+                        next_tick,
+                        body_event,
+                        None,
+                        relief,
+                    )?;
                     #[cfg(test)]
                     {
                         advanced_organism = true;
@@ -3600,6 +3611,7 @@ impl HeadlessWorld {
             }
         }
         let world = Self {
+            thermal_contact_candidate: None,
             seed: state.seed,
             disable_age_death: state.disable_age_death,
             terrain,
@@ -4653,6 +4665,7 @@ impl HeadlessWorld {
         );
         let (initial_hazard_contact, initial_peer_touch) =
             self.body_contacts_at(world_entity_id, initial_position);
+        let initial_thermal = self.thermal_contact_severity_at(world_entity_id, initial_position);
 
         let mut channels = bundle
             .channels
@@ -4743,21 +4756,17 @@ impl HeadlessWorld {
                 .iter()
                 .map(|(_, result)| result.execution.physical.displacement),
         );
+        let final_thermal = self.thermal_contact_severity_at(world_entity_id, final_position);
+        let (body_event, relief) =
+            self.thermal_interval_event(body_event, initial_thermal.max(final_thermal));
         body_event.validate_contract()?;
-        if let Some(neural) = neural {
-            self.organism_registry
-                .advance_biology_with_neural_emission(
-                    bundle.organism_id,
-                    outcome_tick,
-                    body_event,
-                    neural,
-                )
-                .map_err(map_organism_registry_error)?;
-        } else {
-            self.organism_registry
-                .advance_biology(bundle.organism_id, outcome_tick, body_event)
-                .map_err(map_organism_registry_error)?;
-        }
+        self.advance_biology_with_thermal_candidate(
+            bundle.organism_id,
+            outcome_tick,
+            body_event,
+            neural,
+            relief,
+        )?;
         self.validate_organism_bindings()?;
         let biology_after = *self
             .organism_registry
@@ -4952,6 +4961,7 @@ impl HeadlessWorld {
             self.validate_registered_action(command, world_entity_id, outcome_tick)?;
         let initial_position = self.objects[&world_entity_id.raw()].position;
         let (_, initial_peer_touch) = self.body_contacts_at(world_entity_id, initial_position);
+        let initial_thermal = self.thermal_contact_severity_at(world_entity_id, initial_position);
         let mut action_result = match mode {
             RegisteredCommandMode::Legacy => self.apply_command(command)?,
             RegisteredCommandMode::Neural {
@@ -4973,10 +4983,18 @@ impl HeadlessWorld {
                 .remove(&command.organism_id.raw())
                 .unwrap_or_else(BodyEventDelta::zero),
         );
+        let final_thermal = self.thermal_contact_severity_at(world_entity_id, final_position);
+        let (body_event, relief) = self
+            .thermal_interval_event(action_result.body_event, initial_thermal.max(final_thermal));
+        action_result.body_event = body_event;
         self.last_action_result = Some(action_result.clone());
-        self.organism_registry
-            .advance_biology(command.organism_id, outcome_tick, action_result.body_event)
-            .map_err(map_organism_registry_error)?;
+        self.advance_biology_with_thermal_candidate(
+            command.organism_id,
+            outcome_tick,
+            body_event,
+            None,
+            relief,
+        )?;
         self.validate_organism_bindings()?;
         let biology_after = *self
             .organism_registry
