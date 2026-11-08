@@ -1,0 +1,17 @@
+diff --git a/crates/alife_world/src/headless.rs b/crates/alife_world/src/headless.rs
+index bd8007ab..dce253df 100644
+--- a/crates/alife_world/src/headless.rs
++++ b/crates/alife_world/src/headless.rs
+@@ -8950,10 +8950,10 @@ mod task_6_factorized_motor_tests {
+                 label: "v19-curved-ground-contact".into(),
+                 kind: WorldObjectKind::Hazard,
+                 organism_id: None,
+-                position: Vec3f::new(0.05, 0.0, 0.0),
++                position: Vec3f::new(0.14, 0.0, 0.0),
+                 nutrition: 0.0,
+                 hazard_pain: 0.2,
+-                radius: 0.01,
++                radius: 0.1,
+                 token_id: None,
+             })
+             .unwrap();

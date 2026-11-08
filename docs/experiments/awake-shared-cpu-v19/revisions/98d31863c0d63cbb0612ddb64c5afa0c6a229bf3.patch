@@ -1,0 +1,13 @@
+diff --git a/crates/alife_training/tests/cpu_collector.rs b/crates/alife_training/tests/cpu_collector.rs
+index dda794c2..2d697263 100644
+--- a/crates/alife_training/tests/cpu_collector.rs
++++ b/crates/alife_training/tests/cpu_collector.rs
+@@ -80,7 +80,7 @@ fn new_game_with_readout_fixture(
+     if prescribed_meal_readout {
+         // Explicit fresh architecture factor: default remains one head.
+         let mut architecture =
+-            serde_json::to_value(&fixture_genotype.brain.construction.maternal_architecture)
++            serde_json::to_value(fixture_genotype.brain.construction.maternal_architecture)
+                 .unwrap();
+         architecture["motor_head_count"] = serde_json::json!(4);
+         let architecture = serde_json::from_value(architecture).unwrap();

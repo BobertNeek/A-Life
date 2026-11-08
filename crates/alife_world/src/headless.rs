@@ -4970,6 +4970,12 @@ impl HeadlessWorld {
         if let Some((novelty, _)) = novelty {
             body_event.perceived_novelty = novelty;
         }
+        let ordinary_body_event = normalize_sleep_recovery_for_motion(
+            body_event,
+            executed
+                .iter()
+                .map(|(_, result)| result.execution.physical.displacement),
+        );
         if let Some(state) = translation.as_ref() {
             if let Some(reflex) = &state.withdrawal {
                 body_event.energy = (body_event.energy - reflex.energy_cost).clamp(-1.0, 1.0);
@@ -4995,6 +5001,9 @@ impl HeadlessWorld {
                         .map(|r| r.displacement),
                 ),
         );
+        if let Some(state) = translation.as_deref_mut() {
+            state.bind_ordinary_body_equivalence(ordinary_body_event, body_event);
+        }
         let final_thermal = self
             .thermal_contact_severity_at(world_entity_id, final_position)
             .max(translation.as_ref().map_or(0.0, |state| state.thermal_peak));
@@ -6079,7 +6088,7 @@ impl HeadlessWorld {
         command: ActionCommand,
         agent_id: WorldEntityId,
         intent: MoveIntent,
-        translation: Option<&mut awake_translation::AwakeTranslationState>,
+        mut translation: Option<&mut awake_translation::AwakeTranslationState>,
     ) -> Result<HeadlessActionResult, ScaffoldContractError> {
         if self.player_held_object() == Some(agent_id) {
             return self.finish_action(
@@ -6192,6 +6201,11 @@ impl HeadlessWorld {
             state.swept_contact_plan(self, &command, agent_id, start, destination)
         });
         if let Some(plan) = &contact_plan {
+            // From this point onward, even a fail-closed terrain/carry return
+            // is candidate intervention, not the ordinary selected execution.
+            if let Some(state) = translation.as_deref_mut() {
+                state.mark_voluntary_execution_altered();
+            }
             if let Some(terrain) = &self.terrain {
                 // Never place a clipped swept contact above/below the actual
                 // ground. Until the path is grounded exactly, reject this
@@ -8906,6 +8920,88 @@ mod task_6_factorized_motor_tests {
         assert!((actual.allocated_translation_time - 1.0).abs() < 1e-6);
     }
 
+    fn terrain_rejected_prefix_case(toxic: bool) {
+        let (mut world, agent, food, mut bundle) = prepared_world();
+        hold_food_for_meal(&mut world, food);
+        world.objects.get_mut(&food.raw()).unwrap().hazard_pain = if toxic { 0.4 } else { 0.0 };
+        bundle
+            .channels
+            .retain(|c| c.channel != MotorChannel::Locomotion);
+        bundle
+            .channels
+            .push(initial_priority_bundle(false).channels[0].clone());
+        let profile = (0..32)
+            .map(|i| if i == 11 { 0.01 } else { 0.0 })
+            .collect::<Vec<_>>();
+        world.terrain = Some(
+            crate::WorldTerrain::new(
+                crate::TerrainData {
+                    width: 32,
+                    depth: 32,
+                    origin_x: -0.5,
+                    origin_z: -0.8,
+                    spacing: 0.05,
+                    heights: profile.repeat(32),
+                    obstacles: vec![],
+                    water_level: None,
+                },
+                crate::LocomotionLimits::default(),
+            )
+            .unwrap(),
+        );
+        world
+            .editor_spawn_object(WorldEditorSpawnSpec {
+                label: "v19-curved-ground-contact".into(),
+                kind: WorldObjectKind::Hazard,
+                organism_id: None,
+                position: Vec3f::new(0.14, 0.0, 0.0),
+                nutrition: 0.0,
+                hazard_pain: 0.2,
+                radius: 0.1,
+                token_id: None,
+            })
+            .unwrap();
+        let mut ordinary = world.clone();
+        let expected = ordinary
+            .apply_registered_motor_bundle(&bundle, agent)
+            .unwrap();
+        assert!(
+            expected.joint.execution.displacement.x > 0.09,
+            "ordinary fixture move must remain legal"
+        );
+        let actual = world
+            .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
+            .unwrap();
+        assert!(
+            world.entity(food).unwrap().consumed,
+            "fixture must execute the toxic meal"
+        );
+        assert_eq!(actual.voluntary.joint.execution.displacement, Vec3f::ZERO);
+        assert!(actual.voluntary_execution_altered);
+        if toxic {
+            assert!(actual.reflex_budget_exhausted);
+        } else {
+            assert!(
+                actual.withdrawal.is_none(),
+                "nonpainful rejection invented a reflex"
+            );
+        }
+        assert!(
+            !actual.exhausted_late_no_effect,
+            "candidate-only terrain rejection was falsely labeled ordinary-equivalent"
+        );
+    }
+
+    #[test]
+    fn awake_terrain_rejected_prefix_is_not_ordinary_equivalent_after_late_meal() {
+        terrain_rejected_prefix_case(true);
+    }
+
+    #[test]
+    fn awake_terrain_rejected_prefix_remains_intervention_without_withdrawal() {
+        terrain_rejected_prefix_case(false);
+    }
+
     #[test]
     fn awake_late_internal_damage_uses_only_remaining_translation_time() {
         for moving in [false, true] {
@@ -8921,6 +9017,10 @@ mod task_6_factorized_motor_tests {
                     .push(initial_priority_bundle(false).channels[0].clone());
             }
             let before = world.organism_registry.get(ORGANISM_ID).unwrap().clone();
+            let mut ordinary = world.clone();
+            let expected = ordinary
+                .apply_registered_motor_bundle(&bundle, agent)
+                .unwrap();
             let receipt = world
                 .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
                 .unwrap();
@@ -8938,7 +9038,22 @@ mod task_6_factorized_motor_tests {
                 "food was invented as external pain geometry"
             );
             assert_eq!(receipt.reflex_budget_exhausted, moving);
+            assert_eq!(receipt.exhausted_late_no_effect, moving);
             if moving {
+                assert!(
+                    receipt.voluntary == expected,
+                    "exhausted meal voluntary receipt changed"
+                );
+                assert!(
+                    world.save_state() == ordinary.save_state(),
+                    "exhausted meal world state changed"
+                );
+                assert!(
+                    serde_json::to_vec(&world.save_state()).unwrap()
+                        == serde_json::to_vec(&ordinary.save_state()).unwrap(),
+                    "exhausted meal world bytes changed"
+                );
+                assert!(!receipt.voluntary_execution_altered);
                 assert!(
                     reflex.blocked,
                     "exhausted interval must not report successful withdrawal"
@@ -9223,6 +9338,7 @@ mod task_6_factorized_motor_tests {
             .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
             .unwrap();
         let reflex = receipt.withdrawal.as_ref().unwrap();
+        assert!(!receipt.exhausted_late_no_effect);
         assert_eq!(reflex.sources.len(), 2);
         assert!(reflex.blocked);
         assert_eq!(reflex.displacement, Vec3f::ZERO);
@@ -9286,6 +9402,8 @@ mod task_6_factorized_motor_tests {
             )
             .unwrap();
         let reflex = receipt.withdrawal.as_ref().unwrap();
+        assert!(!receipt.exhausted_late_no_effect);
+        assert!(receipt.voluntary_execution_altered);
         assert!(reflex.blocked);
         assert_eq!(receipt.actual_displacement, Vec3f::ZERO);
         assert_eq!(receipt.allocated_translation_time, 1.0);

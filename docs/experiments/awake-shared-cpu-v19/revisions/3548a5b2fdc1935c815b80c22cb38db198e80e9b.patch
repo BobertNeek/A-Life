@@ -1,0 +1,19 @@
+diff --git a/crates/alife_training/tests/cpu_collector/shared_actuator.rs b/crates/alife_training/tests/cpu_collector/shared_actuator.rs
+index 1b0b125c..c6990d55 100644
+--- a/crates/alife_training/tests/cpu_collector/shared_actuator.rs
++++ b/crates/alife_training/tests/cpu_collector/shared_actuator.rs
+@@ -196,6 +196,14 @@ fn shared_actuator_exhausted_late_meal_retains_exact_ordinary_experience() {
+     let (mut candidate, food) =
+         CpuCanonicalHost::new_prepared_cohort(game, &trainer, 0x1919, |world| {
+             let (organism, entity) = world.organism_entity_ids()[0];
++            // Explicit sparse opportunity fixture: prevent unrelated canonical food
++            // targets from filling the finite manipulation candidate mask.
++            world.configure_ecology(EcologyState::default())?;
++            for object in world.object_snapshots() {
++                if object.id != entity {
++                    world.editor_remove_object(object.id)?;
++                }
++            }
+             let mut position = world.entity(entity).unwrap().position;
+             position.x += 0.3;
+             let food = world.editor_spawn_object(WorldEditorSpawnSpec {

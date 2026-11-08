@@ -1,0 +1,38 @@
+diff --git a/crates/alife_training/tests/cpu_collector/shared_actuator.rs b/crates/alife_training/tests/cpu_collector/shared_actuator.rs
+index 4174a136..a4af7d59 100644
+--- a/crates/alife_training/tests/cpu_collector/shared_actuator.rs
++++ b/crates/alife_training/tests/cpu_collector/shared_actuator.rs
+@@ -248,6 +248,33 @@ fn shared_actuator_exhausted_late_meal_retains_exact_ordinary_experience() {
+         .map(|d| d.patch.decision().selected_action.action_id.raw())
+         .collect::<Vec<_>>();
+     for decision in &expected.decisions {
++        let replay = trainer
++            .evaluate_replay(&alife_training::TrainingSequence {
++                phenotype_hash: trainer.phenotype().phenotype_hash(),
++                initial: decision.initial.clone(),
++                ticks: vec![decision.replay_tick.clone()],
++                burn_in_ticks: 0,
++                memory_candidate_gain: trainer
++                    .phenotype()
++                    .candidate_decoder()
++                    .memory_channel()
++                    .map_or(0.0, |m| m.max_candidate_gain()),
++            })
++            .unwrap();
++        for (index, c) in decision.replay_tick.candidates.iter().enumerate() {
++            let mut range = (f32::INFINITY, f32::NEG_INFINITY);
++            for s in trainer.phenotype().synapses() {
++                if matches!(s.kind(), CompiledSynapseKind::Decoder(d)
++                    if d.head() == DecoderHeadKind::ActionCandidate && d.family() == c.family)
++                {
++                    let a = replay.final_activations[0][s.source() as usize];
++                    range.0 = range.0.min(a);
++                    range.1 = range.1.max(a);
++                }
++            }
++            eprintln!("detached candidate={index} family={:?} taste={} innate={} logit={} source_range={range:?}",
++                c.family, c.decoder_inputs[15], c.innate_bias, replay.candidate_logits[0][index]);
++        }
+         eprintln!("v19 inherited-meal representative={:?} motor_candidate_indices={:?} candidate_count={}", sampled, decision.action.motor_candidates, decision.action.candidate_count);
+         eprintln!(
+             "v19 inherited-meal channels={:?}",

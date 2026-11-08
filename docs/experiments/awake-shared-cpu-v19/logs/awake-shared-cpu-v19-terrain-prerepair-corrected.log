@@ -1,0 +1,22 @@
+   Compiling alife_world v0.1.0 (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-v19/crates/alife_world)
+    Finished `test` profile [unoptimized] target(s) in 2m 51s
+     Running unittests src/lib.rs (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-target-v18/debug/deps/alife_world-6b7d17d635ca0301)
+
+running 1 test
+test headless::task_6_factorized_motor_tests::awake_terrain_rejected_prefix_is_not_ordinary_equivalent_after_late_meal ... FAILED
+
+failures:
+
+---- headless::task_6_factorized_motor_tests::awake_terrain_rejected_prefix_is_not_ordinary_equivalent_after_late_meal stdout ----
+
+thread 'headless::task_6_factorized_motor_tests::awake_terrain_rejected_prefix_is_not_ordinary_equivalent_after_late_meal' (73) panicked at crates/alife_world/src/headless.rs:8977:9:
+candidate-only terrain rejection was falsely labeled ordinary-equivalent
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    headless::task_6_factorized_motor_tests::awake_terrain_rejected_prefix_is_not_ordinary_equivalent_after_late_meal
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 281 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p alife_world --lib`

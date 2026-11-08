@@ -1,0 +1,178 @@
+diff --git a/crates/alife_training/src/cpu/host.rs b/crates/alife_training/src/cpu/host.rs
+index f7752d57..222df6cb 100644
+--- a/crates/alife_training/src/cpu/host.rs
++++ b/crates/alife_training/src/cpu/host.rs
+@@ -1151,9 +1151,10 @@ impl CpuCanonicalHost {
+                     )
+                     .map_err(|_| CpuHostError::State("canonical motor transaction rejected"))?
+             };
+-            let intervened = intervention_receipt
+-                .as_ref()
+-                .is_some_and(|r| r.withdrawal.is_some() && !r.exhausted_late_no_effect);
++            let intervened = intervention_receipt.as_ref().is_some_and(|r| {
++                r.voluntary_execution_altered
++                    || (r.withdrawal.is_some() && !r.exhausted_late_no_effect)
++            });
+             let successor = grounded_successor_state(
+                 &self.world,
+                 record.world_entity_id(),
+diff --git a/crates/alife_world/src/headless.rs b/crates/alife_world/src/headless.rs
+index dce253df..592ca8ad 100644
+--- a/crates/alife_world/src/headless.rs
++++ b/crates/alife_world/src/headless.rs
+@@ -6088,7 +6088,7 @@ impl HeadlessWorld {
+         command: ActionCommand,
+         agent_id: WorldEntityId,
+         intent: MoveIntent,
+-        translation: Option<&mut awake_translation::AwakeTranslationState>,
++        mut translation: Option<&mut awake_translation::AwakeTranslationState>,
+     ) -> Result<HeadlessActionResult, ScaffoldContractError> {
+         if self.player_held_object() == Some(agent_id) {
+             return self.finish_action(
+@@ -6201,6 +6201,11 @@ impl HeadlessWorld {
+             state.swept_contact_plan(self, &command, agent_id, start, destination)
+         });
+         if let Some(plan) = &contact_plan {
++            // From this point onward, even a fail-closed terrain/carry return
++            // is candidate intervention, not the ordinary selected execution.
++            if let Some(state) = translation.as_deref_mut() {
++                state.mark_voluntary_execution_altered();
++            }
+             if let Some(terrain) = &self.terrain {
+                 // Never place a clipped swept contact above/below the actual
+                 // ground. Until the path is grounded exactly, reject this
+@@ -8915,11 +8920,10 @@ mod task_6_factorized_motor_tests {
+         assert!((actual.allocated_translation_time - 1.0).abs() < 1e-6);
+     }
+ 
+-    #[test]
+-    fn awake_terrain_rejected_prefix_is_not_ordinary_equivalent_after_late_meal() {
++    fn terrain_rejected_prefix_case(toxic: bool) {
+         let (mut world, agent, food, mut bundle) = prepared_world();
+         hold_food_for_meal(&mut world, food);
+-        world.objects.get_mut(&food.raw()).unwrap().hazard_pain = 0.4;
++        world.objects.get_mut(&food.raw()).unwrap().hazard_pain = if toxic { 0.4 } else { 0.0 };
+         bundle
+             .channels
+             .retain(|c| c.channel != MotorChannel::Locomotion);
+@@ -8973,13 +8977,31 @@ mod task_6_factorized_motor_tests {
+             "fixture must execute the toxic meal"
+         );
+         assert_eq!(actual.voluntary.joint.execution.displacement, Vec3f::ZERO);
+-        assert!(actual.reflex_budget_exhausted);
++        assert!(actual.voluntary_execution_altered);
++        if toxic {
++            assert!(actual.reflex_budget_exhausted);
++        } else {
++            assert!(
++                actual.withdrawal.is_none(),
++                "nonpainful rejection invented a reflex"
++            );
++        }
+         assert!(
+             !actual.exhausted_late_no_effect,
+             "candidate-only terrain rejection was falsely labeled ordinary-equivalent"
+         );
+     }
+ 
++    #[test]
++    fn awake_terrain_rejected_prefix_is_not_ordinary_equivalent_after_late_meal() {
++        terrain_rejected_prefix_case(true);
++    }
++
++    #[test]
++    fn awake_terrain_rejected_prefix_remains_intervention_without_withdrawal() {
++        terrain_rejected_prefix_case(false);
++    }
++
+     #[test]
+     fn awake_late_internal_damage_uses_only_remaining_translation_time() {
+         for moving in [false, true] {
+@@ -9026,6 +9048,12 @@ mod task_6_factorized_motor_tests {
+                     world.save_state() == ordinary.save_state(),
+                     "exhausted meal world state changed"
+                 );
++                assert!(
++                    serde_json::to_vec(&world.save_state()).unwrap()
++                        == serde_json::to_vec(&ordinary.save_state()).unwrap(),
++                    "exhausted meal world bytes changed"
++                );
++                assert!(!receipt.voluntary_execution_altered);
+                 assert!(
+                     reflex.blocked,
+                     "exhausted interval must not report successful withdrawal"
+@@ -9375,6 +9403,7 @@ mod task_6_factorized_motor_tests {
+             .unwrap();
+         let reflex = receipt.withdrawal.as_ref().unwrap();
+         assert!(!receipt.exhausted_late_no_effect);
++        assert!(receipt.voluntary_execution_altered);
+         assert!(reflex.blocked);
+         assert_eq!(receipt.actual_displacement, Vec3f::ZERO);
+         assert_eq!(receipt.allocated_translation_time, 1.0);
+diff --git a/crates/alife_world/src/headless/awake_translation.rs b/crates/alife_world/src/headless/awake_translation.rs
+index 3d049483..bc1bbe29 100644
+--- a/crates/alife_world/src/headless/awake_translation.rs
++++ b/crates/alife_world/src/headless/awake_translation.rs
+@@ -37,6 +37,9 @@ pub struct AwakeTranslationIntervalReceipt {
+     /// Only a late zero-time/effort/motion response with the same normalized
+     /// body event as ordinary execution qualifies. Initial/swept responses do not.
+     pub exhausted_late_no_effect: bool,
++    /// Monotonic: candidate-only preemption, clipping or rejection occurred.
++    /// This remains true even if no withdrawal could be executed.
++    pub voluntary_execution_altered: bool,
+     pub reflex_path: f32,
+     pub voluntary_path: f32,
+     pub voluntary_translation_energy: f32,
+@@ -56,6 +59,7 @@ pub(super) struct AwakeTranslationState {
+     reflex_time: f32,
+     late_response: bool,
+     exhausted_late_no_effect: bool,
++    voluntary_execution_altered: bool,
+ }
+ 
+ pub(super) struct SweptContactPlan {
+@@ -87,6 +91,7 @@ impl AwakeTranslationState {
+         let mut budget = TranslationIntervalBudget::new(MOVE_STEP * physical_capacity)?;
+         self.withdrawal = world.apply_contact_withdrawal(organism, entity, capacity, gain, 0.0)?;
+         if let Some(reflex) = &self.withdrawal {
++            self.voluntary_execution_altered = true;
+             self.reflex_time = 1.0;
+             // Even a blocked protective attempt owns this interval. A voluntary
+             // translation cannot undo the response or receive a second allowance.
+@@ -247,17 +252,27 @@ impl AwakeTranslationState {
+         Ok(())
+     }
+ 
++    pub(super) fn mark_voluntary_execution_altered(&mut self) {
++        self.voluntary_execution_altered = true;
++    }
++
+     pub(super) fn bind_ordinary_body_equivalence(
+         &mut self,
+         ordinary: BodyEventDelta,
+         actual: BodyEventDelta,
+     ) {
+         self.exhausted_late_no_effect = self.late_response
++            && !self.voluntary_execution_altered
+             && self.reflex_time == 0.0
+             && self.withdrawal.as_ref().is_some_and(|r| {
+                 r.blocked && r.displacement == Vec3f::ZERO && r.energy_cost == 0.0
+             })
+-            && ordinary == actual;
++            && ordinary == actual
++            // Only these fields can change above the normalization boundary.
++            // Do not call signed-zero changes byte-exact equivalence.
++            && ordinary.energy.to_bits() == actual.energy.to_bits()
++            && ordinary.damage.to_bits() == actual.damage.to_bits()
++            && ordinary.sleep_recovery.to_bits() == actual.sleep_recovery.to_bits();
+     }
+ 
+     pub(super) fn observe_voluntary(
+@@ -407,6 +422,7 @@ impl HeadlessWorld {
+                     voluntary,
+                     reflex_budget_exhausted: state.withdrawal.is_some() && state.reflex_time == 0.0,
+                     exhausted_late_no_effect: state.exhausted_late_no_effect,
++                    voluntary_execution_altered: state.voluntary_execution_altered,
+                     withdrawal: state.withdrawal,
+                     voluntary_time_allocated: state.voluntary_time,
+                     reflex_time_allocated: state.reflex_time,

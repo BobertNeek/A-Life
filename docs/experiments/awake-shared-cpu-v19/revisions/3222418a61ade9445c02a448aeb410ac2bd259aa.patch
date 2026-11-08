@@ -1,0 +1,15 @@
+diff --git a/crates/alife_training/tests/cpu_collector/shared_actuator.rs b/crates/alife_training/tests/cpu_collector/shared_actuator.rs
+index c6990d55..4174a136 100644
+--- a/crates/alife_training/tests/cpu_collector/shared_actuator.rs
++++ b/crates/alife_training/tests/cpu_collector/shared_actuator.rs
+@@ -213,7 +213,9 @@ fn shared_actuator_exhausted_late_meal_retains_exact_ordinary_experience() {
+                 position,
+                 nutrition: 0.6,
+                 hazard_pain: 0.4,
+-                radius: 0.1,
++                // Held grip offset is0.5; radius0.6 provides actual surface
++                // contact/taste rather than a distant chemical oracle.
++                radius: 0.6,
+                 token_id: None,
+             })?;
+             let grab = ActionCommand::structured(

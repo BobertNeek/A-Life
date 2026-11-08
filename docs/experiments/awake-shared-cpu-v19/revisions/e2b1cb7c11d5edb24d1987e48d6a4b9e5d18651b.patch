@@ -1,0 +1,20 @@
+diff --git a/crates/alife_training/tests/cpu_collector/shared_actuator.rs b/crates/alife_training/tests/cpu_collector/shared_actuator.rs
+index f6d433df..1b0b125c 100644
+--- a/crates/alife_training/tests/cpu_collector/shared_actuator.rs
++++ b/crates/alife_training/tests/cpu_collector/shared_actuator.rs
+@@ -240,8 +240,13 @@ fn shared_actuator_exhausted_late_meal_retains_exact_ordinary_experience() {
+     for decision in &expected.decisions {
+         eprintln!("v19 inherited-meal representative={:?} motor_candidate_indices={:?} candidate_count={}", sampled, decision.action.motor_candidates, decision.action.candidate_count);
+         eprintln!(
+-            "v19 inherited-meal decision={:?}",
+-            decision.patch.decision()
++            "v19 inherited-meal channels={:?}",
++            decision
++                .patch
++                .decision()
++                .selected_bundle
++                .as_ref()
++                .map(|b| &b.channels)
+         );
+     }
+     assert!(

@@ -44,6 +44,17 @@ fn new_game_with_profile_fixture(
     CpuFoundationTrainer,
     PhenotypeCompilerInputs,
 ) {
+    new_game_with_readout_fixture(atp, profile, false)
+}
+fn new_game_with_readout_fixture(
+    atp: Option<f32>,
+    profile: SensorProfile,
+    prescribed_meal_readout: bool,
+) -> (
+    CanonicalNewGame,
+    CpuFoundationTrainer,
+    PhenotypeCompilerInputs,
+) {
     let builtin = if profile == SensorProfile::GroundedTerrainVisionV1 {
         let capacity = BrainCapacityClass::n2048();
         let genome = BrainGenome::scaffold(0x7A1123, capacity.id());
@@ -65,7 +76,19 @@ fn new_game_with_profile_fixture(
     config.sensor_profile = profile;
     let game = create_canonical_new_game_with_n2048_candidate(&config, &builtin).unwrap();
     let record = game.world.organism_registry().iter().next().unwrap();
-    let genome = &record.phenotype().brain_genome;
+    let mut fixture_genotype = record.genome().clone();
+    if prescribed_meal_readout {
+        // Explicit fresh architecture factor: default remains one head.
+        let mut architecture =
+            serde_json::to_value(fixture_genotype.brain.construction.maternal_architecture)
+                .unwrap();
+        architecture["motor_head_count"] = serde_json::json!(4);
+        let architecture = serde_json::from_value(architecture).unwrap();
+        fixture_genotype.brain.construction.maternal_architecture = architecture;
+        fixture_genotype.brain.construction.paternal_architecture = architecture;
+    }
+    let fixture_phenotype = fixture_genotype.express().unwrap();
+    let genome = &fixture_phenotype.brain_genome;
     let capacity = BrainCapacityClass::n2048();
     let development = foundation_construction_development(
         genome,
@@ -77,7 +100,27 @@ fn new_game_with_profile_fixture(
         PhenotypeCompiler::compile(genome, &capacity, &development, config.sensor_profile).unwrap();
     let asset = FoundationWeightAsset::from_trained_weights(
         &base,
-        base.synapses().iter().map(|s| s.genetic_weight()).collect(),
+        base.synapses()
+            .iter()
+            .map(|s| {
+                if prescribed_meal_readout {
+                    if let CompiledSynapseKind::Decoder(c) = s.kind() {
+                        if c.head() == DecoderHeadKind::ActionCandidate {
+                            // Explicit fresh inherited readout fixture, not learned competence.
+                            // Lane15 is real contact chemistry, not an oracle target label.
+                            return match (c.family(), c.input_lane()) {
+                                // Detached source range is negative for this fresh founder;
+                                // signed readout, not a forced action or neuron mutation.
+                                (CandidateActionFamily::Ingest, 15) => -10.0,
+                                (CandidateActionFamily::Approach, 15) => 2.0,
+                                _ => 0.0,
+                            };
+                        }
+                    }
+                }
+                s.genetic_weight()
+            })
+            .collect(),
         TrainingStageManifest::new(1, 1, 1),
     )
     .unwrap();
@@ -87,7 +130,31 @@ fn new_game_with_profile_fixture(
         asset.clone(),
     )
     .unwrap();
-    let mut game = create_canonical_new_game_with_n2048_candidate(&config, &asset).unwrap();
+    let mut game = if prescribed_meal_readout {
+        let mut game = game;
+        let record = game.world.organism_registry().iter().next().unwrap();
+        let genotype = fixture_genotype
+            .with_n2048_foundation_candidate(asset.clone())
+            .unwrap();
+        let phenotype = genotype.express().unwrap();
+        let replacement = WorldOrganismRecord::new(
+            record.organism_id(),
+            record.world_entity_id(),
+            genotype.clone(),
+            phenotype,
+            *record.biochemistry(),
+            record.birth_tick(),
+        )
+        .unwrap();
+        game.creatures[0].weights.genetic_fixed_digest =
+            PortableAssetDigest::for_bytes(&serde_json::to_vec(&genotype).unwrap()).0;
+        game.world
+            .replace_organism_record_exact(replacement)
+            .unwrap();
+        game
+    } else {
+        create_canonical_new_game_with_n2048_candidate(&config, &asset).unwrap()
+    };
     if let Some(atp) = atp {
         let record = game.world.organism_registry().iter().next().unwrap();
         let mut chemistry = *record.biochemistry();

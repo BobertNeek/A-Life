@@ -1,0 +1,14 @@
+diff --git a/crates/alife_training/tests/cpu_collector/shared_actuator.rs b/crates/alife_training/tests/cpu_collector/shared_actuator.rs
+index 9c87e71b..ce2cede8 100644
+--- a/crates/alife_training/tests/cpu_collector/shared_actuator.rs
++++ b/crates/alife_training/tests/cpu_collector/shared_actuator.rs
+@@ -204,6 +204,9 @@ fn shared_actuator_exhausted_late_meal_retains_exact_ordinary_experience() {
+                     world.editor_remove_object(object.id)?;
+                 }
+             }
++            // Origin-centered geometry isolates exact exhausted-time plumbing.
++            // Canonical X=3 separately exposed a quantized-position timing residue.
++            world.editor_move_object(entity, Vec3f::ZERO)?;
+             let mut position = world.entity(entity).unwrap().position;
+             position.x += 0.3;
+             let food = world.editor_spawn_object(WorldEditorSpawnSpec {

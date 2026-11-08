@@ -1,0 +1,15 @@
+diff --git a/crates/alife_training/tests/cpu_collector.rs b/crates/alife_training/tests/cpu_collector.rs
+index ad71a4fd..dda794c2 100644
+--- a/crates/alife_training/tests/cpu_collector.rs
++++ b/crates/alife_training/tests/cpu_collector.rs
+@@ -109,7 +109,9 @@ fn new_game_with_readout_fixture(
+                             // Explicit fresh inherited readout fixture, not learned competence.
+                             // Lane15 is real contact chemistry, not an oracle target label.
+                             return match (c.family(), c.input_lane()) {
+-                                (CandidateActionFamily::Ingest, 15) => 10.0,
++                                // Detached source range is negative for this fresh founder;
++                                // signed readout, not a forced action or neuron mutation.
++                                (CandidateActionFamily::Ingest, 15) => -10.0,
+                                 (CandidateActionFamily::Approach, 15) => 2.0,
+                                 _ => 0.0,
+                             };

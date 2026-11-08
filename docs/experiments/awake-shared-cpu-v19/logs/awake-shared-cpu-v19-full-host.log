@@ -1,0 +1,37 @@
+    Finished `test` profile [unoptimized] target(s) in 0.24s
+     Running tests/cpu_collector.rs (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-target-v18/debug/deps/cpu_collector-a2643aa43bc47c1a)
+
+running 30 tests
+test atp_policy_reduces_native_work_and_refuses_unaffordable_dispatch ... ok
+test canonical_cpu_seals_biology_memory_and_exact_restore_without_an_icd ... ok
+test canonical_low_atp_executes_minimum_budget_and_empty_atp_sleeps ... ok
+test canonical_native_perception_commits_the_identity_used_by_each_frame ... ok
+test canonical_restore_rejects_missing_or_inconsistent_perception_identity ... ok
+test canonical_restore_retains_observed_objects_and_their_identity_cursor ... ok
+test canonical_rollout_trains_full_residual_with_native_optimizer_ages ... ok
+test collector_shards::admission_does_not_authorize_a_changed_central_state_or_config ... ok
+test collector_shards::corrupted_stale_duplicate_and_resealed_invalid_evidence_never_mutates_optimizers ... ok
+test collector_shards::invalid_window_bounds_and_incomplete_inventory_are_rejected ... ok
+test collector_shards::legacy_diagnostic_rows_remain_readable_but_cannot_authorize_new_shards ... ok
+test collector_shards::two_collectors_roundtrip_and_update_one_canonical_actor_and_critic ... ok
+test forced_sleep_completes_wake_and_resumes_real_decisions ... ok
+test native_replay_bench::native_collected_replay_ledger ... ignored, native CPU replay benchmark; explicitly run with a writable output directory
+test need_switching::native_need_switching_reports_matched_biology_and_movement_sensory_controls ... ok
+test observed_focus::native_selection_can_reach_an_observed_far_focus_without_rewriting_the_brain ... ok
+test prepared_episode_admits_newborn_before_ordinary_aging_and_keeps_founder_state ... ok
+test recovery_sleep_replays_structural_state_and_roundtrips_authority ... ok
+test restore_rejects_cross_owner_or_modified_private_state ... ok
+test sealed_authority::changed_world_brain_or_memory_seal_rejects_before_preparation_and_keeps_state ... ok
+test sealed_authority::failed_preparation_and_snapshot_continue_like_cold_restore ... ok
+test sealed_authority::sleeping_resident_seal_follows_awake_peers_sampling_counter ... ok
+test sealed_native_outcome_retains_uncredited_inherited_readouts ... ok
+test semantic_preparation_cannot_edit_ordinary_senses_or_advance_a_failed_host ... ok
+test shared_actuator::shared_actuator_exhausted_late_meal_retains_exact_ordinary_experience ... ok
+test shared_actuator::shared_actuator_quiet_host_is_exact_ordinary_execution ... ok
+test shared_actuator::shared_actuator_real_dispatch_consumed_without_false_experience_and_restores ... ok
+test shared_actuator::shared_actuator_repeated_contact_keeps_sequence_unissued_and_releases ... ok
+test sleep_gap_reward_uses_only_gap_duration_and_preserves_full_gae_elapsed ... ok
+test snapshot_branch_and_failed_step_preserve_all_private_state ... ok
+
+test result: ok. 29 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 106.63s
+

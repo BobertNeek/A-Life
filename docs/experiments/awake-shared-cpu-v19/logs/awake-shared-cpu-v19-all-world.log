@@ -1,0 +1,895 @@
+   Compiling alife_world v0.1.0 (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-v19/crates/alife_world)
+    Finished `test` profile [unoptimized] target(s) in 10m 15s
+     Running unittests src/lib.rs (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-target-v18/debug/deps/alife_world-6b7d17d635ca0301)
+
+running 283 tests
+test appearance::tests::new_founders_use_the_fixed_twelve_family_roster ... ok
+test appearance::tests::offspring_can_inherit_appended_family_ids_per_slot ... ok
+test appearance::tests::schema_v1_appearance_migrates_to_coherent_schema_v2_parts ... ok
+test appearance::tests::schema_v1_migration_remains_frozen_to_the_original_eight_families ... ok
+test appearance::tests::schema_v2_mixed_parts_roundtrip_without_renderer_types ... ok
+test appearance::tests::schema_v2_roundtrips_appended_family_ids ... ok
+test candidate_enumerator::founder_basis_tests::intrinsic_choices_have_learning_support_without_changing_object_evidence ... ok
+test headless::biochemical_outcome_tests::failures_report_disappointment_not_injury ... ok
+test headless::body_clearance_tests::authored_radius_and_body_limits_define_closed_swept_sphere ... ok
+test headless::body_clearance_tests::authored_small_obstacle_does_not_overblock_default_body ... ok
+test headless::body_clearance_tests::body_limits_do_not_change_fixed_pose_sensing_or_hand_contact_queries ... ok
+test headless::body_clearance_tests::carrying_still_checks_body_and_unchanged_grip_sweep ... ok
+test headless::body_clearance_tests::compatibility_agent_drop_cannot_create_expanded_overlap_but_items_keep_legacy_rule ... ok
+test headless::body_clearance_tests::compatibility_agent_placement_respects_limits_and_closed_static_boundary ... ok
+test headless::body_clearance_tests::compatibility_escape_is_monotonic_with_explicit_boundary_rules ... ok
+test headless::body_clearance_tests::compatibility_escape_still_checks_every_other_obstacle ... ok
+test headless::body_clearance_tests::compatibility_geometry_arriving_during_hold_does_not_trap_release ... ok
+test headless::body_clearance_tests::compatibility_old_legal_pose_restores_and_escapes_monotonically ... ok
+test headless::body_clearance_tests::compatibility_player_held_old_pose_allows_only_nonworsening_recovery ... ok
+test headless::body_clearance_tests::compatibility_player_rescue_cannot_create_overlap_with_another_obstacle ... ok
+test headless::body_clearance_tests::compatibility_selected_visible_step_never_deepens_any_overlap ... ok
+test headless::body_clearance_tests::compatibility_visible_approach_can_leave_old_overlap ... ok
+test headless::body_clearance_tests::declared_large_body_cannot_pass_through_small_obstacle ... ok
+test headless::body_clearance_tests::expanded_sphere_preserves_three_dimensional_sloping_trajectories ... ok
+test headless::body_clearance_tests::flat_terrain_default_and_no_terrain_agree ... ok
+test headless::body_clearance_tests::grounded_candidate_approach_escapes_trough_toward_player_held_goal ... ok
+test headless::body_clearance_tests::grounded_candidate_projection_does_not_authorize_unsupported_steps ... ok
+test headless::body_clearance_tests::grounded_candidate_slope_projection_preserves_monotonic_escape ... ok
+test headless::body_clearance_tests::overlap_stationary_and_fast_crossings_use_same_radius ... ok
+test headless::body_clearance_tests::portable_roundtrip_keeps_authored_fields_and_corrected_continuation ... ok
+test headless::body_clearance_tests::precision_visible_approach_can_escape_center_and_boundary_outward ... ok
+test headless::body_clearance_tests::precision_visible_approach_escapes_symmetric_overlap_on_exact_perpendicular ... ok
+test headless::carry_pose_tests::carry_pose_does_not_bypass_occlusion_or_released_peripheral_cone ... ok
+test headless::carry_pose_tests::carry_pose_follows_player_lift_release_and_new_terrain_placement ... ok
+test headless::carry_pose_tests::carry_pose_rejects_solid_grip_turn_and_movement_before_mutating ... ok
+test headless::carry_pose_tests::carry_pose_reorients_during_approach_and_flee ... ok
+test headless::carry_pose_tests::carry_pose_reserves_visible_held_contact_among_nearer_contact_clutter ... ok
+test headless::carry_pose_tests::carry_pose_roundtrips_current_persistence_and_release_stays_in_world ... ok
+test headless::carry_pose_tests::carry_pose_tracks_body_turn_walk_and_independent_head_gaze ... ok
+test headless::contact_chemistry_tests::contact_endpoint_cost_against_previous_hazard_scan ... ignored, manual CPU endpoint cost comparison; no biology or neural execution
+test headless::contact_chemistry_tests::current_save_restore_and_rollback_preserve_contact_continuation_without_new_state ... ok
+test headless::contact_chemistry_tests::genetic_newborn_gets_touch_without_inheriting_personal_affinity_or_parent_chemistry ... ok
+test headless::contact_chemistry_tests::grounded_peer_identity_uses_observed_slots_without_static_affinity ... ok
+test headless::contact_chemistry_tests::same_tick_death_preserves_contact_exposure_across_order_and_action_paths ... ok
+test headless::contact_chemistry_tests::separation_solids_and_dead_bodies_stop_contact_and_unpleasant_events_remain_negative ... ok
+test headless::contact_chemistry_tests::touch_is_independent_of_static_affinity_and_bounded_per_canonical_interval ... ok
+test headless::contact_chemistry_tests::zero_affinity_founders_receive_stationary_touch_and_natural_loneliness_relief ... ok
+test headless::eat_possession_tests::another_creatures_held_food_cannot_be_eaten_or_stolen ... ok
+test headless::eat_possession_tests::eat_pickup_never_navigates_or_acquires_nonfood_or_player_held_targets ... ok
+test headless::eat_possession_tests::eat_pickup_rejects_blocked_grip_even_with_clear_body_to_food_contact ... ok
+test headless::eat_possession_tests::food_harm_does_not_change_observed_cues_or_physical_acquisition ... ok
+test headless::eat_possession_tests::possession_of_a_different_target_prepares_an_atomic_swap_not_consumption ... ok
+test headless::eat_possession_tests::reachable_loose_food_eat_acquires_only_then_later_eat_consumes_same_target ... ok
+test headless::eat_possession_tests::released_food_selected_eat_reacquires_without_consuming ... ok
+test headless::eat_possession_tests::self_held_consumption_keeps_nutrition_taste_and_ownership_cleanup ... ok
+test headless::hands::tests::activity_provenance_survives_save_without_vetoing_legacy_swaps ... ok
+test headless::hands::tests::dead_or_missing_effector_actor_cannot_swap_a_deliberate_hold ... ok
+test headless::hands::tests::deliberate_carry_swaps_and_capacity_stays_one_after_restore ... ok
+test headless::hands::tests::explicit_grab_cannot_steal_player_hold ... ok
+test headless::hands::tests::feet_do_not_waive_item_bounds_unrelated_items_or_peers ... ok
+test headless::hands::tests::feet_reject_thin_solid_obstacles_across_the_item_sweep ... ok
+test headless::hands::tests::fixed_activity_toy_is_used_in_place_after_safe_grip_preparation ... ok
+test headless::hands::tests::food_at_feet_uses_existing_carry_abstraction_at_authored_and_default_radii ... ok
+test headless::hands::tests::grip_provenance_binds_world_identity_and_invalid_possession_is_rejected ... ok
+test headless::hands::tests::harmful_food_switch_preserves_preparation_and_portable_continuation ... ok
+test headless::hands::tests::invalid_requested_target_preserves_deliberate_and_activity_holds ... ok
+test headless::hands::tests::item_grounding_is_not_actor_wading_or_slope_policy ... ok
+test headless::hands::tests::item_sweep_vertical_radius_boundaries_are_closed_above_and_below ... ok
+test headless::hands::tests::joint_locomotion_precedes_exact_target_swap_and_biology_advances_once ... ok
+test headless::hands::tests::looking_inspecting_and_approaching_never_acquire_or_release ... ok
+test headless::hands::tests::mobile_play_acquisition_uses_the_same_physical_checks_as_explicit_grab ... ok
+test headless::hands::tests::multiple_held_corruption_blocks_acquisition_but_preserves_same_target_release ... ok
+test headless::hands::tests::no_safe_supported_placement_keeps_old_object_without_new_activity ... ok
+test headless::hands::tests::play_acquires_mobile_ball_before_actual_activation ... ok
+test headless::hands::tests::raised_midpath_solid_rejects_swap_without_losing_the_previous_hold ... ok
+test headless::hands::tests::registered_preparation_receipts_and_rollback_preserve_exact_possession ... ok
+test headless::hands::tests::selected_impossible_grab_reports_failure_instead_of_stopping_the_host ... ok
+test headless::hands::tests::staged_swap_contract_failure_preserves_poses_velocities_and_diagnostics ... ok
+test headless::hands::tests::supported_feet_accept_an_airborne_grip_outside_the_terrain ... ok
+test headless::hands::tests::switching_activity_places_and_acquires_atomically_before_really_eating ... ok
+test headless::local_steering::body_radius_tests::unladen_clearance_uses_authored_radius_and_shared_body_limit ... ok
+test headless::local_steering::tests::absent_visual_gain_or_admission_cannot_authorize_steering ... ok
+test headless::local_steering::tests::alternating_outward_and_inward_detours_cannot_replenish_progress_budget ... ok
+test headless::local_steering::tests::carry_clearance_changes_local_step_without_dropping_the_object ... ok
+test headless::local_steering::tests::clear_visible_oblique_arrival_keeps_the_exact_chosen_endpoint ... ok
+test headless::local_steering::tests::equal_observations_hide_goal_and_distant_opening_changes_until_intermediate_reveals_goal ... ok
+test headless::local_steering::tests::exhausted_same_goal_stays_blocked_across_ticks_reload_and_repeated_commands ... ok
+test headless::local_steering::tests::geometry_beyond_the_local_sensor_horizon_cannot_choose_a_route ... ok
+test headless::local_steering::tests::invalid_controller_state_is_rejected_by_restore ... ok
+test headless::local_steering::tests::losing_real_visibility_after_a_step_stops_assistance_immediately ... ok
+test headless::local_steering::tests::opaque_corner_and_remembered_bearing_do_not_enable_detours ... ok
+test headless::local_steering::tests::transparent_solid_can_preserve_sight_without_becoming_walkable ... ok
+test headless::local_steering::tests::visible_destination_over_low_obstacle_gets_only_bounded_local_steps ... ok
+test headless::local_steering::tests::visible_gap_respects_body_size_and_does_not_squeeze_through ... ok
+test headless::nonvisual_perception_tests::contact_occlusion_keeps_a_large_blocker_outside_the_source_query ... ok
+test headless::nonvisual_perception_tests::indexed_and_canonical_touch_both_respect_solid_terrain ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_accumulates_four_mixed_sign_bands_in_entity_order ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_cell_bounds_cover_boundary_float_neighbors_and_extreme_positions ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_cell_occupancy_falls_back_at_ceil_sixteenth ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_dense_cell_falls_back_with_exact_mixed_band_packet ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_dense_own_cell_never_bypasses_snapshot_validation ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_duplicate_membership_can_only_choose_an_earlier_full_scan ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_far_carried_union_obeys_the_same_raw_budget ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_far_oversized_contact_and_temperature_are_retained ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_far_possession_and_duplicate_membership_are_retained_once ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_huge_radius_and_small_world_choose_bounded_full_scan ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_lateral_odor_reaches_cell_two_on_both_sides ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_nonfinite_edges_preserve_canonical_error_or_float_bits ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_own_cell_is_inside_successful_bounds_at_geometry_edges ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_own_cell_raw_budget_keeps_consumed_members_and_packet_parity ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_rear_occluded_odor_and_touch_keep_hidden_targets_hidden ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_rebuilt_batch_tracks_position_radius_and_owner_mutations ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_reused_index_observes_lifecycle_ingestion_pruning ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_reused_index_reads_current_ingestion_sample_and_removal ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_reused_index_reads_current_observer_pose_and_yaw ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_reused_index_reads_current_observer_sensor_gains ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_reused_index_reads_current_player_care ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_reused_index_reads_current_registry_injury ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_reused_index_reads_selected_source_payload_and_consumption ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_self_and_consumed_fields_preserve_sparse_query ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_small_world_keeps_existing_index_validation ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_small_world_skips_only_unused_metadata_until_seventeen_objects ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_unsupported_nonfinite_transition_requires_rebuild ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_unsupported_same_tick_source_reuse_requires_rebuild ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_work_counts_stay_local_when_remote_world_grows ... ok
+test headless::player_hand::tests::editor_move_cannot_displace_a_player_held_object_or_break_its_save ... ok
+test headless::player_hand::tests::fixed_scenery_missing_and_unavailable_objects_are_not_pickup_targets ... ok
+test headless::player_hand::tests::player_can_pick_move_persist_and_release_creatures_and_movable_objects ... ok
+test headless::player_hand::tests::player_carry_blocks_self_movement_and_releases_on_selected_terrain ... ok
+test headless::player_hand::tests::removing_an_agent_clears_only_its_own_player_hold_before_save ... ok
+test headless::population_validation_tests::cached_population_proof_rejects_an_unrelated_corrupt_peer_before_staged_action_mutation ... ok
+test headless::prediction_residual_pulse_tests::late_tick_failure_preserves_each_creatures_pulse_for_exact_retry ... ok
+test headless::sight_ray_direction_tests::forward_entry_tangency_miss_and_range_boundaries_are_preserved ... ok
+test headless::sight_ray_direction_tests::inside_and_surface_contact_keep_zero_distance_hits ... ok
+test headless::sight_ray_direction_tests::rear_opaque_sphere_does_not_hide_front_food_in_actual_perception ... ok
+test headless::sight_ray_direction_tests::rear_opaque_sphere_does_not_zero_actual_terrain_vision_fan ... ok
+test headless::sight_ray_direction_tests::spheres_fully_behind_the_ray_do_not_hit ... ok
+test headless::task_3_2a_tests::eat_reports_only_physical_contact_that_the_attempt_reached ... ok
+test headless::task_3_2a_tests::exhausted_spawn_sequence_does_not_consume_an_entity_id ... ok
+test headless::task_3_2a_tests::exhausted_world_tick_is_rejected_without_mutation ... ok
+test headless::task_3_2a_tests::inspect_preserves_safe_semantics_and_applies_target_hazard ... ok
+test headless::task_3_2a_tests::malformed_spawn_payload_preserves_objects_and_identity_allocators ... ok
+test headless::task_3_2a_tests::registered_neural_vocalize_failure_rolls_back_speech_and_world_state ... ok
+test headless::task_3_2a_tests::registered_transaction_rolls_back_late_failure_completely ... ok
+test headless::task_3_2a_tests::try_advance_tick_advances_development_age_health_and_death_in_stable_order_and_rolls_back_late_failure ... ok
+test headless::task_3_2a_tests::try_advance_tick_applies_maximum_lifespan_in_stable_order_and_rolls_back ... ok
+test headless::task_3_2a_tests::try_advance_tick_applies_passive_upkeep_in_stable_order_and_rolls_back ... ok
+test headless::task_3_2a_tests::try_advance_tick_updates_all_registered_biology_and_resource_lifecycle_in_stable_order_and_rolls_back_late_failure ... ok
+test headless::task_4_3a2_tests::derived_living_capacity_blocks_ready_conception ... ok
+test headless::task_4_3a2_tests::distant_or_genetically_incompatible_parents_receive_no_conception ... ok
+test headless::task_4_3a2_tests::distinct_cloned_founders_remain_eligible_for_a_real_birth ... ok
+test headless::task_4_3a2_tests::inherited_fertility_and_investment_change_actual_births_and_reserves ... ok
+test headless::task_4_3a2_tests::late_child_spawn_failure_preserves_tick_objects_registry_and_allocators ... ok
+test headless::task_4_3a2_tests::mating_reach::clear_mating_preserves_exact_radius_and_does_not_require_gaze ... ok
+test headless::task_4_3a2_tests::mating_reach::heightfield_slope_and_water_do_not_become_mating_path_requirements ... ok
+test headless::task_4_3a2_tests::mating_reach::local_candidates_follow_queried_parent_and_do_not_survive_world_changes ... ok
+test headless::task_4_3a2_tests::mating_reach::mating_query_cpu_cost ... ignored, bounded CPU component timing, not a gameplay throughput benchmark
+test headless::task_4_3a2_tests::mating_reach::motor_bundles_observe_barriers_and_clear_space_before_conception ... ok
+test headless::task_4_3a2_tests::mating_reach::solid_barriers_defer_birth_without_stalling_or_debiting_parental_investment ... ok
+test headless::task_4_3a2_tests::mating_reach::solid_reach_equivalence::cached_candidates_fall_back_for_later_unsupported_pairs ... ok
+test headless::task_4_3a2_tests::mating_reach::solid_reach_equivalence::early_filter_matches_original_over_deterministic_mixed_geometry ... ok
+test headless::task_4_3a2_tests::mating_reach::solid_reach_equivalence::early_filter_preserves_endpoints_tangency_radius_floor_and_consumption ... ok
+test headless::task_4_3a2_tests::mating_reach::solid_reach_equivalence::early_filter_preserves_terrain_faces_vertical_bounds_and_zero_length ... ok
+test headless::task_4_3a2_tests::mating_reach::solid_reach_equivalence::local_candidates_match_original_over_bounded_nearby_geometry ... ok
+test headless::task_4_3a2_tests::mating_reach::solid_reach_equivalence::local_candidates_preserve_domain_edges_large_spheres_and_cell_faces ... ok
+test headless::task_4_3a2_tests::mating_reach::solid_reach_equivalence::sparse_terrain_cell_faces_use_pruned_index_candidates ... ok
+test headless::task_4_3a2_tests::mating_reach::solids_remove_both_parents_opportunities_independently_of_opacity ... ok
+test headless::task_4_3a2_tests::nearby_parents_around_terrain_corner_have_a_supported_birth_without_stalling ... ok
+test headless::task_4_3a2_tests::nearby_ready_compatible_parents_create_one_deterministic_newborn ... ok
+test headless::task_4_3a2_tests::nearby_ready_parents_born_one_tick_apart_conceive_from_fresh_latched_opportunity ... ok
+test headless::task_4_3a2_tests::terminal_death_frees_living_capacity_before_conception ... ok
+test headless::task_6_factorized_motor_tests::awake_ground_priority_quiet_slope_preserves_existing_planar_walking ... ok
+test headless::task_6_factorized_motor_tests::awake_initial_priority_blocks_rest_recovery_and_rolls_back_atomically ... ok
+test headless::task_6_factorized_motor_tests::awake_initial_priority_preempts_toward_motion_without_false_voluntary_credit ... ok
+test headless::task_6_factorized_motor_tests::awake_initial_priority_preserves_carried_hazard_ownership_and_pose ... ok
+test headless::task_6_factorized_motor_tests::awake_initial_priority_quiet_control_preserves_complete_world_and_receipt ... ok
+test headless::task_6_factorized_motor_tests::awake_initial_priority_restore_has_no_latched_reflex_after_contact_ends ... ok
+test headless::task_6_factorized_motor_tests::awake_initial_priority_water_block_preserves_zero_motion_and_honest_effort ... ok
+test headless::task_6_factorized_motor_tests::awake_late_internal_damage_uses_only_remaining_translation_time ... ok
+test headless::task_6_factorized_motor_tests::awake_spatial_priority_diagonal_motion_uses_three_dimensional_time ... ok
+test headless::task_6_factorized_motor_tests::awake_spatial_priority_vertical_motion_cannot_skip_contact_or_time ... ok
+test headless::task_6_factorized_motor_tests::awake_swept_priority_early_middle_late_share_time_path_and_effort ... ok
+test headless::task_6_factorized_motor_tests::awake_swept_priority_end_contact_has_no_extra_full_reflex_allowance ... ok
+test headless::task_6_factorized_motor_tests::awake_swept_priority_opposed_tangent_normals_stop_without_invented_direction ... ok
+test headless::task_6_factorized_motor_tests::awake_swept_priority_samples_intermediate_thermal_contact_once ... ok
+test headless::task_6_factorized_motor_tests::awake_swept_priority_slow_intent_uses_time_not_distance_remainder ... ok
+test headless::task_6_factorized_motor_tests::awake_swept_priority_zero_net_path_suppresses_rest_with_one_biology_advance ... ok
+test headless::task_6_factorized_motor_tests::awake_terrain_rejected_prefix_is_not_ordinary_equivalent_after_late_meal ... ok
+test headless::task_6_factorized_motor_tests::awake_terrain_rejected_prefix_remains_intervention_without_withdrawal ... ok
+test headless::task_6_factorized_motor_tests::body_only_candidate_does_not_flee_a_self_carried_source ... ok
+test headless::task_6_factorized_motor_tests::body_only_candidate_late_failure_rolls_back_motion_and_biology ... ok
+test headless::task_6_factorized_motor_tests::body_only_overlap_carried_hazard_still_respects_grip_blockers_and_rollback ... ok
+test headless::task_6_factorized_motor_tests::body_only_overlap_own_carried_hazard_does_not_block_external_withdrawal ... ok
+test headless::task_6_factorized_motor_tests::body_only_overlap_peer_inward_boundary_tangent_and_new_entries_still_block ... ok
+test headless::task_6_factorized_motor_tests::body_only_overlap_peer_outward_escape_keeps_one_biology_interval ... ok
+test headless::task_6_factorized_motor_tests::body_only_overlap_unrelated_hazard_sweep_still_blocks_new_contact ... ok
+test headless::task_6_factorized_motor_tests::body_only_withdrawal_kernel_acute_heading_fallback_is_bounded ... ok
+test headless::task_6_factorized_motor_tests::body_only_withdrawal_kernel_opposed_sources_and_obstacles_block ... ok
+test headless::task_6_factorized_motor_tests::body_only_withdrawal_kernel_preserves_carry_and_ignores_carried_source ... ok
+test headless::task_6_factorized_motor_tests::body_only_withdrawal_kernel_terrain_water_peers_and_capacity_are_physical_limits ... ok
+test headless::task_6_factorized_motor_tests::carry_pose_joint_interval_keeps_translation_and_rotation_through_later_channels ... ok
+test headless::task_6_factorized_motor_tests::eat_pickup_requires_the_existing_manipulation_effector ... ok
+test headless::task_6_factorized_motor_tests::factorized_bundle_causally_couples_neural_emission_into_organism_chemistry ... ok
+test headless::task_6_factorized_motor_tests::factorized_bundle_executes_as_one_joint_transaction_and_rolls_back ... ok
+test headless::task_6_factorized_motor_tests::factorized_held_food_eat_and_rest_share_one_biology_advance ... ok
+test headless::task_6_factorized_motor_tests::factorized_joint_outcome_retains_independent_contact_and_transfer_identities ... ok
+test headless::task_6_factorized_motor_tests::factorized_posture_inspect_rejects_missing_world_target ... ok
+test headless::task_6_factorized_motor_tests::factorized_posture_preserves_direct_idle_rest_and_inspect_semantics ... ok
+test headless::task_6_factorized_motor_tests::factorized_vocal_missing_payload_never_creates_or_refreshes_legacy_token ... ok
+test headless::task_6_factorized_motor_tests::factorized_vocal_preserves_gpu_payload_for_primary_and_auxiliary_channels ... ok
+test headless::task_6_factorized_motor_tests::harmful_food_motor_acquisition_preserves_biology_and_portable_save_continuation ... ok
+test headless::task_6_factorized_motor_tests::n019_rejects_remote_or_unowned_grab_and_remote_inspect_contact ... ok
+test headless::task_6_factorized_motor_tests::n022_commits_interval_motion_for_stationary_blocked_and_factorized_actions ... ok
+test headless::task_6_factorized_motor_tests::registered_eat_pickup_and_later_meal_keep_selected_channel_and_measured_biology ... ok
+test headless::task_6_factorized_motor_tests::rest_motion_actual_movement_cannot_count_as_sleep ... ok
+test headless::task_6_factorized_motor_tests::rest_motion_failure_rolls_back_state_and_receipts ... ok
+test headless::task_6_factorized_motor_tests::rest_motion_normalization_preserves_doses_and_detects_cancelled_paths ... ok
+test headless::task_6_factorized_motor_tests::rest_motion_stationary_and_blocked_rest_keep_recovery ... ok
+test headless::task_6_factorized_motor_tests::world_tick_composes_sleep_recovery_into_the_single_biology_advance ... ok
+test headless::terrain_vision_tests::biological_capacity_limits_translation_without_changing_intent ... ok
+test headless::terrain_vision_tests::blind_exploration_primitives_survive_motor_translation_and_collision ... ok
+test headless::terrain_vision_tests::coincident_xz_sight_is_gaze_independent_for_general_objects ... ok
+test headless::terrain_vision_tests::coincident_xz_sight_preserves_occlusion_range_and_consumed_filters ... ok
+test headless::terrain_vision_tests::gaze_opaque_barriers_and_transparency_change_actual_sight ... ok
+test headless::terrain_vision_tests::noncoincident_rear_contact_still_obeys_the_sight_cone ... ok
+test headless::terrain_vision_tests::scent_and_touch_survive_occlusion_without_creating_hidden_targets ... ok
+test headless::terrain_vision_tests::solid_reach_blocks_grab_and_eat_even_when_transparent ... ok
+test headless::terrain_vision_tests::terrain_obstacle_hides_food_and_shortens_depth_rays ... ok
+test headless::thermal_contact_candidate::tests::hot_cold_are_symmetric_tolerance_scaled_and_conductance_insulates ... ok
+test headless::thermal_contact_candidate::tests::inherited_tolerance_variants_and_mature_chemical_projection ... ok
+test headless::thermal_contact_candidate::tests::invalid_parameters_and_late_failures_roll_back_complete_world ... ok
+test headless::thermal_contact_candidate::tests::locomotion_departure_gets_one_endpoint_dose_then_neutral_recovery ... ok
+test headless::thermal_contact_candidate::tests::neural_bundle_and_stationary_late_failure_share_atomic_boundary ... ok
+test headless::thermal_contact_candidate::tests::neutral_boundaries_and_default_are_byte_identical ... ok
+test headless::thermal_contact_candidate::tests::no_contact_and_intervening_solid_block_exposure ... ok
+test headless::thermal_contact_candidate::tests::overlapping_hot_and_cold_use_max_not_sum_or_cancellation ... ok
+test headless::thermal_contact_candidate::tests::physical_withdrawal_uses_both_thermal_endpoints_and_truthful_once_only_receipt ... ok
+test headless::thermal_contact_candidate::tests::relocation_recovers_without_sleep_atp_or_fatigue_benefit_and_save_continues ... ok
+test headless::thermal_contact_candidate::tests::selected_physical_response_does_not_gate_configured_thermal_dose ... ok
+test headless::thermal_contact_candidate::tests::stationary_single_and_joint_actions_receive_one_interval_not_command_duration ... ok
+test headless::thermal_contact_candidate::tests::v2_continued_hot_cold_rest_preserves_exposure_and_other_sleep_benefits ... ok
+test headless::thermal_contact_candidate::tests::v2_zero_external_dose_does_not_suppress_legacy_or_v1_sleep_cooling ... ok
+test headless::thermal_contact_candidate::tests::zero_exchange_preserves_signed_zero_and_wrapper_count_is_not_time ... ok
+test headless::translation_budget::blocked_attempt_still_uses_its_allocated_time ... ok
+test headless::translation_budget::early_contact_allocates_only_remaining_time_at_reflex_speed ... ok
+test headless::translation_budget::initial_reflex_priority_consumes_interval_before_voluntary_translation ... ok
+test headless::translation_budget::malformed_and_over_budget_segments_are_atomic_rejections ... ok
+test headless::translation_budget::opposite_segments_count_path_not_zero_net_displacement ... ok
+test headless::translation_budget::slow_full_interval_cannot_be_followed_by_another_full_reflex ... ok
+test island::tests::island_new_game_and_restore_keep_the_selected_geometry ... ok
+test island::tests::island_overview_ray_uses_the_requested_range ... ok
+test organism::registered_record_tests::registry_record_proof_invalidates_on_every_mutable_dereference ... ok
+test organism::registered_record_tests::registry_record_proof_is_invalidated_before_a_mutating_closure_can_unwind ... ok
+test organism::registered_record_tests::registry_record_proof_is_local_and_failed_mutations_restore_exact_state ... ok
+test organism::registered_record_tests::registry_record_proof_preserves_wire_clone_restore_and_replacement ... ok
+test organism::registered_record_tests::registry_record_proofs_do_not_cache_registry_indices ... ok
+test organism::tests::biochemistry_digest_preserves_signed_zero_round_trip ... ok
+test organism::tests::exhausted_body_revision_rolls_back_the_complete_record ... ok
+test organism::tests::exhausted_embodiment_revision_rejects_replacement_without_mutation ... ok
+test organism::tests::exhausted_memory_revision_rolls_back_cognitive_sealing ... ok
+test organism::tests::immutable_genetic_validation_preserves_restore_and_mutable_guards ... ok
+test organism::tests::malformed_registry_advance_returns_prestate_error_without_mutation ... ok
+test organism::tests::malformed_registry_prestate_does_not_invoke_biology_closure ... ok
+test organism::tests::mutable_validation_cache_embodiment_replacement_and_deserialization_preserve_binding ... ok
+test organism::tests::mutable_validation_cache_preserves_signed_zero_public_mutations_and_wire_guards ... ok
+test organism::tests::mutable_validation_cache_rejects_invalid_biology_and_restores_failed_transactions ... ok
+test organism::tests::newborn_record_advance_uses_age_since_birth_not_absolute_world_tick ... ok
+test organism::tests::registry_failed_advance_preserves_exact_biochemistry ... ok
+test persistence::terrain_persistence_tests::custom_terrain_save_reloads_geometry_limits_and_signature ... ok
+test persistence::terrain_persistence_tests::island_binding_roundtrips_and_rejects_incompatible_geometry ... ok
+test persistence::terrain_persistence_tests::player_carry_save_roundtrip_validates_the_release_surface ... ok
+test persistence::terrain_persistence_tests::terrainless_fixture_save_roundtrips ... ok
+test terrain::tests::environment_water_and_body_limits_are_independent ... ok
+test terrain::tests::invalid_terrain_is_rejected_and_clones_share_samples ... ok
+test terrain::tests::selected_terrain_controls_placement_movement_and_obstacles ... ok
+test terrain_surface::tests::island_actual_move_reports_blocked_at_a_baked_rock_or_trunk ... ok
+test terrain_surface::tests::island_actual_move_updates_authoritative_height_and_displacement ... ok
+test terrain_surface::tests::island_sweep_rejects_thin_obstacle_and_water_and_steep_ground ... ok
+test terrain_surface::tests::island_triangles_and_vertical_pick_agree ... ok
+test terrain_surface::tests::ray_pick_does_not_skip_grid_or_triangle_ridges ... ok
+test terrain_surface::tests::rounded_mesh_boundary_supports_player_placement_and_restore ... ok
+test tracked_objects::tests::failed_observation_batch_preserves_the_observer_registry ... ok
+test tracked_objects::tests::sensing_batch_preserves_audited_ids_eviction_and_restore_continuation ... ok
+
+test result: ok. 281 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 2.18s
+
+     Running tests/agent_naming.rs (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-target-v18/debug/deps/agent_naming-02da79b2d29e8858)
+
+running 6 tests
+test existing_generated_agent_names_can_be_kept_without_opening_a_reserved_alias ... ok
+test generated_object_prefixes_are_reserved_without_mutating_world_state_or_lookup ... ok
+test invalid_names_and_collisions_leave_both_world_state_and_lookup_unchanged ... ok
+test names_are_bounded_by_unicode_scalars_and_use_unicode_lowercase_comparison ... ok
+test rename_rejects_missing_and_non_agent_targets_without_mutation ... ok
+test rename_trims_and_updates_the_canonical_label_and_lookup_with_the_same_identity ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/atomic_portable_save.rs (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-target-v18/debug/deps/atomic_portable_save-1ab97293bfa8fe3c)
+
+running 3 tests
+test failed_save_publication_preserves_destination_and_cleans_its_staged_file ... ok
+test failed_save_write_keeps_previous_save_readable_and_releases_staging_budget ... ok
+test save_creation_and_replacement_preserve_exact_world_state_and_budget ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/biology_audit_taste.rs (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-target-v18/debug/deps/biology_audit_taste-84ef6d8dbcc242b6)
+
+running 9 tests
+test another_creatures_rest_preserves_eaters_taste ... ok
+test both_external_actor_removal_paths_clear_taste ... ok
+test dead_creatures_drop_taste_before_retirement ... ok
+test exact_world_roundtrip_preserves_eaters_taste ... ok
+test legacy_saves_without_observations_remain_loadable_and_new_invalid_samples_fail ... ok
+test sampled_taste_survives_food_edit_and_removal ... ok
+test simultaneous_neutral_posture_preserves_taste ... ok
+test taste_expires_after_next_perception_and_failed_ingestion_does_not_refresh_it ... ok
+test two_eaters_keep_their_own_opposite_tastes ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests/biology_injury_terminal.rs (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-target-v18/debug/deps/biology_injury_terminal-eb4818615550526d)
+
+running 2 tests
+test injury_save_reload_reaches_the_same_terminal_state_and_stays_dead ... ok
+test sustained_hazard_reaches_health_death_before_energy_exhaustion ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/body_only_hazard_contact.rs (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-target-v18/debug/deps/body_only_hazard_contact-9b94fa0f9af989f6)
+
+running 13 tests
+test body_only_boundary_does_not_redeliver_damage_after_an_action ... ok
+test body_only_candidate_awake_and_sleeping_intervals_share_physical_reflex_geometry ... ok
+test body_only_candidate_blocked_damage_still_interrupts_physical_sleep ... ok
+test body_only_candidate_coincident_or_unlocalized_dose_uses_bounded_heading_fallback ... ok
+test body_only_candidate_opposed_contacts_cancel_without_suppressing_damage ... ok
+test body_only_candidate_quiet_sleep_and_chronic_injury_are_exact_noops ... ok
+test body_only_candidate_restore_is_exact_and_never_repeats_an_action_interval ... ok
+test body_only_candidate_source_bound_accepts_256_and_rejects_257_atomically ... ok
+test body_only_candidate_withdraws_sleeping_contact_and_releases_after_removal ... ok
+test body_only_contact_merges_interval_damage_without_counting_it_twice ... ok
+test body_only_contact_restore_continues_exactly_and_invalid_interval_rolls_back ... ok
+test body_only_quiet_or_nonpainful_contact_keeps_exact_ordinary_sleep ... ok
+test body_only_stationary_sleep_delivers_fresh_contact_once_without_movement ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests/canonical_new_game.rs (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-target-v18/debug/deps/canonical_new_game-dbba1c6c4ee046fe)
+
+running 9 tests
+test canonical_new_game_binds_every_subsystem_before_admission ... ok
+test canonical_new_game_contains_live_ecology_not_frontend_fixtures ... ok
+test canonical_new_game_creates_exact_requested_population ... ok
+test canonical_new_game_founders_compile_against_the_checked_nano512_foundation ... ok
+test canonical_new_game_is_deterministic_and_rejects_the_wrong_foundation ... ok
+test canonical_new_game_meadow_is_safe_until_actual_hazard_contact ... ok
+test canonical_new_game_rejects_population_outside_phase3_bounds ... ok
+test food_and_toy_variants_have_physical_gene_controlled_and_persistent_effects ... ok
+test player_care_is_local_gene_controlled_and_survives_pending_save ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.74s
+
+     Running tests/carried_food_terrain_vision.rs (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-target-v18/debug/deps/carried_food_terrain_vision-41cb82b87e6996d6)
+
+running 5 tests
+test default_radius_carrier_occludes_another_observer_but_its_owner_can_eat ... ok
+test default_radius_owner_can_select_two_real_eat_candidates_and_consume ... ok
+test default_radius_owner_retains_small_held_target_at_both_head_limits_and_after_moving ... ok
+test other_creature_tracks_carried_food_and_cannot_grab_or_eat_it ... ok
+test third_party_body_occlusion_also_holds_with_nonoverlapping_creature_spheres ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/cpu_policy_config.rs (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-target-v18/debug/deps/cpu_policy_config-18ab74ffd895cbb8)
+
+running 1 test
+test cpu_requires_explicit_offline_schema_and_gpu_default_remains_compatible ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/decoder_policy_portable_save.rs (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-target-v18/debug/deps/decoder_policy_portable_save-e9794dfed7e2f44f)
+
+running 1 test
+test explicit_inherited_decoder_policy_survives_real_portable_file_save_and_restore ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.11s
+
+     Running tests/ecology_resource_cycles.rs (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-target-v18/debug/deps/ecology_resource_cycles-72a15f86313005f6)
+
+running 6 tests
+test hazard_zone_pressure_is_negative_bounded_and_visible_to_sensory_report ... ok
+test invalid_or_unsupported_ecology_inputs_are_rejected ... ok
+test repeated_eat_reacquires_regrown_food_before_consuming ... ok
+test resource_regrowth_is_deterministic_and_preserves_bounds ... ok
+test save_load_preserves_ecology_state_and_resource_lifecycle ... ok
+test spawn_policy_and_world_caps_are_deterministic_and_bounded ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/founder_brain_regressions.rs (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-target-v18/debug/deps/founder_brain_regressions-ca9319b2d1568579)
+
+running 7 tests
+test combined_hunger_and_danger_use_measured_cues_and_actual_movement ... ok
+test distant_visible_objects_support_urgency_driven_approach_and_avoid_without_chemical_gps ... ok
+test fresh_builtin_foundations_prefer_nearer_identical_observations ... ok
+test fresh_procedural_founders_prefer_nearer_identical_observations ... ok
+test ordinary_default_nano_newborn_damage_reaches_pain_without_maturing_other_chemistry ... ok
+test play_and_grab_keep_all_physical_features_and_have_distinct_readouts ... ok
+test play_other_stays_manipulation_in_joint_commands_memory_and_decision_history ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.81s
+
+     Running tests/fresh_foundation_checkpoint_comparison.rs (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-target-v18/debug/deps/fresh_foundation_checkpoint_comparison-cba194811d33cbab)
+
+running 3 tests
+test checkpoint_treatments_match_only_in_the_new_domain_without_mutation ... ok
+test other_subjects_and_invalid_assets_cannot_be_projected_away ... ok
+test world_body_genome_graph_and_private_references_remain_controls ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.06s
+
+     Running tests/fvr02_persistent_voxel_backend.rs (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-target-v18/debug/deps/fvr02_persistent_voxel_backend-0e2ec7d26cc33b6e)
+
+running 6 tests
+test fvr02_failed_out_of_bounds_edit_preserves_exact_backend_state ... ok
+test fvr02_persistent_chunks_roundtrip_saved_edits_and_materialized_metadata ... ok
+test fvr02_portable_save_migrates_legacy_p34_and_preserves_voxel_roundtrip ... ok
+test fvr02_profile_residency_budgets_scale_without_minimum_ceiling ... ok
+test fvr02_rejects_tampered_profile_budget_and_generator_identity ... ok
+test fvr02_snapshot_streams_are_compact_dirty_and_renderer_independent ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/golden_traces_determinism.rs (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-target-v18/debug/deps/golden_traces_determinism-8b48a46f30c5ba62)
+
+running 4 tests
+test bounded_randomized_scenario_loops_preserve_learning_invariants ... ok
+test different_seed_replay_changes_only_declared_stochastic_trace_fields ... ok
+test p18_scenarios_match_versioned_golden_trace_fixtures ... ok
+test same_seed_replay_produces_identical_golden_trace_summary ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/gpu_brain_persistence.rs (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-target-v18/debug/deps/gpu_brain_persistence-e61ba13f9ce40b3c)
+
+running 12 tests
+test completed_sleep_promotion_moves_exact_staging_refs_into_committed_main_state ... ok
+test every_consolidation_state_roundtrips_with_exact_required_assets ... ok
+test every_sleep_phase_roundtrips_without_duplicate_consolidation ... ok
+test gpu_checkpoint_asset_reference_enumeration_structurally_covers_every_optional_class ... ok
+test gpu_checkpoint_requires_exact_enclosing_manifest_references ... ok
+test impossible_phase_asset_and_pending_transaction_combinations_are_rejected ... ok
+test legacy_pending_json_stays_absent_and_malformed_index_is_rejected ... ok
+test live_topology_selector_is_fail_closed_across_v5_and_v6 ... ok
+test portable_float_assets_bind_exact_shapes_generations_and_canonical_bits ... ok
+test portable_replay_journal_preserves_bounded_ring_identity_and_empty_reset_state ... ok
+test r06_exact_cognitive_checkpoint_preserves_acquired_predictor_and_rejects_legacy ... ok
+test retained_learning_attempt_counts_zero_through_three_roundtrip_without_sidecar_replay ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/gpu_brain_vnext_migration.rs (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-target-v18/debug/deps/gpu_brain_vnext_migration-d5bdf051115698e7)
+
+running 6 tests
+test backend_api_wire_mapping_is_exact_and_rejects_unknown_spellings ... ok
+test portable_throttle_roundtrip_covers_every_level_and_rejects_tamper ... ok
+test promoted_ids_are_ready_large_legacy_ids_are_inspection_only_and_unknown_is_rejected ... ok
+test provenance_bounds_adapter_name_and_excludes_it_from_portable_compatibility ... ok
+test restore_compatibility_rejects_required_capability_and_same_adapter_drift ... ok
+test throttle_sequence_accepts_only_the_exact_next_cursor_and_bound_asset ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/gpu_memory_grounding_persistence.rs (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-target-v18/debug/deps/gpu_memory_grounding_persistence-70c3af63b7e3e816)
+
+running 5 tests
+test memory_and_topology_summaries_bind_exact_owner_and_profile ... ok
+test memory_summary_rejects_staged_asset_without_staged_checkpoint ... ok
+test tracked_object_state_roundtrips_and_never_reuses_an_id ... ok
+test tracker_restore_rejects_tampered_owner_key_and_next_id ... ok
+test tracker_restores_multiple_organism_local_streams_without_collision ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/grounded_object_slots.rs (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-target-v18/debug/deps/grounded_object_slots-3acf40e763813b4e)
+
+running 16 tests
+test coincident_terrain_food_stays_visible_and_eat_pickup_precedes_consumption ... ok
+test duplicate_looking_objects_keep_distinct_tracked_bindings ... ok
+test grounded_horizontal_bearing_distinguishes_xz_cardinals_and_diagonals ... ok
+test grounded_horizontal_bearing_ignores_height_and_has_finite_zero_xz_fallback ... ok
+test grounded_physical_state_participates_in_the_world_determinism_signature ... ok
+test grounded_profile_exposes_physics_not_world_object_kind ... ok
+test looking_straight_at_food_after_approach_keeps_the_terrain_frame_valid ... ok
+test new_objects_keep_kind_specific_chemistry_across_spawn_order ... ok
+test per_organism_tracked_ids_do_not_depend_on_cross_organism_schedule_order ... ok
+test play_preserves_angular_speed_and_rejects_unobserved_feature_overrides ... ok
+test relabelling_private_world_semantics_cannot_change_a_grounded_frame ... ok
+test sixteen_slots_yield_four_complete_six_action_groups_and_never_a_partial_group ... ok
+test tracked_ids_are_stable_while_candidate_features_remain_physical ... ok
+test tracker_capacity_evicts_deterministically_and_never_reuses_an_id ... ok
+test tracker_record_keeps_portable_provenance_descriptor_and_last_seen_tick ... ok
+test world_save_roundtrip_preserves_grounded_physics_and_portable_tracking_key ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/habitat_authority.rs (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-target-v18/debug/deps/habitat_authority-1e8f55e919ce81e8)
+
+running 13 tests
+test every_mode_uses_the_same_gpu_authoritative_cognition_identity ... ok
+test every_transfer_provenance_field_is_required ... ok
+test managed_and_school_allow_only_their_explicit_controls ... ok
+test one_world_contains_all_modes_and_exactly_one_membership_per_creature ... ok
+test operation_permissions_reject_actor_roles_that_do_not_own_the_mode ... ok
+test reserve_requires_tags_for_capture_test_breed_and_reintroduction ... ok
+test restore_rejects_unknown_organism_actors_in_transfer_provenance ... ok
+test restore_validation_rejects_duplicate_membership_and_broken_transfer_chains ... ok
+test retired_ledger_gaps_preserve_surviving_receipt_ids ... ok
+test transfer_authority_must_match_an_involved_habitat_mode ... ok
+test transfer_rejects_unknown_ids_stale_prior_noop_and_missing_provenance ... ok
+test transfers_are_append_only_deterministic_and_preserve_complete_provenance ... ok
+test wild_breeding_is_creature_chosen_and_player_breeding_is_rejected ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/habitat_presentation.rs (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-target-v18/debug/deps/habitat_presentation-e1a95dd80893c5de)
+
+running 2 tests
+test projection_is_read_only_and_habitat_operations_leave_authoritative_snapshots_unchanged ... ok
+test projection_keeps_ungrounded_emitted_speech_unknown_and_reports_relationship_evidence ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/headless_soak.rs (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-target-v18/debug/deps/headless_soak-efe2b70e2cec16ed)
+
+running 2 tests
+test fast_headless_soak_preserves_release_gate_invariants ... ok
+test manual_extended_headless_soak_preserves_release_gate_invariants ... ignored, manual extended headless soak: cargo test -p alife_world --test headless_soak -- --ignored --nocapture
+
+test result: ok. 1 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/headless_world_harness.rs (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-target-v18/debug/deps/headless_world_harness-ac521a889ccf5fa9)
+
+running 13 tests
+test action_execution_supports_approach_flee_grab_and_vocalize ... ok
+test action_execution_supports_move_inspect_eat_rest_and_idle ... ok
+test carried_object_follows_carrier_across_move_and_save_restore ... ok
+test food_biology_and_hazard_pain_are_measured_without_host_reward ... ok
+test headless_harness_collects_rest_patch_without_forcing_cpu_sleep ... ok
+test headless_world_tick_progression_is_explicit_and_deterministic ... ok
+test ingesting_one_edible_poison_applies_nutrition_and_pain_together ... ok
+test missing_affordance_and_invalid_target_failures_are_distinct ... ok
+test movement_sweeps_obstacles_between_clear_endpoints ... ok
+test multi_tick_cpu_reference_brain_stepping_is_headless_and_deterministic ... ok
+test seeded_random_builder_replays_same_world_state ... ok
+test sensory_gathering_is_bounded_ordered_and_maps_affordances_to_core_snapshot ... ok
+test stable_world_entity_ids_are_replayable_for_same_seed_and_script ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/headless_world_signature.rs (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-target-v18/debug/deps/headless_world_signature-dcc9a55333ddc76e)
+
+running 9 tests
+test canonical_signature_binds_optional_terrain_identity ... ok
+test canonical_signature_distinguishes_one_bit_radius_change_at_contact_threshold ... ok
+test canonical_signature_distinguishes_same_seed_wrong_and_later_worlds ... ok
+test canonical_signature_includes_future_organism_identity_state ... ok
+test canonical_signature_registry_changes_when_only_biology_lifecycle_archive_changes ... ok
+test canonical_signature_registry_is_current_and_included_in_world_identity ... ok
+test canonical_signature_registry_order_is_input_order_independent ... ok
+test organism_allocator_round_trip_preserves_retired_high_id_and_legacy_derives_max_plus_one ... ok
+test organism_identity_reservation_and_overflow_are_atomic ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+
+     Running tests/movement_blocking_contact.rs (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-target-v18/debug/deps/movement_blocking_contact-c31bba0e41883940)
+
+running 7 tests
+test blocked_step_reports_the_first_rock_surface_independently_of_spawn_order ... ok
+test coincident_contacts_keep_id_order_even_without_displacement ... ok
+test first_surface_can_belong_to_the_rock_with_the_more_distant_center ... ok
+test large_tangent_radius_does_not_move_contact_ahead_of_an_earlier_surface ... ok
+test near_tangent_rounding_does_not_move_contact_ahead_of_an_earlier_surface ... ok
+test starting_on_a_surface_keeps_contact_at_the_start_of_the_step ... ok
+test tangent_and_clear_steps_use_the_expanded_body_collision_boundary ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/movement_hazard_contact.rs (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-target-v18/debug/deps/movement_hazard_contact-2cf26b45aeadfbe5)
+
+running 8 tests
+test a_swept_only_hazard_still_causes_contact_after_the_body_leaves_it ... ok
+test completed_pose_contact_takes_priority_over_a_nearer_swept_only_hazard ... ok
+test equal_distance_hazards_keep_the_lowest_entity_id_tie_break ... ok
+test motor_bundle_reports_the_same_nearest_hazard_as_its_body_contact ... ok
+test movement_hazard_feedback_and_injury_are_independent_of_spawn_order ... ok
+test multiple_swept_only_contacts_use_completed_pose_proximity_in_both_spawn_orders ... ok
+test portable_restore_keeps_hazard_identity_and_geometric_selection ... ok
+test stationary_contact_boundary_and_clear_movement_are_preserved ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/perception_candidates.rs (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-target-v18/debug/deps/perception_candidates-1208d144be913084)
+
+running 19 tests
+test batch_perception_index_matches_canonical_privileged_and_grounded_frames ... ok
+test candidate_enumerator_rejects_duplicate_contact_entity_ids ... ok
+test candidate_enumerator_rejects_invalid_contact_entity_id ... ok
+test candidate_enumerator_rejects_missing_genuine_visible_contact ... ok
+test candidate_enumerator_rejects_non_visible_contact_entity_id ... ok
+test candidate_enumerator_rejects_visible_entity_beyond_contact_radius ... ok
+test distance_then_entity_order_is_stable_and_caps_at_four_complete_object_groups ... ok
+test every_retained_object_gets_the_same_six_mechanical_operations ... ok
+test grounded_profile_uses_the_dedicated_physical_extractor ... ok
+test idle_is_index_zero_and_all_candidate_indices_are_contiguous ... ok
+test invalid_organism_and_mismatched_homeostasis_tick_are_rejected ... ok
+test perception_and_candidates_share_one_authoritative_tick_and_empty_context ... ok
+test privileged_feature_lanes_have_exact_geometry_affordance_evidence_and_reserved_values ... ok
+test privileged_horizontal_bearing_distinguishes_xz_cardinals_and_diagonals ... ok
+test privileged_horizontal_bearing_ignores_height_and_has_finite_zero_xz_fallback ... ok
+test rest_and_vocalize_are_unscored_intrinsic_opportunities_in_both_profiles ... ok
+test same_seed_snapshot_and_inputs_replay_identical_frames ... ok
+test semantic_relabelling_changes_features_not_candidate_transport ... ok
+test teacher_token_adds_teacher_affordance_without_changing_candidate_transport ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/player_drop_obstacles.rs (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-target-v18/debug/deps/player_drop_obstacles-25a3d12ef43a8741)
+
+running 9 tests
+test carried_reach_crossing_a_sphere_is_rejected_even_when_both_endpoints_fit ... ok
+test carried_reach_respects_terrain_boxes_without_sweeping_the_air_carry ... ok
+test carrying_can_cross_rocks_and_can_rescue_an_existing_overlap ... ok
+test equivalent_projected_ground_requests_preserve_existing_overlap_recovery ... ok
+test new_ground_must_leave_carried_food_outside_solid_rock ... ok
+test player_can_carry_food_across_rocks_and_rescue_an_existing_grip_overlap ... ok
+test player_rejects_new_rock_overlaps_without_mutating_the_hold_or_world ... ok
+test positions_just_outside_the_existing_collision_radius_remain_legal ... ok
+test rejected_drop_preserves_registered_state_and_a_restorable_releasable_hold ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/policy_weight_comparison_signature.rs (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-target-v18/debug/deps/policy_weight_comparison_signature-91ec570e915c96ff)
+
+running 8 tests
+test activity_grip_provenance_is_never_excluded_from_policy_comparison ... ok
+test another_organisms_policy_and_the_designated_subject_are_bound ... ok
+test missing_candidate_and_malformed_payloads_cannot_be_projected ... ok
+test physiology_lifecycle_and_nonpolicy_genome_state_remain_bound ... ok
+test policy_only_changes_match_without_changing_canonical_world_identity ... ok
+test projected_genetics_reference_preserves_graph_and_causal_metadata ... ok
+test training_stage_and_promotion_provenance_are_not_treatments ... ok
+test world_tick_position_terrain_speech_tracking_and_lifecycle_rules_remain_bound ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.76s
+
+     Running tests/prediction_residual_pulse.rs (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-target-v18/debug/deps/prediction_residual_pulse-701cf9ae39a44bc9)
+
+running 3 tests
+test a_failed_record_update_preserves_pending_pulse_and_exact_state_reference ... ok
+test exact_world_state_retains_a_pulse_and_consumes_it_during_idle_or_sleep_biology ... ok
+test prechange_record_bytes_and_body_identity_remain_exact_without_a_pulse ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/procedural_chunks.rs (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-target-v18/debug/deps/procedural_chunks-0de9f70e90e8a2b0)
+
+running 12 tests
+test procedural_chunk_activation_respects_capacity ... ok
+test procedural_chunk_summary_reports_bounded_material_distribution ... ok
+test procedural_chunks_activate_around_creatures_without_rendering ... ok
+test procedural_chunks_are_deterministic_for_seed_and_tile ... ok
+test procedural_chunks_do_not_exist_without_creature_anchors ... ok
+test procedural_chunks_follow_creature_travel_from_same_seed ... ok
+test procedural_material_ids_match_alpha_art_roles ... ok
+test procedural_world_content_does_not_exist_without_active_creature_chunks ... ok
+test procedural_world_content_includes_readable_ecology_roles ... ok
+test procedural_world_content_is_deterministic_and_creature_anchored ... ok
+test procedural_world_content_respects_capacity ... ok
+test valid_far_virtual_tiles_keep_biome_distance_arithmetic_in_range ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/regrowth_memory_continuity.rs (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-target-v18/debug/deps/regrowth_memory_continuity-87154e4da5ad2e5f)
+
+running 1 test
+test regrown_food_retains_individual_memory_after_consumed_portable_component_save ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/save_load_roundtrip.rs (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-target-v18/debug/deps/save_load_roundtrip-673da9e93ee19f08)
+
+running 21 tests
+test appearance_schema_v1_migrates_and_schema_v2_roundtrips_in_saves ... ok
+test asset_manifest_validates_required_optional_and_digest_mismatch ... ok
+test committed_legacy_p34_save_fails_closed_without_authoritative_v3_state ... ok
+test composite_genome_foundation_and_nonzero_lifetime_state_survive_portable_restore ... ok
+test current_runtime_config_round_trips_both_explicit_policies ... ok
+test current_world_objects_reject_tampered_or_partial_tracking_identity ... ok
+test habitat_authority_round_trips_with_membership_and_transfer_provenance ... ok
+test incompatible_schemas_reject_without_silent_migration ... ok
+test json_asset_digest_is_stable_across_line_endings ... ok
+test learning_values_and_genetic_lifetime_boundaries_validate ... ok
+test legacy_save_without_habitats_defaults_every_creature_to_wild ... ok
+test legacy_world_objects_migrate_by_canonical_order_and_resave_current_identity ... ok
+test portable_save_rejects_retired_backend_config ... ok
+test present_but_incomplete_habitat_state_is_not_treated_as_legacy ... ok
+test runtime_config_defaults_are_deterministic_and_invalid_combinations_reject ... ok
+test runtime_config_rejects_retired_backend_flags_with_or_without_current_policy ... ok
+test runtime_config_requires_explicit_current_policy ... ok
+test stable_id_remap_rejects_invalid_or_duplicate_world_ids ... ok
+test tiny_save_load_round_trip_restores_stable_world_and_summaries ... ok
+test typed_unavailable_gpu_runtime_state_is_valid_and_stops_learned_actions ... ok
+test v2_portable_restore_invokes_architecture_migration_and_fails_without_authority ... ok
+
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.27s
+
+     Running tests/scenario_suite.rs (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-target-v18/debug/deps/scenario_suite-008f32b74d99b6ee)
+
+running 8 tests
+test curiosity_contradiction_scenario_raises_gap_bias_without_bypassing_arbitration ... ok
+test fatigue_rest_scenario_does_not_invoke_cpu_sleep_authority ... ok
+test food_seeking_scenario_links_hunger_food_salience_and_measured_biology ... ok
+test obstacle_frustration_scenario_records_failure_and_gap ... ok
+test pain_poison_scenario_records_danger_without_heuristic_replay ... ok
+test social_trust_fear_scenario_records_social_context_as_bias_only ... ok
+test teacher_perception_event_is_perceptual_and_modulatory_only ... ok
+test word_token_grounding_scenario_binds_words_through_sensory_context_without_slm ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/solid_contact_sensing.rs (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-target-v18/debug/deps/solid_contact_sensing-e2955e67df29a17f)
+
+running 3 tests
+test a_solid_wall_blocks_surface_temperature_contact_but_not_scent ... ok
+test an_obstacle_keeps_its_own_contact_but_blocks_another_objects_temperature ... ok
+test unobstructed_rear_contact_and_the_existing_range_boundary_are_preserved ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/spatial_speech.rs (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-target-v18/debug/deps/spatial_speech-ede06b293bc75478)
+
+running 7 tests
+test active_spatial_speech_and_cooldown_roundtrip_with_the_world_save ... ok
+test broadcast_range_and_creature_raw_token_identity_are_preserved ... ok
+test duplicate_utterance_rejection_preserves_the_original_emission ... ok
+test named_player_speech_reaches_only_the_named_creature ... ok
+test neural_vocalize_requires_gpu_payload_and_enforces_prompted_and_spontaneous_cooldowns ... ok
+test rejected_creature_utterance_does_not_advance_the_world_allocator ... ok
+test world_allocates_collision_free_player_utterance_ids ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/task_3_2a_atomic_action.rs (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-target-v18/debug/deps/task_3_2a_atomic_action-c32108576a02ecd4)
+
+running 16 tests
+test cognitive_energy_setter_preserves_routed_body_projection ... ok
+test incidental_hazard_contact_preserves_factorized_action_outcome ... ok
+test movement_sweeps_hazards_only_along_the_executed_segment ... ok
+test registered_approach_touch_ignores_affinity_without_manufacturing_threat_or_reward ... ok
+test registered_food_transaction_reports_actual_nutrition ... ok
+test registered_hazard_and_agent_contact_preserves_hazard_observation_and_social_event ... ok
+test registered_hazard_contact_reports_measured_damage ... ok
+test registered_move_transaction_advances_authoritative_biology_once ... ok
+test registered_neural_command_seals_gpu_speech_with_biology ... ok
+test registered_specialized_events_preserve_physical_and_physiological_fields ... ok
+test registered_transaction_rejects_dead_record_without_mutation ... ok
+test registered_transaction_rejects_mismatched_identity_without_mutation ... ok
+test registered_transaction_rejects_missing_record_without_mutation ... ok
+test registered_transaction_rejects_wrong_tick_without_mutation ... ok
+test registered_zero_only_event_profiles_keep_unmodeled_fields_zero ... ok
+test stored_object_radius_bounds_grounded_contact_and_movement_collision ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/terrain_sweep.rs (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-target-v18/debug/deps/terrain_sweep-5c33cf21ab9c890f)
+
+running 9 tests
+test authoritative_world_blocks_the_strip_without_displacing_the_creature ... ok
+test decimal_spacing_keeps_the_existing_rounded_grid_boundary_owner ... ok
+test diagonal_and_grid_boundary_ownership_and_start_escape_are_preserved ... ok
+test diagonal_sweep_catches_a_narrow_valley_at_positive_and_negative_origins ... ok
+test movement_does_not_skip_a_valid_fine_grid_water_strip ... ok
+test ordinary_flat_paths_corners_zero_distance_and_rounded_edges_still_work ... ok
+test sweep_rejects_excessive_traversal_and_malformed_surface_without_scanning_map ... ok
+test translated_diagonal_keeps_its_flat_triangle_owner ... ok
+test water_and_slope_barriers_are_independently_swept_in_both_directions ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/v11_cognitive_biology.rs (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-target-v18/debug/deps/v11_cognitive_biology-09d42c1e273a5c0f)
+
+running 2 tests
+test cognitive_work_is_deterministic_and_policy_cost_reaches_authoritative_biology ... ok
+test new_game_inherited_turnover_preserves_legacy_identity_and_food_reserves ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running tests/v2_organism_state_graph.rs (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-target-v18/debug/deps/v2_organism_state_graph-f71be147997d737d)
+
+running 7 tests
+test canonical_record_advances_subsystems_only_through_explicit_boundaries ... ok
+test embodiment_replacement_rejects_foreign_or_skipped_revisions ... ok
+test embodiment_replacement_requires_monotonic_source_ticks ... ok
+test grounded_terrain_vision_consumes_embodiment_calibration_in_both_perception_paths ... ok
+test lifecycle_and_persistence_changes_advance_only_their_owned_reference ... ok
+test production_sensing_and_motor_execution_consume_embodiment_state ... ok
+test teacher_signals_require_a_grounded_actor_and_enter_normal_sensing ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/world_organism_binding.rs (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-target-v18/debug/deps/world_organism_binding-363b75f4ae5126d3)
+
+running 20 tests
+test an_unregistered_legacy_agent_can_still_be_removed ... ok
+test current_persistence_restore_retains_exact_registry_and_archive_state ... ok
+test duplicate_agent_spawns_reject_without_consuming_world_or_spawn_identity ... ok
+test habitat_replacement_rejects_memberships_from_a_future_world_tick ... ok
+test habitat_replacement_rejects_memberships_outside_the_world_registry ... ok
+test headless_world_registers_and_resolves_a_matching_record ... ok
+test persistence_rejects_non_agent_organism_identity ... ok
+test registered_agent_cannot_be_removed_through_world_or_editor_paths ... ok
+test registration_rejects_invalid_bindings_and_duplicate_stable_ids_atomically ... ok
+test replace_one_organism_record_is_atomic_and_binding_exact ... ok
+test replace_registry_accepts_the_exact_complete_agent_set ... ok
+test replace_registry_accepts_valid_biology_lifecycle_archive_state ... ok
+test replace_registry_rejects_agent_without_organism_id_atomically ... ok
+test replace_registry_rejects_duplicate_agent_organism_identity_atomically ... ok
+test replace_registry_rejects_duplicate_organism_atomically ... ok
+test replace_registry_rejects_duplicate_world_entity_atomically ... ok
+test replace_registry_rejects_extra_record_atomically ... ok
+test replace_registry_rejects_malformed_record_atomically ... ok
+test replace_registry_rejects_missing_agent_record_atomically ... ok
+test replace_registry_rejects_missing_object_wrong_kind_and_wrong_binding_atomically ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests/world_organism_registry.rs (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-target-v18/debug/deps/world_organism_registry-49b9acfe3d6b4f1c)
+
+running 20 tests
+test age_and_zero_archive_digest_contracts_are_checked ... ok
+test biology_advance_keeps_identity_together_and_revalidates_the_record ... ok
+test biology_mutation_rolls_back_when_the_closure_returns_an_error ... ok
+test biology_mutation_rolls_back_when_the_resulting_biology_is_invalid ... ok
+test biology_tick_regression_leaves_record_biology_unchanged ... ok
+test cognitive_energy_debit_preserves_local_reserves_and_zero_is_a_noop ... ok
+test dead_registry_rejects_both_biology_paths_without_mutating_biology ... ok
+test duplicate_ids_are_rejected_without_corrupting_either_index ... ok
+test insert_rejects_zero_ids_and_birth_after_current_biology_tick ... ok
+test lifecycle_and_archive_links_enforce_ordering_without_revival ... ok
+test malformed_birth_link_transition_leaves_archive_unchanged ... ok
+test malformed_death_transition_leaves_lifecycle_unchanged ... ok
+test malformed_life_link_transition_leaves_archive_unchanged ... ok
+test malformed_record_advance_rolls_back_biology_after_record_validation_fails ... ok
+test registry_biology_tick_regressions_leave_biology_unchanged ... ok
+test registry_forwards_validated_biology_lifecycle_and_archive_operations ... ok
+test registry_insert_rejects_identity_and_exact_expression_mismatches ... ok
+test same_digest_archive_retries_are_idempotent_and_valid ... ok
+test same_digest_archive_retries_still_validate_record_ordering ... ok
+test valid_record_inserts_and_resolves_by_both_stable_ids ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/world_organism_registry_persistence.rs (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-target-v18/debug/deps/world_organism_registry_persistence-2b7ff4c8ee6c87ac)
+
+running 13 tests
+test absent_registry_field_is_legacy_empty_without_changing_world_object_identity ... ok
+test declared_creatures_cannot_lose_records_through_typed_restore_or_legacy_habitat_migration ... ok
+test external_actor_cohort_roundtrips_without_permitting_missing_biology ... ok
+test failed_snapshot_replacement_leaves_the_entire_save_unchanged ... ok
+test malformed_present_registry_records_are_rejected_before_restore ... ok
+test old_complete_registry_remains_restorable_without_external_actor_metadata ... ok
+test portable_save_round_trip_binds_creature_summary_to_world_record ... ok
+test present_empty_registry_is_authoritative_and_rejects_declared_creatures ... ok
+test registered_agents_survive_portable_json_restore_with_exact_identity_and_signature ... ok
+test registered_creatures_restore_with_an_unregistered_embodied_teacher ... ok
+test registry_insertion_order_has_identical_json_and_restored_identity ... ok
+test rename_round_trip_preserves_identity_and_acquired_world_state ... ok
+test replacing_headless_world_snapshot_retains_registry_records_and_archive_links ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.59s
+
+   Doc-tests alife_world
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

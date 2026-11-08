@@ -34,6 +34,12 @@ pub struct AwakeTranslationIntervalReceipt {
     pub voluntary_time_allocated: f32,
     pub reflex_time_allocated: f32,
     pub reflex_budget_exhausted: bool,
+    /// Only a late zero-time/effort/motion response with the same normalized
+    /// body event as ordinary execution qualifies. Initial/swept responses do not.
+    pub exhausted_late_no_effect: bool,
+    /// Monotonic: candidate-only preemption, clipping or rejection occurred.
+    /// This remains true even if no withdrawal could be executed.
+    pub voluntary_execution_altered: bool,
     pub reflex_path: f32,
     pub voluntary_path: f32,
     pub voluntary_translation_energy: f32,
@@ -51,6 +57,9 @@ pub(super) struct AwakeTranslationState {
     pub(super) thermal_peak: f32,
     voluntary_time: f32,
     reflex_time: f32,
+    late_response: bool,
+    exhausted_late_no_effect: bool,
+    voluntary_execution_altered: bool,
 }
 
 pub(super) struct SweptContactPlan {
@@ -82,6 +91,7 @@ impl AwakeTranslationState {
         let mut budget = TranslationIntervalBudget::new(MOVE_STEP * physical_capacity)?;
         self.withdrawal = world.apply_contact_withdrawal(organism, entity, capacity, gain, 0.0)?;
         if let Some(reflex) = &self.withdrawal {
+            self.voluntary_execution_altered = true;
             self.reflex_time = 1.0;
             // Even a blocked protective attempt owns this interval. A voluntary
             // translation cannot undo the response or receive a second allowance.
@@ -226,6 +236,7 @@ impl AwakeTranslationState {
             None,
         )?;
         if let Some(reflex) = &self.withdrawal {
+            self.late_response = true;
             self.reflex_time = remaining;
             budget.consume(
                 MOVE_STEP * self.capacity.unwrap_or(1.0).clamp(0.0, 1.0) * self.gain,
@@ -239,6 +250,29 @@ impl AwakeTranslationState {
             world.commit_carried_interval_velocity(organism, &carried);
         }
         Ok(())
+    }
+
+    pub(super) fn mark_voluntary_execution_altered(&mut self) {
+        self.voluntary_execution_altered = true;
+    }
+
+    pub(super) fn bind_ordinary_body_equivalence(
+        &mut self,
+        ordinary: BodyEventDelta,
+        actual: BodyEventDelta,
+    ) {
+        self.exhausted_late_no_effect = self.late_response
+            && !self.voluntary_execution_altered
+            && self.reflex_time == 0.0
+            && self.withdrawal.as_ref().is_some_and(|r| {
+                r.blocked && r.displacement == Vec3f::ZERO && r.energy_cost == 0.0
+            })
+            && ordinary == actual
+            // Only these fields can change above the normalization boundary.
+            // Do not call signed-zero changes byte-exact equivalence.
+            && ordinary.energy.to_bits() == actual.energy.to_bits()
+            && ordinary.damage.to_bits() == actual.damage.to_bits()
+            && ordinary.sleep_recovery.to_bits() == actual.sleep_recovery.to_bits();
     }
 
     pub(super) fn observe_voluntary(
@@ -387,6 +421,8 @@ impl HeadlessWorld {
                     ),
                     voluntary,
                     reflex_budget_exhausted: state.withdrawal.is_some() && state.reflex_time == 0.0,
+                    exhausted_late_no_effect: state.exhausted_late_no_effect,
+                    voluntary_execution_altered: state.voluntary_execution_altered,
                     withdrawal: state.withdrawal,
                     voluntary_time_allocated: state.voluntary_time,
                     reflex_time_allocated: state.reflex_time,

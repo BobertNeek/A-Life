@@ -1,0 +1,58 @@
+diff --git a/crates/alife_training/tests/cpu_collector.rs b/crates/alife_training/tests/cpu_collector.rs
+index eedb92d2..ad71a4fd 100644
+--- a/crates/alife_training/tests/cpu_collector.rs
++++ b/crates/alife_training/tests/cpu_collector.rs
+@@ -76,7 +76,19 @@ fn new_game_with_readout_fixture(
+     config.sensor_profile = profile;
+     let game = create_canonical_new_game_with_n2048_candidate(&config, &builtin).unwrap();
+     let record = game.world.organism_registry().iter().next().unwrap();
+-    let genome = &record.phenotype().brain_genome;
++    let mut fixture_genotype = record.genome().clone();
++    if prescribed_meal_readout {
++        // Explicit fresh architecture factor: default remains one head.
++        let mut architecture =
++            serde_json::to_value(&fixture_genotype.brain.construction.maternal_architecture)
++                .unwrap();
++        architecture["motor_head_count"] = serde_json::json!(4);
++        let architecture = serde_json::from_value(architecture).unwrap();
++        fixture_genotype.brain.construction.maternal_architecture = architecture;
++        fixture_genotype.brain.construction.paternal_architecture = architecture;
++    }
++    let fixture_phenotype = fixture_genotype.express().unwrap();
++    let genome = &fixture_phenotype.brain_genome;
+     let capacity = BrainCapacityClass::n2048();
+     let development = foundation_construction_development(
+         genome,
+@@ -116,7 +128,31 @@ fn new_game_with_readout_fixture(
+         asset.clone(),
+     )
+     .unwrap();
+-    let mut game = create_canonical_new_game_with_n2048_candidate(&config, &asset).unwrap();
++    let mut game = if prescribed_meal_readout {
++        let mut game = game;
++        let record = game.world.organism_registry().iter().next().unwrap();
++        let genotype = fixture_genotype
++            .with_n2048_foundation_candidate(asset.clone())
++            .unwrap();
++        let phenotype = genotype.express().unwrap();
++        let replacement = WorldOrganismRecord::new(
++            record.organism_id(),
++            record.world_entity_id(),
++            genotype.clone(),
++            phenotype,
++            *record.biochemistry(),
++            record.birth_tick(),
++        )
++        .unwrap();
++        game.creatures[0].weights.genetic_fixed_digest =
++            PortableAssetDigest::for_bytes(&serde_json::to_vec(&genotype).unwrap()).0;
++        game.world
++            .replace_organism_record_exact(replacement)
++            .unwrap();
++        game
++    } else {
++        create_canonical_new_game_with_n2048_candidate(&config, &asset).unwrap()
++    };
+     if let Some(atp) = atp {
+         let record = game.world.organism_registry().iter().next().unwrap();
+         let mut chemistry = *record.biochemistry();

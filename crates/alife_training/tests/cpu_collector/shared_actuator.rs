@@ -179,3 +179,161 @@ fn shared_actuator_repeated_contact_keeps_sequence_unissued_and_releases() {
     );
     assert_eq!(step.ordinary.decisions.len(), 1);
 }
+
+#[test]
+fn shared_actuator_exhausted_late_meal_retains_exact_ordinary_experience() {
+    // New declared inherited readout factor after the unchanged founder selected Inspect.
+    // Same seed, normal native sampler, no forced measured action or neural state writes.
+    let (game, mut trainer, _) =
+        new_game_with_readout_fixture(None, SensorProfile::GroundedObjectSlotsV1, true);
+    let mut sentinel = trainer.checkpoint();
+    sentinel.optimizer_step = 7;
+    sentinel.update_ages[0] = 7;
+    sentinel.first_moment[0] = 0.125;
+    sentinel.second_moment[0] = 0.25;
+    trainer.restore_checkpoint(sentinel).unwrap();
+    let founder_before = trainer.checkpoint();
+    let (mut candidate, food) =
+        CpuCanonicalHost::new_prepared_cohort(game, &trainer, 0x1919, |world| {
+            let (organism, entity) = world.organism_entity_ids()[0];
+            // Explicit sparse opportunity fixture: prevent unrelated canonical food
+            // targets from filling the finite manipulation candidate mask.
+            world.configure_ecology(EcologyState::default())?;
+            for object in world.object_snapshots() {
+                if object.id != entity {
+                    world.editor_remove_object(object.id)?;
+                }
+            }
+            // Origin-centered geometry isolates exact exhausted-time plumbing.
+            // Canonical X=3 separately exposed a quantized-position timing residue.
+            world.editor_move_object(entity, Vec3f::ZERO)?;
+            let mut position = world.entity(entity).unwrap().position;
+            position.x += 0.3;
+            let food = world.editor_spawn_object(WorldEditorSpawnSpec {
+                label: "v19-toxic-held-meal".into(),
+                kind: WorldObjectKind::Food,
+                organism_id: None,
+                position,
+                nutrition: 0.6,
+                hazard_pain: 0.4,
+                // Held grip offset is0.5; radius0.6 provides actual surface
+                // contact/taste rather than a distant chemical oracle.
+                radius: 0.6,
+                token_id: None,
+            })?;
+            let grab = ActionCommand::structured(
+                organism,
+                HeadlessActionIds::GRAB,
+                ActionKind::Hold,
+                ActionTarget::new(Some(food), None),
+                Intensity::new(1.0)?,
+                DurationTicks::new(1),
+                Confidence::new(0.9)?,
+                0,
+                None,
+                None,
+                None,
+            )?;
+            assert!(world.apply_command(&grab)?.execution.succeeded);
+            assert_eq!(world.entity(food).unwrap().carried_by, Some(organism));
+            Ok::<_, ScaffoldContractError>(food)
+        })
+        .unwrap();
+    let before = candidate.checkpoint(&trainer).unwrap();
+    let mut ordinary = candidate.snapshot();
+    let expected = ordinary.step(&trainer, 0.01).unwrap();
+    let actual = candidate
+        .step_with_shared_contact_priority(&trainer, 0.01)
+        .unwrap();
+    let sampled = expected
+        .decisions
+        .iter()
+        .map(|d| d.patch.decision().selected_action.action_id.raw())
+        .collect::<Vec<_>>();
+    for decision in &expected.decisions {
+        let replay = trainer
+            .evaluate_replay(&alife_training::TrainingSequence {
+                phenotype_hash: trainer.phenotype().phenotype_hash(),
+                initial: decision.initial.clone(),
+                ticks: vec![decision.replay_tick.clone()],
+                burn_in_ticks: 0,
+                memory_candidate_gain: trainer
+                    .phenotype()
+                    .candidate_decoder()
+                    .memory_channel()
+                    .map_or(0.0, |m| m.max_candidate_gain()),
+            })
+            .unwrap();
+        for (index, c) in decision.replay_tick.candidates.iter().enumerate() {
+            let mut range = (f32::INFINITY, f32::NEG_INFINITY);
+            for s in trainer.phenotype().synapses() {
+                if matches!(s.kind(), CompiledSynapseKind::Decoder(d)
+                    if d.head() == DecoderHeadKind::ActionCandidate && d.family() == c.family)
+                {
+                    let a = replay.final_activations[0][s.source() as usize];
+                    range.0 = range.0.min(a);
+                    range.1 = range.1.max(a);
+                }
+            }
+            eprintln!("detached candidate={index} family={:?} taste={} innate={} logit={} source_range={range:?}",
+                c.family, c.decoder_inputs[15], c.innate_bias, replay.candidate_logits[0][index]);
+        }
+        eprintln!("v19 inherited-meal representative={:?} motor_candidate_indices={:?} candidate_count={}", sampled, decision.action.motor_candidates, decision.action.candidate_count);
+        eprintln!(
+            "v19 inherited-meal channels={:?}",
+            decision
+                .patch
+                .decision()
+                .selected_bundle
+                .as_ref()
+                .map(|b| &b.channels)
+        );
+    }
+    assert!(
+        ordinary.world().entity(food).unwrap().consumed,
+        "fixed actual sampler did not consume prepared meal; selected={sampled:?}"
+    );
+    for intervention in &actual.interventions {
+        let p = &intervention.physical;
+        eprintln!("intervention altered={} exhausted={} no_effect={} voluntary_time={} reflex_time={} withdrawal={:?}",
+            p.voluntary_execution_altered, p.reflex_budget_exhausted, p.exhausted_late_no_effect,
+            p.voluntary_time_allocated, p.reflex_time_allocated, p.withdrawal);
+    }
+    assert!(
+        actual.interventions.is_empty(),
+        "fixture did not produce an unaffected exhausted response"
+    );
+    assert_eq!(actual.unaltered_responses.len(), 1);
+    let response = &actual.unaltered_responses[0];
+    assert!(response.exhausted_late_no_effect && response.reflex_budget_exhausted);
+    assert!(response
+        .voluntary
+        .channel_receipts
+        .iter()
+        .any(|channel| channel.physical.contact == PhysicalContactKind::Consumed));
+    let reflex = response.withdrawal.as_ref().unwrap();
+    assert!(reflex.blocked && reflex.displacement == Vec3f::ZERO && reflex.energy_cost == 0.0);
+    assert_eq!(response.reflex_time_allocated, 0.0);
+    assert!(
+        serde_json::to_vec(&expected.decisions).unwrap()
+            == serde_json::to_vec(&actual.ordinary.decisions).unwrap()
+    );
+    assert!(
+        bytes(&ordinary, &trainer) == bytes(&candidate, &trainer),
+        "meal state/credit differs from ordinary"
+    );
+    let after = candidate.checkpoint(&trainer).unwrap();
+    assert_eq!(
+        after.residents[0].next_sequence,
+        before.residents[0].next_sequence + 1
+    );
+    assert_eq!(
+        after.residents[0].neural.weight_generation,
+        before.residents[0].neural.weight_generation + 1
+    );
+    assert_eq!(
+        after.residents[0].memory.last_observed_sequence_id_raw,
+        before.residents[0].next_sequence
+    );
+    assert!(trainer.checkpoint() == founder_before);
+}

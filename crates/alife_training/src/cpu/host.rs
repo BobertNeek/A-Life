@@ -160,6 +160,9 @@ pub struct CpuIntervenedDecision {
 pub struct CpuSharedContactStep {
     pub ordinary: CpuCanonicalStep,
     pub interventions: Vec<CpuIntervenedDecision>,
+    /// Zero-time late physical responses proven not to change ordinary
+    /// execution. Their matching experiences retain ordinary sealed credit.
+    pub unaltered_responses: Vec<alife_world::AwakeTranslationIntervalReceipt>,
 }
 fn weight_digest(founder: &CpuFoundationTrainer) -> Result<[u64; 4], ScaffoldContractError> {
     let mut d = CanonicalDigestBuilder::new(b"ALIFE-CPU-FOUNDER-WEIGHTS-V1");
@@ -710,17 +713,20 @@ impl CpuCanonicalHost {
             resident.sealed_authority = None;
         }
         let mut interventions = Vec::new();
+        let mut unaltered_responses = Vec::new();
         let ordinary = next.step_inner(
             founder,
             temperature,
             prepare,
             shared_contact,
             &mut interventions,
+            &mut unaltered_responses,
         )?;
         *self = next;
         Ok(CpuSharedContactStep {
             ordinary,
             interventions,
+            unaltered_responses,
         })
     }
     fn step_inner(
@@ -733,6 +739,7 @@ impl CpuCanonicalHost {
         ) -> Result<PerceptionFrameDraft, ScaffoldContractError>,
         shared_contact: bool,
         interventions: &mut Vec<CpuIntervenedDecision>,
+        unaltered_responses: &mut Vec<alife_world::AwakeTranslationIntervalReceipt>,
     ) -> Result<CpuCanonicalStep, CpuHostError> {
         let p = founder.phenotype();
         let tick = self.world.tick();
@@ -1144,9 +1151,10 @@ impl CpuCanonicalHost {
                     )
                     .map_err(|_| CpuHostError::State("canonical motor transaction rejected"))?
             };
-            let intervened = intervention_receipt
-                .as_ref()
-                .is_some_and(|r| r.withdrawal.is_some());
+            let intervened = intervention_receipt.as_ref().is_some_and(|r| {
+                r.voluntary_execution_altered
+                    || (r.withdrawal.is_some() && !r.exhausted_late_no_effect)
+            });
             let successor = grounded_successor_state(
                 &self.world,
                 record.world_entity_id(),
@@ -1352,6 +1360,11 @@ impl CpuCanonicalHost {
                 .next_sequence
                 .checked_add(1)
                 .ok_or(CpuHostError::State("sequence overflow"))?;
+            if let Some(response) = intervention_receipt {
+                if response.exhausted_late_no_effect {
+                    unaltered_responses.push(response);
+                }
+            }
             decisions.push(CpuCollectedDecision {
                 organism_id: id,
                 sampling_counter: Some(sampling_counter),

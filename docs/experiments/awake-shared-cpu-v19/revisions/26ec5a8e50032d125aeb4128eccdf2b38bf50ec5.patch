@@ -1,0 +1,17 @@
+diff --git a/crates/alife_training/tests/cpu_collector/shared_actuator.rs b/crates/alife_training/tests/cpu_collector/shared_actuator.rs
+index a4af7d59..9c87e71b 100644
+--- a/crates/alife_training/tests/cpu_collector/shared_actuator.rs
++++ b/crates/alife_training/tests/cpu_collector/shared_actuator.rs
+@@ -290,6 +290,12 @@ fn shared_actuator_exhausted_late_meal_retains_exact_ordinary_experience() {
+         ordinary.world().entity(food).unwrap().consumed,
+         "fixed actual sampler did not consume prepared meal; selected={sampled:?}"
+     );
++    for intervention in &actual.interventions {
++        let p = &intervention.physical;
++        eprintln!("intervention altered={} exhausted={} no_effect={} voluntary_time={} reflex_time={} withdrawal={:?}",
++            p.voluntary_execution_altered, p.reflex_budget_exhausted, p.exhausted_late_no_effect,
++            p.voluntary_time_allocated, p.reflex_time_allocated, p.withdrawal);
++    }
+     assert!(
+         actual.interventions.is_empty(),
+         "fixture did not produce an unaffected exhausted response"
