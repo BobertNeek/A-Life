@@ -1,0 +1,42 @@
+{
+  "source": "3af4e8cd1e9badad4d50448f31323dc3a1e5c8d0",
+  "tree": "7ad52d8bde8c39f73be81c346ea6ad2f99c65be5",
+  "base": "ab69f2d32f9ef981862d610ea3450a66d1b1e199",
+  "files": [
+    {
+      "path": "crates/alife_training/src/cpu/host.rs",
+      "blob": "6d10906ba1c7cff67acdf6f84f4979ee5eca72f1",
+      "sha256": "4f432281f98d96c0b47e0b9cc1e1bfe4199516698313264539145f8d5bde9475"
+    },
+    {
+      "path": "crates/alife_training/src/cpu/organism.rs",
+      "blob": "0300a9db9aeb5fcd20f0aed04e20340c318149b5",
+      "sha256": "11328c83d6dab2cc8c11f0f2ae3e11812b349a9d95bd1df25f7b792beae47ff7"
+    },
+    {
+      "path": "crates/alife_training/tests/cpu_collector.rs",
+      "blob": "e62a3ed6b2bbd0f4f5606e992642b2c2e210cca9",
+      "sha256": "76a4943f1ce73c1b5432a38c396e94b463903160f27426d175de4fbd13485964"
+    },
+    {
+      "path": "crates/alife_training/tests/cpu_collector/shared_actuator.rs",
+      "blob": "068fb8d3ca1d63246017db09c3a99e5aa6daf58d",
+      "sha256": "f72f09ebe4561c4142e92a66a880a8cc5eae375cc74ee61c329dc9c3fe6d1e19"
+    },
+    {
+      "path": "crates/alife_world/src/headless.rs",
+      "blob": "72a792fa5f47ca08f8ed63c72487d1dbe3c31c16",
+      "sha256": "e61fb33571ea69114a4c091a492012eafbf2d6fb937d366c751c7d29c66b5d1a"
+    },
+    {
+      "path": "crates/alife_world/src/headless/awake_translation.rs",
+      "blob": "6ad31a074d7e0823dc34d264980e6ea1b81b0441",
+      "sha256": "a3db4bf3210713b91d097d6035607da36dd7a3f94abbdaafd2e6acf08b9fee6b"
+    },
+    {
+      "path": "crates/alife_world/src/headless/contact_withdrawal.rs",
+      "blob": "4a935ccd2e8e586a53f585ed6cea43a87bc1ebba",
+      "sha256": "59bf50f18fb2dfeac011864993f8d790acf3766548666873930da02b4293a3f6"
+    }
+  ]
+}

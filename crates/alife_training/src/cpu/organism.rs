@@ -738,6 +738,41 @@ mod tests {
         assert!(state.advance(&founder, context, &effects()).is_err());
     }
     #[test]
+    fn intervened_dispatch_rejects_tampering_and_duplicate_without_credit() {
+        let (founder, _, _) = fixture();
+        let mut state = staged_fixture(&founder, false, true, 1);
+        let before = state.checkpoint.clone();
+        let binding = state.pending.as_ref().unwrap().binding.clone().unwrap();
+        let mut wrong = binding.clone();
+        wrong.dispatch_generation += 1;
+        assert!(state
+            .consume_intervened_selection(&founder, &wrong, alife_core::Tick(9))
+            .is_err());
+        assert!(state.checkpoint == before && state.pending.is_some());
+        state
+            .consume_intervened_selection(&founder, &binding, alife_core::Tick(9))
+            .unwrap();
+        let after = state.checkpoint().unwrap();
+        assert!(after.fast == before.fast && after.lifetime == before.lifetime);
+        assert!(after.neural == before.neural);
+        assert_eq!(after.weight_generation, before.weight_generation);
+        for (i, synapse) in founder.phenotype().synapses().iter().enumerate() {
+            let receptor =
+                &founder.phenotype().plasticity_receptors()[synapse.receptor_index() as usize];
+            assert!(
+                (after.eligibility[i]
+                    - before.eligibility[i] * receptor.eligibility_decay().powi(3))
+                .abs()
+                    < 1e-6
+            );
+        }
+        assert!(state
+            .consume_intervened_selection(&founder, &binding, alife_core::Tick(9))
+            .is_err());
+        assert!(state.checkpoint().unwrap() == after);
+    }
+
+    #[test]
     fn zero_step_collection_preserves_both_banks_and_native_eligibility_input() {
         let (founder, _, _) = fixture();
         let p = founder.phenotype();

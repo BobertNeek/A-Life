@@ -1,0 +1,20 @@
+{
+  "README.md": "151cbc537332636b066f0c03178b19ab2904b236be35d460d3f23894999f4779",
+  "awake-shared-cpu-v18-check.log": "55ab21d47ec9cff1b732be64f878171441a9db1825e6f601b7b8095c7475dd74",
+  "awake-shared-cpu-v18-consume.log": "e2464c2005754c83e043efb8474c2f82e2d0c335b36b8b367140e933d4a4e8dc",
+  "awake-shared-cpu-v18-fixture-check.log": "e091ecf40f26d6382887137931e4279b16d52da16ec89ea710ac7034fd7816bd",
+  "awake-shared-cpu-v18-host.log": "8f678066e309a9effd274180948f84fd6e02bbfcacb509827b4e763e965fea76",
+  "awake-shared-cpu-v18-world.log": "564522692505dc78f50085961c988c7e0d1ac8baca6a1762333a597af6217246",
+  "closure.txt": "bf225ec7ca8e09eb9ee20fcbafe4958aeaf9069575cfef162042d1af7e3ccd09",
+  "executables.sha256": "653eac175fce2227babda050b3d4fb65599f7a6b182f26e2228996c9c4819277",
+  "reconstruction.md": "61145e87b4c3c112e46e21a05d02482d7adcf37986281c100a7b6b5f9258d52d",
+  "source/crates/alife_training/src/cpu/host.rs": "4f432281f98d96c0b47e0b9cc1e1bfe4199516698313264539145f8d5bde9475",
+  "source/crates/alife_training/src/cpu/organism.rs": "11328c83d6dab2cc8c11f0f2ae3e11812b349a9d95bd1df25f7b792beae47ff7",
+  "source/crates/alife_training/tests/cpu_collector/shared_actuator.rs": "f72f09ebe4561c4142e92a66a880a8cc5eae375cc74ee61c329dc9c3fe6d1e19",
+  "source/crates/alife_training/tests/cpu_collector.rs": "76a4943f1ce73c1b5432a38c396e94b463903160f27426d175de4fbd13485964",
+  "source/crates/alife_world/src/headless/awake_translation.rs": "a3db4bf3210713b91d097d6035607da36dd7a3f94abbdaafd2e6acf08b9fee6b",
+  "source/crates/alife_world/src/headless/contact_withdrawal.rs": "59bf50f18fb2dfeac011864993f8d790acf3766548666873930da02b4293a3f6",
+  "source/crates/alife_world/src/headless.rs": "e61fb33571ea69114a4c091a492012eafbf2d6fb937d366c751c7d29c66b5d1a",
+  "source.json": "0daecb5918059e807fdb4ecb0799c3cf6bc370f036b951c9292ac7beef4b8435",
+  "source.patch": "0901ecc2428fe6541541e26de42e695670654e0e04bdf71b59b11964cd7b6e29"
+}

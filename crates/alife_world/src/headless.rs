@@ -8907,6 +8907,66 @@ mod task_6_factorized_motor_tests {
     }
 
     #[test]
+    fn awake_late_internal_damage_uses_only_remaining_translation_time() {
+        for moving in [false, true] {
+            let (mut world, agent, food, mut bundle) = prepared_world();
+            hold_food_for_meal(&mut world, food);
+            world.objects.get_mut(&food.raw()).unwrap().hazard_pain = 0.4;
+            bundle
+                .channels
+                .retain(|c| c.channel != MotorChannel::Locomotion);
+            if moving {
+                bundle
+                    .channels
+                    .push(initial_priority_bundle(false).channels[0].clone());
+            }
+            let before = world.organism_registry.get(ORGANISM_ID).unwrap().clone();
+            let receipt = world
+                .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
+                .unwrap();
+            assert!(world.entity(food).unwrap().consumed);
+            let reflex = receipt
+                .withdrawal
+                .as_ref()
+                .expect("fresh toxic ingestion lacked response");
+            assert_eq!(
+                reflex.direction_basis,
+                WithdrawalDirectionBasis::AcuteDamageHeadingFallback
+            );
+            assert!(
+                reflex.sources.is_empty(),
+                "food was invented as external pain geometry"
+            );
+            assert_eq!(receipt.reflex_budget_exhausted, moving);
+            if moving {
+                assert!(
+                    reflex.blocked,
+                    "exhausted interval must not report successful withdrawal"
+                );
+                assert_eq!(reflex.displacement, Vec3f::ZERO);
+                assert_eq!(reflex.energy_cost, 0.0);
+                assert_eq!(receipt.reflex_time_allocated, 0.0);
+            } else {
+                assert!(!reflex.blocked);
+                assert!(reflex.displacement.x < 0.0);
+                assert_eq!(receipt.reflex_time_allocated, 1.0);
+            }
+            let expected = before
+                .biochemistry()
+                .advance(
+                    receipt.voluntary.outcome_tick,
+                    receipt.voluntary.body_event,
+                    before.phenotype(),
+                )
+                .unwrap();
+            assert!(
+                receipt.voluntary.biology_after == expected,
+                "toxic response duplicated biology"
+            );
+        }
+    }
+
+    #[test]
     fn awake_ground_priority_quiet_slope_preserves_existing_planar_walking() {
         let (mut candidate, agent) = withdrawal_world(Vec3f::new(8.0, 0.0, 0.0), 0.4);
         candidate.terrain = Some(

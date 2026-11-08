@@ -1,0 +1,47 @@
+   Compiling syn v2.0.117
+   Compiling cc v1.2.63
+   Compiling serde_core v1.0.228
+   Compiling blake3 v1.8.5
+   Compiling serde_derive v1.0.228
+   Compiling bytemuck_derive v1.10.2
+   Compiling thiserror-impl v2.0.18
+   Compiling constant_time_eq v0.4.2
+   Compiling serde_json v1.0.150
+   Compiling cfg-if v1.0.4
+   Compiling arrayref v0.3.9
+   Compiling arrayvec v0.7.6
+   Compiling cpufeatures v0.3.0
+   Compiling thiserror v2.0.18
+   Compiling bytemuck v1.25.0
+   Compiling serde v1.0.228
+   Compiling zmij v1.0.21
+   Compiling smallvec v1.15.1
+   Compiling bitflags v2.13.0
+   Compiling memchr v2.8.1
+   Compiling itoa v1.0.18
+   Compiling alife_core v0.1.0 (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-v18-recovered/crates/alife_core)
+   Compiling alife_storage v0.1.0 (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-v18-recovered/crates/alife_storage)
+   Compiling alife_world v0.1.0 (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-v18-recovered/crates/alife_world)
+    Finished `test` profile [unoptimized] target(s) in 4m 31s
+     Running unittests src/lib.rs (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-target-v18/debug/deps/alife_world-6b7d17d635ca0301)
+
+running 16 tests
+test headless::task_6_factorized_motor_tests::awake_ground_priority_quiet_slope_preserves_existing_planar_walking ... ok
+test headless::task_6_factorized_motor_tests::awake_initial_priority_blocks_rest_recovery_and_rolls_back_atomically ... ok
+test headless::task_6_factorized_motor_tests::awake_initial_priority_preempts_toward_motion_without_false_voluntary_credit ... ok
+test headless::task_6_factorized_motor_tests::awake_initial_priority_preserves_carried_hazard_ownership_and_pose ... ok
+test headless::task_6_factorized_motor_tests::awake_initial_priority_quiet_control_preserves_complete_world_and_receipt ... ok
+test headless::task_6_factorized_motor_tests::awake_initial_priority_restore_has_no_latched_reflex_after_contact_ends ... ok
+test headless::task_6_factorized_motor_tests::awake_initial_priority_water_block_preserves_zero_motion_and_honest_effort ... ok
+test headless::task_6_factorized_motor_tests::awake_late_internal_damage_uses_only_remaining_translation_time ... ok
+test headless::task_6_factorized_motor_tests::awake_spatial_priority_diagonal_motion_uses_three_dimensional_time ... ok
+test headless::task_6_factorized_motor_tests::awake_spatial_priority_vertical_motion_cannot_skip_contact_or_time ... ok
+test headless::task_6_factorized_motor_tests::awake_swept_priority_early_middle_late_share_time_path_and_effort ... ok
+test headless::task_6_factorized_motor_tests::awake_swept_priority_end_contact_has_no_extra_full_reflex_allowance ... ok
+test headless::task_6_factorized_motor_tests::awake_swept_priority_opposed_tangent_normals_stop_without_invented_direction ... ok
+test headless::task_6_factorized_motor_tests::awake_swept_priority_samples_intermediate_thermal_contact_once ... ok
+test headless::task_6_factorized_motor_tests::awake_swept_priority_slow_intent_uses_time_not_distance_remainder ... ok
+test headless::task_6_factorized_motor_tests::awake_swept_priority_zero_net_path_suppresses_rest_with_one_biology_advance ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 265 filtered out; finished in 0.02s
+

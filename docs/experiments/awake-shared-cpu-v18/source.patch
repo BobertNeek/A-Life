@@ -1,0 +1,777 @@
+diff --git a/crates/alife_training/src/cpu/host.rs b/crates/alife_training/src/cpu/host.rs
+index 0bf9ce5..6d10906 100644
+--- a/crates/alife_training/src/cpu/host.rs
++++ b/crates/alife_training/src/cpu/host.rs
+@@ -147,6 +147,20 @@ pub struct CpuCanonicalStep {
+     pub sleeping_organisms: usize,
+     pub sleep_consolidations: usize,
+ }
++/// Physical intervention is not an on-policy experience or replay row.
++/// Its reserved experience sequence has not been issued as an ExperiencePatch.
++pub struct CpuIntervenedDecision {
++    pub organism_id: OrganismId,
++    pub sampling_counter: u32,
++    pub dispatch_generation: u64,
++    pub selected: DecisionSnapshot,
++    pub physical: alife_world::AwakeTranslationIntervalReceipt,
++    pub cognitive_work: CognitiveWorkReceipt,
++}
++pub struct CpuSharedContactStep {
++    pub ordinary: CpuCanonicalStep,
++    pub interventions: Vec<CpuIntervenedDecision>,
++}
+ fn weight_digest(founder: &CpuFoundationTrainer) -> Result<[u64; 4], ScaffoldContractError> {
+     let mut d = CanonicalDigestBuilder::new(b"ALIFE-CPU-FOUNDER-WEIGHTS-V1");
+     for &w in founder.weights() {
+@@ -653,6 +667,29 @@ impl CpuCanonicalHost {
+             ExperienceSequenceId,
+         ) -> Result<PerceptionFrameDraft, ScaffoldContractError>,
+     ) -> Result<CpuCanonicalStep, CpuHostError> {
++        self.step_with_preparation_mode(founder, temperature, false, &mut prepare)
++            .map(|result| result.ordinary)
++    }
++
++    /// Explicit research caller. No ordinary/default activation.
++    pub fn step_with_shared_contact_priority(
++        &mut self,
++        founder: &CpuFoundationTrainer,
++        temperature: f32,
++    ) -> Result<CpuSharedContactStep, CpuHostError> {
++        self.step_with_preparation_mode(founder, temperature, true, &mut |draft, _| Ok(draft))
++    }
++
++    fn step_with_preparation_mode(
++        &mut self,
++        founder: &CpuFoundationTrainer,
++        temperature: f32,
++        shared_contact: bool,
++        prepare: &mut impl FnMut(
++            PerceptionFrameDraft,
++            ExperienceSequenceId,
++        ) -> Result<PerceptionFrameDraft, ScaffoldContractError>,
++    ) -> Result<CpuSharedContactStep, CpuHostError> {
+         self.validate_founder(founder)?;
+         for (&raw, r) in &self.residents {
+             let record = self
+@@ -672,9 +709,19 @@ impl CpuCanonicalHost {
+         for resident in next.residents.values_mut() {
+             resident.sealed_authority = None;
+         }
+-        let result = next.step_inner(founder, temperature, &mut prepare)?;
++        let mut interventions = Vec::new();
++        let ordinary = next.step_inner(
++            founder,
++            temperature,
++            prepare,
++            shared_contact,
++            &mut interventions,
++        )?;
+         *self = next;
+-        Ok(result)
++        Ok(CpuSharedContactStep {
++            ordinary,
++            interventions,
++        })
+     }
+     fn step_inner(
+         &mut self,
+@@ -684,6 +731,8 @@ impl CpuCanonicalHost {
+             PerceptionFrameDraft,
+             ExperienceSequenceId,
+         ) -> Result<PerceptionFrameDraft, ScaffoldContractError>,
++        shared_contact: bool,
++        interventions: &mut Vec<CpuIntervenedDecision>,
+     ) -> Result<CpuCanonicalStep, CpuHostError> {
+         let p = founder.phenotype();
+         let tick = self.world.tick();
+@@ -1014,20 +1063,17 @@ impl CpuCanonicalHost {
+                 command,
+             )?
+             .with_finalized_memory_recall(&frame, &recall, index)?;
+-            r.neural.stage_selection(
+-                p,
+-                &action,
+-                CpuDecisionBinding {
+-                    sequence_id: sequence,
+-                    frame_digest: frame.frame_digest(),
+-                    action_id: candidate.action_id,
+-                    candidate_feature_digest: candidate.feature_digest()?,
+-                    dispatch_generation: output.dispatch_generation,
+-                    active_activation_side: output.active_activation_side,
+-                    joint_selection: joint,
+-                },
+-                speech.is_some(),
+-            )?;
++            let binding = CpuDecisionBinding {
++                sequence_id: sequence,
++                frame_digest: frame.frame_digest(),
++                action_id: candidate.action_id,
++                candidate_feature_digest: candidate.feature_digest()?,
++                dispatch_generation: output.dispatch_generation,
++                active_activation_side: output.active_activation_side,
++                joint_selection: joint,
++            };
++            r.neural
++                .stage_selection(p, &action, binding.clone(), speech.is_some())?;
+             let mut cognitive = recall
+                 .cognitive_context()
+                 .cloned()
+@@ -1077,16 +1123,30 @@ impl CpuCanonicalHost {
+                         .map(|s| (entity, s.salience.novelty.raw()))
+                 })
+                 .collect::<Vec<_>>();
+-            let receipt = self
+-                .world
+-                .apply_registered_motor_bundle_with_perceived_novelty_in_staged_tick(
+-                    &bundle,
+-                    record.world_entity_id(),
+-                    &emissions,
+-                    frame.sensory().channels.novelty_signal.raw(),
+-                    &object_novelty,
+-                )
+-                .map_err(|_| CpuHostError::State("canonical motor transaction rejected"))?;
++            let intervention_receipt = if shared_contact {
++                Some(self.world.apply_registered_motor_bundle_with_shared_contact_priority_and_perceived_novelty(
++                    &bundle, record.world_entity_id(), &emissions,
++                    frame.sensory().channels.novelty_signal.raw(), &object_novelty,
++                ).map_err(|_| CpuHostError::State("shared actuator transaction rejected"))?)
++            } else {
++                None
++            };
++            let receipt = if let Some(actual) = &intervention_receipt {
++                actual.voluntary.clone()
++            } else {
++                self.world
++                    .apply_registered_motor_bundle_with_perceived_novelty_in_staged_tick(
++                        &bundle,
++                        record.world_entity_id(),
++                        &emissions,
++                        frame.sensory().channels.novelty_signal.raw(),
++                        &object_novelty,
++                    )
++                    .map_err(|_| CpuHostError::State("canonical motor transaction rejected"))?
++            };
++            let intervened = intervention_receipt
++                .as_ref()
++                .is_some_and(|r| r.withdrawal.is_some());
+             let successor = grounded_successor_state(
+                 &self.world,
+                 record.world_entity_id(),
+@@ -1103,13 +1163,20 @@ impl CpuCanonicalHost {
+                 motor_condition,
+                 successor,
+             )?;
+-            let prediction = r.predictor.observe_frozen(&target, &forecast)?;
+-            let error = apply_prediction_evidence(
+-                &mut cognitive,
+-                &target,
+-                &prediction.error,
+-                prediction.prediction.category_coverage,
+-            )?;
++            let (error, prediction_work) = if intervened {
++                // Forecasting already ran. Account for that work, but do not
++                // teach a voluntary motor predictor using a reflex outcome.
++                (0.0, forecast.predicted_successor.len() as u64)
++            } else {
++                let prediction = r.predictor.observe_frozen(&target, &forecast)?;
++                let error = apply_prediction_evidence(
++                    &mut cognitive,
++                    &target,
++                    &prediction.error,
++                    prediction.prediction.category_coverage,
++                )?;
++                (error, prediction.error.len() as u64)
++            };
+             let memory = recall.receipt();
+             let dendritic_work = r
+                 .v11
+@@ -1148,9 +1215,11 @@ impl CpuCanonicalHost {
+                     + u64::from(memory.similarity_evaluations),
+                 cognitive.concept.active_concepts.len() as u64,
+                 cognitive.gap.active_gaps.len() as u64,
+-                prediction.error.len() as u64,
++                prediction_work,
+                 0,
+                 structural_work,
++                // Selection eligibility was actually staged even if a reflex
++                // later discards it. This accounts for work, not a weight update.
+                 1,
+                 0,
+             )?
+@@ -1162,6 +1231,28 @@ impl CpuCanonicalHost {
+                 .cloned()
+                 .ok_or(CpuHostError::State("missing post-action organism"))?;
+             after.account_cognitive_work(work, CognitiveWorkCostPolicy::enabled(1.0e-6)?)?;
++            if intervened {
++                r.neural
++                    .consume_intervened_selection(founder, &binding, receipt.outcome_tick)?;
++                let checkpoint = r.neural.checkpoint()?;
++                after.seal_cognitive_subsystems(
++                    receipt.outcome_tick,
++                    json_digest(b"ALIFE-CPU-NEURAL-STATE-V1", &checkpoint)?,
++                    r.memory.export_active_bank()?.active_bank_digest,
++                )?;
++                self.world.replace_organism_record_exact(after)?;
++                interventions.push(CpuIntervenedDecision {
++                    organism_id: id,
++                    sampling_counter,
++                    dispatch_generation: output.dispatch_generation,
++                    selected: decision,
++                    physical: intervention_receipt.unwrap(),
++                    cognitive_work: work,
++                });
++                // No experience was issued. Its sequence and action-observation
++                // watermarks stay unchanged; dispatch/tick authority advances.
++                continue;
++            }
+             after.stage_prediction_residual_pulse(
+                 sequence,
+                 output.dispatch_generation,
+diff --git a/crates/alife_training/src/cpu/organism.rs b/crates/alife_training/src/cpu/organism.rs
+index 109a0f8..0300a9d 100644
+--- a/crates/alife_training/src/cpu/organism.rs
++++ b/crates/alife_training/src/cpu/organism.rs
+@@ -30,7 +30,7 @@ pub struct CpuOrganismCheckpoint {
+     pub active_activation_side: u8,
+ }
+ /// Identity of the actual selected decision, bound before world execution.
+-#[derive(Debug, Clone)]
++#[derive(Debug, Clone, PartialEq, Eq)]
+ pub struct CpuDecisionBinding {
+     pub sequence_id: ExperienceSequenceId,
+     pub frame_digest: PerceptionFrameDigest,
+@@ -330,6 +330,49 @@ impl CpuOrganismState {
+         pending.binding = Some(binding);
+         Ok(())
+     }
++    /// Consume host-verified physical intervention without action-causal credit.
++    /// No ExperiencePatch or replay sequence is issued. The enclosing host
++    /// binds the physical receipt and seals the completed inference/body state.
++    pub(super) fn consume_intervened_selection(
++        &mut self,
++        founder: &CpuFoundationTrainer,
++        binding: &CpuDecisionBinding,
++        outcome_tick: alife_core::Tick,
++    ) -> Result<(), TrainingError> {
++        let p = founder.phenotype();
++        let pending = self.pending.as_ref().ok_or_else(invalid)?;
++        if self.checkpoint.phenotype_hash != p.phenotype_hash()
++            || founder
++                .weights()
++                .iter()
++                .zip(p.synapses())
++                .any(|(w, s)| w.to_bits() != s.genetic_weight().to_bits())
++            || pending.binding.as_ref() != Some(binding)
++            || pending.staged.is_none()
++            || pending.representative.is_none()
++            || outcome_tick.raw() < pending.tick
++            || binding.dispatch_generation != self.checkpoint.dispatch_generation
++            || binding.active_activation_side != self.checkpoint.active_activation_side
++        {
++            return Err(invalid());
++        }
++        binding.joint_selection.validate()?;
++        let elapsed = self
++            .checkpoint
++            .last_decision_tick
++            .map_or(0, |old| pending.tick - old);
++        // Preserve historical trace decay; discard every new selected-action
++        // increment. Fast/lifetime weights and optimizer ages stay unchanged.
++        for (eligibility, synapse) in self.checkpoint.eligibility.iter_mut().zip(p.synapses()) {
++            let receptor = &p.plasticity_receptors()[synapse.receptor_index() as usize];
++            *eligibility *= decay(receptor.eligibility_decay(), elapsed);
++        }
++        self.checkpoint.last_decision_tick = Some(pending.tick);
++        self.checkpoint.last_outcome_tick = Some(outcome_tick.raw());
++        self.pending = None;
++        Ok(())
++    }
++
+     /// Apply only canonical sealed credit with the receptor frame from its real
+     /// chemistry tick. No raw reward scalar API is exposed.
+     pub fn apply_credit(
+@@ -694,6 +737,41 @@ mod tests {
+         let context = pending.context.clone();
+         assert!(state.advance(&founder, context, &effects()).is_err());
+     }
++    #[test]
++    fn intervened_dispatch_rejects_tampering_and_duplicate_without_credit() {
++        let (founder, _, _) = fixture();
++        let mut state = staged_fixture(&founder, false, true, 1);
++        let before = state.checkpoint.clone();
++        let binding = state.pending.as_ref().unwrap().binding.clone().unwrap();
++        let mut wrong = binding.clone();
++        wrong.dispatch_generation += 1;
++        assert!(state
++            .consume_intervened_selection(&founder, &wrong, alife_core::Tick(9))
++            .is_err());
++        assert!(state.checkpoint == before && state.pending.is_some());
++        state
++            .consume_intervened_selection(&founder, &binding, alife_core::Tick(9))
++            .unwrap();
++        let after = state.checkpoint().unwrap();
++        assert!(after.fast == before.fast && after.lifetime == before.lifetime);
++        assert!(after.neural == before.neural);
++        assert_eq!(after.weight_generation, before.weight_generation);
++        for (i, synapse) in founder.phenotype().synapses().iter().enumerate() {
++            let receptor =
++                &founder.phenotype().plasticity_receptors()[synapse.receptor_index() as usize];
++            assert!(
++                (after.eligibility[i]
++                    - before.eligibility[i] * receptor.eligibility_decay().powi(3))
++                .abs()
++                    < 1e-6
++            );
++        }
++        assert!(state
++            .consume_intervened_selection(&founder, &binding, alife_core::Tick(9))
++            .is_err());
++        assert!(state.checkpoint().unwrap() == after);
++    }
++
+     #[test]
+     fn zero_step_collection_preserves_both_banks_and_native_eligibility_input() {
+         let (founder, _, _) = fixture();
+diff --git a/crates/alife_training/tests/cpu_collector.rs b/crates/alife_training/tests/cpu_collector.rs
+index c23aa00..e62a3ed 100644
+--- a/crates/alife_training/tests/cpu_collector.rs
++++ b/crates/alife_training/tests/cpu_collector.rs
+@@ -11,6 +11,8 @@ mod need_switching;
+ mod observed_focus;
+ #[path = "cpu_collector/sealed_authority.rs"]
+ mod sealed_authority;
++#[path = "cpu_collector/shared_actuator.rs"]
++mod shared_actuator;
+ fn fixture() -> (CpuCanonicalHost, CpuFoundationTrainer) {
+     fixture_atp(None)
+ }
+diff --git a/crates/alife_training/tests/cpu_collector/shared_actuator.rs b/crates/alife_training/tests/cpu_collector/shared_actuator.rs
+new file mode 100644
+index 0000000..068fb8d
+--- /dev/null
++++ b/crates/alife_training/tests/cpu_collector/shared_actuator.rs
+@@ -0,0 +1,181 @@
++use super::*;
++
++fn bytes(host: &CpuCanonicalHost, trainer: &CpuFoundationTrainer) -> Vec<u8> {
++    serde_json::to_vec(&host.checkpoint(trainer).unwrap()).unwrap()
++}
++
++#[test]
++fn shared_actuator_quiet_host_is_exact_ordinary_execution() {
++    let (mut ordinary, trainer) = fixture();
++    let mut candidate = ordinary.snapshot();
++    let expected = ordinary.step(&trainer, 1.0).unwrap();
++    let actual = candidate
++        .step_with_shared_contact_priority(&trainer, 1.0)
++        .unwrap();
++    assert!(actual.interventions.is_empty());
++    assert_eq!(expected.decisions.len(), actual.ordinary.decisions.len());
++    assert!(
++        bytes(&ordinary, &trainer) == bytes(&candidate, &trainer),
++        "quiet state changed"
++    );
++    assert!(
++        serde_json::to_vec(&expected.decisions).unwrap()
++            == serde_json::to_vec(&actual.ordinary.decisions).unwrap(),
++        "quiet experience changed"
++    );
++}
++
++#[test]
++fn shared_actuator_real_dispatch_consumed_without_false_experience_and_restores() {
++    let (game, mut trainer) = new_game_fixture(None);
++    // Explicit synthetic optimizer sentinels, not acquired biological learning.
++    let mut sentinel = trainer.checkpoint();
++    sentinel.optimizer_step = 7;
++    sentinel.update_ages[0] = 7;
++    sentinel.first_moment[0] = 0.125;
++    sentinel.second_moment[0] = 0.25;
++    trainer.restore_checkpoint(sentinel).unwrap();
++    let founder_before = trainer.checkpoint();
++    let (mut host, source) =
++        CpuCanonicalHost::new_prepared_cohort(game, &trainer, 0x1818, |world| {
++            let (_, entity) = world.organism_entity_ids()[0];
++            let position = world.entity(entity).unwrap().position;
++            world.editor_spawn_object(WorldEditorSpawnSpec {
++                label: "v18-acute-center".into(),
++                kind: WorldObjectKind::Hazard,
++                organism_id: None,
++                position,
++                nutrition: 0.0,
++                hazard_pain: 0.4,
++                radius: 0.02,
++                token_id: None,
++            })
++        })
++        .unwrap();
++    let before = host.checkpoint(&trainer).unwrap();
++    let step = host
++        .step_with_shared_contact_priority(&trainer, 1.0)
++        .unwrap();
++    assert_eq!(step.interventions.len(), 1);
++    assert!(step.ordinary.decisions.is_empty());
++    let intervention = &step.interventions[0];
++    let physical = &intervention.physical;
++    let reflex = physical.withdrawal.as_ref().unwrap();
++    assert_eq!(
++        reflex.direction_basis,
++        WithdrawalDirectionBasis::AcuteDamageHeadingFallback
++    );
++    assert!(physical.allocated_translation_time <= 1.0);
++    assert!(
++        intervention.cognitive_work.prediction_ops > 0,
++        "executed forecast work disappeared"
++    );
++    assert_eq!(
++        intervention.cognitive_work.learning_ops, 1,
++        "staged eligibility work disappeared"
++    );
++    assert_eq!(
++        intervention.selected.sequence_id,
++        physical.voluntary.bundle.sequence_id
++    );
++    let after = host.checkpoint(&trainer).unwrap();
++    let a = &after.residents[0];
++    let b = &before.residents[0];
++    assert!(a.neural.fast == b.neural.fast && a.neural.lifetime == b.neural.lifetime);
++    assert!(a.neural.eligibility == b.neural.eligibility);
++    assert_eq!(a.neural.weight_generation, b.neural.weight_generation);
++    assert_eq!(a.next_sequence, b.next_sequence);
++    assert!(a.neural.dispatch_generation > b.neural.dispatch_generation);
++    assert!(a.memory == b.memory, "false family memory recorded");
++    assert!(
++        a.predictor == b.predictor,
++        "reflex taught a voluntary motor prediction"
++    );
++    assert!(
++        serde_json::to_vec(&a.language_grounding).unwrap()
++            == serde_json::to_vec(&b.language_grounding).unwrap()
++    );
++    let aj = serde_json::to_value(&after).unwrap();
++    let bj = serde_json::to_value(&before).unwrap();
++    assert!(aj["residents"][0]["replay"] == bj["residents"][0]["replay"]);
++    assert!(trainer.checkpoint() == founder_before);
++    let saved = serde_json::to_vec(&after).unwrap();
++    let mut restored =
++        CpuCanonicalHost::from_checkpoint(serde_json::from_slice(&saved).unwrap(), &trainer)
++            .unwrap();
++    assert!(bytes(&restored, &trainer) == saved);
++    // No experience was issued by the consumed dispatch. A new genuine
++    // dispatch may issue that sequence, including after ordinary-mode restore.
++    host.world_mut().editor_remove_object(source).unwrap();
++    restored.world_mut().editor_remove_object(source).unwrap();
++    let next = host.step(&trainer, 1.0).unwrap();
++    let twin = restored.step(&trainer, 1.0).unwrap();
++    assert_eq!(next.decisions.len(), 1);
++    assert_eq!(
++        next.decisions[0].patch.header().sequence_id.raw(),
++        a.next_sequence
++    );
++    assert!(
++        next.decisions[0]
++            .patch
++            .decision()
++            .neural_evidence()
++            .unwrap()
++            .dispatch_generation
++            > intervention.dispatch_generation
++    );
++    assert!(
++        serde_json::to_vec(&next.decisions).unwrap()
++            == serde_json::to_vec(&twin.decisions).unwrap()
++    );
++    assert!(bytes(&host, &trainer) == bytes(&restored, &trainer));
++    assert!(trainer.checkpoint() == founder_before);
++}
++
++#[test]
++fn shared_actuator_repeated_contact_keeps_sequence_unissued_and_releases() {
++    let (game, trainer) = new_game_fixture(None);
++    let (mut host, source) =
++        CpuCanonicalHost::new_prepared_cohort(game, &trainer, 0x1819, |world| {
++            let (_, entity) = world.organism_entity_ids()[0];
++            let mut position = world.entity(entity).unwrap().position;
++            position.x += 0.1;
++            world.editor_spawn_object(WorldEditorSpawnSpec {
++                label: "v18-repeated-contact".into(),
++                kind: WorldObjectKind::Hazard,
++                organism_id: None,
++                position,
++                nutrition: 0.0,
++                hazard_pain: 0.02,
++                radius: 0.8,
++                token_id: None,
++            })
++        })
++        .unwrap();
++    let before = host.checkpoint(&trainer).unwrap();
++    let mut dispatch = before.residents[0].neural.dispatch_generation;
++    for _ in 0..2 {
++        let step = host
++            .step_with_shared_contact_priority(&trainer, 1.0)
++            .unwrap();
++        assert!(step.ordinary.decisions.is_empty());
++        assert_eq!(step.interventions.len(), 1);
++        assert!(step.interventions[0].dispatch_generation > dispatch);
++        dispatch = step.interventions[0].dispatch_generation;
++        let current = host.checkpoint(&trainer).unwrap();
++        assert_eq!(
++            current.residents[0].next_sequence,
++            before.residents[0].next_sequence
++        );
++        assert!(current.residents[0].neural.fast == before.residents[0].neural.fast);
++    }
++    host.world_mut().editor_remove_object(source).unwrap();
++    let step = host
++        .step_with_shared_contact_priority(&trainer, 1.0)
++        .unwrap();
++    assert!(
++        step.interventions.is_empty(),
++        "acute response remained latched"
++    );
++    assert_eq!(step.ordinary.decisions.len(), 1);
++}
+diff --git a/crates/alife_world/src/headless.rs b/crates/alife_world/src/headless.rs
+index b44c1d2..72a792f 100644
+--- a/crates/alife_world/src/headless.rs
++++ b/crates/alife_world/src/headless.rs
+@@ -4910,6 +4910,37 @@ impl HeadlessWorld {
+             .fold(BodyEventDelta::zero(), |total, (_, result)| {
+                 combine_body_event(total, result.body_event)
+             });
++        if let Some(state) = translation.as_deref_mut() {
++            // Only fresh action damage is unlocalized. A harmful held object
++            // is not an escapable source. Ingestion has already consumed and
++            // released the food, so its new internal dose permits fallback.
++            let acute_damage = executed
++                .iter()
++                .filter(|(_, result)| {
++                    !result
++                        .execution
++                        .physical
++                        .target_entity
++                        .is_some_and(|target| {
++                            self.objects.get(&target.raw()).is_some_and(|object| {
++                                object.kind == WorldObjectKind::Hazard
++                                    && object.carried_by == Some(bundle.organism_id)
++                            })
++                        })
++                })
++                .map(|(_, result)| result.body_event.damage)
++                .fold(0.0_f32, f32::max);
++            let voluntary_displacement = executed.iter().fold(Vec3f::ZERO, |sum, (_, result)| {
++                add(sum, result.execution.physical.displacement)
++            });
++            state.finish_late_response(
++                self,
++                bundle.organism_id,
++                world_entity_id,
++                acute_damage,
++                voluntary_displacement,
++            )?;
++        }
+         let final_position = self
+             .objects
+             .get(&world_entity_id.raw())
+@@ -8875,6 +8906,66 @@ mod task_6_factorized_motor_tests {
+         assert!((actual.allocated_translation_time - 1.0).abs() < 1e-6);
+     }
+ 
++    #[test]
++    fn awake_late_internal_damage_uses_only_remaining_translation_time() {
++        for moving in [false, true] {
++            let (mut world, agent, food, mut bundle) = prepared_world();
++            hold_food_for_meal(&mut world, food);
++            world.objects.get_mut(&food.raw()).unwrap().hazard_pain = 0.4;
++            bundle
++                .channels
++                .retain(|c| c.channel != MotorChannel::Locomotion);
++            if moving {
++                bundle
++                    .channels
++                    .push(initial_priority_bundle(false).channels[0].clone());
++            }
++            let before = world.organism_registry.get(ORGANISM_ID).unwrap().clone();
++            let receipt = world
++                .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
++                .unwrap();
++            assert!(world.entity(food).unwrap().consumed);
++            let reflex = receipt
++                .withdrawal
++                .as_ref()
++                .expect("fresh toxic ingestion lacked response");
++            assert_eq!(
++                reflex.direction_basis,
++                WithdrawalDirectionBasis::AcuteDamageHeadingFallback
++            );
++            assert!(
++                reflex.sources.is_empty(),
++                "food was invented as external pain geometry"
++            );
++            assert_eq!(receipt.reflex_budget_exhausted, moving);
++            if moving {
++                assert!(
++                    reflex.blocked,
++                    "exhausted interval must not report successful withdrawal"
++                );
++                assert_eq!(reflex.displacement, Vec3f::ZERO);
++                assert_eq!(reflex.energy_cost, 0.0);
++                assert_eq!(receipt.reflex_time_allocated, 0.0);
++            } else {
++                assert!(!reflex.blocked);
++                assert!(reflex.displacement.x < 0.0);
++                assert_eq!(receipt.reflex_time_allocated, 1.0);
++            }
++            let expected = before
++                .biochemistry()
++                .advance(
++                    receipt.voluntary.outcome_tick,
++                    receipt.voluntary.body_event,
++                    before.phenotype(),
++                )
++                .unwrap();
++            assert!(
++                receipt.voluntary.biology_after == expected,
++                "toxic response duplicated biology"
++            );
++        }
++    }
++
+     #[test]
+     fn awake_ground_priority_quiet_slope_preserves_existing_planar_walking() {
+         let (mut candidate, agent) = withdrawal_world(Vec3f::new(8.0, 0.0, 0.0), 0.4);
+diff --git a/crates/alife_world/src/headless/awake_translation.rs b/crates/alife_world/src/headless/awake_translation.rs
+index 3ee5a24..6ad31a0 100644
+--- a/crates/alife_world/src/headless/awake_translation.rs
++++ b/crates/alife_world/src/headless/awake_translation.rs
+@@ -199,6 +199,48 @@ impl AwakeTranslationState {
+         Ok(())
+     }
+ 
++    pub(super) fn finish_late_response(
++        &mut self,
++        world: &mut HeadlessWorld,
++        organism: OrganismId,
++        own: WorldEntityId,
++        acute_damage: f32,
++        voluntary_displacement: Vec3f,
++    ) -> Result<(), ScaffoldContractError> {
++        if self.withdrawal.is_some() {
++            return Ok(());
++        }
++        let budget = self
++            .budget
++            .as_mut()
++            .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
++        let remaining = 1.0 - budget.spent_time;
++        let carried = world.carried_interval_positions(organism, None);
++        self.withdrawal = world.apply_contact_withdrawal_for_interval(
++            organism,
++            own,
++            self.capacity,
++            self.gain,
++            acute_damage,
++            remaining,
++            None,
++        )?;
++        if let Some(reflex) = &self.withdrawal {
++            self.reflex_time = remaining;
++            budget.consume(
++                MOVE_STEP * self.capacity.unwrap_or(1.0).clamp(0.0, 1.0) * self.gain,
++                remaining,
++                self.time_metric.path_length(reflex.displacement),
++            )?;
++            world.commit_current_interval_velocity(
++                organism,
++                add(voluntary_displacement, reflex.displacement),
++            )?;
++            world.commit_carried_interval_velocity(organism, &carried);
++        }
++        Ok(())
++    }
++
+     pub(super) fn observe_voluntary(
+         &mut self,
+         command: &ActionCommand,
+@@ -274,18 +316,60 @@ impl HeadlessWorld {
+         Ok(result)
+     }
+ 
+-    /// Candidate initial and swept external-contact priority. Late internal
+-    /// injury and ordinary sealed CPU/GPU credit are not integrated here.
++    /// Candidate initial/swept contact and fresh late-action damage priority.
++    /// Ordinary sealed CPU/GPU credit is not integrated by this world API.
+     /// Existing ordinary APIs and physical defaults are unchanged.
+     pub fn apply_registered_motor_bundle_with_shared_contact_priority(
+         &mut self,
+         bundle: &MotorCommandBundle,
+         entity: WorldEntityId,
++    ) -> Result<AwakeTranslationIntervalReceipt, HeadlessMotorTransactionError> {
++        self.apply_shared_contact_bundle(bundle, entity, None, None)
++    }
++
++    /// Explicit staged-host variant preserving ordinary neural emissions and
++    /// perceived novelty. The enclosing host owns its whole-state commit.
++    pub fn apply_registered_motor_bundle_with_shared_contact_priority_and_perceived_novelty(
++        &mut self,
++        bundle: &MotorCommandBundle,
++        entity: WorldEntityId,
++        neural: &NeuralEmissionFrame,
++        novelty: f32,
++        object_novelty: &[(WorldEntityId, f32)],
++    ) -> Result<AwakeTranslationIntervalReceipt, HeadlessMotorTransactionError> {
++        if !novelty.is_finite()
++            || !(0.0..=1.0).contains(&novelty)
++            || object_novelty.len() > bundle.channels.len()
++            || object_novelty.iter().any(|(id, value)| {
++                id.raw() == 0 || !value.is_finite() || !(0.0..=1.0).contains(value)
++            })
++        {
++            return Err(ScaffoldContractError::ScalarOutOfRange.into());
++        }
++        self.apply_shared_contact_bundle(
++            bundle,
++            entity,
++            Some(neural),
++            Some((novelty, object_novelty)),
++        )
++    }
++
++    fn apply_shared_contact_bundle(
++        &mut self,
++        bundle: &MotorCommandBundle,
++        entity: WorldEntityId,
++        neural: Option<&NeuralEmissionFrame>,
++        novelty: Option<(f32, &[(WorldEntityId, f32)])>,
+     ) -> Result<AwakeTranslationIntervalReceipt, HeadlessMotorTransactionError> {
+         let before = self.clone();
+         let mut state = AwakeTranslationState::default();
+-        let result =
+-            self.apply_registered_motor_bundle_inner(bundle, entity, None, None, Some(&mut state));
++        let result = self.apply_registered_motor_bundle_inner(
++            bundle,
++            entity,
++            neural,
++            novelty,
++            Some(&mut state),
++        );
+         match result {
+             Err(error) => {
+                 *self = before;
+diff --git a/crates/alife_world/src/headless/contact_withdrawal.rs b/crates/alife_world/src/headless/contact_withdrawal.rs
+index 93464c5..4a935cc 100644
+--- a/crates/alife_world/src/headless/contact_withdrawal.rs
++++ b/crates/alife_world/src/headless/contact_withdrawal.rs
+@@ -176,6 +176,11 @@ impl HeadlessWorld {
+             direction = Vec3f::new(-yaw.cos(), 0.0, -yaw.sin());
+             receipt.direction_basis = WithdrawalDirectionBasis::AcuteDamageHeadingFallback;
+         }
++        // A directional protective response with no remaining actuator time
++        // is blocked, not a successful zero-distance move.
++        if interval_fraction == 0.0 {
++            return Ok(Some(receipt));
++        }
+         let norm = direction.x.hypot(direction.z);
+         let capacity =
+             locomotor_capacity.unwrap_or(1.0).clamp(0.0, 1.0) * effector_gain.clamp(0.0, 1.0);

@@ -1,0 +1,4 @@
+    Checking alife_world v0.1.0 (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-v18-recovered/crates/alife_world)
+    Checking alife_runtime v0.1.0 (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-v18-recovered/crates/alife_runtime)
+    Checking alife_training v0.1.0 (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-v18-recovered/crates/alife_training)
+    Finished `dev` profile [unoptimized] target(s) in 14.12s

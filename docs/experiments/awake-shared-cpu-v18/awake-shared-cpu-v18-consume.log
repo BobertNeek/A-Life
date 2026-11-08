@@ -1,0 +1,78 @@
+   Compiling thiserror v2.0.18
+   Compiling libm v0.2.16
+   Compiling libloading v0.8.9
+   Compiling log v0.4.32
+   Compiling equivalent v1.0.2
+   Compiling bytemuck v1.25.0
+   Compiling num-traits v0.2.19
+   Compiling foldhash v0.2.0
+   Compiling allocator-api2 v0.2.21
+   Compiling smallvec v1.15.1
+   Compiling hashbrown v0.16.1
+   Compiling zerocopy v0.8.52
+   Compiling unicode-width v0.2.2
+   Compiling once_cell v1.21.4
+   Compiling bit-vec v0.9.1
+   Compiling hashbrown v0.17.1
+   Compiling indexmap v2.14.0
+   Compiling bit-set v0.9.1
+   Compiling codespan-reporting v0.13.1
+   Compiling half v2.7.1
+   Compiling spirv v0.4.0+sdk-1.4.341.0
+   Compiling foldhash v0.1.5
+   Compiling raw-window-handle v0.6.2
+   Compiling rustc-hash v1.1.0
+   Compiling scopeguard v1.2.0
+   Compiling hexf-parse v0.2.1
+   Compiling naga v29.0.3
+   Compiling lock_api v0.4.14
+   Compiling wgpu-types v29.0.3
+   Compiling hashbrown v0.15.5
+   Compiling parking_lot_core v0.9.12
+   Compiling ash v0.38.0+1.3.281
+   Compiling dlib v0.5.3
+   Compiling gpu-descriptor-types v0.2.0
+   Compiling presser v0.3.1
+   Compiling gpu-allocator v0.28.0
+   Compiling gpu-descriptor v0.3.2
+   Compiling wayland-sys v0.31.11
+   Compiling parking_lot v0.12.5
+   Compiling wgpu-naga-bridge v29.0.3
+   Compiling khronos-egl v6.0.0
+   Compiling ordered-float v5.3.0
+   Compiling renderdoc-sys v1.1.0
+   Compiling glow v0.17.0
+   Compiling profiling v1.0.18
+   Compiling wgpu-hal v29.0.3
+   Compiling typenum v1.20.1
+   Compiling generic-array v0.14.7
+   Compiling blake3 v1.8.5
+   Compiling serde v1.0.228
+   Compiling wgpu-core-deps-windows-linux-android v29.0.3
+   Compiling wgpu-core v29.0.3
+   Compiling alife_core v0.1.0 (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-v18-recovered/crates/alife_core)
+   Compiling static_assertions v1.1.0
+   Compiling wgpu v29.0.3
+   Compiling serde_json v1.0.150
+   Compiling zstd-sys v2.0.16+zstd.1.5.7
+   Compiling block-buffer v0.10.4
+   Compiling crypto-common v0.1.7
+   Compiling pollster v0.4.0
+   Compiling alife_gpu_backend v0.1.0 (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-v18-recovered/crates/alife_gpu_backend)
+   Compiling alife_world v0.1.0 (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-v18-recovered/crates/alife_world)
+   Compiling digest v0.10.7
+   Compiling zstd-safe v7.2.4
+   Compiling cpufeatures v0.2.17
+   Compiling sha2 v0.10.9
+   Compiling zstd v0.13.3
+   Compiling alife_runtime v0.1.0 (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-v18-recovered/crates/alife_runtime)
+   Compiling base64 v0.22.1
+   Compiling alife_training v0.1.0 (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-v18-recovered/crates/alife_training)
+    Finished `test` profile [unoptimized] target(s) in 7m 24s
+     Running unittests src/lib.rs (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-target-v18/debug/deps/alife_training-5f0f6c68c9328a99)
+
+running 1 test
+test cpu::organism::tests::intervened_dispatch_rejects_tampering_and_duplicate_without_credit ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 126 filtered out; finished in 0.55s
+

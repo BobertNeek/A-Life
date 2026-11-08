@@ -11,6 +11,8 @@ mod need_switching;
 mod observed_focus;
 #[path = "cpu_collector/sealed_authority.rs"]
 mod sealed_authority;
+#[path = "cpu_collector/shared_actuator.rs"]
+mod shared_actuator;
 fn fixture() -> (CpuCanonicalHost, CpuFoundationTrainer) {
     fixture_atp(None)
 }

@@ -1,0 +1,11 @@
+   Compiling alife_training v0.1.0 (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-v18-recovered/crates/alife_training)
+    Finished `test` profile [unoptimized] target(s) in 37.35s
+     Running tests/cpu_collector.rs (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-target-v18/debug/deps/cpu_collector-a2643aa43bc47c1a)
+
+running 3 tests
+test shared_actuator::shared_actuator_quiet_host_is_exact_ordinary_execution ... ok
+test shared_actuator::shared_actuator_real_dispatch_consumed_without_false_experience_and_restores ... ok
+test shared_actuator::shared_actuator_repeated_contact_keeps_sequence_unissued_and_releases ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 26 filtered out; finished in 5.37s
+
