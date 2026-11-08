@@ -1,0 +1,3802 @@
+--- a/crates/alife_game_app/src/production_voxel_renderer/hearthling.rs
++++ b/crates/alife_game_app/src/production_voxel_renderer/hearthling.rs
+@@ -906,6 +906,8 @@
+             alife_core::channel_command_for_action(alife_core::MotorChannel::Manipulation, &eat)
+                 .unwrap();
+         let receipt = alife_world::HeadlessMotorChannelReceipt {
++            succeeded: true,
++            failure: None,
+             command: command.clone(),
+             phase: alife_world::headless::ActionPhase::Completed,
+             grip_transfers: Vec::new(),
+--- a/crates/alife_training/Cargo.toml
++++ b/crates/alife_training/Cargo.toml
+@@ -56,3 +56,7 @@
+ [[example]]
+ name = "probe_grip_reader"
+ required-features = ["cpu-backend"]
++
++[[example]]
++name = "probe_world_swap"
++required-features = ["cpu-backend"]
+--- /dev/null
++++ b/crates/alife_training/examples/probe_world_swap.rs
+@@ -0,0 +1,568 @@
++//! NEW reconstruction, not a recovered original artifact. Main remains disabled.
++//! One frozen v12 foundation, two matched seeds, old/new world, ordinary sleep.
++#![allow(dead_code)]
++use alife_core::*;
++use alife_runtime::canonical_preparation::foundation_construction_development;
++use alife_training::{cpu::*, AdamWConfig, StageTrainableMask, TrainingSequence};
++use alife_world::*;
++use serde::{Deserialize, Serialize};
++use sha2::{Digest, Sha256};
++#[path = "support/care_candidate.rs"]
++mod care_candidate;
++#[path = "support/world_swap_diagnostics.rs"]
++mod diagnostics;
++#[path = "support/world_swap_legacy_v12.rs"]
++mod legacy;
++#[cfg(test)]
++#[path = "support/world_swap_native_qualification.rs"]
++mod native_qualification;
++#[path = "support/world_swap_native_sink.rs"]
++mod native_sink;
++#[cfg(test)]
++#[path = "support/world_swap_prepared_fixture.rs"]
++mod prepared_fixture;
++#[cfg(test)]
++#[path = "support/world_swap_prepared_fixture_adapter.rs"]
++mod prepared_fixture_adapter;
++#[path = "support/world_swap_receipt_projection.rs"]
++mod projection;
++type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
++const PREPARATION_TICKS: u16 = 600;
++const PRIMARY_TICKS: u16 = 256;
++const TEMPERATURE: f32 = 1.0;
++const ASSET_SHA256: &str = "6edcd6dd1dc5bfedf8f7b73bf605bb480e36c0ba022a316840a6f0bd87629632";
++#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
++#[serde(rename_all = "snake_case")]
++enum WorldVariant {
++    OldWorld,
++    NewWorld,
++}
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++struct Scene {
++    seed: u64,
++    harmful_slot: usize,
++    appearance: [usize; 2],
++    spawn_order: [usize; 2],
++}
++const SCENES: [Scene; 2] = [
++    Scene {
++        seed: 2026112301,
++        harmful_slot: 0,
++        appearance: [0, 1],
++        spawn_order: [0, 1],
++    },
++    Scene {
++        seed: 2026112302,
++        harmful_slot: 1,
++        appearance: [0, 1],
++        spawn_order: [0, 1],
++    },
++];
++fn bytes<T: Serialize>(x: &T) -> Result<Vec<u8>> {
++    Ok(serde_json::to_vec(x)?)
++}
++fn digest(b: &[u8]) -> String {
++    format!("{:x}", Sha256::digest(b))
++}
++fn require(ok: bool, code: &'static str) -> Result<()> {
++    if ok {
++        Ok(())
++    } else {
++        Err(diagnostics::gate_error(code))
++    }
++}
++struct Life {
++    host: CpuCanonicalHost,
++    trainer: CpuFoundationTrainer,
++    own: OrganismId,
++    targets: [WorldEntityId; 2],
++    initial_body_biology: Vec<u8>,
++    initial_scene: Vec<u8>,
++    sampling_seed: u32,
++}
++fn body_biology(world: &HeadlessWorld, own: OrganismId) -> Result<Vec<u8>> {
++    let r = world
++        .organism_registry()
++        .get(own)
++        .ok_or("missing_organism")?;
++    let p = r.phenotype();
++    bytes(&(
++        r.organism_id(),
++        r.birth_tick(),
++        &p.body,
++        &p.chemistry,
++        &p.development,
++        &p.reproduction,
++        &p.predisposition,
++        r.embodiment(),
++        r.biochemistry(),
++        r.lifecycle(),
++    ))
++}
++fn preparation_guard(alive: bool, health: f32, injury: f32) -> bool {
++    alive && health.is_finite() && injury.is_finite() && health >= 0.70 && injury <= 0.25
++}
++fn preparation_world_guard(world: &HeadlessWorld, own: OrganismId) -> Result<()> {
++    let r = world
++        .organism_registry()
++        .get(own)
++        .ok_or("preparation organism")?;
++    require(
++        preparation_guard(
++            r.lifecycle().is_alive(),
++            r.biochemistry().body.health,
++            r.biochemistry().body.injury,
++        ),
++        "preparation safeguard",
++    )
++}
++fn make_life<const PREPARE: u16>(
++    scene: Scene,
++    frozen_asset: &FoundationWeightAsset,
++) -> Result<Life> {
++    make_life_observed::<PREPARE>(scene, frozen_asset, |_| Ok(()))
++}
++fn make_life_observed<const PREPARE: u16>(
++    scene: Scene,
++    frozen_asset: &FoundationWeightAsset,
++    mut preparation_progress: impl FnMut(bool) -> Result<()>,
++) -> Result<Life> {
++    let asset = frozen_asset.clone();
++    let mut config = CanonicalNewGameConfig::phase3(scene.seed, 1)?;
++    config.brain_class = BrainScaleTier::Standard2048;
++    config.sensor_profile = SensorProfile::GroundedObjectSlotsV1;
++    let mut game = create_canonical_new_game_with_n2048_memory_gain_candidate(&config, &asset)?;
++    let original = game
++        .world
++        .organism_registry()
++        .iter()
++        .next()
++        .ok_or("missing_founder")?
++        .clone();
++    let genome = original.phenotype().brain_genome.clone();
++    let development = foundation_construction_development(
++        &genome,
++        &BrainCapacityClass::n2048(),
++        &original.phenotype().development_state_at(Tick::ZERO)?,
++    )?;
++    let (p, _) = PhenotypeCompiler::compile_n2048_memory_gain_foundation_candidate(
++        genome,
++        development,
++        asset.clone(),
++    )?;
++    let trainer = CpuFoundationTrainer::new(
++        p.clone(),
++        asset,
++        StageTrainableMask::recurrent_only(&p)?,
++        AdamWConfig::default(),
++    )?;
++    let own = original.organism_id();
++    let mut world = HeadlessScenarioBuilder::new(scene.seed)
++        .agent("learner", own, Vec3f::ZERO)
++        .terrain_zone(
++            1,
++            "assay",
++            TerrainZoneKind::Meadow,
++            Vec3f::ZERO,
++            12.0,
++            0.0,
++            0.0,
++        )
++        .build()?;
++    let common = GroundedPhysicalProperties {
++        velocity: Vec3f::ZERO,
++        color: [0.9, 0.2, 0.2],
++        material: [0.35, 0.15, 0.65],
++        shape: [0.2, 0.8, 0.2],
++        chemical: [0.85, 0.1, 0.2],
++        surface_temperature: 0.1,
++        terrain: [0.5, 0.25],
++    };
++    let mut slots = [None, None];
++    for slot in scene.spawn_order {
++        let id = world.editor_spawn_object(WorldEditorSpawnSpec {
++            label: format!("resource_{slot}"),
++            kind: WorldObjectKind::Food,
++            organism_id: None,
++            position: Vec3f::new(0.35, 0.0, if slot == 0 { -0.35 } else { 0.35 }),
++            nutrition: 0.05,
++            hazard_pain: if slot == scene.harmful_slot {
++                0.35
++            } else {
++                0.0
++            },
++            radius: 0.5,
++            token_id: None,
++        })?;
++        let mut physical = common;
++        if scene.appearance[slot] == 1 {
++            physical.color = [0.2, 0.2, 0.9];
++        }
++        world.set_grounded_physical_properties(id, physical)?;
++        world.track_resource_lifecycle(id, EcologyZoneId(1), 16, 512)?;
++        slots[slot] = Some(id);
++    }
++    let mut chemistry = *original.biochemistry();
++    chemistry.body.set_energy(0.4)?;
++    world.register_organism_record(WorldOrganismRecord::new(
++        own,
++        world.entity_id("learner").ok_or("missing_body")?,
++        original.genome().clone(),
++        original.phenotype().clone(),
++        chemistry,
++        original.birth_tick(),
++    )?)?;
++    let targets = [
++        slots[scene.harmful_slot].ok_or("missing_h")?,
++        slots[1 - scene.harmful_slot].ok_or("missing_s")?,
++    ];
++    game.world = world;
++    let sampling_seed = (scene.seed ^ (scene.seed >> 32)) as u32;
++    let (host, _) =
++        CpuCanonicalHost::new_prepared_cohort(game, &trainer, sampling_seed, |world| {
++            preparation_world_guard(world, own)?;
++            for _ in 0..PREPARE {
++                preparation_progress(false)?;
++                world.try_advance_tick()?;
++                preparation_progress(true)?;
++                preparation_world_guard(world, own)?;
++            }
++            Ok::<_, Box<dyn std::error::Error>>(())
++        })?;
++    let initial_body_biology = body_biology(host.world(), own)?;
++    let initial_scene = bytes(
++        &targets
++            .iter()
++            .map(|&id| {
++                WorldObjectSaveState::from(host.world().entity(id).expect("new resource").clone())
++            })
++            .collect::<Vec<_>>(),
++    )?;
++    require(
++        host.checkpoint(&trainer)?
++            .residents
++            .iter()
++            .all(|r| r.memory.records.is_empty()),
++        "nonempty_initial_memory",
++    )?;
++    Ok(Life {
++        host,
++        trainer,
++        own,
++        targets,
++        initial_body_biology,
++        initial_scene,
++        sampling_seed,
++    })
++}
++#[derive(Serialize)]
++struct PairIdentity {
++    asset_sha256: String,
++    founder_optimizer_sha256: String,
++    full_initial_checkpoint_sha256: String,
++    initial_body_biology_sha256: String,
++    initial_scene_sha256: String,
++    sampling_seed: u32,
++    sampling_counter: u32,
++    actual_world_tick: u64,
++}
++fn pair_identity(life: &Life, asset: &FoundationWeightAsset) -> Result<PairIdentity> {
++    let checkpoint = life.host.checkpoint(&life.trainer)?;
++    require(checkpoint.sampling_counter == 0, "initial_sampling")?;
++    require(
++        checkpoint.residents.len() == 1 && checkpoint.residents[0].memory.records.is_empty(),
++        "initial_memory",
++    )?;
++    Ok(PairIdentity {
++        asset_sha256: digest(&asset.encode_canonical()?),
++        founder_optimizer_sha256: digest(&bytes(&life.trainer.checkpoint())?),
++        full_initial_checkpoint_sha256: digest(&bytes(&checkpoint)?),
++        initial_body_biology_sha256: digest(&life.initial_body_biology),
++        initial_scene_sha256: digest(&life.initial_scene),
++        sampling_seed: checkpoint.sampling_seed,
++        sampling_counter: checkpoint.sampling_counter,
++        actual_world_tick: life.host.world().tick().raw(),
++    })
++}
++trait AuditSink {
++    fn stage(&mut self, stage: diagnostics::Stage) -> Result<()>;
++    fn preparation_progress(&mut self, returned: bool) -> Result<()>;
++    fn host_returned(&mut self) -> Result<()>;
++    fn replay_progress(&mut self, returned: bool) -> Result<()>;
++    fn projected_step(&mut self) -> Result<()>;
++    fn guard(&mut self) -> Result<()>;
++    fn attempted_before_construction(&mut self, scene: Scene, variant: WorldVariant) -> Result<()>;
++    fn prepared_pair_barrier(&mut self, identity: &PairIdentity) -> Result<()>;
++    fn before_step(&mut self, life: &Life, primary_tick: u16) -> Result<()>;
++    fn actual_step(
++        &mut self,
++        life: &Life,
++        step: &CpuCanonicalStep,
++        primary_tick: u16,
++        projection: &serde_json::Value,
++    ) -> Result<()>;
++    fn finish(
++        &mut self,
++        life: &Life,
++        counts: &Counts,
++        founder_unchanged: bool,
++        roundtrip: bool,
++    ) -> Result<()>;
++}
++#[derive(Debug, Clone, Copy, Serialize)]
++#[serde(rename_all = "snake_case")]
++enum Stop {
++    TickBudget,
++    ThirdHarmfulMeal,
++    Health,
++    Injury,
++    Death,
++}
++#[derive(Serialize)]
++struct Counts {
++    ticks: u16,
++    decisions: u16,
++    sleeping_ticks: u16,
++    sleep_consolidations: u16,
++    meals: [u16; 2],
++    negative_harmful_meals: u16,
++    stop: Stop,
++    initial_energy: f32,
++    initial_health: f32,
++    initial_injury: f32,
++    final_energy: f32,
++    final_health: f32,
++    final_injury: f32,
++    min_health: f32,
++    max_injury: f32,
++}
++fn consumed(row: &CpuCollectedDecision, target: WorldEntityId) -> bool {
++    let physical = |o: &PhysicalActionOutcome| {
++        o.target_entity == Some(target) && o.contact == PhysicalContactKind::Consumed
++    };
++    let outcome = row.patch.outcome();
++    physical(&outcome.physical)
++        || outcome
++            .joint
++            .as_ref()
++            .is_some_and(|j| j.channel_outcomes.iter().any(|c| physical(&c.physical)))
++}
++fn verify_actual_replay(life: &Life, row: &CpuCollectedDecision) -> Result<()> {
++    let frozen = bytes(&life.trainer.checkpoint())?;
++    let sequence = TrainingSequence {
++        phenotype_hash: life.trainer.phenotype().phenotype_hash(),
++        initial: row.initial.clone(),
++        ticks: vec![row.replay_tick.clone()],
++        burn_in_ticks: 0,
++        memory_candidate_gain: life
++            .trainer
++            .phenotype()
++            .candidate_decoder()
++            .memory_channel()
++            .map_or(0., |m| m.max_candidate_gain()),
++    };
++    let mut output = life.trainer.evaluate_replay(&sequence)?;
++    let choice = sample_cpu_joint_action(
++        life.trainer.phenotype(),
++        row.patch.pre_action().perception(),
++        &output.candidate_logits.remove(0),
++        life.sampling_seed,
++        row.sampling_counter.ok_or("rng_counter")?,
++        TEMPERATURE,
++    )?;
++    require(bytes(&choice)? == bytes(&row.action)?, "actual_replay")?;
++    require(
++        bytes(&life.trainer.checkpoint())? == frozen,
++        "immutable_replay",
++    )
++}
++// WorldVariant is only a checked source/report identity, never a policy switch.
++fn run_reviewed(scene: Scene, variant: WorldVariant, sink: &mut impl AuditSink) -> Result<()> {
++    require(SCENES.contains(&scene), "unassigned_seed")?;
++    sink.guard()?;
++    sink.attempted_before_construction(scene, variant)?;
++    sink.stage(diagnostics::Stage::AssetConstruction)?;
++    let asset = legacy::construct()?;
++    require(
++        digest(&asset.encode_canonical()?) == ASSET_SHA256,
++        "asset_binding",
++    )?;
++    sink.stage(diagnostics::Stage::LifeConstruction)?;
++    let mut life = make_life_observed::<PREPARATION_TICKS>(scene, &asset, |returned| {
++        sink.preparation_progress(returned)
++    })?;
++    sink.stage(diagnostics::Stage::InitialBinding)?;
++    let initial_record = life
++        .host
++        .world()
++        .organism_registry()
++        .get(life.own)
++        .ok_or("initial_organism")?;
++    require(
++        initial_record.lifecycle().is_alive()
++            && initial_record.biochemistry().body.health >= 0.70
++            && initial_record.biochemistry().body.injury <= 0.25,
++        "initial_safeguard",
++    )?;
++    let identity = pair_identity(&life, &asset)?;
++    sink.stage(diagnostics::Stage::PairBarrier)?;
++    sink.prepared_pair_barrier(&identity)?;
++    sink.guard()?;
++    let founder = bytes(&life.trainer.checkpoint())?;
++    let body = life
++        .host
++        .world()
++        .organism_registry()
++        .get(life.own)
++        .ok_or("missing_body")?
++        .biochemistry()
++        .body;
++    let mut counts = Counts {
++        ticks: 0,
++        decisions: 0,
++        sleeping_ticks: 0,
++        sleep_consolidations: 0,
++        meals: [0, 0],
++        negative_harmful_meals: 0,
++        stop: Stop::TickBudget,
++        initial_energy: body.energy,
++        initial_health: body.health,
++        initial_injury: body.injury,
++        final_energy: body.energy,
++        final_health: body.health,
++        final_injury: body.injury,
++        min_health: body.health,
++        max_injury: body.injury,
++    };
++    for index in 0..PRIMARY_TICKS {
++        sink.stage(diagnostics::Stage::ResourceGuard)?;
++        sink.guard()?;
++        sink.before_step(&life, index)?;
++        let tick_before = life.host.world().tick().raw();
++        let step = life.host.step_with_swap_audit(&life.trainer, TEMPERATURE)?;
++        sink.host_returned()?;
++        counts.ticks += 1;
++        require(
++            life.host.world().tick().raw() == tick_before + 1,
++            "actual_clock",
++        )?;
++        require(
++            step.decisions.len() <= 1 && step.decisions.len() == step.swap_audits.len(),
++            "population",
++        )?;
++        counts.decisions += u16::try_from(step.decisions.len())?;
++        counts.sleeping_ticks += u16::from(step.sleeping_organisms > 0);
++        counts.sleep_consolidations += u16::try_from(step.sleep_consolidations)?;
++        for row in &step.decisions {
++            sink.replay_progress(false)?;
++            verify_actual_replay(&life, row)?;
++            sink.replay_progress(true)?;
++            for (role, target) in life.targets.iter().copied().enumerate() {
++                if consumed(row, target) {
++                    counts.meals[role] += 1;
++                    let p = row
++                        .patch
++                        .outcome()
++                        .measured_physiology
++                        .as_ref()
++                        .ok_or("physiology")?;
++                    counts.negative_harmful_meals += u16::from(
++                        role == 0
++                            && p.aversive_harm() > 0.
++                            && row.patch.outcome().experienced_valence().raw() < 0.,
++                    );
++                }
++            }
++        }
++        sink.stage(diagnostics::Stage::Projection)?;
++        let projection = projection::project(&life, &step, index)?;
++        sink.projected_step()?;
++        sink.stage(diagnostics::Stage::RowCollection)?;
++        sink.actual_step(&life, &step, index, &projection)?;
++        sink.stage(diagnostics::Stage::Safeguards)?;
++        let record = life
++            .host
++            .world()
++            .organism_registry()
++            .get(life.own)
++            .ok_or("missing_body")?;
++        let body = record.biochemistry().body;
++        counts.final_energy = body.energy;
++        counts.final_health = body.health;
++        counts.final_injury = body.injury;
++        counts.min_health = counts.min_health.min(body.health);
++        counts.max_injury = counts.max_injury.max(body.injury);
++        if !record.lifecycle().is_alive() {
++            counts.stop = Stop::Death;
++            break;
++        }
++        if body.health < 0.70 {
++            counts.stop = Stop::Health;
++            break;
++        }
++        if body.injury > 0.25 {
++            counts.stop = Stop::Injury;
++            break;
++        }
++        if counts.meals[0] >= 3 {
++            counts.stop = Stop::ThirdHarmfulMeal;
++            break;
++        }
++    }
++    sink.stage(diagnostics::Stage::CheckpointRoundtrip)?;
++    // No extra tick: this is a checkpoint byte roundtrip, not next-step proof.
++    let original = bytes(&life.host.checkpoint(&life.trainer)?)?;
++    let restored =
++        CpuCanonicalHost::from_checkpoint(serde_json::from_slice(&original)?, &life.trainer)?;
++    let roundtrip = original == bytes(&restored.checkpoint(&life.trainer)?)?;
++    let founder_unchanged = founder == bytes(&life.trainer.checkpoint())?;
++    require(roundtrip && founder_unchanged, "preservation")?;
++    sink.stage(diagnostics::Stage::Summary)?;
++    sink.finish(&life, &counts, founder_unchanged, roundtrip)
++}
++fn qualified_entry(
++    root: std::path::PathBuf,
++    binding_path: &std::path::Path,
++    scene_index: usize,
++    variant: WorldVariant,
++) -> Result<()> {
++    let scene = *SCENES.get(scene_index).ok_or("case")?;
++    let raw = std::fs::read(binding_path)?;
++    require(raw.len() <= 16384, "binding_bound")?;
++    let binding: native_sink::Binding = serde_json::from_slice(&raw)?;
++    let mut sink = native_sink::NativeSink::new(root, binding, scene, variant)?;
++    if let Err(error) = run_reviewed(scene, variant, &mut sink) {
++        sink.reject(error.as_ref())?;
++        return Err("case rejected; no retry".into());
++    }
++    Ok(())
++}
++struct ReviewedArgs {
++    root: std::path::PathBuf,
++    binding_path: std::path::PathBuf,
++    scene_index: usize,
++    variant: WorldVariant,
++}
++fn parse_reviewed_args(args: &[String]) -> Result<ReviewedArgs> {
++    require(args.len() == 6 && args[1] == "run-reviewed", "cli mode")?;
++    require(!args[2].is_empty() && !args[3].is_empty(), "cli path")?;
++    let scene_index = match args[4].as_str() {
++        "0" => 0,
++        "1" => 1,
++        _ => return Err("cli scene".into()),
++    };
++    let variant = match args[5].as_str() {
++        "old_world" => WorldVariant::OldWorld,
++        "new_world" => WorldVariant::NewWorld,
++        _ => return Err("cli world".into()),
++    };
++    Ok(ReviewedArgs {
++        root: args[2].as_str().into(),
++        binding_path: args[3].as_str().into(),
++        scene_index,
++        variant,
++    })
++}
++fn main() -> Result<()> {
++    Err("disabled source-only proposal; fresh matched v5 has no study dispatch".into())
++}
+--- /dev/null
++++ b/crates/alife_training/examples/support/world_swap_diagnostics.rs
+@@ -0,0 +1,307 @@
++//! Closed scalar diagnostics. Never serializes native error text or private state.
++use super::*;
++#[derive(Clone, Copy, Debug, Serialize)]
++#[serde(rename_all = "snake_case")]
++pub(super) enum Stage {
++    BeforeConstruction,
++    AssetConstruction,
++    LifeConstruction,
++    Preparation,
++    InitialBinding,
++    PairBarrier,
++    ResourceGuard,
++    HostStep,
++    StepValidation,
++    Replay,
++    Projection,
++    RowCollection,
++    Safeguards,
++    CheckpointRoundtrip,
++    Summary,
++}
++#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
++#[serde(rename_all = "snake_case")]
++pub(super) enum Code {
++    NativeOperation,
++    Io,
++    Serialization,
++    CpuHost,
++    Invariant,
++    AssetBinding,
++    ActualReplay,
++    FounderMutation,
++    TransferExecution,
++    FailedTransfer,
++    MealReceipt,
++    MealChannel,
++    Ownership,
++    TargetBinding,
++    SequenceBinding,
++    Population,
++    Clock,
++    Preservation,
++    Deadline,
++    Resource,
++    OutputBound,
++    Handshake,
++    Accounting,
++    SafetyStop,
++}
++#[derive(Debug)]
++struct Failure(Code);
++impl std::fmt::Display for Failure {
++    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
++        write!(f, "closed diagnostic {:?}", self.0)
++    }
++}
++impl std::error::Error for Failure {}
++pub(super) fn gate_error(gate: &'static str) -> Box<dyn std::error::Error> {
++    let code = match gate {
++        "asset_binding" | "asset" => Code::AssetBinding,
++        "actual_replay" => Code::ActualReplay,
++        "immutable_replay" => Code::FounderMutation,
++        "transfer_execution" | "transfer_channel" | "execution_binding" => Code::TransferExecution,
++        "preparation safeguard" | "fixture safety stop" => Code::SafetyStop,
++        "failed_transfer" | "failure_binding" => Code::FailedTransfer,
++        "meal_receipt" | "physical_meal" | "joint_meal_binding" => Code::MealReceipt,
++        "meal_channel" => Code::MealChannel,
++        "owner_transfer" | "multiple_hold" | "acquire_receipt" | "release_receipt"
++        | "place_receipt" => Code::Ownership,
++        "selected_target" | "candidate_binding" | "swap_receipt" | "swap_phase" => {
++            Code::TargetBinding
++        }
++        "sequence_binding" | "actual_receipt_binding" => Code::SequenceBinding,
++        "population" | "audit_count" => Code::Population,
++        "actual_clock" | "clock" => Code::Clock,
++        "preservation" => Code::Preservation,
++        "deadline" => Code::Deadline,
++        "resource" => Code::Resource,
++        "output_bound" => Code::OutputBound,
++        "handshake" => Code::Handshake,
++        "accounting" | "row_count" | "tick_budget" | "diagnostic_accounting" => Code::Accounting,
++        _ => Code::Invariant,
++    };
++    Box::new(Failure(code))
++}
++pub(super) fn classify(error: &(dyn std::error::Error + 'static)) -> Code {
++    if let Some(f) = error.downcast_ref::<Failure>() {
++        f.0
++    } else if error.is::<std::io::Error>() {
++        Code::Io
++    } else if error.is::<serde_json::Error>() {
++        Code::Serialization
++    } else if error.is::<CpuHostError>() {
++        Code::CpuHost
++    } else {
++        Code::NativeOperation
++    }
++}
++#[derive(Clone, Debug, Serialize)]
++pub(super) struct Progress {
++    pub stage: Stage,
++    pub preparation_requested: u16,
++    pub preparation_returned: u16,
++    pub host_requested: u16,
++    pub host_returned: u16,
++    pub replay_requested: u16,
++    pub replay_returned: u16,
++    pub projected_steps: u16,
++    pub collected_rows: u16,
++}
++impl Default for Progress {
++    fn default() -> Self {
++        Self {
++            stage: Stage::BeforeConstruction,
++            preparation_requested: 0,
++            preparation_returned: 0,
++            host_requested: 0,
++            host_returned: 0,
++            replay_requested: 0,
++            replay_returned: 0,
++            projected_steps: 0,
++            collected_rows: 0,
++        }
++    }
++}
++impl Progress {
++    pub fn preparation(&mut self, returned: bool) -> Result<()> {
++        require(
++            self.preparation_requested < PREPARATION_TICKS || returned,
++            "diagnostic_accounting",
++        )?;
++        require(
++            if returned {
++                self.preparation_requested == self.preparation_returned + 1
++            } else {
++                self.preparation_requested == self.preparation_returned
++            },
++            "diagnostic_accounting",
++        )?;
++        self.stage = Stage::Preparation;
++        if returned {
++            self.preparation_returned += 1;
++        } else {
++            self.preparation_requested += 1;
++        }
++        Ok(())
++    }
++    pub fn host(&mut self, returned: bool) -> Result<()> {
++        require(
++            self.host_requested < PRIMARY_TICKS || returned,
++            "diagnostic_accounting",
++        )?;
++        require(
++            if returned {
++                self.host_requested == self.host_returned + 1
++            } else {
++                self.host_requested == self.host_returned
++            },
++            "diagnostic_accounting",
++        )?;
++        self.stage = if returned {
++            Stage::StepValidation
++        } else {
++            Stage::HostStep
++        };
++        if returned {
++            self.host_returned += 1;
++        } else {
++            self.host_requested += 1;
++        }
++        Ok(())
++    }
++    pub fn replay(&mut self, returned: bool) -> Result<()> {
++        require(
++            if returned {
++                self.replay_requested == self.replay_returned + 1
++            } else {
++                self.replay_requested == self.replay_returned
++                    && self.replay_requested < self.host_returned
++            },
++            "diagnostic_accounting",
++        )?;
++        self.stage = Stage::Replay;
++        if returned {
++            self.replay_returned += 1;
++        } else {
++            self.replay_requested += 1;
++        }
++        Ok(())
++    }
++    pub fn projected(&mut self) -> Result<()> {
++        require(
++            self.projected_steps < self.host_returned,
++            "diagnostic_accounting",
++        )?;
++        self.projected_steps += 1;
++        Ok(())
++    }
++    pub fn collected(&mut self) -> Result<()> {
++        require(
++            self.collected_rows < self.projected_steps,
++            "diagnostic_accounting",
++        )?;
++        self.collected_rows += 1;
++        Ok(())
++    }
++}
++#[cfg(test)]
++mod tests {
++    use super::*;
++    #[test]
++    fn rejected_request_and_returned_unprojected_step_remain_distinct() {
++        let mut p = Progress::default();
++        p.host(false).unwrap();
++        assert_eq!(
++            (p.host_requested, p.host_returned, p.projected_steps),
++            (1, 0, 0)
++        );
++        assert!(p.host(false).is_err());
++        p.host(true).unwrap();
++        assert_eq!(
++            (p.host_requested, p.host_returned, p.projected_steps),
++            (1, 1, 0)
++        );
++        p.replay(false).unwrap();
++        assert_eq!((p.replay_requested, p.replay_returned), (1, 0));
++        p.replay(true).unwrap();
++        p.projected().unwrap();
++        p.collected().unwrap();
++        assert_eq!((p.projected_steps, p.collected_rows), (1, 1));
++        assert!(p.projected().is_err());
++    }
++    #[test]
++    fn finite_error_class_never_contains_native_error_text() {
++        let error = std::io::Error::other("UNTRUSTED_NATIVE_TEXT_MUST_NOT_BE_EXPORTED");
++        let raw = serde_json::to_string(&classify(&error)).unwrap();
++        assert_eq!(raw, "\"io\"");
++        assert!(!raw.contains("UNTRUSTED"));
++        assert_eq!(
++            classify(gate_error("transfer_execution").as_ref()),
++            Code::TransferExecution
++        );
++        assert_eq!(
++            classify(gate_error("unlisted_static_gate").as_ref()),
++            Code::Invariant
++        );
++    }
++    #[test]
++    fn injected_failures_project_exact_partial_counts_without_error_text() {
++        let error = std::io::Error::other("PRIVATE_ERROR_SENTINEL");
++        let mut p = Progress::default();
++        for stage in 0..4 {
++            match stage {
++                0 => p.host(false).unwrap(),
++                1 => p.host(true).unwrap(),
++                2 => p.projected().unwrap(),
++                3 => p.collected().unwrap(),
++                _ => unreachable!(),
++            }
++            let value = rejection_value("fixture", &error, &p);
++            assert_eq!(value.as_object().unwrap().len(), 4);
++            assert_eq!(value["gate"], "native_rejected");
++            assert_eq!(value["code"], "io");
++            assert_eq!(value["progress"]["host_requested"], 1);
++            assert_eq!(value["progress"]["host_returned"], u16::from(stage >= 1));
++            assert_eq!(value["progress"]["projected_steps"], u16::from(stage >= 2));
++            assert_eq!(value["progress"]["collected_rows"], u16::from(stage >= 3));
++            assert!(!value.to_string().contains("PRIVATE_ERROR_SENTINEL"));
++        }
++    }
++    #[test]
++    fn prepared_counts_are_bounded_without_advancing_a_world() {
++        let mut p = Progress::default();
++        for _ in 0..PREPARATION_TICKS {
++            p.preparation(false).unwrap();
++            p.preparation(true).unwrap();
++        }
++        assert!(p.preparation(false).is_err());
++        assert_eq!(
++            (p.preparation_requested, p.preparation_returned),
++            (600, 600)
++        );
++        assert_eq!(
++            (p.host_requested, p.host_returned, p.projected_steps),
++            (0, 0, 0)
++        );
++    }
++    #[test]
++    fn preparation_failure_preserves_requested_and_completed_counts() {
++        let mut p = Progress::default();
++        p.preparation(false).unwrap();
++        p.preparation(true).unwrap();
++        p.preparation(false).unwrap();
++        assert_eq!((p.preparation_requested, p.preparation_returned), (2, 1));
++        assert!(p.preparation(false).is_err());
++        assert_eq!((p.preparation_requested, p.preparation_returned), (2, 1));
++    }
++}
++
++/// Pure finite rejection projection, also used by NativeSink's durable rejection.
++pub(super) fn rejection_value(
++    case_id: &str,
++    error: &(dyn std::error::Error + 'static),
++    progress: &Progress,
++) -> serde_json::Value {
++    serde_json::json!({"case_id":case_id,"gate":"native_rejected","code":classify(error),"progress":progress})
++}
+--- /dev/null
++++ b/crates/alife_training/examples/support/world_swap_legacy_v12.rs
+@@ -0,0 +1,71 @@
++//! Reconstructed wrapper; constructor body verified exact against published source.
++use super::care_candidate;
++use alife_core::*;
++type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
++pub fn construct() -> Result<FoundationWeightAsset> {
++    candidate_with_readouts(2026110901, 0.25, true, 12., true)
++}
++
++fn candidate_with_readouts(
++    seed: u64,
++    gain: f32,
++    reader: bool,
++    memory_gain: f32,
++    family_valence_reader: bool,
++) -> Result<FoundationWeightAsset> {
++    if family_valence_reader && (!reader || memory_gain != 12.) {
++        return Err("the family-value factor requires the frozen target reader and cap 12".into());
++    }
++    let (_, p, source) = if memory_gain == 12. {
++        care_candidate::source_memory_gain(seed)?
++    } else if memory_gain == 0.5 {
++        care_candidate::source(seed, true)?
++    } else {
++        return Err("unsupported memory gain".into());
++    };
++    let (mut weights, _) = care_candidate::whole_care(&p)?;
++    for (synapse, weight) in p.synapses().iter().zip(&mut weights) {
++        if matches!(synapse.kind(), CompiledSynapseKind::Decoder(c)
++            if c.head() == DecoderHeadKind::ActionCandidate)
++        {
++            *weight *= gain;
++        }
++    }
++    if reader {
++        let mut memory_counts = std::collections::BTreeMap::new();
++        for synapse in p.synapses() {
++            if let CompiledSynapseKind::Decoder(c) = synapse.kind() {
++                if c.head() == DecoderHeadKind::MemoryContext {
++                    *memory_counts
++                        .entry((c.family().raw(), c.input_lane()))
++                        .or_insert(0usize) += 1;
++                }
++            }
++        }
++        for (i, synapse) in p.synapses().iter().enumerate() {
++            let CompiledSynapseKind::Decoder(c) = synapse.kind() else {
++                continue;
++            };
++            if c.head() != DecoderHeadKind::MemoryContext {
++                continue;
++            }
++            let total = match (c.family(), c.input_lane()) {
++                (CandidateActionFamily::Ingest, 25) => -16.,
++                (CandidateActionFamily::Ingest, 26) => -64.,
++                (CandidateActionFamily::Ingest, 32) if family_valence_reader => 32.,
++                (CandidateActionFamily::Approach | CandidateActionFamily::Contact, 25) => -8.,
++                (CandidateActionFamily::Approach | CandidateActionFamily::Contact, 26) => -32.,
++                (CandidateActionFamily::Avoid, 25) => 16.,
++                (CandidateActionFamily::Avoid, 26) => 128.,
++                _ => 0.,
++            };
++            let copies = memory_counts[&(c.family().raw(), c.input_lane())];
++            weights[i] = total / copies as f32;
++        }
++    }
++    Ok(FoundationWeightAsset::from_trained_weights(
++        &p,
++        weights,
++        source.manifest().training_stage(),
++    )?)
++}
+--- /dev/null
++++ b/crates/alife_training/examples/support/world_swap_native_qualification.rs
+@@ -0,0 +1,227 @@
++//! Separately bounded disposable qualification, never a reserved study life.
++//! Runtime test: one fresh host cloned once, four ticks per branch, no prep ticks.
++//! Repeated once per compiled world arm: at most 4 branches / 16 host steps total.
++use super::*;
++const FIXTURE_SEED: u64 = 0x5753_5632;
++fn fixture() -> Result<Life> {
++    let asset = legacy::construct()?;
++    let scene = Scene {
++        seed: FIXTURE_SEED,
++        harmful_slot: 0,
++        appearance: [0, 1],
++        spawn_order: [0, 1],
++    };
++    make_life::<0>(scene, &asset)
++}
++fn fixture_progress(root: &std::path::Path, index: usize, stage: &str) -> Result<()> {
++    use std::io::Write;
++    let path = root.join(format!("step-{index}-{stage}.json"));
++    let mut file = std::fs::OpenOptions::new()
++        .write(true)
++        .create_new(true)
++        .open(path)?;
++    file.write_all(
++        serde_json::to_string(
++            &serde_json::json!({"index":index,"stage":stage,"fixture_seed":FIXTURE_SEED}),
++        )?
++        .as_bytes(),
++    )?;
++    file.sync_all()?;
++    Ok(())
++}
++#[test]
++#[ignore = "bounded fresh-host qualification requires separate source-reviewed dispatch"]
++fn audit_does_not_change_fixed_host_transitions() -> Result<()> {
++    let root = std::path::PathBuf::from(std::env::var("WORLD_SWAP_AUDIT_FIXTURE_ROOT")?);
++    require(
++        root.is_dir() && !root.is_symlink() && std::fs::read_dir(&root)?.next().is_none(),
++        "fixture fresh root",
++    )?;
++    fixture_progress(&root, 0, "before_construction")?;
++    let mut life = fixture()?;
++    let mut ordinary =
++        CpuCanonicalHost::from_checkpoint(life.host.checkpoint(&life.trainer)?, &life.trainer)?;
++    let frozen = bytes(&life.trainer.checkpoint())?;
++    require(
++        bytes(&ordinary.checkpoint(&life.trainer)?)?
++            == bytes(&life.host.checkpoint(&life.trainer)?)?,
++        "fixture initial",
++    )?;
++    let mut decisions = 0;
++    let mut candidate_sets = 0;
++    let mut rows = Vec::new();
++    for index in 0..4 {
++        fixture_progress(&root, index, "ordinary_requested")?;
++        let a = ordinary.step(&life.trainer, TEMPERATURE)?;
++        fixture_progress(&root, index, "ordinary_returned")?;
++        fixture_progress(&root, index, "audited_requested")?;
++        let b = life.host.step_with_swap_audit(&life.trainer, TEMPERATURE)?;
++        fixture_progress(&root, index, "audited_returned")?;
++        require(
++            a.tick_before.raw() == index as u64 && a.tick_after.raw() == index as u64 + 1,
++            "fixture actual clock",
++        )?;
++        candidate_sets += b
++            .swap_audits
++            .iter()
++            .filter(|audit| !audit.candidates.is_empty())
++            .count();
++        require(
++            a.swap_audits.is_empty() && b.swap_audits.len() == b.decisions.len(),
++            "fixture audit count",
++        )?;
++        require(
++            bytes(&a.decisions)? == bytes(&b.decisions)?,
++            "fixture decision equality",
++        )?;
++        require(
++            (
++                a.tick_before,
++                a.tick_after,
++                a.sleeping_organisms,
++                a.sleep_consolidations,
++            ) == (
++                b.tick_before,
++                b.tick_after,
++                b.sleeping_organisms,
++                b.sleep_consolidations,
++            ),
++            "fixture step equality",
++        )?;
++        require(
++            bytes(&ordinary.checkpoint(&life.trainer)?)?
++                == bytes(&life.host.checkpoint(&life.trainer)?)?,
++            "fixture full checkpoint equality",
++        )?;
++        require(
++            bytes(&life.trainer.checkpoint())? == frozen,
++            "fixture optimizer equality",
++        )?;
++        for row in &b.decisions {
++            verify_actual_replay(&life, row)?;
++        }
++        rows.push(projection::project(&life, &b, index as u16)?);
++        decisions += b.decisions.len();
++        for host in [&ordinary, &life.host] {
++            require(
++                host.world().organism_registry().iter().all(|r| {
++                    r.lifecycle().is_alive()
++                        && r.biochemistry().body.health >= 0.70
++                        && r.biochemistry().body.injury <= 0.25
++                }),
++                "fixture health stop",
++            )?;
++        }
++        fixture_progress(&root, index, "verified")?;
++    }
++    require(
++        decisions > 0 && candidate_sets > 0,
++        "fixture must reach audit hook",
++    )?;
++    let final_checkpoint = life.host.checkpoint(&life.trainer)?;
++    require(
++        final_checkpoint.residents.iter().any(|r| {
++            r.neural.last_outcome_tick.is_some()
++                && r.neural
++                    .eligibility
++                    .iter()
++                    .chain(&r.neural.fast)
++                    .chain(&r.neural.lifetime)
++                    .any(|v| *v != 0.0)
++        }),
++        "fixture nontrivial acquired neural state",
++    )?;
++    let report = serde_json::json!({"schema_version":1,"scope":"partial_fixed_fixture_not_a_study_case",
++        "fixture_seed":FIXTURE_SEED,"preparation_ticks":0,"host_steps":8,"rows":rows,"candidate_sets":candidate_sets,"nontrivial_acquired_neural_state":true,
++        "full_checkpoint_equal_each_step":true,"founder_optimizer_unchanged":true});
++    let raw = bytes(&report)?;
++    require(raw.len() <= 1024 * 1024, "fixture scalar bound")?;
++    use std::io::Write;
++    let mut output = std::fs::OpenOptions::new()
++        .write(true)
++        .create_new(true)
++        .open(root.join("partial-projection.json"))?;
++    output.write_all(&raw)?;
++    output.sync_all()?;
++    Ok(())
++}
++
++#[test]
++fn production_main_rejects_fixture_process_args() {
++    assert!(main().is_err());
++}
++
++#[test]
++fn frozen_genetic_asset_identity_without_a_life() -> Result<()> {
++    let asset = legacy::construct()?;
++    require(
++        digest(&asset.encode_canonical()?) == ASSET_SHA256,
++        "fixture frozen asset",
++    )?;
++    require(
++        asset.manifest().sensor_profile() == SensorProfile::GroundedObjectSlotsV1,
++        "fixture profile",
++    )?;
++    require(
++        asset.manifest().capacity_class_id() == BrainCapacityClass::n2048().id(),
++        "fixture brain class",
++    )
++}
++
++#[test]
++fn cli_assignment_parser_is_closed_without_dispatch() {
++    let good = [
++        "probe",
++        "run-reviewed",
++        "/fixture/root",
++        "/fixture/binding.json",
++        "0",
++        "old_world",
++    ]
++    .map(String::from);
++    let parsed = parse_reviewed_args(&good).unwrap();
++    assert_eq!(parsed.scene_index, 0);
++    assert_eq!(parsed.variant, WorldVariant::OldWorld);
++    assert_eq!(parsed.root, std::path::PathBuf::from("/fixture/root"));
++    assert_eq!(
++        parsed.binding_path,
++        std::path::PathBuf::from("/fixture/binding.json")
++    );
++    for (index, value) in [
++        (1, "run"),
++        (2, ""),
++        (3, ""),
++        (4, "2"),
++        (4, "2026112201"),
++        (5, "other"),
++    ] {
++        let mut bad = good.clone();
++        bad[index] = value.into();
++        assert!(parse_reviewed_args(&bad).is_err());
++    }
++    assert!(parse_reviewed_args(&good[..5]).is_err());
++}
++
++#[test]
++fn preparation_guard_stops_breaches_and_accepts_exact_boundaries() {
++    assert!(preparation_guard(true, 0.70, 0.25));
++    assert!(preparation_guard(true, 1.0, 0.0));
++    for (alive, health, injury) in [
++        (false, 1.0, 0.0),
++        (true, 0.69, 0.0),
++        (true, 1.0, 0.26),
++        (true, f32::NAN, 0.0),
++        (true, 1.0, f32::INFINITY),
++    ] {
++        assert!(!preparation_guard(alive, health, injury));
++    }
++}
++
++#[test]
++#[ignore = "separately reviewed prepared fixture; fixed bound and executable binding required"]
++fn prepared_audit_does_not_change_fixed_host_transitions() {
++    assert!(
++        super::prepared_fixture_adapter::run_bound_fixture().is_ok(),
++        "prepared fixture rejected; inspect finite scalar receipt"
++    );
++}
+--- /dev/null
++++ b/crates/alife_training/examples/support/world_swap_native_sink.rs
+@@ -0,0 +1,545 @@
++//! NEW reconstructed scalar-only sink; native qualification and external bounded-pipe runner required.
++use super::*;
++use serde_json::{json, Value};
++use std::{
++    fs,
++    io::{BufRead, Read, Write},
++    path::{Path, PathBuf},
++    time::{SystemTime, UNIX_EPOCH},
++};
++const FLOOR: u64 = 2 * 1024 * 1024 * 1024 + 256 * 1024 * 1024;
++#[derive(Clone, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++pub(super) struct SourceBinding {
++    pub source_tree: String,
++    pub source_closure_sha256: String,
++    pub executable_sha256: String,
++    pub plan_sha256: String,
++    pub common_patch_sha256: String,
++    pub world_patch_sha256: String,
++}
++#[derive(Clone, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++pub(super) struct Binding {
++    pub protocol: String,
++    pub deadline_unix_seconds: u64,
++    pub old_world: SourceBinding,
++    pub new_world: SourceBinding,
++}
++impl Binding {
++    fn source(&self, v: WorldVariant) -> &SourceBinding {
++        match v {
++            WorldVariant::OldWorld => &self.old_world,
++            WorldVariant::NewWorld => &self.new_world,
++        }
++    }
++}
++pub(super) struct NativeSink {
++    root: PathBuf,
++    binding: Binding,
++    id: String,
++    scene: Scene,
++    variant: WorldVariant,
++    initial: Option<Value>,
++    rows: Vec<Value>,
++    attempted: bool,
++    started: bool,
++    progress: diagnostics::Progress,
++    scalar_prefix_bytes: usize,
++}
++fn case_id(scene: Scene, variant: WorldVariant) -> String {
++    format!(
++        "s{}_{}",
++        if scene.seed == SCENES[0].seed { 1 } else { 2 },
++        match variant {
++            WorldVariant::OldWorld => "old_world",
++            WorldVariant::NewWorld => "new_world",
++        }
++    )
++}
++fn create(path: &Path, value: &Value) -> Result<Vec<u8>> {
++    let mut raw = serde_json::to_vec(value)?;
++    raw.push(b'\n');
++    require(raw.len() <= 8 * 1024 * 1024, "output_bound")?;
++    let mut f = fs::OpenOptions::new()
++        .write(true)
++        .create_new(true)
++        .open(path)?;
++    f.write_all(&raw)?;
++    f.sync_all()?;
++    Ok(raw)
++}
++const SCALAR_PREFIX_CAP: usize = 8 * 1024 * 1024;
++const SCALAR_PREFIX_RECORD_CAP: usize = 64 * 1024;
++fn scalar_prefix_record(value: &Value, previous_bytes: usize) -> Result<Vec<u8>> {
++    let mut raw = serde_json::to_vec(value)?;
++    raw.push(b'\n');
++    require(
++        raw.len() <= SCALAR_PREFIX_RECORD_CAP
++            && previous_bytes
++                .checked_add(raw.len())
++                .is_some_and(|n| n <= SCALAR_PREFIX_CAP),
++        "output_bound",
++    )?;
++    Ok(raw)
++}
++fn signal(kind: &str, id: &str) -> Result<()> {
++    println!("{} {}", kind, id);
++    std::io::stdout().flush()?;
++    Ok(())
++}
++fn wait_for(kind: &str, id: &str) -> Result<()> {
++    wait_for_reader(&mut std::io::stdin().lock(), kind, id)
++}
++fn wait_for_reader(reader: &mut impl BufRead, kind: &str, id: &str) -> Result<()> {
++    let mut line = String::new();
++    reader.take(128).read_line(&mut line)?;
++    require(line == format!("{} {}\n", kind, id), "handshake")
++}
++fn free_bytes(root: &Path) -> Result<u64> {
++    let output = std::process::Command::new("df")
++        .arg("-Pk")
++        .arg(root)
++        .output()?;
++    require(output.status.success(), "resource")?;
++    let text = std::str::from_utf8(&output.stdout).map_err(|_| "resource")?;
++    let value: u64 = text
++        .lines()
++        .last()
++        .and_then(|s| s.split_whitespace().nth(3))
++        .ok_or("resource")?
++        .parse()
++        .map_err(|_| "resource")?;
++    value.checked_mul(1024).ok_or_else(|| "resource".into())
++}
++impl NativeSink {
++    pub(super) fn new(
++        root: PathBuf,
++        binding: Binding,
++        scene: Scene,
++        variant: WorldVariant,
++    ) -> Result<Self> {
++        require(binding.protocol == "world_only_swap_v1", "binding")?;
++        require(
++            root.is_dir() && !root.is_symlink() && fs::read_dir(&root)?.next().is_none(),
++            "fresh_directory",
++        )?;
++        let executable = fs::read(std::env::current_exe()?)?;
++        require(
++            digest(&executable) == binding.source(variant).executable_sha256,
++            "executable",
++        )?;
++        Ok(Self {
++            root,
++            binding,
++            id: case_id(scene, variant),
++            scene,
++            variant,
++            initial: None,
++            rows: Vec::new(),
++            attempted: false,
++            started: false,
++            progress: diagnostics::Progress::default(),
++            scalar_prefix_bytes: 0,
++        })
++    }
++    fn append_scalar_prefix(&mut self, value: &Value, header: bool) -> Result<()> {
++        let raw = scalar_prefix_record(value, self.scalar_prefix_bytes)?;
++        require(header == (self.scalar_prefix_bytes == 0), "accounting")?;
++        let path = self.root.join("scalar-prefix.jsonl");
++        let mut options = fs::OpenOptions::new();
++        options.write(true);
++        if header {
++            options.create_new(true);
++        } else {
++            let metadata = fs::symlink_metadata(&path)?;
++            require(
++                metadata.is_file()
++                    && !metadata.file_type().is_symlink()
++                    && metadata.len() == self.scalar_prefix_bytes as u64,
++                "output_bound",
++            )?;
++            options.append(true);
++        }
++        let mut file = options.open(path)?;
++        file.write_all(&raw)?;
++        file.sync_all()?;
++        self.scalar_prefix_bytes += raw.len();
++        Ok(())
++    }
++    fn finish_report(
++        &mut self,
++        c: &Counts,
++        founder_unchanged: bool,
++        roundtrip: bool,
++    ) -> Result<()> {
++        self.guard()?;
++        require(
++            self.rows.len() == usize::from(c.ticks) && self.started,
++            "accounting",
++        )?;
++        let actual_decisions = self
++            .rows
++            .iter()
++            .map(|r| r["decisions"].as_array().map_or(0, Vec::len))
++            .sum::<usize>();
++        require(actual_decisions == usize::from(c.decisions), "accounting")?;
++        let mut meals = [0u16; 2];
++        for row in &self.rows {
++            for decision in row["decisions"].as_array().ok_or("projection")? {
++                for (i, count) in meals.iter_mut().enumerate() {
++                    *count += u16::from(
++                        decision["physical_meals"][i]
++                            .as_bool()
++                            .ok_or("projection")?,
++                    );
++                }
++            }
++        }
++        require(
++            meals == c.meals && founder_unchanged && roundtrip,
++            "preservation",
++        )?;
++        let result = json!({"schema_version":1,"case_id":self.id,"seed":self.scene.seed,"world":self.variant,
++            "initial":self.initial.as_ref().ok_or("initial")?,"source":self.binding.source(self.variant),"rows":self.rows,
++            "stop":c.stop,"founder_optimizer_unchanged":founder_unchanged,"checkpoint_roundtrip_exact":roundtrip,"primary_next_checkpoint_tested":false});
++        // Keep room for completion/rejection metadata within the unchanged
++        // 16 MiB case and 64 MiB private-run limits. A bounded-output failure
++        // retains the already persisted scalar prefix instead of losing it.
++        let summary_bytes = serde_json::to_vec(&result)?
++            .len()
++            .checked_add(1)
++            .ok_or("output_bound")?;
++        let mut existing = 0usize;
++        for entry in fs::read_dir(&self.root)? {
++            existing = existing
++                .checked_add(usize::try_from(entry?.metadata()?.len())?)
++                .ok_or("output_bound")?;
++        }
++        require(
++            existing
++                .checked_add(summary_bytes)
++                .and_then(|n| n.checked_add(64 * 1024))
++                .is_some_and(|n| n <= 16 * 1024 * 1024),
++            "output_bound",
++        )?;
++        let raw = create(&self.root.join("summary.json"), &result)?;
++        create(
++            &self.root.join("completion.json"),
++            &json!({"case_id":self.id,"original_summary_sha256":digest(&raw),"original_summary_byte_count":raw.len()}),
++        )?;
++        signal("CASE_READY", &self.id)?;
++        wait_for("VALIDATED", &self.id)
++    }
++    pub(super) fn reject(&self, error: &(dyn std::error::Error + 'static)) -> Result<()> {
++        create(
++            &self.root.join("rejection.json"),
++            &diagnostics::rejection_value(&self.id, error, &self.progress),
++        )?;
++        signal("REJECTED", &self.id)
++    }
++}
++impl AuditSink for NativeSink {
++    fn stage(&mut self, stage: diagnostics::Stage) -> Result<()> {
++        self.progress.stage = stage;
++        Ok(())
++    }
++    fn preparation_progress(&mut self, returned: bool) -> Result<()> {
++        self.progress.preparation(returned)
++    }
++    fn host_returned(&mut self) -> Result<()> {
++        self.progress.host(true)
++    }
++    fn replay_progress(&mut self, returned: bool) -> Result<()> {
++        self.progress.replay(returned)
++    }
++    fn projected_step(&mut self) -> Result<()> {
++        self.progress.projected()
++    }
++    fn guard(&mut self) -> Result<()> {
++        let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
++        require(now < self.binding.deadline_unix_seconds, "deadline")?;
++        require(free_bytes(&self.root)? >= FLOOR, "resource")?;
++        let mut size = 0u64;
++        for entry in fs::read_dir(&self.root)? {
++            let entry = entry?;
++            require(
++                entry.file_type()?.is_file() && !entry.file_type()?.is_symlink(),
++                "output_bound",
++            )?;
++            size = size
++                .checked_add(entry.metadata()?.len())
++                .ok_or("output_bound")?;
++        }
++        require(size <= 16 * 1024 * 1024, "output_bound")
++    }
++    fn attempted_before_construction(&mut self, scene: Scene, variant: WorldVariant) -> Result<()> {
++        require(
++            !self.attempted && scene == self.scene && variant == self.variant,
++            "assignment",
++        )?;
++        create(
++            &self.root.join("attempted.json"),
++            &json!({"case_id":self.id,"seed":scene.seed,"world":variant,"stage":"before_construction"}),
++        )?;
++        self.attempted = true;
++        Ok(())
++    }
++    fn prepared_pair_barrier(&mut self, identity: &PairIdentity) -> Result<()> {
++        require(
++            self.attempted && !self.started && self.initial.is_none(),
++            "accounting",
++        )?;
++        require(identity.asset_sha256 == ASSET_SHA256, "asset")?;
++        let initial = serde_json::to_value(identity)?;
++        create(
++            &self.root.join("prepared.json"),
++            &json!({"case_id":self.id,"initial":initial,"source":self.binding.source(self.variant)}),
++        )?;
++        self.initial = Some(initial);
++        let header = json!({"schema_version":1,"scope":"study_scalar_prefix","case_id":self.id,
++            "seed":self.scene.seed,"world":self.variant,"initial":self.initial,
++            "source":self.binding.source(self.variant)});
++        self.append_scalar_prefix(&header, true)?;
++        signal("PREPARED", &self.id)?;
++        wait_for("START", &self.id)?;
++        self.guard()?;
++        create(
++            &self.root.join("started.json"),
++            &json!({"case_id":self.id,"stage":"before_first_primary_tick"}),
++        )?;
++        self.started = true;
++        Ok(())
++    }
++    fn before_step(&mut self, _: &Life, index: u16) -> Result<()> {
++        require(
++            self.started && usize::from(index) == self.rows.len() && index < PRIMARY_TICKS,
++            "tick_budget",
++        )?;
++        self.progress.host(false)
++    }
++    fn actual_step(
++        &mut self,
++        _: &Life,
++        step: &CpuCanonicalStep,
++        index: u16,
++        projection: &Value,
++    ) -> Result<()> {
++        require(
++            step.decisions.len() <= 1 && usize::from(index) == self.rows.len(),
++            "row_count",
++        )?;
++        require(
++            projection["primary_tick"].as_u64() == Some(u64::from(index) + 1),
++            "clock",
++        )?;
++        self.rows.push(projection.clone());
++        self.progress.collected()?;
++        // A later append/sync failure does not undo the completed host step or
++        // in-memory collection. Only complete, validated persisted rows count
++        // as prefix evidence; no following step is invoked after this error.
++        self.append_scalar_prefix(projection, false)
++    }
++    fn finish(
++        &mut self,
++        _: &Life,
++        c: &Counts,
++        founder_unchanged: bool,
++        roundtrip: bool,
++    ) -> Result<()> {
++        self.finish_report(c, founder_unchanged, roundtrip)
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use std::io::Cursor;
++    // Synthetic process protocol only: no host, trainer, world or checkpoint exists.
++    #[test]
++    #[ignore = "data-only subprocess fixture, requires unique temporary directory"]
++    fn fixture_process() -> Result<()> {
++        let root = PathBuf::from(std::env::var("WORLD_SWAP_FIXTURE_ROOT")?);
++        let mode = std::env::var("WORLD_SWAP_FIXTURE_MODE")?;
++        let source = SourceBinding {
++            source_tree: "0".repeat(40),
++            source_closure_sha256: "0".repeat(64),
++            executable_sha256: digest(&fs::read(std::env::current_exe()?)?),
++            plan_sha256: "0".repeat(64),
++            common_patch_sha256: "0".repeat(64),
++            world_patch_sha256: "0".repeat(64),
++        };
++        let binding = Binding {
++            protocol: "world_only_swap_v1".into(),
++            deadline_unix_seconds: SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() + 20,
++            old_world: source.clone(),
++            new_world: source,
++        };
++        let scene = Scene {
++            seed: 0x5753_5632,
++            harmful_slot: 0,
++            appearance: [0, 1],
++            spawn_order: [0, 1],
++        };
++        let identity = PairIdentity {
++            asset_sha256: ASSET_SHA256.into(),
++            founder_optimizer_sha256: "0".repeat(64),
++            full_initial_checkpoint_sha256: "0".repeat(64),
++            initial_body_biology_sha256: "0".repeat(64),
++            initial_scene_sha256: "0".repeat(64),
++            sampling_seed: scene.seed as u32,
++            sampling_counter: 0,
++            actual_world_tick: 0,
++        };
++        let mut sink = NativeSink::new(root, binding, scene, WorldVariant::OldWorld)?;
++        sink.attempted_before_construction(scene, WorldVariant::OldWorld)?;
++        if mode == "stderr_overflow" {
++            let block = [b'X'; 4096];
++            for _ in 0..1025 {
++                std::io::stderr().write_all(&block)?;
++            }
++            return Err("fixture expected runner stop".into());
++        }
++        if let Err(error) = sink.prepared_pair_barrier(&identity) {
++            sink.reject(error.as_ref())?;
++            return Err(error);
++        }
++        let counts = Counts {
++            ticks: 0,
++            decisions: 0,
++            sleeping_ticks: 0,
++            sleep_consolidations: 0,
++            meals: [0, 0],
++            negative_harmful_meals: 0,
++            stop: Stop::TickBudget,
++            initial_energy: 1.0,
++            initial_health: 1.0,
++            initial_injury: 0.0,
++            final_energy: 1.0,
++            final_health: 1.0,
++            final_injury: 0.0,
++            min_health: 1.0,
++            max_injury: 0.0,
++        };
++        sink.finish_report(&counts, true, true)
++    }
++    fn synthetic_scalar_sink() -> Result<NativeSink> {
++        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
++        let nonce = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
++        let root = std::env::temp_dir().join(format!(
++            "scalar-prefix-data-only-{}-{}-{}",
++            std::process::id(),
++            nonce,
++            NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
++        ));
++        fs::create_dir(&root)?;
++        let source = SourceBinding {
++            source_tree: "0".repeat(40),
++            source_closure_sha256: "0".repeat(64),
++            executable_sha256: digest(&fs::read(std::env::current_exe()?)?),
++            plan_sha256: "0".repeat(64),
++            common_patch_sha256: "0".repeat(64),
++            world_patch_sha256: "0".repeat(64),
++        };
++        let binding = Binding {
++            protocol: "world_only_swap_v1".into(),
++            deadline_unix_seconds: 0,
++            old_world: source.clone(),
++            new_world: source,
++        };
++        // Seed zero is deliberately not a study seed; no scene/world is created.
++        NativeSink::new(
++            root,
++            binding,
++            Scene {
++                seed: 0,
++                harmful_slot: 0,
++                appearance: [0, 1],
++                spawn_order: [0, 1],
++            },
++            WorldVariant::OldWorld,
++        )
++    }
++    #[test]
++    fn scalar_prefix_append_roundtrips_existing_bytes_without_a_life() -> Result<()> {
++        let mut sink = synthetic_scalar_sink()?;
++        let header = json!({"synthetic_header":true});
++        let row = json!({"synthetic_row":1});
++        sink.append_scalar_prefix(&header, true)?;
++        sink.append_scalar_prefix(&row, false)?;
++        let raw = fs::read(sink.root.join("scalar-prefix.jsonl"))?;
++        let mut expected = scalar_prefix_record(&header, 0)?;
++        expected.extend(scalar_prefix_record(&row, expected.len())?);
++        assert_eq!(raw, expected);
++        assert_eq!(sink.scalar_prefix_bytes, raw.len());
++        assert!(sink.append_scalar_prefix(&header, true).is_err());
++        assert_eq!(fs::read(sink.root.join("scalar-prefix.jsonl"))?, raw);
++        Ok(())
++    }
++    #[test]
++    fn partial_scalar_append_never_overwrites_or_admits_a_following_record() -> Result<()> {
++        let mut sink = synthetic_scalar_sink()?;
++        sink.append_scalar_prefix(&json!({"synthetic_header":true}), true)?;
++        sink.append_scalar_prefix(&json!({"synthetic_row":1}), false)?;
++        let path = sink.root.join("scalar-prefix.jsonl");
++        let mut file = fs::OpenOptions::new().append(true).open(&path)?;
++        file.write_all(b"{")?;
++        file.sync_all()?;
++        let interrupted = fs::read(&path)?;
++        assert!(sink
++            .append_scalar_prefix(&json!({"synthetic_row":2}), false)
++            .is_err());
++        assert_eq!(fs::read(&path)?, interrupted);
++        Ok(())
++    }
++    #[test]
++    fn scalar_prefix_records_are_newline_framed_and_bounded_without_a_life() {
++        let value = json!({"fixture":"scalar"});
++        let raw = scalar_prefix_record(&value, 0).unwrap();
++        assert_eq!(raw.last(), Some(&b'\n'));
++        assert_eq!(raw.iter().filter(|&&c| c == b'\n').count(), 1);
++        assert!(scalar_prefix_record(&value, SCALAR_PREFIX_CAP - raw.len()).is_ok());
++        assert!(scalar_prefix_record(&value, SCALAR_PREFIX_CAP - raw.len() + 1).is_err());
++        assert!(scalar_prefix_record(
++            &json!({"oversized":"x".repeat(SCALAR_PREFIX_RECORD_CAP)}),
++            0
++        )
++        .is_err());
++    }
++    #[test]
++    fn bounded_handshake_rejects_wrong_case_truncation_and_overflow() {
++        assert!(wait_for_reader(&mut Cursor::new(b"START fixture\n"), "START", "fixture").is_ok());
++        for raw in [
++            b"START other\n".as_slice(),
++            b"START fixture".as_slice(),
++            &[b'X'; 256][..],
++        ] {
++            assert!(wait_for_reader(&mut Cursor::new(raw), "START", "fixture").is_err());
++        }
++    }
++    #[test]
++    fn create_new_is_byte_exact_and_never_overwrites() -> Result<()> {
++        let root =
++            std::env::temp_dir().join(format!("swap-sink-data-fixture-{}", std::process::id()));
++        fs::create_dir(&root)?;
++        let path = root.join("fixture.json");
++        let raw = create(&path, &json!({"fixed": 1}))?;
++        assert_eq!(raw, fs::read(&path)?);
++        assert_eq!(raw, b"{\"fixed\":1}\n");
++        assert!(create(&path, &json!({"replacement": 2})).is_err());
++        assert_eq!(raw, fs::read(&path)?);
++        fs::remove_file(path)?;
++        fs::remove_dir(root)?;
++        Ok(())
++    }
++    #[test]
++    fn bounded_writer_refuses_oversize_before_creating_file() -> Result<()> {
++        let path = std::env::temp_dir().join(format!(
++            "swap-sink-oversize-fixture-{}.json",
++            std::process::id()
++        ));
++        assert!(create(&path, &json!({"fixed": "X".repeat(8*1024*1024)})).is_err());
++        assert!(!path.exists());
++        Ok(())
++    }
++}
+--- /dev/null
++++ b/crates/alife_training/examples/support/world_swap_prepared_fixture.rs
+@@ -0,0 +1,348 @@
++//! SOURCE-ONLY proposal. Include only under cfg(test); main remains disabled.
++//! One fresh prepared host and one exact restore per independently bound world.
++use super::*;
++use serde_json::{json, Value};
++
++const FIXTURE_SEED: u64 = 0x5753_5635;
++const PAIRED_STEPS: u16 = 4;
++
++#[derive(Clone, Copy, Debug, Serialize)]
++#[serde(rename_all = "snake_case")]
++pub(super) enum FixtureStage {
++    BeforeConstruction,
++    PreparedBoundary,
++    InitialIdentity,
++    PairedState,
++    PostProjection,
++    Safeguards,
++    Finished,
++}
++/// Callback payload is bounded metadata, never a native error or checkpoint.
++/// `returned: false` must be durably recorded before dispatch; `true` records
++/// successful return. An observer error immediately aborts, without a retry.
++#[derive(Clone, Serialize)]
++#[serde(tag = "event", rename_all = "snake_case")]
++pub(super) enum FixtureEvent {
++    Stage { stage: FixtureStage },
++    AssetConstruction { returned: bool },
++    FreshConstruction { returned: bool },
++    Restore { returned: bool },
++    Preparation { returned: bool },
++    OrdinaryHost { returned: bool },
++    AuditedHost { returned: bool },
++    Replay { returned: bool },
++    Projection { returned: bool },
++    PairedStateEqual,
++    ProjectionStateUnchanged,
++    Evidence { evidence: Evidence },
++    ProjectedRow { row: Value },
++}
++#[derive(Clone, Default, Serialize)]
++pub(super) struct Evidence {
++    asset_bound: bool,
++    initial_checkpoint_equal: bool,
++    initial_body_biology_equal: bool,
++    initial_scene_equal: bool,
++    initial_sampling_equal: bool,
++    trainer_unchanged: bool,
++    nontrivial_neural_activity: bool,
++    real_decisions: u16,
++    candidate_sets: u16,
++    manipulation_channels: u16,
++    manipulation_transfers: u16,
++    held_h_safe_eat_candidates: u16,
++    held_h_safe_eat_attempts: u16,
++    held_h_safe_atomic_swaps: u16,
++}
++
++fn guard(host: &CpuCanonicalHost, own: OrganismId) -> Result<()> {
++    require(
++        host.world().organism_registry().iter().count() == 1,
++        "population",
++    )?;
++    preparation_world_guard(host.world(), own)
++}
++fn scene_bytes(host: &CpuCanonicalHost, targets: [WorldEntityId; 2]) -> Result<Vec<u8>> {
++    let objects = targets
++        .iter()
++        .map(|&id| {
++            host.world()
++                .entity(id)
++                .cloned()
++                .map(WorldObjectSaveState::from)
++                .ok_or("fixture scene target")
++        })
++        .collect::<std::result::Result<Vec<_>, _>>()?;
++    bytes(&objects)
++}
++
++pub(super) fn run_prepared_fixture(
++    world: WorldVariant,
++    observe: &mut impl FnMut(FixtureEvent) -> Result<()>,
++) -> Result<Value> {
++    let mut evidence = Evidence::default();
++    let mut rows = Vec::new();
++    observe(FixtureEvent::Stage {
++        stage: FixtureStage::BeforeConstruction,
++    })?;
++    observe(FixtureEvent::AssetConstruction { returned: false })?;
++    let asset = legacy::construct()?;
++    observe(FixtureEvent::AssetConstruction { returned: true })?;
++    require(
++        digest(&asset.encode_canonical()?) == ASSET_SHA256,
++        "asset_binding",
++    )?;
++    evidence.asset_bound = true;
++    let scene = Scene {
++        seed: FIXTURE_SEED,
++        harmful_slot: 0,
++        appearance: [0, 1],
++        spawn_order: [0, 1],
++    };
++    observe(FixtureEvent::FreshConstruction { returned: false })?;
++    let mut life = make_life_observed::<600>(scene, &asset, |returned| {
++        observe(FixtureEvent::Preparation { returned })
++    })?;
++    observe(FixtureEvent::FreshConstruction { returned: true })?;
++    observe(FixtureEvent::Stage {
++        stage: FixtureStage::PreparedBoundary,
++    })?;
++    guard(&life.host, life.own)?;
++    let founder = bytes(&life.trainer.checkpoint())?;
++    let initial = life.host.checkpoint(&life.trainer)?;
++    require(
++        life.host.world().tick().raw() == 600
++            && initial.residents.len() == 1
++            && initial.sampling_seed == FIXTURE_SEED as u32
++            && initial.sampling_counter == 0
++            && initial.residents.iter().all(|r| {
++                r.memory.records.is_empty()
++                    && r.staged_memory
++                        .as_ref()
++                        .is_none_or(|m| m.records.is_empty())
++            }),
++        "fixture initial",
++    )?;
++    // The sole checkpoint input is this function's fresh prepared checkpoint.
++    // No filesystem checkpoint input and no second preparation or final restore.
++    let initial_bytes = bytes(&initial)?;
++    observe(FixtureEvent::Restore { returned: false })?;
++    let mut ordinary = CpuCanonicalHost::from_checkpoint(initial, &life.trainer)?;
++    observe(FixtureEvent::Restore { returned: true })?;
++    observe(FixtureEvent::Stage {
++        stage: FixtureStage::InitialIdentity,
++    })?;
++    guard(&ordinary, life.own)?;
++    let ordinary_initial = ordinary.checkpoint(&life.trainer)?;
++    require(bytes(&ordinary_initial)? == initial_bytes, "preservation")?;
++    evidence.initial_checkpoint_equal = true;
++    require(
++        body_biology(ordinary.world(), life.own)? == life.initial_body_biology
++            && body_biology(life.host.world(), life.own)? == life.initial_body_biology,
++        "fixture body identity",
++    )?;
++    evidence.initial_body_biology_equal = true;
++    require(
++        scene_bytes(&ordinary, life.targets)? == life.initial_scene
++            && scene_bytes(&life.host, life.targets)? == life.initial_scene,
++        "fixture scene identity",
++    )?;
++    evidence.initial_scene_equal = true;
++    require(
++        ordinary_initial.sampling_seed == life.sampling_seed
++            && ordinary_initial.sampling_counter == 0
++            && ordinary.world().tick().raw() == 600,
++        "fixture sampling identity",
++    )?;
++    evidence.initial_sampling_equal = true;
++    require(
++        bytes(&life.trainer.checkpoint())? == founder,
++        "immutable_replay",
++    )?;
++    evidence.trainer_unchanged = true;
++    observe(FixtureEvent::Evidence {
++        evidence: evidence.clone(),
++    })?;
++
++    for index in 0..PAIRED_STEPS {
++        observe(FixtureEvent::Stage {
++            stage: FixtureStage::Safeguards,
++        })?;
++        guard(&ordinary, life.own)?;
++        guard(&life.host, life.own)?;
++        observe(FixtureEvent::OrdinaryHost { returned: false })?;
++        let a = ordinary.step(&life.trainer, TEMPERATURE)?;
++        observe(FixtureEvent::OrdinaryHost { returned: true })?;
++        // Stop immediately on an ordinary-branch safeguard breach, before
++        // dispatching its audited partner. A rejected receipt preserves counts.
++        observe(FixtureEvent::Stage {
++            stage: FixtureStage::Safeguards,
++        })?;
++        guard(&ordinary, life.own)?;
++        observe(FixtureEvent::AuditedHost { returned: false })?;
++        let b = life.host.step_with_swap_audit(&life.trainer, TEMPERATURE)?;
++        observe(FixtureEvent::AuditedHost { returned: true })?;
++        observe(FixtureEvent::Stage {
++            stage: FixtureStage::PairedState,
++        })?;
++        require(
++            a.tick_before.raw() == 600 + u64::from(index)
++                && a.tick_after.raw() == 601 + u64::from(index),
++            "actual_clock",
++        )?;
++        require(
++            a.swap_audits.is_empty()
++                && b.decisions.len() <= 1
++                && b.swap_audits.len() == b.decisions.len(),
++            "audit_count",
++        )?;
++        require(
++            bytes(&a.decisions)? == bytes(&b.decisions)?,
++            "fixture decision equality",
++        )?;
++        require(
++            (
++                a.tick_before,
++                a.tick_after,
++                a.sleeping_organisms,
++                a.sleep_consolidations,
++            ) == (
++                b.tick_before,
++                b.tick_after,
++                b.sleeping_organisms,
++                b.sleep_consolidations,
++            ),
++            "fixture step equality",
++        )?;
++        let post = bytes(&life.host.checkpoint(&life.trainer)?)?;
++        require(
++            bytes(&ordinary.checkpoint(&life.trainer)?)? == post,
++            "preservation",
++        )?;
++        require(
++            bytes(&life.trainer.checkpoint())? == founder,
++            "immutable_replay",
++        )?;
++        observe(FixtureEvent::PairedStateEqual)?;
++        observe(FixtureEvent::Stage {
++            stage: FixtureStage::Safeguards,
++        })?;
++        guard(&life.host, life.own)?;
++        for row in &b.decisions {
++            observe(FixtureEvent::Replay { returned: false })?;
++            verify_actual_replay(&life, row)?;
++            observe(FixtureEvent::Replay { returned: true })?;
++        }
++        observe(FixtureEvent::Projection { returned: false })?;
++        let row = projection::project(&life, &b, index)?;
++        observe(FixtureEvent::Projection { returned: true })?;
++        observe(FixtureEvent::Stage {
++            stage: FixtureStage::PostProjection,
++        })?;
++        require(
++            bytes(&life.host.checkpoint(&life.trainer)?)? == post
++                && bytes(&ordinary.checkpoint(&life.trainer)?)? == post,
++            "preservation",
++        )?;
++        require(
++            bytes(&life.trainer.checkpoint())? == founder
++                && digest(&asset.encode_canonical()?) == ASSET_SHA256,
++            "immutable_replay",
++        )?;
++        observe(FixtureEvent::ProjectionStateUnchanged)?;
++        // Only successfully collected scalar rows contribute behavioral evidence.
++        observe(FixtureEvent::ProjectedRow { row: row.clone() })?;
++        rows.push(row.clone());
++        evidence.real_decisions += u16::try_from(b.decisions.len())?;
++        evidence.candidate_sets += u16::try_from(
++            b.swap_audits
++                .iter()
++                .filter(|a| !a.candidates.is_empty())
++                .count(),
++        )?;
++        for audit in &b.swap_audits {
++            for channel in &audit.motor.channel_receipts {
++                if channel.command.channel == MotorChannel::Manipulation {
++                    evidence.manipulation_channels += 1;
++                    evidence.manipulation_transfers += u16::try_from(channel.grip_transfers.len())?;
++                }
++            }
++        }
++        // Descriptive counts from the actual bounded projection only. Candidate
++        // presence is an opportunity, not an executed action or a transfer.
++        if let Some(decisions) = row["decisions"].as_array() {
++            for decision in decisions {
++                let h_held = decision["owners_before"].as_array().is_some_and(|owners| {
++                    owners
++                        .iter()
++                        .any(|owner| owner["target"] == "h" && owner["owner"] == "self")
++                });
++                if h_held {
++                    evidence.held_h_safe_eat_candidates +=
++                        u16::from(decision["candidates"].as_array().is_some_and(|candidates| {
++                            candidates.iter().any(|c| {
++                                c["primitive"] == HeadlessActionIds::EAT.raw() && c["target"] == "s"
++                            })
++                        }));
++                    evidence.held_h_safe_eat_attempts +=
++                        u16::from(decision["channels"].as_array().is_some_and(|channels| {
++                            channels.iter().any(|c| {
++                                c["slot"] == 2
++                                    && c["primitive"] == HeadlessActionIds::EAT.raw()
++                                    && c["target"] == "s"
++                            })
++                        }));
++                    evidence.held_h_safe_atomic_swaps +=
++                        u16::from(decision["channels"].as_array().is_some_and(|channels| {
++                            channels.iter().any(|c| {
++                                c["slot"] == 2 && c["target"] == "s" && c["event"] == "atomic_swap"
++                            })
++                        }));
++                }
++            }
++        }
++        observe(FixtureEvent::Evidence {
++            evidence: evidence.clone(),
++        })?;
++        observe(FixtureEvent::Stage {
++            stage: FixtureStage::Safeguards,
++        })?;
++        guard(&ordinary, life.own)?;
++        guard(&life.host, life.own)?;
++    }
++    let final_checkpoint = life.host.checkpoint(&life.trainer)?;
++    evidence.nontrivial_neural_activity = final_checkpoint.residents.iter().any(|r| {
++        r.neural.last_outcome_tick.is_some_and(|tick| tick >= 600)
++            && r.neural
++                .neural
++                .activations
++                .iter()
++                .chain(&r.neural.eligibility)
++                .chain(&r.neural.fast)
++                .chain(&r.neural.lifetime)
++                .any(|v| *v != 0.0)
++    });
++    require(
++        evidence.real_decisions > 0
++            && evidence.candidate_sets > 0
++            && evidence.nontrivial_neural_activity,
++        "fixture nontrivial activity",
++    )?;
++    require(rows.len() == usize::from(PAIRED_STEPS), "accounting")?;
++    observe(FixtureEvent::Evidence {
++        evidence: evidence.clone(),
++    })?;
++    // Zero transfers is an honest coverage gap, never a reason to extend the
++    // horizon, force an action, add memory, or schedule a retry.
++    observe(FixtureEvent::Stage {
++        stage: FixtureStage::Finished,
++    })?;
++    Ok(json!({"schema_version":1,
++        "scope":"prepared_fixed_fixture_not_a_study_case", "status":"PARTIAL",
++        "outcome":"fixture_passed", "fixture_seed":FIXTURE_SEED, "world":world,
++        "execution_domain":"offline_cpu", "study_completed":false,
++        "strict_validation":"pending", "asset_sha256":ASSET_SHA256,
++        "evidence":evidence, "rows":rows,
++        "manipulation_coverage":if evidence.manipulation_transfers > 0 {
++            "actual_transfers_observed" } else { "no_actual_transfers_observed" }}))
++}
+--- /dev/null
++++ b/crates/alife_training/examples/support/world_swap_prepared_fixture_adapter.rs
+@@ -0,0 +1,533 @@
++//! Fixed-fixture only, with durable closed counters and no private/native error text.
++use super::prepared_fixture::{Evidence, FixtureEvent, FixtureStage};
++use super::*;
++use serde_json::{json, Value};
++use std::{fs, io::Write, path::Path};
++#[derive(Clone, Copy, Default, Serialize)]
++struct Count {
++    requested: u16,
++    returned: u16,
++}
++impl Count {
++    fn change(&mut self, returned: bool, cap: u16) -> Result<()> {
++        require(
++            if returned {
++                self.requested == self.returned + 1
++            } else {
++                self.requested == self.returned && self.requested < cap
++            },
++            "accounting",
++        )?;
++        if returned {
++            self.returned += 1;
++        } else {
++            self.requested += 1;
++        }
++        Ok(())
++    }
++    fn done(self) -> bool {
++        self.requested == self.returned
++    }
++}
++#[derive(Clone, Serialize)]
++struct Progress {
++    stage: &'static str,
++    asset_construction: Count,
++    fresh_construction: Count,
++    restore: Count,
++    preparation: Count,
++    ordinary_host: Count,
++    audited_host: Count,
++    replay: Count,
++    projection: Count,
++    paired_states_equal: u16,
++    projection_states_unchanged: u16,
++    rows_collected: u16,
++}
++impl Default for Progress {
++    fn default() -> Self {
++        Self {
++            stage: "before_construction",
++            asset_construction: Count::default(),
++            fresh_construction: Count::default(),
++            restore: Count::default(),
++            preparation: Count::default(),
++            ordinary_host: Count::default(),
++            audited_host: Count::default(),
++            replay: Count::default(),
++            projection: Count::default(),
++            paired_states_equal: 0,
++            projection_states_unchanged: 0,
++            rows_collected: 0,
++        }
++    }
++}
++struct Collector {
++    progress: Progress,
++    evidence: Evidence,
++    rows: Vec<Value>,
++}
++impl Default for Collector {
++    fn default() -> Self {
++        Self {
++            progress: Progress::default(),
++            evidence: Evidence::default(),
++            rows: Vec::new(),
++        }
++    }
++}
++fn fields(v: &Value, names: &[&str]) -> Result<()> {
++    let map = v.as_object().ok_or("fixture scalar shape")?;
++    require(
++        map.len() == names.len() && names.iter().all(|k| map.contains_key(*k)),
++        "fixture scalar shape",
++    )
++}
++fn shape_row(v: &Value, index: usize) -> Result<()> {
++    fields(
++        v,
++        &[
++            "primary_tick",
++            "world_tick_before",
++            "world_tick_after",
++            "sampling_counter_after",
++            "sleeping",
++            "sleep_consolidations",
++            "boundary_owners",
++            "alive",
++            "energy",
++            "health",
++            "injury",
++            "active_memory_count",
++            "staged_memory_count",
++            "decisions",
++        ],
++    )?;
++    require(
++        v["primary_tick"].as_u64() == Some(index as u64 + 1) && bytes(v)?.len() <= 64 * 1024,
++        "output_bound",
++    )?;
++    let decisions = v["decisions"].as_array().ok_or("fixture scalar shape")?;
++    require(decisions.len() <= 1, "population")?;
++    for d in decisions {
++        fields(
++            d,
++            &[
++                "sequence",
++                "sampling_counter",
++                "actual_replay_equal",
++                "pain",
++                "pre_energy",
++                "aversive_harm",
++                "experienced_valence",
++                "owners_before",
++                "owners_after",
++                "candidates",
++                "channels",
++                "physical_meals",
++                "ingest_episode_active",
++                "ingest_episode_staged",
++            ],
++        )?;
++        let candidates = d["candidates"].as_array().ok_or("fixture scalar shape")?;
++        let channels = d["channels"].as_array().ok_or("fixture scalar shape")?;
++        require(
++            candidates.len() <= 32 && channels.len() <= 5,
++            "output_bound",
++        )?;
++        for c in candidates {
++            fields(
++                c,
++                &[
++                    "index",
++                    "primitive",
++                    "family",
++                    "target",
++                    "active",
++                    "owner",
++                    "mode",
++                    "contact",
++                    "contact_reachable",
++                    "grasp_reachable",
++                    "held_count",
++                    "actor_alive",
++                    "effector",
++                    "target_sources",
++                    "family_sources",
++                    "target_confidence",
++                    "family_confidence",
++                    "family_valence",
++                    "source_sequence",
++                    "source_exact_ingest",
++                ],
++            )?;
++        }
++        for c in channels {
++            fields(
++                c,
++                &[
++                    "slot",
++                    "candidate",
++                    "primitive",
++                    "target",
++                    "phase",
++                    "executed",
++                    "failure",
++                    "contact",
++                    "physical_target",
++                    "event",
++                    "transfers",
++                ],
++            )?;
++            let transfers = c["transfers"].as_array().ok_or("fixture scalar shape")?;
++            require(transfers.len() <= 2, "output_bound")?;
++            for t in transfers {
++                fields(t, &["target", "kind", "previous_owner", "new_owner"])?;
++            }
++        }
++    }
++    // Full enum/range, ownership, physical-meal and replay semantics are checked
++    // by the separately bound Python validator before any receipt is admitted.
++    Ok(())
++}
++impl Collector {
++    fn reduce(&mut self, event: FixtureEvent) -> Result<()> {
++        let p = &mut self.progress;
++        match event {
++            FixtureEvent::Stage { stage } => {
++                p.stage = match stage {
++                    FixtureStage::BeforeConstruction => "before_construction",
++                    FixtureStage::PreparedBoundary => "prepared_boundary",
++                    FixtureStage::InitialIdentity => "initial_identity",
++                    FixtureStage::PairedState => "paired_state",
++                    FixtureStage::PostProjection => "post_projection",
++                    FixtureStage::Safeguards => "safeguards",
++                    FixtureStage::Finished => "finished",
++                }
++            }
++            FixtureEvent::AssetConstruction { returned } => {
++                p.stage = "asset_construction";
++                p.asset_construction.change(returned, 1)?;
++            }
++            FixtureEvent::FreshConstruction { returned } => {
++                require(
++                    p.asset_construction.returned == 1
++                        && (!returned || p.preparation.returned == 600),
++                    "accounting",
++                )?;
++                p.stage = "fresh_construction";
++                p.fresh_construction.change(returned, 1)?;
++            }
++            FixtureEvent::Preparation { returned } => {
++                require(
++                    p.fresh_construction.requested == 1 && p.fresh_construction.returned == 0,
++                    "accounting",
++                )?;
++                p.stage = "preparation";
++                p.preparation.change(returned, 600)?;
++            }
++            FixtureEvent::Restore { returned } => {
++                require(
++                    p.fresh_construction.returned == 1 && p.preparation.returned == 600,
++                    "accounting",
++                )?;
++                p.stage = "restore";
++                p.restore.change(returned, 1)?;
++            }
++            FixtureEvent::OrdinaryHost { returned } => {
++                require(
++                    p.restore.returned == 1
++                        && (returned
++                            || (p.ordinary_host.returned == p.rows_collected
++                                && p.audited_host.returned == p.rows_collected)),
++                    "accounting",
++                )?;
++                p.stage = "ordinary_host";
++                p.ordinary_host.change(returned, 4)?;
++            }
++            FixtureEvent::AuditedHost { returned } => {
++                require(
++                    p.ordinary_host.returned == p.rows_collected + 1
++                        && p.audited_host.returned == p.rows_collected,
++                    "accounting",
++                )?;
++                p.stage = "audited_host";
++                p.audited_host.change(returned, 4)?;
++            }
++            FixtureEvent::Replay { returned } => {
++                require(
++                    p.paired_states_equal == p.rows_collected + 1
++                        && p.replay.requested <= p.audited_host.returned,
++                    "accounting",
++                )?;
++                p.stage = "replay";
++                p.replay.change(returned, 4)?;
++            }
++            FixtureEvent::Projection { returned } => {
++                require(
++                    p.paired_states_equal == p.rows_collected + 1 && p.replay.done(),
++                    "accounting",
++                )?;
++                p.stage = "projection";
++                p.projection.change(returned, 4)?;
++            }
++            FixtureEvent::PairedStateEqual => {
++                require(
++                    p.paired_states_equal == p.rows_collected
++                        && p.audited_host.returned == p.rows_collected + 1,
++                    "accounting",
++                )?;
++                p.paired_states_equal += 1;
++            }
++            FixtureEvent::ProjectionStateUnchanged => {
++                require(
++                    p.projection_states_unchanged == p.rows_collected
++                        && p.projection.returned == p.rows_collected + 1,
++                    "accounting",
++                )?;
++                p.projection_states_unchanged += 1;
++            }
++            FixtureEvent::Evidence { evidence } => self.evidence = evidence,
++            FixtureEvent::ProjectedRow { row } => {
++                require(
++                    p.projection_states_unchanged == p.rows_collected + 1 && self.rows.len() < 4,
++                    "accounting",
++                )?;
++                shape_row(&row, self.rows.len())?;
++                self.rows.push(row);
++                p.rows_collected += 1;
++            }
++        }
++        Ok(())
++    }
++    fn evidence_value(&self) -> Result<Value> {
++        let mut value = serde_json::to_value(&self.evidence)?;
++        let mut counts = [0u16; 7];
++        for row in &self.rows {
++            for d in row["decisions"].as_array().ok_or("fixture scalar shape")? {
++                counts[0] += 1;
++                let candidates = d["candidates"].as_array().ok_or("fixture scalar shape")?;
++                let channels = d["channels"].as_array().ok_or("fixture scalar shape")?;
++                counts[1] += u16::from(!candidates.is_empty());
++                for c in channels {
++                    if c["slot"] == 2 {
++                        counts[2] += 1;
++                        counts[3] += u16::try_from(
++                            c["transfers"]
++                                .as_array()
++                                .ok_or("fixture scalar shape")?
++                                .len(),
++                        )?;
++                    }
++                }
++                let held = d["owners_before"].as_array().is_some_and(|owners| {
++                    owners
++                        .iter()
++                        .any(|o| o["target"] == "h" && o["owner"] == "self")
++                });
++                if held {
++                    counts[4] += u16::from(
++                        candidates
++                            .iter()
++                            .any(|c| c["primitive"] == 210 && c["target"] == "s"),
++                    );
++                    counts[5] +=
++                        u16::from(channels.iter().any(|c| {
++                            c["slot"] == 2 && c["primitive"] == 210 && c["target"] == "s"
++                        }));
++                    counts[6] += u16::from(channels.iter().any(|c| {
++                        c["slot"] == 2 && c["target"] == "s" && c["event"] == "atomic_swap"
++                    }));
++                }
++            }
++        }
++        for (name, count) in [
++            "real_decisions",
++            "candidate_sets",
++            "manipulation_channels",
++            "manipulation_transfers",
++            "held_h_safe_eat_candidates",
++            "held_h_safe_eat_attempts",
++            "held_h_safe_atomic_swaps",
++        ]
++        .iter()
++        .zip(counts)
++        {
++            value[*name] = json!(count);
++        }
++        Ok(value)
++    }
++    fn snapshot(&self) -> Result<Value> {
++        Ok(json!({"progress":self.progress,"evidence":self.evidence_value()?}))
++    }
++}
++fn create(path: &Path, value: &Value, bound: usize) -> Result<()> {
++    let raw = bytes(value)?;
++    require(raw.len() <= bound, "output_bound")?;
++    let mut f = fs::OpenOptions::new()
++        .create_new(true)
++        .write(true)
++        .open(path)?;
++    f.write_all(&raw)?;
++    f.sync_all()?;
++    Ok(())
++}
++fn persist(root: &Path, collector: &Collector) -> Result<()> {
++    let next = root.join("progress.next");
++    create(&next, &collector.snapshot()?, 16 * 1024)?;
++    fs::rename(next, root.join("progress.json"))?;
++    fs::File::open(root)?.sync_all()?;
++    Ok(())
++}
++#[derive(Deserialize)]
++#[serde(deny_unknown_fields)]
++struct Binding {
++    world: WorldVariant,
++    source: native_sink::SourceBinding,
++}
++pub(super) fn run_bound_fixture() -> Result<()> {
++    let root = std::path::PathBuf::from(std::env::var("WORLD_SWAP_PREPARED_FIXTURE_ROOT")?);
++    require(root.is_dir() && !root.is_symlink(), "fixture root")?;
++    let entries = fs::read_dir(&root)?.collect::<std::result::Result<Vec<_>, _>>()?;
++    require(
++        entries.len() == 1 && entries[0].file_name() == "binding.json",
++        "fixture fresh root",
++    )?;
++    let raw = fs::read(root.join("binding.json"))?;
++    require(raw.len() <= 16 * 1024, "output_bound")?;
++    let binding: Binding = serde_json::from_slice(&raw)?;
++    require(
++        binding.source.executable_sha256 == digest(&fs::read(std::env::current_exe()?)?),
++        "executable binding",
++    )?;
++    let mut collector = Collector::default();
++    persist(&root, &collector)?;
++    let result = prepared_fixture::run_prepared_fixture(binding.world, &mut |event| {
++        collector.reduce(event)?;
++        persist(&root, &collector)
++    });
++    let (mut report, passed) = match result {
++        Ok(value) => (value, true),
++        Err(error) => (
++            json!({"schema_version":1,"scope":"prepared_fixed_fixture_not_a_study_case","status":"PARTIAL",
++            "outcome":"fixture_rejected","fixture_seed":0x5753_5635u64,"world":binding.world,
++            "execution_domain":"offline_cpu","study_completed":false,"strict_validation":"pending","asset_sha256":ASSET_SHA256,
++            "evidence":collector.evidence_value()?,"rows":collector.rows,
++            "manipulation_coverage":if collector.evidence_value()?["manipulation_transfers"].as_u64().unwrap_or(0)>0 {"actual_transfers_observed"}else{"no_actual_transfers_observed"},
++            "code":diagnostics::classify(error.as_ref())}),
++            false,
++        ),
++    };
++    // Recompute from accepted rows even if the later Evidence callback failed.
++    report["evidence"] = collector.evidence_value()?;
++    report["manipulation_coverage"] = json!(if report["evidence"]["manipulation_transfers"]
++        .as_u64()
++        .unwrap_or(0)
++        > 0
++    {
++        "actual_transfers_observed"
++    } else {
++        "no_actual_transfers_observed"
++    });
++    report["progress"] = serde_json::to_value(&collector.progress)?;
++    report["source"] = serde_json::to_value(&binding.source)?;
++    if passed {
++        report["code"] = Value::Null;
++    }
++    create(&root.join("receipt.json"), &report, 256 * 1024)?;
++    fs::File::open(&root)?.sync_all()?;
++    require(passed, "fixture rejected")
++}
++#[cfg(test)]
++mod tests {
++    use super::*;
++    fn prepared_collector() -> Collector {
++        let mut c = Collector::default();
++        for returned in [false, true] {
++            c.reduce(FixtureEvent::AssetConstruction { returned })
++                .unwrap();
++        }
++        c.reduce(FixtureEvent::FreshConstruction { returned: false })
++            .unwrap();
++        for _ in 0..600 {
++            for returned in [false, true] {
++                c.reduce(FixtureEvent::Preparation { returned }).unwrap();
++            }
++        }
++        c.reduce(FixtureEvent::FreshConstruction { returned: true })
++            .unwrap();
++        for returned in [false, true] {
++            c.reduce(FixtureEvent::Restore { returned }).unwrap();
++        }
++        c
++    }
++    #[test]
++    fn request_fail_return_and_projection_fail_have_distinct_counts_without_world() {
++        let mut c = prepared_collector();
++        c.reduce(FixtureEvent::OrdinaryHost { returned: false })
++            .unwrap();
++        assert_eq!(
++            (
++                c.progress.ordinary_host.requested,
++                c.progress.ordinary_host.returned
++            ),
++            (1, 0)
++        );
++        assert!(c
++            .reduce(FixtureEvent::OrdinaryHost { returned: false })
++            .is_err());
++        c.reduce(FixtureEvent::OrdinaryHost { returned: true })
++            .unwrap();
++        for returned in [false, true] {
++            c.reduce(FixtureEvent::AuditedHost { returned }).unwrap();
++        }
++        c.reduce(FixtureEvent::PairedStateEqual).unwrap();
++        c.reduce(FixtureEvent::Projection { returned: false })
++            .unwrap();
++        assert_eq!(
++            (
++                c.progress.audited_host.returned,
++                c.progress.projection.requested,
++                c.progress.projection.returned,
++                c.progress.rows_collected
++            ),
++            (1, 1, 0, 0)
++        );
++        c.reduce(FixtureEvent::Projection { returned: true })
++            .unwrap();
++        assert_eq!(
++            (c.progress.projection.returned, c.progress.rows_collected),
++            (1, 0)
++        );
++    }
++    #[test]
++    fn accepted_rows_determine_counts_even_before_evidence_callback() {
++        let mut c = Collector::default();
++        c.rows.push(json!({"decisions":[{"owners_before":[],"candidates":[{}],"channels":[{"slot":2,"transfers":[{}]}]}]}));
++        let e = c.evidence_value().unwrap();
++        assert_eq!(e["real_decisions"], 1);
++        assert_eq!(e["manipulation_transfers"], 1);
++        assert_eq!(e["asset_bound"], false);
++        assert_eq!(e["nontrivial_neural_activity"], false);
++        c.rows.clear();
++        assert_eq!(c.evidence_value().unwrap()["manipulation_transfers"], 0);
++    }
++    #[test]
++    fn preparation_and_order_fail_closed_without_world() {
++        let mut c = Collector::default();
++        assert!(c
++            .reduce(FixtureEvent::Preparation { returned: false })
++            .is_err());
++        assert!(c
++            .reduce(FixtureEvent::OrdinaryHost { returned: false })
++            .is_err());
++        let mut c = prepared_collector();
++        assert!(c
++            .reduce(FixtureEvent::Preparation { returned: false })
++            .is_err());
++        assert!(c
++            .reduce(FixtureEvent::AuditedHost { returned: false })
++            .is_err());
++        assert_eq!(c.progress.preparation.returned, 600);
++    }
++}
+--- /dev/null
++++ b/crates/alife_training/examples/support/world_swap_receipt_projection.rs
+@@ -0,0 +1,371 @@
++//! NEW reconstructed projection of actual receipts. No hypothetical world action.
++use super::*;
++use serde_json::{json, Value};
++fn role(life: &Life, id: Option<WorldEntityId>) -> &'static str {
++    match id {
++        None => "none",
++        Some(t) if t == life.targets[0] => "h",
++        Some(t) if t == life.targets[1] => "s",
++        _ => "other",
++    }
++}
++fn owner(o: SwapOwner) -> &'static str {
++    match o {
++        SwapOwner::Missing => "missing",
++        SwapOwner::Consumed => "consumed",
++        SwapOwner::Nobody => "nobody",
++        SwapOwner::ThisOrganism => "self",
++        SwapOwner::OtherOrganism => "other",
++        SwapOwner::Player => "player",
++    }
++}
++fn mode(m: SwapGripMode) -> &'static str {
++    match m {
++        SwapGripMode::None => "none",
++        SwapGripMode::Activity => "activity",
++        SwapGripMode::Deliberate => "deliberate",
++    }
++}
++fn phase(p: ActionPhase) -> &'static str {
++    match p {
++        ActionPhase::Attempt => "attempt",
++        ActionPhase::Preparation => "preparation",
++        ActionPhase::Completed => "completed",
++    }
++}
++fn contact(p: PhysicalContactKind) -> &'static str {
++    match p {
++        PhysicalContactKind::None => "none",
++        PhysicalContactKind::Touch => "touch",
++        PhysicalContactKind::Collision => "collision",
++        PhysicalContactKind::Blocked => "blocked",
++        PhysicalContactKind::Consumed => "consumed",
++        PhysicalContactKind::Moved => "moved",
++    }
++}
++fn transfer(t: GripTransferKind) -> &'static str {
++    match t {
++        GripTransferKind::Acquired => "acquired",
++        GripTransferKind::Released => "released",
++        GripTransferKind::Placed => "placed",
++        GripTransferKind::Consumed => "consumed",
++    }
++}
++fn holder(o: Option<OrganismId>, own: OrganismId) -> &'static str {
++    match o {
++        None => "nobody",
++        Some(x) if x == own => "self",
++        _ => "other",
++    }
++}
++fn failure(f: Option<ReferenceActionFailure>) -> &'static str {
++    match f {
++        None => "none",
++        Some(ReferenceActionFailure::MissingAffordance) => "missing_affordance",
++        Some(ReferenceActionFailure::ActionRejected) => "action_rejected",
++        Some(ReferenceActionFailure::Blocked) => "blocked",
++        Some(ReferenceActionFailure::ExecutorInvalid) => "executor_invalid",
++    }
++}
++fn owners(life: &Life, facts: &[SwapOwnership]) -> Result<Value> {
++    require(facts.len() <= 16, "scene_bound")?;
++    let mut result = Vec::new();
++    for target in life.targets {
++        let f = facts
++            .iter()
++            .find(|f| f.target == target)
++            .ok_or("owner_missing")?;
++        result.push(json!({"target":role(life,Some(target)),"active":f.active,"owner":owner(f.owner),"mode":mode(f.mode)}));
++    }
++    require(
++        facts
++            .iter()
++            .filter(|f| f.owner == SwapOwner::ThisOrganism)
++            .count()
++            <= 1,
++        "multiple_hold",
++    )?;
++    Ok(Value::Array(result))
++}
++fn event(c: &HeadlessMotorChannelReceipt, own: OrganismId) -> Result<&'static str> {
++    let target = c.command.target.and_then(|t| t.entity);
++    require(c.succeeded == c.failure.is_none(), "failure_binding")?;
++    require(
++        c.observation
++            .as_ref()
++            .is_none_or(|o| o.executed == c.succeeded),
++        "execution_binding",
++    )?;
++    let t = &c.grip_transfers;
++    require(
++        t.is_empty() || c.command.channel == MotorChannel::Manipulation,
++        "transfer_channel",
++    )?;
++    let value = match t.as_slice() {
++        [] => {
++            if c.failure.is_some() {
++                "failed"
++            } else {
++                "none"
++            }
++        }
++        [a] => match a.kind {
++            GripTransferKind::Acquired => {
++                require(
++                    Some(a.object) == target
++                        && c.physical.target_entity == target
++                        && (c.command.primitive != HeadlessActionIds::EAT
++                            || c.phase == ActionPhase::Preparation)
++                        && a.previous_owner.is_none()
++                        && a.new_owner == Some(own),
++                    "acquire_receipt",
++                )?;
++                "acquired"
++            }
++            GripTransferKind::Placed => {
++                require(
++                    a.previous_owner == Some(own)
++                        && a.new_owner.is_none()
++                        && c.physical.target_entity == Some(a.object)
++                        && (c.command.primitive != HeadlessActionIds::EAT
++                            || c.phase == ActionPhase::Preparation),
++                    "place_receipt",
++                )?;
++                "placed_only"
++            }
++            GripTransferKind::Released => {
++                require(
++                    Some(a.object) == target
++                        && a.previous_owner == Some(own)
++                        && a.new_owner.is_none(),
++                    "release_receipt",
++                )?;
++                "released"
++            }
++            GripTransferKind::Consumed => {
++                require(
++                    Some(a.object) == target
++                        && a.previous_owner == Some(own)
++                        && a.new_owner.is_none()
++                        && c.physical.contact == PhysicalContactKind::Consumed
++                        && c.physical.target_entity == target
++                        && c.command.primitive == HeadlessActionIds::EAT
++                        && c.phase == ActionPhase::Completed,
++                    "meal_receipt",
++                )?;
++                "consumed"
++            }
++        },
++        [a, b] => {
++            require(
++                a.kind == GripTransferKind::Placed
++                    && b.kind == GripTransferKind::Acquired
++                    && a.object != b.object
++                    && a.previous_owner == Some(own)
++                    && a.new_owner.is_none()
++                    && b.previous_owner.is_none()
++                    && b.new_owner == Some(own)
++                    && Some(b.object) == target
++                    && c.physical.target_entity == target,
++                "swap_receipt",
++            )?;
++            require(
++                c.command.primitive != HeadlessActionIds::EAT
++                    || c.phase == ActionPhase::Preparation,
++                "swap_phase",
++            )?;
++            "atomic_swap"
++        }
++        _ => return Err("transfer_count".into()),
++    };
++    require(
++        t.is_empty()
++            || (c.succeeded
++                && c.physical.contact
++                    == if value == "consumed" {
++                        PhysicalContactKind::Consumed
++                    } else {
++                        PhysicalContactKind::Touch
++                    }),
++        "transfer_execution",
++    )?;
++    require(t.is_empty() || c.failure.is_none(), "failed_transfer")?;
++    require(
++        c.physical.contact != PhysicalContactKind::Consumed || value == "consumed",
++        "physical_meal",
++    )?;
++    Ok(value)
++}
++pub(super) fn project(life: &Life, step: &CpuCanonicalStep, index: u16) -> Result<Value> {
++    require(
++        step.decisions.len() == step.swap_audits.len() && step.decisions.len() <= 1,
++        "audit_count",
++    )?;
++    let checkpoint = life.host.checkpoint(&life.trainer)?;
++    require(checkpoint.residents.len() == 1, "population")?;
++    let resident = &checkpoint.residents[0];
++    let active = &resident.memory.records;
++    let staged = resident
++        .staged_memory
++        .as_ref()
++        .map(|m| m.records.as_slice())
++        .unwrap_or(&[]);
++    let mut decisions = Vec::new();
++    for (row, audit) in step.decisions.iter().zip(&step.swap_audits) {
++        let frame = row.patch.pre_action().perception();
++        require(
++            audit.sequence == row.patch.header().sequence_id
++                && audit.frame_digest == frame.frame_digest(),
++            "sequence_binding",
++        )?;
++        require(
++            row.patch.selected_bundle() == Some(&audit.motor.bundle)
++                && row.patch.outcome().joint.as_ref() == Some(&audit.motor.joint),
++            "actual_receipt_binding",
++        )?;
++        require(
++            audit.candidates.len() == frame.candidates().len(),
++            "candidate_count",
++        )?;
++        require(
++            audit
++                .motor
++                .channel_receipts
++                .iter()
++                .flat_map(|c| c.grip_transfers.iter())
++                .eq(audit.motor.grip_transfers.iter()),
++            "transfer_order",
++        )?;
++        let mut candidates = Vec::new();
++        for (i, (c, e)) in frame.candidates().iter().zip(&audit.candidates).enumerate() {
++            require(
++                c.candidate_index as usize == i
++                    && e.candidate_index as usize == i
++                    && e.world_target == c.target.entity,
++                "candidate_binding",
++            )?;
++            let source = e.best_family_source.as_ref();
++            let exact = source.is_some_and(|s| {
++                s.action == HeadlessActionIds::EAT.raw()
++                    && s.family == u16::from(CandidateActionFamily::Ingest.raw())
++                    && s.contact == Some(PhysicalContactKind::Consumed)
++                    && e.tracked_target
++                        .is_some_and(|t| t.raw() == s.tracked_target)
++            });
++            candidates.push(json!({"index":i,"primitive":c.action_id.raw(),"family":c.family.raw(),"target":role(life,c.target.entity),
++                "active":e.physical.active,"owner":owner(e.physical.owner),"mode":mode(e.physical.mode),"contact":c.features.0[18]>0.,
++                "contact_reachable":e.physical.physical_contact_reachable,"grasp_reachable":e.physical.grasp_reachable,
++                "held_count":e.physical.self_held_object_count,"actor_alive":e.physical.actor_alive,"effector":e.physical.manipulation_effector,
++                "target_sources":e.target_source_count,"family_sources":e.family_source_count,"target_confidence":e.target_confidence,
++                "family_confidence":e.family_confidence,"family_valence":e.family_valence,
++                "source_sequence":source.map(|s|s.sequence),"source_exact_ingest":exact}));
++        }
++        let mut channels = Vec::new();
++        let mut meals = [false; 2];
++        let mut covered_active = [false; 2];
++        let mut covered_staged = [false; 2];
++        for c in &audit.motor.channel_receipts {
++            let slot = match c.command.channel {
++                MotorChannel::Locomotion => 0,
++                MotorChannel::Orientation => 1,
++                MotorChannel::Manipulation => 2,
++                MotorChannel::Vocal => 3,
++                MotorChannel::Posture => 4,
++                _ => return Err("channel".into()),
++            };
++            let ci = row.action.motor_candidates[slot].ok_or("selected_channel")? as usize;
++            let candidate = frame.candidates().get(ci).ok_or("selected_index")?;
++            let target = c.command.target.and_then(|t| t.entity);
++            require(
++                candidate.action_id == c.command.primitive && candidate.target.entity == target,
++                "selected_target",
++            )?;
++            let observed = event(c, life.own)?;
++            let executed = c.succeeded;
++            require(c.failure.is_none() || !executed, "failure_binding")?;
++            let transfers=c.grip_transfers.iter().map(|t|json!({"target":role(life,Some(t.object)),"kind":transfer(t.kind),
++                "previous_owner":holder(t.previous_owner,life.own),"new_owner":holder(t.new_owner,life.own)})).collect::<Vec<_>>();
++            channels.push(json!({"slot":slot,"candidate":ci,"primitive":c.command.primitive.raw(),"target":role(life,target),
++                "phase":phase(c.phase),"executed":executed,"failure":failure(c.failure),"contact":contact(c.physical.contact),
++                "physical_target":role(life,c.physical.target_entity),"event":observed,"transfers":transfers}));
++            if observed == "consumed" {
++                require(slot == 2 && executed, "meal_channel")?;
++                let role_index = life
++                    .targets
++                    .iter()
++                    .position(|t| Some(*t) == target)
++                    .ok_or("meal_target")?;
++                meals[role_index] = true;
++                let tracked = audit.candidates[ci]
++                    .tracked_target
++                    .ok_or("meal_tracking")?
++                    .raw();
++                let exact = |m: &&PortableMemoryRecordV2| {
++                    m.organism_id_raw == life.own.raw()
++                        && m.sealed_sequence_id_raw == audit.sequence.raw()
++                        && m.tracked_object_id_raw == tracked
++                        && m.action_id_raw == HeadlessActionIds::EAT.raw()
++                        && m.family_raw == u16::from(CandidateActionFamily::Ingest.raw())
++                        && m.outcome_contact == Some(PhysicalContactKind::Consumed)
++                };
++                covered_active[role_index] = active.iter().filter(exact).count() > 0;
++                covered_staged[role_index] = staged.iter().filter(exact).count() > 0;
++                // Representative-only memory is not relabeled or rejected merely for missing Ingest coverage.
++            }
++        }
++        for i in 0..2 {
++            require(
++                meals[i] == consumed(row, life.targets[i]),
++                "joint_meal_binding",
++            )?;
++        }
++        for t in &audit.motor.grip_transfers {
++            let before = audit
++                .owners_before
++                .iter()
++                .find(|f| f.target == t.object)
++                .ok_or("owner_before")?;
++            let after = audit
++                .owners_after
++                .iter()
++                .find(|f| f.target == t.object)
++                .ok_or("owner_after")?;
++            require(
++                (before.owner == SwapOwner::ThisOrganism) == (t.previous_owner == Some(life.own))
++                    && (after.owner == SwapOwner::ThisOrganism) == (t.new_owner == Some(life.own)),
++                "owner_transfer",
++            )?;
++            // Concurrent locomotion may move held items within the bundle. Do not invent channel-entry geometry.
++        }
++        let phys = row
++            .patch
++            .outcome()
++            .measured_physiology
++            .as_ref()
++            .ok_or("physiology")?;
++        decisions.push(json!({"sequence":audit.sequence.raw(),"sampling_counter":row.sampling_counter.ok_or("rng_counter")?,
++            "actual_replay_equal":true,"pain":audit.current_pain,"pre_energy":audit.motor.biology_before.body.energy,
++            "aversive_harm":phys.aversive_harm(),"experienced_valence":row.patch.outcome().experienced_valence().raw(),
++            "owners_before":owners(life,&audit.owners_before)?,"owners_after":owners(life,&audit.owners_after)?,
++            "candidates":candidates,"channels":channels,"physical_meals":meals,"ingest_episode_active":covered_active,
++            "ingest_episode_staged":covered_staged}));
++    }
++    let record = life
++        .host
++        .world()
++        .organism_registry()
++        .get(life.own)
++        .ok_or("organism")?;
++    let b = record.biochemistry().body;
++    Ok(
++        json!({"primary_tick":index+1,"world_tick_before":step.tick_before.raw(),"world_tick_after":step.tick_after.raw(),
++        "sampling_counter_after":checkpoint.sampling_counter,"sleeping":step.sleeping_organisms>0,"sleep_consolidations":step.sleep_consolidations,
++        "boundary_owners":owners(life,&life.host.world().research_swap_owners(life.own))?,
++        "alive":record.lifecycle().is_alive(),"energy":b.energy,"health":b.health,"injury":b.injury,
++        "active_memory_count":active.len(),"staged_memory_count":staged.len(),"decisions":decisions}),
++    )
++}
++
++#[cfg(test)]
++#[path = "world_swap_receipt_regression.rs"]
++mod receipt_regression;
+--- /dev/null
++++ b/crates/alife_training/examples/support/world_swap_receipt_regression.rs
+@@ -0,0 +1,373 @@
++//! Proposed cfg(test) child of world_swap_receipt_projection.rs.
++//!
++//! Requires the separately reviewed transient channel `succeeded` field. This
++//! file deliberately does not compile against the frozen, unpatched source.
++//! Attach only to a NEW source revision using:
++//!   #[cfg(test)]
++//!   #[path = "world_swap_receipt_regression.rs"]
++//!   mod receipt_regression;
++//!
++//! No host, brain session, neural step, training, replay or study life is made.
++//! One externally selected arm runs exactly one fresh physical record, five
++//! registered single-channel actions, and four world-clock advances. The record
++//! is required by the public registered-motor API. All actions are literal EATs.
++//! Both arms together: two fresh records, ten actions, eight clock advances.
++//! Each action advances registered biology once; intervening clock commits do
++//! not advance that already-advanced biology a second time. World transactions
++//! take their ordinary internal rollback snapshots; no test world is branched.
++//! Nothing is persisted. No successful MeasuredChannelObservation is invented.
++
++use alife_core::{
++    ActionTarget, BiochemistryState, BrainCapacityClass, ChannelCommand, Confidence,
++    CreatureGenome, DurationTicks, ExperienceSequenceId, FoundationGeneticIdentity, Intensity,
++    MotorChannel, MotorCommandBundle, OrganismId, PhysicalContactKind, ReferenceActionFailure,
++    Tick, Vec3f, WorldEntityId,
++};
++use alife_world::{
++    ActionPhase, GripTransferKind, HeadlessActionIds, HeadlessMotorChannelReceipt,
++    HeadlessScenarioBuilder, HeadlessWorld, WorldOrganismRecord,
++};
++
++const PHYSICAL_SEED: u64 = 0x5753_5634;
++const OWN: OrganismId = OrganismId(7);
++const OTHER: OrganismId = OrganismId(99);
++const SCRIPT: [usize; 5] = [0, 1, 1, 1, 1];
++
++#[derive(Clone, Copy)]
++enum ExpectedArm {
++    Old,
++    New,
++}
++
++impl ExpectedArm {
++    fn from_reviewed_dispatch() -> Self {
++        // This must come from the reviewed build/source binding. Do not infer
++        // the expected arm from the receipt being tested or accept either arm.
++        match std::env::var("WORLD_SWAP_RECEIPT_EXPECTED_ARM").as_deref() {
++            Ok("old_world") => Self::Old,
++            Ok("new_world") => Self::New,
++            _ => panic!("set WORLD_SWAP_RECEIPT_EXPECTED_ARM from the reviewed source binding"),
++        }
++    }
++
++    fn events(self) -> [&'static str; 5] {
++        match self {
++            Self::Old => ["acquired", "placed_only", "acquired", "consumed", "failed"],
++            Self::New => ["acquired", "atomic_swap", "consumed", "failed", "failed"],
++        }
++    }
++}
++
++fn physical_fixture() -> (HeadlessWorld, WorldEntityId, [WorldEntityId; 2]) {
++    let mut world = HeadlessScenarioBuilder::new(PHYSICAL_SEED)
++        .agent("receipt-body", OWN, Vec3f::ZERO)
++        .food("receipt-a", Vec3f::new(0.0, 0.0, 0.6), 0.05)
++        .food("receipt-b", Vec3f::new(1.1, 0.0, 0.0), 0.05)
++        .build()
++        .unwrap();
++    let body = world.entity_id("receipt-body").unwrap();
++    let targets = [
++        world.entity_id("receipt-a").unwrap(),
++        world.entity_id("receipt-b").unwrap(),
++    ];
++    // The same small founder used by existing registered-motor unit tests,
++    // with only this disposable fixture's seed. No foundation asset is loaded.
++    let genome = CreatureGenome::early_mammal_founder(
++        PHYSICAL_SEED,
++        FoundationGeneticIdentity::new(10, 1, 7, BrainCapacityClass::N512_ID).unwrap(),
++    )
++    .unwrap();
++    let phenotype = genome.express().unwrap();
++    let biology = BiochemistryState::new(&phenotype, Tick::ZERO).unwrap();
++    world
++        .register_organism_record(
++            WorldOrganismRecord::new(OWN, body, genome, phenotype, biology, Tick::ZERO).unwrap(),
++        )
++        .unwrap();
++    assert_eq!(world.organism_registry().iter().count(), 1);
++    assert_eq!(world.object_snapshots().len(), 3);
++    (world, body, targets)
++}
++
++fn selected_eat(tick: Tick, sequence: u64, target: WorldEntityId) -> MotorCommandBundle {
++    MotorCommandBundle::new(
++        OWN,
++        ExperienceSequenceId::new(sequence).unwrap(),
++        tick,
++        vec![ChannelCommand::new(
++            MotorChannel::Manipulation,
++            HeadlessActionIds::EAT,
++            Some(ActionTarget::new(Some(target), None)),
++            Vec3f::ZERO,
++            Intensity::new(1.0).unwrap(),
++            DurationTicks::new(1),
++            0.0,
++            Confidence::new(0.9).unwrap(),
++            0,
++        )
++        .unwrap()],
++    )
++    .unwrap()
++}
++
++fn rejects(
++    label: &str,
++    real: &HeadlessMotorChannelReceipt,
++    corrupt: impl FnOnce(&mut HeadlessMotorChannelReceipt),
++) {
++    let mut copy = real.clone();
++    corrupt(&mut copy);
++    assert!(
++        copy.observation.is_none(),
++        "{label}: do not forge a measured observation"
++    );
++    assert!(
++        super::event(&copy, OWN).is_err(),
++        "accepted forged receipt: {label}"
++    );
++}
++
++fn reject_corrupted_receipts(
++    receipts: &[HeadlessMotorChannelReceipt],
++    targets: [WorldEntityId; 2],
++    arm: ExpectedArm,
++) {
++    let acquired = &receipts[0];
++    let meal = &receipts[match arm {
++        ExpectedArm::Old => 3,
++        ExpectedArm::New => 2,
++    }];
++    let failed = &receipts[4];
++    assert!(acquired.succeeded && meal.succeeded && !failed.succeeded);
++
++    // All nominal successes below first passed the projection untouched.
++    // The most important regression: missing locomotion telemetry must not
++    // conceal actual manipulation success OR override actual channel failure.
++    for real in [acquired, &receipts[1], meal] {
++        for channel in [
++            MotorChannel::Locomotion,
++            MotorChannel::Orientation,
++            MotorChannel::Vocal,
++            MotorChannel::Posture,
++        ] {
++            rejects("transfer on non-manipulation channel", real, |c| {
++                c.command.channel = channel
++            });
++        }
++        rejects("actual success bit cleared", real, |c| c.succeeded = false);
++        rejects("successful transfer with failure", real, |c| {
++            c.failure = Some(ReferenceActionFailure::MissingAffordance);
++        });
++        rejects("transfer without contact", real, |c| {
++            c.physical.contact = PhysicalContactKind::None;
++        });
++    }
++    rejects("acquisition in wrong EAT phase", acquired, |c| {
++        c.phase = ActionPhase::Completed
++    });
++    rejects("acquisition physical target mismatch", acquired, |c| {
++        c.physical.target_entity = Some(targets[1]);
++    });
++    rejects("acquisition selected target mismatch", acquired, |c| {
++        c.command.target = Some(ActionTarget::new(Some(targets[1]), None));
++    });
++    rejects("acquisition claims stealing", acquired, |c| {
++        c.grip_transfers[0].previous_owner = Some(OTHER);
++    });
++    rejects("acquisition names wrong new owner", acquired, |c| {
++        c.grip_transfers[0].new_owner = Some(OTHER);
++    });
++    rejects("meal in preparation phase", meal, |c| {
++        c.phase = ActionPhase::Preparation
++    });
++    rejects("meal mislabeled as GRAB", meal, |c| {
++        c.command.primitive = HeadlessActionIds::GRAB
++    });
++    rejects("meal physical target mismatch", meal, |c| {
++        c.physical.target_entity = Some(targets[0]);
++    });
++    rejects("meal retains possession", meal, |c| {
++        c.grip_transfers[0].new_owner = Some(OWN)
++    });
++    rejects("consumed contact without consumed transfer", meal, |c| {
++        c.grip_transfers.clear()
++    });
++
++    match arm {
++        ExpectedArm::Old => {
++            let placed = &receipts[1];
++            rejects(
++                "placement targets selected rather than placed object",
++                placed,
++                |c| {
++                    c.physical.target_entity = Some(targets[1]);
++                },
++            );
++            rejects("placement in completed EAT phase", placed, |c| {
++                c.phase = ActionPhase::Completed
++            });
++            rejects("placement claims another owner's possession", placed, |c| {
++                c.grip_transfers[0].previous_owner = Some(OTHER);
++            });
++        }
++        ExpectedArm::New => {
++            let swapped = &receipts[1];
++            rejects("atomic swap reverses transfer order", swapped, |c| {
++                c.grip_transfers.reverse()
++            });
++            rejects("atomic swap uses same object twice", swapped, |c| {
++                c.grip_transfers[0].object = c.grip_transfers[1].object;
++            });
++            rejects(
++                "atomic EAT swap claims completed meal phase",
++                swapped,
++                |c| {
++                    c.phase = ActionPhase::Completed;
++                },
++            );
++            rejects("atomic swap physical target mismatch", swapped, |c| {
++                c.physical.target_entity = Some(targets[0]);
++            });
++        }
++    }
++
++    // Begin with an ACTUAL failed consumed-target attempt, then graft a real
++    // acquired-B transfer onto it. Make target, contact and phase plausible so
++    // failure rejection cannot depend only on a trivially mismatched target.
++    let acquired_b = match arm {
++        ExpectedArm::Old => receipts[2].grip_transfers[0],
++        ExpectedArm::New => receipts[1].grip_transfers[1],
++    };
++    assert_eq!(acquired_b.kind, GripTransferKind::Acquired);
++    assert_eq!(acquired_b.object, targets[1]);
++    for clear_failure in [false, true] {
++        rejects("failed action with grafted transfer", failed, |c| {
++            c.grip_transfers = vec![acquired_b];
++            c.physical.contact = PhysicalContactKind::Touch;
++            c.phase = ActionPhase::Preparation;
++            if clear_failure {
++                c.failure = None;
++            }
++            // Keep the actual false success bit in BOTH variants.
++        });
++    }
++}
++
++#[test]
++#[ignore = "source-only proposal: physical receipts require separately reviewed bounded dispatch"]
++fn actual_manipulation_receipts_without_locomotion_observations() {
++    let arm = ExpectedArm::from_reviewed_dispatch();
++    let expected = arm.events();
++    let (mut world, body, targets) = physical_fixture();
++    let mut receipts = Vec::with_capacity(SCRIPT.len());
++    let mut clock_advances = 0;
++
++    for (index, target_slot) in SCRIPT.into_iter().enumerate() {
++        assert_eq!(world.tick(), Tick::new(index as u64));
++        let before = targets.map(|id| world.entity(id).unwrap().clone());
++        let target = targets[target_slot];
++        let bundle = selected_eat(world.tick(), index as u64 + 1, target);
++        let transaction = world.apply_registered_motor_bundle(&bundle, body).unwrap();
++        assert_eq!(transaction.outcome_tick, Tick::new(index as u64 + 1));
++        assert_eq!(transaction.channel_receipts.len(), 1);
++        let actual = transaction.channel_receipts[0].clone();
++
++        assert_eq!(actual.command.channel, MotorChannel::Manipulation);
++        assert_eq!(actual.command.primitive, HeadlessActionIds::EAT);
++        assert_eq!(actual.command.target.and_then(|t| t.entity), Some(target));
++        assert!(actual.observation.is_none());
++        // Never consult transaction.succeeded or synthesize a channel result.
++        assert_eq!(actual.succeeded, expected[index] != "failed");
++        assert_eq!(super::event(&actual, OWN).unwrap(), expected[index]);
++        assert_eq!(transaction.grip_transfers, actual.grip_transfers);
++
++        let after = targets.map(|id| world.entity(id).unwrap().clone());
++        for transfer in &actual.grip_transfers {
++            let slot = targets
++                .iter()
++                .position(|id| *id == transfer.object)
++                .unwrap();
++            assert_eq!(transfer.previous_owner, before[slot].carried_by);
++            assert_eq!(transfer.new_owner, after[slot].carried_by);
++            assert_eq!(transfer.previous_position, before[slot].position);
++            assert_eq!(transfer.new_position, after[slot].position);
++        }
++        assert!(after.iter().filter(|o| o.carried_by == Some(OWN)).count() <= 1);
++        assert_eq!(world.entity(body).unwrap().position, Vec3f::ZERO);
++        assert!(!after[0].consumed, "the scripted test never consumes A");
++
++        match expected[index] {
++            "acquired" => {
++                assert_eq!(actual.phase, ActionPhase::Preparation);
++                assert_eq!(actual.grip_transfers.len(), 1);
++                assert_eq!(actual.grip_transfers[0].kind, GripTransferKind::Acquired);
++                assert_eq!(after[target_slot].carried_by, Some(OWN));
++                assert!(after[target_slot].activity_hold);
++                assert!(!after[target_slot].consumed);
++                assert_eq!(transaction.body_event.nutrition, 0.0);
++            }
++            "placed_only" => {
++                assert_eq!(actual.phase, ActionPhase::Preparation);
++                assert_eq!(actual.grip_transfers.len(), 1);
++                assert_eq!(actual.grip_transfers[0].kind, GripTransferKind::Placed);
++                assert_eq!(actual.grip_transfers[0].object, targets[0]);
++                assert_eq!(actual.physical.target_entity, Some(targets[0]));
++                assert!(after.iter().all(|o| o.carried_by.is_none() && !o.consumed));
++                assert_eq!(transaction.body_event.nutrition, 0.0);
++            }
++            "atomic_swap" => {
++                assert_eq!(actual.phase, ActionPhase::Preparation);
++                assert_eq!(actual.grip_transfers.len(), 2);
++                assert_eq!(actual.grip_transfers[0].kind, GripTransferKind::Placed);
++                assert_eq!(actual.grip_transfers[0].object, targets[0]);
++                assert_eq!(actual.grip_transfers[1].kind, GripTransferKind::Acquired);
++                assert_eq!(actual.grip_transfers[1].object, targets[1]);
++                assert_eq!(actual.physical.target_entity, Some(targets[1]));
++                assert_eq!(after[0].carried_by, None);
++                assert_eq!(after[1].carried_by, Some(OWN));
++                assert!(after[1].activity_hold && !after[1].consumed);
++                assert_eq!(transaction.body_event.nutrition, 0.0);
++            }
++            "consumed" => {
++                assert_eq!(actual.phase, ActionPhase::Completed);
++                assert_eq!(actual.grip_transfers.len(), 1);
++                assert_eq!(actual.grip_transfers[0].kind, GripTransferKind::Consumed);
++                assert_eq!(actual.physical.contact, PhysicalContactKind::Consumed);
++                assert_eq!(actual.physical.target_entity, Some(targets[1]));
++                assert!(after[1].consumed);
++                assert_eq!(after[1].carried_by, None);
++                assert_eq!(transaction.body_event.nutrition, 0.05);
++            }
++            "failed" => {
++                assert_eq!(actual.phase, ActionPhase::Attempt);
++                assert!(actual.failure.is_some());
++                assert!(actual.grip_transfers.is_empty());
++                assert_eq!(actual.physical.contact, PhysicalContactKind::None);
++                assert!(after[1].consumed);
++                assert_eq!(after[1].carried_by, None);
++                assert_eq!(transaction.body_event.nutrition, 0.0);
++            }
++            _ => unreachable!(),
++        }
++        let registered = world.organism_registry().get(OWN).unwrap();
++        assert_eq!(registered.biochemistry().tick, Tick::new(index as u64 + 1));
++        assert!(registered.lifecycle().is_alive());
++        assert_eq!(world.organism_registry().iter().count(), 1);
++        assert_eq!(world.object_snapshots().len(), 3);
++        receipts.push(actual);
++
++        if index + 1 < SCRIPT.len() {
++            let already_advanced = *world.organism_registry().get(OWN).unwrap().biochemistry();
++            world.try_advance_tick().unwrap();
++            clock_advances += 1;
++            assert_eq!(
++                world.organism_registry().get(OWN).unwrap().biochemistry(),
++                &already_advanced
++            );
++        }
++    }
++    assert_eq!(receipts.len(), 5);
++    assert_eq!(clock_advances, 4);
++    assert_eq!(world.tick(), Tick::new(4));
++    reject_corrupted_receipts(&receipts, targets, arm);
++}
+--- a/crates/alife_training/src/cpu/host.rs
++++ b/crates/alife_training/src/cpu/host.rs
+@@ -15,6 +15,8 @@
+     PortableSaveFile, RuntimeConfig,
+ };
+ use std::collections::BTreeMap;
++mod swap_audit;
++pub use swap_audit::*;
+ 
+ #[derive(Debug, thiserror::Error)]
+ pub enum CpuHostError {
+@@ -141,6 +143,8 @@
+     pub patch: ExperiencePatch,
+ }
+ pub struct CpuCanonicalStep {
++    /// Opt-in transient output, not part of checkpoints or learning.
++    pub swap_audits: Vec<CpuSwapAudit>,
+     pub tick_before: Tick,
+     pub tick_after: Tick,
+     pub decisions: Vec<CpuCollectedDecision>,
+@@ -648,10 +652,30 @@
+         &mut self,
+         founder: &CpuFoundationTrainer,
+         temperature: f32,
++        prepare: impl FnMut(
++            PerceptionFrameDraft,
++            ExperienceSequenceId,
++        ) -> Result<PerceptionFrameDraft, ScaffoldContractError>,
++    ) -> Result<CpuCanonicalStep, CpuHostError> {
++        self.step_with_optional_swap_audit(founder, temperature, prepare, false)
++    }
++    /// Native path with opt-in read-only physical and recall diagnostics.
++    pub fn step_with_swap_audit(
++        &mut self,
++        founder: &CpuFoundationTrainer,
++        temperature: f32,
++    ) -> Result<CpuCanonicalStep, CpuHostError> {
++        self.step_with_optional_swap_audit(founder, temperature, |draft, _| Ok(draft), true)
++    }
++    fn step_with_optional_swap_audit(
++        &mut self,
++        founder: &CpuFoundationTrainer,
++        temperature: f32,
+         mut prepare: impl FnMut(
+             PerceptionFrameDraft,
+             ExperienceSequenceId,
+         ) -> Result<PerceptionFrameDraft, ScaffoldContractError>,
++        swap_audit: bool,
+     ) -> Result<CpuCanonicalStep, CpuHostError> {
+         self.validate_founder(founder)?;
+         for (&raw, r) in &self.residents {
+@@ -672,7 +696,7 @@
+         for resident in next.residents.values_mut() {
+             resident.sealed_authority = None;
+         }
+-        let result = next.step_inner(founder, temperature, &mut prepare)?;
++        let result = next.step_inner(founder, temperature, &mut prepare, swap_audit)?;
+         *self = next;
+         Ok(result)
+     }
+@@ -684,10 +708,12 @@
+             PerceptionFrameDraft,
+             ExperienceSequenceId,
+         ) -> Result<PerceptionFrameDraft, ScaffoldContractError>,
++        swap_audit: bool,
+     ) -> Result<CpuCanonicalStep, CpuHostError> {
+         let p = founder.phenotype();
+         let tick = self.world.tick();
+         let mut decisions = Vec::new();
++        let mut swap_audits = Vec::new();
+         let mut sleeping = 0;
+         let mut consolidations = 0;
+         let mut body_events = BTreeMap::new();
+@@ -1077,6 +1103,18 @@
+                         .map(|s| (entity, s.salience.novelty.raw()))
+                 })
+                 .collect::<Vec<_>>();
++            let audit_candidates = if swap_audit {
++                Some(swap_audit::swap_candidates(
++                    &self.world,
++                    &perception_world,
++                    &frame,
++                    &recall.context().candidates,
++                    &r.memory.export_active_bank()?.records,
++                )?)
++            } else {
++                None
++            };
++            let audit_owners_before = swap_audit.then(|| self.world.research_swap_owners(id));
+             let receipt = self
+                 .world
+                 .apply_registered_motor_bundle_with_perceived_novelty_in_staged_tick(
+@@ -1087,6 +1125,28 @@
+                     &object_novelty,
+                 )
+                 .map_err(|_| CpuHostError::State("canonical motor transaction rejected"))?;
++            if let Some(candidates) = audit_candidates {
++                let after = candidates
++                    .iter()
++                    .map(|c| {
++                        self.world.research_swap_physical_facts(
++                            id,
++                            c.physical.primitive,
++                            c.world_target,
++                        )
++                    })
++                    .collect();
++                swap_audits.push(CpuSwapAudit {
++                    sequence,
++                    frame_digest: frame.frame_digest(),
++                    current_pain: receipt.biology_before.homeostasis.drives.pain,
++                    candidates,
++                    motor: receipt.clone(),
++                    after,
++                    owners_before: audit_owners_before.unwrap_or_default(),
++                    owners_after: self.world.research_swap_owners(id),
++                });
++            }
+             let successor = grounded_successor_state(
+                 &self.world,
+                 record.world_entity_id(),
+@@ -1290,6 +1350,7 @@
+             .try_advance_tick_with_body_events_in_staged_tick(&body_events)?;
+         self.seal_all_residents()?;
+         Ok(CpuCanonicalStep {
++            swap_audits,
+             tick_before: tick,
+             tick_after,
+             decisions,
+--- /dev/null
++++ b/crates/alife_training/src/cpu/host/swap_audit.rs
+@@ -0,0 +1,116 @@
++//! Reconstructed transient audit. No Serialize/checkpoint/learning field and no writeback.
++use super::*;
++use alife_world::{HeadlessMotorTransactionReceipt, SwapOwnership, SwapPhysicalFacts};
++#[derive(Debug, Clone)]
++pub struct CpuSwapMemorySource {
++    pub memory_id: u64,
++    pub sequence: u64,
++    pub tracked_target: u64,
++    pub action: u32,
++    pub family: u16,
++    pub contact: Option<PhysicalContactKind>,
++}
++#[derive(Debug, Clone)]
++pub struct CpuSwapCandidateAudit {
++    pub candidate_index: u16,
++    pub world_target: Option<WorldEntityId>,
++    pub tracked_target: Option<TrackedObjectId>,
++    pub slot_index: Option<u16>,
++    pub physical: SwapPhysicalFacts,
++    pub target_source_count: u16,
++    pub family_source_count: u16,
++    pub target_confidence: f32,
++    pub family_confidence: f32,
++    pub family_valence: f32,
++    pub best_family_source: Option<CpuSwapMemorySource>,
++}
++#[derive(Debug, Clone)]
++pub struct CpuSwapAudit {
++    pub sequence: ExperienceSequenceId,
++    pub frame_digest: PerceptionFrameDigest,
++    pub current_pain: f32,
++    pub candidates: Vec<CpuSwapCandidateAudit>,
++    pub motor: HeadlessMotorTransactionReceipt,
++    pub owners_before: Vec<SwapOwnership>,
++    pub owners_after: Vec<SwapOwnership>,
++    pub after: Vec<SwapPhysicalFacts>,
++}
++pub(super) fn swap_candidates(
++    world: &HeadlessWorld,
++    perception_world: &HeadlessWorld,
++    frame: &PerceptionFrame,
++    contexts: &[CandidateMemoryContextV1],
++    records: &[PortableMemoryRecordV2],
++) -> Result<Vec<CpuSwapCandidateAudit>, CpuHostError> {
++    frame.validate_contract()?;
++    let own = frame.organism_id();
++    frame
++        .candidates()
++        .iter()
++        .enumerate()
++        .map(|(i, candidate)| {
++            let index =
++                u16::try_from(i).map_err(|_| CpuHostError::State("audit candidate index"))?;
++            let (slot_index, tracked) = match candidate.observation {
++                CandidateObservationRef::None => (None, None),
++                CandidateObservationRef::ObjectSlot(slot_index) => {
++                    let slot = frame
++                        .grounded_object_slots()
++                        .iter()
++                        .find(|s| s.slot_index == slot_index)
++                        .ok_or(CpuHostError::State("audit slot binding"))?;
++                    let target = candidate
++                        .target
++                        .entity
++                        .ok_or(CpuHostError::State("audit missing target"))?;
++                    let object = perception_world
++                        .entity(target)
++                        .ok_or(CpuHostError::State("audit target binding"))?;
++                    let record = perception_world
++                        .tracked_objects()
++                        .records_for(own)
++                        .and_then(|mut records| {
++                            records.find(|r| r.tracking_key == object.tracking_key)
++                        })
++                        .ok_or(CpuHostError::State("audit tracking binding"))?;
++                    if record.tracked_object_id != slot.tracked_object_id {
++                        return Err(CpuHostError::State("audit tracked slot mismatch"));
++                    }
++                    (Some(slot_index), Some(slot.tracked_object_id))
++                }
++            };
++            let context = contexts
++                .iter()
++                .find(|c| c.candidate_index == index)
++                .ok_or(CpuHostError::State("audit recall context missing"))?;
++            context.validate_contract()?;
++            Ok(CpuSwapCandidateAudit {
++                candidate_index: index,
++                world_target: candidate.target.entity,
++                tracked_target: tracked,
++                slot_index,
++                physical: world.research_swap_physical_facts(
++                    own,
++                    candidate.action_id,
++                    candidate.target.entity,
++                ),
++                target_source_count: context.target_source_count,
++                family_source_count: context.family_source_count,
++                target_confidence: context.target_confidence.raw(),
++                family_confidence: context.family_confidence.raw(),
++                family_valence: context.family_value[0],
++                best_family_source: context
++                    .best_family_source
++                    .and_then(|id| records.iter().find(|r| r.memory_id_raw == id.raw()))
++                    .map(|r| CpuSwapMemorySource {
++                        memory_id: r.memory_id_raw,
++                        sequence: r.sealed_sequence_id_raw,
++                        tracked_target: r.tracked_object_id_raw,
++                        action: r.action_id_raw,
++                        family: r.family_raw,
++                        contact: r.outcome_contact,
++                    }),
++            })
++        })
++        .collect()
++}
+--- a/crates/alife_world/src/headless.rs
++++ b/crates/alife_world/src/headless.rs
+@@ -1221,6 +1221,10 @@
+ 
+ #[derive(Debug, Clone, PartialEq)]
+ pub struct HeadlessMotorChannelReceipt {
++    /// Exact per-channel executor success; observation remains locomotion-only.
++    pub succeeded: bool,
++    /// Actual transient execution category, not a persistent or cognitive input.
++    pub failure: Option<ReferenceActionFailure>,
+     pub command: ChannelCommand,
+     pub phase: ActionPhase,
+     pub grip_transfers: Vec<GripTransfer>,
+@@ -1348,6 +1352,8 @@
+ mod hands;
+ pub use hands::{ActionPhase, GripTransfer, GripTransferKind};
+ mod grip_research;
++mod swap_audit;
++pub use swap_audit::*;
+ mod local_steering;
+ mod mating_reach;
+ pub use local_steering::LocalSteeringState;
+@@ -4793,6 +4799,8 @@
+             }
+             channel_outcomes.push(ChannelPhysicalOutcome::new(channel.channel, physical)?);
+             channel_receipts.push(HeadlessMotorChannelReceipt {
++                succeeded: result.execution.succeeded,
++                failure: result.execution.failure,
+                 command: channel.clone(),
+                 phase: result.phase,
+                 grip_transfers: result.grip_transfers.clone(),
+--- /dev/null
++++ b/crates/alife_world/src/headless/swap_audit.rs
+@@ -0,0 +1,129 @@
++//! Reconstructed opt-in transient facts, never legality counterfactuals or policy inputs.
++use super::*;
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub enum SwapOwner {
++    Missing,
++    Consumed,
++    Nobody,
++    ThisOrganism,
++    OtherOrganism,
++    Player,
++}
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub enum SwapGripMode {
++    None,
++    Activity,
++    Deliberate,
++}
++#[derive(Debug, Clone, PartialEq)]
++pub struct SwapOwnership {
++    pub target: WorldEntityId,
++    pub active: bool,
++    pub owner: SwapOwner,
++    pub mode: SwapGripMode,
++    pub position: Vec3f,
++}
++#[derive(Debug, Clone, PartialEq)]
++pub struct SwapPhysicalFacts {
++    pub tick: Tick,
++    pub organism: OrganismId,
++    pub target: Option<WorldEntityId>,
++    pub primitive: ActionId,
++    pub owner: SwapOwner,
++    pub mode: SwapGripMode,
++    pub active: bool,
++    pub self_held_object_count: usize,
++    pub actor_alive: bool,
++    pub manipulation_effector: bool,
++    pub physical_contact_reachable: Option<bool>,
++    pub grasp_reachable: Option<bool>,
++}
++impl HeadlessWorld {
++    fn swap_owner(&self, organism: OrganismId, object: &WorldObject) -> SwapOwner {
++        if object.consumed {
++            SwapOwner::Consumed
++        } else if self.player_held_object() == Some(object.id) {
++            SwapOwner::Player
++        } else if object.carried_by == Some(organism) {
++            SwapOwner::ThisOrganism
++        } else if object.carried_by.is_some() {
++            SwapOwner::OtherOrganism
++        } else {
++            SwapOwner::Nobody
++        }
++    }
++    pub fn research_swap_owners(&self, organism: OrganismId) -> Vec<SwapOwnership> {
++        self.objects
++            .values()
++            .map(|o| SwapOwnership {
++                target: o.id,
++                active: !o.consumed,
++                owner: self.swap_owner(organism, o),
++                mode: if o.consumed || o.carried_by.is_none() {
++                    SwapGripMode::None
++                } else if o.activity_hold {
++                    SwapGripMode::Activity
++                } else {
++                    SwapGripMode::Deliberate
++                },
++                position: o.position,
++            })
++            .collect()
++    }
++    pub fn research_swap_physical_facts(
++        &self,
++        organism: OrganismId,
++        primitive: ActionId,
++        target: Option<WorldEntityId>,
++    ) -> SwapPhysicalFacts {
++        let record = self.organism_registry.get(organism);
++        let agent = self.agent_entity_id(organism).ok();
++        let alive = agent
++            .and_then(|id| self.objects.get(&id.raw()))
++            .is_some_and(|a| !a.consumed && record.is_none_or(|r| r.lifecycle().is_alive()));
++        let effector = record.is_none_or(|r| {
++            r.embodiment()
++                .effector_gain(EffectorCapability::Manipulation)
++                > 0.
++        });
++        let mut facts = SwapPhysicalFacts {
++            tick: self.tick,
++            organism,
++            target,
++            primitive,
++            owner: SwapOwner::Missing,
++            mode: SwapGripMode::None,
++            active: false,
++            self_held_object_count: self
++                .objects
++                .values()
++                .filter(|o| !o.consumed && o.carried_by == Some(organism))
++                .count(),
++            actor_alive: alive,
++            manipulation_effector: effector,
++            physical_contact_reachable: None,
++            grasp_reachable: None,
++        };
++        let Some(id) = target else { return facts };
++        let Some(object) = self.objects.get(&id.raw()) else {
++            return facts;
++        };
++        facts.owner = self.swap_owner(organism, object);
++        facts.active = !object.consumed;
++        facts.mode = if object.consumed || object.carried_by.is_none() {
++            SwapGripMode::None
++        } else if object.activity_hold {
++            SwapGripMode::Activity
++        } else {
++            SwapGripMode::Deliberate
++        };
++        if let Some(agent) = agent {
++            if let Some(body) = self.objects.get(&agent.raw()) {
++                facts.physical_contact_reachable =
++                    Some(self.physical_contact_reachable(body.position, object.position));
++                facts.grasp_reachable = Some(self.grasp_target_is_reachable(organism, agent, id));
++            }
++        }
++        facts
++    }
++}

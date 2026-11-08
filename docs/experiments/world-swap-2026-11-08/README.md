@@ -16,5 +16,11 @@ behavioral evidence. Later qualification does not rewrite an earlier result.
    checks, but selected no safe-EAT attempts while holding H and observed no
    atomic swaps. It is not an efficacy or autonomous behavioral comparison.
 
-The fresh 23xx comparison remains a disabled, unrun proposal. No study has
-started, and none of these archives authorizes replaying closed cases.
+At the v4 archive point, the fresh 23xx comparison remained a disabled, unrun
+proposal. Later source mappings are recorded separately below. None of these
+archives changes the closure of the earlier allocation.
+
+4. [Fresh matched 23xx protocol v5](fresh-matched-23xx-v5/README.md): later
+   source-only snapshot of the separate four-life comparison: disabled proposal,
+   fixed protocol and later active-main mapping, without study outputs or a
+   claim of publicly timestamped preregistration.
