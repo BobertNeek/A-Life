@@ -1829,7 +1829,7 @@ impl HeadlessWorld {
                         .ok_or(ScaffoldContractError::InvalidId)?
                         .world_entity_id();
                     let position = candidate.objects[&entity.raw()].position;
-                    let (_, peer_touch) = candidate.body_contacts_at(entity, position);
+                    let (hazard_contact, peer_touch) = candidate.body_contacts_at(entity, position);
                     let ambient_event = BodyEventDelta {
                         social_contact: peer_touch_dose(peer_touch),
                         ..ambient_event
@@ -1848,6 +1848,11 @@ impl HeadlessWorld {
                             .remove(&organism_id.raw())
                             .unwrap_or_else(BodyEventDelta::zero),
                     );
+                    // Stationary/body-only intervals receive the same actual
+                    // surface-contact dose as action intervals, exactly once.
+                    let body_event = hazard_contact.map_or(body_event, |(_, pain)| {
+                        merge_hazard_contact_body_event(body_event, pain)
+                    });
                     candidate
                         .organism_registry
                         .advance_biology(organism_id, next_tick, body_event)
