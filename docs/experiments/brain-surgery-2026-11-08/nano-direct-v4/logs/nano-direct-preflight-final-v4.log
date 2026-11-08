@@ -1,0 +1,3 @@
+   Compiling alife_training v0.1.0 (/workspace/scratch/ee5e08a3ca9b/nano-direct-need-gate-v4/crates/alife_training)
+    Finished `dev` profile [unoptimized] target(s) in 0.90s
+     Running `/workspace/shared/grip-integration-qualification-20261108/grip-candidate-qualification/target/debug/examples/probe_nano_direct_need_routing /workspace/scratch/ee5e08a3ca9b/nano-direct-preflight-final-v4.json --preflight`

@@ -1,0 +1,11 @@
+# Corrected native opportunity control (source prepared, not yet executed)
+
+Source: motor-family-production-frame-v5, commit 28a08813a88403ba78f79072b22c0c753bbc604b, tree 9a2b6f1147631fc3a11b899f165393b62f71d9dc. Parent: frozen d40c96cd motor-family-reconciliation-v1. Only two test files changed; previous fixture and report are unchanged.
+
+The earlier fixture omitted neutral locomotion and therefore could not measure wholly resting bundles. The additive v4 erratum remains authoritative; no claim that the recurrent candidate failed to rest follows from that measurement.
+
+This next fixture enumerates GroundedObjectSlotsV1 opportunities through a static fresh HeadlessWorld, including canonical NO_LOCOMOTION (103), NO_MANIPULATION (212), and NO_POSTURE (104). It executes no world interval. It verifies the expressed early-mammal founder motor-head count and width against the unchanged scaffold; it does not manufacture four heads. Neural stimulation remains the explicit fixed homeostasis port assay, not the complete production encoder or a gameplay rollout.
+
+Both graph arms retain their existing recurrent topology and whole-care weight recipe. Zero-route-six controls must remain bit-exact. Matched birth and separately labeled no-dendrite diagnostic arms are retained. No assertions require the candidate to improve, rest, saturate, or change all conditions. Native action IDs, kinds, targets and all six sampled slots are saved for every seed. No-op presence counts as inactive; wholly inactive bundles and Rest/Idle representatives with active factors are separate counts. Approach/Eat disagreement requires an actual nonempty Approach target. Outputs use create_new and a distinct environment variable, so frozen reports cannot be overwritten.
+
+Pending checks: compile both new tests, validate actual enumerator candidate bounds and head expression, inspect the complete emitted candidate inventory and sample audit, then compare recurrent latency and signed readout effects. Any fixture-construction failures will be retained separately. Family competition still cannot alone enforce cross-target coordination. No default, inherited genotype, optimizer, private checkpoint, GPU runtime or live policy is modified.

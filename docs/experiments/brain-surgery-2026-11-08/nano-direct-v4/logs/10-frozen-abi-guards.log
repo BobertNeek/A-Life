@@ -1,0 +1,85 @@
+   Compiling alife_core v0.1.0 (/workspace/scratch/ee5e08a3ca9b/nano-direct-need-gate-v4/crates/alife_core)
+    Finished `test` profile [unoptimized] target(s) in 1m 05s
+     Running tests/abi_validation_errors.rs (/workspace/shared/grip-integration-qualification-20261108/grip-candidate-qualification/target/debug/deps/abi_validation_errors-f54ef3f983713cde)
+
+running 4 tests
+test action_and_experience_abis_use_current_versions ... ok
+test action_commands_reject_bad_abi_versions ... ok
+test experience_headers_reject_old_versions ... ok
+test incompatible_abi_returns_typed_error_and_diagnostic ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/decoder_lifetime_rate_policy.rs (/workspace/shared/grip-integration-qualification-20261108/grip-candidate-qualification/target/debug/deps/decoder_lifetime_rate_policy-41bdaf55b73ef3f2)
+
+running 10 tests
+test critical_periods_cannot_reenable_an_explicit_zero_decoder_family ... ok
+test family_override_precedence_is_explicit_and_only_action_candidate_scoped ... ok
+test heterozygous_reproduction_keeps_credit_and_rate_policies_linked ... ok
+test inheritance_keeps_decoder_policy_as_a_coherent_existing_parent_selected_block ... ok
+test omitted_policy_preserves_genome_bytes_and_current_procedural_identity ... ok
+test policy_roundtrip_binds_input_and_phenotype_identity_and_rejects_stale_input ... ok
+test rate_policy_validation_covers_every_head_and_family ... ok
+test reduced_scales_use_existing_critical_period_boost_and_explicit_zero_head_stays_zero ... ok
+test selected_families_scale_all_delta_rates_and_leave_every_other_synapse_unchanged ... ok
+test semantic_head_opt_in_never_leaks_across_shared_decoder_projections ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.48s
+
+     Running tests/n2048_foundation_abi.rs (/workspace/shared/grip-integration-qualification-20261108/grip-candidate-qualification/target/debug/deps/n2048_foundation_abi-340a322fdc0753ce)
+
+running 15 tests
+test auxiliary_decoder_plan_cannot_rebind_its_authenticated_head_to_another_range ... ok
+test explicit_n2048_candidate_preserves_exact_weights_and_compiler_resume_identity ... ok
+test foundation_and_language_mismatch_reject_before_phenotype_construction ... ok
+test foundation_asset_rejects_every_bound_abi_mismatch ... ok
+test foundation_payload_codec_round_trips_and_rejects_corruption ... ok
+test language_codebook_is_bounded_compositional_and_address_independent ... ok
+test n2048_layout_routes_and_decoder_partitions_are_exact ... ok
+test one_n2048_foundation_asset_reuses_stable_addresses_across_distinct_genomes ... ok
+test persistent_addresses_are_unique_packing_independent_and_blake3_bound ... ok
+test phenotype_identity_binds_language_address_route_and_plasticity_digests ... ok
+test pre_v5_compiler_inputs_are_rejected_instead_of_silently_reinterpreted ... ok
+test production_n2048_birth_loads_immutable_foundation_asset_and_binds_payload_identity ... ok
+test production_n2048_birth_rejects_missing_or_mismatched_foundation_asset_before_gpu_upload ... ok
+test promoted_foundation_requires_and_preserves_explicit_evaluation_provenance ... ok
+test smaller_promoted_classes_retain_valid_compiled_phenotypes ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.95s
+
+     Running tests/n512_foundation_abi.rs (/workspace/shared/grip-integration-qualification-20261108/grip-candidate-qualification/target/debug/deps/n512_foundation_abi-a44f51d762f8526e)
+
+running 5 tests
+test checked_n512_assets_are_present_and_canonically_decodable ... ok
+test n2048_builtin_payloads_retain_legacy_digests_and_canonical_bytes ... ok
+test n512_builtins_bind_exact_profiles_and_compile_validated_matches_asset_path ... ok
+test n512_foundations_reject_class_profile_and_forged_cross_wires ... ok
+test n512_genetic_birth_asset_is_bootstrap_and_canonical ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running tests/n512_legacy_compatibility_abi.rs (/workspace/shared/grip-integration-qualification-20261108/grip-candidate-qualification/target/debug/deps/n512_legacy_compatibility_abi-19759fb21b9c2d16)
+
+running 2 tests
+test immutable_nano512_enters_only_through_explicit_legacy_abi_without_reindexing ... ok
+test malformed_and_unknown_assets_fail_closed_without_canonical_retry ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+     Running tests/nano_need_memory_gate.rs (/workspace/shared/grip-integration-qualification-20261108/grip-candidate-qualification/target/debug/deps/nano_need_memory_gate-38f07edeb4dd7a0c)
+
+running 1 test
+test explicit_need_port_is_append_only_and_old_memory_semantics_stay_bound ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.14s
+
+     Running tests/signed_decoder_foundations.rs (/workspace/shared/grip-integration-qualification-20261108/grip-candidate-qualification/target/debug/deps/signed_decoder_foundations-6ce5d7b77fc6cce9)
+
+running 4 tests
+test exact_n2048_foundation_preserves_negative_decoder_weights_and_rejects_negative_excitation ... ok
+test legacy_nano_candidate_keeps_signed_readouts_and_every_frozen_weight ... ok
+test private_n2048_foundation_replacement_does_not_apply_builtin_birth_signs ... ok
+test retained_nano_founder_asset_remains_canonically_admissible_without_rewriting ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.99s
+

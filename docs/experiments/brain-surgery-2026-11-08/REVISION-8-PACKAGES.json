@@ -1,0 +1,16 @@
+[
+  {
+    "name": "nano-direct-v4",
+    "archive_sha256": "23c569e42515be4158f67559215b2d069f073683723016537a31f8ed0e723c23",
+    "selected_files": 33,
+    "omitted_files": []
+  },
+  {
+    "name": "motor-native-frame-v5",
+    "archive_sha256": "d88a0627bf4058503679d1206d4150616ed1130ebb3cd0339d40a1271754c3ec",
+    "selected_files": 14,
+    "omitted_files": [
+      "motor-production-frame-report-v5.json"
+    ]
+  }
+]

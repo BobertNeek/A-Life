@@ -1,0 +1,10 @@
+   Compiling alife_training v0.1.0 (/workspace/scratch/ee5e08a3ca9b/nano-direct-need-gate-v4/crates/alife_training)
+    Finished `test` profile [unoptimized] target(s) in 0.51s
+     Running tests/cpu_encoder_inputs.rs (/workspace/shared/grip-integration-qualification-20261108/grip-candidate-qualification/target/debug/deps/cpu_encoder_inputs-dffab40b63852be4)
+
+running 2 tests
+test extracted_encoder_is_bit_identical_with_non_neutral_receptors_and_pressure ... ok
+test full_frame_encoder_calls_shared_helper_on_canonical_preparation ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.84s
+

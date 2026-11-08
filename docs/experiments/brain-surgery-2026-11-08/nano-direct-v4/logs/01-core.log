@@ -1,0 +1,44 @@
+   Compiling alife_core v0.1.0 (/workspace/scratch/ee5e08a3ca9b/nano-direct-need-gate-v4/crates/alife_core)
+error[E0308]: mismatched types
+   --> crates/alife_core/src/phenotype/record.rs:264:71
+    |
+264 |                 let (source, source_lobe) = factor.need_memory_source(self)?;
+    |                                                    ------------------ ^^^^ expected `&BrainPhenotype`, found `BrainPhenotype`
+    |                                                    |
+    |                                                    arguments to this method are incorrect
+    |
+note: method defined here
+   --> crates/alife_core/src/nano512_readout_candidate.rs:96:19
+    |
+ 96 |     pub(crate) fn need_memory_source(
+    |                   ^^^^^^^^^^^^^^^^^^
+ 97 |         self,
+ 98 |         phenotype: &crate::BrainPhenotype,
+    |         ---------------------------------
+help: consider borrowing here
+    |
+264 |                 let (source, source_lobe) = factor.need_memory_source(&self)?;
+    |                                                                       +
+
+error[E0308]: mismatched types
+   --> crates/alife_core/src/phenotype/record.rs:333:81
+    |
+333 | ...                   crate::NanoDriveRoutingV1::sensed_loneliness_source(self)?,
+    |                       --------------------------------------------------- ^^^^ expected `&BrainPhenotype`, found `BrainPhenotype`
+    |                       |
+    |                       arguments to this function are incorrect
+    |
+note: associated function defined here
+   --> crates/alife_core/src/nano512_readout_candidate.rs:70:19
+    |
+ 70 |     pub(crate) fn sensed_loneliness_source(
+    |                   ^^^^^^^^^^^^^^^^^^^^^^^^
+ 71 |         phenotype: &crate::BrainPhenotype,
+    |         ---------------------------------
+help: consider borrowing here
+    |
+333 |                             crate::NanoDriveRoutingV1::sensed_loneliness_source(&self)?,
+    |                                                                                 +
+
+For more information about this error, try `rustc --explain E0308`.
+error: could not compile `alife_core` (lib) due to 2 previous errors

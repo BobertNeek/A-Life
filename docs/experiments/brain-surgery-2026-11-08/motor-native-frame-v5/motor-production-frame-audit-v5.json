@@ -1,0 +1,4807 @@
+{
+  "schema": "motor-native-frame-audit-v5",
+  "source_commit": "28a08813a88403ba78f79072b22c0c753bbc604b",
+  "source_tree": "9a2b6f1147631fc3a11b899f165393b62f71d9dc",
+  "report_sha256": "11811e33ca85d10f85510b14815735c801f47d317b81280eca51fba17de42aba",
+  "audited_sampled_bundles": 124416,
+  "all_counts_and_native_primitive_targets_recomputed": true,
+  "head_count": 1,
+  "head_width": 8,
+  "final_interval_rows": [
+    {
+      "case": "quiet_sparse",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 2,
+      "arm": "unchanged",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 1,
+          "target": null,
+          "family": "Idle",
+          "count": 4
+        },
+        {
+          "primitive": 3,
+          "target": null,
+          "family": "Rest",
+          "count": 2
+        },
+        {
+          "primitive": 400,
+          "target": null,
+          "family": "Other",
+          "count": 6
+        },
+        {
+          "primitive": 103,
+          "target": null,
+          "family": "Approach",
+          "count": 5
+        },
+        {
+          "primitive": 212,
+          "target": null,
+          "family": "Contact",
+          "count": 8
+        },
+        {
+          "primitive": 104,
+          "target": null,
+          "family": "Other",
+          "count": 7
+        }
+      ],
+      "quiet_rest_bundles": 6,
+      "wholly_inactive_bundles": 26,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "quiet_sparse",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 2,
+      "arm": "candidate",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 1,
+          "target": null,
+          "family": "Idle",
+          "count": 4
+        },
+        {
+          "primitive": 3,
+          "target": null,
+          "family": "Rest",
+          "count": 2
+        },
+        {
+          "primitive": 400,
+          "target": null,
+          "family": "Other",
+          "count": 6
+        },
+        {
+          "primitive": 103,
+          "target": null,
+          "family": "Approach",
+          "count": 5
+        },
+        {
+          "primitive": 212,
+          "target": null,
+          "family": "Contact",
+          "count": 8
+        },
+        {
+          "primitive": 104,
+          "target": null,
+          "family": "Other",
+          "count": 7
+        }
+      ],
+      "quiet_rest_bundles": 6,
+      "wholly_inactive_bundles": 26,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "quiet_sparse",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 2,
+      "arm": "zero_competition",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 1,
+          "target": null,
+          "family": "Idle",
+          "count": 4
+        },
+        {
+          "primitive": 3,
+          "target": null,
+          "family": "Rest",
+          "count": 2
+        },
+        {
+          "primitive": 400,
+          "target": null,
+          "family": "Other",
+          "count": 6
+        },
+        {
+          "primitive": 103,
+          "target": null,
+          "family": "Approach",
+          "count": 5
+        },
+        {
+          "primitive": 212,
+          "target": null,
+          "family": "Contact",
+          "count": 8
+        },
+        {
+          "primitive": 104,
+          "target": null,
+          "family": "Other",
+          "count": 7
+        }
+      ],
+      "quiet_rest_bundles": 6,
+      "wholly_inactive_bundles": 26,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "quiet_full",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 2,
+      "arm": "unchanged",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 32
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "quiet_full",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 2,
+      "arm": "candidate",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 32
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "quiet_full",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 2,
+      "arm": "zero_competition",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 32
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "hunger",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 2,
+      "arm": "unchanged",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 32
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "hunger",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 2,
+      "arm": "candidate",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 210,
+          "target": 2,
+          "family": "Ingest",
+          "count": 6
+        },
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 26
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 6,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "hunger",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 2,
+      "arm": "zero_competition",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 32
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "fatigue",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 2,
+      "arm": "unchanged",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 32
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "fatigue",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 2,
+      "arm": "candidate",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 32
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "fatigue",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 2,
+      "arm": "zero_competition",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 32
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "pain",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 2,
+      "arm": "unchanged",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 32
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "pain",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 2,
+      "arm": "candidate",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 102,
+          "target": 4,
+          "family": "Avoid",
+          "count": 11
+        },
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 21
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "pain",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 2,
+      "arm": "zero_competition",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 32
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "hunger_fatigue",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 2,
+      "arm": "unchanged",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 32
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "hunger_fatigue",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 2,
+      "arm": "candidate",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 210,
+          "target": 2,
+          "family": "Ingest",
+          "count": 6
+        },
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 26
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 6,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "hunger_fatigue",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 2,
+      "arm": "zero_competition",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 32
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "hunger_pain",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 2,
+      "arm": "unchanged",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 32
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "hunger_pain",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 2,
+      "arm": "candidate",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 210,
+          "target": 2,
+          "family": "Ingest",
+          "count": 4
+        },
+        {
+          "primitive": 102,
+          "target": 4,
+          "family": "Avoid",
+          "count": 11
+        },
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 17
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 4,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "hunger_pain",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 2,
+      "arm": "zero_competition",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 32
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "fatigue_pain",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 2,
+      "arm": "unchanged",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 32
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "fatigue_pain",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 2,
+      "arm": "candidate",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 102,
+          "target": 4,
+          "family": "Avoid",
+          "count": 11
+        },
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 21
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "fatigue_pain",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 2,
+      "arm": "zero_competition",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 32
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "all_conflict",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 2,
+      "arm": "unchanged",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 32
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "all_conflict",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 2,
+      "arm": "candidate",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 210,
+          "target": 2,
+          "family": "Ingest",
+          "count": 4
+        },
+        {
+          "primitive": 102,
+          "target": 4,
+          "family": "Avoid",
+          "count": 11
+        },
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 17
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 4,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "all_conflict",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 2,
+      "arm": "zero_competition",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 32
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "quiet_sparse",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 4,
+      "arm": "unchanged",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 1,
+          "target": null,
+          "family": "Idle",
+          "count": 4
+        },
+        {
+          "primitive": 3,
+          "target": null,
+          "family": "Rest",
+          "count": 7
+        },
+        {
+          "primitive": 400,
+          "target": null,
+          "family": "Other",
+          "count": 5
+        },
+        {
+          "primitive": 103,
+          "target": null,
+          "family": "Approach",
+          "count": 8
+        },
+        {
+          "primitive": 212,
+          "target": null,
+          "family": "Contact",
+          "count": 3
+        },
+        {
+          "primitive": 104,
+          "target": null,
+          "family": "Other",
+          "count": 5
+        }
+      ],
+      "quiet_rest_bundles": 11,
+      "wholly_inactive_bundles": 27,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "quiet_sparse",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 4,
+      "arm": "candidate",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 1,
+          "target": null,
+          "family": "Idle",
+          "count": 4
+        },
+        {
+          "primitive": 3,
+          "target": null,
+          "family": "Rest",
+          "count": 7
+        },
+        {
+          "primitive": 400,
+          "target": null,
+          "family": "Other",
+          "count": 5
+        },
+        {
+          "primitive": 103,
+          "target": null,
+          "family": "Approach",
+          "count": 8
+        },
+        {
+          "primitive": 212,
+          "target": null,
+          "family": "Contact",
+          "count": 3
+        },
+        {
+          "primitive": 104,
+          "target": null,
+          "family": "Other",
+          "count": 5
+        }
+      ],
+      "quiet_rest_bundles": 11,
+      "wholly_inactive_bundles": 27,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "quiet_sparse",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 4,
+      "arm": "zero_competition",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 1,
+          "target": null,
+          "family": "Idle",
+          "count": 4
+        },
+        {
+          "primitive": 3,
+          "target": null,
+          "family": "Rest",
+          "count": 7
+        },
+        {
+          "primitive": 400,
+          "target": null,
+          "family": "Other",
+          "count": 5
+        },
+        {
+          "primitive": 103,
+          "target": null,
+          "family": "Approach",
+          "count": 8
+        },
+        {
+          "primitive": 212,
+          "target": null,
+          "family": "Contact",
+          "count": 3
+        },
+        {
+          "primitive": 104,
+          "target": null,
+          "family": "Other",
+          "count": 5
+        }
+      ],
+      "quiet_rest_bundles": 11,
+      "wholly_inactive_bundles": 27,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "quiet_full",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 4,
+      "arm": "unchanged",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 32
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "quiet_full",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 4,
+      "arm": "candidate",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 32
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "quiet_full",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 4,
+      "arm": "zero_competition",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 32
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "hunger",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 4,
+      "arm": "unchanged",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 32
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "hunger",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 4,
+      "arm": "candidate",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 210,
+          "target": 2,
+          "family": "Ingest",
+          "count": 13
+        },
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 19
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 13,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "hunger",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 4,
+      "arm": "zero_competition",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 32
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "fatigue",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 4,
+      "arm": "unchanged",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 32
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "fatigue",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 4,
+      "arm": "candidate",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 32
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "fatigue",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 4,
+      "arm": "zero_competition",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 32
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "pain",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 4,
+      "arm": "unchanged",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 32
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "pain",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 4,
+      "arm": "candidate",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 102,
+          "target": 4,
+          "family": "Avoid",
+          "count": 12
+        },
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 20
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "pain",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 4,
+      "arm": "zero_competition",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 32
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "hunger_fatigue",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 4,
+      "arm": "unchanged",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 32
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "hunger_fatigue",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 4,
+      "arm": "candidate",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 210,
+          "target": 2,
+          "family": "Ingest",
+          "count": 13
+        },
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 19
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 13,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "hunger_fatigue",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 4,
+      "arm": "zero_competition",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 32
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "hunger_pain",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 4,
+      "arm": "unchanged",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 32
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "hunger_pain",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 4,
+      "arm": "candidate",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 210,
+          "target": 2,
+          "family": "Ingest",
+          "count": 8
+        },
+        {
+          "primitive": 102,
+          "target": 4,
+          "family": "Avoid",
+          "count": 16
+        },
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 8
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 3,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "hunger_pain",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 4,
+      "arm": "zero_competition",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 32
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "fatigue_pain",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 4,
+      "arm": "unchanged",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 32
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "fatigue_pain",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 4,
+      "arm": "candidate",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 102,
+          "target": 4,
+          "family": "Avoid",
+          "count": 12
+        },
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 20
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "fatigue_pain",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 4,
+      "arm": "zero_competition",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 32
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "all_conflict",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 4,
+      "arm": "unchanged",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 32
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "all_conflict",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 4,
+      "arm": "candidate",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 210,
+          "target": 2,
+          "family": "Ingest",
+          "count": 8
+        },
+        {
+          "primitive": 102,
+          "target": 4,
+          "family": "Avoid",
+          "count": 16
+        },
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 8
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 3,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "all_conflict",
+      "birth_dendrites": true,
+      "microsteps_per_interval": 4,
+      "arm": "zero_competition",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 32
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        16,
+        16,
+        16,
+        16,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "quiet_sparse",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 2,
+      "arm": "unchanged",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 1,
+          "target": null,
+          "family": "Idle",
+          "count": 4
+        },
+        {
+          "primitive": 3,
+          "target": null,
+          "family": "Rest",
+          "count": 2
+        },
+        {
+          "primitive": 400,
+          "target": null,
+          "family": "Other",
+          "count": 6
+        },
+        {
+          "primitive": 103,
+          "target": null,
+          "family": "Approach",
+          "count": 5
+        },
+        {
+          "primitive": 212,
+          "target": null,
+          "family": "Contact",
+          "count": 8
+        },
+        {
+          "primitive": 104,
+          "target": null,
+          "family": "Other",
+          "count": 7
+        }
+      ],
+      "quiet_rest_bundles": 6,
+      "wholly_inactive_bundles": 26,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "quiet_sparse",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 2,
+      "arm": "candidate",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 1,
+          "target": null,
+          "family": "Idle",
+          "count": 4
+        },
+        {
+          "primitive": 3,
+          "target": null,
+          "family": "Rest",
+          "count": 2
+        },
+        {
+          "primitive": 400,
+          "target": null,
+          "family": "Other",
+          "count": 6
+        },
+        {
+          "primitive": 103,
+          "target": null,
+          "family": "Approach",
+          "count": 5
+        },
+        {
+          "primitive": 212,
+          "target": null,
+          "family": "Contact",
+          "count": 8
+        },
+        {
+          "primitive": 104,
+          "target": null,
+          "family": "Other",
+          "count": 7
+        }
+      ],
+      "quiet_rest_bundles": 6,
+      "wholly_inactive_bundles": 26,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "quiet_sparse",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 2,
+      "arm": "zero_competition",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 1,
+          "target": null,
+          "family": "Idle",
+          "count": 4
+        },
+        {
+          "primitive": 3,
+          "target": null,
+          "family": "Rest",
+          "count": 2
+        },
+        {
+          "primitive": 400,
+          "target": null,
+          "family": "Other",
+          "count": 6
+        },
+        {
+          "primitive": 103,
+          "target": null,
+          "family": "Approach",
+          "count": 5
+        },
+        {
+          "primitive": 212,
+          "target": null,
+          "family": "Contact",
+          "count": 8
+        },
+        {
+          "primitive": 104,
+          "target": null,
+          "family": "Other",
+          "count": 7
+        }
+      ],
+      "quiet_rest_bundles": 6,
+      "wholly_inactive_bundles": 26,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "quiet_full",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 2,
+      "arm": "unchanged",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 102,
+          "target": 2,
+          "family": "Avoid",
+          "count": 17
+        },
+        {
+          "primitive": 210,
+          "target": 4,
+          "family": "Ingest",
+          "count": 1
+        },
+        {
+          "primitive": 102,
+          "target": 3,
+          "family": "Avoid",
+          "count": 14
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "quiet_full",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 2,
+      "arm": "candidate",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 4,
+          "target": 2,
+          "family": "Inspect",
+          "count": 1
+        },
+        {
+          "primitive": 102,
+          "target": 2,
+          "family": "Avoid",
+          "count": 11
+        },
+        {
+          "primitive": 213,
+          "target": 2,
+          "family": "Other",
+          "count": 1
+        },
+        {
+          "primitive": 210,
+          "target": 4,
+          "family": "Ingest",
+          "count": 4
+        },
+        {
+          "primitive": 4,
+          "target": 3,
+          "family": "Inspect",
+          "count": 1
+        },
+        {
+          "primitive": 102,
+          "target": 3,
+          "family": "Avoid",
+          "count": 13
+        },
+        {
+          "primitive": 103,
+          "target": null,
+          "family": "Approach",
+          "count": 1
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 1,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "quiet_full",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 2,
+      "arm": "zero_competition",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 102,
+          "target": 2,
+          "family": "Avoid",
+          "count": 17
+        },
+        {
+          "primitive": 210,
+          "target": 4,
+          "family": "Ingest",
+          "count": 1
+        },
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 2
+        },
+        {
+          "primitive": 102,
+          "target": 3,
+          "family": "Avoid",
+          "count": 12
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "hunger",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 2,
+      "arm": "unchanged",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 102,
+          "target": 2,
+          "family": "Avoid",
+          "count": 1
+        },
+        {
+          "primitive": 210,
+          "target": 2,
+          "family": "Ingest",
+          "count": 24
+        },
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 5
+        },
+        {
+          "primitive": 102,
+          "target": 3,
+          "family": "Avoid",
+          "count": 1
+        },
+        {
+          "primitive": 210,
+          "target": 3,
+          "family": "Ingest",
+          "count": 1
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 11,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "hunger",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 2,
+      "arm": "candidate",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 210,
+          "target": 2,
+          "family": "Ingest",
+          "count": 29
+        },
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 2
+        },
+        {
+          "primitive": 210,
+          "target": 3,
+          "family": "Ingest",
+          "count": 1
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 21,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "hunger",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 2,
+      "arm": "zero_competition",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 102,
+          "target": 2,
+          "family": "Avoid",
+          "count": 1
+        },
+        {
+          "primitive": 210,
+          "target": 2,
+          "family": "Ingest",
+          "count": 23
+        },
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 4
+        },
+        {
+          "primitive": 102,
+          "target": 3,
+          "family": "Avoid",
+          "count": 3
+        },
+        {
+          "primitive": 210,
+          "target": 3,
+          "family": "Ingest",
+          "count": 1
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 11,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "fatigue",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 2,
+      "arm": "unchanged",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 3,
+          "target": null,
+          "family": "Rest",
+          "count": 1
+        },
+        {
+          "primitive": 101,
+          "target": 2,
+          "family": "Approach",
+          "count": 1
+        },
+        {
+          "primitive": 102,
+          "target": 2,
+          "family": "Avoid",
+          "count": 15
+        },
+        {
+          "primitive": 213,
+          "target": 2,
+          "family": "Other",
+          "count": 1
+        },
+        {
+          "primitive": 211,
+          "target": 4,
+          "family": "Contact",
+          "count": 1
+        },
+        {
+          "primitive": 213,
+          "target": 4,
+          "family": "Other",
+          "count": 1
+        },
+        {
+          "primitive": 102,
+          "target": 3,
+          "family": "Avoid",
+          "count": 12
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 1,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "fatigue",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 2,
+      "arm": "candidate",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 3,
+          "target": null,
+          "family": "Rest",
+          "count": 4
+        },
+        {
+          "primitive": 102,
+          "target": 2,
+          "family": "Avoid",
+          "count": 13
+        },
+        {
+          "primitive": 210,
+          "target": 4,
+          "family": "Ingest",
+          "count": 3
+        },
+        {
+          "primitive": 4,
+          "target": 3,
+          "family": "Inspect",
+          "count": 2
+        },
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 1
+        },
+        {
+          "primitive": 102,
+          "target": 3,
+          "family": "Avoid",
+          "count": 8
+        },
+        {
+          "primitive": 213,
+          "target": 3,
+          "family": "Other",
+          "count": 1
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 4,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "fatigue",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 2,
+      "arm": "zero_competition",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 3,
+          "target": null,
+          "family": "Rest",
+          "count": 1
+        },
+        {
+          "primitive": 102,
+          "target": 2,
+          "family": "Avoid",
+          "count": 16
+        },
+        {
+          "primitive": 210,
+          "target": 4,
+          "family": "Ingest",
+          "count": 3
+        },
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 2
+        },
+        {
+          "primitive": 102,
+          "target": 3,
+          "family": "Avoid",
+          "count": 10
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 1,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "pain",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 2,
+      "arm": "unchanged",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 101,
+          "target": 2,
+          "family": "Approach",
+          "count": 1
+        },
+        {
+          "primitive": 102,
+          "target": 4,
+          "family": "Avoid",
+          "count": 15
+        },
+        {
+          "primitive": 210,
+          "target": 4,
+          "family": "Ingest",
+          "count": 3
+        },
+        {
+          "primitive": 211,
+          "target": 4,
+          "family": "Contact",
+          "count": 1
+        },
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 3
+        },
+        {
+          "primitive": 102,
+          "target": 3,
+          "family": "Avoid",
+          "count": 9
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "pain",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 2,
+      "arm": "candidate",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 102,
+          "target": 4,
+          "family": "Avoid",
+          "count": 25
+        },
+        {
+          "primitive": 210,
+          "target": 4,
+          "family": "Ingest",
+          "count": 3
+        },
+        {
+          "primitive": 4,
+          "target": 3,
+          "family": "Inspect",
+          "count": 1
+        },
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 2
+        },
+        {
+          "primitive": 102,
+          "target": 3,
+          "family": "Avoid",
+          "count": 1
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "pain",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 2,
+      "arm": "zero_competition",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 101,
+          "target": 2,
+          "family": "Approach",
+          "count": 1
+        },
+        {
+          "primitive": 102,
+          "target": 4,
+          "family": "Avoid",
+          "count": 12
+        },
+        {
+          "primitive": 210,
+          "target": 4,
+          "family": "Ingest",
+          "count": 9
+        },
+        {
+          "primitive": 211,
+          "target": 4,
+          "family": "Contact",
+          "count": 1
+        },
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 1
+        },
+        {
+          "primitive": 102,
+          "target": 3,
+          "family": "Avoid",
+          "count": 8
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "hunger_fatigue",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 2,
+      "arm": "unchanged",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 102,
+          "target": 2,
+          "family": "Avoid",
+          "count": 1
+        },
+        {
+          "primitive": 210,
+          "target": 2,
+          "family": "Ingest",
+          "count": 25
+        },
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 4
+        },
+        {
+          "primitive": 102,
+          "target": 3,
+          "family": "Avoid",
+          "count": 1
+        },
+        {
+          "primitive": 210,
+          "target": 3,
+          "family": "Ingest",
+          "count": 1
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 11,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "hunger_fatigue",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 2,
+      "arm": "candidate",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 210,
+          "target": 2,
+          "family": "Ingest",
+          "count": 29
+        },
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 2
+        },
+        {
+          "primitive": 210,
+          "target": 3,
+          "family": "Ingest",
+          "count": 1
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 21,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "hunger_fatigue",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 2,
+      "arm": "zero_competition",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 102,
+          "target": 2,
+          "family": "Avoid",
+          "count": 1
+        },
+        {
+          "primitive": 210,
+          "target": 2,
+          "family": "Ingest",
+          "count": 23
+        },
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 4
+        },
+        {
+          "primitive": 102,
+          "target": 3,
+          "family": "Avoid",
+          "count": 3
+        },
+        {
+          "primitive": 210,
+          "target": 3,
+          "family": "Ingest",
+          "count": 1
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 11,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "hunger_pain",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 2,
+      "arm": "unchanged",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 210,
+          "target": 2,
+          "family": "Ingest",
+          "count": 25
+        },
+        {
+          "primitive": 102,
+          "target": 4,
+          "family": "Avoid",
+          "count": 2
+        },
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 4
+        },
+        {
+          "primitive": 210,
+          "target": 3,
+          "family": "Ingest",
+          "count": 1
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 16,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "hunger_pain",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 2,
+      "arm": "candidate",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 210,
+          "target": 2,
+          "family": "Ingest",
+          "count": 27
+        },
+        {
+          "primitive": 102,
+          "target": 4,
+          "family": "Avoid",
+          "count": 3
+        },
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 1
+        },
+        {
+          "primitive": 210,
+          "target": 3,
+          "family": "Ingest",
+          "count": 1
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 6,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "hunger_pain",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 2,
+      "arm": "zero_competition",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 210,
+          "target": 2,
+          "family": "Ingest",
+          "count": 24
+        },
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 6
+        },
+        {
+          "primitive": 102,
+          "target": 3,
+          "family": "Avoid",
+          "count": 1
+        },
+        {
+          "primitive": 210,
+          "target": 3,
+          "family": "Ingest",
+          "count": 1
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 16,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "fatigue_pain",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 2,
+      "arm": "unchanged",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 3,
+          "target": null,
+          "family": "Rest",
+          "count": 5
+        },
+        {
+          "primitive": 101,
+          "target": 2,
+          "family": "Approach",
+          "count": 1
+        },
+        {
+          "primitive": 102,
+          "target": 4,
+          "family": "Avoid",
+          "count": 12
+        },
+        {
+          "primitive": 210,
+          "target": 4,
+          "family": "Ingest",
+          "count": 6
+        },
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 1
+        },
+        {
+          "primitive": 102,
+          "target": 3,
+          "family": "Avoid",
+          "count": 7
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 5,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "fatigue_pain",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 2,
+      "arm": "candidate",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 3,
+          "target": null,
+          "family": "Rest",
+          "count": 4
+        },
+        {
+          "primitive": 102,
+          "target": 4,
+          "family": "Avoid",
+          "count": 23
+        },
+        {
+          "primitive": 210,
+          "target": 4,
+          "family": "Ingest",
+          "count": 4
+        },
+        {
+          "primitive": 102,
+          "target": 3,
+          "family": "Avoid",
+          "count": 1
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 4,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "fatigue_pain",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 2,
+      "arm": "zero_competition",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 3,
+          "target": null,
+          "family": "Rest",
+          "count": 4
+        },
+        {
+          "primitive": 101,
+          "target": 2,
+          "family": "Approach",
+          "count": 1
+        },
+        {
+          "primitive": 102,
+          "target": 4,
+          "family": "Avoid",
+          "count": 12
+        },
+        {
+          "primitive": 210,
+          "target": 4,
+          "family": "Ingest",
+          "count": 7
+        },
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 1
+        },
+        {
+          "primitive": 102,
+          "target": 3,
+          "family": "Avoid",
+          "count": 7
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 4,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "all_conflict",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 2,
+      "arm": "unchanged",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 210,
+          "target": 2,
+          "family": "Ingest",
+          "count": 26
+        },
+        {
+          "primitive": 102,
+          "target": 4,
+          "family": "Avoid",
+          "count": 1
+        },
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 4
+        },
+        {
+          "primitive": 210,
+          "target": 3,
+          "family": "Ingest",
+          "count": 1
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 17,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "all_conflict",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 2,
+      "arm": "candidate",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 210,
+          "target": 2,
+          "family": "Ingest",
+          "count": 27
+        },
+        {
+          "primitive": 102,
+          "target": 4,
+          "family": "Avoid",
+          "count": 3
+        },
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 1
+        },
+        {
+          "primitive": 210,
+          "target": 3,
+          "family": "Ingest",
+          "count": 1
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 6,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "all_conflict",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 2,
+      "arm": "zero_competition",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 210,
+          "target": 2,
+          "family": "Ingest",
+          "count": 24
+        },
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 6
+        },
+        {
+          "primitive": 102,
+          "target": 3,
+          "family": "Avoid",
+          "count": 1
+        },
+        {
+          "primitive": 210,
+          "target": 3,
+          "family": "Ingest",
+          "count": 1
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 16,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "quiet_sparse",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 4,
+      "arm": "unchanged",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 1,
+          "target": null,
+          "family": "Idle",
+          "count": 4
+        },
+        {
+          "primitive": 3,
+          "target": null,
+          "family": "Rest",
+          "count": 7
+        },
+        {
+          "primitive": 400,
+          "target": null,
+          "family": "Other",
+          "count": 5
+        },
+        {
+          "primitive": 103,
+          "target": null,
+          "family": "Approach",
+          "count": 8
+        },
+        {
+          "primitive": 212,
+          "target": null,
+          "family": "Contact",
+          "count": 3
+        },
+        {
+          "primitive": 104,
+          "target": null,
+          "family": "Other",
+          "count": 5
+        }
+      ],
+      "quiet_rest_bundles": 11,
+      "wholly_inactive_bundles": 27,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "quiet_sparse",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 4,
+      "arm": "candidate",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 1,
+          "target": null,
+          "family": "Idle",
+          "count": 4
+        },
+        {
+          "primitive": 3,
+          "target": null,
+          "family": "Rest",
+          "count": 7
+        },
+        {
+          "primitive": 400,
+          "target": null,
+          "family": "Other",
+          "count": 5
+        },
+        {
+          "primitive": 103,
+          "target": null,
+          "family": "Approach",
+          "count": 8
+        },
+        {
+          "primitive": 212,
+          "target": null,
+          "family": "Contact",
+          "count": 3
+        },
+        {
+          "primitive": 104,
+          "target": null,
+          "family": "Other",
+          "count": 5
+        }
+      ],
+      "quiet_rest_bundles": 11,
+      "wholly_inactive_bundles": 27,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "quiet_sparse",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 4,
+      "arm": "zero_competition",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 1,
+          "target": null,
+          "family": "Idle",
+          "count": 4
+        },
+        {
+          "primitive": 3,
+          "target": null,
+          "family": "Rest",
+          "count": 7
+        },
+        {
+          "primitive": 400,
+          "target": null,
+          "family": "Other",
+          "count": 5
+        },
+        {
+          "primitive": 103,
+          "target": null,
+          "family": "Approach",
+          "count": 8
+        },
+        {
+          "primitive": 212,
+          "target": null,
+          "family": "Contact",
+          "count": 3
+        },
+        {
+          "primitive": 104,
+          "target": null,
+          "family": "Other",
+          "count": 5
+        }
+      ],
+      "quiet_rest_bundles": 11,
+      "wholly_inactive_bundles": 27,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "quiet_full",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 4,
+      "arm": "unchanged",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 1,
+          "target": null,
+          "family": "Idle",
+          "count": 2
+        },
+        {
+          "primitive": 102,
+          "target": 2,
+          "family": "Avoid",
+          "count": 21
+        },
+        {
+          "primitive": 4,
+          "target": 4,
+          "family": "Inspect",
+          "count": 1
+        },
+        {
+          "primitive": 102,
+          "target": 3,
+          "family": "Avoid",
+          "count": 7
+        },
+        {
+          "primitive": 103,
+          "target": null,
+          "family": "Approach",
+          "count": 1
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 1,
+      "rest_plus_activity": 2,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "quiet_full",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 4,
+      "arm": "candidate",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 1,
+          "target": null,
+          "family": "Idle",
+          "count": 2
+        },
+        {
+          "primitive": 102,
+          "target": 2,
+          "family": "Avoid",
+          "count": 14
+        },
+        {
+          "primitive": 213,
+          "target": 2,
+          "family": "Other",
+          "count": 1
+        },
+        {
+          "primitive": 4,
+          "target": 4,
+          "family": "Inspect",
+          "count": 2
+        },
+        {
+          "primitive": 101,
+          "target": 4,
+          "family": "Approach",
+          "count": 1
+        },
+        {
+          "primitive": 210,
+          "target": 4,
+          "family": "Ingest",
+          "count": 3
+        },
+        {
+          "primitive": 211,
+          "target": 4,
+          "family": "Contact",
+          "count": 1
+        },
+        {
+          "primitive": 102,
+          "target": 3,
+          "family": "Avoid",
+          "count": 6
+        },
+        {
+          "primitive": 211,
+          "target": 3,
+          "family": "Contact",
+          "count": 1
+        },
+        {
+          "primitive": 212,
+          "target": null,
+          "family": "Contact",
+          "count": 1
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 2,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "quiet_full",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 4,
+      "arm": "zero_competition",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 1,
+          "target": null,
+          "family": "Idle",
+          "count": 2
+        },
+        {
+          "primitive": 102,
+          "target": 2,
+          "family": "Avoid",
+          "count": 21
+        },
+        {
+          "primitive": 210,
+          "target": 4,
+          "family": "Ingest",
+          "count": 1
+        },
+        {
+          "primitive": 102,
+          "target": 3,
+          "family": "Avoid",
+          "count": 7
+        },
+        {
+          "primitive": 103,
+          "target": null,
+          "family": "Approach",
+          "count": 1
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 1,
+      "rest_plus_activity": 2,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "hunger",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 4,
+      "arm": "unchanged",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 101,
+          "target": 2,
+          "family": "Approach",
+          "count": 2
+        },
+        {
+          "primitive": 210,
+          "target": 2,
+          "family": "Ingest",
+          "count": 26
+        },
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 2
+        },
+        {
+          "primitive": 102,
+          "target": 3,
+          "family": "Avoid",
+          "count": 1
+        },
+        {
+          "primitive": 210,
+          "target": 3,
+          "family": "Ingest",
+          "count": 1
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 14,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "hunger",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 4,
+      "arm": "candidate",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 102,
+          "target": 2,
+          "family": "Avoid",
+          "count": 2
+        },
+        {
+          "primitive": 210,
+          "target": 2,
+          "family": "Ingest",
+          "count": 28
+        },
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 1
+        },
+        {
+          "primitive": 210,
+          "target": 3,
+          "family": "Ingest",
+          "count": 1
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 25,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "hunger",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 4,
+      "arm": "zero_competition",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 101,
+          "target": 2,
+          "family": "Approach",
+          "count": 2
+        },
+        {
+          "primitive": 210,
+          "target": 2,
+          "family": "Ingest",
+          "count": 25
+        },
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 2
+        },
+        {
+          "primitive": 102,
+          "target": 3,
+          "family": "Avoid",
+          "count": 1
+        },
+        {
+          "primitive": 210,
+          "target": 3,
+          "family": "Ingest",
+          "count": 2
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 13,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "fatigue",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 4,
+      "arm": "unchanged",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 1,
+          "target": null,
+          "family": "Idle",
+          "count": 2
+        },
+        {
+          "primitive": 400,
+          "target": null,
+          "family": "Other",
+          "count": 1
+        },
+        {
+          "primitive": 102,
+          "target": 2,
+          "family": "Avoid",
+          "count": 21
+        },
+        {
+          "primitive": 102,
+          "target": 3,
+          "family": "Avoid",
+          "count": 7
+        },
+        {
+          "primitive": 103,
+          "target": null,
+          "family": "Approach",
+          "count": 1
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 1,
+      "rest_plus_activity": 2,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "fatigue",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 4,
+      "arm": "candidate",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 1,
+          "target": null,
+          "family": "Idle",
+          "count": 2
+        },
+        {
+          "primitive": 3,
+          "target": null,
+          "family": "Rest",
+          "count": 5
+        },
+        {
+          "primitive": 400,
+          "target": null,
+          "family": "Other",
+          "count": 1
+        },
+        {
+          "primitive": 4,
+          "target": 2,
+          "family": "Inspect",
+          "count": 1
+        },
+        {
+          "primitive": 102,
+          "target": 2,
+          "family": "Avoid",
+          "count": 14
+        },
+        {
+          "primitive": 4,
+          "target": 4,
+          "family": "Inspect",
+          "count": 1
+        },
+        {
+          "primitive": 4,
+          "target": 3,
+          "family": "Inspect",
+          "count": 1
+        },
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 1
+        },
+        {
+          "primitive": 102,
+          "target": 3,
+          "family": "Avoid",
+          "count": 5
+        },
+        {
+          "primitive": 212,
+          "target": null,
+          "family": "Contact",
+          "count": 1
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 7,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "fatigue",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 4,
+      "arm": "zero_competition",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 1,
+          "target": null,
+          "family": "Idle",
+          "count": 2
+        },
+        {
+          "primitive": 4,
+          "target": 2,
+          "family": "Inspect",
+          "count": 1
+        },
+        {
+          "primitive": 102,
+          "target": 2,
+          "family": "Avoid",
+          "count": 21
+        },
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 1
+        },
+        {
+          "primitive": 102,
+          "target": 3,
+          "family": "Avoid",
+          "count": 6
+        },
+        {
+          "primitive": 213,
+          "target": 3,
+          "family": "Other",
+          "count": 1
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 2,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "pain",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 4,
+      "arm": "unchanged",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 1,
+          "target": null,
+          "family": "Idle",
+          "count": 2
+        },
+        {
+          "primitive": 102,
+          "target": 4,
+          "family": "Avoid",
+          "count": 19
+        },
+        {
+          "primitive": 210,
+          "target": 4,
+          "family": "Ingest",
+          "count": 3
+        },
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 2
+        },
+        {
+          "primitive": 102,
+          "target": 3,
+          "family": "Avoid",
+          "count": 5
+        },
+        {
+          "primitive": 103,
+          "target": null,
+          "family": "Approach",
+          "count": 1
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 1,
+      "rest_plus_activity": 2,
+      "approach_eat_different_targets": 1,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "pain",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 4,
+      "arm": "candidate",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 3,
+          "target": null,
+          "family": "Rest",
+          "count": 2
+        },
+        {
+          "primitive": 102,
+          "target": 4,
+          "family": "Avoid",
+          "count": 25
+        },
+        {
+          "primitive": 210,
+          "target": 4,
+          "family": "Ingest",
+          "count": 2
+        },
+        {
+          "primitive": 4,
+          "target": 3,
+          "family": "Inspect",
+          "count": 1
+        },
+        {
+          "primitive": 102,
+          "target": 3,
+          "family": "Avoid",
+          "count": 1
+        },
+        {
+          "primitive": 213,
+          "target": 3,
+          "family": "Other",
+          "count": 1
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 2,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "pain",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 4,
+      "arm": "zero_competition",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 1,
+          "target": null,
+          "family": "Idle",
+          "count": 2
+        },
+        {
+          "primitive": 102,
+          "target": 4,
+          "family": "Avoid",
+          "count": 15
+        },
+        {
+          "primitive": 210,
+          "target": 4,
+          "family": "Ingest",
+          "count": 8
+        },
+        {
+          "primitive": 213,
+          "target": 4,
+          "family": "Other",
+          "count": 1
+        },
+        {
+          "primitive": 102,
+          "target": 3,
+          "family": "Avoid",
+          "count": 5
+        },
+        {
+          "primitive": 103,
+          "target": null,
+          "family": "Approach",
+          "count": 1
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 1,
+      "rest_plus_activity": 2,
+      "approach_eat_different_targets": 2,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "hunger_fatigue",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 4,
+      "arm": "unchanged",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 3,
+          "target": null,
+          "family": "Rest",
+          "count": 2
+        },
+        {
+          "primitive": 210,
+          "target": 2,
+          "family": "Ingest",
+          "count": 26
+        },
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 2
+        },
+        {
+          "primitive": 102,
+          "target": 3,
+          "family": "Avoid",
+          "count": 1
+        },
+        {
+          "primitive": 210,
+          "target": 3,
+          "family": "Ingest",
+          "count": 1
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 2,
+      "approach_eat_different_targets": 14,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "hunger_fatigue",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 4,
+      "arm": "candidate",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 3,
+          "target": null,
+          "family": "Rest",
+          "count": 2
+        },
+        {
+          "primitive": 210,
+          "target": 2,
+          "family": "Ingest",
+          "count": 28
+        },
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 1
+        },
+        {
+          "primitive": 210,
+          "target": 3,
+          "family": "Ingest",
+          "count": 1
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 2,
+      "approach_eat_different_targets": 25,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "hunger_fatigue",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 4,
+      "arm": "zero_competition",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 3,
+          "target": null,
+          "family": "Rest",
+          "count": 2
+        },
+        {
+          "primitive": 210,
+          "target": 2,
+          "family": "Ingest",
+          "count": 25
+        },
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 2
+        },
+        {
+          "primitive": 102,
+          "target": 3,
+          "family": "Avoid",
+          "count": 1
+        },
+        {
+          "primitive": 210,
+          "target": 3,
+          "family": "Ingest",
+          "count": 2
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 2,
+      "approach_eat_different_targets": 13,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "hunger_pain",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 4,
+      "arm": "unchanged",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 101,
+          "target": 2,
+          "family": "Approach",
+          "count": 2
+        },
+        {
+          "primitive": 210,
+          "target": 2,
+          "family": "Ingest",
+          "count": 26
+        },
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 2
+        },
+        {
+          "primitive": 210,
+          "target": 3,
+          "family": "Ingest",
+          "count": 2
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 23,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "hunger_pain",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 4,
+      "arm": "candidate",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 210,
+          "target": 2,
+          "family": "Ingest",
+          "count": 28
+        },
+        {
+          "primitive": 102,
+          "target": 4,
+          "family": "Avoid",
+          "count": 2
+        },
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 1
+        },
+        {
+          "primitive": 210,
+          "target": 3,
+          "family": "Ingest",
+          "count": 1
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 12,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "hunger_pain",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 4,
+      "arm": "zero_competition",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 101,
+          "target": 2,
+          "family": "Approach",
+          "count": 2
+        },
+        {
+          "primitive": 210,
+          "target": 2,
+          "family": "Ingest",
+          "count": 24
+        },
+        {
+          "primitive": 102,
+          "target": 4,
+          "family": "Avoid",
+          "count": 1
+        },
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 3
+        },
+        {
+          "primitive": 210,
+          "target": 3,
+          "family": "Ingest",
+          "count": 2
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 0,
+      "approach_eat_different_targets": 21,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "fatigue_pain",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 4,
+      "arm": "unchanged",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 3,
+          "target": null,
+          "family": "Rest",
+          "count": 9
+        },
+        {
+          "primitive": 101,
+          "target": 2,
+          "family": "Approach",
+          "count": 1
+        },
+        {
+          "primitive": 4,
+          "target": 4,
+          "family": "Inspect",
+          "count": 1
+        },
+        {
+          "primitive": 102,
+          "target": 4,
+          "family": "Avoid",
+          "count": 13
+        },
+        {
+          "primitive": 210,
+          "target": 4,
+          "family": "Ingest",
+          "count": 2
+        },
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 1
+        },
+        {
+          "primitive": 102,
+          "target": 3,
+          "family": "Avoid",
+          "count": 4
+        },
+        {
+          "primitive": 103,
+          "target": null,
+          "family": "Approach",
+          "count": 1
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 1,
+      "rest_plus_activity": 9,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "fatigue_pain",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 4,
+      "arm": "candidate",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 3,
+          "target": null,
+          "family": "Rest",
+          "count": 5
+        },
+        {
+          "primitive": 4,
+          "target": 2,
+          "family": "Inspect",
+          "count": 1
+        },
+        {
+          "primitive": 102,
+          "target": 4,
+          "family": "Avoid",
+          "count": 22
+        },
+        {
+          "primitive": 210,
+          "target": 4,
+          "family": "Ingest",
+          "count": 2
+        },
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 1
+        },
+        {
+          "primitive": 210,
+          "target": 3,
+          "family": "Ingest",
+          "count": 1
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 5,
+      "approach_eat_different_targets": 1,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "fatigue_pain",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 4,
+      "arm": "zero_competition",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 3,
+          "target": null,
+          "family": "Rest",
+          "count": 9
+        },
+        {
+          "primitive": 102,
+          "target": 4,
+          "family": "Avoid",
+          "count": 15
+        },
+        {
+          "primitive": 210,
+          "target": 4,
+          "family": "Ingest",
+          "count": 3
+        },
+        {
+          "primitive": 102,
+          "target": 3,
+          "family": "Avoid",
+          "count": 4
+        },
+        {
+          "primitive": 103,
+          "target": null,
+          "family": "Approach",
+          "count": 1
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 1,
+      "rest_plus_activity": 9,
+      "approach_eat_different_targets": 0,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "all_conflict",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 4,
+      "arm": "unchanged",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 3,
+          "target": null,
+          "family": "Rest",
+          "count": 2
+        },
+        {
+          "primitive": 210,
+          "target": 2,
+          "family": "Ingest",
+          "count": 26
+        },
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 2
+        },
+        {
+          "primitive": 210,
+          "target": 3,
+          "family": "Ingest",
+          "count": 2
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 2,
+      "approach_eat_different_targets": 23,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "all_conflict",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 4,
+      "arm": "candidate",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 3,
+          "target": null,
+          "family": "Rest",
+          "count": 2
+        },
+        {
+          "primitive": 210,
+          "target": 2,
+          "family": "Ingest",
+          "count": 26
+        },
+        {
+          "primitive": 102,
+          "target": 4,
+          "family": "Avoid",
+          "count": 2
+        },
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 1
+        },
+        {
+          "primitive": 210,
+          "target": 3,
+          "family": "Ingest",
+          "count": 1
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 2,
+      "approach_eat_different_targets": 12,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "case": "all_conflict",
+      "birth_dendrites": false,
+      "microsteps_per_interval": 4,
+      "arm": "zero_competition",
+      "first_recurrent_difference_microstep": 2,
+      "representatives": [
+        {
+          "primitive": 3,
+          "target": null,
+          "family": "Rest",
+          "count": 2
+        },
+        {
+          "primitive": 210,
+          "target": 2,
+          "family": "Ingest",
+          "count": 24
+        },
+        {
+          "primitive": 102,
+          "target": 4,
+          "family": "Avoid",
+          "count": 1
+        },
+        {
+          "primitive": 101,
+          "target": 3,
+          "family": "Approach",
+          "count": 3
+        },
+        {
+          "primitive": 210,
+          "target": 3,
+          "family": "Ingest",
+          "count": 2
+        }
+      ],
+      "quiet_rest_bundles": 0,
+      "wholly_inactive_bundles": 0,
+      "rest_plus_activity": 2,
+      "approach_eat_different_targets": 21,
+      "family_above_095": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    }
+  ],
+  "interpretation": "Different selected targets are not an execution/binding failure: food A entity2 is already reachable at distance0.3 with no possession or solid blocker; Approach entity3 plus Eat entity2 can be legitimate. No world interval was executed. Quiet full opportunity result is limited to these fixed inputs and weights; no universal rest failure claim."
+}

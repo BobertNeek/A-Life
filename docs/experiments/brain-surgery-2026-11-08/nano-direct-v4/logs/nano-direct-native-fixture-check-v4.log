@@ -1,0 +1,48 @@
+    Checking alife_core v0.1.0 (/workspace/scratch/ee5e08a3ca9b/nano-direct-need-gate-v4/crates/alife_core)
+    Checking alife_storage v0.1.0 (/workspace/scratch/ee5e08a3ca9b/nano-direct-need-gate-v4/crates/alife_storage)
+    Checking alife_world v0.1.0 (/workspace/scratch/ee5e08a3ca9b/nano-direct-need-gate-v4/crates/alife_world)
+    Checking alife_gpu_backend v0.1.0 (/workspace/scratch/ee5e08a3ca9b/nano-direct-need-gate-v4/crates/alife_gpu_backend)
+    Checking alife_runtime v0.1.0 (/workspace/scratch/ee5e08a3ca9b/nano-direct-need-gate-v4/crates/alife_runtime)
+    Checking alife_training v0.1.0 (/workspace/scratch/ee5e08a3ca9b/nano-direct-need-gate-v4/crates/alife_training)
+error[E0277]: the trait bound `WorldObject: serde::Serialize` is not satisfied
+   --> crates/alife_training/examples/probe_nano_direct_need_routing.rs:137:31
+    |
+137 |                   let matched = json!({"body":old.phenotype().body,"chemistry":old.phenotype().chemistry,
+    |  _______________________________^
+138 | |                     "development":old.phenotype().development,"reproduction":old.phenotype().reproduction,
+139 | |                     "predisposition":old.phenotype().predisposition,"plasticity":old.phenotype().brain_genome.plasticity_paramete...
+140 | |                     "biology":biology,"world_objects":world.object_snapshots()});
+    | |                                                                                ^
+    | |                                                                                |
+    | |________________________________________________________________________________the trait `serde_core::ser::Serialize` is not implemented for `WorldObject`
+    |                                                                                  required by a bound introduced by this call
+    |
+    = note: for local types consider adding `#[derive(serde::Serialize)]` to your `WorldObject` type
+    = note: for types from other crates check whether the crate offers a `serde` feature flag
+    = help: the following other types implement trait `serde_core::ser::Serialize`:
+              &'a T
+              &'a mut T
+              ()
+              (T,)
+              (T0, T1)
+              (T0, T1, T2)
+              (T0, T1, T2, T3)
+              (T0, T1, T2, T3, T4)
+            and 975 others
+    = note: required for `Vec<WorldObject>` to implement `serde_core::ser::Serialize`
+    = note: 1 redundant requirement hidden
+    = note: required for `&Vec<WorldObject>` to implement `serde_core::ser::Serialize`
+note: required by a bound in `to_value`
+   --> /workspace/scratch/ee5e08a3ca9b/recovered-toolchain-rust-1.99.1-20261107/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde_json-1.0.150/src/value/mod.rs:997:8
+    |
+995 | pub fn to_value<T>(value: T) -> Result<Value, Error>
+    |        -------- required by a bound in this function
+996 | where
+997 |     T: Serialize,
+    |        ^^^^^^^^^ required by this bound in `to_value`
+    = note: the full name for the type has been written to '/workspace/shared/grip-integration-qualification-20261108/grip-candidate-qualification/target/debug/examples/probe_nano_direct_need_routing-ed101500612265e6.long-type-4042983335212468556.txt'
+    = note: consider using `--verbose` to print the full type name to the console
+    = note: this error originates in the macro `$crate::json_internal` which comes from the expansion of the macro `json` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+For more information about this error, try `rustc --explain E0277`.
+error: could not compile `alife_training` (example "probe_nano_direct_need_routing") due to 1 previous error

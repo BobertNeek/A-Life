@@ -1,0 +1,1615 @@
+diff --git a/crates/alife_core/src/foundation.rs b/crates/alife_core/src/foundation.rs
+index beb58e9..2e34604 100644
+--- a/crates/alife_core/src/foundation.rs
++++ b/crates/alife_core/src/foundation.rs
+@@ -479,6 +479,7 @@ impl FoundationId {
+     pub const N2048_V1: Self = Self(0x4E32_3034_385F_5631);
+     pub const N2048_EXPERIMENTAL_GRAPH_V1: Self = Self(0x4E32_3034_3845_0001);
+     pub const N2048_MEMORY_GAIN_CANDIDATE_V1: Self = Self(0x4E32_3034_384D_0001);
++    pub const N2048_MOTOR_RECONCILIATION_CANDIDATE_V1: Self = Self(0x4E32_3034_3852_0001);
+     pub const N2048_GRIP_READER_CANDIDATE_V1: Self = Self(0x4E32_3034_3847_0001);
+ 
+     pub const fn raw(self) -> u64 {
+@@ -505,6 +506,7 @@ impl FoundationCompatibilityFamilyId {
+     pub const N2048_FOUNDATION: Self = Self(0x4E32_3034_385F_FA11);
+     pub const N2048_EXPERIMENTAL_GRAPH: Self = Self(0x4E32_3034_3845_FA11);
+     pub const N2048_MEMORY_GAIN_CANDIDATE: Self = Self(0x4E32_3034_384D_FA11);
++    pub const N2048_MOTOR_RECONCILIATION_CANDIDATE: Self = Self(0x4E32_3034_3852_FA11);
+     pub const N2048_GRIP_READER_CANDIDATE: Self = Self(0x4E32_3034_3847_FA11);
+ 
+     pub const fn raw(self) -> u64 {
+@@ -886,6 +888,10 @@ impl FoundationWeightAsset {
+         self.manifest.foundation_id.raw() == FoundationId::N2048_MEMORY_GAIN_CANDIDATE_V1.raw()
+     }
+ 
++    pub const fn is_n2048_motor_reconciliation_candidate(&self) -> bool {
++        self.manifest.foundation_id.raw()
++            == FoundationId::N2048_MOTOR_RECONCILIATION_CANDIDATE_V1.raw()
++    }
+     pub const fn is_n2048_experimental_graph(&self) -> bool {
+         self.manifest.foundation_id.raw() == FoundationId::N2048_EXPERIMENTAL_GRAPH_V1.raw()
+     }
+@@ -1238,6 +1244,7 @@ impl FoundationWeightAsset {
+         let (foundation_id, compatibility_family_id) = if self.is_n2048_experimental_graph()
+             || self.is_n2048_memory_gain_candidate()
+             || self.is_n2048_grip_reader_candidate()
++            || self.is_n2048_motor_reconciliation_candidate()
+         {
+             if self.manifest.capacity_class_id != BrainCapacityClass::N2048_ID
+                 || self.manifest.layout_digest
+@@ -1247,14 +1254,18 @@ impl FoundationWeightAsset {
+                 return Err(ScaffoldContractError::PhenotypeCompile);
+             }
+             (
+-                if self.is_n2048_grip_reader_candidate() {
++                if self.is_n2048_motor_reconciliation_candidate() {
++                    FoundationId::N2048_MOTOR_RECONCILIATION_CANDIDATE_V1
++                } else if self.is_n2048_grip_reader_candidate() {
+                     FoundationId::N2048_GRIP_READER_CANDIDATE_V1
+                 } else if self.is_n2048_memory_gain_candidate() {
+                     FoundationId::N2048_MEMORY_GAIN_CANDIDATE_V1
+                 } else {
+                     FoundationId::N2048_EXPERIMENTAL_GRAPH_V1
+                 },
+-                if self.is_n2048_grip_reader_candidate() {
++                if self.is_n2048_motor_reconciliation_candidate() {
++                    FoundationCompatibilityFamilyId::N2048_MOTOR_RECONCILIATION_CANDIDATE
++                } else if self.is_n2048_grip_reader_candidate() {
+                     FoundationCompatibilityFamilyId::N2048_GRIP_READER_CANDIDATE
+                 } else if self.is_n2048_memory_gain_candidate() {
+                     FoundationCompatibilityFamilyId::N2048_MEMORY_GAIN_CANDIDATE
+diff --git a/crates/alife_core/src/legacy_nano512_compatibility.rs b/crates/alife_core/src/legacy_nano512_compatibility.rs
+index f65c8d7..11a8a01 100644
+--- a/crates/alife_core/src/legacy_nano512_compatibility.rs
++++ b/crates/alife_core/src/legacy_nano512_compatibility.rs
+@@ -83,9 +83,19 @@ pub enum FoundationAbiSelection {
+     // Append variants so older binary enum tags keep their exact meaning.
+     N2048MemoryGainCandidateV1(crate::N2048MemoryGainCandidateV1),
+     N2048GripReaderCandidateV1(crate::N2048GripReaderCandidateV1),
++    N2048MotorReconciliationCandidateV1(crate::N2048MotorReconciliationCandidateV1),
+ }
+ 
+ impl FoundationAbiSelection {
++    pub const fn n2048_motor_reconciliation_candidate(
++        &self,
++    ) -> Option<&crate::N2048MotorReconciliationCandidateV1> {
++        match self {
++            Self::N2048MotorReconciliationCandidateV1(value) => Some(value),
++            _ => None,
++        }
++    }
++
+     pub const fn n2048_grip_reader_candidate(&self) -> Option<&crate::N2048GripReaderCandidateV1> {
+         match self {
+             Self::N2048GripReaderCandidateV1(value) => Some(value),
+@@ -111,6 +121,7 @@ impl FoundationAbiSelection {
+             Self::N2048ExperimentalGraphV1(_)
+                 | Self::N2048MemoryGainCandidateV1(_)
+                 | Self::N2048GripReaderCandidateV1(_)
++                | Self::N2048MotorReconciliationCandidateV1(_)
+         )
+     }
+ 
+@@ -133,7 +144,8 @@ impl FoundationAbiSelection {
+             Self::CanonicalV2(binding) => Some(binding),
+             Self::N2048ExperimentalGraphV1(_)
+             | Self::N2048MemoryGainCandidateV1(_)
+-            | Self::N2048GripReaderCandidateV1(_) => None,
++            | Self::N2048GripReaderCandidateV1(_)
++            | Self::N2048MotorReconciliationCandidateV1(_) => None,
+             Self::LegacyNano512CompatibilityV1(_)
+             | Self::MigratedN2048FoundationV1(_)
+             | Self::Nano512ReadoutCandidateV1(_)
+@@ -148,7 +160,8 @@ impl FoundationAbiSelection {
+             Self::CanonicalV2(_) => None,
+             Self::N2048ExperimentalGraphV1(_)
+             | Self::N2048MemoryGainCandidateV1(_)
+-            | Self::N2048GripReaderCandidateV1(_) => None,
++            | Self::N2048GripReaderCandidateV1(_)
++            | Self::N2048MotorReconciliationCandidateV1(_) => None,
+             Self::LegacyNano512CompatibilityV1(descriptor) => Some(descriptor),
+             Self::MigratedN2048FoundationV1(_)
+             | Self::Nano512ReadoutCandidateV1(_)
+@@ -163,7 +176,8 @@ impl FoundationAbiSelection {
+             Self::MigratedN2048FoundationV1(descriptor) => Some(descriptor),
+             Self::N2048ExperimentalGraphV1(_)
+             | Self::N2048MemoryGainCandidateV1(_)
+-            | Self::N2048GripReaderCandidateV1(_) => None,
++            | Self::N2048GripReaderCandidateV1(_)
++            | Self::N2048MotorReconciliationCandidateV1(_) => None,
+             Self::CanonicalV2(_)
+             | Self::LegacyNano512CompatibilityV1(_)
+             | Self::Nano512ReadoutCandidateV1(_)
+@@ -182,6 +196,9 @@ impl FoundationAbiSelection {
+             return Err(ScaffoldContractError::PhenotypeCompile);
+         }
+         match self {
++            Self::N2048MotorReconciliationCandidateV1(recipe) => {
++                recipe.validate_against(capacity, sensor_profile)
++            }
+             Self::N2048GripReaderCandidateV1(recipe) => {
+                 recipe.validate_against(capacity, sensor_profile)
+             }
+@@ -240,7 +257,8 @@ impl FoundationAbiSelection {
+             Self::CanonicalV2(binding) => binding.language_codebook().clone(),
+             Self::N2048ExperimentalGraphV1(_)
+             | Self::N2048MemoryGainCandidateV1(_)
+-            | Self::N2048GripReaderCandidateV1(_) => LanguageCodebookV1::canonical(),
++            | Self::N2048GripReaderCandidateV1(_)
++            | Self::N2048MotorReconciliationCandidateV1(_) => LanguageCodebookV1::canonical(),
+             Self::LegacyNano512CompatibilityV1(_) => LanguageCodebookV1::canonical(),
+             Self::MigratedN2048FoundationV1(_) => LanguageCodebookV1::canonical(),
+         }
+@@ -254,7 +272,8 @@ impl FoundationAbiSelection {
+             Self::CanonicalV2(binding) => binding.capacity_class_id(),
+             Self::N2048ExperimentalGraphV1(_)
+             | Self::N2048MemoryGainCandidateV1(_)
+-            | Self::N2048GripReaderCandidateV1(_) => BrainCapacityClass::N2048_ID,
++            | Self::N2048GripReaderCandidateV1(_)
++            | Self::N2048MotorReconciliationCandidateV1(_) => BrainCapacityClass::N2048_ID,
+             Self::LegacyNano512CompatibilityV1(_) => BrainCapacityClass::N512_ID,
+             Self::MigratedN2048FoundationV1(_) => BrainCapacityClass::N2048_ID,
+         }
+@@ -266,6 +285,9 @@ impl FoundationAbiSelection {
+                 Some(FoundationId::N512_READOUT_CANDIDATE_V1)
+             }
+             Self::CanonicalV2(binding) => binding.foundation_id(),
++            Self::N2048MotorReconciliationCandidateV1(_) => {
++                Some(FoundationId::N2048_MOTOR_RECONCILIATION_CANDIDATE_V1)
++            }
+             Self::N2048ExperimentalGraphV1(_) => Some(FoundationId::N2048_EXPERIMENTAL_GRAPH_V1),
+             Self::N2048MemoryGainCandidateV1(_) => {
+                 Some(FoundationId::N2048_MEMORY_GAIN_CANDIDATE_V1)
+@@ -286,7 +308,8 @@ impl FoundationAbiSelection {
+             Self::CanonicalV2(binding) => binding.foundation_version(),
+             Self::N2048ExperimentalGraphV1(_)
+             | Self::N2048MemoryGainCandidateV1(_)
+-            | Self::N2048GripReaderCandidateV1(_) => Some(FoundationVersion::V1),
++            | Self::N2048GripReaderCandidateV1(_)
++            | Self::N2048MotorReconciliationCandidateV1(_) => Some(FoundationVersion::V1),
+             Self::LegacyNano512CompatibilityV1(descriptor) => {
+                 Some(descriptor.source_foundation_version)
+             }
+@@ -302,6 +325,9 @@ impl FoundationAbiSelection {
+                 Some(FoundationCompatibilityFamilyId::N512_FOUNDATION)
+             }
+             Self::CanonicalV2(binding) => binding.compatibility_family_id(),
++            Self::N2048MotorReconciliationCandidateV1(_) => {
++                Some(FoundationCompatibilityFamilyId::N2048_MOTOR_RECONCILIATION_CANDIDATE)
++            }
+             Self::N2048ExperimentalGraphV1(_) => {
+                 Some(FoundationCompatibilityFamilyId::N2048_EXPERIMENTAL_GRAPH)
+             }
+@@ -325,6 +351,7 @@ impl FoundationAbiSelection {
+             Self::Nano512ActionCreditCandidateV2(candidate) => Some(candidate.source().asset_ref()),
+             Self::Nano512ReadoutCandidateV1(candidate) => Some(candidate.asset_ref()),
+             Self::CanonicalV2(binding) => binding.foundation_weight_asset(),
++            Self::N2048MotorReconciliationCandidateV1(recipe) => recipe.asset_ref(),
+             Self::N2048ExperimentalGraphV1(recipe) => recipe.asset_ref(),
+             Self::N2048MemoryGainCandidateV1(recipe) => recipe.asset_ref(),
+             Self::N2048GripReaderCandidateV1(recipe) => recipe.asset_ref(),
+@@ -345,6 +372,10 @@ impl FoundationAbiSelection {
+ 
+     pub(crate) fn write_canonical(&self, digest: &mut CanonicalDigestBuilder) {
+         match self {
++            Self::N2048MotorReconciliationCandidateV1(recipe) => {
++                digest.write_u8(9);
++                recipe.write_canonical(digest);
++            }
+             Self::N2048GripReaderCandidateV1(recipe) => {
+                 digest.write_u8(8);
+                 recipe.write_canonical(digest);
+diff --git a/crates/alife_core/src/lib.rs b/crates/alife_core/src/lib.rs
+index 5fe0dd1..ff6f0bd 100644
+--- a/crates/alife_core/src/lib.rs
++++ b/crates/alife_core/src/lib.rs
+@@ -387,3 +387,6 @@ pub use validation::{ensure_current_version, Validate};
+ pub use version::{
+     require_current_version, require_version, ContractVersion, SchemaKind, SchemaVersions,
+ };
++
++mod n2048_motor_reconciliation_candidate;
++pub use n2048_motor_reconciliation_candidate::N2048MotorReconciliationCandidateV1;
+diff --git a/crates/alife_core/src/n2048_motor_reconciliation_candidate.rs b/crates/alife_core/src/n2048_motor_reconciliation_candidate.rs
+new file mode 100644
+index 0000000..512e7e7
+--- /dev/null
++++ b/crates/alife_core/src/n2048_motor_reconciliation_candidate.rs
+@@ -0,0 +1,98 @@
++//! Explicit, fresh-founder research graph. Never a V1 coordinate migration.
++use crate::{
++    BrainCapacityClass, CanonicalDigestBuilder, FoundationWeightAsset, FoundationWeightAssetRef,
++    ScaffoldContractError, SensorProfile,
++};
++use serde::{Deserialize, Serialize};
++
++/// A sealed deterministic wiring recipe. Optional canonical bytes bind exact
++/// genetic weights; acquired state and optimizer state are deliberately absent.
++#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++pub struct N2048MotorReconciliationCandidateV1 {
++    schema_version: u16,
++    sensor_profile: SensorProfile,
++    recipe_digest: [u64; 4],
++    foundation_bytes: Option<Vec<u8>>,
++}
++impl N2048MotorReconciliationCandidateV1 {
++    pub fn fresh(sensor_profile: SensorProfile) -> Result<Self, ScaffoldContractError> {
++        SensorProfile::try_from_raw(sensor_profile.raw())?;
++        Ok(Self {
++            schema_version: 1,
++            sensor_profile,
++            recipe_digest: Self::recipe_digest(),
++            foundation_bytes: None,
++        })
++    }
++    pub fn for_asset(asset: &FoundationWeightAsset) -> Result<Self, ScaffoldContractError> {
++        if !asset.is_n2048_motor_reconciliation_candidate() {
++            return Err(ScaffoldContractError::PhenotypeCompile);
++        }
++        let mut value = Self::fresh(asset.manifest().sensor_profile())?;
++        value.foundation_bytes = Some(asset.encode_canonical()?);
++        Ok(value)
++    }
++    pub fn recipe_digest() -> [u64; 4] {
++        let mut d = CanonicalDigestBuilder::new(b"alife.n2048.motor-family-reconciliation.v1");
++        for word in crate::N2048ExperimentalGraphV1::recipe_digest() {
++            d.write_u64(word);
++        }
++        // Same 1536 route-6 edges, redistributed over all 56 directed
++        // non-self family pairs. Twelve incoming/outgoing edges per neuron cover each
++        // population. No decoder, activation, input or dendrite gain changes.
++        for value in [6_u32, 8, 16, 56, 1536, 12, 7, 5, 1] {
++            d.write_u32(value);
++        }
++        d.finish256()
++    }
++    pub const fn sensor_profile(&self) -> SensorProfile {
++        self.sensor_profile
++    }
++    pub fn asset(&self) -> Result<Option<FoundationWeightAsset>, ScaffoldContractError> {
++        self.foundation_bytes
++            .as_deref()
++            .map(FoundationWeightAsset::decode_canonical)
++            .transpose()
++    }
++    pub fn asset_ref(&self) -> Option<FoundationWeightAssetRef> {
++        self.asset().ok().flatten().map(|asset| asset.asset_ref())
++    }
++    pub(crate) fn validate_against(
++        &self,
++        capacity: &BrainCapacityClass,
++        profile: SensorProfile,
++    ) -> Result<(), ScaffoldContractError> {
++        if self.schema_version != 1
++            || capacity.id() != BrainCapacityClass::N2048_ID
++            || self.sensor_profile != profile
++            || self.recipe_digest != Self::recipe_digest()
++        {
++            return Err(ScaffoldContractError::PhenotypeCompile);
++        }
++        SensorProfile::try_from_raw(profile.raw())?;
++        if let Some(asset) = self.asset()? {
++            if !asset.is_n2048_motor_reconciliation_candidate()
++                || asset.manifest().sensor_profile() != profile
++            {
++                return Err(ScaffoldContractError::PhenotypeCompile);
++            }
++        }
++        Ok(())
++    }
++    pub(crate) fn write_canonical(&self, d: &mut CanonicalDigestBuilder) {
++        d.write_u16(self.schema_version);
++        d.write_u16(self.sensor_profile.raw());
++        for word in self.recipe_digest {
++            d.write_u64(word);
++        }
++        match &self.foundation_bytes {
++            Some(bytes) => {
++                d.write_some();
++                d.write_sequence_len(bytes.len());
++                d.write_bytes(bytes);
++            }
++            None => d.write_none(),
++        }
++    }
++}
+diff --git a/crates/alife_core/src/phenotype/abi_validation.rs b/crates/alife_core/src/phenotype/abi_validation.rs
+index aed8deb..8393b08 100644
+--- a/crates/alife_core/src/phenotype/abi_validation.rs
++++ b/crates/alife_core/src/phenotype/abi_validation.rs
+@@ -179,7 +179,12 @@ pub(super) fn compute_abi_digests(
+         use crate::blake3_digest::{domain_hasher, Blake3Write};
+         let mut route = domain_hasher(b"alife.n2048.experimental-route-abi.v1");
+         let mut plasticity = domain_hasher(b"alife.n2048.experimental-plasticity-abi.v1");
+-        for word in crate::N2048ExperimentalGraphV1::recipe_digest() {
++        let recipe = if selection.n2048_motor_reconciliation_candidate().is_some() {
++            crate::N2048MotorReconciliationCandidateV1::recipe_digest()
++        } else {
++            crate::N2048ExperimentalGraphV1::recipe_digest()
++        };
++        for word in recipe {
+             route.write_u64(word);
+             plasticity.write_u64(word);
+         }
+diff --git a/crates/alife_core/src/phenotype/compiler.rs b/crates/alife_core/src/phenotype/compiler.rs
+index b5f1df2..cb4dc14 100644
+--- a/crates/alife_core/src/phenotype/compiler.rs
++++ b/crates/alife_core/src/phenotype/compiler.rs
+@@ -83,6 +83,43 @@ impl PhenotypeCompiler {
+         Ok((Self::compile_validated(&inputs, &capacity)?, inputs))
+     }
+ 
++    /// Explicit fresh research graph. This does not reinterpret V1 weights.
++    pub fn compile_n2048_motor_reconciliation_graph(
++        genome: BrainGenome,
++        development: DevelopmentState,
++        sensor_profile: SensorProfile,
++    ) -> Result<(BrainPhenotype, PhenotypeCompilerInputs), ScaffoldContractError> {
++        let capacity = BrainCapacityClass::n2048();
++        let inputs = PhenotypeCompilerInputs::try_new_with_foundation_selection(
++            genome,
++            &capacity,
++            development,
++            sensor_profile,
++            crate::FoundationAbiSelection::N2048MotorReconciliationCandidateV1(
++                crate::N2048MotorReconciliationCandidateV1::fresh(sensor_profile)?,
++            ),
++        )?;
++        Ok((Self::compile_validated(&inputs, &capacity)?, inputs))
++    }
++
++    pub fn compile_n2048_motor_reconciliation_foundation_candidate(
++        genome: BrainGenome,
++        development: DevelopmentState,
++        asset: FoundationWeightAsset,
++    ) -> Result<(BrainPhenotype, PhenotypeCompilerInputs), ScaffoldContractError> {
++        let capacity = BrainCapacityClass::n2048();
++        let inputs = PhenotypeCompilerInputs::try_new_with_foundation_selection(
++            genome,
++            &capacity,
++            development,
++            asset.manifest().sensor_profile(),
++            crate::FoundationAbiSelection::N2048MotorReconciliationCandidateV1(
++                crate::N2048MotorReconciliationCandidateV1::for_asset(&asset)?,
++            ),
++        )?;
++        Ok((Self::compile_validated(&inputs, &capacity)?, inputs))
++    }
++
+     /// Explicit fresh research graph. This does not reinterpret V1 weights.
+     pub fn compile_n2048_experimental_graph(
+         genome: BrainGenome,
+@@ -259,6 +296,18 @@ impl PhenotypeCompiler {
+                 None => super::construction::compile(inputs, capacity),
+             };
+         }
++        if let Some(recipe) = inputs
++            .foundation_abi()
++            .n2048_motor_reconciliation_candidate()
++        {
++            inputs.validate_against(capacity)?;
++            return match recipe.asset()? {
++                Some(asset) => {
++                    super::construction::compile_with_foundation_asset(inputs, capacity, &asset)
++                }
++                None => super::construction::compile(inputs, capacity),
++            };
++        }
+         if let Some(recipe) = inputs.foundation_abi().n2048_experimental_graph() {
+             inputs.validate_against(capacity)?;
+             return match recipe.asset()? {
+diff --git a/crates/alife_core/src/phenotype/construction.rs b/crates/alife_core/src/phenotype/construction.rs
+index 25f8365..51c38c3 100644
+--- a/crates/alife_core/src/phenotype/construction.rs
++++ b/crates/alife_core/src/phenotype/construction.rs
+@@ -57,12 +57,17 @@ fn compile_inner(
+     };
+     let encoder =
+         super::io_compile::compile_encoder(genome, development, &layout, inputs.sensor_profile())?;
+-    let (mut projections, mut synapses, mut receipts) =
+-        if inputs.foundation_abi().uses_n2048_experimental_graph() {
+-            super::topology_compile::compile_n2048_experimental(genome, &layout, capacity)?
+-        } else {
+-            super::topology_compile::compile_recurrent(genome, &layout, capacity)?
+-        };
++    let (mut projections, mut synapses, mut receipts) = if inputs
++        .foundation_abi()
++        .n2048_motor_reconciliation_candidate()
++        .is_some()
++    {
++        super::topology_compile::compile_n2048_motor_reconciliation(genome, &layout, capacity)?
++    } else if inputs.foundation_abi().uses_n2048_experimental_graph() {
++        super::topology_compile::compile_n2048_experimental(genome, &layout, capacity)?
++    } else {
++        super::topology_compile::compile_recurrent(genome, &layout, capacity)?
++    };
+     let mut decoders = super::io_compile::compile_decoders(
+         genome,
+         development,
+diff --git a/crates/alife_core/src/phenotype/topology_compile.rs b/crates/alife_core/src/phenotype/topology_compile.rs
+index 80788d2..9e27160 100644
+--- a/crates/alife_core/src/phenotype/topology_compile.rs
++++ b/crates/alife_core/src/phenotype/topology_compile.rs
+@@ -438,8 +438,15 @@ pub(super) fn validate_n2048_experimental_coordinates(
+     capacity: &BrainCapacityClass,
+ ) -> Result<(), ScaffoldContractError> {
+     let genome = BrainGenome::scaffold(1, capacity.id());
+-    let (projections, synapses, _) =
+-        compile_n2048_experimental(&genome, phenotype.lobe_layout(), capacity)?;
++    let (projections, synapses, _) = if phenotype
++        .foundation_abi()
++        .n2048_motor_reconciliation_candidate()
++        .is_some()
++    {
++        compile_n2048_motor_reconciliation(&genome, phenotype.lobe_layout(), capacity)?
++    } else {
++        compile_n2048_experimental(&genome, phenotype.lobe_layout(), capacity)?
++    };
+     if phenotype.projections().get(..projections.len()) != Some(projections.as_slice())
+         || phenotype.synapses().len() != 32768
+         || synapses.iter().zip(phenotype.synapses()).any(|(a, b)| {
+@@ -744,3 +751,90 @@ fn splitmix64(mut value: u64) -> u64 {
+ const fn compile_error() -> ScaffoldContractError {
+     ScaffoldContractError::PhenotypeCompile
+ }
++
++/// Opt-in family competition coordinates. This changes only route 6 of the
++/// fresh experimental graph; no old graph is interpreted under these addresses.
++pub(super) fn compile_n2048_motor_reconciliation(
++    genome: &BrainGenome,
++    layout: &LobeLayout,
++    capacity: &BrainCapacityClass,
++) -> Result<RecurrentCompilation, ScaffoldContractError> {
++    let (mut projections, mut synapses, mut receipts) =
++        compile_n2048_experimental(genome, layout, capacity)?;
++    let spec = crate::N2048FoundationLayoutV1::route_specs()[6];
++    let motor = layout
++        .region(LobeKind::ActionPlanning)
++        .ok_or_else(compile_error)?;
++    let (start, count) = projections[6].synapse_range();
++    let mut rows = Vec::with_capacity(count as usize);
++    for family in 0..8u32 {
++        for lane in 0..16u32 {
++            let target = motor.start + family * 16 + lane;
++            // One same-lane edge from every rival family, plus five rotated
++            // adjacent-lane edges. Exactly twelve incoming AND outgoing edges
++            // per neuron avoids changing lane gain through uneven degree.
++            for delta in 1..8u32 {
++                rows.push((motor.start + ((family + delta) % 8) * 16 + lane, target));
++            }
++            for extra in 0..5u32 {
++                let delta = (lane + extra) % 7 + 1;
++                rows.push((
++                    motor.start + ((family + delta) % 8) * 16 + (lane + 1) % 16,
++                    target,
++                ));
++            }
++        }
++    }
++    if rows.len() != count as usize {
++        return Err(compile_error());
++    }
++    rows.sort_unstable();
++    let route = RoutingMask::new(
++        spec.source_lobe(),
++        spec.target_lobe(),
++        spec.projection_type(),
++        spec.active_tile_policy(),
++        spec.update_cadence(),
++        spec.priority(),
++    );
++    for (slot, (from, to)) in synapses[start as usize..(start + count) as usize]
++        .iter_mut()
++        .zip(rows)
++    {
++        *slot = CompiledSynapse::new(
++            from,
++            to,
++            genetic_weight(
++                genome.genetic_prior_seed,
++                6,
++                from,
++                to,
++                spec.projection_type(),
++            ),
++            alpha_for(genome, route, from, to, motor.start),
++            6,
++            CompiledSynapseKind::Recurrent,
++        );
++    }
++    projections[6] = CompiledProjection::new(
++        6,
++        spec.source_lobe(),
++        spec.target_lobe(),
++        spec.projection_type(),
++        spec.active_tile_policy(),
++        spec.update_cadence(),
++        spec.priority(),
++        0,
++        start,
++        count,
++        56,
++    );
++    receipts[6].active_tiles = 56;
++    receipts[6].tile_ceiling = 56;
++    if receipts.iter().map(|r| r.active_tiles).sum::<u32>()
++        > capacity.execution().max_active_tiles()
++    {
++        return Err(compile_error());
++    }
++    Ok((projections, synapses, receipts))
++}
+diff --git a/crates/alife_training/src/cpu/replay.rs b/crates/alife_training/src/cpu/replay.rs
+index b65041d..9897405 100644
+--- a/crates/alife_training/src/cpu/replay.rs
++++ b/crates/alife_training/src/cpu/replay.rs
+@@ -478,3 +478,9 @@ impl SparseGraph {
+         Ok(())
+     }
+ }
++
++#[cfg(test)]
++mod motor_reconciliation_assay;
++
++#[cfg(test)]
++mod motor_production_frame_assay;
+diff --git a/crates/alife_training/src/cpu/replay/motor_production_frame_assay.rs b/crates/alife_training/src/cpu/replay/motor_production_frame_assay.rs
+new file mode 100644
+index 0000000..0347590
+--- /dev/null
++++ b/crates/alife_training/src/cpu/replay/motor_production_frame_assay.rs
+@@ -0,0 +1,471 @@
++//! Bounded CPU fixture with production-enumerated static opportunities.
++//! No world interval, private checkpoint, trainer or autonomous policy is executed.
++//! Uses actual compiler, recurrent tape, signed decoder and factor sampler.
++use super::*;
++use crate::cpu::sample_cpu_joint_action;
++use crate::{TrainingInitialState, TrainingReplayCandidate, TrainingReplayTick};
++use alife_core::*;
++use alife_gpu_backend::GpuV11CausalState;
++use serde_json::{json, Value};
++use std::collections::BTreeSet;
++
++use super::motor_reconciliation_assay::care_candidate;
++
++fn graphs() -> (BrainPhenotype, BrainPhenotype) {
++    let capacity = BrainCapacityClass::n2048();
++    let genome = BrainGenome::scaffold(0x7A11, capacity.id());
++    let founder = CreatureGenome::early_mammal_founder(
++        0x7A11,
++        FoundationGeneticIdentity::new(10, 1, 7, capacity.id()).unwrap(),
++    )
++    .unwrap()
++    .express()
++    .unwrap();
++    assert_eq!(
++        founder
++            .brain_genome
++            .cognitive_architecture()
++            .motor_head_count(),
++        genome.cognitive_architecture().motor_head_count()
++    );
++    assert_eq!(
++        founder
++            .brain_genome
++            .cognitive_architecture()
++            .motor_head_width(),
++        genome.cognitive_architecture().motor_head_width()
++    );
++    assert_eq!(genome.cognitive_architecture().motor_head_count(), 1);
++    let development =
++        DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(0.8).unwrap());
++    let base = PhenotypeCompiler::compile_n2048_experimental_graph(
++        genome.clone(),
++        development.clone(),
++        SensorProfile::GroundedObjectSlotsV1,
++    )
++    .unwrap()
++    .0;
++    let candidate = PhenotypeCompiler::compile_n2048_motor_reconciliation_graph(
++        genome,
++        development,
++        SensorProfile::GroundedObjectSlotsV1,
++    )
++    .unwrap()
++    .0;
++    (base, candidate)
++}
++
++#[test]
++fn motor_production_frame_identity_and_coordinates_are_isolated() {
++    let (base, candidate) = graphs();
++    assert_ne!(base.phenotype_hash(), candidate.phenotype_hash());
++    assert_ne!(base.route_abi_digest(), candidate.route_abi_digest());
++    assert_ne!(
++        base.persistent_address_map().digest(),
++        candidate.persistent_address_map().digest()
++    );
++    assert_eq!(base.neuron_dynamics(), candidate.neuron_dynamics());
++    assert_eq!(base.sensor_encoder(), candidate.sensor_encoder());
++    assert_eq!(base.candidate_decoder(), candidate.candidate_decoder());
++    assert_eq!(base.microstep_count(), candidate.microstep_count());
++    assert_eq!(base.synapses().len(), candidate.synapses().len());
++    for (a, b) in base.synapses().iter().zip(candidate.synapses()) {
++        if a.route_index() != 6 {
++            assert_eq!(a, b);
++        }
++    }
++    assert_eq!(candidate.budgets().global.active_tiles, 187);
++    let m = candidate.candidate_decoder().motor_start();
++    for n in m..m + 128 {
++        assert_eq!(
++            candidate
++                .synapses()
++                .iter()
++                .filter(|s| s.route_index() == 6 && s.target() == n)
++                .count(),
++            12
++        );
++        assert_eq!(
++            candidate
++                .synapses()
++                .iter()
++                .filter(|s| s.route_index() == 6 && s.source() == n)
++                .count(),
++            12
++        );
++    }
++    let pairs = candidate
++        .synapses()
++        .iter()
++        .filter(|s| s.route_index() == 6)
++        .map(|s| ((s.source() - m) / 16, (s.target() - m) / 16))
++        .collect::<BTreeSet<_>>();
++    assert_eq!(pairs.len(), 56);
++    assert!(pairs.iter().all(|(a, b)| a != b && *a < 8 && *b < 8));
++    for family in 0..8 {
++        for lane in 0..16 {
++            for other in 0..8 {
++                if other != family {
++                    assert!(candidate.synapses().iter().any(|s| s.route_index() == 6
++                        && s.target() == m + family * 16 + lane
++                        && (s.source() - m) / 16 == other));
++                }
++            }
++        }
++    }
++    let asset = FoundationWeightAsset::from_trained_weights(
++        &candidate,
++        candidate
++            .synapses()
++            .iter()
++            .map(|s| s.genetic_weight())
++            .collect(),
++        TrainingStageManifest::bootstrap(),
++    )
++    .unwrap();
++    let decoded =
++        FoundationWeightAsset::decode_canonical(&asset.encode_canonical().unwrap()).unwrap();
++    // A fresh coordinate graph has no bound asset; only explicit recompile
++    // admits the exported genetic payload.
++    assert!(decoded.validate_against(&candidate).is_err());
++    assert!(decoded.validate_against(&base).is_err());
++    assert!(N2048ExperimentalGraphV1::for_asset(&decoded).is_err());
++    assert!(N2048MemoryGainCandidateV1::for_asset(&decoded).is_err());
++    let capacity = BrainCapacityClass::n2048();
++    let genome = BrainGenome::scaffold(0x7A11, capacity.id());
++    let development =
++        DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(0.8).unwrap());
++    let restored = PhenotypeCompiler::compile_n2048_motor_reconciliation_foundation_candidate(
++        genome,
++        development,
++        decoded.clone(),
++    )
++    .unwrap()
++    .0;
++    decoded.validate_against(&restored).unwrap();
++    assert!(FoundationAbiBinding::canonical_for_foundation_asset(&capacity, &decoded).is_err());
++    let round: BrainPhenotype =
++        serde_json::from_slice(&serde_json::to_vec(&restored).unwrap()).unwrap();
++    assert_eq!(restored, round);
++    let mut tampered = serde_json::to_value(&restored).unwrap();
++    tampered["foundation_abi_selection"]["contract"]["recipe_digest"][0] = json!(0);
++    assert!(serde_json::from_value::<BrainPhenotype>(tampered).is_err());
++    assert_eq!(candidate.synapses(), restored.synapses());
++    assert_eq!(candidate.route_abi_digest(), restored.route_abi_digest());
++}
++
++fn frame(hunger: f32, fatigue: f32, pain: f32, quiet: bool) -> PerceptionFrame {
++    let tick = Tick::new(1);
++    let id = OrganismId(777);
++    let mut drives = DriveSnapshot::baseline();
++    drives.hunger = hunger;
++    drives.fatigue = fatigue;
++    drives.pain = pain;
++    drives.fear = 0.;
++    drives.curiosity = 0.;
++    drives.loneliness = 0.;
++    drives.reproductive_drive = 0.;
++    // Static fresh world enumeration only: no body interval or policy is executed.
++    let mut builder =
++        alife_world::HeadlessScenarioBuilder::new(0x7A11).agent("subject", id, Vec3f::ZERO);
++    if !quiet {
++        builder = builder
++            .food("food A", Vec3f::new(0.3, 0., 0.), 0.8)
++            .food("food B", Vec3f::new(1.2, 0., 0.5), 0.6)
++            .hazard("hazard", Vec3f::new(-0.4, 0., 0.), 0.8);
++    }
++    let mut world = builder.build().unwrap();
++    let frame = world
++        .perception_frame(
++            id,
++            tick,
++            SensorProfile::GroundedObjectSlotsV1,
++            HomeostaticSnapshot::new(tick, drives, EndocrineSnapshot::baseline()).unwrap(),
++        )
++        .unwrap();
++    for primitive in [
++        alife_world::HeadlessActionIds::NO_LOCOMOTION,
++        alife_world::HeadlessActionIds::NO_MANIPULATION,
++        alife_world::HeadlessActionIds::NO_POSTURE,
++    ] {
++        assert!(frame
++            .candidates()
++            .iter()
++            .any(|c| c.action_id == primitive && c.target.entity.is_none()));
++    }
++    frame
++}
++
++fn sequence(p: &BrainPhenotype, f: &PerceptionFrame, birth: bool, steps: u32) -> TrainingSequence {
++    // Explicit fixed-port stimulation, not a claim of running the whole sensory
++    // pipeline. Homeostatic values pass through the actual compiled assignments.
++    // No sensory/body/context evidence, endogenous chemistry or learned memory.
++    let n = p.neuron_count() as usize;
++    let home = f
++        .homeostasis()
++        .drives
++        .to_array()
++        .into_iter()
++        .chain(f.homeostasis().hormones.to_array())
++        .collect::<Vec<_>>();
++    let mut encoded = vec![0.; n];
++    for a in p.sensor_encoder().assignments() {
++        if a.source_group() == SensorEncoderSourceGroup::Homeostasis {
++            let (low, high) = a.clamp_range();
++            encoded[a.target_neuron() as usize] +=
++                (home[a.source_index() as usize] * a.scale() + a.bias()).clamp(low, high);
++        }
++    }
++    for v in &mut encoded {
++        *v = v.clamp(-1., 1.);
++    }
++    let candidates = f
++        .candidates()
++        .iter()
++        .map(|c| {
++            let mut inputs = [0.; 54];
++            inputs[..24].copy_from_slice(&c.features.0);
++            let family = p
++                .candidate_decoder()
++                .families()
++                .iter()
++                .find(|v| v.family() == c.family)
++                .unwrap();
++            TrainingReplayCandidate {
++                family: c.family,
++                decoder_inputs: inputs,
++                innate_bias: family.innate_contribution(f.homeostasis().drives, c.features),
++            }
++        })
++        .collect();
++    TrainingSequence {
++        phenotype_hash: p.phenotype_hash(),
++        initial: TrainingInitialState {
++            activations: vec![0.; n],
++            activity_ema: vec![0.; n],
++            metabolic_load: vec![0.; n],
++            dendrites: if birth {
++                GpuV11CausalState::for_phenotype(p)
++                    .unwrap()
++                    .dendritic_branches()
++                    .clone()
++            } else {
++                DendriticBranchSet::default()
++            },
++        },
++        ticks: vec![
++            TrainingReplayTick {
++                encoded_inputs: encoded,
++                projection_gain: 1.,
++                local_threshold_shift: 0.,
++                microstep_count: steps,
++                enabled_routes: vec![true; p.projections().len()],
++                effective_weight_offsets: vec![0.; p.synapses().len()],
++                structural_synapses: vec![],
++                candidates
++            };
++            12
++        ],
++        burn_in_ticks: 0,
++        memory_candidate_gain: p
++            .candidate_decoder()
++            .memory_channel()
++            .map_or(0., |m| m.max_candidate_gain()),
++    }
++}
++fn weights(p: &BrainPhenotype, zero: bool) -> Vec<f32> {
++    let mut w = care_candidate::whole_care(p).unwrap().0;
++    if zero {
++        for (id, s) in p.synapses().iter().enumerate() {
++            if s.route_index() == 6 {
++                w[id] = 0.;
++            }
++        }
++    }
++    w
++}
++fn family_summary(p: &BrainPhenotype, a: &[f32]) -> Value {
++    let m = p.candidate_decoder().motor_start() as usize;
++    Value::Array((0..8).map(|f| {let row=&a[m+f*16..m+(f+1)*16];json!({"family":f,"mean":row.iter().sum::<f32>()/16.,"min":row.iter().copied().fold(f32::INFINITY,f32::min),"max":row.iter().copied().fold(f32::NEG_INFINITY,f32::max),"abs_above_095":row.iter().filter(|v|v.abs()>0.95).count()})}).collect())
++}
++fn decoder_terms(p: &BrainPhenotype, w: &[f32], q: &TrainingSequence, a: &[f32]) -> Value {
++    Value::Array(q.ticks[0].candidates.iter().enumerate().map(|(index,c)| {
++        let mut lane_terms=[0f32;24];
++        for (id,s) in p.synapses().iter().enumerate(){
++            if let CompiledSynapseKind::Decoder(coord)=s.kind(){if coord.head()==DecoderHeadKind::ActionCandidate && coord.family()==c.family{
++                lane_terms[coord.input_lane() as usize]+=a[s.source() as usize]*c.decoder_inputs[coord.input_lane() as usize]*w[id];
++            }}
++        }
++        let bias=p.candidate_decoder().families().iter().find(|f|f.family()==c.family).unwrap().bias();
++        json!({"candidate":index,"family":c.family,"innate_bias":c.innate_bias,"family_bias":bias,"signed_lane_contributions":lane_terms.iter().enumerate().filter(|(_,v)|**v!=0.).map(|(lane,v)|json!({"lane":lane,"value":v})).collect::<Vec<_>>(),"sum":bias+c.innate_bias+lane_terms.iter().sum::<f32>()})
++    }).collect())
++}
++fn selection(p: &BrainPhenotype, f: &PerceptionFrame, logits: &[f32], counter: u32) -> Value {
++    let mut representatives = vec![0; logits.len()];
++    let mut full_rest = 0;
++    let mut wholly_inactive = 0;
++    let mut rest_with_activity = 0;
++    let mut mismatched = 0;
++    let mut first = None;
++    let mut sampled_bundles = Vec::with_capacity(32);
++    for seed in 0..32 {
++        let a = sample_cpu_joint_action(p, f, logits, seed, counter, 0.7).unwrap();
++        assert_eq!(
++            a,
++            sample_cpu_joint_action(p, f, logits, seed, counter, 0.7).unwrap()
++        );
++        representatives[a.representative as usize] += 1;
++        sampled_bundles.push(json!({"seed":seed,"counter":counter,"representative":a.representative,"motor_candidates":a.motor_candidates,"selected_primitives":a.motor_candidates.iter().map(|slot|slot.map(|i| { let c = &f.candidates()[i as usize]; json!({"action_id":c.action_id,"kind":c.kind,"family":c.family,"target":c.target}) })).collect::<Vec<_>>(),"log_probability":a.old_joint_log_probability}));
++        let is_rest = matches!(
++            f.candidates()[a.representative as usize].family,
++            CandidateActionFamily::Idle | CandidateActionFamily::Rest
++        );
++        let active = a.motor_candidates.iter().flatten().any(|slot| {
++            let c = &f.candidates()[*slot as usize];
++            !matches!(
++                c.action_id,
++                alife_world::HeadlessActionIds::NO_LOCOMOTION
++                    | alife_world::HeadlessActionIds::NO_MANIPULATION
++                    | alife_world::HeadlessActionIds::NO_POSTURE
++            ) && !matches!(c.kind, ActionKind::Idle | ActionKind::Rest)
++        });
++        if !active {
++            wholly_inactive += 1;
++        }
++        if is_rest && !active {
++            full_rest += 1;
++        }
++        if is_rest && active {
++            rest_with_activity += 1;
++        }
++        if let (Some(l), Some(m)) = (a.motor_candidates[0], a.motor_candidates[2]) {
++            let (l, m) = (&f.candidates()[l as usize], &f.candidates()[m as usize]);
++            if l.family == CandidateActionFamily::Approach
++                && l.target.entity.is_some()
++                && m.family == CandidateActionFamily::Ingest
++                && l.target.entity != m.target.entity
++            {
++                mismatched += 1;
++            }
++        }
++        if first.is_none() {
++            first = Some(
++                json!({"representative":a.representative,"motor_candidates":a.motor_candidates,"selected_primitives":a.motor_candidates.iter().map(|slot|slot.map(|i| { let c = &f.candidates()[i as usize]; json!({"action_id":c.action_id,"kind":c.kind,"family":c.family,"target":c.target}) })).collect::<Vec<_>>(),"log_probability":a.old_joint_log_probability}),
++            );
++        }
++    }
++    json!({"samples":32,"representative_counts":representatives,"valid_rest_bundle":full_rest,"wholly_inactive_bundle":wholly_inactive,"rest_representative_with_other_active_slots":rest_with_activity,"approach_eat_target_mismatch":mismatched,"seed_zero_selection":first,"sampled_bundles":sampled_bundles})
++}
++fn run(
++    p: &BrainPhenotype,
++    w: &[f32],
++    f: &PerceptionFrame,
++    birth: bool,
++    steps: u32,
++) -> (Tape, Value) {
++    let q = sequence(p, f, birth, steps);
++    q.validate_for(p).unwrap();
++    let g = SparseGraph::new(p);
++    let tape = g.forward(p, w, &q).unwrap();
++    let repeat = g.forward(p, w, &q).unwrap();
++    assert_eq!(tape.a, repeat.a);
++    assert_eq!(tape.m, repeat.m);
++    assert_eq!(tape.evaluation, repeat.evaluation);
++    let mut ticks = Vec::new();
++    let stride = p.microstep_count() as usize;
++    for tick in 0..q.ticks.len() {
++        let mut microsteps = Vec::new();
++        for step in 1..=steps as usize {
++            let a = &tape.a[tick * stride + step];
++            // Score this actual intermediate bank through the production replay
++            // decoder, with zero extra recurrence; do not hand-pick actions.
++            let mut probe = q.clone();
++            probe.ticks.truncate(1);
++            probe.initial.activations = a.clone();
++            probe.ticks[0].microstep_count = 0;
++            let logits = g
++                .forward(p, w, &probe)
++                .unwrap()
++                .evaluation
++                .candidate_logits
++                .remove(0);
++            let terms = decoder_terms(p, w, &q, a);
++            for (i, term) in terms.as_array().unwrap().iter().enumerate() {
++                assert!((term["sum"].as_f64().unwrap() as f32 - logits[i]).abs() < 2e-5);
++            }
++            microsteps.push(json!({"step":step,"family_activity":family_summary(p,a),"logits":logits,"signed_contributions":if tick==0||tick+1==q.ticks.len(){terms}else{Value::Null},"selection":selection(p,f,&logits,(tick*stride+step)as u32)}));
++        }
++        ticks.push(
++            json!({"interval":tick,"world_interval_ms_reference":50,"microsteps":microsteps}),
++        );
++    }
++    (tape, json!({"intervals":ticks}))
++}
++
++#[test]
++fn motor_production_frame_actual_microsteps_decoder_and_sampler() {
++    let (base, candidate) = graphs();
++    let base_w = weights(&base, false);
++    let candidate_w = weights(&candidate, false);
++    let base_zero = weights(&base, true);
++    let candidate_zero = weights(&candidate, true);
++    for (i, s) in base.synapses().iter().enumerate() {
++        if s.route_index() != 6 {
++            assert_eq!(base_w[i].to_bits(), candidate_w[i].to_bits());
++        }
++    }
++    let cases = [
++        ("quiet_sparse", 0., 0., 0., true),
++        ("quiet_full", 0., 0., 0., false),
++        ("hunger", 0.9, 0., 0., false),
++        ("fatigue", 0., 0.9, 0., false),
++        ("pain", 0., 0., 0.9, false),
++        ("hunger_fatigue", 0.9, 0.9, 0., false),
++        ("hunger_pain", 0.9, 0., 0.9, false),
++        ("fatigue_pain", 0., 0.9, 0.9, false),
++        ("all_conflict", 0.9, 0.9, 0.9, false),
++    ];
++    let mut rows = Vec::new();
++    let mut changed = 0;
++    for birth in [true, false] {
++        for steps in [2, 4] {
++            for (name, h, f, p, quiet) in cases {
++                let frame = frame(h, f, p, quiet);
++                let q_base = sequence(&base, &frame, birth, steps);
++                let q_candidate = sequence(&candidate, &frame, birth, steps);
++                let zero_base = SparseGraph::new(&base)
++                    .forward(&base, &base_zero, &q_base)
++                    .unwrap();
++                let zero_candidate = SparseGraph::new(&candidate)
++                    .forward(&candidate, &candidate_zero, &q_candidate)
++                    .unwrap();
++                assert_eq!(zero_base.a, zero_candidate.a);
++                assert_eq!(zero_base.m, zero_candidate.m);
++                assert_eq!(zero_base.evaluation, zero_candidate.evaluation);
++                let (a, ar) = run(&base, &base_w, &frame, birth, steps);
++                let (b, br) = run(&candidate, &candidate_w, &frame, birth, steps);
++                let (_, zr) = run(&candidate, &candidate_zero, &frame, birth, steps);
++                if a.a != b.a {
++                    changed += 1;
++                }
++                // From zero initialization, recurrence cannot alter the first step.
++                assert_eq!(a.a[1], b.a[1]);
++                rows.push(json!({"case":name,"birth_dendrites":birth,"diagnostic_only_no_dendrites":!birth,"microsteps_per_interval":steps,"unchanged":ar,"candidate":br,"zero_competition":zr,"first_candidate_vs_unchanged_activation_difference_microstep":a.a.iter().zip(&b.a).position(|(a,b)|a!=b),"first_candidate_vs_zero_activation_difference_microstep":b.a.iter().zip(&zero_candidate.a).position(|(a,b)|a!=b)}));
++            }
++        }
++    }
++    // Outcome is measured, never asserted to improve or to suppress valid rest.
++
++    let report = json!({"schema":"motor-family-production-frame-cpu-v5","changed_conditions":changed,"motor_head_count":base.cognitive_architecture().motor_head_count(),"motor_head_width":base.cognitive_architecture().motor_head_width(),"graph":"N2048MotorReconciliationCandidateV1","base":"N2048ExperimentalGraphV1","new_foundation_id":candidate.foundation_abi().foundation_id().unwrap().raw(),"enumerated_frames":cases.iter().map(|(name,h,f,p,q)| { let frame=frame(*h,*f,*p,*q); json!({"case":name,"candidates":frame.candidates()}) }).collect::<Vec<_>>(),"base_phenotype":base.phenotype_hash(),"candidate_phenotype":candidate.phenotype_hash(),"candidate_route_abi":candidate.route_abi_digest(),"route6_edges":1536,"route6_family_pairs":56,"edge_weight":-0.03,"unchanged_drive_decoder_and_activation":true,"zero_route6_controls_bit_exact":true,"deterministic_repeats":true,"execution":"CPU actual compiled graph, SparseGraph::forward and sample_cpu_joint_action; static native perception only, no world intervals, training or GPU dispatch","limitations":["Native GroundedObjectSlotsV1 candidates from a static fresh world; neural inputs remain fixed homeostasis ports, not a whole sensory pipeline","Birth dendrites unchanged; no-dendrite arms are matched diagnostics, not a gain repair","Rest representative is not stationary rest if other sampler factors remain active","Family competition has no target binding; sampled Avoid is not a physical reflex","No executed world intervals, physical receipts or reflex tests; only the actual expressed founder one-head configuration is tested"],"rows":rows});
++    if let Ok(path) = std::env::var("ALIFE_MOTOR_PRODUCTION_FRAME_REPORT") {
++        use std::io::Write;
++        let mut file = std::fs::OpenOptions::new()
++            .write(true)
++            .create_new(true)
++            .open(path)
++            .unwrap();
++        file.write_all(&serde_json::to_vec(&report).unwrap())
++            .unwrap();
++    }
++    println!("motor reconciliation: 36 matched conditions x 3 reported arms; repeated exact CPU tapes; zero controls exact; scalar report emitted only when explicitly requested");
++}
+diff --git a/crates/alife_training/src/cpu/replay/motor_reconciliation_assay.rs b/crates/alife_training/src/cpu/replay/motor_reconciliation_assay.rs
+new file mode 100644
+index 0000000..5d66a03
+--- /dev/null
++++ b/crates/alife_training/src/cpu/replay/motor_reconciliation_assay.rs
+@@ -0,0 +1,576 @@
++//! Bounded CPU fixture, never a world, private checkpoint, trainer or policy.
++//! Uses actual compiler, recurrent tape, signed decoder and factor sampler.
++use super::*;
++use crate::cpu::sample_cpu_joint_action;
++use crate::{TrainingInitialState, TrainingReplayCandidate, TrainingReplayTick};
++use alife_core::*;
++use alife_gpu_backend::GpuV11CausalState;
++use serde_json::{json, Value};
++use std::collections::BTreeSet;
++
++#[allow(dead_code)]
++#[path = "../../../examples/support/care_candidate.rs"]
++pub(super) mod care_candidate;
++
++fn graphs() -> (BrainPhenotype, BrainPhenotype) {
++    let capacity = BrainCapacityClass::n2048();
++    let genome = BrainGenome::scaffold(0x7A11, capacity.id());
++    let development =
++        DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(0.8).unwrap());
++    let base = PhenotypeCompiler::compile_n2048_experimental_graph(
++        genome.clone(),
++        development.clone(),
++        SensorProfile::PrivilegedAffordanceV1,
++    )
++    .unwrap()
++    .0;
++    let candidate = PhenotypeCompiler::compile_n2048_motor_reconciliation_graph(
++        genome,
++        development,
++        SensorProfile::PrivilegedAffordanceV1,
++    )
++    .unwrap()
++    .0;
++    (base, candidate)
++}
++
++#[test]
++fn motor_reconciliation_identity_and_coordinates_are_isolated() {
++    let (base, candidate) = graphs();
++    assert_ne!(base.phenotype_hash(), candidate.phenotype_hash());
++    assert_ne!(base.route_abi_digest(), candidate.route_abi_digest());
++    assert_ne!(
++        base.persistent_address_map().digest(),
++        candidate.persistent_address_map().digest()
++    );
++    assert_eq!(base.neuron_dynamics(), candidate.neuron_dynamics());
++    assert_eq!(base.sensor_encoder(), candidate.sensor_encoder());
++    assert_eq!(base.candidate_decoder(), candidate.candidate_decoder());
++    assert_eq!(base.microstep_count(), candidate.microstep_count());
++    assert_eq!(base.synapses().len(), candidate.synapses().len());
++    for (a, b) in base.synapses().iter().zip(candidate.synapses()) {
++        if a.route_index() != 6 {
++            assert_eq!(a, b);
++        }
++    }
++    assert_eq!(candidate.budgets().global.active_tiles, 187);
++    let m = candidate.candidate_decoder().motor_start();
++    for n in m..m + 128 {
++        assert_eq!(
++            candidate
++                .synapses()
++                .iter()
++                .filter(|s| s.route_index() == 6 && s.target() == n)
++                .count(),
++            12
++        );
++        assert_eq!(
++            candidate
++                .synapses()
++                .iter()
++                .filter(|s| s.route_index() == 6 && s.source() == n)
++                .count(),
++            12
++        );
++    }
++    let pairs = candidate
++        .synapses()
++        .iter()
++        .filter(|s| s.route_index() == 6)
++        .map(|s| ((s.source() - m) / 16, (s.target() - m) / 16))
++        .collect::<BTreeSet<_>>();
++    assert_eq!(pairs.len(), 56);
++    assert!(pairs.iter().all(|(a, b)| a != b && *a < 8 && *b < 8));
++    for family in 0..8 {
++        for lane in 0..16 {
++            for other in 0..8 {
++                if other != family {
++                    assert!(candidate.synapses().iter().any(|s| s.route_index() == 6
++                        && s.target() == m + family * 16 + lane
++                        && (s.source() - m) / 16 == other));
++                }
++            }
++        }
++    }
++    let asset = FoundationWeightAsset::from_trained_weights(
++        &candidate,
++        candidate
++            .synapses()
++            .iter()
++            .map(|s| s.genetic_weight())
++            .collect(),
++        TrainingStageManifest::bootstrap(),
++    )
++    .unwrap();
++    let decoded =
++        FoundationWeightAsset::decode_canonical(&asset.encode_canonical().unwrap()).unwrap();
++    // A fresh coordinate graph has no bound asset; only explicit recompile
++    // admits the exported genetic payload.
++    assert!(decoded.validate_against(&candidate).is_err());
++    assert!(decoded.validate_against(&base).is_err());
++    assert!(N2048ExperimentalGraphV1::for_asset(&decoded).is_err());
++    assert!(N2048MemoryGainCandidateV1::for_asset(&decoded).is_err());
++    let capacity = BrainCapacityClass::n2048();
++    let genome = BrainGenome::scaffold(0x7A11, capacity.id());
++    let development =
++        DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(0.8).unwrap());
++    let restored = PhenotypeCompiler::compile_n2048_motor_reconciliation_foundation_candidate(
++        genome,
++        development,
++        decoded.clone(),
++    )
++    .unwrap()
++    .0;
++    decoded.validate_against(&restored).unwrap();
++    assert!(FoundationAbiBinding::canonical_for_foundation_asset(&capacity, &decoded).is_err());
++    let round: BrainPhenotype =
++        serde_json::from_slice(&serde_json::to_vec(&restored).unwrap()).unwrap();
++    assert_eq!(restored, round);
++    let mut tampered = serde_json::to_value(&restored).unwrap();
++    tampered["foundation_abi_selection"]["contract"]["recipe_digest"][0] = json!(0);
++    assert!(serde_json::from_value::<BrainPhenotype>(tampered).is_err());
++    assert_eq!(candidate.synapses(), restored.synapses());
++    assert_eq!(candidate.route_abi_digest(), restored.route_abi_digest());
++}
++
++fn frame(hunger: f32, fatigue: f32, pain: f32, quiet: bool) -> PerceptionFrame {
++    let tick = Tick::new(1);
++    let id = OrganismId(777);
++    let mut drives = DriveSnapshot::baseline();
++    drives.hunger = hunger;
++    drives.fatigue = fatigue;
++    drives.pain = pain;
++    drives.fear = 0.;
++    drives.curiosity = 0.;
++    drives.loneliness = 0.;
++    drives.reproductive_drive = 0.;
++    let mut candidates = Vec::new();
++    let definitions = [
++        (
++            "Idle",
++            ActionKind::Idle,
++            CandidateActionFamily::Idle,
++            0,
++            0.,
++            0.,
++            0.,
++        ),
++        (
++            "Rest",
++            ActionKind::Rest,
++            CandidateActionFamily::Rest,
++            0,
++            0.,
++            0.,
++            0.,
++        ),
++        (
++            "Approach A",
++            ActionKind::Move,
++            CandidateActionFamily::Approach,
++            101,
++            0.25,
++            0.8,
++            0.,
++        ),
++        (
++            "Approach B",
++            ActionKind::Move,
++            CandidateActionFamily::Approach,
++            102,
++            0.10,
++            0.6,
++            1.,
++        ),
++        (
++            "Avoid H",
++            ActionKind::Move,
++            CandidateActionFamily::Avoid,
++            103,
++            0.05,
++            -1.,
++            1.,
++        ),
++        (
++            "Eat A",
++            ActionKind::Interact,
++            CandidateActionFamily::Ingest,
++            101,
++            0.25,
++            0.8,
++            0.,
++        ),
++        (
++            "Eat B",
++            ActionKind::Interact,
++            CandidateActionFamily::Ingest,
++            102,
++            0.10,
++            0.6,
++            1.,
++        ),
++        (
++            "Inspect A",
++            ActionKind::Inspect,
++            CandidateActionFamily::Inspect,
++            101,
++            0.25,
++            0.8,
++            0.,
++        ),
++    ];
++    for (_, kind, family, target, distance, valence, contact) in definitions {
++        // Quiet sparse opportunity control omits targets, not by score masking.
++        // Quiet_full below retains the same opportunities as conflict frames.
++        if quiet && target != 0 {
++            continue;
++        }
++        let mut f = CandidateFeatureVector::zero().with_intrinsic_action_basis(kind);
++        if target != 0 {
++            f = CandidateFeatureVector::zero();
++            f.0[0] = 1.;
++            f.0[1] = 1.;
++            f.0[2] = distance;
++            f.0[15] = valence;
++            f.0[18] = contact;
++        }
++        candidates.push(
++            ActionCandidate::new(
++                candidates.len() as u16,
++                ActionId(1000 + candidates.len() as u32),
++                kind,
++                family,
++                CandidateObservationRef::None,
++                if target == 0 {
++                    ActionTarget::NONE
++                } else {
++                    ActionTarget::new(Some(WorldEntityId(target)), None)
++                },
++                f,
++                Confidence::new(1.).unwrap(),
++                NormalizedScalar::new(0.1).unwrap(),
++                DurationTicks::new(1),
++                DurationTicks::new(1),
++            )
++            .unwrap(),
++        );
++    }
++    PerceptionFrame::new(
++        id,
++        tick,
++        SensorProfile::PrivilegedAffordanceV1,
++        SensorySnapshot::new(
++            id,
++            tick,
++            Vec3f::ZERO,
++            SensoryChannels::ZERO,
++            Default::default(),
++        )
++        .unwrap(),
++        BodySnapshot {
++            pose: Pose::IDENTITY,
++            velocity: Velocity::ZERO,
++        },
++        HomeostaticSnapshot::new(tick, drives, EndocrineSnapshot::baseline()).unwrap(),
++        candidates,
++        SensorProfileProvenance::new(
++            SensorProfile::PrivilegedAffordanceV1,
++            SensoryAbiVersion::CURRENT,
++            tick,
++        )
++        .unwrap(),
++        vec![],
++    )
++    .unwrap()
++}
++
++fn sequence(p: &BrainPhenotype, f: &PerceptionFrame, birth: bool, steps: u32) -> TrainingSequence {
++    // Explicit fixed-port stimulation, not a claim of running the whole sensory
++    // pipeline. Homeostatic values pass through the actual compiled assignments.
++    // No sensory/body/context evidence, endogenous chemistry or learned memory.
++    let n = p.neuron_count() as usize;
++    let home = f
++        .homeostasis()
++        .drives
++        .to_array()
++        .into_iter()
++        .chain(f.homeostasis().hormones.to_array())
++        .collect::<Vec<_>>();
++    let mut encoded = vec![0.; n];
++    for a in p.sensor_encoder().assignments() {
++        if a.source_group() == SensorEncoderSourceGroup::Homeostasis {
++            let (low, high) = a.clamp_range();
++            encoded[a.target_neuron() as usize] +=
++                (home[a.source_index() as usize] * a.scale() + a.bias()).clamp(low, high);
++        }
++    }
++    for v in &mut encoded {
++        *v = v.clamp(-1., 1.);
++    }
++    let candidates = f
++        .candidates()
++        .iter()
++        .map(|c| {
++            let mut inputs = [0.; 54];
++            inputs[..24].copy_from_slice(&c.features.0);
++            let family = p
++                .candidate_decoder()
++                .families()
++                .iter()
++                .find(|v| v.family() == c.family)
++                .unwrap();
++            TrainingReplayCandidate {
++                family: c.family,
++                decoder_inputs: inputs,
++                innate_bias: family.innate_contribution(f.homeostasis().drives, c.features),
++            }
++        })
++        .collect();
++    TrainingSequence {
++        phenotype_hash: p.phenotype_hash(),
++        initial: TrainingInitialState {
++            activations: vec![0.; n],
++            activity_ema: vec![0.; n],
++            metabolic_load: vec![0.; n],
++            dendrites: if birth {
++                GpuV11CausalState::for_phenotype(p)
++                    .unwrap()
++                    .dendritic_branches()
++                    .clone()
++            } else {
++                DendriticBranchSet::default()
++            },
++        },
++        ticks: vec![
++            TrainingReplayTick {
++                encoded_inputs: encoded,
++                projection_gain: 1.,
++                local_threshold_shift: 0.,
++                microstep_count: steps,
++                enabled_routes: vec![true; p.projections().len()],
++                effective_weight_offsets: vec![0.; p.synapses().len()],
++                structural_synapses: vec![],
++                candidates
++            };
++            12
++        ],
++        burn_in_ticks: 0,
++        memory_candidate_gain: p
++            .candidate_decoder()
++            .memory_channel()
++            .map_or(0., |m| m.max_candidate_gain()),
++    }
++}
++fn weights(p: &BrainPhenotype, zero: bool) -> Vec<f32> {
++    let mut w = care_candidate::whole_care(p).unwrap().0;
++    if zero {
++        for (id, s) in p.synapses().iter().enumerate() {
++            if s.route_index() == 6 {
++                w[id] = 0.;
++            }
++        }
++    }
++    w
++}
++fn family_summary(p: &BrainPhenotype, a: &[f32]) -> Value {
++    let m = p.candidate_decoder().motor_start() as usize;
++    Value::Array((0..8).map(|f| {let row=&a[m+f*16..m+(f+1)*16];json!({"family":f,"mean":row.iter().sum::<f32>()/16.,"min":row.iter().copied().fold(f32::INFINITY,f32::min),"max":row.iter().copied().fold(f32::NEG_INFINITY,f32::max),"abs_above_095":row.iter().filter(|v|v.abs()>0.95).count()})}).collect())
++}
++fn decoder_terms(p: &BrainPhenotype, w: &[f32], q: &TrainingSequence, a: &[f32]) -> Value {
++    Value::Array(q.ticks[0].candidates.iter().enumerate().map(|(index,c)| {
++        let mut lane_terms=[0f32;24];
++        for (id,s) in p.synapses().iter().enumerate(){
++            if let CompiledSynapseKind::Decoder(coord)=s.kind(){if coord.head()==DecoderHeadKind::ActionCandidate && coord.family()==c.family{
++                lane_terms[coord.input_lane() as usize]+=a[s.source() as usize]*c.decoder_inputs[coord.input_lane() as usize]*w[id];
++            }}
++        }
++        let bias=p.candidate_decoder().families().iter().find(|f|f.family()==c.family).unwrap().bias();
++        json!({"candidate":index,"family":c.family,"innate_bias":c.innate_bias,"family_bias":bias,"signed_lane_contributions":lane_terms.iter().enumerate().filter(|(_,v)|**v!=0.).map(|(lane,v)|json!({"lane":lane,"value":v})).collect::<Vec<_>>(),"sum":bias+c.innate_bias+lane_terms.iter().sum::<f32>()})
++    }).collect())
++}
++fn selection(p: &BrainPhenotype, f: &PerceptionFrame, logits: &[f32], counter: u32) -> Value {
++    let mut representatives = vec![0; logits.len()];
++    let mut full_rest = 0;
++    let mut rest_with_activity = 0;
++    let mut mismatched = 0;
++    let mut first = None;
++    let mut sampled_bundles = Vec::with_capacity(32);
++    for seed in 0..32 {
++        let a = sample_cpu_joint_action(p, f, logits, seed, counter, 0.7).unwrap();
++        assert_eq!(
++            a,
++            sample_cpu_joint_action(p, f, logits, seed, counter, 0.7).unwrap()
++        );
++        representatives[a.representative as usize] += 1;
++        sampled_bundles.push(json!({"seed":seed,"counter":counter,"representative":a.representative,"motor_candidates":a.motor_candidates,"log_probability":a.old_joint_log_probability}));
++        let is_rest = matches!(
++            f.candidates()[a.representative as usize].family,
++            CandidateActionFamily::Idle | CandidateActionFamily::Rest
++        );
++        let active = a.motor_candidates[..4].iter().any(Option::is_some);
++        if is_rest && !active {
++            full_rest += 1;
++        }
++        if is_rest && active {
++            rest_with_activity += 1;
++        }
++        if let (Some(l), Some(m)) = (a.motor_candidates[0], a.motor_candidates[2]) {
++            let (l, m) = (&f.candidates()[l as usize], &f.candidates()[m as usize]);
++            if l.family == CandidateActionFamily::Approach
++                && m.family == CandidateActionFamily::Ingest
++                && l.target.entity != m.target.entity
++            {
++                mismatched += 1;
++            }
++        }
++        if first.is_none() {
++            first = Some(
++                json!({"representative":a.representative,"motor_candidates":a.motor_candidates,"log_probability":a.old_joint_log_probability}),
++            );
++        }
++    }
++    json!({"samples":32,"representative_counts":representatives,"valid_rest_bundle":full_rest,"rest_representative_with_other_active_slots":rest_with_activity,"approach_eat_target_mismatch":mismatched,"seed_zero_selection":first,"sampled_bundles":sampled_bundles})
++}
++fn run(
++    p: &BrainPhenotype,
++    w: &[f32],
++    f: &PerceptionFrame,
++    birth: bool,
++    steps: u32,
++) -> (Tape, Value) {
++    let q = sequence(p, f, birth, steps);
++    q.validate_for(p).unwrap();
++    let g = SparseGraph::new(p);
++    let tape = g.forward(p, w, &q).unwrap();
++    let repeat = g.forward(p, w, &q).unwrap();
++    assert_eq!(tape.a, repeat.a);
++    assert_eq!(tape.m, repeat.m);
++    assert_eq!(tape.evaluation, repeat.evaluation);
++    let mut ticks = Vec::new();
++    let stride = p.microstep_count() as usize;
++    for tick in 0..q.ticks.len() {
++        let mut microsteps = Vec::new();
++        for step in 1..=steps as usize {
++            let a = &tape.a[tick * stride + step];
++            // Score this actual intermediate bank through the production replay
++            // decoder, with zero extra recurrence; do not hand-pick actions.
++            let mut probe = q.clone();
++            probe.ticks.truncate(1);
++            probe.initial.activations = a.clone();
++            probe.ticks[0].microstep_count = 0;
++            let logits = g
++                .forward(p, w, &probe)
++                .unwrap()
++                .evaluation
++                .candidate_logits
++                .remove(0);
++            let terms = decoder_terms(p, w, &q, a);
++            for (i, term) in terms.as_array().unwrap().iter().enumerate() {
++                assert!((term["sum"].as_f64().unwrap() as f32 - logits[i]).abs() < 2e-5);
++            }
++            microsteps.push(json!({"step":step,"family_activity":family_summary(p,a),"logits":logits,"signed_contributions":if tick==0||tick+1==q.ticks.len(){terms}else{Value::Null},"selection":selection(p,f,&logits,(tick*stride+step)as u32)}));
++        }
++        ticks.push(
++            json!({"interval":tick,"world_interval_ms_reference":50,"microsteps":microsteps}),
++        );
++    }
++    (tape, json!({"intervals":ticks}))
++}
++
++#[test]
++fn motor_reconciliation_actual_microsteps_decoder_and_sampler() {
++    let (base, candidate) = graphs();
++    let base_w = weights(&base, false);
++    let candidate_w = weights(&candidate, false);
++    let base_zero = weights(&base, true);
++    let candidate_zero = weights(&candidate, true);
++    for (i, s) in base.synapses().iter().enumerate() {
++        if s.route_index() != 6 {
++            assert_eq!(base_w[i].to_bits(), candidate_w[i].to_bits());
++        }
++    }
++    let cases = [
++        ("quiet_sparse", 0., 0., 0., true),
++        ("quiet_full", 0., 0., 0., false),
++        ("hunger", 0.9, 0., 0., false),
++        ("fatigue", 0., 0.9, 0., false),
++        ("pain", 0., 0., 0.9, false),
++        ("hunger_fatigue", 0.9, 0.9, 0., false),
++        ("hunger_pain", 0.9, 0., 0.9, false),
++        ("fatigue_pain", 0., 0.9, 0.9, false),
++        ("all_conflict", 0.9, 0.9, 0.9, false),
++    ];
++    let mut rows = Vec::new();
++    let mut changed = 0;
++    for birth in [true, false] {
++        for steps in [2, 4] {
++            for (name, h, f, p, quiet) in cases {
++                let frame = frame(h, f, p, quiet);
++                let q_base = sequence(&base, &frame, birth, steps);
++                let q_candidate = sequence(&candidate, &frame, birth, steps);
++                let zero_base = SparseGraph::new(&base)
++                    .forward(&base, &base_zero, &q_base)
++                    .unwrap();
++                let zero_candidate = SparseGraph::new(&candidate)
++                    .forward(&candidate, &candidate_zero, &q_candidate)
++                    .unwrap();
++                assert_eq!(zero_base.a, zero_candidate.a);
++                assert_eq!(zero_base.m, zero_candidate.m);
++                assert_eq!(zero_base.evaluation, zero_candidate.evaluation);
++                let (a, ar) = run(&base, &base_w, &frame, birth, steps);
++                let (b, br) = run(&candidate, &candidate_w, &frame, birth, steps);
++                let (_, zr) = run(&candidate, &candidate_zero, &frame, birth, steps);
++                for arm in [&ar, &br, &zr] {
++                    for tick in arm["intervals"].as_array().unwrap() {
++                        for step in tick["microsteps"].as_array().unwrap() {
++                            assert_eq!(
++                                step["selection"]["valid_rest_bundle"].as_u64().unwrap(),
++                                if quiet { 32 } else { 0 }
++                            );
++                        }
++                    }
++                }
++                let last = &br["intervals"][11]["microsteps"][steps as usize - 1];
++                if birth {
++                    for family in 0..4 {
++                        assert_eq!(last["family_activity"][family]["abs_above_095"], json!(16));
++                    }
++                }
++                if !birth && name == "hunger" {
++                    assert!(
++                        last["selection"]["approach_eat_target_mismatch"]
++                            .as_u64()
++                            .unwrap()
++                            > 0
++                    );
++                }
++                if !birth && name == "quiet_full" {
++                    let z = &zr["intervals"][11]["microsteps"][steps as usize - 1];
++                    assert!(
++                        last["family_activity"][4]["mean"].as_f64().unwrap()
++                            < z["family_activity"][4]["mean"].as_f64().unwrap()
++                    );
++                    assert!(last["logits"][4].as_f64().unwrap() > z["logits"][4].as_f64().unwrap());
++                    assert!(
++                        last["selection"]["rest_representative_with_other_active_slots"]
++                            .as_u64()
++                            .unwrap()
++                            > 0
++                    );
++                }
++                if a.a != b.a {
++                    changed += 1;
++                }
++                // From zero initialization, recurrence cannot alter the first step.
++                assert_eq!(a.a[1], b.a[1]);
++                rows.push(json!({"case":name,"birth_dendrites":birth,"diagnostic_only_no_dendrites":!birth,"microsteps_per_interval":steps,"unchanged":ar,"candidate":br,"zero_competition":zr,"first_candidate_vs_unchanged_activation_difference_microstep":a.a.iter().zip(&b.a).position(|(a,b)|a!=b),"first_candidate_vs_zero_activation_difference_microstep":b.a.iter().zip(&zero_candidate.a).position(|(a,b)|a!=b)}));
++            }
++        }
++    }
++    assert_eq!(changed, 36);
++    let report = json!({"schema":"motor-family-reconciliation-no-world-cpu-v1","graph":"N2048MotorReconciliationCandidateV1","base":"N2048ExperimentalGraphV1","new_foundation_id":candidate.foundation_abi().foundation_id().unwrap().raw(),"base_phenotype":base.phenotype_hash(),"candidate_phenotype":candidate.phenotype_hash(),"candidate_route_abi":candidate.route_abi_digest(),"route6_edges":1536,"route6_family_pairs":56,"edge_weight":-0.03,"unchanged_drive_decoder_and_activation":true,"zero_route6_controls_bit_exact":true,"deterministic_repeats":true,"execution":"CPU actual compiled graph, SparseGraph::forward and sample_cpu_joint_action; no world, training or GPU dispatch","limitations":["Privileged fixed candidate features, not a whole sensory pipeline or gameplay result","Birth dendrites unchanged; no-dendrite arms are matched diagnostics, not a gain repair","Rest representative is not stationary rest if other sampler factors remain active","Family competition has no target binding; sampled Avoid is not a physical reflex","No executed actions, physical receipts or reflex tests in this no-world fixture"],"rows":rows});
++    if let Ok(path) = std::env::var("ALIFE_MOTOR_RECONCILIATION_REPORT") {
++        std::fs::write(path, serde_json::to_vec(&report).unwrap()).unwrap();
++    }
++    println!("motor reconciliation: 36 matched conditions x 3 reported arms; repeated exact CPU tapes; zero controls exact; scalar report emitted only when explicitly requested");
++}

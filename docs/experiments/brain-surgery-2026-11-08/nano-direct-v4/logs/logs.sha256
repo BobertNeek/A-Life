@@ -1,0 +1,12 @@
+1bd3df1de7618e7e97c6e433b27e6f2f5968f38af8902c8893eab3af3dc6105f  logs/direct-need-v4/01-core.log
+add85bed4f40313ce42fdfc42f43bef83c53f29c48d4062e290585446b3a88c9  logs/direct-need-v4/02-core.log
+11f35cae19276fc804482a3f2e77d6dc6cc1d57e2c24f08cac41139520f47aac  logs/direct-need-v4/03-core-final.log
+81f1f7388dba2c920d760e475b4f2683df3cbec1fbd5ec0d78a6cf0b86d11dfb  logs/direct-need-v4/04-cpu-direct.log
+3938dfb3d15dae094f21228934089398227ceb37677e98cd8b75c9a619cd14a4  logs/direct-need-v4/05-core-cadence.log
+4275688dbe7b088501d8191279796c9a87705952f1fc404bc19d7d99db74d25e  logs/direct-need-v4/06-cpu-native-cadence.log
+064c647801679ee89182838b59e4c1253b0f6ded7fceb349cc7159e1b0a011cc  logs/direct-need-v4/07-core-final.log
+52afa0243c51b0a744151cd09e151fd444c265c374660a67e3517eddd4715524  logs/direct-need-v4/08-cpu-final.log
+ff13766618e250a2d77ece12b84f1c84fc0670646360ae70b3358deccd0595c1  logs/direct-need-v4/09-encoder-equivalence.log
+a582fba8ac2931c5553b5f8cd7d6af46a89318efa115183ed89c8e99f92a9c7d  logs/direct-need-v4/10-frozen-abi-guards.log
+77b93a12b30f23baf4b2a39acad01ddce620685e99052ccab082ffd15a5a6af9  logs/direct-need-v4/11-clippy-core.log
+60332962bdb2e8d4f020ebab464216ef54ec6ec0c34db3f4d513ae9a1ac4e3fc  logs/direct-need-v4/12-clippy-cpu.log

@@ -1,0 +1,111 @@
+{
+  "original_archive_sha256": "d88a0627bf4058503679d1206d4150616ed1130ebb3cd0339d40a1271754c3ec",
+  "selection": "All original safe package files except explicitly omitted full scalar bundle report; raw private replay is not present in either archive. Original manifest bytes remain unchanged.",
+  "members": [
+    {
+      "member": "motor-production-frame-report-v5.json",
+      "relative_path": "motor-production-frame-report-v5.json",
+      "sha256": "11811e33ca85d10f85510b14815735c801f47d317b81280eca51fba17de42aba",
+      "bytes": 51679775,
+      "selected": false
+    },
+    {
+      "member": "motor-production-frame-audit-v5.json",
+      "relative_path": "motor-production-frame-audit-v5.json",
+      "sha256": "b380055029c98a529214b09e00b61f4f707581ce1f1cefd6dfd9ea3d8041f49b",
+      "bytes": 101111,
+      "selected": true
+    },
+    {
+      "member": "audit_motor_production_frame_v5.py",
+      "relative_path": "audit_motor_production_frame_v5.py",
+      "sha256": "f5f2edc89b230fbf70c5ed04e0f7029d3828e4331707fb70d4d88c1779e4e761",
+      "bytes": 3401,
+      "selected": true
+    },
+    {
+      "member": "motor-production-frame-results-v5.md",
+      "relative_path": "motor-production-frame-results-v5.md",
+      "sha256": "2970e6500f4538538463e322576035aeb9666af5ca77525a3087f0d7ee42558b",
+      "bytes": 3903,
+      "selected": true
+    },
+    {
+      "member": "motor-production-frame-v5-plan.md",
+      "relative_path": "motor-production-frame-v5-plan.md",
+      "sha256": "1a4f39dcfa4f7fa657eb18de35298dbdc9759f3bf4cb80aea5123126348ffdd7",
+      "bytes": 2232,
+      "selected": true
+    },
+    {
+      "member": "motor-production-frame-full-v5.patch",
+      "relative_path": "motor-production-frame-full-v5.patch",
+      "sha256": "55bbc9428bc6418ad7c3d9ab5b8125c229d253283d736ea68ab76eb7e886bf95",
+      "bytes": 72504,
+      "selected": true
+    },
+    {
+      "member": "motor-production-frame-delta-v5.patch",
+      "relative_path": "motor-production-frame-delta-v5.patch",
+      "sha256": "3cc7e888fe93bc47ab0500048b7760db5e6b445436cf578b6a4083eb248b347f",
+      "bytes": 23390,
+      "selected": true
+    },
+    {
+      "member": "motor-production-frame-tree-v5.txt",
+      "relative_path": "motor-production-frame-tree-v5.txt",
+      "sha256": "4df60ce56cda03e619c85632cac6ead095a57765049fe9ab844534547d8b1fd4",
+      "bytes": 133213,
+      "selected": true
+    },
+    {
+      "member": "motor-production-frame-first-native-v5.log",
+      "relative_path": "motor-production-frame-first-native-v5.log",
+      "sha256": "c24136aee89e692229d2045af7af6b09347dcc8a73a5c66ea235aa29c8a073fb",
+      "bytes": 1042,
+      "selected": true
+    },
+    {
+      "member": "motor-production-frame-cpu-native-v5.log",
+      "relative_path": "motor-production-frame-cpu-native-v5.log",
+      "sha256": "2676f5779d933f15ff83cd328a3c20d68e83a4d16b70994ce83f7a94ecaaca0b",
+      "bytes": 1154,
+      "selected": true
+    },
+    {
+      "member": "motor-production-frame-clippy-prerepair-v5.log",
+      "relative_path": "motor-production-frame-clippy-prerepair-v5.log",
+      "sha256": "0e44f7f60b56c573e8984302ad9ca4f927b8fd8e914cf22a7340b49ffa8b3248",
+      "bytes": 1291,
+      "selected": true
+    },
+    {
+      "member": "motor-production-frame-clippy-repaired-v5.log",
+      "relative_path": "motor-production-frame-clippy-repaired-v5.log",
+      "sha256": "dd05260c42d2a3d862779af043e6c89c4101f8aec71c780a739fbfb217c88b4d",
+      "bytes": 184,
+      "selected": true
+    },
+    {
+      "member": "motor-production-frame-fmt-v5.log",
+      "relative_path": "motor-production-frame-fmt-v5.log",
+      "sha256": "e16cd4f4541d49e27316cc2d1cbaa7998315c79c017b142a37bfff86debad727",
+      "bytes": 33,
+      "selected": true
+    },
+    {
+      "member": "motor-family-reconciliation-rest-erratum-v4.md",
+      "relative_path": "motor-family-reconciliation-rest-erratum-v4.md",
+      "sha256": "bcad5582106ff6acc6d0b393dc26c3ac6263b0819d325abbdcfab19379bd3ec6",
+      "bytes": 7008,
+      "selected": true
+    },
+    {
+      "member": "motor-production-frame-manifest-v5.json",
+      "relative_path": "motor-production-frame-manifest-v5.json",
+      "sha256": "4e4895ea01ea2984a761f9db54a3ff1a844075ef83aadfa72ada62168e84a1c1",
+      "bytes": 2126,
+      "selected": true
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+   Compiling alife_core v0.1.0 (/workspace/scratch/ee5e08a3ca9b/motor-family-production-frame-v5/crates/alife_core)
+   Compiling alife_storage v0.1.0 (/workspace/scratch/ee5e08a3ca9b/motor-family-production-frame-v5/crates/alife_storage)
+   Compiling alife_world v0.1.0 (/workspace/scratch/ee5e08a3ca9b/motor-family-production-frame-v5/crates/alife_world)
+   Compiling alife_gpu_backend v0.1.0 (/workspace/scratch/ee5e08a3ca9b/motor-family-production-frame-v5/crates/alife_gpu_backend)
+   Compiling alife_runtime v0.1.0 (/workspace/scratch/ee5e08a3ca9b/motor-family-production-frame-v5/crates/alife_runtime)
+   Compiling alife_training v0.1.0 (/workspace/scratch/ee5e08a3ca9b/motor-family-production-frame-v5/crates/alife_training)
+    Finished `test` profile [unoptimized] target(s) in 3m 09s
+     Running unittests src/lib.rs (/workspace/scratch/ee5e08a3ca9b/motor-reflex-target-v1/debug/deps/alife_training-9beb9f751ea88fe8)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 45 filtered out; finished in 0.00s
+
