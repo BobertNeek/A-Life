@@ -1,0 +1,55 @@
+{
+  "source_commit": "68eaeaed2b9e4f5c07f3fb129f6ddd4afd417913",
+  "source_tree": "e11f9b012363f77f31d581364e7c2f3bb56cab74",
+  "research_base_commit": "2da9dd323ad6f074556a851174a2edbc9e34e216",
+  "research_base_tree": "e402bcb5d5fc034ac0244e78d49fa1a0da25ede3",
+  "immediate_base_commit": "8d43b8d2758ba4d923fc38195221c6e48e3d59f2",
+  "executable_bindings": {
+    "alife_game_app-6fdbdab04223c905": {
+      "sha256": "80f180758e3da3b0d4677b01e41a72011a7befe6bfe5e36f083c02499beb12a4",
+      "bytes": 53006808,
+      "included": false
+    },
+    "oja_credit_stability-ff42c32996005761": {
+      "sha256": "1c363ba0ba717014067385c1c0d69d4c51e2dfdea99dba6df79e06f30570e282",
+      "bytes": 28178304,
+      "included": false
+    },
+    "cpu_collector-a2643aa43bc47c1a": {
+      "sha256": "b5a8e118fe91b21f5097b7fe7a4502da12ca719680680043cbcfbb3cf8384397",
+      "bytes": 40311144,
+      "included": false
+    }
+  },
+  "defaults_changed": false,
+  "private_lives_or_checkpoints_used": false,
+  "toolchain": "rustc 1.99.1",
+  "native_build_jobs": 1,
+  "adapter": {
+    "name": "SwiftShader Device (Subzero)",
+    "backend": "Vulkan",
+    "type": "CPU",
+    "vendor": 6880,
+    "device": 49374
+  },
+  "limitations": [
+    "Host producer uses controlled fixed selection; not an actual GPU decision",
+    "WGSL evaluator does not cover full runtime admission/commit/retry",
+    "Pinned baseline diagnostic failed; actual frozen-original comparison passed separately",
+    "Cognitive suspension remains separate future work"
+  ],
+  "test_counts": {
+    "game_app_gpu_runtime_unit": {
+      "passed": 200,
+      "failed": 0,
+      "ignored": 4
+    },
+    "cpu_collector": {
+      "passed": 30,
+      "failed": 0,
+      "ignored": 1
+    },
+    "actual_v13_wgsl_evaluator_cases": 11,
+    "unchanged_synthetic_wgsl_control_cases": 70
+  }
+}

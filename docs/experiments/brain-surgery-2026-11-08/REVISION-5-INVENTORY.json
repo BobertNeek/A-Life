@@ -1,0 +1,115 @@
+{
+  "schema": "brain-daily-handoff-inventory-v1",
+  "scope": "Additive source, finite scalar/physical evidence, bounded project fixture logs and hashes only",
+  "parent_commit": "cf333d2b48543e344fa1b5fcd78e1a0417b8e7d2",
+  "source_and_scalar_only": true,
+  "native_study_reactivated": false,
+  "defaults_promoted": false,
+  "files": [
+    {
+      "path": "docs/experiments/brain-surgery-2026-11-08/DAILY-HANDOFF-REVISION-5.md",
+      "bytes": 12665,
+      "sha256": "9f21b32ad178135237ad6c562428b1d8aae0984ac6d2b74d84a964d65d5ebf5d"
+    },
+    {
+      "path": "docs/experiments/brain-surgery-2026-11-08/boredom-v2a/README.md",
+      "bytes": 1737,
+      "sha256": "0c79f36395cfeb5e93e348ac031188cc3223b53ca69f2a4525d5d4220db785d9"
+    },
+    {
+      "path": "docs/experiments/brain-surgery-2026-11-08/boredom-v2a/build-v4.compile-lines.txt",
+      "bytes": 421,
+      "sha256": "0a8e767bce88e62dbaa91ced4f157d550b51e4e15dfdbe413c44ae442ce5a30a"
+    },
+    {
+      "path": "docs/experiments/brain-surgery-2026-11-08/boredom-v2a/compile-README.md",
+      "bytes": 1531,
+      "sha256": "823a62717d36d6cc12650a7de2dd79ecaac98c150efd9e3d31bc1b9deffc0a27"
+    },
+    {
+      "path": "docs/experiments/brain-surgery-2026-11-08/boredom-v2a/compile-binding.json",
+      "bytes": 12416,
+      "sha256": "0df2eaf0ea4a5d1dd62dd860973f6abf7a164bc6bdcf42cf75ffc38f70082e62"
+    },
+    {
+      "path": "docs/experiments/brain-surgery-2026-11-08/boredom-v2a/compile-erratum.json",
+      "bytes": 849,
+      "sha256": "beb079bc047da8890998b3553d2afed453728e032beb6a6aaddf7d699d177f37"
+    },
+    {
+      "path": "docs/experiments/brain-surgery-2026-11-08/boredom-v2a/compile-proof-and-erratum.tar.gz",
+      "bytes": 70091,
+      "sha256": "3e16e203a0dfb0eb58677fab0d2ebc9dc6efae1cfc544b7848a3c153720e15b4"
+    },
+    {
+      "path": "docs/experiments/brain-surgery-2026-11-08/boredom-v2a/exact-ablation-diff.json",
+      "bytes": 187089,
+      "sha256": "5765fd698dcf569a85d984a4e5bc588a4ab1ab7be4f04017bceefb40eea13167"
+    },
+    {
+      "path": "docs/experiments/brain-surgery-2026-11-08/boredom-v2a/fatigue-diagnosis.md",
+      "bytes": 4997,
+      "sha256": "3607970bbed3c1134856d35dda6968366f235168063b6b7756996607a9496523"
+    },
+    {
+      "path": "docs/experiments/brain-surgery-2026-11-08/boredom-v2a/independent-scalar-review.json",
+      "bytes": 14112,
+      "sha256": "f0c5480bbfc25ff9da3932d6d24e67468c2d2326d7351f31f0daac9e142b5617"
+    },
+    {
+      "path": "docs/experiments/brain-surgery-2026-11-08/boredom-v2a/plan-v2.json",
+      "bytes": 1257,
+      "sha256": "789fb78a37c3394d968729efc5eb2b0852e319b812b00698703693d8ff5c42af"
+    },
+    {
+      "path": "docs/experiments/brain-surgery-2026-11-08/boredom-v2a/rest-qualification-v3.compile-lines.txt",
+      "bytes": 196,
+      "sha256": "754563e2997be55f6345f5cb61be2efca522069c7a3b007769609a33b2df9abb"
+    },
+    {
+      "path": "docs/experiments/brain-surgery-2026-11-08/boredom-v2a/results.md",
+      "bytes": 7783,
+      "sha256": "daaf0ce84b85afae4b3a3486457869417ea0a16e794f969c0b7867928b63a50f"
+    },
+    {
+      "path": "docs/experiments/brain-surgery-2026-11-08/boredom-v2a/source-and-scalars.tar.gz",
+      "bytes": 1431452,
+      "sha256": "74b920a163c0dc85d38dc320def191a7857f8fb73399520812d627cf29436b7c"
+    },
+    {
+      "path": "docs/experiments/brain-surgery-2026-11-08/boredom-v2a/source-lineage.md",
+      "bytes": 3948,
+      "sha256": "d52e16e2bad6ee6459c4846552119abfffad7cf449c45e3de4992e466929f2bd"
+    },
+    {
+      "path": "docs/experiments/brain-surgery-2026-11-08/boredom-v2a/tests-v3.compile-lines.txt",
+      "bytes": 494,
+      "sha256": "c41dff3ee4eb2393690566f109c7644a2964b9849408d5bbda47b7ef2d6ee330"
+    },
+    {
+      "path": "docs/experiments/brain-surgery-2026-11-08/pain-v6/README.md",
+      "bytes": 2018,
+      "sha256": "77b9006c79949591bf542e36ad6c39f795cb61b9675841e9578dae854b5cb5a4"
+    },
+    {
+      "path": "docs/experiments/brain-surgery-2026-11-08/pain-v6/bindings.json",
+      "bytes": 1828,
+      "sha256": "7ae757ebbf34d83eda66878dc43f397092c3f62e2b96aa84c9e6e4dbf1fc5df4"
+    },
+    {
+      "path": "docs/experiments/brain-surgery-2026-11-08/pain-v6/cognitive-pain-interruption-design-v1.md",
+      "bytes": 6765,
+      "sha256": "23c11958c0efa107f2acd1e08eb893394492d9b7975d84ca23762445c3e5ea28"
+    },
+    {
+      "path": "docs/experiments/brain-surgery-2026-11-08/pain-v6/reflex-gpu-integration-v6-review.md",
+      "bytes": 5406,
+      "sha256": "605781ef31ce2d9320a06bf87545e9cf8394c5c0d4a77136acde2f15e0a467a4"
+    },
+    {
+      "path": "docs/experiments/brain-surgery-2026-11-08/pain-v6/source-and-qualification.tar.gz",
+      "bytes": 394622,
+      "sha256": "e839169820d37de24099b1be379b922ba4b85675d0c08401c5c93009620f7573"
+    }
+  ]
+}

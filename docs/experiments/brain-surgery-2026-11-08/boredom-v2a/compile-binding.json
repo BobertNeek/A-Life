@@ -1,0 +1,242 @@
+{
+  "schema": "boredom-v2a-compile-proof-supplement-v1",
+  "supplements_review_manifest_sha256": "faf0b633097aa0ab9bf251195c557ab478946f3914fcefb2c98dfe480e695535",
+  "supplements_review_archive_sha256": "74b920a163c0dc85d38dc320def191a7857f8fb73399520812d627cf29436b7c",
+  "supplements_source_patch_sha256": "f2462348f595d79312761166b01c28ea411f33bfbe0e2e8bf88d3556735c4d2d",
+  "sanitization": {
+    "only_transformation": "Replace the isolated experiment absolute source-root prefix with $FROZEN_SOURCE. Preserve all other text, whitespace, crate names, versions, suffix paths, profile and timing.",
+    "source_root_label": "boredom-loop-candidate-v1",
+    "original_absolute_source_root_sha256": "3b115c81f02efaafdbeb5090f241fd3897c48ab9d38615fedaeeef7ea7952617"
+  },
+  "logs": [
+    {
+      "original_log_name": "build-v4.log",
+      "original_log_sha256": "67fc5c94bd6add3320b640c59b371ee66b3ffd587c21921e0e275ccbeaf14e44",
+      "original_log_bytes": 636,
+      "sanitized_lines_file": "build-v4.compile-lines.txt",
+      "sanitized_lines_sha256": "0a8e767bce88e62dbaa91ced4f157d550b51e4e15dfdbe413c44ae442ce5a30a",
+      "compile_paths": [
+        {
+          "crate": "alife_core",
+          "version": "v0.1.0",
+          "sanitized_actual_compile_path": "$FROZEN_SOURCE/crates/alife_core",
+          "original_absolute_compile_path_sha256": "b98549186827fd43e1e12bb71205cf1124762182212867765e4cbef1f24eb53c",
+          "cargo_manifest_sha256": "1cf3862ef0fe8e19cfeb42c6a99c7909dcb4ddce8f669ccf8115f5fcdb18d933"
+        },
+        {
+          "crate": "alife_gpu_backend",
+          "version": "v0.1.0",
+          "sanitized_actual_compile_path": "$FROZEN_SOURCE/crates/alife_gpu_backend",
+          "original_absolute_compile_path_sha256": "98154c55753b1af08c519c3fdb53716f7b647922584fb2ab5b1970fca3436e57",
+          "cargo_manifest_sha256": "172560c6dbb9cc7ed2d811ac6842ab4351abd5c061a928178251a092953ee7de"
+        },
+        {
+          "crate": "alife_world",
+          "version": "v0.1.0",
+          "sanitized_actual_compile_path": "$FROZEN_SOURCE/crates/alife_world",
+          "original_absolute_compile_path_sha256": "b1a284375153d1399a62ceea930f5303a4c53b35312272d43e10ba55912d173e",
+          "cargo_manifest_sha256": "8ea02fa0709aacf4dd97043fe9fbb3d2af0afd4a073561c7edf25780e6cdd196"
+        },
+        {
+          "crate": "alife_runtime",
+          "version": "v0.1.0",
+          "sanitized_actual_compile_path": "$FROZEN_SOURCE/crates/alife_runtime",
+          "original_absolute_compile_path_sha256": "670a7c72b961b943f2d5f42c33eb290d7ffca380006d6faf16ca739d3ab4824d",
+          "cargo_manifest_sha256": "d1a1025a8c76b1f101ce1b02ced6fb5b2d0d82b4705baa5a83551777d1c1eb67"
+        },
+        {
+          "crate": "alife_training",
+          "version": "v0.1.0",
+          "sanitized_actual_compile_path": "$FROZEN_SOURCE/crates/alife_training",
+          "original_absolute_compile_path_sha256": "9c5236b23c21192ac6e25968870961fb2cc8e2eb2051f447cb546221e70802bb",
+          "cargo_manifest_sha256": "29a5d554bdcdc6e2099ae6e108e03c1f53b3e117feaeffdeadaa366f9d43d213"
+        }
+      ]
+    },
+    {
+      "original_log_name": "tests-v3.log",
+      "original_log_sha256": "427a75616985505dcd17619958b3e2c25f42a338c94112499c8724299336bcd9",
+      "original_log_bytes": 1539,
+      "sanitized_lines_file": "tests-v3.compile-lines.txt",
+      "sanitized_lines_sha256": "c41dff3ee4eb2393690566f109c7644a2964b9849408d5bbda47b7ef2d6ee330",
+      "compile_paths": [
+        {
+          "crate": "alife_core",
+          "version": "v0.1.0",
+          "sanitized_actual_compile_path": "$FROZEN_SOURCE/crates/alife_core",
+          "original_absolute_compile_path_sha256": "b98549186827fd43e1e12bb71205cf1124762182212867765e4cbef1f24eb53c",
+          "cargo_manifest_sha256": "1cf3862ef0fe8e19cfeb42c6a99c7909dcb4ddce8f669ccf8115f5fcdb18d933"
+        },
+        {
+          "crate": "alife_storage",
+          "version": "v0.1.0",
+          "sanitized_actual_compile_path": "$FROZEN_SOURCE/crates/alife_storage",
+          "original_absolute_compile_path_sha256": "7f3d720b8d72226460b0b609dd7bfd93865a999d38154d3309ef6298c23d54c1",
+          "cargo_manifest_sha256": "832af4bdfc5533f953d556fb909775dce99d3967bbe85d82a71956f964b7e2e8"
+        },
+        {
+          "crate": "alife_gpu_backend",
+          "version": "v0.1.0",
+          "sanitized_actual_compile_path": "$FROZEN_SOURCE/crates/alife_gpu_backend",
+          "original_absolute_compile_path_sha256": "98154c55753b1af08c519c3fdb53716f7b647922584fb2ab5b1970fca3436e57",
+          "cargo_manifest_sha256": "172560c6dbb9cc7ed2d811ac6842ab4351abd5c061a928178251a092953ee7de"
+        },
+        {
+          "crate": "alife_world",
+          "version": "v0.1.0",
+          "sanitized_actual_compile_path": "$FROZEN_SOURCE/crates/alife_world",
+          "original_absolute_compile_path_sha256": "b1a284375153d1399a62ceea930f5303a4c53b35312272d43e10ba55912d173e",
+          "cargo_manifest_sha256": "8ea02fa0709aacf4dd97043fe9fbb3d2af0afd4a073561c7edf25780e6cdd196"
+        },
+        {
+          "crate": "alife_runtime",
+          "version": "v0.1.0",
+          "sanitized_actual_compile_path": "$FROZEN_SOURCE/crates/alife_runtime",
+          "original_absolute_compile_path_sha256": "670a7c72b961b943f2d5f42c33eb290d7ffca380006d6faf16ca739d3ab4824d",
+          "cargo_manifest_sha256": "d1a1025a8c76b1f101ce1b02ced6fb5b2d0d82b4705baa5a83551777d1c1eb67"
+        },
+        {
+          "crate": "alife_training",
+          "version": "v0.1.0",
+          "sanitized_actual_compile_path": "$FROZEN_SOURCE/crates/alife_training",
+          "original_absolute_compile_path_sha256": "9c5236b23c21192ac6e25968870961fb2cc8e2eb2051f447cb546221e70802bb",
+          "cargo_manifest_sha256": "29a5d554bdcdc6e2099ae6e108e03c1f53b3e117feaeffdeadaa366f9d43d213"
+        }
+      ]
+    },
+    {
+      "original_log_name": "rest-qualification-v3.log",
+      "original_log_sha256": "fb1eed10c2c06b5624cceea844ac90baf1c756a8312072bb7dc92b5679d63f11",
+      "original_log_bytes": 1003,
+      "sanitized_lines_file": "rest-qualification-v3.compile-lines.txt",
+      "sanitized_lines_sha256": "754563e2997be55f6345f5cb61be2efca522069c7a3b007769609a33b2df9abb",
+      "compile_paths": [
+        {
+          "crate": "alife_core",
+          "version": "v0.1.0",
+          "sanitized_actual_compile_path": "$FROZEN_SOURCE/crates/alife_core",
+          "original_absolute_compile_path_sha256": "b98549186827fd43e1e12bb71205cf1124762182212867765e4cbef1f24eb53c",
+          "cargo_manifest_sha256": "1cf3862ef0fe8e19cfeb42c6a99c7909dcb4ddce8f669ccf8115f5fcdb18d933"
+        },
+        {
+          "crate": "alife_world",
+          "version": "v0.1.0",
+          "sanitized_actual_compile_path": "$FROZEN_SOURCE/crates/alife_world",
+          "original_absolute_compile_path_sha256": "b1a284375153d1399a62ceea930f5303a4c53b35312272d43e10ba55912d173e",
+          "cargo_manifest_sha256": "8ea02fa0709aacf4dd97043fe9fbb3d2af0afd4a073561c7edf25780e6cdd196"
+        }
+      ]
+    }
+  ],
+  "source_closure": {
+    "manifest_file": "frozen-source-closure.sha256",
+    "manifest_sha256": "c1b11fb626c7693a6e39657f39db35a4ac9d12013595bf12faac95e9a86f5513",
+    "file_count": 1281,
+    "local_only_full_source_archive_sha256": "e8b2a054aa7c8eb38bcc9b65647837f1c2419b9fffd71ec94dc6bd18296844fe",
+    "reconstruction": "Baseline 2da9dd323ad6f074556a851174a2edbc9e34e216, then original drive-audit patch, exact common Rest patch, and boredom v2a source patch; verified in the closed v2a package.",
+    "metadata_scope": "Current sizes/mtimes are inspection metadata, not a contemporaneous pre-build timestamp attestation. The full source closure was assembled at packaging; documentation was finalized after native qualification.",
+    "critical_source_and_manifests": [
+      {
+        "relative_path": "crates/alife_training/examples/probe_boredom_loop.rs",
+        "bytes": 26327,
+        "sha256": "a56b9daae0e93a5f2f7d5ac53496e8f972c1d530e03ecbc77fc00cf08ad66114",
+        "current_source_mtime_utc": "2026-11-08T05:34:14.378970+00:00"
+      },
+      {
+        "relative_path": "crates/alife_training/examples/support/boredom_candidate.rs",
+        "bytes": 9260,
+        "sha256": "dbe476c070dbddb7bea2beb65853f6bcf033df99d08597208df88224d89b29c5",
+        "current_source_mtime_utc": "2026-11-08T05:34:14.378970+00:00"
+      },
+      {
+        "relative_path": "crates/alife_world/src/headless.rs",
+        "bytes": 479886,
+        "sha256": "ddb351afd1c5a12e8013f6e9c90076ba616dfed54659ea92de99ee8300a79ff9",
+        "current_source_mtime_utc": "2026-11-08T05:34:14.378970+00:00"
+      },
+      {
+        "relative_path": "Cargo.toml",
+        "bytes": 1940,
+        "sha256": "1f389513e0040d75fa669ddd98cb257dba99b94cdf5043c251d1b59cdccc6555",
+        "current_source_mtime_utc": "2026-11-08T05:34:14.382970+00:00"
+      },
+      {
+        "relative_path": "Cargo.lock",
+        "bytes": 161088,
+        "sha256": "a8323d85b09d781596a62e7f383e2dc36cd57628c002f4dfcd75a8b49b4031eb",
+        "current_source_mtime_utc": "2026-11-08T05:34:14.382970+00:00"
+      },
+      {
+        "relative_path": "crates/alife_core/Cargo.toml",
+        "bytes": 374,
+        "sha256": "1cf3862ef0fe8e19cfeb42c6a99c7909dcb4ddce8f669ccf8115f5fcdb18d933",
+        "current_source_mtime_utc": "2026-11-08T05:34:14.378970+00:00"
+      },
+      {
+        "relative_path": "crates/alife_gpu_backend/Cargo.toml",
+        "bytes": 493,
+        "sha256": "172560c6dbb9cc7ed2d811ac6842ab4351abd5c061a928178251a092953ee7de",
+        "current_source_mtime_utc": "2026-11-08T05:34:14.378970+00:00"
+      },
+      {
+        "relative_path": "crates/alife_world/Cargo.toml",
+        "bytes": 307,
+        "sha256": "8ea02fa0709aacf4dd97043fe9fbb3d2af0afd4a073561c7edf25780e6cdd196",
+        "current_source_mtime_utc": "2026-11-08T05:34:14.378970+00:00"
+      },
+      {
+        "relative_path": "crates/alife_runtime/Cargo.toml",
+        "bytes": 635,
+        "sha256": "d1a1025a8c76b1f101ce1b02ced6fb5b2d0d82b4705baa5a83551777d1c1eb67",
+        "current_source_mtime_utc": "2026-11-08T05:34:14.378970+00:00"
+      },
+      {
+        "relative_path": "crates/alife_training/Cargo.toml",
+        "bytes": 1972,
+        "sha256": "29a5d554bdcdc6e2099ae6e108e03c1f53b3e117feaeffdeadaa366f9d43d213",
+        "current_source_mtime_utc": "2026-11-08T05:34:14.378970+00:00"
+      },
+      {
+        "relative_path": "crates/alife_storage/Cargo.toml",
+        "bytes": 152,
+        "sha256": "832af4bdfc5533f953d556fb909775dce99d3967bbe85d82a71956f964b7e2e8",
+        "current_source_mtime_utc": "2026-11-08T05:34:14.378970+00:00"
+      }
+    ]
+  },
+  "executable_binding": {
+    "file_label": "probe-boredom-v3",
+    "sha256": "53b2ec4e42193c837c4679675f687a6bf18518e9c4b45695f96ea8ffc146a4af",
+    "original_copied_binary_source_provenance_file": "probe-v3-provenance.sha256",
+    "provenance_sha256": "6a55a583da97fa21f2e254f8bd8358e1c8b8aaa744a8a06f2edb9d6511d40d31",
+    "plan_sha256": "789fb78a37c3394d968729efc5eb2b0852e319b812b00698703693d8ff5c42af",
+    "executable_bytes_included": false
+  },
+  "test_compile_evidence": {
+    "independently_captured_in_separate_test_profile_logs": true,
+    "boredom_test_compile_crates": [
+      "alife_core",
+      "alife_storage",
+      "alife_gpu_backend",
+      "alife_world",
+      "alife_runtime",
+      "alife_training"
+    ],
+    "rest_test_compile_crates": [
+      "alife_core",
+      "alife_world"
+    ],
+    "passed_test_names_and_results": "Already present in the closed v2a qualification files and source docs qualification.json.",
+    "test_executable_separately_frozen_or_hashed": false
+  },
+  "limits": [
+    "Cargo text logs show actual source paths and successful compile completion, but do not embed source-tree or executable digests.",
+    "The source/log/provenance/executable connection is a retrospective hash-bound evidence chain, not a compiler-signed attestation or a reproducible-build comparison.",
+    "Touching source metadata before qualification is not independently logged by these Compiling/Finished lines.",
+    "This supplement does not claim complete transitive toolchain/system-library capture or a fresh native rerun.",
+    "Compiling alife_gpu_backend does not mean a GPU device was used; this experiment was CPU execution."
+  ],
+  "no_native_work_rerun": true,
+  "no_acquired_banks_read": true,
+  "closed_v2a_bytes_unchanged": true
+}
