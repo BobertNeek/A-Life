@@ -1,0 +1,2373 @@
+{
+  "study": "native-need-association-v4-matched-own-history",
+  "status": "completed_bounded_missing_reference_null",
+  "published_source_commit": "0db339c89844bdd180a75d3fd47e2fd8fe4f7a35",
+  "source_input_root_sha256": "5df9112366055e7190e9f5edaa0d10a8864e736526e38d6c7e189935ca9bef6d",
+  "source_patch_sha256": "91ecc1f927285d4622c5e8ffeca731ccd531b30969915c89173e98fd41a6b863",
+  "protocol_sha256": "321299a60fc8b6fe98e0b1cf22e846407baf31a4fb1b3c0636d5142e2efa2819",
+  "executable_sha256": "5fc90d3fea9372098fe68c7b487b05740462d3d90c79613d81b282540c8676d4",
+  "asset_sha256": "1d2978cbd857a7ca99dc1b2cf65be9f6ff417a6f78199282e0431b94332c9377",
+  "sampling_seed": 2026111303,
+  "construction_seed": 2026111301,
+  "arms": [
+    {
+      "arm": "gain-zero",
+      "gain": 0.0,
+      "intervals": 12,
+      "decisions": 12,
+      "stop_reason": "budget_exhausted",
+      "stored_rest": 7,
+      "stored_noop": 0,
+      "stored_observed": 3,
+      "compatible_rest_opportunities": 0,
+      "nonzero_rest_readout_opportunities": 0,
+      "max_abs_rest_readout": 0.0,
+      "same_row_ablation_changed_joint_choices": 0,
+      "source_rejections": {
+        "additional_meaningful_command": 2
+      },
+      "founder_optimizer_exact": true,
+      "timeline": [
+        {
+          "sequence": 1,
+          "tick": 601,
+          "selected_kind": "Rest",
+          "selected_action_id": 3,
+          "source_observation": "Stored",
+          "actual_channel_primitives": [
+            103,
+            3
+          ],
+          "physical_total_displacement_x": 0.0,
+          "sleep_recovery_event": 1.0,
+          "prior_body_sleeping": false,
+          "final_body_sleeping": true,
+          "sleep_controller": "Awake",
+          "rest_logit": 4.537512302398682,
+          "own_noop_logit": 3.3924953937530518,
+          "inspect_logit": 4.5148606300354,
+          "pure_rest_probability": 0.28200190217497434,
+          "pure_noop_probability": 0.13066723620569673,
+          "body_energy": 0.7915411591529846,
+          "brain_atp": 0.6458869576454163,
+          "fatigue": 0.0,
+          "boredom": 0.12000088393688202,
+          "health": 1.0,
+          "injury": 0.0,
+          "actual_cognitive_body_energy_debit": 0.00020289752865210176,
+          "repriced_native_atp_q16": 7362,
+          "brain_work": {
+            "decoder_candidate_ops": 16,
+            "memory_context_ops": 21639,
+            "microsteps": 3,
+            "neuron_updates": 6836,
+            "synapse_ops": 52064,
+            "tile_visits": 276
+          },
+          "binding_memory_ops": 7554,
+          "context_memory_ops": 3549,
+          "reader_scratch_memory_ops": 10524,
+          "reader_lookup_memory_ops": 0,
+          "source_support": [
+            {
+              "action_id": 4,
+              "family": "Inspect",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 3,
+              "family": "Rest",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 103,
+              "family": "Approach",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 104,
+              "family": "Other",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            }
+          ]
+        },
+        {
+          "sequence": 2,
+          "tick": 602,
+          "selected_kind": "Inspect",
+          "selected_action_id": 4,
+          "source_observation": {
+            "Unsupported": "additional_meaningful_command"
+          },
+          "actual_channel_primitives": [
+            101,
+            4
+          ],
+          "physical_total_displacement_x": 0.0999302864074707,
+          "sleep_recovery_event": 0.0,
+          "prior_body_sleeping": true,
+          "final_body_sleeping": false,
+          "sleep_controller": "Awake",
+          "rest_logit": 6.438899993896484,
+          "own_noop_logit": 4.780331611633301,
+          "inspect_logit": 6.306075096130371,
+          "pure_rest_probability": 0.3695128327804223,
+          "pure_noop_probability": 0.0901305128132262,
+          "body_energy": 0.791314423084259,
+          "brain_atp": 0.6458818316459656,
+          "fatigue": 7.999868103070185e-05,
+          "boredom": 0.12020088732242584,
+          "health": 1.0,
+          "injury": 0.0,
+          "actual_cognitive_body_energy_debit": 0.00020292251429054886,
+          "repriced_native_atp_q16": 7364,
+          "brain_work": {
+            "decoder_candidate_ops": 16,
+            "memory_context_ops": 21647,
+            "microsteps": 3,
+            "neuron_updates": 6836,
+            "synapse_ops": 52064,
+            "tile_visits": 276
+          },
+          "binding_memory_ops": 7554,
+          "context_memory_ops": 3549,
+          "reader_scratch_memory_ops": 10524,
+          "reader_lookup_memory_ops": 8,
+          "source_support": [
+            {
+              "action_id": 4,
+              "family": "Inspect",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 3,
+              "family": "Rest",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "body sleeping",
+                "hormone 0 locality",
+                "hormone 5 locality"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 103,
+              "family": "Approach",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 104,
+              "family": "Other",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            }
+          ]
+        },
+        {
+          "sequence": 3,
+          "tick": 603,
+          "selected_kind": "Rest",
+          "selected_action_id": 3,
+          "source_observation": {
+            "Unsupported": "additional_meaningful_command"
+          },
+          "actual_channel_primitives": [
+            101,
+            3
+          ],
+          "physical_total_displacement_x": 0.09989118576049805,
+          "sleep_recovery_event": 0.0,
+          "prior_body_sleeping": false,
+          "final_body_sleeping": false,
+          "sleep_controller": "Awake",
+          "rest_logit": 7.185252666473389,
+          "own_noop_logit": 5.2742133140563965,
+          "inspect_logit": 6.829028606414795,
+          "pure_rest_probability": 0.42896584902072543,
+          "pure_noop_probability": 0.07871730614566828,
+          "body_energy": 0.7910921573638916,
+          "brain_atp": 0.6458724737167358,
+          "fatigue": 0.00016000302275642753,
+          "boredom": 0.12040089070796967,
+          "health": 1.0,
+          "injury": 0.0,
+          "actual_cognitive_body_energy_debit": 0.0002029275055974722,
+          "repriced_native_atp_q16": 7364,
+          "brain_work": {
+            "decoder_candidate_ops": 16,
+            "memory_context_ops": 21647,
+            "microsteps": 3,
+            "neuron_updates": 6836,
+            "synapse_ops": 52064,
+            "tile_visits": 276
+          },
+          "binding_memory_ops": 7554,
+          "context_memory_ops": 3549,
+          "reader_scratch_memory_ops": 10524,
+          "reader_lookup_memory_ops": 8,
+          "source_support": [
+            {
+              "action_id": 4,
+              "family": "Inspect",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 3,
+              "family": "Rest",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "body pose/velocity",
+                "observed slots/geometry",
+                "sensory channels",
+                "hormone 0 locality",
+                "hormone 5 locality"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 103,
+              "family": "Approach",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 104,
+              "family": "Other",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            }
+          ]
+        },
+        {
+          "sequence": 4,
+          "tick": 604,
+          "selected_kind": "Rest",
+          "selected_action_id": 3,
+          "source_observation": "Stored",
+          "actual_channel_primitives": [
+            103,
+            3
+          ],
+          "physical_total_displacement_x": 0.0,
+          "sleep_recovery_event": 1.0,
+          "prior_body_sleeping": false,
+          "final_body_sleeping": true,
+          "sleep_controller": "Awake",
+          "rest_logit": 7.463443756103516,
+          "own_noop_logit": 5.4128947257995605,
+          "inspect_logit": 6.8475871086120605,
+          "pure_rest_probability": 0.47955782398354685,
+          "pure_noop_probability": 0.07592186448168745,
+          "body_energy": 0.790888249874115,
+          "brain_atp": 0.64585942029953,
+          "fatigue": 0.0,
+          "boredom": 0.12040089070796967,
+          "health": 1.0,
+          "injury": 0.0,
+          "actual_cognitive_body_energy_debit": 0.00020293000852689147,
+          "repriced_native_atp_q16": 7364,
+          "brain_work": {
+            "decoder_candidate_ops": 16,
+            "memory_context_ops": 21647,
+            "microsteps": 3,
+            "neuron_updates": 6836,
+            "synapse_ops": 52064,
+            "tile_visits": 276
+          },
+          "binding_memory_ops": 7554,
+          "context_memory_ops": 3549,
+          "reader_scratch_memory_ops": 10524,
+          "reader_lookup_memory_ops": 8,
+          "source_support": [
+            {
+              "action_id": 4,
+              "family": "Inspect",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 3,
+              "family": "Rest",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "body pose/velocity",
+                "observed slots/geometry",
+                "sensory channels",
+                "hormone 0 locality",
+                "hormone 5 locality",
+                "hormone 6 locality"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 103,
+              "family": "Approach",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 104,
+              "family": "Other",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            }
+          ]
+        },
+        {
+          "sequence": 5,
+          "tick": 605,
+          "selected_kind": "Inspect",
+          "selected_action_id": 4,
+          "source_observation": "Stored",
+          "actual_channel_primitives": [
+            103,
+            4
+          ],
+          "physical_total_displacement_x": 0.0,
+          "sleep_recovery_event": 0.0,
+          "prior_body_sleeping": true,
+          "final_body_sleeping": false,
+          "sleep_controller": "Awake",
+          "rest_logit": 7.563990116119385,
+          "own_noop_logit": 5.42917537689209,
+          "inspect_logit": 6.717569828033447,
+          "pure_rest_probability": 0.5178565456354332,
+          "pure_noop_probability": 0.07528948800955185,
+          "body_energy": 0.7906797528266907,
+          "brain_atp": 0.6458427309989929,
+          "fatigue": 7.999868103070185e-05,
+          "boredom": 0.12060089409351349,
+          "health": 1.0,
+          "injury": 0.0,
+          "actual_cognitive_body_energy_debit": 0.00020295502326916903,
+          "repriced_native_atp_q16": 7366,
+          "brain_work": {
+            "decoder_candidate_ops": 16,
+            "memory_context_ops": 21655,
+            "microsteps": 3,
+            "neuron_updates": 6836,
+            "synapse_ops": 52064,
+            "tile_visits": 276
+          },
+          "binding_memory_ops": 7554,
+          "context_memory_ops": 3549,
+          "reader_scratch_memory_ops": 10524,
+          "reader_lookup_memory_ops": 16,
+          "source_support": [
+            {
+              "action_id": 4,
+              "family": "Inspect",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 3,
+              "family": "Rest",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "body pose/velocity",
+                "observed slots/geometry",
+                "body sleeping",
+                "hormone 0 locality"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 103,
+              "family": "Approach",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 104,
+              "family": "Other",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            }
+          ]
+        },
+        {
+          "sequence": 6,
+          "tick": 606,
+          "selected_kind": "Rest",
+          "selected_action_id": 3,
+          "source_observation": "Stored",
+          "actual_channel_primitives": [
+            103,
+            3
+          ],
+          "physical_total_displacement_x": 0.0,
+          "sleep_recovery_event": 1.0,
+          "prior_body_sleeping": false,
+          "final_body_sleeping": true,
+          "sleep_controller": "Awake",
+          "rest_logit": 7.599817752838135,
+          "own_noop_logit": 5.408472061157227,
+          "inspect_logit": 6.565001487731934,
+          "pure_rest_probability": 0.5455061586457464,
+          "pure_noop_probability": 0.07503909540328885,
+          "body_energy": 0.7904744744300842,
+          "brain_atp": 0.6458225846290588,
+          "fatigue": 0.0,
+          "boredom": 0.12060089409351349,
+          "health": 1.0,
+          "injury": 0.0,
+          "actual_cognitive_body_energy_debit": 0.0002029850147664547,
+          "repriced_native_atp_q16": 7368,
+          "brain_work": {
+            "decoder_candidate_ops": 16,
+            "memory_context_ops": 21665,
+            "microsteps": 3,
+            "neuron_updates": 6836,
+            "synapse_ops": 52064,
+            "tile_visits": 276
+          },
+          "binding_memory_ops": 7554,
+          "context_memory_ops": 3551,
+          "reader_scratch_memory_ops": 10524,
+          "reader_lookup_memory_ops": 24,
+          "source_support": [
+            {
+              "action_id": 4,
+              "family": "Inspect",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "sensory channels",
+                "body sleeping"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 3,
+              "family": "Rest",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "body pose/velocity",
+                "observed slots/geometry",
+                "sensory channels",
+                "hormone 0 locality",
+                "hormone 6 locality"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 103,
+              "family": "Approach",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 104,
+              "family": "Other",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            }
+          ]
+        },
+        {
+          "sequence": 7,
+          "tick": 607,
+          "selected_kind": "Inspect",
+          "selected_action_id": 4,
+          "source_observation": "Stored",
+          "actual_channel_primitives": [
+            103,
+            4
+          ],
+          "physical_total_displacement_x": 0.0,
+          "sleep_recovery_event": 0.0,
+          "prior_body_sleeping": true,
+          "final_body_sleeping": false,
+          "sleep_controller": "Awake",
+          "rest_logit": 7.61250114440918,
+          "own_noop_logit": 5.378938674926758,
+          "inspect_logit": 6.426512241363525,
+          "pure_rest_probability": 0.5655709841979195,
+          "pure_noop_probability": 0.07471031995014385,
+          "body_energy": 0.7902658581733704,
+          "brain_atp": 0.6457990407943726,
+          "fatigue": 7.999868103070185e-05,
+          "boredom": 0.12080089747905731,
+          "health": 1.0,
+          "injury": 0.0,
+          "actual_cognitive_body_energy_debit": 0.00020300751202739775,
+          "repriced_native_atp_q16": 7370,
+          "brain_work": {
+            "decoder_candidate_ops": 16,
+            "memory_context_ops": 21673,
+            "microsteps": 3,
+            "neuron_updates": 6836,
+            "synapse_ops": 52064,
+            "tile_visits": 276
+          },
+          "binding_memory_ops": 7554,
+          "context_memory_ops": 3551,
+          "reader_scratch_memory_ops": 10524,
+          "reader_lookup_memory_ops": 32,
+          "source_support": [
+            {
+              "action_id": 4,
+              "family": "Inspect",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "sensory channels"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 3,
+              "family": "Rest",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "body sleeping"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 103,
+              "family": "Approach",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 104,
+              "family": "Other",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            }
+          ]
+        },
+        {
+          "sequence": 8,
+          "tick": 608,
+          "selected_kind": "Rest",
+          "selected_action_id": 3,
+          "source_observation": "Stored",
+          "actual_channel_primitives": [
+            103,
+            3
+          ],
+          "physical_total_displacement_x": 0.0,
+          "sleep_recovery_event": 1.0,
+          "prior_body_sleeping": false,
+          "final_body_sleeping": true,
+          "sleep_controller": "Awake",
+          "rest_logit": 7.616962909698486,
+          "own_noop_logit": 5.349438190460205,
+          "inspect_logit": 6.310819625854492,
+          "pure_rest_probability": 0.5802951643377858,
+          "pure_noop_probability": 0.07422300045322196,
+          "body_energy": 0.7900619506835938,
+          "brain_atp": 0.645772397518158,
+          "fatigue": 0.0,
+          "boredom": 0.12080089747905731,
+          "health": 1.0,
+          "injury": 0.0,
+          "actual_cognitive_body_energy_debit": 0.00020302250050008297,
+          "repriced_native_atp_q16": 7372,
+          "brain_work": {
+            "decoder_candidate_ops": 16,
+            "memory_context_ops": 21679,
+            "microsteps": 3,
+            "neuron_updates": 6836,
+            "synapse_ops": 52064,
+            "tile_visits": 276
+          },
+          "binding_memory_ops": 7554,
+          "context_memory_ops": 3549,
+          "reader_scratch_memory_ops": 10524,
+          "reader_lookup_memory_ops": 40,
+          "source_support": [
+            {
+              "action_id": 4,
+              "family": "Inspect",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "sensory channels",
+                "body sleeping"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 3,
+              "family": "Rest",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "sensory channels"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 103,
+              "family": "Approach",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 104,
+              "family": "Other",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            }
+          ]
+        },
+        {
+          "sequence": 9,
+          "tick": 609,
+          "selected_kind": "Rest",
+          "selected_action_id": 3,
+          "source_observation": "Stored",
+          "actual_channel_primitives": [
+            103,
+            3
+          ],
+          "physical_total_displacement_x": 0.0,
+          "sleep_recovery_event": 1.0,
+          "prior_body_sleeping": true,
+          "final_body_sleeping": true,
+          "sleep_controller": "Awake",
+          "rest_logit": 7.618523120880127,
+          "own_noop_logit": 5.322606086730957,
+          "inspect_logit": 6.218142032623291,
+          "pure_rest_probability": 0.5911491136155487,
+          "pure_noop_probability": 0.07361063336880522,
+          "body_energy": 0.7898587584495544,
+          "brain_atp": 0.6457427144050598,
+          "fatigue": 0.0,
+          "boredom": 0.12080089747905731,
+          "health": 1.0,
+          "injury": 0.0,
+          "actual_cognitive_body_energy_debit": 0.00020304501231294125,
+          "repriced_native_atp_q16": 7374,
+          "brain_work": {
+            "decoder_candidate_ops": 16,
+            "memory_context_ops": 21687,
+            "microsteps": 3,
+            "neuron_updates": 6836,
+            "synapse_ops": 52064,
+            "tile_visits": 276
+          },
+          "binding_memory_ops": 7554,
+          "context_memory_ops": 3549,
+          "reader_scratch_memory_ops": 10524,
+          "reader_lookup_memory_ops": 48,
+          "source_support": [
+            {
+              "action_id": 4,
+              "family": "Inspect",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "sensory channels"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 3,
+              "family": "Rest",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "body sleeping"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 103,
+              "family": "Approach",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 104,
+              "family": "Other",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            }
+          ]
+        },
+        {
+          "sequence": 10,
+          "tick": 610,
+          "selected_kind": "Rest",
+          "selected_action_id": 3,
+          "source_observation": "Stored",
+          "actual_channel_primitives": [
+            103,
+            3
+          ],
+          "physical_total_displacement_x": 0.0,
+          "sleep_recovery_event": 1.0,
+          "prior_body_sleeping": true,
+          "final_body_sleeping": true,
+          "sleep_controller": "Awake",
+          "rest_logit": 7.619055271148682,
+          "own_noop_logit": 5.299003601074219,
+          "inspect_logit": 6.1457977294921875,
+          "pure_rest_probability": 0.5991592197141211,
+          "pure_noop_probability": 0.07293081861118095,
+          "body_energy": 0.7896556258201599,
+          "brain_atp": 0.6457101702690125,
+          "fatigue": 0.0,
+          "boredom": 0.12080089747905731,
+          "health": 1.0,
+          "injury": 0.0,
+          "actual_cognitive_body_energy_debit": 0.0002030675095738843,
+          "repriced_native_atp_q16": 7376,
+          "brain_work": {
+            "decoder_candidate_ops": 16,
+            "memory_context_ops": 21695,
+            "microsteps": 3,
+            "neuron_updates": 6836,
+            "synapse_ops": 52064,
+            "tile_visits": 276
+          },
+          "binding_memory_ops": 7554,
+          "context_memory_ops": 3549,
+          "reader_scratch_memory_ops": 10524,
+          "reader_lookup_memory_ops": 56,
+          "source_support": [
+            {
+              "action_id": 4,
+              "family": "Inspect",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "sensory channels",
+                "hormone 6 locality"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 3,
+              "family": "Rest",
+              "action_sequence": 9,
+              "reference_sequence": null,
+              "action_mismatch_fields": [],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 103,
+              "family": "Approach",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 104,
+              "family": "Other",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            }
+          ]
+        },
+        {
+          "sequence": 11,
+          "tick": 611,
+          "selected_kind": "Inspect",
+          "selected_action_id": 4,
+          "source_observation": "Stored",
+          "actual_channel_primitives": [
+            103,
+            4
+          ],
+          "physical_total_displacement_x": 0.0,
+          "sleep_recovery_event": 0.0,
+          "prior_body_sleeping": true,
+          "final_body_sleeping": false,
+          "sleep_controller": "Awake",
+          "rest_logit": 7.619227886199951,
+          "own_noop_logit": 5.278450965881348,
+          "inspect_logit": 6.090258598327637,
+          "pure_rest_probability": 0.6050789558115782,
+          "pure_noop_probability": 0.07222909305671718,
+          "body_energy": 0.789447009563446,
+          "brain_atp": 0.6456747651100159,
+          "fatigue": 7.999868103070185e-05,
+          "boredom": 0.12100090086460114,
+          "health": 1.0,
+          "injury": 0.0,
+          "actual_cognitive_body_energy_debit": 0.00020309000683482736,
+          "repriced_native_atp_q16": 7378,
+          "brain_work": {
+            "decoder_candidate_ops": 16,
+            "memory_context_ops": 21703,
+            "microsteps": 3,
+            "neuron_updates": 6836,
+            "synapse_ops": 52064,
+            "tile_visits": 276
+          },
+          "binding_memory_ops": 7554,
+          "context_memory_ops": 3549,
+          "reader_scratch_memory_ops": 10524,
+          "reader_lookup_memory_ops": 64,
+          "source_support": [
+            {
+              "action_id": 4,
+              "family": "Inspect",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "sensory channels",
+                "hormone 6 locality"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 3,
+              "family": "Rest",
+              "action_sequence": 10,
+              "reference_sequence": null,
+              "action_mismatch_fields": [],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 103,
+              "family": "Approach",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 104,
+              "family": "Other",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            }
+          ]
+        },
+        {
+          "sequence": 12,
+          "tick": 612,
+          "selected_kind": "Rest",
+          "selected_action_id": 3,
+          "source_observation": "Stored",
+          "actual_channel_primitives": [
+            103,
+            3
+          ],
+          "physical_total_displacement_x": 0.0,
+          "sleep_recovery_event": 1.0,
+          "prior_body_sleeping": false,
+          "final_body_sleeping": true,
+          "sleep_controller": "Awake",
+          "rest_logit": 7.619271755218506,
+          "own_noop_logit": 5.260507106781006,
+          "inspect_logit": 6.048023223876953,
+          "pure_rest_probability": 0.6094700888644943,
+          "pure_noop_probability": 0.07153320483331213,
+          "body_energy": 0.7892411351203918,
+          "brain_atp": 0.6456366181373596,
+          "fatigue": 0.0,
+          "boredom": 0.12100090086460114,
+          "health": 1.0,
+          "injury": 0.0,
+          "actual_cognitive_body_energy_debit": 0.00020311502157710493,
+          "repriced_native_atp_q16": 7380,
+          "brain_work": {
+            "decoder_candidate_ops": 16,
+            "memory_context_ops": 21713,
+            "microsteps": 3,
+            "neuron_updates": 6836,
+            "synapse_ops": 52064,
+            "tile_visits": 276
+          },
+          "binding_memory_ops": 7554,
+          "context_memory_ops": 3551,
+          "reader_scratch_memory_ops": 10524,
+          "reader_lookup_memory_ops": 72,
+          "source_support": [
+            {
+              "action_id": 4,
+              "family": "Inspect",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "sensory channels",
+                "body sleeping"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 3,
+              "family": "Rest",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "sensory channels",
+                "body sleeping"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 103,
+              "family": "Approach",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 104,
+              "family": "Other",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            }
+          ]
+        }
+      ],
+      "natural_rest_action_recalls_without_reference": [
+        {
+          "decision": 10,
+          "source_sequence": 9,
+          "action_id": 3
+        },
+        {
+          "decision": 11,
+          "source_sequence": 10,
+          "action_id": 3
+        }
+      ],
+      "natural_observed_action_recalls_without_reference": [],
+      "pure_noop_probability_sum_on_actual_rows": 0.9650025733325006,
+      "total_actual_cognitive_body_energy_debit": 0.0024359651579288766,
+      "initial_biology": {
+        "body_energy": 0.7917450070381165,
+        "boredom": 0.12000088393688202,
+        "brain_atp": 0.645887553691864,
+        "fatigue": 0.03705247491598129,
+        "health": 1.0,
+        "injury": 0.0,
+        "sleeping": false,
+        "tick": 600
+      },
+      "final_biology": {
+        "body_energy": 0.7892411351203918,
+        "boredom": 0.12100090086460114,
+        "brain_atp": 0.6456366181373596,
+        "fatigue": 0.0,
+        "health": 1.0,
+        "injury": 0.0,
+        "sleeping": true,
+        "tick": 612
+      },
+      "organ_energy_net_changes": {
+        "MetabolicReserve": -0.0024703145027160645,
+        "Circulatory": -0.002520620822906494,
+        "NeuralSupport": -0.002541840076446533,
+        "Thermoregulatory": -0.0024715065956115723,
+        "Locomotor": -0.0025489330291748047,
+        "Digestive": -0.0024703145027160645
+      }
+    },
+    {
+      "arm": "gain-035",
+      "gain": 0.3499999940395355,
+      "intervals": 12,
+      "decisions": 12,
+      "stop_reason": "budget_exhausted",
+      "stored_rest": 7,
+      "stored_noop": 0,
+      "stored_observed": 3,
+      "compatible_rest_opportunities": 0,
+      "nonzero_rest_readout_opportunities": 0,
+      "max_abs_rest_readout": 0.0,
+      "same_row_ablation_changed_joint_choices": 0,
+      "source_rejections": {
+        "additional_meaningful_command": 2
+      },
+      "founder_optimizer_exact": true,
+      "timeline": [
+        {
+          "sequence": 1,
+          "tick": 601,
+          "selected_kind": "Rest",
+          "selected_action_id": 3,
+          "source_observation": "Stored",
+          "actual_channel_primitives": [
+            103,
+            3
+          ],
+          "physical_total_displacement_x": 0.0,
+          "sleep_recovery_event": 1.0,
+          "prior_body_sleeping": false,
+          "final_body_sleeping": true,
+          "sleep_controller": "Awake",
+          "rest_logit": 4.537512302398682,
+          "own_noop_logit": 3.3924953937530518,
+          "inspect_logit": 4.5148606300354,
+          "pure_rest_probability": 0.28200190217497434,
+          "pure_noop_probability": 0.13066723620569673,
+          "body_energy": 0.7915411591529846,
+          "brain_atp": 0.6458869576454163,
+          "fatigue": 0.0,
+          "boredom": 0.12000088393688202,
+          "health": 1.0,
+          "injury": 0.0,
+          "actual_cognitive_body_energy_debit": 0.00020289752865210176,
+          "repriced_native_atp_q16": 7362,
+          "brain_work": {
+            "decoder_candidate_ops": 16,
+            "memory_context_ops": 21639,
+            "microsteps": 3,
+            "neuron_updates": 6836,
+            "synapse_ops": 52064,
+            "tile_visits": 276
+          },
+          "binding_memory_ops": 7554,
+          "context_memory_ops": 3549,
+          "reader_scratch_memory_ops": 10524,
+          "reader_lookup_memory_ops": 0,
+          "source_support": [
+            {
+              "action_id": 4,
+              "family": "Inspect",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 3,
+              "family": "Rest",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 103,
+              "family": "Approach",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 104,
+              "family": "Other",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            }
+          ]
+        },
+        {
+          "sequence": 2,
+          "tick": 602,
+          "selected_kind": "Inspect",
+          "selected_action_id": 4,
+          "source_observation": {
+            "Unsupported": "additional_meaningful_command"
+          },
+          "actual_channel_primitives": [
+            101,
+            4
+          ],
+          "physical_total_displacement_x": 0.0999302864074707,
+          "sleep_recovery_event": 0.0,
+          "prior_body_sleeping": true,
+          "final_body_sleeping": false,
+          "sleep_controller": "Awake",
+          "rest_logit": 6.438899993896484,
+          "own_noop_logit": 4.780331611633301,
+          "inspect_logit": 6.306075096130371,
+          "pure_rest_probability": 0.3695128327804223,
+          "pure_noop_probability": 0.0901305128132262,
+          "body_energy": 0.791314423084259,
+          "brain_atp": 0.6458818316459656,
+          "fatigue": 7.999868103070185e-05,
+          "boredom": 0.12020088732242584,
+          "health": 1.0,
+          "injury": 0.0,
+          "actual_cognitive_body_energy_debit": 0.00020292251429054886,
+          "repriced_native_atp_q16": 7364,
+          "brain_work": {
+            "decoder_candidate_ops": 16,
+            "memory_context_ops": 21647,
+            "microsteps": 3,
+            "neuron_updates": 6836,
+            "synapse_ops": 52064,
+            "tile_visits": 276
+          },
+          "binding_memory_ops": 7554,
+          "context_memory_ops": 3549,
+          "reader_scratch_memory_ops": 10524,
+          "reader_lookup_memory_ops": 8,
+          "source_support": [
+            {
+              "action_id": 4,
+              "family": "Inspect",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 3,
+              "family": "Rest",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "body sleeping",
+                "hormone 0 locality",
+                "hormone 5 locality"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 103,
+              "family": "Approach",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 104,
+              "family": "Other",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            }
+          ]
+        },
+        {
+          "sequence": 3,
+          "tick": 603,
+          "selected_kind": "Rest",
+          "selected_action_id": 3,
+          "source_observation": {
+            "Unsupported": "additional_meaningful_command"
+          },
+          "actual_channel_primitives": [
+            101,
+            3
+          ],
+          "physical_total_displacement_x": 0.09989118576049805,
+          "sleep_recovery_event": 0.0,
+          "prior_body_sleeping": false,
+          "final_body_sleeping": false,
+          "sleep_controller": "Awake",
+          "rest_logit": 7.185252666473389,
+          "own_noop_logit": 5.2742133140563965,
+          "inspect_logit": 6.829028606414795,
+          "pure_rest_probability": 0.42896584902072543,
+          "pure_noop_probability": 0.07871730614566828,
+          "body_energy": 0.7910921573638916,
+          "brain_atp": 0.6458724737167358,
+          "fatigue": 0.00016000302275642753,
+          "boredom": 0.12040089070796967,
+          "health": 1.0,
+          "injury": 0.0,
+          "actual_cognitive_body_energy_debit": 0.0002029275055974722,
+          "repriced_native_atp_q16": 7364,
+          "brain_work": {
+            "decoder_candidate_ops": 16,
+            "memory_context_ops": 21647,
+            "microsteps": 3,
+            "neuron_updates": 6836,
+            "synapse_ops": 52064,
+            "tile_visits": 276
+          },
+          "binding_memory_ops": 7554,
+          "context_memory_ops": 3549,
+          "reader_scratch_memory_ops": 10524,
+          "reader_lookup_memory_ops": 8,
+          "source_support": [
+            {
+              "action_id": 4,
+              "family": "Inspect",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 3,
+              "family": "Rest",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "body pose/velocity",
+                "observed slots/geometry",
+                "sensory channels",
+                "hormone 0 locality",
+                "hormone 5 locality"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 103,
+              "family": "Approach",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 104,
+              "family": "Other",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            }
+          ]
+        },
+        {
+          "sequence": 4,
+          "tick": 604,
+          "selected_kind": "Rest",
+          "selected_action_id": 3,
+          "source_observation": "Stored",
+          "actual_channel_primitives": [
+            103,
+            3
+          ],
+          "physical_total_displacement_x": 0.0,
+          "sleep_recovery_event": 1.0,
+          "prior_body_sleeping": false,
+          "final_body_sleeping": true,
+          "sleep_controller": "Awake",
+          "rest_logit": 7.463443756103516,
+          "own_noop_logit": 5.4128947257995605,
+          "inspect_logit": 6.8475871086120605,
+          "pure_rest_probability": 0.47955782398354685,
+          "pure_noop_probability": 0.07592186448168745,
+          "body_energy": 0.790888249874115,
+          "brain_atp": 0.64585942029953,
+          "fatigue": 0.0,
+          "boredom": 0.12040089070796967,
+          "health": 1.0,
+          "injury": 0.0,
+          "actual_cognitive_body_energy_debit": 0.00020293000852689147,
+          "repriced_native_atp_q16": 7364,
+          "brain_work": {
+            "decoder_candidate_ops": 16,
+            "memory_context_ops": 21647,
+            "microsteps": 3,
+            "neuron_updates": 6836,
+            "synapse_ops": 52064,
+            "tile_visits": 276
+          },
+          "binding_memory_ops": 7554,
+          "context_memory_ops": 3549,
+          "reader_scratch_memory_ops": 10524,
+          "reader_lookup_memory_ops": 8,
+          "source_support": [
+            {
+              "action_id": 4,
+              "family": "Inspect",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 3,
+              "family": "Rest",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "body pose/velocity",
+                "observed slots/geometry",
+                "sensory channels",
+                "hormone 0 locality",
+                "hormone 5 locality",
+                "hormone 6 locality"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 103,
+              "family": "Approach",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 104,
+              "family": "Other",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            }
+          ]
+        },
+        {
+          "sequence": 5,
+          "tick": 605,
+          "selected_kind": "Inspect",
+          "selected_action_id": 4,
+          "source_observation": "Stored",
+          "actual_channel_primitives": [
+            103,
+            4
+          ],
+          "physical_total_displacement_x": 0.0,
+          "sleep_recovery_event": 0.0,
+          "prior_body_sleeping": true,
+          "final_body_sleeping": false,
+          "sleep_controller": "Awake",
+          "rest_logit": 7.563990116119385,
+          "own_noop_logit": 5.42917537689209,
+          "inspect_logit": 6.717569828033447,
+          "pure_rest_probability": 0.5178565456354332,
+          "pure_noop_probability": 0.07528948800955185,
+          "body_energy": 0.7906797528266907,
+          "brain_atp": 0.6458427309989929,
+          "fatigue": 7.999868103070185e-05,
+          "boredom": 0.12060089409351349,
+          "health": 1.0,
+          "injury": 0.0,
+          "actual_cognitive_body_energy_debit": 0.00020295502326916903,
+          "repriced_native_atp_q16": 7366,
+          "brain_work": {
+            "decoder_candidate_ops": 16,
+            "memory_context_ops": 21655,
+            "microsteps": 3,
+            "neuron_updates": 6836,
+            "synapse_ops": 52064,
+            "tile_visits": 276
+          },
+          "binding_memory_ops": 7554,
+          "context_memory_ops": 3549,
+          "reader_scratch_memory_ops": 10524,
+          "reader_lookup_memory_ops": 16,
+          "source_support": [
+            {
+              "action_id": 4,
+              "family": "Inspect",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 3,
+              "family": "Rest",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "body pose/velocity",
+                "observed slots/geometry",
+                "body sleeping",
+                "hormone 0 locality"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 103,
+              "family": "Approach",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 104,
+              "family": "Other",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            }
+          ]
+        },
+        {
+          "sequence": 6,
+          "tick": 606,
+          "selected_kind": "Rest",
+          "selected_action_id": 3,
+          "source_observation": "Stored",
+          "actual_channel_primitives": [
+            103,
+            3
+          ],
+          "physical_total_displacement_x": 0.0,
+          "sleep_recovery_event": 1.0,
+          "prior_body_sleeping": false,
+          "final_body_sleeping": true,
+          "sleep_controller": "Awake",
+          "rest_logit": 7.599817752838135,
+          "own_noop_logit": 5.408472061157227,
+          "inspect_logit": 6.565001487731934,
+          "pure_rest_probability": 0.5455061586457464,
+          "pure_noop_probability": 0.07503909540328885,
+          "body_energy": 0.7904744744300842,
+          "brain_atp": 0.6458225846290588,
+          "fatigue": 0.0,
+          "boredom": 0.12060089409351349,
+          "health": 1.0,
+          "injury": 0.0,
+          "actual_cognitive_body_energy_debit": 0.0002029850147664547,
+          "repriced_native_atp_q16": 7368,
+          "brain_work": {
+            "decoder_candidate_ops": 16,
+            "memory_context_ops": 21665,
+            "microsteps": 3,
+            "neuron_updates": 6836,
+            "synapse_ops": 52064,
+            "tile_visits": 276
+          },
+          "binding_memory_ops": 7554,
+          "context_memory_ops": 3551,
+          "reader_scratch_memory_ops": 10524,
+          "reader_lookup_memory_ops": 24,
+          "source_support": [
+            {
+              "action_id": 4,
+              "family": "Inspect",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "sensory channels",
+                "body sleeping"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 3,
+              "family": "Rest",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "body pose/velocity",
+                "observed slots/geometry",
+                "sensory channels",
+                "hormone 0 locality",
+                "hormone 6 locality"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 103,
+              "family": "Approach",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 104,
+              "family": "Other",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            }
+          ]
+        },
+        {
+          "sequence": 7,
+          "tick": 607,
+          "selected_kind": "Inspect",
+          "selected_action_id": 4,
+          "source_observation": "Stored",
+          "actual_channel_primitives": [
+            103,
+            4
+          ],
+          "physical_total_displacement_x": 0.0,
+          "sleep_recovery_event": 0.0,
+          "prior_body_sleeping": true,
+          "final_body_sleeping": false,
+          "sleep_controller": "Awake",
+          "rest_logit": 7.61250114440918,
+          "own_noop_logit": 5.378938674926758,
+          "inspect_logit": 6.426512241363525,
+          "pure_rest_probability": 0.5655709841979195,
+          "pure_noop_probability": 0.07471031995014385,
+          "body_energy": 0.7902658581733704,
+          "brain_atp": 0.6457990407943726,
+          "fatigue": 7.999868103070185e-05,
+          "boredom": 0.12080089747905731,
+          "health": 1.0,
+          "injury": 0.0,
+          "actual_cognitive_body_energy_debit": 0.00020300751202739775,
+          "repriced_native_atp_q16": 7370,
+          "brain_work": {
+            "decoder_candidate_ops": 16,
+            "memory_context_ops": 21673,
+            "microsteps": 3,
+            "neuron_updates": 6836,
+            "synapse_ops": 52064,
+            "tile_visits": 276
+          },
+          "binding_memory_ops": 7554,
+          "context_memory_ops": 3551,
+          "reader_scratch_memory_ops": 10524,
+          "reader_lookup_memory_ops": 32,
+          "source_support": [
+            {
+              "action_id": 4,
+              "family": "Inspect",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "sensory channels"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 3,
+              "family": "Rest",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "body sleeping"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 103,
+              "family": "Approach",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 104,
+              "family": "Other",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            }
+          ]
+        },
+        {
+          "sequence": 8,
+          "tick": 608,
+          "selected_kind": "Rest",
+          "selected_action_id": 3,
+          "source_observation": "Stored",
+          "actual_channel_primitives": [
+            103,
+            3
+          ],
+          "physical_total_displacement_x": 0.0,
+          "sleep_recovery_event": 1.0,
+          "prior_body_sleeping": false,
+          "final_body_sleeping": true,
+          "sleep_controller": "Awake",
+          "rest_logit": 7.616962909698486,
+          "own_noop_logit": 5.349438190460205,
+          "inspect_logit": 6.310819625854492,
+          "pure_rest_probability": 0.5802951643377858,
+          "pure_noop_probability": 0.07422300045322196,
+          "body_energy": 0.7900619506835938,
+          "brain_atp": 0.645772397518158,
+          "fatigue": 0.0,
+          "boredom": 0.12080089747905731,
+          "health": 1.0,
+          "injury": 0.0,
+          "actual_cognitive_body_energy_debit": 0.00020302250050008297,
+          "repriced_native_atp_q16": 7372,
+          "brain_work": {
+            "decoder_candidate_ops": 16,
+            "memory_context_ops": 21679,
+            "microsteps": 3,
+            "neuron_updates": 6836,
+            "synapse_ops": 52064,
+            "tile_visits": 276
+          },
+          "binding_memory_ops": 7554,
+          "context_memory_ops": 3549,
+          "reader_scratch_memory_ops": 10524,
+          "reader_lookup_memory_ops": 40,
+          "source_support": [
+            {
+              "action_id": 4,
+              "family": "Inspect",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "sensory channels",
+                "body sleeping"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 3,
+              "family": "Rest",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "sensory channels"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 103,
+              "family": "Approach",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 104,
+              "family": "Other",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            }
+          ]
+        },
+        {
+          "sequence": 9,
+          "tick": 609,
+          "selected_kind": "Rest",
+          "selected_action_id": 3,
+          "source_observation": "Stored",
+          "actual_channel_primitives": [
+            103,
+            3
+          ],
+          "physical_total_displacement_x": 0.0,
+          "sleep_recovery_event": 1.0,
+          "prior_body_sleeping": true,
+          "final_body_sleeping": true,
+          "sleep_controller": "Awake",
+          "rest_logit": 7.618523120880127,
+          "own_noop_logit": 5.322606086730957,
+          "inspect_logit": 6.218142032623291,
+          "pure_rest_probability": 0.5911491136155487,
+          "pure_noop_probability": 0.07361063336880522,
+          "body_energy": 0.7898587584495544,
+          "brain_atp": 0.6457427144050598,
+          "fatigue": 0.0,
+          "boredom": 0.12080089747905731,
+          "health": 1.0,
+          "injury": 0.0,
+          "actual_cognitive_body_energy_debit": 0.00020304501231294125,
+          "repriced_native_atp_q16": 7374,
+          "brain_work": {
+            "decoder_candidate_ops": 16,
+            "memory_context_ops": 21687,
+            "microsteps": 3,
+            "neuron_updates": 6836,
+            "synapse_ops": 52064,
+            "tile_visits": 276
+          },
+          "binding_memory_ops": 7554,
+          "context_memory_ops": 3549,
+          "reader_scratch_memory_ops": 10524,
+          "reader_lookup_memory_ops": 48,
+          "source_support": [
+            {
+              "action_id": 4,
+              "family": "Inspect",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "sensory channels"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 3,
+              "family": "Rest",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "body sleeping"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 103,
+              "family": "Approach",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 104,
+              "family": "Other",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            }
+          ]
+        },
+        {
+          "sequence": 10,
+          "tick": 610,
+          "selected_kind": "Rest",
+          "selected_action_id": 3,
+          "source_observation": "Stored",
+          "actual_channel_primitives": [
+            103,
+            3
+          ],
+          "physical_total_displacement_x": 0.0,
+          "sleep_recovery_event": 1.0,
+          "prior_body_sleeping": true,
+          "final_body_sleeping": true,
+          "sleep_controller": "Awake",
+          "rest_logit": 7.619055271148682,
+          "own_noop_logit": 5.299003601074219,
+          "inspect_logit": 6.1457977294921875,
+          "pure_rest_probability": 0.5991592197141211,
+          "pure_noop_probability": 0.07293081861118095,
+          "body_energy": 0.7896556258201599,
+          "brain_atp": 0.6457101702690125,
+          "fatigue": 0.0,
+          "boredom": 0.12080089747905731,
+          "health": 1.0,
+          "injury": 0.0,
+          "actual_cognitive_body_energy_debit": 0.0002030675095738843,
+          "repriced_native_atp_q16": 7376,
+          "brain_work": {
+            "decoder_candidate_ops": 16,
+            "memory_context_ops": 21695,
+            "microsteps": 3,
+            "neuron_updates": 6836,
+            "synapse_ops": 52064,
+            "tile_visits": 276
+          },
+          "binding_memory_ops": 7554,
+          "context_memory_ops": 3549,
+          "reader_scratch_memory_ops": 10524,
+          "reader_lookup_memory_ops": 56,
+          "source_support": [
+            {
+              "action_id": 4,
+              "family": "Inspect",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "sensory channels",
+                "hormone 6 locality"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 3,
+              "family": "Rest",
+              "action_sequence": 9,
+              "reference_sequence": null,
+              "action_mismatch_fields": [],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 103,
+              "family": "Approach",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 104,
+              "family": "Other",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            }
+          ]
+        },
+        {
+          "sequence": 11,
+          "tick": 611,
+          "selected_kind": "Inspect",
+          "selected_action_id": 4,
+          "source_observation": "Stored",
+          "actual_channel_primitives": [
+            103,
+            4
+          ],
+          "physical_total_displacement_x": 0.0,
+          "sleep_recovery_event": 0.0,
+          "prior_body_sleeping": true,
+          "final_body_sleeping": false,
+          "sleep_controller": "Awake",
+          "rest_logit": 7.619227886199951,
+          "own_noop_logit": 5.278450965881348,
+          "inspect_logit": 6.090258598327637,
+          "pure_rest_probability": 0.6050789558115782,
+          "pure_noop_probability": 0.07222909305671718,
+          "body_energy": 0.789447009563446,
+          "brain_atp": 0.6456747651100159,
+          "fatigue": 7.999868103070185e-05,
+          "boredom": 0.12100090086460114,
+          "health": 1.0,
+          "injury": 0.0,
+          "actual_cognitive_body_energy_debit": 0.00020309000683482736,
+          "repriced_native_atp_q16": 7378,
+          "brain_work": {
+            "decoder_candidate_ops": 16,
+            "memory_context_ops": 21703,
+            "microsteps": 3,
+            "neuron_updates": 6836,
+            "synapse_ops": 52064,
+            "tile_visits": 276
+          },
+          "binding_memory_ops": 7554,
+          "context_memory_ops": 3549,
+          "reader_scratch_memory_ops": 10524,
+          "reader_lookup_memory_ops": 64,
+          "source_support": [
+            {
+              "action_id": 4,
+              "family": "Inspect",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "sensory channels",
+                "hormone 6 locality"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 3,
+              "family": "Rest",
+              "action_sequence": 10,
+              "reference_sequence": null,
+              "action_mismatch_fields": [],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 103,
+              "family": "Approach",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 104,
+              "family": "Other",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            }
+          ]
+        },
+        {
+          "sequence": 12,
+          "tick": 612,
+          "selected_kind": "Rest",
+          "selected_action_id": 3,
+          "source_observation": "Stored",
+          "actual_channel_primitives": [
+            103,
+            3
+          ],
+          "physical_total_displacement_x": 0.0,
+          "sleep_recovery_event": 1.0,
+          "prior_body_sleeping": false,
+          "final_body_sleeping": true,
+          "sleep_controller": "Awake",
+          "rest_logit": 7.619271755218506,
+          "own_noop_logit": 5.260507106781006,
+          "inspect_logit": 6.048023223876953,
+          "pure_rest_probability": 0.6094700888644943,
+          "pure_noop_probability": 0.07153320483331213,
+          "body_energy": 0.7892411351203918,
+          "brain_atp": 0.6456366181373596,
+          "fatigue": 0.0,
+          "boredom": 0.12100090086460114,
+          "health": 1.0,
+          "injury": 0.0,
+          "actual_cognitive_body_energy_debit": 0.00020311502157710493,
+          "repriced_native_atp_q16": 7380,
+          "brain_work": {
+            "decoder_candidate_ops": 16,
+            "memory_context_ops": 21713,
+            "microsteps": 3,
+            "neuron_updates": 6836,
+            "synapse_ops": 52064,
+            "tile_visits": 276
+          },
+          "binding_memory_ops": 7554,
+          "context_memory_ops": 3551,
+          "reader_scratch_memory_ops": 10524,
+          "reader_lookup_memory_ops": 72,
+          "source_support": [
+            {
+              "action_id": 4,
+              "family": "Inspect",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "sensory channels",
+                "body sleeping"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 3,
+              "family": "Rest",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "sensory channels",
+                "body sleeping"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 103,
+              "family": "Approach",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            },
+            {
+              "action_id": 104,
+              "family": "Other",
+              "action_sequence": null,
+              "reference_sequence": null,
+              "action_mismatch_fields": [
+                "no source in namespace"
+              ],
+              "reference_mismatch_fields": [
+                "no own-reference source"
+              ]
+            }
+          ]
+        }
+      ],
+      "natural_rest_action_recalls_without_reference": [
+        {
+          "decision": 10,
+          "source_sequence": 9,
+          "action_id": 3
+        },
+        {
+          "decision": 11,
+          "source_sequence": 10,
+          "action_id": 3
+        }
+      ],
+      "natural_observed_action_recalls_without_reference": [],
+      "pure_noop_probability_sum_on_actual_rows": 0.9650025733325006,
+      "total_actual_cognitive_body_energy_debit": 0.0024359651579288766,
+      "initial_biology": {
+        "body_energy": 0.7917450070381165,
+        "boredom": 0.12000088393688202,
+        "brain_atp": 0.645887553691864,
+        "fatigue": 0.03705247491598129,
+        "health": 1.0,
+        "injury": 0.0,
+        "sleeping": false,
+        "tick": 600
+      },
+      "final_biology": {
+        "body_energy": 0.7892411351203918,
+        "boredom": 0.12100090086460114,
+        "brain_atp": 0.6456366181373596,
+        "fatigue": 0.0,
+        "health": 1.0,
+        "injury": 0.0,
+        "sleeping": true,
+        "tick": 612
+      },
+      "organ_energy_net_changes": {
+        "MetabolicReserve": -0.0024703145027160645,
+        "Circulatory": -0.002520620822906494,
+        "NeuralSupport": -0.002541840076446533,
+        "Thermoregulatory": -0.0024715065956115723,
+        "Locomotor": -0.0025489330291748047,
+        "Digestive": -0.0024703145027160645
+      }
+    }
+  ],
+  "claim_boundary": "Gain 0 versus 0.35 isolates the acquired-reader contribution under equal declared pricing. It does not estimate net benefit of installing this port versus ordinary no-port operation. The detached ordinary-cost preview is not a third autonomous arm. No learning or policy competence is established without the required own reference."
+}

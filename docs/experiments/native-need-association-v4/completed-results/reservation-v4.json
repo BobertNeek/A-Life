@@ -1,0 +1,17 @@
+{
+  "study": "native-need-association-v4-matched-own-history",
+  "sampling_seed": 2026111303,
+  "construction_seed": 2026111301,
+  "arms": [
+    "gain-zero",
+    "gain-035"
+  ],
+  "max_host_intervals_per_arm": 12,
+  "paired_sampling_seed_reuse_intentional": true,
+  "scan_files": 64,
+  "scan_bytes": 1336229,
+  "scan_scope": "Tracked current checkout experiment docs/training examples/tests plus explicitly public V3 source/result Markdown and JSON; not global uniqueness",
+  "matches": [],
+  "parent_owner_coordination": "Parent reported no known owner reservation/use, 2026-11-08",
+  "reserved_utc": "2026-11-08T13:14:58.163782+00:00"
+}

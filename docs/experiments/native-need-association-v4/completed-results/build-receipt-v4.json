@@ -1,0 +1,46 @@
+{
+  "published_source_commit": "0db339c89844bdd180a75d3fd47e2fd8fe4f7a35",
+  "published_source_tree": "53a268f4",
+  "study": "native-need-association-v4-matched-own-history",
+  "base_commit": "c775c8c92e8f5e625f8a3e861ef79200199b54df",
+  "source_manifest_sha256": "aa2c84db247e97f1aa4f97ea9769066135e1a404d446aaaa2fb888c7c86211da",
+  "source_input_count": 719,
+  "source_input_root_sha256": "5df9112366055e7190e9f5edaa0d10a8864e736526e38d6c7e189935ca9bef6d",
+  "source_patch_sha256": "91ecc1f927285d4622c5e8ffeca731ccd531b30969915c89173e98fd41a6b863",
+  "protocol_sha256": "321299a60fc8b6fe98e0b1cf22e846407baf31a4fb1b3c0636d5142e2efa2819",
+  "sampling_seed": 2026111303,
+  "construction_seed": 2026111301,
+  "asset_sha256": "1d2978cbd857a7ca99dc1b2cf65be9f6ff417a6f78199282e0431b94332c9377",
+  "executable_sha256": "5fc90d3fea9372098fe68c7b487b05740462d3d90c79613d81b282540c8676d4",
+  "executable_path": "/workspace/shared/native-need-association-v4-evidence/matched-2026111303/native-need-v4-matched.bin",
+  "preserved_executable_outside_cargo_target": true,
+  "toolchain": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+  "toolchain_hashes": {
+    "rustc": "b53b780f77f952062f8ca8a3b70aef2390b1e45ad91939be94afdc9543026853",
+    "cargo": "a670e02cfa39ac2e53f77a2d911ca1fc9e2c479b0603ec956625be1daf24e3af"
+  },
+  "cargo_locked": true,
+  "build_jobs": 1,
+  "incremental": false,
+  "debug_symbols": false,
+  "qualification": {
+    "core_native": 19,
+    "cpu_source": 21,
+    "exact_adapter": 4,
+    "nonignored_fixture": 4,
+    "native_life_test_ignored_during_qualification": true,
+    "strict_core_cpu_clippy": true,
+    "workspace_format": true
+  },
+  "logs": {
+    "fmt-v4-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "clippy-v4-final.log": "98fffebca6b6966b79e157639dbfd101328737907324890150fb118a1c2b84d2",
+    "core-v4-final.log": "2cee02827cf23393104ac5bc3158b957c4fc524fc1472789dc0e44ee59677bd5",
+    "cpu-source-v4-final.log": "2fdf076e1c89d243b9720a5ec302471eace336ff5f78103c4a833f5fd398f1eb",
+    "adapter-v4-final.log": "cd49b379a87d6d1beace2b4d14594de317fc83035a69375bdb493208a3e76210",
+    "fixture-v4-final.log": "a29167eadbae4a5ea066ddc5eecb2579db0153de6135d2b34a600075c922f32a"
+  },
+  "reservation_sha256": "a34c86f6a1949a3a10167c2e9ba2d21255923dea52fa71d0640a991720a2208c",
+  "before_exposure": true,
+  "created_utc": "2026-11-08T13:38:46.471370+00:00"
+}

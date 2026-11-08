@@ -1,0 +1,55 @@
+{
+  "completed_intervals": 24,
+  "completed_arms": 2,
+  "no_replacements_or_extensions": true,
+  "both_stops": "budget_exhausted",
+  "shared_actual_projection_keys": [
+    "sequence",
+    "tick_before",
+    "tick_after",
+    "frame_digest",
+    "selected_command",
+    "action",
+    "candidates",
+    "brain_work",
+    "biological_reward",
+    "final_biology",
+    "actual_cognitive_energy_debit",
+    "sleep_controller_phase",
+    "founder_optimizer_exact",
+    "sampling_audit",
+    "source_audit",
+    "source_observation"
+  ],
+  "shared_actual_projection_sha256": {
+    "gain-zero": "329cff3bd3ebdef52a5e10ecaa6e3afb3b49d3c5c467afd9e4a9a419592039b9",
+    "gain-035": "329cff3bd3ebdef52a5e10ecaa6e3afb3b49d3c5c467afd9e4a9a419592039b9"
+  },
+  "whole_private_state_byte_equality_claimed": false,
+  "full_journals_byte_equal": false,
+  "journal_differences_include_arm_and_recipe_identity": true,
+  "shared_actual_fields_byte_equal_after_canonical_json_projection": true,
+  "runtime_exact_founder_optimizer_comparisons": 26,
+  "comparison_method": "The compiled fixture compares full in-memory founder/optimizer checkpoint bytes after each interval and at each endpoint. No private checkpoint is retained for a separate retrospective comparison.",
+  "final_physiology_binding_rows": 24,
+  "before_binding_rows": 24,
+  "precharge_differs_from_final_rows": 24,
+  "reader_zero_rows": 96,
+  "source_price_rows": 24,
+  "safety_rows": 24,
+  "same_row_replayed_actual_draws": 24,
+  "same_row_changed_choices": 0,
+  "source_inputs_unchanged": true,
+  "executable_preserved_and_unchanged": true,
+  "fresh_local_raw_evidence_hashes": {
+    "gain-035.fresh-local-diagnostics.jsonl": "ae7732560ff1184efbee4a3e5f9064aca2e45a85f80cb9f4dd1c42ac5275b81a",
+    "gain-zero.fresh-local-diagnostics.jsonl": "bbb0759184a2f6f975a42e3e294f8ffb8a2a6c14df1a77eda90d1f9fe9b0db40"
+  },
+  "runtime_log_sha256": "2bd0b7949736d55845f8367c0848996df78e01f4d13550b7021a3a602c289b64",
+  "original_process_receipt_sha256": "f52c613e0968cb437349f0d1f939f842d6aaa1387476c2e06ffa2531be0828ba",
+  "no_retry_marker_sha256": "91bd18c2a4363fbf235d194b8be8e83340499737b3f6be829d7fcb93d1a09b25",
+  "preserved_failed_qualification_logs": {
+    "core-v4-first.log": "7167f4f8d033907abb2d9b462aa073a73793dd92f851503fc25c8b2689712f75",
+    "clippy-v4-first.log": "582af3e5632707ccd78184ef089a3e3c125c4db88297bc14596152aca24edb21"
+  }
+}
