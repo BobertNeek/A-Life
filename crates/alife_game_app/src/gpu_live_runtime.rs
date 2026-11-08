@@ -44,6 +44,7 @@ mod persistence_response_comparison;
 mod recovery_sleep_tests;
 #[cfg(test)]
 mod resident_sync_tests;
+mod restore_reconciliation;
 pub(crate) mod semantic_prior;
 #[cfg(all(test, feature = "gpu-tests"))]
 mod sleep_atomicity_tests;
@@ -4782,11 +4783,17 @@ impl GpuLiveBrainRuntime {
             .iter()
             .filter_map(|creature| creature.gpu_brain.clone())
             .collect::<Vec<_>>();
-        let requires_checkpoint_reconciliation = checkpoints.len() != save.creatures.len()
-            || checkpoints.iter().any(|state| {
-                state.pending_eligibility.is_some()
-                    || state.pending_experience_transaction.is_some()
-            });
+        let requires_checkpoint_reconciliation =
+            restore_reconciliation::population_requires_reconciliation(
+                save.creatures.len(),
+                checkpoints
+                    .iter()
+                    .map(|state| restore_reconciliation::CheckpointShape {
+                        pending_eligibility: state.pending_eligibility.is_some(),
+                        pending_transaction: state.pending_experience_transaction.is_some(),
+                        retained_credit: state.memory.retained_learning.is_some(),
+                    }),
+            );
         let mut runtime = Self::restore_with_checkpoints(
             backend,
             world,
