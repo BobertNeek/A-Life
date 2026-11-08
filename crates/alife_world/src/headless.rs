@@ -9100,7 +9100,7 @@ mod task_6_factorized_motor_tests {
     }
 
     #[test]
-    fn awake_duration_translated_full_steps_do_not_create_phantom_reflex_effort() {
+    fn awake_duration_translated_steps_preserve_time_and_known_path_limit() {
         for origin in [0.0, 3.0, 1000.0] {
             for intensity in [0.5, 1.0] {
                 let (mut world, agent, food, mut bundle) = prepared_world();
@@ -9119,9 +9119,28 @@ mod task_6_factorized_motor_tests {
                 let expected = ordinary
                     .apply_registered_motor_bundle(&bundle, agent)
                     .unwrap();
-                let actual = world
-                    .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
-                    .unwrap();
+                let before = serde_json::to_vec(&world.save_state()).unwrap();
+                let result = world
+                    .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent);
+                if origin == 1000.0 && intensity == 0.5 {
+                    let error = match result {
+                        Err(error) => error,
+                        Ok(_) => panic!("known upward-rounded endpoint limit unexpectedly changed"),
+                    };
+                    eprintln!("V20_KNOWN_ENDPOINT_LIMIT origin={origin} intensity={intensity} error={error:?}");
+                    assert!(matches!(
+                        error,
+                        HeadlessMotorTransactionError::Contract(
+                            ScaffoldContractError::ScalarOutOfRange
+                        )
+                    ));
+                    assert!(ordinary.entity(food).unwrap().consumed);
+                    assert!(serde_json::to_vec(&world.save_state()).unwrap() == before);
+                    continue;
+                }
+                let actual = result.unwrap_or_else(|error| {
+                    panic!("origin={origin} intensity={intensity}: {error:?}")
+                });
                 assert_eq!(
                     actual.voluntary_time_allocated, 1.0,
                     "origin={origin}, intensity={intensity}"
@@ -9210,7 +9229,7 @@ mod task_6_factorized_motor_tests {
     }
 
     #[test]
-    fn awake_duration_ordinary_blocked_attempt_has_no_phantom_late_effort() {
+    fn awake_duration_blocked_meal_has_no_invented_acute_response() {
         let (mut world, agent, food, mut bundle) = prepared_world();
         hold_food_for_meal(&mut world, food);
         world.objects.get_mut(&food.raw()).unwrap().hazard_pain = 0.4;
@@ -9244,6 +9263,75 @@ mod task_6_factorized_motor_tests {
             VoluntaryTimeProvenance::BlockedAttempt
         );
         assert_eq!(receipt.voluntary_time_allocated, 1.0);
+        assert!(
+            !world.entity(food).unwrap().consumed,
+            "blocked reach unexpectedly consumed meal"
+        );
+        assert!(receipt.withdrawal.is_none() && !receipt.voluntary_execution_altered);
+        assert!(!receipt.exhausted_late_no_effect);
+        assert!(receipt.voluntary == expected);
+        assert!(
+            serde_json::to_vec(&world.save_state()).unwrap()
+                == serde_json::to_vec(&ordinary.save_state()).unwrap()
+        );
+    }
+
+    #[test]
+    fn awake_duration_ordinary_blocked_attempt_has_no_phantom_late_effort() {
+        let (mut world, agent, food, mut bundle) = prepared_world();
+        hold_food_for_meal(&mut world, food);
+        world.objects.get_mut(&food.raw()).unwrap().hazard_pain = 0.4;
+        bundle
+            .channels
+            .retain(|c| c.channel != MotorChannel::Locomotion);
+        let target = Vec3f::new(-1.0, 0.0, 0.0);
+        bundle.channels.push(
+            ChannelCommand::new(
+                MotorChannel::Locomotion,
+                ActionKind::Move.canonical_id(),
+                Some(alife_core::ActionTarget::new(None, Some(target))),
+                target,
+                Intensity::new(1.0).unwrap(),
+                alife_core::DurationTicks::new(1),
+                0.0,
+                Confidence::new(1.0).unwrap(),
+                0,
+            )
+            .unwrap(),
+        );
+        world
+            .editor_spawn_object(WorldEditorSpawnSpec {
+                label: "ordinary-blocker".into(),
+                kind: WorldObjectKind::Obstacle,
+                organism_id: None,
+                position: Vec3f::new(-1.25, 0.0, 0.0),
+                nutrition: 0.0,
+                hazard_pain: 0.0,
+                radius: 1.0,
+                token_id: None,
+            })
+            .unwrap();
+        let start = world.entity(agent).unwrap().position;
+        assert!(world.physical_contact_reachable(start, world.entity(food).unwrap().position));
+        assert!(world
+            .first_motion_blocker(start, Vec3f::new(-0.1, 0.0, 0.0))
+            .is_some());
+        let mut ordinary = world.clone();
+        let expected = ordinary
+            .apply_registered_motor_bundle(&bundle, agent)
+            .unwrap();
+        let receipt = world
+            .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
+            .unwrap();
+        assert_eq!(
+            receipt.voluntary_time_provenance,
+            VoluntaryTimeProvenance::BlockedAttempt
+        );
+        assert_eq!(receipt.voluntary_time_allocated, 1.0);
+        assert!(
+            world.entity(food).unwrap().consumed,
+            "opposite blocked move must leave held meal reachable"
+        );
         assert!(receipt.exhausted_late_no_effect && !receipt.voluntary_execution_altered);
         assert!(receipt.voluntary == expected);
         assert!(

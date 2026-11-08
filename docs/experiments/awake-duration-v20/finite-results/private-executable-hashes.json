@@ -1,0 +1,18 @@
+[
+  {
+    "name": "world-e690ac1b-alife_world-6b7d17d635ca0301",
+    "sha256": "d6bfdad64e330209c23e382ee7dd57521d691c540981d24eccb582e272bb47c1"
+  },
+  {
+    "name": "cpu-collector-f085d026",
+    "sha256": "e99e02e26fb518b53d28d5815058900dd374b482adb46bef2629fa9d6d293dea"
+  },
+  {
+    "name": "world-e8fc6bb5-alife_world-6b7d17d635ca0301",
+    "sha256": "6df571d27dd230a5cc27162f7614158206942b5eb6017063201374f1f9309085"
+  },
+  {
+    "name": "world-f085d026-alife_world-6b7d17d635ca0301",
+    "sha256": "081371d4ecffb8525471c3533c0eea4a9daf43cab61777f4d8d6e9ddb751964b"
+  }
+]

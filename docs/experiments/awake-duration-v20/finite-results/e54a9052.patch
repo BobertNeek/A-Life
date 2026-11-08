@@ -1,0 +1,294 @@
+diff --git a/crates/alife_training/tests/cpu_collector/shared_actuator.rs b/crates/alife_training/tests/cpu_collector/shared_actuator.rs
+index ce2cede8..e89ea3da 100644
+--- a/crates/alife_training/tests/cpu_collector/shared_actuator.rs
++++ b/crates/alife_training/tests/cpu_collector/shared_actuator.rs
+@@ -182,6 +182,16 @@ fn shared_actuator_repeated_contact_keeps_sequence_unissued_and_releases() {
+ 
+ #[test]
+ fn shared_actuator_exhausted_late_meal_retains_exact_ordinary_experience() {
++    shared_actuator_meal_at_origin(0.0);
++}
++
++#[test]
++fn shared_actuator_translated_meal_has_no_phantom_time_or_credit_loss() {
++    shared_actuator_meal_at_origin(3.0);
++    shared_actuator_meal_at_origin(1000.0);
++}
++
++fn shared_actuator_meal_at_origin(origin_x: f32) {
+     // New declared inherited readout factor after the unchanged founder selected Inspect.
+     // Same seed, normal native sampler, no forced measured action or neural state writes.
+     let (game, mut trainer, _) =
+@@ -204,9 +214,9 @@ fn shared_actuator_exhausted_late_meal_retains_exact_ordinary_experience() {
+                     world.editor_remove_object(object.id)?;
+                 }
+             }
+-            // Origin-centered geometry isolates exact exhausted-time plumbing.
+-            // Canonical X=3 separately exposed a quantized-position timing residue.
+-            world.editor_move_object(entity, Vec3f::ZERO)?;
++            // Same declared fixture at translated coordinates. Each case is
++            // paired against its own exact ordinary execution.
++            world.editor_move_object(entity, Vec3f::new(origin_x, 0.0, 0.0))?;
+             let mut position = world.entity(entity).unwrap().position;
+             position.x += 0.3;
+             let food = world.editor_spawn_object(WorldEditorSpawnSpec {
+diff --git a/crates/alife_world/src/headless.rs b/crates/alife_world/src/headless.rs
+index 592ca8ad..d56f729a 100644
+--- a/crates/alife_world/src/headless.rs
++++ b/crates/alife_world/src/headless.rs
+@@ -4,7 +4,9 @@
+ 
+ mod awake_translation;
+ mod contact_withdrawal;
+-pub use awake_translation::{AwakeTranslationIntervalReceipt, TranslationTimeMetric};
++pub use awake_translation::{
++    AwakeTranslationIntervalReceipt, TranslationTimeMetric, VoluntaryTimeProvenance,
++};
+ 
+ use std::{
+     cell::{Ref, RefCell},
+@@ -6113,6 +6115,7 @@ impl HeadlessWorld {
+         }
+         let mut observed_goal = None;
+         let max_step = MOVE_STEP * command.intensity.raw();
++        let mut planned_time = awake_translation::PlannedTranslationTime::full(max_step);
+         let destination = match intent {
+             MoveIntent::Forward => {
+                 let yaw = self
+@@ -6125,19 +6128,31 @@ impl HeadlessWorld {
+                     Vec3f::new(yaw.cos() * max_step, 0.0, yaw.sin() * max_step),
+                 ))
+             }
+-            MoveIntent::Absolute if command.target_position.is_some() => command
+-                .target_position
+-                .map(|target| step_toward(start, target, max_step)),
++            MoveIntent::Absolute if command.target_position.is_some() => {
++                command.target_position.map(|target| {
++                    planned_time = awake_translation::PlannedTranslationTime::toward(
++                        subtract(target, start),
++                        max_step,
++                    );
++                    step_toward(start, target, max_step)
++                })
++            }
+             MoveIntent::Absolute | MoveIntent::Approach => {
+                 let Some(target) = command.target_entity else {
+                     return self.invalid_target(command, None);
+                 };
+                 if let Some(relative) = self.visible_motion_target(command.organism_id, target)? {
+                     observed_goal = Some((target, relative));
++                    planned_time =
++                        awake_translation::PlannedTranslationTime::toward(relative, max_step);
+                     Some(step_toward(start, add(start, relative), max_step))
+                 } else if let Some(remembered) = command.target_position {
+                     // A creature-supplied remembered point permits a straight
+                     // movement only. It cannot authorize a local detour.
++                    planned_time = awake_translation::PlannedTranslationTime::toward(
++                        subtract(remembered, start),
++                        max_step,
++                    );
+                     Some(step_toward(start, remembered, max_step))
+                 } else {
+                     return self.blocked_local_move(command);
+@@ -6158,6 +6173,9 @@ impl HeadlessWorld {
+             return self.invalid_target(command, command.target_entity);
+         };
+         destination.validate()?;
++        if let Some(state) = translation.as_deref_mut() {
++            state.set_planned_time(planned_time);
++        }
+         let mut detour = false;
+         if let Some((target, relative)) = observed_goal {
+             let Some((selected, diverted)) =
+@@ -9081,6 +9099,50 @@ mod task_6_factorized_motor_tests {
+         }
+     }
+ 
++    #[test]
++    fn awake_duration_translated_full_steps_do_not_create_phantom_reflex_effort() {
++        for origin in [0.0, 3.0, 1000.0] {
++            for intensity in [0.5, 1.0] {
++                let (mut world, agent, food, mut bundle) = prepared_world();
++                for object in world.objects.values_mut() {
++                    object.position.x += origin;
++                }
++                hold_food_for_meal(&mut world, food);
++                world.objects.get_mut(&food.raw()).unwrap().hazard_pain = 0.4;
++                bundle
++                    .channels
++                    .retain(|c| c.channel != MotorChannel::Locomotion);
++                let mut movement = initial_priority_bundle(false).channels[0].clone();
++                movement.intensity = Intensity::new(intensity).unwrap();
++                bundle.channels.push(movement);
++                let mut ordinary = world.clone();
++                let expected = ordinary
++                    .apply_registered_motor_bundle(&bundle, agent)
++                    .unwrap();
++                let actual = world
++                    .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
++                    .unwrap();
++                assert_eq!(
++                    actual.voluntary_time_allocated, 1.0,
++                    "origin={origin}, intensity={intensity}"
++                );
++                assert_eq!(actual.reflex_time_allocated, 0.0);
++                assert!(actual.exhausted_late_no_effect);
++                let reflex = actual.withdrawal.as_ref().unwrap();
++                assert!(
++                    reflex.blocked
++                        && reflex.displacement == Vec3f::ZERO
++                        && reflex.energy_cost == 0.0
++                );
++                assert!(actual.voluntary == expected);
++                assert!(
++                    serde_json::to_vec(&world.save_state()).unwrap()
++                        == serde_json::to_vec(&ordinary.save_state()).unwrap()
++                );
++            }
++        }
++    }
++
+     #[test]
+     fn awake_ground_priority_quiet_slope_preserves_existing_planar_walking() {
+         let (mut candidate, agent) = withdrawal_world(Vec3f::new(8.0, 0.0, 0.0), 0.4);
+diff --git a/crates/alife_world/src/headless/awake_translation.rs b/crates/alife_world/src/headless/awake_translation.rs
+index bc1bbe29..dce637c3 100644
+--- a/crates/alife_world/src/headless/awake_translation.rs
++++ b/crates/alife_world/src/headless/awake_translation.rs
+@@ -20,6 +20,55 @@ impl TranslationTimeMetric {
+     }
+ }
+ 
++/// Ephemeral provenance for actual voluntary actuator time, never inferred
++/// from rounded final world-coordinate subtraction.
++#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
++pub enum VoluntaryTimeProvenance {
++    #[default]
++    NoTranslation,
++    InitialPreemption,
++    FullInterval,
++    GoalArrival,
++    ZeroSpeed,
++    BlockedAttempt,
++    SweptContact,
++}
++
++#[derive(Debug, Clone, Copy)]
++pub(super) struct PlannedTranslationTime {
++    duration: f32,
++    provenance: VoluntaryTimeProvenance,
++}
++impl PlannedTranslationTime {
++    pub(super) fn full(speed: f32) -> Self {
++        if speed > 0.0 {
++            Self {
++                duration: 1.0,
++                provenance: VoluntaryTimeProvenance::FullInterval,
++            }
++        } else {
++            Self {
++                duration: 0.0,
++                provenance: VoluntaryTimeProvenance::ZeroSpeed,
++            }
++        }
++    }
++    pub(super) fn toward(relative: Vec3f, speed: f32) -> Self {
++        if speed <= 0.0 {
++            return Self::full(speed);
++        }
++        let length = distance(Vec3f::ZERO, relative);
++        if length >= speed {
++            Self::full(speed)
++        } else {
++            Self {
++                duration: length / speed,
++                provenance: VoluntaryTimeProvenance::GoalArrival,
++            }
++        }
++    }
++}
++
+ /// The voluntary receipt retains selected intent and actual per-channel motion.
+ /// Its body event/biology include the reflex once; `actual_displacement` also
+ /// includes the separately identified involuntary movement. This wrapper is not
+@@ -32,6 +81,8 @@ pub struct AwakeTranslationIntervalReceipt {
+     pub allocated_translation_time: f32,
+     pub translation_time_metric: TranslationTimeMetric,
+     pub voluntary_time_allocated: f32,
++    pub planned_voluntary_time: f32,
++    pub voluntary_time_provenance: VoluntaryTimeProvenance,
+     pub reflex_time_allocated: f32,
+     pub reflex_budget_exhausted: bool,
+     /// Only a late zero-time/effort/motion response with the same normalized
+@@ -56,6 +107,8 @@ pub(super) struct AwakeTranslationState {
+     time_metric: TranslationTimeMetric,
+     pub(super) thermal_peak: f32,
+     voluntary_time: f32,
++    planned_time: Option<PlannedTranslationTime>,
++    voluntary_time_provenance: VoluntaryTimeProvenance,
+     reflex_time: f32,
+     late_response: bool,
+     exhausted_late_no_effect: bool,
+@@ -92,6 +145,7 @@ impl AwakeTranslationState {
+         self.withdrawal = world.apply_contact_withdrawal(organism, entity, capacity, gain, 0.0)?;
+         if let Some(reflex) = &self.withdrawal {
+             self.voluntary_execution_altered = true;
++            self.voluntary_time_provenance = VoluntaryTimeProvenance::InitialPreemption;
+             self.reflex_time = 1.0;
+             // Even a blocked protective attempt owns this interval. A voluntary
+             // translation cannot undo the response or receive a second allowance.
+@@ -151,7 +205,7 @@ impl AwakeTranslationState {
+         if sources.is_empty() {
+             return None;
+         }
+-        let duration = (self.time_metric.path_length(delta) * fraction / speed).clamp(0.0, 1.0);
++        let duration = self.planned_time?.duration * fraction.clamp(0.0, 1.0);
+         Some(SweptContactPlan {
+             position,
+             sources,
+@@ -185,6 +239,7 @@ impl AwakeTranslationState {
+         result.observation.energy_delta = SignedValence::new(result.body_event.energy)?;
+         result.observation.homeostatic_delta.drives.brain_atp *= plan.duration;
+         self.voluntary_time = plan.duration;
++        self.voluntary_time_provenance = VoluntaryTimeProvenance::SweptContact;
+         self.voluntary_path += distance(Vec3f::ZERO, displacement);
+         self.voluntary_translation_energy += result.body_event.energy;
+         self.thermal_peak = world.thermal_contact_severity_at(own, plan.position);
+@@ -252,6 +307,10 @@ impl AwakeTranslationState {
+         Ok(())
+     }
+ 
++    pub(super) fn set_planned_time(&mut self, time: PlannedTranslationTime) {
++        self.planned_time = Some(time);
++    }
++
+     pub(super) fn mark_voluntary_execution_altered(&mut self) {
+         self.voluntary_execution_altered = true;
+     }
+@@ -295,11 +354,14 @@ impl AwakeTranslationState {
+         let path = self.time_metric.path_length(displacement);
+         let speed = MOVE_STEP * command.intensity.raw();
+         let time = if !result.execution.succeeded {
++            self.voluntary_time_provenance = VoluntaryTimeProvenance::BlockedAttempt;
+             1.0
+-        } else if speed > 0.0 {
+-            (path / speed).clamp(0.0, 1.0)
+         } else {
+-            0.0
++            let planned = self
++                .planned_time
++                .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
++            self.voluntary_time_provenance = planned.provenance;
++            planned.duration
+         };
+         self.budget
+             .as_mut()
+@@ -425,6 +487,8 @@ impl HeadlessWorld {
+                     voluntary_execution_altered: state.voluntary_execution_altered,
+                     withdrawal: state.withdrawal,
+                     voluntary_time_allocated: state.voluntary_time,
++                    planned_voluntary_time: state.planned_time.map_or(0.0, |p| p.duration),
++                    voluntary_time_provenance: state.voluntary_time_provenance,
+                     reflex_time_allocated: state.reflex_time,
+                     allocated_translation_time: state.budget.map_or(0.0, |b| b.spent_time),
+                     translation_time_metric: state.time_metric,

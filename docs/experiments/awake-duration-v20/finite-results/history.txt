@@ -1,0 +1,39 @@
+commit e8fc6bb5a1f1802ca0ec81f740bf6fe11752cb3e
+Author:     Codex <codex@openai.com>
+AuthorDate: Sun Nov 8 05:54:59 2026 -0700
+Commit:     Codex <codex@openai.com>
+CommitDate: Sun Nov 8 05:54:59 2026 -0700
+
+    Respect contact occlusion floor in blocked-move consumed-meal control
+
+commit e690ac1b451854dcdc0d01005163863de6ae6a69
+Author:     Codex <codex@openai.com>
+AuthorDate: Sun Nov 8 05:48:37 2026 -0700
+Commit:     Codex <codex@openai.com>
+CommitDate: Sun Nov 8 05:48:37 2026 -0700
+
+    Separate exact endpoint-limit diagnosis and blocked meal reach controls
+
+commit f085d026b7a8eec21866cb44cc21754708a6b105
+Author:     Codex <codex@openai.com>
+AuthorDate: Sun Nov 8 05:21:28 2026 -0700
+Commit:     Codex <codex@openai.com>
+CommitDate: Sun Nov 8 05:21:28 2026 -0700
+
+    Pin goal arrival, zero speed and blocked effort duration semantics
+
+commit e54a9052a359ed7bf9e3e11b23085748d5f050f4
+Author:     Codex <codex@openai.com>
+AuthorDate: Sun Nov 8 05:19:33 2026 -0700
+Commit:     Codex <codex@openai.com>
+CommitDate: Sun Nov 8 05:19:33 2026 -0700
+
+    Carry explicit planned actuator duration through accepted and swept movement
+
+commit f48b90d4b17b665fcf281e605006a614ac4abf54
+Author:     Codex <codex@openai.com>
+AuthorDate: Sun Nov 8 05:18:13 2026 -0700
+Commit:     Codex <codex@openai.com>
+CommitDate: Sun Nov 8 05:18:13 2026 -0700
+
+    Add translated-coordinate actuator and actual meal credit regressions

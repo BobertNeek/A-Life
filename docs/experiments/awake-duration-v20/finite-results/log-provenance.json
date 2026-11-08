@@ -1,0 +1,22 @@
+[
+  {
+    "file": "awake-duration-v20-first-world.log",
+    "original_sha256": "f6c0b790fb6d1fde8f3a4839673d36f521500170c44059fc0d741d1e087aa736",
+    "projection": false
+  },
+  {
+    "file": "awake-duration-v20-first-host.log",
+    "original_sha256": "fb9499b153aa4d411dd5fb19f233664ca32493f9cd76c9d29885a21ed6f97f40",
+    "projection": false
+  },
+  {
+    "file": "awake-duration-v20-diagnosed-world.log",
+    "original_sha256": "f6b160d5be8b58d75fe81234d42b11d2e1c4ab69ba3e13f5106eef5158d9e02a",
+    "projection": false
+  },
+  {
+    "file": "awake-duration-v20-corrected-controls.log",
+    "original_sha256": "6df8596e3aba647303eab14ee28270efae14bed8465d4511a68a1fe2e5fa414b",
+    "projection": false
+  }
+]

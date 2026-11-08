@@ -1,0 +1,89 @@
+diff --git a/crates/alife_training/tests/cpu_collector/shared_actuator.rs b/crates/alife_training/tests/cpu_collector/shared_actuator.rs
+index ce2cede8..e89ea3da 100644
+--- a/crates/alife_training/tests/cpu_collector/shared_actuator.rs
++++ b/crates/alife_training/tests/cpu_collector/shared_actuator.rs
+@@ -182,6 +182,16 @@ fn shared_actuator_repeated_contact_keeps_sequence_unissued_and_releases() {
+ 
+ #[test]
+ fn shared_actuator_exhausted_late_meal_retains_exact_ordinary_experience() {
++    shared_actuator_meal_at_origin(0.0);
++}
++
++#[test]
++fn shared_actuator_translated_meal_has_no_phantom_time_or_credit_loss() {
++    shared_actuator_meal_at_origin(3.0);
++    shared_actuator_meal_at_origin(1000.0);
++}
++
++fn shared_actuator_meal_at_origin(origin_x: f32) {
+     // New declared inherited readout factor after the unchanged founder selected Inspect.
+     // Same seed, normal native sampler, no forced measured action or neural state writes.
+     let (game, mut trainer, _) =
+@@ -204,9 +214,9 @@ fn shared_actuator_exhausted_late_meal_retains_exact_ordinary_experience() {
+                     world.editor_remove_object(object.id)?;
+                 }
+             }
+-            // Origin-centered geometry isolates exact exhausted-time plumbing.
+-            // Canonical X=3 separately exposed a quantized-position timing residue.
+-            world.editor_move_object(entity, Vec3f::ZERO)?;
++            // Same declared fixture at translated coordinates. Each case is
++            // paired against its own exact ordinary execution.
++            world.editor_move_object(entity, Vec3f::new(origin_x, 0.0, 0.0))?;
+             let mut position = world.entity(entity).unwrap().position;
+             position.x += 0.3;
+             let food = world.editor_spawn_object(WorldEditorSpawnSpec {
+diff --git a/crates/alife_world/src/headless.rs b/crates/alife_world/src/headless.rs
+index 592ca8ad..06a51d80 100644
+--- a/crates/alife_world/src/headless.rs
++++ b/crates/alife_world/src/headless.rs
+@@ -9081,6 +9081,50 @@ mod task_6_factorized_motor_tests {
+         }
+     }
+ 
++    #[test]
++    fn awake_duration_translated_full_steps_do_not_create_phantom_reflex_effort() {
++        for origin in [0.0, 3.0, 1000.0] {
++            for intensity in [0.5, 1.0] {
++                let (mut world, agent, food, mut bundle) = prepared_world();
++                for object in world.objects.values_mut() {
++                    object.position.x += origin;
++                }
++                hold_food_for_meal(&mut world, food);
++                world.objects.get_mut(&food.raw()).unwrap().hazard_pain = 0.4;
++                bundle
++                    .channels
++                    .retain(|c| c.channel != MotorChannel::Locomotion);
++                let mut movement = initial_priority_bundle(false).channels[0].clone();
++                movement.intensity = Intensity::new(intensity).unwrap();
++                bundle.channels.push(movement);
++                let mut ordinary = world.clone();
++                let expected = ordinary
++                    .apply_registered_motor_bundle(&bundle, agent)
++                    .unwrap();
++                let actual = world
++                    .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
++                    .unwrap();
++                assert_eq!(
++                    actual.voluntary_time_allocated, 1.0,
++                    "origin={origin}, intensity={intensity}"
++                );
++                assert_eq!(actual.reflex_time_allocated, 0.0);
++                assert!(actual.exhausted_late_no_effect);
++                let reflex = actual.withdrawal.as_ref().unwrap();
++                assert!(
++                    reflex.blocked
++                        && reflex.displacement == Vec3f::ZERO
++                        && reflex.energy_cost == 0.0
++                );
++                assert!(actual.voluntary == expected);
++                assert!(
++                    serde_json::to_vec(&world.save_state()).unwrap()
++                        == serde_json::to_vec(&ordinary.save_state()).unwrap()
++                );
++            }
++        }
++    }
++
+     #[test]
+     fn awake_ground_priority_quiet_slope_preserves_existing_planar_walking() {
+         let (mut candidate, agent) = withdrawal_world(Vec3f::new(8.0, 0.0, 0.0), 0.4);
