@@ -1,0 +1,58 @@
+   Compiling alife_core v0.1.0 (/workspace/scratch/ee5e08a3ca9b/fresh-founder-branch-v1/crates/alife_core)
+    Finished `test` profile [unoptimized] target(s) in 1m 25s
+     Running tests/legacy_selector_wire.rs (/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/legacy_selector_wire-24586a1f68c5da79)
+
+running 3 tests
+test all_existing_selectors_and_nested_records_preserve_literal_bytes ... ok
+test missing_and_tampered_literal_receipts_fail_closed ... ok
+test preserved_old_json_restores_when_capture_is_provided ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 11.16s
+
+     Running tests/n2048_bounded_founder.rs (/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/n2048_bounded_founder-170a13bcf9886370)
+
+running 3 tests
+test exact_asset_admission_rejects_cross_branch_abi ... ok
+test explicit_branch_abi_preserves_coordinates_and_separates_identity ... ok
+test selector_and_recipe_tamper_cannot_reinterpret_phenotype ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.03s
+
+     Running tests/n2048_experimental_graph.rs (/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/n2048_experimental_graph-849f123bdb914ff9)
+
+running 3 tests
+test changed_recipe_and_topology_are_rejected_at_deserialization ... ok
+test experimental_identity_roundtrips_but_never_admits_as_default_foundation ... ok
+test experimental_native_graph_covers_grounded_inputs_and_exact_budgets ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.30s
+
+     Running tests/n2048_foundation_abi.rs (/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/n2048_foundation_abi-fc158c4c0b23bdcc)
+
+running 15 tests
+test auxiliary_decoder_plan_cannot_rebind_its_authenticated_head_to_another_range ... ok
+test explicit_n2048_candidate_preserves_exact_weights_and_compiler_resume_identity ... ok
+test foundation_and_language_mismatch_reject_before_phenotype_construction ... ok
+test foundation_asset_rejects_every_bound_abi_mismatch ... ok
+test foundation_payload_codec_round_trips_and_rejects_corruption ... ok
+test language_codebook_is_bounded_compositional_and_address_independent ... ok
+test n2048_layout_routes_and_decoder_partitions_are_exact ... ok
+test one_n2048_foundation_asset_reuses_stable_addresses_across_distinct_genomes ... ok
+test persistent_addresses_are_unique_packing_independent_and_blake3_bound ... ok
+test phenotype_identity_binds_language_address_route_and_plasticity_digests ... ok
+test pre_v5_compiler_inputs_are_rejected_instead_of_silently_reinterpreted ... ok
+test production_n2048_birth_loads_immutable_foundation_asset_and_binds_payload_identity ... ok
+test production_n2048_birth_rejects_missing_or_mismatched_foundation_asset_before_gpu_upload ... ok
+test promoted_foundation_requires_and_preserves_explicit_evaluation_provenance ... ok
+test smaller_promoted_classes_retain_valid_compiled_phenotypes ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.14s
+
+     Running tests/n512_legacy_compatibility_abi.rs (/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/n512_legacy_compatibility_abi-27e96385dc1f8979)
+
+running 2 tests
+test immutable_nano512_enters_only_through_explicit_legacy_abi_without_reindexing ... ok
+test malformed_and_unknown_assets_fail_closed_without_canonical_retry ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+

@@ -1,0 +1,25 @@
+   Compiling syn v2.0.117
+   Compiling serde_core v1.0.228
+   Compiling cc v1.2.63
+   Compiling serde v1.0.228
+   Compiling blake3 v1.8.5
+   Compiling serde_derive v1.0.228
+   Compiling bytemuck_derive v1.10.2
+   Compiling thiserror-impl v2.0.18
+   Compiling virtue v0.0.18
+   Compiling serde_json v1.0.150
+   Compiling bincode_derive v2.0.1
+   Compiling thiserror v2.0.18
+   Compiling bytemuck v1.25.0
+   Compiling unty v0.0.4
+   Compiling smallvec v1.15.1
+   Compiling alife_core v0.1.0 (/workspace/scratch/ee5e08a3ca9b/bounded-founder-prechange-wire/crates/alife_core)
+   Compiling bincode v2.0.1
+    Finished `test` profile [unoptimized] target(s) in 2m 25s
+     Running tests/legacy_selector_wire.rs (/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/legacy_selector_wire-647db1ba7b3f8f5f)
+
+running 1 test
+test all_existing_selectors_and_nested_records_preserve_literal_bytes ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.07s
+

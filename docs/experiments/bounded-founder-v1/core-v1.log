@@ -1,0 +1,63 @@
+   Compiling alife_core v0.1.0 (/workspace/scratch/ee5e08a3ca9b/fresh-founder-branch-v1/crates/alife_core)
+error[E0599]: no associated function or constant named `compile_n2048_bounded_founder` found for struct `alife_core::PhenotypeCompiler` in the current scope
+  --> crates/alife_core/tests/n2048_bounded_founder.rs:10:28
+   |
+10 |         PhenotypeCompiler::compile_n2048_bounded_founder(g, d, SensorProfile::GroundedObjectSlotsV1)
+   |                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ associated function or constant not found in `alife_core::PhenotypeCompiler`
+
+error[E0599]: no method named `fresh_dendritic_parameters` found for reference `&alife_core::FoundationAbiSelection` in the current scope
+  --> crates/alife_core/tests/n2048_bounded_founder.rs:37:37
+   |
+37 |     assert_eq!(old.foundation_abi().fresh_dendritic_parameters(), (6., -1.));
+   |                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^ method not found in `&alife_core::FoundationAbiSelection`
+
+error[E0599]: no method named `fresh_dendritic_parameters` found for reference `&alife_core::FoundationAbiSelection` in the current scope
+  --> crates/alife_core/tests/n2048_bounded_founder.rs:39:30
+   |
+39 |         new.foundation_abi().fresh_dendritic_parameters(),
+   |                              ^^^^^^^^^^^^^^^^^^^^^^^^^^ method not found in `&alife_core::FoundationAbiSelection`
+
+error[E0599]: no method named `is_n2048_bounded_founder_v1` found for reference `&alife_core::FoundationAbiSelection` in the current scope
+  --> crates/alife_core/tests/n2048_bounded_founder.rs:51:33
+   |
+51 |     assert!(!p.foundation_abi().is_n2048_bounded_founder_v1());
+   |                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^ method not found in `&alife_core::FoundationAbiSelection`
+
+error[E0599]: no method named `fresh_dendritic_parameters` found for reference `&alife_core::FoundationAbiSelection` in the current scope
+  --> crates/alife_core/tests/n2048_bounded_founder.rs:52:35
+   |
+52 |     assert_eq!(p.foundation_abi().fresh_dendritic_parameters(), (6., -1.));
+   |                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^ method not found in `&alife_core::FoundationAbiSelection`
+
+error[E0599]: no associated function or constant named `compile_n2048_bounded_founder_candidate` found for struct `alife_core::PhenotypeCompiler` in the current scope
+  --> crates/alife_core/tests/n2048_bounded_founder.rs:62:28
+   |
+62 |         PhenotypeCompiler::compile_n2048_bounded_founder_candidate(g.clone(), d.clone(), old)
+   |                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ associated function or constant not found in `alife_core::PhenotypeCompiler`
+   |
+help: there is an associated function `compile_n2048_foundation_candidate` with a similar name
+   |
+62 -         PhenotypeCompiler::compile_n2048_bounded_founder_candidate(g.clone(), d.clone(), old)
+62 +         PhenotypeCompiler::compile_n2048_foundation_candidate(g.clone(), d.clone(), old)
+   |
+
+error[E0599]: no associated function or constant named `compile_n2048_bounded_founder_candidate` found for struct `alife_core::PhenotypeCompiler` in the current scope
+  --> crates/alife_core/tests/n2048_bounded_founder.rs:74:28
+   |
+74 |         PhenotypeCompiler::compile_n2048_bounded_founder_candidate(g, d, new.clone()).unwrap();
+   |                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ associated function or constant not found in `alife_core::PhenotypeCompiler`
+   |
+help: there is an associated function `compile_n2048_foundation_candidate` with a similar name
+   |
+74 -         PhenotypeCompiler::compile_n2048_bounded_founder_candidate(g, d, new.clone()).unwrap();
+74 +         PhenotypeCompiler::compile_n2048_foundation_candidate(g, d, new.clone()).unwrap();
+   |
+
+error[E0599]: no variant, associated function, or constant named `N2048BoundedFounderV1` found for enum `alife_core::FoundationAbiSelection` in the current scope
+   --> crates/alife_core/tests/n2048_bounded_founder.rs:112:33
+    |
+112 |         FoundationAbiSelection::N2048BoundedFounderV1(bad)
+    |                                 ^^^^^^^^^^^^^^^^^^^^^ variant, associated function, or constant not found in `alife_core::FoundationAbiSelection`
+
+For more information about this error, try `rustc --explain E0599`.
+error: could not compile `alife_core` (test "n2048_bounded_founder") due to 8 previous errors

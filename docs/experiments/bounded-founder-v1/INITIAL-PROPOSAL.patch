@@ -1,0 +1,541 @@
+diff --git a/crates/alife_core/src/legacy_nano512_compatibility.rs b/crates/alife_core/src/legacy_nano512_compatibility.rs
+index a5313738..f8cce5c8 100644
+--- a/crates/alife_core/src/legacy_nano512_compatibility.rs
++++ b/crates/alife_core/src/legacy_nano512_compatibility.rs
+@@ -75,6 +75,8 @@ impl ProductionRuntimePath {
+ #[serde(tag = "abi_selection", content = "contract")]
+ pub enum FoundationAbiSelection {
+     N2048ExperimentalGraphV1(crate::N2048ExperimentalGraphV1),
++    /// Explicit fresh-state branch ABI; never applied to restored acquired state.
++    N2048BoundedFounderV1(crate::N2048ExperimentalGraphV1),
+     CanonicalV2(FoundationAbiBinding),
+     LegacyNano512CompatibilityV1(LegacyNano512CompatibilityAbiDescriptor),
+     MigratedN2048FoundationV1(MigratedN2048FoundationV1Descriptor),
+@@ -83,9 +85,40 @@ pub enum FoundationAbiSelection {
+ }
+ 
+ impl FoundationAbiSelection {
++    pub const fn is_n2048_bounded_founder_v1(&self) -> bool {
++        matches!(self, Self::N2048BoundedFounderV1(_))
++    }
++    /// Fixed fresh-founder recipe only. Existing checkpoints retain their own branches.
++    pub const fn fresh_dendritic_parameters(&self) -> (f32, f32) {
++        if self.is_n2048_bounded_founder_v1() {
++            (0.25, 0.1)
++        } else {
++            (6.0, -1.0)
++        }
++    }
++    pub fn bounded_founder_plan_digest() -> [u64; 4] {
++        let mut d = CanonicalDigestBuilder::new(b"alife.n2048.bounded-founder-branches.v1");
++        // 64 first motor targets; self and next source, each weight 1.
++        for v in [
++            1_u32,
++            2048,
++            64,
++            0,
++            1,
++            1_f32.to_bits(),
++            0.25_f32.to_bits(),
++            0.1_f32.to_bits(),
++        ] {
++            d.write_u32(v);
++        }
++        d.finish256()
++    }
++
+     pub const fn n2048_experimental_graph(&self) -> Option<&crate::N2048ExperimentalGraphV1> {
+         match self {
+-            Self::N2048ExperimentalGraphV1(recipe) => Some(recipe),
++            Self::N2048ExperimentalGraphV1(recipe) | Self::N2048BoundedFounderV1(recipe) => {
++                Some(recipe)
++            }
+             _ => None,
+         }
+     }
+@@ -100,7 +133,7 @@ impl FoundationAbiSelection {
+     pub const fn canonical_v2(&self) -> Option<&FoundationAbiBinding> {
+         match self {
+             Self::CanonicalV2(binding) => Some(binding),
+-            Self::N2048ExperimentalGraphV1(_) => None,
++            Self::N2048ExperimentalGraphV1(_) | Self::N2048BoundedFounderV1(_) => None,
+             Self::LegacyNano512CompatibilityV1(_)
+             | Self::MigratedN2048FoundationV1(_)
+             | Self::Nano512ReadoutCandidateV1(_)
+@@ -113,7 +146,7 @@ impl FoundationAbiSelection {
+     ) -> Option<&LegacyNano512CompatibilityAbiDescriptor> {
+         match self {
+             Self::CanonicalV2(_) => None,
+-            Self::N2048ExperimentalGraphV1(_) => None,
++            Self::N2048ExperimentalGraphV1(_) | Self::N2048BoundedFounderV1(_) => None,
+             Self::LegacyNano512CompatibilityV1(descriptor) => Some(descriptor),
+             Self::MigratedN2048FoundationV1(_)
+             | Self::Nano512ReadoutCandidateV1(_)
+@@ -126,7 +159,7 @@ impl FoundationAbiSelection {
+     ) -> Option<&MigratedN2048FoundationV1Descriptor> {
+         match self {
+             Self::MigratedN2048FoundationV1(descriptor) => Some(descriptor),
+-            Self::N2048ExperimentalGraphV1(_) => None,
++            Self::N2048ExperimentalGraphV1(_) | Self::N2048BoundedFounderV1(_) => None,
+             Self::CanonicalV2(_)
+             | Self::LegacyNano512CompatibilityV1(_)
+             | Self::Nano512ReadoutCandidateV1(_)
+@@ -160,7 +193,7 @@ impl FoundationAbiSelection {
+                 Ok(())
+             }
+             Self::CanonicalV2(binding) => binding.validate_against(capacity),
+-            Self::N2048ExperimentalGraphV1(recipe) => {
++            Self::N2048ExperimentalGraphV1(recipe) | Self::N2048BoundedFounderV1(recipe) => {
+                 recipe.validate_against(capacity, sensor_profile)
+             }
+             Self::LegacyNano512CompatibilityV1(descriptor) => {
+@@ -190,7 +223,9 @@ impl FoundationAbiSelection {
+                 LanguageCodebookV1::canonical()
+             }
+             Self::CanonicalV2(binding) => binding.language_codebook().clone(),
+-            Self::N2048ExperimentalGraphV1(_) => LanguageCodebookV1::canonical(),
++            Self::N2048ExperimentalGraphV1(_) | Self::N2048BoundedFounderV1(_) => {
++                LanguageCodebookV1::canonical()
++            }
+             Self::LegacyNano512CompatibilityV1(_) => LanguageCodebookV1::canonical(),
+             Self::MigratedN2048FoundationV1(_) => LanguageCodebookV1::canonical(),
+         }
+@@ -202,7 +237,9 @@ impl FoundationAbiSelection {
+                 BrainCapacityClass::N512_ID
+             }
+             Self::CanonicalV2(binding) => binding.capacity_class_id(),
+-            Self::N2048ExperimentalGraphV1(_) => BrainCapacityClass::N2048_ID,
++            Self::N2048ExperimentalGraphV1(_) | Self::N2048BoundedFounderV1(_) => {
++                BrainCapacityClass::N2048_ID
++            }
+             Self::LegacyNano512CompatibilityV1(_) => BrainCapacityClass::N512_ID,
+             Self::MigratedN2048FoundationV1(_) => BrainCapacityClass::N2048_ID,
+         }
+@@ -214,7 +251,9 @@ impl FoundationAbiSelection {
+                 Some(FoundationId::N512_READOUT_CANDIDATE_V1)
+             }
+             Self::CanonicalV2(binding) => binding.foundation_id(),
+-            Self::N2048ExperimentalGraphV1(_) => Some(FoundationId::N2048_EXPERIMENTAL_GRAPH_V1),
++            Self::N2048ExperimentalGraphV1(_) | Self::N2048BoundedFounderV1(_) => {
++                Some(FoundationId::N2048_EXPERIMENTAL_GRAPH_V1)
++            }
+             Self::LegacyNano512CompatibilityV1(descriptor) => Some(descriptor.source_foundation_id),
+             Self::MigratedN2048FoundationV1(descriptor) => Some(descriptor.source_foundation_id),
+         }
+@@ -226,7 +265,9 @@ impl FoundationAbiSelection {
+                 Some(FoundationVersion::V1)
+             }
+             Self::CanonicalV2(binding) => binding.foundation_version(),
+-            Self::N2048ExperimentalGraphV1(_) => Some(FoundationVersion::V1),
++            Self::N2048ExperimentalGraphV1(_) | Self::N2048BoundedFounderV1(_) => {
++                Some(FoundationVersion::V1)
++            }
+             Self::LegacyNano512CompatibilityV1(descriptor) => {
+                 Some(descriptor.source_foundation_version)
+             }
+@@ -242,7 +283,7 @@ impl FoundationAbiSelection {
+                 Some(FoundationCompatibilityFamilyId::N512_FOUNDATION)
+             }
+             Self::CanonicalV2(binding) => binding.compatibility_family_id(),
+-            Self::N2048ExperimentalGraphV1(_) => {
++            Self::N2048ExperimentalGraphV1(_) | Self::N2048BoundedFounderV1(_) => {
+                 Some(FoundationCompatibilityFamilyId::N2048_EXPERIMENTAL_GRAPH)
+             }
+             Self::LegacyNano512CompatibilityV1(descriptor) => {
+@@ -259,7 +300,9 @@ impl FoundationAbiSelection {
+             Self::Nano512ActionCreditCandidateV2(candidate) => Some(candidate.source().asset_ref()),
+             Self::Nano512ReadoutCandidateV1(candidate) => Some(candidate.asset_ref()),
+             Self::CanonicalV2(binding) => binding.foundation_weight_asset(),
+-            Self::N2048ExperimentalGraphV1(recipe) => recipe.asset_ref(),
++            Self::N2048ExperimentalGraphV1(recipe) | Self::N2048BoundedFounderV1(recipe) => {
++                recipe.asset_ref()
++            }
+             Self::LegacyNano512CompatibilityV1(descriptor) => Some(descriptor.source_weight_asset),
+             Self::MigratedN2048FoundationV1(descriptor) => Some(descriptor.source_weight_asset),
+         }
+@@ -277,6 +320,13 @@ impl FoundationAbiSelection {
+ 
+     pub(crate) fn write_canonical(&self, digest: &mut CanonicalDigestBuilder) {
+         match self {
++            Self::N2048BoundedFounderV1(recipe) => {
++                digest.write_u8(7);
++                recipe.write_canonical(digest);
++                for word in Self::bounded_founder_plan_digest() {
++                    digest.write_u64(word);
++                }
++            }
+             Self::N2048ExperimentalGraphV1(recipe) => {
+                 digest.write_u8(6);
+                 recipe.write_canonical(digest);
+diff --git a/crates/alife_core/src/phenotype/abi_validation.rs b/crates/alife_core/src/phenotype/abi_validation.rs
+index b54baab2..1f32fba6 100644
+--- a/crates/alife_core/src/phenotype/abi_validation.rs
++++ b/crates/alife_core/src/phenotype/abi_validation.rs
+@@ -185,6 +185,11 @@ pub(super) fn compute_abi_digests(
+             plasticity.write_u32(s.alpha().to_bits());
+             plasticity.write_u16(s.receptor_index());
+         }
++        if selection.is_n2048_bounded_founder_v1() {
++            for word in crate::FoundationAbiSelection::bounded_founder_plan_digest() {
++                plasticity.write_u64(word);
++            }
++        }
+         return (
+             Blake3Digest::from_hasher(route),
+             Blake3Digest::from_hasher(plasticity),
+diff --git a/crates/alife_core/src/phenotype/compiler.rs b/crates/alife_core/src/phenotype/compiler.rs
+index becc2dbc..114ae50b 100644
+--- a/crates/alife_core/src/phenotype/compiler.rs
++++ b/crates/alife_core/src/phenotype/compiler.rs
+@@ -50,6 +50,43 @@ impl PhenotypeCompiler {
+         Ok((Self::compile_validated(&inputs, &capacity)?, inputs))
+     }
+ 
++    /// Opt-in fresh-founder branch ABI on the experimental N2048 graph.
++    /// Does not migrate or reset acquired state; no default caller selects this.
++    pub fn compile_n2048_bounded_founder(
++        genome: BrainGenome,
++        development: DevelopmentState,
++        sensor_profile: SensorProfile,
++    ) -> Result<(BrainPhenotype, PhenotypeCompilerInputs), ScaffoldContractError> {
++        let capacity = BrainCapacityClass::n2048();
++        let inputs = PhenotypeCompilerInputs::try_new_with_foundation_selection(
++            genome,
++            &capacity,
++            development,
++            sensor_profile,
++            crate::FoundationAbiSelection::N2048BoundedFounderV1(
++                crate::N2048ExperimentalGraphV1::fresh(sensor_profile)?,
++            ),
++        )?;
++        Ok((Self::compile_validated(&inputs, &capacity)?, inputs))
++    }
++    pub fn compile_n2048_bounded_founder_candidate(
++        genome: BrainGenome,
++        development: DevelopmentState,
++        asset: FoundationWeightAsset,
++    ) -> Result<(BrainPhenotype, PhenotypeCompilerInputs), ScaffoldContractError> {
++        let capacity = BrainCapacityClass::n2048();
++        let inputs = PhenotypeCompilerInputs::try_new_with_foundation_selection(
++            genome,
++            &capacity,
++            development,
++            asset.manifest().sensor_profile(),
++            crate::FoundationAbiSelection::N2048BoundedFounderV1(
++                crate::N2048ExperimentalGraphV1::for_asset(&asset)?,
++            ),
++        )?;
++        Ok((Self::compile_validated(&inputs, &capacity)?, inputs))
++    }
++
+     /// Exact, explicit training candidate admission. Builtin compilation and its
+     /// inherited coordinate variation retain their existing behavior.
+     pub fn compile_n2048_foundation_candidate(
+diff --git a/crates/alife_core/tests/n2048_bounded_founder.rs b/crates/alife_core/tests/n2048_bounded_founder.rs
+new file mode 100644
+index 00000000..7d5386e8
+--- /dev/null
++++ b/crates/alife_core/tests/n2048_bounded_founder.rs
+@@ -0,0 +1,115 @@
++use alife_core::*;
++fn inputs() -> (BrainGenome, DevelopmentState) {
++    let g = BrainGenome::scaffold(0x2048_2026, BrainCapacityClass::N2048_ID);
++    let d = DevelopmentState::new(g.id, Tick::ZERO, NormalizedScalar::new(1.).unwrap());
++    (g, d)
++}
++fn compile(bounded: bool) -> (BrainPhenotype, PhenotypeCompilerInputs) {
++    let (g, d) = inputs();
++    if bounded {
++        PhenotypeCompiler::compile_n2048_bounded_founder(g, d, SensorProfile::GroundedObjectSlotsV1)
++            .unwrap()
++    } else {
++        PhenotypeCompiler::compile_n2048_experimental_graph(
++            g,
++            d,
++            SensorProfile::GroundedObjectSlotsV1,
++        )
++        .unwrap()
++    }
++}
++#[test]
++fn explicit_branch_abi_preserves_coordinates_and_separates_identity() {
++    let (old, _) = compile(false);
++    let before = serde_json::to_vec(&old).unwrap();
++    let (new, _) = compile(true);
++    assert_eq!(old.synapses(), new.synapses());
++    assert_eq!(old.neuron_dynamics(), new.neuron_dynamics());
++    assert_eq!(old.sensor_encoder(), new.sensor_encoder());
++    assert_eq!(old.candidate_decoder(), new.candidate_decoder());
++    assert_eq!(old.route_abi_digest(), new.route_abi_digest());
++    assert_ne!(old.plasticity_abi_digest(), new.plasticity_abi_digest());
++    assert_ne!(old.phenotype_hash(), new.phenotype_hash());
++    assert_ne!(
++        old.foundation_abi().selector_digest(),
++        new.foundation_abi().selector_digest()
++    );
++    assert_eq!(old.foundation_abi().fresh_dendritic_parameters(), (6., -1.));
++    assert_eq!(
++        new.foundation_abi().fresh_dendritic_parameters(),
++        (0.25, 0.1)
++    );
++    assert_eq!(before, serde_json::to_vec(&compile(false).0).unwrap());
++    let (g, d) = inputs();
++    let p = PhenotypeCompiler::compile(
++        &g,
++        &BrainCapacityClass::n2048(),
++        &d,
++        SensorProfile::GroundedObjectSlotsV1,
++    )
++    .unwrap();
++    assert!(!p.foundation_abi().is_n2048_bounded_founder_v1());
++    assert_eq!(p.foundation_abi().fresh_dendritic_parameters(), (6., -1.));
++}
++#[test]
++fn exact_asset_admission_rejects_cross_branch_abi() {
++    let old = FoundationWeightAsset::from_phenotype_for_genetic_birth(&compile(false).0).unwrap();
++    let new = FoundationWeightAsset::from_phenotype_for_genetic_birth(&compile(true).0).unwrap();
++    assert_ne!(old.digest(), new.digest());
++    assert_eq!(old.weights(), new.weights());
++    let (g, d) = inputs();
++    assert!(
++        PhenotypeCompiler::compile_n2048_bounded_founder_candidate(g.clone(), d.clone(), old)
++            .is_err()
++    );
++    assert!(
++        PhenotypeCompiler::compile_n2048_experimental_foundation_candidate(
++            g.clone(),
++            d.clone(),
++            new.clone()
++        )
++        .is_err()
++    );
++    let (p, i) =
++        PhenotypeCompiler::compile_n2048_bounded_founder_candidate(g, d, new.clone()).unwrap();
++    new.validate_against(&p).unwrap();
++    let round: PhenotypeCompilerInputs =
++        serde_json::from_slice(&serde_json::to_vec(&i).unwrap()).unwrap();
++    assert_eq!(
++        p,
++        PhenotypeCompiler::compile_validated(&round, &BrainCapacityClass::n2048()).unwrap()
++    );
++    assert_eq!(
++        new,
++        FoundationWeightAsset::decode_canonical(&new.encode_canonical().unwrap()).unwrap()
++    );
++}
++#[test]
++fn selector_and_recipe_tamper_cannot_reinterpret_phenotype() {
++    let (p, _) = compile(true);
++    let bytes = serde_json::to_string(&p).unwrap();
++    let substituted = bytes.replace("N2048BoundedFounderV1", "N2048ExperimentalGraphV1");
++    let altered = serde_json::from_str::<BrainPhenotype>(&substituted);
++    assert!(
++        altered.is_err()
++            || altered
++                .unwrap()
++                .validate_against(&BrainCapacityClass::n2048())
++                .is_err()
++    );
++    let mut recipe = serde_json::to_value(
++        N2048ExperimentalGraphV1::fresh(SensorProfile::GroundedObjectSlotsV1).unwrap(),
++    )
++    .unwrap();
++    recipe["recipe_digest"][0] = serde_json::json!(0);
++    let bad: N2048ExperimentalGraphV1 = serde_json::from_value(recipe).unwrap();
++    let (g, d) = inputs();
++    assert!(PhenotypeCompilerInputs::try_new_with_foundation_selection(
++        g,
++        &BrainCapacityClass::n2048(),
++        d,
++        SensorProfile::GroundedObjectSlotsV1,
++        FoundationAbiSelection::N2048BoundedFounderV1(bad)
++    )
++    .is_err());
++}
+diff --git a/crates/alife_gpu_backend/src/closed_loop_v11.rs b/crates/alife_gpu_backend/src/closed_loop_v11.rs
+index e76ecfca..b762165a 100644
+--- a/crates/alife_gpu_backend/src/closed_loop_v11.rs
++++ b/crates/alife_gpu_backend/src/closed_loop_v11.rs
+@@ -223,6 +223,10 @@ impl GpuV11CausalState {
+         .max(1)
+         .min(usize::from(motor_width))
+         .min(64);
++        let (output_gain, threshold) = phenotype.foundation_abi().fresh_dendritic_parameters();
++        if phenotype.foundation_abi().is_n2048_bounded_founder_v1() && branch_count != 64 {
++            return Err(ScaffoldContractError::GpuLayoutMismatch);
++        }
+         let mut branches = Vec::with_capacity(branch_count);
+         for index in 0..branch_count {
+             let target = motor_start + index as u32;
+@@ -236,8 +240,8 @@ impl GpuV11CausalState {
+             };
+             branches.push(DendriticBranch::new(
+                 target,
+-                -1.0,
+-                6.0,
++                threshold,
++                output_gain,
+                 vec![
+                     DendriticInputRef::new(target, 1.0)?,
+                     DendriticInputRef::new(second_source, 1.0)?,
+diff --git a/crates/alife_training/Cargo.toml b/crates/alife_training/Cargo.toml
+index d1604c4d..105e0017 100644
+--- a/crates/alife_training/Cargo.toml
++++ b/crates/alife_training/Cargo.toml
+@@ -64,3 +64,7 @@ required-features = ["cpu-backend"]
+ [[example]]
+ name = "probe_fresh_branch_state"
+ required-features = ["cpu-backend"]
++
++[[example]]
++name = "probe_bounded_founder_admission"
++required-features = ["cpu-backend"]
+diff --git a/crates/alife_training/examples/probe_bounded_founder_admission.rs b/crates/alife_training/examples/probe_bounded_founder_admission.rs
+new file mode 100644
+index 00000000..afbff48c
+--- /dev/null
++++ b/crates/alife_training/examples/probe_bounded_founder_admission.rs
+@@ -0,0 +1,143 @@
++//! Disposable admission/continuation tests, no world or training lives.
++#[allow(dead_code)]
++#[path = "support/motor_balance_assay.rs"]
++mod assay;
++use alife_core::*;
++use alife_gpu_backend::{GpuClassBucketPlan, GpuPhenotypeUpload, GpuV11CausalState};
++use alife_training::{cpu::*, AdamWConfig, StageTrainableMask};
++fn compiled(bounded: bool) -> (BrainPhenotype, FoundationWeightAsset) {
++    let g = BrainGenome::scaffold(0x2048_2026, BrainCapacityClass::N2048_ID);
++    let d = DevelopmentState::new(g.id, Tick::ZERO, NormalizedScalar::new(1.).unwrap());
++    let p = if bounded {
++        PhenotypeCompiler::compile_n2048_bounded_founder(
++            g.clone(),
++            d.clone(),
++            SensorProfile::GroundedObjectSlotsV1,
++        )
++    } else {
++        PhenotypeCompiler::compile_n2048_experimental_graph(
++            g.clone(),
++            d.clone(),
++            SensorProfile::GroundedObjectSlotsV1,
++        )
++    }
++    .unwrap()
++    .0;
++    let a = FoundationWeightAsset::from_phenotype_for_genetic_birth(&p).unwrap();
++    let p = if bounded {
++        PhenotypeCompiler::compile_n2048_bounded_founder_candidate(g, d, a.clone())
++    } else {
++        PhenotypeCompiler::compile_n2048_experimental_foundation_candidate(g, d, a.clone())
++    }
++    .unwrap()
++    .0;
++    (p, a)
++}
++fn main() {
++    println!("Run focused tests; this binary does not launch a world.");
++}
++#[cfg(test)]
++mod tests {
++    use super::*;
++    #[test]
++    fn fresh_branches_and_direct_gpu_upload_are_identity_bound() {
++        let (old, _) = compiled(false);
++        let (new, _) = compiled(true);
++        let a = GpuV11CausalState::for_phenotype(&old).unwrap();
++        let b = GpuV11CausalState::for_phenotype(&new).unwrap();
++        assert_eq!(a.dendritic_branches().branches().len(), 64);
++        for (x, y) in a
++            .dendritic_branches()
++            .branches()
++            .iter()
++            .zip(b.dendritic_branches().branches())
++        {
++            assert_eq!(x.target, y.target);
++            assert_eq!(x.inputs, y.inputs);
++            assert_eq!((x.output_gain, x.threshold), (6., -1.));
++            assert_eq!((y.output_gain, y.threshold), (0.25, 0.1));
++        }
++        let old_upload = GpuPhenotypeUpload::try_from(&old).unwrap();
++        let new_upload = GpuPhenotypeUpload::try_from(&new).unwrap();
++        old_upload.validate_against(&old).unwrap();
++        new_upload.validate_against(&new).unwrap();
++        assert!(old_upload.validate_against(&new).is_err());
++        assert!(new_upload.validate_against(&old).is_err());
++        // Planning is CPU-side validation, not a GPU dispatch or parity claim.
++        GpuClassBucketPlan::for_phenotype(&old).unwrap();
++        GpuClassBucketPlan::for_phenotype(&new).unwrap();
++    }
++    #[test]
++    fn acquired_branch_checkpoint_survives_and_continues_without_fresh_reset() {
++        let (p, asset) = compiled(true);
++        let (old, _) = compiled(false);
++        let mut causal = GpuV11CausalState::for_phenotype(&p).unwrap();
++        let mut branches = causal.dendritic_branches().branches().to_vec();
++        branches[0] = DendriticBranch::new(
++            branches[0].target,
++            0.31,
++            0.73,
++            vec![DendriticInputRef::new(256, 0.42).unwrap()],
++        )
++        .unwrap();
++        causal
++            .set_dendritic_branches(DendriticBranchSet::new(branches).unwrap())
++            .unwrap();
++        let cp = causal.checkpoint();
++        let restored = GpuV11CausalState::restore(
++            serde_json::from_slice(&serde_json::to_vec(&cp).unwrap()).unwrap(),
++        )
++        .unwrap();
++        assert_eq!(cp, restored.checkpoint());
++        let base = [0.1, 0.1, 0., 0., 0.1, 0.45, 0.75, 0., 0.1, 0.1, 0.];
++        let mut q = assay::sequence(
++            &p,
++            base,
++            base,
++            "nutritious_contact",
++            restored.dendritic_branches(),
++            false,
++        );
++        q.ticks.truncate(8);
++        q.burn_in_ticks = 0;
++        let mask = StageTrainableMask::from_synapse_indices(
++            &p,
++            &(0..p.synapses().len() as u32).collect::<Vec<_>>(),
++        )
++        .unwrap();
++        let trainer =
++            CpuFoundationTrainer::new(p.clone(), asset, mask, AdamWConfig::default()).unwrap();
++        let full = trainer.evaluate_replay(&q).unwrap();
++        let mut prefix = q.clone();
++        prefix.ticks.truncate(4);
++        let first = trainer.evaluate_replay(&prefix).unwrap();
++        let mut initial = q.initial.clone();
++        initial.activations = first.final_activations[3].clone();
++        initial.activity_ema = first.final_activity_ema[3].clone();
++        initial.metabolic_load = first.final_metabolic_load[3].clone();
++        let state = CpuOrganismState::new(&p, OrganismId::new(1).unwrap(), initial).unwrap();
++        let checkpoint = state.checkpoint().unwrap();
++        let restored = CpuOrganismState::from_checkpoint(
++            &p,
++            serde_json::from_slice(&serde_json::to_vec(&checkpoint).unwrap()).unwrap(),
++        )
++        .unwrap();
++        assert_eq!(checkpoint, restored.checkpoint().unwrap());
++        assert!(CpuOrganismState::from_checkpoint(&old, checkpoint).is_err());
++        let mut suffix = q.clone();
++        suffix.initial = restored.neural_state().clone();
++        suffix.ticks = q.ticks[4..].to_vec();
++        let last = trainer.evaluate_replay(&suffix).unwrap();
++        assert_eq!(full.final_activations[4..], last.final_activations);
++        assert_eq!(full.final_activity_ema[4..], last.final_activity_ema);
++        assert_eq!(full.final_metabolic_load[4..], last.final_metabolic_load);
++        assert_eq!(full.candidate_logits[4..], last.candidate_logits);
++        assert_ne!(
++            restored.neural_state().dendrites,
++            GpuV11CausalState::for_phenotype(&p)
++                .unwrap()
++                .dendritic_branches()
++                .clone()
++        );
++    }
++}

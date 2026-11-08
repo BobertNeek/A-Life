@@ -50,6 +50,43 @@ impl PhenotypeCompiler {
         Ok((Self::compile_validated(&inputs, &capacity)?, inputs))
     }
 
+    /// Opt-in fresh-founder branch ABI on the experimental N2048 graph.
+    /// Does not migrate or reset acquired state; no default caller selects this.
+    pub fn compile_n2048_bounded_founder(
+        genome: BrainGenome,
+        development: DevelopmentState,
+        sensor_profile: SensorProfile,
+    ) -> Result<(BrainPhenotype, PhenotypeCompilerInputs), ScaffoldContractError> {
+        let capacity = BrainCapacityClass::n2048();
+        let inputs = PhenotypeCompilerInputs::try_new_with_foundation_selection(
+            genome,
+            &capacity,
+            development,
+            sensor_profile,
+            crate::FoundationAbiSelection::N2048BoundedFounderV1(
+                crate::N2048ExperimentalGraphV1::fresh(sensor_profile)?,
+            ),
+        )?;
+        Ok((Self::compile_validated(&inputs, &capacity)?, inputs))
+    }
+    pub fn compile_n2048_bounded_founder_candidate(
+        genome: BrainGenome,
+        development: DevelopmentState,
+        asset: FoundationWeightAsset,
+    ) -> Result<(BrainPhenotype, PhenotypeCompilerInputs), ScaffoldContractError> {
+        let capacity = BrainCapacityClass::n2048();
+        let inputs = PhenotypeCompilerInputs::try_new_with_foundation_selection(
+            genome,
+            &capacity,
+            development,
+            asset.manifest().sensor_profile(),
+            crate::FoundationAbiSelection::N2048BoundedFounderV1(
+                crate::N2048ExperimentalGraphV1::for_asset(&asset)?,
+            ),
+        )?;
+        Ok((Self::compile_validated(&inputs, &capacity)?, inputs))
+    }
+
     /// Exact, explicit training candidate admission. Builtin compilation and its
     /// inherited coordinate variation retain their existing behavior.
     pub fn compile_n2048_foundation_candidate(

@@ -1,0 +1,20 @@
+   Compiling alife_core v0.1.0 (/workspace/scratch/ee5e08a3ca9b/fresh-founder-branch-v1/crates/alife_core)
+    Finished `test` profile [unoptimized] target(s) in 2m 34s
+     Running tests/legacy_selector_wire.rs (/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/legacy_selector_wire-24586a1f68c5da79)
+
+running 3 tests
+test all_existing_selectors_and_nested_records_preserve_literal_bytes ... ok
+test missing_and_tampered_literal_receipts_fail_closed ... ok
+test preserved_old_json_restores_when_capture_is_provided ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 11.35s
+
+     Running tests/n2048_bounded_founder.rs (/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/n2048_bounded_founder-170a13bcf9886370)
+
+running 3 tests
+test exact_asset_admission_rejects_cross_branch_abi ... ok
+test explicit_branch_abi_preserves_coordinates_and_separates_identity ... ok
+test selector_and_recipe_tamper_cannot_reinterpret_phenotype ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.07s
+

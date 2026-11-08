@@ -1,0 +1,18 @@
+   Compiling alife_training v0.1.0 (/workspace/scratch/ee5e08a3ca9b/fresh-founder-branch-v1/crates/alife_training)
+warning: unused import: `alife_core::*`
+ --> crates/alife_training/src/cpu/host/bounded_founder_tests.rs:3:5
+  |
+3 | use alife_core::*;
+  |     ^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: `alife_training` (lib test) generated 1 warning (run `cargo fix --lib -p alife_training --tests` to apply 1 suggestion)
+    Finished `test` profile [unoptimized] target(s) in 2m 43s
+     Running unittests src/lib.rs (/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/alife_training-4a8651734d104723)
+
+running 1 test
+test cpu::host::bounded_founder_tests::bounded_host_admits_restores_acquired_fixture_and_continues_exactly ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 126 filtered out; finished in 4.02s
+

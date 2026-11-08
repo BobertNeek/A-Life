@@ -1,0 +1,115 @@
+//! Literal pre-change JSON and bincode-encode fixtures, generated only from the
+//! frozen parent revision. JSON restore is supported; adjacent-tag bincode
+//! decoding is probed honestly rather than assumed to be supported.
+use alife_core::*;
+use serde::Serialize;
+use std::path::PathBuf;
+fn pair(id: BrainClassId) -> (BrainGenome, DevelopmentState) {
+    let g = BrainGenome::scaffold(0x2048_2026, id);
+    let d = DevelopmentState::new(g.id, Tick::ZERO, NormalizedScalar::new(1.).unwrap());
+    (g, d)
+}
+fn cases() -> Vec<(
+    &'static str,
+    BrainPhenotype,
+    Option<PhenotypeCompilerInputs>,
+)> {
+    let profile = SensorProfile::GroundedObjectSlotsV1;
+    let mut cases = vec![];
+    let (g, d) = pair(BrainCapacityClass::N2048_ID);
+    let (p, i) =
+        PhenotypeCompiler::compile_n2048_experimental_graph(g.clone(), d.clone(), profile).unwrap();
+    cases.push(("experimental", p, Some(i)));
+    let i = PhenotypeCompilerInputs::try_new(
+        g.clone(),
+        &BrainCapacityClass::n2048(),
+        d.clone(),
+        profile,
+    )
+    .unwrap();
+    let p = PhenotypeCompiler::compile_validated(&i, &BrainCapacityClass::n2048()).unwrap();
+    cases.push(("canonical", p, Some(i)));
+    let asset = FoundationWeightAsset::builtin_n2048_v1(profile).unwrap();
+    let p = PhenotypeCompiler::compile_from_foundation_asset(
+        &g,
+        &BrainCapacityClass::n2048(),
+        &d,
+        profile,
+        &asset,
+    )
+    .unwrap();
+    cases.push(("migrated", p, None));
+    let asset = FoundationWeightAsset::builtin_nano512_v1(profile).unwrap();
+    let (p, i, _) =
+        PhenotypeCompiler::compile_fixed_legacy_nano512_compatibility_asset(profile, &asset)
+            .unwrap()
+            .into_runtime_parts();
+    cases.push(("legacy", p.clone(), Some(i)));
+    let asset = FoundationWeightAsset::from_nano512_readout_candidate(
+        &p,
+        asset.weights().to_vec(),
+        TrainingStageManifest::new(1, 1, 1),
+    )
+    .unwrap();
+    let (p, i) = PhenotypeCompiler::compile_nano512_readout_candidate(&asset).unwrap();
+    cases.push(("readout", p, Some(i)));
+    let c = Nano512ActionCreditCandidateV2::new(
+        &asset,
+        ActionCandidateCreditProfileV1::SignedConsequences,
+    )
+    .unwrap();
+    let (p, i) = PhenotypeCompiler::compile_nano512_action_credit_candidate(&c).unwrap();
+    cases.push(("credit", p, Some(i)));
+    cases
+}
+fn literal<T: Serialize>(name: &str, value: &T) {
+    let root = std::env::var_os("ALIFE_LEGACY_WIRE_CAPTURE_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/legacy_selector_wire")
+        });
+    for (ext, bytes) in [
+        ("json", serde_json::to_vec(value).unwrap()),
+        (
+            "bin",
+            bincode::serde::encode_to_vec(value, bincode::config::standard()).unwrap(),
+        ),
+    ] {
+        let path = root.join(format!("{name}.{ext}"));
+        if std::env::var_os("ALIFE_LEGACY_WIRE_CAPTURE_DIR").is_some() {
+            std::fs::create_dir_all(&root).unwrap();
+            std::fs::write(path, bytes).unwrap();
+        } else {
+            assert_eq!(
+                std::fs::read(&path).expect("literal pre-change fixture missing"),
+                bytes,
+                "{}",
+                path.display()
+            );
+        }
+    }
+}
+#[test]
+fn all_existing_selectors_and_nested_records_preserve_literal_bytes() {
+    for (name, p, i) in cases() {
+        literal(&format!("{name}_selector"), p.foundation_abi());
+        literal(&format!("{name}_phenotype"), &p);
+        let restored: BrainPhenotype =
+            serde_json::from_slice(&serde_json::to_vec(&p).unwrap()).unwrap();
+        assert_eq!(restored, p);
+        let selector: FoundationAbiSelection =
+            serde_json::from_slice(&serde_json::to_vec(p.foundation_abi()).unwrap()).unwrap();
+        assert_eq!(&selector, p.foundation_abi());
+        if let Some(i) = i {
+            literal(&format!("{name}_inputs"), &i);
+            let round: PhenotypeCompilerInputs =
+                serde_json::from_slice(&serde_json::to_vec(&i).unwrap()).unwrap();
+            assert_eq!(round, i);
+            let capacity = BrainCapacityClass::supported_for_id(p.brain_class_id()).unwrap();
+            assert_eq!(
+                PhenotypeCompiler::compile_validated(&round, &capacity).unwrap(),
+                p
+            );
+        }
+    }
+}

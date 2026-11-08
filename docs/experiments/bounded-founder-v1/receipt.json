@@ -1,0 +1,143 @@
+{
+  "schema": "bounded_founder_qualification_v1",
+  "final_source_commit": "a2424a76649dd43408517e10e3bd08214a92eba2",
+  "successful_host_test_source": "2a529118",
+  "final_source_delta": "Remove redundant test-only import only; production code unchanged.",
+  "old_capture_library_commit": "7599f5f4ea0fb19a6d92cfdbaefc810d50d66988",
+  "capture_helper_sha256": "b991df7a816943439e4b772dcb20412b2c8f54233e20ba850b1859919e06004d",
+  "old_capture_test_executable_sha256": "a5ba4c2f99951790c7e9918e2cb91d2d5dc5e3fccc717045af60f61104a37649",
+  "manual_selector_tag": 9,
+  "selected_core_tests_passed": 26,
+  "host_fixture_tests_passed": 1,
+  "cpu_continuation_gpu_plan_tests_passed": 2,
+  "gpu_device_dispatches": 0,
+  "optimizer_history_scope": "Byte-preserved constructor zero moments/ages in measured host fixture.",
+  "source_files": {
+    "Cargo.lock": {
+      "sha256": "2b637c0f2b2cd34fb9fe2f9a5f9a3a7b490f0b7f8d5f1f7c8764f29077d0ebdd",
+      "bytes": 161097
+    },
+    "crates/alife_core/Cargo.toml": {
+      "sha256": "7154bcddf73e212d74feb487a64323475f502d0885665ed1a4e112b9542c2945",
+      "bytes": 391
+    },
+    "crates/alife_core/src/legacy_nano512_compatibility.rs": {
+      "sha256": "8ec7a8f89b01f26fd9c4cb1cfd07d6e322ea16bf27b8dd384e5d80f7f3528051",
+      "bytes": 46959
+    },
+    "crates/alife_core/src/phenotype/abi_validation.rs": {
+      "sha256": "072a868427f443961373f26a262373a4e3cf33df991480b47fcb8668de3432ef",
+      "bytes": 11555
+    },
+    "crates/alife_core/src/phenotype/compiler.rs": {
+      "sha256": "5b044a14c13c65ccc226f004e288da03ba4ac42d0de94e31b337860257dd8432",
+      "bytes": 16537
+    },
+    "crates/alife_core/src/phenotype/record.rs": {
+      "sha256": "1254976cc97fede6105df625709f3407d976439049bab6f945190f1f7d7bf974",
+      "bytes": 53743
+    },
+    "crates/alife_core/tests/legacy_selector_wire.rs": {
+      "sha256": "8144fb6ab0e16013c283c608f4d9d1c41303580191156dd65cd9debe01889114",
+      "bytes": 5840
+    },
+    "crates/alife_core/tests/n2048_bounded_founder.rs": {
+      "sha256": "fd966774e024fbceb136830dcdb1b53bbfdf2146328eb50e1a26776246e822c8",
+      "bytes": 4327
+    },
+    "crates/alife_gpu_backend/src/closed_loop_v11.rs": {
+      "sha256": "4b013fdceb3aaa00fd2b05bf68f254d0a375fcfc50949c9fed0dbbe2cbbaf2a6",
+      "bytes": 26820
+    },
+    "crates/alife_training/Cargo.toml": {
+      "sha256": "21e22989752ff780b59c4d328eab98222dfdcd782f6e652a568c253933b51360",
+      "bytes": 1921
+    },
+    "crates/alife_training/examples/probe_bounded_founder_admission.rs": {
+      "sha256": "0cb9aaf5312e0876eb9d9b42d24035cbdcc26714dadcbd94d12f19f945e73af3",
+      "bytes": 5948
+    },
+    "crates/alife_training/src/cpu/host.rs": {
+      "sha256": "d40e91089d22f8f8c0ea4dbfb465e7309170415ae02ebfb857b7f319d04a60fc",
+      "bytes": 62111
+    },
+    "crates/alife_training/src/cpu/host/bounded_founder_tests.rs": {
+      "sha256": "3adba4a2e6fe329d2918a3d185e8a4489e0e312fe59c1ae9cac0b2f38703cfc3",
+      "bytes": 4274
+    }
+  },
+  "artifacts": {
+    "wire-compact-v1.log": {
+      "sha256": "fc55da89c6b4387142e641e5989a79df1a7558e5627020f805ccdc83e08687de",
+      "bytes": 526
+    },
+    "legacy-wire-capture-test.rs.txt": {
+      "sha256": "b991df7a816943439e4b772dcb20412b2c8f54233e20ba850b1859919e06004d",
+      "bytes": 4427
+    },
+    "README.md": {
+      "sha256": "feb2840899ad3415506e281964eab360bd7dae90bfc472cea1dbecdce06830d2",
+      "bytes": 4355
+    },
+    "fmt-v1.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "clippy-tests-v1.log": {
+      "sha256": "d374644fffae0fc4e0be6844224413e9d7a314edc3a9b548947d8fb9c3ad8279",
+      "bytes": 176
+    },
+    "admission-v3.log": {
+      "sha256": "a8845e890f15791a378260b39371a42cd98c92de05000eb2aac1b0aa926f346a",
+      "bytes": 1418
+    },
+    "clippy-training-v1.log": {
+      "sha256": "277f0f22c75b28ef842f4f1afdba73505030f14324e65cb3cab437c834402b57",
+      "bytes": 2684
+    },
+    "wire-capture-v1.log": {
+      "sha256": "1e6da32999df09688c5caf910cad5ef54123a90e0b66350065b85f43f67cc5cd",
+      "bytes": 1002
+    },
+    "legacy-wire-capture.json": {
+      "sha256": "0af1558f1c86330dc1cf36ceea39fa20c431ffb82d2f6e9d040afaef56909f9e",
+      "bytes": 5142
+    },
+    "admission-v2.log": {
+      "sha256": "8534e1db71b8b836f3dc909c89de3d1c48eaa06d3fccd21237a4abc7bf573c43",
+      "bytes": 1085
+    },
+    "clippy-core-v1.log": {
+      "sha256": "6cb2efb6c596f2a2d07918cfea4507f0dc081dffabac545f327b2cd1a5feda1a",
+      "bytes": 915
+    },
+    "host-v4.log": {
+      "sha256": "2c084d65afd99f517876ed721d2568d2fb1f57149f459fe49eb87141bb2576b4",
+      "bytes": 911
+    },
+    "admission-v4.log": {
+      "sha256": "38917715e9c43580f1653c14ee4913211ae0ef33352f828c47343a490e41d605",
+      "bytes": 644
+    },
+    "RESULTS.md": {
+      "sha256": "2e3d6a3b8f076249780d67b94e6851580c638fc4dacbd3d49848dfafb75442e4",
+      "bytes": 5698
+    },
+    "wire-compact-v2.log": {
+      "sha256": "a28d3fb28a5e29186685cebc395a529270499ca4c19588d476775c868f624c12",
+      "bytes": 1108
+    },
+    "core-final-v1.log": {
+      "sha256": "e1c9cb08d04d2dcbfb2531b9929e395d665affcf485068f0d1cd4b69dd3e4392",
+      "bytes": 3552
+    },
+    "core-v2.log": {
+      "sha256": "7e732455d9d1a2519fae92f7f98dfa94e59a62c043d02b5e9b51ae3f2f6fef7f",
+      "bytes": 3423
+    },
+    "core-v1.log": {
+      "sha256": "8afca16047d6e7640c212fd99523ded3c91d61a53a6802b60781f69cccf41a7c",
+      "bytes": 4373
+    }
+  }
+}

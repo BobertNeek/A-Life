@@ -692,6 +692,15 @@ impl BrainPhenotype {
         {
             super::topology_compile::validate_n2048_experimental_coordinates(self, capacity)?;
         }
+        if self.foundation_abi_selection.is_n2048_bounded_founder_v1()
+            && (self
+                .cognitive_architecture_plan()
+                .dendritic_branch_capacity()
+                < 64
+                || self.candidate_decoder().motor_width() < 64)
+        {
+            return Err(ScaffoldContractError::PhenotypeCompile);
+        }
         self.language_codebook.validate_contract()?;
         let execution = capacity.execution();
         if self.schema_version != PHENOTYPE_SCHEMA_VERSION

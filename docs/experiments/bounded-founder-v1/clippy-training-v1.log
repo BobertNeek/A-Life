@@ -1,0 +1,68 @@
+    Checking thiserror v2.0.18
+    Checking libm v0.2.16
+    Checking libloading v0.8.9
+    Checking log v0.4.32
+    Checking equivalent v1.0.2
+    Checking bytemuck v1.25.0
+    Checking num-traits v0.2.19
+    Checking foldhash v0.2.0
+    Checking allocator-api2 v0.2.21
+    Checking smallvec v1.15.1
+    Checking hashbrown v0.16.1
+    Checking zerocopy v0.8.52
+    Checking libc v0.2.186
+    Checking once_cell v1.21.4
+    Checking bit-vec v0.9.1
+    Checking hashbrown v0.17.1
+    Checking unicode-width v0.2.2
+    Checking codespan-reporting v0.13.1
+    Checking indexmap v2.14.0
+    Checking bit-set v0.9.1
+    Checking half v2.7.1
+    Checking spirv v0.4.0+sdk-1.4.341.0
+    Checking hexf-parse v0.2.1
+    Checking foldhash v0.1.5
+    Checking unicode-ident v1.0.24
+    Checking scopeguard v1.2.0
+    Checking raw-window-handle v0.6.2
+    Checking rustc-hash v1.1.0
+    Checking naga v29.0.3
+    Checking wgpu-types v29.0.3
+    Checking lock_api v0.4.14
+    Checking hashbrown v0.15.5
+    Checking ash v0.38.0+1.3.281
+    Checking parking_lot_core v0.9.12
+    Checking dlib v0.5.3
+    Checking gpu-descriptor-types v0.2.0
+    Checking presser v0.3.1
+    Checking gpu-allocator v0.28.0
+    Checking gpu-descriptor v0.3.2
+    Checking wayland-sys v0.31.11
+    Checking parking_lot v0.12.5
+    Checking khronos-egl v6.0.0
+    Checking serde_core v1.0.228
+    Checking wgpu-naga-bridge v29.0.3
+    Checking ordered-float v5.3.0
+    Checking renderdoc-sys v1.1.0
+    Checking glow v0.17.0
+    Checking profiling v1.0.18
+    Checking wgpu-hal v29.0.3
+    Checking blake3 v1.8.5
+    Checking serde v1.0.228
+    Checking wgpu-core-deps-windows-linux-android v29.0.3
+    Checking wgpu-core v29.0.3
+    Checking alife_core v0.1.0 (/workspace/scratch/ee5e08a3ca9b/fresh-founder-branch-v1/crates/alife_core)
+    Checking static_assertions v1.1.0
+    Checking serde_json v1.0.150
+    Checking wgpu v29.0.3
+    Checking zstd-sys v2.0.16+zstd.1.5.7
+    Checking pollster v0.4.0
+    Checking alife_storage v0.1.0 (/workspace/scratch/ee5e08a3ca9b/fresh-founder-branch-v1/crates/alife_storage)
+    Checking alife_world v0.1.0 (/workspace/scratch/ee5e08a3ca9b/fresh-founder-branch-v1/crates/alife_world)
+    Checking alife_gpu_backend v0.1.0 (/workspace/scratch/ee5e08a3ca9b/fresh-founder-branch-v1/crates/alife_gpu_backend)
+    Checking zstd-safe v7.2.4
+    Checking zstd v0.13.3
+    Checking alife_runtime v0.1.0 (/workspace/scratch/ee5e08a3ca9b/fresh-founder-branch-v1/crates/alife_runtime)
+    Checking base64 v0.22.1
+    Checking alife_training v0.1.0 (/workspace/scratch/ee5e08a3ca9b/fresh-founder-branch-v1/crates/alife_training)
+    Finished `dev` profile [unoptimized] target(s) in 2m 04s

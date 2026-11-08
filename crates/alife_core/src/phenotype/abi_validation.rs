@@ -185,6 +185,11 @@ pub(super) fn compute_abi_digests(
             plasticity.write_u32(s.alpha().to_bits());
             plasticity.write_u16(s.receptor_index());
         }
+        if selection.is_n2048_bounded_founder_v1() {
+            for word in crate::FoundationAbiSelection::bounded_founder_plan_digest() {
+                plasticity.write_u64(word);
+            }
+        }
         return (
             Blake3Digest::from_hasher(route),
             Blake3Digest::from_hasher(plasticity),

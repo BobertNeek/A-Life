@@ -1357,7 +1357,13 @@ pub(super) fn validate_record_founder(
             .phenotype()
             .development_state_at(record.biochemistry().tick)?,
     )?;
-    let (compiled, _) = if p.foundation_abi().n2048_experimental_graph().is_some() {
+    let (compiled, _) = if p.foundation_abi().is_n2048_bounded_founder_v1() {
+        PhenotypeCompiler::compile_n2048_bounded_founder_candidate(
+            genome.clone(),
+            development,
+            founder.source_foundation.clone(),
+        )?
+    } else if p.foundation_abi().n2048_experimental_graph().is_some() {
         PhenotypeCompiler::compile_n2048_experimental_foundation_candidate(
             genome.clone(),
             development,
@@ -1513,3 +1519,7 @@ fn structural_sleep_evidence(
     }
     structural_evidence
 }
+
+#[cfg(test)]
+#[path = "host/bounded_founder_tests.rs"]
+mod bounded_founder_tests;

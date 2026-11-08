@@ -223,6 +223,10 @@ impl GpuV11CausalState {
         .max(1)
         .min(usize::from(motor_width))
         .min(64);
+        let (output_gain, threshold) = phenotype.foundation_abi().fresh_dendritic_parameters();
+        if phenotype.foundation_abi().is_n2048_bounded_founder_v1() && branch_count != 64 {
+            return Err(ScaffoldContractError::GpuLayoutMismatch);
+        }
         let mut branches = Vec::with_capacity(branch_count);
         for index in 0..branch_count {
             let target = motor_start + index as u32;
@@ -236,8 +240,8 @@ impl GpuV11CausalState {
             };
             branches.push(DendriticBranch::new(
                 target,
-                -1.0,
-                6.0,
+                threshold,
+                output_gain,
                 vec![
                     DendriticInputRef::new(target, 1.0)?,
                     DendriticInputRef::new(second_source, 1.0)?,

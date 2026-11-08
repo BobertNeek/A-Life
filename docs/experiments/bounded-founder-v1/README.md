@@ -1,0 +1,21 @@
+# Prospective bounded fresh-founder branch ABI
+
+Source-only until qualification receipts are added. This is a new explicitly selected fresh-founder contract, not a weight-only repair, not an old-life migration and not promotion.
+
+`FoundationAbiSelection::N2048BoundedFounderV1` retains the experimental graph's coordinates and decoder layouts. Its new canonical selector tag and fixed branch-plan digest identify 64 first motor branches, self/next unit-weight inputs, output gain .25, threshold .1. The digest also enters plasticity ABI, and thus exact foundation asset validation/digest and phenotype identity. The existing graph foundation/compatibility family labels are deliberately shared for coordinate lineage; compatibility requires the new plasticity ABI and exact selector, not those coarse labels alone. Old selectors' canonical bytes are unchanged. Both new compiler entry points require explicit opt-in; defaults are unchanged.
+
+Fresh `GpuV11CausalState::for_phenotype` reads the sealed selector, requires64 branches and uses the bounded parameters only for this new identity. The CPU fresh host and GPU direct fresh insertion already call that same constructor. Restore continues to preserve checkpoint branches exactly, without running fresh initialization. Raw causal-state restore is shape validation only; full organism checkpoints enforce phenotype identity. Neither raw state shape compatibility nor shared foundation family implies permission to cross-restore an organism.
+
+Planned tests: exact coordinate/dynamics equality, distinct selector/plasticity/asset/phenotype identities, cross-asset and selector-tamper rejection, unchanged old defaults, direct GPU upload/plan validation, and disposable modified-branch/state checkpoint continuation with exact CPU suffix equality and cross-phenotype rejection. Direct GPU plan support may fail independently of the branch change; report actual outcomes. No hardware execution, learning, world life or behavioral claim is implied by these tests.
+
+The measured predecessor is `fresh-branch-state-v1`; its explicit initial-state intervention remains a separate frozen experiment. The current candidate does not apply that intervention to any saved creature.
+
+The combined .25/.1 plan is one measured stable research candidate, not an established optimum. Gain-only .25/−1 also gave stable useful responses and remains preserved as a lower-change alternative for later comparisons. The low gain limits local branch feedback; neither this rationale nor the detached observations prove global contraction of the coupled biological system. The new variant is appended after every existing selector to preserve serialization indices as well as manual canonical tags.
+
+## Preservation qualification revision
+
+The initial proposal is preserved at a6e98d9b. Its enum declaration inserted the new variant second; the revision appends it to retain old serialization indices. `legacy_selector_wire` compares literal JSON and bincode encoding bytes for all six old selectors, nested phenotypes and available compiler inputs. Fixtures must be captured by the identical test source on frozen pre-change7599, never generated from this candidate; JSON restore/recompile is checked. Bincode encoding stability is not a claim of adjacent-tag bincode decoding support.
+
+Actual CPU-host validation now dispatches the bounded compiler before the broader experimental-graph branch. A bounded3-step host test admits a disposable founder, retains nonzero neural state and an explicitly modified acquired-branch fixture through checkpoint/restore, compares the next step exactly, rejects both cross-graph restore directions and checks the founder/optimizer bytes stay unchanged. The fixture branch edit is an intentional test setup, not evidence of naturally learned branches. Core admission also requires the64-branch capacity before the common fresh constructor is reached.
+
+Canonical selector tag9 is reserved for this plan; independently published memory/grip research uses7/8. The appended enum preserves accepted-base ordinals, but joint binary compatibility with those unmerged selectors is not claimed. Legacy serde preservation uses captured SHA-256/length pairs for actual JSON/bincode bytes, not canonical selector digests. Full old raw captures remain local and are used for actual JSON restore tests.

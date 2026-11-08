@@ -56,3 +56,15 @@ required-features = ["cpu-backend"]
 [[example]]
 name = "probe_motor_operating_point"
 required-features = ["cpu-backend"]
+
+[[example]]
+name = "probe_motor_opponent"
+required-features = ["cpu-backend"]
+
+[[example]]
+name = "probe_fresh_branch_state"
+required-features = ["cpu-backend"]
+
+[[example]]
+name = "probe_bounded_founder_admission"
+required-features = ["cpu-backend"]
