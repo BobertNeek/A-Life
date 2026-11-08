@@ -2086,6 +2086,14 @@ impl Validate for ExperiencePatch {
         if self.header.phase != ExperiencePatchPhase::Sealed {
             return Err(ScaffoldContractError::UnorderedExperiencePhase);
         }
+        // The header selects validation and digest semantics. Even a legacy
+        // header must match every sealed part instead of relabeling its data.
+        if self.pre_action.abi_version != self.header.abi_version
+            || self.decision.abi_version != self.header.abi_version
+            || self.outcome.abi_version != self.header.abi_version
+        {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
         self.pre_action.validate_contract()?;
         self.decision.validate_contract()?;
         self.outcome.validate_contract()?;
@@ -2113,10 +2121,7 @@ impl Validate for ExperiencePatch {
                 .cognitive_work
                 .as_ref()
                 .ok_or(ScaffoldContractError::MissingPhaseData)?;
-            if self.pre_action.abi_version != self.header.abi_version
-                || self.decision.abi_version != self.header.abi_version
-                || self.outcome.abi_version != self.header.abi_version
-                || self.decision.prediction_target.as_ref() != Some(prediction)
+            if self.decision.prediction_target.as_ref() != Some(prediction)
                 || self.decision.cognitive_work.as_ref() != Some(work)
                 || self.pre_action.prediction_target.as_ref() != Some(prediction)
                 || self.outcome.cognitive_work.as_ref() != Some(work)

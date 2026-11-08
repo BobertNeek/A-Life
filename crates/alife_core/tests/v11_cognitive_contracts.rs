@@ -672,3 +672,53 @@ fn v12_sealed_patch_preserves_channel_identities_and_rejects_v11_relabeling() {
     let relabeled: ExperiencePatch = serde_json::from_value(relabeled).unwrap();
     assert!(relabeled.validate_contract().is_err());
 }
+
+#[test]
+fn legacy_header_cannot_downgrade_nested_context_evidence() {
+    let patches = [
+        ExperiencePatch::new_v11(
+            legacy_pre_action(Tick::new(10)),
+            bundle(),
+            measured_outcome(joint_outcome()),
+            prediction(),
+            work(),
+            context(),
+        )
+        .unwrap(),
+        ExperiencePatch::new_v12(
+            legacy_pre_action(Tick::new(10)),
+            bundle(),
+            measured_v12_outcome(v12_joint_outcome()),
+            prediction(),
+            work(),
+            context(),
+        )
+        .unwrap(),
+    ];
+    for patch in patches {
+        let original_digest = patch.causal_digest().unwrap();
+        let original_bytes = serde_json::to_vec(&patch).unwrap();
+        let roundtrip: ExperiencePatch = serde_json::from_slice(&original_bytes).unwrap();
+        assert_eq!(serde_json::to_vec(&roundtrip).unwrap(), original_bytes);
+        assert_eq!(roundtrip.causal_digest().unwrap(), original_digest);
+
+        for part in ["header", "pre_action", "decision", "outcome"] {
+            let mut value = serde_json::to_value(&patch).unwrap();
+            value[part]["abi_version"] = serde_json::json!(ExperiencePatch::ABI_VERSION);
+            if part == "header" {
+                // The old branch only inspected these outer optional fields,
+                // allowing the still-contextual nested evidence to survive.
+                value.as_object_mut().unwrap().remove("prediction_target");
+                value.as_object_mut().unwrap().remove("cognitive_work");
+            }
+            // Rejection at decoding is also fail-closed.
+            if let Ok(downgraded) = serde_json::from_value::<ExperiencePatch>(value) {
+                assert!(downgraded.validate_contract().is_err(), "part: {part}");
+                assert!(downgraded.causal_digest().is_err(), "part: {part}");
+                assert!(alife_core::ExperiencePacker::default()
+                    .pack(&downgraded)
+                    .is_err());
+            }
+        }
+    }
+}
