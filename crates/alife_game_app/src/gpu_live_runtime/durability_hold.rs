@@ -30,3 +30,9 @@ pub(crate) fn sleep_recovery_body_event_due(
 pub(crate) fn motor_eligible(phase: SleepPhase) -> bool {
     phase == SleepPhase::Awake
 }
+
+/// The scheduler suppresses dispatch across either edge of sleep. Body-only
+/// contact may run in those intervals, independently of physical recovery.
+pub(crate) fn sleeping_body_contact_due(before: SleepPhase, after: SleepPhase) -> bool {
+    before != SleepPhase::Awake || after != SleepPhase::Awake
+}

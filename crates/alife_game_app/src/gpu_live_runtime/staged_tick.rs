@@ -133,6 +133,7 @@ impl GpuLiveBrainRuntime {
         let mut batch = Vec::with_capacity(self.handles.len());
         let mut summaries_by_organism = BTreeMap::new();
         let mut scheduled_body_events = BTreeMap::new();
+        let mut sleeping_body_contacts = BTreeSet::new();
         let mut persist_exact_sleep_boundary = false;
         let mut sleep_journal_entries = Vec::new();
         let mut journaled_recovery_edges = Vec::new();
@@ -500,6 +501,13 @@ impl GpuLiveBrainRuntime {
             let remains_dispatchable = phase_before == SleepPhase::Awake
                 && sleep_event.phase == SleepPhase::Awake
                 && sleep_event.transition.is_none();
+            // Only scheduled sleeping/no-decision intervals may use the physical
+            // response. Awake residents lacking a selection or retained-learning
+            // availability are not sleepers. Do not infer this from recovery:
+            // Completed durability holds deliberately omit that dose.
+            if sleeping_body_contact_due(phase_before, sleep_event.phase) {
+                sleeping_body_contacts.insert(raw);
+            }
             if !remains_dispatchable || retained_learning_pending {
                 summaries_by_organism.insert(
                     raw,
@@ -1045,16 +1053,19 @@ impl GpuLiveBrainRuntime {
         if summaries_by_organism.len() != expected_summary_count {
             return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
         }
-        #[cfg(any(test, feature = "gpu-tests"))]
-        if std::mem::take(&mut self.forced_late_advance_failure) {
-            return Err(ScaffoldContractError::NonMonotonicTick.into());
-        }
         let authority_timing = advance_and_synchronize_authority(
             &mut self.world,
             &mut self.residents,
             tick_after,
             &scheduled_body_events,
+            &sleeping_body_contacts,
         )?;
+        // Exercise the enclosing rollback after physical/body authority has
+        // actually changed, including contact withdrawal and biology.
+        #[cfg(any(test, feature = "gpu-tests"))]
+        if std::mem::take(&mut self.forced_late_advance_failure) {
+            return Err(ScaffoldContractError::NonMonotonicTick.into());
+        }
         self.performance_metrics.world_authority_advance_wall_ns = self
             .performance_metrics
             .world_authority_advance_wall_ns

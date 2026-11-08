@@ -1,0 +1,65 @@
+{
+  "upstream_head": "2e13e227c6ac4ac8d883ffbaeed9f6291c6cefd0",
+  "upstream_tree": "31bfd38e1c384fd9b112bcd948f102959fecb66f",
+  "pr306_head": "c8fcd14f2ee6f88cbde6f60d4201dcb8a9827116",
+  "local_source_commit": "c761d3690cbfb8e49d101f88357f5094cc997d07",
+  "local_source_tree": "1c77029f0ba8c967b743fc0c1ffbba390b430882",
+  "note": "Local source-only import has omitted upstream art. All changed-path preimages match verified PR306 exactly. The merged main has the same upstream tree.",
+  "paths": [
+    {
+      "path": "crates/alife_game_app/src/gpu_live_runtime.rs",
+      "upstream_blob": "accec6b9785626eba86409a4d5b5551a0f006613",
+      "qualified_blob": "ac5f37239912999b26e0b55a4422670e46de695c"
+    },
+    {
+      "path": "crates/alife_game_app/src/gpu_live_runtime/durability_hold.rs",
+      "upstream_blob": "8b8308f26bb4aadf6b0105005a705827df74ce22",
+      "qualified_blob": "8af23f944cafc0ac41f8bdc03e00c24b26f9c58f"
+    },
+    {
+      "path": "crates/alife_game_app/src/gpu_live_runtime/newborn_admission_tests.rs",
+      "upstream_blob": "0d248fca9c6078f7765a46ff4fbce0f2e6214004",
+      "qualified_blob": "30d016d0d477b7e86ee10e22f92aaa7491bc56c7"
+    },
+    {
+      "path": "crates/alife_game_app/src/gpu_live_runtime/sleeping_body_contact_tests.rs",
+      "upstream_blob": null,
+      "qualified_blob": "26fe8bac1a3d649bed902e591081c6736121c62a"
+    },
+    {
+      "path": "crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs",
+      "upstream_blob": "fbcf24a2ed464c793cd8c73ba8a9b259f019a91b",
+      "qualified_blob": "710adf03e12a20ac884644123e3cb4643ac0dc89"
+    },
+    {
+      "path": "crates/alife_game_app/src/new_game_lifecycle.rs",
+      "upstream_blob": "383ad6a5fc7adde5da28659e6722e865ff1be401",
+      "qualified_blob": "936729794e09ca806275a1d7e156c9c026e14000"
+    },
+    {
+      "path": "crates/alife_gpu_backend/src/closed_loop_runtime.rs",
+      "upstream_blob": "709aa43d55095f452157d37843c43c28f3f5d6a6",
+      "qualified_blob": "4c8f6978673965b2e3bfa6eaac7afc03825a1543"
+    },
+    {
+      "path": "crates/alife_gpu_backend/src/closed_loop_runtime/software_training_test.rs",
+      "upstream_blob": "278c3cfed325c340d5cacf0d339821183fbffd3f",
+      "qualified_blob": "39f2c8d19156534022dd06c052af21fde3e14271"
+    },
+    {
+      "path": "crates/alife_gpu_backend/src/startup_diagnostics.rs",
+      "upstream_blob": "cc0f54168612277eb775f1d442b2f8a2a5e01929",
+      "qualified_blob": "13a8bce1721c05b702aad5a5b80c5f7147d91977"
+    },
+    {
+      "path": "crates/alife_world/src/headless.rs",
+      "upstream_blob": "80141ef4168d7586081c23da9a7675a5273f1db6",
+      "qualified_blob": "b0b086cdc5bb9c6e69c6f96a15fcea65ecd8d667"
+    },
+    {
+      "path": "docs/ARCHITECTURE.md",
+      "upstream_blob": "132c8dabb192215ed067ee39c9e3c7ab0614397e",
+      "qualified_blob": "9586e788beb3771df4830fe38ccd7da0b3339a58"
+    }
+  ]
+}

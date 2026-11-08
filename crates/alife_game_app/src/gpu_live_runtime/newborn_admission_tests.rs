@@ -298,6 +298,7 @@ fn newborn_fixture_failure_rolls_back_parents_clock_allocators_and_registry() {
             &mut candidate.residents,
             birth_tick,
             &body_events,
+            &BTreeSet::new(),
         )?;
         assert_newborn(&candidate.world, birth_tick);
         assert_ne!(
@@ -321,6 +322,7 @@ fn newborn_fixture_failure_rolls_back_parents_clock_allocators_and_registry() {
             &mut candidate.residents,
             birth_tick,
             &body_events,
+            &BTreeSet::new(),
         )
     });
     retried.unwrap();

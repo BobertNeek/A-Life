@@ -55,7 +55,8 @@ impl DeviceRole {
     fn from_label(label: &str) -> Self {
         match label {
             "alife-required-closed-loop-device" => Self::RequiredClosedLoop,
-            "alife-explicit-software-offline-training-test" => Self::OfflineSoftwareTest,
+            "alife-explicit-software-offline-training-test"
+            | "alife-explicit-software-offline-runtime-test" => Self::OfflineSoftwareTest,
             _ => Self::Other,
         }
     }

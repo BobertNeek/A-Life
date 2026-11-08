@@ -1,0 +1,21 @@
+   Compiling alife_game_app v0.1.0 (/workspace/scratch/ee5e08a3ca9b/sleeping-body-main-integration/crates/alife_game_app)
+    Finished `test` profile [unoptimized] target(s) in 2m 33s
+     Running unittests src/lib.rs (/workspace/scratch/ee5e08a3ca9b/motor-reflex-target-v1/debug/deps/alife_game_app-3da14afd57976c36)
+
+running 10 tests
+test gpu_live_runtime::sleeping_body_contact_tests::device::sleeping_body_software_runtime_normal_tick_mixed_control_capture_restore ... SLEEP_BODY_EXPLICIT_OFFLINE_SOFTWARE_ADAPTER=AdapterInfo { name: "SwiftShader Device (Subzero)", vendor: 6880, device: 49374, device_type: Cpu, device_pci_bus_id: "", driver: "SwiftShader driver", driver_info: "", backend: Vulkan, subgroup_min_size: 4, subgroup_max_size: 4, transient_saves_memory: false }
+SLEEP_BODY_OFFLINE_SOFTWARE_MIXED_PASS tick=1 sleeping_withdrawal=1 awake_no_selection_withdrawal=0 voluntary_patches=0 learning_receipts=0 post_body_rollback_retry=1 restore=1
+ok
+test gpu_live_runtime::sleeping_body_contact_tests::device::sleeping_body_software_runtime_pending_jobs_and_completed_capture_guard ... SLEEP_BODY_EXPLICIT_OFFLINE_SOFTWARE_ADAPTER=AdapterInfo { name: "SwiftShader Device (Subzero)", vendor: 6880, device: 49374, device_type: Cpu, device_pci_bus_id: "", driver: "SwiftShader driver", driver_info: "", backend: Vulkan, subgroup_min_size: 4, subgroup_max_size: 4, transient_saves_memory: false }
+SLEEP_BODY_OFFLINE_SOFTWARE_PIPELINE_PASS pending=1 prepared=1 submitted=1 completed=1 completed_durability_hold=1 capture_restore=4 voluntary_patches=0
+ok
+test gpu_live_runtime::sleeping_body_contact_tests::sleeping_body_host_actual_scheduler_contact_mixed_awake_and_exact_biology ... ok
+test gpu_live_runtime::sleeping_body_contact_tests::sleeping_body_host_all_inflight_payloads_and_completed_hold_survive ... ok
+test gpu_live_runtime::sleeping_body_contact_tests::sleeping_body_host_invalid_selection_is_rejected_before_body_mutation ... ok
+test gpu_live_runtime::sleeping_body_contact_tests::sleeping_body_host_late_failure_restores_scheduler_body_seals_then_retry_once ... ok
+test gpu_live_runtime::sleeping_body_contact_tests::sleeping_body_host_quiet_and_chronic_pain_keep_ordinary_sleep_exact ... ok
+test gpu_live_runtime::sleeping_body_contact_tests::sleeping_body_host_scope_excludes_awake_without_recovery_or_selection ... ok
+test gpu_live_runtime::sleeping_body_contact_tests::sleeping_body_host_selective_interval_never_repeats_action_biology ... ok
+test gpu_live_runtime::sleeping_body_contact_tests::sleeping_body_host_unlocalized_acute_damage_reverses_heading_without_yaw ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 263 filtered out; finished in 20.90s
