@@ -1,0 +1,11 @@
+   Compiling alife_world v0.1.0 (/workspace/scratch/ee5e08a3ca9b/shared-endpoint-v22/crates/alife_world)
+    Finished `test` profile [unoptimized] target(s) in 3m 09s
+     Running unittests src/lib.rs (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-target-v18/debug/deps/alife_world-6b7d17d635ca0301)
+
+running 3 tests
+test headless::task_6_factorized_motor_tests::common_endpoint_observed_approach_contracts_before_clearance_with_real_motion ... ok
+test headless::task_6_factorized_motor_tests::common_endpoint_translated_meals_preserve_exact_ordinary_receipt ... ok
+test headless::task_6_factorized_motor_tests::common_endpoint_translated_reflex_initial_and_remaining_intervals ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 289 filtered out; finished in 0.04s
+

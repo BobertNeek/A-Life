@@ -77,13 +77,38 @@ impl HeadlessWorld {
         effector_gain: f32,
         acute_damage: f32,
     ) -> Result<Option<ContactWithdrawalReceipt>, ScaffoldContractError> {
+        self.apply_contact_withdrawal_for_interval(
+            organism,
+            own,
+            locomotor_capacity,
+            effector_gain,
+            acute_damage,
+            1.0,
+            None,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn apply_contact_withdrawal_for_interval(
+        &mut self,
+        organism: OrganismId,
+        own: WorldEntityId,
+        locomotor_capacity: Option<f32>,
+        effector_gain: f32,
+        acute_damage: f32,
+        interval_fraction: f32,
+        swept_sources: Option<&[WorldEntityId]>,
+    ) -> Result<Option<ContactWithdrawalReceipt>, ScaffoldContractError> {
+        if !interval_fraction.is_finite() || !(0.0..=1.0).contains(&interval_fraction) {
+            return Err(ScaffoldContractError::ScalarOutOfRange);
+        }
         let body = self
             .objects
             .get(&own.raw())
             .ok_or(ScaffoldContractError::InvalidId)?;
         let start = body.position;
         let yaw = body.body_yaw;
-        let sources = self
+        let mut sources = self
             .objects
             .values()
             .filter(|o| {
@@ -96,6 +121,27 @@ impl HeadlessWorld {
             })
             .map(|o| o.id)
             .collect::<Vec<_>>();
+        if let Some(swept) = swept_sources {
+            for id in swept {
+                let object = self
+                    .objects
+                    .get(&id.raw())
+                    .ok_or(ScaffoldContractError::InvalidId)?;
+                if object.id == own
+                    || object.consumed
+                    || object.carried_by == Some(organism)
+                    || object.kind != WorldObjectKind::Hazard
+                    || object.hazard_pain <= 0.0
+                    || distance(object.position, start) > object.radius + 1e-5
+                {
+                    return Err(ScaffoldContractError::InvalidDecisionEvidence);
+                }
+                if !sources.contains(id) {
+                    sources.push(*id);
+                }
+            }
+            sources.sort_unstable_by_key(|id| id.raw());
+        }
         if sources.len() > ContactWithdrawalReceipt::MAX_SOURCES {
             return Err(ScaffoldContractError::InvalidDecisionEvidence);
         }
@@ -130,6 +176,11 @@ impl HeadlessWorld {
             direction = Vec3f::new(-yaw.cos(), 0.0, -yaw.sin());
             receipt.direction_basis = WithdrawalDirectionBasis::AcuteDamageHeadingFallback;
         }
+        // A directional protective response with no remaining actuator time
+        // is blocked, not a successful zero-distance move.
+        if interval_fraction == 0.0 {
+            return Ok(Some(receipt));
+        }
         let norm = direction.x.hypot(direction.z);
         let capacity =
             locomotor_capacity.unwrap_or(1.0).clamp(0.0, 1.0) * effector_gain.clamp(0.0, 1.0);
@@ -137,12 +188,20 @@ impl HeadlessWorld {
             return Ok(Some(receipt));
         }
         // One short interval, never a path search, repeated escape plan or teleport.
-        let step = MOVE_STEP * capacity;
+        let step = MOVE_STEP * capacity * interval_fraction;
         let proposed = add(
             start,
             Vec3f::new(direction.x / norm * step, 0.0, direction.z / norm * step),
         );
-        receipt.energy_cost = 0.02 * capacity;
+        receipt.energy_cost = 0.02 * capacity * interval_fraction;
+        let Some(proposed) = self.bounded_translation_endpoint(
+            start,
+            proposed,
+            MOVE_STEP * capacity,
+            interval_fraction,
+        ) else {
+            return Ok(Some(receipt));
+        };
         let destination = if let Some(terrain) = &self.terrain {
             let Some(grounded) = terrain.resolve_move(start, proposed) else {
                 return Ok(Some(receipt));
@@ -150,6 +209,14 @@ impl HeadlessWorld {
             grounded
         } else {
             proposed
+        };
+        let Some(destination) = self.bounded_translation_endpoint(
+            start,
+            destination,
+            MOVE_STEP * capacity,
+            interval_fraction,
+        ) else {
+            return Ok(Some(receipt));
         };
         // Conflicting contact normals cannot be resolved by inventing a route.
         if receipt.sources.iter().any(|id| {

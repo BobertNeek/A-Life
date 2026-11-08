@@ -1,0 +1,10 @@
+   Compiling alife_world v0.1.0 (/workspace/scratch/ee5e08a3ca9b/shared-endpoint-v22/crates/alife_world)
+    Finished `test` profile [unoptimized] target(s) in 3m 22s
+     Running unittests src/lib.rs (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-target-v18/debug/deps/alife_world-6b7d17d635ca0301)
+
+running 1 test
+test headless::task_6_factorized_motor_tests::curved_prefix_diagnostic_separates_ground_legality_from_chord_contact ... CURVED_PREFIX_DIAGNOSTIC chord_x=0.04 grounded_y=0.008000001 projected_source_distance=0.10031949 radius=0.1 legal_later_x=0.041 legal_later_source_distance=0.099339016 ordinary_x=0.1
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 292 filtered out; finished in 0.00s
+

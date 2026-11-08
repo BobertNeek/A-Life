@@ -155,6 +155,8 @@ impl HeadlessWorld {
         target: WorldEntityId,
         relative: Vec3f,
         original: Vec3f,
+        speed: f32,
+        duration: f32,
     ) -> Result<Option<(Vec3f, bool)>, ScaffoldContractError> {
         let observer = self.agent_for(organism)?;
         let step = (original.x - observer.position.x).hypot(original.z - observer.position.z);
@@ -173,7 +175,20 @@ impl HeadlessWorld {
                 }
             }
         }
-        let ranges = self.local_clearance_ranges(observer, bearing, &candidates);
+        let mut valid = [true; 9];
+        for (index, candidate) in candidates.iter_mut().enumerate() {
+            match self.bounded_translation_endpoint(observer.position, *candidate, speed, duration)
+            {
+                Some(endpoint) => *candidate = endpoint,
+                None => valid[index] = false,
+            }
+        }
+        let mut ranges = self.local_clearance_ranges(observer, bearing, &candidates);
+        for (index, range) in ranges.iter_mut().enumerate() {
+            if !valid[index] {
+                *range = 0.0;
+            }
+        }
         let exhausted = observer.local_steering.is_some_and(|state| {
             state.target == target && state.non_progress_steps >= MAX_NON_PROGRESS_STEPS
         });

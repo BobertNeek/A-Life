@@ -1,0 +1,20 @@
+    Checking serde_core v1.0.228
+    Checking serde v1.0.228
+    Checking thiserror v2.0.18
+    Checking bytemuck v1.25.0
+    Checking smallvec v1.15.1
+    Checking serde_json v1.0.150
+    Checking alife_core v0.1.0 (/workspace/scratch/ee5e08a3ca9b/awake-shared-trajectory-v16/crates/alife_core)
+    Checking alife_storage v0.1.0 (/workspace/scratch/ee5e08a3ca9b/awake-shared-trajectory-v16/crates/alife_storage)
+    Checking alife_world v0.1.0 (/workspace/scratch/ee5e08a3ca9b/awake-shared-trajectory-v16/crates/alife_world)
+error: derefed type is same as origin
+    --> crates/alife_world/src/headless.rs:6287:45
+     |
+6287 |         if let (Some(state), Some(plan)) = (translation.as_deref_mut(), contact_plan) {
+     |                                             ^^^^^^^^^^^^^^^^^^^^^^^^^^ help: try: `translation`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#needless_option_as_deref
+     = note: `-D clippy::needless-option-as-deref` implied by `-D warnings`
+     = help: to override `-D warnings` add `#[allow(clippy::needless_option_as_deref)]`
+
+error: could not compile `alife_world` (lib) due to 1 previous error

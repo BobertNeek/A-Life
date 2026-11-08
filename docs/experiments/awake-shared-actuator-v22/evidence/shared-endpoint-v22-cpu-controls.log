@@ -1,0 +1,74 @@
+   Compiling alife_core v0.1.0 (/workspace/scratch/ee5e08a3ca9b/shared-endpoint-v22/crates/alife_core)
+   Compiling alife_world v0.1.0 (/workspace/scratch/ee5e08a3ca9b/shared-endpoint-v22/crates/alife_world)
+   Compiling alife_gpu_backend v0.1.0 (/workspace/scratch/ee5e08a3ca9b/shared-endpoint-v22/crates/alife_gpu_backend)
+   Compiling alife_runtime v0.1.0 (/workspace/scratch/ee5e08a3ca9b/shared-endpoint-v22/crates/alife_runtime)
+   Compiling alife_training v0.1.0 (/workspace/scratch/ee5e08a3ca9b/shared-endpoint-v22/crates/alife_training)
+    Finished `test` profile [unoptimized] target(s) in 6m 55s
+     Running tests/cpu_collector.rs (/workspace/scratch/ee5e08a3ca9b/awake-shared-cpu-target-v18/debug/deps/cpu_collector-a2643aa43bc47c1a)
+
+running 6 tests
+test shared_actuator::common_endpoint_real_meal_at_x128_retains_ordinary_credit_and_checkpoint ... detached candidate=0 family=Inspect taste=0.7633333 innate=-0 logit=0 source_range=(0.5635021, 0.5646802)
+detached candidate=1 family=Approach taste=0.7633333 innate=0 logit=13.807404 source_range=(0.56055564, 0.56585574)
+detached candidate=2 family=Avoid taste=0.7633333 innate=0 logit=0 source_range=(-0.1847111, -0.16473176)
+detached candidate=3 family=Ingest taste=0.7633333 innate=0 logit=16.406902 source_range=(-0.14584923, -0.12045379)
+detached candidate=4 family=Contact taste=0.7633333 innate=-0 logit=0 source_range=(-0.18247437, -0.16383837)
+detached candidate=5 family=Other taste=0.7633333 innate=-0 logit=0 source_range=(-0.14826685, -0.1251077)
+detached candidate=6 family=Idle taste=0 innate=-0 logit=0 source_range=(0.5670118, 0.5670118)
+detached candidate=7 family=Rest taste=0 innate=0 logit=0 source_range=(0.56701064, 0.5670118)
+detached candidate=8 family=Other taste=0 innate=-0 logit=0 source_range=(-0.14826685, -0.1251077)
+detached candidate=9 family=Approach taste=0 innate=0 logit=0 source_range=(0.56055564, 0.56585574)
+detached candidate=10 family=Contact taste=0 innate=-0 logit=0 source_range=(-0.18247437, -0.16383837)
+detached candidate=11 family=Other taste=0 innate=-0 logit=0 source_range=(-0.14826685, -0.1251077)
+v19 inherited-meal representative=[210] motor_candidate_indices=[Some(1), None, Some(3), Some(8), Some(7), None] candidate_count=12
+v19 inherited-meal channels=Some([ChannelCommand { channel: Locomotion, primitive: ActionId(101), target: Some(ActionTarget { entity: Some(WorldEntityId(8)), position: Some(Vec3f { x: 128.5, y: 0.0, z: 0.0 }) }), direction: Vec3f { x: 128.5, y: 0.0, z: 0.0 }, intensity: Intensity(1.0), duration_ticks: DurationTicks(1), stand_off_distance: 0.0, payload: BoundedMotorPayload { values: [] }, confidence: Confidence(0.9375), coordination_group: 0 }, ChannelCommand { channel: Manipulation, primitive: ActionId(210), target: Some(ActionTarget { entity: Some(WorldEntityId(8)), position: Some(Vec3f { x: 128.5, y: 0.0, z: 0.0 }) }), direction: Vec3f { x: 128.5, y: 0.0, z: 0.0 }, intensity: Intensity(1.0), duration_ticks: DurationTicks(1), stand_off_distance: 0.0, payload: BoundedMotorPayload { values: [] }, confidence: Confidence(0.93749905), coordination_group: 0 }, ChannelCommand { channel: Vocal, primitive: ActionId(400), target: None, direction: Vec3f { x: 0.0, y: 0.0, z: 0.0 }, intensity: Intensity(1.0), duration_ticks: DurationTicks(1), stand_off_distance: 0.0, payload: BoundedMotorPayload { values: [] }, confidence: Confidence(1.0), coordination_group: 0 }, ChannelCommand { channel: Posture, primitive: ActionId(3), target: None, direction: Vec3f { x: 0.0, y: 0.0, z: 0.0 }, intensity: Intensity(1.0), duration_ticks: DurationTicks(1), stand_off_distance: 0.0, payload: BoundedMotorPayload { values: [] }, confidence: Confidence(1.0), coordination_group: 0 }])
+ok
+test shared_actuator::shared_actuator_exhausted_late_meal_retains_exact_ordinary_experience ... detached candidate=0 family=Inspect taste=0.7633333 innate=-0 logit=0 source_range=(0.5635021, 0.5646802)
+detached candidate=1 family=Approach taste=0.7633333 innate=0 logit=13.807233 source_range=(0.56055504, 0.56585443)
+detached candidate=2 family=Avoid taste=0.7633333 innate=0 logit=0 source_range=(-0.1847111, -0.16473176)
+detached candidate=3 family=Ingest taste=0.7633333 innate=0 logit=16.406902 source_range=(-0.14584923, -0.12045379)
+detached candidate=4 family=Contact taste=0.7633333 innate=-0 logit=0 source_range=(-0.18247437, -0.16383837)
+detached candidate=5 family=Other taste=0.7633333 innate=-0 logit=0 source_range=(-0.14813256, -0.12494387)
+detached candidate=6 family=Idle taste=0 innate=-0 logit=0 source_range=(0.5670118, 0.5670118)
+detached candidate=7 family=Rest taste=0 innate=0 logit=0 source_range=(0.56701064, 0.5670118)
+detached candidate=8 family=Other taste=0 innate=-0 logit=0 source_range=(-0.14813256, -0.12494387)
+detached candidate=9 family=Approach taste=0 innate=0 logit=0 source_range=(0.56055504, 0.56585443)
+detached candidate=10 family=Contact taste=0 innate=-0 logit=0 source_range=(-0.18247437, -0.16383837)
+detached candidate=11 family=Other taste=0 innate=-0 logit=0 source_range=(-0.14813256, -0.12494387)
+v19 inherited-meal representative=[210] motor_candidate_indices=[Some(1), None, Some(3), Some(8), Some(7), None] candidate_count=12
+v19 inherited-meal channels=Some([ChannelCommand { channel: Locomotion, primitive: ActionId(101), target: Some(ActionTarget { entity: Some(WorldEntityId(8)), position: Some(Vec3f { x: 0.5, y: 0.0, z: 0.0 }) }), direction: Vec3f { x: 0.5, y: 0.0, z: 0.0 }, intensity: Intensity(1.0), duration_ticks: DurationTicks(1), stand_off_distance: 0.0, payload: BoundedMotorPayload { values: [] }, confidence: Confidence(0.9375), coordination_group: 0 }, ChannelCommand { channel: Manipulation, primitive: ActionId(210), target: Some(ActionTarget { entity: Some(WorldEntityId(8)), position: Some(Vec3f { x: 0.5, y: 0.0, z: 0.0 }) }), direction: Vec3f { x: 0.5, y: 0.0, z: 0.0 }, intensity: Intensity(1.0), duration_ticks: DurationTicks(1), stand_off_distance: 0.0, payload: BoundedMotorPayload { values: [] }, confidence: Confidence(0.93749905), coordination_group: 0 }, ChannelCommand { channel: Vocal, primitive: ActionId(400), target: None, direction: Vec3f { x: 0.0, y: 0.0, z: 0.0 }, intensity: Intensity(1.0), duration_ticks: DurationTicks(1), stand_off_distance: 0.0, payload: BoundedMotorPayload { values: [] }, confidence: Confidence(1.0), coordination_group: 0 }, ChannelCommand { channel: Posture, primitive: ActionId(3), target: None, direction: Vec3f { x: 0.0, y: 0.0, z: 0.0 }, intensity: Intensity(1.0), duration_ticks: DurationTicks(1), stand_off_distance: 0.0, payload: BoundedMotorPayload { values: [] }, confidence: Confidence(1.0), coordination_group: 0 }])
+ok
+test shared_actuator::shared_actuator_quiet_host_is_exact_ordinary_execution ... ok
+test shared_actuator::shared_actuator_real_dispatch_consumed_without_false_experience_and_restores ... ok
+test shared_actuator::shared_actuator_repeated_contact_keeps_sequence_unissued_and_releases ... ok
+test shared_actuator::shared_actuator_translated_meal_has_no_phantom_time_or_credit_loss ... detached candidate=0 family=Inspect taste=0.7633333 innate=-0 logit=0 source_range=(0.5635021, 0.5646802)
+detached candidate=1 family=Approach taste=0.7633333 innate=0 logit=13.807404 source_range=(0.56055564, 0.56585574)
+detached candidate=2 family=Avoid taste=0.7633333 innate=0 logit=0 source_range=(-0.1847111, -0.16473176)
+detached candidate=3 family=Ingest taste=0.7633333 innate=0 logit=16.406902 source_range=(-0.14584923, -0.12045379)
+detached candidate=4 family=Contact taste=0.7633333 innate=-0 logit=0 source_range=(-0.18247437, -0.16383837)
+detached candidate=5 family=Other taste=0.7633333 innate=-0 logit=0 source_range=(-0.14826685, -0.1251077)
+detached candidate=6 family=Idle taste=0 innate=-0 logit=0 source_range=(0.5670118, 0.5670118)
+detached candidate=7 family=Rest taste=0 innate=0 logit=0 source_range=(0.56701064, 0.5670118)
+detached candidate=8 family=Other taste=0 innate=-0 logit=0 source_range=(-0.14826685, -0.1251077)
+detached candidate=9 family=Approach taste=0 innate=0 logit=0 source_range=(0.56055564, 0.56585574)
+detached candidate=10 family=Contact taste=0 innate=-0 logit=0 source_range=(-0.18247437, -0.16383837)
+detached candidate=11 family=Other taste=0 innate=-0 logit=0 source_range=(-0.14826685, -0.1251077)
+v19 inherited-meal representative=[210] motor_candidate_indices=[Some(1), None, Some(3), Some(8), Some(7), None] candidate_count=12
+v19 inherited-meal channels=Some([ChannelCommand { channel: Locomotion, primitive: ActionId(101), target: Some(ActionTarget { entity: Some(WorldEntityId(8)), position: Some(Vec3f { x: 3.5, y: 0.0, z: 0.0 }) }), direction: Vec3f { x: 3.5, y: 0.0, z: 0.0 }, intensity: Intensity(1.0), duration_ticks: DurationTicks(1), stand_off_distance: 0.0, payload: BoundedMotorPayload { values: [] }, confidence: Confidence(0.9375), coordination_group: 0 }, ChannelCommand { channel: Manipulation, primitive: ActionId(210), target: Some(ActionTarget { entity: Some(WorldEntityId(8)), position: Some(Vec3f { x: 3.5, y: 0.0, z: 0.0 }) }), direction: Vec3f { x: 3.5, y: 0.0, z: 0.0 }, intensity: Intensity(1.0), duration_ticks: DurationTicks(1), stand_off_distance: 0.0, payload: BoundedMotorPayload { values: [] }, confidence: Confidence(0.93749905), coordination_group: 0 }, ChannelCommand { channel: Vocal, primitive: ActionId(400), target: None, direction: Vec3f { x: 0.0, y: 0.0, z: 0.0 }, intensity: Intensity(1.0), duration_ticks: DurationTicks(1), stand_off_distance: 0.0, payload: BoundedMotorPayload { values: [] }, confidence: Confidence(1.0), coordination_group: 0 }, ChannelCommand { channel: Posture, primitive: ActionId(3), target: None, direction: Vec3f { x: 0.0, y: 0.0, z: 0.0 }, intensity: Intensity(1.0), duration_ticks: DurationTicks(1), stand_off_distance: 0.0, payload: BoundedMotorPayload { values: [] }, confidence: Confidence(1.0), coordination_group: 0 }])
+detached candidate=0 family=Inspect taste=0.7633333 innate=-0 logit=0 source_range=(0.5635021, 0.5646802)
+detached candidate=1 family=Approach taste=0.7633333 innate=0 logit=13.807404 source_range=(0.56055564, 0.56585574)
+detached candidate=2 family=Avoid taste=0.7633333 innate=0 logit=0 source_range=(-0.1847111, -0.16473176)
+detached candidate=3 family=Ingest taste=0.7633333 innate=0 logit=16.406902 source_range=(-0.14584923, -0.12045379)
+detached candidate=4 family=Contact taste=0.7633333 innate=-0 logit=0 source_range=(-0.18247437, -0.16383837)
+detached candidate=5 family=Other taste=0.7633333 innate=-0 logit=0 source_range=(-0.14826685, -0.1251077)
+detached candidate=6 family=Idle taste=0 innate=-0 logit=0 source_range=(0.5670118, 0.5670118)
+detached candidate=7 family=Rest taste=0 innate=0 logit=0 source_range=(0.56701064, 0.5670118)
+detached candidate=8 family=Other taste=0 innate=-0 logit=0 source_range=(-0.14826685, -0.1251077)
+detached candidate=9 family=Approach taste=0 innate=0 logit=0 source_range=(0.56055564, 0.56585574)
+detached candidate=10 family=Contact taste=0 innate=-0 logit=0 source_range=(-0.18247437, -0.16383837)
+detached candidate=11 family=Other taste=0 innate=-0 logit=0 source_range=(-0.14826685, -0.1251077)
+v19 inherited-meal representative=[210] motor_candidate_indices=[Some(1), None, Some(3), Some(8), Some(7), None] candidate_count=12
+v19 inherited-meal channels=Some([ChannelCommand { channel: Locomotion, primitive: ActionId(101), target: Some(ActionTarget { entity: Some(WorldEntityId(8)), position: Some(Vec3f { x: 1000.5, y: 0.0, z: 0.0 }) }), direction: Vec3f { x: 1000.5, y: 0.0, z: 0.0 }, intensity: Intensity(1.0), duration_ticks: DurationTicks(1), stand_off_distance: 0.0, payload: BoundedMotorPayload { values: [] }, confidence: Confidence(0.9375), coordination_group: 0 }, ChannelCommand { channel: Manipulation, primitive: ActionId(210), target: Some(ActionTarget { entity: Some(WorldEntityId(8)), position: Some(Vec3f { x: 1000.5, y: 0.0, z: 0.0 }) }), direction: Vec3f { x: 1000.5, y: 0.0, z: 0.0 }, intensity: Intensity(1.0), duration_ticks: DurationTicks(1), stand_off_distance: 0.0, payload: BoundedMotorPayload { values: [] }, confidence: Confidence(0.93749905), coordination_group: 0 }, ChannelCommand { channel: Vocal, primitive: ActionId(400), target: None, direction: Vec3f { x: 0.0, y: 0.0, z: 0.0 }, intensity: Intensity(1.0), duration_ticks: DurationTicks(1), stand_off_distance: 0.0, payload: BoundedMotorPayload { values: [] }, confidence: Confidence(1.0), coordination_group: 0 }, ChannelCommand { channel: Posture, primitive: ActionId(3), target: None, direction: Vec3f { x: 0.0, y: 0.0, z: 0.0 }, intensity: Intensity(1.0), duration_ticks: DurationTicks(1), stand_off_distance: 0.0, payload: BoundedMotorPayload { values: [] }, confidence: Confidence(1.0), coordination_group: 0 }])
+ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 26 filtered out; finished in 12.13s
+

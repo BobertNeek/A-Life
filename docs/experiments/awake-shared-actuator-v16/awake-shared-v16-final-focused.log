@@ -1,0 +1,24 @@
+   Compiling alife_world v0.1.0 (/workspace/scratch/ee5e08a3ca9b/awake-shared-trajectory-v16/crates/alife_world)
+    Finished `test` profile [unoptimized] target(s) in 1m 33s
+     Running unittests src/lib.rs (/workspace/scratch/ee5e08a3ca9b/arousal-lineage-check-target-v9/debug/deps/alife_world-6b7d17d635ca0301)
+
+running 15 tests
+test headless::task_6_factorized_motor_tests::awake_ground_priority_quiet_slope_preserves_existing_planar_walking ... ok
+test headless::task_6_factorized_motor_tests::awake_initial_priority_blocks_rest_recovery_and_rolls_back_atomically ... ok
+test headless::task_6_factorized_motor_tests::awake_initial_priority_preempts_toward_motion_without_false_voluntary_credit ... ok
+test headless::task_6_factorized_motor_tests::awake_initial_priority_preserves_carried_hazard_ownership_and_pose ... ok
+test headless::task_6_factorized_motor_tests::awake_initial_priority_quiet_control_preserves_complete_world_and_receipt ... ok
+test headless::task_6_factorized_motor_tests::awake_initial_priority_restore_has_no_latched_reflex_after_contact_ends ... ok
+test headless::task_6_factorized_motor_tests::awake_initial_priority_water_block_preserves_zero_motion_and_honest_effort ... ok
+test headless::task_6_factorized_motor_tests::awake_spatial_priority_diagonal_motion_uses_three_dimensional_time ... ok
+test headless::task_6_factorized_motor_tests::awake_spatial_priority_vertical_motion_cannot_skip_contact_or_time ... ok
+test headless::task_6_factorized_motor_tests::awake_swept_priority_early_middle_late_share_time_path_and_effort ... ok
+test headless::task_6_factorized_motor_tests::awake_swept_priority_end_contact_has_no_extra_full_reflex_allowance ... ok
+test headless::task_6_factorized_motor_tests::awake_swept_priority_opposed_tangent_normals_stop_without_invented_direction ... ok
+test headless::task_6_factorized_motor_tests::awake_swept_priority_samples_intermediate_thermal_contact_once ... ok
+test headless::task_6_factorized_motor_tests::awake_swept_priority_slow_intent_uses_time_not_distance_remainder ... AWAKE_SHARED_ADAPTER_RATES effector=1.035 proprioception=0.975 voluntary_factor=0.5045625 voluntary_rate=0.050456252 reflex_rate=0.1 actual_reflex_path=0.049999963
+ok
+test headless::task_6_factorized_motor_tests::awake_swept_priority_zero_net_path_suppresses_rest_with_one_biology_advance ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 265 filtered out; finished in 0.02s
+

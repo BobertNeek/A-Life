@@ -883,7 +883,7 @@ fn grounded_candidate_projection_does_not_authorize_unsupported_steps() {
         // Selection still returns one candidate. The authoritative terrain check
         // rejects unsupported/out-of-bounds, too-steep and too-deep endpoints.
         let selected = world
-            .steer_visible_step(ORGANISM, target, relative, original)
+            .steer_visible_step(ORGANISM, target, relative, original, MOVE_STEP, 1.0)
             .unwrap()
             .unwrap()
             .0;
