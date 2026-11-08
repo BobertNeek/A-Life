@@ -1,0 +1,976 @@
+{
+  "approach_reference": 1791,
+  "approach_signal": 1776,
+  "branch_count": 64,
+  "branch_plan_sha256": "573cf19b525672e20a46fd5a7dcee026bcaabcf31ab96922716389a56ebf8461",
+  "branches": [
+    {
+      "inputs": [
+        {
+          "source": 1728,
+          "weight": 1.0
+        },
+        {
+          "source": 1729,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1728,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1729,
+          "weight": 1.0
+        },
+        {
+          "source": 1730,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1729,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1730,
+          "weight": 1.0
+        },
+        {
+          "source": 1731,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1730,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1731,
+          "weight": 1.0
+        },
+        {
+          "source": 1732,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1731,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1732,
+          "weight": 1.0
+        },
+        {
+          "source": 1733,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1732,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1733,
+          "weight": 1.0
+        },
+        {
+          "source": 1734,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1733,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1734,
+          "weight": 1.0
+        },
+        {
+          "source": 1735,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1734,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1735,
+          "weight": 1.0
+        },
+        {
+          "source": 1736,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1735,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1736,
+          "weight": 1.0
+        },
+        {
+          "source": 1737,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1736,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1737,
+          "weight": 1.0
+        },
+        {
+          "source": 1738,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1737,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1738,
+          "weight": 1.0
+        },
+        {
+          "source": 1739,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1738,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1739,
+          "weight": 1.0
+        },
+        {
+          "source": 1740,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1739,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1740,
+          "weight": 1.0
+        },
+        {
+          "source": 1741,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1740,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1741,
+          "weight": 1.0
+        },
+        {
+          "source": 1742,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1741,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1742,
+          "weight": 1.0
+        },
+        {
+          "source": 1743,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1742,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1743,
+          "weight": 1.0
+        },
+        {
+          "source": 1744,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1743,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1744,
+          "weight": 1.0
+        },
+        {
+          "source": 1745,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1744,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1745,
+          "weight": 1.0
+        },
+        {
+          "source": 1746,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1745,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1746,
+          "weight": 1.0
+        },
+        {
+          "source": 1747,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1746,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1747,
+          "weight": 1.0
+        },
+        {
+          "source": 1748,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1747,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1748,
+          "weight": 1.0
+        },
+        {
+          "source": 1749,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1748,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1749,
+          "weight": 1.0
+        },
+        {
+          "source": 1750,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1749,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1750,
+          "weight": 1.0
+        },
+        {
+          "source": 1751,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1750,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1751,
+          "weight": 1.0
+        },
+        {
+          "source": 1752,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1751,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1752,
+          "weight": 1.0
+        },
+        {
+          "source": 1753,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1752,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1753,
+          "weight": 1.0
+        },
+        {
+          "source": 1754,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1753,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1754,
+          "weight": 1.0
+        },
+        {
+          "source": 1755,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1754,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1755,
+          "weight": 1.0
+        },
+        {
+          "source": 1756,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1755,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1756,
+          "weight": 1.0
+        },
+        {
+          "source": 1757,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1756,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1757,
+          "weight": 1.0
+        },
+        {
+          "source": 1758,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1757,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1758,
+          "weight": 1.0
+        },
+        {
+          "source": 1759,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1758,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1759,
+          "weight": 1.0
+        },
+        {
+          "source": 1760,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1759,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1760,
+          "weight": 1.0
+        },
+        {
+          "source": 1761,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1760,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1761,
+          "weight": 1.0
+        },
+        {
+          "source": 1762,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1761,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1762,
+          "weight": 1.0
+        },
+        {
+          "source": 1763,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1762,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1763,
+          "weight": 1.0
+        },
+        {
+          "source": 1764,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1763,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1764,
+          "weight": 1.0
+        },
+        {
+          "source": 1765,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1764,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1765,
+          "weight": 1.0
+        },
+        {
+          "source": 1766,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1765,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1766,
+          "weight": 1.0
+        },
+        {
+          "source": 1767,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1766,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1767,
+          "weight": 1.0
+        },
+        {
+          "source": 1768,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1767,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1768,
+          "weight": 1.0
+        },
+        {
+          "source": 1769,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1768,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1769,
+          "weight": 1.0
+        },
+        {
+          "source": 1770,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1769,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1770,
+          "weight": 1.0
+        },
+        {
+          "source": 1771,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1770,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1771,
+          "weight": 1.0
+        },
+        {
+          "source": 1772,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1771,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1772,
+          "weight": 1.0
+        },
+        {
+          "source": 1773,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1772,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1773,
+          "weight": 1.0
+        },
+        {
+          "source": 1774,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1773,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1774,
+          "weight": 1.0
+        },
+        {
+          "source": 1775,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1774,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1775,
+          "weight": 1.0
+        },
+        {
+          "source": 1776,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1775,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1776,
+          "weight": 1.0
+        },
+        {
+          "source": 1777,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1776,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1777,
+          "weight": 1.0
+        },
+        {
+          "source": 1778,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1777,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1778,
+          "weight": 1.0
+        },
+        {
+          "source": 1779,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1778,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1779,
+          "weight": 1.0
+        },
+        {
+          "source": 1780,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1779,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1780,
+          "weight": 1.0
+        },
+        {
+          "source": 1781,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1780,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1781,
+          "weight": 1.0
+        },
+        {
+          "source": 1782,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1781,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1782,
+          "weight": 1.0
+        },
+        {
+          "source": 1783,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1782,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1783,
+          "weight": 1.0
+        },
+        {
+          "source": 1784,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1783,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1784,
+          "weight": 1.0
+        },
+        {
+          "source": 1785,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1784,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1785,
+          "weight": 1.0
+        },
+        {
+          "source": 1786,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1785,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1786,
+          "weight": 1.0
+        },
+        {
+          "source": 1787,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1786,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1787,
+          "weight": 1.0
+        },
+        {
+          "source": 1788,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1787,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1788,
+          "weight": 1.0
+        },
+        {
+          "source": 1789,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1788,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1789,
+          "weight": 1.0
+        },
+        {
+          "source": 1790,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1789,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1790,
+          "weight": 1.0
+        },
+        {
+          "source": 1791,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1790,
+      "threshold": 0.10000000149011612
+    },
+    {
+      "inputs": [
+        {
+          "source": 1791,
+          "weight": 1.0
+        },
+        {
+          "source": 1792,
+          "weight": 1.0
+        }
+      ],
+      "output_gain": 0.25,
+      "target": 1791,
+      "threshold": 0.10000000149011612
+    }
+  ],
+  "inspect_signal": 1760,
+  "output_gain": 0.25,
+  "profile": "BoundedCombined",
+  "rest_reference": 1759,
+  "rest_signal": 1747,
+  "schema": "explicit_fresh_branch_plan_v1",
+  "targets_and_input_weights_preserved": true,
+  "threshold": 0.10000000149011612
+}

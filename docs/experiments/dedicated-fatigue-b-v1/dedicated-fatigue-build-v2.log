@@ -1,0 +1,15 @@
+   Compiling alife_core v0.1.0 (/workspace/scratch/ee5e08a3ca9b/dedicated-fatigue-b-v1/crates/alife_core)
+   Compiling alife_gpu_backend v0.1.0 (/workspace/scratch/ee5e08a3ca9b/dedicated-fatigue-b-v1/crates/alife_gpu_backend)
+   Compiling alife_world v0.1.0 (/workspace/scratch/ee5e08a3ca9b/dedicated-fatigue-b-v1/crates/alife_world)
+   Compiling alife_runtime v0.1.0 (/workspace/scratch/ee5e08a3ca9b/dedicated-fatigue-b-v1/crates/alife_runtime)
+   Compiling alife_training v0.1.0 (/workspace/scratch/ee5e08a3ca9b/dedicated-fatigue-b-v1/crates/alife_training)
+warning: constant `FEATURE_CONTROLS` is never used
+  --> crates/alife_training/examples/probe_dedicated_fatigue.rs:30:7
+   |
+30 | const FEATURE_CONTROLS: [&str; 8] = [
+   |       ^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `alife_training` (example "probe_dedicated_fatigue") generated 1 warning
+    Finished `dev` profile [unoptimized] target(s) in 1m 40s

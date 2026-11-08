@@ -1,0 +1,83 @@
+{
+  "schema": "dedicated_fatigue_nonnegative_basis_receipt_v1",
+  "runtime_source_commit": "3e0aac31e01641f16d2b92e8a3e89b4003f47488",
+  "initial_guard_failure_commit": "1d7e309a814022f7787c5e0048bff4aa259de7a1",
+  "passed_intermediate_source": "68608bff2e1afa9481183ce3daa91f4b2502650f",
+  "executable_sha256": "88fdb40e35774a8f768871e45e2d3389e12f265dfd3f03ffe8b49404b4ae2cc6",
+  "source_sha256": {
+    "crates/alife_training/examples/probe_dedicated_fatigue.rs": "6477784369fa1938c7b42b058117fb55d380f713461e1c2f2c0a760763e92dad",
+    "crates/alife_training/examples/support/dedicated_fatigue.rs": "6436f26a87b9e5cda890742f3cece4212c58c9a25d3dd9c8a268d5fddd27b3fc",
+    "crates/alife_training/examples/support/motor_balance_assay.rs": "15b7621c7dc4f932172cfc2a69b878da88eb3d481cda3ac52c21f3c665a4df60",
+    "crates/alife_training/examples/support/multidrive_frozen.rs": "bee7e25f1340e1278eee9d34395a4fd3bc201bac3a63dc47879c27a5aaa176e4",
+    "crates/alife_training/examples/support/motor_probe_common.rs": "82f654569b92f415f3e789d613276faf5748d9b7d36034acc1b7d76c6138dfd4",
+    "crates/alife_training/examples/support/motor_operating_point.rs": "04e5582f808aba2acf3dca97816280edbfa515c39d4de911e18db6fb43b7387a",
+    "crates/alife_training/examples/probe_broad_drive_basis.rs": "3d0159eeecd1ec67adf6bdc8eb08b577b64715aa83784daecad1a24c57e4151c",
+    "crates/alife_training/examples/support/broad_drive_basis.rs": "9fcfa9006f2eb3726be508e856ea09b92c2f825a0c83bb202511f4e211cc050e"
+  },
+  "backend": "native_cpu_replay",
+  "world_steps": 0,
+  "learning_steps": 0,
+  "motor_initial_activation": 0,
+  "inputs": "synthetic zero sensory/hormone lanes; real compiled drive encoder; projection gain1; threshold shift0; four microsteps",
+  "profile_matrix": [
+    {
+      "file": "results/combined-full.json.gz",
+      "source_json_sha256": "3118a6ce7441ca67e7f5e22c90d66475343cee3342dff2820f4b839e68db938c",
+      "gzip_sha256": "e664ac3d4653e4b36336a1eb426ec0a25671a22b1e453a23e60831e5c56db62b",
+      "arms": 7,
+      "conditions_per_arm": 23,
+      "contexts": 4,
+      "replay_evaluations_including_arm_baseline": 168,
+      "frame_slots": 16128
+    },
+    {
+      "file": "results/combined-partial.json.gz",
+      "source_json_sha256": "d94ebad378a98d74970fff50412fbfb0c44a49110d43d6e75d2e3cf0aac6f705",
+      "gzip_sha256": "3e50eb9474b227ba940f98df1e7dae8eaab869a8a4b8f85c8dd933721faa52fa",
+      "arms": 2,
+      "conditions_per_arm": 23,
+      "contexts": 4,
+      "replay_evaluations_including_arm_baseline": 48,
+      "frame_slots": 4608
+    },
+    {
+      "file": "results/inherited-full.json.gz",
+      "source_json_sha256": "59f5b8ed97a8947217b0c25745812b2702572f6eba70edab4115a5bf60de3abc",
+      "gzip_sha256": "6ab26ee0f71763cc7a697245148445d82ee7eb5ee27c75569583b4031df6eba2",
+      "arms": 2,
+      "conditions_per_arm": 23,
+      "contexts": 4,
+      "replay_evaluations_including_arm_baseline": 48,
+      "frame_slots": 4608
+    },
+    {
+      "file": "results/inherited-partial.json.gz",
+      "source_json_sha256": "d41a189bc81d072e871bbdccefc93220f09b80ac9e338f26f7472f894e2d52d3",
+      "gzip_sha256": "ec2323d3838c59202271e521daeecd16312d34707503a6570ea99f2121352048",
+      "arms": 2,
+      "conditions_per_arm": 23,
+      "contexts": 4,
+      "replay_evaluations_including_arm_baseline": 48,
+      "frame_slots": 4608
+    }
+  ],
+  "native_tests_passed": 9,
+  "input_cut_sequence_checks": 299,
+  "dedicated_readout_cut_complete_activation_trace_pairs": 23,
+  "matched_reference_retained_path_sample_pairs": 4048,
+  "exact_reference_plan_rows": [
+    26367,
+    26751,
+    26927,
+    27135
+  ],
+  "exact_new_motor_edge": 9697,
+  "shared_reference_contact_prior": 2.0,
+  "shared_reference_contact_after": 2.4,
+  "all11_paths_resolved": true,
+  "all11_biological_motivations_repaired": false,
+  "branch_plan_scope": "Explicit fresh causal state only. No durable founder initialization or acquired branch changes.",
+  "native_default_runtime_activation": false,
+  "resource_lane_released": true,
+  "controls": "All seven arms only at combined branch/full reference. Other three branch/reference combinations retain Baseline and Dedicated. All23 conditions and four contexts present in every arm. Max-B/signed-cue/no-locomotion are additional algebraic tests, not extra world trials."
+}

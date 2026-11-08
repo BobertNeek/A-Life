@@ -1,0 +1,23 @@
+   Compiling alife_training v0.1.0 (/workspace/scratch/ee5e08a3ca9b/dedicated-fatigue-b-v1/crates/alife_training)
+    Finished `test` profile [unoptimized] target(s) in 2.63s
+     Running unittests examples/probe_broad_drive_basis.rs (/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/examples/probe_broad_drive_basis-8045f0726b953f41)
+
+running 4 tests
+test tests::future_head_and_rows_do_not_alias_an_admitted_legacy_decoder ... ok
+test tests::legacy_ports_including_memory_cognitive_and_grip_are_bit_preserved ... ok
+test tests::peer_and_intrinsic_vocal_use_only_same_frame_observations ... ok
+test tests::temperature_is_symmetric_and_unknown_expectancies_are_unassigned ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running unittests examples/probe_dedicated_fatigue.rs (/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/examples/probe_dedicated_fatigue-78f859916ae2b9ea)
+
+running 5 tests
+test tests::actual_all_drive_coordinates_and_zero_prior_are_required ... ok
+test tests::fresh_branch_plan_cannot_change_inputs_or_claim_wrong_digest ... ok
+test tests::full_reference_factor_only_changes_declared_decoder_rows ... ok
+test tests::input_cut_and_washout_preserve_all_nonphysical_decoder_lanes ... ok
+test tests::nonnegative_basis_is_invariant_to_signed_cues_and_zero_for_noops ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.83s
+

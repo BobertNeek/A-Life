@@ -1,0 +1,10 @@
+{
+  "source_runtime_commit": "224d8a74cb72460551c5a13e106a52cc3c18c78b",
+  "source_results_sha256": "0077b6bd38ab4b3cbaaf50f5557b2dd5707a36ab2785b152cdc5dc2d7a28e67c",
+  "selection": {
+    "factor": "BoundedCombined",
+    "motor_start": 0,
+    "differential_readout": true
+  },
+  "scope": "Detached fresh initial state only; not a founder ABI and not acquired state."
+}
