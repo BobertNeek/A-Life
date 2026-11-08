@@ -1,0 +1,22 @@
+{
+  "schema": "ordinary_physiology_b_first_tick_run_binding",
+  "source": "6dee4ea0e93cb8e7315e94611d9ac0c86fb97ff4",
+  "executable_sha256": "5681bc2337705834ac83159d4ec2fbe16ad35a60240577fe4f9bab216c2ffe3d",
+  "test_executable_sha256": "434316cb220743eb4195551eb422090397eb60a03602f418767e26e603c3262f",
+  "protocol_sha256": "a63c2b7c2fee4573816a193c16a576bedaa4d0d97836828b41e60da4d255f03d",
+  "seed": 7,
+  "arms": 8,
+  "cases": 10,
+  "ticks_per_case": 1,
+  "max_world_ticks": 80,
+  "output_directory": "first-tick-7-6dee4ea0-once",
+  "previous_runs": 0,
+  "failures_before_run": [
+    "7ea0cb0c E0308 biochemical enum namespace; fixed6dee4ea0",
+    "6dee4ea0 normal dev build E0599 stale older core artifact; rebuilt unchanged source after mtime invalidation"
+  ],
+  "tests_passed": 4,
+  "strict_example_clippy": "passed",
+  "changed_rustfmt": "passed",
+  "full_new_seed_matrix_dispatched": false
+}

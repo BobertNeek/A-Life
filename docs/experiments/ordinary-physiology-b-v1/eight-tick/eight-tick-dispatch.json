@@ -1,0 +1,19 @@
+{
+  "schema": "ordinary_physiology_b_eight_tick_dispatch_v1",
+  "status": "attempted_dispatched",
+  "attempt": 1,
+  "utc": "2026-11-08T15:35:07.411046+00:00",
+  "runtime_source": "6dee4ea0e93cb8e7315e94611d9ac0c86fb97ff4",
+  "evidence_source": "92a28448be62060ad761e26406955aa64fbc783c",
+  "binding_sha256": "ac6cbca675443983fe046adb42ca765cc3bbf410fa879000fab0eb9ae12e7e1f",
+  "executable_sha256": "5681bc2337705834ac83159d4ec2fbe16ad35a60240577fe4f9bab216c2ffe3d",
+  "seed_hex": "0xB0011108",
+  "seed": 2952859912,
+  "output_directory": "eight-tick-0xb0011108-6dee4ea0-once",
+  "scenes": 80,
+  "ticks_per_scene": 8,
+  "maximum_world_ticks": 640,
+  "outer_timeout_seconds": 900,
+  "retry_allowed": false,
+  "overlap_check": "Coordinating task verified nine tracked worktrees and known active owners immediately before dispatch."
+}

@@ -1,0 +1,199 @@
+{
+  "schema": "ordinary_physiology_b_publication_manifest_v1",
+  "base_commit": "8ddf89f64311a5d6c8e76e5b219d6665c9ddac4e",
+  "base_tree": "dc37336a9a23538f05efa340545d0c314a6b087b",
+  "B1_helper_source": "2e519c584e9f5d56e6c60544c135769a5ad612e6",
+  "runtime_source": "6dee4ea0e93cb8e7315e94611d9ac0c86fb97ff4",
+  "closed_evidence_source": "6d4b4ab5",
+  "note": "An additive publication tree, not a claim the recomposed tree generated the prior bound executable. Every production runtime file and existing imported helper matches the qualified published base. Host/B1 source files are exact original bytes. Original synthetic and first-tick artifacts remain unchanged.",
+  "exclusions": [
+    "Raw diagnostic JSON and per-case neural/candidate input receipts",
+    "Checkpoint banks and complete learned-weight arrays",
+    "Executables",
+    "B2 or broader derived-basis candidate changes"
+  ],
+  "source_patch": "source-additions.patch",
+  "files": [
+    {
+      "path": "crates/alife_training/examples/probe_physiology_host.rs",
+      "bytes": 18727,
+      "sha256": "afc2e12df17e68aab5a255e4cba9c709fb41f77e221ccc2acacc21ed0a0518a8",
+      "git_blob_sha1": "28c0a69066d48a76163e2eb2d65c70b9d5f19453"
+    },
+    {
+      "path": "crates/alife_training/examples/support/physiology_host.rs",
+      "bytes": 12047,
+      "sha256": "94addce2513784fbb9e874947591c1f1ec8e2254d30cafb13d1a400d3932311b",
+      "git_blob_sha1": "e0ee30e2f1bb0d44d9ecc6c151ab3e752f7b6c31"
+    },
+    {
+      "path": "crates/alife_training/examples/support/dedicated_fatigue.rs",
+      "bytes": 11382,
+      "sha256": "6436f26a87b9e5cda890742f3cece4212c58c9a25d3dd9c8a268d5fddd27b3fc",
+      "git_blob_sha1": "6b2d503a710faed470270984136da6e41255e516"
+    },
+    {
+      "path": "docs/experiments/ordinary-physiology-b-v1/EIGHT-TICK-RESULTS.md",
+      "bytes": 9595,
+      "sha256": "96090693c78fa42da74e84780f27c76f610635ff03b9609932a05cf9e19c71fa",
+      "git_blob_sha1": "4d884ea80ff28ab12bee0fda265d594378516839"
+    },
+    {
+      "path": "docs/experiments/ordinary-physiology-b-v1/FIRST-TICK-RESULTS.md",
+      "bytes": 4461,
+      "sha256": "956e0e81f60d33c0eec25fd564a68731da062b90dd7ba6d029361e758b727a2a",
+      "git_blob_sha1": "0f4da2aef21f9cac6bfb22d751feae97fdd98d16"
+    },
+    {
+      "path": "docs/experiments/ordinary-physiology-b-v1/PROTOCOL.md",
+      "bytes": 7100,
+      "sha256": "08337bfb2164868199883fe65839c542aa0a0807e0ba0b9a5bf414d85549e7b2",
+      "git_blob_sha1": "235c1e1d8772d83839db914e949eb41dd182fc1e"
+    },
+    {
+      "path": "docs/experiments/ordinary-physiology-b-v1/eight-tick/contrasts.csv",
+      "bytes": 48033,
+      "sha256": "b2cf80081aa6bc57e17f3d455f34f25c3e0bb8c8c26335a1b6a426d081978399",
+      "git_blob_sha1": "736b9523c42ba9543e75e7190f403803b86a7003"
+    },
+    {
+      "path": "docs/experiments/ordinary-physiology-b-v1/eight-tick/coverage.json",
+      "bytes": 196708,
+      "sha256": "b1b33a91108d502f5ca611549d2548e080051a75a84e16bcd2fe4522ca68e1c3",
+      "git_blob_sha1": "3aaf2da124008bf2de6344ee50297c4a414f3a9a"
+    },
+    {
+      "path": "docs/experiments/ordinary-physiology-b-v1/eight-tick/eight-tick-dispatch.json",
+      "bytes": 832,
+      "sha256": "7bdda3d768ede3e58abd74ceab8fb27ac3f76c59b611343e93215df23c0e948d",
+      "git_blob_sha1": "f6b5df7cae3f7998c47722b834e52f0e12eff042"
+    },
+    {
+      "path": "docs/experiments/ordinary-physiology-b-v1/eight-tick/eight-tick-reserved-binding.json",
+      "bytes": 1355,
+      "sha256": "ac6cbca675443983fe046adb42ca765cc3bbf410fa879000fab0eb9ae12e7e1f",
+      "git_blob_sha1": "759a3f60a2788bfa3c8277cb2340ad4ae3b306f9"
+    },
+    {
+      "path": "docs/experiments/ordinary-physiology-b-v1/eight-tick/eight-tick.stderr.log",
+      "bytes": 7824,
+      "sha256": "f8d6c62bc3c6eeaffc1cc810d29894aa0ec4b90011c7b1c25aee4521c7599e95",
+      "git_blob_sha1": "11d06d146d3cd220063775df35c36590bd833e9d"
+    },
+    {
+      "path": "docs/experiments/ordinary-physiology-b-v1/eight-tick/execution-coverage.csv",
+      "bytes": 68977,
+      "sha256": "087ee17d4c5dc2277ace5091d24799b5165b93d75bcb77ca680c95515e6c0808",
+      "git_blob_sha1": "a8bcfd8256a72bd72248808a6452f8d543582863"
+    },
+    {
+      "path": "docs/experiments/ordinary-physiology-b-v1/eight-tick/interval-summary.json.gz",
+      "bytes": 557015,
+      "sha256": "9d455f102a31dd14d3e2edc0de67c031a36b5be58d78c1adf021d94653a7b62c",
+      "git_blob_sha1": "29c34bf118d4dfe1c172fa861431794dcd4561b9"
+    },
+    {
+      "path": "docs/experiments/ordinary-physiology-b-v1/eight-tick/receipt.json",
+      "bytes": 2710,
+      "sha256": "53d6abb60e23491ec2b71bedcbed09860ed17737c26bee09f68b7ddcf290a9d7",
+      "git_blob_sha1": "944170f1342e63601636c403205913c161ec29fd"
+    },
+    {
+      "path": "docs/experiments/ordinary-physiology-b-v1/first-tick/first-tick-run-binding.json",
+      "bytes": 902,
+      "sha256": "3a592399b88d341a65700a4ef682dfc3c0d598d3bae56dcbfa503594f7661e64",
+      "git_blob_sha1": "9506f5c6f1fc779b4a9b43da899e6d14571bfec4"
+    },
+    {
+      "path": "docs/experiments/ordinary-physiology-b-v1/first-tick/first-tick.stderr.log",
+      "bytes": 7824,
+      "sha256": "fa923f7e41f6b9aa56422aa147dc06840e4b5b101017ecd1b0c54a30dc5e8374",
+      "git_blob_sha1": "6701df4e8acccd1dc927e36cf4e9b674f209aa01"
+    },
+    {
+      "path": "docs/experiments/ordinary-physiology-b-v1/first-tick/frozen-protocol.json",
+      "bytes": 3576,
+      "sha256": "a63c2b7c2fee4573816a193c16a576bedaa4d0d97836828b41e60da4d255f03d",
+      "git_blob_sha1": "1c6293673ffe3a64d8b386b0f8d296bf17444a64"
+    },
+    {
+      "path": "docs/experiments/ordinary-physiology-b-v1/first-tick/host-build-6dee4ea0.log",
+      "bytes": 1447,
+      "sha256": "42f71233806b4f89dfc5d016b5272d403b2420a6d6edc84e305ad7dd12a8fd8f",
+      "git_blob_sha1": "81d53620a49ca70636c2276b77381743b25f2abe"
+    },
+    {
+      "path": "docs/experiments/ordinary-physiology-b-v1/first-tick/host-build-fingerprint-invalidated.log",
+      "bytes": 16857,
+      "sha256": "d5073ce9979bdbab4872f97a4d38527be0bcd48adbbdd69a8ba9bac0dc3a7c07",
+      "git_blob_sha1": "77a39573bd4531b454116dd929851243b555fd7f"
+    },
+    {
+      "path": "docs/experiments/ordinary-physiology-b-v1/first-tick/host-clippy-initial.log",
+      "bytes": 172,
+      "sha256": "8bcfa672b3519bd5ef6172f74fd8112ed94a062394af9cd6582d926de298acdb",
+      "git_blob_sha1": "45557499f817d07f8469e1424c13386fe25660ee"
+    },
+    {
+      "path": "docs/experiments/ordinary-physiology-b-v1/first-tick/host-rustfmt.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "git_blob_sha1": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
+    },
+    {
+      "path": "docs/experiments/ordinary-physiology-b-v1/first-tick/host-tests-initial.log",
+      "bytes": 1946,
+      "sha256": "81ff1744d9ff160357638f05f2271a618e5aa5d28a1018cda83fb3617c5893ab",
+      "git_blob_sha1": "fdbdeac75004d049d7a92a3f8dc50e02d7bc7e69"
+    },
+    {
+      "path": "docs/experiments/ordinary-physiology-b-v1/first-tick/host-tests-namespace-fixed.log",
+      "bytes": 742,
+      "sha256": "1081034ceadd5060bd39f93135758f578966b53e1d5a7bc9821c4f361fe9f1a8",
+      "git_blob_sha1": "c4d8145b079b2975149a2c7b2d02163f4ee45c5e"
+    },
+    {
+      "path": "docs/experiments/ordinary-physiology-b-v1/first-tick/receipt.json",
+      "bytes": 1350,
+      "sha256": "0033f29ca0174513f6e1f052cc1f9f625dc5917699902e3ae64567427c6b42fc",
+      "git_blob_sha1": "8136b45dd7c96d39c6c64eb53f18e76934713b44"
+    },
+    {
+      "path": "docs/experiments/ordinary-physiology-b-v1/first-tick/summarize_first_tick.py",
+      "bytes": 5084,
+      "sha256": "152e1e700c65da1703cb81d9c572d11ab81505b0e036dbdc6257370b14f3d929",
+      "git_blob_sha1": "cd763955916725d05317cfafe285dc709ecd71bf"
+    },
+    {
+      "path": "docs/experiments/ordinary-physiology-b-v1/first-tick/summary.json.gz",
+      "bytes": 29225,
+      "sha256": "b4cc5dbd73f129da29ec773b6b0f210064d4c9f6d419ad2318c60df0104ddd16",
+      "git_blob_sha1": "abbd07f69bed1c07c4f29ac14736e55996f7f9c1"
+    },
+    {
+      "path": "docs/experiments/ordinary-physiology-b-v1/source-additions.patch",
+      "bytes": 43770,
+      "sha256": "5cb142e24926181c22fa13f38c7e2b69e603296c5107542f029acc584d571caa",
+      "git_blob_sha1": "c7b464b01663ccf303c594b88ba2ed9f1ef10aa2"
+    },
+    {
+      "path": "docs/experiments/ordinary-physiology-b-v1/summarize_execution_coverage.py",
+      "bytes": 2730,
+      "sha256": "2a357a863e7d3b209dbf65a11a41122b9380758f4f4172d51a54477a174825e1",
+      "git_blob_sha1": "fda8e25faffa2936069f8737bbb537370c4689f2"
+    },
+    {
+      "path": "docs/experiments/ordinary-physiology-b-v1/summarize_intervals.py",
+      "bytes": 5820,
+      "sha256": "55d3302a92e4072703bae099aab9ce82226dc7499d3f29fd85fffd395b3c60d6",
+      "git_blob_sha1": "495c53809781097d8b4bbeba0656db2cce08a10a"
+    },
+    {
+      "path": "crates/alife_training/Cargo.toml",
+      "bytes": 2001,
+      "sha256": "8d932aaed7e78d491d15717a44a30cec09125bdeded73d9be918b8f3a78412bf",
+      "git_blob_sha1": "eb41855a95789759e490ec970348dcb11093c355",
+      "change": "Only add probe_physiology_host example registration to published base."
+    }
+  ]
+}

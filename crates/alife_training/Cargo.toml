@@ -68,3 +68,7 @@ required-features = ["cpu-backend"]
 [[example]]
 name = "probe_bounded_founder_admission"
 required-features = ["cpu-backend"]
+
+[[example]]
+name = "probe_physiology_host"
+required-features = ["cpu-backend"]

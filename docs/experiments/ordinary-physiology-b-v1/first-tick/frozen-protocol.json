@@ -1,0 +1,138 @@
+{
+  "arms": [
+    {
+      "bounded": false,
+      "dedicated_b": false,
+      "tonic_bridges": false
+    },
+    {
+      "bounded": false,
+      "dedicated_b": false,
+      "tonic_bridges": true
+    },
+    {
+      "bounded": false,
+      "dedicated_b": true,
+      "tonic_bridges": false
+    },
+    {
+      "bounded": false,
+      "dedicated_b": true,
+      "tonic_bridges": true
+    },
+    {
+      "bounded": true,
+      "dedicated_b": false,
+      "tonic_bridges": false
+    },
+    {
+      "bounded": true,
+      "dedicated_b": false,
+      "tonic_bridges": true
+    },
+    {
+      "bounded": true,
+      "dedicated_b": true,
+      "tonic_bridges": false
+    },
+    {
+      "bounded": true,
+      "dedicated_b": true,
+      "tonic_bridges": true
+    }
+  ],
+  "case_count": 10,
+  "cases": [
+    {
+      "curiosity": 0.10000000149011612,
+      "fatigue": 0.10000000149011612,
+      "hunger": 0.10000000149011612,
+      "name": "neutral_comfortable",
+      "scene": "Neutral"
+    },
+    {
+      "curiosity": 0.10000000149011612,
+      "fatigue": 0.6499999761581421,
+      "hunger": 0.10000000149011612,
+      "name": "neutral_fatigued",
+      "scene": "Neutral"
+    },
+    {
+      "curiosity": 0.10000000149011612,
+      "fatigue": 0.10000000149011612,
+      "hunger": 0.10000000149011612,
+      "name": "food_comfortable",
+      "scene": "Food"
+    },
+    {
+      "curiosity": 0.10000000149011612,
+      "fatigue": 0.10000000149011612,
+      "hunger": 0.6499999761581421,
+      "name": "food_hungry",
+      "scene": "Food"
+    },
+    {
+      "curiosity": 0.10000000149011612,
+      "fatigue": 0.10000000149011612,
+      "hunger": 0.10000000149011612,
+      "name": "bitter_comfortable",
+      "scene": "Bitter"
+    },
+    {
+      "curiosity": 0.10000000149011612,
+      "fatigue": 0.10000000149011612,
+      "hunger": 0.6499999761581421,
+      "name": "bitter_hungry",
+      "scene": "Bitter"
+    },
+    {
+      "curiosity": 0.10000000149011612,
+      "fatigue": 0.10000000149011612,
+      "hunger": 0.10000000149011612,
+      "name": "object_comfortable",
+      "scene": "Object"
+    },
+    {
+      "curiosity": 0.6499999761581421,
+      "fatigue": 0.10000000149011612,
+      "hunger": 0.10000000149011612,
+      "name": "object_curious",
+      "scene": "Object"
+    },
+    {
+      "curiosity": 0.10000000149011612,
+      "fatigue": 0.6499999761581421,
+      "hunger": 0.10000000149011612,
+      "name": "food_fatigued",
+      "scene": "Food"
+    },
+    {
+      "curiosity": 0.10000000149011612,
+      "fatigue": 0.6499999761581421,
+      "hunger": 0.10000000149011612,
+      "name": "bitter_fatigued",
+      "scene": "Bitter"
+    }
+  ],
+  "expansion_axes_deferred": [
+    "hot/cold",
+    "social",
+    "reproduction",
+    "unbound extension"
+  ],
+  "factor_count": 8,
+  "fixture_max_world_ticks": 80,
+  "fixture_seed": 7,
+  "fixture_ticks_per_case": 1,
+  "founder_dependency": "a2424a76 bounded tag9; founder qualification passed; this assay unexecuted",
+  "normal_somatic_learning_retained": true,
+  "proposed_max_world_ticks": 640,
+  "proposed_world_seed": 2952859912,
+  "proposed_world_ticks_per_case": 8,
+  "schema": "ordinary_physiology_b_protocol_v1",
+  "scope": "CPU host only; no default GPU runtime activation, no evolutionary or learned-success claim",
+  "shared_controls": "full differential references, B1 Contact prior, all candidate availability and actual physiology",
+  "status": "source_only_unexecuted",
+  "tonic_warning": "383 receives the real regional gate offset; its fixed-context silence was not biological silence",
+  "training_optimizer_steps": 0
+}

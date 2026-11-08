@@ -1,0 +1,26 @@
+{
+  "schema": "ordinary_physiology_b_eight_tick_reserved_binding_v1",
+  "status": "reserved_not_dispatched",
+  "source": "6dee4ea0e93cb8e7315e94611d9ac0c86fb97ff4",
+  "executable_sha256": "5681bc2337705834ac83159d4ec2fbe16ad35a60240577fe4f9bab216c2ffe3d",
+  "frozen_protocol_sha256": "a63c2b7c2fee4573816a193c16a576bedaa4d0d97836828b41e60da4d255f03d",
+  "qualification_receipt_sha256": "0033f29ca0174513f6e1f052cc1f9f625dc5917699902e3ae64567427c6b42fc",
+  "first_tick_raw_sha256": "f09f71615398419b1dd9e421090c2a193b9d52252ffc4f9e9ac30fc3125235c3",
+  "matrix_seed_hex": "0xB0011108",
+  "matrix_seed_decimal": 2952859912,
+  "seed_count": 1,
+  "arms": 8,
+  "cases": 10,
+  "ticks_per_case": 8,
+  "maximum_world_ticks": 640,
+  "proposed_output_directory": "eight-tick-0xb0011108-6dee4ea0-once",
+  "known_previous_uses": 0,
+  "overlap_verification": "Coordinating task checked workspace source and both active native owners before reservation.",
+  "dispatch_prerequisites": [
+    "review completed first-tick integration findings",
+    "obtain explicit released native lane; currently assigned to basis compile-only batch"
+  ],
+  "additional_user_approval_needed": false,
+  "interval_extractor_sha256": "55d3302a92e4072703bae099aab9ce82226dc7499d3f29fd85fffd395b3c60d6",
+  "interval_extractor_validated_on_frozen_first_tick_max_error": 1.198829181702464e-07
+}

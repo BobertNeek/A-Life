@@ -1,0 +1,12 @@
+   Compiling alife_training v0.1.0 (/workspace/scratch/ee5e08a3ca9b/physiology-host-b-v1/crates/alife_training)
+    Finished `test` profile [unoptimized] target(s) in 3.36s
+     Running unittests examples/probe_physiology_host.rs (/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/examples/probe_physiology_host-ecdc60ba2e85a95d)
+
+running 4 tests
+test tests::actual_atp_budget_not_fixed_four_microsteps ... ok
+test tests::newborn_profiles_derive_real_drives_and_do_not_change_genes ... ok
+test tests::prospective_counts_do_not_launch_a_world ... ok
+test tests::tonic_five_edges_only_and_branch_controls_keep_fixed_coordinates ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.61s
+

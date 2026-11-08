@@ -1,0 +1,36 @@
+{
+  "schema": "ordinary_physiology_b_first_tick_receipt_v1",
+  "source": "6dee4ea0e93cb8e7315e94611d9ac0c86fb97ff4",
+  "executable_sha256": "5681bc2337705834ac83159d4ec2fbe16ad35a60240577fe4f9bab216c2ffe3d",
+  "binding_sha256": "3a592399b88d341a65700a4ef682dfc3c0d598d3bae56dcbfa503594f7661e64",
+  "raw_result_sha256": "f09f71615398419b1dd9e421090c2a193b9d52252ffc4f9e9ac30fc3125235c3",
+  "summary_sha256": "0eb7688a6302a30c83ea1a518d633e4f4ad38f77cae548099010ce6920a05189",
+  "compressed_summary_sha256": "b4cc5dbd73f129da29ec773b6b0f210064d4c9f6d419ad2318c60df0104ddd16",
+  "world_ticks": 80,
+  "seed": 7,
+  "cases": 10,
+  "arms": 8,
+  "intervals_per_case": 1,
+  "exit_code": 0,
+  "tests_passed": 4,
+  "strict_example_clippy": "passed",
+  "changed_rustfmt": "passed",
+  "failures": [
+    {
+      "source": "7ea0cb0c",
+      "stage": "compile tests",
+      "error": "E0308: wrong drive enum namespace; fixed6dee4ea0"
+    },
+    {
+      "source": "6dee4ea0",
+      "stage": "normal dev build",
+      "error": "E0599: stale dev core artifact; source bytes unchanged, mtimes invalidated and dependent closure rebuilt"
+    }
+  ],
+  "world_execution_failures": [],
+  "replays_exact": true,
+  "matched_first_inputs_exact": true,
+  "native_lane_released": true,
+  "new_seed_matrix_dispatched": false,
+  "raw_checkpoint_or_learned_array_published": false
+}

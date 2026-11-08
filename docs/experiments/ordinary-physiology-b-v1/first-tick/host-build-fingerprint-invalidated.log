@@ -1,0 +1,112 @@
+       Fresh unicode-ident v1.0.24
+       Fresh proc-macro2 v1.0.106
+       Fresh libc v0.2.186
+       Fresh quote v1.0.45
+       Fresh syn v2.0.117
+       Fresh cfg-if v1.0.4
+       Fresh cfg_aliases v0.2.1
+       Fresh pkg-config v0.3.33
+       Fresh jobserver v0.1.34
+       Fresh find-msvc-tools v0.1.9
+       Fresh bitflags v2.13.0
+       Fresh shlex v2.0.1
+       Fresh cc v1.2.63
+       Fresh autocfg v1.5.1
+       Fresh thiserror-impl v2.0.18
+       Fresh thiserror v2.0.18
+       Fresh libm v0.2.16
+       Fresh libloading v0.8.9
+       Fresh bytemuck_derive v1.10.2
+       Fresh equivalent v1.0.2
+       Fresh arrayvec v0.7.6
+       Fresh log v0.4.32
+       Fresh bytemuck v1.25.0
+       Fresh num-traits v0.2.19
+       Fresh zerocopy-derive v0.8.52
+       Fresh foldhash v0.2.0
+       Fresh allocator-api2 v0.2.21
+       Fresh smallvec v1.15.1
+       Fresh hashbrown v0.16.1
+       Fresh zerocopy v0.8.52
+       Fresh unicode-width v0.2.2
+       Fresh hashbrown v0.17.1
+       Fresh once_cell v1.21.4
+       Fresh bit-vec v0.9.1
+       Fresh bit-set v0.9.1
+       Fresh indexmap v2.14.0
+       Fresh codespan-reporting v0.13.1
+       Fresh half v2.7.1
+       Fresh spirv v0.4.0+sdk-1.4.341.0
+       Fresh foldhash v0.1.5
+       Fresh raw-window-handle v0.6.2
+       Fresh hexf-parse v0.2.1
+       Fresh rustc-hash v1.1.0
+       Fresh scopeguard v1.2.0
+       Fresh lock_api v0.4.14
+       Fresh naga v29.0.3
+       Fresh wgpu-types v29.0.3
+       Fresh hashbrown v0.15.5
+       Fresh parking_lot_core v0.9.12
+       Fresh ash v0.38.0+1.3.281
+       Fresh dlib v0.5.3
+       Fresh gpu-descriptor-types v0.2.0
+       Fresh presser v0.3.1
+       Fresh version_check v0.9.5
+       Fresh gpu-allocator v0.28.0
+       Fresh gpu-descriptor v0.3.2
+       Fresh wayland-sys v0.31.11
+       Fresh parking_lot v0.12.5
+       Fresh khronos-egl v6.0.0
+       Fresh wgpu-naga-bridge v29.0.3
+       Fresh serde_core v1.0.228
+       Fresh ordered-float v5.3.0
+       Fresh glow v0.17.0
+       Fresh profiling v1.0.18
+       Fresh renderdoc-sys v1.1.0
+       Fresh wgpu-hal v29.0.3
+       Fresh serde_derive v1.0.228
+       Fresh arrayref v0.3.9
+       Fresh litrs v1.0.0
+       Fresh constant_time_eq v0.4.2
+       Fresh typenum v1.20.1
+       Fresh cpufeatures v0.3.0
+       Fresh blake3 v1.8.5
+       Fresh generic-array v0.14.7
+       Fresh document-features v0.2.12
+       Fresh serde v1.0.228
+       Fresh wgpu-core-deps-windows-linux-android v29.0.3
+       Fresh wgpu-core v29.0.3
+       Dirty alife_core v0.1.0 (/workspace/scratch/ee5e08a3ca9b/physiology-host-b-v1/crates/alife_core): the file `crates/alife_core/src/phenotype/compiler.rs` has changed (1794150870.195671571s, 17m 6s after last build at 1794149844.185956701s)
+   Compiling alife_core v0.1.0 (/workspace/scratch/ee5e08a3ca9b/physiology-host-b-v1/crates/alife_core)
+     Running `/workspace/scratch/ee5e08a3ca9b/recovered-toolchain-rust-1.99.1-reset2/rustup/toolchains/1.99.1-x86_64-unknown-linux-gnu/bin/rustc --crate-name alife_core --edition=2021 crates/alife_core/src/lib.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --crate-type lib --emit=dep-info,metadata,link -C embed-bitcode=no --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=26bf702b66e2d8fb -C extra-filename=-57cf552e1648489e --out-dir /workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps -C strip=debuginfo -L dependency=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps --extern bitflags=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/libbitflags-f6be2fe850a4300b.rmeta --extern blake3=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/libblake3-cb872c3efc893665.rmeta --extern bytemuck=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/libbytemuck-80a1e20cb3f6e09c.rmeta --extern serde=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/libserde-d2b92067b57ae43f.rmeta --extern smallvec=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/libsmallvec-3c55f9b5d3758862.rmeta --extern thiserror=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/libthiserror-b53aba970f9bf1ae.rmeta -L native=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/build/blake3-341d421ec6df7fff/out -L native=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/build/blake3-341d421ec6df7fff/out`
+       Fresh zmij v1.0.21
+       Fresh itoa v1.0.18
+       Fresh memchr v2.8.1
+       Fresh static_assertions v1.1.0
+       Fresh wgpu v29.0.3
+       Fresh serde_json v1.0.150
+       Fresh zstd-sys v2.0.16+zstd.1.5.7
+       Fresh block-buffer v0.10.4
+       Fresh crypto-common v0.1.7
+       Fresh pollster v0.4.0
+       Fresh alife_storage v0.1.0 (/workspace/scratch/ee5e08a3ca9b/physiology-host-b-v1/crates/alife_storage)
+       Dirty alife_world v0.1.0 (/workspace/scratch/ee5e08a3ca9b/physiology-host-b-v1/crates/alife_world): the dependency `alife_core` was rebuilt
+   Compiling alife_world v0.1.0 (/workspace/scratch/ee5e08a3ca9b/physiology-host-b-v1/crates/alife_world)
+     Running `/workspace/scratch/ee5e08a3ca9b/recovered-toolchain-rust-1.99.1-reset2/rustup/toolchains/1.99.1-x86_64-unknown-linux-gnu/bin/rustc --crate-name alife_world --edition=2021 crates/alife_world/src/lib.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --crate-type lib --emit=dep-info,metadata,link -C embed-bitcode=no --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values())' -C metadata=bca020d443d08f6a -C extra-filename=-050a16acfb9cb4fb --out-dir /workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps -C strip=debuginfo -L dependency=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps --extern alife_core=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/libalife_core-57cf552e1648489e.rmeta --extern alife_storage=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/libalife_storage-a04f2ff0363c97e0.rmeta --extern serde=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/libserde-d2b92067b57ae43f.rmeta --extern serde_json=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/libserde_json-4909800a82ecea08.rmeta --extern thiserror=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/libthiserror-b53aba970f9bf1ae.rmeta -L native=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/build/blake3-341d421ec6df7fff/out -L native=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/build/blake3-341d421ec6df7fff/out`
+       Dirty alife_gpu_backend v0.1.0 (/workspace/scratch/ee5e08a3ca9b/physiology-host-b-v1/crates/alife_gpu_backend): the dependency `alife_core` was rebuilt
+   Compiling alife_gpu_backend v0.1.0 (/workspace/scratch/ee5e08a3ca9b/physiology-host-b-v1/crates/alife_gpu_backend)
+     Running `/workspace/scratch/ee5e08a3ca9b/recovered-toolchain-rust-1.99.1-reset2/rustup/toolchains/1.99.1-x86_64-unknown-linux-gnu/bin/rustc --crate-name alife_gpu_backend --edition=2021 crates/alife_gpu_backend/src/lib.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --crate-type lib --emit=dep-info,metadata,link -C embed-bitcode=no --cfg 'feature="default"' --cfg 'feature="training-rollout"' --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values("default", "gpu-tests", "test-support", "training-rollout"))' -C metadata=f87c21e7d07f07b3 -C extra-filename=-e50e43ec60ca4844 --out-dir /workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps -C strip=debuginfo -L dependency=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps --extern alife_core=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/libalife_core-57cf552e1648489e.rmeta --extern bytemuck=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/libbytemuck-80a1e20cb3f6e09c.rmeta --extern naga=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/libnaga-63fac1e9c9e76222.rmeta --extern pollster=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/libpollster-b322fcc4f67d03d6.rmeta --extern serde=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/libserde-d2b92067b57ae43f.rmeta --extern wgpu=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/libwgpu-893bd0adbca736b1.rmeta -L native=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/build/blake3-341d421ec6df7fff/out -L native=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/build/blake3-341d421ec6df7fff/out`
+       Fresh digest v0.10.7
+       Fresh zstd-safe v7.2.4
+       Fresh cpufeatures v0.2.17
+       Fresh sha2 v0.10.9
+       Fresh zstd v0.13.3
+       Dirty alife_runtime v0.1.0 (/workspace/scratch/ee5e08a3ca9b/physiology-host-b-v1/crates/alife_runtime): the dependency `alife_world` was rebuilt
+   Compiling alife_runtime v0.1.0 (/workspace/scratch/ee5e08a3ca9b/physiology-host-b-v1/crates/alife_runtime)
+     Running `/workspace/scratch/ee5e08a3ca9b/recovered-toolchain-rust-1.99.1-reset2/rustup/toolchains/1.99.1-x86_64-unknown-linux-gnu/bin/rustc --crate-name alife_runtime --edition=2021 crates/alife_runtime/src/lib.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --crate-type lib --emit=dep-info,metadata,link -C embed-bitcode=no --cfg 'feature="default"' --cfg 'feature="training-rollout"' --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values("default", "gpu-tests", "training-rollout"))' -C metadata=b4dc8816cbb31060 -C extra-filename=-a6f1e0405e4627fb --out-dir /workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps -C strip=debuginfo -L dependency=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps --extern alife_core=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/libalife_core-57cf552e1648489e.rmeta --extern alife_gpu_backend=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/libalife_gpu_backend-e50e43ec60ca4844.rmeta --extern alife_storage=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/libalife_storage-a04f2ff0363c97e0.rmeta --extern alife_world=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/libalife_world-050a16acfb9cb4fb.rmeta --extern serde=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/libserde-d2b92067b57ae43f.rmeta --extern serde_json=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/libserde_json-4909800a82ecea08.rmeta --extern thiserror=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/libthiserror-b53aba970f9bf1ae.rmeta -L native=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/build/blake3-341d421ec6df7fff/out -L native=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/build/blake3-341d421ec6df7fff/out`
+       Fresh base64 v0.22.1
+       Dirty alife_training v0.1.0 (/workspace/scratch/ee5e08a3ca9b/physiology-host-b-v1/crates/alife_training): the dependency `alife_world` was rebuilt
+   Compiling alife_training v0.1.0 (/workspace/scratch/ee5e08a3ca9b/physiology-host-b-v1/crates/alife_training)
+     Running `/workspace/scratch/ee5e08a3ca9b/recovered-toolchain-rust-1.99.1-reset2/rustup/toolchains/1.99.1-x86_64-unknown-linux-gnu/bin/rustc --crate-name alife_training --edition=2021 crates/alife_training/src/lib.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --crate-type lib --emit=dep-info,metadata,link -C embed-bitcode=no --cfg 'feature="cpu-backend"' --cfg 'feature="default"' --cfg 'feature="receipt-lineage"' --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values("cpu-backend", "default", "gpu-tests", "receipt-lineage"))' -C metadata=680135bc1b81b225 -C extra-filename=-6e416c769d334639 --out-dir /workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps -C strip=debuginfo -L dependency=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps --extern alife_core=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/libalife_core-57cf552e1648489e.rmeta --extern alife_gpu_backend=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/libalife_gpu_backend-e50e43ec60ca4844.rmeta --extern alife_runtime=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/libalife_runtime-a6f1e0405e4627fb.rmeta --extern alife_world=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/libalife_world-050a16acfb9cb4fb.rmeta --extern base64=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/libbase64-6902f67cbd01db74.rmeta --extern bytemuck=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/libbytemuck-80a1e20cb3f6e09c.rmeta --extern serde=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/libserde-d2b92067b57ae43f.rmeta --extern serde_json=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/libserde_json-4909800a82ecea08.rmeta --extern sha2=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/libsha2-584eac0ed8c9c447.rmeta --extern thiserror=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/libthiserror-b53aba970f9bf1ae.rmeta --extern wgpu=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/libwgpu-893bd0adbca736b1.rmeta --extern zstd=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/libzstd-07e3d4e740f2fced.rmeta -L native=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/build/blake3-341d421ec6df7fff/out -L native=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/build/blake3-341d421ec6df7fff/out -L native=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/build/zstd-sys-7a653b51e31244ec/out`
+     Running `/workspace/scratch/ee5e08a3ca9b/recovered-toolchain-rust-1.99.1-reset2/rustup/toolchains/1.99.1-x86_64-unknown-linux-gnu/bin/rustc --crate-name probe_physiology_host --edition=2021 crates/alife_training/examples/probe_physiology_host.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --crate-type bin --emit=dep-info,link -C embed-bitcode=no --cfg 'feature="cpu-backend"' --cfg 'feature="default"' --cfg 'feature="receipt-lineage"' --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values("cpu-backend", "default", "gpu-tests", "receipt-lineage"))' -C metadata=e1959e22a73f4761 -C extra-filename=-e4068f1cbb1b4330 --out-dir /workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/examples -C strip=debuginfo -L dependency=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps --extern alife_core=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/libalife_core-57cf552e1648489e.rlib --extern alife_gpu_backend=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/libalife_gpu_backend-e50e43ec60ca4844.rlib --extern alife_runtime=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/libalife_runtime-a6f1e0405e4627fb.rlib --extern alife_training=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/libalife_training-6e416c769d334639.rlib --extern alife_world=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/libalife_world-050a16acfb9cb4fb.rlib --extern base64=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/libbase64-6902f67cbd01db74.rlib --extern bytemuck=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/libbytemuck-80a1e20cb3f6e09c.rlib --extern naga=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/libnaga-63fac1e9c9e76222.rlib --extern pollster=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/libpollster-b322fcc4f67d03d6.rlib --extern serde=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/libserde-d2b92067b57ae43f.rlib --extern serde_json=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/libserde_json-4909800a82ecea08.rlib --extern sha2=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/libsha2-584eac0ed8c9c447.rlib --extern thiserror=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/libthiserror-b53aba970f9bf1ae.rlib --extern wgpu=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/libwgpu-893bd0adbca736b1.rlib --extern zstd=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/deps/libzstd-07e3d4e740f2fced.rlib -L native=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/build/blake3-341d421ec6df7fff/out -L native=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/build/blake3-341d421ec6df7fff/out -L native=/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/build/zstd-sys-7a653b51e31244ec/out`
+    Finished `dev` profile [unoptimized] target(s) in 1m 41s

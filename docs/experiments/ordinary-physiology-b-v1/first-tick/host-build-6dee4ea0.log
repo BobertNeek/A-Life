@@ -1,0 +1,21 @@
+   Compiling alife_training v0.1.0 (/workspace/scratch/ee5e08a3ca9b/physiology-host-b-v1/crates/alife_training)
+error[E0599]: no associated function or constant named `compile_n2048_bounded_founder` found for struct `alife_core::PhenotypeCompiler` in the current scope
+   --> crates/alife_training/examples/support/physiology_host.rs:269:28
+    |
+269 |         PhenotypeCompiler::compile_n2048_bounded_founder(
+    |                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ associated function or constant not found in `alife_core::PhenotypeCompiler`
+
+error[E0599]: no associated function or constant named `compile_n2048_bounded_founder_candidate` found for struct `alife_core::PhenotypeCompiler` in the current scope
+   --> crates/alife_training/examples/support/physiology_host.rs:298:28
+    |
+298 |         PhenotypeCompiler::compile_n2048_bounded_founder_candidate(
+    |                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ associated function or constant not found in `alife_core::PhenotypeCompiler`
+    |
+help: there is an associated function `compile_n2048_foundation_candidate` with a similar name
+    |
+298 -         PhenotypeCompiler::compile_n2048_bounded_founder_candidate(
+298 +         PhenotypeCompiler::compile_n2048_foundation_candidate(
+    |
+
+For more information about this error, try `rustc --explain E0599`.
+error: could not compile `alife_training` (example "probe_physiology_host") due to 2 previous errors
