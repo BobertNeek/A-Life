@@ -1,0 +1,19 @@
+   Compiling alife_world v0.1.0 (/workspace/scratch/ee5e08a3ca9b/grounded-approach-need-v1/crates/alife_world)
+    Finished `test` profile [unoptimized] target(s) in 1m 33s
+     Running unittests src/lib.rs (/workspace/shared/grip-integration-qualification-20261108/grip-candidate-qualification/target/debug/deps/alife_world-5c9ccab29d8984f3)
+
+running 1 test
+test headless::grounded_approach_need_tests::grounded_approach_fixture_preflight_no_intervals ... 
+thread 'headless::grounded_approach_need_tests::grounded_approach_fixture_preflight_no_intervals' (63) panicked at crates/alife_world/src/headless/grounded_approach_need_tests.rs:156:14:
+frozen setup must expose a grounded Approach candidate; do not retune if absent
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    headless::grounded_approach_need_tests::grounded_approach_fixture_preflight_no_intervals
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 246 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p alife_world --lib`

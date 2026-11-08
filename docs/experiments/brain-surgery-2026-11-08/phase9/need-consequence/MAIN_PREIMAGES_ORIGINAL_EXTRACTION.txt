@@ -1,0 +1,16 @@
+Main base 550f79ad1f765132c634e7a272da56b521b57ec0
+Main tree c4e5230799be59df95d468be1343c4549892851d
+Component source 1eb2a73df0390734a253b520b919276e864c1952
+Component tree f69613934d3d5a90d3c5f4404f56bdf472064202
+Isolated main index apply-check exit 0
+crates/alife_core/Cargo.toml blob 83019ebf491658fe6fb6cbe96465f8a6d9c3cf9f
+1cf3862ef0fe8e19cfeb42c6a99c7909dcb4ddce8f669ccf8115f5fcdb18d933  -
+crates/alife_core/src/lib.rs blob 617f1e922d1dedb81a9d8a5a1c504903e1c53161
+f747664c3d83ce327544189c662c04674f91018db924562fa8069de835978e5f  -
+crates/alife_core/src/need_consequence.rs absent on main
+crates/alife_world/src/headless.rs blob 80141ef4168d7586081c23da9a7675a5273f1db6
+5fd69093fad5cc5afa554cc390eafe6705a71d760eadd20b3423f992888dae68  -
+crates/alife_world/src/headless/need_consequence_evidence_tests.rs absent on main
+NEED_EVIDENCE_FIXED_PLAN.md absent on main
+NEED_EVIDENCE_INTERFACE.md absent on main
+NEED_EVIDENCE_RESULTS_V1.md absent on main

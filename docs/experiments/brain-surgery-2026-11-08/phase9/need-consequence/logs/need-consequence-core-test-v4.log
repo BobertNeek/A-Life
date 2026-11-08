@@ -1,0 +1,20 @@
+   Compiling alife_core v0.1.0 (/workspace/scratch/ee5e08a3ca9b/need-consequence-evidence-v1/crates/alife_core)
+    Finished `test` profile [unoptimized] target(s) in 1m 06s
+     Running unittests src/lib.rs (/workspace/shared/grip-integration-qualification-20261108/grip-candidate-qualification/target/debug/deps/alife_core-2fd07a44616ca3ca)
+
+running 10 tests
+test need_consequence::tests::need_consequence_byte_caps_and_size_eviction_are_enforced ... need-consequence synthetic source bytes=11440 one-record store bytes=12780
+need-consequence padded sources=16 encoded store bytes=1041350
+ok
+test need_consequence::tests::need_consequence_exact_target_family_profile_context_and_later_clock ... ok
+test need_consequence::tests::need_consequence_joint_source_is_one_association_and_ambiguity_stays_unknown ... ok
+test need_consequence::tests::need_consequence_opposite_observations_do_not_merge_into_zero ... ok
+test need_consequence::tests::need_consequence_preserves_all_signed_lanes_and_source_identity ... ok
+test need_consequence::tests::need_consequence_pruning_and_restore_preserve_monotonic_replay_guard ... ok
+test need_consequence::tests::need_consequence_recall_age_scan_and_output_are_bounded ... ok
+test need_consequence::tests::need_consequence_restore_revalidates_sources_even_with_recomputed_envelope_digest ... ok
+test need_consequence::tests::need_consequence_unknown_is_not_measured_zero_and_cannot_be_reinterpreted ... ok
+test need_consequence::tests::need_consequence_unobserved_target_does_not_create_evidence ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 41 filtered out; finished in 0.25s
+

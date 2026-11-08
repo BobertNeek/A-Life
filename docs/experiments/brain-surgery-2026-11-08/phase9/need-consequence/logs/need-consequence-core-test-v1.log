@@ -1,0 +1,54 @@
+   Compiling alife_core v0.1.0 (/workspace/scratch/ee5e08a3ca9b/need-consequence-evidence-v1/crates/alife_core)
+    Finished `test` profile [unoptimized] target(s) in 1m 05s
+     Running unittests src/lib.rs (/workspace/shared/grip-integration-qualification-20261108/grip-candidate-qualification/target/debug/deps/alife_core-2fd07a44616ca3ca)
+
+running 8 tests
+test need_consequence::tests::need_consequence_byte_caps_and_size_eviction_are_enforced ... 
+thread 'need_consequence::tests::need_consequence_byte_caps_and_size_eviction_are_enforced' (62) panicked at crates/alife_core/src/need_consequence.rs:792:92:
+called `Result::unwrap()` on an `Err` value: NonMonotonicTick
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test need_consequence::tests::need_consequence_exact_target_family_profile_context_and_later_clock ... 
+thread 'need_consequence::tests::need_consequence_exact_target_family_profile_context_and_later_clock' (63) panicked at crates/alife_core/src/need_consequence.rs:792:92:
+called `Result::unwrap()` on an `Err` value: NonMonotonicTick
+FAILED
+test need_consequence::tests::need_consequence_preserves_all_signed_lanes_and_source_identity ... 
+thread 'need_consequence::tests::need_consequence_preserves_all_signed_lanes_and_source_identity' (64) panicked at crates/alife_core/src/need_consequence.rs:792:92:
+called `Result::unwrap()` on an `Err` value: NonMonotonicTick
+FAILED
+test need_consequence::tests::need_consequence_pruning_and_restore_preserve_monotonic_replay_guard ... 
+thread 'need_consequence::tests::need_consequence_pruning_and_restore_preserve_monotonic_replay_guard' (65) panicked at crates/alife_core/src/need_consequence.rs:792:92:
+called `Result::unwrap()` on an `Err` value: NonMonotonicTick
+FAILED
+test need_consequence::tests::need_consequence_recall_age_scan_and_output_are_bounded ... 
+thread 'need_consequence::tests::need_consequence_recall_age_scan_and_output_are_bounded' (66) panicked at crates/alife_core/src/need_consequence.rs:792:92:
+called `Result::unwrap()` on an `Err` value: NonMonotonicTick
+FAILED
+test need_consequence::tests::need_consequence_restore_revalidates_sources_even_with_recomputed_envelope_digest ... 
+thread 'need_consequence::tests::need_consequence_restore_revalidates_sources_even_with_recomputed_envelope_digest' (67) panicked at crates/alife_core/src/need_consequence.rs:792:92:
+called `Result::unwrap()` on an `Err` value: NonMonotonicTick
+FAILED
+test need_consequence::tests::need_consequence_unknown_is_not_measured_zero_and_cannot_be_reinterpreted ... 
+thread 'need_consequence::tests::need_consequence_unknown_is_not_measured_zero_and_cannot_be_reinterpreted' (68) panicked at crates/alife_core/src/need_consequence.rs:792:92:
+called `Result::unwrap()` on an `Err` value: NonMonotonicTick
+FAILED
+test need_consequence::tests::need_consequence_unobserved_target_does_not_create_evidence ... 
+thread 'need_consequence::tests::need_consequence_unobserved_target_does_not_create_evidence' (69) panicked at crates/alife_core/src/need_consequence.rs:739:10:
+called `Result::unwrap()` on an `Err` value: InvalidPerceptionFrame
+FAILED
+
+failures:
+
+failures:
+    need_consequence::tests::need_consequence_byte_caps_and_size_eviction_are_enforced
+    need_consequence::tests::need_consequence_exact_target_family_profile_context_and_later_clock
+    need_consequence::tests::need_consequence_preserves_all_signed_lanes_and_source_identity
+    need_consequence::tests::need_consequence_pruning_and_restore_preserve_monotonic_replay_guard
+    need_consequence::tests::need_consequence_recall_age_scan_and_output_are_bounded
+    need_consequence::tests::need_consequence_restore_revalidates_sources_even_with_recomputed_envelope_digest
+    need_consequence::tests::need_consequence_unknown_is_not_measured_zero_and_cannot_be_reinterpreted
+    need_consequence::tests::need_consequence_unobserved_target_does_not_create_evidence
+
+test result: FAILED. 0 passed; 8 failed; 0 ignored; 0 measured; 41 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p alife_core --lib`

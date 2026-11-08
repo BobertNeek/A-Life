@@ -1,0 +1,15 @@
+# Frozen first actual immutable-worker fixture
+
+Source motor-reflex-gpu-epoch-fixtures-v11, f8e71f109a8792e54376e1fb8c07763fe195e2ea, tree613f99dc4c26135e5c929c70bd1fc0116443bf2b. Parent3b5ddd6 V10 remains frozen. Delta reflex-epoch-v11-first-fixture.patch SHA256146f2e8fd0db161bf9e0baa3ee3b96f8bf55c55dca077ed47c713f7e08e510d6. Source passed lib/tests type check with gpu-runtime,gpu-tests; no fixture execution yet.
+
+First execution scope: one fresh Nano512 world seeded31118, one actual GPU decision, two world intervals. Core-controller ForcedRecovery→Interrupted transition is explicit fixture setup, sealed into the body and persisted through a real exact baseline worker. It is not a claimed automatic pain-trigger path.
+
+Inject exactly one existing post-seal credit rejection. The actual inference, world outcome and sealed observation must exist. Hold its real checkpoint worker using the existing start gate. Next ordinary interval must retry that retained sealed observation and obtain one actual backend acknowledgment, without a new batch, sequence or sealed-patch count. The acknowledgment occurs at current tick1, the same tick as the already captured older pending-credit state; its active generation must be newer.
+
+Publish the held older worker while holding the follow-up worker. The newer authority obligation must remain dirty. Restore the actual published old assets and verify captured inference authority plus retained credit. Release/publish the genuine follow-up, require the obligation clears only then, and restore actual new assets with exact credited authority, state, cursor and no retained credit. No successful worker result, publication acknowledgment, neural state, or optimizer output is forged. Assertions do not print raw arrays. Generated fresh checkpoints remain local and are excluded from reports.
+
+Two separate host tests cover explicit candidate+durability+clear entry/exit admission and unchanged legacy recovery with no sleep recovery in interrupted phases. The new predicate is only reachable through explicit candidate mode; ordinary hardware admission and default Awake-only dispatch are preserved. No automatic interruption/resume callback is added in this source.
+
+A later separate fixed fixture must cover a real old frozen consolidation pipeline and genuine commit, plus enqueue failure and resume ordering. Passing this first fixture would not prove those cases. No autonomous cohort or old study is reused. Source/fixture corrections, if required by actual failures, will receive distinct identities and retained logs.
+
+Execution after device-lane release only: VK_ICD_FILENAMES=/usr/lib/chromium/vk_swiftshader_icd.json, jobs1, incremental0, debug0, own arousal-lineage-check-target-v9; cargo test --offline -p alife_game_app --features gpu-runtime,gpu-tests --lib arousal_epoch_software_real_rejected_credit_retry_and_same_tick_older_capture -- --test-threads=1 --nocapture. Report the actual adapter, failed stage or finite result, and exact executable/source hashes. Software execution is not hardware/live-game qualification.

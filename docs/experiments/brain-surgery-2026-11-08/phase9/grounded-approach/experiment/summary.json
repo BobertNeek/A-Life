@@ -1,0 +1,292 @@
+{
+  "actual_next_source_key_equality_count": 0,
+  "actual_next_source_unknown_count": 6,
+  "actual_world_intervals": 6,
+  "admitted_neural_sources": 0,
+  "all_intended_physical_conditions_met": true,
+  "budget_remaining": 0,
+  "contrasts": [
+    {
+      "comparison": "peer_approach minus toy_approach",
+      "initial_loneliness": 0.0,
+      "interpretation": "between-fork contrast, not isolated motor credit or a stored effect",
+      "raw_delta_difference": {
+        "brain_atp": 0.0,
+        "curiosity": 0.0,
+        "extension0": 0.0,
+        "extension1": 0.0,
+        "fatigue": 0.0,
+        "fear": 0.0,
+        "hunger": 0.0,
+        "loneliness": -0.00599999725818634,
+        "pain": 0.0,
+        "reproductive_drive": 0.0,
+        "temperature_stress": 0.0
+      }
+    },
+    {
+      "comparison": "peer_approach minus peer_passive",
+      "initial_loneliness": 0.0,
+      "interpretation": "between-fork contrast, not isolated motor credit or a stored effect",
+      "raw_delta_difference": {
+        "brain_atp": -0.0008800029754638672,
+        "curiosity": 0.0,
+        "extension0": 0.0,
+        "extension1": 0.0,
+        "fatigue": 0.0008800029754638672,
+        "fear": 0.0,
+        "hunger": 0.0013200044631958008,
+        "loneliness": -0.00599999725818634,
+        "pain": 0.0,
+        "reproductive_drive": 0.0,
+        "temperature_stress": 0.0
+      }
+    },
+    {
+      "comparison": "peer_approach minus toy_approach",
+      "initial_loneliness": 0.15000000596046448,
+      "interpretation": "between-fork contrast, not isolated motor credit or a stored effect",
+      "raw_delta_difference": {
+        "brain_atp": 0.0,
+        "curiosity": 0.0,
+        "extension0": 0.0,
+        "extension1": 0.0,
+        "fatigue": 0.0,
+        "fear": 0.0,
+        "hunger": 0.0,
+        "loneliness": -0.007499992847442627,
+        "pain": 0.0,
+        "reproductive_drive": 0.0,
+        "temperature_stress": 0.0
+      }
+    },
+    {
+      "comparison": "peer_approach minus peer_passive",
+      "initial_loneliness": 0.15000000596046448,
+      "interpretation": "between-fork contrast, not isolated motor credit or a stored effect",
+      "raw_delta_difference": {
+        "brain_atp": -0.0008800029754638672,
+        "curiosity": 0.0,
+        "extension0": 0.0,
+        "extension1": 0.0,
+        "fatigue": 0.0008800029754638672,
+        "fear": 0.0,
+        "hunger": 0.0013200044631958008,
+        "loneliness": -0.007499992847442627,
+        "pain": 0.0,
+        "reproductive_drive": 0.0,
+        "temperature_stress": 0.0
+      }
+    }
+  ],
+  "exact_same_source_unknown_count": 6,
+  "neural_forward_passes": 0,
+  "original_maximum_budget": 8,
+  "rows": [
+    {
+      "body_energy_after": 0.7847333550453186,
+      "body_energy_before": 0.7925000190734863,
+      "body_event": {
+        "damage": 0.0,
+        "energy": -0.03999999910593033,
+        "mating_opportunity": 0.0,
+        "nutrition": 0.0,
+        "sleep_recovery": 0.0,
+        "social_contact": 0.012500000186264515,
+        "temperature_stress": 0.0
+      },
+      "case": "peer_approach",
+      "final_peer_contact": true,
+      "initial_loneliness": 0.0,
+      "initial_peer_contact": false,
+      "intended_condition_met": true,
+      "raw_eleven_deltas": [
+        0.03874799609184265,
+        0.025831997394561768,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        -0.025831997394561768,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "sensor_confidence": 0.8999999761581421,
+      "travel": 0.10000000149011612
+    },
+    {
+      "body_energy_after": 0.7847333550453186,
+      "body_energy_before": 0.7925000190734863,
+      "body_event": {
+        "damage": 0.0,
+        "energy": -0.03999999910593033,
+        "mating_opportunity": 0.0,
+        "nutrition": 0.0,
+        "sleep_recovery": 0.0,
+        "social_contact": 0.0,
+        "temperature_stress": 0.0
+      },
+      "case": "toy_approach",
+      "final_peer_contact": false,
+      "initial_loneliness": 0.0,
+      "initial_peer_contact": false,
+      "intended_condition_met": true,
+      "raw_eleven_deltas": [
+        0.03874799609184265,
+        0.025831997394561768,
+        0.0,
+        0.0,
+        0.00599999725818634,
+        0.0,
+        -0.025831997394561768,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "sensor_confidence": 0.8999999761581421,
+      "travel": 0.10000000149011612
+    },
+    {
+      "body_energy_after": 0.792066752910614,
+      "body_energy_before": 0.7925000190734863,
+      "body_event": {
+        "social_contact": 0.0,
+        "source": "no-action control, no contact/mating/care"
+      },
+      "case": "peer_passive",
+      "final_peer_contact": false,
+      "initial_loneliness": 0.0,
+      "initial_peer_contact": false,
+      "intended_condition_met": true,
+      "raw_eleven_deltas": [
+        0.03742799162864685,
+        0.0249519944190979,
+        0.0,
+        0.0,
+        0.00599999725818634,
+        0.0,
+        -0.0249519944190979,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "sensor_confidence": 0.8999999761581421,
+      "travel": 0.0
+    },
+    {
+      "body_energy_after": 0.7847333550453186,
+      "body_energy_before": 0.7925000190734863,
+      "body_event": {
+        "damage": 0.0,
+        "energy": -0.03999999910593033,
+        "mating_opportunity": 0.0,
+        "nutrition": 0.0,
+        "sleep_recovery": 0.0,
+        "social_contact": 0.012500000186264515,
+        "temperature_stress": 0.0
+      },
+      "case": "peer_approach",
+      "final_peer_contact": true,
+      "initial_loneliness": 0.15000000596046448,
+      "initial_peer_contact": false,
+      "intended_condition_met": true,
+      "raw_eleven_deltas": [
+        0.03874799609184265,
+        0.025831997394561768,
+        0.0,
+        0.0,
+        -0.007499992847442627,
+        0.0,
+        -0.025831997394561768,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "sensor_confidence": 0.8999999761581421,
+      "travel": 0.10000000149011612
+    },
+    {
+      "body_energy_after": 0.7847333550453186,
+      "body_energy_before": 0.7925000190734863,
+      "body_event": {
+        "damage": 0.0,
+        "energy": -0.03999999910593033,
+        "mating_opportunity": 0.0,
+        "nutrition": 0.0,
+        "sleep_recovery": 0.0,
+        "social_contact": 0.0,
+        "temperature_stress": 0.0
+      },
+      "case": "toy_approach",
+      "final_peer_contact": false,
+      "initial_loneliness": 0.15000000596046448,
+      "initial_peer_contact": false,
+      "intended_condition_met": true,
+      "raw_eleven_deltas": [
+        0.03874799609184265,
+        0.025831997394561768,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        -0.025831997394561768,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "sensor_confidence": 0.8999999761581421,
+      "travel": 0.10000000149011612
+    },
+    {
+      "body_energy_after": 0.792066752910614,
+      "body_energy_before": 0.7925000190734863,
+      "body_event": {
+        "social_contact": 0.0,
+        "source": "no-action control, no contact/mating/care"
+      },
+      "case": "peer_passive",
+      "final_peer_contact": false,
+      "initial_loneliness": 0.15000000596046448,
+      "initial_peer_contact": false,
+      "intended_condition_met": true,
+      "raw_eleven_deltas": [
+        0.03742799162864685,
+        0.0249519944190979,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        -0.0249519944190979,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "sensor_confidence": 0.8999999761581421,
+      "travel": 0.0
+    }
+  ],
+  "selected_policy_actions": 0,
+  "store_result": "Unknown because authentic neural evidence was not produced; not a retained-source recall failure",
+  "unavailable_controls": [
+    {
+      "actual_world_intervals": 0,
+      "case": "peer_blocked",
+      "initial_loneliness": 0,
+      "reason": "four cage objects occupy all object-candidate slots; no prescribed peer command fabricated"
+    },
+    {
+      "actual_world_intervals": 0,
+      "case": "peer_blocked",
+      "initial_loneliness": 0.15,
+      "reason": "four cage objects occupy all object-candidate slots; no prescribed peer command fabricated"
+    }
+  ],
+  "unspent_closed_slots": 2
+}

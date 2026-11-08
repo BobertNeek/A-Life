@@ -1,0 +1,9 @@
+# Frozen test-only near-context retrieval comparison V2
+
+No production store/decoder changes, new life, new action type or additional world conditions. Reuse the three prescribed conditions and their passive clones from V1's fixed unit test. This is an ordinary unit rerun, not a V4 policy allocation.
+
+Compare exact V1 lookup with a separately named test-only eligibility rule: hard exact organism/profile/action ID/kind/family/tracked target/entity; source after-tick no more than one tick old and not in the future; bounded one-source comparison. Reuse the existing family-query96-feature encoder and existing weighted cosine segments (.30×0..40 + .10×40..49 + .20×49..57 + .35×57..81 + .05×81..83) and existing .72 cutoff. These are pre-existing constants, not fitted to this fixture's outcomes. Return the raw score/distance and original evidence/confidence; do not average, select favorable signs, fabricate zero, or change source provenance.
+
+Measure actual next-world queries, plus explicit query-only wrong entity, wrong family, wrong profile and stale clock controls. Print a higher-loneliness artificial query's score separately, without creating an observation or an alternate lived state. Preserve both real negative peer delta and real zero toy/separated deltas. The test-only rule is a retrieval hypothesis; it does not establish useful distant-context generalization, safety under changed target attributes, policy scoring/credit, persistence admission or CPU/GPU integration. V1 storage/strict lookup remains unchanged.
+
+Parent-requested finite R3 disclosure, frozen before measurement: add one artificial loneliness=1 query at the actual next tick/context per same observation. Report its score/distance or rejection without tuning the .72 rule, adding actions, changing observations or inferring reward. R2 corrected the earlier .16 query clock; R1 future-source rejection is preserved.

@@ -1,0 +1,1564 @@
+diff --git a/crates/alife_world/src/headless.rs b/crates/alife_world/src/headless.rs
+index e743de4..fd2267a 100644
+--- a/crates/alife_world/src/headless.rs
++++ b/crates/alife_world/src/headless.rs
+@@ -13042,3 +13042,6 @@ mod body_clearance_tests;
+ 
+ #[cfg(test)]
+ mod need_consequence_evidence_tests;
++
++#[cfg(test)]
++mod grounded_approach_need_tests;
+diff --git a/crates/alife_world/src/headless/grounded_approach_need_tests.rs b/crates/alife_world/src/headless/grounded_approach_need_tests.rs
+new file mode 100644
+index 0000000..08ea58f
+--- /dev/null
++++ b/crates/alife_world/src/headless/grounded_approach_need_tests.rs
+@@ -0,0 +1,419 @@
++//! Six prescribed physical intervals from eight fixed slots; two blocked slots unavailable.
++//! This is not a neural selection or learned policy.
++//! No fake neural provenance envelope is constructed to satisfy store admission.
++use super::*;
++use alife_core::*;
++use serde_json::{json, Value};
++use std::io::Write;
++
++const SEED: u64 = 921_412;
++const SUBJECT: OrganismId = OrganismId(1);
++const TARGET_POSITION: Vec3f = Vec3f::new(0.8, 0.0, 0.0);
++const CASES: [&str; 4] = [
++    "peer_approach",
++    "toy_approach",
++    "peer_passive",
++    "peer_blocked",
++];
++
++struct Setup {
++    world: HeadlessWorld,
++    actor: WorldEntityId,
++    target: WorldEntityId,
++    frame: PerceptionFrame,
++    candidate: ActionCandidate,
++    before: BiochemistryState,
++    pressure: f32,
++    case: &'static str,
++}
++
++// Fixture initialization only. These are freshly constructed public-genome
++// concentrations, not loaded life/checkpoint state. Change the chemical source,
++// then rederive the canonical projection; never change just the drive view.
++fn initialize_loneliness(phenotype: &CreaturePhenotype, pressure: f32) -> BiochemistryState {
++    let initial = BiochemistryState::new_with_age(phenotype, Tick(600), Tick(600)).unwrap();
++    let chemistry = &phenotype.chemistry.biochemical;
++    let receptor = chemistry
++        .receptors()
++        .iter()
++        .find(|receptor| {
++            receptor.target == BiochemicalTargetLocus::Drive(BiochemicalDriveChannel::Loneliness)
++        })
++        .unwrap();
++    assert_eq!(receptor.threshold, 0.0);
++    assert_eq!(receptor.gain, 1.0);
++    assert!(!receptor.digital);
++    let index = chemistry
++        .species()
++        .iter()
++        .position(|species| species.id == receptor.source)
++        .unwrap();
++    let mut fresh_wire = serde_json::to_value(initial).unwrap();
++    fresh_wire["graph_state"]["concentrations"][index] = json!(pressure);
++    let state: BiochemicalGraphState =
++        serde_json::from_value(fresh_wire["graph_state"].clone()).unwrap();
++    fresh_wire["homeostasis"] =
++        serde_json::to_value(state.derive_homeostasis(chemistry).unwrap()).unwrap();
++    let biology: BiochemistryState = serde_json::from_value(fresh_wire).unwrap();
++    biology.validate_against(phenotype).unwrap();
++    assert_eq!(
++        biology.homeostasis,
++        biology.graph_state().derive_homeostasis(chemistry).unwrap()
++    );
++    assert_eq!(
++        biology.homeostasis.drives.loneliness.to_bits(),
++        pressure.to_bits()
++    );
++    let original = initial.homeostasis.drives.to_array();
++    let changed = biology.homeostasis.drives.to_array();
++    for index in 0..11 {
++        if index != 4 {
++            assert_eq!(original[index].to_bits(), changed[index].to_bits());
++        }
++    }
++    assert_eq!(biology.body, initial.body);
++    assert_eq!(biology.development, initial.development);
++    biology
++}
++
++fn setups(pressure: f32) -> Vec<Setup> {
++    let genome = CreatureGenome::early_mammal_founder(
++        SEED,
++        FoundationGeneticIdentity::new(10, 1, 7, BrainCapacityClass::N512_ID).unwrap(),
++    )
++    .unwrap();
++    let phenotype = genome.express().unwrap();
++    let before = initialize_loneliness(&phenotype, pressure);
++    let mut peer = HeadlessScenarioBuilder::new(SEED)
++        .agent("subject", SUBJECT, Vec3f::ZERO)
++        .build()
++        .unwrap();
++    peer.tick = Tick(600);
++    let actor = peer.entity_id("subject").unwrap();
++    let target = peer
++        .spawn_social_agent("target", OrganismId(2), TARGET_POSITION, 0.0)
++        .unwrap();
++    peer.set_grounded_physical_properties(
++        target,
++        GroundedPhysicalProperties::deterministic_for_kind(WorldObjectKind::ActivityToy, 2),
++    )
++    .unwrap();
++    peer.register_organism_record(
++        crate::WorldOrganismRecord::new(SUBJECT, actor, genome, phenotype, before, Tick::ZERO)
++            .unwrap(),
++    )
++    .unwrap();
++    let mut result = Vec::new();
++    for case in CASES {
++        // Each arm is an isolated fork of the same unadvanced body/scene.
++        let mut world = peer.clone();
++        if case == "toy_approach" {
++            let object = world.objects.get_mut(&target.raw()).unwrap();
++            object.kind = WorldObjectKind::ActivityToy;
++            object.organism_id = None;
++            // All pose/radius/material/chemical observables remain matched.
++        }
++        if case == "peer_blocked" {
++            for (label, position) in [
++                ("cage_east", Vec3f::new(0.4, 0.0, 0.0)),
++                ("cage_west", Vec3f::new(-0.4, 0.0, 0.0)),
++                ("cage_north", Vec3f::new(0.0, 0.0, 0.4)),
++                ("cage_south", Vec3f::new(0.0, 0.0, -0.4)),
++            ] {
++                let obstacle = world
++                    .insert_object(SpawnSpec {
++                        label,
++                        kind: WorldObjectKind::Obstacle,
++                        organism_id: None,
++                        position,
++                        nutrition: 0.0,
++                        hazard_pain: 0.0,
++                        token_id: None,
++                        social_affinity: 0.0,
++                        teacher_channel: None,
++                    })
++                    .unwrap();
++                let obstacle = world.objects.get_mut(&obstacle.raw()).unwrap();
++                obstacle.radius = 0.2;
++                obstacle.optical_opacity = 0.0;
++            }
++        }
++        world.validate_organism_bindings().unwrap();
++        let frame = world
++            .perception_frame(
++                SUBJECT,
++                Tick(600),
++                SensorProfile::GroundedObjectSlotsV1,
++                before.homeostasis,
++            )
++            .unwrap();
++        println!("cold candidate diagnostics pressure={pressure} case={case} target={} slots={} candidates={:?}", target.raw(), frame.grounded_object_slots().len(), frame.candidates().iter().map(|candidate| (candidate.action_id.raw(), candidate.kind, candidate.family, candidate.target.entity.map(WorldEntityId::raw))).collect::<Vec<_>>());
++        let candidate = frame
++            .candidates()
++            .iter()
++            .find(|candidate| {
++                candidate.action_id == HeadlessActionIds::APPROACH
++                    && candidate.target.entity == Some(target)
++            })
++            .copied();
++        let Some(candidate) = candidate else {
++            // Pre-execution revision after the preserved zero-interval failure:
++            // retain geometry and admission. Never force attention or a target.
++            assert_eq!(case, "peer_blocked", "unexpected missing candidate");
++            assert_eq!(frame.grounded_object_slots().len(), 5);
++            println!("unavailable fixed slot pressure={pressure} case={case} reason=peer omitted by four-object candidate budget; actual_intervals=0");
++            continue;
++        };
++        assert_eq!(candidate.family, CandidateActionFamily::Approach);
++        assert!(matches!(
++            candidate.observation,
++            CandidateObservationRef::ObjectSlot(_)
++        ));
++        assert!(!world.body_contacts_at(actor, Vec3f::ZERO).1);
++        assert_eq!(frame.homeostasis(), &before.homeostasis);
++        result.push(Setup {
++            world,
++            actor,
++            target,
++            frame,
++            candidate,
++            before,
++            pressure,
++            case,
++        });
++    }
++    assert_eq!(
++        result.len(),
++        3,
++        "exactly the three unchanged eligible slots"
++    );
++    result
++}
++
++fn execute(setup: Setup) -> Value {
++    let Setup {
++        mut world,
++        actor,
++        target,
++        frame,
++        candidate,
++        before,
++        pressure,
++        case,
++    } = setup;
++    let fork = format!("grounded-approach-need-v1/pressure-{pressure}/{case}");
++    let start = world.entity(actor).unwrap().position;
++    let initial_touch = world.body_contacts_at(actor, start).1;
++    let initial_yaw = world.entity(actor).unwrap().body_yaw;
++    let query = NeedConsequenceQueryV1::from_frame(&frame, &candidate).unwrap();
++    let store = NeedConsequenceStoreV1::new(SUBJECT, 2).unwrap();
++    let mut operation = json!({"kind": "passive_world_tick", "selected_command_count": 0});
++    let after;
++    let physical_displacement;
++    let operation_succeeded;
++    let body_event;
++    if case == "peer_passive" {
++        world.try_advance_tick().unwrap();
++        after = *world
++            .organism_registry()
++            .get(SUBJECT)
++            .unwrap()
++            .biochemistry();
++        physical_displacement = subtract(world.entity(actor).unwrap().position, start);
++        operation_succeeded = true;
++        // No action receipt exists for passive biology. This is a verified
++        // zero ambient-input control, not a fabricated receipt or action source.
++        body_event =
++            json!({"source": "no-action control, no contact/mating/care", "social_contact": 0.0});
++    } else {
++        // Selection is prescribed by this experiment. Confidence=1 states that
++        // prescription only; it is not a learned-policy or causal confidence.
++        let command = candidate
++            .to_command(SUBJECT, Confidence::new(1.0).unwrap())
++            .unwrap();
++        assert_eq!(command.action_id, HeadlessActionIds::APPROACH);
++        assert_eq!(command.intensity.raw(), 1.0);
++        let receipt = world
++            .apply_registered_command(&command, actor, Tick(601))
++            .unwrap();
++        assert_eq!(receipt.biology_before, before);
++        assert_eq!(receipt.action_result.command, command);
++        after = receipt.biology_after;
++        physical_displacement = receipt.action_result.execution.physical.displacement;
++        operation_succeeded = receipt.action_result.execution.succeeded;
++        body_event = serde_json::to_value(receipt.action_result.body_event).unwrap();
++        operation = json!({
++            "kind": "prescribed_registered_Approach",
++            "selected_command_count": 1,
++            "primitive": command.action_id.raw(),
++            "action_kind": format!("{:?}", command.kind),
++            "family": format!("{:?}", candidate.family),
++            "target_entity": command.target_entity.unwrap().raw(),
++            "command_intensity": command.intensity.raw(),
++            "prescription_confidence_not_neural": command.confidence.raw(),
++            "receipt_succeeded": operation_succeeded,
++            "receipt_failure": format!("{:?}", receipt.action_result.execution.failure),
++            "receipt_phase": format!("{:?}", receipt.action_result.phase),
++            "physical": receipt.action_result.execution.physical,
++        });
++        world.try_advance_tick().unwrap();
++        assert_eq!(
++            *world
++                .organism_registry()
++                .get(SUBJECT)
++                .unwrap()
++                .biochemistry(),
++            after,
++            "world finalization must not run the already committed biology twice"
++        );
++    }
++    assert_eq!(world.tick(), Tick(601));
++    assert_eq!(before.tick, Tick(600));
++    assert_eq!(after.tick, Tick(601));
++    assert_eq!(after.development.age_ticks, Tick(601));
++    let end = world.entity(actor).unwrap().position;
++    assert_eq!(physical_displacement, subtract(end, start));
++    let final_touch = world.body_contacts_at(actor, end).1;
++    let next_frame = world
++        .perception_frame(
++            SUBJECT,
++            Tick(601),
++            SensorProfile::GroundedObjectSlotsV1,
++            after.homeostasis,
++        )
++        .unwrap();
++    let next_candidate = next_frame.candidates().iter().find(|candidate| {
++        candidate.action_id == HeadlessActionIds::APPROACH
++            && candidate.target.entity == Some(target)
++    });
++    let same_source = store.recall(&query, Tick(601), 1, 2).unwrap();
++    assert!(matches!(
++        same_source.evidence,
++        NeedConsequenceEvidenceV1::Unknown
++    ));
++    let next_lookup = next_candidate.map(|candidate| {
++        let next_query = NeedConsequenceQueryV1::from_frame(&next_frame, candidate).unwrap();
++        let recall = store.recall(&next_query, Tick(601), 1, 2).unwrap();
++        assert!(matches!(
++            recall.evidence,
++            NeedConsequenceEvidenceV1::Unknown
++        ));
++        json!({"evidence": "Unknown", "records_inspected": recall.inspected_records,
++            "same_exact_context_key": query == next_query,
++            "same_tracked_target": query.tracked_target() == next_query.tracked_target(),
++            "same_family": query.action_family() == next_query.action_family()})
++    });
++    let before_drives = before.homeostasis.drives.to_array();
++    let after_drives = after.homeostasis.drives.to_array();
++    let delta: [f32; 11] = std::array::from_fn(|i| after_drives[i] - before_drives[i]);
++    let condition_met = match case {
++        "peer_approach" => {
++            operation_succeeded && !initial_touch && final_touch && distance(start, end) > 0.0
++        }
++        "toy_approach" => {
++            operation_succeeded && !initial_touch && !final_touch && distance(start, end) > 0.0
++        }
++        "peer_passive" => !initial_touch && !final_touch && start == end,
++        "peer_blocked" => !operation_succeeded && !initial_touch && !final_touch && start == end,
++        _ => unreachable!(),
++    };
++    let mut row = json!({
++        "fixture_fork_namespace": fork,
++        "world_binding_limit": "namespace is external fixture ownership, not a runtime world/life epoch API",
++        "world_seed": SEED, "organism": SUBJECT.raw(), "actor_entity": actor.raw(),
++        "genome_id": before.source_genome_id, "source_sequence": null,
++        "source_origin": "prescribed physical interval, no neural decision or sealed neural patch",
++        "source_frame_digest": frame.frame_digest().0, "next_frame_digest": next_frame.frame_digest().0,
++        "source_tracked_target": format!("{:?}", query.tracked_target()),
++        "case": case, "initial_loneliness": pressure, "intended_condition_met": condition_met,
++        "ticks": [before.tick.raw(), after.tick.raw()], "world_ticks_per_second": WORLD_TICKS_PER_SECOND,
++        "biology_updates": 1, "development_before": before.development, "development_after": after.development,
++        "cadence": before.cadence, "start": start, "end": end,
++        "initial_yaw": initial_yaw, "final_yaw": world.entity(actor).unwrap().body_yaw,
++        "target_start": TARGET_POSITION, "target_end": world.entity(target).unwrap().position,
++        "per_segment_displacements": [physical_displacement], "travel": distance(start, end),
++        "initial_peer_contact": initial_touch, "final_peer_contact": final_touch,
++        "operation": operation, "body_event": body_event,
++    });
++    let biology_and_evidence = json!({
++        "source_before_drives": before_drives, "final_after_drives": after_drives,
++        "raw_eleven_deltas": delta, "body_energy_before": before.body.energy, "body_energy_after": after.body.energy,
++        "biochemical_work": after.biochemical_work(),
++        "sensor_confidence": candidate.sensor_confidence.raw(),
++        "measured_store_confidence": null, "causal_confidence": null,
++        "store_admission": "not attempted: authentic neural decision required; no fabricated envelope",
++        "store_records": store.len(),
++        "exact_same_source_lookup": {"evidence": "Unknown", "records_inspected": same_source.inspected_records},
++        "actual_next_source_lookup": next_lookup,
++        "interpretation": "joint physical interval observation only; not scalar reward, policy, or learned self-care",
++    });
++    row.as_object_mut()
++        .unwrap()
++        .extend(biology_and_evidence.as_object().unwrap().clone());
++    row
++}
++
++#[test]
++fn grounded_approach_fixture_preflight_no_intervals() {
++    for pressure in [0.0_f32, 0.15] {
++        for setup in setups(pressure) {
++            println!("preflight pressure={} case={} candidate={} observed={:?} target={} radius={} body_radius={} sensor_confidence={}",
++                pressure, setup.case, setup.candidate.action_id.raw(), setup.candidate.observation,
++                setup.target.raw(), setup.world.entity(setup.target).unwrap().radius,
++                setup.world.locomotion_body_radius(), setup.candidate.sensor_confidence.raw());
++        }
++    }
++}
++
++#[test]
++#[ignore = "explicit six-world-interval revision; requires fresh output directory and must not rerun"]
++fn grounded_approach_need_six_prescribed_intervals() {
++    let directory = std::env::var_os("ALIFE_GROUNDED_APPROACH_RUN_DIR")
++        .expect("explicit run directory required");
++    let directory = std::path::PathBuf::from(directory);
++    std::fs::create_dir_all(&directory).unwrap();
++    let mut started = std::fs::OpenOptions::new()
++        .create_new(true)
++        .write(true)
++        .open(directory.join("started.json"))
++        .expect("never rerun this budget: started marker already exists");
++    writeln!(
++        started,
++        "{{\"budget\":8,\"status\":\"started\",\"source\":\"frozen before execution\"}}"
++    )
++    .unwrap();
++    started.sync_all().unwrap();
++    let mut output = std::fs::OpenOptions::new()
++        .create_new(true)
++        .write(true)
++        .open(directory.join("outcomes.jsonl"))
++        .unwrap();
++    let mut count = 0;
++    for pressure in [0.0_f32, 0.15] {
++        for setup in setups(pressure) {
++            // Persist intent before every interval. An interrupted outcome is
++            // uncertain, not permission to replay or reclaim its budget slot.
++            writeln!(
++                started,
++                "{{\"interval\":{},\"pressure\":{},\"case\":\"{}\"}}",
++                count + 1,
++                pressure,
++                setup.case
++            )
++            .unwrap();
++            started.sync_all().unwrap();
++            let row = execute(setup);
++            writeln!(output, "{row}").unwrap();
++            output.sync_all().unwrap();
++            println!("grounded_approach_outcome {row}");
++            count += 1;
++        }
++    }
++    assert_eq!(count, 6);
++    writeln!(
++        started,
++        "{{\"completed_intervals\":6,\"unspent_closed_slots\":2,\"budget_remaining\":0}}"
++    )
++    .unwrap();
++    started.sync_all().unwrap();
++}
+diff --git a/docs/experiments/grounded-approach-need-v1/FROZEN_PLAN.md b/docs/experiments/grounded-approach-need-v1/FROZEN_PLAN.md
+new file mode 100644
+index 0000000..2279bc8
+--- /dev/null
++++ b/docs/experiments/grounded-approach-need-v1/FROZEN_PLAN.md
+@@ -0,0 +1,116 @@
++# Grounded Approach / need consequences: fixed eight-interval plan
++
++Frozen before native physical execution. This is a physical source/attribution
++fixture, not a learned neural policy, trained brain or scalar reward experiment.
++
++## Source and budget
++
++Ordinary-main ancestor: `550f79ad1f765132c634e7a272da56b521b57ec0`.
++Qualified opt-in source: PR #310 head
++`5163e3ff7d54b262b73eaafd6db9fb52bc473b4b`, tree
++`85e2ef5f2509a78db11393914fbe1bc921e3aa41`.
++The new patch contains only test code and this experiment's documentation.
++No production store, biology, policy, genetic asset, interface or default changes.
++
++Exactly four arms at each of initial loneliness 0 and .15. At most eight actual
++world intervals, one interval per disposable fork, from tick600 to601 at20Hz.
++No autonomous selector, neural inference, training, GPU/device, existing acquired
++state, private checkpoint, repeated observation, extension, or post-result tuning.
++A cold setup check and detached exact queries are not world intervals. A separate
++create-new run marker records each intent before execution; interruption consumes
++an uncertain slot and does not authorize replay. The test is ignored by default.
++
++## Frozen initialization and arms
++
++All subjects use genome seed921412, foundation identity(10,1,7,N512), freshly
++constructed biology at biological age600 and world tick600. Age600 is initialized,
++not lived history; report actual maturation/puberty/expression. The loneliness
++receptor's underlying chemical concentration is initialized to0 or.15 through a
++fresh in-memory serialized value, then the authoritative graph derives the whole
++homeostatic projection. This is neither a loaded private state nor a query-only
++mutation. The genome, all other initial drive readings, organs and development
++are unchanged. Preserve the original genotype and reference chemistry baseline.
++
++Subject is at(0,0,0), yaw0. Target is at(.8,0,0), radius.75, with identical grounded
++material properties in every arm. The unregistered static peer is organism2;
++its role is a physical peer-contact source, not a second simulated private brain.
++Each case is an isolated fork of the same unadvanced base body/scene:
++
++1. peer_approach: prescribed observed Approach to peer, ActionId101, familyApproach,
++   intensity1, only one command. Registered real execution and local steering own
++   movement. The nominal .1 step should enter the .75 contact region.
++2. toy_approach: the same physical target becomes an ActivityToy without organism
++   identity. Pose, radius and grounded material properties stay fixed. Prescribe
++   the same actual Approach primitive and intensity.
++3. peer_passive: the identical peer scene advances one ordinary tick without a
++   command. It starts outside contact and must remain stationary. It produces no
++   fictitious action memory or action receipt.
++4. peer_blocked: same prescribed peer Approach with four transparent solid sphere
++   obstacles at(±.4,0,0),(0,0,±.4), each radius.2. The intended physical cage leaves
++   the target visible but blocks travel. These obstacles are the declared
++   experimental difference, including their perceptual consequences.
++
++Measure the actual trajectory and endpoint touch. Do not infer contact from the
++primitive, target class, nominal geometry, or instruction. If the cage fails,
++there is no legal retry with changed geometry. Record intended_condition_met=false
++and keep that result. No other condition may be silently retuned after outcomes.
++
++## Evidence and ownership boundary
++
++Use actual registered-command receipts and canonical before/final-after biology.
++World finalization must preserve the receipt's already advanced biology exactly.
++Record pre/post pose, single movement segment, endpoint contacts, physical cost,
++body event, all eleven source-before/after/delta scalars, developmental state,
++timebase, entity and frame provenance. These are bodily measurements, not exported
++neural source vectors. No full sensory frame, sealed source JSON, memory store,
++private bank, optimizer, model activation or checkpoint is written to disk.
++
++The action is prescribed. Do not call its origin NeuralClosedLoopCpu or fabricate
++logit/work/confidence to pass the opt-in store's neural-origin admission guard.
++Command confidence1 only expresses the explicit test prescription; sensor
++confidence remains separate. There is no measured store/causal confidence.
++V1 provides no authentic prescribed-source adapter, so these operation receipts
++are not passed to observe() through a fake envelope. Exact same-source and actual
++next-source queries each run against an independent empty owner store and report
++Unknown; do not describe these as retrieval failures of a retained source.
++Record exact key equality separately to expose context changes independent of
++admission. No approximate match or arbitrary-pressure relief is admitted.
++
++Fixture fork names are explicit external ownership namespaces. Identical numeric
++seed/organism IDs across cloned controls do not establish a runtime world/life
++namespace. No observations are pooled between forks. There is no invented source
++sequence or sealed neural receipt digest. Prior Inspect observations are not
++relabeled as Approach observations.
++
++## What can and cannot be learned
++
++This could demonstrate an Approach-associated physical contact transition,
++eleven-drive differences from no-contact controls, and correct biology timing.
++It cannot demonstrate a learned action policy, neural causal credit, usable
++production memory admission, navigation, generalization or learned self-care.
++At pressure0, physiological baseline drift may make the next reading positive;
++measure it rather than assuming the zero-pressure arm has a zero interval delta.
++
++The controlling architecture distinguishes body-owned physical facts, canonical
++biology, non-reward drives, observed provenance and personal evidence
++(§§5–7,11.2–11.4,15–17). The preceding detached need-reader design remains separate.
++
++## Weight-space work rationale for Astra
++
++Original source: [Sparks of Weight-Space Programming](https://rikiyat.github.io/blog/weight-space-programming/),
++2November2026; checked8November2026.
++
++- Experiment4 edits an existing failing Kinetix car controller after inspecting
++  weights, the scene and one episode. It motivates specific failure diagnosis,
++  not treating a prescribed physical interval as a learned repair.
++- Experiment5 writes zero-initialized small MinAtar controllers with no feedback
++  before evaluation. This ongoing iterative A-Life work is not that zero-shot
++  regime and must not borrow its success claims.
++- Experiment6 constructs a larger Go controller with explicit, limited forward
++  evaluation budgets and iterative edits. It motivates our declared accounting,
++  but our eight physical intervals are not Go rollouts or neural forward passes.
++
++A-Life also has recurrent physiology, private lifetime state, uncertain memory
++and world-owned action validation. This fixture measures whether appropriate
++physical consequence evidence exists before any weight-level policy claim. It
++neither edits weights nor proves that the separate reader can use this source.
+diff --git a/docs/experiments/grounded-approach-need-v1/PREFLIGHT_REVISION.md b/docs/experiments/grounded-approach-need-v1/PREFLIGHT_REVISION.md
+new file mode 100644
+index 0000000..4910e7d
+--- /dev/null
++++ b/docs/experiments/grounded-approach-need-v1/PREFLIGHT_REVISION.md
+@@ -0,0 +1,31 @@
++# Prospective six-interval revision, before any physical exposure
++
++Original fixed eight-slot source is commit
++`ebd4b6244aa4158341cfac5d72e96f3968ebe140`, tree
++`74079511ef3a74feb19a5bf0931f6d714d628e56`. Its zero-interval preflight failed.
++
++The diagnostic shows the blocked scene has five observed grounded slots, while
++the four object-candidate reservations are all occupied by its four nearby cage
++objects. Peer entity2 is not one of the offered target candidates. The other
++three scenes each offer ActionId101 / ActionKind::Move / familyApproach for peer
++or toy entity2. This is not a mistaken ActionKind lookup, invisible target or a
++measured failed action. It is a missing legal observed-target candidate under the
++frozen candidate budget.
++
++Before executing any world interval, revise only execution accounting:
++- Preserve all eight initial setups, geometry, pressure, genotype and sensing.
++- Report both blocked slots unavailable and execute zero intervals for them.
++- Run the remaining six unchanged peer/toy/passive slots exactly once.
++- Do not move/remove obstacles, change attention/profile, replace the target,
++  manufacture a command/candidate, loosen admission, or spend the unused slots.
++- No measured failed-Approach comparison can be claimed from this revision.
++
++The first two compilation failures were fixture-only issues: JSON macro recursion
++(solved by splitting the diagnostic object) and a conflicting DriveChannel alias
++(solved by using BiochemicalDriveChannel). Both occurred before tests/intervals.
++The third invocation established the missing-candidate failure; the fourth added
++cold candidate diagnostics and preserved the same failure. None ran biology.
++
++The final fixture retains a create-new marker, six actual intervals maximum and
++two unspent closed slots. Body measurements are still prescribed observations,
++not neural-origin evidence; the opt-in store remains empty/Unknown.
+diff --git a/docs/experiments/grounded-approach-need-v1/PRIOR_INSPECT_PROVENANCE_ERRATUM.md b/docs/experiments/grounded-approach-need-v1/PRIOR_INSPECT_PROVENANCE_ERRATUM.md
+new file mode 100644
+index 0000000..5786d14
+--- /dev/null
++++ b/docs/experiments/grounded-approach-need-v1/PRIOR_INSPECT_PROVENANCE_ERRATUM.md
+@@ -0,0 +1,41 @@
++# Prior Inspect fixture: precise provenance clarification
++
++Applies to the inherited PR310 source and documentation, not a rerun or a change
++to its measured physical outcomes. The prior fixture really executed registered
++Inspect intervals and measured canonical before/after biology. Its passive clones
++really matched the social relief, so it did not isolate Inspect causality.
++
++However, `headless/need_consequence_evidence_tests.rs::measured_fixture` manually
++constructs `NeuralActionSelection` with logit0, confidence.9 and zero active tiles
++and synapses, then calls `DecisionSnapshot::from_cpu_neural_selection`. That is a
++prescribed action-envelope **contract fixture**, not an actual CPU neural decision.
++The matching `PreActionSnapshot::from_cpu_neural_frame` also gives a schema label,
++not evidence that any forward/select pass took place. Structural validation of
++that label does not authenticate its provenance.
++
++Exact wording to read with this qualification:
++
++- `NEED_EVIDENCE_RESULTS_V1.md`, “All11 stored deltas match the actual measured
++  physiology bitwise. Measured zero remains known.” These are storage/lookup
++  results for prescribed contract envelopes containing real biological samples.
++  They do not show that a genuine neural producer supplied admitted evidence.
++- Same file, “Actual next-world queries miss in all3 cases.” The query frames
++  came from the real successor worlds; the stored source used the synthetic
++  neural-labeled envelope just described. This is an exact-matcher compatibility
++  limit in that contract fixture, not an autonomous creature's recall result.
++- `README.md`, “Exact source-context recall and byte-exact restore pass.” This is
++  a valid contract-level pass only. The nearby “real selection” future gate is
++  still open and must not be omitted from later summaries.
++- `README.md`, “Only a validated sealed observation with measured physiology and
++  an observed representative target can be admitted.” Add: V1 also requires the
++  neural-origin schema. Its producer must supply genuine neural provenance;
++  validation alone cannot establish that the producer actually ran a network.
++- `NEED_EVIDENCE_INTERFACE.md`, “Tests explicitly distinguish synthetic contract
++  fixtures from actual registered-world measurements.” Both can coexist in one
++  fixture: the body measurements are actual, while its neural decision envelope
++  is synthetic. This sentence must not imply an actual neural-origin collection.
++
++The new Approach fixture does not repeat that envelope construction. It retains
++real operation/physiology evidence as prescribed observations, leaves the
++neural-only store empty, and labels exact-source and next-source recalls Unknown.
++No admission rule is relaxed and no additional neural policy run is authorized.
+diff --git a/docs/experiments/grounded-approach-need-v1/QUALIFICATION.json b/docs/experiments/grounded-approach-need-v1/QUALIFICATION.json
+new file mode 100644
+index 0000000..f5d331a
+--- /dev/null
++++ b/docs/experiments/grounded-approach-need-v1/QUALIFICATION.json
+@@ -0,0 +1,160 @@
++{
++  "schema": 1,
++  "executed_source": "e94592cbeede35a3e812093fcdea673410205e2f",
++  "executed_tree": "8753ed65934b7af638ad4bf54ec57889d30afddc",
++  "status": "completed_closed",
++  "ordinary_default_changes": false,
++  "actual_world_intervals": 6,
++  "original_budget": 8,
++  "unavailable_closed_slots": 2,
++  "additional_intervals_authorized": false,
++  "neural_forward_passes": 0,
++  "gpu_device_use": false,
++  "authentic_neural_sources_admitted": 0,
++  "checks": [
++    {
++      "check": "first compile",
++      "status": "failed before test: JSON diagnostic macro recursion",
++      "world_intervals": 0
++    },
++    {
++      "check": "second compile",
++      "status": "failed before test: biochemical DriveChannel alias",
++      "world_intervals": 0
++    },
++    {
++      "check": "third cold preflight",
++      "status": "failed: no blocked-target Approach candidate",
++      "world_intervals": 0
++    },
++    {
++      "check": "fourth cold diagnostic",
++      "status": "same failure confirmed candidate budget cause",
++      "world_intervals": 0
++    },
++    {
++      "check": "fifth revised preflight",
++      "status": "1 passed; all original setups unchanged, blocked unavailable",
++      "world_intervals": 0
++    },
++    {
++      "check": "single six-interval ignored test",
++      "status": "1 passed; six intended physical conditions met",
++      "world_intervals": 6
++    },
++    {
++      "check": "cargo clippy -p alife_world --lib --tests -- -D warnings",
++      "status": "passed; no tests executed",
++      "world_intervals": 0
++    },
++    {
++      "check": "cargo fmt --all --check",
++      "status": "passed",
++      "world_intervals": 0
++    },
++    {
++      "check": "first boundary script",
++      "status": "not run: toolchain was absent from that shell PATH",
++      "world_intervals": 0
++    },
++    {
++      "check": "bash scripts/check_core_boundaries.sh --static",
++      "status": "passed static manifest boundary only",
++      "world_intervals": 0
++    },
++    {
++      "check": "git diff --check",
++      "status": "passed",
++      "world_intervals": 0
++    },
++    {
++      "check": "initial archive diff whitespace",
++      "status": "raw Cargo logs contained trailing whitespace; repository copies normalized for publication, raw byte-exact logs preserved separately",
++      "world_intervals": 0
++    }
++  ],
++  "logs": [
++    {
++      "file": "logs/grounded-approach-preflight-v1.log",
++      "bytes": 1333,
++      "sha256": "879e9846e6a75441b112a5d303216e42b3632e85e1ad3aaff297bc7eadf21f7b",
++      "raw_bytes": 1333,
++      "raw_sha256": "879e9846e6a75441b112a5d303216e42b3632e85e1ad3aaff297bc7eadf21f7b",
++      "normalization": "trailing horizontal whitespace and surplus final blank lines removed in repository copy only; raw logs retained in evidence archive"
++    },
++    {
++      "file": "logs/grounded-approach-preflight-v2.log",
++      "bytes": 932,
++      "sha256": "c66f86002fb2ac61b077ecb55c75fc540c5a5dc47fab10cc38d74c0f6f058f28",
++      "raw_bytes": 932,
++      "raw_sha256": "c66f86002fb2ac61b077ecb55c75fc540c5a5dc47fab10cc38d74c0f6f058f28",
++      "normalization": "trailing horizontal whitespace and surplus final blank lines removed in repository copy only; raw logs retained in evidence archive"
++    },
++    {
++      "file": "logs/grounded-approach-preflight-v3.log",
++      "bytes": 1083,
++      "sha256": "8e4f9473e2a5be95ffd128fdb8aa2a863b90e24dfb069bd19f05890eac71d301",
++      "raw_bytes": 1084,
++      "raw_sha256": "5d3f54825a8dbcac7a21f480112e1327a04dbb4606be1b89c57172b0d14bed61",
++      "normalization": "trailing horizontal whitespace and surplus final blank lines removed in repository copy only; raw logs retained in evidence archive"
++    },
++    {
++      "file": "logs/grounded-approach-preflight-v4.log",
++      "bytes": 3442,
++      "sha256": "3d5292e8e63ee4db8fbdf65cb6d418da4c2cb83f5e5a025931f736b0b73eea00",
++      "raw_bytes": 3442,
++      "raw_sha256": "3d5292e8e63ee4db8fbdf65cb6d418da4c2cb83f5e5a025931f736b0b73eea00",
++      "normalization": "trailing horizontal whitespace and surplus final blank lines removed in repository copy only; raw logs retained in evidence archive"
++    },
++    {
++      "file": "logs/grounded-approach-preflight-v5.log",
++      "bytes": 6357,
++      "sha256": "f29c317449297ec553638654bfe4a9d9a5fadaf6f4c0ada0cf16436d7416616b",
++      "raw_bytes": 6358,
++      "raw_sha256": "0e3aa221461e8f89192feb396d6fe109398d85ff2438696ab0acbfb6687d6045",
++      "normalization": "trailing horizontal whitespace and surplus final blank lines removed in repository copy only; raw logs retained in evidence archive"
++    },
++    {
++      "file": "logs/grounded-approach-six-native-v1.log",
++      "bytes": 26895,
++      "sha256": "79f2f54f386d93f44739b30bbc4b77527e9ce83da0bd3f111772d532d4ac585e",
++      "raw_bytes": 26896,
++      "raw_sha256": "42d390cab9abc188d4068804d4c108b9929e21a0e795248f60f2b674db0a6608",
++      "normalization": "trailing horizontal whitespace and surplus final blank lines removed in repository copy only; raw logs retained in evidence archive"
++    },
++    {
++      "file": "logs/grounded-approach-six-clippy-v1.log",
++      "bytes": 396,
++      "sha256": "63974c56d65dc5d89f791c8a13f5ae5175bad3968eb32f43714fa70e9ccb037a",
++      "raw_bytes": 396,
++      "raw_sha256": "63974c56d65dc5d89f791c8a13f5ae5175bad3968eb32f43714fa70e9ccb037a",
++      "normalization": "trailing horizontal whitespace and surplus final blank lines removed in repository copy only; raw logs retained in evidence archive"
++    },
++    {
++      "file": "logs/grounded-approach-six-fmt-v1.log",
++      "bytes": 0,
++      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
++      "raw_bytes": 0,
++      "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
++      "normalization": "trailing horizontal whitespace and surplus final blank lines removed in repository copy only; raw logs retained in evidence archive"
++    },
++    {
++      "file": "logs/grounded-approach-six-boundaries-v1.log",
++      "bytes": 42,
++      "sha256": "edfe0c3e3b80dbafbf4ad79877ba2d98759b5a4c0c44c77b711ce4411ecbb571",
++      "raw_bytes": 42,
++      "raw_sha256": "edfe0c3e3b80dbafbf4ad79877ba2d98759b5a4c0c44c77b711ce4411ecbb571",
++      "normalization": "trailing horizontal whitespace and surplus final blank lines removed in repository copy only; raw logs retained in evidence archive"
++    },
++    {
++      "file": "logs/grounded-approach-six-boundaries-v2.log",
++      "bytes": 34,
++      "sha256": "b6554fa6b151aea699671a9b5cad329ec249203f6fa858015600843929aff070",
++      "raw_bytes": 34,
++      "raw_sha256": "b6554fa6b151aea699671a9b5cad329ec249203f6fa858015600843929aff070",
++      "normalization": "trailing horizontal whitespace and surplus final blank lines removed in repository copy only; raw logs retained in evidence archive"
++    }
++  ],
++  "scope": "CPU engine/world receipt fixture; not full world suite, policy behavior, neural recall, GPU parity or learned self-care",
++  "publication": "source, bodily scalar receipts and bounded logs only; no source vectors/private banks/checkpoints"
++}
+diff --git a/docs/experiments/grounded-approach-need-v1/README.md b/docs/experiments/grounded-approach-need-v1/README.md
+new file mode 100644
+index 0000000..b98caf8
+--- /dev/null
++++ b/docs/experiments/grounded-approach-need-v1/README.md
+@@ -0,0 +1,41 @@
++# Grounded Approach need evidence: closed six-interval batch
++
++**Status: completed and closed. Do not run another physical interval from this
++archive.** Original budget8; executed6; blocked-control slots unavailable2 and
++closed. No training, policy selection, neural forward pass or device was used.
++
++Prescribed Approach traveled.1 and entered peer touch. At loneliness.15 it
++measured−.007499993 versus0 in matched toy/passive controls. At initial0 it stayed0
++while controls drifted+.006. All eleven raw biological changes and costs are
++preserved; no scalar reward or isolated channel credit is invented.
++
++This supplies physical interval evidence, not authenticated neural-origin
++memory. V1's exact-source and successor queries remain Unknown in empty stores.
++The blocked controls failed cold candidate enumeration, not physical movement;
++there is no measured failed-Approach contrast. Read RESULTS.md for both limits.
++
++Files:
++- FROZEN_PLAN.md: original eight-slot source, conditions, budget and paper context.
++- PREFLIGHT_REVISION.md: prospective reduction to six before any physical run.
++- SOURCE_BINDING.json: original and executed source commits, trees and hashes.
++- outcomes.jsonl, summary.json, run-ledger.jsonl: public finite scalar receipts.
++- RESULTS.md: interpretation, all eleven lanes, drift contrasts and limits.
++- PRIOR_INSPECT_PROVENANCE_ERRATUM.md: real biology versus synthetic neural label.
++- QUALIFICATION.json: commands/status and finite log hashes.
++- summarize.py: read-only scalar summarizer; it cannot execute a world.
++
++Default execution is safe: the physical unit test is #[ignore], requires an
++explicit output-directory environment variable and refuses an existing run
++marker. Ordinary Cargo tests can execute only this fixture's cold preflight,
++which advances no biology. No hosted job/workflow was added or invoked. Packaging
++and publication do not opt into the ignored test. Neither a new directory nor a
++manual --ignored invocation is authorized by this completed batch.
++
++Only test/documentation source and scalar output are shared. No learned weights,
++private banks, neural source vectors, optimizer/activation state, sealed source
++JSON or full saved world/creature is included. The new module is cfg(test) only;
++production/default interfaces and acquired state remain unchanged.
++
++Repository log copies remove trailing whitespace and surplus final blank lines.
++The evidence archive also preserves byte-exact original logs, with both hashes
++in QUALIFICATION.json. No test content or numerical result was changed.
+diff --git a/docs/experiments/grounded-approach-need-v1/RESULTS.md b/docs/experiments/grounded-approach-need-v1/RESULTS.md
+new file mode 100644
+index 0000000..d70e1c5
+--- /dev/null
++++ b/docs/experiments/grounded-approach-need-v1/RESULTS.md
+@@ -0,0 +1,107 @@
++# Prescribed Approach contact: measured biology, no neural-origin admission
++
++The contact transition worked in all six executed slots. Starting at x0 with a
++peer at x.8, an actual registered Approach (primitive101, ActionKind::Move,
++familyApproach) traveled .1000000015 in one20Hz interval and entered peer touch.
++The equal-travel toy never supplied social contact. The same-scene passive clone
++remained outside contact. The real contact body-event dose was .0125.
++
++At initial loneliness.15, Approach to the peer measured −.00749999285 loneliness;
++toy and passive controls measured0. At initial0, the peer stayed0 while toy and
++passive rose+.00599999726 toward the inherited baseline. The peer observation at
++zero is therefore measured zero, not a transferable negative relief amount.
++
++This is physical, prescribed interval evidence. **It is not yet a usable
++neural-origin need-memory source.** No neural selection/forward pass occurred,
++and no fabricated CPU/GPU provenance envelope was constructed. All six separate
++owner stores remain empty. Exact-source and actual-next queries each return
++Unknown in6/6 cases, inspecting0 records. These are not failures to retrieve a
++retained observation. Independently, all6 actual next-state keys differ from the
++source keys despite matching target/family. A future authenticated neural source
++and separately qualified retrieval remain necessary.
++
++## Budget and failed control
++
++Original maximum:8 physical intervals. Actual executed:6. Two unspent slots are
++closed and cannot be reused. There was no post-result retuning or extension.
++
++The intended blocked control failed during cold setup, before any biology ran:
++four nearby cage objects consumed all four object-candidate reservations. The
++peer was in one of five observed slots but had no offered Approach candidate.
++Both pressure versions were therefore marked unavailable. Geometry, attention,
++profile and target were not changed to obtain a command. **There is no measured
++failed-Approach comparison.** The preserved original source/failure and the
++prospective six-slot revision are linked in SOURCE_BINDING.json and
++PREFLIGHT_REVISION.md.
++
++## Eleven signed biological lanes
++
++Order: hunger, fatigue, fear, pain, loneliness, curiosity, ATP availability,
++temperature stress, reproductive drive, extension0, extension1. Values below are
++raw final-after minus source-before, never normalized to unit benefit or pooled
++into a scalar reward.
++
++| Initial loneliness | Arm | Hunger | Fatigue | Fear | Pain | Loneliness | Curiosity | ATP | Temperature | Reproductive | Ext0 | Ext1 |
++|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
++|0|Peer Approach|.0387479961|.0258319974|0|0|0|0|−.0258319974|0|0|0|0|
++|0|Toy Approach|.0387479961|.0258319974|0|0|.0059999973|0|−.0258319974|0|0|0|0|
++|0|Passive peer|.0374279916|.0249519944|0|0|.0059999973|0|−.0249519944|0|0|0|0|
++|.15|Peer Approach|.0387479961|.0258319974|0|0|−.0074999928|0|−.0258319974|0|0|0|0|
++|.15|Toy Approach|.0387479961|.0258319974|0|0|0|0|−.0258319974|0|0|0|0|
++|.15|Passive peer|.0374279916|.0249519944|0|0|0|0|−.0249519944|0|0|0|0|
++
++The large common hunger/fatigue/ATP changes also occur in fresh passive biology.
++They must not all be credited to movement. Relative to passive, each Approach
++has hunger+.00132000446, fatigue+.00088000298, ATP−.00088000298. Peer versus
++same-distance toy differs only in loneliness. These are between-fork diagnostic
++contrasts, not drift-subtracted effects to put into the store. Zero changes in
++other lanes do not prove every environmental pathway for those drives is correct.
++
++Body reserve starts.7925000191; after moving it is.7847333550 versus.7920667529
++passively. Physical movement receipt cost is.08; action body-event energy is−.04.
++Those are distinct engine quantities, not assumed equal to the reserve change or
++ATP change. Every interval's biochemical work receipt is19 species updates,
++1 reaction,22 emitters,26 receptors and0 neural emitters.
++
++## Timing, provenance and uncertainty
++
++All subjects are fresh initialized juvenile age600, not600 lived ticks:
++maturation.3289473653, puberty=false, biochemical expression1. Actual biology
++advances600→601 once. After each registered command, world finalization preserves
++the already committed biological state exactly. Passive controls have no action
++receipt; their no-contact/no-mating/no-care ambient input is reported as a control
++fact, not a fabricated command.
++
++The fixed source genome and all initial biology except the named underlying
++loneliness chemical are identical. Canonical homeostasis is rederived from that
++chemical graph before world registration. Fork-specific namespaces identify
++independent controls; numeric organism IDs alone are not runtime world/life
++provenance, and no stores or sources are pooled across forks.
++
++Sensor confidence is.9 for the observed target. Prescription confidence1 records
++only the deterministic test instruction. Store and causal confidence are null;
++neither becomes an effect estimate. Source/final frame digests and source-before,
++final-after and delta bodily scalars are available in public outcomes.jsonl.
++There are no neural input vectors, source JSON patches, private stores, acquired
++brains, activations, optimizer states or checkpoints in the archive.
++
++## Verification and interpretation
++
++The source-specific cold preflight passes1/1 with no world intervals. The single
++ignored opt-in physical test passes1/1 over exactly6 intervals. Its assertions
++qualify command/pose agreement, canonical source state, once-only biology and
++Unknown separation; the public rows independently show all6 physical conditions
++met. This is not a full world suite, GPU check or trained-brain result.
++
++Original compile failures, the cold unavailable-candidate failure, the diagnostic
++repeat and final logs are preserved. Tests were not rerun after physical outcomes.
++Formatting, static diff and strict Clippy status are recorded in QUALIFICATION.json.
++
++For Astra: these results establish a real contact-conditioned measured source
++opportunity and its costs before any weight-level intervention. They also expose
++a genuine candidate-budget limitation and a provenance/admission boundary. Keep
++the reader detached. A later authentic neural source, retrieval contract and
++candidate-relative behavioral test require a separately scoped experiment.
++Original paper experiments4/5/6 and their distinct limits are summarized in
++FROZEN_PLAN.md. Prior Inspect's actual biology versus synthetic neural-envelope
++provenance is corrected explicitly in PRIOR_INSPECT_PROVENANCE_ERRATUM.md.
+diff --git a/docs/experiments/grounded-approach-need-v1/SOURCE_BINDING.json b/docs/experiments/grounded-approach-need-v1/SOURCE_BINDING.json
+new file mode 100644
+index 0000000..c666e71
+--- /dev/null
++++ b/docs/experiments/grounded-approach-need-v1/SOURCE_BINDING.json
+@@ -0,0 +1,32 @@
++{
++  "schema": 1,
++  "base_main": "550f79ad1f765132c634e7a272da56b521b57ec0",
++  "qualified_component": "5163e3ff7d54b262b73eaafd6db9fb52bc473b4b",
++  "qualified_component_tree": "85e2ef5f2509a78db11393914fbe1bc921e3aa41",
++  "original_eight_slot_source": "ebd4b6244aa4158341cfac5d72e96f3968ebe140",
++  "prospective_six_interval_source": "e94592cbeede35a3e812093fcdea673410205e2f",
++  "prospective_six_interval_tree": "8753ed65934b7af638ad4bf54ec57889d30afddc",
++  "world_intervals_executed_at_freeze": 0,
++  "planned_actual_world_intervals": 6,
++  "original_maximum_world_intervals": 8,
++  "blocked_slots_unavailable": 2,
++  "unused_budget_closed": true,
++  "files": {
++    "crates/alife_world/src/headless.rs": "ca5a709f69f0d7e7bd6ff5eb1f8207cca2234cd909962e8d78942f85835555ac",
++    "crates/alife_world/src/headless/grounded_approach_need_tests.rs": "0c3bbb7137a8d995836e77c7a4efd125c1acdb5b28b7e841bb0cfe540d158fe5",
++    "docs/experiments/grounded-approach-need-v1/FROZEN_PLAN.md": "4e141cc20afdb0f9bd9226fefb98568c806a80ef426bc74fe424c8003672ea15",
++    "docs/experiments/grounded-approach-need-v1/PREFLIGHT_REVISION.md": "86072d845ade38a00e60feb403493538166749c0089cc8aaab4fdb9803fd1b05",
++    "docs/experiments/grounded-approach-need-v1/summarize.py": "8da0dce7c2cb2a4105cf385467dbda9327a4bd5cb5c548ae7ebe4c828cf70736"
++  },
++  "provenance": "prescribed real physical/biological operations; no neural producer or sealed neural envelope",
++  "excluded": [
++    "autonomous selector",
++    "neural forward pass",
++    "learned policy",
++    "GPU/device",
++    "existing acquired/private state",
++    "source vectors",
++    "private banks",
++    "post-result retuning"
++  ]
++}
+diff --git a/docs/experiments/grounded-approach-need-v1/logs/grounded-approach-preflight-v1.log b/docs/experiments/grounded-approach-need-v1/logs/grounded-approach-preflight-v1.log
+new file mode 100644
+index 0000000..eb5eb28
+--- /dev/null
++++ b/docs/experiments/grounded-approach-need-v1/logs/grounded-approach-preflight-v1.log
+@@ -0,0 +1,19 @@
++   Compiling alife_core v0.1.0 (/workspace/scratch/ee5e08a3ca9b/grounded-approach-need-v1/crates/alife_core)
++   Compiling alife_storage v0.1.0 (/workspace/scratch/ee5e08a3ca9b/grounded-approach-need-v1/crates/alife_storage)
++   Compiling alife_world v0.1.0 (/workspace/scratch/ee5e08a3ca9b/grounded-approach-need-v1/crates/alife_world)
++error: recursion limit reached while expanding `$crate::json_internal!`
++   --> crates/alife_world/src/headless/grounded_approach_need_tests.rs:305:5
++    |
++305 | /     json!({
++306 | |         "fixture_fork_namespace": fork,
++307 | |         "world_binding_limit": "namespace is external fixture ownership, not a runtime world/life epoch API",
++308 | |         "world_seed": SEED, "organism": SUBJECT.raw(), "actor_entity": actor.raw(),
++...   |
++331 | |         "interpretation": "joint physical interval observation only; not scalar reward, policy, or learned self-care",
++332 | |     })
++    | |______^
++    |
++    = help: consider increasing the recursion limit by adding a `#![recursion_limit = "256"]` attribute to your crate (`alife_world`)
++    = note: this error originates in the macro `$crate::json_internal` which comes from the expansion of the macro `json` (in Nightly builds, run with -Z macro-backtrace for more info)
++
++error: could not compile `alife_world` (lib test) due to 1 previous error
+diff --git a/docs/experiments/grounded-approach-need-v1/logs/grounded-approach-preflight-v2.log b/docs/experiments/grounded-approach-need-v1/logs/grounded-approach-preflight-v2.log
+new file mode 100644
+index 0000000..548b789
+--- /dev/null
++++ b/docs/experiments/grounded-approach-need-v1/logs/grounded-approach-preflight-v2.log
+@@ -0,0 +1,17 @@
++   Compiling alife_world v0.1.0 (/workspace/scratch/ee5e08a3ca9b/grounded-approach-need-v1/crates/alife_world)
++error[E0308]: mismatched types
++   --> crates/alife_world/src/headless/grounded_approach_need_tests.rs:38:75
++    |
++ 38 |         .find(|receptor| receptor.target == BiochemicalTargetLocus::Drive(DriveChannel::Loneliness))
++    |                                             ----------------------------- ^^^^^^^^^^^^^^^^^^^^^^^^ expected `BiochemicalDriveChannel`, found `DriveChannel`
++    |                                             |
++    |                                             arguments to this enum variant are incorrect
++    |
++note: tuple variant defined here
++   --> crates/alife_core/src/biochemical_graph.rs:249:5
++    |
++249 |     Drive(DriveChannel),
++    |     ^^^^^
++
++For more information about this error, try `rustc --explain E0308`.
++error: could not compile `alife_world` (lib test) due to 1 previous error
+diff --git a/docs/experiments/grounded-approach-need-v1/logs/grounded-approach-preflight-v3.log b/docs/experiments/grounded-approach-need-v1/logs/grounded-approach-preflight-v3.log
+new file mode 100644
+index 0000000..b2e8071
+--- /dev/null
++++ b/docs/experiments/grounded-approach-need-v1/logs/grounded-approach-preflight-v3.log
+@@ -0,0 +1,19 @@
++   Compiling alife_world v0.1.0 (/workspace/scratch/ee5e08a3ca9b/grounded-approach-need-v1/crates/alife_world)
++    Finished `test` profile [unoptimized] target(s) in 1m 33s
++     Running unittests src/lib.rs (/workspace/shared/grip-integration-qualification-20261108/grip-candidate-qualification/target/debug/deps/alife_world-5c9ccab29d8984f3)
++
++running 1 test
++test headless::grounded_approach_need_tests::grounded_approach_fixture_preflight_no_intervals ...
++thread 'headless::grounded_approach_need_tests::grounded_approach_fixture_preflight_no_intervals' (63) panicked at crates/alife_world/src/headless/grounded_approach_need_tests.rs:156:14:
++frozen setup must expose a grounded Approach candidate; do not retune if absent
++note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
++FAILED
++
++failures:
++
++failures:
++    headless::grounded_approach_need_tests::grounded_approach_fixture_preflight_no_intervals
++
++test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 246 filtered out; finished in 0.00s
++
++error: test failed, to rerun pass `-p alife_world --lib`
+diff --git a/docs/experiments/grounded-approach-need-v1/logs/grounded-approach-preflight-v4.log b/docs/experiments/grounded-approach-need-v1/logs/grounded-approach-preflight-v4.log
+new file mode 100644
+index 0000000..866976e
+--- /dev/null
++++ b/docs/experiments/grounded-approach-need-v1/logs/grounded-approach-preflight-v4.log
+@@ -0,0 +1,23 @@
++   Compiling alife_world v0.1.0 (/workspace/scratch/ee5e08a3ca9b/grounded-approach-need-v1/crates/alife_world)
++    Finished `test` profile [unoptimized] target(s) in 1m 32s
++     Running unittests src/lib.rs (/workspace/shared/grip-integration-qualification-20261108/grip-candidate-qualification/target/debug/deps/alife_world-5c9ccab29d8984f3)
++
++running 1 test
++test headless::grounded_approach_need_tests::grounded_approach_fixture_preflight_no_intervals ... cold candidate diagnostics pressure=0 case=peer_approach target=2 slots=1 candidates=[(1, Idle, Idle, None), (3, Rest, Rest, None), (400, Vocalize, Other, None), (4, Inspect, Inspect, Some(2)), (101, Move, Approach, Some(2)), (102, Move, Avoid, Some(2)), (210, Interact, Ingest, Some(2)), (211, Interact, Contact, Some(2)), (213, Interact, Other, Some(2)), (103, Move, Approach, None), (212, Interact, Contact, None), (104, Hold, Other, None)]
++cold candidate diagnostics pressure=0 case=toy_approach target=2 slots=1 candidates=[(1, Idle, Idle, None), (3, Rest, Rest, None), (400, Vocalize, Other, None), (4, Inspect, Inspect, Some(2)), (101, Move, Approach, Some(2)), (102, Move, Avoid, Some(2)), (210, Interact, Ingest, Some(2)), (211, Interact, Contact, Some(2)), (213, Interact, Other, Some(2)), (103, Move, Approach, None), (212, Interact, Contact, None), (104, Hold, Other, None)]
++cold candidate diagnostics pressure=0 case=peer_passive target=2 slots=1 candidates=[(1, Idle, Idle, None), (3, Rest, Rest, None), (400, Vocalize, Other, None), (4, Inspect, Inspect, Some(2)), (101, Move, Approach, Some(2)), (102, Move, Avoid, Some(2)), (210, Interact, Ingest, Some(2)), (211, Interact, Contact, Some(2)), (213, Interact, Other, Some(2)), (103, Move, Approach, None), (212, Interact, Contact, None), (104, Hold, Other, None)]
++cold candidate diagnostics pressure=0 case=peer_blocked target=2 slots=5 candidates=[(1, Idle, Idle, None), (3, Rest, Rest, None), (400, Vocalize, Other, None), (4, Inspect, Inspect, Some(6)), (101, Move, Approach, Some(6)), (102, Move, Avoid, Some(6)), (210, Interact, Ingest, Some(6)), (211, Interact, Contact, Some(6)), (213, Interact, Other, Some(6)), (4, Inspect, Inspect, Some(3)), (101, Move, Approach, Some(3)), (102, Move, Avoid, Some(3)), (210, Interact, Ingest, Some(3)), (211, Interact, Contact, Some(3)), (213, Interact, Other, Some(3)), (4, Inspect, Inspect, Some(4)), (101, Move, Approach, Some(4)), (102, Move, Avoid, Some(4)), (210, Interact, Ingest, Some(4)), (211, Interact, Contact, Some(4)), (213, Interact, Other, Some(4)), (4, Inspect, Inspect, Some(5)), (101, Move, Approach, Some(5)), (102, Move, Avoid, Some(5)), (210, Interact, Ingest, Some(5)), (211, Interact, Contact, Some(5)), (213, Interact, Other, Some(5)), (103, Move, Approach, None), (212, Interact, Contact, None), (104, Hold, Other, None)]
++
++thread 'headless::grounded_approach_need_tests::grounded_approach_fixture_preflight_no_intervals' (63) panicked at crates/alife_world/src/headless/grounded_approach_need_tests.rs:157:14:
++frozen setup must expose a grounded Approach candidate; do not retune if absent
++note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
++FAILED
++
++failures:
++
++failures:
++    headless::grounded_approach_need_tests::grounded_approach_fixture_preflight_no_intervals
++
++test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 246 filtered out; finished in 0.00s
++
++error: test failed, to rerun pass `-p alife_world --lib`
+diff --git a/docs/experiments/grounded-approach-need-v1/logs/grounded-approach-preflight-v5.log b/docs/experiments/grounded-approach-need-v1/logs/grounded-approach-preflight-v5.log
+new file mode 100644
+index 0000000..2151f14
+--- /dev/null
++++ b/docs/experiments/grounded-approach-need-v1/logs/grounded-approach-preflight-v5.log
+@@ -0,0 +1,24 @@
++   Compiling alife_world v0.1.0 (/workspace/scratch/ee5e08a3ca9b/grounded-approach-need-v1/crates/alife_world)
++    Finished `test` profile [unoptimized] target(s) in 1m 33s
++     Running unittests src/lib.rs (/workspace/shared/grip-integration-qualification-20261108/grip-candidate-qualification/target/debug/deps/alife_world-5c9ccab29d8984f3)
++
++running 1 test
++test headless::grounded_approach_need_tests::grounded_approach_fixture_preflight_no_intervals ... cold candidate diagnostics pressure=0 case=peer_approach target=2 slots=1 candidates=[(1, Idle, Idle, None), (3, Rest, Rest, None), (400, Vocalize, Other, None), (4, Inspect, Inspect, Some(2)), (101, Move, Approach, Some(2)), (102, Move, Avoid, Some(2)), (210, Interact, Ingest, Some(2)), (211, Interact, Contact, Some(2)), (213, Interact, Other, Some(2)), (103, Move, Approach, None), (212, Interact, Contact, None), (104, Hold, Other, None)]
++cold candidate diagnostics pressure=0 case=toy_approach target=2 slots=1 candidates=[(1, Idle, Idle, None), (3, Rest, Rest, None), (400, Vocalize, Other, None), (4, Inspect, Inspect, Some(2)), (101, Move, Approach, Some(2)), (102, Move, Avoid, Some(2)), (210, Interact, Ingest, Some(2)), (211, Interact, Contact, Some(2)), (213, Interact, Other, Some(2)), (103, Move, Approach, None), (212, Interact, Contact, None), (104, Hold, Other, None)]
++cold candidate diagnostics pressure=0 case=peer_passive target=2 slots=1 candidates=[(1, Idle, Idle, None), (3, Rest, Rest, None), (400, Vocalize, Other, None), (4, Inspect, Inspect, Some(2)), (101, Move, Approach, Some(2)), (102, Move, Avoid, Some(2)), (210, Interact, Ingest, Some(2)), (211, Interact, Contact, Some(2)), (213, Interact, Other, Some(2)), (103, Move, Approach, None), (212, Interact, Contact, None), (104, Hold, Other, None)]
++cold candidate diagnostics pressure=0 case=peer_blocked target=2 slots=5 candidates=[(1, Idle, Idle, None), (3, Rest, Rest, None), (400, Vocalize, Other, None), (4, Inspect, Inspect, Some(6)), (101, Move, Approach, Some(6)), (102, Move, Avoid, Some(6)), (210, Interact, Ingest, Some(6)), (211, Interact, Contact, Some(6)), (213, Interact, Other, Some(6)), (4, Inspect, Inspect, Some(3)), (101, Move, Approach, Some(3)), (102, Move, Avoid, Some(3)), (210, Interact, Ingest, Some(3)), (211, Interact, Contact, Some(3)), (213, Interact, Other, Some(3)), (4, Inspect, Inspect, Some(4)), (101, Move, Approach, Some(4)), (102, Move, Avoid, Some(4)), (210, Interact, Ingest, Some(4)), (211, Interact, Contact, Some(4)), (213, Interact, Other, Some(4)), (4, Inspect, Inspect, Some(5)), (101, Move, Approach, Some(5)), (102, Move, Avoid, Some(5)), (210, Interact, Ingest, Some(5)), (211, Interact, Contact, Some(5)), (213, Interact, Other, Some(5)), (103, Move, Approach, None), (212, Interact, Contact, None), (104, Hold, Other, None)]
++unavailable fixed slot pressure=0 case=peer_blocked reason=peer omitted by four-object candidate budget; actual_intervals=0
++preflight pressure=0 case=peer_approach candidate=101 observed=ObjectSlot(0) target=2 radius=0.75 body_radius=0.2 sensor_confidence=0.9
++preflight pressure=0 case=toy_approach candidate=101 observed=ObjectSlot(0) target=2 radius=0.75 body_radius=0.2 sensor_confidence=0.9
++preflight pressure=0 case=peer_passive candidate=101 observed=ObjectSlot(0) target=2 radius=0.75 body_radius=0.2 sensor_confidence=0.9
++cold candidate diagnostics pressure=0.15 case=peer_approach target=2 slots=1 candidates=[(1, Idle, Idle, None), (3, Rest, Rest, None), (400, Vocalize, Other, None), (4, Inspect, Inspect, Some(2)), (101, Move, Approach, Some(2)), (102, Move, Avoid, Some(2)), (210, Interact, Ingest, Some(2)), (211, Interact, Contact, Some(2)), (213, Interact, Other, Some(2)), (103, Move, Approach, None), (212, Interact, Contact, None), (104, Hold, Other, None)]
++cold candidate diagnostics pressure=0.15 case=toy_approach target=2 slots=1 candidates=[(1, Idle, Idle, None), (3, Rest, Rest, None), (400, Vocalize, Other, None), (4, Inspect, Inspect, Some(2)), (101, Move, Approach, Some(2)), (102, Move, Avoid, Some(2)), (210, Interact, Ingest, Some(2)), (211, Interact, Contact, Some(2)), (213, Interact, Other, Some(2)), (103, Move, Approach, None), (212, Interact, Contact, None), (104, Hold, Other, None)]
++cold candidate diagnostics pressure=0.15 case=peer_passive target=2 slots=1 candidates=[(1, Idle, Idle, None), (3, Rest, Rest, None), (400, Vocalize, Other, None), (4, Inspect, Inspect, Some(2)), (101, Move, Approach, Some(2)), (102, Move, Avoid, Some(2)), (210, Interact, Ingest, Some(2)), (211, Interact, Contact, Some(2)), (213, Interact, Other, Some(2)), (103, Move, Approach, None), (212, Interact, Contact, None), (104, Hold, Other, None)]
++cold candidate diagnostics pressure=0.15 case=peer_blocked target=2 slots=5 candidates=[(1, Idle, Idle, None), (3, Rest, Rest, None), (400, Vocalize, Other, None), (4, Inspect, Inspect, Some(6)), (101, Move, Approach, Some(6)), (102, Move, Avoid, Some(6)), (210, Interact, Ingest, Some(6)), (211, Interact, Contact, Some(6)), (213, Interact, Other, Some(6)), (4, Inspect, Inspect, Some(3)), (101, Move, Approach, Some(3)), (102, Move, Avoid, Some(3)), (210, Interact, Ingest, Some(3)), (211, Interact, Contact, Some(3)), (213, Interact, Other, Some(3)), (4, Inspect, Inspect, Some(4)), (101, Move, Approach, Some(4)), (102, Move, Avoid, Some(4)), (210, Interact, Ingest, Some(4)), (211, Interact, Contact, Some(4)), (213, Interact, Other, Some(4)), (4, Inspect, Inspect, Some(5)), (101, Move, Approach, Some(5)), (102, Move, Avoid, Some(5)), (210, Interact, Ingest, Some(5)), (211, Interact, Contact, Some(5)), (213, Interact, Other, Some(5)), (103, Move, Approach, None), (212, Interact, Contact, None), (104, Hold, Other, None)]
++unavailable fixed slot pressure=0.15 case=peer_blocked reason=peer omitted by four-object candidate budget; actual_intervals=0
++preflight pressure=0.15 case=peer_approach candidate=101 observed=ObjectSlot(0) target=2 radius=0.75 body_radius=0.2 sensor_confidence=0.9
++preflight pressure=0.15 case=toy_approach candidate=101 observed=ObjectSlot(0) target=2 radius=0.75 body_radius=0.2 sensor_confidence=0.9
++preflight pressure=0.15 case=peer_passive candidate=101 observed=ObjectSlot(0) target=2 radius=0.75 body_radius=0.2 sensor_confidence=0.9
++ok
++
++test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 246 filtered out; finished in 0.00s
+diff --git a/docs/experiments/grounded-approach-need-v1/logs/grounded-approach-six-boundaries-v1.log b/docs/experiments/grounded-approach-need-v1/logs/grounded-approach-six-boundaries-v1.log
+new file mode 100644
+index 0000000..d7f4aca
+--- /dev/null
++++ b/docs/experiments/grounded-approach-need-v1/logs/grounded-approach-six-boundaries-v1.log
+@@ -0,0 +1 @@
++cargo is required for this A-Life command
+diff --git a/docs/experiments/grounded-approach-need-v1/logs/grounded-approach-six-boundaries-v2.log b/docs/experiments/grounded-approach-need-v1/logs/grounded-approach-six-boundaries-v2.log
+new file mode 100644
+index 0000000..df4ef97
+--- /dev/null
++++ b/docs/experiments/grounded-approach-need-v1/logs/grounded-approach-six-boundaries-v2.log
+@@ -0,0 +1 @@
++alife_core boundary checks passed
+diff --git a/docs/experiments/grounded-approach-need-v1/logs/grounded-approach-six-clippy-v1.log b/docs/experiments/grounded-approach-need-v1/logs/grounded-approach-six-clippy-v1.log
+new file mode 100644
+index 0000000..3ed21c0
+--- /dev/null
++++ b/docs/experiments/grounded-approach-need-v1/logs/grounded-approach-six-clippy-v1.log
+@@ -0,0 +1,4 @@
++    Checking alife_core v0.1.0 (/workspace/scratch/ee5e08a3ca9b/grounded-approach-need-v1/crates/alife_core)
++    Checking alife_storage v0.1.0 (/workspace/scratch/ee5e08a3ca9b/grounded-approach-need-v1/crates/alife_storage)
++    Checking alife_world v0.1.0 (/workspace/scratch/ee5e08a3ca9b/grounded-approach-need-v1/crates/alife_world)
++    Finished `dev` profile [unoptimized] target(s) in 25.67s
+diff --git a/docs/experiments/grounded-approach-need-v1/logs/grounded-approach-six-fmt-v1.log b/docs/experiments/grounded-approach-need-v1/logs/grounded-approach-six-fmt-v1.log
+new file mode 100644
+index 0000000..e69de29
+diff --git a/docs/experiments/grounded-approach-need-v1/logs/grounded-approach-six-native-v1.log b/docs/experiments/grounded-approach-need-v1/logs/grounded-approach-six-native-v1.log
+new file mode 100644
+index 0000000..80509b7
+--- /dev/null
++++ b/docs/experiments/grounded-approach-need-v1/logs/grounded-approach-six-native-v1.log
+@@ -0,0 +1,23 @@
++    Finished `test` profile [unoptimized] target(s) in 0.09s
++     Running unittests src/lib.rs (/workspace/shared/grip-integration-qualification-20261108/grip-candidate-qualification/target/debug/deps/alife_world-5c9ccab29d8984f3)
++
++running 1 test
++test headless::grounded_approach_need_tests::grounded_approach_need_six_prescribed_intervals ... cold candidate diagnostics pressure=0 case=peer_approach target=2 slots=1 candidates=[(1, Idle, Idle, None), (3, Rest, Rest, None), (400, Vocalize, Other, None), (4, Inspect, Inspect, Some(2)), (101, Move, Approach, Some(2)), (102, Move, Avoid, Some(2)), (210, Interact, Ingest, Some(2)), (211, Interact, Contact, Some(2)), (213, Interact, Other, Some(2)), (103, Move, Approach, None), (212, Interact, Contact, None), (104, Hold, Other, None)]
++cold candidate diagnostics pressure=0 case=toy_approach target=2 slots=1 candidates=[(1, Idle, Idle, None), (3, Rest, Rest, None), (400, Vocalize, Other, None), (4, Inspect, Inspect, Some(2)), (101, Move, Approach, Some(2)), (102, Move, Avoid, Some(2)), (210, Interact, Ingest, Some(2)), (211, Interact, Contact, Some(2)), (213, Interact, Other, Some(2)), (103, Move, Approach, None), (212, Interact, Contact, None), (104, Hold, Other, None)]
++cold candidate diagnostics pressure=0 case=peer_passive target=2 slots=1 candidates=[(1, Idle, Idle, None), (3, Rest, Rest, None), (400, Vocalize, Other, None), (4, Inspect, Inspect, Some(2)), (101, Move, Approach, Some(2)), (102, Move, Avoid, Some(2)), (210, Interact, Ingest, Some(2)), (211, Interact, Contact, Some(2)), (213, Interact, Other, Some(2)), (103, Move, Approach, None), (212, Interact, Contact, None), (104, Hold, Other, None)]
++cold candidate diagnostics pressure=0 case=peer_blocked target=2 slots=5 candidates=[(1, Idle, Idle, None), (3, Rest, Rest, None), (400, Vocalize, Other, None), (4, Inspect, Inspect, Some(6)), (101, Move, Approach, Some(6)), (102, Move, Avoid, Some(6)), (210, Interact, Ingest, Some(6)), (211, Interact, Contact, Some(6)), (213, Interact, Other, Some(6)), (4, Inspect, Inspect, Some(3)), (101, Move, Approach, Some(3)), (102, Move, Avoid, Some(3)), (210, Interact, Ingest, Some(3)), (211, Interact, Contact, Some(3)), (213, Interact, Other, Some(3)), (4, Inspect, Inspect, Some(4)), (101, Move, Approach, Some(4)), (102, Move, Avoid, Some(4)), (210, Interact, Ingest, Some(4)), (211, Interact, Contact, Some(4)), (213, Interact, Other, Some(4)), (4, Inspect, Inspect, Some(5)), (101, Move, Approach, Some(5)), (102, Move, Avoid, Some(5)), (210, Interact, Ingest, Some(5)), (211, Interact, Contact, Some(5)), (213, Interact, Other, Some(5)), (103, Move, Approach, None), (212, Interact, Contact, None), (104, Hold, Other, None)]
++unavailable fixed slot pressure=0 case=peer_blocked reason=peer omitted by four-object candidate budget; actual_intervals=0
++grounded_approach_outcome {"actor_entity":1,"actual_next_source_lookup":{"evidence":"Unknown","records_inspected":0,"same_exact_context_key":false,"same_family":true,"same_tracked_target":true},"biochemical_work":{"emitter_evaluations":22,"neural_emitter_evaluations":0,"reaction_evaluations":1,"receptor_evaluations":26,"species_updates":19},"biology_updates":1,"body_energy_after":0.7847333550453186,"body_energy_before":0.7925000190734863,"body_event":{"damage":0.0,"energy":-0.03999999910593033,"mating_opportunity":0.0,"nutrition":0.0,"sleep_recovery":0.0,"social_contact":0.012500000186264515,"temperature_stress":0.0},"cadence":{"development_ticks":60,"fast_hormone_ticks":1,"max_catch_up_steps":64,"metabolism_ticks":6,"reproduction_ticks":120},"case":"peer_approach","causal_confidence":null,"development_after":{"age_ticks":601,"biochemical_expression":1.0,"critical_period_active":true,"critical_period_plasticity_bias":0.7419999837875366,"last_update_tick":600,"maturation":0.32894736528396606,"migration_ready":false,"puberty_reached":false,"sleep_maturation_ready":false},"development_before":{"age_ticks":600,"biochemical_expression":1.0,"critical_period_active":true,"critical_period_plasticity_bias":0.7419999837875366,"last_update_tick":600,"maturation":0.32894736528396606,"migration_ready":false,"puberty_reached":false,"sleep_maturation_ready":false},"end":{"x":0.10000000149011612,"y":0.0,"z":0.0},"exact_same_source_lookup":{"evidence":"Unknown","records_inspected":0},"final_after_drives":[0.28874799609184265,0.225832000374794,0.10000000149011612,0.0,0.0,0.44999998807907104,0.7241680026054382,0.0,0.10000000149011612,0.0,0.0],"final_peer_contact":true,"final_yaw":0.0,"fixture_fork_namespace":"grounded-approach-need-v1/pressure-0/peer_approach","genome_id":15485677117937510686,"initial_loneliness":0.0,"initial_peer_contact":false,"initial_yaw":0.0,"intended_condition_met":true,"interpretation":"joint physical interval observation only; not scalar reward, policy, or learned self-care","measured_store_confidence":null,"next_frame_digest":[8897315845334721976,5775089908333320692,5922769542029198584,8855265097180058426],"operation":{"action_kind":"Move","command_intensity":1.0,"family":"Approach","kind":"prescribed_registered_Approach","physical":{"collision_normal":null,"contact":"Moved","displacement":{"x":0.10000000149011612,"y":0.0,"z":0.0},"energy_cost":0.07999999821186066,"target_entity":2},"prescription_confidence_not_neural":1.0,"primitive":101,"receipt_failure":"None","receipt_phase":"Completed","receipt_succeeded":true,"selected_command_count":1,"target_entity":2},"organism":1,"per_segment_displacements":[{"x":0.10000000149011612,"y":0.0,"z":0.0}],"raw_eleven_deltas":[0.03874799609184265,0.025831997394561768,0.0,0.0,0.0,0.0,-0.025831997394561768,0.0,0.0,0.0,0.0],"sensor_confidence":0.8999999761581421,"source_before_drives":[0.25,0.20000000298023224,0.10000000149011612,0.0,0.0,0.44999998807907104,0.75,0.0,0.10000000149011612,0.0,0.0],"source_frame_digest":[4668506931705388810,10052327580553644891,10495295832790774170,9300158227009712412],"source_origin":"prescribed physical interval, no neural decision or sealed neural patch","source_sequence":null,"source_tracked_target":"Some(TrackedObjectId(167417287724572))","start":{"x":0.0,"y":0.0,"z":0.0},"store_admission":"not attempted: authentic neural decision required; no fabricated envelope","store_records":0,"target_end":{"x":0.800000011920929,"y":0.0,"z":0.0},"target_start":{"x":0.800000011920929,"y":0.0,"z":0.0},"ticks":[600,601],"travel":0.10000000149011612,"world_binding_limit":"namespace is external fixture ownership, not a runtime world/life epoch API","world_seed":921412,"world_ticks_per_second":20}
++grounded_approach_outcome {"actor_entity":1,"actual_next_source_lookup":{"evidence":"Unknown","records_inspected":0,"same_exact_context_key":false,"same_family":true,"same_tracked_target":true},"biochemical_work":{"emitter_evaluations":22,"neural_emitter_evaluations":0,"reaction_evaluations":1,"receptor_evaluations":26,"species_updates":19},"biology_updates":1,"body_energy_after":0.7847333550453186,"body_energy_before":0.7925000190734863,"body_event":{"damage":0.0,"energy":-0.03999999910593033,"mating_opportunity":0.0,"nutrition":0.0,"sleep_recovery":0.0,"social_contact":0.0,"temperature_stress":0.0},"cadence":{"development_ticks":60,"fast_hormone_ticks":1,"max_catch_up_steps":64,"metabolism_ticks":6,"reproduction_ticks":120},"case":"toy_approach","causal_confidence":null,"development_after":{"age_ticks":601,"biochemical_expression":1.0,"critical_period_active":true,"critical_period_plasticity_bias":0.7419999837875366,"last_update_tick":600,"maturation":0.32894736528396606,"migration_ready":false,"puberty_reached":false,"sleep_maturation_ready":false},"development_before":{"age_ticks":600,"biochemical_expression":1.0,"critical_period_active":true,"critical_period_plasticity_bias":0.7419999837875366,"last_update_tick":600,"maturation":0.32894736528396606,"migration_ready":false,"puberty_reached":false,"sleep_maturation_ready":false},"end":{"x":0.10000000149011612,"y":0.0,"z":0.0},"exact_same_source_lookup":{"evidence":"Unknown","records_inspected":0},"final_after_drives":[0.28874799609184265,0.225832000374794,0.10000000149011612,0.0,0.00599999725818634,0.44999998807907104,0.7241680026054382,0.0,0.10000000149011612,0.0,0.0],"final_peer_contact":false,"final_yaw":0.0,"fixture_fork_namespace":"grounded-approach-need-v1/pressure-0/toy_approach","genome_id":15485677117937510686,"initial_loneliness":0.0,"initial_peer_contact":false,"initial_yaw":0.0,"intended_condition_met":true,"interpretation":"joint physical interval observation only; not scalar reward, policy, or learned self-care","measured_store_confidence":null,"next_frame_digest":[14434598793138800232,10841731248685408233,4540666251425069678,1473236532882848224],"operation":{"action_kind":"Move","command_intensity":1.0,"family":"Approach","kind":"prescribed_registered_Approach","physical":{"collision_normal":null,"contact":"Moved","displacement":{"x":0.10000000149011612,"y":0.0,"z":0.0},"energy_cost":0.07999999821186066,"target_entity":2},"prescription_confidence_not_neural":1.0,"primitive":101,"receipt_failure":"None","receipt_phase":"Completed","receipt_succeeded":true,"selected_command_count":1,"target_entity":2},"organism":1,"per_segment_displacements":[{"x":0.10000000149011612,"y":0.0,"z":0.0}],"raw_eleven_deltas":[0.03874799609184265,0.025831997394561768,0.0,0.0,0.00599999725818634,0.0,-0.025831997394561768,0.0,0.0,0.0,0.0],"sensor_confidence":0.8999999761581421,"source_before_drives":[0.25,0.20000000298023224,0.10000000149011612,0.0,0.0,0.44999998807907104,0.75,0.0,0.10000000149011612,0.0,0.0],"source_frame_digest":[12540962136005507383,9004593463228020011,13921467142625496676,5140159898858337857],"source_origin":"prescribed physical interval, no neural decision or sealed neural patch","source_sequence":null,"source_tracked_target":"Some(TrackedObjectId(167417287724572))","start":{"x":0.0,"y":0.0,"z":0.0},"store_admission":"not attempted: authentic neural decision required; no fabricated envelope","store_records":0,"target_end":{"x":0.800000011920929,"y":0.0,"z":0.0},"target_start":{"x":0.800000011920929,"y":0.0,"z":0.0},"ticks":[600,601],"travel":0.10000000149011612,"world_binding_limit":"namespace is external fixture ownership, not a runtime world/life epoch API","world_seed":921412,"world_ticks_per_second":20}
++grounded_approach_outcome {"actor_entity":1,"actual_next_source_lookup":{"evidence":"Unknown","records_inspected":0,"same_exact_context_key":false,"same_family":true,"same_tracked_target":true},"biochemical_work":{"emitter_evaluations":22,"neural_emitter_evaluations":0,"reaction_evaluations":1,"receptor_evaluations":26,"species_updates":19},"biology_updates":1,"body_energy_after":0.792066752910614,"body_energy_before":0.7925000190734863,"body_event":{"social_contact":0.0,"source":"no-action control, no contact/mating/care"},"cadence":{"development_ticks":60,"fast_hormone_ticks":1,"max_catch_up_steps":64,"metabolism_ticks":6,"reproduction_ticks":120},"case":"peer_passive","causal_confidence":null,"development_after":{"age_ticks":601,"biochemical_expression":1.0,"critical_period_active":true,"critical_period_plasticity_bias":0.7419999837875366,"last_update_tick":600,"maturation":0.32894736528396606,"migration_ready":false,"puberty_reached":false,"sleep_maturation_ready":false},"development_before":{"age_ticks":600,"biochemical_expression":1.0,"critical_period_active":true,"critical_period_plasticity_bias":0.7419999837875366,"last_update_tick":600,"maturation":0.32894736528396606,"migration_ready":false,"puberty_reached":false,"sleep_maturation_ready":false},"end":{"x":0.0,"y":0.0,"z":0.0},"exact_same_source_lookup":{"evidence":"Unknown","records_inspected":0},"final_after_drives":[0.28742799162864685,0.22495199739933014,0.10000000149011612,0.0,0.00599999725818634,0.44999998807907104,0.7250480055809021,0.0,0.10000000149011612,0.0,0.0],"final_peer_contact":false,"final_yaw":0.0,"fixture_fork_namespace":"grounded-approach-need-v1/pressure-0/peer_passive","genome_id":15485677117937510686,"initial_loneliness":0.0,"initial_peer_contact":false,"initial_yaw":0.0,"intended_condition_met":true,"interpretation":"joint physical interval observation only; not scalar reward, policy, or learned self-care","measured_store_confidence":null,"next_frame_digest":[4925313774520741858,3599075612528468959,7597394717623065662,16007672856167386529],"operation":{"kind":"passive_world_tick","selected_command_count":0},"organism":1,"per_segment_displacements":[{"x":0.0,"y":0.0,"z":0.0}],"raw_eleven_deltas":[0.03742799162864685,0.0249519944190979,0.0,0.0,0.00599999725818634,0.0,-0.0249519944190979,0.0,0.0,0.0,0.0],"sensor_confidence":0.8999999761581421,"source_before_drives":[0.25,0.20000000298023224,0.10000000149011612,0.0,0.0,0.44999998807907104,0.75,0.0,0.10000000149011612,0.0,0.0],"source_frame_digest":[4668506931705388810,10052327580553644891,10495295832790774170,9300158227009712412],"source_origin":"prescribed physical interval, no neural decision or sealed neural patch","source_sequence":null,"source_tracked_target":"Some(TrackedObjectId(167417287724572))","start":{"x":0.0,"y":0.0,"z":0.0},"store_admission":"not attempted: authentic neural decision required; no fabricated envelope","store_records":0,"target_end":{"x":0.800000011920929,"y":0.0,"z":0.0},"target_start":{"x":0.800000011920929,"y":0.0,"z":0.0},"ticks":[600,601],"travel":0.0,"world_binding_limit":"namespace is external fixture ownership, not a runtime world/life epoch API","world_seed":921412,"world_ticks_per_second":20}
++cold candidate diagnostics pressure=0.15 case=peer_approach target=2 slots=1 candidates=[(1, Idle, Idle, None), (3, Rest, Rest, None), (400, Vocalize, Other, None), (4, Inspect, Inspect, Some(2)), (101, Move, Approach, Some(2)), (102, Move, Avoid, Some(2)), (210, Interact, Ingest, Some(2)), (211, Interact, Contact, Some(2)), (213, Interact, Other, Some(2)), (103, Move, Approach, None), (212, Interact, Contact, None), (104, Hold, Other, None)]
++cold candidate diagnostics pressure=0.15 case=toy_approach target=2 slots=1 candidates=[(1, Idle, Idle, None), (3, Rest, Rest, None), (400, Vocalize, Other, None), (4, Inspect, Inspect, Some(2)), (101, Move, Approach, Some(2)), (102, Move, Avoid, Some(2)), (210, Interact, Ingest, Some(2)), (211, Interact, Contact, Some(2)), (213, Interact, Other, Some(2)), (103, Move, Approach, None), (212, Interact, Contact, None), (104, Hold, Other, None)]
++cold candidate diagnostics pressure=0.15 case=peer_passive target=2 slots=1 candidates=[(1, Idle, Idle, None), (3, Rest, Rest, None), (400, Vocalize, Other, None), (4, Inspect, Inspect, Some(2)), (101, Move, Approach, Some(2)), (102, Move, Avoid, Some(2)), (210, Interact, Ingest, Some(2)), (211, Interact, Contact, Some(2)), (213, Interact, Other, Some(2)), (103, Move, Approach, None), (212, Interact, Contact, None), (104, Hold, Other, None)]
++cold candidate diagnostics pressure=0.15 case=peer_blocked target=2 slots=5 candidates=[(1, Idle, Idle, None), (3, Rest, Rest, None), (400, Vocalize, Other, None), (4, Inspect, Inspect, Some(6)), (101, Move, Approach, Some(6)), (102, Move, Avoid, Some(6)), (210, Interact, Ingest, Some(6)), (211, Interact, Contact, Some(6)), (213, Interact, Other, Some(6)), (4, Inspect, Inspect, Some(3)), (101, Move, Approach, Some(3)), (102, Move, Avoid, Some(3)), (210, Interact, Ingest, Some(3)), (211, Interact, Contact, Some(3)), (213, Interact, Other, Some(3)), (4, Inspect, Inspect, Some(4)), (101, Move, Approach, Some(4)), (102, Move, Avoid, Some(4)), (210, Interact, Ingest, Some(4)), (211, Interact, Contact, Some(4)), (213, Interact, Other, Some(4)), (4, Inspect, Inspect, Some(5)), (101, Move, Approach, Some(5)), (102, Move, Avoid, Some(5)), (210, Interact, Ingest, Some(5)), (211, Interact, Contact, Some(5)), (213, Interact, Other, Some(5)), (103, Move, Approach, None), (212, Interact, Contact, None), (104, Hold, Other, None)]
++unavailable fixed slot pressure=0.15 case=peer_blocked reason=peer omitted by four-object candidate budget; actual_intervals=0
++grounded_approach_outcome {"actor_entity":1,"actual_next_source_lookup":{"evidence":"Unknown","records_inspected":0,"same_exact_context_key":false,"same_family":true,"same_tracked_target":true},"biochemical_work":{"emitter_evaluations":22,"neural_emitter_evaluations":0,"reaction_evaluations":1,"receptor_evaluations":26,"species_updates":19},"biology_updates":1,"body_energy_after":0.7847333550453186,"body_energy_before":0.7925000190734863,"body_event":{"damage":0.0,"energy":-0.03999999910593033,"mating_opportunity":0.0,"nutrition":0.0,"sleep_recovery":0.0,"social_contact":0.012500000186264515,"temperature_stress":0.0},"cadence":{"development_ticks":60,"fast_hormone_ticks":1,"max_catch_up_steps":64,"metabolism_ticks":6,"reproduction_ticks":120},"case":"peer_approach","causal_confidence":null,"development_after":{"age_ticks":601,"biochemical_expression":1.0,"critical_period_active":true,"critical_period_plasticity_bias":0.7419999837875366,"last_update_tick":600,"maturation":0.32894736528396606,"migration_ready":false,"puberty_reached":false,"sleep_maturation_ready":false},"development_before":{"age_ticks":600,"biochemical_expression":1.0,"critical_period_active":true,"critical_period_plasticity_bias":0.7419999837875366,"last_update_tick":600,"maturation":0.32894736528396606,"migration_ready":false,"puberty_reached":false,"sleep_maturation_ready":false},"end":{"x":0.10000000149011612,"y":0.0,"z":0.0},"exact_same_source_lookup":{"evidence":"Unknown","records_inspected":0},"final_after_drives":[0.28874799609184265,0.225832000374794,0.10000000149011612,0.0,0.14250001311302185,0.44999998807907104,0.7241680026054382,0.0,0.10000000149011612,0.0,0.0],"final_peer_contact":true,"final_yaw":0.0,"fixture_fork_namespace":"grounded-approach-need-v1/pressure-0.15/peer_approach","genome_id":15485677117937510686,"initial_loneliness":0.15000000596046448,"initial_peer_contact":false,"initial_yaw":0.0,"intended_condition_met":true,"interpretation":"joint physical interval observation only; not scalar reward, policy, or learned self-care","measured_store_confidence":null,"next_frame_digest":[10693332159000282660,12314489300063901819,7700288928574042164,16311597117893214049],"operation":{"action_kind":"Move","command_intensity":1.0,"family":"Approach","kind":"prescribed_registered_Approach","physical":{"collision_normal":null,"contact":"Moved","displacement":{"x":0.10000000149011612,"y":0.0,"z":0.0},"energy_cost":0.07999999821186066,"target_entity":2},"prescription_confidence_not_neural":1.0,"primitive":101,"receipt_failure":"None","receipt_phase":"Completed","receipt_succeeded":true,"selected_command_count":1,"target_entity":2},"organism":1,"per_segment_displacements":[{"x":0.10000000149011612,"y":0.0,"z":0.0}],"raw_eleven_deltas":[0.03874799609184265,0.025831997394561768,0.0,0.0,-0.007499992847442627,0.0,-0.025831997394561768,0.0,0.0,0.0,0.0],"sensor_confidence":0.8999999761581421,"source_before_drives":[0.25,0.20000000298023224,0.10000000149011612,0.0,0.15000000596046448,0.44999998807907104,0.75,0.0,0.10000000149011612,0.0,0.0],"source_frame_digest":[11884486493975033356,13418537765186572150,13873778199147785392,4630585273621669519],"source_origin":"prescribed physical interval, no neural decision or sealed neural patch","source_sequence":null,"source_tracked_target":"Some(TrackedObjectId(167417287724572))","start":{"x":0.0,"y":0.0,"z":0.0},"store_admission":"not attempted: authentic neural decision required; no fabricated envelope","store_records":0,"target_end":{"x":0.800000011920929,"y":0.0,"z":0.0},"target_start":{"x":0.800000011920929,"y":0.0,"z":0.0},"ticks":[600,601],"travel":0.10000000149011612,"world_binding_limit":"namespace is external fixture ownership, not a runtime world/life epoch API","world_seed":921412,"world_ticks_per_second":20}
++grounded_approach_outcome {"actor_entity":1,"actual_next_source_lookup":{"evidence":"Unknown","records_inspected":0,"same_exact_context_key":false,"same_family":true,"same_tracked_target":true},"biochemical_work":{"emitter_evaluations":22,"neural_emitter_evaluations":0,"reaction_evaluations":1,"receptor_evaluations":26,"species_updates":19},"biology_updates":1,"body_energy_after":0.7847333550453186,"body_energy_before":0.7925000190734863,"body_event":{"damage":0.0,"energy":-0.03999999910593033,"mating_opportunity":0.0,"nutrition":0.0,"sleep_recovery":0.0,"social_contact":0.0,"temperature_stress":0.0},"cadence":{"development_ticks":60,"fast_hormone_ticks":1,"max_catch_up_steps":64,"metabolism_ticks":6,"reproduction_ticks":120},"case":"toy_approach","causal_confidence":null,"development_after":{"age_ticks":601,"biochemical_expression":1.0,"critical_period_active":true,"critical_period_plasticity_bias":0.7419999837875366,"last_update_tick":600,"maturation":0.32894736528396606,"migration_ready":false,"puberty_reached":false,"sleep_maturation_ready":false},"development_before":{"age_ticks":600,"biochemical_expression":1.0,"critical_period_active":true,"critical_period_plasticity_bias":0.7419999837875366,"last_update_tick":600,"maturation":0.32894736528396606,"migration_ready":false,"puberty_reached":false,"sleep_maturation_ready":false},"end":{"x":0.10000000149011612,"y":0.0,"z":0.0},"exact_same_source_lookup":{"evidence":"Unknown","records_inspected":0},"final_after_drives":[0.28874799609184265,0.225832000374794,0.10000000149011612,0.0,0.15000000596046448,0.44999998807907104,0.7241680026054382,0.0,0.10000000149011612,0.0,0.0],"final_peer_contact":false,"final_yaw":0.0,"fixture_fork_namespace":"grounded-approach-need-v1/pressure-0.15/toy_approach","genome_id":15485677117937510686,"initial_loneliness":0.15000000596046448,"initial_peer_contact":false,"initial_yaw":0.0,"intended_condition_met":true,"interpretation":"joint physical interval observation only; not scalar reward, policy, or learned self-care","measured_store_confidence":null,"next_frame_digest":[14788453270325467949,1098639984594636200,18394934454715124773,14667136290488477209],"operation":{"action_kind":"Move","command_intensity":1.0,"family":"Approach","kind":"prescribed_registered_Approach","physical":{"collision_normal":null,"contact":"Moved","displacement":{"x":0.10000000149011612,"y":0.0,"z":0.0},"energy_cost":0.07999999821186066,"target_entity":2},"prescription_confidence_not_neural":1.0,"primitive":101,"receipt_failure":"None","receipt_phase":"Completed","receipt_succeeded":true,"selected_command_count":1,"target_entity":2},"organism":1,"per_segment_displacements":[{"x":0.10000000149011612,"y":0.0,"z":0.0}],"raw_eleven_deltas":[0.03874799609184265,0.025831997394561768,0.0,0.0,0.0,0.0,-0.025831997394561768,0.0,0.0,0.0,0.0],"sensor_confidence":0.8999999761581421,"source_before_drives":[0.25,0.20000000298023224,0.10000000149011612,0.0,0.15000000596046448,0.44999998807907104,0.75,0.0,0.10000000149011612,0.0,0.0],"source_frame_digest":[550788438215141666,6231031032538672388,13976462847702759452,10452556425655656084],"source_origin":"prescribed physical interval, no neural decision or sealed neural patch","source_sequence":null,"source_tracked_target":"Some(TrackedObjectId(167417287724572))","start":{"x":0.0,"y":0.0,"z":0.0},"store_admission":"not attempted: authentic neural decision required; no fabricated envelope","store_records":0,"target_end":{"x":0.800000011920929,"y":0.0,"z":0.0},"target_start":{"x":0.800000011920929,"y":0.0,"z":0.0},"ticks":[600,601],"travel":0.10000000149011612,"world_binding_limit":"namespace is external fixture ownership, not a runtime world/life epoch API","world_seed":921412,"world_ticks_per_second":20}
++grounded_approach_outcome {"actor_entity":1,"actual_next_source_lookup":{"evidence":"Unknown","records_inspected":0,"same_exact_context_key":false,"same_family":true,"same_tracked_target":true},"biochemical_work":{"emitter_evaluations":22,"neural_emitter_evaluations":0,"reaction_evaluations":1,"receptor_evaluations":26,"species_updates":19},"biology_updates":1,"body_energy_after":0.792066752910614,"body_energy_before":0.7925000190734863,"body_event":{"social_contact":0.0,"source":"no-action control, no contact/mating/care"},"cadence":{"development_ticks":60,"fast_hormone_ticks":1,"max_catch_up_steps":64,"metabolism_ticks":6,"reproduction_ticks":120},"case":"peer_passive","causal_confidence":null,"development_after":{"age_ticks":601,"biochemical_expression":1.0,"critical_period_active":true,"critical_period_plasticity_bias":0.7419999837875366,"last_update_tick":600,"maturation":0.32894736528396606,"migration_ready":false,"puberty_reached":false,"sleep_maturation_ready":false},"development_before":{"age_ticks":600,"biochemical_expression":1.0,"critical_period_active":true,"critical_period_plasticity_bias":0.7419999837875366,"last_update_tick":600,"maturation":0.32894736528396606,"migration_ready":false,"puberty_reached":false,"sleep_maturation_ready":false},"end":{"x":0.0,"y":0.0,"z":0.0},"exact_same_source_lookup":{"evidence":"Unknown","records_inspected":0},"final_after_drives":[0.28742799162864685,0.22495199739933014,0.10000000149011612,0.0,0.15000000596046448,0.44999998807907104,0.7250480055809021,0.0,0.10000000149011612,0.0,0.0],"final_peer_contact":false,"final_yaw":0.0,"fixture_fork_namespace":"grounded-approach-need-v1/pressure-0.15/peer_passive","genome_id":15485677117937510686,"initial_loneliness":0.15000000596046448,"initial_peer_contact":false,"initial_yaw":0.0,"intended_condition_met":true,"interpretation":"joint physical interval observation only; not scalar reward, policy, or learned self-care","measured_store_confidence":null,"next_frame_digest":[9193170080864300634,8106790952255119823,900169746271176300,5368850114726184069],"operation":{"kind":"passive_world_tick","selected_command_count":0},"organism":1,"per_segment_displacements":[{"x":0.0,"y":0.0,"z":0.0}],"raw_eleven_deltas":[0.03742799162864685,0.0249519944190979,0.0,0.0,0.0,0.0,-0.0249519944190979,0.0,0.0,0.0,0.0],"sensor_confidence":0.8999999761581421,"source_before_drives":[0.25,0.20000000298023224,0.10000000149011612,0.0,0.15000000596046448,0.44999998807907104,0.75,0.0,0.10000000149011612,0.0,0.0],"source_frame_digest":[11884486493975033356,13418537765186572150,13873778199147785392,4630585273621669519],"source_origin":"prescribed physical interval, no neural decision or sealed neural patch","source_sequence":null,"source_tracked_target":"Some(TrackedObjectId(167417287724572))","start":{"x":0.0,"y":0.0,"z":0.0},"store_admission":"not attempted: authentic neural decision required; no fabricated envelope","store_records":0,"target_end":{"x":0.800000011920929,"y":0.0,"z":0.0},"target_start":{"x":0.800000011920929,"y":0.0,"z":0.0},"ticks":[600,601],"travel":0.0,"world_binding_limit":"namespace is external fixture ownership, not a runtime world/life epoch API","world_seed":921412,"world_ticks_per_second":20}
++ok
++
++test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 246 filtered out; finished in 0.02s
+diff --git a/docs/experiments/grounded-approach-need-v1/outcomes.jsonl b/docs/experiments/grounded-approach-need-v1/outcomes.jsonl
+new file mode 100644
+index 0000000..b15740a
+--- /dev/null
++++ b/docs/experiments/grounded-approach-need-v1/outcomes.jsonl
+@@ -0,0 +1,6 @@
++{"actor_entity":1,"actual_next_source_lookup":{"evidence":"Unknown","records_inspected":0,"same_exact_context_key":false,"same_family":true,"same_tracked_target":true},"biochemical_work":{"emitter_evaluations":22,"neural_emitter_evaluations":0,"reaction_evaluations":1,"receptor_evaluations":26,"species_updates":19},"biology_updates":1,"body_energy_after":0.7847333550453186,"body_energy_before":0.7925000190734863,"body_event":{"damage":0.0,"energy":-0.03999999910593033,"mating_opportunity":0.0,"nutrition":0.0,"sleep_recovery":0.0,"social_contact":0.012500000186264515,"temperature_stress":0.0},"cadence":{"development_ticks":60,"fast_hormone_ticks":1,"max_catch_up_steps":64,"metabolism_ticks":6,"reproduction_ticks":120},"case":"peer_approach","causal_confidence":null,"development_after":{"age_ticks":601,"biochemical_expression":1.0,"critical_period_active":true,"critical_period_plasticity_bias":0.7419999837875366,"last_update_tick":600,"maturation":0.32894736528396606,"migration_ready":false,"puberty_reached":false,"sleep_maturation_ready":false},"development_before":{"age_ticks":600,"biochemical_expression":1.0,"critical_period_active":true,"critical_period_plasticity_bias":0.7419999837875366,"last_update_tick":600,"maturation":0.32894736528396606,"migration_ready":false,"puberty_reached":false,"sleep_maturation_ready":false},"end":{"x":0.10000000149011612,"y":0.0,"z":0.0},"exact_same_source_lookup":{"evidence":"Unknown","records_inspected":0},"final_after_drives":[0.28874799609184265,0.225832000374794,0.10000000149011612,0.0,0.0,0.44999998807907104,0.7241680026054382,0.0,0.10000000149011612,0.0,0.0],"final_peer_contact":true,"final_yaw":0.0,"fixture_fork_namespace":"grounded-approach-need-v1/pressure-0/peer_approach","genome_id":15485677117937510686,"initial_loneliness":0.0,"initial_peer_contact":false,"initial_yaw":0.0,"intended_condition_met":true,"interpretation":"joint physical interval observation only; not scalar reward, policy, or learned self-care","measured_store_confidence":null,"next_frame_digest":[8897315845334721976,5775089908333320692,5922769542029198584,8855265097180058426],"operation":{"action_kind":"Move","command_intensity":1.0,"family":"Approach","kind":"prescribed_registered_Approach","physical":{"collision_normal":null,"contact":"Moved","displacement":{"x":0.10000000149011612,"y":0.0,"z":0.0},"energy_cost":0.07999999821186066,"target_entity":2},"prescription_confidence_not_neural":1.0,"primitive":101,"receipt_failure":"None","receipt_phase":"Completed","receipt_succeeded":true,"selected_command_count":1,"target_entity":2},"organism":1,"per_segment_displacements":[{"x":0.10000000149011612,"y":0.0,"z":0.0}],"raw_eleven_deltas":[0.03874799609184265,0.025831997394561768,0.0,0.0,0.0,0.0,-0.025831997394561768,0.0,0.0,0.0,0.0],"sensor_confidence":0.8999999761581421,"source_before_drives":[0.25,0.20000000298023224,0.10000000149011612,0.0,0.0,0.44999998807907104,0.75,0.0,0.10000000149011612,0.0,0.0],"source_frame_digest":[4668506931705388810,10052327580553644891,10495295832790774170,9300158227009712412],"source_origin":"prescribed physical interval, no neural decision or sealed neural patch","source_sequence":null,"source_tracked_target":"Some(TrackedObjectId(167417287724572))","start":{"x":0.0,"y":0.0,"z":0.0},"store_admission":"not attempted: authentic neural decision required; no fabricated envelope","store_records":0,"target_end":{"x":0.800000011920929,"y":0.0,"z":0.0},"target_start":{"x":0.800000011920929,"y":0.0,"z":0.0},"ticks":[600,601],"travel":0.10000000149011612,"world_binding_limit":"namespace is external fixture ownership, not a runtime world/life epoch API","world_seed":921412,"world_ticks_per_second":20}
++{"actor_entity":1,"actual_next_source_lookup":{"evidence":"Unknown","records_inspected":0,"same_exact_context_key":false,"same_family":true,"same_tracked_target":true},"biochemical_work":{"emitter_evaluations":22,"neural_emitter_evaluations":0,"reaction_evaluations":1,"receptor_evaluations":26,"species_updates":19},"biology_updates":1,"body_energy_after":0.7847333550453186,"body_energy_before":0.7925000190734863,"body_event":{"damage":0.0,"energy":-0.03999999910593033,"mating_opportunity":0.0,"nutrition":0.0,"sleep_recovery":0.0,"social_contact":0.0,"temperature_stress":0.0},"cadence":{"development_ticks":60,"fast_hormone_ticks":1,"max_catch_up_steps":64,"metabolism_ticks":6,"reproduction_ticks":120},"case":"toy_approach","causal_confidence":null,"development_after":{"age_ticks":601,"biochemical_expression":1.0,"critical_period_active":true,"critical_period_plasticity_bias":0.7419999837875366,"last_update_tick":600,"maturation":0.32894736528396606,"migration_ready":false,"puberty_reached":false,"sleep_maturation_ready":false},"development_before":{"age_ticks":600,"biochemical_expression":1.0,"critical_period_active":true,"critical_period_plasticity_bias":0.7419999837875366,"last_update_tick":600,"maturation":0.32894736528396606,"migration_ready":false,"puberty_reached":false,"sleep_maturation_ready":false},"end":{"x":0.10000000149011612,"y":0.0,"z":0.0},"exact_same_source_lookup":{"evidence":"Unknown","records_inspected":0},"final_after_drives":[0.28874799609184265,0.225832000374794,0.10000000149011612,0.0,0.00599999725818634,0.44999998807907104,0.7241680026054382,0.0,0.10000000149011612,0.0,0.0],"final_peer_contact":false,"final_yaw":0.0,"fixture_fork_namespace":"grounded-approach-need-v1/pressure-0/toy_approach","genome_id":15485677117937510686,"initial_loneliness":0.0,"initial_peer_contact":false,"initial_yaw":0.0,"intended_condition_met":true,"interpretation":"joint physical interval observation only; not scalar reward, policy, or learned self-care","measured_store_confidence":null,"next_frame_digest":[14434598793138800232,10841731248685408233,4540666251425069678,1473236532882848224],"operation":{"action_kind":"Move","command_intensity":1.0,"family":"Approach","kind":"prescribed_registered_Approach","physical":{"collision_normal":null,"contact":"Moved","displacement":{"x":0.10000000149011612,"y":0.0,"z":0.0},"energy_cost":0.07999999821186066,"target_entity":2},"prescription_confidence_not_neural":1.0,"primitive":101,"receipt_failure":"None","receipt_phase":"Completed","receipt_succeeded":true,"selected_command_count":1,"target_entity":2},"organism":1,"per_segment_displacements":[{"x":0.10000000149011612,"y":0.0,"z":0.0}],"raw_eleven_deltas":[0.03874799609184265,0.025831997394561768,0.0,0.0,0.00599999725818634,0.0,-0.025831997394561768,0.0,0.0,0.0,0.0],"sensor_confidence":0.8999999761581421,"source_before_drives":[0.25,0.20000000298023224,0.10000000149011612,0.0,0.0,0.44999998807907104,0.75,0.0,0.10000000149011612,0.0,0.0],"source_frame_digest":[12540962136005507383,9004593463228020011,13921467142625496676,5140159898858337857],"source_origin":"prescribed physical interval, no neural decision or sealed neural patch","source_sequence":null,"source_tracked_target":"Some(TrackedObjectId(167417287724572))","start":{"x":0.0,"y":0.0,"z":0.0},"store_admission":"not attempted: authentic neural decision required; no fabricated envelope","store_records":0,"target_end":{"x":0.800000011920929,"y":0.0,"z":0.0},"target_start":{"x":0.800000011920929,"y":0.0,"z":0.0},"ticks":[600,601],"travel":0.10000000149011612,"world_binding_limit":"namespace is external fixture ownership, not a runtime world/life epoch API","world_seed":921412,"world_ticks_per_second":20}
++{"actor_entity":1,"actual_next_source_lookup":{"evidence":"Unknown","records_inspected":0,"same_exact_context_key":false,"same_family":true,"same_tracked_target":true},"biochemical_work":{"emitter_evaluations":22,"neural_emitter_evaluations":0,"reaction_evaluations":1,"receptor_evaluations":26,"species_updates":19},"biology_updates":1,"body_energy_after":0.792066752910614,"body_energy_before":0.7925000190734863,"body_event":{"social_contact":0.0,"source":"no-action control, no contact/mating/care"},"cadence":{"development_ticks":60,"fast_hormone_ticks":1,"max_catch_up_steps":64,"metabolism_ticks":6,"reproduction_ticks":120},"case":"peer_passive","causal_confidence":null,"development_after":{"age_ticks":601,"biochemical_expression":1.0,"critical_period_active":true,"critical_period_plasticity_bias":0.7419999837875366,"last_update_tick":600,"maturation":0.32894736528396606,"migration_ready":false,"puberty_reached":false,"sleep_maturation_ready":false},"development_before":{"age_ticks":600,"biochemical_expression":1.0,"critical_period_active":true,"critical_period_plasticity_bias":0.7419999837875366,"last_update_tick":600,"maturation":0.32894736528396606,"migration_ready":false,"puberty_reached":false,"sleep_maturation_ready":false},"end":{"x":0.0,"y":0.0,"z":0.0},"exact_same_source_lookup":{"evidence":"Unknown","records_inspected":0},"final_after_drives":[0.28742799162864685,0.22495199739933014,0.10000000149011612,0.0,0.00599999725818634,0.44999998807907104,0.7250480055809021,0.0,0.10000000149011612,0.0,0.0],"final_peer_contact":false,"final_yaw":0.0,"fixture_fork_namespace":"grounded-approach-need-v1/pressure-0/peer_passive","genome_id":15485677117937510686,"initial_loneliness":0.0,"initial_peer_contact":false,"initial_yaw":0.0,"intended_condition_met":true,"interpretation":"joint physical interval observation only; not scalar reward, policy, or learned self-care","measured_store_confidence":null,"next_frame_digest":[4925313774520741858,3599075612528468959,7597394717623065662,16007672856167386529],"operation":{"kind":"passive_world_tick","selected_command_count":0},"organism":1,"per_segment_displacements":[{"x":0.0,"y":0.0,"z":0.0}],"raw_eleven_deltas":[0.03742799162864685,0.0249519944190979,0.0,0.0,0.00599999725818634,0.0,-0.0249519944190979,0.0,0.0,0.0,0.0],"sensor_confidence":0.8999999761581421,"source_before_drives":[0.25,0.20000000298023224,0.10000000149011612,0.0,0.0,0.44999998807907104,0.75,0.0,0.10000000149011612,0.0,0.0],"source_frame_digest":[4668506931705388810,10052327580553644891,10495295832790774170,9300158227009712412],"source_origin":"prescribed physical interval, no neural decision or sealed neural patch","source_sequence":null,"source_tracked_target":"Some(TrackedObjectId(167417287724572))","start":{"x":0.0,"y":0.0,"z":0.0},"store_admission":"not attempted: authentic neural decision required; no fabricated envelope","store_records":0,"target_end":{"x":0.800000011920929,"y":0.0,"z":0.0},"target_start":{"x":0.800000011920929,"y":0.0,"z":0.0},"ticks":[600,601],"travel":0.0,"world_binding_limit":"namespace is external fixture ownership, not a runtime world/life epoch API","world_seed":921412,"world_ticks_per_second":20}
++{"actor_entity":1,"actual_next_source_lookup":{"evidence":"Unknown","records_inspected":0,"same_exact_context_key":false,"same_family":true,"same_tracked_target":true},"biochemical_work":{"emitter_evaluations":22,"neural_emitter_evaluations":0,"reaction_evaluations":1,"receptor_evaluations":26,"species_updates":19},"biology_updates":1,"body_energy_after":0.7847333550453186,"body_energy_before":0.7925000190734863,"body_event":{"damage":0.0,"energy":-0.03999999910593033,"mating_opportunity":0.0,"nutrition":0.0,"sleep_recovery":0.0,"social_contact":0.012500000186264515,"temperature_stress":0.0},"cadence":{"development_ticks":60,"fast_hormone_ticks":1,"max_catch_up_steps":64,"metabolism_ticks":6,"reproduction_ticks":120},"case":"peer_approach","causal_confidence":null,"development_after":{"age_ticks":601,"biochemical_expression":1.0,"critical_period_active":true,"critical_period_plasticity_bias":0.7419999837875366,"last_update_tick":600,"maturation":0.32894736528396606,"migration_ready":false,"puberty_reached":false,"sleep_maturation_ready":false},"development_before":{"age_ticks":600,"biochemical_expression":1.0,"critical_period_active":true,"critical_period_plasticity_bias":0.7419999837875366,"last_update_tick":600,"maturation":0.32894736528396606,"migration_ready":false,"puberty_reached":false,"sleep_maturation_ready":false},"end":{"x":0.10000000149011612,"y":0.0,"z":0.0},"exact_same_source_lookup":{"evidence":"Unknown","records_inspected":0},"final_after_drives":[0.28874799609184265,0.225832000374794,0.10000000149011612,0.0,0.14250001311302185,0.44999998807907104,0.7241680026054382,0.0,0.10000000149011612,0.0,0.0],"final_peer_contact":true,"final_yaw":0.0,"fixture_fork_namespace":"grounded-approach-need-v1/pressure-0.15/peer_approach","genome_id":15485677117937510686,"initial_loneliness":0.15000000596046448,"initial_peer_contact":false,"initial_yaw":0.0,"intended_condition_met":true,"interpretation":"joint physical interval observation only; not scalar reward, policy, or learned self-care","measured_store_confidence":null,"next_frame_digest":[10693332159000282660,12314489300063901819,7700288928574042164,16311597117893214049],"operation":{"action_kind":"Move","command_intensity":1.0,"family":"Approach","kind":"prescribed_registered_Approach","physical":{"collision_normal":null,"contact":"Moved","displacement":{"x":0.10000000149011612,"y":0.0,"z":0.0},"energy_cost":0.07999999821186066,"target_entity":2},"prescription_confidence_not_neural":1.0,"primitive":101,"receipt_failure":"None","receipt_phase":"Completed","receipt_succeeded":true,"selected_command_count":1,"target_entity":2},"organism":1,"per_segment_displacements":[{"x":0.10000000149011612,"y":0.0,"z":0.0}],"raw_eleven_deltas":[0.03874799609184265,0.025831997394561768,0.0,0.0,-0.007499992847442627,0.0,-0.025831997394561768,0.0,0.0,0.0,0.0],"sensor_confidence":0.8999999761581421,"source_before_drives":[0.25,0.20000000298023224,0.10000000149011612,0.0,0.15000000596046448,0.44999998807907104,0.75,0.0,0.10000000149011612,0.0,0.0],"source_frame_digest":[11884486493975033356,13418537765186572150,13873778199147785392,4630585273621669519],"source_origin":"prescribed physical interval, no neural decision or sealed neural patch","source_sequence":null,"source_tracked_target":"Some(TrackedObjectId(167417287724572))","start":{"x":0.0,"y":0.0,"z":0.0},"store_admission":"not attempted: authentic neural decision required; no fabricated envelope","store_records":0,"target_end":{"x":0.800000011920929,"y":0.0,"z":0.0},"target_start":{"x":0.800000011920929,"y":0.0,"z":0.0},"ticks":[600,601],"travel":0.10000000149011612,"world_binding_limit":"namespace is external fixture ownership, not a runtime world/life epoch API","world_seed":921412,"world_ticks_per_second":20}
++{"actor_entity":1,"actual_next_source_lookup":{"evidence":"Unknown","records_inspected":0,"same_exact_context_key":false,"same_family":true,"same_tracked_target":true},"biochemical_work":{"emitter_evaluations":22,"neural_emitter_evaluations":0,"reaction_evaluations":1,"receptor_evaluations":26,"species_updates":19},"biology_updates":1,"body_energy_after":0.7847333550453186,"body_energy_before":0.7925000190734863,"body_event":{"damage":0.0,"energy":-0.03999999910593033,"mating_opportunity":0.0,"nutrition":0.0,"sleep_recovery":0.0,"social_contact":0.0,"temperature_stress":0.0},"cadence":{"development_ticks":60,"fast_hormone_ticks":1,"max_catch_up_steps":64,"metabolism_ticks":6,"reproduction_ticks":120},"case":"toy_approach","causal_confidence":null,"development_after":{"age_ticks":601,"biochemical_expression":1.0,"critical_period_active":true,"critical_period_plasticity_bias":0.7419999837875366,"last_update_tick":600,"maturation":0.32894736528396606,"migration_ready":false,"puberty_reached":false,"sleep_maturation_ready":false},"development_before":{"age_ticks":600,"biochemical_expression":1.0,"critical_period_active":true,"critical_period_plasticity_bias":0.7419999837875366,"last_update_tick":600,"maturation":0.32894736528396606,"migration_ready":false,"puberty_reached":false,"sleep_maturation_ready":false},"end":{"x":0.10000000149011612,"y":0.0,"z":0.0},"exact_same_source_lookup":{"evidence":"Unknown","records_inspected":0},"final_after_drives":[0.28874799609184265,0.225832000374794,0.10000000149011612,0.0,0.15000000596046448,0.44999998807907104,0.7241680026054382,0.0,0.10000000149011612,0.0,0.0],"final_peer_contact":false,"final_yaw":0.0,"fixture_fork_namespace":"grounded-approach-need-v1/pressure-0.15/toy_approach","genome_id":15485677117937510686,"initial_loneliness":0.15000000596046448,"initial_peer_contact":false,"initial_yaw":0.0,"intended_condition_met":true,"interpretation":"joint physical interval observation only; not scalar reward, policy, or learned self-care","measured_store_confidence":null,"next_frame_digest":[14788453270325467949,1098639984594636200,18394934454715124773,14667136290488477209],"operation":{"action_kind":"Move","command_intensity":1.0,"family":"Approach","kind":"prescribed_registered_Approach","physical":{"collision_normal":null,"contact":"Moved","displacement":{"x":0.10000000149011612,"y":0.0,"z":0.0},"energy_cost":0.07999999821186066,"target_entity":2},"prescription_confidence_not_neural":1.0,"primitive":101,"receipt_failure":"None","receipt_phase":"Completed","receipt_succeeded":true,"selected_command_count":1,"target_entity":2},"organism":1,"per_segment_displacements":[{"x":0.10000000149011612,"y":0.0,"z":0.0}],"raw_eleven_deltas":[0.03874799609184265,0.025831997394561768,0.0,0.0,0.0,0.0,-0.025831997394561768,0.0,0.0,0.0,0.0],"sensor_confidence":0.8999999761581421,"source_before_drives":[0.25,0.20000000298023224,0.10000000149011612,0.0,0.15000000596046448,0.44999998807907104,0.75,0.0,0.10000000149011612,0.0,0.0],"source_frame_digest":[550788438215141666,6231031032538672388,13976462847702759452,10452556425655656084],"source_origin":"prescribed physical interval, no neural decision or sealed neural patch","source_sequence":null,"source_tracked_target":"Some(TrackedObjectId(167417287724572))","start":{"x":0.0,"y":0.0,"z":0.0},"store_admission":"not attempted: authentic neural decision required; no fabricated envelope","store_records":0,"target_end":{"x":0.800000011920929,"y":0.0,"z":0.0},"target_start":{"x":0.800000011920929,"y":0.0,"z":0.0},"ticks":[600,601],"travel":0.10000000149011612,"world_binding_limit":"namespace is external fixture ownership, not a runtime world/life epoch API","world_seed":921412,"world_ticks_per_second":20}
++{"actor_entity":1,"actual_next_source_lookup":{"evidence":"Unknown","records_inspected":0,"same_exact_context_key":false,"same_family":true,"same_tracked_target":true},"biochemical_work":{"emitter_evaluations":22,"neural_emitter_evaluations":0,"reaction_evaluations":1,"receptor_evaluations":26,"species_updates":19},"biology_updates":1,"body_energy_after":0.792066752910614,"body_energy_before":0.7925000190734863,"body_event":{"social_contact":0.0,"source":"no-action control, no contact/mating/care"},"cadence":{"development_ticks":60,"fast_hormone_ticks":1,"max_catch_up_steps":64,"metabolism_ticks":6,"reproduction_ticks":120},"case":"peer_passive","causal_confidence":null,"development_after":{"age_ticks":601,"biochemical_expression":1.0,"critical_period_active":true,"critical_period_plasticity_bias":0.7419999837875366,"last_update_tick":600,"maturation":0.32894736528396606,"migration_ready":false,"puberty_reached":false,"sleep_maturation_ready":false},"development_before":{"age_ticks":600,"biochemical_expression":1.0,"critical_period_active":true,"critical_period_plasticity_bias":0.7419999837875366,"last_update_tick":600,"maturation":0.32894736528396606,"migration_ready":false,"puberty_reached":false,"sleep_maturation_ready":false},"end":{"x":0.0,"y":0.0,"z":0.0},"exact_same_source_lookup":{"evidence":"Unknown","records_inspected":0},"final_after_drives":[0.28742799162864685,0.22495199739933014,0.10000000149011612,0.0,0.15000000596046448,0.44999998807907104,0.7250480055809021,0.0,0.10000000149011612,0.0,0.0],"final_peer_contact":false,"final_yaw":0.0,"fixture_fork_namespace":"grounded-approach-need-v1/pressure-0.15/peer_passive","genome_id":15485677117937510686,"initial_loneliness":0.15000000596046448,"initial_peer_contact":false,"initial_yaw":0.0,"intended_condition_met":true,"interpretation":"joint physical interval observation only; not scalar reward, policy, or learned self-care","measured_store_confidence":null,"next_frame_digest":[9193170080864300634,8106790952255119823,900169746271176300,5368850114726184069],"operation":{"kind":"passive_world_tick","selected_command_count":0},"organism":1,"per_segment_displacements":[{"x":0.0,"y":0.0,"z":0.0}],"raw_eleven_deltas":[0.03742799162864685,0.0249519944190979,0.0,0.0,0.0,0.0,-0.0249519944190979,0.0,0.0,0.0,0.0],"sensor_confidence":0.8999999761581421,"source_before_drives":[0.25,0.20000000298023224,0.10000000149011612,0.0,0.15000000596046448,0.44999998807907104,0.75,0.0,0.10000000149011612,0.0,0.0],"source_frame_digest":[11884486493975033356,13418537765186572150,13873778199147785392,4630585273621669519],"source_origin":"prescribed physical interval, no neural decision or sealed neural patch","source_sequence":null,"source_tracked_target":"Some(TrackedObjectId(167417287724572))","start":{"x":0.0,"y":0.0,"z":0.0},"store_admission":"not attempted: authentic neural decision required; no fabricated envelope","store_records":0,"target_end":{"x":0.800000011920929,"y":0.0,"z":0.0},"target_start":{"x":0.800000011920929,"y":0.0,"z":0.0},"ticks":[600,601],"travel":0.0,"world_binding_limit":"namespace is external fixture ownership, not a runtime world/life epoch API","world_seed":921412,"world_ticks_per_second":20}
+diff --git a/docs/experiments/grounded-approach-need-v1/run-ledger.jsonl b/docs/experiments/grounded-approach-need-v1/run-ledger.jsonl
+new file mode 100644
+index 0000000..760f65a
+--- /dev/null
++++ b/docs/experiments/grounded-approach-need-v1/run-ledger.jsonl
+@@ -0,0 +1,8 @@
++{"budget":8,"status":"started","source":"frozen before execution"}
++{"interval":1,"pressure":0,"case":"peer_approach"}
++{"interval":2,"pressure":0,"case":"toy_approach"}
++{"interval":3,"pressure":0,"case":"peer_passive"}
++{"interval":4,"pressure":0.15,"case":"peer_approach"}
++{"interval":5,"pressure":0.15,"case":"toy_approach"}
++{"interval":6,"pressure":0.15,"case":"peer_passive"}
++{"completed_intervals":6,"unspent_closed_slots":2,"budget_remaining":0}
+diff --git a/docs/experiments/grounded-approach-need-v1/summarize.py b/docs/experiments/grounded-approach-need-v1/summarize.py
+new file mode 100644
+index 0000000..5080801
+--- /dev/null
++++ b/docs/experiments/grounded-approach-need-v1/summarize.py
+@@ -0,0 +1,40 @@
++#!/usr/bin/env python3
++"""Summarize public scalar rows only; never load a brain or run a world."""
++import json
++import sys
++from pathlib import Path
++
++rows = [json.loads(line) for line in Path(sys.argv[1]).read_text().splitlines() if line.strip()]
++assert len(rows) == 6
++assert len({(row["initial_loneliness"], row["case"]) for row in rows}) == 6
++lanes = ["hunger", "fatigue", "fear", "pain", "loneliness", "curiosity", "brain_atp", "temperature_stress", "reproductive_drive", "extension0", "extension1"]
++for row in rows:
++    assert row["biology_updates"] == 1
++    assert row["ticks"] == [600, 601]
++    assert row["store_records"] == 0
++    assert row["exact_same_source_lookup"]["evidence"] == "Unknown"
++    assert row["source_sequence"] is None
++    assert len(row["raw_eleven_deltas"]) == 11
++contrasts = []
++for pressure in sorted({row["initial_loneliness"] for row in rows}):
++    arms = {row["case"]: row for row in rows if row["initial_loneliness"] == pressure}
++    peer = arms["peer_approach"]
++    for control in ["toy_approach", "peer_passive"]:
++        other = arms[control]
++        differences = [a - b for a, b in zip(peer["raw_eleven_deltas"], other["raw_eleven_deltas"])]
++        contrasts.append({"initial_loneliness": pressure, "comparison": f"peer_approach minus {control}", "raw_delta_difference": dict(zip(lanes, differences)), "interpretation": "between-fork contrast, not isolated motor credit or a stored effect"})
++summary = {
++    "actual_world_intervals": len(rows), "budget_remaining": 0,
++    "original_maximum_budget": 8, "unspent_closed_slots": 2,
++    "unavailable_controls": [{"case": "peer_blocked", "initial_loneliness": p, "actual_world_intervals": 0, "reason": "four cage objects occupy all object-candidate slots; no prescribed peer command fabricated"} for p in [0, 0.15]],
++    "all_intended_physical_conditions_met": all(row["intended_condition_met"] for row in rows),
++    "neural_forward_passes": 0, "selected_policy_actions": 0,
++    "admitted_neural_sources": 0,
++    "exact_same_source_unknown_count": sum(row["exact_same_source_lookup"]["evidence"] == "Unknown" for row in rows),
++    "actual_next_source_unknown_count": sum(row["actual_next_source_lookup"] is not None and row["actual_next_source_lookup"]["evidence"] == "Unknown" for row in rows),
++    "actual_next_source_key_equality_count": sum(row["actual_next_source_lookup"] is not None and row["actual_next_source_lookup"]["same_exact_context_key"] for row in rows),
++    "rows": [{key: row[key] for key in ["case", "initial_loneliness", "intended_condition_met", "travel", "initial_peer_contact", "final_peer_contact", "body_event", "raw_eleven_deltas", "body_energy_before", "body_energy_after", "sensor_confidence"]} for row in rows],
++    "contrasts": contrasts,
++    "store_result": "Unknown because authentic neural evidence was not produced; not a retained-source recall failure",
++}
++print(json.dumps(summary, indent=2, sort_keys=True))
+diff --git a/docs/experiments/grounded-approach-need-v1/summary.json b/docs/experiments/grounded-approach-need-v1/summary.json
+new file mode 100644
+index 0000000..796a6e9
+--- /dev/null
++++ b/docs/experiments/grounded-approach-need-v1/summary.json
+@@ -0,0 +1,292 @@
++{
++  "actual_next_source_key_equality_count": 0,
++  "actual_next_source_unknown_count": 6,
++  "actual_world_intervals": 6,
++  "admitted_neural_sources": 0,
++  "all_intended_physical_conditions_met": true,
++  "budget_remaining": 0,
++  "contrasts": [
++    {
++      "comparison": "peer_approach minus toy_approach",
++      "initial_loneliness": 0.0,
++      "interpretation": "between-fork contrast, not isolated motor credit or a stored effect",
++      "raw_delta_difference": {
++        "brain_atp": 0.0,
++        "curiosity": 0.0,
++        "extension0": 0.0,
++        "extension1": 0.0,
++        "fatigue": 0.0,
++        "fear": 0.0,
++        "hunger": 0.0,
++        "loneliness": -0.00599999725818634,
++        "pain": 0.0,
++        "reproductive_drive": 0.0,
++        "temperature_stress": 0.0
++      }
++    },
++    {
++      "comparison": "peer_approach minus peer_passive",
++      "initial_loneliness": 0.0,
++      "interpretation": "between-fork contrast, not isolated motor credit or a stored effect",
++      "raw_delta_difference": {
++        "brain_atp": -0.0008800029754638672,
++        "curiosity": 0.0,
++        "extension0": 0.0,
++        "extension1": 0.0,
++        "fatigue": 0.0008800029754638672,
++        "fear": 0.0,
++        "hunger": 0.0013200044631958008,
++        "loneliness": -0.00599999725818634,
++        "pain": 0.0,
++        "reproductive_drive": 0.0,
++        "temperature_stress": 0.0
++      }
++    },
++    {
++      "comparison": "peer_approach minus toy_approach",
++      "initial_loneliness": 0.15000000596046448,
++      "interpretation": "between-fork contrast, not isolated motor credit or a stored effect",
++      "raw_delta_difference": {
++        "brain_atp": 0.0,
++        "curiosity": 0.0,
++        "extension0": 0.0,
++        "extension1": 0.0,
++        "fatigue": 0.0,
++        "fear": 0.0,
++        "hunger": 0.0,
++        "loneliness": -0.007499992847442627,
++        "pain": 0.0,
++        "reproductive_drive": 0.0,
++        "temperature_stress": 0.0
++      }
++    },
++    {
++      "comparison": "peer_approach minus peer_passive",
++      "initial_loneliness": 0.15000000596046448,
++      "interpretation": "between-fork contrast, not isolated motor credit or a stored effect",
++      "raw_delta_difference": {
++        "brain_atp": -0.0008800029754638672,
++        "curiosity": 0.0,
++        "extension0": 0.0,
++        "extension1": 0.0,
++        "fatigue": 0.0008800029754638672,
++        "fear": 0.0,
++        "hunger": 0.0013200044631958008,
++        "loneliness": -0.007499992847442627,
++        "pain": 0.0,
++        "reproductive_drive": 0.0,
++        "temperature_stress": 0.0
++      }
++    }
++  ],
++  "exact_same_source_unknown_count": 6,
++  "neural_forward_passes": 0,
++  "original_maximum_budget": 8,
++  "rows": [
++    {
++      "body_energy_after": 0.7847333550453186,
++      "body_energy_before": 0.7925000190734863,
++      "body_event": {
++        "damage": 0.0,
++        "energy": -0.03999999910593033,
++        "mating_opportunity": 0.0,
++        "nutrition": 0.0,
++        "sleep_recovery": 0.0,
++        "social_contact": 0.012500000186264515,
++        "temperature_stress": 0.0
++      },
++      "case": "peer_approach",
++      "final_peer_contact": true,
++      "initial_loneliness": 0.0,
++      "initial_peer_contact": false,
++      "intended_condition_met": true,
++      "raw_eleven_deltas": [
++        0.03874799609184265,
++        0.025831997394561768,
++        0.0,
++        0.0,
++        0.0,
++        0.0,
++        -0.025831997394561768,
++        0.0,
++        0.0,
++        0.0,
++        0.0
++      ],
++      "sensor_confidence": 0.8999999761581421,
++      "travel": 0.10000000149011612
++    },
++    {
++      "body_energy_after": 0.7847333550453186,
++      "body_energy_before": 0.7925000190734863,
++      "body_event": {
++        "damage": 0.0,
++        "energy": -0.03999999910593033,
++        "mating_opportunity": 0.0,
++        "nutrition": 0.0,
++        "sleep_recovery": 0.0,
++        "social_contact": 0.0,
++        "temperature_stress": 0.0
++      },
++      "case": "toy_approach",
++      "final_peer_contact": false,
++      "initial_loneliness": 0.0,
++      "initial_peer_contact": false,
++      "intended_condition_met": true,
++      "raw_eleven_deltas": [
++        0.03874799609184265,
++        0.025831997394561768,
++        0.0,
++        0.0,
++        0.00599999725818634,
++        0.0,
++        -0.025831997394561768,
++        0.0,
++        0.0,
++        0.0,
++        0.0
++      ],
++      "sensor_confidence": 0.8999999761581421,
++      "travel": 0.10000000149011612
++    },
++    {
++      "body_energy_after": 0.792066752910614,
++      "body_energy_before": 0.7925000190734863,
++      "body_event": {
++        "social_contact": 0.0,
++        "source": "no-action control, no contact/mating/care"
++      },
++      "case": "peer_passive",
++      "final_peer_contact": false,
++      "initial_loneliness": 0.0,
++      "initial_peer_contact": false,
++      "intended_condition_met": true,
++      "raw_eleven_deltas": [
++        0.03742799162864685,
++        0.0249519944190979,
++        0.0,
++        0.0,
++        0.00599999725818634,
++        0.0,
++        -0.0249519944190979,
++        0.0,
++        0.0,
++        0.0,
++        0.0
++      ],
++      "sensor_confidence": 0.8999999761581421,
++      "travel": 0.0
++    },
++    {
++      "body_energy_after": 0.7847333550453186,
++      "body_energy_before": 0.7925000190734863,
++      "body_event": {
++        "damage": 0.0,
++        "energy": -0.03999999910593033,
++        "mating_opportunity": 0.0,
++        "nutrition": 0.0,
++        "sleep_recovery": 0.0,
++        "social_contact": 0.012500000186264515,
++        "temperature_stress": 0.0
++      },
++      "case": "peer_approach",
++      "final_peer_contact": true,
++      "initial_loneliness": 0.15000000596046448,
++      "initial_peer_contact": false,
++      "intended_condition_met": true,
++      "raw_eleven_deltas": [
++        0.03874799609184265,
++        0.025831997394561768,
++        0.0,
++        0.0,
++        -0.007499992847442627,
++        0.0,
++        -0.025831997394561768,
++        0.0,
++        0.0,
++        0.0,
++        0.0
++      ],
++      "sensor_confidence": 0.8999999761581421,
++      "travel": 0.10000000149011612
++    },
++    {
++      "body_energy_after": 0.7847333550453186,
++      "body_energy_before": 0.7925000190734863,
++      "body_event": {
++        "damage": 0.0,
++        "energy": -0.03999999910593033,
++        "mating_opportunity": 0.0,
++        "nutrition": 0.0,
++        "sleep_recovery": 0.0,
++        "social_contact": 0.0,
++        "temperature_stress": 0.0
++      },
++      "case": "toy_approach",
++      "final_peer_contact": false,
++      "initial_loneliness": 0.15000000596046448,
++      "initial_peer_contact": false,
++      "intended_condition_met": true,
++      "raw_eleven_deltas": [
++        0.03874799609184265,
++        0.025831997394561768,
++        0.0,
++        0.0,
++        0.0,
++        0.0,
++        -0.025831997394561768,
++        0.0,
++        0.0,
++        0.0,
++        0.0
++      ],
++      "sensor_confidence": 0.8999999761581421,
++      "travel": 0.10000000149011612
++    },
++    {
++      "body_energy_after": 0.792066752910614,
++      "body_energy_before": 0.7925000190734863,
++      "body_event": {
++        "social_contact": 0.0,
++        "source": "no-action control, no contact/mating/care"
++      },
++      "case": "peer_passive",
++      "final_peer_contact": false,
++      "initial_loneliness": 0.15000000596046448,
++      "initial_peer_contact": false,
++      "intended_condition_met": true,
++      "raw_eleven_deltas": [
++        0.03742799162864685,
++        0.0249519944190979,
++        0.0,
++        0.0,
++        0.0,
++        0.0,
++        -0.0249519944190979,
++        0.0,
++        0.0,
++        0.0,
++        0.0
++      ],
++      "sensor_confidence": 0.8999999761581421,
++      "travel": 0.0
++    }
++  ],
++  "selected_policy_actions": 0,
++  "store_result": "Unknown because authentic neural evidence was not produced; not a retained-source recall failure",
++  "unavailable_controls": [
++    {
++      "actual_world_intervals": 0,
++      "case": "peer_blocked",
++      "initial_loneliness": 0,
++      "reason": "four cage objects occupy all object-candidate slots; no prescribed peer command fabricated"
++    },
++    {
++      "actual_world_intervals": 0,
++      "case": "peer_blocked",
++      "initial_loneliness": 0.15,
++      "reason": "four cage objects occupy all object-candidate slots; no prescribed peer command fabricated"
++    }
++  ],
++  "unspent_closed_slots": 2
++}

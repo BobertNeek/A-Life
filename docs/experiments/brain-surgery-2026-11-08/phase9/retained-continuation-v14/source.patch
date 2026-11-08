@@ -1,0 +1,89 @@
+diff --git a/crates/alife_game_app/src/gpu_live_runtime/arousal_epoch_runtime_tests.rs b/crates/alife_game_app/src/gpu_live_runtime/arousal_epoch_runtime_tests.rs
+index d54c1694f1b87d1cb4e5c414a20c17766473d769..984c9517df6d6a0be5be03ead6af35befc15efdc 100644
+--- a/crates/alife_game_app/src/gpu_live_runtime/arousal_epoch_runtime_tests.rs
++++ b/crates/alife_game_app/src/gpu_live_runtime/arousal_epoch_runtime_tests.rs
+@@ -258,3 +258,84 @@ fn arousal_epoch_software_real_rejected_credit_retry_and_same_tick_older_capture
+     );
+     println!("AROUSAL_EPOCH_REAL_WORKER_PASS decisions=1 intervals=2 genuine_rejected_credit=1 retry_ack_no_batch=1 old_same_tick_capture_rejected=1 exact_restores=2 fabricated_publications=0");
+ }
++
++#[test]
++fn retained_retry_counts_zero_and_four_resume_through_real_publications() {
++    let (root, mut runtime) = fixture("retained-continuation-v14");
++    setup_clear_interruption(&mut runtime);
++    let sequence = runtime.residents[&1].next_sequence;
++    runtime.force_learning_rejections_for_test(1);
++    runtime
++        .tick_with_contact_withdrawal_candidate_for_test()
++        .unwrap();
++    assert_eq!(runtime.world.tick(), Tick(1));
++    assert_eq!(runtime.retained_learning[&1].attempts, 0);
++    assert_eq!(runtime.residents[&1].next_sequence, sequence + 1);
++    assert!(runtime.last_learning_receipts.is_empty());
++    let sealed = runtime.retained_learning[&1].sealed_patch.clone();
++    let memory = runtime.memories[&1].export_active_bank().unwrap();
++    let topology = runtime.topologies[&1].export_portable().unwrap();
++    let handle = runtime.handle_for(OrganismId(1)).unwrap();
++    let authority = capture_sleep_journal_neural_authority(&mut runtime.backend, handle).unwrap();
++    finish_publication(&mut runtime);
++    let restored = restore_published(&mut runtime, &root);
++    drop(runtime);
++    let mut runtime = restored;
++    let handle = runtime.handle_for(OrganismId(1)).unwrap();
++    let loaded_authority =
++        capture_sleep_journal_neural_authority(&mut runtime.backend, handle).unwrap();
++    assert!(
++        same_neural_authority(&authority, &loaded_authority),
++        "restored retained neural authority changed"
++    );
++    assert_eq!(runtime.retained_learning[&1].attempts, 0);
++    assert!(runtime.retained_learning[&1].sealed_patch == sealed);
++    assert_eq!(runtime.residents[&1].next_sequence, sequence + 1);
++    let start_patches = runtime.sealed_patch_count;
++    runtime.force_learning_rejections_for_test(4);
++    for expected in 1..=4 {
++        runtime.tick().unwrap();
++        assert_eq!(runtime.world.tick(), Tick(u64::from(expected) + 1));
++        assert_eq!(runtime.retained_learning[&1].attempts, expected);
++        assert!(runtime.retained_learning[&1].sealed_patch == sealed);
++        assert_eq!(runtime.sealed_patch_count, start_patches);
++        assert_eq!(runtime.residents[&1].next_sequence, sequence + 1);
++        assert!(runtime.last_learning_receipts.is_empty());
++        assert!(runtime.memories[&1].export_active_bank().unwrap() == memory);
++        assert!(runtime.topologies[&1].export_portable().unwrap() == topology);
++    }
++    runtime.request_exact_population_checkpoint().unwrap();
++    let handle = runtime.handle_for(OrganismId(1)).unwrap();
++    let authority = capture_sleep_journal_neural_authority(&mut runtime.backend, handle).unwrap();
++    finish_publication(&mut runtime);
++    let restored = restore_published(&mut runtime, &root);
++    drop(runtime);
++    let mut runtime = restored;
++    let handle = runtime.handle_for(OrganismId(1)).unwrap();
++    let loaded_authority =
++        capture_sleep_journal_neural_authority(&mut runtime.backend, handle).unwrap();
++    assert!(
++        same_neural_authority(&authority, &loaded_authority),
++        "restored retained neural authority changed"
++    );
++    assert_eq!(runtime.world.tick(), Tick(5));
++    assert_eq!(runtime.retained_learning[&1].attempts, 4);
++    assert!(runtime.retained_learning[&1].sealed_patch == sealed);
++    let start_patches = runtime.sealed_patch_count;
++    runtime.tick().unwrap();
++    assert_eq!(runtime.world.tick(), Tick(6));
++    assert!(runtime.retained_learning.is_empty());
++    assert_eq!(runtime.last_learning_receipts.len(), 1);
++    assert_eq!(runtime.sealed_patch_count, start_patches);
++    assert_eq!(runtime.residents[&1].next_sequence, sequence + 1);
++    assert!(runtime.memories[&1].export_active_bank().unwrap() == memory);
++    assert!(runtime.topologies[&1].export_portable().unwrap() == topology);
++    let handle = runtime.handle_for(OrganismId(1)).unwrap();
++    assert!(runtime
++        .backend
++        .pending_eligibility(handle)
++        .unwrap()
++        .is_none());
++    finish_publication(&mut runtime);
++    println!("RETAINED_RETRY_CONTINUATION_PASS decisions=1 intervals=6 injected_initial_rejection=1 injected_failed_retries=4 exact_restores=2 exact_authority_restores=2 restored_counts=0,4 retry_ack_no_batch=1 memory_topology_unchanged=1");
++}

@@ -1,0 +1,10 @@
+   Compiling alife_game_app v0.1.0 (/workspace/scratch/ee5e08a3ca9b/motor-reflex-retained-restore-v13/crates/alife_game_app)
+    Finished `test` profile [unoptimized] target(s) in 2m 27s
+     Running unittests src/lib.rs (/workspace/scratch/ee5e08a3ca9b/arousal-lineage-check-target-v9/debug/deps/alife_game_app-3da14afd57976c36)
+
+running 2 tests
+test gpu_live_runtime::restore_reconciliation::tests::discarded_unsealed_pending_and_missing_residents_keep_reconciliation ... ok
+test gpu_live_runtime::restore_reconciliation::tests::preserved_retained_credit_and_quiet_population_do_not_republish ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 270 filtered out; finished in 0.00s
+

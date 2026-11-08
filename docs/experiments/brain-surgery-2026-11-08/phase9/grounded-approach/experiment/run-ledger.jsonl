@@ -1,0 +1,8 @@
+{"budget":8,"status":"started","source":"frozen before execution"}
+{"interval":1,"pressure":0,"case":"peer_approach"}
+{"interval":2,"pressure":0,"case":"toy_approach"}
+{"interval":3,"pressure":0,"case":"peer_passive"}
+{"interval":4,"pressure":0.15,"case":"peer_approach"}
+{"interval":5,"pressure":0.15,"case":"toy_approach"}
+{"interval":6,"pressure":0.15,"case":"peer_passive"}
+{"completed_intervals":6,"unspent_closed_slots":2,"budget_remaining":0}

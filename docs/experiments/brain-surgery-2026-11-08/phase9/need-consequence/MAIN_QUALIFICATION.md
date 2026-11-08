@@ -1,0 +1,13 @@
+# Exact ordinary-main qualification
+
+Base:550f79ad1f765132c634e7a272da56b521b57ec0, treec4e5230799be59df95d468be1343c4549892851d.
+Qualified component:493bb172da46add5f6d5da43dd375d5387116473, tree1c142bb1aad2a57d6ec98c689f72180e47bb4d3d.
+Checkout: need-consequence-main-v1. Git worktree created from full ordinary main, then isolated component patch applied. Logs explicitly show compilation/checking from that checkout. No copied-source timestamp reuse, cache deletion, accepted-life or checkpoint access occurred.
+
+Passed98 tests: new core11, new world1 (three conditions), legacy candidate queries7, candidate retrieval67, three-phase experience8, measured physiology2, perception digest golden2. One existing explicit microbenchmark remained ignored. Strict Clippy for core/world lib/tests, workspace rustfmt, static core boundary and diff checks passed. Main world fixture had244 other tests filtered, versus234 on the older research baseline; these are focused checks, not a claim of a full world suite or CI run.
+
+The final component contains only core new module/export/dependency, fixed core/world tests and component documentation. It changes no MemoryBank field, wire format, digest or existing reader; no Nano head5/gate/bias experiment or test-only approximate metric is included. It adds no runtime store, gameplay default, save attachment, CPU/GPU readout or policy allocation. Full-source retention is an opt-in evidence prototype, suitable initially for draft research review, not a scalable population memory or completed biological-policy repair.
+
+The world fixture uses CreatureGenome::early_mammal_founder seed921411 with FoundationGeneticIdentity(10,1,7,N512). A procedural compiled brain identity wraps a prescribed observed Inspect selection; no native policy inference or learning is claimed. Biological state is fresh age600 initialization, not a lived600-tick history. Puberty is false and expression1. The actual world-produced before/after transition is stored. Passive clones receive the same loneliness relief, so this remains interval association rather than isolated Inspect causality.
+
+The package contains only source, safe scalar reports, hashes and logs. No actual serialized source patch/store bank, neural arrays, optimizer arrays or checkpoints are included. The separate metric-v2 directory contains a test-only hypothesis and its qualified research-source results; it is not part of component-main.patch. Both patches have isolated-index apply checks: component on exact base main, metric optionally after the component. No external assets were published and no pull request or hosted CI was started by this worker.

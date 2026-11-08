@@ -1,0 +1,24 @@
+{
+  "source": "40eebc5f3f88ee06b83e859b1b511e295624e445",
+  "tree": "5529e54d9a8a6bacf71ebda8e002250631c892be",
+  "base": "44f030b905fdece730f43403d78ef5734f8f3bd5",
+  "executable_sha256": "f37f99b05d5e6438efe43b516313c00dcad0bb8edd634b2f76e26063a8283817",
+  "pure_tests_pass": 2,
+  "actual_worker_pass": 1,
+  "actual_seconds": 9.3,
+  "strict_app_gpu_tests_clippy": "pass",
+  "fmt_diff": "pass",
+  "excluded": [
+    "executables",
+    "generated checkpoints/assets",
+    "learned arrays"
+  ],
+  "remaining": [
+    "mixed/unsealed/missing reconciliation",
+    "Completed coalescing/generation/restored staging",
+    "restored branch retry",
+    "count4 runtime",
+    "automatic cognitive arousal",
+    "awake actuator budget"
+  ]
+}

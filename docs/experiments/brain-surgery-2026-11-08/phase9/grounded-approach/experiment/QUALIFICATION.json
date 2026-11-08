@@ -1,0 +1,160 @@
+{
+  "schema": 1,
+  "executed_source": "e94592cbeede35a3e812093fcdea673410205e2f",
+  "executed_tree": "8753ed65934b7af638ad4bf54ec57889d30afddc",
+  "status": "completed_closed",
+  "ordinary_default_changes": false,
+  "actual_world_intervals": 6,
+  "original_budget": 8,
+  "unavailable_closed_slots": 2,
+  "additional_intervals_authorized": false,
+  "neural_forward_passes": 0,
+  "gpu_device_use": false,
+  "authentic_neural_sources_admitted": 0,
+  "checks": [
+    {
+      "check": "first compile",
+      "status": "failed before test: JSON diagnostic macro recursion",
+      "world_intervals": 0
+    },
+    {
+      "check": "second compile",
+      "status": "failed before test: biochemical DriveChannel alias",
+      "world_intervals": 0
+    },
+    {
+      "check": "third cold preflight",
+      "status": "failed: no blocked-target Approach candidate",
+      "world_intervals": 0
+    },
+    {
+      "check": "fourth cold diagnostic",
+      "status": "same failure confirmed candidate budget cause",
+      "world_intervals": 0
+    },
+    {
+      "check": "fifth revised preflight",
+      "status": "1 passed; all original setups unchanged, blocked unavailable",
+      "world_intervals": 0
+    },
+    {
+      "check": "single six-interval ignored test",
+      "status": "1 passed; six intended physical conditions met",
+      "world_intervals": 6
+    },
+    {
+      "check": "cargo clippy -p alife_world --lib --tests -- -D warnings",
+      "status": "passed; no tests executed",
+      "world_intervals": 0
+    },
+    {
+      "check": "cargo fmt --all --check",
+      "status": "passed",
+      "world_intervals": 0
+    },
+    {
+      "check": "first boundary script",
+      "status": "not run: toolchain was absent from that shell PATH",
+      "world_intervals": 0
+    },
+    {
+      "check": "bash scripts/check_core_boundaries.sh --static",
+      "status": "passed static manifest boundary only",
+      "world_intervals": 0
+    },
+    {
+      "check": "git diff --check",
+      "status": "passed",
+      "world_intervals": 0
+    },
+    {
+      "check": "initial archive diff whitespace",
+      "status": "raw Cargo logs contained trailing whitespace; repository copies normalized for publication, raw byte-exact logs preserved separately",
+      "world_intervals": 0
+    }
+  ],
+  "logs": [
+    {
+      "file": "logs/grounded-approach-preflight-v1.log",
+      "bytes": 1333,
+      "sha256": "879e9846e6a75441b112a5d303216e42b3632e85e1ad3aaff297bc7eadf21f7b",
+      "raw_bytes": 1333,
+      "raw_sha256": "879e9846e6a75441b112a5d303216e42b3632e85e1ad3aaff297bc7eadf21f7b",
+      "normalization": "trailing horizontal whitespace and surplus final blank lines removed in repository copy only; raw logs retained in evidence archive"
+    },
+    {
+      "file": "logs/grounded-approach-preflight-v2.log",
+      "bytes": 932,
+      "sha256": "c66f86002fb2ac61b077ecb55c75fc540c5a5dc47fab10cc38d74c0f6f058f28",
+      "raw_bytes": 932,
+      "raw_sha256": "c66f86002fb2ac61b077ecb55c75fc540c5a5dc47fab10cc38d74c0f6f058f28",
+      "normalization": "trailing horizontal whitespace and surplus final blank lines removed in repository copy only; raw logs retained in evidence archive"
+    },
+    {
+      "file": "logs/grounded-approach-preflight-v3.log",
+      "bytes": 1083,
+      "sha256": "8e4f9473e2a5be95ffd128fdb8aa2a863b90e24dfb069bd19f05890eac71d301",
+      "raw_bytes": 1084,
+      "raw_sha256": "5d3f54825a8dbcac7a21f480112e1327a04dbb4606be1b89c57172b0d14bed61",
+      "normalization": "trailing horizontal whitespace and surplus final blank lines removed in repository copy only; raw logs retained in evidence archive"
+    },
+    {
+      "file": "logs/grounded-approach-preflight-v4.log",
+      "bytes": 3442,
+      "sha256": "3d5292e8e63ee4db8fbdf65cb6d418da4c2cb83f5e5a025931f736b0b73eea00",
+      "raw_bytes": 3442,
+      "raw_sha256": "3d5292e8e63ee4db8fbdf65cb6d418da4c2cb83f5e5a025931f736b0b73eea00",
+      "normalization": "trailing horizontal whitespace and surplus final blank lines removed in repository copy only; raw logs retained in evidence archive"
+    },
+    {
+      "file": "logs/grounded-approach-preflight-v5.log",
+      "bytes": 6357,
+      "sha256": "f29c317449297ec553638654bfe4a9d9a5fadaf6f4c0ada0cf16436d7416616b",
+      "raw_bytes": 6358,
+      "raw_sha256": "0e3aa221461e8f89192feb396d6fe109398d85ff2438696ab0acbfb6687d6045",
+      "normalization": "trailing horizontal whitespace and surplus final blank lines removed in repository copy only; raw logs retained in evidence archive"
+    },
+    {
+      "file": "logs/grounded-approach-six-native-v1.log",
+      "bytes": 26895,
+      "sha256": "79f2f54f386d93f44739b30bbc4b77527e9ce83da0bd3f111772d532d4ac585e",
+      "raw_bytes": 26896,
+      "raw_sha256": "42d390cab9abc188d4068804d4c108b9929e21a0e795248f60f2b674db0a6608",
+      "normalization": "trailing horizontal whitespace and surplus final blank lines removed in repository copy only; raw logs retained in evidence archive"
+    },
+    {
+      "file": "logs/grounded-approach-six-clippy-v1.log",
+      "bytes": 396,
+      "sha256": "63974c56d65dc5d89f791c8a13f5ae5175bad3968eb32f43714fa70e9ccb037a",
+      "raw_bytes": 396,
+      "raw_sha256": "63974c56d65dc5d89f791c8a13f5ae5175bad3968eb32f43714fa70e9ccb037a",
+      "normalization": "trailing horizontal whitespace and surplus final blank lines removed in repository copy only; raw logs retained in evidence archive"
+    },
+    {
+      "file": "logs/grounded-approach-six-fmt-v1.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "raw_bytes": 0,
+      "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalization": "trailing horizontal whitespace and surplus final blank lines removed in repository copy only; raw logs retained in evidence archive"
+    },
+    {
+      "file": "logs/grounded-approach-six-boundaries-v1.log",
+      "bytes": 42,
+      "sha256": "edfe0c3e3b80dbafbf4ad79877ba2d98759b5a4c0c44c77b711ce4411ecbb571",
+      "raw_bytes": 42,
+      "raw_sha256": "edfe0c3e3b80dbafbf4ad79877ba2d98759b5a4c0c44c77b711ce4411ecbb571",
+      "normalization": "trailing horizontal whitespace and surplus final blank lines removed in repository copy only; raw logs retained in evidence archive"
+    },
+    {
+      "file": "logs/grounded-approach-six-boundaries-v2.log",
+      "bytes": 34,
+      "sha256": "b6554fa6b151aea699671a9b5cad329ec249203f6fa858015600843929aff070",
+      "raw_bytes": 34,
+      "raw_sha256": "b6554fa6b151aea699671a9b5cad329ec249203f6fa858015600843929aff070",
+      "normalization": "trailing horizontal whitespace and surplus final blank lines removed in repository copy only; raw logs retained in evidence archive"
+    }
+  ],
+  "scope": "CPU engine/world receipt fixture; not full world suite, policy behavior, neural recall, GPU parity or learned self-care",
+  "publication": "source, bodily scalar receipts and bounded logs only; no source vectors/private banks/checkpoints"
+}

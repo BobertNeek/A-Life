@@ -1,0 +1,87 @@
+{
+  "schema": "arousal-epoch-finite-actual-evidence-v11",
+  "base_commit": "3b5ddd6be20dbd00679849532369671faced8e38",
+  "base_tree": "1e1b5dce4817dbea21384ac2644b76dfa425503a",
+  "base_package_sha256": "8adb52faec8c684fe6b78c9b594cc8fae7c8e7e82a793a65a8b2aed3bb761ced",
+  "adapter": {
+    "name": "SwiftShader Device (Subzero)",
+    "device_type": "Cpu",
+    "backend": "Vulkan",
+    "vendor": 6880,
+    "device": 49374
+  },
+  "revisions": [
+    {
+      "label": "first",
+      "commit": "f8e71f109a8792e54376e1fb8c07763fe195e2ea",
+      "tree": "613f99dc4c26135e5c929c70bd1fc0116443bf2b",
+      "executable_sha256": "061fbf24c8649974e1ae0f2ba47b8a35cd5c4c332b0ffeab04f9dd69b57dd12d",
+      "exit_code": 101,
+      "actual_log": "reflex-epoch-first-fixture-actual-v11.log",
+      "failed_stage": "fixture unwrap of temporarily worker-owned checkpoint_durability",
+      "fixed_seed": 31118,
+      "observed_decisions": 1,
+      "observed_world_intervals": 2,
+      "passed_before_failure": [
+        "fresh actual sealed observation",
+        "one genuine injected credit rejection",
+        "retry-only actual acknowledgment without new policy batch/sequence/patch",
+        "new active generation",
+        "dirty epoch retained"
+      ],
+      "publication_and_restore_qualified": false
+    },
+    {
+      "label": "polling",
+      "commit": "270cee772c15afc132595b561d8f556177ec92d0",
+      "tree": "83771fe78566b074f89db2f283e3ba0c73ec667e",
+      "executable_sha256": "8e9d0426aba72391dbcf0216ac67d34b08fee6b47731d675206e22525087862d",
+      "exit_code": 101,
+      "actual_log": "reflex-epoch-polling-repair-actual-v11.log",
+      "failed_stage": "bounded timeout after fixture installed follow-up gate before first Worker consumed original gate",
+      "fixed_seed": 31118,
+      "observed_decisions": 1,
+      "observed_world_intervals": 2,
+      "passed_before_failure": [
+        "fresh actual sealed observation",
+        "one genuine injected credit rejection",
+        "retry-only actual acknowledgment without new policy batch/sequence/patch",
+        "new active generation",
+        "dirty epoch retained"
+      ],
+      "publication_and_restore_qualified": false
+    },
+    {
+      "label": "gate_order",
+      "commit": "192ea624c839b409979da368c9faedcab54bd20c",
+      "tree": "6c04b7b36b283ba4ef9825dd61b1444aa8cbfb68",
+      "executable_sha256": "f0abd4f681dbcb142ef9868b91fe6f6a35ce66d4f111bb9d2e8a24adb75b5a54",
+      "exit_code": 101,
+      "actual_log": "reflex-epoch-gate-ownership-actual-v11.log",
+      "failed_stage": "real publication-path LearningEvidenceMismatch after genuine first Worker gate ownership",
+      "fixed_seed": 31118,
+      "observed_decisions": 1,
+      "observed_world_intervals": 2,
+      "passed_before_failure": [
+        "fresh actual sealed observation",
+        "one genuine injected credit rejection",
+        "retry-only actual acknowledgment without new policy batch/sequence/patch",
+        "new active generation",
+        "dirty epoch retained"
+      ],
+      "publication_and_restore_qualified": false
+    }
+  ],
+  "host_gate_tests_passed": 2,
+  "no_runtime_default_or_automatic_pain_trigger": true,
+  "no_hardware_qualification": true,
+  "no_autonomous_cohort": true,
+  "private_checkpoints_read": 0,
+  "excluded": [
+    "executables",
+    "generated fixture checkpoints/assets",
+    "neural arrays",
+    "credentials"
+  ],
+  "diagnosis_status": "Third run exposes real LearningEvidenceMismatch during immutable worker assembly/publication. Exact validator not yet isolated; no guard weakened and no old/new publication/restore success inferred."
+}

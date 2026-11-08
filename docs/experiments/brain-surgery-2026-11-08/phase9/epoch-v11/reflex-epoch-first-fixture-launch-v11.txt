@@ -1,0 +1,1 @@
+VK_ICD_FILENAMES=/usr/lib/chromium/vk_swiftshader_icd.json XDG_RUNTIME_DIR=/tmp/alife-v11-xdg XDG_CACHE_HOME=/tmp/alife-v11-cache /workspace/shared/reflex-epoch-v11-frozen-bin/first-worker-fixture --exact gpu_live_runtime::arousal_epoch_runtime_tests::arousal_epoch_software_real_rejected_credit_retry_and_same_tick_older_capture --test-threads=1 --nocapture

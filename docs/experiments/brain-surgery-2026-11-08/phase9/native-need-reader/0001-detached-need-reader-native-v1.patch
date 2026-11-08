@@ -1,0 +1,2731 @@
+From 21c0277227cc41c6d70dc365ea91402fa6344804 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Sun, 8 Nov 2026 02:25:46 -0700
+Subject: [PATCH] Qualify detached need reader with native neural primitives
+
+---
+ .../alife_core/tests/need_reader_native_v1.rs |  15 +
+ .../tests/need_reader_native_v1/native.rs     | 428 ++++++++++++
+ .../need_reader_native_v1/qualification.rs    | 590 ++++++++++++++++
+ .../need_reader_native_v1/qualified_store.rs  | 639 ++++++++++++++++++
+ .../need_reader_native_v1/scalar_reference.rs | 475 +++++++++++++
+ .../need_reader_native_v1/sealed_fixture.rs   | 263 +++++++
+ .../need-reader-native-v1/README.md           | 231 +++++++
+ .../need-reader-native-v1/RESULTS.csv         |  15 +
+ 8 files changed, 2656 insertions(+)
+ create mode 100644 crates/alife_core/tests/need_reader_native_v1.rs
+ create mode 100644 crates/alife_core/tests/need_reader_native_v1/native.rs
+ create mode 100644 crates/alife_core/tests/need_reader_native_v1/qualification.rs
+ create mode 100644 crates/alife_core/tests/need_reader_native_v1/qualified_store.rs
+ create mode 100644 crates/alife_core/tests/need_reader_native_v1/scalar_reference.rs
+ create mode 100644 crates/alife_core/tests/need_reader_native_v1/sealed_fixture.rs
+ create mode 100644 docs/experiments/need-reader-native-v1/README.md
+ create mode 100644 docs/experiments/need-reader-native-v1/RESULTS.csv
+
+diff --git a/crates/alife_core/tests/need_reader_native_v1.rs b/crates/alife_core/tests/need_reader_native_v1.rs
+new file mode 100644
+index 0000000..1dc0fc5
+--- /dev/null
++++ b/crates/alife_core/tests/need_reader_native_v1.rs
+@@ -0,0 +1,15 @@
++//! Detached CPU primitive qualification. No production module or runtime attachment.
++// Qualified store uses crate-root imports; these are the unchanged core types.
++use alife_core::*;
++
++#[path = "need_reader_native_v1/native.rs"]
++mod native;
++#[path = "need_reader_native_v1/qualification.rs"]
++mod qualification;
++#[allow(dead_code)] // Frozen store API is intentionally broader than this bridge.
++#[path = "need_reader_native_v1/qualified_store.rs"]
++mod qualified_store;
++#[path = "need_reader_native_v1/scalar_reference.rs"]
++mod scalar_reference;
++#[path = "need_reader_native_v1/sealed_fixture.rs"]
++mod sealed_fixture;
+diff --git a/crates/alife_core/tests/need_reader_native_v1/native.rs b/crates/alife_core/tests/need_reader_native_v1/native.rs
+new file mode 100644
+index 0000000..90e8e35
+--- /dev/null
++++ b/crates/alife_core/tests/need_reader_native_v1/native.rs
+@@ -0,0 +1,428 @@
++//! Fixture compiler and staged execution of real core operators. No scalar
++//! pressure/burden/evaluate call occurs in this module. No acquired state enters.
++use std::collections::BTreeMap;
++
++use super::scalar_reference::{ModelError, Recipe, Role, SyntheticEvidence};
++use alife_core::*;
++
++pub(super) const N: usize = 11;
++pub(super) const K: usize = 4;
++const CONSTANT: usize = 22;
++const SCHEMA: u16 = 1;
++const FOUNDATION: &str = "detached-reference-species22-need-reader-v1";
++const CHEMISTRY: &str = "reference-drive-roles-v1-atp-availability";
++const BOREDOM: &str = "species22/play-stimulation/drive-extension0/boredom/v1";
++
++#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
++pub(super) enum GeneId {
++    Knot(u8),
++    Basis(u8),
++    Magnitude(u8),
++    AvailabilityTarget(u8),
++    Gain,
++    Ceiling,
++}
++
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub(super) enum Side {
++    Current,
++    Successor,
++}
++
++/// Stable logical branch identity, never a persistent or packed neuron offset.
++#[derive(Clone, Debug, PartialEq)]
++pub(super) struct BranchIdentity {
++    pub lane: u8,
++    pub role: Role,
++    pub side: Side,
++    pub basis: u8,
++    pub threshold_gene: GeneId,
++    pub weight_gene: GeneId,
++}
++
++pub(super) struct Gene {
++    pub recipe: Recipe,
++    pub typed_boredom_binding: Option<&'static str>,
++}
++impl Gene {
++    pub fn reference() -> Self {
++        Self {
++            recipe: Recipe::reference(),
++            typed_boredom_binding: None,
++        }
++    }
++    pub fn typed_boredom() -> Self {
++        let mut gene = Self::reference();
++        gene.recipe.roles[9] = Role::TypedBoredomFixture;
++        gene.recipe.magnitudes[9] = 0.08;
++        gene.typed_boredom_binding = Some(BOREDOM);
++        gene
++    }
++    fn validate(&self) -> Result<(), ModelError> {
++        self.recipe.validate()?;
++        // This is a reference-species fixture, not authority to reinterpret an
++        // evolved chemistry. Informational extensions cannot evade typed binding.
++        if self
++            .recipe
++            .roles
++            .iter()
++            .enumerate()
++            .any(|(lane, role)| !match lane {
++                0 | 1 | 2 | 3 | 4 | 7 => matches!(role, Role::Burden),
++                6 => matches!(role, Role::Availability { .. }),
++                9 => matches!(role, Role::Informational | Role::TypedBoredomFixture),
++                _ => matches!(role, Role::Informational),
++            })
++        {
++            return Err(ModelError::InvalidRecipe);
++        }
++        if self.recipe.roles.iter().enumerate().any(|(i, role)| {
++            *role == Role::TypedBoredomFixture
++                && (i != 9 || self.typed_boredom_binding != Some(BOREDOM))
++        }) || (self.typed_boredom_binding.is_some()
++            && (self.typed_boredom_binding != Some(BOREDOM)
++                || self.recipe.roles[9] != Role::TypedBoredomFixture))
++        {
++            return Err(ModelError::InvalidRecipe);
++        }
++        Ok(())
++    }
++}
++
++pub(super) struct Circuit {
++    pub recipe: Recipe,
++    pub genes: BTreeMap<GeneId, f32>,
++    pub identity: [u64; 4],
++    pub branches: DendriticBranchSet,
++    pub branch_ids: Vec<BranchIdentity>,
++    pub projections: Vec<NeuralProjectionSchema>,
++}
++
++fn projection(edges: &[(usize, usize, f32)]) -> NeuralProjectionSchema {
++    let spec = BrainClassSpec::for_tier(BrainScaleTier::Nano512);
++    let mut schema = NeuralProjectionSchema::empty_for_brain_class(&spec).unwrap();
++    let mut tiles: BTreeMap<(u32, u32), Vec<CooEntry>> = BTreeMap::new();
++    for &(target, source, weight) in edges {
++        let coord = SparseTileCoord::from_neuron_indices(target as u32, source as u32).unwrap();
++        tiles
++            .entry((coord.microtile_row, coord.microtile_col))
++            .or_default()
++            .push(
++                CooEntry::new(
++                    (target % 16) as u8,
++                    (source % 16) as u8,
++                    SynapseWeightSplit::new(weight, 0.0, 0.0, 0.0, 0.0).unwrap(),
++                )
++                .unwrap(),
++            );
++    }
++    for ((row, col), entries) in tiles {
++        schema.projections[0].tiles.push(ProjectionTile::new_coo(
++            0,
++            SparseTileCoord::new(row, col).unwrap(),
++            CooTile::new(entries).unwrap(),
++        ));
++    }
++    schema.rebuild_supertile_masks();
++    schema.validate().unwrap();
++    schema
++}
++
++impl Circuit {
++    pub fn compile(gene: Gene) -> Result<Self, ModelError> {
++        gene.validate()?;
++        let recipe = gene.recipe;
++        let mut genes = BTreeMap::new();
++        for k in 0..K {
++            genes.insert(GeneId::Knot(k as u8), recipe.knots[k]);
++            genes.insert(GeneId::Basis(k as u8), recipe.basis[k]);
++        }
++        for (lane, role) in recipe.roles.iter().enumerate() {
++            genes.insert(GeneId::Magnitude(lane as u8), recipe.magnitudes[lane]);
++            if let Role::Availability { target } = role {
++                genes.insert(GeneId::AvailabilityTarget(lane as u8), *target);
++            }
++        }
++        genes.insert(GeneId::Gain, recipe.gain);
++        genes.insert(GeneId::Ceiling, recipe.ceiling);
++        let mut digest = CanonicalDigestBuilder::new(b"ALIFE-DETACHED-NEED-READER-TEST-V1");
++        digest.write_u16(SCHEMA);
++        digest.write_bytes(FOUNDATION.as_bytes());
++        digest.write_bytes(CHEMISTRY.as_bytes());
++        digest.write_bytes(gene.typed_boredom_binding.unwrap_or("").as_bytes());
++        for (lane, role) in recipe.roles.iter().enumerate() {
++            digest.write_u64(lane as u64);
++            digest.write_u16(match role {
++                Role::Burden => 1,
++                Role::Availability { .. } => 2,
++                Role::Informational => 3,
++                Role::TypedBoredomFixture => 4,
++            });
++        }
++        for (id, value) in &genes {
++            let (tag, index) = match *id {
++                GeneId::Knot(i) => (1, i),
++                GeneId::Basis(i) => (2, i),
++                GeneId::Magnitude(i) => (3, i),
++                GeneId::AvailabilityTarget(i) => (4, i),
++                GeneId::Gain => (5, 0),
++                GeneId::Ceiling => (6, 0),
++            };
++            digest.write_u16(tag);
++            digest.write_u16(u16::from(index));
++            digest.write_u32(value.to_bits());
++        }
++        let mut affine = Vec::new();
++        let mut pressure = Vec::new();
++        let mut difference = Vec::new();
++        let mut weighted = Vec::new();
++        let mut branches = Vec::new();
++        let mut branch_ids = Vec::new();
++        for lane in 0..N {
++            affine.extend([
++                (lane, lane, 1.0),
++                (N + lane, lane, 1.0),
++                (N + lane, N + lane, 1.0),
++            ]);
++            difference.extend([(lane, lane, 1.0), (lane, N + lane, -1.0)]);
++            weighted.push((0, lane, genes[&GeneId::Magnitude(lane as u8)]));
++        }
++        affine.push((CONSTANT, CONSTANT, 1.0));
++        for side in [Side::Current, Side::Successor] {
++            for lane in 0..N {
++                let index = lane + if side == Side::Current { 0 } else { N };
++                let (weight, intercept) = match recipe.roles[lane] {
++                    Role::Burden | Role::TypedBoredomFixture => (1.0, 0.0),
++                    Role::Availability { .. } => {
++                        (-1.0, genes[&GeneId::AvailabilityTarget(lane as u8)])
++                    }
++                    Role::Informational => (0.0, 0.0),
++                };
++                // Keep zero edges: matched gain/status/role controls do identical work.
++                pressure.extend([(index, index, weight), (index, CONSTANT, intercept)]);
++                for basis in 0..K {
++                    let threshold_gene = GeneId::Knot(basis as u8);
++                    let weight_gene = GeneId::Basis(basis as u8);
++                    branches.push(
++                        DendriticBranch::new(
++                            index as u32,
++                            genes[&threshold_gene],
++                            genes[&weight_gene],
++                            vec![DendriticInputRef::new(index as u32, 1.0).unwrap()],
++                        )
++                        .unwrap(),
++                    );
++                    branch_ids.push(BranchIdentity {
++                        lane: lane as u8,
++                        role: recipe.roles[lane],
++                        side,
++                        basis: basis as u8,
++                        threshold_gene,
++                        weight_gene,
++                    });
++                }
++            }
++        }
++        Ok(Self {
++            recipe,
++            genes,
++            identity: digest.finish256(),
++            branches: DendriticBranchSet::new(branches).unwrap(),
++            branch_ids,
++            projections: vec![
++                projection(&affine),
++                projection(&pressure),
++                projection(&difference),
++                projection(&weighted),
++                projection(&[(0, 0, recipe.gain)]),
++            ],
++        })
++    }
++
++    pub fn run(
++        &self,
++        current: [f32; N],
++        evidence: SyntheticEvidence,
++    ) -> Result<Output, ModelError> {
++        let unit = |v: f32| v.is_finite() && (0.0..=1.0).contains(&v);
++        if current.iter().any(|&v| !unit(v)) {
++            return Err(ModelError::InvalidInput);
++        }
++        let (known, supported, delta, confidence, age, similarity) = match evidence {
++            SyntheticEvidence::Unknown => (false, false, [0.0; N], 0.0, None, None),
++            SyntheticEvidence::MeasuredFixture {
++                delta,
++                confidence,
++                age_ticks,
++                similarity,
++                arithmetic_supported,
++            } => {
++                if delta
++                    .iter()
++                    .any(|v| !v.is_finite() || !(-1.0..=1.0).contains(v))
++                    || !unit(confidence)
++                    || similarity.is_some_and(|v| !unit(v))
++                {
++                    return Err(ModelError::InvalidInput);
++                }
++                (
++                    true,
++                    arithmetic_supported,
++                    delta,
++                    confidence,
++                    Some(age_ticks),
++                    similarity,
++                )
++            }
++        };
++        // Scratch only: no persistent brain, lifetime weights, optimizer or bank accepted.
++        let mut state =
++            CpuNeuralState::for_brain_class(&BrainClassSpec::for_tier(BrainScaleTier::Nano512))
++                .unwrap();
++        state.activations[..N].copy_from_slice(&current);
++        state.activations[N..2 * N].copy_from_slice(&delta);
++        state.activations[CONSTANT] = 1.0;
++        let mut work = Work::default();
++        project(&self.projections[0], &mut state, &mut work);
++        finalize(
++            &mut state,
++            ActivationFunction::Identity,
++            0.0,
++            1.0,
++            &mut work,
++        );
++        let successor = state.activations[N..2 * N].try_into().unwrap();
++        let clipped_successor =
++            std::array::from_fn(|lane| current[lane] + delta[lane] != state.activations[N + lane]);
++        project(&self.projections[1], &mut state, &mut work);
++        finalize(&mut state, ActivationFunction::Relu, 0.0, 1.0, &mut work);
++        let pressure: [f32; 2 * N] = state.activations[..2 * N].try_into().unwrap();
++        // These are the actual core dendritic conjunctions, not oracle outputs.
++        work.dendritic = apply_dendritic_conjunctions(
++            &state.activations,
++            &mut state.accumulators,
++            &self.branches,
++        )
++        .unwrap();
++        finalize(
++            &mut state,
++            ActivationFunction::Identity,
++            0.0,
++            1.0,
++            &mut work,
++        );
++        let burden: [f32; 2 * N] = state.activations[..2 * N].try_into().unwrap();
++        project(&self.projections[2], &mut state, &mut work);
++        finalize(
++            &mut state,
++            ActivationFunction::Identity,
++            -1.0,
++            1.0,
++            &mut work,
++        );
++        let association: [f32; N] = state.activations[..N].try_into().unwrap();
++        project(&self.projections[3], &mut state, &mut work);
++        finalize(
++            &mut state,
++            ActivationFunction::Identity,
++            -2.0,
++            2.0,
++            &mut work,
++        );
++        project(&self.projections[4], &mut state, &mut work);
++        let unclipped_readout = state.accumulators[0];
++        finalize(
++            &mut state,
++            ActivationFunction::Identity,
++            -self.recipe.ceiling,
++            self.recipe.ceiling,
++            &mut work,
++        );
++        let native_readout = state.activations[0];
++        // Diagnostic only. Dynamic confidence/status gates have NOT been compiled.
++        let diagnostic_supported = if known && supported {
++            native_readout
++        } else {
++            0.0
++        };
++        Ok(Output {
++            current,
++            delta,
++            successor,
++            pressure,
++            burden,
++            association,
++            native_readout,
++            diagnostic_supported,
++            diagnostic_confidence_gated: diagnostic_supported * confidence,
++            known,
++            supported,
++            confidence,
++            age,
++            similarity,
++            clipped_successor,
++            readout_clipped: unclipped_readout != native_readout,
++            work,
++        })
++    }
++}
++
++#[derive(Debug, Default, PartialEq, Eq)]
++pub(super) struct Work {
++    pub projections: u32,
++    pub active_tiles: u32,
++    pub active_synapses: u32,
++    pub finalizations: u32,
++    pub activation_cells: u32,
++    pub dendritic: DendriticWorkReceipt,
++}
++#[derive(Debug)]
++pub(super) struct Output {
++    pub current: [f32; N],
++    pub delta: [f32; N],
++    pub successor: [f32; N],
++    pub pressure: [f32; 2 * N],
++    pub burden: [f32; 2 * N],
++    pub association: [f32; N],
++    pub native_readout: f32,
++    pub diagnostic_supported: f32,
++    pub diagnostic_confidence_gated: f32,
++    pub known: bool,
++    pub supported: bool,
++    pub confidence: f32,
++    pub age: Option<u64>,
++    pub similarity: Option<f32>,
++    pub clipped_successor: [bool; N],
++    pub readout_clipped: bool,
++    pub work: Work,
++}
++fn project(schema: &NeuralProjectionSchema, state: &mut CpuNeuralState, work: &mut Work) {
++    let report = cpu_spmv_projection(schema, state, NeuralDiagnostics::reference()).unwrap();
++    assert_eq!(report.overflow_warnings, 0);
++    assert_eq!(report.range_rejections, 0);
++    assert_eq!(report.nan_rejections, 0);
++    assert_eq!(report.mask_skipped_tiles, 0);
++    work.projections += 1;
++    work.active_tiles += report.active_tiles;
++    work.active_synapses += report.active_synapses;
++}
++fn finalize(
++    state: &mut CpuNeuralState,
++    function: ActivationFunction,
++    min: f32,
++    max: f32,
++    work: &mut Work,
++) {
++    finalize_cpu_activations(
++        state,
++        NeuralActivationConfig {
++            function,
++            clamp_min: min,
++            clamp_max: max,
++            clear_accumulators: true,
++        },
++    )
++    .unwrap();
++    work.finalizations += 1;
++    work.activation_cells += state.neuron_count;
++}
+diff --git a/crates/alife_core/tests/need_reader_native_v1/qualification.rs b/crates/alife_core/tests/need_reader_native_v1/qualification.rs
+new file mode 100644
+index 0000000..1870056
+--- /dev/null
++++ b/crates/alife_core/tests/need_reader_native_v1/qualification.rs
+@@ -0,0 +1,590 @@
++use super::native::*;
++use super::qualified_store::*;
++use super::scalar_reference::{self as scalar, Recipe, Role, SyntheticEvidence};
++use super::sealed_fixture::{fixture, Fixture};
++use alife_core::*;
++
++const TOLERANCE: f32 = 2.0e-7;
++fn evidence(delta: [f32; N], confidence: f32) -> SyntheticEvidence {
++    SyntheticEvidence::MeasuredFixture {
++        delta,
++        confidence,
++        age_ticks: 1,
++        similarity: Some(0.99988),
++        arithmetic_supported: true,
++    }
++}
++fn state() -> [f32; N] {
++    [0.25, 0.2, 0.1, 0.0, 0.15, 0.45, 0.75, 0.0, 0.1, 0.0, 0.0]
++}
++fn close(a: f32, b: f32) -> f32 {
++    let error = (a - b).abs();
++    assert!(
++        error <= TOLERANCE,
++        "native={a:?}, scalar={b:?}, error={error:?}"
++    );
++    error
++}
++fn compare(circuit: &Circuit, current: [f32; N], evidence: SyntheticEvidence) -> (Output, f32) {
++    let output = circuit.run(current, evidence).unwrap();
++    let reference = scalar::evaluate(circuit.recipe, current, evidence).unwrap();
++    let mut error: f32 = 0.0;
++    for (lane, &current_reading) in current.iter().enumerate() {
++        error = error.max(close(
++            output.successor[lane],
++            reference.local_successor[lane],
++        ));
++        error = error.max(close(
++            output.association[lane],
++            reference.signed_association[lane],
++        ));
++        let pressure = |x: f32| match circuit.recipe.roles[lane] {
++            Role::Burden | Role::TypedBoredomFixture => x,
++            Role::Availability { target } => (target - x).max(0.0),
++            Role::Informational => 0.0,
++        };
++        for (index, raw) in [
++            (lane, current_reading),
++            (N + lane, reference.local_successor[lane]),
++        ] {
++            error = error.max(close(output.pressure[index], pressure(raw)));
++            error = error.max(close(
++                output.burden[index],
++                circuit.recipe.burden(pressure(raw)),
++            ));
++        }
++    }
++    error = error.max(close(
++        output.diagnostic_supported,
++        reference.readout_before_confidence,
++    ));
++    error = error.max(close(
++        output.diagnostic_confidence_gated,
++        reference.readout_after_confidence,
++    ));
++    assert_eq!(output.known, reference.known);
++    assert_eq!(output.supported, reference.arithmetic_supported);
++    assert_eq!(output.confidence, reference.confidence);
++    assert_eq!(output.current, reference.current);
++    assert_eq!(output.delta, reference.raw_delta);
++    assert_eq!(output.age, reference.age_ticks);
++    assert_eq!(output.similarity, reference.similarity);
++    assert_eq!(output.readout_clipped, reference.readout_clipped);
++    assert!(!reference.admissible_for_exposure);
++    assert_eq!(output.work.projections, 5);
++    assert_eq!(output.work.active_synapses, 112);
++    assert_eq!(output.work.finalizations, 6);
++    assert_eq!(output.work.activation_cells, 3072);
++    assert_eq!(output.work.dendritic.branches_evaluated, 88);
++    assert_eq!(output.work.dendritic.inputs_evaluated, 88);
++    assert_eq!(output.work.dendritic.work_units, 176);
++    (output, error)
++}
++
++#[test]
++fn fourteen_exact_store_to_native_evaluations() {
++    // Synthetic sealed contract fixtures, not world intervals or policy selections.
++    let rows = [
++        ("measured-relief", 0.15, -0.007_499_993, true, 0.15, true),
++        ("measured-zero-at-zero", 0.0, 0.0, true, 0.0, true),
++        ("bounded-near-zero", 0.001, -0.001, true, 0.001, true),
++        ("emergent-harm", 0.0, 0.007_499_993, true, 0.0, true),
++        ("measured-zero-at-baseline", 0.15, 0.0, true, 0.15, true),
++        ("unmeasured-unknown", 0.15, 0.0, false, 0.15, false),
++        ("exact-context-miss", 0.15, -0.007_499_993, true, 0.0, false),
++    ];
++    let mut count = 0;
++    let mut maximum_error: f32 = 0.0;
++    for (label, source_loneliness, delta, measured, query_loneliness, expected_known) in rows {
++        let mut deltas = [0.0; N];
++        deltas[4] = delta;
++        let source = fixture(Fixture {
++            loneliness: source_loneliness,
++            deltas,
++            measured,
++            ..Fixture::default()
++        });
++        source.validate_contract().unwrap();
++        assert!(source.selected_bundle().is_none());
++        let mut store = NeedConsequenceStoreV1::new(OrganismId(7), 4).unwrap();
++        store.observe(&source).unwrap();
++        // Later frame, identical context except the deliberate exact-miss row.
++        // It is NOT an evolved next-world frame or approximate retrieval.
++        let current = fixture(Fixture {
++            sequence: 2,
++            tick: 12,
++            loneliness: query_loneliness,
++            measured: false,
++            ..Fixture::default()
++        });
++        let frame = current.pre_action().perception();
++        frame.validate_contract().unwrap();
++        assert_eq!(frame.candidates().len(), 1);
++        assert_eq!(frame.candidates()[0].family, CandidateActionFamily::Inspect);
++        let query = NeedConsequenceQueryV1::from_frame(frame, &frame.candidates()[0]).unwrap();
++        let recalled = store.recall(&query, frame.tick(), 1, 4).unwrap();
++        let evidence = match recalled.evidence {
++            NeedConsequenceEvidenceV1::Unknown => SyntheticEvidence::Unknown,
++            NeedConsequenceEvidenceV1::Measured(records) => {
++                assert_eq!(records.len(), 1);
++                let record = &records[0];
++                assert_eq!(record.source_sequence_id, source.header().sequence_id);
++                assert_eq!(
++                    record.source_frame_digest,
++                    source.pre_action().perception().frame_digest().0
++                );
++                assert_eq!(record.joint_command_count, 1);
++                assert!(record.source_bundle_digest.is_none());
++                assert_eq!(
++                    record.attribution,
++                    NeedConsequenceAttributionV1::JointIntervalAssociation
++                );
++                assert_eq!(record.before_tick, Tick(10));
++                assert_eq!(record.after_tick, Tick(11));
++                let before = source
++                    .outcome()
++                    .measured_physiology
++                    .as_ref()
++                    .unwrap()
++                    .before
++                    .homeostasis
++                    .drives
++                    .to_array();
++                assert_eq!(before, frame.homeostasis().drives.to_array());
++                assert_eq!(record.confidence.raw(), 0.8);
++                evidence(record.drive_deltas, record.confidence.raw())
++            }
++        };
++        let mut matched = None;
++        for gain in [0.0, 0.35] {
++            let mut gene = Gene::reference();
++            gene.recipe.gain = gain;
++            let circuit = Circuit::compile(gene).unwrap();
++            let (output, error) =
++                compare(&circuit, frame.homeostasis().drives.to_array(), evidence);
++            maximum_error = maximum_error.max(error);
++            assert_eq!(output.known, expected_known);
++            if let Some((previous_association, previous_work)) = &matched {
++                assert_eq!(&output.association, previous_association);
++                assert_eq!(&output.work, previous_work);
++            }
++            println!("row={label} gain={gain} known={} supported={} confidence={} current={} delta={} successor={} p={} q={} Bp={} Bq={} u={} native_readout={} diagnostic_confidence_gated={} error={} work={:?}",
++                output.known, output.supported, output.confidence, output.current[4], output.delta[4],
++                output.successor[4], output.pressure[4], output.pressure[N+4], output.burden[4],
++                output.burden[N+4], output.association[4], output.native_readout,
++                output.diagnostic_confidence_gated, error, output.work);
++            matched = Some((output.association, output.work));
++            count += 1;
++        }
++    }
++    assert_eq!(count, 14);
++    println!(
++        "fourteen_evaluations={count} maximum_absolute_error={maximum_error} tolerance={TOLERANCE}"
++    );
++}
++
++#[test]
++fn all_eleven_roles_both_signs_and_pressure_boundaries() {
++    let circuit = Circuit::compile(Gene::reference()).unwrap();
++    let mut maximum: f32 = 0.0;
++    let mut count = 0;
++    for lane in 0..N {
++        for raw in [0.0, 0.001, 0.15, 0.5, 0.75, 1.0] {
++            for delta in [-1.0, -0.05, 0.0, 0.05, 1.0] {
++                let mut current = state();
++                current[lane] = raw;
++                let mut deltas = [0.0; N];
++                deltas[lane] = delta;
++                let (out, error) = compare(&circuit, current, evidence(deltas, 1.0));
++                maximum = maximum.max(error);
++                count += 1;
++                match circuit.recipe.roles[lane] {
++                    Role::Burden => {
++                        if delta < 0.0 {
++                            assert!(out.association[lane] >= 0.0);
++                        }
++                        if delta > 0.0 {
++                            assert!(out.association[lane] <= 0.0);
++                        }
++                        if raw == 0.0 && delta < 0.0 {
++                            assert_eq!(out.association[lane], 0.0);
++                        }
++                        assert!(out.association[lane] <= circuit.recipe.burden(raw) + TOLERANCE);
++                    }
++                    Role::Availability { .. } => {
++                        if delta > 0.0 {
++                            assert!(out.association[lane] >= 0.0);
++                        }
++                        if delta < 0.0 {
++                            assert!(out.association[lane] <= 0.0);
++                        }
++                        if raw >= 0.75 && delta >= 0.0 {
++                            assert_eq!(out.association[lane], 0.0);
++                        }
++                        assert!(
++                            out.association[lane]
++                                <= circuit.recipe.burden((0.75 - raw).max(0.0)) + TOLERANCE
++                        );
++                    }
++                    Role::Informational => assert_eq!(out.association[lane], 0.0),
++                    Role::TypedBoredomFixture => unreachable!(),
++                }
++                if delta == 0.0 {
++                    assert_eq!(out.association, [0.0; N]);
++                }
++                assert!(out.native_readout.abs() <= 0.35);
++                assert_eq!(
++                    out.clipped_successor[lane],
++                    !(0.0..=1.0).contains(&(raw + delta))
++                );
++            }
++        }
++    }
++    // Above-target ATP loss is neutral until it crosses the actual target.
++    for (available, change, adverse) in [(0.9, -0.05, false), (0.76, -0.05, true)] {
++        let mut current = state();
++        current[6] = available;
++        let mut delta = [0.0; N];
++        delta[6] = change;
++        let out = compare(&circuit, current, evidence(delta, 1.0)).0;
++        if adverse {
++            assert!(out.association[6] < 0.0);
++        } else {
++            assert_eq!(out.association[6], 0.0);
++        }
++    }
++    assert_eq!(count, 330);
++    println!("eleven_lane_boundary_evaluations={count} maximum_absolute_error={maximum}");
++}
++
++#[test]
++fn evidence_status_confidence_and_similarity_are_separate() {
++    let circuit = Circuit::compile(Gene::reference()).unwrap();
++    let (unknown, _) = compare(&circuit, state(), SyntheticEvidence::Unknown);
++    let (zero, _) = compare(&circuit, state(), evidence([0.0; N], 1.0));
++    assert!(!unknown.known);
++    assert!(zero.known);
++    assert_eq!(unknown.association, zero.association);
++    let mut delta = [0.0; N];
++    delta[4] = -0.05;
++    let (full, _) = compare(&circuit, state(), evidence(delta, 1.0));
++    let (half, _) = compare(&circuit, state(), evidence(delta, 0.5));
++    let (no_confidence, _) = compare(&circuit, state(), evidence(delta, 0.0));
++    assert!(no_confidence.known && no_confidence.supported);
++    assert_eq!(half.native_readout, full.native_readout);
++    assert_eq!(half.diagnostic_confidence_gated, full.native_readout * 0.5);
++    assert_eq!(no_confidence.diagnostic_confidence_gated, 0.0);
++    for similarity in [None, Some(0.0), Some(0.975), Some(1.0)] {
++        let (out, _) = compare(
++            &circuit,
++            state(),
++            SyntheticEvidence::MeasuredFixture {
++                delta,
++                confidence: 0.5,
++                age_ticks: 1,
++                similarity,
++                arithmetic_supported: true,
++            },
++        );
++        assert_eq!(
++            out.diagnostic_confidence_gated,
++            half.diagnostic_confidence_gated
++        );
++        assert_eq!(out.delta, delta);
++    }
++    let (unsupported, _) = compare(
++        &circuit,
++        state(),
++        SyntheticEvidence::MeasuredFixture {
++            delta,
++            confidence: 1.0,
++            age_ticks: 1,
++            similarity: Some(1.0),
++            arithmetic_supported: false,
++        },
++    );
++    assert!(unsupported.known && !unsupported.supported);
++    assert_eq!(unsupported.delta, delta);
++    assert_eq!(unsupported.diagnostic_supported, 0.0);
++    assert_eq!(unsupported.diagnostic_confidence_gated, 0.0);
++    assert_eq!(unsupported.work, full.work);
++    // Unknown executes the same graph; gated branch count is a data diagnostic.
++    assert_eq!(unknown.work.active_synapses, full.work.active_synapses);
++    assert_eq!(
++        unknown.work.dendritic.work_units,
++        full.work.dendritic.work_units
++    );
++}
++
++#[test]
++fn shared_gene_identity_count_and_recipe_binding() {
++    let circuit = Circuit::compile(Gene::reference()).unwrap();
++    assert_eq!(circuit.genes.len(), 22); // 4 knots+4 basis+11 magnitudes+1 target+gain+ceiling.
++    assert_eq!(circuit.branch_ids.len(), 88);
++    for lane in 0..N {
++        for k in 0..K {
++            let current = &circuit.branch_ids[lane * K + k];
++            let successor = &circuit.branch_ids[N * K + lane * K + k];
++            assert_eq!(current.side, Side::Current);
++            assert_eq!(successor.side, Side::Successor);
++            assert_eq!(current.lane, successor.lane);
++            assert_eq!(current.role, successor.role);
++            assert_eq!(current.threshold_gene, successor.threshold_gene);
++            assert_eq!(current.weight_gene, successor.weight_gene);
++            assert_eq!(current.weight_gene, GeneId::Basis(k as u8));
++            let a = &circuit.branches.branches()[lane * K + k];
++            let b = &circuit.branches.branches()[N * K + lane * K + k];
++            assert_eq!(a.threshold.to_bits(), b.threshold.to_bits());
++            assert_eq!(a.output_gain.to_bits(), b.output_gain.to_bits());
++            assert_eq!(
++                a.output_gain.to_bits(),
++                circuit.genes[&current.weight_gene].to_bits()
++            );
++            assert_eq!(a.inputs[0].weight, 1.0);
++            assert_eq!(b.inputs[0].weight, 1.0);
++        }
++    }
++    assert_eq!(
++        circuit.identity,
++        Circuit::compile(Gene::reference()).unwrap().identity
++    );
++    let mut altered = Gene::reference();
++    altered.recipe.gain = 0.0;
++    assert_ne!(
++        circuit.identity,
++        Circuit::compile(altered).unwrap().identity
++    );
++    let mut altered = Gene::reference();
++    altered.recipe.roles[6] = Role::Availability { target: 1.0 };
++    assert_ne!(
++        circuit.identity,
++        Circuit::compile(altered).unwrap().identity
++    );
++    let typed = Circuit::compile(Gene::typed_boredom()).unwrap();
++    assert_ne!(circuit.identity, typed.identity);
++    let mut current = state();
++    current[9] = 0.2;
++    let mut delta = [0.0; N];
++    delta[9] = -0.05;
++    assert!(
++        compare(&typed, current, evidence(delta, 1.0))
++            .0
++            .native_readout
++            > 0.0
++    );
++    let mut unbound = Gene::typed_boredom();
++    unbound.typed_boredom_binding = None;
++    assert!(Circuit::compile(unbound).is_err());
++    let mut wrong = Gene::typed_boredom();
++    wrong.typed_boredom_binding = Some("unverified extension");
++    assert!(Circuit::compile(wrong).is_err());
++    println!("recipe_identity={:?} unique_numeric_genes={} dendritic_occurrences={} fixed_sparse_edges=112", circuit.identity, circuit.genes.len(), circuit.branch_ids.len());
++}
++
++#[test]
++fn opposing_drives_cancel_and_current_pressure_changes_preference() {
++    let circuit = Circuit::compile(Gene::reference()).unwrap();
++    let mut current = state();
++    current[4] = 0.75;
++    current[1] = 0.5;
++    let mut delta = [0.0; N];
++    delta[4] = -0.25;
++    delta[1] = 0.25;
++    let (cancel, _) = compare(&circuit, current, evidence(delta, 1.0));
++    assert!(cancel.association[4] > 0.0 && cancel.association[1] < 0.0);
++    assert_eq!(cancel.association[4], -cancel.association[1]);
++    assert_eq!(cancel.native_readout, 0.0);
++    let mut work = [0.0; N];
++    work[4] = -0.05;
++    work[1] = 0.03;
++    work[6] = -0.03;
++    let mut recovery = [0.0; N];
++    recovery[1] = -0.04;
++    recovery[6] = 0.04;
++    let mut rested = state();
++    rested[4] = 0.8;
++    rested[1] = 0.01;
++    rested[6] = 0.8;
++    let mut exhausted = state();
++    exhausted[4] = 0.01;
++    exhausted[1] = 0.8;
++    exhausted[6] = 0.2;
++    let score = |x, d| compare(&circuit, x, evidence(d, 1.0)).0.native_readout;
++    assert!(score(rested, work) > score(rested, recovery));
++    assert!(score(exhausted, recovery) > score(exhausted, work));
++    assert_eq!(score(rested, [0.0; N]), 0.0);
++    // Neither row has an action label. Recovery is hypothetical, not a V1 Rest memory.
++}
++
++#[test]
++fn conditioning_permuted_need_labels_and_candidate_rows_do_not_collapse() {
++    let circuit = Circuit::compile(Gene::reference()).unwrap();
++    let mut delta = [0.0; N];
++    delta[4] = -0.05;
++    let mut low = state();
++    low[4] = 0.0;
++    let mut high = state();
++    high[4] = 0.8;
++    let (low_out, _) = compare(&circuit, low, evidence(delta, 1.0));
++    let (high_out, _) = compare(&circuit, high, evidence(delta, 1.0));
++    assert_eq!(low_out.native_readout, 0.0);
++    assert!(high_out.native_readout > 0.0);
++    // Fixed-reference control improperly erases current pressure; label it explicitly.
++    let fixed_reference = state();
++    let fixed_low = compare(&circuit, fixed_reference, evidence(delta, 1.0)).0;
++    let fixed_high = compare(&circuit, fixed_reference, evidence(delta, 1.0)).0;
++    assert_eq!(fixed_low.native_readout, fixed_high.native_readout);
++    assert!(fixed_low.native_readout > low_out.native_readout);
++    let mut wrong_need = delta;
++    wrong_need.swap(4, 1);
++    high[1] = 0.0;
++    assert_eq!(
++        compare(&circuit, high, evidence(wrong_need, 1.0))
++            .0
++            .native_readout,
++        0.0
++    );
++    let mut second_target = delta;
++    second_target[4] = 0.05;
++    let target_one_alone = compare(&circuit, high, evidence(delta, 1.0)).0;
++    let target_two = compare(&circuit, high, evidence(second_target, 1.0)).0;
++    let target_one_again = compare(&circuit, high, evidence(delta, 1.0)).0;
++    assert_eq!(
++        target_one_alone.native_readout,
++        target_one_again.native_readout
++    );
++    assert!(target_one_alone.native_readout > 0.0 && target_two.native_readout < 0.0);
++    // No candidate count, family pooling, selector or target semantic label in Circuit.
++}
++
++#[test]
++fn invalid_inputs_and_nonmonotone_genes_fail_closed() {
++    let circuit = Circuit::compile(Gene::reference()).unwrap();
++    for value in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY, -0.001, 1.001] {
++        for lane in 0..N {
++            let mut current = state();
++            current[lane] = value;
++            assert!(circuit.run(current, SyntheticEvidence::Unknown).is_err());
++        }
++        assert!(circuit.run(state(), evidence([0.0; N], value)).is_err());
++        assert!(circuit
++            .run(
++                state(),
++                SyntheticEvidence::MeasuredFixture {
++                    delta: [0.0; N],
++                    confidence: 1.0,
++                    age_ticks: 1,
++                    similarity: Some(value),
++                    arithmetic_supported: true
++                }
++            )
++            .is_err());
++    }
++    for value in [f32::NAN, f32::INFINITY, -1.001, 1.001] {
++        for lane in 0..N {
++            let mut delta = [0.0; N];
++            delta[lane] = value;
++            assert!(circuit.run(state(), evidence(delta, 1.0)).is_err());
++        }
++    }
++    let invalid: [fn(&mut Recipe); 15] = [
++        |r| {
++            r.roles[9] = Role::Burden;
++            r.magnitudes[9] = 0.08;
++        },
++        |r| r.roles[6] = Role::Burden,
++        |r| {
++            r.roles[8] = Role::Burden;
++            r.magnitudes[8] = 0.08;
++        },
++        |r| r.basis[0] = -0.1,
++        |r| r.basis = [0.3; K],
++        |r| r.knots[1] = 0.0,
++        |r| r.knots[0] = f32::NAN,
++        |r| r.gain = 0.351,
++        |r| r.gain = -0.1,
++        |r| r.ceiling = 0.351,
++        |r| r.roles[6] = Role::Availability { target: 0.0 },
++        |r| r.roles[6] = Role::Availability { target: 1.001 },
++        |r| r.magnitudes[5] = 0.1,
++        |r| r.magnitudes[0] = -0.1,
++        |r| {
++            r.magnitudes[0] = 1.0;
++            r.magnitudes[1] = 1.0;
++        },
++    ];
++    for edit in invalid {
++        let mut gene = Gene::reference();
++        edit(&mut gene.recipe);
++        assert!(Circuit::compile(gene).is_err());
++    }
++}
++
++#[test]
++fn fresh_scratch_never_accepts_or_resets_acquired_offsets() {
++    let circuit = Circuit::compile(Gene::reference()).unwrap();
++    let before = serde_json::to_vec(&(&circuit.projections, &circuit.branches)).unwrap();
++    for schema in &circuit.projections {
++        for tile in &schema.projections[0].tiles {
++            let SparseTilePayload::Coo(coo) = &tile.payload else {
++                panic!("COO fixture");
++            };
++            for entry in &coo.entries {
++                assert_eq!(entry.weights.lifetime_consolidated, 0.0);
++                assert_eq!(entry.weights.alpha, 0.0);
++                assert_eq!(entry.weights.h_operational, 0.0);
++                assert_eq!(entry.weights.h_shadow, 0.0);
++            }
++        }
++    }
++    // Synthetic acquired sentinel is never supplied to Circuit; check no alias/mutation.
++    let mut sentinel =
++        CpuNeuralState::for_brain_class(&BrainClassSpec::for_tier(BrainScaleTier::Nano512))
++            .unwrap();
++    sentinel.activations[7] = 0.314;
++    sentinel.previous_activations[19] = -0.271;
++    sentinel.accumulators[1] = 0.618;
++    let sentinel_before = serde_json::to_vec(&sentinel).unwrap();
++    let mut delta = [0.0; N];
++    delta[4] = -0.05;
++    let first = compare(&circuit, state(), evidence(delta, 1.0)).0;
++    compare(&circuit, [1.0; N], evidence([1.0; N], 1.0));
++    let again = compare(&circuit, state(), evidence(delta, 1.0)).0;
++    assert_eq!(first.association, again.association);
++    assert_eq!(first.native_readout, again.native_readout);
++    assert_eq!(
++        before,
++        serde_json::to_vec(&(&circuit.projections, &circuit.branches)).unwrap()
++    );
++    assert_eq!(sentinel_before, serde_json::to_vec(&sentinel).unwrap());
++}
++
++#[test]
++fn native_readout_ceiling_and_shared_basis_variants_match_oracle() {
++    let mut gene = Gene::reference();
++    gene.recipe.ceiling = 0.001;
++    let circuit = Circuit::compile(gene).unwrap();
++    let mut current = [1.0; N];
++    current[6] = 0.0;
++    let mut delta = [-1.0; N];
++    delta[6] = 1.0;
++    let (out, _) = compare(&circuit, current, evidence(delta, 1.0));
++    assert!(out.readout_clipped);
++    assert_eq!(out.native_readout, 0.001);
++    for basis in [[0.0; K], [0.25; K], [0.0, 0.0, 0.0, 1.0]] {
++        let mut gene = Gene::reference();
++        gene.recipe.basis = basis;
++        let circuit = Circuit::compile(gene).unwrap();
++        for raw in [0.0, 0.001, 0.15, 0.5, 1.0] {
++            let mut x = state();
++            x[4] = raw;
++            let mut d = [0.0; N];
++            d[4] = -0.05;
++            let (out, _) = compare(&circuit, x, evidence(d, 1.0));
++            assert!(out.association[4] >= 0.0);
++            if raw == 0.0 {
++                assert_eq!(out.native_readout, 0.0);
++            }
++        }
++    }
++}
+diff --git a/crates/alife_core/tests/need_reader_native_v1/qualified_store.rs b/crates/alife_core/tests/need_reader_native_v1/qualified_store.rs
+new file mode 100644
+index 0000000..3ec7dcd
+--- /dev/null
++++ b/crates/alife_core/tests/need_reader_native_v1/qualified_store.rs
+@@ -0,0 +1,639 @@
++//! Opt-in, exact-context evidence of measured biological interval consequences.
++//!
++//! This is deliberately separate from MemoryBank, its V2 formats, and all default
++//! readers. Only a neural representative action with an observed tracked object
++//! and entity can be admitted. Targetless self-actions (including Rest/Idle),
++//! unobserved targets, and heuristic evidence remain Unknown even if measured;
++//! this narrow target-association prototype does not deny their biological effects.
++//! There is no migration from aggregate valence and no action selection.
++//! One retained sealed source produces one association, including for a joint
++//! bundle: its before/after physiology is NOT isolated causal credit for a motor
++//! channel. All eleven normalized drive lanes are raw `after - before` values;
++//! ATP availability, curiosity, reproductive drive and extension lanes are not
++//! silently relabeled as deficits.
++//!
++//! The prototype retains bounded source JSON, at higher storage cost than a
++//! compressed memory. Restore revalidates those sources and rederives every key
++//! and delta. JSON is the only persistence entrypoint: input bytes are bounded
++//! before parsing. These private acquired observations are not fixture assets.
++
++use std::io::{self, Write};
++
++use serde::{Deserialize, Serialize};
++
++use crate::{
++    ActionCandidate, ActionId, ActionKind, CandidateActionFamily, CandidateObservationRef,
++    CanonicalDigestBuilder, Confidence, EvidenceKind, ExperiencePatch, ExperienceSequenceId,
++    OrganismId, PerceptionFrame, ScaffoldContractError, SensorProfileIdentity, Tick,
++    TrackedObjectId, Validate, WorldEntityId,
++};
++
++pub const NEED_CONSEQUENCE_SCHEMA_VERSION: u16 = 1;
++pub const MAX_NEED_CONSEQUENCE_RECORDS: usize = 32;
++pub const MAX_NEED_CONSEQUENCE_SOURCE_BYTES: usize = 128 * 1024;
++pub const MAX_NEED_CONSEQUENCE_STORE_BYTES: usize = 1024 * 1024;
++pub const MAX_NEED_CONSEQUENCE_QUERY_SCAN: usize = 32;
++pub const MAX_NEED_CONSEQUENCE_QUERY_RESULTS: usize = 8;
++pub const NEED_CONSEQUENCE_DRIVE_COUNT: usize = 11;
++
++#[derive(Debug, thiserror::Error)]
++pub enum NeedConsequenceErrorV1 {
++    #[error(transparent)]
++    Contract(#[from] ScaffoldContractError),
++    #[error("need-consequence capacity or query budget is out of bounds")]
++    InvalidLimit,
++    #[error("need-consequence encoded byte limit exceeded")]
++    ByteLimit,
++    #[error("need-consequence source belongs to another organism")]
++    ForeignOrganism,
++    #[error("need-consequence source sequence was already observed or is older")]
++    ReplayedSource,
++    #[error("need-consequence source interval moves backward")]
++    BackwardInterval,
++    #[error("malformed or unsupported need-consequence store/source")]
++    MalformedSource,
++}
++
++/// Exact association key, constructed only from a validated observed frame.
++/// No fields are public and there is no detached/deserializable key constructor.
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub struct NeedConsequenceQueryV1 {
++    organism_id: OrganismId,
++    profile: SensorProfileIdentity,
++    action_id: ActionId,
++    action_kind: ActionKind,
++    family: CandidateActionFamily,
++    tracked_target: Option<TrackedObjectId>,
++    entity: Option<WorldEntityId>,
++    context_digest: [u64; 4],
++}
++
++impl NeedConsequenceQueryV1 {
++    pub fn from_frame(
++        frame: &PerceptionFrame,
++        candidate: &ActionCandidate,
++    ) -> Result<Self, NeedConsequenceErrorV1> {
++        // Bound the observation projection before deeper legacy frame validation.
++        let context = exact_context_bytes(frame)?;
++        frame.validate_contract()?;
++        if frame
++            .candidates()
++            .get(usize::from(candidate.candidate_index))
++            != Some(candidate)
++        {
++            return Err(NeedConsequenceErrorV1::MalformedSource);
++        }
++        let tracked_target = match candidate.observation {
++            CandidateObservationRef::ObjectSlot(index) => Some(
++                frame
++                    .grounded_object_slots()
++                    .get(usize::from(index))
++                    .ok_or(NeedConsequenceErrorV1::MalformedSource)?
++                    .tracked_object_id,
++            ),
++            CandidateObservationRef::None => None,
++        };
++        // Hash a dedicated projection of the validated original observation.
++        // Never create/revalidate a fictitious tick-zero biological frame.
++        let mut digest = CanonicalDigestBuilder::new(b"ALIFE-NEED-CONSEQUENCE-CONTEXT-V1");
++        digest.write_bytes(&context);
++        Ok(Self {
++            organism_id: frame.organism_id(),
++            profile: frame.profile_provenance().identity(),
++            action_id: candidate.action_id,
++            action_kind: candidate.kind,
++            family: candidate.family,
++            tracked_target,
++            entity: candidate.target.entity,
++            context_digest: digest.finish256(),
++        })
++    }
++
++    pub const fn organism_id(&self) -> OrganismId {
++        self.organism_id
++    }
++    pub const fn profile(&self) -> SensorProfileIdentity {
++        self.profile
++    }
++    pub const fn action_family(&self) -> CandidateActionFamily {
++        self.family
++    }
++    pub const fn tracked_target(&self) -> Option<TrackedObjectId> {
++        self.tracked_target
++    }
++    pub const fn target_entity(&self) -> Option<WorldEntityId> {
++        self.entity
++    }
++    pub const fn context_digest(&self) -> [u64; 4] {
++        self.context_digest
++    }
++}
++
++/// The only omitted clocks are frame.tick, sensory.tick, homeostasis.tick and
++/// profile.source_tick. Their original values and original frame digest remain
++/// in the retained source. All observed language, social, semantic, retrieval,
++/// sensory and candidate fields are preserved, including any nested temporal
++/// identity. No timestamp/digest inside observed payloads is rewritten.
++fn exact_context_bytes(frame: &PerceptionFrame) -> Result<Vec<u8>, NeedConsequenceErrorV1> {
++    #[derive(Serialize)]
++    struct SensoryProjection<'a> {
++        abi_version: crate::SensoryAbiVersion,
++        organism_id: OrganismId,
++        observer_position: crate::Vec3f,
++        channels: &'a crate::SensoryChannels,
++        context_streams: &'a crate::ContextStreams,
++        social_context: &'a crate::SocialContextSnapshot,
++        language_context: &'a crate::LanguageContextSnapshot,
++        semantic_context: &'a Option<crate::SemanticContextRef>,
++        gaussian_context: &'a Option<crate::GaussianContextRef>,
++    }
++    #[derive(Serialize)]
++    struct ContextProjection<'a> {
++        profile: SensorProfileIdentity,
++        body: crate::BodySnapshot,
++        drives: &'a crate::DriveSnapshot,
++        hormones: &'a crate::EndocrineSnapshot,
++        sensory: SensoryProjection<'a>,
++        candidates: &'a [ActionCandidate],
++        grounded_objects: &'a [crate::GroundedObjectSlotV1],
++        retrieval_context: &'a crate::PerceptionContextBlock,
++    }
++    let sensory = frame.sensory();
++    encode_bounded(
++        &ContextProjection {
++            profile: frame.profile_provenance().identity(),
++            body: frame.body(),
++            drives: &frame.homeostasis().drives,
++            hormones: &frame.homeostasis().hormones,
++            sensory: SensoryProjection {
++                abi_version: sensory.abi_version,
++                organism_id: sensory.organism_id,
++                observer_position: sensory.observer_position,
++                channels: &sensory.channels,
++                context_streams: &sensory.context_streams,
++                social_context: &sensory.social_context,
++                language_context: &sensory.language_context,
++                semantic_context: &sensory.semantic_context,
++                gaussian_context: &sensory.gaussian_context,
++            },
++            candidates: frame.candidates(),
++            grounded_objects: frame.grounded_object_slots(),
++            retrieval_context: frame.context(),
++        },
++        MAX_NEED_CONSEQUENCE_SOURCE_BYTES,
++    )
++}
++
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub enum NeedConsequenceAttributionV1 {
++    /// The entire observed interval, whether it contained one command or many.
++    JointIntervalAssociation,
++}
++
++#[derive(Debug, Clone, PartialEq)]
++pub struct NeedConsequenceObservationV1 {
++    pub source_sequence_id: ExperienceSequenceId,
++    pub before_tick: Tick,
++    pub after_tick: Tick,
++    /// Hunger, fatigue, fear, pain, loneliness, curiosity, brain ATP,
++    /// temperature stress, reproductive drive, extension 0, extension 1.
++    /// Units: signed change in the normalized biological drive, not reward.
++    pub drive_deltas: [f32; NEED_CONSEQUENCE_DRIVE_COUNT],
++    pub confidence: Confidence,
++    pub attribution: NeedConsequenceAttributionV1,
++    pub joint_command_count: usize,
++    pub source_frame_digest: [u64; 4],
++    pub source_bundle_digest: Option<[u64; 4]>,
++}
++
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub enum NeedConsequenceAdmissionV1 {
++    Measured {
++        pruned_records: usize,
++    },
++    /// The sequence is consumed even when measurement/observed target is absent.
++    Unknown,
++}
++
++#[derive(Debug, Clone, PartialEq)]
++pub enum NeedConsequenceEvidenceV1 {
++    Unknown,
++    /// Individual observations, newest first. No pooled or duplicated credit.
++    Measured(Vec<NeedConsequenceObservationV1>),
++}
++
++#[derive(Debug, Clone, PartialEq)]
++pub struct NeedConsequenceRecallV1 {
++    pub evidence: NeedConsequenceEvidenceV1,
++    pub inspected_records: usize,
++    /// True when the caller's scan or result budget left older sources unseen.
++    pub budget_exhausted: bool,
++}
++
++#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++struct SourceWatermark {
++    sequence: ExperienceSequenceId,
++    before_tick: Tick,
++    after_tick: Tick,
++}
++
++#[derive(Debug, Clone, PartialEq)]
++struct Record {
++    source_json: String,
++    query: NeedConsequenceQueryV1,
++    observation: NeedConsequenceObservationV1,
++}
++
++/// A separately instantiated, organism-owned optional store. No Default impl,
++/// no runtime attachment, no legacy record import, and no shared population pool.
++#[derive(Debug, Clone, PartialEq)]
++pub struct NeedConsequenceStoreV1 {
++    organism_id: OrganismId,
++    capacity: usize,
++    watermark: Option<SourceWatermark>,
++    records: Vec<Record>,
++}
++
++#[derive(Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++struct StoreWire {
++    schema_version: u16,
++    organism_id: OrganismId,
++    capacity: usize,
++    watermark: Option<SourceWatermark>,
++    sources: Vec<String>,
++    integrity_digest: [u64; 4],
++}
++
++impl NeedConsequenceStoreV1 {
++    pub fn new(organism_id: OrganismId, capacity: usize) -> Result<Self, NeedConsequenceErrorV1> {
++        organism_id.validate()?;
++        if capacity == 0 || capacity > MAX_NEED_CONSEQUENCE_RECORDS {
++            return Err(NeedConsequenceErrorV1::InvalidLimit);
++        }
++        Ok(Self {
++            organism_id,
++            capacity,
++            watermark: None,
++            records: Vec::new(),
++        })
++    }
++
++    pub fn len(&self) -> usize {
++        self.records.len()
++    }
++    pub fn is_empty(&self) -> bool {
++        self.records.is_empty()
++    }
++    pub const fn organism_id(&self) -> OrganismId {
++        self.organism_id
++    }
++    pub fn last_source_sequence(&self) -> Option<ExperienceSequenceId> {
++        self.watermark.map(|watermark| watermark.sequence)
++    }
++    pub fn source_encoded_bytes(&self) -> Vec<usize> {
++        self.records
++            .iter()
++            .map(|record| record.source_json.len())
++            .collect()
++    }
++
++    /// Atomic admission. Missing measurement never creates a zero observation.
++    /// Sources must arrive in sequence order with nonoverlapping interval clocks.
++    pub fn observe(
++        &mut self,
++        patch: &ExperiencePatch,
++    ) -> Result<NeedConsequenceAdmissionV1, NeedConsequenceErrorV1> {
++        // Bound source encoding before invoking deeper validation/cloning. This
++        // also bounds fields whose legacy validators permit arbitrary vectors.
++        let source_json =
++            String::from_utf8(encode_bounded(patch, MAX_NEED_CONSEQUENCE_SOURCE_BYTES)?)
++                .map_err(|_| NeedConsequenceErrorV1::MalformedSource)?;
++        patch.validate_contract()?;
++        if patch.header().organism_id != self.organism_id {
++            return Err(NeedConsequenceErrorV1::ForeignOrganism);
++        }
++        let watermark = SourceWatermark {
++            sequence: patch.header().sequence_id,
++            before_tick: patch.pre_action().tick,
++            after_tick: patch.outcome().outcome_tick,
++        };
++        check_next(self.watermark, watermark)?;
++        let record = record_from_patch(patch, source_json)?;
++        let mut next = self.clone();
++        next.watermark = Some(watermark);
++        let mut pruned_records = 0;
++        let admission = if let Some(record) = record {
++            next.records.push(record);
++            while next.records.len() > next.capacity {
++                next.records.remove(0);
++                pruned_records += 1;
++            }
++            NeedConsequenceAdmissionV1::Measured { pruned_records: 0 }
++        } else {
++            NeedConsequenceAdmissionV1::Unknown
++        };
++        // Metadata can grow even on Unknown admission. Evict oldest first for
++        // either count or exact encoded-size pressure, never erase the watermark.
++        loop {
++            match next.to_json() {
++                Ok(_) => break,
++                Err(NeedConsequenceErrorV1::ByteLimit) if !next.records.is_empty() => {
++                    next.records.remove(0);
++                    pruned_records += 1;
++                }
++                Err(error) => return Err(error),
++            }
++        }
++        *self = next;
++        Ok(match admission {
++            NeedConsequenceAdmissionV1::Measured { .. } => {
++                NeedConsequenceAdmissionV1::Measured { pruned_records }
++            }
++            NeedConsequenceAdmissionV1::Unknown => NeedConsequenceAdmissionV1::Unknown,
++        })
++    }
++
++    /// Scan newest sources first. Unknown may mean absent, stale, inexact, or
++    /// outside the explicit scan budget; it never means a measured zero effect.
++    pub fn recall(
++        &self,
++        query: &NeedConsequenceQueryV1,
++        as_of_tick: Tick,
++        max_age_ticks: u64,
++        scan_limit: usize,
++    ) -> Result<NeedConsequenceRecallV1, NeedConsequenceErrorV1> {
++        if scan_limit == 0 || scan_limit > MAX_NEED_CONSEQUENCE_QUERY_SCAN {
++            return Err(NeedConsequenceErrorV1::InvalidLimit);
++        }
++        if query.organism_id != self.organism_id {
++            return Err(NeedConsequenceErrorV1::ForeignOrganism);
++        }
++        let mut measured = Vec::new();
++        let mut inspected_records = 0;
++        for record in self.records.iter().rev().take(scan_limit) {
++            inspected_records += 1;
++            let observation = &record.observation;
++            if let Some(age) = as_of_tick.raw().checked_sub(observation.after_tick.raw()) {
++                if age <= max_age_ticks && &record.query == query {
++                    measured.push(observation.clone());
++                    if measured.len() == MAX_NEED_CONSEQUENCE_QUERY_RESULTS {
++                        break;
++                    }
++                }
++            }
++        }
++        Ok(NeedConsequenceRecallV1 {
++            evidence: if measured.is_empty() {
++                NeedConsequenceEvidenceV1::Unknown
++            } else {
++                NeedConsequenceEvidenceV1::Measured(measured)
++            },
++            inspected_records,
++            budget_exhausted: inspected_records < self.records.len(),
++        })
++    }
++
++    /// A bounded JSON envelope. Do not publish private acquired source banks.
++    pub fn to_json(&self) -> Result<Vec<u8>, NeedConsequenceErrorV1> {
++        let mut wire = StoreWire {
++            schema_version: NEED_CONSEQUENCE_SCHEMA_VERSION,
++            organism_id: self.organism_id,
++            capacity: self.capacity,
++            watermark: self.watermark,
++            sources: self
++                .records
++                .iter()
++                .map(|record| record.source_json.clone())
++                .collect(),
++            integrity_digest: [0; 4],
++        };
++        wire.integrity_digest = wire_digest(&wire);
++        encode_bounded(&wire, MAX_NEED_CONSEQUENCE_STORE_BYTES)
++    }
++
++    /// Reject oversized input before parsing; no permissive generic Deserialize
++    /// entrypoint and no migration from old memory records or experience ABIs.
++    pub fn from_json(bytes: &[u8]) -> Result<Self, NeedConsequenceErrorV1> {
++        if bytes.len() > MAX_NEED_CONSEQUENCE_STORE_BYTES {
++            return Err(NeedConsequenceErrorV1::ByteLimit);
++        }
++        let wire: StoreWire =
++            serde_json::from_slice(bytes).map_err(|_| NeedConsequenceErrorV1::MalformedSource)?;
++        if wire.schema_version != NEED_CONSEQUENCE_SCHEMA_VERSION
++            || wire.sources.len() > wire.capacity
++            || wire.sources.len() > MAX_NEED_CONSEQUENCE_RECORDS
++            || wire.integrity_digest != wire_digest(&wire)
++        {
++            return Err(NeedConsequenceErrorV1::MalformedSource);
++        }
++        let mut result = Self::new(wire.organism_id, wire.capacity)?;
++        let mut previous = None;
++        for source_json in wire.sources {
++            if source_json.len() > MAX_NEED_CONSEQUENCE_SOURCE_BYTES {
++                return Err(NeedConsequenceErrorV1::ByteLimit);
++            }
++            // ExperiencePatch has legacy migration branches. Explicitly reject
++            // those ABIs before calling its parser, rather than importing them.
++            let value: serde_json::Value = serde_json::from_str(&source_json)
++                .map_err(|_| NeedConsequenceErrorV1::MalformedSource)?;
++            let abi = value["header"]["abi_version"].as_u64();
++            if ![
++                ExperiencePatch::ABI_VERSION,
++                ExperiencePatch::V11_ABI_VERSION,
++                ExperiencePatch::V12_ABI_VERSION,
++            ]
++            .into_iter()
++            .any(|allowed| abi == Some(u64::from(allowed)))
++            {
++                return Err(NeedConsequenceErrorV1::MalformedSource);
++            }
++            let patch: ExperiencePatch = serde_json::from_str(&source_json)
++                .map_err(|_| NeedConsequenceErrorV1::MalformedSource)?;
++            patch.validate_contract()?;
++            // Sources emitted here have one canonical current representation.
++            // Reject ignored/duplicate fields and fallback defaults on restore.
++            if encode_bounded(&patch, MAX_NEED_CONSEQUENCE_SOURCE_BYTES)? != source_json.as_bytes()
++            {
++                return Err(NeedConsequenceErrorV1::MalformedSource);
++            }
++            if patch.header().organism_id != result.organism_id {
++                return Err(NeedConsequenceErrorV1::ForeignOrganism);
++            }
++            let next = SourceWatermark {
++                sequence: patch.header().sequence_id,
++                before_tick: patch.pre_action().tick,
++                after_tick: patch.outcome().outcome_tick,
++            };
++            check_next(previous, next)?;
++            previous = Some(next);
++            let record = record_from_patch(&patch, source_json)?
++                .ok_or(NeedConsequenceErrorV1::MalformedSource)?;
++            result.records.push(record);
++        }
++        if let Some(watermark) = wire.watermark {
++            watermark.sequence.validate()?;
++            Tick::validate_monotonic(watermark.before_tick, watermark.after_tick)?;
++            if let Some(last) = previous {
++                if watermark != last {
++                    check_next(Some(last), watermark)?;
++                }
++            }
++        } else if previous.is_some() {
++            return Err(NeedConsequenceErrorV1::MalformedSource);
++        }
++        result.watermark = wire.watermark;
++        // Also enforce canonical re-encoding size, independent of input spacing.
++        result.to_json()?;
++        Ok(result)
++    }
++}
++
++fn check_next(
++    previous: Option<SourceWatermark>,
++    next: SourceWatermark,
++) -> Result<(), NeedConsequenceErrorV1> {
++    next.sequence.validate()?;
++    Tick::validate_monotonic(next.before_tick, next.after_tick)?;
++    if let Some(previous) = previous {
++        if next.sequence.raw() <= previous.sequence.raw() {
++            return Err(NeedConsequenceErrorV1::ReplayedSource);
++        }
++        if next.before_tick.raw() < previous.after_tick.raw() {
++            return Err(NeedConsequenceErrorV1::BackwardInterval);
++        }
++    }
++    Ok(())
++}
++
++fn record_from_patch(
++    patch: &ExperiencePatch,
++    source_json: String,
++) -> Result<Option<Record>, NeedConsequenceErrorV1> {
++    let Some(measured) = patch.outcome().measured_physiology.as_ref() else {
++        return Ok(None);
++    };
++    measured.validate_contract()?;
++    // Stronger local binding than the legacy outcome-only physiology check.
++    let pre = patch.pre_action();
++    if measured.before.source_genome_id != pre.genome_id
++        || measured.before.tick != pre.tick
++        || measured.before.homeostasis != *pre.homeostasis()
++        || measured.after.tick != patch.outcome().outcome_tick
++    {
++        return Err(NeedConsequenceErrorV1::MalformedSource);
++    }
++    if pre.evidence_kind() == EvidenceKind::HeuristicBaseline {
++        return Ok(None);
++    }
++    let decision = patch.decision();
++    let evidence = decision.neural_evidence()?;
++    let frame = pre.perception();
++    let candidate = frame
++        .candidates()
++        .get(usize::from(evidence.candidate_index))
++        .ok_or(NeedConsequenceErrorV1::MalformedSource)?;
++    let query = NeedConsequenceQueryV1::from_frame(frame, candidate)?;
++    if query.tracked_target.is_none() || query.entity.is_none() {
++        return Ok(None);
++    }
++    // The source is associated only with the representative observed candidate.
++    // A joint interval is never expanded into one full delta per motor channel.
++    if let Some(bundle) = patch.selected_bundle() {
++        let matching = bundle
++            .channels
++            .iter()
++            .filter(|channel| {
++                channel.primitive == candidate.action_id
++                    && channel.target.and_then(|target| target.entity) == candidate.target.entity
++            })
++            .count();
++        if matching != 1 {
++            return Ok(None);
++        }
++    }
++    let before = measured.before.homeostasis.drives.to_array();
++    let after = measured.after.homeostasis.drives.to_array();
++    let mut drive_deltas = [0.0; NEED_CONSEQUENCE_DRIVE_COUNT];
++    for (i, delta) in drive_deltas.iter_mut().enumerate() {
++        *delta = after[i] - before[i];
++    }
++    let observation = NeedConsequenceObservationV1 {
++        source_sequence_id: patch.header().sequence_id,
++        before_tick: measured.before.tick,
++        after_tick: measured.after.tick,
++        drive_deltas,
++        confidence: Confidence::new(
++            decision
++                .confidence
++                .raw()
++                .min(candidate.sensor_confidence.raw()),
++        )?,
++        attribution: NeedConsequenceAttributionV1::JointIntervalAssociation,
++        joint_command_count: patch
++            .selected_bundle()
++            .map_or(1, |bundle| bundle.channels.len()),
++        source_frame_digest: frame.frame_digest().0,
++        source_bundle_digest: patch
++            .selected_bundle()
++            .map(|bundle| bundle.canonical_digest())
++            .transpose()?,
++    };
++    Ok(Some(Record {
++        source_json,
++        query,
++        observation,
++    }))
++}
++
++fn wire_digest(wire: &StoreWire) -> [u64; 4] {
++    let mut digest = CanonicalDigestBuilder::new(b"ALIFE-NEED-CONSEQUENCE-STORE-V1");
++    digest.write_u16(wire.schema_version);
++    digest.write_u64(wire.organism_id.raw());
++    digest.write_u64(wire.capacity as u64);
++    if let Some(watermark) = wire.watermark {
++        digest.write_some();
++        digest.write_u64(watermark.sequence.raw());
++        digest.write_u64(watermark.before_tick.raw());
++        digest.write_u64(watermark.after_tick.raw());
++    } else {
++        digest.write_none();
++    }
++    digest.write_sequence_len(wire.sources.len());
++    for source in &wire.sources {
++        digest.write_bytes(source.as_bytes());
++    }
++    digest.finish256()
++}
++
++struct BoundedWriter {
++    bytes: Vec<u8>,
++    limit: usize,
++}
++impl Write for BoundedWriter {
++    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
++        if bytes.len() > self.limit.saturating_sub(self.bytes.len()) {
++            return Err(io::Error::other("need-consequence encoded byte limit"));
++        }
++        self.bytes.extend_from_slice(bytes);
++        Ok(bytes.len())
++    }
++    fn flush(&mut self) -> io::Result<()> {
++        Ok(())
++    }
++}
++fn encode_bounded(value: &impl Serialize, limit: usize) -> Result<Vec<u8>, NeedConsequenceErrorV1> {
++    let mut writer = BoundedWriter {
++        bytes: Vec::new(),
++        limit,
++    };
++    serde_json::to_writer(&mut writer, value).map_err(|error| {
++        if error.is_io() {
++            NeedConsequenceErrorV1::ByteLimit
++        } else {
++            NeedConsequenceErrorV1::MalformedSource
++        }
++    })?;
++    Ok(writer.bytes)
++}
+diff --git a/crates/alife_core/tests/need_reader_native_v1/scalar_reference.rs b/crates/alife_core/tests/need_reader_native_v1/scalar_reference.rs
+new file mode 100644
+index 0000000..84903e6
+--- /dev/null
++++ b/crates/alife_core/tests/need_reader_native_v1/scalar_reference.rs
+@@ -0,0 +1,475 @@
++//! Frozen scalar oracle from need-specific-reader design V1; test-only here.
++//!
++//! This source is deliberately incapable of admitting real memory evidence. It
++//! has no store adapter, constructor for validated source binding, serialization,
++//! action selector, optimizer, checkpoint access, or GPU interface. Its synthetic
++//! inputs must never be described as sealed measured observations. This copy is
++//! compiled only by the detached native integration test, with visibility changes.
++//!
++//! Design: four paired, shared monotone tanh(ReLU) branches per biological lane.
++//! Current readings and historical deltas remain separate. The local successor
++//! is arithmetic, not a forecast. Every returned result is diagnostic only.
++
++const N: usize = 11;
++const K: usize = 4;
++
++#[derive(Clone, Copy, Debug, PartialEq)]
++pub(super) enum Role {
++    Burden,
++    Availability { target: f32 },
++    Informational,
++    // Fixture meaning only. Production requires a validated chemistry binding.
++    TypedBoredomFixture,
++}
++
++impl Role {
++    fn pressure(self, raw: f32) -> f32 {
++        match self {
++            Self::Burden | Self::TypedBoredomFixture => raw,
++            Self::Availability { target } => (target - raw).max(0.0),
++            Self::Informational => 0.0,
++        }
++    }
++}
++
++#[derive(Clone, Copy, Debug)]
++pub(super) struct Recipe {
++    pub(super) roles: [Role; N],
++    pub(super) knots: [f32; K],
++    pub(super) basis: [f32; K],
++    pub(super) magnitudes: [f32; N],
++    pub(super) gain: f32,
++    pub(super) ceiling: f32,
++}
++
++impl Recipe {
++    pub(super) fn reference() -> Self {
++        use Role::*;
++        Self {
++            roles: [
++                Burden,
++                Burden,
++                Burden,
++                Burden,
++                Burden,
++                Informational,
++                Availability { target: 0.75 },
++                Burden,
++                Informational,
++                Informational,
++                Informational,
++            ],
++            knots: [0.0, 0.25, 0.5, 0.75],
++            basis: [0.125, 0.25, 0.25, 0.25],
++            magnitudes: [
++                1.0 / 7.0,
++                1.0 / 7.0,
++                1.0 / 7.0,
++                1.0 / 7.0,
++                1.0 / 7.0,
++                0.0,
++                1.0 / 7.0,
++                1.0 / 7.0,
++                0.0,
++                0.0,
++                0.0,
++            ],
++            gain: 0.35,
++            ceiling: 0.35,
++        }
++    }
++
++    pub(super) fn validate(self) -> Result<(), ModelError> {
++        if !unit(self.gain)
++            || self.gain > 0.35
++            || !unit(self.ceiling)
++            || self.ceiling > 0.35
++            || self.knots.iter().any(|&v| !unit(v))
++            || self.knots.windows(2).any(|p| p[0] >= p[1])
++            || self.basis.iter().any(|&v| !unit(v))
++            || self.basis.iter().sum::<f32>() > 1.0
++            || self.magnitudes.iter().any(|&v| !unit(v))
++            || self.magnitudes.iter().sum::<f32>() > 2.0
++        {
++            return Err(ModelError::InvalidRecipe);
++        }
++        for (role, magnitude) in self.roles.into_iter().zip(self.magnitudes) {
++            match role {
++                Role::Availability { target } if !unit(target) || target <= 0.0 => {
++                    return Err(ModelError::InvalidRecipe);
++                }
++                Role::Informational if magnitude != 0.0 => {
++                    return Err(ModelError::InvalidRecipe);
++                }
++                _ => {}
++            }
++        }
++        Ok(())
++    }
++
++    pub(super) fn burden(self, pressure: f32) -> f32 {
++        self.knots
++            .into_iter()
++            .zip(self.basis)
++            .map(|(threshold, weight)| weight * (pressure - threshold).max(0.0).tanh())
++            .sum()
++    }
++}
++
++#[derive(Clone, Copy, Debug)]
++pub(super) enum SyntheticEvidence {
++    Unknown,
++    MeasuredFixture {
++        delta: [f32; N],
++        confidence: f32,
++        age_ticks: u64,
++        similarity: Option<f32>,
++        // No authority implied. This only tests arithmetic suppression.
++        arithmetic_supported: bool,
++    },
++}
++
++#[derive(Debug, PartialEq)]
++pub(super) enum ModelError {
++    InvalidRecipe,
++    InvalidInput,
++}
++
++#[derive(Debug)]
++pub(super) struct Features {
++    pub(super) known: bool,
++    pub(super) arithmetic_supported: bool,
++    pub(super) current: [f32; N],
++    pub(super) raw_delta: [f32; N],
++    pub(super) local_successor: [f32; N],
++    pub(super) signed_association: [f32; N],
++    pub(super) confidence: f32,
++    pub(super) age_ticks: Option<u64>,
++    pub(super) similarity: Option<f32>,
++    pub(super) readout_before_confidence: f32,
++    pub(super) readout_after_confidence: f32,
++    pub(super) readout_clipped: bool,
++    // Always false: no result from this arithmetic model is runtime evidence.
++    pub(super) admissible_for_exposure: bool,
++}
++
++fn unit(value: f32) -> bool {
++    value.is_finite() && (0.0..=1.0).contains(&value)
++}
++
++pub(super) fn evaluate(
++    recipe: Recipe,
++    current: [f32; N],
++    evidence: SyntheticEvidence,
++) -> Result<Features, ModelError> {
++    recipe.validate()?;
++    if current.iter().any(|&x| !unit(x)) {
++        return Err(ModelError::InvalidInput);
++    }
++    let (known, raw_delta, confidence, age_ticks, similarity, supported) = match evidence {
++        SyntheticEvidence::Unknown => (false, [0.0; N], 0.0, None, None, false),
++        SyntheticEvidence::MeasuredFixture {
++            delta,
++            confidence,
++            age_ticks,
++            similarity,
++            arithmetic_supported,
++        } => {
++            if delta
++                .iter()
++                .any(|x| !x.is_finite() || !(-1.0..=1.0).contains(x))
++                || !unit(confidence)
++                || similarity.is_some_and(|v| !unit(v))
++            {
++                return Err(ModelError::InvalidInput);
++            }
++            (
++                true,
++                delta,
++                confidence,
++                Some(age_ticks),
++                similarity,
++                arithmetic_supported,
++            )
++        }
++    };
++    let mut local_successor = [0.0; N];
++    let mut association = [0.0; N];
++    // Work is identical for all gain and status factors. Clamping here is a
++    // hypothetical biological bound, not a way to admit invalid source values.
++    for lane in 0..N {
++        local_successor[lane] = (current[lane] + raw_delta[lane]).clamp(0.0, 1.0);
++        let role = recipe.roles[lane];
++        association[lane] = recipe.burden(role.pressure(current[lane]))
++            - recipe.burden(role.pressure(local_successor[lane]));
++    }
++    let raw = recipe.gain
++        * association
++            .iter()
++            .zip(recipe.magnitudes)
++            .map(|(value, magnitude)| value * magnitude)
++            .sum::<f32>();
++    let arithmetic_mask = f32::from(u8::from(known && supported));
++    let bounded = raw.clamp(-recipe.ceiling, recipe.ceiling);
++    Ok(Features {
++        known,
++        arithmetic_supported: supported,
++        current,
++        raw_delta,
++        local_successor,
++        signed_association: association,
++        confidence,
++        age_ticks,
++        similarity,
++        readout_before_confidence: bounded * arithmetic_mask,
++        readout_after_confidence: bounded * confidence * arithmetic_mask,
++        readout_clipped: bounded != raw,
++        admissible_for_exposure: false,
++    })
++}
++
++#[cfg(test)]
++mod synthetic_tests {
++    use super::*;
++
++    fn fixture(delta: [f32; N], confidence: f32) -> SyntheticEvidence {
++        SyntheticEvidence::MeasuredFixture {
++            delta,
++            confidence,
++            age_ticks: 1,
++            similarity: Some(0.99988),
++            arithmetic_supported: true,
++        }
++    }
++
++    fn state() -> [f32; N] {
++        [0.25, 0.2, 0.1, 0.0, 0.15, 0.45, 0.75, 0.0, 0.1, 0.0, 0.0]
++    }
++
++    #[test]
++    fn zero_pressure_cannot_receive_historical_relief() {
++        let recipe = Recipe::reference();
++        let mut delta = [0.0; N];
++        delta[4] = -0.007499993;
++        let at_baseline = evaluate(recipe, state(), fixture(delta, 1.0)).unwrap();
++        let mut none = state();
++        none[4] = 0.0;
++        let at_zero = evaluate(recipe, none, fixture(delta, 1.0)).unwrap();
++        assert!(at_baseline.readout_after_confidence > 0.0);
++        assert_eq!(at_zero.signed_association[4], 0.0);
++        assert_eq!(at_zero.readout_after_confidence, 0.0);
++        assert_eq!(at_zero.raw_delta[4], delta[4]);
++        assert!(!at_zero.admissible_for_exposure);
++        none[4] = 0.001;
++        let at_low = evaluate(recipe, none, fixture(delta, 1.0)).unwrap();
++        assert!(at_low.signed_association[4] <= recipe.burden(0.001));
++        assert!(at_low.readout_after_confidence < at_baseline.readout_after_confidence);
++    }
++
++    #[test]
++    fn positive_burden_change_is_adverse_even_at_zero() {
++        for lane in [0, 1, 2, 3, 4, 7] {
++            let mut delta = [0.0; N];
++            delta[lane] = 0.05;
++            let result = evaluate(Recipe::reference(), [0.0; N], fixture(delta, 1.0)).unwrap();
++            assert!(result.signed_association[lane] < 0.0);
++            assert!(result.readout_after_confidence < 0.0);
++        }
++    }
++
++    #[test]
++    fn every_burden_relief_has_a_positive_sign_and_zero_has_none() {
++        for lane in [0, 1, 2, 3, 4, 7] {
++            let mut current = state();
++            current[lane] = 0.5;
++            let mut delta = [0.0; N];
++            delta[lane] = -0.05;
++            let result = evaluate(Recipe::reference(), current, fixture(delta, 1.0)).unwrap();
++            assert!(result.signed_association[lane] > 0.0);
++            assert!(result.readout_after_confidence > 0.0);
++        }
++        let zero = evaluate(Recipe::reference(), state(), fixture([0.0; N], 1.0)).unwrap();
++        assert!(zero.known);
++        assert_eq!(zero.signed_association, [0.0; N]);
++        assert_eq!(zero.readout_after_confidence, 0.0);
++    }
++
++    #[test]
++    fn atp_is_availability_with_an_explicit_target() {
++        let mut delta = [0.0; N];
++        delta[6] = 0.05;
++        let mut current = state();
++        current[6] = 0.4;
++        let low = evaluate(Recipe::reference(), current, fixture(delta, 1.0)).unwrap();
++        assert!(low.signed_association[6] > 0.0);
++        for available in [0.75, 0.9, 1.0] {
++            current[6] = available;
++            let enough = evaluate(Recipe::reference(), current, fixture(delta, 1.0)).unwrap();
++            assert_eq!(enough.signed_association[6], 0.0);
++        }
++        current[6] = 0.76;
++        delta[6] = -0.05;
++        let loss = evaluate(Recipe::reference(), current, fixture(delta, 1.0)).unwrap();
++        assert!(loss.signed_association[6] < 0.0);
++    }
++
++    #[test]
++    fn informational_lanes_are_retained_without_invented_valence() {
++        for lane in [5, 8, 9, 10] {
++            let mut delta = [0.0; N];
++            delta[lane] = 0.05;
++            let result = evaluate(Recipe::reference(), state(), fixture(delta, 1.0)).unwrap();
++            assert_eq!(result.raw_delta[lane], 0.05);
++            assert_eq!(result.signed_association[lane], 0.0);
++            assert_eq!(result.readout_after_confidence, 0.0);
++        }
++        let mut recipe = Recipe::reference();
++        recipe.roles[9] = Role::TypedBoredomFixture;
++        recipe.magnitudes[9] = 0.08;
++        let mut current = state();
++        current[9] = 0.2;
++        let mut delta = [0.0; N];
++        delta[9] = -0.05;
++        assert!(
++            evaluate(recipe, current, fixture(delta, 1.0))
++                .unwrap()
++                .readout_after_confidence
++                > 0.0
++        );
++    }
++
++    #[test]
++    fn unknown_zero_zero_confidence_and_unsupported_stay_distinct() {
++        let recipe = Recipe::reference();
++        let unknown = evaluate(recipe, state(), SyntheticEvidence::Unknown).unwrap();
++        let zero = evaluate(recipe, state(), fixture([0.0; N], 1.0)).unwrap();
++        assert!(!unknown.known);
++        assert!(zero.known);
++        assert_eq!(
++            unknown.readout_after_confidence,
++            zero.readout_after_confidence
++        );
++        let mut delta = [0.0; N];
++        delta[4] = -0.05;
++        let no_confidence = evaluate(recipe, state(), fixture(delta, 0.0)).unwrap();
++        assert!(no_confidence.known);
++        assert!(no_confidence.readout_before_confidence > 0.0);
++        assert_eq!(no_confidence.readout_after_confidence, 0.0);
++        let unsupported = evaluate(
++            recipe,
++            state(),
++            SyntheticEvidence::MeasuredFixture {
++                delta,
++                confidence: 1.0,
++                age_ticks: 1,
++                similarity: Some(0.99),
++                arithmetic_supported: false,
++            },
++        )
++        .unwrap();
++        assert!(unsupported.known);
++        assert!(!unsupported.arithmetic_supported);
++        assert_eq!(unsupported.raw_delta, delta);
++        assert_eq!(unsupported.readout_after_confidence, 0.0);
++    }
++
++    #[test]
++    fn confidence_is_applied_once_and_similarity_is_not_a_weight() {
++        let mut delta = [0.0; N];
++        delta[4] = -0.05;
++        let full = evaluate(Recipe::reference(), state(), fixture(delta, 1.0)).unwrap();
++        let half = evaluate(Recipe::reference(), state(), fixture(delta, 0.5)).unwrap();
++        assert_eq!(
++            half.readout_after_confidence,
++            full.readout_after_confidence * 0.5
++        );
++        for similarity in [Some(0.0), Some(0.975), Some(1.0), None] {
++            let result = evaluate(
++                Recipe::reference(),
++                state(),
++                SyntheticEvidence::MeasuredFixture {
++                    delta,
++                    confidence: 0.5,
++                    age_ticks: 1,
++                    similarity,
++                    arithmetic_supported: true,
++                },
++            )
++            .unwrap();
++            assert_eq!(
++                result.readout_after_confidence,
++                half.readout_after_confidence
++            );
++            assert_eq!(result.similarity, similarity);
++            assert_eq!(result.confidence, 0.5);
++            assert_eq!(result.age_ticks, Some(1));
++        }
++    }
++
++    #[test]
++    fn conflict_can_favor_work_or_synthetic_recovery_without_selecting_actions() {
++        let mut work = [0.0; N];
++        work[4] = -0.05;
++        work[1] = 0.03;
++        work[6] = -0.03;
++        // Synthetic arithmetic only. V1 store does not admit targetless Rest.
++        let mut recovery = [0.0; N];
++        recovery[1] = -0.04;
++        recovery[6] = 0.04;
++        let mut rested_lonely = state();
++        rested_lonely[4] = 0.8;
++        rested_lonely[1] = 0.01;
++        rested_lonely[6] = 0.8;
++        let mut exhausted_content = state();
++        exhausted_content[4] = 0.01;
++        exhausted_content[1] = 0.8;
++        exhausted_content[6] = 0.2;
++        let score = |current, delta| {
++            evaluate(Recipe::reference(), current, fixture(delta, 1.0))
++                .unwrap()
++                .readout_after_confidence
++        };
++        assert!(score(rested_lonely, work) > score(rested_lonely, recovery));
++        assert!(score(exhausted_content, recovery) > score(exhausted_content, work));
++        assert_eq!(score(rested_lonely, [0.0; N]), 0.0);
++    }
++
++    #[test]
++    fn zero_gain_preserves_features_and_work_shape() {
++        let mut delta = [0.0; N];
++        delta[4] = -0.05;
++        let recipe = Recipe::reference();
++        let active = evaluate(recipe, state(), fixture(delta, 1.0)).unwrap();
++        let ablated = evaluate(
++            Recipe {
++                gain: 0.0,
++                ..recipe
++            },
++            state(),
++            fixture(delta, 1.0),
++        )
++        .unwrap();
++        assert_eq!(active.current, ablated.current);
++        assert_eq!(active.raw_delta, ablated.raw_delta);
++        assert_eq!(active.local_successor, ablated.local_successor);
++        assert_eq!(active.signed_association, ablated.signed_association);
++        assert_eq!(ablated.readout_after_confidence, 0.0);
++        assert!(!active.readout_clipped);
++    }
++
++    #[test]
++    fn malformed_inputs_and_unpaired_recipe_bounds_fail() {
++        let mut current = state();
++        current[4] = f32::NAN;
++        assert!(evaluate(Recipe::reference(), current, SyntheticEvidence::Unknown).is_err());
++        let mut delta = [0.0; N];
++        delta[4] = f32::INFINITY;
++        assert!(evaluate(Recipe::reference(), state(), fixture(delta, 1.0)).is_err());
++        let mut recipe = Recipe::reference();
++        recipe.basis[0] = -0.1;
++        assert!(recipe.validate().is_err());
++        recipe = Recipe::reference();
++        recipe.magnitudes[5] = 0.1;
++        assert!(recipe.validate().is_err());
++    }
++}
+diff --git a/crates/alife_core/tests/need_reader_native_v1/sealed_fixture.rs b/crates/alife_core/tests/need_reader_native_v1/sealed_fixture.rs
+new file mode 100644
+index 0000000..8546cbc
+--- /dev/null
++++ b/crates/alife_core/tests/need_reader_native_v1/sealed_fixture.rs
+@@ -0,0 +1,263 @@
++//! Qualified store synthetic sealed-source builder, with test visibility only.
++use alife_core::*;
++
++#[derive(Clone)]
++pub(super) struct Fixture {
++    pub(super) sequence: u64,
++    pub(super) tick: u64,
++    pub(super) organism: OrganismId,
++    pub(super) tracked: TrackedObjectId,
++    pub(super) entity: WorldEntityId,
++    pub(super) profile: SensorProfile,
++    pub(super) family: CandidateActionFamily,
++    pub(super) position: Vec3f,
++    pub(super) loneliness: f32,
++    pub(super) measured: bool,
++    pub(super) observed: bool,
++    pub(super) deltas: [f32; 11],
++    pub(super) padding: usize,
++    pub(super) utterance: u64,
++}
++impl Default for Fixture {
++    fn default() -> Self {
++        Self {
++            sequence: 1,
++            tick: 10,
++            organism: OrganismId(7),
++            tracked: TrackedObjectId(71),
++            entity: WorldEntityId(88),
++            profile: SensorProfile::GroundedObjectSlotsV1,
++            family: CandidateActionFamily::Inspect,
++            position: Vec3f::ZERO,
++            loneliness: 0.5,
++            measured: true,
++            observed: true,
++            deltas: [0.; 11],
++            padding: 0,
++            utterance: 0,
++        }
++    }
++}
++
++pub(super) fn fixture(spec: Fixture) -> ExperiencePatch {
++    let genome = CreatureGenome::early_mammal_founder(
++        301,
++        FoundationGeneticIdentity::new(22, 1, 1, BrainCapacityClass::N512_ID).unwrap(),
++    )
++    .unwrap();
++    let phenotype = genome.express().unwrap();
++    let tick = Tick(spec.tick);
++    // Keep developmental age fixed so clock-only fixtures really retain the same hormones.
++    let mut before = BiochemistryState::new_with_age(&phenotype, tick, Tick::ZERO).unwrap();
++    before.homeostasis.drives = DriveSnapshot {
++        hunger: 0.5,
++        fatigue: 0.5,
++        fear: 0.5,
++        pain: 0.5,
++        loneliness: spec.loneliness,
++        curiosity: 0.5,
++        brain_atp: 0.5,
++        temperature_stress: 0.5,
++        reproductive_drive: 0.5,
++        extension: [0.5, 0.5],
++    };
++    let mut after =
++        BiochemistryState::new_with_age(&phenotype, Tick(spec.tick + 1), Tick::ZERO).unwrap();
++    after.homeostasis = before.homeostasis;
++    after.homeostasis.tick = after.tick;
++    let b = before.homeostasis.drives.to_array();
++    let d = spec.deltas;
++    after.homeostasis.drives = DriveSnapshot {
++        hunger: b[0] + d[0],
++        fatigue: b[1] + d[1],
++        fear: b[2] + d[2],
++        pain: b[3] + d[3],
++        loneliness: b[4] + d[4],
++        curiosity: b[5] + d[5],
++        brain_atp: b[6] + d[6],
++        temperature_stress: b[7] + d[7],
++        reproductive_drive: b[8] + d[8],
++        extension: [b[9] + d[9], b[10] + d[10]],
++    };
++    let slot = GroundedObjectSlotV1 {
++        slot_index: 0,
++        tracked_object_id: spec.tracked,
++        bearing: [0., 0.],
++        distance: 0.1,
++        relative_velocity: [0.; 3],
++        color: [0.2; 3],
++        material: [0.3; 3],
++        shape: [0.4; 3],
++        chemical: [0.; 3],
++        contact: 0.,
++        proprioception: [0.; 2],
++        temperature: 0.,
++        terrain: [0.; 2],
++        confidence: Confidence::new(0.8).unwrap(),
++    };
++    let (kind, action) = match spec.family {
++        CandidateActionFamily::Contact => (ActionKind::Interact, ActionId(201)),
++        CandidateActionFamily::Rest => (ActionKind::Rest, ActionId(2)),
++        _ => (ActionKind::Inspect, ActionId(4)),
++    };
++    let candidate = ActionCandidate::new(
++        0,
++        action,
++        kind,
++        spec.family,
++        if spec.observed {
++            CandidateObservationRef::ObjectSlot(0)
++        } else {
++            CandidateObservationRef::None
++        },
++        if spec.family == CandidateActionFamily::Rest {
++            ActionTarget::NONE
++        } else {
++            ActionTarget::new(Some(spec.entity), Some(Vec3f::new(1., 0., 0.)))
++        },
++        if spec.observed {
++            slot.candidate_features().unwrap()
++        } else {
++            CandidateFeatureVector::zero()
++        },
++        Confidence::new(0.8).unwrap(),
++        NormalizedScalar::new(0.1).unwrap(),
++        DurationTicks::new(1),
++        DurationTicks::new(1),
++    )
++    .unwrap();
++    let mut sensory = SensorySnapshot::new(
++        spec.organism,
++        tick,
++        spec.position,
++        SensoryChannels::ZERO,
++        Default::default(),
++    )
++    .unwrap();
++    if spec.utterance != 0 {
++        sensory.language_context.heard_tokens[0] = Some(HeardToken {
++            utterance_id: UtteranceId::new(spec.utterance).unwrap(),
++            sequence_position: 0,
++            source_kind: UtteranceSourceKind::Creature,
++            speaker_id: Some(OrganismId(8)),
++            addressee: Some(spec.organism),
++            source_entity: Some(spec.entity),
++            token_id: 7,
++            source_position: Vec3f::new(1., 0., 0.),
++            confidence: Confidence::new(0.8).unwrap(),
++            teacher_channel: None,
++        });
++        sensory.social_context.nearest_agents[0] = Some(SocialAgentSnapshot {
++            agent_id: OrganismId(8),
++            body_entity: Some(spec.entity),
++            relative_position: Vec3f::new(1., 0., 0.),
++            gaze_direction: Vec3f::new(-1., 0., 0.),
++            orientation_forward: Vec3f::new(-1., 0., 0.),
++            affinity: SignedValence::ZERO,
++            proximity: NormalizedScalar::new(0.5).unwrap(),
++        });
++        sensory.semantic_context = Some(SemanticContextRef {
++            feature_flags: ContextFeatureFlags::SEMANTIC_CODES,
++            confidence: Confidence::new(0.8).unwrap(),
++            compressed_codes: vec![CompressedSemanticCode {
++                codebook_id: 1,
++                code: 7,
++                salience: NormalizedScalar::new(0.5).unwrap(),
++            }],
++            salience: vec![SemanticSalienceEntry {
++                concept_id: ConceptCellId(1),
++                salience: NormalizedScalar::new(0.5).unwrap(),
++            }],
++        });
++    }
++    let frame = PerceptionFrame::new(
++        spec.organism,
++        tick,
++        spec.profile,
++        sensory,
++        BodySnapshot {
++            pose: Pose {
++                translation: spec.position,
++                ..Pose::IDENTITY
++            },
++            velocity: Velocity::ZERO,
++        },
++        before.homeostasis,
++        vec![candidate],
++        SensorProfileProvenance::new(spec.profile, SensoryAbiVersion::CURRENT, tick).unwrap(),
++        if spec.observed { vec![slot] } else { vec![] },
++    )
++    .unwrap();
++    frame.validate_contract().unwrap();
++    let sequence = ExperienceSequenceId(spec.sequence);
++    let hash = PhenotypeHash([1, 2, 3, 4]);
++    let decision = DecisionSnapshot::from_cpu_neural_selection(
++        sequence,
++        hash,
++        spec.sequence,
++        0,
++        &frame,
++        NeuralActionSelection {
++            candidate_index: 0,
++            logit: 0.,
++            confidence: Confidence::new(0.9).unwrap(),
++            active_tiles: 0,
++            active_synapses: 0,
++        },
++        candidate
++            .to_command(spec.organism, Confidence::new(0.9).unwrap())
++            .unwrap(),
++    )
++    .unwrap();
++    let pre = PreActionSnapshot::from_cpu_neural_frame(
++        sequence,
++        BrainClassSpec::for_tier(BrainScaleTier::Nano512).id,
++        hash,
++        phenotype.brain_genome.id,
++        phenotype.brain_genome.schema_version,
++        phenotype.development_state_at(tick).unwrap(),
++        frame,
++    )
++    .unwrap();
++    let mut outcome = PostActionOutcome::new(
++        spec.organism,
++        sequence,
++        after.tick,
++        true,
++        PhysicalActionOutcome {
++            contact: PhysicalContactKind::None,
++            target_entity: Some(spec.entity),
++            displacement: Vec3f::ZERO,
++            collision_normal: None,
++            energy_cost: NormalizedScalar::ZERO,
++        },
++        HomeostaticDelta::zero(),
++        SignedValence::new(0.9).unwrap(),
++        NormalizedScalar::ZERO,
++        NormalizedScalar::ZERO,
++        SignedValence::ZERO,
++        NormalizedScalar::ZERO,
++    )
++    .unwrap();
++    if spec.measured {
++        outcome = outcome
++            .with_measured_physiology(MeasuredPhysiologyTransition::new(before, after).unwrap())
++            .unwrap();
++    }
++    outcome.memory_hints = vec![
++        MemoryHint {
++            memory_id: MemoryId(1),
++            salience: NormalizedScalar::ZERO
++        };
++        spec.padding
++    ];
++    ExperiencePatchBuilder::new(sequence)
++        .record_pre_action(pre)
++        .unwrap()
++        .record_decision(decision)
++        .unwrap()
++        .record_outcome(outcome)
++        .unwrap()
++        .seal()
++        .unwrap()
++}
+diff --git a/docs/experiments/need-reader-native-v1/README.md b/docs/experiments/need-reader-native-v1/README.md
+new file mode 100644
+index 0000000..e93f57e
+--- /dev/null
++++ b/docs/experiments/need-reader-native-v1/README.md
+@@ -0,0 +1,231 @@
++# Detached need-specific reader: native CPU primitive qualification
++
++## Result and scope
++
++This implements the design's smallest staged neural arithmetic test. It is a
++Cargo integration-test target, not an exported core module, phenotype, decoder,
++foundation asset, inherited production gene, optimizer, or living creature.
++No production file, Cargo manifest, replay lane, memory ABI, checkpoint format,
++old sensor offset, or acquired weight is changed.
++
++Base: ordinary main `550f79ad1f765132c634e7a272da56b521b57ec0`, tree
++`c4e5230799be59df95d468be1343c4549892851d`.
++
++The 14 frozen sealed-source bridge evaluations and 330 eleven-lane boundary
++comparisons passed, with measured maximum absolute native/reference error **0**
++under absolute tolerance `2e-7` on this CPU/toolchain. Two additional ATP
++above-target/crossing controls passed. This does not promise
++bitwise identity on every architecture. The original ten scalar tests also pass.
++See `RESULTS.csv` for the fourteen observations and the verification section for
++exact test commands and further qualification status.
++
++A positive readout is a locally favorable association, not measured reward,
++action causal credit, selected behavior, or successful need regulation.
++The `.15` loneliness / `-.007499993` delta gives native pre-confidence readout
++`0.000045886267`; diagnostic multiplication by source confidence `.8` gives
++`0.000036709014`. This scale is intentionally small, not inflated to force a
++behavioral outcome. No action probabilities or actual creature ticks were run.
++
++## Actual engine operators
++
++`tests/need_reader_native_v1/native.rs` compiles five `NeuralProjectionSchema`s
++with real signed `CooTile` / `SynapseWeightSplit` weights and a real
++`DendriticBranchSet`. It executes:
++
++1. `cpu_spmv_projection`: retain current x and compute x+d from separate raw
++   lanes; `finalize_cpu_activations(Identity, [0,1])` bounds the hypothetical
++   successor. The constant lane is only for the typed ATP target, never a
++   positive reward floor or a comparator to a fixed current need.
++2. Sparse role projection and `finalize_cpu_activations(Relu, [0,1])`: burden x,
++   availability `max(target-x,0)`, informational zero pressure. Both paired
++   states use the same role contract. ATP target is an explicit gene.
++3. `apply_dendritic_conjunctions`: four `tanh(max(p-knot,0))*basis` branches on
++   each of 22 targets, followed by identity activation. This is **88 actual
++   engine dendrites**, with four per target, not eight on one target.
++4. Sparse signed comparison and identity finalization: B(current)-B(successor)
++   for each of the eleven lanes.
++5. Sparse magnitude-weighted sum, then a separate sparse gain projection and
++   bounded identity finalization for the diagnostic readout.
++
++No scalar-reference pressure, burden, successor, association, or readout is
++written into native activations. Scalar code is used only for input recipe
++validation and as a separate post-execution comparison oracle. Intermediate
++successor, pressure, burden, signed association and readout are compared.
++
++All evaluations, including Unknown and gain 0, perform 5 sparse projections,
++10 active microtiles, 112 sparse synapse evaluations, 88 branch/input evaluations
++(176 `DendriticWorkReceipt` units), and 6 activation finalizations. The existing
++scratch constructor allocates 512 cells, so these finalizations visit 3072
++padded cells. At most 23 logical scratch coordinates are live simultaneously;
++this is **not an allocated 512-neuron phenotype**, nor a claim that this network
++fits the current creature's budget. No energy debit, recurrent dynamics,
++receptors, leak, EMA, homeostasis or production scheduling is qualified here.
++The number of positive/gated branches varies with data; evaluated branch work
++and gain-paired work do not. A projection edge with zero gain is retained.
++
++## Inherited recipe, roles, weights and identities
++
++The reference-species fixture retains all eleven raw readings and deltas:
++
++- Hunger, fatigue, fear, pain, loneliness and temperature stress are burdens.
++- ATP is availability with proposed target `.75`.
++- Curiosity, reproductive arousal and untyped extensions are informational. They
++  have zero *innate signed-consequence readout*, not zero activity throughout the
++  animal. Arousal/curiosity changes do not imply universal success or harm.
++- Extension 0 becomes a burden only for the exact fixture binding
++  `species22/play-stimulation/drive-extension0/boredom/v1`; assigning untyped
++  burden semantics or the wrong binding is rejected. This string is synthetic
++  test metadata, not a source-validation certificate for a living organism.
++
++Four knots `[0,.25,.5,.75]` and basis weights `[.125,.25,.25,.25]` recruit more
++pressure-sensitive branches at larger burdens while preserving relevance at
++small pressures. All basis weights are nonnegative with sum <=1. Seven relevant
++reference magnitudes are `1/7`; typed boredom adds `.08`. Equal magnitudes avoid
++inventing an unmeasured need hierarchy, target label, or action-family preference.
++The `.08` boredom prior reflects the reference phenotype's separate coefficient.
++Magnitude L1 sum is capped at 2. Gain is bounded by `.35`, with final signed
++ceiling `.35`. ATP above target earns no extra replenishment prize. ATP losses
++that cross below target can be unfavorable. The target `.75` and gain `.35` are
++**proposed inherited priors**, not fitted or established biological constants.
++
++There are **22 unique numeric gene coordinates**: 4 knots, 4 shared basis gains,
++11 lane magnitudes (including four informational zeros), 1 ATP target, 1 readout
++gain and 1 ceiling. Eleven role tags, schema, foundation/chemistry strings and
++optional extension meaning are identity metadata, not extra float genes. The
++compiled representation contains 88 threshold/gain/input occurrences and 112
++sparse edge weights; those occurrences are not 88 independent learned bases.
++Structural +/-1/0 edges implement transport and differences.
++
++Each logical branch identity names lane, role, current/successor side and basis.
++Both sides resolve the exact same `Knot(k)` and `Basis(k)` keys from a single
++map; tests check equal identities and bit-identical compiled values across all
++44 pairs, and each recipe's digest includes role semantics and every numeric
++gene. Reference digest (four u64 words):
++`[6627187470255709903,11208214143037123844,3463037732579544687,16230909564613200750]`.
++
++These are frozen inherited fixture parameters, **not** a tied-parameter learning
++or optimizer contract. No acquired offset is reset or loaded. The runner accepts
++only immutable circuit plus synthetic row, creates fresh scratch, and accepts no
++persistent state. Repeated interleaved rows leave compiled coefficients identical;
++an unrelated synthetic acquired-state sentinel remains byte-identical. This is
++an absence-of-mutation boundary test, not a private-checkpoint restore test.
++
++## Evidence transport and exact bridge
++
++The qualified store implementation from `need-consequence-main-v1` commit
++`493bb172da46add5f6d5da43dd375d5387116473` is copied into the integration-test
++support directory only. Production main does not gain this module. The original
++store test suite is excluded; store implementation semantics are unchanged.
++Its sealed `Fixture` / `ExperiencePatchBuilder` source constructor is copied with
++only test visibility/formatting changes. These synthetic contract fixtures carry
++valid sealed receipt structure, not actual simulated life measurements.
++
++Every bridge evaluation reads current raw drives from a later, contract-valid
++frame and raw delta solely from its exact retained observation. It checks source
++sequence/frame digest, before/after tick, attribution, one representative
++observed-target Inspect association, and absence of additional selected motor
++channels. Measured source-before values are read directly from the sealed source,
++not reconstructed from current minus delta. At tick 12, exact recall sees the
++source ending at tick 11. The same context at a later tick is constructed by the
++test; it is not proof that an ordinary next-world state matches.
++
++The seven rows are evaluated at gains 0 and .35 with unchanged scratch/work:
++
++1. Loneliness .15 with measured -.007499993.
++2. Loneliness 0 with measured 0.
++3. Loneliness .001 with measured -.001.
++4. Loneliness 0 with measured +.007499993.
++5. Loneliness .15 with measured 0.
++6. Same .15 context with no measured physiology: Unknown.
++7. Query loneliness 0 against .15 source: exact miss, Unknown.
++
++Unknown, measured zero, measured confidence zero and unsupported evidence stay
++separate. Raw deltas, confidence, age and similarity are independently reported.
++Unsupported rows may expose arithmetic diagnostics, but their supported output
++is zero. The known/support masks and confidence multiplication remain explicitly
++**host diagnostics**, not qualified native dynamic gates. The raw native readout
++must not be attached to a policy. Confidence is applied once, after comparison;
++changing similarity never changes delta, confidence or the native readout.
++
++There is no source generalization/admission API here. A boolean test support flag
++has no living-source authority. The earlier cosine admission of loneliness 1
++from a source around .15 remains unsupported even if similarity is high.
++Correct zero-pressure arithmetic does not solve that problem. No .025 local
++matcher, world/life/chemistry identity bridge, multi-command source matcher,
++developmental matcher or independent context matcher is claimed. Those remain
++separate, unqualified gates; exact misses remain Unknown.
++
++## Controls and verification
++
++The native tests additionally cover all eleven lanes at raw readings
++0/.001/.15/.5/.75/1 with deltas -1/-.05/0/.05/1, both signs, clipping, current-zero
++no-phantom-relief, emergent burden harm, ATP bounds, informational retention,
++source confidence applied once, unsupported suppression, opposite burden
++cancellation, and low-vs-high fatigue/ATP/loneliness with fixed consequences.
++The recovery row in that competition test is **hypothetical arithmetic**;
++it is not a retained Rest observation. Existing Inspect evidence cannot teach
++Approach, navigation or targetless Rest.
++
++A fixed-reference pressure control demonstrates loss of current conditioning;
++a wrong-need-lane permutation removes benefit under the actual zero pressure;
++two independent candidate rows keep opposing outcomes rather than collapse into
++a family-common correction. That is scratch row isolation, not a complete
++two-candidate perception/store integration or a candidate selector test.
++Alternate nonnegative basis recipes, zero gain, ceiling clipping, invalid
++nonfinite/out-of-range input, negative/unbounded recipes, unknown role semantics
++and the wrong extension binding are tested. No new target semantics appear.
++
++Commands (serial CPU, Rust 1.99.1, jobs=1, incremental=0, dev/test debug=0):
++
++```sh
++cargo test -p alife_core --test need_reader_native_v1 --offline -- --test-threads=1 --nocapture
++cargo test -p alife_core --test neural_projection_cpu --offline -- --test-threads=1
++cargo test -p alife_core --lib dendritic::tests --offline -- --test-threads=1
++cargo clippy -p alife_core --test need_reader_native_v1 --offline -- -D warnings
++cargo fmt --all -- --check
++bash scripts/check_core_boundaries.sh --static
++git diff --check
++```
++
++Final checks: **19/19** detached/native-oracle tests, **11/11** existing sparse
++projection tests, **4/4** existing dendritic tests, strict focused Clippy, workspace
++format check, static core dependency-boundary check and whitespace check all pass.
++An initial compile found COO local indices supplied as u32 instead of u8; that
++was fixed. The first strict Clippy run found an unnecessary range loop; that was
++fixed and the final test/lint batch rerun. No failing test or unresolved check
++remains within this stated scope.
++
++The scalar oracle came from design `reader_algebra.rs` SHA-256
++`1dc36b721009e7da25cbc70f2ec8c1d1ef2fe9c3f7b7b19dbdcaee103a81932d`.
++After applying the same rustfmt, it differs only in module documentation and
++visibility; its arithmetic and original ten tests are unchanged. The copied store
++implementation is byte-identical after the same rustfmt, with its original tests
++excluded. The support sources remain test-only.
++
++Only those targeted checks are asserted. No full workspace, CPU/GPU gradient
++parity, GPU hardware, live CPU policy, autonomous interval, fixed Approach
++world fixture, acquired checkpoint or learning experiment was run for this task.
++
++## Methods note for Astra
++
++https://rikiyat.github.io/blog/weight-space-programming/ is methodological
++inspiration, **not evidence about A-Life**. Keep these distinct:
++
++- Experiment 4 reports selective repair of 3.5% of a trained 171,664-weight
++  control network, from 0 to 100% over 1,024 evaluations.
++- Experiment 5 generates whole 20,486-weight feedforward game models from zero.
++- Experiment 6 uses iterative feedback.
++
++This A-Life result is engineered sparse/dendritic arithmetic with reasoned,
++bounded inherited priors. It is neither learned living behavior, whole-brain
++weight generation, selective repair of a demonstrated learned policy, nor a
++whole recurrent living-brain result. Iterative feedback here corrected and
++qualified a detached test implementation. It does not license a bigger claim.
++
++Before persistent integration, require independent retrieval/source support,
++complete world/life/genome/chemistry/lineage binding, a typed evidence/confidence
++port, candidate scratch scheduling and budgets, tied-gradient/moment/age
++semantics, CPU/GPU and learning parity, replay capture, save/load validation and
++a new default-off foundation/decoder identity. Do not reinterpret head 5 or old
++sensor/replay offsets, copy adult acquired state into genes, or attach this
++readout as a host logit bonus. The candidate stays detached.
+diff --git a/docs/experiments/need-reader-native-v1/RESULTS.csv b/docs/experiments/need-reader-native-v1/RESULTS.csv
+new file mode 100644
+index 0000000..515c395
+--- /dev/null
++++ b/docs/experiments/need-reader-native-v1/RESULTS.csv
+@@ -0,0 +1,15 @@
++row,gain,known,supported,confidence,current,delta,successor,p,q,Bp,Bq,u,native_readout,diagnostic_confidence_gated,error
++measured-relief,0,true,true,0.8,0.15,-0.007499993,0.14250001,0.15,0.14250001,0.01861063,0.017692905,0.00091772527,0,0,0
++measured-relief,0.35,true,true,0.8,0.15,-0.007499993,0.14250001,0.15,0.14250001,0.01861063,0.017692905,0.00091772527,0.000045886267,0.000036709014,0
++measured-zero-at-zero,0,true,true,0.8,0,0,0,0,0,0,0,0,0,0,0
++measured-zero-at-zero,0.35,true,true,0.8,0,0,0,0,0,0,0,0,0,0,0
++bounded-near-zero,0,true,true,0.8,0.001,-0.001,0,0.001,0,0.00012499996,0,0.00012499996,0,0,0
++bounded-near-zero,0.35,true,true,0.8,0.001,-0.001,0,0.001,0,0.00012499996,0,0.00012499996,0.0000062499985,0.000004999999,0
++emergent-harm,0,true,true,0.8,0,0.007499993,0.007499993,0,0.007499993,0,0.0009374815,-0.0009374815,0,0,0
++emergent-harm,0.35,true,true,0.8,0,0.007499993,0.007499993,0,0.007499993,0,0.0009374815,-0.0009374815,-0.000046874076,-0.000037499263,0
++measured-zero-at-baseline,0,true,true,0.8,0.15,0,0.15,0.15,0.15,0.01861063,0.01861063,0,0,0,0
++measured-zero-at-baseline,0.35,true,true,0.8,0.15,0,0.15,0.15,0.15,0.01861063,0.01861063,0,0,0,0
++unmeasured-unknown,0,false,false,0,0.15,0,0.15,0.15,0.15,0.01861063,0.01861063,0,0,0,0
++unmeasured-unknown,0.35,false,false,0,0.15,0,0.15,0.15,0.15,0.01861063,0.01861063,0,0,0,0
++exact-context-miss,0,false,false,0,0,0,0,0,0,0,0,0,0,0,0
++exact-context-miss,0.35,false,false,0,0,0,0,0,0,0,0,0,0,0,0
+-- 
+2.52.0
+

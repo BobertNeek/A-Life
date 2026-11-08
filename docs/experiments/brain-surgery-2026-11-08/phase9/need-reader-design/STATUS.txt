@@ -1,0 +1,12 @@
+Need-specific reader design V1. Source-only, not runtime-attached.
+Base commit: 550f79ad1f765132c634e7a272da56b521b57ec0
+Design commit: 008a05427657d8aa654cdec8ed80313ff27e4858
+Design tree: a285293000d7f165b30839fe3c405a9808361695
+Branch: design/need-specific-reader-v1
+Checked: source trace, git diff --check; clean isolated checkout.
+Not run: scalar compile/tests, native core fixture, Cargo suites, GPU, world interval fixture.
+Ten synthetic tests are authored in reader_algebra.rs, but uncompiled.
+No runtime source, default ABI, store, Cargo manifest, acquired state, asset or checkpoint is changed.
+No existing checkpoint/private array was read; no source or artifact was uploaded.
+Future native primitive fixture: fourteen frozen evaluations, no selector/learning.
+Future grounded Approach fixture: at most eight prescribed intervals, separately coordinated.

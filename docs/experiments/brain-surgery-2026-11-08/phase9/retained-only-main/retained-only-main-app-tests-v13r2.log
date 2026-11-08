@@ -1,0 +1,222 @@
+   Compiling alife_core v0.1.0 (/workspace/scratch/ee5e08a3ca9b/retained-count-main-extract-v12/crates/alife_core)
+   Compiling alife_world v0.1.0 (/workspace/scratch/ee5e08a3ca9b/retained-count-main-extract-v12/crates/alife_world)
+   Compiling alife_gpu_backend v0.1.0 (/workspace/scratch/ee5e08a3ca9b/retained-count-main-extract-v12/crates/alife_gpu_backend)
+   Compiling alife_game_app v0.1.0 (/workspace/scratch/ee5e08a3ca9b/retained-count-main-extract-v12/crates/alife_game_app)
+   Compiling alife_archive v0.1.0 (/workspace/scratch/ee5e08a3ca9b/retained-count-main-extract-v12/crates/alife_archive)
+   Compiling alife_runtime v0.1.0 (/workspace/scratch/ee5e08a3ca9b/retained-count-main-extract-v12/crates/alife_runtime)
+   Compiling alife_school v0.1.0 (/workspace/scratch/ee5e08a3ca9b/retained-count-main-extract-v12/crates/alife_school)
+   Compiling alife_semantic v0.1.0 (/workspace/scratch/ee5e08a3ca9b/retained-count-main-extract-v12/crates/alife_semantic)
+    Finished `test` profile [unoptimized] target(s) in 4m 50s
+     Running unittests src/lib.rs (/workspace/scratch/ee5e08a3ca9b/arousal-lineage-check-target-v9/debug/deps/alife_game_app-6fdbdab04223c905)
+
+running 205 tests
+test app_bundle_ingestion::tests::drive_relative_paths_are_not_workspace_relative ... ok
+test creature_assembly::geneforge_tests::all_twelve_families_resolve_exact_authored_assets_at_full_and_compact ... ok
+test creature_assembly::geneforge_tests::authored_preparations_resolve_inherited_parts_on_every_torso ... ok
+test creature_assembly::geneforge_tests::exact_target_lod_matrix_bounds_and_residual_evidence_survive_resolution ... ok
+test creature_assembly::geneforge_tests::mixed_assembly_resolves_saved_slot_assets_against_target_torso ... ok
+test creature_assembly::geneforge_tests::preparation_index_rejects_duplicate_wrong_target_missing_group_and_non_finite_records ... ok
+test creature_part_catalog::tests::geneforge_v2_accepts_a_data_only_thirteenth_family ... ok
+test creature_part_catalog::tests::geneforge_v2_catalog_has_the_exact_twelve_frankenstein_families ... ok
+test creature_part_catalog::tests::geneforge_v2_rejects_absent_required_metadata ... ok
+test creature_part_catalog::tests::geneforge_v2_rejects_complete_source_attribution_drift ... ok
+test creature_part_catalog::tests::geneforge_v2_rejects_duplicate_asset_ids ... ok
+test creature_part_catalog::tests::geneforge_v2_rejects_invalid_anatomy_authoring_and_paths ... ok
+test creature_part_catalog::tests::geneforge_v2_rejects_invalid_catalog_bounds_and_landmark_metadata ... ok
+test creature_part_catalog::tests::geneforge_v2_rejects_invalid_logical_slot_json ... ok
+test creature_part_catalog::tests::geneforge_v2_rejects_invalid_output_digests ... ok
+test creature_part_catalog::tests::geneforge_v2_rejects_malformed_source_projection_counts_and_bounds ... ok
+test creature_part_catalog::tests::geneforge_v2_rejects_missing_assets_and_ettin_tails ... ok
+test creature_part_catalog::tests::geneforge_v2_rejects_missing_or_invalid_attachment_frames ... ok
+test creature_part_catalog::tests::geneforge_v2_rejects_missing_semantic_regions ... ok
+test creature_part_catalog::tests::geneforge_v2_rejects_non_finite_and_out_of_range_family_fits ... ok
+test creature_part_catalog::tests::geneforge_v2_requires_same_lod_obj_projection_evidence ... ok
+test creature_part_catalog::tests::geneforge_v2_sources_and_generated_assets_are_complete ... ok
+test creature_part_catalog::tests::geneforge_v2_types_deterministic_importer_metadata ... ok
+test creature_part_catalog::tests::task_5c_catalog_exposes_and_validates_preparation_contract ... ok
+test creature_part_pose::tests::every_root_pose_is_finite_and_never_crushes_anatomy ... ok
+test creature_part_pose::tests::moving_pose_swings_opposite_limbs_without_detaching_parts ... ok
+test creature_part_pose::tests::resting_and_sleeping_are_articulated_crouch_and_side_curl_poses ... ok
+test creature_surface_details::tests::canonical_face_landmarks_remap_into_emitted_head_bounds_and_avoid_bead_eyes ... ok
+test creature_surface_details::tests::eye_size_spans_the_valid_inherited_trait_buckets ... ok
+test creature_surface_details::tests::face_placement_uses_exact_catalog_head_landmarks_and_continuous_traits ... ok
+test creature_surface_details::tests::missing_required_eye_landmark_is_rejected ... ok
+test creature_visual_geometry::tests::side_sleeping_grounding_uses_rotated_width_instead_of_upright_height ... ok
+test creature_visual_geometry::tests::transformed_feet_ground_by_root_translation_without_squashing_bounds ... ok
+test creature_visual_geometry::tests::upright_grounding_places_actual_scaled_foot_minimum_on_surface ... ok
+test creature_visual_geometry::tests::visual_bounds_merge_rejects_no_axis_and_remains_finite ... ok
+test curated_founder_materializer::tests::curated_founder_materializer_builds_complete_plan_ordered_bundle ... ok
+test curated_founder_materializer::tests::curated_founder_materializer_is_deterministic_and_fresh ... ok
+test curated_founder_materializer::tests::curated_founder_materializer_never_uses_fixed_scaffold_as_source ... ok
+test curated_founder_materializer::tests::curated_founder_materializer_rejects_cross_class_and_wrong_foundation ... ok
+test curated_founder_materializer::tests::curated_founder_materializer_rejects_forged_plan_before_output ... ok
+test curated_founder_materializer::tests::curated_founder_materializer_returns_no_partial_bundle ... ok
+test curated_founder_reset::tests::curated_reset_changes_seed_when_source_slot_or_identity_changes ... ok
+test curated_founder_reset::tests::curated_reset_founders_have_empty_parent_recombination_and_mutation_history ... ok
+test curated_founder_reset::tests::curated_reset_plan_is_stable_by_final_agent_identity ... ok
+test curated_founder_reset::tests::curated_reset_rejects_duplicate_or_incomplete_final_population ... ok
+test curated_founder_reset::tests::curated_reset_rejects_legacy_source_with_exact_policy ... ok
+test curated_founder_reset::tests::curated_reset_requires_exact_checked_n512_foundation ... ok
+test curated_founder_reset::tests::production_bootstrap_rejects_bare_p34_without_exact_curated_reset ... ok
+test curated_founder_reset::tests::serialized_plan_validation_rejects_tampered_ids_order_provenance_and_seed ... ok
+test curated_founder_reset::tests::serialized_receipt_validation_rejects_tampered_contract_fields ... ok
+test curated_founder_staging::tests::curated_apply_archive_commit_failure_leaves_world_unpublished ... ok
+test curated_founder_staging::tests::curated_apply_commits_one_ordered_archive_batch_before_registry_publish ... ok
+test curated_founder_staging::tests::curated_apply_rejects_world_candidate_before_archive_commit ... ok
+test curated_founder_staging::tests::curated_publication_accepts_minified_source_with_raw_generation_digest ... ok
+test curated_founder_staging::tests::curated_publication_conflict_leaves_old_save_and_live_world_after_archive_commit ... ok
+test curated_founder_staging::tests::curated_publication_receipt_uses_matching_plan_slot_for_reversed_batch ... ok
+test curated_founder_staging::tests::curated_publication_rejects_mixed_bound_source_and_target_before_archive_commit ... ok
+test curated_founder_staging::tests::curated_publication_retry_reuses_archive_and_handles_already_applied ... ok
+test curated_founder_staging::tests::curated_publication_success_reloads_registry_and_verified_archive_links ... ok
+test curated_founder_staging::tests::curated_stage_builds_complete_candidates_without_mutation ... ok
+test curated_founder_staging::tests::curated_stage_constructs_prefix_candidates_locally_before_late_failure_without_publication ... ok
+test curated_founder_staging::tests::curated_stage_rejects_bundle_or_record_identity_mismatch ... ok
+test curated_founder_staging::tests::curated_stage_rejects_duplicate_or_conflicting_ids ... ok
+test curated_founder_staging::tests::curated_stage_rejects_invalid_archive_run_id_and_conflict ... ok
+test curated_founder_staging::tests::curated_stage_rejects_wrong_world_save_or_checkpoint_identity ... ok
+test double_buffered_scheduler::tests::config_rejects_a_tick_rate_above_microsecond_resolution ... ok
+test double_buffered_scheduler::tests::config_rejects_an_accumulator_shorter_than_one_tick ... ok
+test double_buffered_scheduler::tests::invalid_config_rejects_deferred_and_executed_ticks_without_mutation ... ok
+test double_buffered_scheduler::tests::long_frame_accounts_for_ticks_discarded_by_accumulator_bound ... ok
+test double_buffered_scheduler::tests::recording_a_large_tick_batch_preserves_buffer_parity_and_saturates_counters ... ok
+test founder_import::tests::founder_targets_must_exactly_cover_save_creatures ... ok
+test gpu_authority_telemetry::tests::overlay_does_not_invent_a_zero_logit_for_a_selected_candidate ... ok
+test gpu_authority_telemetry::tests::overlay_reports_a_terminal_backend_failure_as_unavailable ... ok
+test gpu_evidence::persistence::tests::colliding_temporary_receipt_is_preserved ... ok
+test gpu_live_runtime::adaptive_exploration_causality::repeated_sealed_mismatch_keeps_familiar_object_gap_evidence_target_local ... ok
+test gpu_live_runtime::appearance::tests::cloned_parent_genome_lookup_uses_stable_organism_order ... ok
+test gpu_live_runtime::appearance::tests::conflicting_duplicate_saved_values_do_not_depend_on_vector_order ... ok
+test gpu_live_runtime::appearance::tests::file_reload_keeps_exact_appearance_and_all_saved_learning_summaries ... ok
+test gpu_live_runtime::appearance::tests::identity_rebound_is_rejected_and_saved_batch_failure_is_atomic ... ok
+test gpu_live_runtime::appearance::tests::known_parents_produce_the_same_offspring_in_any_sibling_admission_order ... ok
+test gpu_live_runtime::appearance::tests::missing_parent_keeps_the_existing_default_fallback_and_is_not_rederived ... ok
+test gpu_live_runtime::appearance::tests::offspring_survive_parent_retirement_and_pass_cosmetics_to_the_next_generation ... ok
+test gpu_live_runtime::appearance::tests::saved_values_replace_generated_defaults_exactly_without_mutating_sources ... ok
+test gpu_live_runtime::checkpoint_poll::tests::exact_capture_failure_keeps_generation_and_stage_context ... ok
+test gpu_live_runtime::checkpoint_runtime::checkpoint_world_compatibility_tests::durable_world_comparison_accepts_only_the_old_empty_external_seal ... ok
+test gpu_live_runtime::contact_chemistry_tests::contact_chemistry_bootstraps_signed_personal_memory_from_real_founder_experience ... ok
+test gpu_live_runtime::cpu_preparation::tests::approximate_preparation_cpu_timing_evidence ... ignored, Explicit bounded CPU comparison of audited, cold and cached runtime preparation
+test gpu_live_runtime::cpu_preparation::tests::approximate_preparation_retains_memory_and_fresh_keys_between_refreshes ... ok
+test gpu_live_runtime::cpu_preparation::tests::bounded_runtime_summary_preserves_concept_and_gap_selection ... ok
+test gpu_live_runtime::cpu_preparation::tests::caller_and_child_panics_fail_without_partial_results_and_always_join ... ok
+test gpu_live_runtime::cpu_preparation::tests::candidate_churn_cannot_postpone_full_expectancy_refresh ... ok
+test gpu_live_runtime::cpu_preparation::tests::copy_contract_tests::focused_routing_and_all_fallbacks_preserve_complete_drafts ... ok
+test gpu_live_runtime::cpu_preparation::tests::copy_contract_tests::moved_attention_preserves_complete_context_and_rejections ... ok
+test gpu_live_runtime::cpu_preparation::tests::copy_contract_tests::routing_attention_copy_cpu_timing_evidence ... ignored, CPU-only isolated copy comparison; run release explicitly
+test gpu_live_runtime::cpu_preparation::tests::crowded_observed_focus_reaches_audited_and_cached_gpu_preparation ... ok
+test gpu_live_runtime::cpu_preparation::tests::focal_novelty_reuse_preserves_complete_trace_with_empty_focus_and_switches ... ok
+test gpu_live_runtime::cpu_preparation::tests::leaf_measurement_accumulation_and_deltas_saturate ... ok
+test gpu_live_runtime::cpu_preparation::tests::leaf_measurement_flag_preserves_serial_and_worker_results ... ok
+test gpu_live_runtime::cpu_preparation::tests::legacy_serial_and_two_workers_preserve_learned_owner_traces_across_mixed_skips ... ok
+test gpu_live_runtime::cpu_preparation::tests::object_bound_concepts_and_gaps_keep_selective_focus_after_extraction ... ok
+test gpu_live_runtime::cpu_preparation::tests::one_owner_early_or_late_failure_does_not_corrupt_other_rows_or_hysteresis ... ok
+test gpu_live_runtime::cpu_preparation::tests::preparation_is_read_only_and_existing_learning_guard_rejects_second_commit ... ok
+test gpu_live_runtime::cpu_preparation::tests::preparation_panics_roll_back_the_real_staged_tick_wrapper ... ok
+test gpu_live_runtime::cpu_preparation::tests::production_runner_cpu_timing_evidence ... ignored, CPU release timing evidence; run explicitly with --release --ignored --nocapture
+test gpu_live_runtime::cpu_preparation::tests::retained_zero_sixty_four_and_full_banks_preserve_complete_preparation_trace ... ok
+test gpu_live_runtime::cpu_preparation::tests::selected_focal_novelty_preserves_bits_for_ranked_retained_empty_and_nontracked_focus ... ok
+test gpu_live_runtime::cpu_preparation::tests::spawn_failure_falls_back_once_using_the_captured_semantic_hint ... ok
+test gpu_live_runtime::cpu_preparation::tests::terrain_hint_tests::terrain_caller_and_child_panics_do_not_mutate_inputs_repoll_or_continue ... ok
+test gpu_live_runtime::cpu_preparation::tests::terrain_hint_tests::terrain_ready_absent_and_later_owner_hints_match_frozen_serial_and_two_workers ... ok
+test gpu_live_runtime::cpu_preparation::tests::terrain_hint_tests::terrain_spawn_failure_reuses_each_owned_hint_once_without_repolling ... ok
+test gpu_live_runtime::cpu_preparation::tests::worker_policy_bounds_workers_after_serial_hint_capture ... ok
+test gpu_live_runtime::exact_population_checkpoint::tests::different_destination_is_busy_and_preserves_prior_manual_request ... ok
+test gpu_live_runtime::exact_population_checkpoint::tests::equal_tick_manual_request_attaches_to_active_capture ... ok
+test gpu_live_runtime::exact_population_checkpoint::tests::invalid_admission_and_terminal_failure_cannot_poison_or_retry ... ok
+test gpu_live_runtime::exact_population_checkpoint::tests::same_destination_later_request_coalesces_to_maximum_tick ... ok
+test gpu_live_runtime::exact_population_checkpoint::tests::stale_manual_request_survives_old_capture_and_fresh_follow_up ... ok
+test gpu_live_runtime::exact_population_checkpoint::tests::transaction_order_is_strict_and_follow_up_is_one_bit ... ok
+test gpu_live_runtime::headless_trace::tests::bounded_stream_reports_coverage_and_never_overwrites_evidence ... ok
+test gpu_live_runtime::headless_trace::tests::invalid_horizon_does_not_create_output_and_empty_world_has_no_substitute ... ok
+test gpu_live_runtime::live_policy::tests::exact_live_overlay_restore_preserves_biological_authority_and_birth_genome ... ok
+test gpu_live_runtime::live_policy::tests::exact_overlay_restore_rejects_wrong_birth_binding_without_changing_plan ... ok
+test gpu_live_runtime::live_policy::tests::prepared_sleep_request_cannot_cross_a_policy_identity_boundary ... ok
+test gpu_live_runtime::neural_receptor_cache::tests::cache_keeps_dynamic_chemistry_validation ... ok
+test gpu_live_runtime::neural_receptor_cache::tests::cache_rejects_another_valid_phenotype_and_is_rebuilt_on_replacement ... ok
+test gpu_live_runtime::neural_receptor_cache::tests::cached_expression_matches_full_compile_for_promoted_brains_and_fresh_chemistry ... ok
+test gpu_live_runtime::neural_receptor_cache::tests::developmental_time_does_not_change_the_immutable_expression_source ... ok
+test gpu_live_runtime::neural_receptor_cache::tests::fresh_resident_compiles_cache_and_does_not_serialize_it ... ok
+test gpu_live_runtime::neural_receptor_cache::tests::receptor_expression_cpu_timing_evidence ... ignored, CPU-only timing receipt; run explicitly without concurrent builds
+test gpu_live_runtime::neural_receptor_cache::tests::restored_phenotype_rebuilds_expression_and_rejects_corrupt_source ... ok
+test gpu_live_runtime::newborn_admission_tests::natural_newborn_checkpoint_and_reopened_save_keep_the_live_inherited_appearance ... ok
+test gpu_live_runtime::newborn_admission_tests::newborn_fixture_failure_rolls_back_parents_clock_allocators_and_registry ... ok
+test gpu_live_runtime::newborn_admission_tests::newborn_fixture_reaches_natural_birth_at_the_passive_boundary ... ok
+test gpu_live_runtime::persistence_response_comparison::tests::meaningful_prior_and_world_changes_remain_readiness_failures ... ok
+test gpu_live_runtime::persistence_response_comparison::tests::zero_gain_reply_changes_diagnostics_without_changing_ordinary_perception ... ok
+test gpu_live_runtime::replay_rollback_tests::replay_rollback_arc_authority_clone_serde_and_failed_tick_preserve_values ... ok
+test gpu_live_runtime::replay_rollback_tests::replay_rollback_multiple_owners_retirement_and_second_eviction_preserve_original_order ... ok
+test gpu_live_runtime::replay_rollback_tests::replay_rollback_single_owner_append_eviction_and_retry_fill_restore_exact_history ... ok
+test gpu_live_runtime::resident_sync_tests::borrowed_sync_matches_full_residents_over_current_biology_and_development ... ok
+test gpu_live_runtime::resident_sync_tests::borrowed_sync_matches_independently_restored_records_with_cold_genetic_caches ... ok
+test gpu_live_runtime::resident_sync_tests::borrowed_sync_preserves_cold_immutable_validation_before_tick_and_genome_errors ... ok
+test gpu_live_runtime::resident_sync_tests::borrowed_sync_preserves_dead_direct_rejection_and_population_skip ... ok
+test gpu_live_runtime::resident_sync_tests::borrowed_sync_preserves_dynamic_validation_before_tick_and_genome_errors ... ok
+test gpu_live_runtime::resident_sync_tests::borrowed_sync_preserves_population_missing_record_and_partial_progress_order ... ok
+test gpu_live_runtime::resident_sync_tests::borrowed_sync_preserves_stale_tick_and_genome_mismatch_errors ... ok
+test gpu_live_runtime::restore_reconciliation::tests::discarded_unsealed_pending_and_missing_residents_keep_reconciliation ... ok
+test gpu_live_runtime::restore_reconciliation::tests::preserved_retained_credit_and_quiet_population_do_not_republish ... ok
+test gpu_live_runtime::sensitive_period_audit::audit_sensitive_period_age_restore_and_stable_upload_identity ... ok
+test gpu_live_runtime::sensitive_period_audit::authoritative_transition_updates_mutable_transport_without_recompilation ... ok
+test gpu_live_runtime::sensitive_period_audit::learning_age_uses_outcome_and_current_retry_or_sleep_tick_after_restore ... ok
+test gpu_live_runtime::staged_tick::cpu_admission_tests::cpu_re_admission_rejects_generation_offset_owner_token_and_device_loss ... ok
+test gpu_live_runtime::tests::checked_in_n2048_assets_decode_for_every_production_sensor_profile ... ok
+test gpu_live_runtime::tests::checkpoint_coverage_allows_only_unused_newborns_to_lack_state ... ok
+test gpu_live_runtime::tests::curated_reset_conflict_retry_reuses_exact_operation_without_double_archive ... ok
+test gpu_live_runtime::tests::curated_reset_missing_owned_authority_fails_before_archive_save_or_world_mutation ... ok
+test gpu_live_runtime::tests::curated_reset_post_archive_failure_retains_unknown_receipt_and_retries_exact_operation ... ok
+test gpu_live_runtime::tests::curated_reset_precommit_retry_restores_exact_retained_operation ... ok
+test gpu_live_runtime::tests::curated_reset_runtime_owned_authorities_publish_and_leave_gpu_residency_pending ... ok
+test gpu_live_runtime::tests::deferred_checkpoint_publication_does_not_block_ordinary_ticks ... ok
+test gpu_live_runtime::tests::disconnected_command_channel_and_worker_panic_are_joined_once ... ok
+test gpu_live_runtime::tests::disconnected_event_channel_sends_abort_and_retains_the_worker_until_join ... ok
+test gpu_live_runtime::tests::gpu_restore_resident_identity_uses_world_record_and_admits_exact_legacy_checkpoint ... ok
+test gpu_live_runtime::tests::late_sealing_failure_restores_social_chemistry_for_exact_retry ... ok
+test gpu_live_runtime::tests::n2048_gpu_birth_uses_foundation_bound_compiler_inputs ... ok
+test gpu_live_runtime::tests::n512_gpu_birth_uses_checked_foundation_and_rejects_unsupported_classes ... ok
+test gpu_live_runtime::tests::object_bound_concepts_and_gaps_change_predecision_focus_selectively ... ok
+test gpu_live_runtime::tests::phenotype_policy_and_subsystem_work_join_are_causal ... ok
+test gpu_live_runtime::tests::player_food_placement_outgrows_the_old_sandbox_limit_without_label_collisions ... ok
+test gpu_live_runtime::tests::player_food_repeated_placement_uses_xy_ground_and_distinct_ids ... ok
+test gpu_live_runtime::tests::prevalidate_failure_aborts_and_joins_the_worker_before_releasing_its_lease ... ok
+test gpu_live_runtime::tests::production_archive_attachment_derives_save_bound_run_id ... ok
+test gpu_live_runtime::tests::production_archive_source_run_identity_exact_vector ... ok
+test gpu_live_runtime::tests::published_curated_reset_retains_receipt_bound_gpu_residency_plan ... ok
+test gpu_live_runtime::tests::replacement_rejects_persisted_policy_seed_or_brain_class_mismatch ... ok
+test gpu_live_runtime::tests::seal_prepared_selection_applies_social_recognition_while_rest_wins ... ok
+test gpu_live_runtime::tests::seal_prepared_selection_uses_world_biology_receipt_as_resident_authority ... ok
+test gpu_live_runtime::tests::unchanged_grounded_state_has_zero_successor_distance ... ok
+test new_game_lifecycle::tests::n2048_new_game_save_reload_preserves_exact_candidate_and_class ... ok
+test production_assets::tests::fvr11_terrain_atlases_are_manifested_and_compact ... ok
+test production_assets::tests::production_asset_manifest_rejects_placeholder_claimed_final ... ok
+test production_assets::tests::production_asset_manifest_rejects_target_local_assets ... ok
+test production_assets::tests::production_asset_manifest_rejects_unknown_license ... ok
+test production_assets::tests::production_asset_manifest_reports_every_rejected_entry ... ok
+test production_assets::tests::production_asset_manifest_validates_license_and_digest ... ok
+test production_voxel_frontend::tests::fvr04_population_view_preserves_real_save_state_and_voxel_anchors ... ok
+test production_voxel_frontend::tests::fvr04_population_view_supports_owned_one_and_500 ... ok
+test production_voxel_frontend::tests::fvr04_save_roundtrip_preserves_selected_creature_and_visible_signature ... ok
+test production_voxel_frontend::tests::fvr05_population_restore_has_complete_organism_bindings ... ok
+test production_voxel_frontend::tests::fvr05_ux_settings_roundtrip_preserves_profile_and_migrates_old_options ... ok
+test production_voxel_frontend::tests::fvr06_launch_file_boundary_restores_current_owned_untrained_founders ... ok
+test production_voxel_frontend::tests::fvr06_minimum_and_comfort_profiles_record_runtime_caps ... ok
+test production_voxel_frontend::tests::fvr06_preflight_persists_gpu_runtime_descriptor ... Failed to create /home/agent/.cache/mesa_shader_cache for shader cache (Read-only file system)---disabling.
+Failed to create /home/agent/.cache/mesa_shader_cache_db for shader cache (Read-only file system)---disabling.
+ok
+test production_voxel_frontend::tests::fvr08_package_launch_artifacts_are_rooted_next_to_packaged_manifest ... ok
+test production_voxel_frontend::tests::gpu_descriptor_preserves_reported_adapter_and_driver_text ... ok
+test production_voxel_frontend::tests::production_population_preserves_saved_appearance_genes ... ok
+test production_voxel_frontend::tests::ux_settings_preserve_all_overlays_off_and_unrestricted_user_paths ... ok
+test runtime_prereq_diagnostics::tests::diagnostics_reject_contradictory_authority_labels ... ok
+test tests::ca10_environment_manifest_reports_known_scenarios_for_bad_selection ... ok
+test tests::ca10_environment_manifest_validates_and_selects_default_production_voxel ... ok
+test tests::ca12_app_bundle_manifest_discovers_production_assets_and_shaders ... ok
+test tests::ca12_app_bundle_manifest_rejects_missing_required_entries ... ok
+test tests::ca12_app_bundle_manifest_rejects_missing_shader_assets ... ok
+test tests::creature_visual_mapping_is_bounded_and_readable ... ok
+test tests::invalid_config_rejects_with_p34_diagnostics ... ok
+test tests::sleep_and_pain_override_action_visual_states_without_cognitive_mutation ... ok
+test tests::visible_world_loads_actual_saved_objects_without_bevy ... ok
+
+test result: ok. 201 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 132.30s
+

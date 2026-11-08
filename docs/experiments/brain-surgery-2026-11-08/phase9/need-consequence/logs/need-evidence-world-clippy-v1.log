@@ -1,0 +1,57 @@
+    Checking alife_storage v0.1.0 (/workspace/scratch/ee5e08a3ca9b/need-consequence-evidence-v1/crates/alife_storage)
+    Checking alife_world v0.1.0 (/workspace/scratch/ee5e08a3ca9b/need-consequence-evidence-v1/crates/alife_world)
+error: using `clone` on type `ActionCandidate` which implements the `Copy` trait
+  --> crates/alife_world/src/headless/need_consequence_evidence_tests.rs:78:21
+   |
+78 |       let candidate = frame
+   |  _____________________^
+79 | |         .candidates()
+80 | |         .iter()
+81 | |         .find(|c| c.kind == ActionKind::Inspect && c.target.entity == Some(target))
+82 | |         .expect("observed target inspection candidate")
+83 | |         .clone();
+   | |________________^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#clone_on_copy
+   = note: `-D clippy::clone-on-copy` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(clippy::clone_on_copy)]`
+help: try dereferencing it
+   |
+78 ~     let candidate = *frame
+79 +         .candidates()
+80 +         .iter()
+81 +         .find(|c| c.kind == ActionKind::Inspect && c.target.entity == Some(target))
+82 ~         .expect("observed target inspection candidate");
+   |
+
+error: using `clone` on type `ActionCommand` which implements the `Copy` trait
+   --> crates/alife_world/src/headless/need_consequence_evidence_tests.rs:111:9
+    |
+111 |         command.clone(),
+    |         ^^^^^^^^^^^^^^^ help: try removing the `clone` call: `command`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#clone_on_copy
+
+error: using `clone` on type `ActionCandidate` which implements the `Copy` trait
+   --> crates/alife_world/src/headless/need_consequence_evidence_tests.rs:181:26
+    |
+181 |       let next_candidate = next_frame
+    |  __________________________^
+182 | |         .candidates()
+183 | |         .iter()
+184 | |         .find(|c| c.kind == ActionKind::Inspect && c.target.entity == Some(target))
+185 | |         .unwrap()
+186 | |         .clone();
+    | |________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#clone_on_copy
+help: try dereferencing it
+    |
+181 ~     let next_candidate = *next_frame
+182 +         .candidates()
+183 +         .iter()
+184 +         .find(|c| c.kind == ActionKind::Inspect && c.target.entity == Some(target))
+185 ~         .unwrap();
+    |
+
+error: could not compile `alife_world` (lib test) due to 3 previous errors

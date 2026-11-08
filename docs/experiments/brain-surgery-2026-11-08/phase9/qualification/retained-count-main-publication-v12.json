@@ -1,0 +1,41 @@
+{
+  "schema": 1,
+  "pr_url": "https://github.com/BobertNeek/A-Life/pull/311",
+  "remote_head": "1f970f82e2cda8c81d18d114798544480cda8b85",
+  "local_head": "6a5a5261b8f4371f2ac7f6f9ca84c6dc9fb0a678",
+  "tree": "49f28080ba70e19fdb708b2af0e8e0979ad5b8ec",
+  "base": "550f79ad1f765132c634e7a272da56b521b57ec0",
+  "native_result": {
+    "persistence_passed": 12,
+    "persistence_failed": 0,
+    "clippy_core_world_runtime_lib_tests": "passed",
+    "fmt": "passed",
+    "core_boundaries": "passed",
+    "diff": "passed",
+    "device_execution": "not_run",
+    "existing_creature_state": "not_accessed"
+  },
+  "scope": "Only failed-retry counter admission; separate restore-reconciliation failure remains unresolved. No retry-timing/schema/default changes.",
+  "inputs": [
+    {
+      "path": "/workspace/shared/retained-count-main-persistence-v12.log",
+      "sha256": "d98ccbb82d10abe1e1986dea7e1494dbdc907cc364ce4f23865cae6456f8c2e8"
+    },
+    {
+      "path": "/workspace/shared/retained-count-main-clippy-v12.log",
+      "sha256": "7ef189a233e117ef273cb9da28e6de959753cab107451ff9aef4d58141d52093"
+    },
+    {
+      "path": "/workspace/shared/retained-count-main-fmt-v12.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/workspace/shared/retained-count-main-boundaries-v12.log",
+      "sha256": "b6554fa6b151aea699671a9b5cad329ec249203f6fa858015600843929aff070"
+    },
+    {
+      "path": "/workspace/shared/retained-count-main-v12.patch",
+      "sha256": "38018a0bd7cfb1cd9cb5a16fdcbbf77b3dc3ce8742d1f7c0a2274c70d2abf957"
+    }
+  ]
+}

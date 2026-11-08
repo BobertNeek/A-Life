@@ -1,0 +1,13 @@
+# Predeclared standalone need evidence fixtures
+
+No policy allocation or default activation. A separate new store observes only validated sealed interval observations, with Unknown distinct from measured zero. All existing MemoryBank V2 bytes/digests/readers stay unchanged.
+
+Core finite cases: measured positive/negative/zero deltas; missing physiology Unknown; exact organism/profile/family/observed target/context matching; malformed input/restore; duplicate and old source rejection including after bounded pruning; serialization/restore; deterministic bounded capacity/query; joint-interval associative label. No synthetic target category is stored.
+
+World finite cases: three fresh matched registered actors with identical fresh age600 biological initialization (maturity is measured, not assumed). One observed physical peer in contact, one equally placed toy, and one peer outside contact. Prescribed stationary/inspection commands or a directly selected observed candidate are fixture controls, not neural policy evidence. Execute at most one registered interval per case initially, and a second only if required to test duplicate/later source semantics. Measure actual before/after physiology and seal the corresponding observation. Assert peer contact relief differs from toy/no-contact drift; do not subtract drift and label that subtraction an isolated recorded channel effect. Query exact observed target/family/context; wrong target/family must return Unknown. No autonomous lives, genotype edits, checkpoint use, or policy learning claim.
+
+If fixture construction or an assertion fails, preserve the failure and correct only the demonstrated source/fixture issue. Do not expand world intervals adaptively to obtain a favorable effect. Existing contact chemistry tests provide independent longer-expression evidence; this component is source/association/restore qualification.
+
+Before the store-integrated test run: add exactly one passive no-command clone per condition and finalize each registered interval to assert no duplicate biological advance. These3 passive controls add no selected actions. Print actual maturation/puberty/expression/initial pressure/body scalars and20Hz world cadence. The first construction run’s mature description was unsupported and is corrected.
+
+Before the store-integrated run, also query each stored observation from the actual next-world frame at tick601, without resetting physiology or executing another action/interval. Report exact matcher Unknown if incidental physiology/context changed. This is a read-only recall usability check, not a new biological allocation.

@@ -1,0 +1,35 @@
+{
+  "source": "44f030b905fdece730f43403d78ef5734f8f3bd5",
+  "tree": "b3e99a273dd69964c217d69976a1700e9f286e8f",
+  "exe_sha256": "4f0fe9ce2c1c1e7443368da40ffeb3ec8bb3c0402d1c611622aab59612f9a6c9",
+  "world_tests": {
+    "passed": 13,
+    "failed": 0
+  },
+  "prerepair": "expected count0 LearningEvidenceMismatch",
+  "actual_worker": {
+    "exit": 101,
+    "seconds": 8.45,
+    "passed_stages": [
+      "genuine sealed rejection",
+      "retry-only real acknowledgment",
+      "old immutable publication",
+      "newer-credit dirty marker survives old publication"
+    ],
+    "failed_stage": "real old publication restore: Core(LearningReplayRejected)",
+    "not_claimed": [
+      "restored old authority/count",
+      "new exact publication/restore",
+      "marker clearance",
+      "mixed population",
+      "count4 runtime",
+      "default arousal"
+    ]
+  },
+  "excluded": [
+    "executables",
+    "generated checkpoint assets",
+    "whole learned arrays",
+    "private state"
+  ]
+}

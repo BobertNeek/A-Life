@@ -1,0 +1,21 @@
+   Compiling alife_world v0.1.0 (/workspace/scratch/ee5e08a3ca9b/motor-reflex-retained-count-v12/crates/alife_world)
+    Finished `test` profile [unoptimized] target(s) in 1m 15s
+     Running tests/gpu_brain_persistence.rs (/workspace/scratch/ee5e08a3ca9b/arousal-lineage-check-target-v9/debug/deps/gpu_brain_persistence-e61ba13f9ce40b3c)
+
+running 13 tests
+test completed_sleep_promotion_moves_exact_staging_refs_into_committed_main_state ... ok
+test every_consolidation_state_roundtrips_with_exact_required_assets ... ok
+test every_sleep_phase_roundtrips_without_duplicate_consolidation ... ok
+test gpu_checkpoint_asset_reference_enumeration_structurally_covers_every_optional_class ... ok
+test gpu_checkpoint_requires_exact_enclosing_manifest_references ... ok
+test impossible_phase_asset_and_pending_transaction_combinations_are_rejected ... ok
+test legacy_pending_json_stays_absent_and_malformed_index_is_rejected ... ok
+test live_topology_selector_is_fail_closed_across_v5_and_v6 ... ok
+test portable_float_assets_bind_exact_shapes_generations_and_canonical_bits ... ok
+test portable_replay_journal_preserves_bounded_ring_identity_and_empty_reset_state ... ok
+test post_arousal_sleep_lineage_binds_active_generation_without_weakening_old_commit ... ok
+test r06_exact_cognitive_checkpoint_preserves_acquired_predictor_and_rejects_legacy ... ok
+test retained_learning_failed_retry_counts_roundtrip_without_sidecar_replay ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+

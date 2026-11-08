@@ -1,0 +1,9 @@
+# V11 finite actual software-runtime evidence, not publication success
+
+All three exact revisions and finite failure logs are retained. The first two failures were fixture lifecycle/synchronization errors. The third corrected synchronization and reached a real LearningEvidenceMismatch on the actual immutable-worker publication path. No publication or restore success is claimed.
+
+Each run used a fresh disposable instance of the same recipe/seed and remained one genuine decision/two world intervals. These are repeated regressions, not a new behavioral cohort. All three reached a real sealed observation, injected one real credit rejection, then acknowledged that retained credit without a new batch/sequence/patch and retained a newer dirty authority. Third run additionally proved actual original worker gate ownership. Two host admission/recovery controls passed separately.
+
+Source deltas apply to separately frozen V10 (identity/package hash in QUALIFICATION.json). Each revision includes complete tracked tree closure and changed source blobs. Logs were inspected: they contain compiler progress, adapter metadata, finite assertion diagnostics, and scalar transaction stage. No generated checkpoint, asset, neural array, executable or secret is included. Automatic cognitive arousal, ordinary hardware admission, old/new immutable publication/restore, frozen-job drainage, and awake shared actuator behavior remain unqualified.
+
+All tests ran as the exact named arousal_epoch_software_real_rejected_credit_retry_and_same_tick_older_capture test, --test-threads=1 --nocapture, with the explicit SwiftShader ICD. Commands/source/executable hashes are retained; future repairs require their own frozen source and bounded plan. Do not treat failure-stage repair as proof of a later unexecuted stage.

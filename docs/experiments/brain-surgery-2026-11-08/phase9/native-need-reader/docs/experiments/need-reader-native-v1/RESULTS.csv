@@ -1,0 +1,15 @@
+row,gain,known,supported,confidence,current,delta,successor,p,q,Bp,Bq,u,native_readout,diagnostic_confidence_gated,error
+measured-relief,0,true,true,0.8,0.15,-0.007499993,0.14250001,0.15,0.14250001,0.01861063,0.017692905,0.00091772527,0,0,0
+measured-relief,0.35,true,true,0.8,0.15,-0.007499993,0.14250001,0.15,0.14250001,0.01861063,0.017692905,0.00091772527,0.000045886267,0.000036709014,0
+measured-zero-at-zero,0,true,true,0.8,0,0,0,0,0,0,0,0,0,0,0
+measured-zero-at-zero,0.35,true,true,0.8,0,0,0,0,0,0,0,0,0,0,0
+bounded-near-zero,0,true,true,0.8,0.001,-0.001,0,0.001,0,0.00012499996,0,0.00012499996,0,0,0
+bounded-near-zero,0.35,true,true,0.8,0.001,-0.001,0,0.001,0,0.00012499996,0,0.00012499996,0.0000062499985,0.000004999999,0
+emergent-harm,0,true,true,0.8,0,0.007499993,0.007499993,0,0.007499993,0,0.0009374815,-0.0009374815,0,0,0
+emergent-harm,0.35,true,true,0.8,0,0.007499993,0.007499993,0,0.007499993,0,0.0009374815,-0.0009374815,-0.000046874076,-0.000037499263,0
+measured-zero-at-baseline,0,true,true,0.8,0.15,0,0.15,0.15,0.15,0.01861063,0.01861063,0,0,0,0
+measured-zero-at-baseline,0.35,true,true,0.8,0.15,0,0.15,0.15,0.15,0.01861063,0.01861063,0,0,0,0
+unmeasured-unknown,0,false,false,0,0.15,0,0.15,0.15,0.15,0.01861063,0.01861063,0,0,0,0
+unmeasured-unknown,0.35,false,false,0,0.15,0,0.15,0.15,0.15,0.01861063,0.01861063,0,0,0,0
+exact-context-miss,0,false,false,0,0,0,0,0,0,0,0,0,0,0,0
+exact-context-miss,0.35,false,false,0,0,0,0,0,0,0,0,0,0,0,0

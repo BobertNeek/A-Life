@@ -1,0 +1,12 @@
+   Compiling alife_core v0.1.0 (/workspace/scratch/ee5e08a3ca9b/motor-reflex-gpu-epoch-fixtures-v11/crates/alife_core)
+   Compiling alife_storage v0.1.0 (/workspace/scratch/ee5e08a3ca9b/motor-reflex-gpu-epoch-fixtures-v11/crates/alife_storage)
+   Compiling alife_world v0.1.0 (/workspace/scratch/ee5e08a3ca9b/motor-reflex-gpu-epoch-fixtures-v11/crates/alife_world)
+   Compiling alife_gpu_backend v0.1.0 (/workspace/scratch/ee5e08a3ca9b/motor-reflex-gpu-epoch-fixtures-v11/crates/alife_gpu_backend)
+   Compiling alife_runtime v0.1.0 (/workspace/scratch/ee5e08a3ca9b/motor-reflex-gpu-epoch-fixtures-v11/crates/alife_runtime)
+   Compiling alife_game_app v0.1.0 (/workspace/scratch/ee5e08a3ca9b/motor-reflex-gpu-epoch-fixtures-v11/crates/alife_game_app)
+   Compiling alife_training v0.1.0 (/workspace/scratch/ee5e08a3ca9b/motor-reflex-gpu-epoch-fixtures-v11/crates/alife_training)
+   Compiling alife_archive v0.1.0 (/workspace/scratch/ee5e08a3ca9b/motor-reflex-gpu-epoch-fixtures-v11/crates/alife_archive)
+   Compiling alife_school v0.1.0 (/workspace/scratch/ee5e08a3ca9b/motor-reflex-gpu-epoch-fixtures-v11/crates/alife_school)
+   Compiling alife_semantic v0.1.0 (/workspace/scratch/ee5e08a3ca9b/motor-reflex-gpu-epoch-fixtures-v11/crates/alife_semantic)
+    Finished `test` profile [unoptimized] target(s) in 5m 40s
+  Executable unittests src/lib.rs (/workspace/scratch/ee5e08a3ca9b/arousal-lineage-check-target-v9/debug/deps/alife_game_app-3da14afd57976c36)

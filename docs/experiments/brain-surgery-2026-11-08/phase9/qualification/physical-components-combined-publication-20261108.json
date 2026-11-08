@@ -1,0 +1,38 @@
+{
+  "main": "550f79ad1f765132c634e7a272da56b521b57ec0",
+  "speech_merge_tree": "c4e5230799be59df95d468be1343c4549892851d",
+  "thermal": {
+    "pr": 308,
+    "head": "9470091404f3e6a9c2c702412e000215c6306f31",
+    "tree": "449decc0e70fc694e498ae769c8429e23bdb858a",
+    "parents": [
+      "fd118a9ce7b50f513c2cde37fb3b366bf56f22b5",
+      "550f79ad1f765132c634e7a272da56b521b57ec0"
+    ],
+    "verified_imported_blobs": 5,
+    "native_qualification_unchanged": true
+  },
+  "sleeping": {
+    "pr": 309,
+    "head": "233a7e71d744759b55a71f6976c344cd0354adcf",
+    "tree": "da127f8d53fd615f3df18e01a5cbff8c2232738c",
+    "parents": [
+      "bf60fb8b5f69b40da3f1e78e3e1c7623f1448fa9",
+      "9470091404f3e6a9c2c702412e000215c6306f31"
+    ],
+    "verified_combined_blobs": 19,
+    "native_world_passed": 602,
+    "native_actual_software_runtime_passed": 10,
+    "failed": 0,
+    "existing_world_ignored": 3,
+    "strict_lint_format": "pass",
+    "cognitive_arousal_activated": false
+  },
+  "merge_order": [
+    308,
+    309
+  ],
+  "ready_for_review": true,
+  "exact_head_hosted_checks": "pending",
+  "hardware_qualified": false
+}
