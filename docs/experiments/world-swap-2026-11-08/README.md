@@ -24,3 +24,9 @@ archives changes the closure of the earlier allocation.
    source-only snapshot of the separate four-life comparison: disabled proposal,
    fixed protocol and later active-main mapping, without study outputs or a
    claim of publicly timestamped preregistration.
+
+5. [Completed matched 23xx results v5](completed-matched-23xx-v5/README.md):
+   all four fresh paired cases completed and validated. Includes scalar results,
+   physical replacement receipts and the exact eight-file public evidence bundle.
+   This is bounded CPU evidence for the bundled world change, not new learning
+   or generalization; the earlier failed allocation remains closed unchanged.
