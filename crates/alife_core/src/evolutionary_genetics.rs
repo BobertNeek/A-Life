@@ -532,6 +532,20 @@ impl BiochemicalGraphChromosome {
         self.validate_contract()?;
         Ok(self)
     }
+    /// Explicit fresh research construction; never rewrites acquired chemistry.
+    pub fn with_awake_rest_recovery_v1(
+        mut self,
+        side: AlleleSide,
+    ) -> Result<Self, ScaffoldContractError> {
+        let homolog = match side {
+            AlleleSide::Maternal => &mut self.maternal,
+            AlleleSide::Paternal => &mut self.paternal,
+        };
+        *homolog = homolog.clone().with_awake_rest_recovery_v1()?;
+        self.validate_contract()?;
+        Ok(self)
+    }
+
     /// Inherit valuation alongside the chemistry graph, never lifetime rewards.
     pub fn with_value_profile(
         mut self,

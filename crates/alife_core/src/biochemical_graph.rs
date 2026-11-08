@@ -155,6 +155,8 @@ pub enum BiochemicalSourceLocus {
     Investigation,
     /// Persistent loss of viability, distinct from the one-shot damage event.
     HealthDeficit,
+    /// Appended, opt-in V1 body-event source. Legacy enum ordinals stay fixed.
+    AwakeRestRecoveryV1,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -974,6 +976,41 @@ impl BiochemicalPhenotype {
         Ok(self)
     }
 
+    /// Fresh research genotype only: add a separate event-backed fatigue route.
+    /// Existing sleep recovery, waking accumulation and expression stay intact.
+    pub(crate) fn with_awake_rest_recovery_v1(mut self) -> Result<Self, ScaffoldContractError> {
+        if self
+            .emitters
+            .iter()
+            .any(|row| row.source == BiochemicalSourceLocus::AwakeRestRecoveryV1)
+        {
+            return Err(ScaffoldContractError::InvalidGeneticBounds);
+        }
+        self.emitters.push(emitter(
+            BiochemicalSourceLocus::AwakeRestRecoveryV1,
+            ids::FATIGUE,
+            -0.70,
+        ));
+        self.compile()?;
+        Ok(self)
+    }
+
+    /// Only the bounded V1 circuit is admitted by the explicit research entry.
+    /// Mutated or differently targeted future circuits need their own contract.
+    pub fn supports_awake_rest_recovery_v1(&self) -> bool {
+        let mut rows = self
+            .emitters
+            .iter()
+            .filter(|row| row.source == BiochemicalSourceLocus::AwakeRestRecoveryV1);
+        rows.next()
+            == Some(&emitter(
+                BiochemicalSourceLocus::AwakeRestRecoveryV1,
+                ids::FATIGUE,
+                -0.70,
+            ))
+            && rows.next().is_none()
+    }
+
     /// Keep injury salient while health remains low. The emitter lives in the
     /// inherited graph; an old saved graph is never rewritten on load.
     pub(crate) fn with_health_distress(mut self) -> Result<Self, ScaffoldContractError> {
@@ -1362,6 +1399,33 @@ impl BiochemicalGraphState {
         phenotype: &BiochemicalPhenotype,
         developmental_expression: f32,
     ) -> Result<(Self, BiochemicalWorkReceipt), ScaffoldContractError> {
+        self.advance_with_awake_rest_event_v1(
+            next_tick,
+            body,
+            event,
+            neural,
+            phenotype,
+            developmental_expression,
+            crate::AwakeRestEventV1::NONE,
+        )
+    }
+
+    /// One-shot research event, distinct from persistent Awake and SleepRecovery.
+    #[allow(clippy::too_many_arguments)]
+    pub fn advance_with_awake_rest_event_v1(
+        &self,
+        next_tick: Tick,
+        body: BodyState,
+        event: BodyEventDelta,
+        neural: Option<&NeuralEmissionFrame>,
+        phenotype: &BiochemicalPhenotype,
+        developmental_expression: f32,
+        awake_rest: crate::AwakeRestEventV1,
+    ) -> Result<(Self, BiochemicalWorkReceipt), ScaffoldContractError> {
+        awake_rest.validate_for(event, phenotype)?;
+        if awake_rest.dose() > 0.0 && body.sleeping {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
         self.validate_against(phenotype)?;
         validate_developmental_expression(developmental_expression)?;
         Tick::validate_monotonic(self.tick, next_tick)?;
@@ -1392,7 +1456,7 @@ impl BiochemicalGraphState {
         {
             let cadence_crossings = crossed_cadence(self.tick, next_tick, emitter.cadence_ticks);
             if cadence_crossings > 0 {
-                let source = source_value(emitter.source, body, event);
+                let source = source_value(emitter.source, body, event, awake_rest);
                 let source = if emitter.inverted {
                     1.0 - source
                 } else {
@@ -1408,7 +1472,8 @@ impl BiochemicalGraphState {
                         }
                     }
                 };
-                let release_count = emitter_release_count(emitter.source, cadence_crossings);
+                let release_count =
+                    emitter_release_count(emitter.source, cadence_crossings, awake_rest);
                 apply_delta(
                     phenotype,
                     &mut next,
@@ -1795,7 +1860,12 @@ fn receptor_group_signal(
     result
 }
 
-fn source_value(source: BiochemicalSourceLocus, body: BodyState, event: BodyEventDelta) -> f32 {
+fn source_value(
+    source: BiochemicalSourceLocus,
+    body: BodyState,
+    event: BodyEventDelta,
+    awake_rest: crate::AwakeRestEventV1,
+) -> f32 {
     match source {
         BiochemicalSourceLocus::Basal => 1.0,
         BiochemicalSourceLocus::EnergyDeficit => 1.0 - body.energy,
@@ -1812,6 +1882,7 @@ fn source_value(source: BiochemicalSourceLocus, body: BodyState, event: BodyEven
         BiochemicalSourceLocus::PlayStimulation => event.play_stimulation,
         BiochemicalSourceLocus::PerceivedNovelty => event.perceived_novelty,
         BiochemicalSourceLocus::Investigation => event.investigation,
+        BiochemicalSourceLocus::AwakeRestRecoveryV1 => awake_rest.dose(),
     }
     .clamp(0.0, 1.0)
 }
@@ -1825,7 +1896,11 @@ fn crossed_cadence(from: Tick, to: Tick, cadence: u32) -> u32 {
 
 // Event-backed loci are one-shot/source-reset inputs for this advance. Basal
 // and persistent body-state loci can be replayed for each missed boundary.
-fn emitter_release_count(source: BiochemicalSourceLocus, cadence_crossings: u32) -> u32 {
+fn emitter_release_count(
+    source: BiochemicalSourceLocus,
+    cadence_crossings: u32,
+    awake_rest: crate::AwakeRestEventV1,
+) -> u32 {
     match source {
         BiochemicalSourceLocus::Damage
         | BiochemicalSourceLocus::Nutrition
@@ -1836,6 +1911,10 @@ fn emitter_release_count(source: BiochemicalSourceLocus, cadence_crossings: u32)
         | BiochemicalSourceLocus::PlayStimulation
         | BiochemicalSourceLocus::PerceivedNovelty
         | BiochemicalSourceLocus::Investigation => 1,
+        // A missing event must not become a digital/inverted zero-input signal.
+        // Keep inherited variants loadable/mutable, but inert without a positive
+        // typed event. Positive admission separately requires the exact V1 recipe.
+        BiochemicalSourceLocus::AwakeRestRecoveryV1 => u32::from(awake_rest.dose() > 0.0),
         BiochemicalSourceLocus::Basal
         | BiochemicalSourceLocus::Awake
         | BiochemicalSourceLocus::Sleeping
@@ -2110,5 +2189,216 @@ mod health_distress_tests {
             critical_pain > 0.55,
             "near-terminal health must cross the inherited emergency threshold: {critical_pain}"
         );
+    }
+}
+
+#[cfg(test)]
+mod awake_rest_v1_tests {
+    use super::*;
+    use crate::{
+        AwakeRestEventV1, BiochemistryState, BrainCapacityClass, CreatureGenome,
+        FoundationCompatibilityFamilyId, FoundationGeneticIdentity, FoundationId,
+    };
+
+    #[test]
+    fn awake_rest_append_preserves_all_old_source_ordinals_and_body_wire() {
+        use BiochemicalSourceLocus::*;
+        let old = [
+            Basal,
+            EnergyDeficit,
+            Damage,
+            TemperatureStress,
+            Nutrition,
+            SocialContact,
+            SleepRecovery,
+            MatingOpportunity,
+            Awake,
+            Sleeping,
+            PlayerReward,
+            PlayStimulation,
+            PerceivedNovelty,
+            Investigation,
+            HealthDeficit,
+        ];
+        for (ordinal, source) in old.into_iter().enumerate() {
+            assert_eq!(
+                bincode::serde::encode_to_vec(source, bincode::config::standard()).unwrap(),
+                vec![ordinal as u8]
+            );
+            assert_eq!(
+                bincode::serde::encode_to_vec(source, bincode::config::legacy()).unwrap(),
+                (ordinal as u32).to_le_bytes()
+            );
+        }
+        assert_eq!(
+            bincode::serde::encode_to_vec(AwakeRestRecoveryV1, bincode::config::legacy()).unwrap(),
+            15_u32.to_le_bytes()
+        );
+        assert_eq!(BIOCHEMICAL_GRAPH_SCHEMA_VERSION, 3);
+        let event = BodyEventDelta {
+            energy: -0.1,
+            damage: 0.2,
+            temperature_stress: 0.3,
+            nutrition: 0.4,
+            social_contact: 0.5,
+            player_reward: 0.6,
+            play_stimulation: 0.7,
+            perceived_novelty: 0.8,
+            investigation: 0.9,
+            sleep_recovery: 1.0,
+            mating_opportunity: 0.1,
+        };
+        let expected: Vec<u8> = [-0.1_f32, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 0.1]
+            .into_iter()
+            .flat_map(f32::to_le_bytes)
+            .collect();
+        assert_eq!(
+            bincode::serde::encode_to_vec(event, bincode::config::standard()).unwrap(),
+            expected
+        );
+    }
+
+    #[test]
+    fn awake_rest_source_is_once_only_on_catchup_and_requires_explicit_inherited_recipe() {
+        let genome = CreatureGenome::early_mammal_founder(
+            961_060,
+            FoundationGeneticIdentity::new(
+                FoundationId::N512_V1.raw(),
+                1,
+                FoundationCompatibilityFamilyId::N512_FOUNDATION.raw(),
+                BrainCapacityClass::N512_ID,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        let phenotype = genome.express().unwrap();
+        let ordinary = phenotype
+            .chemistry
+            .biochemical
+            .clone()
+            .with_waking_recovery()
+            .unwrap();
+        let graph = ordinary.clone().with_awake_rest_recovery_v1().unwrap();
+        assert!(graph.supports_awake_rest_recovery_v1());
+        assert!(!ordinary.supports_awake_rest_recovery_v1());
+        assert_eq!(graph.value_profile(), ordinary.value_profile());
+        let body = BiochemistryState::new(&phenotype, Tick::ZERO).unwrap().body;
+        let mut initial = BiochemicalGraphState::new(&graph, Tick::ZERO, 1.0).unwrap();
+        initial.concentrations[graph.species_index(ids::FATIGUE).unwrap()] = 0.9;
+        let control = initial
+            .advance(Tick(64), body, BodyEventDelta::zero(), None, &graph, 0.5)
+            .unwrap()
+            .0;
+        let recovered = initial
+            .advance_with_awake_rest_event_v1(
+                Tick(64),
+                body,
+                BodyEventDelta::zero(),
+                None,
+                &graph,
+                0.5,
+                AwakeRestEventV1::new(0.1).unwrap(),
+            )
+            .unwrap()
+            .0;
+        for species in graph.species() {
+            let actual = recovered.concentration(&graph, species.id).unwrap();
+            let expected = control.concentration(&graph, species.id).unwrap()
+                - if species.id == ids::FATIGUE {
+                    0.035
+                } else {
+                    0.0
+                };
+            assert!((actual - expected).abs() < 1e-6, "species={:?}", species.id);
+        }
+        assert!(initial
+            .advance_with_awake_rest_event_v1(
+                Tick(1),
+                body,
+                BodyEventDelta::zero(),
+                None,
+                &ordinary,
+                1.0,
+                AwakeRestEventV1::new(1.0).unwrap()
+            )
+            .is_err());
+        for variant in 0..10 {
+            let mut wrong = graph.clone();
+            let row = wrong.emitters.last_mut().unwrap();
+            match variant {
+                0 => row.target = ids::SLEEP_PRESSURE,
+                1 => row.inverted = true,
+                2 => row.response = EmitterResponse::Digital,
+                3 => row.gain = -0.69,
+                4 => row.developmental_expression_floor = 1.0,
+                5 => row.cadence_ticks = 2,
+                6 => row.threshold = 0.1,
+                7 => wrong.emitters.push(*graph.emitters.last().unwrap()),
+                8 => {
+                    row.inverted = true;
+                    row.response = EmitterResponse::Digital;
+                    row.developmental_expression_floor = 1.0;
+                }
+                _ => {
+                    row.inverted = true;
+                    row.target = ids::BRAIN_ATP;
+                    row.gain = 0.5;
+                    row.developmental_expression_floor = 1.0;
+                }
+            }
+            assert!(!wrong.supports_awake_rest_recovery_v1());
+            wrong.compile().unwrap();
+            let wire = serde_json::to_string(&wrong).unwrap();
+            let restored: BiochemicalPhenotype = serde_json::from_str(&wire).unwrap();
+            assert_eq!(restored, wrong);
+            let mut without = wrong.clone();
+            without
+                .emitters
+                .retain(|row| row.source != BiochemicalSourceLocus::AwakeRestRecoveryV1);
+            without.compile().unwrap();
+            for tick in [Tick(1), Tick(64)] {
+                for expression in [0.0, 0.5, 1.0] {
+                    let inactive = initial
+                        .advance(
+                            tick,
+                            body,
+                            BodyEventDelta::zero(),
+                            None,
+                            &restored,
+                            expression,
+                        )
+                        .unwrap();
+                    let control = initial
+                        .advance(
+                            tick,
+                            body,
+                            BodyEventDelta::zero(),
+                            None,
+                            &without,
+                            expression,
+                        )
+                        .unwrap();
+                    assert_eq!(
+                        inactive.0, control.0,
+                        "variant={variant}, tick={tick:?}, expression={expression}"
+                    );
+                    assert_eq!(
+                        inactive.1.emitter_evaluations,
+                        control.1.emitter_evaluations + if variant == 7 { 2 } else { 1 }
+                    );
+                    assert!(initial
+                        .advance_with_awake_rest_event_v1(
+                            tick,
+                            body,
+                            BodyEventDelta::zero(),
+                            None,
+                            &restored,
+                            expression,
+                            AwakeRestEventV1::new(0.1).unwrap()
+                        )
+                        .is_err());
+                }
+            }
+        }
     }
 }

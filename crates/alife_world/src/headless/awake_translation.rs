@@ -605,6 +605,7 @@ impl HeadlessWorld {
             neural,
             novelty,
             Some(&mut state),
+            None,
         );
         match result {
             Err(error) => {

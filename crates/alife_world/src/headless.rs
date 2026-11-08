@@ -1392,6 +1392,8 @@ pub struct HeadlessWorld {
     injected_tick_late_failure_after_first_organism: bool,
 }
 
+mod awake_rest_research;
+pub use awake_rest_research::{AwakeRestReceiptV1, AwakeRestRequestV1};
 mod thermal_contact_candidate;
 pub use thermal_contact_candidate::ThermalContactCandidate;
 
@@ -4717,8 +4719,14 @@ impl HeadlessWorld {
         world_entity_id: WorldEntityId,
     ) -> Result<HeadlessMotorTransactionReceipt, HeadlessMotorTransactionError> {
         let before = self.clone();
-        let result =
-            self.apply_registered_motor_bundle_inner(bundle, world_entity_id, None, None, None);
+        let result = self.apply_registered_motor_bundle_inner(
+            bundle,
+            world_entity_id,
+            None,
+            None,
+            None,
+            None,
+        );
         if let Err(error) = result {
             *self = before;
             return Err(error);
@@ -4737,6 +4745,7 @@ impl HeadlessWorld {
             bundle,
             world_entity_id,
             Some(neural),
+            None,
             None,
             None,
         );
@@ -4772,6 +4781,7 @@ impl HeadlessWorld {
             Some(neural),
             Some((novelty, object_novelty)),
             None,
+            None,
         )
     }
 
@@ -4782,7 +4792,12 @@ impl HeadlessWorld {
         neural: Option<&NeuralEmissionFrame>,
         novelty: Option<(f32, &[(WorldEntityId, f32)])>,
         mut translation: Option<&mut awake_translation::AwakeTranslationState>,
+        awake_rest: Option<&mut alife_core::AwakeRestEventV1>,
     ) -> Result<HeadlessMotorTransactionReceipt, HeadlessMotorTransactionError> {
+        // No unqualified composition with the separate reflex experiment.
+        if awake_rest.is_some() && translation.is_some() {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
+        }
         let outcome_tick = self.validate_registered_motor_bundle(bundle, world_entity_id)?;
         let embodiment = self
             .organism_registry
@@ -5014,13 +5029,46 @@ impl HeadlessWorld {
         let (body_event, relief) =
             self.thermal_interval_event(body_event, initial_thermal.max(final_thermal));
         body_event.validate_contract()?;
-        self.advance_biology_with_thermal_candidate(
-            bundle.organism_id,
-            outcome_tick,
-            body_event,
-            neural,
-            relief,
-        )?;
+        if let Some(recovery) = awake_rest {
+            // The typed entry validated the inherited recipe and neutral posture.
+            // Every realized segment counts, including cancelled net paths. Fresh
+            // damage/failed work cancels recovery but retains its complete costs.
+            let stationary = executed
+                .iter()
+                .all(|(_, result)| result.execution.physical.displacement == Vec3f::ZERO);
+            let quiet = executed
+                .iter()
+                .all(|(_, result)| result.execution.succeeded)
+                && body_event.damage == 0.0
+                && body_event.sleep_recovery == 0.0;
+            let dose = if stationary && quiet {
+                channels
+                    .iter()
+                    .find(|channel| channel.channel == MotorChannel::Posture)
+                    .map_or(0.0, |channel| channel.intensity.raw())
+            } else {
+                0.0
+            };
+            *recovery = alife_core::AwakeRestEventV1::new(dose)?;
+            self.organism_registry
+                .advance_biology_body_research_v1(
+                    bundle.organism_id,
+                    outcome_tick,
+                    body_event,
+                    neural,
+                    relief,
+                    *recovery,
+                )
+                .map_err(map_organism_registry_error)?;
+        } else {
+            self.advance_biology_with_thermal_candidate(
+                bundle.organism_id,
+                outcome_tick,
+                body_event,
+                neural,
+                relief,
+            )?;
+        }
         self.validate_organism_bindings()?;
         let biology_after = *self
             .organism_registry
