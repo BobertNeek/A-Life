@@ -1,0 +1,29 @@
+{
+  "source_commit": "82d8ac4b096f65469a4a80ac578e75285c205942",
+  "source_tree": "02516c654c4efce2cb69d1d4bbbdd5c51b54754f",
+  "base_commit": "f83be325d47b435c9e8889d70ea64496f2b382b4",
+  "base_tree": "da127f8d53fd615f3df18e01a5cbff8c2232738c",
+  "accepted_main_equivalent_commit": "c775c8c92e8f5e625f8a3e861ef79200199b54df",
+  "files": [
+    {
+      "path": "crates/alife_world/src/headless.rs",
+      "sha256": "048452e21e7e1957985f04c8d4f0b9386edc718decdb26ebd4fb55dfc9b926dd",
+      "git_blob": "b44c1d26e27703f98862b68354e3f1afd429f02a"
+    },
+    {
+      "path": "crates/alife_world/src/headless/awake_translation.rs",
+      "sha256": "dc187f6a37509db45cd59f25106ae6f4e3ee2a5f0e70b330e559148470ea93b0",
+      "git_blob": "3ee5a24f54e27b80a7fc2fd7a2291ffb93460293"
+    },
+    {
+      "path": "crates/alife_world/src/headless/contact_withdrawal.rs",
+      "sha256": "b80a6d08d4a9eff0d37ddbeec666d776edad6cb6243dc208ade651e384ceae02",
+      "git_blob": "93464c5784b94dd2577d0b345ac57e43a3c7551a"
+    },
+    {
+      "path": "crates/alife_world/src/headless/translation_budget.rs",
+      "sha256": "33eee1ae9bebd1a8c34dd79570550410e88537273047663487e1c63ba2b05ddf",
+      "git_blob": "964020edf866121d3b3ff455ad6aac5b17c39c15"
+    }
+  ]
+}

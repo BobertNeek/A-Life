@@ -1,0 +1,13 @@
+    Finished `test` profile [unoptimized] target(s) in 0.08s
+     Running unittests src/lib.rs (/workspace/scratch/ee5e08a3ca9b/arousal-lineage-check-target-v9/debug/deps/alife_world-6b7d17d635ca0301)
+
+running 6 tests
+test headless::translation_budget::blocked_attempt_still_uses_its_allocated_time ... ok
+test headless::translation_budget::early_contact_allocates_only_remaining_time_at_reflex_speed ... ok
+test headless::translation_budget::initial_reflex_priority_consumes_interval_before_voluntary_translation ... ok
+test headless::translation_budget::malformed_and_over_budget_segments_are_atomic_rejections ... ok
+test headless::translation_budget::opposite_segments_count_path_not_zero_net_displacement ... ok
+test headless::translation_budget::slow_full_interval_cannot_be_followed_by_another_full_reflex ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 265 filtered out; finished in 0.00s
+

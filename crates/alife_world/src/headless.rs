@@ -2,7 +2,9 @@
 //!
 //! Owns physical state, perception, action legality, and organism biology.
 
+mod awake_translation;
 mod contact_withdrawal;
+pub use awake_translation::{AwakeTranslationIntervalReceipt, TranslationTimeMetric};
 
 use std::{
     cell::{Ref, RefCell},
@@ -4711,7 +4713,8 @@ impl HeadlessWorld {
         world_entity_id: WorldEntityId,
     ) -> Result<HeadlessMotorTransactionReceipt, HeadlessMotorTransactionError> {
         let before = self.clone();
-        let result = self.apply_registered_motor_bundle_inner(bundle, world_entity_id, None, None);
+        let result =
+            self.apply_registered_motor_bundle_inner(bundle, world_entity_id, None, None, None);
         if let Err(error) = result {
             *self = before;
             return Err(error);
@@ -4726,8 +4729,13 @@ impl HeadlessWorld {
         neural: &NeuralEmissionFrame,
     ) -> Result<HeadlessMotorTransactionReceipt, HeadlessMotorTransactionError> {
         let before = self.clone();
-        let result =
-            self.apply_registered_motor_bundle_inner(bundle, world_entity_id, Some(neural), None);
+        let result = self.apply_registered_motor_bundle_inner(
+            bundle,
+            world_entity_id,
+            Some(neural),
+            None,
+            None,
+        );
         if let Err(error) = result {
             *self = before;
             return Err(error);
@@ -4759,6 +4767,7 @@ impl HeadlessWorld {
             world_entity_id,
             Some(neural),
             Some((novelty, object_novelty)),
+            None,
         )
     }
 
@@ -4768,6 +4777,7 @@ impl HeadlessWorld {
         world_entity_id: WorldEntityId,
         neural: Option<&NeuralEmissionFrame>,
         novelty: Option<(f32, &[(WorldEntityId, f32)])>,
+        mut translation: Option<&mut awake_translation::AwakeTranslationState>,
     ) -> Result<HeadlessMotorTransactionReceipt, HeadlessMotorTransactionError> {
         let outcome_tick = self.validate_registered_motor_bundle(bundle, world_entity_id)?;
         let embodiment = self
@@ -4820,10 +4830,41 @@ impl HeadlessWorld {
             })
             .collect::<Result<Vec<_>, _>>()?;
         channels.sort_by_key(|command| motor_channel_order(command.channel));
+        if let Some(state) = translation.as_deref_mut() {
+            state.begin(
+                self,
+                bundle.organism_id,
+                world_entity_id,
+                locomotor_capacity,
+                &embodiment,
+            )?;
+        }
         let mut executed = Vec::with_capacity(channels.len());
         for channel in &channels {
             let command = legacy_action_for_motor_channel(bundle.organism_id, channel)?;
-            let mut result = if channel.channel == MotorChannel::Vocal {
+            let mut result = if translation
+                .as_ref()
+                .is_some_and(|state| state.preempts(&command))
+            {
+                self.finish_action(
+                    command,
+                    false,
+                    Some(ReferenceActionFailure::ActionRejected),
+                    physical(PhysicalContactKind::None, None, Vec3f::ZERO, 0.0)?,
+                    OutcomeProfile::no_manipulation(),
+                    Vec::new(),
+                )?
+            } else if translation.is_some()
+                && matches!(
+                    classify_action(&command),
+                    HeadlessAction::StepForward
+                        | HeadlessAction::Move
+                        | HeadlessAction::Approach
+                        | HeadlessAction::Flee
+                )
+            {
+                self.execute_awake_translation(&command, translation.as_deref_mut().unwrap())?
+            } else if channel.channel == MotorChannel::Vocal {
                 match decode_vocal_channel_payload(channel)? {
                     Some((payload, prompted)) => {
                         self.apply_neural_command(&command, Some(payload), prompted)?
@@ -4857,6 +4898,9 @@ impl HeadlessWorld {
                     result.body_event.investigation = interaction_novelty;
                     result.body_event.play_stimulation *= 1.0 - interaction_novelty;
                 }
+            }
+            if let Some(state) = translation.as_deref_mut() {
+                state.observe_voluntary(&command, &result)?;
             }
             executed.push((channel.clone(), result));
         }
@@ -4895,13 +4939,34 @@ impl HeadlessWorld {
         if let Some((novelty, _)) = novelty {
             body_event.perceived_novelty = novelty;
         }
+        if let Some(state) = translation.as_ref() {
+            if let Some(reflex) = &state.withdrawal {
+                body_event.energy = (body_event.energy - reflex.energy_cost).clamp(-1.0, 1.0);
+                for source in &reflex.sources {
+                    body_event.damage = body_event
+                        .damage
+                        .max(self.objects[&source.raw()].hazard_pain);
+                }
+            }
+            if body_event.damage > 0.0 {
+                body_event.sleep_recovery = 0.0;
+            }
+        }
         body_event = normalize_sleep_recovery_for_motion(
             body_event,
             executed
                 .iter()
-                .map(|(_, result)| result.execution.physical.displacement),
+                .map(|(_, result)| result.execution.physical.displacement)
+                .chain(
+                    translation
+                        .as_ref()
+                        .and_then(|state| state.withdrawal.as_ref())
+                        .map(|r| r.displacement),
+                ),
         );
-        let final_thermal = self.thermal_contact_severity_at(world_entity_id, final_position);
+        let final_thermal = self
+            .thermal_contact_severity_at(world_entity_id, final_position)
+            .max(translation.as_ref().map_or(0.0, |state| state.thermal_peak));
         let (body_event, relief) =
             self.thermal_interval_event(body_event, initial_thermal.max(final_thermal));
         body_event.validate_contract()?;
@@ -4950,7 +5015,13 @@ impl HeadlessWorld {
         self.last_action_result = executed.last().map(|(_, result)| result.clone());
 
         let physical = aggregate_motor_physical_outcome(&executed)?;
-        self.commit_current_interval_velocity(bundle.organism_id, physical.displacement)?;
+        let actual_displacement = translation
+            .as_ref()
+            .and_then(|state| state.withdrawal.as_ref())
+            .map_or(physical.displacement, |reflex| {
+                add(physical.displacement, reflex.displacement)
+            });
+        self.commit_current_interval_velocity(bundle.organism_id, actual_displacement)?;
         self.commit_carried_interval_velocity(bundle.organism_id, &carried_positions);
         let joint = JointPhysicalOutcome::new(physical, channel_observations)?
             .with_channel_outcomes(channel_outcomes)?;
@@ -5969,6 +6040,16 @@ impl HeadlessWorld {
         agent_id: WorldEntityId,
         intent: MoveIntent,
     ) -> Result<HeadlessActionResult, ScaffoldContractError> {
+        self.execute_move_with_interval(command, agent_id, intent, None)
+    }
+
+    fn execute_move_with_interval(
+        &mut self,
+        command: ActionCommand,
+        agent_id: WorldEntityId,
+        intent: MoveIntent,
+        translation: Option<&mut awake_translation::AwakeTranslationState>,
+    ) -> Result<HeadlessActionResult, ScaffoldContractError> {
         if self.player_held_object() == Some(agent_id) {
             return self.finish_action(
                 command,
@@ -6076,7 +6157,24 @@ impl HeadlessWorld {
             );
         }
 
-        let touched = self
+        let contact_plan = translation.as_ref().and_then(|state| {
+            state.swept_contact_plan(self, &command, agent_id, start, destination)
+        });
+        if let Some(plan) = &contact_plan {
+            if let Some(terrain) = &self.terrain {
+                // Never place a clipped swept contact above/below the actual
+                // ground. Until the path is grounded exactly, reject this
+                // staged move rather than invent an intermediate surface.
+                if terrain
+                    .resolve_move(start, plan.position)
+                    .is_none_or(|grounded| distance(grounded, plan.position) > 1e-5)
+                {
+                    return self.blocked_local_move(command);
+                }
+            }
+            destination = plan.position;
+        }
+        let mut touched = self
             .objects
             .iter()
             .filter(|(id, object)| {
@@ -6091,6 +6189,14 @@ impl HeadlessWorld {
             })
             .map(|(id, _)| WorldEntityId(*id))
             .collect::<Vec<_>>();
+        if let Some(plan) = &contact_plan {
+            for id in &plan.sources {
+                if !touched.contains(id) {
+                    touched.push(*id);
+                }
+            }
+            touched.sort_unstable_by_key(|id| id.raw());
+        }
         // Prefer endpoint contacts, matching body-contact proximity. Keep the
         // nearest swept-only contact as a fallback and entity-ID ties stable.
         let hazard = touched
@@ -6170,14 +6276,18 @@ impl HeadlessWorld {
         };
         // Peer exposure is measured once at the biology boundary, independently
         // of static affinity and how many motor channels report the same touch.
-        self.finish_action(
+        let mut result = self.finish_action(
             command,
             true,
             None,
             physical(contact, target, displacement, 0.08)?,
             profile,
             touched,
-        )
+        )?;
+        if let (Some(state), Some(plan)) = (translation, contact_plan) {
+            state.finish_swept_contact(self, &command, agent_id, &mut result, plan)?;
+        }
+        Ok(result)
     }
 
     fn finish_action(
@@ -8702,6 +8812,500 @@ mod task_6_factorized_motor_tests {
         let agent = world.entity_id("agent").unwrap();
         world.register_organism_record(record(agent)).unwrap();
         (world, agent)
+    }
+
+    fn initial_priority_bundle(rest: bool) -> MotorCommandBundle {
+        let mut channels = vec![ChannelCommand::new(
+            MotorChannel::Locomotion,
+            HeadlessActionIds::STEP_FORWARD,
+            None,
+            Vec3f::new(1.0, 0.0, 0.0),
+            Intensity::new(1.0).unwrap(),
+            alife_core::DurationTicks::new(1),
+            0.0,
+            Confidence::new(1.0).unwrap(),
+            0,
+        )
+        .unwrap()];
+        if rest {
+            channels.push(
+                ChannelCommand::new(
+                    MotorChannel::Posture,
+                    ActionKind::Rest.canonical_id(),
+                    None,
+                    Vec3f::ZERO,
+                    Intensity::new(1.0).unwrap(),
+                    alife_core::DurationTicks::new(1),
+                    0.0,
+                    Confidence::new(1.0).unwrap(),
+                    0,
+                )
+                .unwrap(),
+            );
+        }
+        MotorCommandBundle::new(
+            ORGANISM_ID,
+            alife_core::ExperienceSequenceId::new(1).unwrap(),
+            Tick::ZERO,
+            channels,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn awake_initial_priority_quiet_control_preserves_complete_world_and_receipt() {
+        let (mut candidate, agent) = withdrawal_world(Vec3f::new(8.0, 0.0, 0.0), 0.4);
+        let mut control = candidate.clone();
+        let bundle = initial_priority_bundle(false);
+        let expected = control
+            .apply_registered_motor_bundle(&bundle, agent)
+            .unwrap();
+        let actual = candidate
+            .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
+            .unwrap();
+        assert!(
+            actual.voluntary == expected,
+            "quiet voluntary receipt changed"
+        );
+        assert_eq!(
+            candidate.canonical_signature_digest().unwrap(),
+            control.canonical_signature_digest().unwrap()
+        );
+        assert!(actual.withdrawal.is_none());
+        assert!((actual.allocated_translation_time - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn awake_ground_priority_quiet_slope_preserves_existing_planar_walking() {
+        let (mut candidate, agent) = withdrawal_world(Vec3f::new(8.0, 0.0, 0.0), 0.4);
+        candidate.terrain = Some(
+            crate::WorldTerrain::new(
+                crate::TerrainData {
+                    width: 3,
+                    depth: 3,
+                    origin_x: -1.0,
+                    origin_z: -1.0,
+                    spacing: 1.0,
+                    heights: vec![-0.2, 0.0, 0.2, -0.2, 0.0, 0.2, -0.2, 0.0, 0.2],
+                    obstacles: vec![],
+                    water_level: None,
+                },
+                crate::LocomotionLimits::default(),
+            )
+            .unwrap(),
+        );
+        let mut control = candidate.clone();
+        let bundle = initial_priority_bundle(false);
+        let expected = control
+            .apply_registered_motor_bundle(&bundle, agent)
+            .unwrap();
+        let actual = candidate
+            .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
+            .unwrap();
+        assert!(actual.voluntary == expected, "quiet slope receipt changed");
+        assert_eq!(
+            candidate.canonical_signature_digest().unwrap(),
+            control.canonical_signature_digest().unwrap()
+        );
+        assert_eq!(
+            actual.translation_time_metric,
+            TranslationTimeMetric::GroundPlane
+        );
+        assert!(actual.withdrawal.is_none());
+        assert!(actual.actual_displacement.y > 0.0);
+        assert!(
+            actual.voluntary_path
+                > actual
+                    .actual_displacement
+                    .x
+                    .hypot(actual.actual_displacement.z)
+        );
+        assert!((actual.allocated_translation_time - 1.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn awake_initial_priority_preempts_toward_motion_without_false_voluntary_credit() {
+        let (mut world, agent) = withdrawal_world(Vec3f::new(0.1, 0.0, 0.0), 0.4);
+        let bundle = initial_priority_bundle(false);
+        let receipt = world
+            .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
+            .unwrap();
+        let reflex = receipt.withdrawal.as_ref().unwrap();
+        assert!(!reflex.blocked);
+        assert!(reflex.displacement.x < 0.0);
+        assert_eq!(receipt.voluntary.bundle, bundle);
+        assert!(!receipt.voluntary.succeeded);
+        assert_eq!(receipt.voluntary.joint.execution.displacement, Vec3f::ZERO);
+        assert_eq!(receipt.actual_displacement, reflex.displacement);
+        assert_eq!(world.entity(agent).unwrap().position, reflex.displacement);
+        assert_eq!(receipt.voluntary_path, 0.0);
+        assert_eq!(receipt.allocated_translation_time, 1.0);
+        assert_eq!(receipt.voluntary.body_event.energy, -reflex.energy_cost);
+        assert_eq!(receipt.voluntary.body_event.damage, 0.4);
+        assert_eq!(receipt.voluntary.outcome_tick, Tick(1));
+    }
+
+    #[test]
+    fn awake_initial_priority_blocks_rest_recovery_and_rolls_back_atomically() {
+        let (mut world, agent) = withdrawal_world(Vec3f::new(0.1, 0.0, 0.0), 0.4);
+        let bundle = initial_priority_bundle(true);
+        let receipt = world
+            .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
+            .unwrap();
+        assert_eq!(receipt.voluntary.body_event.sleep_recovery, 0.0);
+        let (mut failing, agent) = withdrawal_world(Vec3f::new(0.1, 0.0, 0.0), 0.4);
+        failing.injected_post_action_failure = true;
+        let before = failing.canonical_signature_digest().unwrap();
+        assert!(failing
+            .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
+            .is_err());
+        assert_eq!(failing.canonical_signature_digest().unwrap(), before);
+    }
+
+    fn swept_priority_world(
+        fraction: f32,
+        intensity: f32,
+    ) -> (HeadlessWorld, WorldEntityId, MotorCommandBundle, f32) {
+        let (mut world, agent) = withdrawal_world(Vec3f::new(8.0, 0.0, 0.0), 0.4);
+        let mut bundle = initial_priority_bundle(false);
+        bundle.channels[0].intensity = Intensity::new(intensity).unwrap();
+        let mut quiet = world.clone();
+        let step = quiet
+            .apply_registered_motor_bundle(&bundle, agent)
+            .unwrap()
+            .joint
+            .execution
+            .displacement
+            .x;
+        assert!(step > 0.0);
+        let hazard = world.entity_id("hazard").unwrap();
+        let object = world.objects.get_mut(&hazard.raw()).unwrap();
+        object.position.x = object.radius + step * fraction;
+        (world, agent, bundle, step)
+    }
+
+    #[test]
+    fn awake_swept_priority_early_middle_late_share_time_path_and_effort() {
+        for fraction in [0.2, 0.5, 0.9] {
+            let (mut world, agent, bundle, step) = swept_priority_world(fraction, 1.0);
+            let receipt = world
+                .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
+                .unwrap();
+            let reflex = receipt.withdrawal.as_ref().unwrap();
+            assert!(!reflex.blocked);
+            assert!((receipt.voluntary_time_allocated - fraction).abs() < 1e-4);
+            assert!((receipt.reflex_time_allocated - (1.0 - fraction)).abs() < 1e-4);
+            assert!((receipt.allocated_translation_time - 1.0).abs() < 1e-6);
+            assert!((receipt.voluntary_path - step * fraction).abs() < 1e-5);
+            assert!((receipt.reflex_path - step * (1.0 - fraction)).abs() < 1e-5);
+            assert!(receipt.voluntary_path + receipt.reflex_path <= step + 1e-5);
+            assert_eq!(receipt.voluntary.bundle, bundle);
+            assert_eq!(
+                world.entity(agent).unwrap().position,
+                receipt.actual_displacement
+            );
+            assert_eq!(receipt.voluntary.body_event.damage, 0.4);
+            assert!((receipt.voluntary_translation_energy + 0.08 * fraction).abs() < 1e-5);
+            assert!(
+                (receipt.voluntary.body_event.energy - receipt.voluntary_translation_energy
+                    + reflex.energy_cost)
+                    .abs()
+                    < 1e-6
+            );
+        }
+    }
+
+    #[test]
+    fn awake_swept_priority_slow_intent_uses_time_not_distance_remainder() {
+        let (mut world, agent, bundle, step) = swept_priority_world(0.5, 0.5);
+        let embodiment = world
+            .organism_registry
+            .get(ORGANISM_ID)
+            .unwrap()
+            .embodiment();
+        let effector = embodiment.effector_gain(EffectorCapability::Translation);
+        let proprioception = embodiment.proprioceptive_gain();
+        let voluntary_factor = (0.5 * effector * proprioception).clamp(0.0, 1.0);
+        let physical_step = step / voluntary_factor;
+        let reflex_rate = physical_step * effector.clamp(0.0, 1.0);
+        let receipt = world
+            .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
+            .unwrap();
+        assert!((receipt.voluntary_time_allocated - 0.5).abs() < 1e-4);
+        assert!((receipt.reflex_time_allocated - 0.5).abs() < 1e-4);
+        assert!((receipt.voluntary_path - step * 0.5).abs() < 1e-5);
+        println!("AWAKE_SHARED_ADAPTER_RATES effector={effector} proprioception={proprioception} voluntary_factor={voluntary_factor} voluntary_rate={step} reflex_rate={reflex_rate} actual_reflex_path={}", receipt.reflex_path);
+        assert!((receipt.reflex_path - reflex_rate * 0.5).abs() < 1e-5);
+        assert!(receipt.voluntary_path + receipt.reflex_path <= physical_step + 1e-5);
+    }
+
+    #[test]
+    fn awake_swept_priority_end_contact_has_no_extra_full_reflex_allowance() {
+        let (mut world, agent, bundle, step) = swept_priority_world(0.999, 1.0);
+        let receipt = world
+            .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
+            .unwrap();
+        assert!(receipt.withdrawal.is_some());
+        assert!(receipt.reflex_time_allocated < 0.002);
+        assert!(receipt.reflex_path < step * 0.002);
+        assert!(receipt.voluntary_path + receipt.reflex_path <= step + 1e-5);
+    }
+
+    #[test]
+    fn awake_swept_priority_zero_net_path_suppresses_rest_with_one_biology_advance() {
+        let (mut world, agent, mut bundle, _) = swept_priority_world(0.5, 1.0);
+        bundle
+            .channels
+            .push(initial_priority_bundle(true).channels[1].clone());
+        let before = world.organism_registry.get(ORGANISM_ID).unwrap().clone();
+        let receipt = world
+            .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
+            .unwrap();
+        assert!(receipt.actual_displacement.x.abs() < 1e-5);
+        assert!(receipt.voluntary_path > 0.0 && receipt.reflex_path > 0.0);
+        assert_eq!(receipt.voluntary.body_event.sleep_recovery, 0.0);
+        let expected = before
+            .biochemistry()
+            .advance(
+                receipt.voluntary.outcome_tick,
+                receipt.voluntary.body_event,
+                before.phenotype(),
+            )
+            .unwrap();
+        assert!(
+            receipt.voluntary.biology_after == expected,
+            "biology advanced more than once"
+        );
+        assert!(
+            *world
+                .organism_registry
+                .get(ORGANISM_ID)
+                .unwrap()
+                .biochemistry()
+                == expected
+        );
+    }
+
+    #[test]
+    fn awake_initial_priority_preserves_carried_hazard_ownership_and_pose() {
+        let (mut world, agent, held) = own_carried_hazard_withdrawal_world();
+        let initial = world.entity(held).unwrap().position;
+        let receipt = world
+            .apply_registered_motor_bundle_with_shared_contact_priority(
+                &initial_priority_bundle(false),
+                agent,
+            )
+            .unwrap();
+        let reflex = receipt.withdrawal.as_ref().unwrap();
+        assert!(!reflex.blocked && !reflex.sources.contains(&held));
+        assert_eq!(world.entity(held).unwrap().carried_by, Some(ORGANISM_ID));
+        assert!(
+            distance(
+                world.entity(held).unwrap().position,
+                add(initial, receipt.actual_displacement)
+            ) < 1e-6
+        );
+        assert_eq!(receipt.voluntary_path, 0.0);
+    }
+
+    #[test]
+    fn awake_swept_priority_opposed_tangent_normals_stop_without_invented_direction() {
+        let (mut world, agent, bundle, step) = swept_priority_world(0.5, 1.0);
+        let first = world.entity_id("hazard").unwrap();
+        let radius = 0.25;
+        let object = world.objects.get_mut(&first.raw()).unwrap();
+        object.radius = radius;
+        object.position = Vec3f::new(step * 0.5, 0.0, radius);
+        world
+            .editor_spawn_object(WorldEditorSpawnSpec {
+                label: "opposed".into(),
+                kind: WorldObjectKind::Hazard,
+                organism_id: None,
+                position: Vec3f::new(step * 0.5, 0.0, -radius),
+                nutrition: 0.0,
+                hazard_pain: 0.4,
+                radius,
+                token_id: None,
+            })
+            .unwrap();
+        let receipt = world
+            .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
+            .unwrap();
+        let reflex = receipt.withdrawal.as_ref().unwrap();
+        assert_eq!(reflex.sources.len(), 2);
+        assert!(reflex.blocked);
+        assert_eq!(reflex.displacement, Vec3f::ZERO);
+        assert_eq!(
+            reflex.direction_basis,
+            WithdrawalDirectionBasis::LocalizedContact
+        );
+        assert!((receipt.voluntary_path - step * 0.5).abs() < 1e-5);
+        assert_eq!(receipt.voluntary.body_event.damage, 0.4);
+    }
+
+    #[test]
+    fn awake_swept_priority_samples_intermediate_thermal_contact_once() {
+        let (mut world, agent, bundle, step) = swept_priority_world(0.5, 1.0);
+        let hazard = world.entity_id("hazard").unwrap();
+        let object = world.objects.get_mut(&hazard.raw()).unwrap();
+        object.radius = HEADLESS_CONTACT_RADIUS;
+        object.position.x = HEADLESS_CONTACT_RADIUS + step * 0.5;
+        object.grounded_physical.surface_temperature = 1.0;
+        let parameters = ThermalContactCandidate::research(BTreeMap::from([(hazard.raw(), 1.0)]));
+        let receipt = world
+            .with_thermal_contact_candidate(parameters, |world| {
+                assert_eq!(world.thermal_contact_severity_at(agent, Vec3f::ZERO), 0.0);
+                let receipt = world
+                    .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
+                    .unwrap();
+                assert_eq!(
+                    world.thermal_contact_severity_at(agent, world.entity(agent).unwrap().position),
+                    0.0
+                );
+                Ok(receipt)
+            })
+            .unwrap();
+        assert!((receipt.voluntary.body_event.temperature_stress - 0.005).abs() < 1e-6);
+        assert_eq!(receipt.voluntary.body_event.damage, 0.4);
+    }
+
+    #[test]
+    fn awake_initial_priority_water_block_preserves_zero_motion_and_honest_effort() {
+        let (mut world, agent) = withdrawal_world(Vec3f::new(0.2, 0.0, 0.0), 0.4);
+        world.terrain = Some(
+            crate::WorldTerrain::new(
+                crate::TerrainData {
+                    width: 3,
+                    depth: 3,
+                    origin_x: -1.0,
+                    origin_z: -1.0,
+                    spacing: 1.0,
+                    heights: vec![0.0; 9],
+                    obstacles: vec![],
+                    water_level: Some(3.0),
+                },
+                crate::LocomotionLimits::default(),
+            )
+            .unwrap(),
+        );
+        let receipt = world
+            .apply_registered_motor_bundle_with_shared_contact_priority(
+                &initial_priority_bundle(true),
+                agent,
+            )
+            .unwrap();
+        let reflex = receipt.withdrawal.as_ref().unwrap();
+        assert!(reflex.blocked);
+        assert_eq!(receipt.actual_displacement, Vec3f::ZERO);
+        assert_eq!(receipt.allocated_translation_time, 1.0);
+        assert!(!receipt.reflex_budget_exhausted);
+        assert_eq!(receipt.voluntary.body_event.energy, -reflex.energy_cost);
+        assert_eq!(receipt.voluntary.body_event.sleep_recovery, 0.0);
+    }
+
+    #[test]
+    fn awake_initial_priority_restore_has_no_latched_reflex_after_contact_ends() {
+        let (mut world, agent) = withdrawal_world(Vec3f::new(0.01, 0.0, 0.0), 0.4);
+        let hazard = world.entity_id("hazard").unwrap();
+        world.objects.get_mut(&hazard.raw()).unwrap().radius = 0.03;
+        world
+            .apply_registered_motor_bundle_with_shared_contact_priority(
+                &initial_priority_bundle(false),
+                agent,
+            )
+            .unwrap();
+        world.try_advance_tick().unwrap();
+        let encoded = serde_json::to_vec(&world.save_state()).unwrap();
+        let decoded = serde_json::from_slice(&encoded).unwrap();
+        let mut restored = HeadlessWorld::from_save_state(&decoded).unwrap();
+        let mut bundle = initial_priority_bundle(true);
+        bundle
+            .channels
+            .retain(|channel| channel.channel == MotorChannel::Posture);
+        bundle.tick = Tick(1);
+        bundle.sequence_id = alife_core::ExperienceSequenceId::new(2).unwrap();
+        let expected = world
+            .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
+            .unwrap();
+        let actual = restored
+            .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
+            .unwrap();
+        assert!(expected.withdrawal.is_none() && actual.withdrawal.is_none());
+        assert!(expected == actual, "restored interval differed");
+        assert_eq!(
+            world.canonical_signature_digest().unwrap(),
+            restored.canonical_signature_digest().unwrap()
+        );
+    }
+
+    fn spatial_swept_priority_case(target: Vec3f) {
+        let (mut world, agent) = withdrawal_world(Vec3f::new(8.0, 0.0, 0.0), 0.4);
+        let bundle = MotorCommandBundle::new(
+            ORGANISM_ID,
+            alife_core::ExperienceSequenceId::new(1).unwrap(),
+            Tick::ZERO,
+            vec![ChannelCommand::new(
+                MotorChannel::Locomotion,
+                ActionKind::Move.canonical_id(),
+                Some(alife_core::ActionTarget::new(None, Some(target))),
+                Vec3f::ZERO,
+                Intensity::new(1.0).unwrap(),
+                alife_core::DurationTicks::new(1),
+                0.0,
+                Confidence::new(1.0).unwrap(),
+                0,
+            )
+            .unwrap()],
+        )
+        .unwrap();
+        let mut quiet = world.clone();
+        let quiet_receipt = quiet.apply_registered_motor_bundle(&bundle, agent).unwrap();
+        let displacement = quiet_receipt.joint.execution.displacement;
+        let full_path = distance(Vec3f::ZERO, displacement);
+        assert!(full_path > 0.0);
+        let hazard = world.entity_id("hazard").unwrap();
+        let radius = 0.02;
+        let scale = (full_path * 0.5 + radius) / full_path;
+        let object = world.objects.get_mut(&hazard.raw()).unwrap();
+        object.radius = radius;
+        object.position = Vec3f::new(
+            displacement.x * scale,
+            displacement.y * scale,
+            displacement.z * scale,
+        );
+        let receipt = world
+            .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
+            .unwrap();
+        assert!(
+            receipt.withdrawal.is_some(),
+            "spatial contact did not produce a reflex receipt"
+        );
+        assert_eq!(
+            receipt.translation_time_metric,
+            TranslationTimeMetric::Spatial
+        );
+        assert!(
+            (receipt.voluntary_time_allocated - 0.5).abs() < 1e-4,
+            "spatial prefix used wrong time: {}",
+            receipt.voluntary_time_allocated
+        );
+        assert!((receipt.reflex_time_allocated - 0.5).abs() < 1e-4);
+        assert!(
+            receipt.voluntary_path + receipt.reflex_path <= full_path + 1e-5,
+            "spatial path exceeded interval: {} > {}",
+            receipt.voluntary_path + receipt.reflex_path,
+            full_path
+        );
+    }
+
+    #[test]
+    fn awake_spatial_priority_diagonal_motion_uses_three_dimensional_time() {
+        spatial_swept_priority_case(Vec3f::new(1.0, 1.0, 0.0));
+    }
+
+    #[test]
+    fn awake_spatial_priority_vertical_motion_cannot_skip_contact_or_time() {
+        spatial_swept_priority_case(Vec3f::new(0.0, 1.0, 0.0));
     }
 
     #[test]
@@ -13109,3 +13713,5 @@ fn motion_sphere_entry(start: Vec3f, end: Vec3f, center: Vec3f, radius: f32) -> 
 
 #[cfg(test)]
 mod body_clearance_tests;
+
+mod translation_budget;

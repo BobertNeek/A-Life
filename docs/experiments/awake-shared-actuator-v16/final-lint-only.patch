@@ -1,0 +1,22 @@
+diff --git a/crates/alife_world/src/headless.rs b/crates/alife_world/src/headless.rs
+index fd0e373..b44c1d2 100644
+--- a/crates/alife_world/src/headless.rs
++++ b/crates/alife_world/src/headless.rs
+@@ -6048,7 +6048,7 @@ impl HeadlessWorld {
+         command: ActionCommand,
+         agent_id: WorldEntityId,
+         intent: MoveIntent,
+-        mut translation: Option<&mut awake_translation::AwakeTranslationState>,
++        translation: Option<&mut awake_translation::AwakeTranslationState>,
+     ) -> Result<HeadlessActionResult, ScaffoldContractError> {
+         if self.player_held_object() == Some(agent_id) {
+             return self.finish_action(
+@@ -6284,7 +6284,7 @@ impl HeadlessWorld {
+             profile,
+             touched,
+         )?;
+-        if let (Some(state), Some(plan)) = (translation.as_deref_mut(), contact_plan) {
++        if let (Some(state), Some(plan)) = (translation, contact_plan) {
+             state.finish_swept_contact(self, &command, agent_id, &mut result, plan)?;
+         }
+         Ok(result)

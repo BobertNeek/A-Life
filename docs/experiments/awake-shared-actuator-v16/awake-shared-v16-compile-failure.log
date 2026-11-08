@@ -1,0 +1,23 @@
+   Compiling alife_core v0.1.0 (/workspace/scratch/ee5e08a3ca9b/awake-shared-trajectory-v16/crates/alife_core)
+   Compiling alife_storage v0.1.0 (/workspace/scratch/ee5e08a3ca9b/awake-shared-trajectory-v16/crates/alife_storage)
+   Compiling alife_world v0.1.0 (/workspace/scratch/ee5e08a3ca9b/awake-shared-trajectory-v16/crates/alife_world)
+error[E0277]: the trait bound `alife_core::WorldEntityId: Ord` is not satisfied
+   --> crates/alife_world/src/headless/contact_withdrawal.rs:143:21
+    |
+143 |             sources.sort_unstable();
+    |                     ^^^^^^^^^^^^^ the trait `Ord` is not implemented for `alife_core::WorldEntityId`
+    |
+note: required by a bound in `core::slice::<impl [T]>::sort_unstable`
+   --> /rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/slice/mod.rs:3148:4
+
+error[E0277]: the trait bound `alife_core::WorldEntityId: Ord` is not satisfied
+    --> crates/alife_world/src/headless.rs:6198:21
+     |
+6198 |             touched.sort_unstable();
+     |                     ^^^^^^^^^^^^^ the trait `Ord` is not implemented for `alife_core::WorldEntityId`
+     |
+note: required by a bound in `core::slice::<impl [T]>::sort_unstable`
+    --> /rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/slice/mod.rs:3148:4
+
+For more information about this error, try `rustc --explain E0277`.
+error: could not compile `alife_world` (lib test) due to 2 previous errors
