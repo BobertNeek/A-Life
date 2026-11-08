@@ -1,0 +1,30 @@
+{
+  "base_commit": "2da9dd323ad6f074556a851174a2edbc9e34e216",
+  "prerequisite_v1_archive_sha256": "f68ff5f3374eec7434db8fde2dc5685b87d80c99ab8380fcd2f2ccc034afe1ed",
+  "v2_patch_sha256": "4c04c48358bbe3f7fe66ee4dc2b3b70459a9c41c47578d9290283609e4eb1e63",
+  "source_closure_file_sha256": "db39a27cf4937b3886a9bbadc42ff361cd4f632e36d3c13e67ea451bbcd4ebba",
+  "executable_sha256": "625ad8f5abee782c9c24123e3470a57872c52f321b493d523e79c23ca8041723",
+  "plan_sha256": "a31b1c6d89ef9209b3b0f44537db90d4e74c3f8833f82517702a50a92edaf8c4",
+  "context_input_sha256": "eb3b0bf55bb3ad0bf65ec2822c03dadbdf30466930ba56be463df827cc0d3d42",
+  "gains_per_gene": [
+    0,
+    0.0625,
+    0.25,
+    1,
+    4
+  ],
+  "original_rows": 24,
+  "unique_contexts": 12,
+  "final_replay_rows": 120,
+  "replay_ticks_per_row": 1,
+  "autonomous_lives": 0,
+  "new_physical_dispatches": 0,
+  "seed_allocation": null,
+  "constructor_seed": 2026110901,
+  "toolchain": "Rust1.99.1",
+  "backend": "CPU",
+  "jobs": 1,
+  "incremental": false,
+  "debug": 0,
+  "rust_min_stack": 33554432
+}

@@ -1,0 +1,821 @@
+--- a/crates/alife_training/examples/probe_grip_reader.rs
++++ b/crates/alife_training/examples/probe_grip_reader.rs
+@@ -18,6 +18,14 @@
+ /// Fresh inherited genes only. No acquired life, optimizer or private file input.
+ #[cfg(test)]
+ fn candidate(seed: u64, grip_reader: bool) -> Result<(BrainPhenotype, FoundationWeightAsset)> {
++    candidate_gain(seed, if grip_reader { 4. } else { 0. })
++}
++
++#[cfg(test)]
++fn candidate_gain(
++    seed: u64,
++    per_gene_gain: f32,
++) -> Result<(BrainPhenotype, FoundationWeightAsset)> {
+     let mut config = CanonicalNewGameConfig::phase3(seed, 1)?;
+     config.brain_class = BrainScaleTier::Standard2048;
+     let builtin = FoundationWeightAsset::builtin_n2048_v1(config.sensor_profile)?;
+@@ -70,8 +78,8 @@
+             (CandidateActionFamily::Approach | CandidateActionFamily::Contact, 26) => -32.,
+             (CandidateActionFamily::Avoid, 25) => 16.,
+             (CandidateActionFamily::Avoid, 26) => 128.,
+-            (CandidateActionFamily::Contact, 53) if grip_reader => 32.,
+-            (CandidateActionFamily::Other, 53) if grip_reader => -32.,
++            (CandidateActionFamily::Contact, 53) => 8. * per_gene_gain,
++            (CandidateActionFamily::Other, 53) if per_gene_gain != 0. => -8. * per_gene_gain,
+             _ => 0.,
+         };
+         *weight = total / counts[&(c.family().raw(), c.input_lane())] as f32;
+@@ -609,4 +617,163 @@
+             serde_json::json!({"legacy_v12_sha256":inherited_sha256,"legacy_v12_blake3_digest":hex(inherited.digest()),"off_digest":hex(off_asset.digest()),"on_digest":hex(on_asset.digest()),"legacy_to_off_weight_bit_changes":0,"legacy_to_off_coordinate_changes":retargeted,"off_to_on_weight_changes":16,"synapses":32768,"cognitive_decoder":false})
+         );
+     }
++
++    #[test]
++    fn detached_gain_ladder_exact_v1_contexts() {
++        let inputs: Vec<serde_json::Value> =
++            serde_json::from_str(include_str!("support/grip_utility_contexts_v1.json")).unwrap();
++        assert_eq!(inputs.len(), 24);
++        let (baseline, baseline_asset) = candidate_gain(2026110901, 0.).unwrap();
++        let mut output = Vec::new();
++        for gain in [0., 1. / 16., 1. / 4., 1., 4.] {
++            let (p, asset) = candidate_gain(2026110901, gain).unwrap();
++            let mut changes = 0;
++            for ((base, new), synapse) in baseline_asset
++                .weights()
++                .iter()
++                .zip(asset.weights())
++                .zip(p.synapses())
++            {
++                if base.to_bits() != new.to_bits() {
++                    let CompiledSynapseKind::Decoder(c) = synapse.kind() else {
++                        panic!("unexpected change")
++                    };
++                    assert_eq!(c.head(), DecoderHeadKind::MemoryContext);
++                    assert_eq!(c.input_lane(), 53);
++                    assert_eq!(*base, 0.);
++                    assert_eq!(
++                        *new,
++                        if c.family() == CandidateActionFamily::Contact {
++                            gain
++                        } else {
++                            assert_eq!(c.family(), CandidateActionFamily::Other);
++                            -gain
++                        }
++                    );
++                    changes += 1;
++                }
++            }
++            assert_eq!(changes, if gain == 0. { 0 } else { 16 });
++            assert_eq!(p.projections(), baseline.projections());
++            assert_eq!(p.neuron_dynamics(), baseline.neuron_dynamics());
++            for (a, b) in p.synapses().iter().zip(baseline.synapses()) {
++                assert_eq!(a.kind(), b.kind());
++                assert_eq!(a.source(), b.source());
++                assert_eq!(a.target(), b.target());
++            }
++            let asset_hex = asset
++                .digest()
++                .bytes()
++                .iter()
++                .map(|b| format!("{b:02x}"))
++                .collect::<String>();
++            let weights = asset.weights().to_vec();
++            let trainer = CpuFoundationTrainer::new(
++                p.clone(),
++                asset,
++                StageTrainableMask::recurrent_only(&p).unwrap(),
++                AdamWConfig::default(),
++            )
++            .unwrap();
++            let before = serde_json::to_vec(&trainer.checkpoint()).unwrap();
++            for (row_index, input) in inputs.iter().enumerate() {
++                let number = |key: &str| input[key].as_f64().unwrap() as f32;
++                let close = input["action_id"] == 2201;
++                let family = if close {
++                    CandidateActionFamily::Contact
++                } else {
++                    CandidateActionFamily::Other
++                };
++                let port = number("lane53");
++                let mut q = sequence(
++                    &p,
++                    &[
++                        (family, number("own_family_lane32"), port),
++                        (CandidateActionFamily::Other, -0.25, 0.),
++                    ],
++                );
++                q.ticks[0].candidates[0].decoder_inputs[26] = number("target_lane26");
++                q.ticks[0].candidates[0].innate_bias = number("task_prior");
++                q.ticks[0].candidates[1].innate_bias = number("ordinary_other_prior");
++                if input["case"] == "unrelated_pain_no_target_evidence" {
++                    q.ticks[0].encoded_inputs[0] = 0.125;
++                }
++                let evaluation = trainer.evaluate_replay(&q).unwrap();
++                let logits = &evaluation.candidate_logits[0];
++                let mut memory_raw = 0.;
++                let mut port_raw = 0.;
++                let mut coefficient = 0.;
++                let mut own_family = 0.;
++                let mut target = 0.;
++                for (synapse, weight) in p.synapses().iter().zip(&weights) {
++                    if let CompiledSynapseKind::Decoder(c) = synapse.kind() {
++                        if c.head() == DecoderHeadKind::MemoryContext && c.family() == family {
++                            let value = q.ticks[0].candidates[0].decoder_inputs
++                                [c.input_lane() as usize]
++                                * weight;
++                            memory_raw += value;
++                            if c.input_lane() == 53 {
++                                port_raw += value;
++                                coefficient += weight;
++                            }
++                            if c.input_lane() == 32 {
++                                own_family += value;
++                            }
++                            if c.input_lane() == 26 {
++                                target += value;
++                            }
++                        }
++                    }
++                }
++                let memory_clamped = memory_raw.clamp(-12., 12.);
++                let measured_memory = logits[0] - number("task_prior");
++                assert!((measured_memory - memory_clamped).abs() < 0.00001);
++                assert_eq!(logits[1], number("ordinary_other_prior"));
++                assert!((port_raw - coefficient * port).abs() < 0.00001);
++                let selected = if logits[0] > logits[1] {
++                    "operation"
++                } else {
++                    "ordinary_other_idle"
++                };
++                if gain == 0. || gain == 4. {
++                    let matching = &inputs[(row_index / 2) * 2 + usize::from(gain == 4.)];
++                    for j in 0..2 {
++                        assert_eq!(logits[j], matching["logits"][j].as_f64().unwrap() as f32);
++                    }
++                    assert_eq!(selected, matching["fixture_argmax"]);
++                }
++                output.push(serde_json::json!({"source_row":row_index,"original_arm":input["arm"],"case":input["case"],"per_gene_gain":gain,"action_id":input["action_id"],"input53":port,"summed_operation_coefficient":coefficient,"operation_component":port_raw,"own_family_component":own_family,"target_component":target,"memory_raw":memory_raw,"memory_clamped":memory_clamped,"measured_memory_component":measured_memory,"cap_active":memory_raw!=memory_clamped,"logits":logits,"fixture_argmax":selected,"task_prior":input["task_prior"],"ordinary_other_prior":input["ordinary_other_prior"],"held_before":input["held_before"],"physical_dispatch":false,"asset_blake3":asset_hex}));
++            }
++            assert_eq!(serde_json::to_vec(&trainer.checkpoint()).unwrap(), before);
++        }
++        println!(
++            "GAIN_LADDER_JSON={}",
++            serde_json::to_string(&output).unwrap()
++        );
++        assert_eq!(output.len(), 120);
++    }
++    #[test]
++    fn detached_gain_ladder_memory_contract_bounds() {
++        let mut context = CandidateMemoryContextV1 {
++            candidate_index: 0,
++            target_latent: [0.; 8],
++            family_value: [0.; 4],
++            target_confidence: Confidence::new(0.).unwrap(),
++            family_confidence: Confidence::new(1.).unwrap(),
++            target_source_count: 0,
++            family_source_count: 1,
++            best_target_source: None,
++            best_family_source: Some(MemoryId(1)),
++        };
++        for value in [-1., 0., 1.] {
++            context.family_value[0] = value;
++            assert!(context.validate_contract().is_ok());
++        }
++        for value in [-1.0001, 1.0001, f32::INFINITY, f32::NAN] {
++            context.family_value[0] = value;
++            assert!(context.validate_contract().is_err());
++        }
++        assert!(Confidence::new(1.0001).is_err());
++        assert!(Confidence::new(-0.0001).is_err());
++    }
+ }
+--- /dev/null
++++ b/crates/alife_training/examples/support/grip_utility_contexts_v1.json
+@@ -0,0 +1,626 @@
++[
++  {
++    "action_id": 2201,
++    "arm": "off",
++    "case": "aversive_ingestion_pickup",
++    "consumed": false,
++    "final_x": 0.5,
++    "fixture_argmax": "operation",
++    "held_after": true,
++    "held_before": false,
++    "lane53": -0.25,
++    "logits": [
++      1.0,
++      0.0
++    ],
++    "memory_clamped": 0.0,
++    "operation_contribution": 0.0,
++    "ordinary_other_prior": 0.0,
++    "origin_x": 0.5,
++    "own_family_contribution": 0.0,
++    "own_family_lane32": -0.25,
++    "physical_success": true,
++    "reachable": true,
++    "target_contribution": -0.0,
++    "target_lane26": 0.0,
++    "task_prior": 1.0
++  },
++  {
++    "action_id": 2201,
++    "arm": "on",
++    "case": "aversive_ingestion_pickup",
++    "consumed": false,
++    "final_x": 0.5,
++    "fixture_argmax": "ordinary_other_idle",
++    "held_after": false,
++    "held_before": false,
++    "lane53": -0.25,
++    "logits": [
++      -7.0,
++      0.0
++    ],
++    "memory_clamped": -8.0,
++    "operation_contribution": -8.0,
++    "ordinary_other_prior": 0.0,
++    "origin_x": 0.5,
++    "own_family_contribution": 0.0,
++    "own_family_lane32": -0.25,
++    "physical_success": true,
++    "reachable": true,
++    "target_contribution": -0.0,
++    "target_lane26": 0.0,
++    "task_prior": 1.0
++  },
++  {
++    "action_id": 2201,
++    "arm": "off",
++    "case": "safe_food_pickup",
++    "consumed": false,
++    "final_x": 0.5,
++    "fixture_argmax": "operation",
++    "held_after": true,
++    "held_before": false,
++    "lane53": 0.25,
++    "logits": [
++      1.0,
++      0.0
++    ],
++    "memory_clamped": 0.0,
++    "operation_contribution": 0.0,
++    "ordinary_other_prior": 0.0,
++    "origin_x": 0.5,
++    "own_family_contribution": 0.0,
++    "own_family_lane32": -0.25,
++    "physical_success": true,
++    "reachable": true,
++    "target_contribution": -0.0,
++    "target_lane26": 0.0,
++    "task_prior": 1.0
++  },
++  {
++    "action_id": 2201,
++    "arm": "on",
++    "case": "safe_food_pickup",
++    "consumed": false,
++    "final_x": 0.5,
++    "fixture_argmax": "operation",
++    "held_after": true,
++    "held_before": false,
++    "lane53": 0.25,
++    "logits": [
++      9.0,
++      0.0
++    ],
++    "memory_clamped": 8.0,
++    "operation_contribution": 8.0,
++    "ordinary_other_prior": 0.0,
++    "origin_x": 0.5,
++    "own_family_contribution": 0.0,
++    "own_family_lane32": -0.25,
++    "physical_success": true,
++    "reachable": true,
++    "target_contribution": -0.0,
++    "target_lane26": 0.0,
++    "task_prior": 1.0
++  },
++  {
++    "action_id": 2201,
++    "arm": "off",
++    "case": "useful_harmless_aversive_object_pickup",
++    "consumed": false,
++    "final_x": 0.5,
++    "fixture_argmax": "operation",
++    "held_after": true,
++    "held_before": false,
++    "lane53": -0.25,
++    "logits": [
++      1.0,
++      0.0
++    ],
++    "memory_clamped": 0.0,
++    "operation_contribution": 0.0,
++    "ordinary_other_prior": 0.0,
++    "origin_x": 0.5,
++    "own_family_contribution": 0.0,
++    "own_family_lane32": -0.25,
++    "physical_success": true,
++    "reachable": true,
++    "target_contribution": -0.0,
++    "target_lane26": 0.0,
++    "task_prior": 1.0
++  },
++  {
++    "action_id": 2201,
++    "arm": "on",
++    "case": "useful_harmless_aversive_object_pickup",
++    "consumed": false,
++    "final_x": 0.5,
++    "fixture_argmax": "ordinary_other_idle",
++    "held_after": false,
++    "held_before": false,
++    "lane53": -0.25,
++    "logits": [
++      -7.0,
++      0.0
++    ],
++    "memory_clamped": -8.0,
++    "operation_contribution": -8.0,
++    "ordinary_other_prior": 0.0,
++    "origin_x": 0.5,
++    "own_family_contribution": 0.0,
++    "own_family_lane32": -0.25,
++    "physical_success": true,
++    "reachable": true,
++    "target_contribution": -0.0,
++    "target_lane26": 0.0,
++    "task_prior": 1.0
++  },
++  {
++    "action_id": 2202,
++    "arm": "off",
++    "case": "useful_aversive_object_transport_hold",
++    "consumed": false,
++    "final_x": 0.699999988079071,
++    "fixture_argmax": "ordinary_other_idle",
++    "held_after": true,
++    "held_before": true,
++    "lane53": -0.25,
++    "logits": [
++      0.0,
++      1.0
++    ],
++    "memory_clamped": 0.0,
++    "operation_contribution": 0.0,
++    "ordinary_other_prior": 1.0,
++    "origin_x": 0.5,
++    "own_family_contribution": 0.0,
++    "own_family_lane32": -0.25,
++    "physical_success": true,
++    "reachable": true,
++    "target_contribution": 0.0,
++    "target_lane26": 0.0,
++    "task_prior": 0.0
++  },
++  {
++    "action_id": 2202,
++    "arm": "on",
++    "case": "useful_aversive_object_transport_hold",
++    "consumed": false,
++    "final_x": 0.5,
++    "fixture_argmax": "operation",
++    "held_after": false,
++    "held_before": true,
++    "lane53": -0.25,
++    "logits": [
++      8.0,
++      1.0
++    ],
++    "memory_clamped": 8.0,
++    "operation_contribution": 8.0,
++    "ordinary_other_prior": 1.0,
++    "origin_x": 0.5,
++    "own_family_contribution": 0.0,
++    "own_family_lane32": -0.25,
++    "physical_success": true,
++    "reachable": true,
++    "target_contribution": 0.0,
++    "target_lane26": 0.0,
++    "task_prior": 0.0
++  },
++  {
++    "action_id": 2202,
++    "arm": "off",
++    "case": "aversive_object_release_at_destination",
++    "consumed": false,
++    "final_x": 0.699999988079071,
++    "fixture_argmax": "operation",
++    "held_after": false,
++    "held_before": true,
++    "lane53": -0.25,
++    "logits": [
++      1.0,
++      0.0
++    ],
++    "memory_clamped": 0.0,
++    "operation_contribution": 0.0,
++    "ordinary_other_prior": 0.0,
++    "origin_x": 0.5,
++    "own_family_contribution": 0.0,
++    "own_family_lane32": -0.25,
++    "physical_success": true,
++    "reachable": true,
++    "target_contribution": 0.0,
++    "target_lane26": 0.0,
++    "task_prior": 1.0
++  },
++  {
++    "action_id": 2202,
++    "arm": "on",
++    "case": "aversive_object_release_at_destination",
++    "consumed": false,
++    "final_x": 0.699999988079071,
++    "fixture_argmax": "operation",
++    "held_after": false,
++    "held_before": true,
++    "lane53": -0.25,
++    "logits": [
++      9.0,
++      0.0
++    ],
++    "memory_clamped": 8.0,
++    "operation_contribution": 8.0,
++    "ordinary_other_prior": 0.0,
++    "origin_x": 0.5,
++    "own_family_contribution": 0.0,
++    "own_family_lane32": -0.25,
++    "physical_success": true,
++    "reachable": true,
++    "target_contribution": 0.0,
++    "target_lane26": 0.0,
++    "task_prior": 1.0
++  },
++  {
++    "action_id": 2202,
++    "arm": "off",
++    "case": "safe_food_release_at_destination",
++    "consumed": false,
++    "final_x": 0.699999988079071,
++    "fixture_argmax": "operation",
++    "held_after": false,
++    "held_before": true,
++    "lane53": 0.25,
++    "logits": [
++      1.0,
++      0.0
++    ],
++    "memory_clamped": 0.0,
++    "operation_contribution": 0.0,
++    "ordinary_other_prior": 0.0,
++    "origin_x": 0.5,
++    "own_family_contribution": 0.0,
++    "own_family_lane32": -0.25,
++    "physical_success": true,
++    "reachable": true,
++    "target_contribution": 0.0,
++    "target_lane26": 0.0,
++    "task_prior": 1.0
++  },
++  {
++    "action_id": 2202,
++    "arm": "on",
++    "case": "safe_food_release_at_destination",
++    "consumed": false,
++    "final_x": 0.699999988079071,
++    "fixture_argmax": "ordinary_other_idle",
++    "held_after": true,
++    "held_before": true,
++    "lane53": 0.25,
++    "logits": [
++      -7.0,
++      0.0
++    ],
++    "memory_clamped": -8.0,
++    "operation_contribution": -8.0,
++    "ordinary_other_prior": 0.0,
++    "origin_x": 0.5,
++    "own_family_contribution": 0.0,
++    "own_family_lane32": -0.25,
++    "physical_success": true,
++    "reachable": true,
++    "target_contribution": 0.0,
++    "target_lane26": 0.0,
++    "task_prior": 1.0
++  },
++  {
++    "action_id": 2201,
++    "arm": "off",
++    "case": "other_target_no_ingestion_evidence",
++    "consumed": false,
++    "final_x": 0.5,
++    "fixture_argmax": "operation",
++    "held_after": true,
++    "held_before": false,
++    "lane53": 0.0,
++    "logits": [
++      1.0,
++      0.0
++    ],
++    "memory_clamped": 0.0,
++    "operation_contribution": 0.0,
++    "ordinary_other_prior": 0.0,
++    "origin_x": 0.5,
++    "own_family_contribution": 0.0,
++    "own_family_lane32": -0.25,
++    "physical_success": true,
++    "reachable": true,
++    "target_contribution": -0.0,
++    "target_lane26": 0.0,
++    "task_prior": 1.0
++  },
++  {
++    "action_id": 2201,
++    "arm": "on",
++    "case": "other_target_no_ingestion_evidence",
++    "consumed": false,
++    "final_x": 0.5,
++    "fixture_argmax": "operation",
++    "held_after": true,
++    "held_before": false,
++    "lane53": 0.0,
++    "logits": [
++      1.0,
++      0.0
++    ],
++    "memory_clamped": 0.0,
++    "operation_contribution": 0.0,
++    "ordinary_other_prior": 0.0,
++    "origin_x": 0.5,
++    "own_family_contribution": 0.0,
++    "own_family_lane32": -0.25,
++    "physical_success": true,
++    "reachable": true,
++    "target_contribution": -0.0,
++    "target_lane26": 0.0,
++    "task_prior": 1.0
++  },
++  {
++    "action_id": 2201,
++    "arm": "off",
++    "case": "unrelated_pain_no_target_evidence",
++    "consumed": false,
++    "final_x": 0.5,
++    "fixture_argmax": "operation",
++    "held_after": true,
++    "held_before": false,
++    "lane53": 0.0,
++    "logits": [
++      1.0,
++      0.0
++    ],
++    "memory_clamped": 0.0,
++    "operation_contribution": 0.0,
++    "ordinary_other_prior": 0.0,
++    "origin_x": 0.5,
++    "own_family_contribution": 0.0,
++    "own_family_lane32": -0.25,
++    "physical_success": true,
++    "reachable": true,
++    "target_contribution": -0.0,
++    "target_lane26": 0.0,
++    "task_prior": 1.0
++  },
++  {
++    "action_id": 2201,
++    "arm": "on",
++    "case": "unrelated_pain_no_target_evidence",
++    "consumed": false,
++    "final_x": 0.5,
++    "fixture_argmax": "operation",
++    "held_after": true,
++    "held_before": false,
++    "lane53": 0.0,
++    "logits": [
++      1.0,
++      0.0
++    ],
++    "memory_clamped": 0.0,
++    "operation_contribution": 0.0,
++    "ordinary_other_prior": 0.0,
++    "origin_x": 0.5,
++    "own_family_contribution": 0.0,
++    "own_family_lane32": -0.25,
++    "physical_success": true,
++    "reachable": true,
++    "target_contribution": -0.0,
++    "target_lane26": 0.0,
++    "task_prior": 1.0
++  },
++  {
++    "action_id": 2201,
++    "arm": "off",
++    "case": "empty_memory",
++    "consumed": false,
++    "final_x": 0.5,
++    "fixture_argmax": "operation",
++    "held_after": true,
++    "held_before": false,
++    "lane53": 0.0,
++    "logits": [
++      1.0,
++      0.0
++    ],
++    "memory_clamped": 0.0,
++    "operation_contribution": 0.0,
++    "ordinary_other_prior": 0.0,
++    "origin_x": 0.5,
++    "own_family_contribution": 0.0,
++    "own_family_lane32": -0.25,
++    "physical_success": true,
++    "reachable": true,
++    "target_contribution": -0.0,
++    "target_lane26": 0.0,
++    "task_prior": 1.0
++  },
++  {
++    "action_id": 2201,
++    "arm": "on",
++    "case": "empty_memory",
++    "consumed": false,
++    "final_x": 0.5,
++    "fixture_argmax": "operation",
++    "held_after": true,
++    "held_before": false,
++    "lane53": 0.0,
++    "logits": [
++      1.0,
++      0.0
++    ],
++    "memory_clamped": 0.0,
++    "operation_contribution": 0.0,
++    "ordinary_other_prior": 0.0,
++    "origin_x": 0.5,
++    "own_family_contribution": 0.0,
++    "own_family_lane32": -0.25,
++    "physical_success": true,
++    "reachable": true,
++    "target_contribution": -0.0,
++    "target_lane26": 0.0,
++    "task_prior": 1.0
++  },
++  {
++    "action_id": 2202,
++    "arm": "off",
++    "case": "unknown_memory_zero_projection",
++    "consumed": false,
++    "final_x": 0.5,
++    "fixture_argmax": "operation",
++    "held_after": false,
++    "held_before": true,
++    "lane53": 0.0,
++    "logits": [
++      1.0,
++      0.0
++    ],
++    "memory_clamped": 0.0,
++    "operation_contribution": 0.0,
++    "ordinary_other_prior": 0.0,
++    "origin_x": 0.5,
++    "own_family_contribution": 0.0,
++    "own_family_lane32": -0.25,
++    "physical_success": true,
++    "reachable": true,
++    "target_contribution": 0.0,
++    "target_lane26": 0.0,
++    "task_prior": 1.0
++  },
++  {
++    "action_id": 2202,
++    "arm": "on",
++    "case": "unknown_memory_zero_projection",
++    "consumed": false,
++    "final_x": 0.5,
++    "fixture_argmax": "operation",
++    "held_after": false,
++    "held_before": true,
++    "lane53": 0.0,
++    "logits": [
++      1.0,
++      0.0
++    ],
++    "memory_clamped": 0.0,
++    "operation_contribution": -0.0,
++    "ordinary_other_prior": 0.0,
++    "origin_x": 0.5,
++    "own_family_contribution": 0.0,
++    "own_family_lane32": -0.25,
++    "physical_success": true,
++    "reachable": true,
++    "target_contribution": 0.0,
++    "target_lane26": 0.0,
++    "task_prior": 1.0
++  },
++  {
++    "action_id": 2201,
++    "arm": "off",
++    "case": "own_family_only_negative",
++    "consumed": false,
++    "final_x": 0.5,
++    "fixture_argmax": "operation",
++    "held_after": true,
++    "held_before": false,
++    "lane53": 0.0,
++    "logits": [
++      1.0,
++      0.0
++    ],
++    "memory_clamped": 0.0,
++    "operation_contribution": 0.0,
++    "ordinary_other_prior": 0.0,
++    "origin_x": 0.5,
++    "own_family_contribution": 0.0,
++    "own_family_lane32": -0.25,
++    "physical_success": true,
++    "reachable": true,
++    "target_contribution": -0.0,
++    "target_lane26": 0.0,
++    "task_prior": 1.0
++  },
++  {
++    "action_id": 2201,
++    "arm": "on",
++    "case": "own_family_only_negative",
++    "consumed": false,
++    "final_x": 0.5,
++    "fixture_argmax": "operation",
++    "held_after": true,
++    "held_before": false,
++    "lane53": 0.0,
++    "logits": [
++      1.0,
++      0.0
++    ],
++    "memory_clamped": 0.0,
++    "operation_contribution": 0.0,
++    "ordinary_other_prior": 0.0,
++    "origin_x": 0.5,
++    "own_family_contribution": 0.0,
++    "own_family_lane32": -0.25,
++    "physical_success": true,
++    "reachable": true,
++    "target_contribution": -0.0,
++    "target_lane26": 0.0,
++    "task_prior": 1.0
++  },
++  {
++    "action_id": 2201,
++    "arm": "off",
++    "case": "target_pain_existing_route",
++    "consumed": false,
++    "final_x": 0.5,
++    "fixture_argmax": "ordinary_other_idle",
++    "held_after": false,
++    "held_before": false,
++    "lane53": 0.0,
++    "logits": [
++      -2.9999983310699463,
++      0.0
++    ],
++    "memory_clamped": -4.0,
++    "operation_contribution": 0.0,
++    "ordinary_other_prior": 0.0,
++    "origin_x": 0.5,
++    "own_family_contribution": 0.0,
++    "own_family_lane32": -0.25,
++    "physical_success": true,
++    "reachable": true,
++    "target_contribution": -4.0,
++    "target_lane26": 0.125,
++    "task_prior": 1.0
++  },
++  {
++    "action_id": 2201,
++    "arm": "on",
++    "case": "target_pain_existing_route",
++    "consumed": false,
++    "final_x": 0.5,
++    "fixture_argmax": "ordinary_other_idle",
++    "held_after": false,
++    "held_before": false,
++    "lane53": 0.0,
++    "logits": [
++      -2.9999983310699463,
++      0.0
++    ],
++    "memory_clamped": -4.0,
++    "operation_contribution": 0.0,
++    "ordinary_other_prior": 0.0,
++    "origin_x": 0.5,
++    "own_family_contribution": 0.0,
++    "own_family_lane32": -0.25,
++    "physical_success": true,
++    "reachable": true,
++    "target_contribution": -4.0,
++    "target_lane26": 0.125,
++    "task_prior": 1.0
++  }
++]
