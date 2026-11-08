@@ -1,0 +1,1262 @@
+{
+  "pairs": [
+    {
+      "seed": 2026112601,
+      "off_meals_h_s": [
+        1,
+        13
+      ],
+      "on_meals_h_s": [
+        1,
+        13
+      ],
+      "on_minus_off_safe_meals": 0,
+      "on_minus_off_harmful_meals": 0,
+      "off_final_energy": 0.5204988121986389,
+      "on_final_energy": 0.5204886198043823,
+      "on_minus_off_energy": -1.0192394256591797e-05,
+      "joint_choice_different_steps": 1,
+      "first_choice_difference": {
+        "step": 189,
+        "off_choice": [
+          [
+            101,
+            "h"
+          ],
+          null,
+          null,
+          null,
+          [
+            3,
+            "none"
+          ],
+          null
+        ],
+        "on_choice": [
+          [
+            101,
+            "h"
+          ],
+          null,
+          null,
+          [
+            400,
+            "none"
+          ],
+          null,
+          null
+        ],
+        "off_meals_h_s": [
+          1,
+          10
+        ],
+        "on_meals_h_s": [
+          1,
+          10
+        ]
+      },
+      "all_choice_differences": [
+        {
+          "step": 189,
+          "off_choice": [
+            [
+              101,
+              "h"
+            ],
+            null,
+            null,
+            null,
+            [
+              3,
+              "none"
+            ],
+            null
+          ],
+          "on_choice": [
+            [
+              101,
+              "h"
+            ],
+            null,
+            null,
+            [
+              400,
+              "none"
+            ],
+            null,
+            null
+          ],
+          "off_meals_h_s": [
+            1,
+            10
+          ],
+          "on_meals_h_s": [
+            1,
+            10
+          ]
+        }
+      ],
+      "off_failed_operation_count": 14,
+      "on_failed_operation_count": 15,
+      "off_transfers": {
+        "h:acquired": 10,
+        "s:acquired": 13,
+        "h:placed": 4,
+        "s:consumed": 13,
+        "h:consumed": 1,
+        "h:released": 5
+      },
+      "on_transfers": {
+        "h:acquired": 10,
+        "s:acquired": 13,
+        "h:placed": 4,
+        "s:consumed": 13,
+        "h:consumed": 1,
+        "h:released": 5
+      },
+      "off_held_ticks": {
+        "h:activity": 3,
+        "H_held_S_contact_reachable": 15,
+        "s:activity": 35,
+        "h:deliberate": 44
+      },
+      "on_held_ticks": {
+        "h:activity": 3,
+        "H_held_S_contact_reachable": 15,
+        "s:activity": 35,
+        "h:deliberate": 44
+      },
+      "off_safe_to_harm_swaps": 0,
+      "on_safe_to_harm_swaps": 0,
+      "off_rest_motion": {
+        "Rest_with_locomotion": 13
+      },
+      "on_rest_motion": {
+        "Rest_with_locomotion": 12
+      }
+    },
+    {
+      "seed": 2026112602,
+      "off_meals_h_s": [
+        1,
+        13
+      ],
+      "on_meals_h_s": [
+        1,
+        13
+      ],
+      "on_minus_off_safe_meals": 0,
+      "on_minus_off_harmful_meals": 0,
+      "off_final_energy": 0.521587073802948,
+      "on_final_energy": 0.5215964913368225,
+      "on_minus_off_energy": 9.417533874511719e-06,
+      "joint_choice_different_steps": 24,
+      "first_choice_difference": {
+        "step": 157,
+        "off_choice": [
+          [
+            101,
+            "h"
+          ],
+          null,
+          [
+            2201,
+            "h"
+          ],
+          null,
+          null,
+          null
+        ],
+        "on_choice": [
+          [
+            101,
+            "h"
+          ],
+          null,
+          [
+            213,
+            "h"
+          ],
+          null,
+          null,
+          null
+        ],
+        "off_meals_h_s": [
+          1,
+          8
+        ],
+        "on_meals_h_s": [
+          1,
+          8
+        ]
+      },
+      "all_choice_differences": [
+        {
+          "step": 157,
+          "off_choice": [
+            [
+              101,
+              "h"
+            ],
+            null,
+            [
+              2201,
+              "h"
+            ],
+            null,
+            null,
+            null
+          ],
+          "on_choice": [
+            [
+              101,
+              "h"
+            ],
+            null,
+            [
+              213,
+              "h"
+            ],
+            null,
+            null,
+            null
+          ],
+          "off_meals_h_s": [
+            1,
+            8
+          ],
+          "on_meals_h_s": [
+            1,
+            8
+          ]
+        },
+        {
+          "step": 159,
+          "off_choice": [
+            [
+              101,
+              "h"
+            ],
+            null,
+            null,
+            null,
+            [
+              4,
+              "h"
+            ],
+            null
+          ],
+          "on_choice": [
+            [
+              101,
+              "h"
+            ],
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "off_meals_h_s": [
+            1,
+            8
+          ],
+          "on_meals_h_s": [
+            1,
+            8
+          ]
+        },
+        {
+          "step": 162,
+          "off_choice": [
+            [
+              101,
+              "h"
+            ],
+            null,
+            null,
+            null,
+            [
+              3,
+              "none"
+            ],
+            null
+          ],
+          "on_choice": [
+            [
+              101,
+              "h"
+            ],
+            null,
+            null,
+            null,
+            [
+              1,
+              "none"
+            ],
+            null
+          ],
+          "off_meals_h_s": [
+            1,
+            8
+          ],
+          "on_meals_h_s": [
+            1,
+            8
+          ]
+        },
+        {
+          "step": 165,
+          "off_choice": [
+            [
+              101,
+              "h"
+            ],
+            null,
+            [
+              213,
+              "h"
+            ],
+            null,
+            null,
+            null
+          ],
+          "on_choice": [
+            [
+              101,
+              "h"
+            ],
+            null,
+            [
+              2201,
+              "h"
+            ],
+            null,
+            null,
+            null
+          ],
+          "off_meals_h_s": [
+            1,
+            8
+          ],
+          "on_meals_h_s": [
+            1,
+            8
+          ]
+        },
+        {
+          "step": 170,
+          "off_choice": [
+            [
+              101,
+              "h"
+            ],
+            null,
+            null,
+            null,
+            [
+              4,
+              "h"
+            ],
+            null
+          ],
+          "on_choice": [
+            [
+              101,
+              "h"
+            ],
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "off_meals_h_s": [
+            1,
+            8
+          ],
+          "on_meals_h_s": [
+            1,
+            8
+          ]
+        },
+        {
+          "step": 191,
+          "off_choice": [
+            [
+              101,
+              "h"
+            ],
+            null,
+            null,
+            null,
+            [
+              1,
+              "none"
+            ],
+            null
+          ],
+          "on_choice": [
+            [
+              101,
+              "h"
+            ],
+            null,
+            null,
+            null,
+            [
+              3,
+              "none"
+            ],
+            null
+          ],
+          "off_meals_h_s": [
+            1,
+            9
+          ],
+          "on_meals_h_s": [
+            1,
+            9
+          ]
+        },
+        {
+          "step": 193,
+          "off_choice": [
+            [
+              101,
+              "h"
+            ],
+            null,
+            null,
+            null,
+            [
+              4,
+              "s"
+            ],
+            null
+          ],
+          "on_choice": [
+            [
+              101,
+              "s"
+            ],
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "off_meals_h_s": [
+            1,
+            9
+          ],
+          "on_meals_h_s": [
+            1,
+            9
+          ]
+        },
+        {
+          "step": 199,
+          "off_choice": [
+            [
+              101,
+              "h"
+            ],
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "on_choice": [
+            [
+              101,
+              "h"
+            ],
+            null,
+            null,
+            null,
+            [
+              4,
+              "h"
+            ],
+            null
+          ],
+          "off_meals_h_s": [
+            1,
+            10
+          ],
+          "on_meals_h_s": [
+            1,
+            10
+          ]
+        },
+        {
+          "step": 206,
+          "off_choice": [
+            [
+              101,
+              "h"
+            ],
+            null,
+            null,
+            [
+              400,
+              "none"
+            ],
+            null,
+            null
+          ],
+          "on_choice": [
+            [
+              101,
+              "h"
+            ],
+            null,
+            null,
+            null,
+            [
+              3,
+              "none"
+            ],
+            null
+          ],
+          "off_meals_h_s": [
+            1,
+            10
+          ],
+          "on_meals_h_s": [
+            1,
+            10
+          ]
+        },
+        {
+          "step": 219,
+          "off_choice": [
+            [
+              101,
+              "h"
+            ],
+            null,
+            [
+              2201,
+              "h"
+            ],
+            null,
+            null,
+            null
+          ],
+          "on_choice": [
+            [
+              101,
+              "h"
+            ],
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "off_meals_h_s": [
+            1,
+            11
+          ],
+          "on_meals_h_s": [
+            1,
+            11
+          ]
+        },
+        {
+          "step": 222,
+          "off_choice": [
+            [
+              101,
+              "h"
+            ],
+            null,
+            null,
+            null,
+            [
+              4,
+              "h"
+            ],
+            null
+          ],
+          "on_choice": [
+            [
+              101,
+              "h"
+            ],
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "off_meals_h_s": [
+            1,
+            11
+          ],
+          "on_meals_h_s": [
+            1,
+            11
+          ]
+        },
+        {
+          "step": 223,
+          "off_choice": [
+            [
+              103,
+              "none"
+            ],
+            null,
+            null,
+            [
+              400,
+              "none"
+            ],
+            null,
+            null
+          ],
+          "on_choice": [
+            [
+              103,
+              "none"
+            ],
+            null,
+            null,
+            null,
+            [
+              3,
+              "none"
+            ],
+            null
+          ],
+          "off_meals_h_s": [
+            1,
+            11
+          ],
+          "on_meals_h_s": [
+            1,
+            11
+          ]
+        },
+        {
+          "step": 234,
+          "off_choice": [
+            [
+              101,
+              "h"
+            ],
+            null,
+            [
+              210,
+              "s"
+            ],
+            null,
+            null,
+            null
+          ],
+          "on_choice": [
+            [
+              101,
+              "h"
+            ],
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "off_meals_h_s": [
+            1,
+            12
+          ],
+          "on_meals_h_s": [
+            1,
+            11
+          ]
+        },
+        {
+          "step": 235,
+          "off_choice": [
+            [
+              101,
+              "h"
+            ],
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "on_choice": [
+            [
+              101,
+              "h"
+            ],
+            null,
+            [
+              210,
+              "s"
+            ],
+            null,
+            null,
+            null
+          ],
+          "off_meals_h_s": [
+            1,
+            12
+          ],
+          "on_meals_h_s": [
+            1,
+            12
+          ]
+        },
+        {
+          "step": 238,
+          "off_choice": [
+            [
+              101,
+              "h"
+            ],
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "on_choice": [
+            [
+              101,
+              "h"
+            ],
+            null,
+            [
+              2201,
+              "h"
+            ],
+            null,
+            null,
+            null
+          ],
+          "off_meals_h_s": [
+            1,
+            12
+          ],
+          "on_meals_h_s": [
+            1,
+            12
+          ]
+        },
+        {
+          "step": 239,
+          "off_choice": [
+            [
+              101,
+              "h"
+            ],
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "on_choice": [
+            [
+              101,
+              "h"
+            ],
+            null,
+            null,
+            null,
+            [
+              3,
+              "none"
+            ],
+            null
+          ],
+          "off_meals_h_s": [
+            1,
+            12
+          ],
+          "on_meals_h_s": [
+            1,
+            12
+          ]
+        },
+        {
+          "step": 247,
+          "off_choice": [
+            [
+              103,
+              "none"
+            ],
+            null,
+            null,
+            [
+              400,
+              "none"
+            ],
+            null,
+            null
+          ],
+          "on_choice": [
+            [
+              103,
+              "none"
+            ],
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "off_meals_h_s": [
+            1,
+            12
+          ],
+          "on_meals_h_s": [
+            1,
+            12
+          ]
+        },
+        {
+          "step": 248,
+          "off_choice": [
+            [
+              101,
+              "h"
+            ],
+            null,
+            [
+              213,
+              "h"
+            ],
+            null,
+            null,
+            null
+          ],
+          "on_choice": [
+            [
+              101,
+              "h"
+            ],
+            null,
+            null,
+            null,
+            [
+              1,
+              "none"
+            ],
+            null
+          ],
+          "off_meals_h_s": [
+            1,
+            12
+          ],
+          "on_meals_h_s": [
+            1,
+            12
+          ]
+        },
+        {
+          "step": 250,
+          "off_choice": [
+            [
+              101,
+              "s"
+            ],
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "on_choice": [
+            [
+              101,
+              "h"
+            ],
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "off_meals_h_s": [
+            1,
+            12
+          ],
+          "on_meals_h_s": [
+            1,
+            12
+          ]
+        },
+        {
+          "step": 251,
+          "off_choice": [
+            [
+              101,
+              "s"
+            ],
+            null,
+            null,
+            null,
+            [
+              4,
+              "s"
+            ],
+            null
+          ],
+          "on_choice": [
+            [
+              101,
+              "s"
+            ],
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "off_meals_h_s": [
+            1,
+            12
+          ],
+          "on_meals_h_s": [
+            1,
+            12
+          ]
+        },
+        {
+          "step": 253,
+          "off_choice": [
+            [
+              101,
+              "h"
+            ],
+            null,
+            null,
+            null,
+            [
+              4,
+              "h"
+            ],
+            null
+          ],
+          "on_choice": [
+            [
+              101,
+              "s"
+            ],
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "off_meals_h_s": [
+            1,
+            12
+          ],
+          "on_meals_h_s": [
+            1,
+            12
+          ]
+        },
+        {
+          "step": 254,
+          "off_choice": [
+            [
+              103,
+              "none"
+            ],
+            null,
+            null,
+            [
+              400,
+              "none"
+            ],
+            null,
+            null
+          ],
+          "on_choice": [
+            [
+              101,
+              "h"
+            ],
+            null,
+            [
+              210,
+              "s"
+            ],
+            null,
+            null,
+            null
+          ],
+          "off_meals_h_s": [
+            1,
+            12
+          ],
+          "on_meals_h_s": [
+            1,
+            13
+          ]
+        },
+        {
+          "step": 255,
+          "off_choice": [
+            [
+              103,
+              "none"
+            ],
+            null,
+            [
+              210,
+              "s"
+            ],
+            null,
+            null,
+            null
+          ],
+          "on_choice": [
+            [
+              101,
+              "h"
+            ],
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "off_meals_h_s": [
+            1,
+            13
+          ],
+          "on_meals_h_s": [
+            1,
+            13
+          ]
+        },
+        {
+          "step": 256,
+          "off_choice": [
+            [
+              103,
+              "none"
+            ],
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "on_choice": [
+            [
+              101,
+              "h"
+            ],
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          "off_meals_h_s": [
+            1,
+            13
+          ],
+          "on_meals_h_s": [
+            1,
+            13
+          ]
+        }
+      ],
+      "off_failed_operation_count": 18,
+      "on_failed_operation_count": 13,
+      "off_transfers": {
+        "s:acquired": 16,
+        "s:placed": 3,
+        "h:acquired": 11,
+        "h:placed": 7,
+        "s:consumed": 13,
+        "h:consumed": 1,
+        "h:released": 3
+      },
+      "on_transfers": {
+        "s:acquired": 16,
+        "s:placed": 3,
+        "h:acquired": 11,
+        "h:placed": 7,
+        "s:consumed": 13,
+        "h:consumed": 1,
+        "h:released": 3
+      },
+      "off_held_ticks": {
+        "s:activity": 41,
+        "h:activity": 5,
+        "H_held_S_contact_reachable": 12,
+        "h:deliberate": 59
+      },
+      "on_held_ticks": {
+        "s:activity": 41,
+        "h:activity": 5,
+        "H_held_S_contact_reachable": 13,
+        "h:deliberate": 51
+      },
+      "off_safe_to_harm_swaps": 3,
+      "on_safe_to_harm_swaps": 3,
+      "off_rest_motion": {
+        "Rest_with_locomotion": 8
+      },
+      "on_rest_motion": {
+        "Rest_with_locomotion": 10
+      }
+    }
+  ],
+  "engagement": [
+    {
+      "seed": 2026112601,
+      "arm": "OFF",
+      "decisions": 256,
+      "counts": {
+        "2201:s:available": 28,
+        "2201:h:available": 194,
+        "2202:h:available": 47,
+        "2202:h:nonzero": 47,
+        "2202:h:known_ingest": 47,
+        "2202:h:exact_consumed": 44,
+        "2202:s:available": 35,
+        "2202:s:nonzero": 35,
+        "2202:s:known_ingest": 35,
+        "2202:s:exact_consumed": 28,
+        "2201:h:nonzero": 193,
+        "2201:h:known_ingest": 193,
+        "2201:h:exact_consumed": 185,
+        "2201:s:nonzero": 25,
+        "2201:s:known_ingest": 25,
+        "2201:s:exact_consumed": 25
+      },
+      "h_operation_port_range": [
+        -0.2721596956253052,
+        0.000517462205607444
+      ],
+      "h_operation_component_range": [
+        -0.0001731174415908754,
+        2.1806816619118763e-07
+      ],
+      "h_operation_effective_coefficient_range": [
+        -9.336935704595817e-07,
+        0.0006464030011557043
+      ]
+    },
+    {
+      "seed": 2026112601,
+      "arm": "gain_1_16",
+      "decisions": 256,
+      "counts": {
+        "2201:s:available": 28,
+        "2201:h:available": 194,
+        "2202:h:available": 47,
+        "2202:h:nonzero": 47,
+        "2202:h:known_ingest": 47,
+        "2202:h:exact_consumed": 44,
+        "2202:s:available": 35,
+        "2202:s:nonzero": 35,
+        "2202:s:known_ingest": 35,
+        "2202:s:exact_consumed": 28,
+        "2201:h:nonzero": 193,
+        "2201:h:known_ingest": 193,
+        "2201:h:exact_consumed": 185,
+        "2201:s:nonzero": 25,
+        "2201:s:known_ingest": 25,
+        "2201:s:exact_consumed": 25
+      },
+      "h_operation_port_range": [
+        -0.2721596956253052,
+        0.000517462205607444
+      ],
+      "h_operation_component_range": [
+        -0.1360798478126526,
+        0.13586920499801636
+      ],
+      "h_operation_effective_coefficient_range": [
+        -0.5000008940696716,
+        0.5006663203239441
+      ]
+    },
+    {
+      "seed": 2026112602,
+      "arm": "OFF",
+      "decisions": 256,
+      "counts": {
+        "2201:s:available": 34,
+        "2201:h:available": 177,
+        "2202:s:available": 41,
+        "2202:s:nonzero": 41,
+        "2202:s:known_ingest": 41,
+        "2202:s:exact_consumed": 34,
+        "2202:h:available": 64,
+        "2202:h:nonzero": 64,
+        "2202:h:known_ingest": 64,
+        "2202:h:exact_consumed": 59,
+        "2201:s:nonzero": 33,
+        "2201:s:known_ingest": 33,
+        "2201:s:exact_consumed": 29,
+        "2201:h:nonzero": 173,
+        "2201:h:known_ingest": 173,
+        "2201:h:exact_consumed": 166
+      },
+      "h_operation_port_range": [
+        -0.27227121591567993,
+        0.0
+      ],
+      "h_operation_component_range": [
+        -0.00023842469090595841,
+        1.2687387425103225e-05
+      ],
+      "h_operation_effective_coefficient_range": [
+        -4.686112151830457e-05,
+        0.001029575476422906
+      ]
+    },
+    {
+      "seed": 2026112602,
+      "arm": "gain_1_16",
+      "decisions": 256,
+      "counts": {
+        "2201:s:available": 33,
+        "2201:h:available": 185,
+        "2202:s:available": 41,
+        "2202:s:nonzero": 41,
+        "2202:s:known_ingest": 41,
+        "2202:s:exact_consumed": 34,
+        "2202:h:available": 56,
+        "2202:h:nonzero": 56,
+        "2202:h:known_ingest": 56,
+        "2202:h:exact_consumed": 51,
+        "2201:s:nonzero": 32,
+        "2201:s:known_ingest": 32,
+        "2201:s:exact_consumed": 28,
+        "2201:h:nonzero": 181,
+        "2201:h:known_ingest": 181,
+        "2201:h:exact_consumed": 174
+      },
+      "h_operation_port_range": [
+        -0.27227121591567993,
+        0.0
+      ],
+      "h_operation_component_range": [
+        -0.13613559305667877,
+        0.13574041426181793
+      ],
+      "h_operation_effective_coefficient_range": [
+        -0.5,
+        0.5005192756652832
+      ]
+    }
+  ],
+  "interpretation": "Actual alternate trajectories, not same-state counterfactuals; two seeds do not establish generalization."
+}

@@ -1,0 +1,31 @@
+{
+  "source_base_commit": "2da9dd323ad6f074556a851174a2edbc9e34e216",
+  "prerequisite_v3_archive_sha256": "2408b6fbbdbd990acd1d4311f9dd939b4ec03186d56265421141f7373a88a574",
+  "source_closure_file_sha256": "8a5a4209261d6c9e71b972be82aa3e98eb61fdf8139ac73b9ce2e57f00a5cbb9",
+  "source_patch_sha256": "d885d2f18a2cff379af142eab06a04d642b2175b3560fbeafbfcdb4f89ae94c7",
+  "plan_sha256": "002e1a638e575f43e3a8fc6c6e52ff1888fe04daa5f168e521dc9543c8340c5b",
+  "executable_sha256": "ca7a32c18bcaf23ba133ea33d801df066da2c84d0b86278b79fcd8712e175029",
+  "runner_sha256": "82ac129113d51317771272828d7ea8757d3b6248d5e2be2145c85150c27cd982",
+  "common_world_sha256": "e3444b35833119cda5c990df0bc8ce4de0fab93565a244728734be3a86aca763",
+  "off_asset_blake3": "0bf3400adc03e001be609717a5a325232bc8f86a734cf60ff7a740cab29de7f1",
+  "on_asset_blake3": "d66071901ed92bf55506d1ac6a35de484627ae23a3a4f677cf0211ba47b0718f",
+  "gains": [
+    0,
+    0.0625
+  ],
+  "seeds": [
+    2026112501,
+    2026112502
+  ],
+  "max_lives": 4,
+  "max_preparation_per_life": 600,
+  "max_primary_per_life": 256,
+  "max_public_bytes": 67108864,
+  "max_wallclock_seconds": 1800,
+  "backend": "CPU",
+  "toolchain": "Rust1.99.1",
+  "jobs": 1,
+  "freshness_file_sha256": "246411e656c90b4a6a167bd417c8bb3b06ecc5823d7a09d9fbde9a8bbaba6e39",
+  "compiled_artifacts_sha256": "a559535853494f9a3cc7b9a607049459d8c57fc4ace457e06325f752a3748cd8",
+  "frozen_unix": 1794114879.0076864
+}

@@ -1,0 +1,46 @@
+[
+  {
+    "field": "world.subject.genome.n2048_foundation_candidate.weights",
+    "reason": "Exact16 treatment, all other bits equal"
+  },
+  {
+    "field": "world.subject.genome.n2048_foundation_candidate.digest",
+    "reason": "Derived canonical asset digest"
+  },
+  {
+    "field": "world.subject.genome.n2048_foundation_candidate.manifest.weight_asset.digest",
+    "reason": "Same asset reference"
+  },
+  {
+    "field": "world.subject.state_graph.genetics_development.content_digest",
+    "reason": "Derived from genotype"
+  },
+  {
+    "field": "world.subject.state_graph.brain.content_digest",
+    "reason": "Native seal includes phenotype-bound private state; exact own-restore verified"
+  },
+  {
+    "field": "residents[].neural.phenotype_hash",
+    "reason": "Legitimate compiled phenotype identity; all other resident bytes compared"
+  },
+  {
+    "field": "optimizer.phenotype_hash",
+    "reason": "Same compiled identity"
+  },
+  {
+    "field": "optimizer.source_foundation_digest",
+    "reason": "Legitimate admitted source asset"
+  },
+  {
+    "field": "optimizer.weights",
+    "reason": "Separately checked exact16 treatment"
+  },
+  {
+    "field": "checkpoint.phenotype_hash",
+    "reason": "Validated legitimate phenotype identity, not equality-normalized or restored across arms"
+  },
+  {
+    "field": "checkpoint.founder_weight_digest",
+    "reason": "Native founder digest validated by own exact restore; declared16 genes differ"
+  }
+]
