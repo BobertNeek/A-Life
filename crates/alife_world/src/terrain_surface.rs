@@ -6,6 +6,17 @@ use std::collections::HashMap;
 
 pub(crate) const CELL: f32 = 10.0;
 
+/// Ephemeral canonical triangle interval, shared by legality and contact geometry.
+/// No persistence or new terrain ownership convention.
+#[derive(Debug, Clone)]
+pub(crate) struct GroundedSweepSegment {
+    pub(crate) from: f64,
+    pub(crate) to: f64,
+    pub(crate) start: [f64; 3],
+    pub(crate) end: [f64; 3],
+    gradient: [f32; 2],
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TerrainBinding {
     pub version: u16,
@@ -393,6 +404,27 @@ impl TerrainSurface {
         end: Vec3f,
         limits: crate::LocomotionLimits,
     ) -> Option<()> {
+        let water_floor = self
+            .water_level
+            .map(|water| f64::from(water - limits.max_wading_depth));
+        for segment in self.grounded_sweep_segments(start, end)? {
+            if segment.gradient[0].hypot(segment.gradient[1]) > limits.max_slope {
+                return None;
+            }
+            if water_floor.is_some_and(|floor| segment.start[1] < floor || segment.end[1] < floor) {
+                return None;
+            }
+        }
+        Some(())
+    }
+
+    /// Exact X/Z/diagonal cuts and f32 grid ownership used by terrain validation.
+    /// This supplies geometry; callers must retain full physical legality checks.
+    pub(crate) fn grounded_sweep_segments(
+        &self,
+        start: Vec3f,
+        end: Vec3f,
+    ) -> Option<Vec<GroundedSweepSegment>> {
         // Public surface dimensions can be changed independently of the baked
         // samples. Fail closed before indexing malformed geometry.
         if self.width < 2
@@ -453,9 +485,7 @@ impl TerrainSurface {
         cuts.sort_by(f64::total_cmp);
         // Do not merge merely nearby cuts: they may enclose a thin bad triangle.
         cuts.dedup();
-        let water_floor = self
-            .water_level
-            .map(|water| f64::from(water - limits.max_wading_depth));
+        let mut segments = Vec::with_capacity(cuts.len().saturating_sub(1));
         for interval in cuts.windows(2) {
             let middle = (interval[0] + interval[1]) * 0.5;
             let u = a[0] + delta[0] * middle;
@@ -486,22 +516,24 @@ impl TerrainSurface {
                     [(h1 - h0) / self.spacing, (h2 - h1) / self.spacing],
                 )
             };
-            if gradient[0].hypot(gradient[1]) > limits.max_slope {
-                return None;
-            }
-            if let Some(floor) = water_floor {
-                // Height is affine inside this triangle. Its two interval
-                // endpoints bound the entire interval, including water extrema.
-                for t in interval {
-                    let u = (a[0] + delta[0] * t - i as f64).clamp(0.0, 1.0);
-                    let v = (a[1] + delta[1] * t - j as f64).clamp(0.0, 1.0);
-                    if f64::from(h0) + du * u + dv * v < floor {
-                        return None;
-                    }
-                }
-            }
+            let position = |t: f64| {
+                let u = (a[0] + delta[0] * t - i as f64).clamp(0.0, 1.0);
+                let v = (a[1] + delta[1] * t - j as f64).clamp(0.0, 1.0);
+                [
+                    f64::from(start.x) + (f64::from(end.x) - f64::from(start.x)) * t,
+                    f64::from(h0) + du * u + dv * v,
+                    f64::from(start.z) + (f64::from(end.z) - f64::from(start.z)) * t,
+                ]
+            };
+            segments.push(GroundedSweepSegment {
+                from: interval[0],
+                to: interval[1],
+                start: position(interval[0]),
+                end: position(interval[1]),
+                gradient,
+            });
         }
-        Some(())
+        Some(segments)
     }
     pub fn ray_hit(&self, origin: Vec3f, direction: Vec3f, max_distance: f32) -> Option<Vec3f> {
         if origin.validate().is_err()

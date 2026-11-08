@@ -166,6 +166,146 @@ impl AwakeTranslationState {
         own: WorldEntityId,
         start: Vec3f,
         end: Vec3f,
+    ) -> Result<Option<SweptContactPlan>, ScaffoldContractError> {
+        let Some(terrain) = &world.terrain else {
+            return Ok(self.linear_swept_contact_plan(world, command, own, start, end));
+        };
+        // Existing old/editor poses can start above or below sampled ground.
+        // Preserve their exact legacy route; do not invent zero-time grounding.
+        if terrain.surface().height(start.x, start.z) != Some(start.y) {
+            return Ok(self.linear_swept_contact_plan(world, command, own, start, end));
+        }
+        let segments = terrain
+            .grounded_move_segments(start, end)
+            .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
+        // Preserve the existing flat route's exact scalar arithmetic.
+        if segments.iter().all(|segment| {
+            segment.start[1] == f64::from(start.y) && segment.end[1] == f64::from(start.y)
+        }) {
+            return Ok(self.linear_swept_contact_plan(world, command, own, start, end));
+        }
+        let hazards = world
+            .objects
+            .values()
+            .filter(|o| {
+                o.id != own
+                    && !o.consumed
+                    && o.carried_by != Some(command.organism_id)
+                    && o.kind == WorldObjectKind::Hazard
+                    && o.hazard_pain > 0.0
+            })
+            .collect::<Vec<_>>();
+        let mut contacts = Vec::new();
+        for segment in &segments {
+            for hazard in &hazards {
+                if let Some(local) = super::grounded_path::grounded_segment_sphere_entry(
+                    segment.start,
+                    segment.end,
+                    hazard.position,
+                    hazard.radius,
+                ) {
+                    contacts.push((
+                        segment.from + (segment.to - segment.from) * local,
+                        hazard.id,
+                    ));
+                }
+            }
+        }
+        contacts.sort_by(|a, b| a.0.total_cmp(&b.0).then_with(|| a.1.raw().cmp(&b.1.raw())));
+        let Some((fraction, _)) = contacts.first() else {
+            return Ok(None);
+        };
+        let geometric_fraction = (*fraction).clamp(0.0, 1.0);
+        let planned = self
+            .planned_time
+            .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?
+            .duration;
+        let speed = MOVE_STEP * command.intensity.raw();
+        let point_at = |fraction: f64| {
+            Vec3f::new(
+                (f64::from(start.x) + (f64::from(end.x) - f64::from(start.x)) * fraction) as f32,
+                start.y,
+                (f64::from(start.z) + (f64::from(end.z) - f64::from(start.z)) * fraction) as f32,
+            )
+        };
+        let first = point_at(geometric_fraction);
+        let mut fractions = vec![geometric_fraction];
+        // A finite stencil of forward f32-coordinate centers on this SAME plan.
+        // Each axis contributes its next eight representable values. This avoids
+        // starving a coarse translated axis behind thousands of fine-axis ULPs.
+        // No spatial nudge toward a source and no endpoint/time allowance added.
+        for (from, to, coordinate) in [(start.x, end.x, first.x), (start.z, end.z, first.z)] {
+            let delta = f64::from(to) - f64::from(from);
+            if delta == 0.0 {
+                continue;
+            }
+            let mut next = coordinate;
+            for _ in 0..8 {
+                next = if delta > 0.0 {
+                    next.next_up()
+                } else {
+                    next.next_down()
+                };
+                let progress = (f64::from(next) - f64::from(from)) / delta;
+                if progress.is_finite() && progress > geometric_fraction && progress <= 1.0 {
+                    fractions.push(progress);
+                }
+            }
+        }
+        fractions.sort_by(f64::total_cmp);
+        fractions.dedup();
+        for fraction in fractions {
+            let proposed = point_at(fraction);
+            let position = terrain
+                .resolve_move(start, proposed)
+                .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
+            // The represented full endpoint always consumes the full planned
+            // interval, never a residue inferred from rounded displacement.
+            let accepted_fraction = if position == end { 1.0 } else { fraction };
+            let duration = if position == end {
+                planned
+            } else {
+                planned * accepted_fraction as f32
+            };
+            let path = self.time_metric.path_length(subtract(position, start));
+            if path > speed * duration + 1e-6 {
+                continue;
+            } // Exact existing budget guard.
+            let sources = hazards
+                .iter()
+                .filter(|object| {
+                    contacts
+                        .iter()
+                        .any(|(entry, id)| *id == object.id && *entry <= accepted_fraction)
+                        && distance(object.position, position) <= object.radius + 1e-5
+                })
+                .map(|object| object.id)
+                .collect::<Vec<_>>();
+            if sources.is_empty() {
+                continue;
+            }
+            #[cfg(test)]
+            if accepted_fraction > geometric_fraction {
+                eprintln!("GROUNDED_REPRESENTED_CONTACT geometric={geometric_fraction} accepted={accepted_fraction} planar={path} time={duration}");
+            }
+            return Ok(Some(SweptContactPlan {
+                position,
+                sources,
+                duration,
+            }));
+        }
+        // No admitted point in the explicit bounded representable stencil.
+        // Do not invent source membership, route motion or extra actuator time.
+        Err(ScaffoldContractError::InvalidDecisionEvidence)
+    }
+
+    fn linear_swept_contact_plan(
+        &self,
+        world: &HeadlessWorld,
+        command: &ActionCommand,
+        own: WorldEntityId,
+        start: Vec3f,
+        end: Vec3f,
     ) -> Option<SweptContactPlan> {
         let speed = MOVE_STEP * command.intensity.raw();
         let delta = subtract(end, start);

@@ -188,6 +188,14 @@ impl WorldTerrain {
     pub fn resolve_move(&self, a: Vec3f, b: Vec3f) -> Option<Vec3f> {
         self.surface.resolve_move_with(a, b, self.limits)
     }
+    pub(crate) fn grounded_move_segments(
+        &self,
+        a: Vec3f,
+        b: Vec3f,
+    ) -> Option<Vec<crate::terrain_surface::GroundedSweepSegment>> {
+        let end = self.resolve_move(a, b)?;
+        self.surface.grounded_sweep_segments(a, end)
+    }
 }
 
 #[cfg(test)]
