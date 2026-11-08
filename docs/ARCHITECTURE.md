@@ -78,6 +78,31 @@ non-contact spatial retreat fallback.
 
 GPU unavailability is typed unavailability. CPU reference helpers do not take over the production neural policy.
 
+## Rest and realized translation
+
+The world combines a factorized motor bundle into one body event and advances
+biology once. Selecting `Rest` does not grant sleep recovery when another
+part of that interval actually translates the organism. Before the
+biology advance, the world checks each realized displacement and clears only
+`sleep_recovery` if any segment is nonzero. Separate path segments matter:
+opposite movements still count as work even when their net displacement is zero.
+
+A blocked move with no displacement can coexist with successful stationary
+rest. Its existing attempt cost remains charged. Movement costs, nutrition,
+contact, damage, and other doses are not replaced or applied twice. This rule
+does not change inherited chemistry, neural action selection, or saved state.
+This check is translation-only. An in-place body turn changes body yaw and may
+move a carried object, but currently reports zero organism displacement, so
+`Turn` plus `Rest` can still receive recovery. Head/gaze orientation is distinct
+from body turning. A future yaw rule must use realized body rotation and preserve
+blocked-turn semantics, rather than rejecting a selected command. Stationary
+pain and sleep interruption also require separate handling.
+
+The `rest_motion_` world regressions cover moving rest with and without a held
+object, stationary and blocked rest, energy parity with movement alone, one
+biology advance, rollback, and cancelled-path normalization. Run them with
+`cargo test -p alife_world --lib rest_motion_ -- --test-threads=1`.
+
 ## Inherited biochemical learning signals
 
 Chemical dynamics remain in the inherited sparse graph: species baselines and

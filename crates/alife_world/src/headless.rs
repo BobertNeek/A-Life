@@ -4732,6 +4732,12 @@ impl HeadlessWorld {
         if let Some((novelty, _)) = novelty {
             body_event.perceived_novelty = novelty;
         }
+        body_event = normalize_sleep_recovery_for_motion(
+            body_event,
+            executed
+                .iter()
+                .map(|(_, result)| result.execution.physical.displacement),
+        );
         body_event.validate_contract()?;
         if let Some(neural) = neural {
             self.organism_registry
@@ -7585,6 +7591,20 @@ fn peer_touch_dose(touching: bool) -> f32 {
     }
 }
 
+/// Sleep is a stationary interval, not merely a selected posture. Inspect each
+/// realized path segment, since opposite voluntary/reflex movements can cancel
+/// in the net outcome while still doing physical work. Preserve all other costs
+/// and doses, including failed attempts that produced no displacement.
+fn normalize_sleep_recovery_for_motion(
+    mut event: BodyEventDelta,
+    displacements: impl IntoIterator<Item = Vec3f>,
+) -> BodyEventDelta {
+    if displacements.into_iter().any(|step| step != Vec3f::ZERO) {
+        event.sleep_recovery = 0.0;
+    }
+    event
+}
+
 fn combine_body_event(total: BodyEventDelta, event: BodyEventDelta) -> BodyEventDelta {
     BodyEventDelta {
         energy: (total.energy + event.energy).clamp(-1.0, 1.0),
@@ -9538,6 +9558,160 @@ mod task_6_factorized_motor_tests {
                 .biochemistry(),
             expected
         );
+    }
+
+    fn rest_motion_fixture(
+        carry: bool,
+        blocked: bool,
+    ) -> (HeadlessWorld, WorldEntityId, MotorCommandBundle) {
+        let (mut world, agent, food, _) = prepared_world();
+        if carry {
+            hold_food_for_meal(&mut world, food);
+        }
+        if blocked {
+            world
+                .editor_spawn_object(WorldEditorSpawnSpec {
+                    label: "rest-motion-blocker".to_string(),
+                    kind: WorldObjectKind::Obstacle,
+                    organism_id: None,
+                    position: Vec3f::new(0.8, 0.0, 0.0),
+                    nutrition: 0.0,
+                    hazard_pain: 0.0,
+                    radius: 0.55,
+                    token_id: None,
+                })
+                .unwrap();
+        }
+        let mut bundle = posture_bundle(ActionKind::Rest.canonical_id(), None);
+        bundle.channels.push(
+            ChannelCommand::new(
+                MotorChannel::Locomotion,
+                HeadlessActionIds::STEP_FORWARD,
+                None,
+                Vec3f::new(1.0, 0.0, 0.0),
+                Intensity::new(1.0).unwrap(),
+                alife_core::DurationTicks::new(1),
+                0.0,
+                Confidence::new(0.9).unwrap(),
+                0,
+            )
+            .unwrap(),
+        );
+        (world, agent, bundle)
+    }
+
+    #[test]
+    fn rest_motion_normalization_preserves_doses_and_detects_cancelled_paths() {
+        let event = BodyEventDelta {
+            energy: -0.12,
+            damage: 0.02,
+            temperature_stress: 0.03,
+            nutrition: 0.04,
+            social_contact: 0.05,
+            player_reward: 0.06,
+            play_stimulation: 0.07,
+            perceived_novelty: 0.08,
+            investigation: 0.09,
+            sleep_recovery: 1.0,
+            mating_opportunity: 0.11,
+        };
+        assert_eq!(normalize_sleep_recovery_for_motion(event, []), event);
+        assert_eq!(
+            normalize_sleep_recovery_for_motion(event, [Vec3f::ZERO]),
+            event
+        );
+        let expected = BodyEventDelta {
+            sleep_recovery: 0.0,
+            ..event
+        };
+        let outward = Vec3f::new(0.1, 0.0, 0.0);
+        let return_path = Vec3f::new(-0.1, 0.0, 0.0);
+        assert_eq!(
+            normalize_sleep_recovery_for_motion(event, [outward]),
+            expected
+        );
+        assert_eq!(
+            normalize_sleep_recovery_for_motion(event, [outward, return_path]),
+            expected
+        );
+        assert_eq!(
+            normalize_sleep_recovery_for_motion(expected, [return_path]),
+            expected
+        );
+    }
+
+    #[test]
+    fn rest_motion_actual_movement_cannot_count_as_sleep() {
+        for carry in [false, true] {
+            let (mut world, agent, bundle) = rest_motion_fixture(carry, false);
+            let mut movement_only = world.clone();
+            let mut movement_bundle = bundle.clone();
+            movement_bundle
+                .channels
+                .retain(|c| c.channel != MotorChannel::Posture);
+            let moving = movement_only
+                .apply_registered_motor_bundle(&movement_bundle, agent)
+                .unwrap();
+            let receipt = world.apply_registered_motor_bundle(&bundle, agent).unwrap();
+            assert_ne!(receipt.joint.execution.displacement, Vec3f::ZERO);
+            assert_eq!(receipt.body_event.sleep_recovery, 0.0, "carry={carry}");
+            assert!(!receipt.biology_after.body.sleeping);
+            assert_eq!(receipt.body_event.energy, moving.body_event.energy);
+            assert_eq!(
+                receipt.joint.execution.energy_cost,
+                moving.joint.execution.energy_cost
+            );
+            assert!(receipt.body_event.energy < 0.0);
+            assert_eq!(
+                receipt.biology_after,
+                receipt
+                    .biology_before
+                    .advance(
+                        receipt.outcome_tick,
+                        receipt.body_event,
+                        world
+                            .organism_registry()
+                            .get(ORGANISM_ID)
+                            .unwrap()
+                            .phenotype(),
+                    )
+                    .unwrap()
+            );
+            assert_eq!(receipt.biology_after.tick, Tick(1));
+        }
+    }
+
+    #[test]
+    fn rest_motion_stationary_and_blocked_rest_keep_recovery() {
+        for blocked in [false, true] {
+            let (mut world, agent, mut bundle) = rest_motion_fixture(false, blocked);
+            if !blocked {
+                bundle
+                    .channels
+                    .retain(|c| c.channel == MotorChannel::Posture);
+            }
+            let receipt = world.apply_registered_motor_bundle(&bundle, agent).unwrap();
+            assert_eq!(receipt.joint.execution.displacement, Vec3f::ZERO);
+            assert_eq!(receipt.body_event.sleep_recovery, 1.0);
+            assert!(receipt.biology_after.body.sleeping);
+            if blocked {
+                assert!(!receipt.succeeded);
+            }
+            assert!(receipt.biology_after.body.energy <= receipt.biology_before.body.energy);
+        }
+    }
+
+    #[test]
+    fn rest_motion_failure_rolls_back_state_and_receipts() {
+        let (mut world, agent, bundle) = rest_motion_fixture(true, false);
+        let before = world.canonical_signature_digest().unwrap();
+        let objects = world.object_snapshots();
+        let organism = world.organism_registry().get(ORGANISM_ID).unwrap().clone();
+        world.inject_post_action_failure();
+        assert!(world.apply_registered_motor_bundle(&bundle, agent).is_err());
+        assert_eq!(world.canonical_signature_digest().unwrap(), before);
+        assert_eq!(world.object_snapshots(), objects);
+        assert_eq!(world.organism_registry().get(ORGANISM_ID), Some(&organism));
     }
 
     #[test]
