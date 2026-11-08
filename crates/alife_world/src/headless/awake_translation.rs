@@ -20,6 +20,55 @@ impl TranslationTimeMetric {
     }
 }
 
+/// Ephemeral provenance for actual voluntary actuator time, never inferred
+/// from rounded final world-coordinate subtraction.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum VoluntaryTimeProvenance {
+    #[default]
+    NoTranslation,
+    InitialPreemption,
+    FullInterval,
+    GoalArrival,
+    ZeroSpeed,
+    BlockedAttempt,
+    SweptContact,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(super) struct PlannedTranslationTime {
+    duration: f32,
+    provenance: VoluntaryTimeProvenance,
+}
+impl PlannedTranslationTime {
+    pub(super) fn full(speed: f32) -> Self {
+        if speed > 0.0 {
+            Self {
+                duration: 1.0,
+                provenance: VoluntaryTimeProvenance::FullInterval,
+            }
+        } else {
+            Self {
+                duration: 0.0,
+                provenance: VoluntaryTimeProvenance::ZeroSpeed,
+            }
+        }
+    }
+    pub(super) fn toward(relative: Vec3f, speed: f32) -> Self {
+        if speed <= 0.0 {
+            return Self::full(speed);
+        }
+        let length = distance(Vec3f::ZERO, relative);
+        if length >= speed {
+            Self::full(speed)
+        } else {
+            Self {
+                duration: length / speed,
+                provenance: VoluntaryTimeProvenance::GoalArrival,
+            }
+        }
+    }
+}
+
 /// The voluntary receipt retains selected intent and actual per-channel motion.
 /// Its body event/biology include the reflex once; `actual_displacement` also
 /// includes the separately identified involuntary movement. This wrapper is not
@@ -32,6 +81,8 @@ pub struct AwakeTranslationIntervalReceipt {
     pub allocated_translation_time: f32,
     pub translation_time_metric: TranslationTimeMetric,
     pub voluntary_time_allocated: f32,
+    pub planned_voluntary_time: f32,
+    pub voluntary_time_provenance: VoluntaryTimeProvenance,
     pub reflex_time_allocated: f32,
     pub reflex_budget_exhausted: bool,
     /// Only a late zero-time/effort/motion response with the same normalized
@@ -56,6 +107,8 @@ pub(super) struct AwakeTranslationState {
     time_metric: TranslationTimeMetric,
     pub(super) thermal_peak: f32,
     voluntary_time: f32,
+    planned_time: Option<PlannedTranslationTime>,
+    voluntary_time_provenance: VoluntaryTimeProvenance,
     reflex_time: f32,
     late_response: bool,
     exhausted_late_no_effect: bool,
@@ -92,6 +145,7 @@ impl AwakeTranslationState {
         self.withdrawal = world.apply_contact_withdrawal(organism, entity, capacity, gain, 0.0)?;
         if let Some(reflex) = &self.withdrawal {
             self.voluntary_execution_altered = true;
+            self.voluntary_time_provenance = VoluntaryTimeProvenance::InitialPreemption;
             self.reflex_time = 1.0;
             // Even a blocked protective attempt owns this interval. A voluntary
             // translation cannot undo the response or receive a second allowance.
@@ -151,7 +205,7 @@ impl AwakeTranslationState {
         if sources.is_empty() {
             return None;
         }
-        let duration = (self.time_metric.path_length(delta) * fraction / speed).clamp(0.0, 1.0);
+        let duration = self.planned_time?.duration * fraction.clamp(0.0, 1.0);
         Some(SweptContactPlan {
             position,
             sources,
@@ -185,6 +239,7 @@ impl AwakeTranslationState {
         result.observation.energy_delta = SignedValence::new(result.body_event.energy)?;
         result.observation.homeostatic_delta.drives.brain_atp *= plan.duration;
         self.voluntary_time = plan.duration;
+        self.voluntary_time_provenance = VoluntaryTimeProvenance::SweptContact;
         self.voluntary_path += distance(Vec3f::ZERO, displacement);
         self.voluntary_translation_energy += result.body_event.energy;
         self.thermal_peak = world.thermal_contact_severity_at(own, plan.position);
@@ -252,6 +307,10 @@ impl AwakeTranslationState {
         Ok(())
     }
 
+    pub(super) fn set_planned_time(&mut self, time: PlannedTranslationTime) {
+        self.planned_time = Some(time);
+    }
+
     pub(super) fn mark_voluntary_execution_altered(&mut self) {
         self.voluntary_execution_altered = true;
     }
@@ -295,11 +354,14 @@ impl AwakeTranslationState {
         let path = self.time_metric.path_length(displacement);
         let speed = MOVE_STEP * command.intensity.raw();
         let time = if !result.execution.succeeded {
+            self.voluntary_time_provenance = VoluntaryTimeProvenance::BlockedAttempt;
             1.0
-        } else if speed > 0.0 {
-            (path / speed).clamp(0.0, 1.0)
         } else {
-            0.0
+            let planned = self
+                .planned_time
+                .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
+            self.voluntary_time_provenance = planned.provenance;
+            planned.duration
         };
         self.budget
             .as_mut()
@@ -425,6 +487,8 @@ impl HeadlessWorld {
                     voluntary_execution_altered: state.voluntary_execution_altered,
                     withdrawal: state.withdrawal,
                     voluntary_time_allocated: state.voluntary_time,
+                    planned_voluntary_time: state.planned_time.map_or(0.0, |p| p.duration),
+                    voluntary_time_provenance: state.voluntary_time_provenance,
                     reflex_time_allocated: state.reflex_time,
                     allocated_translation_time: state.budget.map_or(0.0, |b| b.spent_time),
                     translation_time_metric: state.time_metric,

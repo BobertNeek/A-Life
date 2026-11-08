@@ -182,6 +182,16 @@ fn shared_actuator_repeated_contact_keeps_sequence_unissued_and_releases() {
 
 #[test]
 fn shared_actuator_exhausted_late_meal_retains_exact_ordinary_experience() {
+    shared_actuator_meal_at_origin(0.0);
+}
+
+#[test]
+fn shared_actuator_translated_meal_has_no_phantom_time_or_credit_loss() {
+    shared_actuator_meal_at_origin(3.0);
+    shared_actuator_meal_at_origin(1000.0);
+}
+
+fn shared_actuator_meal_at_origin(origin_x: f32) {
     // New declared inherited readout factor after the unchanged founder selected Inspect.
     // Same seed, normal native sampler, no forced measured action or neural state writes.
     let (game, mut trainer, _) =
@@ -204,9 +214,9 @@ fn shared_actuator_exhausted_late_meal_retains_exact_ordinary_experience() {
                     world.editor_remove_object(object.id)?;
                 }
             }
-            // Origin-centered geometry isolates exact exhausted-time plumbing.
-            // Canonical X=3 separately exposed a quantized-position timing residue.
-            world.editor_move_object(entity, Vec3f::ZERO)?;
+            // Same declared fixture at translated coordinates. Each case is
+            // paired against its own exact ordinary execution.
+            world.editor_move_object(entity, Vec3f::new(origin_x, 0.0, 0.0))?;
             let mut position = world.entity(entity).unwrap().position;
             position.x += 0.3;
             let food = world.editor_spawn_object(WorldEditorSpawnSpec {

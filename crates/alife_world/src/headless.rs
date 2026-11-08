@@ -4,7 +4,9 @@
 
 mod awake_translation;
 mod contact_withdrawal;
-pub use awake_translation::{AwakeTranslationIntervalReceipt, TranslationTimeMetric};
+pub use awake_translation::{
+    AwakeTranslationIntervalReceipt, TranslationTimeMetric, VoluntaryTimeProvenance,
+};
 
 use std::{
     cell::{Ref, RefCell},
@@ -6113,6 +6115,7 @@ impl HeadlessWorld {
         }
         let mut observed_goal = None;
         let max_step = MOVE_STEP * command.intensity.raw();
+        let mut planned_time = awake_translation::PlannedTranslationTime::full(max_step);
         let destination = match intent {
             MoveIntent::Forward => {
                 let yaw = self
@@ -6125,19 +6128,31 @@ impl HeadlessWorld {
                     Vec3f::new(yaw.cos() * max_step, 0.0, yaw.sin() * max_step),
                 ))
             }
-            MoveIntent::Absolute if command.target_position.is_some() => command
-                .target_position
-                .map(|target| step_toward(start, target, max_step)),
+            MoveIntent::Absolute if command.target_position.is_some() => {
+                command.target_position.map(|target| {
+                    planned_time = awake_translation::PlannedTranslationTime::toward(
+                        subtract(target, start),
+                        max_step,
+                    );
+                    step_toward(start, target, max_step)
+                })
+            }
             MoveIntent::Absolute | MoveIntent::Approach => {
                 let Some(target) = command.target_entity else {
                     return self.invalid_target(command, None);
                 };
                 if let Some(relative) = self.visible_motion_target(command.organism_id, target)? {
                     observed_goal = Some((target, relative));
+                    planned_time =
+                        awake_translation::PlannedTranslationTime::toward(relative, max_step);
                     Some(step_toward(start, add(start, relative), max_step))
                 } else if let Some(remembered) = command.target_position {
                     // A creature-supplied remembered point permits a straight
                     // movement only. It cannot authorize a local detour.
+                    planned_time = awake_translation::PlannedTranslationTime::toward(
+                        subtract(remembered, start),
+                        max_step,
+                    );
                     Some(step_toward(start, remembered, max_step))
                 } else {
                     return self.blocked_local_move(command);
@@ -6158,6 +6173,9 @@ impl HeadlessWorld {
             return self.invalid_target(command, command.target_entity);
         };
         destination.validate()?;
+        if let Some(state) = translation.as_deref_mut() {
+            state.set_planned_time(planned_time);
+        }
         let mut detour = false;
         if let Some((target, relative)) = observed_goal {
             let Some((selected, diverted)) =
@@ -9079,6 +9097,159 @@ mod task_6_factorized_motor_tests {
                 "toxic response duplicated biology"
             );
         }
+    }
+
+    #[test]
+    fn awake_duration_translated_full_steps_do_not_create_phantom_reflex_effort() {
+        for origin in [0.0, 3.0, 1000.0] {
+            for intensity in [0.5, 1.0] {
+                let (mut world, agent, food, mut bundle) = prepared_world();
+                for object in world.objects.values_mut() {
+                    object.position.x += origin;
+                }
+                hold_food_for_meal(&mut world, food);
+                world.objects.get_mut(&food.raw()).unwrap().hazard_pain = 0.4;
+                bundle
+                    .channels
+                    .retain(|c| c.channel != MotorChannel::Locomotion);
+                let mut movement = initial_priority_bundle(false).channels[0].clone();
+                movement.intensity = Intensity::new(intensity).unwrap();
+                bundle.channels.push(movement);
+                let mut ordinary = world.clone();
+                let expected = ordinary
+                    .apply_registered_motor_bundle(&bundle, agent)
+                    .unwrap();
+                let actual = world
+                    .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
+                    .unwrap();
+                assert_eq!(
+                    actual.voluntary_time_allocated, 1.0,
+                    "origin={origin}, intensity={intensity}"
+                );
+                assert_eq!(actual.reflex_time_allocated, 0.0);
+                assert!(actual.exhausted_late_no_effect);
+                let reflex = actual.withdrawal.as_ref().unwrap();
+                assert!(
+                    reflex.blocked
+                        && reflex.displacement == Vec3f::ZERO
+                        && reflex.energy_cost == 0.0
+                );
+                assert!(actual.voluntary == expected);
+                assert!(
+                    serde_json::to_vec(&world.save_state()).unwrap()
+                        == serde_json::to_vec(&ordinary.save_state()).unwrap()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn awake_duration_goal_arrival_and_zero_speed_keep_real_remaining_time() {
+        for (origin, goal, intensity, provenance) in [
+            (0.0, 0.025, 1.0, VoluntaryTimeProvenance::GoalArrival),
+            (3.0, 0.025, 1.0, VoluntaryTimeProvenance::GoalArrival),
+            (0.0, 0.5, 0.0, VoluntaryTimeProvenance::ZeroSpeed),
+        ] {
+            let (mut world, agent, food, mut bundle) = prepared_world();
+            for object in world.objects.values_mut() {
+                object.position.x += origin;
+            }
+            hold_food_for_meal(&mut world, food);
+            world.objects.get_mut(&food.raw()).unwrap().hazard_pain = 0.4;
+            bundle
+                .channels
+                .retain(|c| c.channel != MotorChannel::Locomotion);
+            let target = Vec3f::new(origin + goal, 0.0, 0.0);
+            bundle.channels.push(
+                ChannelCommand::new(
+                    MotorChannel::Locomotion,
+                    ActionKind::Move.canonical_id(),
+                    Some(alife_core::ActionTarget::new(None, Some(target))),
+                    target,
+                    Intensity::new(intensity).unwrap(),
+                    alife_core::DurationTicks::new(1),
+                    0.0,
+                    Confidence::new(1.0).unwrap(),
+                    0,
+                )
+                .unwrap(),
+            );
+            let before = world.organism_registry.get(ORGANISM_ID).unwrap().clone();
+            let receipt = world
+                .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
+                .unwrap();
+            assert!(world.entity(food).unwrap().consumed);
+            assert_eq!(receipt.voluntary_time_provenance, provenance);
+            assert_eq!(
+                receipt.voluntary_time_allocated,
+                receipt.planned_voluntary_time
+            );
+            if intensity > 0.0 {
+                assert!((receipt.voluntary_time_allocated - 0.25).abs() < 1e-4);
+            } else {
+                assert_eq!(receipt.voluntary_time_allocated, 0.0);
+            }
+            assert_eq!(
+                receipt.voluntary_time_allocated + receipt.reflex_time_allocated,
+                1.0
+            );
+            assert!(!receipt.exhausted_late_no_effect);
+            let reflex = receipt.withdrawal.as_ref().unwrap();
+            assert!(!reflex.blocked && reflex.energy_cost > 0.0 && reflex.displacement.x < 0.0);
+            assert!(receipt.voluntary_path + receipt.reflex_path <= MOVE_STEP + 1e-5);
+            let biology = before
+                .biochemistry()
+                .advance(
+                    receipt.voluntary.outcome_tick,
+                    receipt.voluntary.body_event,
+                    before.phenotype(),
+                )
+                .unwrap();
+            assert!(receipt.voluntary.biology_after == biology);
+        }
+    }
+
+    #[test]
+    fn awake_duration_ordinary_blocked_attempt_has_no_phantom_late_effort() {
+        let (mut world, agent, food, mut bundle) = prepared_world();
+        hold_food_for_meal(&mut world, food);
+        world.objects.get_mut(&food.raw()).unwrap().hazard_pain = 0.4;
+        bundle
+            .channels
+            .retain(|c| c.channel != MotorChannel::Locomotion);
+        bundle
+            .channels
+            .push(initial_priority_bundle(false).channels[0].clone());
+        world
+            .editor_spawn_object(WorldEditorSpawnSpec {
+                label: "ordinary-blocker".into(),
+                kind: WorldObjectKind::Obstacle,
+                organism_id: None,
+                position: Vec3f::new(0.15, 0.0, 0.0),
+                nutrition: 0.0,
+                hazard_pain: 0.0,
+                radius: 0.1,
+                token_id: None,
+            })
+            .unwrap();
+        let mut ordinary = world.clone();
+        let expected = ordinary
+            .apply_registered_motor_bundle(&bundle, agent)
+            .unwrap();
+        let receipt = world
+            .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
+            .unwrap();
+        assert_eq!(
+            receipt.voluntary_time_provenance,
+            VoluntaryTimeProvenance::BlockedAttempt
+        );
+        assert_eq!(receipt.voluntary_time_allocated, 1.0);
+        assert!(receipt.exhausted_late_no_effect && !receipt.voluntary_execution_altered);
+        assert!(receipt.voluntary == expected);
+        assert!(
+            serde_json::to_vec(&world.save_state()).unwrap()
+                == serde_json::to_vec(&ordinary.save_state()).unwrap()
+        );
     }
 
     #[test]

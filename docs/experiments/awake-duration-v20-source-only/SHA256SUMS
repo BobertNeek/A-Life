@@ -1,0 +1,7 @@
+3c6e7adffb958dfa111efda620d4319d71b036bf39ab53d19b37199b76604f77  ./PLAN.md
+5c2b10a8afb003e49db8f1975c67f83de27bad8ee9c4676d3d44259b52b6a599  ./delta.patch
+35205ab47b212a9292823c9574c439e738cc7afc1c2b0a6c380ed366611dd5e6  ./identity.txt
+ddda930f36b91df1d372c2edec1b205706b10cdcfce2ded87283c6579d85e8be  ./source-closure.txt
+4f7d881d536f1658dd9deec39daacbcd39a7684901d4f05c666aff5f2c505f0c  ./source/crates/alife_training/tests/cpu_collector/shared_actuator.rs
+8a286548f95c8ca9843cbfe0b1c20ee3209f39ce80673b631107c284084d815e  ./source/crates/alife_world/src/headless.rs
+ba20587423acef5cc13e34a16a780febcc5865e2828d7e210f92e9fa244b8b09  ./source/crates/alife_world/src/headless/awake_translation.rs
