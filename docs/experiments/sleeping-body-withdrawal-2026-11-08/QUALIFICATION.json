@@ -1,0 +1,145 @@
+{
+  "schema_version": 1,
+  "date": "2026-11-08",
+  "status": "Qualified source copied byte-for-byte to full main tree; exact published-head hosted checks pending",
+  "upstream": {
+    "merged_main_commit": "2e13e227c6ac4ac8d883ffbaeed9f6291c6cefd0",
+    "tree": "31bfd38e1c384fd9b112bcd948f102959fecb66f",
+    "pr306_head": "c8fcd14f2ee6f88cbde6f60d4201dcb8a9827116",
+    "base_before_pr306": "b0b4e5ab85473f1ace63f0629ecf4704e7b0fb81",
+    "merge_note": "Main is the merge of b0b4e5ab and c8fcd14f; its exact tree equals PR306. Changed-path preimages were checked against c8fcd14f, and the combined patch applies cleanly to the publication checkout with that exact tree.",
+    "pr307_and_thermal_pr308_adopted": false
+  },
+  "local_source": {
+    "branch": "sleeping-body-contact-integration",
+    "commit": "c761d3690cbfb8e49d101f88357f5094cc997d07",
+    "tree": "1c77029f0ba8c967b743fc0c1ffbba390b430882",
+    "offline_seam_commit": "932390bbd7b6d9cc258795f8bd30eff9dd879b7a",
+    "build_input_blobs": [
+      {
+        "path": "assets/founders/scaled-choice-nociceptive-v1/candidate.alife-foundation",
+        "blob": "929ed6ea3d2b7afd1f5e0a58a6dcad2984b7f8d3"
+      },
+      {
+        "path": "assets/founders/scaled-choice-nociceptive-v1/historical/2026-09-08-scaled-choice-32416/candidate.alife-foundation",
+        "blob": "27398e7165348c9be25c6ef8ef543d31b7982715"
+      },
+      {
+        "path": "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json",
+        "blob": "5e51dd36330678d6e2165f750d8c0d842f0179fc"
+      }
+    ],
+    "note": "Source-only worker checkout omitted unrelated art; publication replaces only the eleven verified source/documentation blobs on the full existing main tree. No assets changed."
+  },
+  "behavior": {
+    "scope": "Explicit scheduled sleeping/no-decision IDs, including Completed durability holds; excludes awake no-selection and preparation-failure controls.",
+    "biology": "One actual body event and advance. Already advanced voluntary bodies are skipped. Fresh contact may withdraw the body and suppress recovery even when movement is blocked. Quiet/chronic pain without a fresh dose does not trigger.",
+    "direction": "Inherited PR306 localized outward response; unlocalized fresh damage uses bounded backwards translation with unchanged yaw.",
+    "cognition": "No body-triggered scheduler edge, voluntary episode, policy credit, aroused neural dispatch, genome change, replay/optimizer rewrite or persistence schema extension. Normal consolidation and capture obligations remain active."
+  },
+  "results": {
+    "integration": {
+      "passed": 10,
+      "failed": 0,
+      "host_fixture_tests": 8,
+      "explicit_software_runtime_tests": 2
+    },
+    "software_boundary_controls": {
+      "passed": 2,
+      "failed": 0,
+      "controls": [
+        "Ordinary required factory rejects the actual Cpu adapter before device acquisition.",
+        "Training-only fixture rejects runtime dispatch and restore staging.",
+        "Explicit runtime marker and truthful adapter identity survive staging.",
+        "Shared device-loss signal stops original and staging contexts."
+      ]
+    },
+    "world_full": {
+      "passed": 587,
+      "failed": 0,
+      "ignored": 3,
+      "suite_count": 44
+    },
+    "existing_resident_sync": {
+      "passed": 7,
+      "failed": 0
+    },
+    "existing_newborn_rollback": {
+      "passed": 1,
+      "failed": 0
+    },
+    "strict_app_test_clippy": "passed",
+    "strict_production_gpu_runtime_library_clippy": "passed",
+    "strict_world_all_targets_clippy": "passed",
+    "cargo_fmt_check": "passed",
+    "git_diff_check": "passed",
+    "patch_apply_check": "passed"
+  },
+  "runtime_evidence": {
+    "adapter": "SwiftShader Device (Subzero)",
+    "vendor": 6880,
+    "device": 49374,
+    "device_type": "Cpu",
+    "backend": "Vulkan",
+    "hardware_qualified": false,
+    "fresh_builtin_nano512_founders": true,
+    "autonomous_awake_decisions": 0,
+    "voluntary_patches": 0,
+    "physical_response_learning_receipts": 0,
+    "capture_restore_boundaries": 5,
+    "actual_consolidation_states": [
+      "Pending",
+      "Prepared",
+      "Submitted",
+      "Completed"
+    ],
+    "completed_durability_hold_withdrawal": true,
+    "actual_post_body_failure_rollback_retry": true,
+    "retry_repeated_atp_charge": false
+  },
+  "commands": [
+    "cargo test --offline -p alife_game_app --features gpu-tests --lib sleeping_body_ -- --test-threads=1 --nocapture",
+    "cargo test --offline -p alife_gpu_backend --features gpu-tests --lib software_training_test::tests:: -- --ignored --test-threads=1 --nocapture",
+    "cargo test --offline -p alife_world -- --test-threads=1",
+    "cargo test --offline -p alife_game_app --features gpu-tests --lib resident_sync_tests -- --test-threads=1",
+    "cargo test --offline -p alife_game_app --features gpu-tests --lib newborn_fixture_failure -- --test-threads=1",
+    "cargo clippy --offline -p alife_game_app --features gpu-tests --lib --tests -- -D warnings",
+    "cargo clippy --offline -p alife_game_app --features gpu-runtime --lib -- -D warnings",
+    "cargo clippy --offline -p alife_world --all-targets -- -D warnings",
+    "cargo fmt --all --check",
+    "git diff --check"
+  ],
+  "environment": {
+    "rust_toolchain": "1.99.1-x86_64-unknown-linux-gnu",
+    "cargo_build_jobs": 1,
+    "cargo_incremental": 0,
+    "dev_and_test_debug": 0,
+    "rust_min_stack": 33554432,
+    "software_fixture_icd": "/usr/lib/chromium/vk_swiftshader_icd.json",
+    "private_target_released": true
+  },
+  "limits": [
+    "Fixed fixtures and fresh built-in founders with empty replay, not a trained private-life evaluation.",
+    "Software-runtime execution does not qualify ordinary hardware admission or live gameplay.",
+    "No cognitive wake or awake neural decision-interception claim.",
+    "No performance or readiness claim; no physical hardware or Bevy renderer build performed.",
+    "No private banks or private checkpoints were input; fixture-generated checkpoint files and neural arrays are excluded from deliverables."
+  ],
+  "future_thermal_merge": "Keep selected physical withdrawal, then endpoint-max thermal sampling, then the final combined biology event. Refresh response.applied_body_event before appending it and advancing biology once. Thermal exposure remains outside the selected-sleeper filter. No thermal change was imported here.",
+  "publication": "New draft; no merge or gameplay hardware claim. Exact-head CPU Vulkan workflow adds the same ten runtime fixtures and one boundary fixture with fail-closed nonzero counts.",
+  "package_contains": "Changed Rust/documentation source, source patches, successful text logs and scalar/source identity receipts only; no binaries, neural arrays, checkpoints or credentials.",
+  "hosted_workflow_delta": "Existing offline-software-vulkan.yml runs the fixed sleeping-body test module (exact10 pass expected) plus exact runtime-marker/device-loss test (exact1 pass expected), using the same truthful CPU Vulkan ICD. Thread stack32MiB for nested portable fixtures; no study entry point, uploads or automatic native lives.",
+  "original_qualified_package_sha256": "b0e01d46c8cd971cfb15aec712d8c6eec9c6fe29c02116c53a9e4128a5c5e01b",
+  "public_finite_log_projection": {
+    "final-integration-tests.log": {
+      "normalization": "Trailing empty line removed only; all printed test/adapter/source lines unchanged",
+      "original_sha256": "e71c806320b601b48414ea4e57ee34996126d5bb31cd35f3a7804ed3f3a31eb6",
+      "published_sha256": "fe2f758bd149b1534927305d07167c0c1a0b7db249d8990595ecafbc0a9f2c52"
+    },
+    "software-boundary-controls.log": {
+      "normalization": "Trailing empty line removed only; all printed test/adapter/source lines unchanged",
+      "original_sha256": "2f3c1871f85578fdb2d14963fefcc0888b1828843bf7ced82eec1be702434058",
+      "published_sha256": "e691f66dd9557de63c65658167bd892323db54ad6efcc6df67a2d2221a59e1bb"
+    }
+  }
+}

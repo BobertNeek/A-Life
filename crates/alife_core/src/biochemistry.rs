@@ -159,15 +159,37 @@ impl BodyState {
         energy_use: Option<f32>,
         repair_signal: Option<f32>,
         sleep_metabolic_rate: f32,
+        thermal_balance: ThermalBalanceCandidate,
     ) -> Self {
         let injury_gain = event.damage * (1.0 - phenotype.body.injury_resistance);
         let turnover = phenotype.body.metabolic_turnover;
         let recovery = event.sleep_recovery * turnover;
-        let temperature_stress = clamp01(
-            self.temperature_stress
-                + event.temperature_stress * (1.0 - phenotype.body.temperature_tolerance)
-                - recovery * 0.20,
-        );
+        let temperature_stress = if !thermal_balance.suppress_sleep_thermal_relief
+            && thermal_balance.passive_relief == 0.0
+        {
+            // Keep the literal legacy arithmetic path, including signed zero.
+            clamp01(
+                self.temperature_stress
+                    + event.temperature_stress * (1.0 - phenotype.body.temperature_tolerance)
+                    - recovery * 0.20,
+            )
+        } else if thermal_balance.suppress_sleep_thermal_relief {
+            // Candidate V2: continued measured external exposure is not erased
+            // by the inherited sleep-cooling shortcut. Every other sleep effect
+            // still uses `recovery` and the unmodified event below.
+            clamp01(
+                self.temperature_stress
+                    + event.temperature_stress * (1.0 - phenotype.body.temperature_tolerance)
+                    - thermal_balance.passive_relief,
+            )
+        } else {
+            clamp01(
+                self.temperature_stress
+                    + event.temperature_stress * (1.0 - phenotype.body.temperature_tolerance)
+                    - recovery * 0.20
+                    - thermal_balance.passive_relief,
+            )
+        };
         let mut organs = self.organs;
         for organ in &mut organs {
             let local_damage = match organ.kind {
@@ -388,6 +410,16 @@ impl Validate for BodyState {
         }
         Ok(())
     }
+}
+
+/// Nonpersistent research input to one biological interval. Amounts are already
+/// integrated over the actual interval, never multiplied by command duration.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct ThermalBalanceCandidate {
+    pub passive_relief: f32,
+    /// Set only for positive explicitly configured external contact exposure.
+    /// Does not suppress sleep's fatigue, ATP, repair, or metabolic effects.
+    pub suppress_sleep_thermal_relief: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -792,6 +824,47 @@ impl BiochemistryState {
         neural: Option<&NeuralEmissionFrame>,
         phenotype: &CreaturePhenotype,
     ) -> Result<Self, ScaffoldContractError> {
+        self.advance_with_thermal_relief_candidate(
+            next_tick, next_age, event, neural, phenotype, 0.0,
+        )
+    }
+
+    /// Explicit research input: measured passive thermal-load relief, not sleep,
+    /// nutrition or reward. The ordinary entry points always supply zero.
+    pub fn advance_with_thermal_relief_candidate(
+        &self,
+        next_tick: Tick,
+        next_age: Tick,
+        event: BodyEventDelta,
+        neural: Option<&NeuralEmissionFrame>,
+        phenotype: &CreaturePhenotype,
+        thermal_relief: f32,
+    ) -> Result<Self, ScaffoldContractError> {
+        self.advance_with_thermal_balance_candidate(
+            next_tick,
+            next_age,
+            event,
+            neural,
+            phenotype,
+            ThermalBalanceCandidate {
+                passive_relief: thermal_relief,
+                suppress_sleep_thermal_relief: false,
+            },
+        )
+    }
+
+    /// Candidate V2 explicit thermal balance. Ordinary and V1 entry points keep
+    /// the inherited sleep-cooling term through the wrapper above.
+    pub fn advance_with_thermal_balance_candidate(
+        &self,
+        next_tick: Tick,
+        next_age: Tick,
+        event: BodyEventDelta,
+        neural: Option<&NeuralEmissionFrame>,
+        phenotype: &CreaturePhenotype,
+        thermal_balance: ThermalBalanceCandidate,
+    ) -> Result<Self, ScaffoldContractError> {
+        validate_unit_values(&[thermal_balance.passive_relief])?;
         self.validate_against(phenotype)?;
         event.validate_contract()?;
         phenotype.brain_genome.validate_contract()?;
@@ -857,6 +930,7 @@ impl BiochemistryState {
             energy_use,
             repair_signal,
             sleep_metabolic_rate,
+            thermal_balance,
         );
         body.validate_contract()?;
         let development = if development_steps > 0 {
@@ -1194,6 +1268,7 @@ mod tests {
                 Some(energy),
                 Some(repair),
                 1.0,
+                ThermalBalanceCandidate::default(),
             )
         };
         assert!(run(0.25, 0.0).energy > run(1.0, 0.0).energy);
@@ -1208,6 +1283,7 @@ mod tests {
             Some(1.0),
             Some(1.0),
             1.0,
+            ThermalBalanceCandidate::default(),
         );
         assert_eq!(after.health, exhausted.health);
         assert_eq!(after.energy, 0.0);
@@ -1226,6 +1302,7 @@ mod tests {
                 Some(0.0),
                 None,
                 1.0,
+                ThermalBalanceCandidate::default(),
             )
         };
         let recovered = sleeping(body);
@@ -1263,6 +1340,7 @@ mod tests {
                 Some(0.0),
                 repair,
                 1.0,
+                ThermalBalanceCandidate::default(),
             )
         };
         let without_repair = run(body, event, Some(0.0));
@@ -1315,6 +1393,7 @@ mod tests {
                 Some(0.0),
                 repair,
                 1.0,
+                ThermalBalanceCandidate::default(),
             );
             let before_organ = body.organ(OrganKind::Circulatory);
             let after_organ = after.organ(OrganKind::Circulatory);

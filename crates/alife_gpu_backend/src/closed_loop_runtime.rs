@@ -2748,6 +2748,8 @@ pub struct GpuClosedLoopBackend {
     runtime_profile: GpuRuntimeProfile,
     #[cfg(feature = "gpu-tests")]
     offline_software_training_test: bool,
+    #[cfg(feature = "gpu-tests")]
+    offline_software_runtime_test: bool,
     runtime_budget: GpuRuntimeBudget,
     activity_policy: BrainActivityPolicyV1,
     admission: GpuAdmissionReceipt,
@@ -2908,6 +2910,8 @@ impl GpuClosedLoopBackend {
             runtime_profile: profile,
             #[cfg(feature = "gpu-tests")]
             offline_software_training_test: false,
+            #[cfg(feature = "gpu-tests")]
+            offline_software_runtime_test: false,
             runtime_budget,
             activity_policy,
             admission,
@@ -2975,6 +2979,8 @@ impl GpuClosedLoopBackend {
             runtime_profile: self.runtime_profile,
             #[cfg(feature = "gpu-tests")]
             offline_software_training_test: self.offline_software_training_test,
+            #[cfg(feature = "gpu-tests")]
+            offline_software_runtime_test: self.offline_software_runtime_test,
             runtime_budget: self.runtime_budget,
             activity_policy: self.activity_policy,
             admission: GpuAdmissionReceipt::empty(self.runtime_budget),

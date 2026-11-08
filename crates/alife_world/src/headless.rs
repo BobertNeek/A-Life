@@ -1360,6 +1360,7 @@ impl IngestionObservation {
 pub struct HeadlessWorld {
     seed: u64,
     disable_age_death: bool,
+    thermal_contact_candidate: Option<ThermalContactCandidate>,
     terrain: Option<crate::WorldTerrain>,
     tick: Tick,
     next_entity_id: u64,
@@ -1384,6 +1385,9 @@ pub struct HeadlessWorld {
     #[cfg(test)]
     injected_tick_late_failure_after_first_organism: bool,
 }
+
+mod thermal_contact_candidate;
+pub use thermal_contact_candidate::ThermalContactCandidate;
 
 mod hands;
 pub use hands::{ActionPhase, GripTransfer, GripTransferKind};
@@ -1579,6 +1583,7 @@ impl HeadlessWorld {
         Self {
             seed,
             disable_age_death: false,
+            thermal_contact_candidate: None,
             terrain: None,
             tick: Tick::ZERO,
             next_entity_id: DEFAULT_ENTITY_ID_START,
@@ -1794,7 +1799,7 @@ impl HeadlessWorld {
         &mut self,
         body_events: &BTreeMap<u64, BodyEventDelta>,
     ) -> Result<Tick, ScaffoldContractError> {
-        self.advance_body_events_with_contact_mode(body_events, None)
+        self.advance_body_events_with_contact_mode(body_events, None, None)
     }
 
     /// Explicit body-only candidate. A real contact dose can withdraw the body
@@ -1818,7 +1823,43 @@ impl HeadlessWorld {
     ) -> Result<BodyOnlyContactIntervalReceipt, ScaffoldContractError> {
         let mut responses = Vec::new();
         let outcome_tick =
-            self.advance_body_events_with_contact_mode(body_events, Some(&mut responses))?;
+            self.advance_body_events_with_contact_mode(body_events, None, Some(&mut responses))?;
+        Ok(BodyOnlyContactIntervalReceipt {
+            schema_version: 1,
+            outcome_tick,
+            responses,
+        })
+    }
+
+    /// Advances the ordinary body interval, allowing contact withdrawal only for
+    /// the explicit scheduled, non-decision organisms selected by the caller.
+    /// This set is independent of recovery doses: a completed sleep transaction
+    /// held for durability can still have a due body without a recovery event.
+    /// The caller owns the full enclosing world rollback transaction. Organisms
+    /// already advanced by a voluntary action are never advanced or moved twice.
+    #[doc(hidden)]
+    pub fn try_advance_tick_with_selected_body_contacts_in_staged_tick(
+        &mut self,
+        body_events: &BTreeMap<u64, BodyEventDelta>,
+        contact_organisms: &BTreeSet<u64>,
+    ) -> Result<BodyOnlyContactIntervalReceipt, ScaffoldContractError> {
+        for &raw in contact_organisms {
+            let id = OrganismId(raw);
+            id.validate()?;
+            let record = self
+                .organism_registry
+                .get(id)
+                .ok_or(ScaffoldContractError::InvalidId)?;
+            if !record.lifecycle().is_alive() {
+                return Err(ScaffoldContractError::InvalidId);
+            }
+        }
+        let mut responses = Vec::new();
+        let outcome_tick = self.advance_body_events_with_contact_mode(
+            body_events,
+            Some(contact_organisms),
+            Some(&mut responses),
+        )?;
         Ok(BodyOnlyContactIntervalReceipt {
             schema_version: 1,
             outcome_tick,
@@ -1829,6 +1870,7 @@ impl HeadlessWorld {
     fn advance_body_events_with_contact_mode(
         &mut self,
         body_events: &BTreeMap<u64, BodyEventDelta>,
+        contact_organisms: Option<&BTreeSet<u64>>,
         mut contact_responses: Option<&mut Vec<BodyOnlyContactResponse>>,
     ) -> Result<Tick, ScaffoldContractError> {
         let candidate = self;
@@ -1933,7 +1975,10 @@ impl HeadlessWorld {
                     let mut body_event = hazard_contact.map_or(body_event, |(_, pain)| {
                         merge_hazard_contact_body_event(body_event, pain)
                     });
-                    if let Some(responses) = contact_responses.as_deref_mut() {
+                    let mut contact_response = None;
+                    if contact_responses.is_some()
+                        && contact_organisms.is_none_or(|ids| ids.contains(&organism_id.raw()))
+                    {
                         let (event, response) = candidate.apply_body_only_contact_response(
                             organism_id,
                             entity,
@@ -1942,14 +1987,32 @@ impl HeadlessWorld {
                             unlocalized_damage,
                         )?;
                         body_event = event;
-                        if let Some(response) = response {
-                            responses.push(response);
-                        }
+                        contact_response = response;
                     }
-                    candidate
-                        .organism_registry
-                        .advance_biology(organism_id, next_tick, body_event)
-                        .map_err(map_organism_registry_error)?;
+                    // The physical-only response can translate this body too.
+                    // Match voluntary intervals: sample both endpoints and dose
+                    // at most once, without erasing a contact just left behind.
+                    let final_position = candidate.objects[&entity.raw()].position;
+                    let thermal = candidate
+                        .thermal_contact_severity_at(entity, position)
+                        .max(candidate.thermal_contact_severity_at(entity, final_position));
+                    let (body_event, relief) =
+                        candidate.thermal_interval_event(body_event, thermal);
+                    if let (Some(responses), Some(mut response)) =
+                        (contact_responses.as_deref_mut(), contact_response)
+                    {
+                        // Preserve the receipt's actual final biology input,
+                        // including the independently configured thermal dose.
+                        response.applied_body_event = body_event;
+                        responses.push(response);
+                    }
+                    candidate.advance_biology_with_thermal_candidate(
+                        organism_id,
+                        next_tick,
+                        body_event,
+                        None,
+                        relief,
+                    )?;
                     #[cfg(test)]
                     {
                         advanced_organism = true;
@@ -3693,6 +3756,7 @@ impl HeadlessWorld {
             }
         }
         let world = Self {
+            thermal_contact_candidate: None,
             seed: state.seed,
             disable_age_death: state.disable_age_death,
             terrain,
@@ -4746,6 +4810,7 @@ impl HeadlessWorld {
         );
         let (initial_hazard_contact, initial_peer_touch) =
             self.body_contacts_at(world_entity_id, initial_position);
+        let initial_thermal = self.thermal_contact_severity_at(world_entity_id, initial_position);
 
         let mut channels = bundle
             .channels
@@ -4836,21 +4901,17 @@ impl HeadlessWorld {
                 .iter()
                 .map(|(_, result)| result.execution.physical.displacement),
         );
+        let final_thermal = self.thermal_contact_severity_at(world_entity_id, final_position);
+        let (body_event, relief) =
+            self.thermal_interval_event(body_event, initial_thermal.max(final_thermal));
         body_event.validate_contract()?;
-        if let Some(neural) = neural {
-            self.organism_registry
-                .advance_biology_with_neural_emission(
-                    bundle.organism_id,
-                    outcome_tick,
-                    body_event,
-                    neural,
-                )
-                .map_err(map_organism_registry_error)?;
-        } else {
-            self.organism_registry
-                .advance_biology(bundle.organism_id, outcome_tick, body_event)
-                .map_err(map_organism_registry_error)?;
-        }
+        self.advance_biology_with_thermal_candidate(
+            bundle.organism_id,
+            outcome_tick,
+            body_event,
+            neural,
+            relief,
+        )?;
         self.validate_organism_bindings()?;
         let biology_after = *self
             .organism_registry
@@ -5045,6 +5106,7 @@ impl HeadlessWorld {
             self.validate_registered_action(command, world_entity_id, outcome_tick)?;
         let initial_position = self.objects[&world_entity_id.raw()].position;
         let (_, initial_peer_touch) = self.body_contacts_at(world_entity_id, initial_position);
+        let initial_thermal = self.thermal_contact_severity_at(world_entity_id, initial_position);
         let mut action_result = match mode {
             RegisteredCommandMode::Legacy => self.apply_command(command)?,
             RegisteredCommandMode::Neural {
@@ -5066,10 +5128,18 @@ impl HeadlessWorld {
                 .remove(&command.organism_id.raw())
                 .unwrap_or_else(BodyEventDelta::zero),
         );
+        let final_thermal = self.thermal_contact_severity_at(world_entity_id, final_position);
+        let (body_event, relief) = self
+            .thermal_interval_event(action_result.body_event, initial_thermal.max(final_thermal));
+        action_result.body_event = body_event;
         self.last_action_result = Some(action_result.clone());
-        self.organism_registry
-            .advance_biology(command.organism_id, outcome_tick, action_result.body_event)
-            .map_err(map_organism_registry_error)?;
+        self.advance_biology_with_thermal_candidate(
+            command.organism_id,
+            outcome_tick,
+            body_event,
+            None,
+            relief,
+        )?;
         self.validate_organism_bindings()?;
         let biology_after = *self
             .organism_registry
