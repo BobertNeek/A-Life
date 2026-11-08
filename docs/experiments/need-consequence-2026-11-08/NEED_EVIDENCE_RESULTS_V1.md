@@ -4,6 +4,13 @@ Core source aa0e74b208ea2f085b1b4b0c77f9fb7b77a0f1d6; integrated fixed-world sou
 
 ## Actual observations
 
+**Decision-provenance boundary:** these are prescribed physical actions, not neural
+choices. The unit fixture explicitly constructs a CPU-neural envelope with logit
+0, confidence .9, and zero active tiles/synapses to exercise the storage contract.
+Measured biology and world receipts are actual; the neural selection label in
+that envelope is synthetic. The storage/restore results do not qualify authentic
+neural admission, policy selection, or learned behavior.
+
 Three prescribed Inspect observations use fresh age600 initialization at world tick600, not600 lived ticks. All share maturation .32894737, puberty=false (puberty tick1113), biochemical expression1, loneliness.15, energy.7925, health1, injury0, awake. Earlier 'mature' wording was unsupported and is corrected: these are juvenile fixtures with expressed chemistry.
 
 World rate20Hz. Each registered action measures exactly tick600→601; metabolism cadence6 and development cadence60 ticks. Finalizing that same world interval does not advance its biology again. One passive no-command clone per condition produces the same loneliness change, confirming this is actual ambient contact relief during the interval, not an isolated consequence of Inspect.

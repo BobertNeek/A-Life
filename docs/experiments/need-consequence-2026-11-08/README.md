@@ -27,6 +27,13 @@ equally positioned toy and separated-peer controls measured zero. Passive clones
 showed the same change, so this is interval association rather than Inspect
 causality. Fixtures initialize juvenile age 600, not 600 lived ticks or adulthood.
 
+The Inspect command is prescribed. Its storage contract test constructs a synthetic
+CPU-neural decision envelope with a chosen score/confidence and zero reported
+neural work; no network selected it. The body changes and physical receipts are
+real, but admission under that test envelope is not proof of authentic neural
+selection or a working neural-to-memory pipeline. Real selection remains a
+separate qualification requirement.
+
 Exact source-context recall and byte-exact restore pass. However, all three actual
 next-world queries return Unknown despite the same target and family. This is
 honest evidence-storage qualification, not useful learned recall or a repaired
