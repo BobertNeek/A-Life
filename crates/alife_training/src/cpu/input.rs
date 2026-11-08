@@ -272,6 +272,16 @@ pub fn decode_cpu_speech(
     let source = p.candidate_decoder().motor_start() as usize + 128;
     let target = source + 32;
     let ids=p.synapses().iter().enumerate().filter(|(_,s)|matches!(s.kind(),CompiledSynapseKind::Decoder(c) if c.head()==DecoderHeadKind::SpeechPayload)).collect::<Vec<_>>();
+    if p.speech_decoder().is_none() {
+        // Nano has no speech-payload head. Match the native decoder's empty
+        // receipt, preserving the selected vocal action so the world records
+        // its ordinary missing-payload failure instead of inventing tokens.
+        return if ids.is_empty() {
+            Ok(None)
+        } else {
+            Err(invalid())
+        };
+    }
     if ids.len() != 1024 {
         return Err(invalid());
     }

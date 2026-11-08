@@ -1,0 +1,85 @@
+{
+  "scope": "Fixed selected-sleeper physical response plus explicit thermal configuration, no autonomous decisions/lives",
+  "sleeping_remote_head": "bf60fb8b5f69b40da3f1e78e3e1c7623f1448fa9",
+  "thermal_remote_head": "fd118a9ce7b50f513c2cde37fb3b366bf56f22b5",
+  "source_sha256": {
+    "crates/alife_world/src/headless.rs": "727b3a7a37468ef3f5d31c7b5f899969d421c1909a8b01b8338b22f9dee59395",
+    "crates/alife_world/src/headless/thermal_contact_candidate/tests.rs": "bbf42f3f666205eec2462c294b53a3df948a5e57fdd1832f7b405df911d7b2c9",
+    "crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs": "e3f618afd1dad9dd8f26a7f1e6e4cf72d05909693c48d2f9b1c6711d272e750d",
+    "crates/alife_game_app/src/gpu_live_runtime/sleeping_body_contact_tests.rs": "77491bb3c706a1e9e51f3b44b1230ed91e45ab0069db62cf20a217745723a4d6"
+  },
+  "expected": "selected set gates only physical response, not configured thermal dose; once-only final receipt, exact actual software runtime compatibility",
+  "schema_version": 1,
+  "native_result": "pass",
+  "unique_world_passes": 602,
+  "unique_runtime_passes": 10,
+  "focused_is_included_in_world": true,
+  "failed": 0,
+  "existing_ignored_world": 3,
+  "clippy": "strict app gpu-tests, production gpu-runtime, core/world all targets passed",
+  "format_diff": "pass",
+  "log_bindings": {
+    "selected-focused": {
+      "sha256": "b03cddd34e0d29f7ea0bf3c87031f45a5de1516367a5f8729134b38d79821e56",
+      "bytes": 772,
+      "test_totals": [
+        1,
+        0,
+        0
+      ],
+      "finished": null
+    },
+    "runtime": {
+      "sha256": "a503535272efeeac78a5de60d7b23924cf1c8fd51cd50399406bb080c40ecb34",
+      "bytes": 3641,
+      "test_totals": [
+        10,
+        0,
+        0
+      ],
+      "finished": null
+    },
+    "world": {
+      "sha256": "cb0708df63f05fc810ae2b348ce16e9b094341daf8d01f0425dd7827f4b80855",
+      "bytes": 67315,
+      "test_totals": [
+        602,
+        0,
+        3
+      ],
+      "finished": null
+    },
+    "app-clippy": {
+      "sha256": "4b73c49743fc09d938bdcc48d97dec5b2d12443f0579642823e32102d6a159f3",
+      "bytes": 1243,
+      "test_totals": null,
+      "finished": true
+    },
+    "production-clippy": {
+      "sha256": "431ceedc64f3859ca175cea4e10aef40eca219d4570705bf243d1a4ab24011e0",
+      "bytes": 424,
+      "test_totals": null,
+      "finished": true
+    },
+    "core-world-clippy": {
+      "sha256": "c034380a49842bf95b9624f00646f3d5e33c8b99340f9de992684052a8257b8a",
+      "bytes": 343,
+      "test_totals": null,
+      "finished": true
+    },
+    "fmt-final": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "test_totals": null,
+      "finished": null
+    }
+  },
+  "scope_limits": [
+    "fresh fixed fixtures only",
+    "actual software Vulkan, not hardware gameplay",
+    "no autonomous study or default cognitive arousal",
+    "no acquired-state migration/reset",
+    "thermal dose outside selected physical response gate"
+  ],
+  "main_speech_integration": "separate five-path merge after this source-bound native run; exact-head hosted checks remain required"
+}

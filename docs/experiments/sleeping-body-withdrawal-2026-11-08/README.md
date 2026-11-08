@@ -43,10 +43,25 @@ software-runtime behavior, not hardware gameplay, performance or cognitive wake.
 The changed existing CI workflow reruns fixed fixtures and checks exact pass
 counts; its outcome on the new published head remains pending.
 
-The thermal component is a separate draft. A future merge must keep thermal
-exposure outside the selected-sleeper filter, sample start/end contact after a
-withdrawal, and record the final combined event before one biology advance.
-No thermal or awake voluntary-action reflex is activated by this patch.
+## Combined thermal qualification
+
+The later combined source includes the explicit default-off thermal component
+from PR #308 head fd118a9c. Thermal exposure stays outside the selected-sleeper
+filter: an organism excluded from physical withdrawal still receives configured
+thermal dose. Both start/end contact are sampled after withdrawal, and the final
+combined event is recorded before one biology advance. The new selected-set
+fixture checks both selected and unselected actors, including physical recovery,
+actual displacement, final receipt, thermal dose and exactly one biological tick.
+
+This combined source passed all 10 runtime fixtures and all 602 world tests with
+zero failures and 3 existing ignored world benchmarks. The focused selected-set
+test is included in the full world count. Strict app test, production GPU-runtime
+and core/world all-target Clippy, formatting and diff checks passed.
+COMBINED-THERMAL-QUALIFICATION.json binds the pre-run source hashes and finite
+log summaries. These results do not rerun the original separate core thermal
+suite or qualify hardware, autonomous behavior, learning or cognitive wake.
+The thermal wrapper remains explicit; ordinary surfaces are not made harmful.
+No awake voluntary-action reflex is activated.
 
 The durable experiment source reference remains
 [Sparks of Weight-Space Programming](https://rikiyat.github.io/blog/weight-space-programming/).
