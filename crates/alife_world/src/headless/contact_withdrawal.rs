@@ -176,6 +176,11 @@ impl HeadlessWorld {
             direction = Vec3f::new(-yaw.cos(), 0.0, -yaw.sin());
             receipt.direction_basis = WithdrawalDirectionBasis::AcuteDamageHeadingFallback;
         }
+        // A directional protective response with no remaining actuator time
+        // is blocked, not a successful zero-distance move.
+        if interval_fraction == 0.0 {
+            return Ok(Some(receipt));
+        }
         let norm = direction.x.hypot(direction.z);
         let capacity =
             locomotor_capacity.unwrap_or(1.0).clamp(0.0, 1.0) * effector_gain.clamp(0.0, 1.0);
@@ -189,6 +194,14 @@ impl HeadlessWorld {
             Vec3f::new(direction.x / norm * step, 0.0, direction.z / norm * step),
         );
         receipt.energy_cost = 0.02 * capacity * interval_fraction;
+        let Some(proposed) = self.bounded_translation_endpoint(
+            start,
+            proposed,
+            MOVE_STEP * capacity,
+            interval_fraction,
+        ) else {
+            return Ok(Some(receipt));
+        };
         let destination = if let Some(terrain) = &self.terrain {
             let Some(grounded) = terrain.resolve_move(start, proposed) else {
                 return Ok(Some(receipt));
@@ -196,6 +209,14 @@ impl HeadlessWorld {
             grounded
         } else {
             proposed
+        };
+        let Some(destination) = self.bounded_translation_endpoint(
+            start,
+            destination,
+            MOVE_STEP * capacity,
+            interval_fraction,
+        ) else {
+            return Ok(Some(receipt));
         };
         // Conflicting contact normals cannot be resolved by inventing a route.
         if receipt.sources.iter().any(|id| {

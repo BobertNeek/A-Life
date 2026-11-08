@@ -1,0 +1,32 @@
+[
+  {
+    "path": "crates/alife_world/src/headless.rs",
+    "equal": true,
+    "sha256": "085f033d17e401da67c20e73bf62de8d04df31851b91c6e6d0fb4a9981d246cd"
+  },
+  {
+    "path": "crates/alife_world/src/headless/awake_translation.rs",
+    "equal": true,
+    "sha256": "409496204c627d8fd80019d2edd1292df9ae3c1fec439129d4675bb84ef4b256"
+  },
+  {
+    "path": "crates/alife_world/src/headless/body_clearance_tests.rs",
+    "equal": true,
+    "sha256": "0d1cd01d93aacba98ecc5d3de0c3444607f9892e2d6b64e917c998309a498fd1"
+  },
+  {
+    "path": "crates/alife_world/src/headless/contact_withdrawal.rs",
+    "equal": true,
+    "sha256": "402338900191659a912b282a68fbc6a9b96b09c6a4426d5dc981b9a87a27c0e2"
+  },
+  {
+    "path": "crates/alife_world/src/headless/local_steering.rs",
+    "equal": true,
+    "sha256": "b078687ed5ea00b483d20803f2d7ab3c16ec0a4c2cff5b6a211716ccfa9492e6"
+  },
+  {
+    "path": "crates/alife_world/src/headless/translation_endpoint.rs",
+    "equal": true,
+    "sha256": "d66ae10a669cf6ff20cfae13c79af907a17758533586371a1a0b352b6ad15861"
+  }
+]

@@ -1,0 +1,10 @@
+10eed547fedd94a18731ea189206e695c5347b48
+434785cc99548227a2b02c8d024ac711b1cbf038
+ M crates/alife_world/src/headless.rs
+ M crates/alife_world/src/headless/awake_translation.rs
+ M crates/alife_world/src/headless/body_clearance_tests.rs
+ M crates/alife_world/src/headless/contact_withdrawal.rs
+ M crates/alife_world/src/headless/local_steering.rs
+?? crates/alife_world/src/headless/translation_endpoint.rs
+85ee507b28fb45ca705366e6399b9a120d62ad8287e4cdede45bfe0b1246c20a  -
+d66ae10a669cf6ff20cfae13c79af907a17758533586371a1a0b352b6ad15861  crates/alife_world/src/headless/translation_endpoint.rs

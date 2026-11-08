@@ -1,0 +1,47 @@
+commit 2e154178cbdc9a18c4c1c09572327ea7c8c81032
+Author:     Codex <codex@openai.com>
+AuthorDate: Sun Nov 8 07:01:53 2026 -0700
+Commit:     Codex <codex@openai.com>
+CommitDate: Sun Nov 8 07:01:53 2026 -0700
+
+    Add explicit fresh half-speed native meal-credit parity control
+
+commit ffdf1c49f0d13adf4174b7dcaa8f10ec3cc31a01
+Author:     Codex <codex@openai.com>
+AuthorDate: Sun Nov 8 06:53:29 2026 -0700
+Commit:     Codex <codex@openai.com>
+CommitDate: Sun Nov 8 06:57:27 2026 -0700
+
+    Add source-only curved-prefix legality and actual contact diagnostic
+
+commit 076169f605902e2f750d557308a568e5e23b335d
+Author:     Codex <codex@openai.com>
+AuthorDate: Sun Nov 8 06:47:04 2026 -0700
+Commit:     Codex <codex@openai.com>
+CommitDate: Sun Nov 8 06:47:04 2026 -0700
+
+    Pin observed Approach clearance and actual motion at translated coordinates
+
+commit 1faacaf698f0f50adffa39141dd2f69f5b0b2280
+Author:     Codex <codex@openai.com>
+AuthorDate: Sun Nov 8 06:32:08 2026 -0700
+Commit:     Codex <codex@openai.com>
+CommitDate: Sun Nov 8 06:32:08 2026 -0700
+
+    Bound proposed endpoints before terrain sweep and recheck resolved geometry
+
+commit c4b945c50a28b1d47ce68e87d393702b3ab84e99
+Author:     Codex <codex@openai.com>
+AuthorDate: Sun Nov 8 06:31:25 2026 -0700
+Commit:     Codex <codex@openai.com>
+CommitDate: Sun Nov 8 06:31:25 2026 -0700
+
+    Prepare separate reflex endpoint reuse and translated remaining-time guards
+
+commit 5dc4db9193dab04c4b12f8b5665d80077e59d4a8
+Author:     Codex <codex@openai.com>
+AuthorDate: Sun Nov 8 06:31:00 2026 -0700
+Commit:     Codex <codex@openai.com>
+CommitDate: Sun Nov 8 06:31:00 2026 -0700
+
+    Prepare common bounded endpoint planner for ordinary and candidate motion

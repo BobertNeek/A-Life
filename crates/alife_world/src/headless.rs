@@ -4,7 +4,10 @@
 
 mod awake_translation;
 mod contact_withdrawal;
-pub use awake_translation::{AwakeTranslationIntervalReceipt, TranslationTimeMetric};
+mod translation_endpoint;
+pub use awake_translation::{
+    AwakeTranslationIntervalReceipt, TranslationTimeMetric, VoluntaryTimeProvenance,
+};
 
 use std::{
     cell::{Ref, RefCell},
@@ -4910,6 +4913,37 @@ impl HeadlessWorld {
             .fold(BodyEventDelta::zero(), |total, (_, result)| {
                 combine_body_event(total, result.body_event)
             });
+        if let Some(state) = translation.as_deref_mut() {
+            // Only fresh action damage is unlocalized. A harmful held object
+            // is not an escapable source. Ingestion has already consumed and
+            // released the food, so its new internal dose permits fallback.
+            let acute_damage = executed
+                .iter()
+                .filter(|(_, result)| {
+                    !result
+                        .execution
+                        .physical
+                        .target_entity
+                        .is_some_and(|target| {
+                            self.objects.get(&target.raw()).is_some_and(|object| {
+                                object.kind == WorldObjectKind::Hazard
+                                    && object.carried_by == Some(bundle.organism_id)
+                            })
+                        })
+                })
+                .map(|(_, result)| result.body_event.damage)
+                .fold(0.0_f32, f32::max);
+            let voluntary_displacement = executed.iter().fold(Vec3f::ZERO, |sum, (_, result)| {
+                add(sum, result.execution.physical.displacement)
+            });
+            state.finish_late_response(
+                self,
+                bundle.organism_id,
+                world_entity_id,
+                acute_damage,
+                voluntary_displacement,
+            )?;
+        }
         let final_position = self
             .objects
             .get(&world_entity_id.raw())
@@ -4939,6 +4973,12 @@ impl HeadlessWorld {
         if let Some((novelty, _)) = novelty {
             body_event.perceived_novelty = novelty;
         }
+        let ordinary_body_event = normalize_sleep_recovery_for_motion(
+            body_event,
+            executed
+                .iter()
+                .map(|(_, result)| result.execution.physical.displacement),
+        );
         if let Some(state) = translation.as_ref() {
             if let Some(reflex) = &state.withdrawal {
                 body_event.energy = (body_event.energy - reflex.energy_cost).clamp(-1.0, 1.0);
@@ -4964,6 +5004,9 @@ impl HeadlessWorld {
                         .map(|r| r.displacement),
                 ),
         );
+        if let Some(state) = translation.as_deref_mut() {
+            state.bind_ordinary_body_equivalence(ordinary_body_event, body_event);
+        }
         let final_thermal = self
             .thermal_contact_severity_at(world_entity_id, final_position)
             .max(translation.as_ref().map_or(0.0, |state| state.thermal_peak));
@@ -6048,7 +6091,7 @@ impl HeadlessWorld {
         command: ActionCommand,
         agent_id: WorldEntityId,
         intent: MoveIntent,
-        translation: Option<&mut awake_translation::AwakeTranslationState>,
+        mut translation: Option<&mut awake_translation::AwakeTranslationState>,
     ) -> Result<HeadlessActionResult, ScaffoldContractError> {
         if self.player_held_object() == Some(agent_id) {
             return self.finish_action(
@@ -6073,6 +6116,7 @@ impl HeadlessWorld {
         }
         let mut observed_goal = None;
         let max_step = MOVE_STEP * command.intensity.raw();
+        let mut planned_time = awake_translation::PlannedTranslationTime::full(max_step);
         let destination = match intent {
             MoveIntent::Forward => {
                 let yaw = self
@@ -6085,19 +6129,31 @@ impl HeadlessWorld {
                     Vec3f::new(yaw.cos() * max_step, 0.0, yaw.sin() * max_step),
                 ))
             }
-            MoveIntent::Absolute if command.target_position.is_some() => command
-                .target_position
-                .map(|target| step_toward(start, target, max_step)),
+            MoveIntent::Absolute if command.target_position.is_some() => {
+                command.target_position.map(|target| {
+                    planned_time = awake_translation::PlannedTranslationTime::toward(
+                        subtract(target, start),
+                        max_step,
+                    );
+                    step_toward(start, target, max_step)
+                })
+            }
             MoveIntent::Absolute | MoveIntent::Approach => {
                 let Some(target) = command.target_entity else {
                     return self.invalid_target(command, None);
                 };
                 if let Some(relative) = self.visible_motion_target(command.organism_id, target)? {
                     observed_goal = Some((target, relative));
+                    planned_time =
+                        awake_translation::PlannedTranslationTime::toward(relative, max_step);
                     Some(step_toward(start, add(start, relative), max_step))
                 } else if let Some(remembered) = command.target_position {
                     // A creature-supplied remembered point permits a straight
                     // movement only. It cannot authorize a local detour.
+                    planned_time = awake_translation::PlannedTranslationTime::toward(
+                        subtract(remembered, start),
+                        max_step,
+                    );
                     Some(step_toward(start, remembered, max_step))
                 } else {
                     return self.blocked_local_move(command);
@@ -6118,16 +6174,33 @@ impl HeadlessWorld {
             return self.invalid_target(command, command.target_entity);
         };
         destination.validate()?;
+        if let Some(state) = translation.as_deref_mut() {
+            state.set_planned_time(planned_time);
+        }
         let mut detour = false;
         if let Some((target, relative)) = observed_goal {
-            let Some((selected, diverted)) =
-                self.steer_visible_step(command.organism_id, target, relative, destination)?
+            let Some((selected, diverted)) = self.steer_visible_step(
+                command.organism_id,
+                target,
+                relative,
+                destination,
+                max_step,
+                planned_time.duration,
+            )?
             else {
                 return self.blocked_local_move(command);
             };
             destination = selected;
             detour = diverted;
         }
+        // Bound coordinate rounding before terrain's own swept legality checks.
+        // Recheck the resolved endpoint below before body/contact/carry checks.
+        let Some(bounded) =
+            self.bounded_translation_endpoint(start, destination, max_step, planned_time.duration)
+        else {
+            return self.blocked_local_move(command);
+        };
+        destination = bounded;
         if let Some(terrain) = self.terrain.as_ref() {
             let Some(grounded) = terrain.resolve_move(start, destination) else {
                 return self.finish_action(
@@ -6141,6 +6214,12 @@ impl HeadlessWorld {
             };
             destination = grounded;
         }
+        let Some(bounded) =
+            self.bounded_translation_endpoint(start, destination, max_step, planned_time.duration)
+        else {
+            return self.blocked_local_move(command);
+        };
+        destination = bounded;
         if let Some(blocker) = self.first_motion_blocker(start, destination) {
             return self.finish_action(
                 command,
@@ -6161,6 +6240,11 @@ impl HeadlessWorld {
             state.swept_contact_plan(self, &command, agent_id, start, destination)
         });
         if let Some(plan) = &contact_plan {
+            // From this point onward, even a fail-closed terrain/carry return
+            // is candidate intervention, not the ordinary selected execution.
+            if let Some(state) = translation.as_deref_mut() {
+                state.mark_voluntary_execution_altered();
+            }
             if let Some(terrain) = &self.terrain {
                 // Never place a clipped swept contact above/below the actual
                 // ground. Until the path is grounded exactly, reject this
@@ -8876,6 +8960,646 @@ mod task_6_factorized_motor_tests {
     }
 
     #[test]
+    fn curved_prefix_diagnostic_separates_ground_legality_from_chord_contact() {
+        let toxic = false;
+        let (mut world, agent, food, mut bundle) = prepared_world();
+        hold_food_for_meal(&mut world, food);
+        world.objects.get_mut(&food.raw()).unwrap().hazard_pain = if toxic { 0.4 } else { 0.0 };
+        bundle
+            .channels
+            .retain(|c| c.channel != MotorChannel::Locomotion);
+        bundle
+            .channels
+            .push(initial_priority_bundle(false).channels[0].clone());
+        let profile = (0..32)
+            .map(|i| if i == 11 { 0.01 } else { 0.0 })
+            .collect::<Vec<_>>();
+        world.terrain = Some(
+            crate::WorldTerrain::new(
+                crate::TerrainData {
+                    width: 32,
+                    depth: 32,
+                    origin_x: -0.5,
+                    origin_z: -0.8,
+                    spacing: 0.05,
+                    heights: profile.repeat(32),
+                    obstacles: vec![],
+                    water_level: None,
+                },
+                crate::LocomotionLimits::default(),
+            )
+            .unwrap(),
+        );
+        world
+            .editor_spawn_object(WorldEditorSpawnSpec {
+                label: "v19-curved-ground-contact".into(),
+                kind: WorldObjectKind::Hazard,
+                organism_id: None,
+                position: Vec3f::new(0.14, 0.0, 0.0),
+                nutrition: 0.0,
+                hazard_pain: 0.2,
+                radius: 0.1,
+                token_id: None,
+            })
+            .unwrap();
+        let start = world.entity(agent).unwrap().position;
+        let hazard = world.entity_id("v19-curved-ground-contact").unwrap();
+        let object = world.entity(hazard).unwrap();
+        let center = object.position;
+        let radius = object.radius;
+        let full = world
+            .terrain
+            .as_ref()
+            .unwrap()
+            .resolve_move(start, Vec3f::new(MOVE_STEP, 0.0, 0.0))
+            .unwrap();
+        let fraction = motion_sphere_entry(start, full, center, radius).unwrap() as f32;
+        let chord = add(
+            start,
+            Vec3f::new(
+                (full.x - start.x) * fraction,
+                (full.y - start.y) * fraction,
+                (full.z - start.z) * fraction,
+            ),
+        );
+        let grounded = world
+            .terrain
+            .as_ref()
+            .unwrap()
+            .resolve_move(start, chord)
+            .unwrap();
+        assert!(distance(chord, grounded) > 1e-5);
+        assert!(world.carried_pose_reachable(ORGANISM_ID, grounded, 0.0));
+        assert!(world.first_motion_blocker(start, grounded).is_none());
+        assert!(
+            distance(grounded, center) > radius + 1e-5,
+            "ground projection alone must not invent surface contact"
+        );
+        let later = world
+            .terrain
+            .as_ref()
+            .unwrap()
+            .resolve_move(start, Vec3f::new(0.041, 0.0, 0.0))
+            .unwrap();
+        assert!(world.carried_pose_reachable(ORGANISM_ID, later, 0.0));
+        assert!(world.first_motion_blocker(start, later).is_none());
+        assert!(distance(later, center) <= radius);
+        let mut ordinary = world.clone();
+        let expected = ordinary
+            .apply_registered_motor_bundle(&bundle, agent)
+            .unwrap();
+        assert!(expected.joint.execution.displacement.x > 0.09);
+        let actual = world
+            .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
+            .unwrap();
+        assert_eq!(actual.voluntary_path, 0.0);
+        assert!(actual.voluntary_execution_altered);
+        assert!(actual.withdrawal.is_none());
+        eprintln!("CURVED_PREFIX_DIAGNOSTIC chord_x={} grounded_y={} projected_source_distance={} radius={} legal_later_x={} legal_later_source_distance={} ordinary_x={}", chord.x, grounded.y, distance(grounded,center), radius, later.x, distance(later,center), expected.joint.execution.displacement.x);
+    }
+
+    fn terrain_rejected_prefix_case(toxic: bool) {
+        let (mut world, agent, food, mut bundle) = prepared_world();
+        hold_food_for_meal(&mut world, food);
+        world.objects.get_mut(&food.raw()).unwrap().hazard_pain = if toxic { 0.4 } else { 0.0 };
+        bundle
+            .channels
+            .retain(|c| c.channel != MotorChannel::Locomotion);
+        bundle
+            .channels
+            .push(initial_priority_bundle(false).channels[0].clone());
+        let profile = (0..32)
+            .map(|i| if i == 11 { 0.01 } else { 0.0 })
+            .collect::<Vec<_>>();
+        world.terrain = Some(
+            crate::WorldTerrain::new(
+                crate::TerrainData {
+                    width: 32,
+                    depth: 32,
+                    origin_x: -0.5,
+                    origin_z: -0.8,
+                    spacing: 0.05,
+                    heights: profile.repeat(32),
+                    obstacles: vec![],
+                    water_level: None,
+                },
+                crate::LocomotionLimits::default(),
+            )
+            .unwrap(),
+        );
+        world
+            .editor_spawn_object(WorldEditorSpawnSpec {
+                label: "v19-curved-ground-contact".into(),
+                kind: WorldObjectKind::Hazard,
+                organism_id: None,
+                position: Vec3f::new(0.14, 0.0, 0.0),
+                nutrition: 0.0,
+                hazard_pain: 0.2,
+                radius: 0.1,
+                token_id: None,
+            })
+            .unwrap();
+        let mut ordinary = world.clone();
+        let expected = ordinary
+            .apply_registered_motor_bundle(&bundle, agent)
+            .unwrap();
+        assert!(
+            expected.joint.execution.displacement.x > 0.09,
+            "ordinary fixture move must remain legal"
+        );
+        let actual = world
+            .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
+            .unwrap();
+        assert!(
+            world.entity(food).unwrap().consumed,
+            "fixture must execute the toxic meal"
+        );
+        assert_eq!(actual.voluntary.joint.execution.displacement, Vec3f::ZERO);
+        assert!(actual.voluntary_execution_altered);
+        if toxic {
+            assert!(actual.reflex_budget_exhausted);
+        } else {
+            assert!(
+                actual.withdrawal.is_none(),
+                "nonpainful rejection invented a reflex"
+            );
+        }
+        assert!(
+            !actual.exhausted_late_no_effect,
+            "candidate-only terrain rejection was falsely labeled ordinary-equivalent"
+        );
+    }
+
+    #[test]
+    fn awake_terrain_rejected_prefix_is_not_ordinary_equivalent_after_late_meal() {
+        terrain_rejected_prefix_case(true);
+    }
+
+    #[test]
+    fn awake_terrain_rejected_prefix_remains_intervention_without_withdrawal() {
+        terrain_rejected_prefix_case(false);
+    }
+
+    #[test]
+    fn awake_late_internal_damage_uses_only_remaining_translation_time() {
+        for moving in [false, true] {
+            let (mut world, agent, food, mut bundle) = prepared_world();
+            hold_food_for_meal(&mut world, food);
+            world.objects.get_mut(&food.raw()).unwrap().hazard_pain = 0.4;
+            bundle
+                .channels
+                .retain(|c| c.channel != MotorChannel::Locomotion);
+            if moving {
+                bundle
+                    .channels
+                    .push(initial_priority_bundle(false).channels[0].clone());
+            }
+            let before = world.organism_registry.get(ORGANISM_ID).unwrap().clone();
+            let mut ordinary = world.clone();
+            let expected = ordinary
+                .apply_registered_motor_bundle(&bundle, agent)
+                .unwrap();
+            let receipt = world
+                .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
+                .unwrap();
+            assert!(world.entity(food).unwrap().consumed);
+            let reflex = receipt
+                .withdrawal
+                .as_ref()
+                .expect("fresh toxic ingestion lacked response");
+            assert_eq!(
+                reflex.direction_basis,
+                WithdrawalDirectionBasis::AcuteDamageHeadingFallback
+            );
+            assert!(
+                reflex.sources.is_empty(),
+                "food was invented as external pain geometry"
+            );
+            assert_eq!(receipt.reflex_budget_exhausted, moving);
+            assert_eq!(receipt.exhausted_late_no_effect, moving);
+            if moving {
+                assert!(
+                    receipt.voluntary == expected,
+                    "exhausted meal voluntary receipt changed"
+                );
+                assert!(
+                    world.save_state() == ordinary.save_state(),
+                    "exhausted meal world state changed"
+                );
+                assert!(
+                    serde_json::to_vec(&world.save_state()).unwrap()
+                        == serde_json::to_vec(&ordinary.save_state()).unwrap(),
+                    "exhausted meal world bytes changed"
+                );
+                assert!(!receipt.voluntary_execution_altered);
+                assert!(
+                    reflex.blocked,
+                    "exhausted interval must not report successful withdrawal"
+                );
+                assert_eq!(reflex.displacement, Vec3f::ZERO);
+                assert_eq!(reflex.energy_cost, 0.0);
+                assert_eq!(receipt.reflex_time_allocated, 0.0);
+            } else {
+                assert!(!reflex.blocked);
+                assert!(reflex.displacement.x < 0.0);
+                assert_eq!(receipt.reflex_time_allocated, 1.0);
+            }
+            let expected = before
+                .biochemistry()
+                .advance(
+                    receipt.voluntary.outcome_tick,
+                    receipt.voluntary.body_event,
+                    before.phenotype(),
+                )
+                .unwrap();
+            assert!(
+                receipt.voluntary.biology_after == expected,
+                "toxic response duplicated biology"
+            );
+        }
+    }
+
+    #[test]
+    fn common_endpoint_observed_approach_contracts_before_clearance_with_real_motion() {
+        for origin in [-1000.0, -128.0, 128.0, 1000.0] {
+            for intensity in [0.5, 1.0] {
+                let (mut candidate, agent, _, mut bundle) = prepared_world();
+                for object in candidate.objects.values_mut() {
+                    object.position.x += origin;
+                }
+                bundle
+                    .channels
+                    .retain(|c| c.channel == MotorChannel::Locomotion);
+                bundle.channels[0].intensity = Intensity::new(intensity).unwrap();
+                let mut ordinary = candidate.clone();
+                let expected = ordinary
+                    .apply_registered_motor_bundle(&bundle, agent)
+                    .unwrap();
+                let actual = candidate
+                    .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
+                    .unwrap();
+                assert!(
+                    actual.voluntary_path > 0.0,
+                    "origin={origin} intensity={intensity}: no actual Approach motion"
+                );
+                assert!(!actual.voluntary_execution_altered);
+                assert!(actual.withdrawal.is_none());
+                assert!(actual.voluntary == expected);
+                assert!(
+                    serde_json::to_vec(&ordinary.save_state()).unwrap()
+                        == serde_json::to_vec(&candidate.save_state()).unwrap()
+                );
+                assert_eq!(actual.voluntary_time_allocated, 1.0);
+            }
+        }
+    }
+
+    #[test]
+    fn common_endpoint_translated_meals_preserve_exact_ordinary_receipt() {
+        for origin in [0.0, 3.0, 1000.0] {
+            for intensity in [0.5, 1.0] {
+                let (mut world, agent, food, mut bundle) = prepared_world();
+                for object in world.objects.values_mut() {
+                    object.position.x += origin;
+                }
+                hold_food_for_meal(&mut world, food);
+                world.objects.get_mut(&food.raw()).unwrap().hazard_pain = 0.4;
+                bundle
+                    .channels
+                    .retain(|c| c.channel != MotorChannel::Locomotion);
+                let mut movement = initial_priority_bundle(false).channels[0].clone();
+                movement.intensity = Intensity::new(intensity).unwrap();
+                bundle.channels.push(movement);
+                let mut ordinary = world.clone();
+                let expected = ordinary
+                    .apply_registered_motor_bundle(&bundle, agent)
+                    .unwrap();
+                let result = world
+                    .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent);
+                let actual = result.unwrap_or_else(|error| {
+                    panic!("origin={origin} intensity={intensity}: {error:?}")
+                });
+                assert_eq!(
+                    actual.voluntary_time_allocated, 1.0,
+                    "origin={origin}, intensity={intensity}"
+                );
+                assert_eq!(actual.reflex_time_allocated, 0.0);
+                assert!(actual.exhausted_late_no_effect);
+                let reflex = actual.withdrawal.as_ref().unwrap();
+                assert!(
+                    reflex.blocked
+                        && reflex.displacement == Vec3f::ZERO
+                        && reflex.energy_cost == 0.0
+                );
+                assert!(actual.voluntary == expected);
+                assert!(
+                    serde_json::to_vec(&world.save_state()).unwrap()
+                        == serde_json::to_vec(&ordinary.save_state()).unwrap()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn awake_endpoint_quantization_must_not_reject_a_bounded_full_interval() {
+        let (mut candidate, agent) = withdrawal_world(Vec3f::new(8.0, 0.0, 0.0), 0.4);
+        for object in candidate.objects.values_mut() {
+            object.position.x += 128.0;
+        }
+        let mut ordinary = candidate.clone();
+        let bundle = initial_priority_bundle(false);
+        let ordinary_receipt = ordinary
+            .apply_registered_motor_bundle(&bundle, agent)
+            .unwrap();
+        assert!(
+            ordinary_receipt.joint.execution.displacement.x <= MOVE_STEP,
+            "ordinary endpoint exceeded declared cap"
+        );
+        let receipt = candidate
+            .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
+            .expect("representable endpoint should be contracted, not reject the full interval");
+        assert_eq!(receipt.voluntary_time_allocated, 1.0);
+        assert!(receipt.voluntary_path <= MOVE_STEP);
+        assert!(receipt.withdrawal.is_none());
+    }
+
+    #[test]
+    fn awake_endpoint_signed_coordinates_speeds_and_quiet_parity() {
+        for origin in [
+            -100_000_000.0,
+            -1000.0,
+            -128.0,
+            0.0,
+            3.0,
+            128.0,
+            1000.0,
+            100_000_000.0,
+        ] {
+            for intensity in [0.0, 0.00001, 0.5, 1.0] {
+                let (mut world, agent) = withdrawal_world(Vec3f::new(8.0, 0.0, 0.0), 0.4);
+                for object in world.objects.values_mut() {
+                    object.position.x += origin;
+                }
+                let mut bundle = initial_priority_bundle(false);
+                bundle.channels[0].intensity = Intensity::new(intensity).unwrap();
+                let embodiment = world
+                    .organism_registry
+                    .get(ORGANISM_ID)
+                    .unwrap()
+                    .embodiment();
+                let speed = MOVE_STEP
+                    * (intensity
+                        * embodiment.effector_gain(EffectorCapability::Translation)
+                        * embodiment.proprioceptive_gain())
+                    .clamp(0.0, 1.0);
+                let mut ordinary = world.clone();
+                let expected = ordinary
+                    .apply_registered_motor_bundle(&bundle, agent)
+                    .unwrap();
+                let actual = world
+                    .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
+                    .unwrap_or_else(|e| panic!("origin={origin}, intensity={intensity}: {e:?}"));
+                assert!(actual.withdrawal.is_none());
+                assert_eq!(actual.reflex_time_allocated, 0.0);
+                assert!(!actual.voluntary_execution_altered);
+                {
+                    assert!(actual.voluntary == expected);
+                    assert!(
+                        serde_json::to_vec(&world.save_state()).unwrap()
+                            == serde_json::to_vec(&ordinary.save_state()).unwrap()
+                    );
+                }
+                assert!(actual.voluntary_path <= speed + 1e-6);
+            }
+        }
+    }
+
+    #[test]
+    fn awake_endpoint_contraction_revalidates_ground_and_carried_pose() {
+        let (mut world, agent, food, _) = prepared_world();
+        for object in world.objects.values_mut() {
+            object.position.x += 128.0;
+        }
+        hold_food_for_meal(&mut world, food);
+        world.terrain = Some(
+            crate::WorldTerrain::new(
+                crate::TerrainData {
+                    width: 3,
+                    depth: 3,
+                    origin_x: 127.0,
+                    origin_z: -1.0,
+                    spacing: 1.0,
+                    heights: vec![-0.2, 0.0, 0.2, -0.2, 0.0, 0.2, -0.2, 0.0, 0.2],
+                    obstacles: vec![],
+                    water_level: None,
+                },
+                crate::LocomotionLimits::default(),
+            )
+            .unwrap(),
+        );
+        let start = world.entity(agent).unwrap().position;
+        let receipt = world
+            .apply_registered_motor_bundle_with_shared_contact_priority(
+                &initial_priority_bundle(false),
+                agent,
+            )
+            .unwrap();
+        assert!(!receipt.voluntary_execution_altered);
+        assert_eq!(receipt.voluntary_time_allocated, 1.0);
+        let end = world.entity(agent).unwrap().position;
+        assert_eq!(
+            world.terrain.as_ref().unwrap().resolve_move(start, end),
+            Some(end)
+        );
+        assert!(subtract(end, start).x.hypot(subtract(end, start).z) <= MOVE_STEP);
+        assert_eq!(world.entity(food).unwrap().carried_by, Some(ORGANISM_ID));
+        assert!(world.carried_pose_reachable(
+            ORGANISM_ID,
+            end,
+            world.entity(agent).unwrap().body_yaw
+        ));
+        assert!(receipt.withdrawal.is_none());
+    }
+
+    #[test]
+    fn awake_duration_goal_arrival_and_zero_speed_keep_real_remaining_time() {
+        for (origin, goal, intensity, provenance) in [
+            (0.0, 0.025, 1.0, VoluntaryTimeProvenance::GoalArrival),
+            (3.0, 0.025, 1.0, VoluntaryTimeProvenance::GoalArrival),
+            (0.0, 0.5, 0.0, VoluntaryTimeProvenance::ZeroSpeed),
+        ] {
+            let (mut world, agent, food, mut bundle) = prepared_world();
+            for object in world.objects.values_mut() {
+                object.position.x += origin;
+            }
+            hold_food_for_meal(&mut world, food);
+            world.objects.get_mut(&food.raw()).unwrap().hazard_pain = 0.4;
+            bundle
+                .channels
+                .retain(|c| c.channel != MotorChannel::Locomotion);
+            let target = Vec3f::new(origin + goal, 0.0, 0.0);
+            bundle.channels.push(
+                ChannelCommand::new(
+                    MotorChannel::Locomotion,
+                    ActionKind::Move.canonical_id(),
+                    Some(alife_core::ActionTarget::new(None, Some(target))),
+                    target,
+                    Intensity::new(intensity).unwrap(),
+                    alife_core::DurationTicks::new(1),
+                    0.0,
+                    Confidence::new(1.0).unwrap(),
+                    0,
+                )
+                .unwrap(),
+            );
+            let before = world.organism_registry.get(ORGANISM_ID).unwrap().clone();
+            let receipt = world
+                .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
+                .unwrap();
+            assert!(world.entity(food).unwrap().consumed);
+            assert_eq!(receipt.voluntary_time_provenance, provenance);
+            assert_eq!(
+                receipt.voluntary_time_allocated,
+                receipt.planned_voluntary_time
+            );
+            if intensity > 0.0 {
+                assert!((receipt.voluntary_time_allocated - 0.25).abs() < 1e-4);
+            } else {
+                assert_eq!(receipt.voluntary_time_allocated, 0.0);
+            }
+            assert_eq!(
+                receipt.voluntary_time_allocated + receipt.reflex_time_allocated,
+                1.0
+            );
+            assert!(!receipt.exhausted_late_no_effect);
+            let reflex = receipt.withdrawal.as_ref().unwrap();
+            assert!(!reflex.blocked && reflex.energy_cost > 0.0 && reflex.displacement.x < 0.0);
+            assert!(receipt.voluntary_path + receipt.reflex_path <= MOVE_STEP + 1e-5);
+            let biology = before
+                .biochemistry()
+                .advance(
+                    receipt.voluntary.outcome_tick,
+                    receipt.voluntary.body_event,
+                    before.phenotype(),
+                )
+                .unwrap();
+            assert!(receipt.voluntary.biology_after == biology);
+        }
+    }
+
+    #[test]
+    fn awake_duration_blocked_meal_has_no_invented_acute_response() {
+        let (mut world, agent, food, mut bundle) = prepared_world();
+        hold_food_for_meal(&mut world, food);
+        world.objects.get_mut(&food.raw()).unwrap().hazard_pain = 0.4;
+        bundle
+            .channels
+            .retain(|c| c.channel != MotorChannel::Locomotion);
+        bundle
+            .channels
+            .push(initial_priority_bundle(false).channels[0].clone());
+        world
+            .editor_spawn_object(WorldEditorSpawnSpec {
+                label: "ordinary-blocker".into(),
+                kind: WorldObjectKind::Obstacle,
+                organism_id: None,
+                position: Vec3f::new(0.15, 0.0, 0.0),
+                nutrition: 0.0,
+                hazard_pain: 0.0,
+                radius: 0.1,
+                token_id: None,
+            })
+            .unwrap();
+        let mut ordinary = world.clone();
+        let expected = ordinary
+            .apply_registered_motor_bundle(&bundle, agent)
+            .unwrap();
+        let receipt = world
+            .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
+            .unwrap();
+        assert_eq!(
+            receipt.voluntary_time_provenance,
+            VoluntaryTimeProvenance::BlockedAttempt
+        );
+        assert_eq!(receipt.voluntary_time_allocated, 1.0);
+        assert!(
+            !world.entity(food).unwrap().consumed,
+            "blocked reach unexpectedly consumed meal"
+        );
+        assert!(receipt.withdrawal.is_none() && !receipt.voluntary_execution_altered);
+        assert!(!receipt.exhausted_late_no_effect);
+        assert!(receipt.voluntary == expected);
+        assert!(
+            serde_json::to_vec(&world.save_state()).unwrap()
+                == serde_json::to_vec(&ordinary.save_state()).unwrap()
+        );
+    }
+
+    #[test]
+    fn awake_duration_ordinary_blocked_attempt_has_no_phantom_late_effort() {
+        let (mut world, agent, food, mut bundle) = prepared_world();
+        hold_food_for_meal(&mut world, food);
+        world.objects.get_mut(&food.raw()).unwrap().hazard_pain = 0.4;
+        bundle
+            .channels
+            .retain(|c| c.channel != MotorChannel::Locomotion);
+        let target = Vec3f::new(-1.0, 0.0, 0.0);
+        bundle.channels.push(
+            ChannelCommand::new(
+                MotorChannel::Locomotion,
+                ActionKind::Move.canonical_id(),
+                Some(alife_core::ActionTarget::new(None, Some(target))),
+                target,
+                Intensity::new(1.0).unwrap(),
+                alife_core::DurationTicks::new(1),
+                0.0,
+                Confidence::new(1.0).unwrap(),
+                0,
+            )
+            .unwrap(),
+        );
+        world
+            .editor_spawn_object(WorldEditorSpawnSpec {
+                label: "ordinary-blocker".into(),
+                kind: WorldObjectKind::Obstacle,
+                organism_id: None,
+                position: Vec3f::new(-1.25, 0.0, 0.0),
+                nutrition: 0.0,
+                hazard_pain: 0.0,
+                radius: 1.0,
+                token_id: None,
+            })
+            .unwrap();
+        let start = world.entity(agent).unwrap().position;
+        assert!(world.physical_contact_reachable(start, world.entity(food).unwrap().position));
+        assert!(world
+            .first_motion_blocker(start, Vec3f::new(-0.1, 0.0, 0.0))
+            .is_some());
+        let mut ordinary = world.clone();
+        let expected = ordinary
+            .apply_registered_motor_bundle(&bundle, agent)
+            .unwrap();
+        let receipt = world
+            .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
+            .unwrap();
+        assert_eq!(
+            receipt.voluntary_time_provenance,
+            VoluntaryTimeProvenance::BlockedAttempt
+        );
+        assert_eq!(receipt.voluntary_time_allocated, 1.0);
+        assert!(
+            world.entity(food).unwrap().consumed,
+            "opposite blocked move must leave held meal reachable"
+        );
+        assert!(receipt.exhausted_late_no_effect && !receipt.voluntary_execution_altered);
+        assert!(receipt.voluntary == expected);
+        assert!(
+            serde_json::to_vec(&world.save_state()).unwrap()
+                == serde_json::to_vec(&ordinary.save_state()).unwrap()
+        );
+    }
+
+    #[test]
     fn awake_ground_priority_quiet_slope_preserves_existing_planar_walking() {
         let (mut candidate, agent) = withdrawal_world(Vec3f::new(8.0, 0.0, 0.0), 0.4);
         candidate.terrain = Some(
@@ -8982,6 +9706,39 @@ mod task_6_factorized_motor_tests {
         let object = world.objects.get_mut(&hazard.raw()).unwrap();
         object.position.x = object.radius + step * fraction;
         (world, agent, bundle, step)
+    }
+
+    #[test]
+    fn common_endpoint_translated_reflex_initial_and_remaining_intervals() {
+        for origin in [-1000.0, -128.0, 128.0, 1000.0] {
+            let (mut initial, agent) = withdrawal_world(Vec3f::new(0.1, 0.0, 0.0), 0.4);
+            for object in initial.objects.values_mut() {
+                object.position.x += origin;
+            }
+            let result = initial
+                .apply_registered_motor_bundle_with_shared_contact_priority(
+                    &initial_priority_bundle(false),
+                    agent,
+                )
+                .unwrap();
+            assert_eq!(result.reflex_time_allocated, 1.0);
+            assert!(result.reflex_path <= MOVE_STEP + 1e-6);
+            assert_eq!(result.voluntary_path, 0.0);
+            for fraction in [0.2, 0.5, 0.9] {
+                let (mut world, agent, bundle, _) = swept_priority_world(fraction, 1.0);
+                for object in world.objects.values_mut() {
+                    object.position.x += origin;
+                }
+                let result = world
+                    .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
+                    .unwrap_or_else(|e| panic!("origin={origin} fraction={fraction}: {e:?}"));
+                assert!(result.withdrawal.is_some());
+                assert!(result.voluntary_execution_altered);
+                assert_eq!(result.allocated_translation_time, 1.0);
+                assert!(result.reflex_path <= MOVE_STEP * result.reflex_time_allocated + 1e-6);
+                assert!(result.voluntary_path + result.reflex_path <= MOVE_STEP + 2e-6);
+            }
+        }
     }
 
     #[test]
@@ -9132,6 +9889,7 @@ mod task_6_factorized_motor_tests {
             .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
             .unwrap();
         let reflex = receipt.withdrawal.as_ref().unwrap();
+        assert!(!receipt.exhausted_late_no_effect);
         assert_eq!(reflex.sources.len(), 2);
         assert!(reflex.blocked);
         assert_eq!(reflex.displacement, Vec3f::ZERO);
@@ -9195,6 +9953,8 @@ mod task_6_factorized_motor_tests {
             )
             .unwrap();
         let reflex = receipt.withdrawal.as_ref().unwrap();
+        assert!(!receipt.exhausted_late_no_effect);
+        assert!(receipt.voluntary_execution_altered);
         assert!(reflex.blocked);
         assert_eq!(receipt.actual_displacement, Vec3f::ZERO);
         assert_eq!(receipt.allocated_translation_time, 1.0);

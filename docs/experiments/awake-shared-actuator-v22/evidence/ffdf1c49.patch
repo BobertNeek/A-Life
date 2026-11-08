@@ -1,0 +1,567 @@
+diff --git a/crates/alife_training/tests/cpu_collector/shared_actuator.rs b/crates/alife_training/tests/cpu_collector/shared_actuator.rs
+index e89ea3da..ad28efa3 100644
+--- a/crates/alife_training/tests/cpu_collector/shared_actuator.rs
++++ b/crates/alife_training/tests/cpu_collector/shared_actuator.rs
+@@ -191,6 +191,11 @@ fn shared_actuator_translated_meal_has_no_phantom_time_or_credit_loss() {
+     shared_actuator_meal_at_origin(1000.0);
+ }
+ 
++#[test]
++fn common_endpoint_real_meal_at_x128_retains_ordinary_credit_and_checkpoint() {
++    shared_actuator_meal_at_origin(128.0);
++}
++
+ fn shared_actuator_meal_at_origin(origin_x: f32) {
+     // New declared inherited readout factor after the unchanged founder selected Inspect.
+     // Same seed, normal native sampler, no forced measured action or neural state writes.
+diff --git a/crates/alife_world/src/headless.rs b/crates/alife_world/src/headless.rs
+index 68ddd0ad..06fa1154 100644
+--- a/crates/alife_world/src/headless.rs
++++ b/crates/alife_world/src/headless.rs
+@@ -4,6 +4,7 @@
+ 
+ mod awake_translation;
+ mod contact_withdrawal;
++mod translation_endpoint;
+ pub use awake_translation::{
+     AwakeTranslationIntervalReceipt, TranslationTimeMetric, VoluntaryTimeProvenance,
+ };
+@@ -6178,14 +6179,28 @@ impl HeadlessWorld {
+         }
+         let mut detour = false;
+         if let Some((target, relative)) = observed_goal {
+-            let Some((selected, diverted)) =
+-                self.steer_visible_step(command.organism_id, target, relative, destination)?
++            let Some((selected, diverted)) = self.steer_visible_step(
++                command.organism_id,
++                target,
++                relative,
++                destination,
++                max_step,
++                planned_time.duration,
++            )?
+             else {
+                 return self.blocked_local_move(command);
+             };
+             destination = selected;
+             detour = diverted;
+         }
++        // Bound coordinate rounding before terrain's own swept legality checks.
++        // Recheck the resolved endpoint below before body/contact/carry checks.
++        let Some(bounded) =
++            self.bounded_translation_endpoint(start, destination, max_step, planned_time.duration)
++        else {
++            return self.blocked_local_move(command);
++        };
++        destination = bounded;
+         if let Some(terrain) = self.terrain.as_ref() {
+             let Some(grounded) = terrain.resolve_move(start, destination) else {
+                 return self.finish_action(
+@@ -6199,14 +6214,12 @@ impl HeadlessWorld {
+             };
+             destination = grounded;
+         }
+-        if let Some(state) = translation.as_deref_mut() {
+-            let Some(bounded) =
+-                state.bounded_voluntary_endpoint(self, start, destination, max_step)
+-            else {
+-                return self.blocked_local_move(command);
+-            };
+-            destination = bounded;
+-        }
++        let Some(bounded) =
++            self.bounded_translation_endpoint(start, destination, max_step, planned_time.duration)
++        else {
++            return self.blocked_local_move(command);
++        };
++        destination = bounded;
+         if let Some(blocker) = self.first_motion_blocker(start, destination) {
+             return self.finish_action(
+                 command,
+@@ -8946,6 +8959,105 @@ mod task_6_factorized_motor_tests {
+         assert!((actual.allocated_translation_time - 1.0).abs() < 1e-6);
+     }
+ 
++    #[test]
++    fn curved_prefix_diagnostic_separates_ground_legality_from_chord_contact() {
++        let toxic = false;
++        let (mut world, agent, food, mut bundle) = prepared_world();
++        hold_food_for_meal(&mut world, food);
++        world.objects.get_mut(&food.raw()).unwrap().hazard_pain = if toxic { 0.4 } else { 0.0 };
++        bundle
++            .channels
++            .retain(|c| c.channel != MotorChannel::Locomotion);
++        bundle
++            .channels
++            .push(initial_priority_bundle(false).channels[0].clone());
++        let profile = (0..32)
++            .map(|i| if i == 11 { 0.01 } else { 0.0 })
++            .collect::<Vec<_>>();
++        world.terrain = Some(
++            crate::WorldTerrain::new(
++                crate::TerrainData {
++                    width: 32,
++                    depth: 32,
++                    origin_x: -0.5,
++                    origin_z: -0.8,
++                    spacing: 0.05,
++                    heights: profile.repeat(32),
++                    obstacles: vec![],
++                    water_level: None,
++                },
++                crate::LocomotionLimits::default(),
++            )
++            .unwrap(),
++        );
++        world
++            .editor_spawn_object(WorldEditorSpawnSpec {
++                label: "v19-curved-ground-contact".into(),
++                kind: WorldObjectKind::Hazard,
++                organism_id: None,
++                position: Vec3f::new(0.14, 0.0, 0.0),
++                nutrition: 0.0,
++                hazard_pain: 0.2,
++                radius: 0.1,
++                token_id: None,
++            })
++            .unwrap();
++        let start = world.entity(agent).unwrap().position;
++        let hazard = world.entity_id("v19-curved-ground-contact").unwrap();
++        let object = world.entity(hazard).unwrap();
++        let center = object.position;
++        let radius = object.radius;
++        let full = world
++            .terrain
++            .as_ref()
++            .unwrap()
++            .resolve_move(start, Vec3f::new(MOVE_STEP, 0.0, 0.0))
++            .unwrap();
++        let fraction = motion_sphere_entry(start, full, center, radius).unwrap() as f32;
++        let chord = add(
++            start,
++            Vec3f::new(
++                (full.x - start.x) * fraction,
++                (full.y - start.y) * fraction,
++                (full.z - start.z) * fraction,
++            ),
++        );
++        let grounded = world
++            .terrain
++            .as_ref()
++            .unwrap()
++            .resolve_move(start, chord)
++            .unwrap();
++        assert!(distance(chord, grounded) > 1e-5);
++        assert!(world.carried_pose_reachable(ORGANISM_ID, grounded, 0.0));
++        assert!(world.first_motion_blocker(start, grounded).is_none());
++        assert!(
++            distance(grounded, center) > radius + 1e-5,
++            "ground projection alone must not invent surface contact"
++        );
++        let later = world
++            .terrain
++            .as_ref()
++            .unwrap()
++            .resolve_move(start, Vec3f::new(0.041, 0.0, 0.0))
++            .unwrap();
++        assert!(world.carried_pose_reachable(ORGANISM_ID, later, 0.0));
++        assert!(world.first_motion_blocker(start, later).is_none());
++        assert!(distance(later, center) <= radius);
++        let mut ordinary = world.clone();
++        let expected = ordinary
++            .apply_registered_motor_bundle(&bundle, agent)
++            .unwrap();
++        assert!(expected.joint.execution.displacement.x > 0.09);
++        let actual = world
++            .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
++            .unwrap();
++        assert_eq!(actual.voluntary_path, 0.0);
++        assert!(actual.voluntary_execution_altered);
++        assert!(actual.withdrawal.is_none());
++        eprintln!("CURVED_PREFIX_DIAGNOSTIC chord_x={} grounded_y={} projected_source_distance={} radius={} legal_later_x={} legal_later_source_distance={} ordinary_x={}", chord.x, grounded.y, distance(grounded,center), radius, later.x, distance(later,center), expected.joint.execution.displacement.x);
++    }
++
+     fn terrain_rejected_prefix_case(toxic: bool) {
+         let (mut world, agent, food, mut bundle) = prepared_world();
+         hold_food_for_meal(&mut world, food);
+@@ -9108,7 +9220,42 @@ mod task_6_factorized_motor_tests {
+     }
+ 
+     #[test]
+-    fn awake_endpoint_translated_steps_preserve_time_and_mark_contraction() {
++    fn common_endpoint_observed_approach_contracts_before_clearance_with_real_motion() {
++        for origin in [-1000.0, -128.0, 128.0, 1000.0] {
++            for intensity in [0.5, 1.0] {
++                let (mut candidate, agent, _, mut bundle) = prepared_world();
++                for object in candidate.objects.values_mut() {
++                    object.position.x += origin;
++                }
++                bundle
++                    .channels
++                    .retain(|c| c.channel == MotorChannel::Locomotion);
++                bundle.channels[0].intensity = Intensity::new(intensity).unwrap();
++                let mut ordinary = candidate.clone();
++                let expected = ordinary
++                    .apply_registered_motor_bundle(&bundle, agent)
++                    .unwrap();
++                let actual = candidate
++                    .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
++                    .unwrap();
++                assert!(
++                    actual.voluntary_path > 0.0,
++                    "origin={origin} intensity={intensity}: no actual Approach motion"
++                );
++                assert!(!actual.voluntary_execution_altered);
++                assert!(actual.withdrawal.is_none());
++                assert!(actual.voluntary == expected);
++                assert!(
++                    serde_json::to_vec(&ordinary.save_state()).unwrap()
++                        == serde_json::to_vec(&candidate.save_state()).unwrap()
++                );
++                assert_eq!(actual.voluntary_time_allocated, 1.0);
++            }
++        }
++    }
++
++    #[test]
++    fn common_endpoint_translated_meals_preserve_exact_ordinary_receipt() {
+         for origin in [0.0, 3.0, 1000.0] {
+             for intensity in [0.5, 1.0] {
+                 let (mut world, agent, food, mut bundle) = prepared_world();
+@@ -9129,19 +9276,6 @@ mod task_6_factorized_motor_tests {
+                     .unwrap();
+                 let result = world
+                     .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent);
+-                if origin == 1000.0 && intensity == 0.5 {
+-                    let actual = result.expect("bounded representable endpoint");
+-                    assert!(actual.voluntary_execution_altered);
+-                    assert!(!actual.exhausted_late_no_effect);
+-                    assert_eq!(actual.voluntary_time_allocated, 1.0);
+-                    assert_eq!(actual.reflex_time_allocated, 0.0);
+-                    assert!(world.entity(food).unwrap().consumed);
+-                    assert!(actual.voluntary_path <= 0.050456252);
+-                    let reflex = actual.withdrawal.as_ref().unwrap();
+-                    assert_eq!(reflex.displacement, Vec3f::ZERO);
+-                    assert_eq!(reflex.energy_cost, 0.0);
+-                    continue;
+-                }
+                 let actual = result.unwrap_or_else(|error| {
+                     panic!("origin={origin} intensity={intensity}: {error:?}")
+                 });
+@@ -9178,8 +9312,8 @@ mod task_6_factorized_motor_tests {
+             .apply_registered_motor_bundle(&bundle, agent)
+             .unwrap();
+         assert!(
+-            ordinary_receipt.joint.execution.displacement.x > MOVE_STEP,
+-            "fixture no longer reproduces upward f32 endpoint rounding"
++            ordinary_receipt.joint.execution.displacement.x <= MOVE_STEP,
++            "ordinary endpoint exceeded declared cap"
+         );
+         let receipt = candidate
+             .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
+@@ -9191,7 +9325,16 @@ mod task_6_factorized_motor_tests {
+ 
+     #[test]
+     fn awake_endpoint_signed_coordinates_speeds_and_quiet_parity() {
+-        for origin in [-1000.0, -128.0, 0.0, 3.0, 128.0, 1000.0] {
++        for origin in [
++            -100_000_000.0,
++            -1000.0,
++            -128.0,
++            0.0,
++            3.0,
++            128.0,
++            1000.0,
++            100_000_000.0,
++        ] {
+             for intensity in [0.0, 0.00001, 0.5, 1.0] {
+                 let (mut world, agent) = withdrawal_world(Vec3f::new(8.0, 0.0, 0.0), 0.4);
+                 for object in world.objects.values_mut() {
+@@ -9218,10 +9361,8 @@ mod task_6_factorized_motor_tests {
+                     .unwrap_or_else(|e| panic!("origin={origin}, intensity={intensity}: {e:?}"));
+                 assert!(actual.withdrawal.is_none());
+                 assert_eq!(actual.reflex_time_allocated, 0.0);
+-                if actual.voluntary_execution_altered {
+-                    assert!(actual.voluntary_path <= speed);
+-                    assert!(!actual.exhausted_late_no_effect);
+-                } else {
++                assert!(!actual.voluntary_execution_altered);
++                {
+                     assert!(actual.voluntary == expected);
+                     assert!(
+                         serde_json::to_vec(&world.save_state()).unwrap()
+@@ -9263,7 +9404,7 @@ mod task_6_factorized_motor_tests {
+                 agent,
+             )
+             .unwrap();
+-        assert!(receipt.voluntary_execution_altered);
++        assert!(!receipt.voluntary_execution_altered);
+         assert_eq!(receipt.voluntary_time_allocated, 1.0);
+         let end = world.entity(agent).unwrap().position;
+         assert_eq!(
+@@ -9567,6 +9708,39 @@ mod task_6_factorized_motor_tests {
+         (world, agent, bundle, step)
+     }
+ 
++    #[test]
++    fn common_endpoint_translated_reflex_initial_and_remaining_intervals() {
++        for origin in [-1000.0, -128.0, 128.0, 1000.0] {
++            let (mut initial, agent) = withdrawal_world(Vec3f::new(0.1, 0.0, 0.0), 0.4);
++            for object in initial.objects.values_mut() {
++                object.position.x += origin;
++            }
++            let result = initial
++                .apply_registered_motor_bundle_with_shared_contact_priority(
++                    &initial_priority_bundle(false),
++                    agent,
++                )
++                .unwrap();
++            assert_eq!(result.reflex_time_allocated, 1.0);
++            assert!(result.reflex_path <= MOVE_STEP + 1e-6);
++            assert_eq!(result.voluntary_path, 0.0);
++            for fraction in [0.2, 0.5, 0.9] {
++                let (mut world, agent, bundle, _) = swept_priority_world(fraction, 1.0);
++                for object in world.objects.values_mut() {
++                    object.position.x += origin;
++                }
++                let result = world
++                    .apply_registered_motor_bundle_with_shared_contact_priority(&bundle, agent)
++                    .unwrap_or_else(|e| panic!("origin={origin} fraction={fraction}: {e:?}"));
++                assert!(result.withdrawal.is_some());
++                assert!(result.voluntary_execution_altered);
++                assert_eq!(result.allocated_translation_time, 1.0);
++                assert!(result.reflex_path <= MOVE_STEP * result.reflex_time_allocated + 1e-6);
++                assert!(result.voluntary_path + result.reflex_path <= MOVE_STEP + 2e-6);
++            }
++        }
++    }
++
+     #[test]
+     fn awake_swept_priority_early_middle_late_share_time_path_and_effort() {
+         for fraction in [0.2, 0.5, 0.9] {
+diff --git a/crates/alife_world/src/headless/awake_translation.rs b/crates/alife_world/src/headless/awake_translation.rs
+index 634dda78..97df2f82 100644
+--- a/crates/alife_world/src/headless/awake_translation.rs
++++ b/crates/alife_world/src/headless/awake_translation.rs
+@@ -36,7 +36,7 @@ pub enum VoluntaryTimeProvenance {
+ 
+ #[derive(Debug, Clone, Copy)]
+ pub(super) struct PlannedTranslationTime {
+-    duration: f32,
++    pub(super) duration: f32,
+     provenance: VoluntaryTimeProvenance,
+ }
+ impl PlannedTranslationTime {
+@@ -307,50 +307,6 @@ impl AwakeTranslationState {
+         Ok(())
+     }
+ 
+-    /// Correct only representational overshoot of a planned voluntary endpoint.
+-    /// Never expands the existing allowance or changes allocated actuator time.
+-    pub(super) fn bounded_voluntary_endpoint(
+-        &mut self,
+-        world: &HeadlessWorld,
+-        start: Vec3f,
+-        end: Vec3f,
+-        speed: f32,
+-    ) -> Option<Vec3f> {
+-        let duration = self.planned_time?.duration;
+-        let allowance = speed * duration;
+-        let tolerance = 1e-6 * self.budget?.full_speed_distance().max(1.0);
+-        if self.time_metric.path_length(subtract(end, start)) <= allowance + tolerance {
+-            return Some(end);
+-        }
+-        self.mark_voluntary_execution_altered();
+-        let mut candidate = end;
+-        // A fixed bound prevents a precision repair from becoming a path search.
+-        // Larger projection/path defects remain fail-closed, separately diagnosed.
+-        for _ in 0..8 {
+-            fn toward(value: f32, origin: f32) -> f32 {
+-                if value > origin {
+-                    value.next_down().max(origin)
+-                } else if value < origin {
+-                    value.next_up().min(origin)
+-                } else {
+-                    value
+-                }
+-            }
+-            candidate.x = toward(candidate.x, start.x);
+-            candidate.z = toward(candidate.z, start.z);
+-            if world.terrain.is_none() {
+-                candidate.y = toward(candidate.y, start.y);
+-            }
+-            if let Some(terrain) = &world.terrain {
+-                candidate = terrain.resolve_move(start, candidate)?;
+-            }
+-            if self.time_metric.path_length(subtract(candidate, start)) <= allowance {
+-                return Some(candidate);
+-            }
+-        }
+-        None
+-    }
+-
+     pub(super) fn set_planned_time(&mut self, time: PlannedTranslationTime) {
+         self.planned_time = Some(time);
+     }
+diff --git a/crates/alife_world/src/headless/body_clearance_tests.rs b/crates/alife_world/src/headless/body_clearance_tests.rs
+index 68e8220d..4dcc008f 100644
+--- a/crates/alife_world/src/headless/body_clearance_tests.rs
++++ b/crates/alife_world/src/headless/body_clearance_tests.rs
+@@ -883,7 +883,7 @@ fn grounded_candidate_projection_does_not_authorize_unsupported_steps() {
+         // Selection still returns one candidate. The authoritative terrain check
+         // rejects unsupported/out-of-bounds, too-steep and too-deep endpoints.
+         let selected = world
+-            .steer_visible_step(ORGANISM, target, relative, original)
++            .steer_visible_step(ORGANISM, target, relative, original, MOVE_STEP, 1.0)
+             .unwrap()
+             .unwrap()
+             .0;
+diff --git a/crates/alife_world/src/headless/contact_withdrawal.rs b/crates/alife_world/src/headless/contact_withdrawal.rs
+index 4a935ccd..0488f5db 100644
+--- a/crates/alife_world/src/headless/contact_withdrawal.rs
++++ b/crates/alife_world/src/headless/contact_withdrawal.rs
+@@ -194,6 +194,14 @@ impl HeadlessWorld {
+             Vec3f::new(direction.x / norm * step, 0.0, direction.z / norm * step),
+         );
+         receipt.energy_cost = 0.02 * capacity * interval_fraction;
++        let Some(proposed) = self.bounded_translation_endpoint(
++            start,
++            proposed,
++            MOVE_STEP * capacity,
++            interval_fraction,
++        ) else {
++            return Ok(Some(receipt));
++        };
+         let destination = if let Some(terrain) = &self.terrain {
+             let Some(grounded) = terrain.resolve_move(start, proposed) else {
+                 return Ok(Some(receipt));
+@@ -202,6 +210,14 @@ impl HeadlessWorld {
+         } else {
+             proposed
+         };
++        let Some(destination) = self.bounded_translation_endpoint(
++            start,
++            destination,
++            MOVE_STEP * capacity,
++            interval_fraction,
++        ) else {
++            return Ok(Some(receipt));
++        };
+         // Conflicting contact normals cannot be resolved by inventing a route.
+         if receipt.sources.iter().any(|id| {
+             let origin = self.objects[&id.raw()].position;
+diff --git a/crates/alife_world/src/headless/local_steering.rs b/crates/alife_world/src/headless/local_steering.rs
+index 5eeb04bd..5ba31a66 100644
+--- a/crates/alife_world/src/headless/local_steering.rs
++++ b/crates/alife_world/src/headless/local_steering.rs
+@@ -155,6 +155,8 @@ impl HeadlessWorld {
+         target: WorldEntityId,
+         relative: Vec3f,
+         original: Vec3f,
++        speed: f32,
++        duration: f32,
+     ) -> Result<Option<(Vec3f, bool)>, ScaffoldContractError> {
+         let observer = self.agent_for(organism)?;
+         let step = (original.x - observer.position.x).hypot(original.z - observer.position.z);
+@@ -173,7 +175,20 @@ impl HeadlessWorld {
+                 }
+             }
+         }
+-        let ranges = self.local_clearance_ranges(observer, bearing, &candidates);
++        let mut valid = [true; 9];
++        for (index, candidate) in candidates.iter_mut().enumerate() {
++            match self.bounded_translation_endpoint(observer.position, *candidate, speed, duration)
++            {
++                Some(endpoint) => *candidate = endpoint,
++                None => valid[index] = false,
++            }
++        }
++        let mut ranges = self.local_clearance_ranges(observer, bearing, &candidates);
++        for (index, range) in ranges.iter_mut().enumerate() {
++            if !valid[index] {
++                *range = 0.0;
++            }
++        }
+         let exhausted = observer.local_steering.is_some_and(|state| {
+             state.target == target && state.non_progress_steps >= MAX_NON_PROGRESS_STEPS
+         });
+diff --git a/crates/alife_world/src/headless/translation_budget.rs b/crates/alife_world/src/headless/translation_budget.rs
+index 1e2a7c06..964020ed 100644
+--- a/crates/alife_world/src/headless/translation_budget.rs
++++ b/crates/alife_world/src/headless/translation_budget.rs
+@@ -22,10 +22,6 @@ impl TranslationIntervalBudget {
+         })
+     }
+ 
+-    pub(super) fn full_speed_distance(self) -> f32 {
+-        self.full_speed_distance
+-    }
+-
+     /// Record one staged, physically executed segment/attempt. `speed_distance`
+     /// is that route's distance at its actual bounded speed for one full tick.
+     /// `duration` is its allocated fraction of the same tick, not a second tick.
+diff --git a/crates/alife_world/src/headless/translation_endpoint.rs b/crates/alife_world/src/headless/translation_endpoint.rs
+new file mode 100644
+index 00000000..75e3f2ec
+--- /dev/null
++++ b/crates/alife_world/src/headless/translation_endpoint.rs
+@@ -0,0 +1,59 @@
++//! Common bounded representation correction, not reflex intervention.
++use super::*;
++
++impl HeadlessWorld {
++    /// Preserve the planned duration and original speed cap. Only an endpoint
++    /// exceeding the existing numeric guard is contracted; no route is invented.
++    pub(super) fn bounded_translation_endpoint(
++        &self,
++        start: Vec3f,
++        end: Vec3f,
++        speed: f32,
++        duration: f32,
++    ) -> Option<Vec3f> {
++        if !speed.is_finite()
++            || speed < 0.0
++            || !duration.is_finite()
++            || !(0.0..=1.0).contains(&duration)
++        {
++            return None;
++        }
++        let length = |p| {
++            let d = subtract(p, start);
++            if self.terrain.is_some() {
++                d.x.hypot(d.z)
++            } else {
++                distance(Vec3f::ZERO, d)
++            }
++        };
++        let allowance = speed * duration;
++        // MOVE_STEP is <=1: this is exactly the existing budget tolerance.
++        if length(end) <= allowance + 1e-6 {
++            return Some(end);
++        }
++        let mut candidate = end;
++        for _ in 0..8 {
++            fn toward(value: f32, origin: f32) -> f32 {
++                if value > origin {
++                    value.next_down().max(origin)
++                } else if value < origin {
++                    value.next_up().min(origin)
++                } else {
++                    value
++                }
++            }
++            candidate.x = toward(candidate.x, start.x);
++            candidate.z = toward(candidate.z, start.z);
++            if self.terrain.is_none() {
++                candidate.y = toward(candidate.y, start.y);
++            }
++            if let Some(terrain) = &self.terrain {
++                candidate = terrain.resolve_move(start, candidate)?;
++            }
++            if length(candidate) <= allowance {
++                return Some(candidate);
++            }
++        }
++        None
++    }
++}
