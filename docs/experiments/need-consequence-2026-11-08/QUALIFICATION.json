@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "base_main": "550f79ad1f765132c634e7a272da56b521b57ec0",
+  "base_tree": "c4e5230799be59df95d468be1343c4549892851d",
+  "native_source": "493bb172da46add5f6d5da43dd375d5387116473",
+  "native_tree": "1c142bb1aad2a57d6ec98c689f72180e47bb4d3d",
+  "native_passed": 98,
+  "native_failed": 0,
+  "existing_ignored": 1,
+  "source_sha256": {
+    "crates/alife_core/Cargo.toml": "d7670df3e834781d87d9b3dd1118e62299e8d3ad5ae1fe690740179a3e465a3f",
+    "crates/alife_core/src/lib.rs": "7b292589e8c42a02c48f4094c7d08f9a3694583d456de2f69ddbfbdc7eecdccb",
+    "crates/alife_core/src/need_consequence.rs": "12d19fdd6bfa383eb323ec43d0f2e8c19b00972bc2bdba2eb817d41a8456e265",
+    "crates/alife_world/src/headless.rs": "4f66a60c81bd5d0ee0aed2f8a474feddc74e47459c326b1688b748a92acf65bd",
+    "crates/alife_world/src/headless/need_consequence_evidence_tests.rs": "14f4c0b7fe61eb4c03d4ec04ab7326b4a365b6201b74c3de6b3a3ec6ec7ba8a7"
+  },
+  "log_bindings": {
+    "need-evidence-main-core-v1.log": {
+      "sha256": "5988abceddecd19d934bf3243f89c95fb4176760fa4f16b692823dcc8ae19789",
+      "bytes": 1751
+    },
+    "need-evidence-main-world-v1.log": {
+      "sha256": "1328862077fd1c92f215dd4dd1a2018cca7cc56798160b012d8ed0675699ae7a",
+      "bytes": 2346
+    },
+    "need-evidence-main-legacy-v1.log": {
+      "sha256": "74afa22a9d593772b6ca18f879455e0ecbab06c5bbd8123cc2b25a6575d55c7b",
+      "bytes": 8980
+    },
+    "need-evidence-main-clippy-v1.log": {
+      "sha256": "0a7d1621019c93b7ccd059104e3f5ef6309f8cfd231c69b336666cba9aeab3f3",
+      "bytes": 393
+    },
+    "need-evidence-main-fmt-v1.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "need-evidence-main-boundaries-v1.log": {
+      "sha256": "b6554fa6b151aea699671a9b5cad329ec249203f6fa858015600843929aff070",
+      "bytes": 34
+    }
+  },
+  "original_safe_archive_sha256": "2b53780e6872a2b30af163bf635ed15070bbe2f82f9e955f142c4127f8690142",
+  "source_changes_after_native": "none; documentation moved into an experiment directory and publication metadata added",
+  "runtime_attached": false,
+  "approximate_metric_included": false,
+  "native_policy_inference_or_learning": false,
+  "exact_head_hosted_checks": "pending"
+}
