@@ -112,7 +112,7 @@ pub use biochemical_graph::{
 pub use biochemistry::{
     BiochemistryCadence, BiochemistryState, BodyEventDelta, BodyState, DevelopmentReadiness,
     OrganKind, OrganPhysiology, PassiveBodyUpkeepPolicy, ReproductionReadiness,
-    MAX_BIOCHEMISTRY_CATCH_UP_STEPS, ORGAN_KIND_COUNT,
+    ThermalBalanceCandidate, MAX_BIOCHEMISTRY_CATCH_UP_STEPS, ORGAN_KIND_COUNT,
 };
 pub use blake3_digest::Blake3Digest;
 pub use brain_class::{BrainClassSpec, BrainComputeBudget, BrainScaleTier};
