@@ -1,0 +1,7 @@
+BYTE_IDENTICAL awake-rest-false-age-0.json bytes=72181 sha256=7dc998940f0566707125a985e154cd733bf21a66787650dcffa7fb1bdcdd025b
+BYTE_IDENTICAL awake-rest-false-age-1200.json bytes=72598 sha256=569c61fd876c2a1d92b8499701df275484c882dd3ff55dd316257f9254464438
+BYTE_IDENTICAL awake-rest-false-age-240.json bytes=72603 sha256=490d279ca8a1429dbf956db3db72fdcb171c8dc3439ad59e9a6dc233520874dd
+BYTE_IDENTICAL awake-rest-true-age-0.json bytes=72566 sha256=f1c53d5233c5f841fa1aa212a809013703378c22322a1fcd78caf411b5569a1a
+BYTE_IDENTICAL awake-rest-true-age-1200.json bytes=72985 sha256=d0854e70df59cb0d7779de06ab26ca0d9447168399338ace2a27f3fe28b307cf
+BYTE_IDENTICAL awake-rest-true-age-240.json bytes=72987 sha256=8d5735a7041b059fb10b329b4fb29e2472455edda3120b3d8962d012ca46b293
+All 6 ordinary/awake-rest portable saves and all component digest records exactly identical across accepted main68beb760 and candidate3007e0ab. Generated fixtures only; no retained life input.

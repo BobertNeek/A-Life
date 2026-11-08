@@ -976,6 +976,39 @@ impl BiochemicalPhenotype {
         Ok(self)
     }
 
+    /// Fresh construction only: separate waking fatigue and pressure timescales.
+    /// This edits inherited production, never concentrations, thresholds or value.
+    /// The ordinary recipe and valid mutant graphs do not invoke this helper.
+    pub(crate) fn with_recovery_timescale_v1(mut self) -> Result<Self, ScaffoldContractError> {
+        for (target, gain) in [(ids::FATIGUE, 0.0012), (ids::SLEEP_PRESSURE, 0.0006)] {
+            let rows: Vec<_> = self
+                .emitters
+                .iter()
+                .filter(|row| row.source == BiochemicalSourceLocus::Awake && row.target == target)
+                .collect();
+            let [row] = rows.as_slice() else {
+                return Err(ScaffoldContractError::InvalidGeneticBounds);
+            };
+            if row.cadence_ticks != 1
+                || row.threshold != 0.0
+                || row.response != EmitterResponse::Analogue
+                || row.inverted
+                || row.developmental_expression_floor != 0.0
+                || row.gain <= 0.0
+            {
+                return Err(ScaffoldContractError::InvalidGeneticBounds);
+            }
+            // Resolve the same unique row mutably after validating its units.
+            self.emitters
+                .iter_mut()
+                .find(|row| row.source == BiochemicalSourceLocus::Awake && row.target == target)
+                .ok_or(ScaffoldContractError::InvalidGeneticBounds)?
+                .gain = gain;
+        }
+        self.compile()?;
+        Ok(self)
+    }
+
     /// Fresh research genotype only: add a separate event-backed fatigue route.
     /// Existing sleep recovery, waking accumulation and expression stay intact.
     pub(crate) fn with_awake_rest_recovery_v1(mut self) -> Result<Self, ScaffoldContractError> {
@@ -2400,5 +2433,129 @@ mod awake_rest_v1_tests {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod recovery_timescale_v1_tests {
+    use super::*;
+    use crate::{BiochemistryState, BrainCapacityClass, CreatureGenome, FoundationGeneticIdentity};
+
+    fn fixture() -> (BiochemicalPhenotype, BodyState) {
+        let genome = CreatureGenome::early_mammal_founder(
+            901,
+            FoundationGeneticIdentity::new(1, 1, 1, BrainCapacityClass::N512_ID).unwrap(),
+        )
+        .unwrap();
+        let phenotype = genome.express().unwrap();
+        let body = BiochemistryState::new(&phenotype, Tick::ZERO).unwrap().body;
+        (
+            phenotype
+                .chemistry
+                .biochemical
+                .with_waking_recovery()
+                .unwrap(),
+            body,
+        )
+    }
+
+    #[test]
+    fn recovery_timescale_full_expression_graph_matches_prospective_targets_and_baseline_bound() {
+        let (baseline, body) = fixture();
+        let calibrated = baseline.clone().with_recovery_timescale_v1().unwrap();
+        for (candidate, graph) in [(false, baseline), (true, calibrated)] {
+            // Authored expression=1 isolates the rate's units; concentrations
+            // remain the fresh zero-expression state, never patched.
+            let mut state = BiochemicalGraphState::new(&graph, Tick::ZERO, 0.0).unwrap();
+            let mut fatigue = None;
+            let mut pressure = None;
+            for age in 1..=4514 {
+                state = state
+                    .advance(Tick(age), body, BodyEventDelta::zero(), None, &graph, 1.0)
+                    .unwrap()
+                    .0;
+                let h = state.derive_homeostasis(&graph).unwrap();
+                if h.drives.fatigue >= 0.35 {
+                    fatigue.get_or_insert(age);
+                }
+                if h.hormones.sleep_pressure >= 0.6 {
+                    pressure.get_or_insert(age);
+                }
+            }
+            if candidate {
+                assert!((200..=400).contains(&fatigue.unwrap()));
+                assert!((900..=1300).contains(&pressure.unwrap()));
+                assert_eq!((fatigue, pressure), (Some(292), Some(1009)));
+            } else {
+                assert_eq!((fatigue, pressure), (None, None));
+                let species = graph
+                    .species
+                    .iter()
+                    .find(|s| s.id == ids::SLEEP_PRESSURE)
+                    .unwrap();
+                let emitter = graph
+                    .emitters
+                    .iter()
+                    .find(|e| {
+                        e.source == BiochemicalSourceLocus::Awake && e.target == ids::SLEEP_PRESSURE
+                    })
+                    .unwrap();
+                let r = f64::from(species.decay_retention);
+                let eq = f64::from(species.baseline) + f64::from(emitter.gain) / (1.0 - r);
+                let upper = eq * (1.0 - r.powf(4514.0));
+                assert!(upper + 4514.0 * 4.0 * f64::from(f32::EPSILON) < 0.35);
+                assert!(
+                    (state
+                        .derive_homeostasis(&graph)
+                        .unwrap()
+                        .hormones
+                        .sleep_pressure
+                        - f64::min(upper, 1.0) as f32)
+                        .abs()
+                        < 2e-5
+                );
+                println!("RECOVERY_BOUND optimistic_at4514={upper:.12} fatigue_earliest={} pressure_earliest={} retention_half_life={}",
+                    ((1.0-0.35/eq).ln()/r.ln()).ceil(),((1.0-0.60/eq).ln()/r.ln()).ceil(),0.5_f64.ln()/r.ln());
+            }
+            println!("RECOVERY_GRAPH authored_full_expression=true candidate={candidate} F_first={fatigue:?} P_first={pressure:?}");
+        }
+    }
+
+    #[test]
+    fn recovery_timescale_explicit_helper_rejects_unsupported_shapes_not_valid_mutants() {
+        let (baseline, body) = fixture();
+        for variant in 0..8 {
+            let mut graph = baseline.clone();
+            let index = graph
+                .emitters
+                .iter()
+                .position(|e| e.source == BiochemicalSourceLocus::Awake && e.target == ids::FATIGUE)
+                .unwrap();
+            match variant {
+                0 => graph.emitters[index].cadence_ticks = 2,
+                1 => graph.emitters[index].threshold = 0.1,
+                2 => graph.emitters[index].response = EmitterResponse::Digital,
+                3 => graph.emitters[index].inverted = true,
+                4 => graph.emitters[index].developmental_expression_floor = 0.1,
+                5 => graph.emitters[index].gain = -0.1,
+                6 => {
+                    graph.emitters.remove(index);
+                }
+                _ => graph.emitters.push(graph.emitters[index]),
+            }
+            graph.compile().unwrap();
+            assert!(graph.clone().with_recovery_timescale_v1().is_err());
+            let bytes = serde_json::to_vec(&graph).unwrap();
+            let restored: BiochemicalPhenotype = serde_json::from_slice(&bytes).unwrap();
+            assert_eq!(bytes, serde_json::to_vec(&restored).unwrap());
+            let state = BiochemicalGraphState::new(&restored, Tick::ZERO, 0.0).unwrap();
+            state
+                .advance(Tick(1), body, BodyEventDelta::zero(), None, &restored, 1.0)
+                .unwrap();
+        }
+        let ordinary =
+            BiochemicalPhenotype::early_mammal_reference(EndocrineProfile::baseline(), 0.75)
+                .unwrap();
+        assert!(ordinary.with_recovery_timescale_v1().is_err());
     }
 }

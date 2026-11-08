@@ -1,0 +1,4 @@
+   Compiling alife_core v0.1.0 (<workspace>/recovery-drive-timescale-v1/crates/alife_core)
+   Compiling alife_world v0.1.0 (<workspace>/recovery-drive-timescale-v1/crates/alife_world)
+    Finished `dev` profile [unoptimized] target(s) in 44.66s
+     Running `<workspace>/recovery-timescale-target-v1/debug/examples/recovery_timescale_legacy_wire <workspace>/recovery-timescale-wire-candidate`

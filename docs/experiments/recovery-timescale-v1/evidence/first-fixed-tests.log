@@ -1,0 +1,160 @@
+   Compiling proc-macro2 v1.0.106
+   Compiling unicode-ident v1.0.24
+   Compiling quote v1.0.45
+   Compiling syn v2.0.117
+   Compiling serde_core v1.0.228
+   Compiling find-msvc-tools v0.1.9
+   Compiling shlex v2.0.1
+   Compiling cc v1.2.63
+   Compiling serde v1.0.228
+   Compiling blake3 v1.8.5
+   Compiling serde_derive v1.0.228
+   Compiling thiserror v2.0.18
+   Compiling zmij v1.0.21
+   Compiling bytemuck_derive v1.10.2
+   Compiling thiserror-impl v2.0.18
+   Compiling constant_time_eq v0.4.2
+   Compiling cpufeatures v0.3.0
+   Compiling arrayvec v0.7.6
+   Compiling cfg-if v1.0.4
+   Compiling arrayref v0.3.9
+   Compiling serde_json v1.0.150
+   Compiling bytemuck v1.25.0
+   Compiling itoa v1.0.18
+   Compiling bitflags v2.13.0
+   Compiling virtue v0.0.18
+   Compiling smallvec v1.15.1
+   Compiling memchr v2.8.1
+   Compiling bincode_derive v2.0.1
+   Compiling unty v0.0.4
+   Compiling bincode v2.0.1
+   Compiling alife_core v0.1.0 (<workspace>/recovery-drive-timescale-v1/crates/alife_core)
+   Compiling alife_storage v0.1.0 (<workspace>/recovery-drive-timescale-v1/crates/alife_storage)
+   Compiling alife_world v0.1.0 (<workspace>/recovery-drive-timescale-v1/crates/alife_world)
+    Finished `test` profile [unoptimized] target(s) in 5m 47s
+     Running unittests src/lib.rs (<workspace>/recovery-timescale-target-v1/debug/deps/alife_core-2fd07a44616ca3ca)
+
+running 2 tests
+test biochemical_graph::recovery_timescale_v1_tests::recovery_timescale_explicit_helper_rejects_unsupported_shapes_not_valid_mutants ... ok
+test biochemical_graph::recovery_timescale_v1_tests::recovery_timescale_full_expression_graph_matches_prospective_targets_and_baseline_bound ... RECOVERY_BOUND optimistic_at4514=0.323276167851 fatigue_earliest=4938 pressure_earliest=9401 retention_half_life=13860.297008795433
+RECOVERY_GRAPH authored_full_expression=true candidate=false F_first=None P_first=None
+RECOVERY_GRAPH authored_full_expression=true candidate=true F_first=Some(292) P_first=Some(1009)
+ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 43 filtered out; finished in 0.01s
+
+     Running unittests src/lib.rs (<workspace>/recovery-timescale-target-v1/debug/deps/alife_world-b879ef3528ab86a5)
+
+running 6 tests
+test new_game::recovery_timescale_tests::recovery_timescale_equal_scripted_cycles_allow_natural_rebuildup_within_life ... RECOVERY_ACTION scripted=AwakeRest age=400 F=0.021343285->0.000000000 P=0.021343285->0.021422232 awake_dose=1 sleep_dose=0 sleeping=false energy=0.791990340->0.791989386 atp=0.646028936->0.646027565
+RECOVERY_ACTION scripted=AwakeRest age=700 F=0.023744786->0.000000000 P=0.044847839->0.044925593 awake_dose=1 sleep_dose=0 sleeping=false energy=0.791623831->0.791622877 atp=0.645826519->0.645825922
+RECOVERY_ACTION scripted=BodySleep age=1200 F=0.039429806->0.000000000 P=0.083245292->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.791011870->0.791010916 atp=0.645520985->0.645520389
+RECOVERY_CYCLE calibrated=false cycle=1 age=1200 F=0.039429806 P=0.08324529
+RECOVERY_ACTION scripted=AwakeRest age=1450 F=0.019798765->0.000000000 P=0.019798765->0.019877786 awake_dose=1 sleep_dose=0 sleeping=false energy=0.790707648->0.790706635 atp=0.645368278->0.645367682
+RECOVERY_ACTION scripted=AwakeRest age=1750 F=0.023744786->0.000000000 P=0.043326415->0.043404259 awake_dose=1 sleep_dose=0 sleeping=false energy=0.790341079->0.790340126 atp=0.645184875->0.645184278
+RECOVERY_ACTION scripted=BodySleep age=2200 F=0.035523422->0.000000000 P=0.077961087->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.789790928->0.789789975 atp=0.644910097->0.644909501
+RECOVERY_CYCLE calibrated=false cycle=2 age=2200 F=0.035523422 P=0.07796109
+RECOVERY_ACTION scripted=AwakeRest age=2450 F=0.019798765->0.000000000 P=0.019798765->0.019877786 awake_dose=1 sleep_dose=0 sleeping=false energy=0.789484978->0.789484024 atp=0.644757271->0.644756675
+RECOVERY_ACTION scripted=AwakeRest age=2750 F=0.023744786->0.000000000 P=0.043326415->0.043404259 awake_dose=1 sleep_dose=0 sleeping=false energy=0.789118469->0.789117515 atp=0.644573987->0.644573390
+RECOVERY_ACTION scripted=BodySleep age=3200 F=0.035523422->0.000000000 P=0.077961087->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.788568914->0.788567841 atp=0.644299150->0.644298553
+RECOVERY_CYCLE calibrated=false cycle=3 age=3200 F=0.035523422 P=0.07796109
+RECOVERY_ACTION scripted=AwakeRest age=3450 F=0.019798765->0.000000000 P=0.019798765->0.019877786 awake_dose=1 sleep_dose=0 sleeping=false energy=0.788262904->0.788261890 atp=0.644146383->0.644145727
+RECOVERY_ACTION scripted=AwakeRest age=3750 F=0.023744786->0.000000000 P=0.043326415->0.043404259 awake_dose=1 sleep_dose=0 sleeping=false energy=0.787896335->0.787895262 atp=0.643963099->0.643962443
+RECOVERY_ACTION scripted=BodySleep age=4200 F=0.035523422->0.000000000 P=0.077961087->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.787346184->0.787345231 atp=0.643688142->0.643687546
+RECOVERY_CYCLE calibrated=false cycle=4 age=4200 F=0.035523422 P=0.07796109
+RECOVERY_ACTION scripted=AwakeRest age=400 F=0.322803617->0.000000000 P=0.162735566->0.163337424 awake_dose=1 sleep_dose=0 sleeping=false energy=0.791990340->0.791989386 atp=0.646028936->0.646027565
+RECOVERY_ACTION scripted=AwakeRest age=700 F=0.359107226->0.000000000 P=0.341952443->0.342545360 awake_dose=1 sleep_dose=0 sleeping=false energy=0.791623831->0.791622877 atp=0.645826519->0.645825922
+RECOVERY_ACTION scripted=BodySleep age=1200 F=0.596334040->0.000000000 P=0.634735227->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.791011870->0.791010916 atp=0.645520985->0.645520389
+RECOVERY_CYCLE calibrated=true cycle=1 age=1200 F=0.59633404 P=0.6347352
+RECOVERY_ACTION scripted=AwakeRest age=1450 F=0.299429566->0.000000000 P=0.150951907->0.151554361 awake_dose=1 sleep_dose=0 sleeping=false energy=0.790707648->0.790706635 atp=0.645368278->0.645367682
+RECOVERY_ACTION scripted=AwakeRest age=1750 F=0.359107226->0.000000000 P=0.330343634->0.330937117 awake_dose=1 sleep_dose=0 sleeping=false energy=0.790341079->0.790340126 atp=0.645184875->0.645184278
+RECOVERY_ACTION scripted=BodySleep age=2200 F=0.537248015->0.000000000 P=0.594435215->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.789790928->0.789789975 atp=0.644910097->0.644909501
+RECOVERY_CYCLE calibrated=true cycle=2 age=2200 F=0.537248 P=0.5944352
+RECOVERY_ACTION scripted=AwakeRest age=2450 F=0.299429566->0.000000000 P=0.150951907->0.151554361 awake_dose=1 sleep_dose=0 sleeping=false energy=0.789484978->0.789484024 atp=0.644757271->0.644756675
+RECOVERY_ACTION scripted=AwakeRest age=2750 F=0.359107226->0.000000000 P=0.330343634->0.330937117 awake_dose=1 sleep_dose=0 sleeping=false energy=0.789118469->0.789117515 atp=0.644573987->0.644573390
+RECOVERY_ACTION scripted=BodySleep age=3200 F=0.537248015->0.000000000 P=0.594435215->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.788568914->0.788567841 atp=0.644299150->0.644298553
+RECOVERY_CYCLE calibrated=true cycle=3 age=3200 F=0.537248 P=0.5944352
+RECOVERY_ACTION scripted=AwakeRest age=3450 F=0.299429566->0.000000000 P=0.150951907->0.151554361 awake_dose=1 sleep_dose=0 sleeping=false energy=0.788262904->0.788261890 atp=0.644146383->0.644145727
+RECOVERY_ACTION scripted=AwakeRest age=3750 F=0.359107226->0.000000000 P=0.330343634->0.330937117 awake_dose=1 sleep_dose=0 sleeping=false energy=0.787896335->0.787895262 atp=0.643963099->0.643962443
+RECOVERY_ACTION scripted=BodySleep age=4200 F=0.537248015->0.000000000 P=0.594435215->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.787346184->0.787345231 atp=0.643688142->0.643687546
+RECOVERY_CYCLE calibrated=true cycle=4 age=4200 F=0.537248 P=0.5944352
+ok
+test new_game::recovery_timescale_tests::recovery_timescale_fresh_only_changes_two_inherited_rates_and_no_clock_or_value ... RECOVERY_PARAMETERS id=2 baseline=0.2 retention=0.99995 awake_gain=0.0012 receptor=BiochemicalReceptor { source: ChemicalSpeciesId(2), target: Drive(Fatigue), threshold: 0.0, gain: 1.0, nominal: 0.0, digital: false }
+RECOVERY_PARAMETERS id=18 baseline=0.2 retention=0.99995 awake_gain=0.0006 receptor=BiochemicalReceptor { source: ChemicalSpeciesId(18), target: Endocrine(SleepPressure), threshold: 0.0, gain: 1.0, nominal: 0.0, digital: false }
+RECOVERY_IDENTITIES seed=0x3434d3146580001 baseline_genotype=PortableAssetDigest("fnv1a64:f8f65d51b883ae66") candidate_genotype=PortableAssetDigest("fnv1a64:aeb71b1e921a83c0") baseline_graph=PortableAssetDigest("fnv1a64:f16e12476c4d4486") candidate_graph=PortableAssetDigest("fnv1a64:90b0f4753405d61f") foundation=PortableAssetDigest("fnv1a64:5c7e5a692de727f0") clock=BiochemistryCadence { fast_hormone_ticks: 1, metabolism_ticks: 6, development_ticks: 60, reproduction_ticks: 120, max_catch_up_steps: 64 } lifespan=4514 turnover=0.0025000002 value=BiologicalValueProfile { drives: [-0.14285715, -0.14285715, -0.14285715, -0.14285715, -0.14285715, 0.0, 0.14285715, -0.14285715, 0.0, -0.08, 0.0], hormones: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.3, 0.0], energy: 0.14285715, injury: 1.0, disappointment: 0.03 }
+ok
+test new_game::recovery_timescale_tests::recovery_timescale_inheritance_keeps_genes_and_valid_mutants_without_runtime_gate ... RECOVERY_INHERITANCE seed=901 authored_mutation_rate=None mutations=11 F_gain=0.0012 P_gain=0.00061473413 valid_ordinary_advance=true
+RECOVERY_INHERITANCE seed=902 authored_mutation_rate=Some(0.0) mutations=0 F_gain=0.0012 P_gain=0.00058561907 valid_ordinary_advance=true
+RECOVERY_INHERITANCE seed=903 authored_mutation_rate=Some(1.0) mutations=666 F_gain=0.007691562 P_gain=-0.029278344 valid_ordinary_advance=true
+ok
+test new_game::recovery_timescale_tests::recovery_timescale_natural_buildup_respects_development_and_unchanged_age_death ... RECOVERY_BOUNDARY calibrated=false age=59 expression=0 F=0 P=0 energy=0.79242176 alive=true
+RECOVERY_BOUNDARY calibrated=false age=60 expression=0.2990431 F=0.000023924425 P=0.000023924425 energy=0.7924188 alive=true
+RECOVERY_BOUNDARY calibrated=false age=179 expression=0.5980862 F=0.0042955666 P=0.0042955666 energy=0.79226404 alive=true
+RECOVERY_BOUNDARY calibrated=false age=180 expression=0.89712924 F=0.0043671336 P=0.0043671336 energy=0.7922613 alive=true
+RECOVERY_BOUNDARY calibrated=false age=239 expression=0.89712924 F=0.008582344 P=0.008582344 energy=0.7921886 alive=true
+RECOVERY_BOUNDARY calibrated=false age=240 expression=1 F=0.008661905 P=0.008661905 energy=0.7921858 alive=true
+RECOVERY_BOUNDARY calibrated=false age=4513 expression=1 F=0.31481013 P=0.31481013 energy=0.786964 alive=true
+RECOVERY_BOUNDARY calibrated=false age=4514 expression=1 F=0.31487438 P=0.31487438 energy=0.786963 alive=false
+RECOVERY_NATURAL calibrated=false F_reference_first=None P_reference_first=None full_expression=Some(240) at240=(0.008661905, 0.008661905) age_death=4514 final=(0.31487438, 0.31487438)
+RECOVERY_BOUNDARY calibrated=true age=59 expression=0 F=0 P=0 energy=0.79242176 alive=true
+RECOVERY_BOUNDARY calibrated=true age=60 expression=0.2990431 F=0.00036184312 P=0.00018241727 energy=0.7924188 alive=true
+RECOVERY_BOUNDARY calibrated=true age=179 expression=0.5980862 F=0.064970754 P=0.032753732 energy=0.79226404 alive=true
+RECOVERY_BOUNDARY calibrated=true age=180 expression=0.89712924 F=0.06605303 P=0.033299346 energy=0.7922613 alive=true
+RECOVERY_BOUNDARY calibrated=true age=239 expression=0.89712924 F=0.12981182 P=0.06544211 energy=0.7921886 alive=true
+RECOVERY_BOUNDARY calibrated=true age=240 expression=1 F=0.13101535 P=0.06604884 energy=0.7921858 alive=true
+RECOVERY_BOUNDARY calibrated=true age=4513 expression=1 F=1 P=1 energy=0.786964 alive=true
+RECOVERY_BOUNDARY calibrated=true age=4514 expression=1 F=1 P=1 energy=0.786963 alive=false
+RECOVERY_NATURAL calibrated=true F_reference_first=Some(423) P_reference_first=Some(1141) full_expression=Some(240) at240=(0.13101535, 0.06604884) age_death=4514 final=(1.0, 1.0)
+ok
+test new_game::recovery_timescale_tests::recovery_timescale_natural_need_real_awake_rest_and_sleep_have_distinct_effects ... RECOVERY_ACTION scripted=AwakeRest age=1200 F=0.083245292->0.000000000 P=0.083245292->0.083321132 awake_dose=1 sleep_dose=0 sleeping=false energy=0.791011870->0.791010916 atp=0.645520985->0.645520389
+RECOVERY_ACTION scripted=Neutral age=1200 F=0.083245292->0.083321132 P=0.083245292->0.083321132 awake_dose=0 sleep_dose=0 sleeping=false energy=0.791011870->0.791010916 atp=0.645520985->0.645520389
+RECOVERY_ACTION scripted=BodySleep age=1200 F=0.083245292->0.000000000 P=0.083245292->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.791011870->0.791010916 atp=0.645520985->0.645520389
+RECOVERY_ACTION scripted=AwakeRest age=1200 F=1.000000000->0.300000012 P=0.634735227->0.635313511 awake_dose=1 sleep_dose=0 sleeping=false energy=0.791011870->0.791010916 atp=0.645520985->0.645520389
+RECOVERY_ACTION scripted=Neutral age=1200 F=1.000000000->1.000000000 P=0.634735227->0.635313511 awake_dose=0 sleep_dose=0 sleeping=false energy=0.791011870->0.791010916 atp=0.645520985->0.645520389
+RECOVERY_ACTION scripted=BodySleep age=1200 F=1.000000000->0.299960017 P=0.634735227->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.791011870->0.791010916 atp=0.645520985->0.645520389
+ok
+test new_game::recovery_timescale_tests::recovery_timescale_save_restore_preserves_accumulation_and_exact_continuation ... RECOVERY_ACTION scripted=Neutral age=240 F=0.008661905->0.008741478 P=0.008661905->0.008741478 awake_dose=0 sleep_dose=0 sleeping=false energy=0.792185783->0.792184830 atp=0.659184158->0.658660471
+RECOVERY_ACTION scripted=Neutral age=240 F=0.008661905->0.008741478 P=0.008661905->0.008741478 awake_dose=0 sleep_dose=0 sleeping=false energy=0.792185783->0.792184830 atp=0.659184158->0.658660471
+RECOVERY_ACTION scripted=AwakeRest age=240 F=0.008661905->0.000000000 P=0.008661905->0.008741478 awake_dose=1 sleep_dose=0 sleeping=false energy=0.792185783->0.792184830 atp=0.659184158->0.658660471
+RECOVERY_ACTION scripted=AwakeRest age=240 F=0.008661905->0.000000000 P=0.008661905->0.008741478 awake_dose=1 sleep_dose=0 sleeping=false energy=0.792185783->0.792184830 atp=0.659184158->0.658660471
+RECOVERY_ACTION scripted=BodySleep age=240 F=0.008661905->0.000000000 P=0.008661905->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.792185783->0.792184830 atp=0.659184158->0.658660471
+RECOVERY_ACTION scripted=BodySleep age=240 F=0.008661905->0.000000000 P=0.008661905->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.792185783->0.792184830 atp=0.659184158->0.658660471
+RECOVERY_ACTION scripted=BodySleep age=240 F=0.008661905->0.000000000 P=0.008661905->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.792185783->0.792184830 atp=0.659184158->0.658660471
+RECOVERY_ACTION scripted=Neutral age=1200 F=0.074913897->0.074990161 P=0.074913897->0.074990161 awake_dose=0 sleep_dose=0 sleeping=false energy=0.791011870->0.791010916 atp=0.645520985->0.645520389
+RECOVERY_ACTION scripted=Neutral age=1200 F=0.074913897->0.074990161 P=0.074913897->0.074990161 awake_dose=0 sleep_dose=0 sleeping=false energy=0.791011870->0.791010916 atp=0.645520985->0.645520389
+RECOVERY_ACTION scripted=AwakeRest age=1200 F=0.074913897->0.000000000 P=0.074913897->0.074990161 awake_dose=1 sleep_dose=0 sleeping=false energy=0.791011870->0.791010916 atp=0.645520985->0.645520389
+RECOVERY_ACTION scripted=AwakeRest age=1200 F=0.074913897->0.000000000 P=0.074913897->0.074990161 awake_dose=1 sleep_dose=0 sleeping=false energy=0.791011870->0.791010916 atp=0.645520985->0.645520389
+RECOVERY_ACTION scripted=BodySleep age=1200 F=0.074913897->0.000000000 P=0.074913897->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.791011870->0.791010916 atp=0.645520985->0.645520389
+RECOVERY_ACTION scripted=BodySleep age=1200 F=0.074913897->0.000000000 P=0.074913897->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.791011870->0.791010916 atp=0.645520985->0.645520389
+RECOVERY_ACTION scripted=BodySleep age=1200 F=0.074913897->0.000000000 P=0.074913897->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.791011870->0.791010916 atp=0.645520985->0.645520389
+RECOVERY_ACTION scripted=Neutral age=2200 F=0.077961087->0.078037187 P=0.077961087->0.078037187 awake_dose=0 sleep_dose=0 sleeping=false energy=0.789790928->0.789789975 atp=0.644910097->0.644909501
+RECOVERY_ACTION scripted=Neutral age=2200 F=0.077961087->0.078037187 P=0.077961087->0.078037187 awake_dose=0 sleep_dose=0 sleeping=false energy=0.789790928->0.789789975 atp=0.644910097->0.644909501
+RECOVERY_ACTION scripted=AwakeRest age=2200 F=0.077961087->0.000000000 P=0.077961087->0.078037187 awake_dose=1 sleep_dose=0 sleeping=false energy=0.789790928->0.789789975 atp=0.644910097->0.644909501
+RECOVERY_ACTION scripted=AwakeRest age=2200 F=0.077961087->0.000000000 P=0.077961087->0.078037187 awake_dose=1 sleep_dose=0 sleeping=false energy=0.789790928->0.789789975 atp=0.644910097->0.644909501
+RECOVERY_ACTION scripted=BodySleep age=2200 F=0.077961087->0.000000000 P=0.077961087->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.789790928->0.789789975 atp=0.644910097->0.644909501
+RECOVERY_ACTION scripted=BodySleep age=2200 F=0.077961087->0.000000000 P=0.077961087->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.789790928->0.789789975 atp=0.644910097->0.644909501
+RECOVERY_ACTION scripted=BodySleep age=2200 F=0.077961087->0.000000000 P=0.077961087->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.789790928->0.789789975 atp=0.644910097->0.644909501
+RECOVERY_ACTION scripted=Neutral age=240 F=0.131015345->0.132218793 P=0.066048838->0.066655554 awake_dose=0 sleep_dose=0 sleeping=false energy=0.792185783->0.792184830 atp=0.659184158->0.658660471
+RECOVERY_ACTION scripted=Neutral age=240 F=0.131015345->0.132218793 P=0.066048838->0.066655554 awake_dose=0 sleep_dose=0 sleeping=false energy=0.792185783->0.792184830 atp=0.659184158->0.658660471
+RECOVERY_ACTION scripted=AwakeRest age=240 F=0.131015345->0.000000000 P=0.066048838->0.066655554 awake_dose=1 sleep_dose=0 sleeping=false energy=0.792185783->0.792184830 atp=0.659184158->0.658660471
+RECOVERY_ACTION scripted=AwakeRest age=240 F=0.131015345->0.000000000 P=0.066048838->0.066655554 awake_dose=1 sleep_dose=0 sleeping=false energy=0.792185783->0.792184830 atp=0.659184158->0.658660471
+RECOVERY_ACTION scripted=BodySleep age=240 F=0.131015345->0.000000000 P=0.066048838->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.792185783->0.792184830 atp=0.659184158->0.658660471
+RECOVERY_ACTION scripted=BodySleep age=240 F=0.131015345->0.000000000 P=0.066048838->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.792185783->0.792184830 atp=0.659184158->0.658660471
+RECOVERY_ACTION scripted=BodySleep age=240 F=0.131015345->0.000000000 P=0.066048838->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.792185783->0.792184830 atp=0.659184158->0.658660471
+RECOVERY_ACTION scripted=Neutral age=1200 F=1.000000000->1.000000000 P=0.571200609->0.571782053 awake_dose=0 sleep_dose=0 sleeping=false energy=0.791011870->0.791010916 atp=0.645520985->0.645520389
+RECOVERY_ACTION scripted=Neutral age=1200 F=1.000000000->1.000000000 P=0.571200609->0.571782053 awake_dose=0 sleep_dose=0 sleeping=false energy=0.791011870->0.791010916 atp=0.645520985->0.645520389
+RECOVERY_ACTION scripted=AwakeRest age=1200 F=1.000000000->0.300000012 P=0.571200609->0.571782053 awake_dose=1 sleep_dose=0 sleeping=false energy=0.791011870->0.791010916 atp=0.645520985->0.645520389
+RECOVERY_ACTION scripted=AwakeRest age=1200 F=1.000000000->0.300000012 P=0.571200609->0.571782053 awake_dose=1 sleep_dose=0 sleeping=false energy=0.791011870->0.791010916 atp=0.645520985->0.645520389
+RECOVERY_ACTION scripted=BodySleep age=1200 F=1.000000000->0.299960017 P=0.571200609->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.791011870->0.791010916 atp=0.645520985->0.645520389
+RECOVERY_ACTION scripted=BodySleep age=1200 F=1.000000000->0.299960017 P=0.571200609->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.791011870->0.791010916 atp=0.645520985->0.645520389
+RECOVERY_ACTION scripted=BodySleep age=1200 F=1.000000000->0.299960017 P=0.571200609->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.791011870->0.791010916 atp=0.645520985->0.645520389
+RECOVERY_ACTION scripted=Neutral age=2200 F=1.000000000->1.000000000 P=0.594435215->0.595015466 awake_dose=0 sleep_dose=0 sleeping=false energy=0.789790928->0.789789975 atp=0.644910097->0.644909501
+RECOVERY_ACTION scripted=Neutral age=2200 F=1.000000000->1.000000000 P=0.594435215->0.595015466 awake_dose=0 sleep_dose=0 sleeping=false energy=0.789790928->0.789789975 atp=0.644910097->0.644909501
+RECOVERY_ACTION scripted=AwakeRest age=2200 F=1.000000000->0.300000012 P=0.594435215->0.595015466 awake_dose=1 sleep_dose=0 sleeping=false energy=0.789790928->0.789789975 atp=0.644910097->0.644909501
+RECOVERY_ACTION scripted=AwakeRest age=2200 F=1.000000000->0.300000012 P=0.594435215->0.595015466 awake_dose=1 sleep_dose=0 sleeping=false energy=0.789790928->0.789789975 atp=0.644910097->0.644909501
+RECOVERY_ACTION scripted=BodySleep age=2200 F=1.000000000->0.299960017 P=0.594435215->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.789790928->0.789789975 atp=0.644910097->0.644909501
+RECOVERY_ACTION scripted=BodySleep age=2200 F=1.000000000->0.299960017 P=0.594435215->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.789790928->0.789789975 atp=0.644910097->0.644909501
+RECOVERY_ACTION scripted=BodySleep age=2200 F=1.000000000->0.299960017 P=0.594435215->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.789790928->0.789789975 atp=0.644910097->0.644909501
+ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 310 filtered out; finished in 1.03s

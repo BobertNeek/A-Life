@@ -532,6 +532,21 @@ impl BiochemicalGraphChromosome {
         self.validate_contract()?;
         Ok(self)
     }
+    /// Explicit fresh-genotype rate calibration. Recombination and mutation use
+    /// the resulting ordinary graph genes; no runtime admission switch is added.
+    pub fn with_recovery_timescale_v1(
+        mut self,
+        side: AlleleSide,
+    ) -> Result<Self, ScaffoldContractError> {
+        let homolog = match side {
+            AlleleSide::Maternal => &mut self.maternal,
+            AlleleSide::Paternal => &mut self.paternal,
+        };
+        *homolog = homolog.clone().with_recovery_timescale_v1()?;
+        self.validate_contract()?;
+        Ok(self)
+    }
+
     /// Explicit fresh research construction; never rewrites acquired chemistry.
     pub fn with_awake_rest_recovery_v1(
         mut self,

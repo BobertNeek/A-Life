@@ -1,0 +1,633 @@
+   Compiling alife_core v0.1.0 (<workspace>/recovery-drive-timescale-v1/crates/alife_core)
+   Compiling alife_world v0.1.0 (<workspace>/recovery-drive-timescale-v1/crates/alife_world)
+    Finished `test` profile [unoptimized] target(s) in 5m 23s
+     Running unittests src/lib.rs (<workspace>/recovery-timescale-target-v1/debug/deps/alife_core-2fd07a44616ca3ca)
+
+running 45 tests
+test biochemical_graph::awake_rest_v1_tests::awake_rest_append_preserves_all_old_source_ordinals_and_body_wire ... ok
+test biochemical_graph::awake_rest_v1_tests::awake_rest_source_is_once_only_on_catchup_and_requires_explicit_inherited_recipe ... ok
+test biochemical_graph::health_distress_tests::inherited_low_health_keeps_pain_active_without_new_damage ... ok
+test biochemical_graph::recovery_timescale_v1_tests::recovery_timescale_explicit_helper_rejects_unsupported_shapes_not_valid_mutants ... ok
+test biochemical_graph::recovery_timescale_v1_tests::recovery_timescale_full_expression_graph_matches_prospective_targets_and_baseline_bound ... RECOVERY_BOUND optimistic_at4514=0.323276167851 fatigue_earliest=4938 pressure_earliest=9401 retention_half_life=13860.297008795433
+RECOVERY_GRAPH authored_full_expression=true candidate=false F_first=None P_first=None
+RECOVERY_GRAPH authored_full_expression=true candidate=true F_first=Some(292) P_first=Some(1009)
+ok
+test biochemistry::tests::food_relief_is_greater_when_biology_is_hungry_than_when_sated ... ok
+test biochemistry::tests::globally_fatal_damage_cannot_be_repaired_before_terminal_check ... ok
+test biochemistry::tests::inherited_chemical_controls_change_upkeep_and_pay_for_repair ... ok
+test biochemistry::tests::newborn_at_late_world_tick_starts_development_at_biological_age_zero ... ok
+test biochemistry::tests::surviving_body_can_repair_a_zero_integrity_organ_from_its_reserve ... ok
+test dendritic::tests::deserialization_rejects_branch_sets_that_bypass_constructor_bounds ... ok
+test dendritic::tests::joint_inputs_gate_a_branch_and_change_final_neuron_output ... ok
+test dendritic::tests::neuron_count_validation_rejects_out_of_range_sources_and_targets ... ok
+test dendritic::tests::target_spans_are_sorted_bounded_and_skip_empty_targets ... ok
+test evolutionary_genetics::mutation_journal_tests::discrete_mutation_stops_before_changing_an_allele_without_journal_capacity ... ok
+test memory::candidate_recall::outcome_provenance_tests::ambiguous_joint_representative_remains_unknown ... ok
+test memory::candidate_recall::outcome_provenance_tests::joint_provenance_uses_the_exact_representative_channel_and_target ... ok
+test memory::candidate_recall::outcome_provenance_tests::missing_or_mismatched_physical_target_is_not_object_provenance ... ok
+test memory::encoded_context_tests::cloned_preparations_own_independent_payloads_and_finalize_independently ... ok
+test memory::encoded_context_tests::finalization_rejects_changed_drafts_receipts_and_retained_blocks ... ok
+test memory::encoded_context_tests::repeated_cognitive_context_keeps_episodic_encoding_and_final_keys ... ok
+test memory::runtime::tests::cached_attention_prefers_supported_evidence_over_weak_extremes ... ok
+test phenotype::decoder::tests::slice_a_decoder_shape_requires_exact_widths_and_positive_zero_biases ... ok
+test phenotype::encoder::growth_tests::growth_encoder_rejects_a_valid_plan_rebound_to_expansion ... ok
+test phenotype::io_compile::innate_priority_tests::care_dispositions_are_grounded_small_and_overridable_by_bounded_readouts ... ok
+test phenotype::io_compile::innate_priority_tests::founder_encoder_covers_bilateral_smell_pose_motion_and_care_drives ... ok
+test phenotype::io_compile::innate_priority_tests::inherited_survival_path_uses_real_drives_and_food_cue ... ok
+test phenotype::io_compile::innate_priority_tests::noncontact_approach_cue_is_bounded_and_never_indexes_a_feature_lane ... ok
+test phenotype::learning::tests::cognitive_decoder_rate_policy_is_isolated_in_receptor_construction ... ok
+test phenotype::learning::tests::disabled_receptor_has_exactly_zero_delta_rates ... ok
+test phenotype::learning::tests::founder_choice_readouts_use_signed_consequences_without_removing_predictive_recurrence ... ok
+test phenotype::learning::tests::replay_capture_plan_rejects_missing_or_changed_integrity_digest ... ok
+test phenotype::learning::tests::sleep_plan_rejects_unknown_wire_policies ... ok
+test phenotype::learning::tests::sleep_plan_reports_the_sleep_schema_domain ... ok
+test phenotype::record::tests::deserialization_rejects_rehashed_globally_balanced_forged_route_counts ... ok
+test phenotype::record::tests::deserialization_rejects_reordered_route_receipts ... ok
+test phenotype::record::tests::self_consistently_rehashed_noncanonical_route_is_rejected ... ok
+test structural_plasticity::tests::bounded_growth_changes_later_compute_and_pruning_removes_weak_edge ... ok
+test structural_plasticity::tests::deserialization_rejects_connections_outside_the_declared_neural_shape ... ok
+test topology::gap_portability_tests::repeated_concept_gap_sources_roundtrip_through_portable_form ... ok
+test topology::lifecycle_tests::lifecycle_matched_timing_probe ... ignored, manual matched CPU lifecycle timing; no GPU or FPS claim
+test topology::lifecycle_tests::lifecycle_matches_reference_across_owners_decay_and_gap_dismissal ... ok
+test topology::lifecycle_tests::lifecycle_matches_reference_for_split_merge_pruning_and_capacity ... ok
+test topology::lifecycle_tests::lifecycle_preserves_rejection_rollback_and_public_digest_validation ... ok
+test topology::lifecycle_tests::merging_concepts_deduplicates_nonadjacent_bindings_before_export ... ok
+
+test result: ok. 44 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 2.45s
+
+     Running unittests src/lib.rs (<workspace>/recovery-timescale-target-v1/debug/deps/alife_world-b879ef3528ab86a5)
+
+running 317 tests
+test appearance::tests::new_founders_use_the_fixed_twelve_family_roster ... ok
+test appearance::tests::offspring_can_inherit_appended_family_ids_per_slot ... ok
+test appearance::tests::schema_v1_appearance_migrates_to_coherent_schema_v2_parts ... ok
+test appearance::tests::schema_v1_migration_remains_frozen_to_the_original_eight_families ... ok
+test appearance::tests::schema_v2_mixed_parts_roundtrip_without_renderer_types ... ok
+test appearance::tests::schema_v2_roundtrips_appended_family_ids ... ok
+test candidate_enumerator::founder_basis_tests::intrinsic_choices_have_learning_support_without_changing_object_evidence ... ok
+test headless::awake_rest_research::tests::awake_rest_admission_rejects_ordinary_recipe_bad_posture_stale_interval_and_missing_effector ... ok
+test headless::awake_rest_research::tests::awake_rest_damage_cancels_only_recovery_and_failed_transaction_rolls_back ... AWAKE_REST fresh-damage age=60 candidate=true posture=104 moving=false expression=0.299043089 dose=0.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.649999976->0.649991393 pressure=0.649999976->0.649991393 energy=0.792418778->0.792407990 atp=0.748758495->0.747566581 event_energy=0.000000000 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST damage-control age=60 candidate=false posture=104 moving=false expression=0.299043089 dose=0.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.649999976->0.649991393 pressure=0.649999976->0.649991393 energy=0.792418778->0.792407990 atp=0.748758495->0.747566581 event_energy=0.000000000 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+ok
+test headless::awake_rest_research::tests::awake_rest_development_matrix_preserves_sleep_need_and_legacy_rest ... AWAKE_REST fresh age=0 candidate=true posture=104 moving=false expression=0.000000000 dose=1.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.000000000->0.000000000 pressure=0.000000000->0.000000000 energy=0.792500019->0.792498887 atp=0.750000000->0.750000000 event_energy=0.000000000 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST fresh age=0 candidate=false posture=104 moving=false expression=0.000000000 dose=0.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.000000000->0.000000000 pressure=0.000000000->0.000000000 energy=0.792500019->0.792498887 atp=0.750000000->0.750000000 event_energy=0.000000000 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST fresh age=0 candidate=false posture=3 moving=false expression=0.000000000 dose=0.000000000 sleep_dose=1.000000000 body_sleep=true sleep_state=1.000000000 fatigue=0.000000000->0.000000000 pressure=0.000000000->0.000000000 energy=0.792500019->0.792498887 atp=0.750000000->0.750000000 event_energy=0.000000000 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST fresh age=0 candidate=false posture=1 moving=false expression=0.000000000 dose=0.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.000000000->0.000000000 pressure=0.000000000->0.000000000 energy=0.792500019->0.792494297 atp=0.750000000->0.750000000 event_energy=-0.010000000 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST fresh age=0 candidate=true posture=104 moving=true expression=0.000000000 dose=0.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.000000000->0.000000000 pressure=0.000000000->0.000000000 energy=0.792500019->0.792480648 atp=0.750000000->0.750000000 event_energy=-0.039999999 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.099999905, y: 0.0, z: 0.0 }
+AWAKE_REST fresh age=0 candidate=false posture=104 moving=true expression=0.000000000 dose=0.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.000000000->0.000000000 pressure=0.000000000->0.000000000 energy=0.792500019->0.792480648 atp=0.750000000->0.750000000 event_energy=-0.039999999 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.099999905, y: 0.0, z: 0.0 }
+AWAKE_REST fresh age=0 candidate=false posture=3 moving=true expression=0.000000000 dose=0.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.000000000->0.000000000 pressure=0.000000000->0.000000000 energy=0.792500019->0.792480648 atp=0.750000000->0.750000000 event_energy=-0.039999999 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.099999905, y: 0.0, z: 0.0 }
+AWAKE_REST authored-fatigue-and-pressure-0.65 age=0 candidate=true posture=104 moving=false expression=0.000000000 dose=1.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.649999976->0.649967492 pressure=0.649999976->0.649967492 energy=0.792500019->0.792498887 atp=0.750000000->0.750000000 event_energy=0.000000000 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST authored-fatigue-and-pressure-0.65 age=0 candidate=false posture=104 moving=false expression=0.000000000 dose=0.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.649999976->0.649967492 pressure=0.649999976->0.649967492 energy=0.792500019->0.792498887 atp=0.750000000->0.750000000 event_energy=0.000000000 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST authored-fatigue-and-pressure-0.65 age=0 candidate=false posture=3 moving=false expression=0.000000000 dose=0.000000000 sleep_dose=1.000000000 body_sleep=true sleep_state=1.000000000 fatigue=0.649999976->0.649967492 pressure=0.649999976->0.649967492 energy=0.792500019->0.792498887 atp=0.750000000->0.750000000 event_energy=0.000000000 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST authored-fatigue-and-pressure-0.65 age=0 candidate=false posture=1 moving=false expression=0.000000000 dose=0.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.649999976->0.649967492 pressure=0.649999976->0.649967492 energy=0.792500019->0.792494297 atp=0.750000000->0.750000000 event_energy=-0.010000000 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST authored-fatigue-and-pressure-0.65 age=0 candidate=true posture=104 moving=true expression=0.000000000 dose=0.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.649999976->0.649967492 pressure=0.649999976->0.649967492 energy=0.792500019->0.792480648 atp=0.750000000->0.750000000 event_energy=-0.039999999 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.035000086, y: 0.0, z: 0.0 }
+AWAKE_REST authored-fatigue-and-pressure-0.65 age=0 candidate=false posture=104 moving=true expression=0.000000000 dose=0.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.649999976->0.649967492 pressure=0.649999976->0.649967492 energy=0.792500019->0.792480648 atp=0.750000000->0.750000000 event_energy=-0.039999999 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.035000086, y: 0.0, z: 0.0 }
+AWAKE_REST authored-fatigue-and-pressure-0.65 age=0 candidate=false posture=3 moving=true expression=0.000000000 dose=0.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.649999976->0.649967492 pressure=0.649999976->0.649967492 energy=0.792500019->0.792480648 atp=0.750000000->0.750000000 event_energy=-0.039999999 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.035000086, y: 0.0, z: 0.0 }
+AWAKE_REST fresh age=60 candidate=true posture=104 moving=false expression=0.299043089 dose=1.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.000023924->0.000000000 pressure=0.000023924->0.000047848 energy=0.792418778->0.792417705 atp=0.748758495->0.747566640 event_energy=0.000000000 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST fresh age=60 candidate=false posture=104 moving=false expression=0.299043089 dose=0.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.000023924->0.000047848 pressure=0.000023924->0.000047848 energy=0.792418778->0.792417705 atp=0.748758495->0.747566640 event_energy=0.000000000 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST fresh age=60 candidate=false posture=3 moving=false expression=0.299043089 dose=0.000000000 sleep_dose=1.000000000 body_sleep=true sleep_state=1.000000000 fatigue=0.000023924->0.000000000 pressure=0.000023924->0.000000000 energy=0.792418778->0.792417705 atp=0.748758495->0.747566640 event_energy=0.000000000 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST fresh age=60 candidate=false posture=1 moving=false expression=0.299043089 dose=0.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.000023924->0.000047848 pressure=0.000023924->0.000047848 energy=0.792418778->0.792413056 atp=0.748758495->0.747566581 event_energy=-0.010000000 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST fresh age=60 candidate=true posture=104 moving=true expression=0.299043089 dose=0.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.000023924->0.000047848 pressure=0.000023924->0.000047848 energy=0.792418778->0.792399406 atp=0.748758495->0.747566521 event_energy=-0.039999999 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.09999275, y: 0.0, z: 0.0 }
+AWAKE_REST fresh age=60 candidate=false posture=104 moving=true expression=0.299043089 dose=0.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.000023924->0.000047848 pressure=0.000023924->0.000047848 energy=0.792418778->0.792399406 atp=0.748758495->0.747566521 event_energy=-0.039999999 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.09999275, y: 0.0, z: 0.0 }
+AWAKE_REST fresh age=60 candidate=false posture=3 moving=true expression=0.299043089 dose=0.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.000023924->0.000047848 pressure=0.000023924->0.000047848 energy=0.792418778->0.792399406 atp=0.748758495->0.747566521 event_energy=-0.039999999 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.09999275, y: 0.0, z: 0.0 }
+AWAKE_REST authored-fatigue-and-pressure-0.65 age=60 candidate=true posture=104 moving=false expression=0.299043089 dose=1.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.649999976->0.440661252 pressure=0.649999976->0.649991393 energy=0.792418778->0.792417705 atp=0.748758495->0.747566640 event_energy=0.000000000 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST authored-fatigue-and-pressure-0.65 age=60 candidate=false posture=104 moving=false expression=0.299043089 dose=0.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.649999976->0.649991393 pressure=0.649999976->0.649991393 energy=0.792418778->0.792417705 atp=0.748758495->0.747566640 event_energy=0.000000000 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST authored-fatigue-and-pressure-0.65 age=60 candidate=false posture=3 moving=false expression=0.299043089 dose=0.000000000 sleep_dose=1.000000000 body_sleep=true sleep_state=1.000000000 fatigue=0.649999976->0.440640330 pressure=0.649999976->0.425688148 energy=0.792418778->0.792417705 atp=0.748758495->0.747566640 event_energy=0.000000000 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST authored-fatigue-and-pressure-0.65 age=60 candidate=false posture=1 moving=false expression=0.299043089 dose=0.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.649999976->0.649991393 pressure=0.649999976->0.649991393 energy=0.792418778->0.792413056 atp=0.748758495->0.747566581 event_energy=-0.010000000 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST authored-fatigue-and-pressure-0.65 age=60 candidate=true posture=104 moving=true expression=0.299043089 dose=0.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.649999976->0.649991393 pressure=0.649999976->0.649991393 energy=0.792418778->0.792399406 atp=0.748758495->0.747566521 event_energy=-0.039999999 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.034998417, y: 0.0, z: 0.0 }
+AWAKE_REST authored-fatigue-and-pressure-0.65 age=60 candidate=false posture=104 moving=true expression=0.299043089 dose=0.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.649999976->0.649991393 pressure=0.649999976->0.649991393 energy=0.792418778->0.792399406 atp=0.748758495->0.747566521 event_energy=-0.039999999 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.034998417, y: 0.0, z: 0.0 }
+AWAKE_REST authored-fatigue-and-pressure-0.65 age=60 candidate=false posture=3 moving=true expression=0.299043089 dose=0.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.649999976->0.649991393 pressure=0.649999976->0.649991393 energy=0.792418778->0.792399406 atp=0.748758495->0.747566521 event_energy=-0.039999999 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.034998417, y: 0.0, z: 0.0 }
+AWAKE_REST fresh age=240 candidate=true posture=104 moving=false expression=1.000000000 dose=1.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.008661905->0.000000000 pressure=0.008661905->0.008741478 energy=0.792185783->0.792184830 atp=0.659184158->0.658660471 event_energy=0.000000000 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST fresh age=240 candidate=false posture=104 moving=false expression=1.000000000 dose=0.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.008661905->0.008741478 pressure=0.008661905->0.008741478 energy=0.792185783->0.792184830 atp=0.659184158->0.658660471 event_energy=0.000000000 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST fresh age=240 candidate=false posture=3 moving=false expression=1.000000000 dose=0.000000000 sleep_dose=1.000000000 body_sleep=true sleep_state=1.000000000 fatigue=0.008661905->0.000000000 pressure=0.008661905->0.000000000 energy=0.792185783->0.792184830 atp=0.659184158->0.658660471 event_energy=0.000000000 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST fresh age=240 candidate=false posture=1 moving=false expression=1.000000000 dose=0.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.008661905->0.008741478 pressure=0.008661905->0.008741478 energy=0.792185783->0.792180300 atp=0.659184158->0.658660352 event_energy=-0.010000000 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST fresh age=240 candidate=true posture=104 moving=true expression=1.000000000 dose=0.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.008661905->0.008741478 pressure=0.008661905->0.008741478 energy=0.792185783->0.792166471 atp=0.659184158->0.658660114 event_energy=-0.039999999 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.09911561, y: 0.0, z: 0.0 }
+AWAKE_REST fresh age=240 candidate=false posture=104 moving=true expression=1.000000000 dose=0.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.008661905->0.008741478 pressure=0.008661905->0.008741478 energy=0.792185783->0.792166471 atp=0.659184158->0.658660114 event_energy=-0.039999999 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.09911561, y: 0.0, z: 0.0 }
+AWAKE_REST fresh age=240 candidate=false posture=3 moving=true expression=1.000000000 dose=0.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.008661905->0.008741478 pressure=0.008661905->0.008741478 energy=0.792185783->0.792166471 atp=0.659184158->0.658660114 event_energy=-0.039999999 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.09911561, y: 0.0, z: 0.0 }
+AWAKE_REST authored-fatigue-and-pressure-0.65 age=240 candidate=true posture=104 moving=false expression=1.000000000 dose=1.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.649999976->0.000000000 pressure=0.649999976->0.650047481 energy=0.792185783->0.792184830 atp=0.659184158->0.658660471 event_energy=0.000000000 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST authored-fatigue-and-pressure-0.65 age=240 candidate=false posture=104 moving=false expression=1.000000000 dose=0.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.649999976->0.650047481 pressure=0.649999976->0.650047481 energy=0.792185783->0.792184830 atp=0.659184158->0.658660471 event_energy=0.000000000 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST authored-fatigue-and-pressure-0.65 age=240 candidate=false posture=3 moving=false expression=1.000000000 dose=0.000000000 sleep_dose=1.000000000 body_sleep=true sleep_state=1.000000000 fatigue=0.649999976->0.000000000 pressure=0.649999976->0.000000000 energy=0.792185783->0.792184830 atp=0.659184158->0.658660471 event_energy=0.000000000 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST authored-fatigue-and-pressure-0.65 age=240 candidate=false posture=1 moving=false expression=1.000000000 dose=0.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.649999976->0.650047481 pressure=0.649999976->0.650047481 energy=0.792185783->0.792180300 atp=0.659184158->0.658660352 event_energy=-0.010000000 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST authored-fatigue-and-pressure-0.65 age=240 candidate=true posture=104 moving=true expression=1.000000000 dose=0.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.649999976->0.650047481 pressure=0.649999976->0.650047481 energy=0.792185783->0.792166471 atp=0.659184158->0.658660114 event_energy=-0.039999999 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.03499365, y: 0.0, z: 0.0 }
+AWAKE_REST authored-fatigue-and-pressure-0.65 age=240 candidate=false posture=104 moving=true expression=1.000000000 dose=0.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.649999976->0.650047481 pressure=0.649999976->0.650047481 energy=0.792185783->0.792166471 atp=0.659184158->0.658660114 event_energy=-0.039999999 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.03499365, y: 0.0, z: 0.0 }
+AWAKE_REST authored-fatigue-and-pressure-0.65 age=240 candidate=false posture=3 moving=true expression=1.000000000 dose=0.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.649999976->0.650047481 pressure=0.649999976->0.650047481 energy=0.792185783->0.792166471 atp=0.659184158->0.658660114 event_energy=-0.039999999 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.03499365, y: 0.0, z: 0.0 }
+ok
+test headless::awake_rest_research::tests::awake_rest_duration_and_effector_intensity_are_bounded_not_free_repeated_doses ... ok
+test headless::awake_rest_research::tests::awake_rest_failed_attempt_retains_cost_and_actual_body_sleep_remains_available ... AWAKE_REST actual-rest-control age=60 candidate=false posture=3 moving=false expression=0.299043089 dose=0.000000000 sleep_dose=1.000000000 body_sleep=true sleep_state=1.000000000 fatigue=0.649999976->0.440640330 pressure=0.649999976->0.425688148 energy=0.792418778->0.792417705 atp=0.748758495->0.747566640 event_energy=0.000000000 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST wake-from-body-sleep age=61 candidate=true posture=104 moving=false expression=0.299043089 dose=1.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.440640330->0.231312051 pressure=0.425688148->0.425690770 energy=0.792417705->0.792416632 atp=0.747566640->0.746422470 event_energy=0.000000000 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST wake-control age=61 candidate=false posture=104 moving=false expression=0.299043089 dose=0.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.440640330->0.440642208 pressure=0.425688148->0.425690770 energy=0.792417705->0.792416632 atp=0.747566640->0.746422470 event_energy=0.000000000 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST blocked-attempt age=60 candidate=true posture=104 moving=true expression=0.299043089 dose=0.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.649999976->0.649991393 pressure=0.649999976->0.649991393 energy=0.792418778->0.792403936 atp=0.748758495->0.747566521 event_energy=-0.029999999 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST blocked-control age=60 candidate=false posture=104 moving=true expression=0.299043089 dose=0.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.649999976->0.649991393 pressure=0.649999976->0.649991393 energy=0.792418778->0.792403936 atp=0.748758495->0.747566521 event_energy=-0.029999999 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+ok
+test headless::awake_rest_research::tests::awake_rest_inheritance_retains_structural_alleles_and_seeded_mutated_gametes ... AWAKE_REST_INHERITANCE seed=901 authored_rate=None mutations=15 threshold=0.000000000 gain=-0.699999988 floor=0.000000000 exact_event_admission=true newborn_advance=true roundtrip=true
+AWAKE_REST_INHERITANCE seed=902 authored_rate=Some(0.0) mutations=0 threshold=0.000000000 gain=-0.699999988 floor=0.000000000 exact_event_admission=true newborn_advance=true roundtrip=true
+AWAKE_REST_INHERITANCE seed=903 authored_rate=Some(1.0) mutations=666 threshold=0.073153220 gain=-0.688934445 floor=0.058194399 exact_event_admission=false newborn_advance=true roundtrip=true
+ok
+test headless::awake_rest_research::tests::awake_rest_inherited_emitter_alone_preserves_passive_and_ordinary_outcomes ... AWAKE_REST ordinary-genotype age=0 candidate=false posture=104 moving=false expression=0.000000000 dose=0.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.000000000->0.000000000 pressure=0.000000000->0.000000000 energy=0.792500019->0.792498887 atp=0.750000000->0.750000000 event_energy=0.000000000 work=82 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST candidate-emitter-inactive age=0 candidate=false posture=104 moving=false expression=0.000000000 dose=0.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.000000000->0.000000000 pressure=0.000000000->0.000000000 energy=0.792500019->0.792498887 atp=0.750000000->0.750000000 event_energy=0.000000000 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST ordinary-genotype age=0 candidate=false posture=3 moving=false expression=0.000000000 dose=0.000000000 sleep_dose=1.000000000 body_sleep=true sleep_state=1.000000000 fatigue=0.000000000->0.000000000 pressure=0.000000000->0.000000000 energy=0.792500019->0.792498887 atp=0.750000000->0.750000000 event_energy=0.000000000 work=82 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST candidate-emitter-inactive age=0 candidate=false posture=3 moving=false expression=0.000000000 dose=0.000000000 sleep_dose=1.000000000 body_sleep=true sleep_state=1.000000000 fatigue=0.000000000->0.000000000 pressure=0.000000000->0.000000000 energy=0.792500019->0.792498887 atp=0.750000000->0.750000000 event_energy=0.000000000 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST ordinary-genotype age=0 candidate=false posture=1 moving=false expression=0.000000000 dose=0.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.000000000->0.000000000 pressure=0.000000000->0.000000000 energy=0.792500019->0.792494297 atp=0.750000000->0.750000000 event_energy=-0.010000000 work=82 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST candidate-emitter-inactive age=0 candidate=false posture=1 moving=false expression=0.000000000 dose=0.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.000000000->0.000000000 pressure=0.000000000->0.000000000 energy=0.792500019->0.792494297 atp=0.750000000->0.750000000 event_energy=-0.010000000 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST ordinary-genotype age=60 candidate=false posture=104 moving=false expression=0.299043089 dose=0.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.000023924->0.000047848 pressure=0.000023924->0.000047848 energy=0.792418778->0.792417705 atp=0.748758495->0.747566640 event_energy=0.000000000 work=82 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST candidate-emitter-inactive age=60 candidate=false posture=104 moving=false expression=0.299043089 dose=0.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.000023924->0.000047848 pressure=0.000023924->0.000047848 energy=0.792418778->0.792417705 atp=0.748758495->0.747566640 event_energy=0.000000000 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST ordinary-genotype age=60 candidate=false posture=3 moving=false expression=0.299043089 dose=0.000000000 sleep_dose=1.000000000 body_sleep=true sleep_state=1.000000000 fatigue=0.000023924->0.000000000 pressure=0.000023924->0.000000000 energy=0.792418778->0.792417705 atp=0.748758495->0.747566640 event_energy=0.000000000 work=82 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST candidate-emitter-inactive age=60 candidate=false posture=3 moving=false expression=0.299043089 dose=0.000000000 sleep_dose=1.000000000 body_sleep=true sleep_state=1.000000000 fatigue=0.000023924->0.000000000 pressure=0.000023924->0.000000000 energy=0.792418778->0.792417705 atp=0.748758495->0.747566640 event_energy=0.000000000 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST ordinary-genotype age=60 candidate=false posture=1 moving=false expression=0.299043089 dose=0.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.000023924->0.000047848 pressure=0.000023924->0.000047848 energy=0.792418778->0.792413056 atp=0.748758495->0.747566581 event_energy=-0.010000000 work=82 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST candidate-emitter-inactive age=60 candidate=false posture=1 moving=false expression=0.299043089 dose=0.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.000023924->0.000047848 pressure=0.000023924->0.000047848 energy=0.792418778->0.792413056 atp=0.748758495->0.747566581 event_energy=-0.010000000 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST ordinary-genotype age=240 candidate=false posture=104 moving=false expression=1.000000000 dose=0.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.008661905->0.008741478 pressure=0.008661905->0.008741478 energy=0.792185783->0.792184830 atp=0.659184158->0.658660471 event_energy=0.000000000 work=82 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST candidate-emitter-inactive age=240 candidate=false posture=104 moving=false expression=1.000000000 dose=0.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.008661905->0.008741478 pressure=0.008661905->0.008741478 energy=0.792185783->0.792184830 atp=0.659184158->0.658660471 event_energy=0.000000000 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST ordinary-genotype age=240 candidate=false posture=3 moving=false expression=1.000000000 dose=0.000000000 sleep_dose=1.000000000 body_sleep=true sleep_state=1.000000000 fatigue=0.008661905->0.000000000 pressure=0.008661905->0.000000000 energy=0.792185783->0.792184830 atp=0.659184158->0.658660471 event_energy=0.000000000 work=82 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST candidate-emitter-inactive age=240 candidate=false posture=3 moving=false expression=1.000000000 dose=0.000000000 sleep_dose=1.000000000 body_sleep=true sleep_state=1.000000000 fatigue=0.008661905->0.000000000 pressure=0.008661905->0.000000000 energy=0.792185783->0.792184830 atp=0.659184158->0.658660471 event_energy=0.000000000 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST ordinary-genotype age=240 candidate=false posture=1 moving=false expression=1.000000000 dose=0.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.008661905->0.008741478 pressure=0.008661905->0.008741478 energy=0.792185783->0.792180300 atp=0.659184158->0.658660352 event_energy=-0.010000000 work=82 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST candidate-emitter-inactive age=240 candidate=false posture=1 moving=false expression=1.000000000 dose=0.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.008661905->0.008741478 pressure=0.008661905->0.008741478 energy=0.792185783->0.792180300 atp=0.659184158->0.658660352 event_energy=-0.010000000 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+ok
+test headless::awake_rest_research::tests::awake_rest_portable_roundtrip_keeps_recipe_state_and_exact_continuation ... AWAKE_REST before-save age=60 candidate=true posture=104 moving=false expression=0.299043089 dose=1.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.000023924->0.000000000 pressure=0.000023924->0.000047848 energy=0.792418778->0.792417705 atp=0.748758495->0.747566640 event_energy=0.000000000 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST after-restore age=60 candidate=true posture=104 moving=false expression=0.299043089 dose=1.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.000023924->0.000000000 pressure=0.000023924->0.000047848 energy=0.792418778->0.792417705 atp=0.748758495->0.747566640 event_energy=0.000000000 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST before-save age=60 candidate=false posture=3 moving=false expression=0.299043089 dose=0.000000000 sleep_dose=1.000000000 body_sleep=true sleep_state=1.000000000 fatigue=0.000023924->0.000000000 pressure=0.000023924->0.000000000 energy=0.792418778->0.792417705 atp=0.748758495->0.747566640 event_energy=0.000000000 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST after-restore age=60 candidate=false posture=3 moving=false expression=0.299043089 dose=0.000000000 sleep_dose=1.000000000 body_sleep=true sleep_state=1.000000000 fatigue=0.000023924->0.000000000 pressure=0.000023924->0.000000000 energy=0.792418778->0.792417705 atp=0.748758495->0.747566640 event_energy=0.000000000 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST before-save age=60 candidate=false posture=1 moving=false expression=0.299043089 dose=0.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.000023924->0.000047848 pressure=0.000023924->0.000047848 energy=0.792418778->0.792413056 atp=0.748758495->0.747566581 event_energy=-0.010000000 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST after-restore age=60 candidate=false posture=1 moving=false expression=0.299043089 dose=0.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.000023924->0.000047848 pressure=0.000023924->0.000047848 energy=0.792418778->0.792413056 atp=0.748758495->0.747566581 event_energy=-0.010000000 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST before-save age=60 candidate=true posture=104 moving=false expression=0.299043089 dose=1.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.649999976->0.440661252 pressure=0.649999976->0.649991393 energy=0.792418778->0.792417705 atp=0.748758495->0.747566640 event_energy=0.000000000 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST after-restore age=60 candidate=true posture=104 moving=false expression=0.299043089 dose=1.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.649999976->0.440661252 pressure=0.649999976->0.649991393 energy=0.792418778->0.792417705 atp=0.748758495->0.747566640 event_energy=0.000000000 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST before-save age=60 candidate=false posture=3 moving=false expression=0.299043089 dose=0.000000000 sleep_dose=1.000000000 body_sleep=true sleep_state=1.000000000 fatigue=0.649999976->0.440640330 pressure=0.649999976->0.425688148 energy=0.792418778->0.792417705 atp=0.748758495->0.747566640 event_energy=0.000000000 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST after-restore age=60 candidate=false posture=3 moving=false expression=0.299043089 dose=0.000000000 sleep_dose=1.000000000 body_sleep=true sleep_state=1.000000000 fatigue=0.649999976->0.440640330 pressure=0.649999976->0.425688148 energy=0.792418778->0.792417705 atp=0.748758495->0.747566640 event_energy=0.000000000 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST before-save age=60 candidate=false posture=1 moving=false expression=0.299043089 dose=0.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.649999976->0.649991393 pressure=0.649999976->0.649991393 energy=0.792418778->0.792413056 atp=0.748758495->0.747566581 event_energy=-0.010000000 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+AWAKE_REST after-restore age=60 candidate=false posture=1 moving=false expression=0.299043089 dose=0.000000000 sleep_dose=0.000000000 body_sleep=false sleep_state=0.000000000 fatigue=0.649999976->0.649991393 pressure=0.649999976->0.649991393 energy=0.792418778->0.792413056 atp=0.748758495->0.747566581 event_energy=-0.010000000 work=83 effectors=1.034999967 displacement=Vec3f { x: 0.0, y: 0.0, z: 0.0 }
+ok
+test headless::biochemical_outcome_tests::failures_report_disappointment_not_injury ... ok
+test headless::body_clearance_tests::authored_radius_and_body_limits_define_closed_swept_sphere ... ok
+test headless::body_clearance_tests::authored_small_obstacle_does_not_overblock_default_body ... ok
+test headless::body_clearance_tests::body_limits_do_not_change_fixed_pose_sensing_or_hand_contact_queries ... ok
+test headless::body_clearance_tests::carrying_still_checks_body_and_unchanged_grip_sweep ... ok
+test headless::body_clearance_tests::compatibility_agent_drop_cannot_create_expanded_overlap_but_items_keep_legacy_rule ... ok
+test headless::body_clearance_tests::compatibility_agent_placement_respects_limits_and_closed_static_boundary ... ok
+test headless::body_clearance_tests::compatibility_escape_is_monotonic_with_explicit_boundary_rules ... ok
+test headless::body_clearance_tests::compatibility_escape_still_checks_every_other_obstacle ... ok
+test headless::body_clearance_tests::compatibility_geometry_arriving_during_hold_does_not_trap_release ... ok
+test headless::body_clearance_tests::compatibility_old_legal_pose_restores_and_escapes_monotonically ... ok
+test headless::body_clearance_tests::compatibility_player_held_old_pose_allows_only_nonworsening_recovery ... ok
+test headless::body_clearance_tests::compatibility_player_rescue_cannot_create_overlap_with_another_obstacle ... ok
+test headless::body_clearance_tests::compatibility_selected_visible_step_never_deepens_any_overlap ... ok
+test headless::body_clearance_tests::compatibility_visible_approach_can_leave_old_overlap ... ok
+test headless::body_clearance_tests::declared_large_body_cannot_pass_through_small_obstacle ... ok
+test headless::body_clearance_tests::expanded_sphere_preserves_three_dimensional_sloping_trajectories ... ok
+test headless::body_clearance_tests::flat_terrain_default_and_no_terrain_agree ... ok
+test headless::body_clearance_tests::grounded_candidate_approach_escapes_trough_toward_player_held_goal ... ok
+test headless::body_clearance_tests::grounded_candidate_projection_does_not_authorize_unsupported_steps ... ok
+test headless::body_clearance_tests::grounded_candidate_slope_projection_preserves_monotonic_escape ... ok
+test headless::body_clearance_tests::overlap_stationary_and_fast_crossings_use_same_radius ... ok
+test headless::body_clearance_tests::portable_roundtrip_keeps_authored_fields_and_corrected_continuation ... ok
+test headless::body_clearance_tests::precision_visible_approach_can_escape_center_and_boundary_outward ... ok
+test headless::body_clearance_tests::precision_visible_approach_escapes_symmetric_overlap_on_exact_perpendicular ... ok
+test headless::carry_pose_tests::carry_pose_does_not_bypass_occlusion_or_released_peripheral_cone ... ok
+test headless::carry_pose_tests::carry_pose_follows_player_lift_release_and_new_terrain_placement ... ok
+test headless::carry_pose_tests::carry_pose_rejects_solid_grip_turn_and_movement_before_mutating ... ok
+test headless::carry_pose_tests::carry_pose_reorients_during_approach_and_flee ... ok
+test headless::carry_pose_tests::carry_pose_reserves_visible_held_contact_among_nearer_contact_clutter ... ok
+test headless::carry_pose_tests::carry_pose_roundtrips_current_persistence_and_release_stays_in_world ... ok
+test headless::carry_pose_tests::carry_pose_tracks_body_turn_walk_and_independent_head_gaze ... ok
+test headless::contact_chemistry_tests::contact_endpoint_cost_against_previous_hazard_scan ... ignored, manual CPU endpoint cost comparison; no biology or neural execution
+test headless::contact_chemistry_tests::current_save_restore_and_rollback_preserve_contact_continuation_without_new_state ... ok
+test headless::contact_chemistry_tests::genetic_newborn_gets_touch_without_inheriting_personal_affinity_or_parent_chemistry ... ok
+test headless::contact_chemistry_tests::grounded_peer_identity_uses_observed_slots_without_static_affinity ... ok
+test headless::contact_chemistry_tests::same_tick_death_preserves_contact_exposure_across_order_and_action_paths ... ok
+test headless::contact_chemistry_tests::separation_solids_and_dead_bodies_stop_contact_and_unpleasant_events_remain_negative ... ok
+test headless::contact_chemistry_tests::touch_is_independent_of_static_affinity_and_bounded_per_canonical_interval ... ok
+test headless::contact_chemistry_tests::zero_affinity_founders_receive_stationary_touch_and_natural_loneliness_relief ... ok
+test headless::eat_possession_tests::another_creatures_held_food_cannot_be_eaten_or_stolen ... ok
+test headless::eat_possession_tests::eat_pickup_never_navigates_or_acquires_nonfood_or_player_held_targets ... ok
+test headless::eat_possession_tests::eat_pickup_rejects_blocked_grip_even_with_clear_body_to_food_contact ... ok
+test headless::eat_possession_tests::food_harm_does_not_change_observed_cues_or_physical_acquisition ... ok
+test headless::eat_possession_tests::possession_of_a_different_target_prepares_an_atomic_swap_not_consumption ... ok
+test headless::eat_possession_tests::reachable_loose_food_eat_acquires_only_then_later_eat_consumes_same_target ... ok
+test headless::eat_possession_tests::released_food_selected_eat_reacquires_without_consuming ... ok
+test headless::eat_possession_tests::self_held_consumption_keeps_nutrition_taste_and_ownership_cleanup ... ok
+test headless::hands::tests::activity_provenance_survives_save_without_vetoing_legacy_swaps ... ok
+test headless::hands::tests::dead_or_missing_effector_actor_cannot_swap_a_deliberate_hold ... ok
+test headless::hands::tests::deliberate_carry_swaps_and_capacity_stays_one_after_restore ... ok
+test headless::hands::tests::explicit_grab_cannot_steal_player_hold ... ok
+test headless::hands::tests::feet_do_not_waive_item_bounds_unrelated_items_or_peers ... ok
+test headless::hands::tests::feet_reject_thin_solid_obstacles_across_the_item_sweep ... ok
+test headless::hands::tests::fixed_activity_toy_is_used_in_place_after_safe_grip_preparation ... ok
+test headless::hands::tests::food_at_feet_uses_existing_carry_abstraction_at_authored_and_default_radii ... ok
+test headless::hands::tests::grip_provenance_binds_world_identity_and_invalid_possession_is_rejected ... ok
+test headless::hands::tests::harmful_food_switch_preserves_preparation_and_portable_continuation ... ok
+test headless::hands::tests::invalid_requested_target_preserves_deliberate_and_activity_holds ... ok
+test headless::hands::tests::item_grounding_is_not_actor_wading_or_slope_policy ... ok
+test headless::hands::tests::item_sweep_vertical_radius_boundaries_are_closed_above_and_below ... ok
+test headless::hands::tests::joint_locomotion_precedes_exact_target_swap_and_biology_advances_once ... ok
+test headless::hands::tests::looking_inspecting_and_approaching_never_acquire_or_release ... ok
+test headless::hands::tests::mobile_play_acquisition_uses_the_same_physical_checks_as_explicit_grab ... ok
+test headless::hands::tests::multiple_held_corruption_blocks_acquisition_but_preserves_same_target_release ... ok
+test headless::hands::tests::no_safe_supported_placement_keeps_old_object_without_new_activity ... ok
+test headless::hands::tests::play_acquires_mobile_ball_before_actual_activation ... ok
+test headless::hands::tests::raised_midpath_solid_rejects_swap_without_losing_the_previous_hold ... ok
+test headless::hands::tests::registered_preparation_receipts_and_rollback_preserve_exact_possession ... ok
+test headless::hands::tests::selected_impossible_grab_reports_failure_instead_of_stopping_the_host ... ok
+test headless::hands::tests::staged_swap_contract_failure_preserves_poses_velocities_and_diagnostics ... ok
+test headless::hands::tests::supported_feet_accept_an_airborne_grip_outside_the_terrain ... ok
+test headless::hands::tests::switching_activity_places_and_acquires_atomically_before_really_eating ... ok
+test headless::local_steering::body_radius_tests::unladen_clearance_uses_authored_radius_and_shared_body_limit ... ok
+test headless::local_steering::tests::absent_visual_gain_or_admission_cannot_authorize_steering ... ok
+test headless::local_steering::tests::alternating_outward_and_inward_detours_cannot_replenish_progress_budget ... ok
+test headless::local_steering::tests::carry_clearance_changes_local_step_without_dropping_the_object ... ok
+test headless::local_steering::tests::clear_visible_oblique_arrival_keeps_the_exact_chosen_endpoint ... ok
+test headless::local_steering::tests::equal_observations_hide_goal_and_distant_opening_changes_until_intermediate_reveals_goal ... ok
+test headless::local_steering::tests::exhausted_same_goal_stays_blocked_across_ticks_reload_and_repeated_commands ... ok
+test headless::local_steering::tests::geometry_beyond_the_local_sensor_horizon_cannot_choose_a_route ... ok
+test headless::local_steering::tests::invalid_controller_state_is_rejected_by_restore ... ok
+test headless::local_steering::tests::losing_real_visibility_after_a_step_stops_assistance_immediately ... ok
+test headless::local_steering::tests::opaque_corner_and_remembered_bearing_do_not_enable_detours ... ok
+test headless::local_steering::tests::transparent_solid_can_preserve_sight_without_becoming_walkable ... ok
+test headless::local_steering::tests::visible_destination_over_low_obstacle_gets_only_bounded_local_steps ... ok
+test headless::local_steering::tests::visible_gap_respects_body_size_and_does_not_squeeze_through ... ok
+test headless::nonvisual_perception_tests::contact_occlusion_keeps_a_large_blocker_outside_the_source_query ... ok
+test headless::nonvisual_perception_tests::indexed_and_canonical_touch_both_respect_solid_terrain ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_accumulates_four_mixed_sign_bands_in_entity_order ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_cell_bounds_cover_boundary_float_neighbors_and_extreme_positions ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_cell_occupancy_falls_back_at_ceil_sixteenth ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_dense_cell_falls_back_with_exact_mixed_band_packet ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_dense_own_cell_never_bypasses_snapshot_validation ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_duplicate_membership_can_only_choose_an_earlier_full_scan ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_far_carried_union_obeys_the_same_raw_budget ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_far_oversized_contact_and_temperature_are_retained ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_far_possession_and_duplicate_membership_are_retained_once ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_huge_radius_and_small_world_choose_bounded_full_scan ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_lateral_odor_reaches_cell_two_on_both_sides ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_nonfinite_edges_preserve_canonical_error_or_float_bits ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_own_cell_is_inside_successful_bounds_at_geometry_edges ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_own_cell_raw_budget_keeps_consumed_members_and_packet_parity ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_rear_occluded_odor_and_touch_keep_hidden_targets_hidden ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_rebuilt_batch_tracks_position_radius_and_owner_mutations ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_reused_index_observes_lifecycle_ingestion_pruning ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_reused_index_reads_current_ingestion_sample_and_removal ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_reused_index_reads_current_observer_pose_and_yaw ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_reused_index_reads_current_observer_sensor_gains ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_reused_index_reads_current_player_care ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_reused_index_reads_current_registry_injury ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_reused_index_reads_selected_source_payload_and_consumption ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_self_and_consumed_fields_preserve_sparse_query ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_small_world_keeps_existing_index_validation ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_small_world_skips_only_unused_metadata_until_seventeen_objects ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_unsupported_nonfinite_transition_requires_rebuild ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_unsupported_same_tick_source_reuse_requires_rebuild ... ok
+test headless::nonvisual_perception_tests::indexed_nonvisual_work_counts_stay_local_when_remote_world_grows ... remote=128 canonical_objects=130 indexed_objects=2 canonical_distances=390 indexed_distances=6
+remote=512 canonical_objects=514 indexed_objects=2 canonical_distances=1542 indexed_distances=6
+remote=2048 canonical_objects=2050 indexed_objects=2 canonical_distances=6150 indexed_distances=6
+ok
+test headless::player_hand::tests::editor_move_cannot_displace_a_player_held_object_or_break_its_save ... ok
+test headless::player_hand::tests::fixed_scenery_missing_and_unavailable_objects_are_not_pickup_targets ... ok
+test headless::player_hand::tests::player_can_pick_move_persist_and_release_creatures_and_movable_objects ... ok
+test headless::player_hand::tests::player_carry_blocks_self_movement_and_releases_on_selected_terrain ... ok
+test headless::player_hand::tests::removing_an_agent_clears_only_its_own_player_hold_before_save ... ok
+test headless::population_validation_tests::cached_population_proof_rejects_an_unrelated_corrupt_peer_before_staged_action_mutation ... ok
+test headless::prediction_residual_pulse_tests::late_tick_failure_preserves_each_creatures_pulse_for_exact_retry ... ok
+test headless::sight_ray_direction_tests::forward_entry_tangency_miss_and_range_boundaries_are_preserved ... ok
+test headless::sight_ray_direction_tests::inside_and_surface_contact_keep_zero_distance_hits ... ok
+test headless::sight_ray_direction_tests::rear_opaque_sphere_does_not_hide_front_food_in_actual_perception ... ok
+test headless::sight_ray_direction_tests::rear_opaque_sphere_does_not_zero_actual_terrain_vision_fan ... ok
+test headless::sight_ray_direction_tests::spheres_fully_behind_the_ray_do_not_hit ... ok
+test headless::task_3_2a_tests::eat_reports_only_physical_contact_that_the_attempt_reached ... ok
+test headless::task_3_2a_tests::exhausted_spawn_sequence_does_not_consume_an_entity_id ... ok
+test headless::task_3_2a_tests::exhausted_world_tick_is_rejected_without_mutation ... ok
+test headless::task_3_2a_tests::inspect_preserves_safe_semantics_and_applies_target_hazard ... ok
+test headless::task_3_2a_tests::malformed_spawn_payload_preserves_objects_and_identity_allocators ... ok
+test headless::task_3_2a_tests::registered_neural_vocalize_failure_rolls_back_speech_and_world_state ... ok
+test headless::task_3_2a_tests::registered_transaction_rolls_back_late_failure_completely ... ok
+test headless::task_3_2a_tests::try_advance_tick_advances_development_age_health_and_death_in_stable_order_and_rolls_back_late_failure ... ok
+test headless::task_3_2a_tests::try_advance_tick_applies_maximum_lifespan_in_stable_order_and_rolls_back ... ok
+test headless::task_3_2a_tests::try_advance_tick_applies_passive_upkeep_in_stable_order_and_rolls_back ... ok
+test headless::task_3_2a_tests::try_advance_tick_updates_all_registered_biology_and_resource_lifecycle_in_stable_order_and_rolls_back_late_failure ... ok
+test headless::task_4_3a2_tests::derived_living_capacity_blocks_ready_conception ... ok
+test headless::task_4_3a2_tests::distant_or_genetically_incompatible_parents_receive_no_conception ... ok
+test headless::task_4_3a2_tests::distinct_cloned_founders_remain_eligible_for_a_real_birth ... ok
+test headless::task_4_3a2_tests::inherited_fertility_and_investment_change_actual_births_and_reserves ... ok
+test headless::task_4_3a2_tests::late_child_spawn_failure_preserves_tick_objects_registry_and_allocators ... ok
+test headless::task_4_3a2_tests::mating_reach::clear_mating_preserves_exact_radius_and_does_not_require_gaze ... ok
+test headless::task_4_3a2_tests::mating_reach::heightfield_slope_and_water_do_not_become_mating_path_requirements ... ok
+test headless::task_4_3a2_tests::mating_reach::local_candidates_follow_queried_parent_and_do_not_survive_world_changes ... ok
+test headless::task_4_3a2_tests::mating_reach::mating_query_cpu_cost ... ignored, bounded CPU component timing, not a gameplay throughput benchmark
+test headless::task_4_3a2_tests::mating_reach::motor_bundles_observe_barriers_and_clear_space_before_conception ... ok
+test headless::task_4_3a2_tests::mating_reach::solid_barriers_defer_birth_without_stalling_or_debiting_parental_investment ... ok
+test headless::task_4_3a2_tests::mating_reach::solid_reach_equivalence::cached_candidates_fall_back_for_later_unsupported_pairs ... ok
+test headless::task_4_3a2_tests::mating_reach::solid_reach_equivalence::early_filter_matches_original_over_deterministic_mixed_geometry ... ok
+test headless::task_4_3a2_tests::mating_reach::solid_reach_equivalence::early_filter_preserves_endpoints_tangency_radius_floor_and_consumption ... ok
+test headless::task_4_3a2_tests::mating_reach::solid_reach_equivalence::early_filter_preserves_terrain_faces_vertical_bounds_and_zero_length ... ok
+test headless::task_4_3a2_tests::mating_reach::solid_reach_equivalence::local_candidates_match_original_over_bounded_nearby_geometry ... ok
+test headless::task_4_3a2_tests::mating_reach::solid_reach_equivalence::local_candidates_preserve_domain_edges_large_spheres_and_cell_faces ... ok
+test headless::task_4_3a2_tests::mating_reach::solid_reach_equivalence::sparse_terrain_cell_faces_use_pruned_index_candidates ... ok
+test headless::task_4_3a2_tests::mating_reach::solids_remove_both_parents_opportunities_independently_of_opacity ... ok
+test headless::task_4_3a2_tests::nearby_parents_around_terrain_corner_have_a_supported_birth_without_stalling ... ok
+test headless::task_4_3a2_tests::nearby_ready_compatible_parents_create_one_deterministic_newborn ... ok
+test headless::task_4_3a2_tests::nearby_ready_parents_born_one_tick_apart_conceive_from_fresh_latched_opportunity ... ok
+test headless::task_4_3a2_tests::terminal_death_frees_living_capacity_before_conception ... ok
+test headless::task_6_factorized_motor_tests::awake_duration_blocked_meal_has_no_invented_acute_response ... ok
+test headless::task_6_factorized_motor_tests::awake_duration_goal_arrival_and_zero_speed_keep_real_remaining_time ... ok
+test headless::task_6_factorized_motor_tests::awake_duration_ordinary_blocked_attempt_has_no_phantom_late_effort ... ok
+test headless::task_6_factorized_motor_tests::awake_endpoint_contraction_revalidates_ground_and_carried_pose ... ok
+test headless::task_6_factorized_motor_tests::awake_endpoint_quantization_must_not_reject_a_bounded_full_interval ... ok
+test headless::task_6_factorized_motor_tests::awake_endpoint_signed_coordinates_speeds_and_quiet_parity ... ok
+test headless::task_6_factorized_motor_tests::awake_ground_priority_quiet_slope_preserves_existing_planar_walking ... ok
+test headless::task_6_factorized_motor_tests::awake_grounded_prefix_finds_real_hazard_without_meal_pain ... ok
+test headless::task_6_factorized_motor_tests::awake_grounded_prefix_preserves_intervention_after_late_meal ... ok
+test headless::task_6_factorized_motor_tests::awake_initial_priority_blocks_rest_recovery_and_rolls_back_atomically ... ok
+test headless::task_6_factorized_motor_tests::awake_initial_priority_preempts_toward_motion_without_false_voluntary_credit ... ok
+test headless::task_6_factorized_motor_tests::awake_initial_priority_preserves_carried_hazard_ownership_and_pose ... ok
+test headless::task_6_factorized_motor_tests::awake_initial_priority_quiet_control_preserves_complete_world_and_receipt ... ok
+test headless::task_6_factorized_motor_tests::awake_initial_priority_restore_has_no_latched_reflex_after_contact_ends ... ok
+test headless::task_6_factorized_motor_tests::awake_initial_priority_water_block_preserves_zero_motion_and_honest_effort ... ok
+test headless::task_6_factorized_motor_tests::awake_late_internal_damage_uses_only_remaining_translation_time ... ok
+test headless::task_6_factorized_motor_tests::awake_spatial_priority_diagonal_motion_uses_three_dimensional_time ... ok
+test headless::task_6_factorized_motor_tests::awake_spatial_priority_vertical_motion_cannot_skip_contact_or_time ... ok
+test headless::task_6_factorized_motor_tests::awake_swept_priority_early_middle_late_share_time_path_and_effort ... ok
+test headless::task_6_factorized_motor_tests::awake_swept_priority_end_contact_has_no_extra_full_reflex_allowance ... ok
+test headless::task_6_factorized_motor_tests::awake_swept_priority_opposed_tangent_normals_stop_without_invented_direction ... ok
+test headless::task_6_factorized_motor_tests::awake_swept_priority_samples_intermediate_thermal_contact_once ... ok
+test headless::task_6_factorized_motor_tests::awake_swept_priority_slow_intent_uses_time_not_distance_remainder ... AWAKE_SHARED_ADAPTER_RATES effector=1.035 proprioception=0.975 voluntary_factor=0.5045625 voluntary_rate=0.050456252 reflex_rate=0.1 actual_reflex_path=0.049999963
+ok
+test headless::task_6_factorized_motor_tests::awake_swept_priority_zero_net_path_suppresses_rest_with_one_biology_advance ... ok
+test headless::task_6_factorized_motor_tests::body_only_candidate_does_not_flee_a_self_carried_source ... ok
+test headless::task_6_factorized_motor_tests::body_only_candidate_late_failure_rolls_back_motion_and_biology ... ok
+test headless::task_6_factorized_motor_tests::body_only_overlap_carried_hazard_still_respects_grip_blockers_and_rollback ... ok
+test headless::task_6_factorized_motor_tests::body_only_overlap_own_carried_hazard_does_not_block_external_withdrawal ... ok
+test headless::task_6_factorized_motor_tests::body_only_overlap_peer_inward_boundary_tangent_and_new_entries_still_block ... ok
+test headless::task_6_factorized_motor_tests::body_only_overlap_peer_outward_escape_keeps_one_biology_interval ... ok
+test headless::task_6_factorized_motor_tests::body_only_overlap_unrelated_hazard_sweep_still_blocks_new_contact ... ok
+test headless::task_6_factorized_motor_tests::body_only_withdrawal_kernel_acute_heading_fallback_is_bounded ... ok
+test headless::task_6_factorized_motor_tests::body_only_withdrawal_kernel_opposed_sources_and_obstacles_block ... ok
+test headless::task_6_factorized_motor_tests::body_only_withdrawal_kernel_preserves_carry_and_ignores_carried_source ... ok
+test headless::task_6_factorized_motor_tests::body_only_withdrawal_kernel_terrain_water_peers_and_capacity_are_physical_limits ... ok
+test headless::task_6_factorized_motor_tests::carry_pose_joint_interval_keeps_translation_and_rotation_through_later_channels ... ok
+test headless::task_6_factorized_motor_tests::common_endpoint_observed_approach_contracts_before_clearance_with_real_motion ... ok
+test headless::task_6_factorized_motor_tests::common_endpoint_translated_meals_preserve_exact_ordinary_receipt ... ok
+test headless::task_6_factorized_motor_tests::common_endpoint_translated_reflex_initial_and_remaining_intervals ... ok
+test headless::task_6_factorized_motor_tests::curved_prefix_diagnostic_separates_ground_legality_from_chord_contact ... CURVED_PREFIX_DIAGNOSTIC chord_x=0.04 grounded_y=0.008000001 projected_source_distance=0.10031949 radius=0.1 legal_later_x=0.041 legal_later_source_distance=0.099339016 ordinary_x=0.1
+ok
+test headless::task_6_factorized_motor_tests::eat_pickup_requires_the_existing_manipulation_effector ... ok
+test headless::task_6_factorized_motor_tests::factorized_bundle_causally_couples_neural_emission_into_organism_chemistry ... ok
+test headless::task_6_factorized_motor_tests::factorized_bundle_executes_as_one_joint_transaction_and_rolls_back ... ok
+test headless::task_6_factorized_motor_tests::factorized_held_food_eat_and_rest_share_one_biology_advance ... ok
+test headless::task_6_factorized_motor_tests::factorized_joint_outcome_retains_independent_contact_and_transfer_identities ... ok
+test headless::task_6_factorized_motor_tests::factorized_posture_inspect_rejects_missing_world_target ... ok
+test headless::task_6_factorized_motor_tests::factorized_posture_preserves_direct_idle_rest_and_inspect_semantics ... ok
+test headless::task_6_factorized_motor_tests::factorized_vocal_missing_payload_never_creates_or_refreshes_legacy_token ... ok
+test headless::task_6_factorized_motor_tests::factorized_vocal_preserves_gpu_payload_for_primary_and_auxiliary_channels ... ok
+test headless::task_6_factorized_motor_tests::grounded_contact_carried_hazard_has_constant_body_relative_separation ... ok
+test headless::task_6_factorized_motor_tests::grounded_contact_closed_tangent_and_near_outside_geometry_are_distinct ... ok
+test headless::task_6_factorized_motor_tests::grounded_contact_convex_concave_diagonal_translated_point_time_bounds ... GROUNDED_POINT_TIME origin=0 concave=false diagonal=false planar=0.040325765 time=0.40325764
+GROUNDED_POINT_TIME origin=0 concave=false diagonal=true planar=0.0871195 time=0.87119496
+GROUNDED_POINT_TIME origin=0 concave=true diagonal=false planar=0.040325765 time=0.40325764
+GROUNDED_POINT_TIME origin=0 concave=true diagonal=true planar=0.0871195 time=0.87119496
+GROUNDED_POINT_TIME origin=-128 concave=false diagonal=false planar=0.04032135 time=0.40325758
+GROUNDED_POINT_TIME origin=-128 concave=false diagonal=true planar=0.087126225 time=0.87125826
+GROUNDED_POINT_TIME origin=-128 concave=true diagonal=false planar=0.04032135 time=0.40325758
+GROUNDED_POINT_TIME origin=-128 concave=true diagonal=true planar=0.087126225 time=0.87125826
+GROUNDED_POINT_TIME origin=128 concave=false diagonal=false planar=0.04032898 time=0.40328833
+GROUNDED_POINT_TIME origin=128 concave=false diagonal=true planar=0.08711361 time=0.8711469
+GROUNDED_POINT_TIME origin=128 concave=true diagonal=false planar=0.04032898 time=0.40328833
+GROUNDED_POINT_TIME origin=128 concave=true diagonal=true planar=0.08711361 time=0.8711469
+GROUNDED_POINT_TIME origin=-1000 concave=false diagonal=false planar=0.04034424 time=0.40350503
+GROUNDED_REPRESENTED_CONTACT geometric=0.8741934403585353 accepted=0.8747841105354058 planar=0.08746398 time=0.8747841
+GROUNDED_POINT_TIME origin=-1000 concave=false diagonal=true planar=0.08746398 time=0.8747841
+GROUNDED_POINT_TIME origin=-1000 concave=true diagonal=false planar=0.04034424 time=0.40350503
+GROUNDED_REPRESENTED_CONTACT geometric=0.8741934403585353 accepted=0.8747841105354058 planar=0.08746398 time=0.8747841
+GROUNDED_POINT_TIME origin=-1000 concave=true diagonal=true planar=0.08746398 time=0.8747841
+GROUNDED_POINT_TIME origin=1000 concave=false diagonal=false planar=0.04034424 time=0.40350503
+GROUNDED_REPRESENTED_CONTACT geometric=0.8741934403585353 accepted=0.8747841105354058 planar=0.08746398 time=0.8747841
+GROUNDED_POINT_TIME origin=1000 concave=false diagonal=true planar=0.08746398 time=0.8747841
+GROUNDED_POINT_TIME origin=1000 concave=true diagonal=false planar=0.04034424 time=0.40350503
+GROUNDED_REPRESENTED_CONTACT geometric=0.8741934403585353 accepted=0.8747841105354058 planar=0.08746398 time=0.8747841
+GROUNDED_POINT_TIME origin=1000 concave=true diagonal=true planar=0.08746398 time=0.8747841
+ok
+test headless::task_6_factorized_motor_tests::grounded_contact_flat_route_is_exact_legacy_and_competing_sources_remain_real ... ok
+test headless::task_6_factorized_motor_tests::grounded_contact_full_represented_endpoint_has_exact_full_time ... GROUNDED_REPRESENTED_CONTACT geometric=0.9999999999999998 accepted=1 planar=0.099975586 time=1
+GROUNDED_REPRESENTED_CONTACT geometric=0.9999999999999998 accepted=1 planar=0.099975586 time=1
+ok
+test headless::task_6_factorized_motor_tests::grounded_contact_near_miss_is_not_a_secondary_source ... ok
+test headless::task_6_factorized_motor_tests::grounded_contact_old_off_surface_pose_keeps_legacy_transition_after_restore ... ok
+test headless::task_6_factorized_motor_tests::grounded_contact_outside_true_route_must_not_create_chord_injury ... ok
+test headless::task_6_factorized_motor_tests::grounded_contact_thin_triangle_peak_is_not_undersampled ... ok
+test headless::task_6_factorized_motor_tests::harmful_food_motor_acquisition_preserves_biology_and_portable_save_continuation ... ok
+test headless::task_6_factorized_motor_tests::n019_rejects_remote_or_unowned_grab_and_remote_inspect_contact ... ok
+test headless::task_6_factorized_motor_tests::n022_commits_interval_motion_for_stationary_blocked_and_factorized_actions ... ok
+test headless::task_6_factorized_motor_tests::registered_eat_pickup_and_later_meal_keep_selected_channel_and_measured_biology ... ok
+test headless::task_6_factorized_motor_tests::rest_motion_actual_movement_cannot_count_as_sleep ... ok
+test headless::task_6_factorized_motor_tests::rest_motion_failure_rolls_back_state_and_receipts ... ok
+test headless::task_6_factorized_motor_tests::rest_motion_normalization_preserves_doses_and_detects_cancelled_paths ... ok
+test headless::task_6_factorized_motor_tests::rest_motion_stationary_and_blocked_rest_keep_recovery ... ok
+test headless::task_6_factorized_motor_tests::world_tick_composes_sleep_recovery_into_the_single_biology_advance ... ok
+test headless::terrain_vision_tests::biological_capacity_limits_translation_without_changing_intent ... ok
+test headless::terrain_vision_tests::blind_exploration_primitives_survive_motor_translation_and_collision ... ok
+test headless::terrain_vision_tests::coincident_xz_sight_is_gaze_independent_for_general_objects ... ok
+test headless::terrain_vision_tests::coincident_xz_sight_preserves_occlusion_range_and_consumed_filters ... ok
+test headless::terrain_vision_tests::gaze_opaque_barriers_and_transparency_change_actual_sight ... ok
+test headless::terrain_vision_tests::noncoincident_rear_contact_still_obeys_the_sight_cone ... ok
+test headless::terrain_vision_tests::scent_and_touch_survive_occlusion_without_creating_hidden_targets ... ok
+test headless::terrain_vision_tests::solid_reach_blocks_grab_and_eat_even_when_transparent ... ok
+test headless::terrain_vision_tests::terrain_obstacle_hides_food_and_shortens_depth_rays ... ok
+test headless::thermal_contact_candidate::tests::hot_cold_are_symmetric_tolerance_scaled_and_conductance_insulates ... ok
+test headless::thermal_contact_candidate::tests::inherited_tolerance_variants_and_mature_chemical_projection ... ok
+test headless::thermal_contact_candidate::tests::invalid_parameters_and_late_failures_roll_back_complete_world ... ok
+test headless::thermal_contact_candidate::tests::locomotion_departure_gets_one_endpoint_dose_then_neutral_recovery ... ok
+test headless::thermal_contact_candidate::tests::neural_bundle_and_stationary_late_failure_share_atomic_boundary ... ok
+test headless::thermal_contact_candidate::tests::neutral_boundaries_and_default_are_byte_identical ... ok
+test headless::thermal_contact_candidate::tests::no_contact_and_intervening_solid_block_exposure ... ok
+test headless::thermal_contact_candidate::tests::overlapping_hot_and_cold_use_max_not_sum_or_cancellation ... ok
+test headless::thermal_contact_candidate::tests::physical_withdrawal_uses_both_thermal_endpoints_and_truthful_once_only_receipt ... ok
+test headless::thermal_contact_candidate::tests::relocation_recovers_without_sleep_atp_or_fatigue_benefit_and_save_continues ... ok
+test headless::thermal_contact_candidate::tests::selected_physical_response_does_not_gate_configured_thermal_dose ... ok
+test headless::thermal_contact_candidate::tests::stationary_single_and_joint_actions_receive_one_interval_not_command_duration ... ok
+test headless::thermal_contact_candidate::tests::v2_continued_hot_cold_rest_preserves_exposure_and_other_sleep_benefits ... V2 temperature=-1 prior=0.027225005 hot_rest=0.029700005 clear_rest=0 ATP_hot=0.8047939 ATP_clear=0.8047939
+V2 temperature=1 prior=0.027225005 hot_rest=0.029700005 clear_rest=0 ATP_hot=0.8047939 ATP_clear=0.8047939
+ok
+test headless::thermal_contact_candidate::tests::v2_zero_external_dose_does_not_suppress_legacy_or_v1_sleep_cooling ... ok
+test headless::thermal_contact_candidate::tests::zero_exchange_preserves_signed_zero_and_wrapper_count_is_not_time ... ok
+test headless::translation_budget::blocked_attempt_still_uses_its_allocated_time ... ok
+test headless::translation_budget::early_contact_allocates_only_remaining_time_at_reflex_speed ... ok
+test headless::translation_budget::initial_reflex_priority_consumes_interval_before_voluntary_translation ... ok
+test headless::translation_budget::malformed_and_over_budget_segments_are_atomic_rejections ... ok
+test headless::translation_budget::opposite_segments_count_path_not_zero_net_displacement ... ok
+test headless::translation_budget::slow_full_interval_cannot_be_followed_by_another_full_reflex ... ok
+test island::tests::island_new_game_and_restore_keep_the_selected_geometry ... ok
+test island::tests::island_overview_ray_uses_the_requested_range ... ok
+test new_game::recovery_timescale_tests::recovery_timescale_equal_scripted_cycles_allow_natural_rebuildup_within_life ... RECOVERY_ACTION scripted=AwakeRest age=400 F=0.021343285->0.000000000 P=0.021343285->0.021422232 awake_dose=1 sleep_dose=0 sleeping=false energy=0.791990340->0.791989386 atp=0.646028936->0.646027565
+RECOVERY_ACTION scripted=AwakeRest age=700 F=0.023744786->0.000000000 P=0.044847839->0.044925593 awake_dose=1 sleep_dose=0 sleeping=false energy=0.791623831->0.791622877 atp=0.645826519->0.645825922
+RECOVERY_ACTION scripted=BodySleep age=1200 F=0.039429806->0.000000000 P=0.083245292->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.791011870->0.791010916 atp=0.645520985->0.645520389
+RECOVERY_CYCLE calibrated=false cycle=1 age=1200 F=0.039429806 P=0.08324529
+RECOVERY_ACTION scripted=AwakeRest age=1450 F=0.019798765->0.000000000 P=0.019798765->0.019877786 awake_dose=1 sleep_dose=0 sleeping=false energy=0.790707648->0.790706635 atp=0.645368278->0.645367682
+RECOVERY_ACTION scripted=AwakeRest age=1750 F=0.023744786->0.000000000 P=0.043326415->0.043404259 awake_dose=1 sleep_dose=0 sleeping=false energy=0.790341079->0.790340126 atp=0.645184875->0.645184278
+RECOVERY_ACTION scripted=BodySleep age=2200 F=0.035523422->0.000000000 P=0.077961087->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.789790928->0.789789975 atp=0.644910097->0.644909501
+RECOVERY_CYCLE calibrated=false cycle=2 age=2200 F=0.035523422 P=0.07796109
+RECOVERY_ACTION scripted=AwakeRest age=2450 F=0.019798765->0.000000000 P=0.019798765->0.019877786 awake_dose=1 sleep_dose=0 sleeping=false energy=0.789484978->0.789484024 atp=0.644757271->0.644756675
+RECOVERY_ACTION scripted=AwakeRest age=2750 F=0.023744786->0.000000000 P=0.043326415->0.043404259 awake_dose=1 sleep_dose=0 sleeping=false energy=0.789118469->0.789117515 atp=0.644573987->0.644573390
+RECOVERY_ACTION scripted=BodySleep age=3200 F=0.035523422->0.000000000 P=0.077961087->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.788568914->0.788567841 atp=0.644299150->0.644298553
+RECOVERY_CYCLE calibrated=false cycle=3 age=3200 F=0.035523422 P=0.07796109
+RECOVERY_ACTION scripted=AwakeRest age=3450 F=0.019798765->0.000000000 P=0.019798765->0.019877786 awake_dose=1 sleep_dose=0 sleeping=false energy=0.788262904->0.788261890 atp=0.644146383->0.644145727
+RECOVERY_ACTION scripted=AwakeRest age=3750 F=0.023744786->0.000000000 P=0.043326415->0.043404259 awake_dose=1 sleep_dose=0 sleeping=false energy=0.787896335->0.787895262 atp=0.643963099->0.643962443
+RECOVERY_ACTION scripted=BodySleep age=4200 F=0.035523422->0.000000000 P=0.077961087->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.787346184->0.787345231 atp=0.643688142->0.643687546
+RECOVERY_CYCLE calibrated=false cycle=4 age=4200 F=0.035523422 P=0.07796109
+RECOVERY_ACTION scripted=AwakeRest age=400 F=0.322803617->0.000000000 P=0.162735566->0.163337424 awake_dose=1 sleep_dose=0 sleeping=false energy=0.791990340->0.791989386 atp=0.646028936->0.646027565
+RECOVERY_ACTION scripted=AwakeRest age=700 F=0.359107226->0.000000000 P=0.341952443->0.342545360 awake_dose=1 sleep_dose=0 sleeping=false energy=0.791623831->0.791622877 atp=0.645826519->0.645825922
+RECOVERY_ACTION scripted=BodySleep age=1200 F=0.596334040->0.000000000 P=0.634735227->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.791011870->0.791010916 atp=0.645520985->0.645520389
+RECOVERY_CYCLE calibrated=true cycle=1 age=1200 F=0.59633404 P=0.6347352
+RECOVERY_ACTION scripted=AwakeRest age=1450 F=0.299429566->0.000000000 P=0.150951907->0.151554361 awake_dose=1 sleep_dose=0 sleeping=false energy=0.790707648->0.790706635 atp=0.645368278->0.645367682
+RECOVERY_ACTION scripted=AwakeRest age=1750 F=0.359107226->0.000000000 P=0.330343634->0.330937117 awake_dose=1 sleep_dose=0 sleeping=false energy=0.790341079->0.790340126 atp=0.645184875->0.645184278
+RECOVERY_ACTION scripted=BodySleep age=2200 F=0.537248015->0.000000000 P=0.594435215->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.789790928->0.789789975 atp=0.644910097->0.644909501
+RECOVERY_CYCLE calibrated=true cycle=2 age=2200 F=0.537248 P=0.5944352
+RECOVERY_ACTION scripted=AwakeRest age=2450 F=0.299429566->0.000000000 P=0.150951907->0.151554361 awake_dose=1 sleep_dose=0 sleeping=false energy=0.789484978->0.789484024 atp=0.644757271->0.644756675
+RECOVERY_ACTION scripted=AwakeRest age=2750 F=0.359107226->0.000000000 P=0.330343634->0.330937117 awake_dose=1 sleep_dose=0 sleeping=false energy=0.789118469->0.789117515 atp=0.644573987->0.644573390
+RECOVERY_ACTION scripted=BodySleep age=3200 F=0.537248015->0.000000000 P=0.594435215->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.788568914->0.788567841 atp=0.644299150->0.644298553
+RECOVERY_CYCLE calibrated=true cycle=3 age=3200 F=0.537248 P=0.5944352
+RECOVERY_ACTION scripted=AwakeRest age=3450 F=0.299429566->0.000000000 P=0.150951907->0.151554361 awake_dose=1 sleep_dose=0 sleeping=false energy=0.788262904->0.788261890 atp=0.644146383->0.644145727
+RECOVERY_ACTION scripted=AwakeRest age=3750 F=0.359107226->0.000000000 P=0.330343634->0.330937117 awake_dose=1 sleep_dose=0 sleeping=false energy=0.787896335->0.787895262 atp=0.643963099->0.643962443
+RECOVERY_ACTION scripted=BodySleep age=4200 F=0.537248015->0.000000000 P=0.594435215->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.787346184->0.787345231 atp=0.643688142->0.643687546
+RECOVERY_CYCLE calibrated=true cycle=4 age=4200 F=0.537248 P=0.5944352
+ok
+test new_game::recovery_timescale_tests::recovery_timescale_fresh_only_changes_two_inherited_rates_and_no_clock_or_value ... RECOVERY_PARAMETERS id=2 baseline=0.2 retention=0.99995 awake_gain=0.0012 receptor=BiochemicalReceptor { source: ChemicalSpeciesId(2), target: Drive(Fatigue), threshold: 0.0, gain: 1.0, nominal: 0.0, digital: false }
+RECOVERY_PARAMETERS id=18 baseline=0.2 retention=0.99995 awake_gain=0.0006 receptor=BiochemicalReceptor { source: ChemicalSpeciesId(18), target: Endocrine(SleepPressure), threshold: 0.0, gain: 1.0, nominal: 0.0, digital: false }
+RECOVERY_IDENTITIES seed=0x3434d3146580001 baseline_genotype=PortableAssetDigest("fnv1a64:f8f65d51b883ae66") candidate_genotype=PortableAssetDigest("fnv1a64:aeb71b1e921a83c0") baseline_graph=PortableAssetDigest("fnv1a64:f16e12476c4d4486") candidate_graph=PortableAssetDigest("fnv1a64:90b0f4753405d61f") foundation=PortableAssetDigest("fnv1a64:5c7e5a692de727f0") clock=BiochemistryCadence { fast_hormone_ticks: 1, metabolism_ticks: 6, development_ticks: 60, reproduction_ticks: 120, max_catch_up_steps: 64 } lifespan=4514 turnover=0.0025000002 value=BiologicalValueProfile { drives: [-0.14285715, -0.14285715, -0.14285715, -0.14285715, -0.14285715, 0.0, 0.14285715, -0.14285715, 0.0, -0.08, 0.0], hormones: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.3, 0.0], energy: 0.14285715, injury: 1.0, disappointment: 0.03 }
+RECOVERY_ASSET canonical_nano512_bytes=PortableAssetDigest("fnv1a64:0881853210d461a6")
+ok
+test new_game::recovery_timescale_tests::recovery_timescale_inheritance_keeps_genes_and_valid_mutants_without_runtime_gate ... RECOVERY_INHERITANCE seed=901 authored_mutation_rate=None mutations=11 F_gain=0.0012 P_gain=0.00061473413 valid_ordinary_advance=true
+RECOVERY_INHERITANCE seed=902 authored_mutation_rate=Some(0.0) mutations=0 F_gain=0.0012 P_gain=0.00058561907 valid_ordinary_advance=true
+RECOVERY_INHERITANCE seed=903 authored_mutation_rate=Some(1.0) mutations=666 F_gain=0.007691562 P_gain=-0.029278344 valid_ordinary_advance=true
+ok
+test new_game::recovery_timescale_tests::recovery_timescale_natural_buildup_respects_development_and_unchanged_age_death ... RECOVERY_BOUNDARY calibrated=false age=59 expression=0 F=0 P=0 energy=0.79242176 alive=true
+RECOVERY_BOUNDARY calibrated=false age=60 expression=0.2990431 F=0.000023924425 P=0.000023924425 energy=0.7924188 alive=true
+RECOVERY_BOUNDARY calibrated=false age=179 expression=0.5980862 F=0.0042955666 P=0.0042955666 energy=0.79226404 alive=true
+RECOVERY_BOUNDARY calibrated=false age=180 expression=0.89712924 F=0.0043671336 P=0.0043671336 energy=0.7922613 alive=true
+RECOVERY_BOUNDARY calibrated=false age=239 expression=0.89712924 F=0.008582344 P=0.008582344 energy=0.7921886 alive=true
+RECOVERY_BOUNDARY calibrated=false age=240 expression=1 F=0.008661905 P=0.008661905 energy=0.7921858 alive=true
+RECOVERY_BOUNDARY calibrated=false age=4513 expression=1 F=0.31481013 P=0.31481013 energy=0.786964 alive=true
+RECOVERY_BOUNDARY calibrated=false age=4514 expression=1 F=0.31487438 P=0.31487438 energy=0.786963 alive=false
+RECOVERY_NATURAL calibrated=false F_reference_first=None P_reference_first=None full_expression=Some(240) at240=(0.008661905, 0.008661905) age_death=4514 final=(0.31487438, 0.31487438)
+RECOVERY_BOUNDARY calibrated=true age=59 expression=0 F=0 P=0 energy=0.79242176 alive=true
+RECOVERY_BOUNDARY calibrated=true age=60 expression=0.2990431 F=0.00036184312 P=0.00018241727 energy=0.7924188 alive=true
+RECOVERY_BOUNDARY calibrated=true age=179 expression=0.5980862 F=0.064970754 P=0.032753732 energy=0.79226404 alive=true
+RECOVERY_BOUNDARY calibrated=true age=180 expression=0.89712924 F=0.06605303 P=0.033299346 energy=0.7922613 alive=true
+RECOVERY_BOUNDARY calibrated=true age=239 expression=0.89712924 F=0.12981182 P=0.06544211 energy=0.7921886 alive=true
+RECOVERY_BOUNDARY calibrated=true age=240 expression=1 F=0.13101535 P=0.06604884 energy=0.7921858 alive=true
+RECOVERY_BOUNDARY calibrated=true age=4513 expression=1 F=1 P=1 energy=0.786964 alive=true
+RECOVERY_BOUNDARY calibrated=true age=4514 expression=1 F=1 P=1 energy=0.786963 alive=false
+RECOVERY_NATURAL calibrated=true F_reference_first=Some(423) P_reference_first=Some(1141) full_expression=Some(240) at240=(0.13101535, 0.06604884) age_death=4514 final=(1.0, 1.0)
+ok
+test new_game::recovery_timescale_tests::recovery_timescale_natural_need_real_awake_rest_and_sleep_have_distinct_effects ... RECOVERY_ACTION scripted=AwakeRest age=1200 F=0.083245292->0.000000000 P=0.083245292->0.083321132 awake_dose=1 sleep_dose=0 sleeping=false energy=0.791011870->0.791010916 atp=0.645520985->0.645520389
+RECOVERY_ACTION scripted=Neutral age=1200 F=0.083245292->0.083321132 P=0.083245292->0.083321132 awake_dose=0 sleep_dose=0 sleeping=false energy=0.791011870->0.791010916 atp=0.645520985->0.645520389
+RECOVERY_ACTION scripted=BodySleep age=1200 F=0.083245292->0.000000000 P=0.083245292->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.791011870->0.791010916 atp=0.645520985->0.645520389
+RECOVERY_ACTION scripted=AwakeRest age=1200 F=1.000000000->0.300000012 P=0.634735227->0.635313511 awake_dose=1 sleep_dose=0 sleeping=false energy=0.791011870->0.791010916 atp=0.645520985->0.645520389
+RECOVERY_ACTION scripted=Neutral age=1200 F=1.000000000->1.000000000 P=0.634735227->0.635313511 awake_dose=0 sleep_dose=0 sleeping=false energy=0.791011870->0.791010916 atp=0.645520985->0.645520389
+RECOVERY_ACTION scripted=BodySleep age=1200 F=1.000000000->0.299960017 P=0.634735227->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.791011870->0.791010916 atp=0.645520985->0.645520389
+ok
+test new_game::recovery_timescale_tests::recovery_timescale_save_restore_preserves_accumulation_and_exact_continuation ... RECOVERY_ACTION scripted=Neutral age=240 F=0.008661905->0.008741478 P=0.008661905->0.008741478 awake_dose=0 sleep_dose=0 sleeping=false energy=0.792185783->0.792184830 atp=0.659184158->0.658660471
+RECOVERY_ACTION scripted=Neutral age=240 F=0.008661905->0.008741478 P=0.008661905->0.008741478 awake_dose=0 sleep_dose=0 sleeping=false energy=0.792185783->0.792184830 atp=0.659184158->0.658660471
+RECOVERY_ACTION scripted=AwakeRest age=240 F=0.008661905->0.000000000 P=0.008661905->0.008741478 awake_dose=1 sleep_dose=0 sleeping=false energy=0.792185783->0.792184830 atp=0.659184158->0.658660471
+RECOVERY_ACTION scripted=AwakeRest age=240 F=0.008661905->0.000000000 P=0.008661905->0.008741478 awake_dose=1 sleep_dose=0 sleeping=false energy=0.792185783->0.792184830 atp=0.659184158->0.658660471
+RECOVERY_ACTION scripted=BodySleep age=240 F=0.008661905->0.000000000 P=0.008661905->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.792185783->0.792184830 atp=0.659184158->0.658660471
+RECOVERY_ACTION scripted=BodySleep age=240 F=0.008661905->0.000000000 P=0.008661905->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.792185783->0.792184830 atp=0.659184158->0.658660471
+RECOVERY_ACTION scripted=BodySleep age=240 F=0.008661905->0.000000000 P=0.008661905->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.792185783->0.792184830 atp=0.659184158->0.658660471
+RECOVERY_ACTION scripted=Neutral age=1200 F=0.074913897->0.074990161 P=0.074913897->0.074990161 awake_dose=0 sleep_dose=0 sleeping=false energy=0.791011870->0.791010916 atp=0.645520985->0.645520389
+RECOVERY_ACTION scripted=Neutral age=1200 F=0.074913897->0.074990161 P=0.074913897->0.074990161 awake_dose=0 sleep_dose=0 sleeping=false energy=0.791011870->0.791010916 atp=0.645520985->0.645520389
+RECOVERY_ACTION scripted=AwakeRest age=1200 F=0.074913897->0.000000000 P=0.074913897->0.074990161 awake_dose=1 sleep_dose=0 sleeping=false energy=0.791011870->0.791010916 atp=0.645520985->0.645520389
+RECOVERY_ACTION scripted=AwakeRest age=1200 F=0.074913897->0.000000000 P=0.074913897->0.074990161 awake_dose=1 sleep_dose=0 sleeping=false energy=0.791011870->0.791010916 atp=0.645520985->0.645520389
+RECOVERY_ACTION scripted=BodySleep age=1200 F=0.074913897->0.000000000 P=0.074913897->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.791011870->0.791010916 atp=0.645520985->0.645520389
+RECOVERY_ACTION scripted=BodySleep age=1200 F=0.074913897->0.000000000 P=0.074913897->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.791011870->0.791010916 atp=0.645520985->0.645520389
+RECOVERY_ACTION scripted=BodySleep age=1200 F=0.074913897->0.000000000 P=0.074913897->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.791011870->0.791010916 atp=0.645520985->0.645520389
+RECOVERY_ACTION scripted=Neutral age=2200 F=0.077961087->0.078037187 P=0.077961087->0.078037187 awake_dose=0 sleep_dose=0 sleeping=false energy=0.789790928->0.789789975 atp=0.644910097->0.644909501
+RECOVERY_ACTION scripted=Neutral age=2200 F=0.077961087->0.078037187 P=0.077961087->0.078037187 awake_dose=0 sleep_dose=0 sleeping=false energy=0.789790928->0.789789975 atp=0.644910097->0.644909501
+RECOVERY_ACTION scripted=AwakeRest age=2200 F=0.077961087->0.000000000 P=0.077961087->0.078037187 awake_dose=1 sleep_dose=0 sleeping=false energy=0.789790928->0.789789975 atp=0.644910097->0.644909501
+RECOVERY_ACTION scripted=AwakeRest age=2200 F=0.077961087->0.000000000 P=0.077961087->0.078037187 awake_dose=1 sleep_dose=0 sleeping=false energy=0.789790928->0.789789975 atp=0.644910097->0.644909501
+RECOVERY_ACTION scripted=BodySleep age=2200 F=0.077961087->0.000000000 P=0.077961087->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.789790928->0.789789975 atp=0.644910097->0.644909501
+RECOVERY_ACTION scripted=BodySleep age=2200 F=0.077961087->0.000000000 P=0.077961087->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.789790928->0.789789975 atp=0.644910097->0.644909501
+RECOVERY_ACTION scripted=BodySleep age=2200 F=0.077961087->0.000000000 P=0.077961087->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.789790928->0.789789975 atp=0.644910097->0.644909501
+RECOVERY_ACTION scripted=Neutral age=240 F=0.131015345->0.132218793 P=0.066048838->0.066655554 awake_dose=0 sleep_dose=0 sleeping=false energy=0.792185783->0.792184830 atp=0.659184158->0.658660471
+RECOVERY_ACTION scripted=Neutral age=240 F=0.131015345->0.132218793 P=0.066048838->0.066655554 awake_dose=0 sleep_dose=0 sleeping=false energy=0.792185783->0.792184830 atp=0.659184158->0.658660471
+RECOVERY_ACTION scripted=AwakeRest age=240 F=0.131015345->0.000000000 P=0.066048838->0.066655554 awake_dose=1 sleep_dose=0 sleeping=false energy=0.792185783->0.792184830 atp=0.659184158->0.658660471
+RECOVERY_ACTION scripted=AwakeRest age=240 F=0.131015345->0.000000000 P=0.066048838->0.066655554 awake_dose=1 sleep_dose=0 sleeping=false energy=0.792185783->0.792184830 atp=0.659184158->0.658660471
+RECOVERY_ACTION scripted=BodySleep age=240 F=0.131015345->0.000000000 P=0.066048838->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.792185783->0.792184830 atp=0.659184158->0.658660471
+RECOVERY_ACTION scripted=BodySleep age=240 F=0.131015345->0.000000000 P=0.066048838->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.792185783->0.792184830 atp=0.659184158->0.658660471
+RECOVERY_ACTION scripted=BodySleep age=240 F=0.131015345->0.000000000 P=0.066048838->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.792185783->0.792184830 atp=0.659184158->0.658660471
+RECOVERY_ACTION scripted=Neutral age=1200 F=1.000000000->1.000000000 P=0.571200609->0.571782053 awake_dose=0 sleep_dose=0 sleeping=false energy=0.791011870->0.791010916 atp=0.645520985->0.645520389
+RECOVERY_ACTION scripted=Neutral age=1200 F=1.000000000->1.000000000 P=0.571200609->0.571782053 awake_dose=0 sleep_dose=0 sleeping=false energy=0.791011870->0.791010916 atp=0.645520985->0.645520389
+RECOVERY_ACTION scripted=AwakeRest age=1200 F=1.000000000->0.300000012 P=0.571200609->0.571782053 awake_dose=1 sleep_dose=0 sleeping=false energy=0.791011870->0.791010916 atp=0.645520985->0.645520389
+RECOVERY_ACTION scripted=AwakeRest age=1200 F=1.000000000->0.300000012 P=0.571200609->0.571782053 awake_dose=1 sleep_dose=0 sleeping=false energy=0.791011870->0.791010916 atp=0.645520985->0.645520389
+RECOVERY_ACTION scripted=BodySleep age=1200 F=1.000000000->0.299960017 P=0.571200609->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.791011870->0.791010916 atp=0.645520985->0.645520389
+RECOVERY_ACTION scripted=BodySleep age=1200 F=1.000000000->0.299960017 P=0.571200609->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.791011870->0.791010916 atp=0.645520985->0.645520389
+RECOVERY_ACTION scripted=BodySleep age=1200 F=1.000000000->0.299960017 P=0.571200609->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.791011870->0.791010916 atp=0.645520985->0.645520389
+RECOVERY_ACTION scripted=Neutral age=2200 F=1.000000000->1.000000000 P=0.594435215->0.595015466 awake_dose=0 sleep_dose=0 sleeping=false energy=0.789790928->0.789789975 atp=0.644910097->0.644909501
+RECOVERY_ACTION scripted=Neutral age=2200 F=1.000000000->1.000000000 P=0.594435215->0.595015466 awake_dose=0 sleep_dose=0 sleeping=false energy=0.789790928->0.789789975 atp=0.644910097->0.644909501
+RECOVERY_ACTION scripted=AwakeRest age=2200 F=1.000000000->0.300000012 P=0.594435215->0.595015466 awake_dose=1 sleep_dose=0 sleeping=false energy=0.789790928->0.789789975 atp=0.644910097->0.644909501
+RECOVERY_ACTION scripted=AwakeRest age=2200 F=1.000000000->0.300000012 P=0.594435215->0.595015466 awake_dose=1 sleep_dose=0 sleeping=false energy=0.789790928->0.789789975 atp=0.644910097->0.644909501
+RECOVERY_ACTION scripted=BodySleep age=2200 F=1.000000000->0.299960017 P=0.594435215->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.789790928->0.789789975 atp=0.644910097->0.644909501
+RECOVERY_ACTION scripted=BodySleep age=2200 F=1.000000000->0.299960017 P=0.594435215->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.789790928->0.789789975 atp=0.644910097->0.644909501
+RECOVERY_ACTION scripted=BodySleep age=2200 F=1.000000000->0.299960017 P=0.594435215->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.789790928->0.789789975 atp=0.644910097->0.644909501
+ok
+test new_game::recovery_timescale_tests::recovery_timescale_separate_1100_script_records_four_real_pressure_crossings ... RECOVERY_ACTION scripted=AwakeRest age=400 F=0.021343285->0.000000000 P=0.021343285->0.021422232 awake_dose=1 sleep_dose=0 sleeping=false energy=0.791990340->0.791989386 atp=0.646028936->0.646027565
+RECOVERY_ACTION scripted=AwakeRest age=700 F=0.023744786->0.000000000 P=0.044847839->0.044925593 awake_dose=1 sleep_dose=0 sleeping=false energy=0.791623831->0.791622877 atp=0.645826519->0.645825922
+RECOVERY_ACTION scripted=BodySleep age=1200 F=0.039429806->0.000000000 P=0.083245292->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.791011870->0.791010916 atp=0.645520985->0.645520389
+RECOVERY_ACTION scripted=AwakeRest age=1450 F=0.019798765->0.000000000 P=0.019798765->0.019877786 awake_dose=1 sleep_dose=0 sleeping=false energy=0.790707648->0.790706635 atp=0.645368278->0.645367682
+RECOVERY_ACTION scripted=AwakeRest age=1750 F=0.023744786->0.000000000 P=0.043326415->0.043404259 awake_dose=1 sleep_dose=0 sleeping=false energy=0.790341079->0.790340126 atp=0.645184875->0.645184278
+RECOVERY_ACTION scripted=BodySleep age=2300 F=0.043326415->0.000000000 P=0.085552394->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.789668560->0.789667606 atp=0.644848943->0.644848347
+RECOVERY_ACTION scripted=AwakeRest age=2550 F=0.019798765->0.000000000 P=0.019798765->0.019877786 awake_dose=1 sleep_dose=0 sleeping=false energy=0.789362609->0.789361656 atp=0.644696236->0.644695640
+RECOVERY_ACTION scripted=AwakeRest age=2850 F=0.023744786->0.000000000 P=0.043326415->0.043404259 awake_dose=1 sleep_dose=0 sleeping=false energy=0.788995981->0.788995028 atp=0.644512951->0.644512296
+RECOVERY_ACTION scripted=BodySleep age=3400 F=0.043326415->0.000000000 P=0.085552394->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.788324654->0.788323700 atp=0.644176960->0.644176364
+RECOVERY_ACTION scripted=AwakeRest age=3650 F=0.019798765->0.000000000 P=0.019798765->0.019877786 awake_dose=1 sleep_dose=0 sleeping=false energy=0.788018703->0.788017750 atp=0.644024134->0.644023538
+RECOVERY_ACTION scripted=AwakeRest age=3950 F=0.023744786->0.000000000 P=0.043326415->0.043404259 awake_dose=1 sleep_dose=0 sleeping=false energy=0.787652194->0.787651241 atp=0.643840849->0.643840253
+RECOVERY_ACTION scripted=BodySleep age=4500 F=0.043326415->0.000000000 P=0.085552394->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.786979675->0.786978722 atp=0.643504858->0.643504262
+RECOVERY_SEPARATE_1100 calibrated=false natural_pressure_crossings=[] scripted_sleeps=[1200,2300,3400,4500] unchanged_age_death=4514
+RECOVERY_ACTION scripted=AwakeRest age=400 F=0.322803617->0.000000000 P=0.162735566->0.163337424 awake_dose=1 sleep_dose=0 sleeping=false energy=0.791990340->0.791989386 atp=0.646028936->0.646027565
+RECOVERY_ACTION scripted=AwakeRest age=700 F=0.359107226->0.000000000 P=0.341952443->0.342545360 awake_dose=1 sleep_dose=0 sleeping=false energy=0.791623831->0.791622877 atp=0.645826519->0.645825922
+RECOVERY_PRESSURE_CROSSING schedule=separate1100 calibrated=true age=1141 pressure=0.60056704
+RECOVERY_ACTION scripted=BodySleep age=1200 F=0.596334040->0.000000000 P=0.634735227->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.791011870->0.791010916 atp=0.645520985->0.645520389
+RECOVERY_ACTION scripted=AwakeRest age=1450 F=0.299429566->0.000000000 P=0.150951907->0.151554361 awake_dose=1 sleep_dose=0 sleeping=false energy=0.790707648->0.790706635 atp=0.645368278->0.645367682
+RECOVERY_ACTION scripted=AwakeRest age=1750 F=0.359107226->0.000000000 P=0.330343634->0.330937117 awake_dose=1 sleep_dose=0 sleeping=false energy=0.790341079->0.790340126 atp=0.645184875->0.645184278
+RECOVERY_PRESSURE_CROSSING schedule=separate1100 calibrated=true age=2210 pressure=0.60023654
+RECOVERY_ACTION scripted=BodySleep age=2300 F=0.655272603->0.000000000 P=0.652318835->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.789668560->0.789667606 atp=0.644848943->0.644848347
+RECOVERY_ACTION scripted=AwakeRest age=2550 F=0.299429566->0.000000000 P=0.150951907->0.151554361 awake_dose=1 sleep_dose=0 sleeping=false energy=0.789362609->0.789361656 atp=0.644696236->0.644695640
+RECOVERY_ACTION scripted=AwakeRest age=2850 F=0.359107226->0.000000000 P=0.330343634->0.330937117 awake_dose=1 sleep_dose=0 sleeping=false energy=0.788995981->0.788995028 atp=0.644512951->0.644512296
+RECOVERY_PRESSURE_CROSSING schedule=separate1100 calibrated=true age=3310 pressure=0.60023654
+RECOVERY_ACTION scripted=BodySleep age=3400 F=0.655272603->0.000000000 P=0.652318835->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.788324654->0.788323700 atp=0.644176960->0.644176364
+RECOVERY_ACTION scripted=AwakeRest age=3650 F=0.299429566->0.000000000 P=0.150951907->0.151554361 awake_dose=1 sleep_dose=0 sleeping=false energy=0.788018703->0.788017750 atp=0.644024134->0.644023538
+RECOVERY_ACTION scripted=AwakeRest age=3950 F=0.359107226->0.000000000 P=0.330343634->0.330937117 awake_dose=1 sleep_dose=0 sleeping=false energy=0.787652194->0.787651241 atp=0.643840849->0.643840253
+RECOVERY_PRESSURE_CROSSING schedule=separate1100 calibrated=true age=4410 pressure=0.60023654
+RECOVERY_ACTION scripted=BodySleep age=4500 F=0.655272603->0.000000000 P=0.652318835->0.000000000 awake_dose=0 sleep_dose=1 sleeping=true energy=0.786979675->0.786978722 atp=0.643504858->0.643504262
+RECOVERY_SEPARATE_1100 calibrated=true natural_pressure_crossings=[1141, 2210, 3310, 4410] scripted_sleeps=[1200,2300,3400,4500] unchanged_age_death=4514
+ok
+test organism::registered_record_tests::registry_record_proof_invalidates_on_every_mutable_dereference ... ok
+test organism::registered_record_tests::registry_record_proof_is_invalidated_before_a_mutating_closure_can_unwind ...
+thread 'organism::registered_record_tests::registry_record_proof_is_invalidated_before_a_mutating_closure_can_unwind' (481) panicked at crates/alife_world/src/organism/registered_record_tests.rs:173:17:
+synthetic interrupted mutation
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+ok
+test organism::registered_record_tests::registry_record_proof_is_local_and_failed_mutations_restore_exact_state ... ok
+test organism::registered_record_tests::registry_record_proof_preserves_wire_clone_restore_and_replacement ... ok
+test organism::registered_record_tests::registry_record_proofs_do_not_cache_registry_indices ... ok
+test organism::tests::biochemistry_digest_preserves_signed_zero_round_trip ... ok
+test organism::tests::exhausted_body_revision_rolls_back_the_complete_record ... ok
+test organism::tests::exhausted_embodiment_revision_rejects_replacement_without_mutation ... ok
+test organism::tests::exhausted_memory_revision_rolls_back_cognitive_sealing ... ok
+test organism::tests::immutable_genetic_validation_preserves_restore_and_mutable_guards ... ok
+test organism::tests::malformed_registry_advance_returns_prestate_error_without_mutation ... ok
+test organism::tests::malformed_registry_prestate_does_not_invoke_biology_closure ... ok
+test organism::tests::mutable_validation_cache_embodiment_replacement_and_deserialization_preserve_binding ... ok
+test organism::tests::mutable_validation_cache_preserves_signed_zero_public_mutations_and_wire_guards ... ok
+test organism::tests::mutable_validation_cache_rejects_invalid_biology_and_restores_failed_transactions ... ok
+test organism::tests::newborn_record_advance_uses_age_since_birth_not_absolute_world_tick ... ok
+test organism::tests::registry_failed_advance_preserves_exact_biochemistry ... ok
+test persistence::terrain_persistence_tests::custom_terrain_save_reloads_geometry_limits_and_signature ... ok
+test persistence::terrain_persistence_tests::island_binding_roundtrips_and_rejects_incompatible_geometry ... ok
+test persistence::terrain_persistence_tests::player_carry_save_roundtrip_validates_the_release_surface ... ok
+test persistence::terrain_persistence_tests::terrainless_fixture_save_roundtrips ... ok
+test terrain::tests::environment_water_and_body_limits_are_independent ... ok
+test terrain::tests::invalid_terrain_is_rejected_and_clones_share_samples ... ok
+test terrain::tests::selected_terrain_controls_placement_movement_and_obstacles ... ok
+test terrain_surface::tests::island_actual_move_reports_blocked_at_a_baked_rock_or_trunk ... ok
+test terrain_surface::tests::island_actual_move_updates_authoritative_height_and_displacement ... ok
+test terrain_surface::tests::island_sweep_rejects_thin_obstacle_and_water_and_steep_ground ... ok
+test terrain_surface::tests::island_triangles_and_vertical_pick_agree ... ok
+test terrain_surface::tests::ray_pick_does_not_skip_grid_or_triangle_ridges ... ok
+test terrain_surface::tests::rounded_mesh_boundary_supports_player_placement_and_restore ... ok
+test tracked_objects::tests::failed_observation_batch_preserves_the_observer_registry ... ok
+test tracked_objects::tests::sensing_batch_preserves_audited_ids_eviction_and_restore_continuation ... ok
+
+test result: ok. 315 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 3.82s

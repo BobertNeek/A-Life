@@ -130,6 +130,13 @@ without a sleep dose or added SleepPressure clearance. The event-gated successor
 retains otherwise-valid mutant inheritance while keeping inactive rows inert;
 seeded construction checks do not qualify a breeding population or neural use.
 
+A separate [fresh recovery-timescale calibration](experiments/recovery-timescale-v1/RESULTS.md)
+changes only inherited waking production rates before expression. It separates
+fatigue and sleep-pressure timers inside the unchanged founder lifespan, while
+ordinary constructors, saved chemistry, recovery mechanisms and value weights
+remain unchanged. Its natural buildup and scripted physical recovery fixtures
+do not establish work-based fatigue or autonomous neural recovery.
+
 ## Inherited biochemical learning signals
 
 Chemical dynamics remain in the inherited sparse graph: species baselines and

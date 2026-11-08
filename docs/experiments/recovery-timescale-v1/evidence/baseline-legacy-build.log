@@ -1,0 +1,31 @@
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.45
+   Compiling unicode-ident v1.0.24
+   Compiling syn v2.0.117
+   Compiling find-msvc-tools v0.1.9
+   Compiling serde_core v1.0.228
+   Compiling shlex v2.0.1
+   Compiling cc v1.2.63
+   Compiling blake3 v1.8.5
+   Compiling thiserror v2.0.18
+   Compiling serde v1.0.228
+   Compiling zmij v1.0.21
+   Compiling bytemuck_derive v1.10.2
+   Compiling serde_derive v1.0.228
+   Compiling thiserror-impl v2.0.18
+   Compiling arrayref v0.3.9
+   Compiling serde_json v1.0.150
+   Compiling cfg-if v1.0.4
+   Compiling arrayvec v0.7.6
+   Compiling cpufeatures v0.3.0
+   Compiling constant_time_eq v0.4.2
+   Compiling bytemuck v1.25.0
+   Compiling bitflags v2.13.0
+   Compiling itoa v1.0.18
+   Compiling memchr v2.8.1
+   Compiling smallvec v1.15.1
+   Compiling alife_core v0.1.0 (<workspace>/recovery-timescale-baseline-wire-v1/crates/alife_core)
+   Compiling alife_storage v0.1.0 (<workspace>/recovery-timescale-baseline-wire-v1/crates/alife_storage)
+   Compiling alife_world v0.1.0 (<workspace>/recovery-timescale-baseline-wire-v1/crates/alife_world)
+    Finished `dev` profile [unoptimized] target(s) in 1m 05s
+     Running `<workspace>/recovery-timescale-baseline-target-v1/debug/examples/recovery_timescale_legacy_wire <workspace>/recovery-timescale-wire-baseline`

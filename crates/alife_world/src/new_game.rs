@@ -84,7 +84,38 @@ pub fn create_canonical_new_game_with_awake_rest_research_v1(
 ) -> Result<CanonicalNewGame, ScaffoldContractError> {
     let foundation = FoundationWeightAsset::builtin_nano512_v1(config.sensor_profile)?;
     validate_phase3_inputs(config, &foundation)?;
-    create_new_game_with_identity_and_research(config, &foundation, None, false, 1, true)
+    create_new_game_with_identity_and_research(
+        config,
+        &foundation,
+        None,
+        false,
+        1,
+        FreshRecoveryResearch::AwakeRestV1,
+    )
+}
+
+/// Fresh opt-in body-rate study with the existing awake-rest mechanism. Ordinary
+/// births and loaded creatures retain their exact inherited chemistry and clocks.
+pub fn create_canonical_new_game_with_recovery_timescale_research_v1(
+    config: &CanonicalNewGameConfig,
+) -> Result<CanonicalNewGame, ScaffoldContractError> {
+    let foundation = FoundationWeightAsset::builtin_nano512_v1(config.sensor_profile)?;
+    validate_phase3_inputs(config, &foundation)?;
+    create_new_game_with_identity_and_research(
+        config,
+        &foundation,
+        None,
+        false,
+        1,
+        FreshRecoveryResearch::TimescaleV1,
+    )
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum FreshRecoveryResearch {
+    None,
+    AwakeRestV1,
+    TimescaleV1,
 }
 
 /// Explicit N2048 experiment using the same ecology and inherited physiology.
@@ -202,7 +233,7 @@ fn create_new_game_with_identity(
         candidate,
         training_group,
         first_organism_id,
-        false,
+        FreshRecoveryResearch::None,
     )
 }
 
@@ -212,7 +243,7 @@ fn create_new_game_with_identity_and_research(
     candidate: Option<&alife_core::Nano512ActionCreditCandidateV2>,
     training_group: bool,
     first_organism_id: u64,
-    awake_rest_research_v1: bool,
+    recovery_research: FreshRecoveryResearch,
 ) -> Result<CanonicalNewGame, ScaffoldContractError> {
     let manifest = foundation.manifest();
     let foundation_identity = FoundationGeneticIdentity::new(
@@ -264,12 +295,19 @@ fn create_new_game_with_identity_and_research(
         )?;
         calibrate_inherited_founder_biochemistry(&mut genome)?;
         enable_inherited_newborn_nociception(&mut genome)?;
-        if awake_rest_research_v1 {
+        if recovery_research != FreshRecoveryResearch::None {
             genome.chemistry.graph = genome
                 .chemistry
                 .graph
                 .with_awake_rest_recovery_v1(alife_core::AlleleSide::Maternal)?
                 .with_awake_rest_recovery_v1(alife_core::AlleleSide::Paternal)?;
+        }
+        if recovery_research == FreshRecoveryResearch::TimescaleV1 {
+            genome.chemistry.graph = genome
+                .chemistry
+                .graph
+                .with_recovery_timescale_v1(alife_core::AlleleSide::Maternal)?
+                .with_recovery_timescale_v1(alife_core::AlleleSide::Paternal)?;
         }
         if let Some(candidate) = candidate {
             genome = genome.with_nano512_action_credit_candidate(candidate.clone())?;
@@ -621,3 +659,6 @@ fn initial_creature_save(
         gpu_brain: None,
     })
 }
+
+#[cfg(test)]
+mod recovery_timescale_tests;

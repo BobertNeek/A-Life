@@ -1,0 +1,136 @@
+   Compiling alife_core v0.1.0 (<workspace>/recovery-drive-timescale-v1/crates/alife_core)
+    Finished `test` profile [unoptimized] target(s) in 1m 28s
+     Running tests/biochemical_graph_v2.rs (<workspace>/recovery-timescale-target-v1/debug/deps/biochemical_graph_v2-f502d01f330dd41b)
+
+running 11 tests
+test biochemistry_validation_requires_graph_and_owner_ticks_to_match ... ok
+test drive_frame_is_a_tick_bound_derivation_of_the_graph ... ok
+test emitter_catch_up_replays_persistent_sources_but_not_instantaneous_events ... ok
+test founder_chemistry_is_a_bounded_sparse_active_graph ... ok
+test founder_graph_produces_reward_social_learning_and_growth_signals ... ok
+test grouped_receptors_use_inherited_baselines_and_responses_after_reload ... ok
+test neural_emission_changes_authoritative_chemistry_and_targeted_receptors ... ok
+test neural_emitter_work_counts_configured_emitters_not_input_emissions ... ok
+test non_unit_species_ranges_survive_advance_and_restore_validation ... ok
+test player_praise_graph_keeps_the_dopamine_emitter ... ok
+test same_tick_without_event_does_not_advance_reactions ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/biochemical_material_baselines.rs (<workspace>/recovery-timescale-target-v1/debug/deps/biochemical_material_baselines-d1bcad6d1937baa5)
+
+running 4 tests
+test newborn_material_reserves_follow_genes_while_regulators_remain_gated ... ok
+test old_zero_reserve_save_loads_exactly_and_recovers_only_by_ordinary_relaxation ... ok
+test relaxation_preserves_material_baselines_without_activating_regulators ... ok
+test stored_concentrations_and_experienced_material_changes_are_not_reset ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/biochemical_reaction_conservation.rs (<workspace>/recovery-timescale-target-v1/debug/deps/biochemical_reaction_conservation-add049d0243a752c)
+
+running 11 tests
+test duplicate_reactants_are_aggregated_before_rate_limiting ... ok
+test full_product_provides_no_feasible_reaction_space ... ok
+test long_step_uses_one_feasible_extent_instead_of_creating_product_material ... ok
+test mixed_reactions_validate_material_balance_without_restricting_regulatory_terms ... ok
+test multiple_reactants_and_products_share_one_limiting_extent ... ok
+test nearly_full_product_caps_extent_without_losing_reactant_material ... ok
+test net_zero_catalyst_stays_exactly_unchanged_at_its_maximum ... ok
+test nonzero_minimum_is_reserved_when_reaction_consumes_material ... ok
+test proportionally_scaled_nonzero_stoichiometry_preserves_reaction_extent ... ok
+test reaction_declaration_order_is_part_of_inherited_simulation_dynamics ... ok
+test zero_rate_leaves_a_valid_reaction_state_unchanged ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/biochemical_valuation.rs (<workspace>/recovery-timescale-target-v1/debug/deps/biochemical_valuation-9ed68632fc5a92f1)
+
+running 4 tests
+test hormonal_tone_modulates_consequences_without_inventing_reward ... ok
+test ordinary_biological_events_have_proportionate_values ... ok
+test valuation_genes_scale_deltas_without_punishing_praise_clearance ... ok
+test valuation_genes_survive_birth_and_persistence_and_cannot_drift ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/biochemistry_development.rs (<workspace>/recovery-timescale-target-v1/debug/deps/biochemistry_development-ae0aa119fe229f2e)
+
+running 13 tests
+test body_compatibility_projections_validate_for_newborns_and_legacy_migrations ... ok
+test body_damage_and_energy_loss_change_drives_hormones_and_neural_modulation ... ok
+test development_readiness_tracks_the_critical_period_window ... ok
+test fast_hormones_respond_before_development_and_reproduction_boundaries ... ok
+test inherited_waking_fatigue_is_separate_from_food_and_recovery ... ok
+test invalid_body_bounds_are_rejected ... ok
+test latched_mate_rechecks_readiness_after_energy_recovers ... ok
+test long_multi_rate_run_stays_bounded ... ok
+test mating_opportunity_between_cadence_boundaries_is_latched_without_refreshing_tick ... ok
+test metabolic_development_and_reproduction_update_only_on_their_boundaries ... ok
+test organ_upkeep_follows_elapsed_cadence_crossings ... ok
+test puberty_health_and_mating_opportunity_gate_reproduction ... ok
+test sleep_recovery_lowers_fatigue_and_sleep_pressure ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/chemistry_homeostasis.rs (<workspace>/recovery-timescale-target-v1/debug/deps/chemistry_homeostasis-876041abe330b5c3)
+
+running 9 tests
+test baseline_drift_decay_and_pain_frustration_spikes_are_deterministic ... ok
+test deltas_are_distinct_signed_changes_and_update_clamps_results ... ok
+test deterministic_finite_inputs_never_produce_nan_or_out_of_range_outputs ... ok
+test homeostatic_snapshots_are_versioned_through_the_central_schema_registry ... ok
+test modulation_helpers_bound_learning_salience_and_motor_confidence ... ok
+test recovery_helpers_reject_invalid_learning_state ... ok
+test recovery_triggers_cover_hyperactivity_catatonia_sleep_pain_and_safe_idle ... ok
+test sleep_recovery_delta_reduces_fatigue_and_sleep_pressure_while_restoring_atp ... ok
+test snapshots_reject_nan_and_out_of_range_learning_values ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/evolutionary_genetics.rs (<workspace>/recovery-timescale-target-v1/debug/deps/evolutionary_genetics-869d492d54516244)
+
+running 18 tests
+test chromosome_traits_change_live_chemistry_without_replacing_the_graph ... ok
+test continuous_loci_blend_both_alleles ... ok
+test discrete_loci_apply_dominant_recessive_and_codominant_rules ... ok
+test each_chromosome_family_changes_its_causal_phenotype_surface ... ok
+test founder_contains_two_valid_alleles_in_every_chromosome_family ... ok
+test homologous_chemistry_and_brain_settings_recombine_and_survive_extreme_mutation ... ok
+test inherited_starter_vocabulary_is_bounded_and_never_contains_silence ... ok
+test juvenile_motor_affordances_follow_their_individual_maturation_genes ... ok
+test malformed_locus_bounds_are_rejected ... ok
+test mutation_delta_above_the_supported_limit_is_rejected_as_overflow ... ok
+test mutation_of_narrow_delta_locus_stays_within_its_declared_bounds ... ok
+test offspring_serialization_round_trip_keeps_dna ... ok
+test ordinary_birth_requires_complete_unique_chromosome_provenance ... ok
+test ordinary_reproduction_keeps_brain_class_bound_to_the_promoted_foundation ... ok
+test reproduction_rejects_incompatible_brain_classes_and_foundation_families ... ok
+test seeded_discrete_mutation_changes_only_declared_domains_and_records_provenance ... ok
+test seeded_reproduction_is_byte_deterministic_bounded_and_records_both_parents ... ok
+test two_organisms_with_the_same_genome_can_have_genetic_offspring ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running tests/measured_physiology_v2.rs (<workspace>/recovery-timescale-target-v1/debug/deps/measured_physiology_v2-cc9965103d989593)
+
+running 2 tests
+test harm_signal_counts_fresh_change_once_and_does_not_punish_unchanged_pain ... ok
+test physiology_transition_is_derived_from_authoritative_before_and_after_states ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/newborn_nociception.rs (<workspace>/recovery-timescale-target-v1/debug/deps/newborn_nociception-79737929d0f7a673)
+
+running 1 test
+test inherited_nociception_responds_to_real_damage_without_maturing_other_chemistry ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/thermal_reproductive_drive_audit.rs (<workspace>/recovery-timescale-target-v1/debug/deps/thermal_reproductive_drive_audit-55d38f81b16bffcd)
+
+running 2 tests
+test adult_mating_readiness_rechecks_live_atp_and_juvenile_gate ... ok
+test supplied_thermal_exposure_reaches_drive_and_recovery_reduces_body_load ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
