@@ -291,6 +291,7 @@ impl GpuExactCheckpointTransactionContextV1 {
 pub struct RetainedLearningCapture<'a> {
     pub sealed_patch: &'a ExperiencePatch,
     pub neural_receptors: &'a NeuralReceptorFrame,
+    /// Saturating count of failed retries, excluding the initial rejection.
     pub attempts: u8,
     pub last_error_code: &'static str,
 }
@@ -299,6 +300,7 @@ pub struct RetainedLearningCapture<'a> {
 pub struct RestoredRetainedLearning {
     pub sealed_patch: ExperiencePatch,
     pub neural_receptors: NeuralReceptorFrame,
+    /// Saturating count of failed retries, excluding the initial rejection.
     pub attempts: u8,
     pub last_error_code: String,
 }
@@ -796,8 +798,6 @@ impl GpuCheckpointAssetStore {
                 if recovery.sealed_patch.pre_action().organism_id != handle.organism_id()
                     || recovery.sealed_patch.header().sensor_profile.identity()
                         != sidecars.sensor_profile
-                    || recovery.attempts == 0
-                    || recovery.attempts > 3
                     || !matches!(
                         recovery.last_error_code,
                         "learning-evidence-mismatch"
