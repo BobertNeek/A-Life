@@ -10,9 +10,9 @@ bitflags.workspace = true
 blake3.workspace = true
 bytemuck.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 smallvec.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
 bincode.workspace = true
-serde_json.workspace = true

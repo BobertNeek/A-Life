@@ -54,6 +54,7 @@ pub mod memory;
 pub mod memory_query;
 pub mod migration_v2;
 pub mod motor;
+pub mod need_consequence;
 pub mod neural;
 pub mod neural_receptors;
 pub mod packed_log;
@@ -380,4 +381,13 @@ pub use units::{
 pub use validation::{ensure_current_version, Validate};
 pub use version::{
     require_current_version, require_version, ContractVersion, SchemaKind, SchemaVersions,
+};
+
+pub use need_consequence::{
+    NeedConsequenceAdmissionV1, NeedConsequenceAttributionV1, NeedConsequenceErrorV1,
+    NeedConsequenceEvidenceV1, NeedConsequenceObservationV1, NeedConsequenceQueryV1,
+    NeedConsequenceRecallV1, NeedConsequenceStoreV1, MAX_NEED_CONSEQUENCE_QUERY_RESULTS,
+    MAX_NEED_CONSEQUENCE_QUERY_SCAN, MAX_NEED_CONSEQUENCE_RECORDS,
+    MAX_NEED_CONSEQUENCE_SOURCE_BYTES, MAX_NEED_CONSEQUENCE_STORE_BYTES,
+    NEED_CONSEQUENCE_DRIVE_COUNT, NEED_CONSEQUENCE_SCHEMA_VERSION,
 };
