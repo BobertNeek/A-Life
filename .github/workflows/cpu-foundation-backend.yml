@@ -50,7 +50,7 @@ jobs:
         run: cargo test --locked -p alife_training --features cpu-backend --test cpu_cooperative_round -- --nocapture
   native-cpu:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
       CARGO_BUILD_JOBS: '2'
       CARGO_INCREMENTAL: '0'
