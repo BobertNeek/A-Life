@@ -1,0 +1,62 @@
+{
+  "archive_sha256": "024d17bcd1f8cc57cbef18aa87389c3488df4d67f1a7b668d865cb74c726eabc",
+  "archive_files_selected": [
+    {
+      "path": "ALL_DRIVE_FINDINGS.md",
+      "bytes": 11854,
+      "sha256": "135694b341b14705bcb8f1bbe9224df510cda645d05b8c8ad1db1ab1b682e669"
+    },
+    {
+      "path": "SHA256SUMS",
+      "bytes": 988,
+      "sha256": "5274ba9f47560f087723cf61f3950186ee6017c2409c4d71dd4c7788b60d2ac3"
+    },
+    {
+      "path": "V3_ERRATA_AND_NEXT_PLAN.md",
+      "bytes": 7581,
+      "sha256": "93d5c88feccb802b6ad5986c8447574082b79a2b1707bd06825d5a27c7168fe7"
+    },
+    {
+      "path": "cpu-absent-speech-repair-v1.log",
+      "bytes": 766,
+      "sha256": "1bf9285cae9fa4f086f9b4b2cc2762d033ea2af23ab5e5f52231c017c307b8e0"
+    },
+    {
+      "path": "nano-need-memory-clippy-final-v3r2.log",
+      "bytes": 921,
+      "sha256": "a32b0b567f056b6d50dc61a0bf323b2c8598b46e1e74c51807224cf1f3b1eab0"
+    },
+    {
+      "path": "nano-need-memory-fmt-final-v3r2.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "nano-need-memory-native-debug3-v3.log",
+      "bytes": 58923,
+      "sha256": "238da16cff90c941c71e7222b1e299ca7d33203f6b07614050c0ab613a5368f8"
+    },
+    {
+      "path": "nano-need-memory-native-failure-v3.log",
+      "bytes": 8559,
+      "sha256": "75eba7209611dfd40c9eb92f2a3fafbda0a01976eb264ee509d22e1e3b9457a1"
+    },
+    {
+      "path": "nano-need-memory-qualification-v3r2.log",
+      "bytes": 10176,
+      "sha256": "0c40f43ba120cc3c7adb49f260859a191e68f63b54a9b4bf3c441ab87315c604"
+    },
+    {
+      "path": "scalar-contrasts.json",
+      "bytes": 62026,
+      "sha256": "505ed4b4f4c79513df1347be9db5860df37ce80ec2706b4024107b53cf2c4f55"
+    },
+    {
+      "path": "source.patch",
+      "bytes": 203902,
+      "sha256": "0d512bb4f167d8c3f84207fe5387bf50a4db6dc7e0904c26b4144ff6d456e0de"
+    }
+  ],
+  "omitted_duplicate_source_files": [],
+  "source_reconstruction": "Original safe archive files copied byte-for-byte."
+}

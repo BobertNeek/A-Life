@@ -1,0 +1,866 @@
+{
+  "base_commit": "27c01b6f258604a307c5c359ad41c7e91ae3ae0b",
+  "source_artifact_sha256": "6f0e21260fec2885bee195cd32b9b7955579fd96e4fd68a49106aa7e27e98a92",
+  "source_asset": [
+    154,
+    227,
+    106,
+    250,
+    73,
+    100,
+    254,
+    235,
+    23,
+    178,
+    13,
+    196,
+    98,
+    3,
+    186,
+    86,
+    248,
+    251,
+    247,
+    25,
+    185,
+    207,
+    218,
+    44,
+    53,
+    209,
+    229,
+    211,
+    207,
+    35,
+    219,
+    66
+  ],
+  "scope": "closed artifact encoder/receptor reconstruction and conditional analytical bounds only; no world intervals or neural replay",
+  "counterfactual_scope": "one raw homeostatic lane substituted in detached validated frame; chemistry-derived receptor effects held at recorded before-state values, not a new biological trajectory",
+  "missing_state": "artifact has no neural initial activations, metabolic loads, somatic weights, enabled-route flags or structural edges; none reconstructed or silently defaulted",
+  "v3_probe_correction": "V3 detached pressure probes changed nominal raw encoder contribution without native interoceptive/regional gains; these are not exact re-encodings",
+  "validated_frames": 384,
+  "new_world_intervals": 0,
+  "neural_replay_runs": 0,
+  "encoder_equivalence_tests_passed": 2,
+  "all11_source_neurons_have_no_recurrent_or_dendritic_inputs": true,
+  "source_node_dynamics": {
+    "activation": "Tanh",
+    "activity_ema_decay": 0.949999988079071,
+    "bias": 0.0,
+    "homeostatic_gain": 1.0,
+    "leak": 0.25,
+    "metabolic_decay": 0.009999999776482582
+  },
+  "lane_inventory": [
+    {
+      "lane": 0,
+      "name": "hunger",
+      "source": 64,
+      "reserve": 496,
+      "reserve_inherited_recurrent": {
+        "alpha": 0.25,
+        "cadence": "Hot10To30Hz",
+        "genetic_weight": 0.06185343116521835,
+        "global_synapse": 287,
+        "route": 1,
+        "somatic_offset": "not recorded; no claim to know actual effective weight",
+        "source": 64
+      }
+    },
+    {
+      "lane": 1,
+      "name": "fatigue",
+      "source": 67,
+      "reserve": 497,
+      "reserve_inherited_recurrent": {
+        "alpha": 0.25,
+        "cadence": "Hot10To30Hz",
+        "genetic_weight": 0.12260507047176361,
+        "global_synapse": 288,
+        "route": 1,
+        "somatic_offset": "not recorded; no claim to know actual effective weight",
+        "source": 64
+      }
+    },
+    {
+      "lane": 2,
+      "name": "fear",
+      "source": 68,
+      "reserve": 498,
+      "reserve_inherited_recurrent": {
+        "alpha": 0.25,
+        "cadence": "Hot10To30Hz",
+        "genetic_weight": 0.21103809773921967,
+        "global_synapse": 289,
+        "route": 1,
+        "somatic_offset": "not recorded; no claim to know actual effective weight",
+        "source": 64
+      }
+    },
+    {
+      "lane": 3,
+      "name": "pain",
+      "source": 65,
+      "reserve": 499,
+      "reserve_inherited_recurrent": {
+        "alpha": 0.25,
+        "cadence": "Hot10To30Hz",
+        "genetic_weight": 0.15965065360069275,
+        "global_synapse": 290,
+        "route": 1,
+        "somatic_offset": "not recorded; no claim to know actual effective weight",
+        "source": 64
+      }
+    },
+    {
+      "lane": 4,
+      "name": "loneliness",
+      "source": 69,
+      "reserve": 500,
+      "reserve_inherited_recurrent": {
+        "alpha": 0.25,
+        "cadence": "Hot10To30Hz",
+        "genetic_weight": 0.06768812239170074,
+        "global_synapse": 291,
+        "route": 1,
+        "somatic_offset": "not recorded; no claim to know actual effective weight",
+        "source": 64
+      }
+    },
+    {
+      "lane": 5,
+      "name": "curiosity",
+      "source": 70,
+      "reserve": 501,
+      "reserve_inherited_recurrent": {
+        "alpha": 0.25,
+        "cadence": "Hot10To30Hz",
+        "genetic_weight": 0.15013307332992554,
+        "global_synapse": 292,
+        "route": 1,
+        "somatic_offset": "not recorded; no claim to know actual effective weight",
+        "source": 64
+      }
+    },
+    {
+      "lane": 6,
+      "name": "brain_atp",
+      "source": 71,
+      "reserve": 502,
+      "reserve_inherited_recurrent": {
+        "alpha": 0.25,
+        "cadence": "Hot10To30Hz",
+        "genetic_weight": 0.09220990538597107,
+        "global_synapse": 293,
+        "route": 1,
+        "somatic_offset": "not recorded; no claim to know actual effective weight",
+        "source": 64
+      }
+    },
+    {
+      "lane": 7,
+      "name": "temperature_stress",
+      "source": 66,
+      "reserve": 503,
+      "reserve_inherited_recurrent": {
+        "alpha": 0.25,
+        "cadence": "Hot10To30Hz",
+        "genetic_weight": 0.17353381216526031,
+        "global_synapse": 294,
+        "route": 1,
+        "somatic_offset": "not recorded; no claim to know actual effective weight",
+        "source": 64
+      }
+    },
+    {
+      "lane": 8,
+      "name": "reproductive_drive",
+      "source": 72,
+      "reserve": 504,
+      "reserve_inherited_recurrent": {
+        "alpha": 0.25,
+        "cadence": "Hot10To30Hz",
+        "genetic_weight": 0.23994800448417664,
+        "global_synapse": 295,
+        "route": 1,
+        "somatic_offset": "not recorded; no claim to know actual effective weight",
+        "source": 64
+      }
+    },
+    {
+      "lane": 9,
+      "name": "extension0",
+      "source": 73,
+      "reserve": 505,
+      "reserve_inherited_recurrent": {
+        "alpha": 0.25,
+        "cadence": "Hot10To30Hz",
+        "genetic_weight": 0.22129657864570618,
+        "global_synapse": 296,
+        "route": 1,
+        "somatic_offset": "not recorded; no claim to know actual effective weight",
+        "source": 64
+      }
+    },
+    {
+      "lane": 10,
+      "name": "extension1",
+      "source": 74,
+      "reserve": 506,
+      "reserve_inherited_recurrent": {
+        "alpha": 0.25,
+        "cadence": "Hot10To30Hz",
+        "genetic_weight": 0.17237797379493713,
+        "global_synapse": 297,
+        "route": 1,
+        "somatic_offset": "not recorded; no claim to know actual effective weight",
+        "source": 64
+      }
+    }
+  ],
+  "pressure_tables": {
+    "toy": [
+      {
+        "raw_pressure": 0.0,
+        "native_encoded": -0.02500000037252903,
+        "source_base_before_nonnegative_metabolic_subtraction": -0.2750000059604645,
+        "positive_first_hop_bound": 0.0
+      },
+      {
+        "raw_pressure": 0.10000000149011612,
+        "native_encoded": 0.0,
+        "source_base_before_nonnegative_metabolic_subtraction": -0.25,
+        "positive_first_hop_bound": 0.0
+      },
+      {
+        "raw_pressure": 0.800000011920929,
+        "native_encoded": 0.17499999701976776,
+        "source_base_before_nonnegative_metabolic_subtraction": -0.07500000298023224,
+        "positive_first_hop_bound": 0.0
+      },
+      {
+        "raw_pressure": 1.0,
+        "native_encoded": 0.22499999403953552,
+        "source_base_before_nonnegative_metabolic_subtraction": -0.025000005960464478,
+        "positive_first_hop_bound": 0.0
+      }
+    ],
+    "peer": [
+      {
+        "raw_pressure": 0.0,
+        "native_encoded": -0.024733399972319603,
+        "source_base_before_nonnegative_metabolic_subtraction": -0.27473339438438416,
+        "positive_first_hop_bound": 0.0
+      },
+      {
+        "raw_pressure": 0.10000000149011612,
+        "native_encoded": 0.0002666004002094269,
+        "source_base_before_nonnegative_metabolic_subtraction": -0.24973340332508087,
+        "positive_first_hop_bound": 0.0
+      },
+      {
+        "raw_pressure": 0.800000011920929,
+        "native_encoded": 0.17526660859584808,
+        "source_base_before_nonnegative_metabolic_subtraction": -0.07473339140415192,
+        "positive_first_hop_bound": 0.0
+      },
+      {
+        "raw_pressure": 1.0,
+        "native_encoded": 0.22526660561561584,
+        "source_base_before_nonnegative_metabolic_subtraction": -0.024733394384384155,
+        "positive_first_hop_bound": 0.0
+      }
+    ]
+  },
+  "contexts": [
+    {
+      "factor": null,
+      "peer_body_fixture": false,
+      "requested_initial_loneliness": 0.10000000149011612,
+      "phenotype_hash": [
+        14322243790955299590,
+        14821385561489304028,
+        1103649265945386601,
+        3685927001501906662
+      ],
+      "source_genome_id": 1452063907989915510,
+      "last_frame_tick": 31,
+      "frame_digest": [
+        16751797935656898538,
+        17139741826488655697,
+        11276544188183369192,
+        13691226629557725942
+      ],
+      "effects": {
+        "attention_gain": 0.5,
+        "consolidation_gate": 0.0,
+        "interoceptive_gain": 0.5,
+        "local_threshold_shift": 0.25,
+        "plasticity_appetitive": 0.0,
+        "plasticity_aversive": 0.0,
+        "projection_gain": 0.5,
+        "regional_excitability": 0.5,
+        "sleep_gate": 0.0,
+        "source_chemistry_version": 3,
+        "source_tick": 31,
+        "structural_growth_gate": 0.0
+      },
+      "global_encoded_offset": -0.02500000037252903,
+      "all_recorded_drives_base_max": -0.08750000596046448,
+      "actual_last_loneliness": 0.028210319578647614,
+      "reader": {
+        "id": 344,
+        "bias": 0.0,
+        "base": -0.2750000059604645,
+        "recurrent_input_count": 0,
+        "dendritic_input_branch_count": 0,
+        "closed_input_equilibrium": -0.430009126663208,
+        "recorded_32_frame_probe_gate_range": [
+          -0.43000859022140503,
+          -0.43000859022140503
+        ],
+        "maximum_equilibrium_error": 5.364418029785156e-07
+      }
+    },
+    {
+      "factor": null,
+      "peer_body_fixture": false,
+      "requested_initial_loneliness": 0.800000011920929,
+      "phenotype_hash": [
+        14322243790955299590,
+        14821385561489304028,
+        1103649265945386601,
+        3685927001501906662
+      ],
+      "source_genome_id": 1452063907989915510,
+      "last_frame_tick": 31,
+      "frame_digest": [
+        10761551439208993838,
+        8651602895634232747,
+        5664543191105252759,
+        18172029642711172690
+      ],
+      "effects": {
+        "attention_gain": 0.5,
+        "consolidation_gate": 0.0,
+        "interoceptive_gain": 0.5,
+        "local_threshold_shift": 0.25,
+        "plasticity_appetitive": 0.0,
+        "plasticity_aversive": 0.0,
+        "projection_gain": 0.5,
+        "regional_excitability": 0.5,
+        "sleep_gate": 0.0,
+        "source_chemistry_version": 3,
+        "source_tick": 31,
+        "structural_growth_gate": 0.0
+      },
+      "global_encoded_offset": -0.02500000037252903,
+      "all_recorded_drives_base_max": -0.07500000298023224,
+      "actual_last_loneliness": 0.2256825566291809,
+      "reader": {
+        "id": 344,
+        "bias": 0.0,
+        "base": -0.2750000059604645,
+        "recurrent_input_count": 0,
+        "dendritic_input_branch_count": 0,
+        "closed_input_equilibrium": -0.430009126663208,
+        "recorded_32_frame_probe_gate_range": [
+          -0.43000859022140503,
+          -0.43000859022140503
+        ],
+        "maximum_equilibrium_error": 5.364418029785156e-07
+      }
+    },
+    {
+      "factor": null,
+      "peer_body_fixture": true,
+      "requested_initial_loneliness": 0.10000000149011612,
+      "phenotype_hash": [
+        14322243790955299590,
+        14821385561489304028,
+        1103649265945386601,
+        3685927001501906662
+      ],
+      "source_genome_id": 1452063907989915510,
+      "last_frame_tick": 31,
+      "frame_digest": [
+        6730094648175010479,
+        4057309618005737735,
+        703002354737150618,
+        12614820141640366472
+      ],
+      "effects": {
+        "attention_gain": 0.5,
+        "consolidation_gate": 0.015995988622307777,
+        "interoceptive_gain": 0.5,
+        "local_threshold_shift": 0.25,
+        "plasticity_appetitive": 0.0,
+        "plasticity_aversive": 0.0,
+        "projection_gain": 0.5,
+        "regional_excitability": 0.5,
+        "sleep_gate": 0.0,
+        "source_chemistry_version": 3,
+        "source_tick": 31,
+        "structural_growth_gate": 0.0
+      },
+      "global_encoded_offset": -0.024733399972319603,
+      "all_recorded_drives_base_max": -0.08723339438438416,
+      "actual_last_loneliness": 0.0,
+      "reader": {
+        "id": 344,
+        "bias": 0.0,
+        "base": -0.27473339438438416,
+        "recurrent_input_count": 0,
+        "dendritic_input_branch_count": 0,
+        "closed_input_equilibrium": -0.4292828440666199,
+        "recorded_32_frame_probe_gate_range": [
+          -0.42928236722946167,
+          -0.42928236722946167
+        ],
+        "maximum_equilibrium_error": 4.76837158203125e-07
+      }
+    },
+    {
+      "factor": null,
+      "peer_body_fixture": true,
+      "requested_initial_loneliness": 0.800000011920929,
+      "phenotype_hash": [
+        14322243790955299590,
+        14821385561489304028,
+        1103649265945386601,
+        3685927001501906662
+      ],
+      "source_genome_id": 1452063907989915510,
+      "last_frame_tick": 31,
+      "frame_digest": [
+        6060871743607132763,
+        1977271697460358830,
+        12876606083703602480,
+        3360721298845261579
+      ],
+      "effects": {
+        "attention_gain": 0.5,
+        "consolidation_gate": 0.015995988622307777,
+        "interoceptive_gain": 0.5,
+        "local_threshold_shift": 0.25,
+        "plasticity_appetitive": 0.0,
+        "plasticity_aversive": 0.0,
+        "projection_gain": 0.5,
+        "regional_excitability": 0.5,
+        "sleep_gate": 0.0,
+        "source_chemistry_version": 3,
+        "source_tick": 31,
+        "structural_growth_gate": 0.0
+      },
+      "global_encoded_offset": -0.024733399972319603,
+      "all_recorded_drives_base_max": -0.07500000298023224,
+      "actual_last_loneliness": 0.09107694029808044,
+      "reader": {
+        "id": 344,
+        "bias": 0.0,
+        "base": -0.27473339438438416,
+        "recurrent_input_count": 0,
+        "dendritic_input_branch_count": 0,
+        "closed_input_equilibrium": -0.4292828440666199,
+        "recorded_32_frame_probe_gate_range": [
+          -0.42928236722946167,
+          -0.42928236722946167
+        ],
+        "maximum_equilibrium_error": 4.76837158203125e-07
+      }
+    },
+    {
+      "factor": "ZeroNeedMemoryGate",
+      "peer_body_fixture": false,
+      "requested_initial_loneliness": 0.10000000149011612,
+      "phenotype_hash": [
+        10134582292771944108,
+        371105542661257961,
+        5534145305591481105,
+        3510158324470094859
+      ],
+      "source_genome_id": 1452063907989915510,
+      "last_frame_tick": 31,
+      "frame_digest": [
+        16758928831952131880,
+        18022328007173407328,
+        404242474282298434,
+        4818098058417780849
+      ],
+      "effects": {
+        "attention_gain": 0.5,
+        "consolidation_gate": 0.0,
+        "interoceptive_gain": 0.5,
+        "local_threshold_shift": 0.25,
+        "plasticity_appetitive": 0.0,
+        "plasticity_aversive": 0.0,
+        "projection_gain": 0.5,
+        "regional_excitability": 0.5,
+        "sleep_gate": 0.0,
+        "source_chemistry_version": 3,
+        "source_tick": 31,
+        "structural_growth_gate": 0.0
+      },
+      "global_encoded_offset": -0.02500000037252903,
+      "all_recorded_drives_base_max": -0.08750000596046448,
+      "actual_last_loneliness": 0.028210319578647614,
+      "reader": {
+        "id": 344,
+        "bias": 0.25,
+        "base": -0.025000005960464478,
+        "recurrent_input_count": 0,
+        "dendritic_input_branch_count": 1,
+        "closed_input_equilibrium": -0.02565242350101471,
+        "recorded_32_frame_probe_gate_range": [
+          -0.02565241977572441,
+          -0.02565241977572441
+        ],
+        "maximum_equilibrium_error": 3.725290298461914e-09
+      }
+    },
+    {
+      "factor": "ZeroNeedMemoryGate",
+      "peer_body_fixture": false,
+      "requested_initial_loneliness": 0.800000011920929,
+      "phenotype_hash": [
+        10134582292771944108,
+        371105542661257961,
+        5534145305591481105,
+        3510158324470094859
+      ],
+      "source_genome_id": 1452063907989915510,
+      "last_frame_tick": 31,
+      "frame_digest": [
+        14244384739916456492,
+        15708087598631802997,
+        3818596866259741508,
+        15192947271638954576
+      ],
+      "effects": {
+        "attention_gain": 0.5,
+        "consolidation_gate": 0.0,
+        "interoceptive_gain": 0.5,
+        "local_threshold_shift": 0.25,
+        "plasticity_appetitive": 0.0,
+        "plasticity_aversive": 0.0,
+        "projection_gain": 0.5,
+        "regional_excitability": 0.5,
+        "sleep_gate": 0.0,
+        "source_chemistry_version": 3,
+        "source_tick": 31,
+        "structural_growth_gate": 0.0
+      },
+      "global_encoded_offset": -0.02500000037252903,
+      "all_recorded_drives_base_max": -0.07500000298023224,
+      "actual_last_loneliness": 0.2256825566291809,
+      "reader": {
+        "id": 344,
+        "bias": 0.25,
+        "base": -0.025000005960464478,
+        "recurrent_input_count": 0,
+        "dendritic_input_branch_count": 1,
+        "closed_input_equilibrium": -0.02565242350101471,
+        "recorded_32_frame_probe_gate_range": [
+          -0.02565241977572441,
+          -0.02565241977572441
+        ],
+        "maximum_equilibrium_error": 3.725290298461914e-09
+      }
+    },
+    {
+      "factor": "ZeroNeedMemoryGate",
+      "peer_body_fixture": true,
+      "requested_initial_loneliness": 0.10000000149011612,
+      "phenotype_hash": [
+        10134582292771944108,
+        371105542661257961,
+        5534145305591481105,
+        3510158324470094859
+      ],
+      "source_genome_id": 1452063907989915510,
+      "last_frame_tick": 31,
+      "frame_digest": [
+        8426998348870013415,
+        5929308022861582482,
+        17364298408173415607,
+        11899848443754383922
+      ],
+      "effects": {
+        "attention_gain": 0.5,
+        "consolidation_gate": 0.015995988622307777,
+        "interoceptive_gain": 0.5,
+        "local_threshold_shift": 0.25,
+        "plasticity_appetitive": 0.0,
+        "plasticity_aversive": 0.0,
+        "projection_gain": 0.5,
+        "regional_excitability": 0.5,
+        "sleep_gate": 0.0,
+        "source_chemistry_version": 3,
+        "source_tick": 31,
+        "structural_growth_gate": 0.0
+      },
+      "global_encoded_offset": -0.024733399972319603,
+      "all_recorded_drives_base_max": -0.08723339438438416,
+      "actual_last_loneliness": 0.0,
+      "reader": {
+        "id": 344,
+        "bias": 0.25,
+        "base": -0.024733394384384155,
+        "recurrent_input_count": 0,
+        "dendritic_input_branch_count": 1,
+        "closed_input_equilibrium": -0.025371670722961426,
+        "recorded_32_frame_probe_gate_range": [
+          -0.025371665135025975,
+          -0.025371665135025975
+        ],
+        "maximum_equilibrium_error": 5.587935451162318e-09
+      }
+    },
+    {
+      "factor": "ZeroNeedMemoryGate",
+      "peer_body_fixture": true,
+      "requested_initial_loneliness": 0.800000011920929,
+      "phenotype_hash": [
+        10134582292771944108,
+        371105542661257961,
+        5534145305591481105,
+        3510158324470094859
+      ],
+      "source_genome_id": 1452063907989915510,
+      "last_frame_tick": 31,
+      "frame_digest": [
+        15373513997988827678,
+        11284024072070982892,
+        15097744289142563237,
+        11086869896716434409
+      ],
+      "effects": {
+        "attention_gain": 0.5,
+        "consolidation_gate": 0.015995988622307777,
+        "interoceptive_gain": 0.5,
+        "local_threshold_shift": 0.25,
+        "plasticity_appetitive": 0.0,
+        "plasticity_aversive": 0.0,
+        "projection_gain": 0.5,
+        "regional_excitability": 0.5,
+        "sleep_gate": 0.0,
+        "source_chemistry_version": 3,
+        "source_tick": 31,
+        "structural_growth_gate": 0.0
+      },
+      "global_encoded_offset": -0.024733399972319603,
+      "all_recorded_drives_base_max": -0.07500000298023224,
+      "actual_last_loneliness": 0.09107694029808044,
+      "reader": {
+        "id": 344,
+        "bias": 0.25,
+        "base": -0.024733394384384155,
+        "recurrent_input_count": 0,
+        "dendritic_input_branch_count": 1,
+        "closed_input_equilibrium": -0.025371670722961426,
+        "recorded_32_frame_probe_gate_range": [
+          -0.025371665135025975,
+          -0.025371665135025975
+        ],
+        "maximum_equilibrium_error": 5.587935451162318e-09
+      }
+    },
+    {
+      "factor": "NeedMemoryGate",
+      "peer_body_fixture": false,
+      "requested_initial_loneliness": 0.10000000149011612,
+      "phenotype_hash": [
+        14982965626741524185,
+        15867917781179225093,
+        11855271576240960682,
+        11838999402718089236
+      ],
+      "source_genome_id": 1452063907989915510,
+      "last_frame_tick": 31,
+      "frame_digest": [
+        16758928831952131880,
+        18022328007173407328,
+        404242474282298434,
+        4818098058417780849
+      ],
+      "effects": {
+        "attention_gain": 0.5,
+        "consolidation_gate": 0.0,
+        "interoceptive_gain": 0.5,
+        "local_threshold_shift": 0.25,
+        "plasticity_appetitive": 0.0,
+        "plasticity_aversive": 0.0,
+        "projection_gain": 0.5,
+        "regional_excitability": 0.5,
+        "sleep_gate": 0.0,
+        "source_chemistry_version": 3,
+        "source_tick": 31,
+        "structural_growth_gate": 0.0
+      },
+      "global_encoded_offset": -0.02500000037252903,
+      "all_recorded_drives_base_max": -0.08750000596046448,
+      "actual_last_loneliness": 0.028210319578647614,
+      "reader": {
+        "id": 344,
+        "bias": 0.25,
+        "base": -0.025000005960464478,
+        "recurrent_input_count": 0,
+        "dendritic_input_branch_count": 1,
+        "closed_input_equilibrium": -0.02565242350101471,
+        "recorded_32_frame_probe_gate_range": [
+          -0.02565241977572441,
+          -0.02565241977572441
+        ],
+        "maximum_equilibrium_error": 3.725290298461914e-09
+      }
+    },
+    {
+      "factor": "NeedMemoryGate",
+      "peer_body_fixture": false,
+      "requested_initial_loneliness": 0.800000011920929,
+      "phenotype_hash": [
+        14982965626741524185,
+        15867917781179225093,
+        11855271576240960682,
+        11838999402718089236
+      ],
+      "source_genome_id": 1452063907989915510,
+      "last_frame_tick": 31,
+      "frame_digest": [
+        14244384739916456492,
+        15708087598631802997,
+        3818596866259741508,
+        15192947271638954576
+      ],
+      "effects": {
+        "attention_gain": 0.5,
+        "consolidation_gate": 0.0,
+        "interoceptive_gain": 0.5,
+        "local_threshold_shift": 0.25,
+        "plasticity_appetitive": 0.0,
+        "plasticity_aversive": 0.0,
+        "projection_gain": 0.5,
+        "regional_excitability": 0.5,
+        "sleep_gate": 0.0,
+        "source_chemistry_version": 3,
+        "source_tick": 31,
+        "structural_growth_gate": 0.0
+      },
+      "global_encoded_offset": -0.02500000037252903,
+      "all_recorded_drives_base_max": -0.07500000298023224,
+      "actual_last_loneliness": 0.2256825566291809,
+      "reader": {
+        "id": 344,
+        "bias": 0.25,
+        "base": -0.025000005960464478,
+        "recurrent_input_count": 0,
+        "dendritic_input_branch_count": 1,
+        "closed_input_equilibrium": -0.02565242350101471,
+        "recorded_32_frame_probe_gate_range": [
+          -0.02565241977572441,
+          -0.02565241977572441
+        ],
+        "maximum_equilibrium_error": 3.725290298461914e-09
+      }
+    },
+    {
+      "factor": "NeedMemoryGate",
+      "peer_body_fixture": true,
+      "requested_initial_loneliness": 0.10000000149011612,
+      "phenotype_hash": [
+        14982965626741524185,
+        15867917781179225093,
+        11855271576240960682,
+        11838999402718089236
+      ],
+      "source_genome_id": 1452063907989915510,
+      "last_frame_tick": 31,
+      "frame_digest": [
+        8426998348870013415,
+        5929308022861582482,
+        17364298408173415607,
+        11899848443754383922
+      ],
+      "effects": {
+        "attention_gain": 0.5,
+        "consolidation_gate": 0.015995988622307777,
+        "interoceptive_gain": 0.5,
+        "local_threshold_shift": 0.25,
+        "plasticity_appetitive": 0.0,
+        "plasticity_aversive": 0.0,
+        "projection_gain": 0.5,
+        "regional_excitability": 0.5,
+        "sleep_gate": 0.0,
+        "source_chemistry_version": 3,
+        "source_tick": 31,
+        "structural_growth_gate": 0.0
+      },
+      "global_encoded_offset": -0.024733399972319603,
+      "all_recorded_drives_base_max": -0.08723339438438416,
+      "actual_last_loneliness": 0.0,
+      "reader": {
+        "id": 344,
+        "bias": 0.25,
+        "base": -0.024733394384384155,
+        "recurrent_input_count": 0,
+        "dendritic_input_branch_count": 1,
+        "closed_input_equilibrium": -0.025371670722961426,
+        "recorded_32_frame_probe_gate_range": [
+          -0.025371665135025975,
+          -0.025371665135025975
+        ],
+        "maximum_equilibrium_error": 5.587935451162318e-09
+      }
+    },
+    {
+      "factor": "NeedMemoryGate",
+      "peer_body_fixture": true,
+      "requested_initial_loneliness": 0.800000011920929,
+      "phenotype_hash": [
+        14982965626741524185,
+        15867917781179225093,
+        11855271576240960682,
+        11838999402718089236
+      ],
+      "source_genome_id": 1452063907989915510,
+      "last_frame_tick": 31,
+      "frame_digest": [
+        15373513997988827678,
+        11284024072070982892,
+        15097744289142563237,
+        11086869896716434409
+      ],
+      "effects": {
+        "attention_gain": 0.5,
+        "consolidation_gate": 0.015995988622307777,
+        "interoceptive_gain": 0.5,
+        "local_threshold_shift": 0.25,
+        "plasticity_appetitive": 0.0,
+        "plasticity_aversive": 0.0,
+        "projection_gain": 0.5,
+        "regional_excitability": 0.5,
+        "sleep_gate": 0.0,
+        "source_chemistry_version": 3,
+        "source_tick": 31,
+        "structural_growth_gate": 0.0
+      },
+      "global_encoded_offset": -0.024733399972319603,
+      "all_recorded_drives_base_max": -0.07500000298023224,
+      "actual_last_loneliness": 0.09107694029808044,
+      "reader": {
+        "id": 344,
+        "bias": 0.25,
+        "base": -0.024733394384384155,
+        "recurrent_input_count": 0,
+        "dendritic_input_branch_count": 1,
+        "closed_input_equilibrium": -0.025371670722961426,
+        "recorded_32_frame_probe_gate_range": [
+          -0.025371665135025975,
+          -0.025371665135025975
+        ],
+        "maximum_equilibrium_error": 5.587935451162318e-09
+      }
+    }
+  ]
+}

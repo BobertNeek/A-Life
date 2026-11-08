@@ -1,0 +1,18 @@
+   Compiling alife_runtime v0.1.0 (/workspace/scratch/ee5e08a3ca9b/motor-reflex-gpu-journal-v8/crates/alife_runtime)
+    Finished `test` profile [unoptimized] target(s) in 28.10s
+     Running unittests src/lib.rs (/workspace/scratch/ee5e08a3ca9b/motor-reflex-target-v1/debug/deps/alife_runtime-7e21bb42129e2c43)
+
+running 10 tests
+test checkpoint_assets::durable_manifest::tests::journal_compound_tick_ordinals_are_bounded_and_contiguous ... ok
+test checkpoint_assets::durable_manifest::tests::journal_none_to_pending_requires_canonical_consolidating_identity ... ok
+test checkpoint_assets::durable_manifest::tests::journal_pre_pending_phase_edges_are_exact_and_fail_closed ... ok
+test checkpoint_assets::durable_manifest::tests::journal_rejects_interleaved_broken_organism_chain ... ok
+test checkpoint_assets::durable_manifest::tests::journal_rejects_malformed_base_digest ... ok
+test checkpoint_assets::durable_manifest::tests::journal_sleep_trigger_raw_mapping_is_stable ... ok
+test checkpoint_assets::durable_manifest::tests::journal_vs_base_accepts_matching_first_source ... ok
+test checkpoint_assets::durable_manifest::tests::journal_vs_base_discards_superseded_ahead_journal ... ok
+test checkpoint_assets::durable_manifest::tests::journal_vs_base_rejects_first_source_mismatch ... ok
+test checkpoint_assets::durable_manifest::tests::version3_container_cannot_relabel_legacy_entries_or_empty_journal ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 11 filtered out; finished in 0.00s
+

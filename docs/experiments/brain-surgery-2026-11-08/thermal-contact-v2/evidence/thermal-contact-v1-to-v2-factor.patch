@@ -1,0 +1,457 @@
+--- a/crates/alife_core/src/lib.rs
++++ b/crates/alife_core/src/lib.rs
+@@ -112,7 +112,7 @@
+ pub use biochemistry::{
+     BiochemistryCadence, BiochemistryState, BodyEventDelta, BodyState, DevelopmentReadiness,
+     OrganKind, OrganPhysiology, PassiveBodyUpkeepPolicy, ReproductionReadiness,
+-    MAX_BIOCHEMISTRY_CATCH_UP_STEPS, ORGAN_KIND_COUNT,
++    ThermalBalanceCandidate, MAX_BIOCHEMISTRY_CATCH_UP_STEPS, ORGAN_KIND_COUNT,
+ };
+ pub use blake3_digest::Blake3Digest;
+ pub use brain_class::{BrainClassSpec, BrainComputeBudget, BrainScaleTier};
+--- a/crates/alife_core/src/biochemistry.rs
++++ b/crates/alife_core/src/biochemistry.rs
+@@ -159,24 +159,35 @@
+         energy_use: Option<f32>,
+         repair_signal: Option<f32>,
+         sleep_metabolic_rate: f32,
+-        thermal_relief: f32,
++        thermal_balance: ThermalBalanceCandidate,
+     ) -> Self {
+         let injury_gain = event.damage * (1.0 - phenotype.body.injury_resistance);
+         let turnover = phenotype.body.metabolic_turnover;
+         let recovery = event.sleep_recovery * turnover;
+-        let temperature_stress = if thermal_relief == 0.0 {
++        let temperature_stress = if !thermal_balance.suppress_sleep_thermal_relief
++            && thermal_balance.passive_relief == 0.0
++        {
+             // Keep the literal legacy arithmetic path, including signed zero.
+             clamp01(
+                 self.temperature_stress
+                     + event.temperature_stress * (1.0 - phenotype.body.temperature_tolerance)
+                     - recovery * 0.20,
+             )
++        } else if thermal_balance.suppress_sleep_thermal_relief {
++            // Candidate V2: continued measured external exposure is not erased
++            // by the inherited sleep-cooling shortcut. Every other sleep effect
++            // still uses `recovery` and the unmodified event below.
++            clamp01(
++                self.temperature_stress
++                    + event.temperature_stress * (1.0 - phenotype.body.temperature_tolerance)
++                    - thermal_balance.passive_relief,
++            )
+         } else {
+             clamp01(
+                 self.temperature_stress
+                     + event.temperature_stress * (1.0 - phenotype.body.temperature_tolerance)
+                     - recovery * 0.20
+-                    - thermal_relief,
++                    - thermal_balance.passive_relief,
+             )
+         };
+         let mut organs = self.organs;
+@@ -401,6 +412,16 @@
+     }
+ }
+ 
++/// Nonpersistent research input to one biological interval. Amounts are already
++/// integrated over the actual interval, never multiplied by command duration.
++#[derive(Debug, Clone, Copy, PartialEq, Default)]
++pub struct ThermalBalanceCandidate {
++    pub passive_relief: f32,
++    /// Set only for positive explicitly configured external contact exposure.
++    /// Does not suppress sleep's fatigue, ATP, repair, or metabolic effects.
++    pub suppress_sleep_thermal_relief: bool,
++}
++
+ #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+ pub struct BodyEventDelta {
+     pub energy: f32,
+@@ -819,7 +840,31 @@
+         phenotype: &CreaturePhenotype,
+         thermal_relief: f32,
+     ) -> Result<Self, ScaffoldContractError> {
+-        validate_unit_values(&[thermal_relief])?;
++        self.advance_with_thermal_balance_candidate(
++            next_tick,
++            next_age,
++            event,
++            neural,
++            phenotype,
++            ThermalBalanceCandidate {
++                passive_relief: thermal_relief,
++                suppress_sleep_thermal_relief: false,
++            },
++        )
++    }
++
++    /// Candidate V2 explicit thermal balance. Ordinary and V1 entry points keep
++    /// the inherited sleep-cooling term through the wrapper above.
++    pub fn advance_with_thermal_balance_candidate(
++        &self,
++        next_tick: Tick,
++        next_age: Tick,
++        event: BodyEventDelta,
++        neural: Option<&NeuralEmissionFrame>,
++        phenotype: &CreaturePhenotype,
++        thermal_balance: ThermalBalanceCandidate,
++    ) -> Result<Self, ScaffoldContractError> {
++        validate_unit_values(&[thermal_balance.passive_relief])?;
+         self.validate_against(phenotype)?;
+         event.validate_contract()?;
+         phenotype.brain_genome.validate_contract()?;
+@@ -885,7 +930,7 @@
+             energy_use,
+             repair_signal,
+             sleep_metabolic_rate,
+-            thermal_relief,
++            thermal_balance,
+         );
+         body.validate_contract()?;
+         let development = if development_steps > 0 {
+@@ -1223,7 +1268,7 @@
+                 Some(energy),
+                 Some(repair),
+                 1.0,
+-                0.0,
++                ThermalBalanceCandidate::default(),
+             )
+         };
+         assert!(run(0.25, 0.0).energy > run(1.0, 0.0).energy);
+@@ -1238,7 +1283,7 @@
+             Some(1.0),
+             Some(1.0),
+             1.0,
+-            0.0,
++            ThermalBalanceCandidate::default(),
+         );
+         assert_eq!(after.health, exhausted.health);
+         assert_eq!(after.energy, 0.0);
+@@ -1257,7 +1302,7 @@
+                 Some(0.0),
+                 None,
+                 1.0,
+-                0.0,
++                ThermalBalanceCandidate::default(),
+             )
+         };
+         let recovered = sleeping(body);
+@@ -1295,7 +1340,7 @@
+                 Some(0.0),
+                 repair,
+                 1.0,
+-                0.0,
++                ThermalBalanceCandidate::default(),
+             )
+         };
+         let without_repair = run(body, event, Some(0.0));
+@@ -1348,7 +1393,7 @@
+                 Some(0.0),
+                 repair,
+                 1.0,
+-                0.0,
++                ThermalBalanceCandidate::default(),
+             );
+             let before_organ = body.organ(OrganKind::Circulatory);
+             let after_organ = after.organ(OrganKind::Circulatory);
+--- a/crates/alife_world/src/organism.rs
++++ b/crates/alife_world/src/organism.rs
+@@ -787,7 +787,7 @@
+         next_tick: Tick,
+         event: BodyEventDelta,
+         neural: Option<&NeuralEmissionFrame>,
+-        thermal_relief: f32,
++        thermal_balance: alife_core::ThermalBalanceCandidate,
+     ) -> Result<(), OrganismRegistryError> {
+         if !self.lifecycle.is_alive() {
+             return Err(OrganismRegistryError::DeadOrganism(self.organism_id));
+@@ -797,13 +797,13 @@
+         let original_state_graph = self.state_graph.clone();
+         let next_age = self.age_at(next_tick)?;
+         let result = (|| -> Result<(), ScaffoldContractError> {
+-            self.biochemistry = self.biochemistry.advance_with_thermal_relief_candidate(
++            self.biochemistry = self.biochemistry.advance_with_thermal_balance_candidate(
+                 next_tick,
+                 next_age,
+                 event,
+                 neural,
+                 &self.phenotype,
+-                thermal_relief,
++                thermal_balance,
+             )?;
+             self.advance_body_state_ref()?;
+             self.validate_contract()
+@@ -1397,12 +1397,12 @@
+         next_tick: Tick,
+         event: BodyEventDelta,
+         neural: Option<&NeuralEmissionFrame>,
+-        thermal_relief: f32,
++        thermal_balance: alife_core::ThermalBalanceCandidate,
+     ) -> Result<(), OrganismRegistryError> {
+         self.records_by_organism
+             .get_mut(&organism_id.raw())
+             .ok_or(OrganismRegistryError::UnknownOrganism(organism_id))?
+-            .advance_biology_thermal_candidate(next_tick, event, neural, thermal_relief)
++            .advance_biology_thermal_candidate(next_tick, event, neural, thermal_balance)
+     }
+ 
+     pub fn account_cognitive_work(
+--- a/crates/alife_world/src/headless/thermal_contact_candidate.rs
++++ b/crates/alife_world/src/headless/thermal_contact_candidate.rs
+@@ -1,5 +1,6 @@
+ //! Explicit, nonpersistent thermal-physics research factor. Not a default rule.
+ use super::*;
++use alife_core::ThermalBalanceCandidate;
+ 
+ #[derive(Debug, Clone)]
+ pub struct ThermalContactCandidate {
+@@ -111,9 +112,9 @@
+         &self,
+         mut event: BodyEventDelta,
+         severity: f32,
+-    ) -> (BodyEventDelta, f32) {
++    ) -> (BodyEventDelta, ThermalBalanceCandidate) {
+         let Some(parameters) = &self.thermal_contact_candidate else {
+-            return (event, 0.0);
++            return (event, ThermalBalanceCandidate::default());
+         };
+         // Each authoritative path admits exactly current_tick+1. A long command
+         // duration is not elapsed physiology; moving samples endpoint contact,
+@@ -128,7 +129,13 @@
+         } else {
+             0.0
+         };
+-        (event, relief)
++        (
++            event,
++            ThermalBalanceCandidate {
++                passive_relief: relief,
++                suppress_sleep_thermal_relief: exposure > 0.0,
++            },
++        )
+     }
+ 
+     pub(super) fn advance_biology_with_thermal_candidate(
+@@ -137,7 +144,7 @@
+         tick: Tick,
+         event: BodyEventDelta,
+         neural: Option<&NeuralEmissionFrame>,
+-        relief: f32,
++        relief: ThermalBalanceCandidate,
+     ) -> Result<(), ScaffoldContractError> {
+         if self.thermal_contact_candidate.is_some() {
+             self.organism_registry
+--- a/crates/alife_world/src/headless/thermal_contact_candidate/tests.rs
++++ b/crates/alife_world/src/headless/thermal_contact_candidate/tests.rs
+@@ -423,7 +423,7 @@
+                 let p = w.organism_registry.get(OWN).unwrap().phenotype();
+                 let b = biology(w);
+                 let ordinary = b.advance(Tick(1), event, p)?;
+-                let candidate = b.advance_with_thermal_relief_candidate(
++                let candidate = b.advance_with_thermal_balance_candidate(
+                     Tick(1),
+                     Tick(1),
+                     event,
+@@ -456,23 +456,48 @@
+ }
+ 
+ #[test]
+-fn frozen_v1_continued_hot_cold_rest_erases_modest_contact_load() {
++fn v2_continued_hot_cold_rest_preserves_exposure_and_other_sleep_benefits() {
+     for temperature in [-1.0, 1.0] {
+-        let (base, own, surface) = fixture_at(temperature, None, Tick(600));
++        let (mut base, own, surface) = fixture_at(temperature, None, Tick(600));
++        for _ in 0..10 {
++            advance(&mut base, config(surface));
++        }
++        // A real shared injury makes the repair comparison nontrivial.
++        let injury = BTreeMap::from([(
++            OWN.raw(),
++            BodyEventDelta {
++                damage: 0.4,
++                ..BodyEventDelta::zero()
++            },
++        )]);
++        base.with_thermal_contact_candidate(config(surface), |w| {
++            w.try_advance_tick_with_body_events(&injury)
++        })
++        .unwrap();
++        let before = biology(&base);
++        assert!(before.body.injury > 0.0);
++        let initial = before.body.temperature_stress;
++        let mut neural_rest = base.clone();
+         let mut idle = base.clone();
+         let mut rest = base.clone();
+-        let mut neutral_rest = base;
++        let mut neutral_rest = base.clone();
++        let mut left_rest = base;
+         neutral_rest
+             .objects
+             .get_mut(&surface.raw())
+             .unwrap()
+             .grounded_physical
+             .surface_temperature = 0.0;
++        left_rest
++            .editor_move_object(surface, Vec3f::new(10.0, 0.0, 0.0))
++            .unwrap();
+         for (world, kind) in [
+             (&mut idle, ActionKind::Idle),
+             (&mut rest, ActionKind::Rest),
+             (&mut neutral_rest, ActionKind::Rest),
++            (&mut left_rest, ActionKind::Rest),
+         ] {
++            let next = Tick(world.tick.raw() + 1);
+             world
+                 .with_thermal_contact_candidate(config(surface), |w| {
+                     let command = HeadlessWorldCommand::structured(
+@@ -482,7 +507,7 @@
+                         None,
+                         None,
+                     )?;
+-                    let receipt = w.apply_registered_command(&command, own, Tick(601))?;
++                    let receipt = w.apply_registered_command(&command, own, next)?;
+                     if kind == ActionKind::Rest {
+                         assert_eq!(receipt.action_result.body_event.sleep_recovery, 1.0);
+                     }
+@@ -490,18 +515,131 @@
+                 })
+                 .unwrap();
+         }
+-        assert!(biology(&idle).body.temperature_stress > 0.0);
+-        assert_eq!(biology(&rest).body.temperature_stress, 0.0);
+-        assert_eq!(biology(&rest).body, biology(&neutral_rest).body);
++        neural_rest
++            .with_thermal_contact_candidate(config(surface), |w| {
++                let command = HeadlessWorldCommand::structured(
++                    OWN,
++                    ActionKind::Rest.canonical_id(),
++                    ActionKind::Rest,
++                    None,
++                    None,
++                )?;
++                let channel =
++                    alife_core::channel_command_for_action(MotorChannel::Posture, &command)?;
++                let bundle = MotorCommandBundle::new(
++                    OWN,
++                    alife_core::ExperienceSequenceId(1),
++                    w.tick,
++                    vec![channel],
++                )?;
++                let neural = NeuralEmissionFrame::new(w.tick, 1, Vec::new())?;
++                w.apply_registered_motor_bundle_with_neural_emission(&bundle, own, &neural)
++                    .unwrap();
++                w.try_advance_tick()
++            })
++            .unwrap();
++        let hot_rest = biology(&rest);
++        let clear_rest = biology(&neutral_rest);
++        assert_eq!(hot_rest.body, biology(&neural_rest).body);
++        assert_eq!(hot_rest.homeostasis, biology(&neural_rest).homeostasis);
++        assert!(
++            biology(&neural_rest)
++                .biochemical_work()
++                .neural_emitter_evaluations
++                > hot_rest.biochemical_work().neural_emitter_evaluations
++        );
++        assert_eq!(
++            rest.last_action_result.as_ref().unwrap().execution,
++            neutral_rest.last_action_result.as_ref().unwrap().execution
++        );
++        assert!(hot_rest.body.health > before.body.health);
++        assert!(hot_rest.body.temperature_stress > initial);
++        assert_eq!(
++            hot_rest.body.temperature_stress,
++            biology(&idle).body.temperature_stress
++        );
++        assert_eq!(clear_rest.body.temperature_stress, 0.0);
++        assert_eq!(biology(&left_rest), clear_rest);
+         assert_eq!(
+-            biology(&rest).homeostasis,
+-            biology(&neutral_rest).homeostasis
++            hot_rest.homeostasis.drives.brain_atp,
++            clear_rest.homeostasis.drives.brain_atp
+         );
+-        println!(
+-            "V1 temperature={temperature} idle_load={} rest_load={} neutral_rest_load={}",
+-            biology(&idle).body.temperature_stress,
+-            biology(&rest).body.temperature_stress,
+-            biology(&neutral_rest).body.temperature_stress
++        assert_eq!(
++            hot_rest.homeostasis.drives.fatigue,
++            clear_rest.homeostasis.drives.fatigue
+         );
++        assert!(
++            hot_rest.homeostasis.drives.brain_atp > biology(&idle).homeostasis.drives.brain_atp
++        );
++        assert_eq!(hot_rest.body.sleeping, clear_rest.body.sleeping);
++        assert!(hot_rest.body.sleeping);
++        assert_eq!(hot_rest.body.energy, clear_rest.body.energy);
++        assert_eq!(hot_rest.body.health, clear_rest.body.health);
++        assert_eq!(hot_rest.body.injury, clear_rest.body.injury);
++        assert_eq!(hot_rest.reproduction, clear_rest.reproduction);
++        assert_eq!(hot_rest.biochemical_work(), clear_rest.biochemical_work());
++        for (a, b) in hot_rest
++            .body
++            .organs()
++            .iter()
++            .zip(clear_rest.body.organs().iter())
++        {
++            assert_eq!(a.energy, b.energy);
++            assert_eq!(a.damage, b.damage);
++            assert_eq!(a.integrity, b.integrity);
++            assert_eq!(a.repair_capacity, b.repair_capacity);
++        }
++        let mut saved = PortableSaveFile::from_json_str(&bytes(&rest))
++            .unwrap()
++            .restore_headless_world()
++            .unwrap();
++        for w in [&mut rest, &mut saved] {
++            let next = Tick(w.tick.raw() + 1);
++            w.with_thermal_contact_candidate(config(surface), |w| {
++                let command = HeadlessWorldCommand::structured(
++                    OWN,
++                    ActionKind::Rest.canonical_id(),
++                    ActionKind::Rest,
++                    None,
++                    None,
++                )?;
++                w.apply_registered_command(&command, own, next)?;
++                w.try_advance_tick()
++            })
++            .unwrap();
++        }
++        assert_eq!(bytes(&rest), bytes(&saved));
++        println!("V2 temperature={temperature} prior={initial} hot_rest={} clear_rest={} ATP_hot={} ATP_clear={}",hot_rest.body.temperature_stress,clear_rest.body.temperature_stress,hot_rest.homeostasis.drives.brain_atp,clear_rest.homeostasis.drives.brain_atp);
+     }
+ }
++
++#[test]
++fn v2_zero_external_dose_does_not_suppress_legacy_or_v1_sleep_cooling() {
++    let (base, _, surface) = fixture_at(1.0, None, Tick(600));
++    let record = base.organism_registry.get(OWN).unwrap();
++    let p = record.phenotype();
++    let before = biology(&base);
++    let event = BodyEventDelta {
++        sleep_recovery: 1.0,
++        temperature_stress: 0.2,
++        ..BodyEventDelta::zero()
++    };
++    let legacy = before.advance(Tick(601), event, p).unwrap();
++    let v1 = before
++        .advance_with_thermal_relief_candidate(Tick(601), Tick(601), event, None, p, 0.0)
++        .unwrap();
++    assert_eq!(
++        serde_json::to_string(&legacy).unwrap(),
++        serde_json::to_string(&v1).unwrap()
++    );
++    let mut candidate = base.clone();
++    let mut p = config(surface);
++    p.exposure_per_second = 0.0;
++    let events = BTreeMap::from([(OWN.raw(), event)]);
++    let mut ordinary = base;
++    ordinary.try_advance_tick_with_body_events(&events).unwrap();
++    candidate
++        .with_thermal_contact_candidate(p, |w| w.try_advance_tick_with_body_events(&events))
++        .unwrap();
++    assert_eq!(bytes(&ordinary), bytes(&candidate));
++}

@@ -1,0 +1,3152 @@
+{
+  "source_commit": "27c01b6f258604a307c5c359ad41c7e91ae3ae0b",
+  "source_tree": "5bacbc0d51b13fc144f94d66ff564e9980fd1bab",
+  "native_receipt_sha256": "6f0e21260fec2885bee195cd32b9b7955579fd96e4fd68a49106aa7e27e98a92",
+  "scope": "384 fixed CPU intervals, no autonomous life or optimizer update. Active/zero choices identical. Detached pressure labels are nominal unmodulated input probes, not exact native re-encoding; see erratum. No neural/learned/optimizer banks or complete state included.",
+  "rows": [
+    {
+      "factor": null,
+      "peer": false,
+      "initial_need": 0.10000000149011612,
+      "interval_decisions": 32,
+      "nonzero_recall_samples": 108,
+      "detached_effects": [
+        {
+          "clear_recall": false,
+          "relay_off": false,
+          "frames": 1,
+          "microsteps": 3,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": false,
+          "frames": 8,
+          "microsteps": 24,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": false,
+          "frames": 32,
+          "microsteps": 96,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": true,
+          "frames": 1,
+          "microsteps": 3,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": true,
+          "frames": 8,
+          "microsteps": 24,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": true,
+          "frames": 32,
+          "microsteps": 96,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": false,
+          "frames": 1,
+          "microsteps": 3,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": false,
+          "frames": 8,
+          "microsteps": 24,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": false,
+          "frames": 32,
+          "microsteps": 96,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": true,
+          "frames": 1,
+          "microsteps": 3,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": true,
+          "frames": 8,
+          "microsteps": 24,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": true,
+          "frames": 32,
+          "microsteps": 96,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      ],
+      "final_loneliness": 0.02708190679550171
+    },
+    {
+      "factor": null,
+      "peer": false,
+      "initial_need": 0.800000011920929,
+      "interval_decisions": 32,
+      "nonzero_recall_samples": 108,
+      "detached_effects": [
+        {
+          "clear_recall": false,
+          "relay_off": false,
+          "frames": 1,
+          "microsteps": 3,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": false,
+          "frames": 8,
+          "microsteps": 24,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": false,
+          "frames": 32,
+          "microsteps": 96,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": true,
+          "frames": 1,
+          "microsteps": 3,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": true,
+          "frames": 8,
+          "microsteps": 24,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": true,
+          "frames": 32,
+          "microsteps": 96,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": false,
+          "frames": 1,
+          "microsteps": 3,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": false,
+          "frames": 8,
+          "microsteps": 24,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": false,
+          "frames": 32,
+          "microsteps": 96,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": true,
+          "frames": 1,
+          "microsteps": 3,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": true,
+          "frames": 8,
+          "microsteps": 24,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": true,
+          "frames": 32,
+          "microsteps": 96,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      ],
+      "final_loneliness": 0.21665525436401367
+    },
+    {
+      "factor": null,
+      "peer": true,
+      "initial_need": 0.10000000149011612,
+      "interval_decisions": 32,
+      "nonzero_recall_samples": 108,
+      "detached_effects": [
+        {
+          "clear_recall": false,
+          "relay_off": false,
+          "frames": 1,
+          "microsteps": 3,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": false,
+          "frames": 8,
+          "microsteps": 24,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": false,
+          "frames": 32,
+          "microsteps": 96,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": true,
+          "frames": 1,
+          "microsteps": 3,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": true,
+          "frames": 8,
+          "microsteps": 24,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": true,
+          "frames": 32,
+          "microsteps": 96,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": false,
+          "frames": 1,
+          "microsteps": 3,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": false,
+          "frames": 8,
+          "microsteps": 24,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": false,
+          "frames": 32,
+          "microsteps": 96,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": true,
+          "frames": 1,
+          "microsteps": 3,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": true,
+          "frames": 8,
+          "microsteps": 24,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": true,
+          "frames": 32,
+          "microsteps": 96,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      ],
+      "final_loneliness": 0.0
+    },
+    {
+      "factor": null,
+      "peer": true,
+      "initial_need": 0.800000011920929,
+      "interval_decisions": 32,
+      "nonzero_recall_samples": 108,
+      "detached_effects": [
+        {
+          "clear_recall": false,
+          "relay_off": false,
+          "frames": 1,
+          "microsteps": 3,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": false,
+          "frames": 8,
+          "microsteps": 24,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": false,
+          "frames": 32,
+          "microsteps": 96,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": true,
+          "frames": 1,
+          "microsteps": 3,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": true,
+          "frames": 8,
+          "microsteps": 24,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": true,
+          "frames": 32,
+          "microsteps": 96,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": false,
+          "frames": 1,
+          "microsteps": 3,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": false,
+          "frames": 8,
+          "microsteps": 24,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": false,
+          "frames": 32,
+          "microsteps": 96,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": true,
+          "frames": 1,
+          "microsteps": 3,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": true,
+          "frames": 8,
+          "microsteps": 24,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": true,
+          "frames": 32,
+          "microsteps": 96,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      ],
+      "final_loneliness": 0.07993385940790176
+    },
+    {
+      "factor": "ZeroNeedMemoryGate",
+      "peer": false,
+      "initial_need": 0.10000000149011612,
+      "interval_decisions": 32,
+      "nonzero_recall_samples": 108,
+      "detached_effects": [
+        {
+          "clear_recall": false,
+          "relay_off": false,
+          "frames": 1,
+          "microsteps": 3,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": false,
+          "frames": 8,
+          "microsteps": 24,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": false,
+          "frames": 32,
+          "microsteps": 96,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": true,
+          "frames": 1,
+          "microsteps": 3,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": true,
+          "frames": 8,
+          "microsteps": 24,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": true,
+          "frames": 32,
+          "microsteps": 96,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": false,
+          "frames": 1,
+          "microsteps": 3,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": false,
+          "frames": 8,
+          "microsteps": 24,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": false,
+          "frames": 32,
+          "microsteps": 96,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": true,
+          "frames": 1,
+          "microsteps": 3,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": true,
+          "frames": 8,
+          "microsteps": 24,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": true,
+          "frames": 32,
+          "microsteps": 96,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      ],
+      "final_loneliness": 0.02708190679550171
+    },
+    {
+      "factor": "ZeroNeedMemoryGate",
+      "peer": false,
+      "initial_need": 0.800000011920929,
+      "interval_decisions": 32,
+      "nonzero_recall_samples": 108,
+      "detached_effects": [
+        {
+          "clear_recall": false,
+          "relay_off": false,
+          "frames": 1,
+          "microsteps": 3,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": false,
+          "frames": 8,
+          "microsteps": 24,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": false,
+          "frames": 32,
+          "microsteps": 96,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": true,
+          "frames": 1,
+          "microsteps": 3,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": true,
+          "frames": 8,
+          "microsteps": 24,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": true,
+          "frames": 32,
+          "microsteps": 96,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": false,
+          "frames": 1,
+          "microsteps": 3,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": false,
+          "frames": 8,
+          "microsteps": 24,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": false,
+          "frames": 32,
+          "microsteps": 96,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": true,
+          "frames": 1,
+          "microsteps": 3,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": true,
+          "frames": 8,
+          "microsteps": 24,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": true,
+          "frames": 32,
+          "microsteps": 96,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      ],
+      "final_loneliness": 0.21665525436401367
+    },
+    {
+      "factor": "ZeroNeedMemoryGate",
+      "peer": true,
+      "initial_need": 0.10000000149011612,
+      "interval_decisions": 32,
+      "nonzero_recall_samples": 108,
+      "detached_effects": [
+        {
+          "clear_recall": false,
+          "relay_off": false,
+          "frames": 1,
+          "microsteps": 3,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": false,
+          "frames": 8,
+          "microsteps": 24,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": false,
+          "frames": 32,
+          "microsteps": 96,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": true,
+          "frames": 1,
+          "microsteps": 3,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": true,
+          "frames": 8,
+          "microsteps": 24,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": true,
+          "frames": 32,
+          "microsteps": 96,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": false,
+          "frames": 1,
+          "microsteps": 3,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": false,
+          "frames": 8,
+          "microsteps": 24,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": false,
+          "frames": 32,
+          "microsteps": 96,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": true,
+          "frames": 1,
+          "microsteps": 3,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": true,
+          "frames": 8,
+          "microsteps": 24,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": true,
+          "frames": 32,
+          "microsteps": 96,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      ],
+      "final_loneliness": 0.0
+    },
+    {
+      "factor": "ZeroNeedMemoryGate",
+      "peer": true,
+      "initial_need": 0.800000011920929,
+      "interval_decisions": 32,
+      "nonzero_recall_samples": 108,
+      "detached_effects": [
+        {
+          "clear_recall": false,
+          "relay_off": false,
+          "frames": 1,
+          "microsteps": 3,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": false,
+          "frames": 8,
+          "microsteps": 24,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": false,
+          "frames": 32,
+          "microsteps": 96,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": true,
+          "frames": 1,
+          "microsteps": 3,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": true,
+          "frames": 8,
+          "microsteps": 24,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": true,
+          "frames": 32,
+          "microsteps": 96,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": false,
+          "frames": 1,
+          "microsteps": 3,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": false,
+          "frames": 8,
+          "microsteps": 24,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": false,
+          "frames": 32,
+          "microsteps": 96,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": true,
+          "frames": 1,
+          "microsteps": 3,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": true,
+          "frames": 8,
+          "microsteps": 24,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": true,
+          "frames": 32,
+          "microsteps": 96,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      ],
+      "final_loneliness": 0.07993385940790176
+    },
+    {
+      "factor": "NeedMemoryGate",
+      "peer": false,
+      "initial_need": 0.10000000149011612,
+      "interval_decisions": 32,
+      "nonzero_recall_samples": 108,
+      "detached_effects": [
+        {
+          "clear_recall": false,
+          "relay_off": false,
+          "frames": 1,
+          "microsteps": 3,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": false,
+          "frames": 8,
+          "microsteps": 24,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": false,
+          "frames": 32,
+          "microsteps": 96,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": true,
+          "frames": 1,
+          "microsteps": 3,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": true,
+          "frames": 8,
+          "microsteps": 24,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": true,
+          "frames": 32,
+          "microsteps": 96,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": false,
+          "frames": 1,
+          "microsteps": 3,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": false,
+          "frames": 8,
+          "microsteps": 24,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": false,
+          "frames": 32,
+          "microsteps": 96,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": true,
+          "frames": 1,
+          "microsteps": 3,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": true,
+          "frames": 8,
+          "microsteps": 24,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": true,
+          "frames": 32,
+          "microsteps": 96,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      ],
+      "final_loneliness": 0.02708190679550171
+    },
+    {
+      "factor": "NeedMemoryGate",
+      "peer": false,
+      "initial_need": 0.800000011920929,
+      "interval_decisions": 32,
+      "nonzero_recall_samples": 108,
+      "detached_effects": [
+        {
+          "clear_recall": false,
+          "relay_off": false,
+          "frames": 1,
+          "microsteps": 3,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": false,
+          "frames": 8,
+          "microsteps": 24,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": false,
+          "frames": 32,
+          "microsteps": 96,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": true,
+          "frames": 1,
+          "microsteps": 3,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": true,
+          "frames": 8,
+          "microsteps": 24,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": true,
+          "frames": 32,
+          "microsteps": 96,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": false,
+          "frames": 1,
+          "microsteps": 3,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": false,
+          "frames": 8,
+          "microsteps": 24,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": false,
+          "frames": 32,
+          "microsteps": 96,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": true,
+          "frames": 1,
+          "microsteps": 3,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": true,
+          "frames": 8,
+          "microsteps": 24,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": true,
+          "frames": 32,
+          "microsteps": 96,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      ],
+      "final_loneliness": 0.21665525436401367
+    },
+    {
+      "factor": "NeedMemoryGate",
+      "peer": true,
+      "initial_need": 0.10000000149011612,
+      "interval_decisions": 32,
+      "nonzero_recall_samples": 108,
+      "detached_effects": [
+        {
+          "clear_recall": false,
+          "relay_off": false,
+          "frames": 1,
+          "microsteps": 3,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": false,
+          "frames": 8,
+          "microsteps": 24,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": false,
+          "frames": 32,
+          "microsteps": 96,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": true,
+          "frames": 1,
+          "microsteps": 3,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": true,
+          "frames": 8,
+          "microsteps": 24,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": true,
+          "frames": 32,
+          "microsteps": 96,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": false,
+          "frames": 1,
+          "microsteps": 3,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": false,
+          "frames": 8,
+          "microsteps": 24,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": false,
+          "frames": 32,
+          "microsteps": 96,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": true,
+          "frames": 1,
+          "microsteps": 3,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": true,
+          "frames": 8,
+          "microsteps": 24,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": true,
+          "frames": 32,
+          "microsteps": 96,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      ],
+      "final_loneliness": 0.0
+    },
+    {
+      "factor": "NeedMemoryGate",
+      "peer": true,
+      "initial_need": 0.800000011920929,
+      "interval_decisions": 32,
+      "nonzero_recall_samples": 108,
+      "detached_effects": [
+        {
+          "clear_recall": false,
+          "relay_off": false,
+          "frames": 1,
+          "microsteps": 3,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": false,
+          "frames": 8,
+          "microsteps": 24,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": false,
+          "frames": 32,
+          "microsteps": 96,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": true,
+          "frames": 1,
+          "microsteps": 3,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": true,
+          "frames": 8,
+          "microsteps": 24,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": false,
+          "relay_off": true,
+          "frames": 32,
+          "microsteps": 96,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": false,
+          "frames": 1,
+          "microsteps": 3,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": false,
+          "frames": 8,
+          "microsteps": 24,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": false,
+          "frames": 32,
+          "microsteps": 96,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": true,
+          "frames": 1,
+          "microsteps": 3,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": true,
+          "frames": 8,
+          "microsteps": 24,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "clear_recall": true,
+          "relay_off": true,
+          "frames": 32,
+          "microsteps": 96,
+          "gate_delta": 0.0,
+          "logit_deltas": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      ],
+      "final_loneliness": 0.07993385940790176
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+   Compiling alife_core v0.1.0 (/workspace/scratch/ee5e08a3ca9b/nano-native-operating-point-v1/crates/alife_core)
+   Compiling alife_gpu_backend v0.1.0 (/workspace/scratch/ee5e08a3ca9b/nano-native-operating-point-v1/crates/alife_gpu_backend)
+   Compiling alife_world v0.1.0 (/workspace/scratch/ee5e08a3ca9b/nano-native-operating-point-v1/crates/alife_world)
+   Compiling alife_runtime v0.1.0 (/workspace/scratch/ee5e08a3ca9b/nano-native-operating-point-v1/crates/alife_runtime)
+   Compiling alife_training v0.1.0 (/workspace/scratch/ee5e08a3ca9b/nano-native-operating-point-v1/crates/alife_training)
+    Finished `dev` profile [unoptimized] target(s) in 46.29s
+     Running `/workspace/shared/grip-integration-qualification-20261108/grip-candidate-qualification/target/debug/examples/probe_nano_operating_point ../nano-need-memory-native-v3r2.json operating-point-v1.json`

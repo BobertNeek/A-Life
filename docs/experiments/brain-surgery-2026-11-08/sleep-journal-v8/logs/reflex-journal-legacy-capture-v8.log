@@ -1,0 +1,23 @@
+   Compiling alife_core v0.1.0 (/workspace/scratch/ee5e08a3ca9b/motor-reflex-gpu-journal-v8/crates/alife_core)
+   Compiling alife_storage v0.1.0 (/workspace/scratch/ee5e08a3ca9b/motor-reflex-gpu-journal-v8/crates/alife_storage)
+   Compiling alife_world v0.1.0 (/workspace/scratch/ee5e08a3ca9b/motor-reflex-gpu-journal-v8/crates/alife_world)
+   Compiling alife_gpu_backend v0.1.0 (/workspace/scratch/ee5e08a3ca9b/motor-reflex-gpu-journal-v8/crates/alife_gpu_backend)
+   Compiling alife_runtime v0.1.0 (/workspace/scratch/ee5e08a3ca9b/motor-reflex-gpu-journal-v8/crates/alife_runtime)
+    Finished `test` profile [unoptimized] target(s) in 3m 05s
+     Running tests/sleep_journal_wire_v3.rs (/workspace/scratch/ee5e08a3ca9b/motor-reflex-target-v1/debug/deps/sleep_journal_wire_v3-9e9bec3fe5e3434a)
+
+running 1 test
+test legacy_v2_journal_storage_bytes_and_nested_sentinel_are_preserved ... 
+thread 'legacy_v2_journal_storage_bytes_and_nested_sentinel_are_preserved' (214) panicked at crates/alife_runtime/tests/sleep_journal_wire_v3.rs:30:82:
+called `Result::unwrap()` on an `Err` value: ConsolidationGenerationMismatch
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    legacy_v2_journal_storage_bytes_and_nested_sentinel_are_preserved
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p alife_runtime --test sleep_journal_wire_v3`

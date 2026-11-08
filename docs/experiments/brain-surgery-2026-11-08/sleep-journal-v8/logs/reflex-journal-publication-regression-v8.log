@@ -1,0 +1,44 @@
+   Compiling alife_runtime v0.1.0 (/workspace/scratch/ee5e08a3ca9b/motor-reflex-gpu-journal-v8/crates/alife_runtime)
+    Finished `test` profile [unoptimized] target(s) in 14.32s
+     Running unittests src/lib.rs (/workspace/scratch/ee5e08a3ca9b/motor-reflex-target-v1/debug/deps/alife_runtime-7e21bb42129e2c43)
+
+running 21 tests
+test checkpoint_assets::content_store::tests::current_manifest_filter_does_not_delete_stale_content_files ... ok
+test checkpoint_assets::content_store::tests::current_manifest_filter_preserves_partial_or_conflicting_writer_metadata ... ok
+test checkpoint_assets::content_store::tests::current_manifest_filter_removes_only_stale_exact_writer_entries ... ok
+test checkpoint_assets::content_store::tests::current_manifest_filter_retains_independent_creature_roots_and_shared_content ... ok
+test checkpoint_assets::content_store::tests::invalid_kind_is_rejected_before_serialization ... ok
+test checkpoint_assets::content_store::tests::output_budget_private_cas_retains_worker_scope_and_counts_staging_peak ... ok
+test checkpoint_assets::content_store::tests::raced_content_addressed_publication_never_replaces_existing_bytes ... ok
+test checkpoint_assets::content_store::tests::serialized_json_preserves_float_bits_and_rejects_corrupt_existing_content ... ok
+test checkpoint_assets::content_store::tests::serialized_phenotype_publication_matches_typed_bytes_and_manifest ... ok
+test checkpoint_assets::durable_manifest::tests::authority_failure_stages_never_expose_a_mixed_pair ... ok
+test checkpoint_assets::durable_manifest::tests::journal_compound_tick_ordinals_are_bounded_and_contiguous ... ok
+test checkpoint_assets::durable_manifest::tests::journal_none_to_pending_requires_canonical_consolidating_identity ... ok
+test checkpoint_assets::durable_manifest::tests::journal_pre_pending_phase_edges_are_exact_and_fail_closed ... ok
+test checkpoint_assets::durable_manifest::tests::journal_rejects_interleaved_broken_organism_chain ... ok
+test checkpoint_assets::durable_manifest::tests::journal_rejects_malformed_base_digest ... ok
+test checkpoint_assets::durable_manifest::tests::journal_sleep_trigger_raw_mapping_is_stable ... ok
+test checkpoint_assets::durable_manifest::tests::journal_vs_base_accepts_matching_first_source ... ok
+test checkpoint_assets::durable_manifest::tests::journal_vs_base_discards_superseded_ahead_journal ... ok
+test checkpoint_assets::durable_manifest::tests::journal_vs_base_rejects_first_source_mismatch ... ok
+test checkpoint_assets::durable_manifest::tests::output_budget_authority_staging_cannot_damage_existing_save ... ok
+test checkpoint_assets::durable_manifest::tests::version3_container_cannot_relabel_legacy_entries_or_empty_journal ... ok
+
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.17s
+
+     Running tests/gpu_checkpoint_manifest_cas.rs (/workspace/scratch/ee5e08a3ca9b/motor-reflex-target-v1/debug/deps/gpu_checkpoint_manifest_cas-eb7b23bae9c4f460)
+
+running 9 tests
+test authority_generations_keep_the_previous_exact_pair_reopenable ... ok
+test authority_identity_survives_complete_tree_relocation ... ok
+test authority_missing_or_tampered_named_artifacts_fail_closed ... ok
+test authority_unknown_pointer_version_fails_closed ... ok
+test exact_save_and_reset_journal_have_one_authority_commit_point ... ok
+test journal_generations_advance_while_the_exact_save_anchor_stays_stable ... ok
+test manual_checkpoint_publish_atomically_creates_a_new_portable_save ... ok
+test pre_pointer_artifact_failure_leaves_old_authority_bytes_unchanged ... ok
+test save_manifest_compare_and_swap_is_atomic_idempotent_and_conflict_typed ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+

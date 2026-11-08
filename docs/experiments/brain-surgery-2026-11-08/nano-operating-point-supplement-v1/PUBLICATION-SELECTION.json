@@ -1,0 +1,67 @@
+{
+  "archive_sha256": "de4c65f0882ff1cc66d286dbba0bdf78281d0cb732eb4f732e21548418c1e563",
+  "archive_files_selected": [
+    {
+      "path": "source-before-run.sha256",
+      "bytes": 348,
+      "sha256": "71d6d23257b60d6d090fb9f1ebc5c7a5d7ad199fa21948b6e0b17737dfe137e8"
+    },
+    {
+      "path": "nano-need-memory-software-kernel-v3.log",
+      "bytes": 4560,
+      "sha256": "a4c99757d097f57664718cd9dd18abf34f37b1a241c6819f3107d0616a7620ae"
+    },
+    {
+      "path": "input.sha256",
+      "bytes": 103,
+      "sha256": "b62d99aeeda8da6fa5482d989c8a405567bd6080cc461992f65e1c6abb7238d0"
+    },
+    {
+      "path": "SHA256SUMS",
+      "bytes": 1030,
+      "sha256": "3a04a878dfc5ad254e410f188d74ab94dff5dd7caf8f28eed70b45a498788973"
+    },
+    {
+      "path": "OPERATING_POINT_FINDINGS.md",
+      "bytes": 4538,
+      "sha256": "e731245ebd6c20a5f4390927a4429397dd964bf5906d8b974d73cd2cbe622c75"
+    },
+    {
+      "path": "02-encoder-equivalence.log",
+      "bytes": 643,
+      "sha256": "1ae7ed4f9c1da66008bb57943885d9728e99a04588560649c0dd59efcb745d3a"
+    },
+    {
+      "path": "operating-point-summary.json",
+      "bytes": 26551,
+      "sha256": "dac69ecf41de601a06e80b178d8ca3966f575379d7f4c4ebc52d29c321400358"
+    },
+    {
+      "path": "operating-point-diagnostic.patch",
+      "bytes": 61978,
+      "sha256": "ac277b133cd520121a0e714579aec5668050054ae52f55b85af7a3afade39f85"
+    },
+    {
+      "path": "README.md",
+      "bytes": 2193,
+      "sha256": "b8d1a98a380cf18eacc521261e307c2a590a07e67e5fe25fa7ba0d6481b74b9d"
+    },
+    {
+      "path": "01-encoder-equivalence.log",
+      "bytes": 3195,
+      "sha256": "beca63aedfa193d6cf3220709a0d1f451cad0930f0045acd6999597487ef83d6"
+    },
+    {
+      "path": "03-operating-point.log",
+      "bytes": 873,
+      "sha256": "1db8170cd93aa4c55fc1f0a14675ef08dc84b175500fab961da97a1a2afcbd56"
+    },
+    {
+      "path": "V3_ERRATA_AND_NEXT_PLAN.md",
+      "bytes": 7581,
+      "sha256": "93d5c88feccb802b6ad5986c8447574082b79a2b1707bd06825d5a27c7168fe7"
+    }
+  ],
+  "omitted_duplicate_source_files": [],
+  "source_reconstruction": "Original safe archive files copied byte-for-byte."
+}

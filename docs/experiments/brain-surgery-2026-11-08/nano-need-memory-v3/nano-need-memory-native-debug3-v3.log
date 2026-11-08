@@ -1,0 +1,1553 @@
+   Compiling alife_training v0.1.0 (/workspace/scratch/ee5e08a3ca9b/nano-need-memory-gate-v3/crates/alife_training)
+    Finished `dev` profile [unoptimized] target(s) in 8.71s
+     Running `/workspace/shared/grip-integration-qualification-20261108/grip-candidate-qualification/target/debug/examples/probe_nano_drive_routing /workspace/scratch/ee5e08a3ca9b/nano-need-memory-native-v3.json`
+native_stage factor=None peer=false need=0.1 interval=0 step
+host_stage Tick(0) encode
+host_stage Tick(0) advance
+host_stage Tick(0) sample
+host_stage Tick(0) speech
+host_stage Tick(0) post_speech
+host_stage Tick(0) stage_selection
+host_stage Tick(0) apply_credit
+host_stage Tick(0) after_credit
+native_stage interval=0 ordinary_replay
+native_stage factor=None peer=false need=0.1 interval=1 step
+host_stage Tick(1) encode
+host_stage Tick(1) advance
+host_stage Tick(1) sample
+host_stage Tick(1) speech
+host_stage Tick(1) post_speech
+host_stage Tick(1) stage_selection
+host_stage Tick(1) apply_credit
+host_stage Tick(1) after_credit
+native_stage interval=1 ordinary_replay
+native_stage factor=None peer=false need=0.1 interval=2 step
+host_stage Tick(2) encode
+host_stage Tick(2) advance
+host_stage Tick(2) sample
+host_stage Tick(2) speech
+host_stage Tick(2) post_speech
+host_stage Tick(2) stage_selection
+host_stage Tick(2) apply_credit
+host_stage Tick(2) after_credit
+native_stage interval=2 ordinary_replay
+native_stage factor=None peer=false need=0.1 interval=3 step
+host_stage Tick(3) encode
+host_stage Tick(3) advance
+host_stage Tick(3) sample
+host_stage Tick(3) speech
+host_stage Tick(3) post_speech
+host_stage Tick(3) stage_selection
+host_stage Tick(3) apply_credit
+host_stage Tick(3) after_credit
+native_stage interval=3 ordinary_replay
+native_stage factor=None peer=false need=0.1 interval=4 step
+host_stage Tick(4) encode
+host_stage Tick(4) advance
+host_stage Tick(4) sample
+host_stage Tick(4) speech
+host_stage Tick(4) post_speech
+host_stage Tick(4) stage_selection
+host_stage Tick(4) apply_credit
+host_stage Tick(4) after_credit
+native_stage interval=4 ordinary_replay
+native_stage factor=None peer=false need=0.1 interval=5 step
+host_stage Tick(5) encode
+host_stage Tick(5) advance
+host_stage Tick(5) sample
+host_stage Tick(5) speech
+host_stage Tick(5) post_speech
+host_stage Tick(5) stage_selection
+host_stage Tick(5) apply_credit
+host_stage Tick(5) after_credit
+native_stage interval=5 ordinary_replay
+native_stage factor=None peer=false need=0.1 interval=6 step
+host_stage Tick(6) encode
+host_stage Tick(6) advance
+host_stage Tick(6) sample
+host_stage Tick(6) speech
+host_stage Tick(6) post_speech
+host_stage Tick(6) stage_selection
+host_stage Tick(6) apply_credit
+host_stage Tick(6) after_credit
+native_stage interval=6 ordinary_replay
+native_stage factor=None peer=false need=0.1 interval=7 step
+host_stage Tick(7) encode
+host_stage Tick(7) advance
+host_stage Tick(7) sample
+host_stage Tick(7) speech
+host_stage Tick(7) post_speech
+host_stage Tick(7) stage_selection
+host_stage Tick(7) apply_credit
+host_stage Tick(7) after_credit
+native_stage interval=7 ordinary_replay
+native_stage factor=None peer=false need=0.1 interval=8 step
+host_stage Tick(8) encode
+host_stage Tick(8) advance
+host_stage Tick(8) sample
+host_stage Tick(8) speech
+host_stage Tick(8) post_speech
+host_stage Tick(8) stage_selection
+host_stage Tick(8) apply_credit
+host_stage Tick(8) after_credit
+native_stage interval=8 ordinary_replay
+native_stage factor=None peer=false need=0.1 interval=9 step
+host_stage Tick(9) encode
+host_stage Tick(9) advance
+host_stage Tick(9) sample
+host_stage Tick(9) speech
+host_stage Tick(9) post_speech
+host_stage Tick(9) stage_selection
+host_stage Tick(9) apply_credit
+host_stage Tick(9) after_credit
+native_stage interval=9 ordinary_replay
+native_stage factor=None peer=false need=0.1 interval=10 step
+host_stage Tick(10) encode
+host_stage Tick(10) advance
+host_stage Tick(10) sample
+host_stage Tick(10) speech
+host_stage Tick(10) post_speech
+host_stage Tick(10) stage_selection
+host_stage Tick(10) apply_credit
+host_stage Tick(10) after_credit
+native_stage interval=10 ordinary_replay
+native_stage factor=None peer=false need=0.1 interval=11 step
+host_stage Tick(11) encode
+host_stage Tick(11) advance
+host_stage Tick(11) sample
+host_stage Tick(11) speech
+host_stage Tick(11) post_speech
+host_stage Tick(11) stage_selection
+host_stage Tick(11) apply_credit
+host_stage Tick(11) after_credit
+native_stage interval=11 ordinary_replay
+native_stage factor=None peer=false need=0.1 interval=12 step
+host_stage Tick(12) encode
+host_stage Tick(12) advance
+host_stage Tick(12) sample
+host_stage Tick(12) speech
+host_stage Tick(12) post_speech
+host_stage Tick(12) stage_selection
+host_stage Tick(12) apply_credit
+host_stage Tick(12) after_credit
+native_stage interval=12 ordinary_replay
+native_stage factor=None peer=false need=0.1 interval=13 step
+host_stage Tick(13) encode
+host_stage Tick(13) advance
+host_stage Tick(13) sample
+host_stage Tick(13) speech
+host_stage Tick(13) post_speech
+host_stage Tick(13) stage_selection
+host_stage Tick(13) apply_credit
+host_stage Tick(13) after_credit
+native_stage interval=13 ordinary_replay
+native_stage factor=None peer=false need=0.1 interval=14 step
+host_stage Tick(14) encode
+host_stage Tick(14) advance
+host_stage Tick(14) sample
+host_stage Tick(14) speech
+host_stage Tick(14) post_speech
+host_stage Tick(14) stage_selection
+host_stage Tick(14) apply_credit
+host_stage Tick(14) after_credit
+native_stage interval=14 ordinary_replay
+native_stage factor=None peer=false need=0.1 interval=15 step
+host_stage Tick(15) encode
+host_stage Tick(15) advance
+host_stage Tick(15) sample
+host_stage Tick(15) speech
+host_stage Tick(15) post_speech
+host_stage Tick(15) stage_selection
+host_stage Tick(15) apply_credit
+host_stage Tick(15) after_credit
+native_stage interval=15 ordinary_replay
+native_stage factor=None peer=false need=0.1 interval=16 step
+host_stage Tick(16) encode
+host_stage Tick(16) advance
+host_stage Tick(16) sample
+host_stage Tick(16) speech
+host_stage Tick(16) post_speech
+host_stage Tick(16) stage_selection
+host_stage Tick(16) apply_credit
+host_stage Tick(16) after_credit
+native_stage interval=16 ordinary_replay
+native_stage factor=None peer=false need=0.1 interval=17 step
+host_stage Tick(17) encode
+host_stage Tick(17) advance
+host_stage Tick(17) sample
+host_stage Tick(17) speech
+host_stage Tick(17) post_speech
+host_stage Tick(17) stage_selection
+host_stage Tick(17) apply_credit
+host_stage Tick(17) after_credit
+native_stage interval=17 ordinary_replay
+native_stage factor=None peer=false need=0.1 interval=18 step
+host_stage Tick(18) encode
+host_stage Tick(18) advance
+host_stage Tick(18) sample
+host_stage Tick(18) speech
+host_stage Tick(18) post_speech
+host_stage Tick(18) stage_selection
+host_stage Tick(18) apply_credit
+host_stage Tick(18) after_credit
+native_stage interval=18 ordinary_replay
+native_stage factor=None peer=false need=0.1 interval=19 step
+host_stage Tick(19) encode
+host_stage Tick(19) advance
+host_stage Tick(19) sample
+host_stage Tick(19) speech
+host_stage Tick(19) post_speech
+host_stage Tick(19) stage_selection
+host_stage Tick(19) apply_credit
+host_stage Tick(19) after_credit
+native_stage interval=19 ordinary_replay
+native_stage factor=None peer=false need=0.1 interval=20 step
+host_stage Tick(20) encode
+host_stage Tick(20) advance
+host_stage Tick(20) sample
+host_stage Tick(20) speech
+host_stage Tick(20) post_speech
+host_stage Tick(20) stage_selection
+host_stage Tick(20) apply_credit
+host_stage Tick(20) after_credit
+native_stage interval=20 ordinary_replay
+native_stage factor=None peer=false need=0.1 interval=21 step
+host_stage Tick(21) encode
+host_stage Tick(21) advance
+host_stage Tick(21) sample
+host_stage Tick(21) speech
+host_stage Tick(21) post_speech
+host_stage Tick(21) stage_selection
+host_stage Tick(21) apply_credit
+host_stage Tick(21) after_credit
+native_stage interval=21 ordinary_replay
+native_stage factor=None peer=false need=0.1 interval=22 step
+host_stage Tick(22) encode
+host_stage Tick(22) advance
+host_stage Tick(22) sample
+host_stage Tick(22) speech
+host_stage Tick(22) post_speech
+host_stage Tick(22) stage_selection
+host_stage Tick(22) apply_credit
+host_stage Tick(22) after_credit
+native_stage interval=22 ordinary_replay
+native_stage factor=None peer=false need=0.1 interval=23 step
+host_stage Tick(23) encode
+host_stage Tick(23) advance
+host_stage Tick(23) sample
+host_stage Tick(23) speech
+host_stage Tick(23) post_speech
+host_stage Tick(23) stage_selection
+host_stage Tick(23) apply_credit
+host_stage Tick(23) after_credit
+native_stage interval=23 ordinary_replay
+native_stage factor=None peer=false need=0.1 interval=24 step
+host_stage Tick(24) encode
+host_stage Tick(24) advance
+host_stage Tick(24) sample
+host_stage Tick(24) speech
+host_stage Tick(24) post_speech
+host_stage Tick(24) stage_selection
+host_stage Tick(24) apply_credit
+host_stage Tick(24) after_credit
+native_stage interval=24 ordinary_replay
+native_stage factor=None peer=false need=0.1 interval=25 step
+host_stage Tick(25) encode
+host_stage Tick(25) advance
+host_stage Tick(25) sample
+host_stage Tick(25) speech
+host_stage Tick(25) post_speech
+host_stage Tick(25) stage_selection
+host_stage Tick(25) apply_credit
+host_stage Tick(25) after_credit
+native_stage interval=25 ordinary_replay
+native_stage factor=None peer=false need=0.1 interval=26 step
+host_stage Tick(26) encode
+host_stage Tick(26) advance
+host_stage Tick(26) sample
+host_stage Tick(26) speech
+host_stage Tick(26) post_speech
+host_stage Tick(26) stage_selection
+host_stage Tick(26) apply_credit
+host_stage Tick(26) after_credit
+native_stage interval=26 ordinary_replay
+native_stage factor=None peer=false need=0.1 interval=27 step
+host_stage Tick(27) encode
+host_stage Tick(27) advance
+host_stage Tick(27) sample
+host_stage Tick(27) speech
+host_stage Tick(27) post_speech
+host_stage Tick(27) stage_selection
+host_stage Tick(27) apply_credit
+host_stage Tick(27) after_credit
+native_stage interval=27 ordinary_replay
+native_stage factor=None peer=false need=0.1 interval=28 step
+host_stage Tick(28) encode
+host_stage Tick(28) advance
+host_stage Tick(28) sample
+host_stage Tick(28) speech
+host_stage Tick(28) post_speech
+host_stage Tick(28) stage_selection
+host_stage Tick(28) apply_credit
+host_stage Tick(28) after_credit
+native_stage interval=28 ordinary_replay
+native_stage factor=None peer=false need=0.1 interval=29 step
+host_stage Tick(29) encode
+host_stage Tick(29) advance
+host_stage Tick(29) sample
+host_stage Tick(29) speech
+host_stage Tick(29) post_speech
+host_stage Tick(29) stage_selection
+host_stage Tick(29) apply_credit
+host_stage Tick(29) after_credit
+native_stage interval=29 ordinary_replay
+native_stage factor=None peer=false need=0.1 interval=30 step
+host_stage Tick(30) encode
+host_stage Tick(30) advance
+host_stage Tick(30) sample
+host_stage Tick(30) speech
+host_stage Tick(30) post_speech
+host_stage Tick(30) stage_selection
+host_stage Tick(30) apply_credit
+host_stage Tick(30) after_credit
+native_stage interval=30 ordinary_replay
+native_stage factor=None peer=false need=0.1 interval=31 step
+host_stage Tick(31) encode
+host_stage Tick(31) advance
+host_stage Tick(31) sample
+host_stage Tick(31) speech
+host_stage Tick(31) post_speech
+host_stage Tick(31) stage_selection
+host_stage Tick(31) apply_credit
+host_stage Tick(31) after_credit
+native_stage interval=31 ordinary_replay
+native_stage detached pressure=0 clear=false relay_off=false frames=1
+native_stage detached pressure=0 clear=false relay_off=false frames=8
+native_stage detached pressure=0 clear=false relay_off=false frames=32
+native_stage detached pressure=0 clear=false relay_off=true frames=1
+native_stage detached pressure=0 clear=false relay_off=true frames=8
+native_stage detached pressure=0 clear=false relay_off=true frames=32
+native_stage detached pressure=0 clear=true relay_off=false frames=1
+native_stage detached pressure=0 clear=true relay_off=false frames=8
+native_stage detached pressure=0 clear=true relay_off=false frames=32
+native_stage detached pressure=0 clear=true relay_off=true frames=1
+native_stage detached pressure=0 clear=true relay_off=true frames=8
+native_stage detached pressure=0 clear=true relay_off=true frames=32
+native_stage detached pressure=0.1 clear=false relay_off=false frames=1
+native_stage detached pressure=0.1 clear=false relay_off=false frames=8
+native_stage detached pressure=0.1 clear=false relay_off=false frames=32
+native_stage detached pressure=0.1 clear=false relay_off=true frames=1
+native_stage detached pressure=0.1 clear=false relay_off=true frames=8
+native_stage detached pressure=0.1 clear=false relay_off=true frames=32
+native_stage detached pressure=0.1 clear=true relay_off=false frames=1
+native_stage detached pressure=0.1 clear=true relay_off=false frames=8
+native_stage detached pressure=0.1 clear=true relay_off=false frames=32
+native_stage detached pressure=0.1 clear=true relay_off=true frames=1
+native_stage detached pressure=0.1 clear=true relay_off=true frames=8
+native_stage detached pressure=0.1 clear=true relay_off=true frames=32
+native_stage detached pressure=0.8 clear=false relay_off=false frames=1
+native_stage detached pressure=0.8 clear=false relay_off=false frames=8
+native_stage detached pressure=0.8 clear=false relay_off=false frames=32
+native_stage detached pressure=0.8 clear=false relay_off=true frames=1
+native_stage detached pressure=0.8 clear=false relay_off=true frames=8
+native_stage detached pressure=0.8 clear=false relay_off=true frames=32
+native_stage detached pressure=0.8 clear=true relay_off=false frames=1
+native_stage detached pressure=0.8 clear=true relay_off=false frames=8
+native_stage detached pressure=0.8 clear=true relay_off=false frames=32
+native_stage detached pressure=0.8 clear=true relay_off=true frames=1
+native_stage detached pressure=0.8 clear=true relay_off=true frames=8
+native_stage detached pressure=0.8 clear=true relay_off=true frames=32
+native_stage factor=None peer=false need=0.8 interval=0 step
+host_stage Tick(0) encode
+host_stage Tick(0) advance
+host_stage Tick(0) sample
+host_stage Tick(0) speech
+host_stage Tick(0) post_speech
+host_stage Tick(0) stage_selection
+host_stage Tick(0) apply_credit
+host_stage Tick(0) after_credit
+native_stage interval=0 ordinary_replay
+native_stage factor=None peer=false need=0.8 interval=1 step
+host_stage Tick(1) encode
+host_stage Tick(1) advance
+host_stage Tick(1) sample
+host_stage Tick(1) speech
+host_stage Tick(1) post_speech
+host_stage Tick(1) stage_selection
+host_stage Tick(1) apply_credit
+host_stage Tick(1) after_credit
+native_stage interval=1 ordinary_replay
+native_stage factor=None peer=false need=0.8 interval=2 step
+host_stage Tick(2) encode
+host_stage Tick(2) advance
+host_stage Tick(2) sample
+host_stage Tick(2) speech
+host_stage Tick(2) post_speech
+host_stage Tick(2) stage_selection
+host_stage Tick(2) apply_credit
+host_stage Tick(2) after_credit
+native_stage interval=2 ordinary_replay
+native_stage factor=None peer=false need=0.8 interval=3 step
+host_stage Tick(3) encode
+host_stage Tick(3) advance
+host_stage Tick(3) sample
+host_stage Tick(3) speech
+host_stage Tick(3) post_speech
+host_stage Tick(3) stage_selection
+host_stage Tick(3) apply_credit
+host_stage Tick(3) after_credit
+native_stage interval=3 ordinary_replay
+native_stage factor=None peer=false need=0.8 interval=4 step
+host_stage Tick(4) encode
+host_stage Tick(4) advance
+host_stage Tick(4) sample
+host_stage Tick(4) speech
+host_stage Tick(4) post_speech
+host_stage Tick(4) stage_selection
+host_stage Tick(4) apply_credit
+host_stage Tick(4) after_credit
+native_stage interval=4 ordinary_replay
+native_stage factor=None peer=false need=0.8 interval=5 step
+host_stage Tick(5) encode
+host_stage Tick(5) advance
+host_stage Tick(5) sample
+host_stage Tick(5) speech
+host_stage Tick(5) post_speech
+host_stage Tick(5) stage_selection
+host_stage Tick(5) apply_credit
+host_stage Tick(5) after_credit
+native_stage interval=5 ordinary_replay
+native_stage factor=None peer=false need=0.8 interval=6 step
+host_stage Tick(6) encode
+host_stage Tick(6) advance
+host_stage Tick(6) sample
+host_stage Tick(6) speech
+host_stage Tick(6) post_speech
+host_stage Tick(6) stage_selection
+host_stage Tick(6) apply_credit
+host_stage Tick(6) after_credit
+native_stage interval=6 ordinary_replay
+native_stage factor=None peer=false need=0.8 interval=7 step
+host_stage Tick(7) encode
+host_stage Tick(7) advance
+host_stage Tick(7) sample
+host_stage Tick(7) speech
+host_stage Tick(7) post_speech
+host_stage Tick(7) stage_selection
+host_stage Tick(7) apply_credit
+host_stage Tick(7) after_credit
+native_stage interval=7 ordinary_replay
+native_stage factor=None peer=false need=0.8 interval=8 step
+host_stage Tick(8) encode
+host_stage Tick(8) advance
+host_stage Tick(8) sample
+host_stage Tick(8) speech
+host_stage Tick(8) post_speech
+host_stage Tick(8) stage_selection
+host_stage Tick(8) apply_credit
+host_stage Tick(8) after_credit
+native_stage interval=8 ordinary_replay
+native_stage factor=None peer=false need=0.8 interval=9 step
+host_stage Tick(9) encode
+host_stage Tick(9) advance
+host_stage Tick(9) sample
+host_stage Tick(9) speech
+host_stage Tick(9) post_speech
+host_stage Tick(9) stage_selection
+host_stage Tick(9) apply_credit
+host_stage Tick(9) after_credit
+native_stage interval=9 ordinary_replay
+native_stage factor=None peer=false need=0.8 interval=10 step
+host_stage Tick(10) encode
+host_stage Tick(10) advance
+host_stage Tick(10) sample
+host_stage Tick(10) speech
+host_stage Tick(10) post_speech
+host_stage Tick(10) stage_selection
+host_stage Tick(10) apply_credit
+host_stage Tick(10) after_credit
+native_stage interval=10 ordinary_replay
+native_stage factor=None peer=false need=0.8 interval=11 step
+host_stage Tick(11) encode
+host_stage Tick(11) advance
+host_stage Tick(11) sample
+host_stage Tick(11) speech
+host_stage Tick(11) post_speech
+host_stage Tick(11) stage_selection
+host_stage Tick(11) apply_credit
+host_stage Tick(11) after_credit
+native_stage interval=11 ordinary_replay
+native_stage factor=None peer=false need=0.8 interval=12 step
+host_stage Tick(12) encode
+host_stage Tick(12) advance
+host_stage Tick(12) sample
+host_stage Tick(12) speech
+host_stage Tick(12) post_speech
+host_stage Tick(12) stage_selection
+host_stage Tick(12) apply_credit
+host_stage Tick(12) after_credit
+native_stage interval=12 ordinary_replay
+native_stage factor=None peer=false need=0.8 interval=13 step
+host_stage Tick(13) encode
+host_stage Tick(13) advance
+host_stage Tick(13) sample
+host_stage Tick(13) speech
+host_stage Tick(13) post_speech
+host_stage Tick(13) stage_selection
+host_stage Tick(13) apply_credit
+host_stage Tick(13) after_credit
+native_stage interval=13 ordinary_replay
+native_stage factor=None peer=false need=0.8 interval=14 step
+host_stage Tick(14) encode
+host_stage Tick(14) advance
+host_stage Tick(14) sample
+host_stage Tick(14) speech
+host_stage Tick(14) post_speech
+host_stage Tick(14) stage_selection
+host_stage Tick(14) apply_credit
+host_stage Tick(14) after_credit
+native_stage interval=14 ordinary_replay
+native_stage factor=None peer=false need=0.8 interval=15 step
+host_stage Tick(15) encode
+host_stage Tick(15) advance
+host_stage Tick(15) sample
+host_stage Tick(15) speech
+host_stage Tick(15) post_speech
+host_stage Tick(15) stage_selection
+host_stage Tick(15) apply_credit
+host_stage Tick(15) after_credit
+native_stage interval=15 ordinary_replay
+native_stage factor=None peer=false need=0.8 interval=16 step
+host_stage Tick(16) encode
+host_stage Tick(16) advance
+host_stage Tick(16) sample
+host_stage Tick(16) speech
+host_stage Tick(16) post_speech
+host_stage Tick(16) stage_selection
+host_stage Tick(16) apply_credit
+host_stage Tick(16) after_credit
+native_stage interval=16 ordinary_replay
+native_stage factor=None peer=false need=0.8 interval=17 step
+host_stage Tick(17) encode
+host_stage Tick(17) advance
+host_stage Tick(17) sample
+host_stage Tick(17) speech
+host_stage Tick(17) post_speech
+host_stage Tick(17) stage_selection
+host_stage Tick(17) apply_credit
+host_stage Tick(17) after_credit
+native_stage interval=17 ordinary_replay
+native_stage factor=None peer=false need=0.8 interval=18 step
+host_stage Tick(18) encode
+host_stage Tick(18) advance
+host_stage Tick(18) sample
+host_stage Tick(18) speech
+host_stage Tick(18) post_speech
+host_stage Tick(18) stage_selection
+host_stage Tick(18) apply_credit
+host_stage Tick(18) after_credit
+native_stage interval=18 ordinary_replay
+native_stage factor=None peer=false need=0.8 interval=19 step
+host_stage Tick(19) encode
+host_stage Tick(19) advance
+host_stage Tick(19) sample
+host_stage Tick(19) speech
+host_stage Tick(19) post_speech
+host_stage Tick(19) stage_selection
+host_stage Tick(19) apply_credit
+host_stage Tick(19) after_credit
+native_stage interval=19 ordinary_replay
+native_stage factor=None peer=false need=0.8 interval=20 step
+host_stage Tick(20) encode
+host_stage Tick(20) advance
+host_stage Tick(20) sample
+host_stage Tick(20) speech
+host_stage Tick(20) post_speech
+host_stage Tick(20) stage_selection
+host_stage Tick(20) apply_credit
+host_stage Tick(20) after_credit
+native_stage interval=20 ordinary_replay
+native_stage factor=None peer=false need=0.8 interval=21 step
+host_stage Tick(21) encode
+host_stage Tick(21) advance
+host_stage Tick(21) sample
+host_stage Tick(21) speech
+host_stage Tick(21) post_speech
+host_stage Tick(21) stage_selection
+host_stage Tick(21) apply_credit
+host_stage Tick(21) after_credit
+native_stage interval=21 ordinary_replay
+native_stage factor=None peer=false need=0.8 interval=22 step
+host_stage Tick(22) encode
+host_stage Tick(22) advance
+host_stage Tick(22) sample
+host_stage Tick(22) speech
+host_stage Tick(22) post_speech
+host_stage Tick(22) stage_selection
+host_stage Tick(22) apply_credit
+host_stage Tick(22) after_credit
+native_stage interval=22 ordinary_replay
+native_stage factor=None peer=false need=0.8 interval=23 step
+host_stage Tick(23) encode
+host_stage Tick(23) advance
+host_stage Tick(23) sample
+host_stage Tick(23) speech
+host_stage Tick(23) post_speech
+host_stage Tick(23) stage_selection
+host_stage Tick(23) apply_credit
+host_stage Tick(23) after_credit
+native_stage interval=23 ordinary_replay
+native_stage factor=None peer=false need=0.8 interval=24 step
+host_stage Tick(24) encode
+host_stage Tick(24) advance
+host_stage Tick(24) sample
+host_stage Tick(24) speech
+host_stage Tick(24) post_speech
+host_stage Tick(24) stage_selection
+host_stage Tick(24) apply_credit
+host_stage Tick(24) after_credit
+native_stage interval=24 ordinary_replay
+native_stage factor=None peer=false need=0.8 interval=25 step
+host_stage Tick(25) encode
+host_stage Tick(25) advance
+host_stage Tick(25) sample
+host_stage Tick(25) speech
+host_stage Tick(25) post_speech
+host_stage Tick(25) stage_selection
+host_stage Tick(25) apply_credit
+host_stage Tick(25) after_credit
+native_stage interval=25 ordinary_replay
+native_stage factor=None peer=false need=0.8 interval=26 step
+host_stage Tick(26) encode
+host_stage Tick(26) advance
+host_stage Tick(26) sample
+host_stage Tick(26) speech
+host_stage Tick(26) post_speech
+host_stage Tick(26) stage_selection
+host_stage Tick(26) apply_credit
+host_stage Tick(26) after_credit
+native_stage interval=26 ordinary_replay
+native_stage factor=None peer=false need=0.8 interval=27 step
+host_stage Tick(27) encode
+host_stage Tick(27) advance
+host_stage Tick(27) sample
+host_stage Tick(27) speech
+host_stage Tick(27) post_speech
+host_stage Tick(27) stage_selection
+host_stage Tick(27) apply_credit
+host_stage Tick(27) after_credit
+native_stage interval=27 ordinary_replay
+native_stage factor=None peer=false need=0.8 interval=28 step
+host_stage Tick(28) encode
+host_stage Tick(28) advance
+host_stage Tick(28) sample
+host_stage Tick(28) speech
+host_stage Tick(28) post_speech
+host_stage Tick(28) stage_selection
+host_stage Tick(28) apply_credit
+host_stage Tick(28) after_credit
+native_stage interval=28 ordinary_replay
+native_stage factor=None peer=false need=0.8 interval=29 step
+host_stage Tick(29) encode
+host_stage Tick(29) advance
+host_stage Tick(29) sample
+host_stage Tick(29) speech
+host_stage Tick(29) post_speech
+host_stage Tick(29) stage_selection
+host_stage Tick(29) apply_credit
+host_stage Tick(29) after_credit
+native_stage interval=29 ordinary_replay
+native_stage factor=None peer=false need=0.8 interval=30 step
+host_stage Tick(30) encode
+host_stage Tick(30) advance
+host_stage Tick(30) sample
+host_stage Tick(30) speech
+host_stage Tick(30) post_speech
+host_stage Tick(30) stage_selection
+host_stage Tick(30) apply_credit
+host_stage Tick(30) after_credit
+native_stage interval=30 ordinary_replay
+native_stage factor=None peer=false need=0.8 interval=31 step
+host_stage Tick(31) encode
+host_stage Tick(31) advance
+host_stage Tick(31) sample
+host_stage Tick(31) speech
+host_stage Tick(31) post_speech
+host_stage Tick(31) stage_selection
+host_stage Tick(31) apply_credit
+host_stage Tick(31) after_credit
+native_stage interval=31 ordinary_replay
+native_stage detached pressure=0 clear=false relay_off=false frames=1
+native_stage detached pressure=0 clear=false relay_off=false frames=8
+native_stage detached pressure=0 clear=false relay_off=false frames=32
+native_stage detached pressure=0 clear=false relay_off=true frames=1
+native_stage detached pressure=0 clear=false relay_off=true frames=8
+native_stage detached pressure=0 clear=false relay_off=true frames=32
+native_stage detached pressure=0 clear=true relay_off=false frames=1
+native_stage detached pressure=0 clear=true relay_off=false frames=8
+native_stage detached pressure=0 clear=true relay_off=false frames=32
+native_stage detached pressure=0 clear=true relay_off=true frames=1
+native_stage detached pressure=0 clear=true relay_off=true frames=8
+native_stage detached pressure=0 clear=true relay_off=true frames=32
+native_stage detached pressure=0.1 clear=false relay_off=false frames=1
+native_stage detached pressure=0.1 clear=false relay_off=false frames=8
+native_stage detached pressure=0.1 clear=false relay_off=false frames=32
+native_stage detached pressure=0.1 clear=false relay_off=true frames=1
+native_stage detached pressure=0.1 clear=false relay_off=true frames=8
+native_stage detached pressure=0.1 clear=false relay_off=true frames=32
+native_stage detached pressure=0.1 clear=true relay_off=false frames=1
+native_stage detached pressure=0.1 clear=true relay_off=false frames=8
+native_stage detached pressure=0.1 clear=true relay_off=false frames=32
+native_stage detached pressure=0.1 clear=true relay_off=true frames=1
+native_stage detached pressure=0.1 clear=true relay_off=true frames=8
+native_stage detached pressure=0.1 clear=true relay_off=true frames=32
+native_stage detached pressure=0.8 clear=false relay_off=false frames=1
+native_stage detached pressure=0.8 clear=false relay_off=false frames=8
+native_stage detached pressure=0.8 clear=false relay_off=false frames=32
+native_stage detached pressure=0.8 clear=false relay_off=true frames=1
+native_stage detached pressure=0.8 clear=false relay_off=true frames=8
+native_stage detached pressure=0.8 clear=false relay_off=true frames=32
+native_stage detached pressure=0.8 clear=true relay_off=false frames=1
+native_stage detached pressure=0.8 clear=true relay_off=false frames=8
+native_stage detached pressure=0.8 clear=true relay_off=false frames=32
+native_stage detached pressure=0.8 clear=true relay_off=true frames=1
+native_stage detached pressure=0.8 clear=true relay_off=true frames=8
+native_stage detached pressure=0.8 clear=true relay_off=true frames=32
+native_stage factor=None peer=true need=0.1 interval=0 step
+host_stage Tick(0) encode
+host_stage Tick(0) advance
+host_stage Tick(0) sample
+host_stage Tick(0) speech
+host_stage Tick(0) post_speech
+host_stage Tick(0) stage_selection
+host_stage Tick(0) apply_credit
+host_stage Tick(0) after_credit
+native_stage interval=0 ordinary_replay
+native_stage factor=None peer=true need=0.1 interval=1 step
+host_stage Tick(1) encode
+host_stage Tick(1) advance
+host_stage Tick(1) sample
+host_stage Tick(1) speech
+host_stage Tick(1) post_speech
+host_stage Tick(1) stage_selection
+host_stage Tick(1) apply_credit
+host_stage Tick(1) after_credit
+native_stage interval=1 ordinary_replay
+native_stage factor=None peer=true need=0.1 interval=2 step
+host_stage Tick(2) encode
+host_stage Tick(2) advance
+host_stage Tick(2) sample
+host_stage Tick(2) speech
+host_stage Tick(2) post_speech
+host_stage Tick(2) stage_selection
+host_stage Tick(2) apply_credit
+host_stage Tick(2) after_credit
+native_stage interval=2 ordinary_replay
+native_stage factor=None peer=true need=0.1 interval=3 step
+host_stage Tick(3) encode
+host_stage Tick(3) advance
+host_stage Tick(3) sample
+host_stage Tick(3) speech
+host_stage Tick(3) post_speech
+host_stage Tick(3) stage_selection
+host_stage Tick(3) apply_credit
+host_stage Tick(3) after_credit
+native_stage interval=3 ordinary_replay
+native_stage factor=None peer=true need=0.1 interval=4 step
+host_stage Tick(4) encode
+host_stage Tick(4) advance
+host_stage Tick(4) sample
+host_stage Tick(4) speech
+host_stage Tick(4) post_speech
+host_stage Tick(4) stage_selection
+host_stage Tick(4) apply_credit
+host_stage Tick(4) after_credit
+native_stage interval=4 ordinary_replay
+native_stage factor=None peer=true need=0.1 interval=5 step
+host_stage Tick(5) encode
+host_stage Tick(5) advance
+host_stage Tick(5) sample
+host_stage Tick(5) speech
+host_stage Tick(5) post_speech
+host_stage Tick(5) stage_selection
+host_stage Tick(5) apply_credit
+host_stage Tick(5) after_credit
+native_stage interval=5 ordinary_replay
+native_stage factor=None peer=true need=0.1 interval=6 step
+host_stage Tick(6) encode
+host_stage Tick(6) advance
+host_stage Tick(6) sample
+host_stage Tick(6) speech
+host_stage Tick(6) post_speech
+host_stage Tick(6) stage_selection
+host_stage Tick(6) apply_credit
+host_stage Tick(6) after_credit
+native_stage interval=6 ordinary_replay
+native_stage factor=None peer=true need=0.1 interval=7 step
+host_stage Tick(7) encode
+host_stage Tick(7) advance
+host_stage Tick(7) sample
+host_stage Tick(7) speech
+host_stage Tick(7) post_speech
+host_stage Tick(7) stage_selection
+host_stage Tick(7) apply_credit
+host_stage Tick(7) after_credit
+native_stage interval=7 ordinary_replay
+native_stage factor=None peer=true need=0.1 interval=8 step
+host_stage Tick(8) encode
+host_stage Tick(8) advance
+host_stage Tick(8) sample
+host_stage Tick(8) speech
+host_stage Tick(8) post_speech
+host_stage Tick(8) stage_selection
+host_stage Tick(8) apply_credit
+host_stage Tick(8) after_credit
+native_stage interval=8 ordinary_replay
+native_stage factor=None peer=true need=0.1 interval=9 step
+host_stage Tick(9) encode
+host_stage Tick(9) advance
+host_stage Tick(9) sample
+host_stage Tick(9) speech
+host_stage Tick(9) post_speech
+host_stage Tick(9) stage_selection
+host_stage Tick(9) apply_credit
+host_stage Tick(9) after_credit
+native_stage interval=9 ordinary_replay
+native_stage factor=None peer=true need=0.1 interval=10 step
+host_stage Tick(10) encode
+host_stage Tick(10) advance
+host_stage Tick(10) sample
+host_stage Tick(10) speech
+host_stage Tick(10) post_speech
+host_stage Tick(10) stage_selection
+host_stage Tick(10) apply_credit
+host_stage Tick(10) after_credit
+native_stage interval=10 ordinary_replay
+native_stage factor=None peer=true need=0.1 interval=11 step
+host_stage Tick(11) encode
+host_stage Tick(11) advance
+host_stage Tick(11) sample
+host_stage Tick(11) speech
+host_stage Tick(11) post_speech
+host_stage Tick(11) stage_selection
+host_stage Tick(11) apply_credit
+host_stage Tick(11) after_credit
+native_stage interval=11 ordinary_replay
+native_stage factor=None peer=true need=0.1 interval=12 step
+host_stage Tick(12) encode
+host_stage Tick(12) advance
+host_stage Tick(12) sample
+host_stage Tick(12) speech
+host_stage Tick(12) post_speech
+host_stage Tick(12) stage_selection
+host_stage Tick(12) apply_credit
+host_stage Tick(12) after_credit
+native_stage interval=12 ordinary_replay
+native_stage factor=None peer=true need=0.1 interval=13 step
+host_stage Tick(13) encode
+host_stage Tick(13) advance
+host_stage Tick(13) sample
+host_stage Tick(13) speech
+host_stage Tick(13) post_speech
+host_stage Tick(13) stage_selection
+host_stage Tick(13) apply_credit
+host_stage Tick(13) after_credit
+native_stage interval=13 ordinary_replay
+native_stage factor=None peer=true need=0.1 interval=14 step
+host_stage Tick(14) encode
+host_stage Tick(14) advance
+host_stage Tick(14) sample
+host_stage Tick(14) speech
+host_stage Tick(14) post_speech
+host_stage Tick(14) stage_selection
+host_stage Tick(14) apply_credit
+host_stage Tick(14) after_credit
+native_stage interval=14 ordinary_replay
+native_stage factor=None peer=true need=0.1 interval=15 step
+host_stage Tick(15) encode
+host_stage Tick(15) advance
+host_stage Tick(15) sample
+host_stage Tick(15) speech
+host_stage Tick(15) post_speech
+host_stage Tick(15) stage_selection
+host_stage Tick(15) apply_credit
+host_stage Tick(15) after_credit
+native_stage interval=15 ordinary_replay
+native_stage factor=None peer=true need=0.1 interval=16 step
+host_stage Tick(16) encode
+host_stage Tick(16) advance
+host_stage Tick(16) sample
+host_stage Tick(16) speech
+host_stage Tick(16) post_speech
+host_stage Tick(16) stage_selection
+host_stage Tick(16) apply_credit
+host_stage Tick(16) after_credit
+native_stage interval=16 ordinary_replay
+native_stage factor=None peer=true need=0.1 interval=17 step
+host_stage Tick(17) encode
+host_stage Tick(17) advance
+host_stage Tick(17) sample
+host_stage Tick(17) speech
+host_stage Tick(17) post_speech
+host_stage Tick(17) stage_selection
+host_stage Tick(17) apply_credit
+host_stage Tick(17) after_credit
+native_stage interval=17 ordinary_replay
+native_stage factor=None peer=true need=0.1 interval=18 step
+host_stage Tick(18) encode
+host_stage Tick(18) advance
+host_stage Tick(18) sample
+host_stage Tick(18) speech
+host_stage Tick(18) post_speech
+host_stage Tick(18) stage_selection
+host_stage Tick(18) apply_credit
+host_stage Tick(18) after_credit
+native_stage interval=18 ordinary_replay
+native_stage factor=None peer=true need=0.1 interval=19 step
+host_stage Tick(19) encode
+host_stage Tick(19) advance
+host_stage Tick(19) sample
+host_stage Tick(19) speech
+host_stage Tick(19) post_speech
+host_stage Tick(19) stage_selection
+host_stage Tick(19) apply_credit
+host_stage Tick(19) after_credit
+native_stage interval=19 ordinary_replay
+native_stage factor=None peer=true need=0.1 interval=20 step
+host_stage Tick(20) encode
+host_stage Tick(20) advance
+host_stage Tick(20) sample
+host_stage Tick(20) speech
+host_stage Tick(20) post_speech
+host_stage Tick(20) stage_selection
+host_stage Tick(20) apply_credit
+host_stage Tick(20) after_credit
+native_stage interval=20 ordinary_replay
+native_stage factor=None peer=true need=0.1 interval=21 step
+host_stage Tick(21) encode
+host_stage Tick(21) advance
+host_stage Tick(21) sample
+host_stage Tick(21) speech
+host_stage Tick(21) post_speech
+host_stage Tick(21) stage_selection
+host_stage Tick(21) apply_credit
+host_stage Tick(21) after_credit
+native_stage interval=21 ordinary_replay
+native_stage factor=None peer=true need=0.1 interval=22 step
+host_stage Tick(22) encode
+host_stage Tick(22) advance
+host_stage Tick(22) sample
+host_stage Tick(22) speech
+host_stage Tick(22) post_speech
+host_stage Tick(22) stage_selection
+host_stage Tick(22) apply_credit
+host_stage Tick(22) after_credit
+native_stage interval=22 ordinary_replay
+native_stage factor=None peer=true need=0.1 interval=23 step
+host_stage Tick(23) encode
+host_stage Tick(23) advance
+host_stage Tick(23) sample
+host_stage Tick(23) speech
+host_stage Tick(23) post_speech
+host_stage Tick(23) stage_selection
+host_stage Tick(23) apply_credit
+host_stage Tick(23) after_credit
+native_stage interval=23 ordinary_replay
+native_stage factor=None peer=true need=0.1 interval=24 step
+host_stage Tick(24) encode
+host_stage Tick(24) advance
+host_stage Tick(24) sample
+host_stage Tick(24) speech
+host_stage Tick(24) post_speech
+host_stage Tick(24) stage_selection
+host_stage Tick(24) apply_credit
+host_stage Tick(24) after_credit
+native_stage interval=24 ordinary_replay
+native_stage factor=None peer=true need=0.1 interval=25 step
+host_stage Tick(25) encode
+host_stage Tick(25) advance
+host_stage Tick(25) sample
+host_stage Tick(25) speech
+host_stage Tick(25) post_speech
+host_stage Tick(25) stage_selection
+host_stage Tick(25) apply_credit
+host_stage Tick(25) after_credit
+native_stage interval=25 ordinary_replay
+native_stage factor=None peer=true need=0.1 interval=26 step
+host_stage Tick(26) encode
+host_stage Tick(26) advance
+host_stage Tick(26) sample
+host_stage Tick(26) speech
+host_stage Tick(26) post_speech
+host_stage Tick(26) stage_selection
+host_stage Tick(26) apply_credit
+host_stage Tick(26) after_credit
+native_stage interval=26 ordinary_replay
+native_stage factor=None peer=true need=0.1 interval=27 step
+host_stage Tick(27) encode
+host_stage Tick(27) advance
+host_stage Tick(27) sample
+host_stage Tick(27) speech
+host_stage Tick(27) post_speech
+host_stage Tick(27) stage_selection
+host_stage Tick(27) apply_credit
+host_stage Tick(27) after_credit
+native_stage interval=27 ordinary_replay
+native_stage factor=None peer=true need=0.1 interval=28 step
+host_stage Tick(28) encode
+host_stage Tick(28) advance
+host_stage Tick(28) sample
+host_stage Tick(28) speech
+host_stage Tick(28) post_speech
+host_stage Tick(28) stage_selection
+host_stage Tick(28) apply_credit
+host_stage Tick(28) after_credit
+native_stage interval=28 ordinary_replay
+native_stage factor=None peer=true need=0.1 interval=29 step
+host_stage Tick(29) encode
+host_stage Tick(29) advance
+host_stage Tick(29) sample
+host_stage Tick(29) speech
+host_stage Tick(29) post_speech
+host_stage Tick(29) stage_selection
+host_stage Tick(29) apply_credit
+host_stage Tick(29) after_credit
+native_stage interval=29 ordinary_replay
+native_stage factor=None peer=true need=0.1 interval=30 step
+host_stage Tick(30) encode
+host_stage Tick(30) advance
+host_stage Tick(30) sample
+host_stage Tick(30) speech
+host_stage Tick(30) post_speech
+host_stage Tick(30) stage_selection
+host_stage Tick(30) apply_credit
+host_stage Tick(30) after_credit
+native_stage interval=30 ordinary_replay
+native_stage factor=None peer=true need=0.1 interval=31 step
+host_stage Tick(31) encode
+host_stage Tick(31) advance
+host_stage Tick(31) sample
+host_stage Tick(31) speech
+host_stage Tick(31) post_speech
+host_stage Tick(31) stage_selection
+host_stage Tick(31) apply_credit
+host_stage Tick(31) after_credit
+native_stage interval=31 ordinary_replay
+native_stage detached pressure=0 clear=false relay_off=false frames=1
+native_stage detached pressure=0 clear=false relay_off=false frames=8
+native_stage detached pressure=0 clear=false relay_off=false frames=32
+native_stage detached pressure=0 clear=false relay_off=true frames=1
+native_stage detached pressure=0 clear=false relay_off=true frames=8
+native_stage detached pressure=0 clear=false relay_off=true frames=32
+native_stage detached pressure=0 clear=true relay_off=false frames=1
+native_stage detached pressure=0 clear=true relay_off=false frames=8
+native_stage detached pressure=0 clear=true relay_off=false frames=32
+native_stage detached pressure=0 clear=true relay_off=true frames=1
+native_stage detached pressure=0 clear=true relay_off=true frames=8
+native_stage detached pressure=0 clear=true relay_off=true frames=32
+native_stage detached pressure=0.1 clear=false relay_off=false frames=1
+native_stage detached pressure=0.1 clear=false relay_off=false frames=8
+native_stage detached pressure=0.1 clear=false relay_off=false frames=32
+native_stage detached pressure=0.1 clear=false relay_off=true frames=1
+native_stage detached pressure=0.1 clear=false relay_off=true frames=8
+native_stage detached pressure=0.1 clear=false relay_off=true frames=32
+native_stage detached pressure=0.1 clear=true relay_off=false frames=1
+native_stage detached pressure=0.1 clear=true relay_off=false frames=8
+native_stage detached pressure=0.1 clear=true relay_off=false frames=32
+native_stage detached pressure=0.1 clear=true relay_off=true frames=1
+native_stage detached pressure=0.1 clear=true relay_off=true frames=8
+native_stage detached pressure=0.1 clear=true relay_off=true frames=32
+native_stage detached pressure=0.8 clear=false relay_off=false frames=1
+native_stage detached pressure=0.8 clear=false relay_off=false frames=8
+native_stage detached pressure=0.8 clear=false relay_off=false frames=32
+native_stage detached pressure=0.8 clear=false relay_off=true frames=1
+native_stage detached pressure=0.8 clear=false relay_off=true frames=8
+native_stage detached pressure=0.8 clear=false relay_off=true frames=32
+native_stage detached pressure=0.8 clear=true relay_off=false frames=1
+native_stage detached pressure=0.8 clear=true relay_off=false frames=8
+native_stage detached pressure=0.8 clear=true relay_off=false frames=32
+native_stage detached pressure=0.8 clear=true relay_off=true frames=1
+native_stage detached pressure=0.8 clear=true relay_off=true frames=8
+native_stage detached pressure=0.8 clear=true relay_off=true frames=32
+native_stage factor=None peer=true need=0.8 interval=0 step
+host_stage Tick(0) encode
+host_stage Tick(0) advance
+host_stage Tick(0) sample
+host_stage Tick(0) speech
+host_stage Tick(0) post_speech
+host_stage Tick(0) stage_selection
+host_stage Tick(0) apply_credit
+host_stage Tick(0) after_credit
+native_stage interval=0 ordinary_replay
+native_stage factor=None peer=true need=0.8 interval=1 step
+host_stage Tick(1) encode
+host_stage Tick(1) advance
+host_stage Tick(1) sample
+host_stage Tick(1) speech
+host_stage Tick(1) post_speech
+host_stage Tick(1) stage_selection
+host_stage Tick(1) apply_credit
+host_stage Tick(1) after_credit
+native_stage interval=1 ordinary_replay
+native_stage factor=None peer=true need=0.8 interval=2 step
+host_stage Tick(2) encode
+host_stage Tick(2) advance
+host_stage Tick(2) sample
+host_stage Tick(2) speech
+host_stage Tick(2) post_speech
+host_stage Tick(2) stage_selection
+host_stage Tick(2) apply_credit
+host_stage Tick(2) after_credit
+native_stage interval=2 ordinary_replay
+native_stage factor=None peer=true need=0.8 interval=3 step
+host_stage Tick(3) encode
+host_stage Tick(3) advance
+host_stage Tick(3) sample
+host_stage Tick(3) speech
+host_stage Tick(3) post_speech
+host_stage Tick(3) stage_selection
+host_stage Tick(3) apply_credit
+host_stage Tick(3) after_credit
+native_stage interval=3 ordinary_replay
+native_stage factor=None peer=true need=0.8 interval=4 step
+host_stage Tick(4) encode
+host_stage Tick(4) advance
+host_stage Tick(4) sample
+host_stage Tick(4) speech
+host_stage Tick(4) post_speech
+host_stage Tick(4) stage_selection
+host_stage Tick(4) apply_credit
+host_stage Tick(4) after_credit
+native_stage interval=4 ordinary_replay
+native_stage factor=None peer=true need=0.8 interval=5 step
+host_stage Tick(5) encode
+host_stage Tick(5) advance
+host_stage Tick(5) sample
+host_stage Tick(5) speech
+host_stage Tick(5) post_speech
+host_stage Tick(5) stage_selection
+host_stage Tick(5) apply_credit
+host_stage Tick(5) after_credit
+native_stage interval=5 ordinary_replay
+native_stage factor=None peer=true need=0.8 interval=6 step
+host_stage Tick(6) encode
+host_stage Tick(6) advance
+host_stage Tick(6) sample
+host_stage Tick(6) speech
+host_stage Tick(6) post_speech
+host_stage Tick(6) stage_selection
+host_stage Tick(6) apply_credit
+host_stage Tick(6) after_credit
+native_stage interval=6 ordinary_replay
+native_stage factor=None peer=true need=0.8 interval=7 step
+host_stage Tick(7) encode
+host_stage Tick(7) advance
+host_stage Tick(7) sample
+host_stage Tick(7) speech
+host_stage Tick(7) post_speech
+host_stage Tick(7) stage_selection
+host_stage Tick(7) apply_credit
+host_stage Tick(7) after_credit
+native_stage interval=7 ordinary_replay
+native_stage factor=None peer=true need=0.8 interval=8 step
+host_stage Tick(8) encode
+host_stage Tick(8) advance
+host_stage Tick(8) sample
+host_stage Tick(8) speech
+host_stage Tick(8) post_speech
+host_stage Tick(8) stage_selection
+host_stage Tick(8) apply_credit
+host_stage Tick(8) after_credit
+native_stage interval=8 ordinary_replay
+native_stage factor=None peer=true need=0.8 interval=9 step
+host_stage Tick(9) encode
+host_stage Tick(9) advance
+host_stage Tick(9) sample
+host_stage Tick(9) speech
+host_stage Tick(9) post_speech
+host_stage Tick(9) stage_selection
+host_stage Tick(9) apply_credit
+host_stage Tick(9) after_credit
+native_stage interval=9 ordinary_replay
+native_stage factor=None peer=true need=0.8 interval=10 step
+host_stage Tick(10) encode
+host_stage Tick(10) advance
+host_stage Tick(10) sample
+host_stage Tick(10) speech
+host_stage Tick(10) post_speech
+host_stage Tick(10) stage_selection
+host_stage Tick(10) apply_credit
+host_stage Tick(10) after_credit
+native_stage interval=10 ordinary_replay
+native_stage factor=None peer=true need=0.8 interval=11 step
+host_stage Tick(11) encode
+host_stage Tick(11) advance
+host_stage Tick(11) sample
+host_stage Tick(11) speech
+host_stage Tick(11) post_speech
+host_stage Tick(11) stage_selection
+host_stage Tick(11) apply_credit
+host_stage Tick(11) after_credit
+native_stage interval=11 ordinary_replay
+native_stage factor=None peer=true need=0.8 interval=12 step
+host_stage Tick(12) encode
+host_stage Tick(12) advance
+host_stage Tick(12) sample
+host_stage Tick(12) speech
+host_stage Tick(12) post_speech
+host_stage Tick(12) stage_selection
+host_stage Tick(12) apply_credit
+host_stage Tick(12) after_credit
+native_stage interval=12 ordinary_replay
+native_stage factor=None peer=true need=0.8 interval=13 step
+host_stage Tick(13) encode
+host_stage Tick(13) advance
+host_stage Tick(13) sample
+host_stage Tick(13) speech
+host_stage Tick(13) post_speech
+host_stage Tick(13) stage_selection
+host_stage Tick(13) apply_credit
+host_stage Tick(13) after_credit
+native_stage interval=13 ordinary_replay
+native_stage factor=None peer=true need=0.8 interval=14 step
+host_stage Tick(14) encode
+host_stage Tick(14) advance
+host_stage Tick(14) sample
+host_stage Tick(14) speech
+host_stage Tick(14) post_speech
+host_stage Tick(14) stage_selection
+host_stage Tick(14) apply_credit
+host_stage Tick(14) after_credit
+native_stage interval=14 ordinary_replay
+native_stage factor=None peer=true need=0.8 interval=15 step
+host_stage Tick(15) encode
+host_stage Tick(15) advance
+host_stage Tick(15) sample
+host_stage Tick(15) speech
+host_stage Tick(15) post_speech
+host_stage Tick(15) stage_selection
+host_stage Tick(15) apply_credit
+host_stage Tick(15) after_credit
+native_stage interval=15 ordinary_replay
+native_stage factor=None peer=true need=0.8 interval=16 step
+host_stage Tick(16) encode
+host_stage Tick(16) advance
+host_stage Tick(16) sample
+host_stage Tick(16) speech
+host_stage Tick(16) post_speech
+host_stage Tick(16) stage_selection
+host_stage Tick(16) apply_credit
+host_stage Tick(16) after_credit
+native_stage interval=16 ordinary_replay
+native_stage factor=None peer=true need=0.8 interval=17 step
+host_stage Tick(17) encode
+host_stage Tick(17) advance
+host_stage Tick(17) sample
+host_stage Tick(17) speech
+host_stage Tick(17) post_speech
+host_stage Tick(17) stage_selection
+host_stage Tick(17) apply_credit
+host_stage Tick(17) after_credit
+native_stage interval=17 ordinary_replay
+native_stage factor=None peer=true need=0.8 interval=18 step
+host_stage Tick(18) encode
+host_stage Tick(18) advance
+host_stage Tick(18) sample
+host_stage Tick(18) speech
+host_stage Tick(18) post_speech
+host_stage Tick(18) stage_selection
+host_stage Tick(18) apply_credit
+host_stage Tick(18) after_credit
+native_stage interval=18 ordinary_replay
+native_stage factor=None peer=true need=0.8 interval=19 step
+host_stage Tick(19) encode
+host_stage Tick(19) advance
+host_stage Tick(19) sample
+host_stage Tick(19) speech
+host_stage Tick(19) post_speech
+host_stage Tick(19) stage_selection
+host_stage Tick(19) apply_credit
+host_stage Tick(19) after_credit
+native_stage interval=19 ordinary_replay
+native_stage factor=None peer=true need=0.8 interval=20 step
+host_stage Tick(20) encode
+host_stage Tick(20) advance
+host_stage Tick(20) sample
+host_stage Tick(20) speech
+host_stage Tick(20) post_speech
+host_stage Tick(20) stage_selection
+host_stage Tick(20) apply_credit
+host_stage Tick(20) after_credit
+native_stage interval=20 ordinary_replay
+native_stage factor=None peer=true need=0.8 interval=21 step
+host_stage Tick(21) encode
+host_stage Tick(21) advance
+host_stage Tick(21) sample
+host_stage Tick(21) speech
+host_stage Tick(21) post_speech
+host_stage Tick(21) stage_selection
+host_stage Tick(21) apply_credit
+host_stage Tick(21) after_credit
+native_stage interval=21 ordinary_replay
+native_stage factor=None peer=true need=0.8 interval=22 step
+host_stage Tick(22) encode
+host_stage Tick(22) advance
+host_stage Tick(22) sample
+host_stage Tick(22) speech
+host_stage Tick(22) post_speech
+host_stage Tick(22) stage_selection
+host_stage Tick(22) apply_credit
+host_stage Tick(22) after_credit
+native_stage interval=22 ordinary_replay
+native_stage factor=None peer=true need=0.8 interval=23 step
+host_stage Tick(23) encode
+host_stage Tick(23) advance
+host_stage Tick(23) sample
+host_stage Tick(23) speech
+host_stage Tick(23) post_speech
+host_stage Tick(23) stage_selection
+host_stage Tick(23) apply_credit
+host_stage Tick(23) after_credit
+native_stage interval=23 ordinary_replay
+native_stage factor=None peer=true need=0.8 interval=24 step
+host_stage Tick(24) encode
+host_stage Tick(24) advance
+host_stage Tick(24) sample
+host_stage Tick(24) speech
+host_stage Tick(24) post_speech
+host_stage Tick(24) stage_selection
+host_stage Tick(24) apply_credit
+host_stage Tick(24) after_credit
+native_stage interval=24 ordinary_replay
+native_stage factor=None peer=true need=0.8 interval=25 step
+host_stage Tick(25) encode
+host_stage Tick(25) advance
+host_stage Tick(25) sample
+host_stage Tick(25) speech
+host_stage Tick(25) post_speech
+host_stage Tick(25) stage_selection
+host_stage Tick(25) apply_credit
+host_stage Tick(25) after_credit
+native_stage interval=25 ordinary_replay
+native_stage factor=None peer=true need=0.8 interval=26 step
+host_stage Tick(26) encode
+host_stage Tick(26) advance
+host_stage Tick(26) sample
+host_stage Tick(26) speech
+host_stage Tick(26) post_speech
+host_stage Tick(26) stage_selection
+host_stage Tick(26) apply_credit
+host_stage Tick(26) after_credit
+native_stage interval=26 ordinary_replay
+native_stage factor=None peer=true need=0.8 interval=27 step
+host_stage Tick(27) encode
+host_stage Tick(27) advance
+host_stage Tick(27) sample
+host_stage Tick(27) speech
+host_stage Tick(27) post_speech
+host_stage Tick(27) stage_selection
+host_stage Tick(27) apply_credit
+host_stage Tick(27) after_credit
+native_stage interval=27 ordinary_replay
+native_stage factor=None peer=true need=0.8 interval=28 step
+host_stage Tick(28) encode
+host_stage Tick(28) advance
+host_stage Tick(28) sample
+host_stage Tick(28) speech
+host_stage Tick(28) post_speech
+host_stage Tick(28) stage_selection
+host_stage Tick(28) apply_credit
+host_stage Tick(28) after_credit
+native_stage interval=28 ordinary_replay
+native_stage factor=None peer=true need=0.8 interval=29 step
+host_stage Tick(29) encode
+host_stage Tick(29) advance
+host_stage Tick(29) sample
+host_stage Tick(29) speech
+host_stage Tick(29) post_speech
+host_stage Tick(29) stage_selection
+host_stage Tick(29) apply_credit
+host_stage Tick(29) after_credit
+native_stage interval=29 ordinary_replay
+native_stage factor=None peer=true need=0.8 interval=30 step
+host_stage Tick(30) encode
+host_stage Tick(30) advance
+host_stage Tick(30) sample
+host_stage Tick(30) speech
+host_stage Tick(30) post_speech
+host_stage Tick(30) stage_selection
+host_stage Tick(30) apply_credit
+host_stage Tick(30) after_credit
+native_stage interval=30 ordinary_replay
+native_stage factor=None peer=true need=0.8 interval=31 step
+host_stage Tick(31) encode
+host_stage Tick(31) advance
+host_stage Tick(31) sample
+host_stage Tick(31) speech
+host_stage Tick(31) post_speech
+host_stage Tick(31) stage_selection
+host_stage Tick(31) apply_credit
+host_stage Tick(31) after_credit
+native_stage interval=31 ordinary_replay
+native_stage detached pressure=0 clear=false relay_off=false frames=1
+native_stage detached pressure=0 clear=false relay_off=false frames=8
+native_stage detached pressure=0 clear=false relay_off=false frames=32
+native_stage detached pressure=0 clear=false relay_off=true frames=1
+native_stage detached pressure=0 clear=false relay_off=true frames=8
+native_stage detached pressure=0 clear=false relay_off=true frames=32
+native_stage detached pressure=0 clear=true relay_off=false frames=1
+native_stage detached pressure=0 clear=true relay_off=false frames=8
+native_stage detached pressure=0 clear=true relay_off=false frames=32
+native_stage detached pressure=0 clear=true relay_off=true frames=1
+native_stage detached pressure=0 clear=true relay_off=true frames=8
+native_stage detached pressure=0 clear=true relay_off=true frames=32
+native_stage detached pressure=0.1 clear=false relay_off=false frames=1
+native_stage detached pressure=0.1 clear=false relay_off=false frames=8
+native_stage detached pressure=0.1 clear=false relay_off=false frames=32
+native_stage detached pressure=0.1 clear=false relay_off=true frames=1
+native_stage detached pressure=0.1 clear=false relay_off=true frames=8
+native_stage detached pressure=0.1 clear=false relay_off=true frames=32
+native_stage detached pressure=0.1 clear=true relay_off=false frames=1
+native_stage detached pressure=0.1 clear=true relay_off=false frames=8
+native_stage detached pressure=0.1 clear=true relay_off=false frames=32
+native_stage detached pressure=0.1 clear=true relay_off=true frames=1
+native_stage detached pressure=0.1 clear=true relay_off=true frames=8
+native_stage detached pressure=0.1 clear=true relay_off=true frames=32
+native_stage detached pressure=0.8 clear=false relay_off=false frames=1
+native_stage detached pressure=0.8 clear=false relay_off=false frames=8
+native_stage detached pressure=0.8 clear=false relay_off=false frames=32
+native_stage detached pressure=0.8 clear=false relay_off=true frames=1
+native_stage detached pressure=0.8 clear=false relay_off=true frames=8
+native_stage detached pressure=0.8 clear=false relay_off=true frames=32
+native_stage detached pressure=0.8 clear=true relay_off=false frames=1
+native_stage detached pressure=0.8 clear=true relay_off=false frames=8
+native_stage detached pressure=0.8 clear=true relay_off=false frames=32
+native_stage detached pressure=0.8 clear=true relay_off=true frames=1
+native_stage detached pressure=0.8 clear=true relay_off=true frames=8
+native_stage detached pressure=0.8 clear=true relay_off=true frames=32
+native_stage factor=Some(ZeroNeedMemoryGate) peer=false need=0.1 interval=0 step
+host_stage Tick(0) encode
+host_stage Tick(0) advance
+host_stage Tick(0) sample
+host_stage Tick(0) speech
+host_stage Tick(0) post_speech
+host_stage Tick(0) stage_selection
+host_stage Tick(0) apply_credit
+host_stage Tick(0) after_credit
+native_stage interval=0 ordinary_replay
+native_stage factor=Some(ZeroNeedMemoryGate) peer=false need=0.1 interval=1 step
+host_stage Tick(1) encode
+host_stage Tick(1) advance
+host_stage Tick(1) sample
+host_stage Tick(1) speech
+host_stage Tick(1) post_speech
+host_stage Tick(1) stage_selection
+host_stage Tick(1) apply_credit
+host_stage Tick(1) after_credit
+native_stage interval=1 ordinary_replay
+native_stage factor=Some(ZeroNeedMemoryGate) peer=false need=0.1 interval=2 step
+host_stage Tick(2) encode
+host_stage Tick(2) advance
+host_stage Tick(2) sample
+host_stage Tick(2) speech
+host_stage Tick(2) post_speech
+host_stage Tick(2) stage_selection
+host_stage Tick(2) apply_credit
+host_stage Tick(2) after_credit
+native_stage interval=2 ordinary_replay
+native_stage factor=Some(ZeroNeedMemoryGate) peer=false need=0.1 interval=3 step
+host_stage Tick(3) encode
+host_stage Tick(3) advance
+host_stage Tick(3) sample
+host_stage Tick(3) speech
+host_stage Tick(3) post_speech
+host_stage Tick(3) stage_selection
+host_stage Tick(3) apply_credit
+host_stage Tick(3) after_credit
+native_stage interval=3 ordinary_replay
+native_stage factor=Some(ZeroNeedMemoryGate) peer=false need=0.1 interval=4 step
+host_stage Tick(4) encode
+host_stage Tick(4) advance
+host_stage Tick(4) sample
+host_stage Tick(4) speech
+host_stage Tick(4) post_speech
+host_stage Tick(4) stage_selection
+host_stage Tick(4) apply_credit
+host_stage Tick(4) after_credit
+native_stage interval=4 ordinary_replay
+native_stage factor=Some(ZeroNeedMemoryGate) peer=false need=0.1 interval=5 step
+host_stage Tick(5) encode
+host_stage Tick(5) advance
+host_stage Tick(5) sample
+host_stage Tick(5) speech
+host_stage Tick(5) post_speech
+host_stage Tick(5) stage_selection
+host_stage Tick(5) apply_credit
+host_stage Tick(5) after_credit
+native_stage interval=5 ordinary_replay
+native_stage factor=Some(ZeroNeedMemoryGate) peer=false need=0.1 interval=6 step
+host_stage Tick(6) encode
+host_stage Tick(6) advance
+host_stage Tick(6) sample
+host_stage Tick(6) speech
+host_stage Tick(6) post_speech
+host_stage Tick(6) stage_selection
+host_stage Tick(6) apply_credit
+host_stage Tick(6) after_credit
+native_stage interval=6 ordinary_replay
+native_stage factor=Some(ZeroNeedMemoryGate) peer=false need=0.1 interval=7 step
+host_stage Tick(7) encode
+host_stage Tick(7) advance
+host_stage Tick(7) sample
+host_stage Tick(7) speech
+host_stage Tick(7) post_speech
+host_stage Tick(7) stage_selection
+host_stage Tick(7) apply_credit
+host_stage Tick(7) after_credit
+native_stage interval=7 ordinary_replay
+native_stage factor=Some(ZeroNeedMemoryGate) peer=false need=0.1 interval=8 step
+host_stage Tick(8) encode
+host_stage Tick(8) advance
+host_stage Tick(8) sample
+host_stage Tick(8) speech
+host_stage Tick(8) post_speech
+host_stage Tick(8) stage_selection
+host_stage Tick(8) apply_credit
+host_stage Tick(8) after_credit
+native_stage interval=8 ordinary_replay
+native_stage factor=Some(ZeroNeedMemoryGate) peer=false need=0.1 interval=9 step
+host_stage Tick(9) encode
+host_stage Tick(9) advance
+host_stage Tick(9) sample
+host_stage Tick(9) speech
+host_stage Tick(9) post_speech
+host_stage Tick(9) stage_selection
+host_stage Tick(9) apply_credit
+host_stage Tick(9) after_credit
+native_stage interval=9 ordinary_replay
+native_stage factor=Some(ZeroNeedMemoryGate) peer=false need=0.1 interval=10 step
+host_stage Tick(10) encode
+host_stage Tick(10) advance
+host_stage Tick(10) sample
+host_stage Tick(10) speech
+host_stage Tick(10) post_speech
+host_stage Tick(10) stage_selection
+host_stage Tick(10) apply_credit
+host_stage Tick(10) after_credit
+native_stage interval=10 ordinary_replay
+native_stage factor=Some(ZeroNeedMemoryGate) peer=false need=0.1 interval=11 step
+host_stage Tick(11) encode
+host_stage Tick(11) advance
+host_stage Tick(11) sample
+host_stage Tick(11) speech
+host_stage Tick(11) post_speech
+host_stage Tick(11) stage_selection
+host_stage Tick(11) apply_credit
+host_stage Tick(11) after_credit
+native_stage interval=11 ordinary_replay
+native_stage factor=Some(ZeroNeedMemoryGate) peer=false need=0.1 interval=12 step
+host_stage Tick(12) encode
+host_stage Tick(12) advance
+host_stage Tick(12) sample
+host_stage Tick(12) speech
+Error: Training(Contract(InvalidDecisionEvidence))

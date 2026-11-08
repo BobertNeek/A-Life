@@ -1,0 +1,19 @@
+{
+  "source_commit": "ae13aed31ddeb2a3736615a00e6cbe23bc0a18ab",
+  "source_tree": "706f319a0b5f9bdbbc828eeaf64a66564d70a571",
+  "prior_qualified_cpu_commit": "3e7239c6cd9b4a34d199a4e513ea2559cb7d748b",
+  "original_research_base": "2da9dd323ad6f074556a851174a2edbc9e34e216",
+  "legacy_capture_source_commit": "8e2914ba9f7097d852d12b5846915e8be2f78997",
+  "legacy_capture_source_tree": "5546c6df4f80a131ca4adf20a8e5ab36a2b9aeb0",
+  "legacy_fixture_sha256": "f61a979c0af61c6cbc58c2b193203ab209fe4b20b5d7488adc410bc0bb6a6933",
+  "executables_hashes_only": {
+    "sleep_journal_wire_v3-9e9bec3fe5e3434a": "d1646464feff8b9f34964439b4a27bdde0822bbc756ee48027d1d19c7b98c0a3",
+    "alife_runtime-7e21bb42129e2c43": "2b4598d2190f405969186edc1e587d2c6cdbe467ad3af6834b567452c648a9b7",
+    "gpu_checkpoint_manifest_cas-eb7b23bae9c4f460": "a6005054109f827daab643d4782ebdddc36f85ed375b3c1375ef514bae6a0f77"
+  },
+  "changed_source_files": [
+    "crates/alife_runtime/src/checkpoint_assets/durable_manifest.rs",
+    "crates/alife_runtime/tests/fixtures/sleep_journal_legacy_v2.json",
+    "crates/alife_runtime/tests/sleep_journal_wire_v3.rs"
+  ]
+}

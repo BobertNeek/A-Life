@@ -1,0 +1,16 @@
+   Compiling alife_core v0.1.0 (/workspace/scratch/ee5e08a3ca9b/motor-reflex-gpu-journal-v8/crates/alife_core)
+   Compiling alife_storage v0.1.0 (/workspace/scratch/ee5e08a3ca9b/motor-reflex-gpu-journal-v8/crates/alife_storage)
+   Compiling alife_gpu_backend v0.1.0 (/workspace/scratch/ee5e08a3ca9b/motor-reflex-gpu-journal-v8/crates/alife_gpu_backend)
+   Compiling alife_world v0.1.0 (/workspace/scratch/ee5e08a3ca9b/motor-reflex-gpu-journal-v8/crates/alife_world)
+   Compiling alife_runtime v0.1.0 (/workspace/scratch/ee5e08a3ca9b/motor-reflex-gpu-journal-v8/crates/alife_runtime)
+    Finished `test` profile [unoptimized] target(s) in 3m 03s
+     Running tests/sleep_journal_wire_v3.rs (/workspace/scratch/ee5e08a3ca9b/motor-reflex-target-v1/debug/deps/sleep_journal_wire_v3-9e9bec3fe5e3434a)
+
+running 4 tests
+test interrupted_journal_edges_preserve_frozen_payload_and_reject_downgrade ... ok
+test legacy_v2_journal_storage_bytes_and_nested_sentinel_are_preserved ... ok
+test same_tick_journal_prefix_accepts_one_final_interrupt_not_a_second_edge ... ok
+test version3_phase_edge_requires_actual_transition_tick_without_changing_version2 ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

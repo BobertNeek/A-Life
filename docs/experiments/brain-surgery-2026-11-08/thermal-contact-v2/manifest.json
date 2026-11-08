@@ -1,0 +1,67 @@
+{
+  "factor": "thermal-contact-research-v2",
+  "promotion": "none",
+  "ordinary_main_commit": "b0b4e5ab85473f1ace63f0629ecf4704e7b0fb81",
+  "base_tree": "0a34d588488c09f9a7fd4d8bc6115be61bdcd750",
+  "local_matching_commit": "7a15a2f8ceffb871947ca7df819095d2cab99327",
+  "source_directory": "/workspace/scratch/ee5e08a3ca9b/thermal-contact-candidate-v2",
+  "build_target": "/workspace/scratch/ee5e08a3ca9b/thermal-contact-target-v2",
+  "rust": "1.99.1",
+  "build_jobs": 1,
+  "incremental": false,
+  "debug_symbols": false,
+  "parameters": {
+    "neutral_band": 0.25,
+    "exposure_per_second": 0.1,
+    "passive_relief_per_second": 0.05,
+    "world_ticks_per_second": 20,
+    "conductance": "explicit per-surface 0..1",
+    "candidate_change": "positive configured exposure suppresses only inherited sleep thermal subtraction"
+  },
+  "checks": {
+    "focused_world_pass": 13,
+    "world_unit_pass_including_focused": 244,
+    "world_unit_ignored": 2,
+    "world_integrations_pass": 42,
+    "core_integrations_pass": 15,
+    "unique_pass_total": 301,
+    "clippy_all_targets": "pass",
+    "format": "pass",
+    "diff_whitespace": "pass",
+    "ordinary_base_patch_apply": "pass",
+    "v1_factor_delta_apply": "pass",
+    "postrun_source_hash_check": "pass"
+  },
+  "v1_archive": {
+    "path": "/workspace/scratch/ee5e08a3ca9b/thermal-contact-v1-evidence.tar.gz",
+    "sha256": "f6c003eeadb396bb3a61217748c7c43ceff63e023365a05f9b0ff6ce5e6bde52"
+  },
+  "original_audit_archive": {
+    "path": "/workspace/scratch/ee5e08a3ca9b/thermal-reproductive-original-audit-v1.tar.gz",
+    "sha256": "6ad84c18d75d051da72809b1401834d378c0e184c89e42a156d7fc2c7ba303b5"
+  },
+  "limitations": [
+    "Explicit opt-in physical experiment; not ordinary defaults or promotion.",
+    "Unsigned dimensionless thermal load, abstract endpoint contact, not realistic thermodynamics.",
+    "External parameters must be supplied again after load; no persistent material ABI.",
+    "No GPU, autonomous cohort, acquired checkpoint, private bank, or neural readout repair.",
+    "Reproductive readiness matched in bounded fixtures; no claim of autonomous mating or birth-policy improvement."
+  ],
+  "files": {
+    "README.md": "8120b64bc1afaf62373a0f40a1ffefb7a63e67905b780a723ba64c4e1170a2d9",
+    "THERMAL_CONTACT_CANDIDATE_DESIGN.md": "7fe6b6c7789f3109cdf4090ab820ddbc4ff888307e2be6b94ed4daab137d4831",
+    "THERMAL_CONTACT_V2_RESULTS.md": "dff8705d2912538427db57f436652278036f1fd7055f9b9c636d3480c770cda6",
+    "evidence/run-thermal-contact-v2-checks-v1.sh": "c14697bc9114f5224a5e05d694262c8c13e4d0fab285ddff9b00f77b139bd899",
+    "evidence/thermal-contact-candidate-v2-source.patch": "4dab8aa99b5a4ce1343307292e59ade40fbe41694f3fb118bf3ba7836e6c762e",
+    "evidence/thermal-contact-v1-to-v2-factor.patch": "ccd6141ecbd46a39bdf3cf2aca7fbe12a1eca4cef9c67680918792828ab25359",
+    "evidence/thermal-contact-v2-checks-v2.log": "385fbbaadc25890a7a14dbf8fd72a43ffecb0755c51233e5d2fa2554b6190eb3",
+    "evidence/thermal-contact-v2-pretest-v5.sha256": "b78a9663607f2c1ba86523375d9ad36be422f3a355bbe94d32717cfad39e47ef",
+    "source/crates/alife_core/src/biochemistry.rs": "0d5ff72f5c7e7305daf4b53f150ce116a9f85ce49738ad8746c4bbfc99f24f2b",
+    "source/crates/alife_core/src/lib.rs": "b3d6b36fcc0893ffc9d869136e1c9930398bc4e13b40ad7836eacc340d9d2b3e",
+    "source/crates/alife_core/tests/thermal_reproductive_drive_audit.rs": "1ca0ab3f018a655cdb32f1ab69ba5c9e061ae825d4b3b523642876160af0ba56",
+    "source/crates/alife_world/src/headless/thermal_contact_candidate/tests.rs": "767883b6f3a3ad589949300cf86af096d505fc428519e8286c342d5378f13fff",
+    "source/crates/alife_world/src/headless/thermal_contact_candidate.rs": "ac6e93d8c6d520fab46f5669a6eb561742ba2e39b7dae39f584be764dd158e5a",
+    "source/crates/alife_world/src/headless.rs": "76ed15c5b2713c57bd7349ce56eac5891e46ee04d372f89c6de3b07b3f5c5db4",
+    "source/crates/alife_world/src/organism.rs": "09f9a61dfe1b36c86134811866d2b489cf70676d7b0a458dc77a738e435cbd24"
+  }
+}
