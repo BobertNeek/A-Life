@@ -37,6 +37,10 @@ warm target; logs name the actual ordinary-main checkout for all compiled crates
 - Strict training lib/tests Clippy with cpu-backend: passed.
 - Workspace formatting: passed.
 
+The existing native-cpu test/Clippy workflow now includes the four fixed
+absent-speech regressions alongside its existing collector targets. No study or
+device run is added. Exact-head hosted execution is separately pending.
+
 These are CPU/helper/world fixtures, not a GPU-device numerical parity run or
 new default-brain admission. No existing private creature/checkpoint is an input,
 no acquired state or wire format changes, and no optimizer update is added. The
