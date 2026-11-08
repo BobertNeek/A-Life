@@ -1,0 +1,24 @@
+{
+  "scope": "Fresh body-only fixture, not autonomous recovery behavior",
+  "source_commit": "64feab7d925bfbc27f3c812aa138b90c44128877",
+  "thresholds": {
+    "fatigue": 0.35,
+    "sleep_pressure": 0.6
+  },
+  "unchanged": {
+    "first_fatigue_crossing": null,
+    "first_pressure_crossing": null,
+    "age_death": 4514,
+    "fatigue_at_death": 0.31487438,
+    "pressure_at_death": 0.31487438
+  },
+  "candidate": {
+    "first_fatigue_crossing": 423,
+    "first_pressure_crossing": 1141,
+    "age_death": 4514
+  },
+  "artifacts": {
+    "recovery-timescale-measured.svg": "35dcbe1badcfcd04e86718aeb57ae435de3bd982c0b9be8a013d5fb977abc8f6",
+    "recovery-timescale-measured.png": "7b2e29b9de860b368b26d2e8f1f11c5ae7bf16c2ddd157ab75cf7948aa334db0"
+  }
+}
