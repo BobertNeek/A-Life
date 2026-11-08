@@ -58,12 +58,12 @@ fn compile_inner(
     let encoder =
         super::io_compile::compile_encoder(genome, development, &layout, inputs.sensor_profile())?;
     let (mut projections, mut synapses, mut receipts) =
-        if inputs.foundation_abi().n2048_experimental_graph().is_some() {
+        if inputs.foundation_abi().uses_n2048_experimental_graph() {
             super::topology_compile::compile_n2048_experimental(genome, &layout, capacity)?
         } else {
             super::topology_compile::compile_recurrent(genome, &layout, capacity)?
         };
-    let decoders = super::io_compile::compile_decoders(
+    let mut decoders = super::io_compile::compile_decoders(
         genome,
         development,
         &layout,
@@ -71,6 +71,13 @@ fn compile_inner(
         u16::try_from(projections.len()).map_err(|_| compile_error())?,
         u32::try_from(synapses.len()).map_err(|_| compile_error())?,
     )?;
+    if inputs
+        .foundation_abi()
+        .n2048_memory_gain_candidate()
+        .is_some()
+    {
+        decoders.candidate = decoders.candidate.with_memory_gain_candidate()?;
+    }
     projections.extend(decoders.projections);
     synapses.extend(decoders.synapses);
     receipts.extend(decoders.receipts);
@@ -289,7 +296,7 @@ fn compile_inner(
                     .get(usize::from(synapse.route_index()))
                     .ok_or(ScaffoldContractError::PhenotypeCompile)?;
                 let delta = if inputs.n2048_candidate_asset().is_some()
-                    || inputs.foundation_abi().n2048_experimental_graph().is_some()
+                    || inputs.foundation_abi().uses_n2048_experimental_graph()
                 {
                     0.0
                 } else {
@@ -299,7 +306,7 @@ fn compile_inner(
                     )
                 };
                 let exact_candidate = inputs.n2048_candidate_asset().is_some()
-                    || inputs.foundation_abi().n2048_experimental_graph().is_some();
+                    || inputs.foundation_abi().uses_n2048_experimental_graph();
                 let mut composed = if exact_candidate {
                     *weight
                 } else {

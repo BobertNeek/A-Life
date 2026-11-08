@@ -1,0 +1,4309 @@
+diff --git a/crates/alife_core/src/foundation.rs b/crates/alife_core/src/foundation.rs
+index c93b52a9..4bd10dc6 100644
+--- a/crates/alife_core/src/foundation.rs
++++ b/crates/alife_core/src/foundation.rs
+@@ -478,6 +478,7 @@ impl FoundationId {
+     pub const N512_READOUT_CANDIDATE_V1: Self = Self(0x4E35_3132_5243_0001);
+     pub const N2048_V1: Self = Self(0x4E32_3034_385F_5631);
+     pub const N2048_EXPERIMENTAL_GRAPH_V1: Self = Self(0x4E32_3034_3845_0001);
++    pub const N2048_MEMORY_GAIN_CANDIDATE_V1: Self = Self(0x4E32_3034_384D_0001);
+ 
+     pub const fn raw(self) -> u64 {
+         self.0
+@@ -502,6 +503,7 @@ impl FoundationCompatibilityFamilyId {
+     pub const N512_FOUNDATION: Self = Self(0x4E35_3132_5F00_FA11);
+     pub const N2048_FOUNDATION: Self = Self(0x4E32_3034_385F_FA11);
+     pub const N2048_EXPERIMENTAL_GRAPH: Self = Self(0x4E32_3034_3845_FA11);
++    pub const N2048_MEMORY_GAIN_CANDIDATE: Self = Self(0x4E32_3034_384D_FA11);
+ 
+     pub const fn raw(self) -> u64 {
+         self.0
+@@ -707,7 +709,7 @@ impl FoundationManifest {
+         weight_asset: FoundationWeightAssetRef,
+     ) -> Result<Self, ScaffoldContractError> {
+         let selection = phenotype.foundation_abi();
+-        let experimental = selection.n2048_experimental_graph().is_some();
++        let experimental = selection.uses_n2048_experimental_graph();
+         let selected_layout_digest = if experimental {
+             layout_digest(phenotype.lobe_layout())
+         } else {
+@@ -719,8 +721,12 @@ impl FoundationManifest {
+         let training_stage = TrainingStageManifest::bootstrap();
+         let (foundation_id, compatibility_family_id) = if experimental {
+             (
+-                FoundationId::N2048_EXPERIMENTAL_GRAPH_V1,
+-                FoundationCompatibilityFamilyId::N2048_EXPERIMENTAL_GRAPH,
++                selection
++                    .foundation_id()
++                    .ok_or(ScaffoldContractError::PhenotypeCompile)?,
++                selection
++                    .compatibility_family_id()
++                    .ok_or(ScaffoldContractError::PhenotypeCompile)?,
+             )
+         } else {
+             foundation_identity_for_class(phenotype.brain_class_id())?
+@@ -807,7 +813,7 @@ impl FoundationManifest {
+         phenotype: &BrainPhenotype,
+     ) -> Result<(), ScaffoldContractError> {
+         let selection = phenotype.foundation_abi();
+-        let experimental = selection.n2048_experimental_graph().is_some();
++        let experimental = selection.uses_n2048_experimental_graph();
+         let selected_layout_digest = if experimental {
+             layout_digest(phenotype.lobe_layout())
+         } else {
+@@ -820,8 +826,12 @@ impl FoundationManifest {
+         self.promotion_receipt.validate(self.training_stage)?;
+         let (foundation_id, compatibility_family_id) = if experimental {
+             (
+-                FoundationId::N2048_EXPERIMENTAL_GRAPH_V1,
+-                FoundationCompatibilityFamilyId::N2048_EXPERIMENTAL_GRAPH,
++                selection
++                    .foundation_id()
++                    .ok_or(ScaffoldContractError::PhenotypeCompile)?,
++                selection
++                    .compatibility_family_id()
++                    .ok_or(ScaffoldContractError::PhenotypeCompile)?,
+             )
+         } else {
+             foundation_identity_for_class(self.capacity_class_id)?
+@@ -866,6 +876,10 @@ pub struct FoundationWeightAsset {
+ }
+ 
+ impl FoundationWeightAsset {
++    pub const fn is_n2048_memory_gain_candidate(&self) -> bool {
++        self.manifest.foundation_id.raw() == FoundationId::N2048_MEMORY_GAIN_CANDIDATE_V1.raw()
++    }
++
+     pub const fn is_n2048_experimental_graph(&self) -> bool {
+         self.manifest.foundation_id.raw() == FoundationId::N2048_EXPERIMENTAL_GRAPH_V1.raw()
+     }
+@@ -1209,21 +1223,30 @@ impl FoundationWeightAsset {
+         self.manifest
+             .promotion_receipt
+             .validate(self.manifest.training_stage)?;
+-        let (foundation_id, compatibility_family_id) = if self.is_n2048_experimental_graph() {
+-            if self.manifest.capacity_class_id != BrainCapacityClass::N2048_ID
+-                || self.manifest.layout_digest
+-                    != layout_digest(&N2048FoundationLayoutV1::lobe_layout())
+-                || self.weights.len() != 32768
+-            {
+-                return Err(ScaffoldContractError::PhenotypeCompile);
+-            }
+-            (
+-                FoundationId::N2048_EXPERIMENTAL_GRAPH_V1,
+-                FoundationCompatibilityFamilyId::N2048_EXPERIMENTAL_GRAPH,
+-            )
+-        } else {
+-            foundation_identity_for_class(self.manifest.capacity_class_id)?
+-        };
++        let (foundation_id, compatibility_family_id) =
++            if self.is_n2048_experimental_graph() || self.is_n2048_memory_gain_candidate() {
++                if self.manifest.capacity_class_id != BrainCapacityClass::N2048_ID
++                    || self.manifest.layout_digest
++                        != layout_digest(&N2048FoundationLayoutV1::lobe_layout())
++                    || self.weights.len() != 32768
++                {
++                    return Err(ScaffoldContractError::PhenotypeCompile);
++                }
++                (
++                    if self.is_n2048_memory_gain_candidate() {
++                        FoundationId::N2048_MEMORY_GAIN_CANDIDATE_V1
++                    } else {
++                        FoundationId::N2048_EXPERIMENTAL_GRAPH_V1
++                    },
++                    if self.is_n2048_memory_gain_candidate() {
++                        FoundationCompatibilityFamilyId::N2048_MEMORY_GAIN_CANDIDATE
++                    } else {
++                        FoundationCompatibilityFamilyId::N2048_EXPERIMENTAL_GRAPH
++                    },
++                )
++            } else {
++                foundation_identity_for_class(self.manifest.capacity_class_id)?
++            };
+         if self.manifest.schema_version != 1
+             || (self.manifest.foundation_id != foundation_id
+                 && !self.is_nano512_readout_candidate())
+diff --git a/crates/alife_core/src/legacy_nano512_compatibility.rs b/crates/alife_core/src/legacy_nano512_compatibility.rs
+index a5313738..8978dd5d 100644
+--- a/crates/alife_core/src/legacy_nano512_compatibility.rs
++++ b/crates/alife_core/src/legacy_nano512_compatibility.rs
+@@ -80,9 +80,24 @@ pub enum FoundationAbiSelection {
+     MigratedN2048FoundationV1(MigratedN2048FoundationV1Descriptor),
+     Nano512ReadoutCandidateV1(crate::Nano512ReadoutCandidateV1),
+     Nano512ActionCreditCandidateV2(crate::Nano512ActionCreditCandidateV2),
++    // Append variants so older binary enum tags keep their exact meaning.
++    N2048MemoryGainCandidateV1(crate::N2048MemoryGainCandidateV1),
+ }
+ 
+ impl FoundationAbiSelection {
++    pub const fn n2048_memory_gain_candidate(&self) -> Option<&crate::N2048MemoryGainCandidateV1> {
++        match self {
++            Self::N2048MemoryGainCandidateV1(value) => Some(value),
++            _ => None,
++        }
++    }
++    pub const fn uses_n2048_experimental_graph(&self) -> bool {
++        matches!(
++            self,
++            Self::N2048ExperimentalGraphV1(_) | Self::N2048MemoryGainCandidateV1(_)
++        )
++    }
++
+     pub const fn n2048_experimental_graph(&self) -> Option<&crate::N2048ExperimentalGraphV1> {
+         match self {
+             Self::N2048ExperimentalGraphV1(recipe) => Some(recipe),
+@@ -100,7 +115,7 @@ impl FoundationAbiSelection {
+     pub const fn canonical_v2(&self) -> Option<&FoundationAbiBinding> {
+         match self {
+             Self::CanonicalV2(binding) => Some(binding),
+-            Self::N2048ExperimentalGraphV1(_) => None,
++            Self::N2048ExperimentalGraphV1(_) | Self::N2048MemoryGainCandidateV1(_) => None,
+             Self::LegacyNano512CompatibilityV1(_)
+             | Self::MigratedN2048FoundationV1(_)
+             | Self::Nano512ReadoutCandidateV1(_)
+@@ -113,7 +128,7 @@ impl FoundationAbiSelection {
+     ) -> Option<&LegacyNano512CompatibilityAbiDescriptor> {
+         match self {
+             Self::CanonicalV2(_) => None,
+-            Self::N2048ExperimentalGraphV1(_) => None,
++            Self::N2048ExperimentalGraphV1(_) | Self::N2048MemoryGainCandidateV1(_) => None,
+             Self::LegacyNano512CompatibilityV1(descriptor) => Some(descriptor),
+             Self::MigratedN2048FoundationV1(_)
+             | Self::Nano512ReadoutCandidateV1(_)
+@@ -126,7 +141,7 @@ impl FoundationAbiSelection {
+     ) -> Option<&MigratedN2048FoundationV1Descriptor> {
+         match self {
+             Self::MigratedN2048FoundationV1(descriptor) => Some(descriptor),
+-            Self::N2048ExperimentalGraphV1(_) => None,
++            Self::N2048ExperimentalGraphV1(_) | Self::N2048MemoryGainCandidateV1(_) => None,
+             Self::CanonicalV2(_)
+             | Self::LegacyNano512CompatibilityV1(_)
+             | Self::Nano512ReadoutCandidateV1(_)
+@@ -163,6 +178,9 @@ impl FoundationAbiSelection {
+             Self::N2048ExperimentalGraphV1(recipe) => {
+                 recipe.validate_against(capacity, sensor_profile)
+             }
++            Self::N2048MemoryGainCandidateV1(recipe) => {
++                recipe.validate_against(capacity, sensor_profile)
++            }
+             Self::LegacyNano512CompatibilityV1(descriptor) => {
+                 descriptor.validate_contract()?;
+                 if capacity.id() != BrainCapacityClass::N512_ID
+@@ -190,7 +208,9 @@ impl FoundationAbiSelection {
+                 LanguageCodebookV1::canonical()
+             }
+             Self::CanonicalV2(binding) => binding.language_codebook().clone(),
+-            Self::N2048ExperimentalGraphV1(_) => LanguageCodebookV1::canonical(),
++            Self::N2048ExperimentalGraphV1(_) | Self::N2048MemoryGainCandidateV1(_) => {
++                LanguageCodebookV1::canonical()
++            }
+             Self::LegacyNano512CompatibilityV1(_) => LanguageCodebookV1::canonical(),
+             Self::MigratedN2048FoundationV1(_) => LanguageCodebookV1::canonical(),
+         }
+@@ -202,7 +222,9 @@ impl FoundationAbiSelection {
+                 BrainCapacityClass::N512_ID
+             }
+             Self::CanonicalV2(binding) => binding.capacity_class_id(),
+-            Self::N2048ExperimentalGraphV1(_) => BrainCapacityClass::N2048_ID,
++            Self::N2048ExperimentalGraphV1(_) | Self::N2048MemoryGainCandidateV1(_) => {
++                BrainCapacityClass::N2048_ID
++            }
+             Self::LegacyNano512CompatibilityV1(_) => BrainCapacityClass::N512_ID,
+             Self::MigratedN2048FoundationV1(_) => BrainCapacityClass::N2048_ID,
+         }
+@@ -215,6 +237,9 @@ impl FoundationAbiSelection {
+             }
+             Self::CanonicalV2(binding) => binding.foundation_id(),
+             Self::N2048ExperimentalGraphV1(_) => Some(FoundationId::N2048_EXPERIMENTAL_GRAPH_V1),
++            Self::N2048MemoryGainCandidateV1(_) => {
++                Some(FoundationId::N2048_MEMORY_GAIN_CANDIDATE_V1)
++            }
+             Self::LegacyNano512CompatibilityV1(descriptor) => Some(descriptor.source_foundation_id),
+             Self::MigratedN2048FoundationV1(descriptor) => Some(descriptor.source_foundation_id),
+         }
+@@ -226,7 +251,9 @@ impl FoundationAbiSelection {
+                 Some(FoundationVersion::V1)
+             }
+             Self::CanonicalV2(binding) => binding.foundation_version(),
+-            Self::N2048ExperimentalGraphV1(_) => Some(FoundationVersion::V1),
++            Self::N2048ExperimentalGraphV1(_) | Self::N2048MemoryGainCandidateV1(_) => {
++                Some(FoundationVersion::V1)
++            }
+             Self::LegacyNano512CompatibilityV1(descriptor) => {
+                 Some(descriptor.source_foundation_version)
+             }
+@@ -245,6 +272,9 @@ impl FoundationAbiSelection {
+             Self::N2048ExperimentalGraphV1(_) => {
+                 Some(FoundationCompatibilityFamilyId::N2048_EXPERIMENTAL_GRAPH)
+             }
++            Self::N2048MemoryGainCandidateV1(_) => {
++                Some(FoundationCompatibilityFamilyId::N2048_MEMORY_GAIN_CANDIDATE)
++            }
+             Self::LegacyNano512CompatibilityV1(descriptor) => {
+                 Some(descriptor.source_compatibility_family_id)
+             }
+@@ -260,6 +290,7 @@ impl FoundationAbiSelection {
+             Self::Nano512ReadoutCandidateV1(candidate) => Some(candidate.asset_ref()),
+             Self::CanonicalV2(binding) => binding.foundation_weight_asset(),
+             Self::N2048ExperimentalGraphV1(recipe) => recipe.asset_ref(),
++            Self::N2048MemoryGainCandidateV1(recipe) => recipe.asset_ref(),
+             Self::LegacyNano512CompatibilityV1(descriptor) => Some(descriptor.source_weight_asset),
+             Self::MigratedN2048FoundationV1(descriptor) => Some(descriptor.source_weight_asset),
+         }
+@@ -277,6 +308,10 @@ impl FoundationAbiSelection {
+ 
+     pub(crate) fn write_canonical(&self, digest: &mut CanonicalDigestBuilder) {
+         match self {
++            Self::N2048MemoryGainCandidateV1(recipe) => {
++                digest.write_u8(7);
++                recipe.write_canonical(digest);
++            }
+             Self::N2048ExperimentalGraphV1(recipe) => {
+                 digest.write_u8(6);
+                 recipe.write_canonical(digest);
+diff --git a/crates/alife_core/src/lib.rs b/crates/alife_core/src/lib.rs
+index 617f1e92..1153eeb6 100644
+--- a/crates/alife_core/src/lib.rs
++++ b/crates/alife_core/src/lib.rs
+@@ -47,6 +47,8 @@ pub use factorized_selection::{
+ };
+ pub use genome::ActionCandidateCreditProfileV1;
+ pub use n2048_experimental_graph::N2048ExperimentalGraphV1;
++mod n2048_memory_gain_candidate;
++pub use n2048_memory_gain_candidate::N2048MemoryGainCandidateV1;
+ pub use nano512_readout_candidate::{Nano512ActionCreditCandidateV2, Nano512ReadoutCandidateV1};
+ pub mod lobe;
+ pub mod math;
+diff --git a/crates/alife_core/src/memory.rs b/crates/alife_core/src/memory.rs
+index 28c5b6b9..6e4d7bd9 100644
+--- a/crates/alife_core/src/memory.rs
++++ b/crates/alife_core/src/memory.rs
+@@ -1214,13 +1214,14 @@ impl MemoryBank {
+         for id in self
+             .candidate_store
+             .family_index
+-            .get(&family_key)
++            .get(&(family_key.clone(), candidate_record.outcome_scope_key()))
+             .into_iter()
+             .flatten()
+             .take(MEMORY_FAMILY_SEARCH_CAP)
+         {
+             let record = &self.candidate_store.records[&id.raw()];
+             if record.identity() != candidate_record.identity()
++                || !record.same_outcome_scope(&candidate_record)
+                 || family_similarity(&candidate_record.query_features, &record.query_features)
+                     < MEMORY_MERGE_SIMILARITY
+             {
+@@ -1235,13 +1236,36 @@ impl MemoryBank {
+                 *selected = Some(*id);
+             }
+         }
++        // Restored legacy records stay Unknown, but a later essentially same-context
++        // consumed outcome must still be able to teach at full capacity.
++        // Search its own bounded bucket; preparation density cannot hide it.
++        if candidate_record.outcome_contact == Some(PhysicalContactKind::Consumed) {
++            for id in self
++                .candidate_store
++                .family_index
++                .get(&(family_key.clone(), 0))
++                .into_iter()
++                .flatten()
++                .take(MEMORY_FAMILY_SEARCH_CAP)
++            {
++                let record = &self.candidate_store.records[&id.raw()];
++                if candidate_record.consumption_supersedes_unknown(record)
++                    && contradiction_id.is_none_or(|previous| id.raw() < previous.raw())
++                {
++                    contradiction_id = Some(*id);
++                }
++            }
++        }
+         let first_matching_event = if query.tracked_object_id().is_some() {
+             !self
+                 .candidate_store
+                 .family_namespace_index
+                 .contains_key(&family_key.namespace_key())
+         } else {
+-            !self.candidate_store.family_index.contains_key(&family_key)
++            !self
++                .candidate_store
++                .family_index
++                .contains_key(&(family_key.clone(), candidate_record.outcome_scope_key()))
+         };
+ 
+         enum MutationPlan {
+@@ -1568,19 +1592,33 @@ impl MemoryBank {
+                 record.memory_id.raw(),
+             ))
+         });
+-        let mut newer_by_identity =
+-            std::collections::BTreeMap::<candidate_index::MemoryRecordIdentity, Vec<usize>>::new();
++        let mut newer_by_identity = std::collections::BTreeMap::<
++            (candidate_index::MemoryRecordIdentity, u8),
++            Vec<usize>,
++        >::new();
+         let mut superseded = std::collections::BTreeSet::new();
+         for (index, record) in folded.iter().enumerate() {
+-            let newer = newer_by_identity.entry(record.identity()).or_default();
+-            if newer.iter().any(|newer_index| {
+-                let other = &folded[*newer_index];
+-                !compatible_memory_outcomes(record, other)
+-                    && family_similarity(&record.query_features, &other.query_features)
+-                        >= MEMORY_MERGE_SIMILARITY
+-            }) {
++            let key = (record.identity(), record.outcome_scope_key());
++            let same_scope_reversal = newer_by_identity.get(&key).is_some_and(|newer| {
++                newer.iter().any(|newer_index| {
++                    let other = &folded[*newer_index];
++                    !compatible_memory_outcomes(record, other)
++                        && family_similarity(&record.query_features, &other.query_features)
++                            >= MEMORY_MERGE_SIMILARITY
++                })
++            });
++            let grounded_legacy_reversal = record.outcome_contact.is_none()
++                && newer_by_identity
++                    .get(&(record.identity(), 5))
++                    .is_some_and(|newer| {
++                        newer.iter().any(|newer_index| {
++                            folded[*newer_index].consumption_supersedes_unknown(record)
++                        })
++                    });
++            if same_scope_reversal || grounded_legacy_reversal {
+                 superseded.insert(record.memory_id.raw());
+             }
++            let newer = newer_by_identity.entry(key).or_default();
+             if newer.len() < MEMORY_FAMILY_SEARCH_CAP {
+                 newer.push(index);
+             }
+diff --git a/crates/alife_core/src/memory/candidate_index.rs b/crates/alife_core/src/memory/candidate_index.rs
+index 8d0e205d..8a2dd50a 100644
+--- a/crates/alife_core/src/memory/candidate_index.rs
++++ b/crates/alife_core/src/memory/candidate_index.rs
+@@ -62,9 +62,54 @@ pub(super) struct CandidateMemoryRecordV2 {
+     pub(super) confidence: f32,
+     pub(super) salience_q16: u16,
+     pub(super) observation_count: u32,
++    /// Exact representative physical outcome, when grounded by its channel and
++    /// target. Absence is legacy/unknown, never inferred from consequence floats.
++    #[serde(default, skip_serializing_if = "Option::is_none")]
++    pub(super) outcome_contact: Option<PhysicalContactKind>,
+ }
+ 
+ impl CandidateMemoryRecordV2 {
++    pub(super) fn same_outcome_scope(&self, other: &Self) -> bool {
++        self.outcome_contact == other.outcome_contact
++    }
++
++    /// A newly grounded meal may teach an old save without relabeling its
++    /// unknown episodes. Preparations never gain this one-way privilege.
++    pub(super) fn consumption_supersedes_unknown(&self, older: &Self) -> bool {
++        self.outcome_contact == Some(PhysicalContactKind::Consumed)
++            && older.outcome_contact.is_none()
++            && self.identity() == older.identity()
++            && super::candidate_recall::family_similarity(
++                &self.query_features,
++                &older.query_features,
++            ) >= super::MEMORY_MERGE_SIMILARITY
++            && !super::candidate_recall::compatible_memory_consequences(self, older)
++    }
++
++    pub(super) fn outcome_scope_key(&self) -> u8 {
++        match self.outcome_contact {
++            None => 0,
++            Some(PhysicalContactKind::None) => 1,
++            Some(PhysicalContactKind::Touch) => 2,
++            Some(PhysicalContactKind::Collision) => 3,
++            Some(PhysicalContactKind::Blocked) => 4,
++            Some(PhysicalContactKind::Consumed) => 5,
++            Some(PhysicalContactKind::Moved) => 6,
++        }
++    }
++
++    fn ingest_recall_priority(&self) -> u8 {
++        if self.family_raw != u16::from(CandidateActionFamily::Ingest.raw())
++            || self.tracked_object_id_raw == 0
++        {
++            return 0;
++        }
++        match self.outcome_contact {
++            Some(PhysicalContactKind::Consumed) => 0,
++            None => 1,
++            Some(_) => 2,
++        }
++    }
+     pub(super) fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+         if self.schema_version != MEMORY_RECALL_SCHEMA_VERSION
+             || self.organism_id_raw == 0
+@@ -80,6 +125,9 @@ impl CandidateMemoryRecordV2 {
+             || !(0.0..=1.0).contains(&self.confidence)
+             || self.observation_count == 0
+             || self.first_tick.raw() > self.last_tick.raw()
++            || (self.outcome_contact.is_some()
++                && (self.tracked_object_id_raw == 0
++                    || self.family_raw != u16::from(CandidateActionFamily::Ingest.raw())))
+         {
+             return Err(ScaffoldContractError::InvalidMemoryQuery);
+         }
+@@ -153,7 +201,7 @@ pub(super) struct CandidateMemoryStoreV2 {
+     pub(super) records: BTreeMap<u64, CandidateMemoryRecordV2>,
+     pub(super) last_sequence_by_organism: BTreeMap<u64, u64>,
+     #[serde(skip, default)]
+-    pub(super) family_index: BTreeMap<MemoryBucketKey, Vec<MemoryId>>,
++    pub(super) family_index: BTreeMap<(MemoryBucketKey, u8), Vec<MemoryId>>,
+     #[serde(skip, default)]
+     pub(super) target_index: BTreeMap<TargetMemoryBucketKey, Vec<MemoryId>>,
+     // Derived retrieval indices keep transient sensory bins out of the lookup
+@@ -329,6 +377,7 @@ impl CandidateMemoryStoreV2 {
+             digest.write_f32(record.confidence)?;
+             digest.write_u16(record.salience_q16);
+             digest.write_u32(record.observation_count);
++            write_outcome_provenance(&mut digest, record.outcome_contact);
+         }
+         digest.write_sequence_len(self.last_sequence_by_organism.len());
+         for (organism, sequence) in &self.last_sequence_by_organism {
+@@ -364,7 +413,7 @@ impl CandidateMemoryStoreV2 {
+             if !target_ids.contains(&memory_id) {
+                 target_ids.push(memory_id);
+             }
+-            self.rank_index_ids(&mut family_ids);
++            self.rank_scoped_index_ids(&mut family_ids, true);
+             self.rank_index_ids(&mut target_ids);
+             self.family_namespace_index
+                 .insert(family_namespace, family_ids);
+@@ -400,12 +449,16 @@ impl CandidateMemoryStoreV2 {
+     }
+ 
+     fn insert_family_index_id(&mut self, family_key: MemoryBucketKey, memory_id: MemoryId) {
+-        let mut ids = self.family_index.remove(&family_key).unwrap_or_default();
++        let key = (
++            family_key,
++            self.records[&memory_id.raw()].outcome_scope_key(),
++        );
++        let mut ids = self.family_index.remove(&key).unwrap_or_default();
+         if !ids.contains(&memory_id) {
+             ids.push(memory_id);
+         }
+         self.rank_index_ids(&mut ids);
+-        self.family_index.insert(family_key, ids);
++        self.family_index.insert(key, ids);
+     }
+ 
+     fn insert_target_index_id(&mut self, target_key: TargetMemoryBucketKey, memory_id: MemoryId) {
+@@ -418,12 +471,22 @@ impl CandidateMemoryStoreV2 {
+     }
+ 
+     fn rank_index_ids(&self, ids: &mut [MemoryId]) {
++        self.rank_scoped_index_ids(ids, false);
++    }
++
++    fn rank_scoped_index_ids(&self, ids: &mut [MemoryId], prefer_meal: bool) {
+         ids.sort_by(|left, right| {
+             let left_record = &self.records[&left.raw()];
+             let right_record = &self.records[&right.raw()];
+-            right_record
+-                .salience_q16
+-                .cmp(&left_record.salience_q16)
++            let scope_order = if prefer_meal {
++                left_record
++                    .ingest_recall_priority()
++                    .cmp(&right_record.ingest_recall_priority())
++            } else {
++                std::cmp::Ordering::Equal
++            };
++            scope_order
++                .then_with(|| right_record.salience_q16.cmp(&left_record.salience_q16))
+                 .then_with(|| {
+                     right_record
+                         .last_tick
+@@ -468,10 +531,11 @@ impl CandidateMemoryStoreV2 {
+                 self.family_namespace_index.remove(&family_namespace);
+             }
+         }
+-        if let Some(ids) = self.family_index.get_mut(&family_key) {
++        let scoped_key = (family_key, record.outcome_scope_key());
++        if let Some(ids) = self.family_index.get_mut(&scoped_key) {
+             ids.retain(|id| *id != record.memory_id);
+             if ids.is_empty() {
+-                self.family_index.remove(&family_key);
++                self.family_index.remove(&scoped_key);
+             }
+         }
+         let target_key = record.target_key();
+@@ -633,3 +697,24 @@ pub(super) fn has_category_cues(features: &[f32]) -> bool {
+         .count()
+         >= 2
+ }
++
++// Unknown emits no bytes: legacy record and bank digest streams stay exact.
++// Known provenance is a versioned extension, authenticated by both portable and
++// active-bank digests and therefore by the enclosing private-state seal.
++pub(super) fn write_outcome_provenance(
++    digest: &mut CanonicalDigestBuilder,
++    contact: Option<PhysicalContactKind>,
++) {
++    if let Some(contact) = contact {
++        digest.write_bytes(b"ALIFE-MEMORY-OUTCOME-PROVENANCE-V1");
++        digest.write_u16(1);
++        digest.write_u8(match contact {
++            PhysicalContactKind::None => 0,
++            PhysicalContactKind::Touch => 1,
++            PhysicalContactKind::Collision => 2,
++            PhysicalContactKind::Blocked => 3,
++            PhysicalContactKind::Consumed => 4,
++            PhysicalContactKind::Moved => 5,
++        });
++    }
++}
+diff --git a/crates/alife_core/src/memory/candidate_recall.rs b/crates/alife_core/src/memory/candidate_recall.rs
+index 63674028..3602c38d 100644
+--- a/crates/alife_core/src/memory/candidate_recall.rs
++++ b/crates/alife_core/src/memory/candidate_recall.rs
+@@ -74,11 +74,57 @@ pub(super) fn candidate_record_from_patch_runtime(
+         confidence: decision.confidence.raw(),
+         salience_q16: (salience.clamp(0.0, 1.0) * f32::from(u16::MAX)).round() as u16,
+         observation_count: 1,
++        outcome_contact: representative_outcome_contact(patch),
+     };
+     record.validate_contract()?;
+     Ok(record)
+ }
+ 
++/// An aggregate joint receipt may describe a different channel/target. Bind
++/// provenance to the representative command, or leave it unknown.
++fn representative_outcome_contact(patch: &ExperiencePatch) -> Option<PhysicalContactKind> {
++    let decision = patch.decision();
++    let query = decision.episodic_key()?.query();
++    // This correction supports the preparatory/consummatory phases of a
++    // tracked Ingest action. Other families retain their exact legacy rules.
++    if query.action_family() != CandidateActionFamily::Ingest || query.tracked_object_id().is_none()
++    {
++        return None;
++    }
++    matched_outcome_contact(
++        decision.selected_action.action_id,
++        decision.selected_action.target_entity,
++        decision.selected_bundle.as_ref(),
++        patch.outcome().physical,
++        patch.outcome().joint.as_ref(),
++    )
++}
++
++fn matched_outcome_contact(
++    action: ActionId,
++    target: Option<crate::WorldEntityId>,
++    bundle: Option<&crate::MotorCommandBundle>,
++    physical: crate::PhysicalActionOutcome,
++    joint: Option<&crate::JointPhysicalOutcome>,
++) -> Option<PhysicalContactKind> {
++    let target = target?;
++    if let Some(bundle) = bundle {
++        let mut matching = bundle.channels.iter().filter(|command| {
++            command.primitive == action
++                && command.target.and_then(|binding| binding.entity) == Some(target)
++        });
++        let command = matching.next()?;
++        if matching.next().is_some() {
++            return None;
++        }
++        let receipt = joint?.channel_outcomes.iter().find(|receipt| {
++            receipt.channel == command.channel && receipt.physical.target_entity == Some(target)
++        })?;
++        return Some(receipt.physical.contact);
++    }
++    (physical.target_entity == Some(target)).then_some(physical.contact)
++}
++
+ pub(super) fn merge_candidate_records(
+     retained: &CandidateMemoryRecordV2,
+     observation: &CandidateMemoryRecordV2,
+@@ -301,7 +347,7 @@ pub(super) fn recall_family_channel_with_budget(
+             if query.tracked_object_id().is_some() {
+                 store.family_namespace_index.get(key)
+             } else {
+-                store.family_index.get(key)
++                store.family_index.get(&(key.clone(), 0))
+             }
+         },
+         store,
+@@ -319,6 +365,26 @@ pub(super) fn recall_family_channel_with_budget(
+             (score >= MEMORY_MIN_SIMILARITY).then_some((id, score))
+         })
+         .collect::<Vec<_>>();
++    if query.tracked_object_id().is_some() && query.action_family() == CandidateActionFamily::Ingest
++    {
++        // A painless pickup is not evidence that consuming the same object is
++        // safe. Only a genuine later consummation can reverse that expectation.
++        let preferred = if matches.iter().any(|(id, _)| {
++            store.records[&id.raw()].outcome_contact == Some(PhysicalContactKind::Consumed)
++        }) {
++            Some(Some(PhysicalContactKind::Consumed))
++        } else if matches
++            .iter()
++            .any(|(id, _)| store.records[&id.raw()].outcome_contact.is_none())
++        {
++            Some(None)
++        } else {
++            None
++        };
++        if let Some(preferred) = preferred {
++            matches.retain(|(id, _)| store.records[&id.raw()].outcome_contact == preferred);
++        }
++    }
+     select_current_individual_outcome(store, &mut matches);
+     let generalized =
+         eligible == 0 && query.tracked_object_id().is_some() && has_category_cues(query.features());
+@@ -595,6 +661,13 @@ pub(super) fn compatible_memory_outcomes(
+ ) -> bool {
+     // Repeated appearance/action is not evidence that conflicting consequences
+     // are equivalent. Preserve reversals and painful individual exceptions.
++    left.same_outcome_scope(right) && compatible_memory_consequences(left, right)
++}
++
++pub(super) fn compatible_memory_consequences(
++    left: &CandidateMemoryRecordV2,
++    right: &CandidateMemoryRecordV2,
++) -> bool {
+     left.family_value
+         .iter()
+         .zip(right.family_value)
+@@ -733,3 +806,154 @@ fn select_current_individual_outcome(
+     let anchor = &store.records[&anchor.raw()];
+     matches.retain(|(id, _)| compatible_memory_outcomes(anchor, &store.records[&id.raw()]));
+ }
++
++#[cfg(test)]
++mod outcome_provenance_tests {
++    use super::*;
++    use crate::{
++        ActionTarget, ChannelCommand, DurationTicks, Intensity, JointPhysicalOutcome, MotorChannel,
++        MotorCommandBundle, PhysicalActionOutcome, Vec3f, WorldEntityId,
++    };
++
++    use crate::experience::ChannelPhysicalOutcome;
++
++    fn physical(
++        target: Option<WorldEntityId>,
++        contact: PhysicalContactKind,
++    ) -> PhysicalActionOutcome {
++        PhysicalActionOutcome {
++            contact,
++            target_entity: target,
++            displacement: Vec3f::ZERO,
++            collision_normal: None,
++            energy_cost: NormalizedScalar::new(0.).unwrap(),
++        }
++    }
++    fn command(channel: MotorChannel, primitive: u32, target: u64) -> ChannelCommand {
++        ChannelCommand::new(
++            channel,
++            ActionId(primitive),
++            Some(ActionTarget::new(Some(WorldEntityId(target)), None)),
++            Vec3f::ZERO,
++            Intensity::new(1.).unwrap(),
++            DurationTicks::new(1),
++            0.,
++            Confidence::new(1.).unwrap(),
++            0,
++        )
++        .unwrap()
++    }
++    fn bundle() -> MotorCommandBundle {
++        MotorCommandBundle::new(
++            OrganismId(1),
++            ExperienceSequenceId(1),
++            Tick::new(1),
++            vec![
++                command(MotorChannel::Manipulation, 210, 1),
++                command(MotorChannel::Locomotion, 207, 2),
++            ],
++        )
++        .unwrap()
++    }
++    #[test]
++    fn missing_or_mismatched_physical_target_is_not_object_provenance() {
++        assert_eq!(
++            matched_outcome_contact(
++                ActionId(210),
++                None,
++                None,
++                physical(None, PhysicalContactKind::Consumed),
++                None
++            ),
++            None
++        );
++        assert_eq!(
++            matched_outcome_contact(
++                ActionId(210),
++                Some(WorldEntityId(1)),
++                None,
++                physical(Some(WorldEntityId(2)), PhysicalContactKind::Consumed),
++                None
++            ),
++            None
++        );
++        assert_eq!(
++            matched_outcome_contact(
++                ActionId(210),
++                Some(WorldEntityId(1)),
++                None,
++                physical(Some(WorldEntityId(1)), PhysicalContactKind::Touch),
++                None
++            ),
++            Some(PhysicalContactKind::Touch)
++        );
++    }
++    #[test]
++    fn joint_provenance_uses_the_exact_representative_channel_and_target() {
++        let bundle = bundle();
++        let aggregate = physical(Some(WorldEntityId(2)), PhysicalContactKind::Consumed);
++        let mut joint = JointPhysicalOutcome::new(aggregate, vec![])
++            .unwrap()
++            .with_channel_outcomes(vec![
++                ChannelPhysicalOutcome::new(
++                    MotorChannel::Manipulation,
++                    physical(Some(WorldEntityId(1)), PhysicalContactKind::Touch),
++                )
++                .unwrap(),
++                ChannelPhysicalOutcome::new(MotorChannel::Locomotion, aggregate).unwrap(),
++            ])
++            .unwrap();
++        let read = |joint: &JointPhysicalOutcome| {
++            matched_outcome_contact(
++                ActionId(210),
++                Some(WorldEntityId(1)),
++                Some(&bundle),
++                aggregate,
++                Some(joint),
++            )
++        };
++        assert_eq!(read(&joint), Some(PhysicalContactKind::Touch));
++        joint.channel_outcomes[0].physical.target_entity = Some(WorldEntityId(2));
++        assert_eq!(
++            read(&joint),
++            None,
++            "another target's Consumed receipt is never borrowed"
++        );
++        joint.channel_outcomes.remove(0);
++        assert_eq!(read(&joint), None);
++        assert_eq!(
++            matched_outcome_contact(
++                ActionId(210),
++                Some(WorldEntityId(1)),
++                Some(&bundle),
++                aggregate,
++                None
++            ),
++            None
++        );
++    }
++    #[test]
++    fn ambiguous_joint_representative_remains_unknown() {
++        let mut bundle = bundle();
++        bundle.channels[1].primitive = ActionId(210);
++        bundle.channels[1].target = bundle.channels[0].target;
++        let p = physical(Some(WorldEntityId(1)), PhysicalContactKind::Consumed);
++        let joint = JointPhysicalOutcome::new(p, vec![])
++            .unwrap()
++            .with_channel_outcomes(vec![
++                ChannelPhysicalOutcome::new(MotorChannel::Manipulation, p).unwrap(),
++                ChannelPhysicalOutcome::new(MotorChannel::Locomotion, p).unwrap(),
++            ])
++            .unwrap();
++        assert_eq!(
++            matched_outcome_contact(
++                ActionId(210),
++                Some(WorldEntityId(1)),
++                Some(&bundle),
++                p,
++                Some(&joint)
++            ),
++            None
++        );
++    }
++}
+diff --git a/crates/alife_core/src/memory/sidecar.rs b/crates/alife_core/src/memory/sidecar.rs
+index 3a1335d3..a5297029 100644
+--- a/crates/alife_core/src/memory/sidecar.rs
++++ b/crates/alife_core/src/memory/sidecar.rs
+@@ -33,6 +33,8 @@ pub struct PortableMemoryRecordV2 {
+     pub salience_q16: u16,
+     pub observation_count: u32,
+     pub canonical_digest: [u64; 4],
++    #[serde(default, skip_serializing_if = "Option::is_none")]
++    pub outcome_contact: Option<PhysicalContactKind>,
+ }
+ 
+ #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+@@ -895,6 +897,7 @@ impl PortableMemoryRecordV2 {
+         digest.write_f32(portable_float(self.confidence_bits)?)?;
+         digest.write_u16(self.salience_q16);
+         digest.write_u32(self.observation_count);
++        candidate_index::write_outcome_provenance(&mut digest, self.outcome_contact);
+         Ok(digest.finish256())
+     }
+ 
+@@ -932,6 +935,8 @@ impl PortableMemoryRecordV2 {
+             || family_value.len() != MEMORY_VALUE_V1_COUNT
+             || target_bins(&query_features) != self.target_bins
+             || !family.is_compatible_with(kind)
++            || (self.outcome_contact.is_some()
++                && (self.tracked_object_id_raw == 0 || family != CandidateActionFamily::Ingest))
+             || !(0.0..=1.0).contains(&confidence)
+             || self.canonical_digest != self.recompute_canonical_digest()?
+         {
+@@ -1052,6 +1057,7 @@ fn portable_bank_from_memory(
+             salience_q16: record.salience_q16,
+             observation_count: record.observation_count,
+             canonical_digest: [0; 4],
++            outcome_contact: record.outcome_contact,
+         };
+         portable.canonical_digest = portable.recompute_canonical_digest()?;
+         portable.validate_for(organism_id.raw(), profile)?;
+@@ -1133,6 +1139,7 @@ fn memory_bank_from_portable(
+             confidence: portable_float(portable.confidence_bits)?,
+             salience_q16: portable.salience_q16,
+             observation_count: portable.observation_count,
++            outcome_contact: portable.outcome_contact,
+         };
+         record.validate_contract()?;
+         records.insert(record.memory_id.raw(), record);
+diff --git a/crates/alife_core/src/n2048_memory_gain_candidate.rs b/crates/alife_core/src/n2048_memory_gain_candidate.rs
+new file mode 100644
+index 00000000..9fd9fee1
+--- /dev/null
++++ b/crates/alife_core/src/n2048_memory_gain_candidate.rs
+@@ -0,0 +1,93 @@
++//! Explicit fresh research identity for a bounded, stronger episodic readout.
++use crate::{
++    BrainCapacityClass, CanonicalDigestBuilder, FoundationWeightAsset, FoundationWeightAssetRef,
++    ScaffoldContractError, SensorProfile,
++};
++use serde::{Deserialize, Serialize};
++#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++pub struct N2048MemoryGainCandidateV1 {
++    schema_version: u16,
++    sensor_profile: SensorProfile,
++    recipe_digest: [u64; 4],
++    foundation_bytes: Option<Vec<u8>>,
++}
++impl N2048MemoryGainCandidateV1 {
++    pub const MAX_CANDIDATE_GAIN: f32 = 12.0;
++    pub fn fresh(sensor_profile: SensorProfile) -> Result<Self, ScaffoldContractError> {
++        SensorProfile::try_from_raw(sensor_profile.raw())?;
++        Ok(Self {
++            schema_version: 1,
++            sensor_profile,
++            recipe_digest: Self::recipe_digest(),
++            foundation_bytes: None,
++        })
++    }
++    pub fn for_asset(asset: &FoundationWeightAsset) -> Result<Self, ScaffoldContractError> {
++        if !asset.is_n2048_memory_gain_candidate() {
++            return Err(ScaffoldContractError::PhenotypeCompile);
++        }
++        let mut value = Self::fresh(asset.manifest().sensor_profile())?;
++        value.foundation_bytes = Some(asset.encode_canonical()?);
++        Ok(value)
++    }
++    pub fn recipe_digest() -> [u64; 4] {
++        let mut d = CanonicalDigestBuilder::new(b"alife.n2048.memory-gain-candidate.v1");
++        for word in crate::N2048ExperimentalGraphV1::recipe_digest() {
++            d.write_u64(word);
++        }
++        d.write_u16(2);
++        d.write_f32(Self::MAX_CANDIDATE_GAIN)
++            .expect("fixed finite gain");
++        d.finish256()
++    }
++    pub const fn sensor_profile(&self) -> SensorProfile {
++        self.sensor_profile
++    }
++    pub fn asset(&self) -> Result<Option<FoundationWeightAsset>, ScaffoldContractError> {
++        self.foundation_bytes
++            .as_deref()
++            .map(FoundationWeightAsset::decode_canonical)
++            .transpose()
++    }
++    pub fn asset_ref(&self) -> Option<FoundationWeightAssetRef> {
++        self.asset().ok().flatten().map(|asset| asset.asset_ref())
++    }
++    pub(crate) fn validate_against(
++        &self,
++        capacity: &BrainCapacityClass,
++        profile: SensorProfile,
++    ) -> Result<(), ScaffoldContractError> {
++        if self.schema_version != 1
++            || capacity.id() != BrainCapacityClass::N2048_ID
++            || self.sensor_profile != profile
++            || self.recipe_digest != Self::recipe_digest()
++        {
++            return Err(ScaffoldContractError::PhenotypeCompile);
++        }
++        SensorProfile::try_from_raw(profile.raw())?;
++        if let Some(asset) = self.asset()? {
++            if !asset.is_n2048_memory_gain_candidate()
++                || asset.manifest().sensor_profile() != profile
++            {
++                return Err(ScaffoldContractError::PhenotypeCompile);
++            }
++        }
++        Ok(())
++    }
++    pub(crate) fn write_canonical(&self, d: &mut CanonicalDigestBuilder) {
++        d.write_u16(self.schema_version);
++        d.write_u16(self.sensor_profile.raw());
++        for word in self.recipe_digest {
++            d.write_u64(word);
++        }
++        match &self.foundation_bytes {
++            Some(bytes) => {
++                d.write_some();
++                d.write_sequence_len(bytes.len());
++                d.write_bytes(bytes);
++            }
++            None => d.write_none(),
++        }
++    }
++}
+diff --git a/crates/alife_core/src/phenotype/abi_validation.rs b/crates/alife_core/src/phenotype/abi_validation.rs
+index b54baab2..7e3524b8 100644
+--- a/crates/alife_core/src/phenotype/abi_validation.rs
++++ b/crates/alife_core/src/phenotype/abi_validation.rs
+@@ -170,7 +170,7 @@ pub(super) fn compute_abi_digests(
+     projections: &[CompiledProjection],
+     synapses: &[CompiledSynapse],
+ ) -> (Blake3Digest, Blake3Digest) {
+-    if selection.n2048_experimental_graph().is_some() {
++    if selection.uses_n2048_experimental_graph() {
+         use crate::blake3_digest::{domain_hasher, Blake3Write};
+         let mut route = domain_hasher(b"alife.n2048.experimental-route-abi.v1");
+         let mut plasticity = domain_hasher(b"alife.n2048.experimental-plasticity-abi.v1");
+diff --git a/crates/alife_core/src/phenotype/compiler.rs b/crates/alife_core/src/phenotype/compiler.rs
+index becc2dbc..da04d336 100644
+--- a/crates/alife_core/src/phenotype/compiler.rs
++++ b/crates/alife_core/src/phenotype/compiler.rs
+@@ -13,6 +13,41 @@ use super::{BrainCapacityClass, BrainPhenotype, PhenotypeCompilerInputs};
+ pub struct PhenotypeCompiler;
+ 
+ impl PhenotypeCompiler {
++    pub fn compile_n2048_memory_gain_graph(
++        genome: BrainGenome,
++        development: DevelopmentState,
++        sensor_profile: SensorProfile,
++    ) -> Result<(BrainPhenotype, PhenotypeCompilerInputs), ScaffoldContractError> {
++        let capacity = BrainCapacityClass::n2048();
++        let inputs = PhenotypeCompilerInputs::try_new_with_foundation_selection(
++            genome,
++            &capacity,
++            development,
++            sensor_profile,
++            crate::FoundationAbiSelection::N2048MemoryGainCandidateV1(
++                crate::N2048MemoryGainCandidateV1::fresh(sensor_profile)?,
++            ),
++        )?;
++        Ok((Self::compile_validated(&inputs, &capacity)?, inputs))
++    }
++    pub fn compile_n2048_memory_gain_foundation_candidate(
++        genome: BrainGenome,
++        development: DevelopmentState,
++        asset: FoundationWeightAsset,
++    ) -> Result<(BrainPhenotype, PhenotypeCompilerInputs), ScaffoldContractError> {
++        let capacity = BrainCapacityClass::n2048();
++        let inputs = PhenotypeCompilerInputs::try_new_with_foundation_selection(
++            genome,
++            &capacity,
++            development,
++            asset.manifest().sensor_profile(),
++            crate::FoundationAbiSelection::N2048MemoryGainCandidateV1(
++                crate::N2048MemoryGainCandidateV1::for_asset(&asset)?,
++            ),
++        )?;
++        Ok((Self::compile_validated(&inputs, &capacity)?, inputs))
++    }
++
+     /// Explicit fresh research graph. This does not reinterpret V1 weights.
+     pub fn compile_n2048_experimental_graph(
+         genome: BrainGenome,
+@@ -171,6 +206,15 @@ impl PhenotypeCompiler {
+         inputs: &PhenotypeCompilerInputs,
+         capacity: &BrainCapacityClass,
+     ) -> Result<BrainPhenotype, ScaffoldContractError> {
++        if let Some(recipe) = inputs.foundation_abi().n2048_memory_gain_candidate() {
++            inputs.validate_against(capacity)?;
++            return match recipe.asset()? {
++                Some(asset) => {
++                    super::construction::compile_with_foundation_asset(inputs, capacity, &asset)
++                }
++                None => super::construction::compile(inputs, capacity),
++            };
++        }
+         if let Some(recipe) = inputs.foundation_abi().n2048_experimental_graph() {
+             inputs.validate_against(capacity)?;
+             return match recipe.asset()? {
+diff --git a/crates/alife_core/src/phenotype/construction.rs b/crates/alife_core/src/phenotype/construction.rs
+index 1c9c9b2f..3343f667 100644
+--- a/crates/alife_core/src/phenotype/construction.rs
++++ b/crates/alife_core/src/phenotype/construction.rs
+@@ -58,12 +58,12 @@ fn compile_inner(
+     let encoder =
+         super::io_compile::compile_encoder(genome, development, &layout, inputs.sensor_profile())?;
+     let (mut projections, mut synapses, mut receipts) =
+-        if inputs.foundation_abi().n2048_experimental_graph().is_some() {
++        if inputs.foundation_abi().uses_n2048_experimental_graph() {
+             super::topology_compile::compile_n2048_experimental(genome, &layout, capacity)?
+         } else {
+             super::topology_compile::compile_recurrent(genome, &layout, capacity)?
+         };
+-    let decoders = super::io_compile::compile_decoders(
++    let mut decoders = super::io_compile::compile_decoders(
+         genome,
+         development,
+         &layout,
+@@ -71,6 +71,13 @@ fn compile_inner(
+         u16::try_from(projections.len()).map_err(|_| compile_error())?,
+         u32::try_from(synapses.len()).map_err(|_| compile_error())?,
+     )?;
++    if inputs
++        .foundation_abi()
++        .n2048_memory_gain_candidate()
++        .is_some()
++    {
++        decoders.candidate = decoders.candidate.with_memory_gain_candidate()?;
++    }
+     projections.extend(decoders.projections);
+     synapses.extend(decoders.synapses);
+     receipts.extend(decoders.receipts);
+@@ -289,7 +296,7 @@ fn compile_inner(
+                     .get(usize::from(synapse.route_index()))
+                     .ok_or(ScaffoldContractError::PhenotypeCompile)?;
+                 let delta = if inputs.n2048_candidate_asset().is_some()
+-                    || inputs.foundation_abi().n2048_experimental_graph().is_some()
++                    || inputs.foundation_abi().uses_n2048_experimental_graph()
+                 {
+                     0.0
+                 } else {
+@@ -299,7 +306,7 @@ fn compile_inner(
+                     )
+                 };
+                 let exact_candidate = inputs.n2048_candidate_asset().is_some()
+-                    || inputs.foundation_abi().n2048_experimental_graph().is_some();
++                    || inputs.foundation_abi().uses_n2048_experimental_graph();
+                 let mut composed = if exact_candidate {
+                     *weight
+                 } else {
+diff --git a/crates/alife_core/src/phenotype/decoder.rs b/crates/alife_core/src/phenotype/decoder.rs
+index 067061e5..5c430a87 100644
+--- a/crates/alife_core/src/phenotype/decoder.rs
++++ b/crates/alife_core/src/phenotype/decoder.rs
+@@ -255,11 +255,32 @@ impl CandidateDecoderPlan {
+         Ok(value)
+     }
+ 
++    pub(super) fn with_memory_gain_candidate(mut self) -> Result<Self, ScaffoldContractError> {
++        let count = self
++            .memory_channel
++            .ok_or(ScaffoldContractError::PhenotypeCompile)?
++            .memory_decoder_synapse_count();
++        self.memory_channel = Some(MemoryChannelPlan::try_new_memory_gain_candidate(count)?);
++        self.validate_shape()?;
++        self.canonical_digest = self.recompute_digest()?;
++        Ok(self)
++    }
+     pub fn validate_against(
+         &self,
+         phenotype: &BrainPhenotype,
+     ) -> Result<(), ScaffoldContractError> {
+         self.validate_local()?;
++        if self
++            .memory_channel
++            .as_ref()
++            .is_some_and(|plan| plan.schema_version() == 2)
++            != phenotype
++                .foundation_abi()
++                .n2048_memory_gain_candidate()
++                .is_some()
++        {
++            return Err(ScaffoldContractError::PhenotypeCompile);
++        }
+         self.factorized_motor_channels(phenotype)?;
+         let capacity = crate::BrainCapacityClass::supported_for_id(phenotype.brain_class_id())?;
+         let execution = capacity.execution();
+diff --git a/crates/alife_core/src/phenotype/memory_channel.rs b/crates/alife_core/src/phenotype/memory_channel.rs
+index f3a05c7f..884bae10 100644
+--- a/crates/alife_core/src/phenotype/memory_channel.rs
++++ b/crates/alife_core/src/phenotype/memory_channel.rs
+@@ -46,6 +46,14 @@ impl MemoryChannelPlan {
+         Ok(value)
+     }
+ 
++    pub(super) fn try_new_memory_gain_candidate(count: u32) -> Result<Self, ScaffoldContractError> {
++        let mut value = Self::try_new_v1(count)?;
++        value.schema_version = 2;
++        value.max_candidate_gain = crate::N2048MemoryGainCandidateV1::MAX_CANDIDATE_GAIN;
++        value.validate_shape()?;
++        value.canonical_digest = value.recompute_digest()?;
++        Ok(value)
++    }
+     pub const fn schema_version(&self) -> u16 {
+         self.schema_version
+     }
+@@ -81,12 +89,19 @@ impl MemoryChannelPlan {
+ 
+     fn validate_shape(&self) -> Result<(), ScaffoldContractError> {
+         let lane_width = Self::TARGET_LATENT_WIDTH + Self::FAMILY_VALUE_WIDTH;
+-        if self.schema_version != MEMORY_CHANNEL_SCHEMA_VERSION
++        if !matches!(self.schema_version, MEMORY_CHANNEL_SCHEMA_VERSION | 2)
+             || self.target_latent_lane_start != CANDIDATE_FEATURE_COUNT as u32
+             || self.family_value_lane_start
+                 != self.target_latent_lane_start + Self::TARGET_LATENT_WIDTH
+             || self.decoder_input_stride != self.target_latent_lane_start + lane_width
+-            || self.max_candidate_gain.to_bits() != 0.5_f32.to_bits()
++            || self.max_candidate_gain.to_bits()
++                != (if self.schema_version == 2 {
++                    12.0_f32
++                } else {
++                    0.5_f32
++                })
++                .to_bits()
++            || (self.schema_version == 2 && self.memory_decoder_synapse_count != 4096)
+             || self.memory_decoder_synapse_count < Self::MINIMUM_SYNAPSE_COUNT
+             || !self
+                 .memory_decoder_synapse_count
+@@ -127,8 +142,12 @@ impl<'de> Deserialize<'de> for MemoryChannelPlan {
+         }
+ 
+         let wire = Wire::deserialize(deserializer)?;
+-        let expected =
+-            Self::try_new_v1(wire.memory_decoder_synapse_count).map_err(D::Error::custom)?;
++        let expected = match wire.schema_version {
++            1 => Self::try_new_v1(wire.memory_decoder_synapse_count),
++            2 => Self::try_new_memory_gain_candidate(wire.memory_decoder_synapse_count),
++            _ => Err(ScaffoldContractError::PhenotypeCompile),
++        }
++        .map_err(D::Error::custom)?;
+         if wire.schema_version != expected.schema_version
+             || wire.target_latent_lane_start != expected.target_latent_lane_start
+             || wire.family_value_lane_start != expected.family_value_lane_start
+@@ -136,7 +155,9 @@ impl<'de> Deserialize<'de> for MemoryChannelPlan {
+             || wire.max_candidate_gain.to_bits() != expected.max_candidate_gain.to_bits()
+             || wire.canonical_digest != expected.canonical_digest
+         {
+-            return Err(D::Error::custom("memory-channel ABI does not match v1"));
++            return Err(D::Error::custom(
++                "memory-channel ABI does not match its explicit version",
++            ));
+         }
+         Ok(expected)
+     }
+diff --git a/crates/alife_core/src/phenotype/record.rs b/crates/alife_core/src/phenotype/record.rs
+index 8d032214..f15e5765 100644
+--- a/crates/alife_core/src/phenotype/record.rs
++++ b/crates/alife_core/src/phenotype/record.rs
+@@ -687,8 +687,7 @@ impl BrainPhenotype {
+             .validate_against(capacity, self.sensor_profile)?;
+         if self
+             .foundation_abi_selection
+-            .n2048_experimental_graph()
+-            .is_some()
++            .uses_n2048_experimental_graph()
+         {
+             super::topology_compile::validate_n2048_experimental_coordinates(self, capacity)?;
+         }
+diff --git a/crates/alife_core/tests/candidate_memory_retrieval.rs b/crates/alife_core/tests/candidate_memory_retrieval.rs
+index 77f39534..f92eda9c 100644
+--- a/crates/alife_core/tests/candidate_memory_retrieval.rs
++++ b/crates/alife_core/tests/candidate_memory_retrieval.rs
+@@ -19,6 +19,9 @@ const TICK: Tick = Tick::new(40);
+ #[path = "candidate_memory_retrieval/social_recognition.rs"]
+ mod social_recognition;
+ 
++#[path = "candidate_memory_retrieval/outcome_phase.rs"]
++mod outcome_phase;
++
+ fn slot(slot_index: u16, tracked: u64, distance: f32, color: [f32; 3]) -> GroundedObjectSlotV1 {
+     GroundedObjectSlotV1 {
+         slot_index,
+diff --git a/crates/alife_core/tests/candidate_memory_retrieval/outcome_phase.rs b/crates/alife_core/tests/candidate_memory_retrieval/outcome_phase.rs
+new file mode 100644
+index 00000000..e5a83570
+--- /dev/null
++++ b/crates/alife_core/tests/candidate_memory_retrieval/outcome_phase.rs
+@@ -0,0 +1,636 @@
++use super::*;
++
++fn meal_event(
++    bank: &MemoryBank,
++    sequence: u64,
++    contact: PhysicalContactKind,
++    reward: f32,
++    pain: f32,
++) -> ExperiencePatch {
++    observation_patch(
++        bank,
++        sequence,
++        sequence,
++        slot(0, 71, 0.4, [0., 0.8, 0.9]),
++        CandidateActionFamily::Ingest,
++        reward,
++        pain,
++        |outcome| {
++            // The fixture candidate has index zero and therefore entity9000.
++            outcome.physical.target_entity = Some(WorldEntityId(9000));
++            outcome.physical.contact = contact;
++            // A novel preparation outcome is meaningful independently of harm.
++            outcome.prediction_error = NormalizedScalar::new(0.2).unwrap();
++        },
++    )
++}
++
++fn expected_meal(bank: &MemoryBank, tick: u64) -> f32 {
++    bank.recall_frame(&probe_for_object(tick, slot(0, 71, 0.4, [0., 0.8, 0.9])))
++        .unwrap()
++        .context()
++        .candidates[0]
++        .family_value[0]
++}
++
++#[test]
++fn painless_ingest_pickup_does_not_reverse_a_harmful_meal() {
++    let mut bank = empty_bank();
++    let meal = meal_event(&bank, 1, PhysicalContactKind::Consumed, -0.9, 0.9);
++    bank.observe_sealed_patch(&meal).unwrap();
++    assert!(expected_meal(&bank, 2) < -0.8);
++    let pickup = meal_event(&bank, 2, PhysicalContactKind::Touch, 0.01, 0.);
++    bank.observe_sealed_patch(&pickup).unwrap();
++    assert_eq!(bank.len(), 2);
++    assert!(expected_meal(&bank, 3) < -0.8);
++    let raw = serde_json::to_vec(&bank).unwrap();
++    let mut restored: MemoryBank = serde_json::from_slice(&raw).unwrap();
++    assert_eq!(serde_json::to_vec(&restored).unwrap(), raw);
++    assert!(expected_meal(&restored, 3) < -0.8);
++    let reversal = meal_event(&restored, 3, PhysicalContactKind::Consumed, 0.8, 0.);
++    restored.observe_sealed_patch(&reversal).unwrap();
++    assert!(expected_meal(&restored, 4) > 0.7);
++}
++
++#[test]
++fn all_unknown_legacy_bytes_and_digest_streams_are_frozen() {
++    let mut bank = empty_bank();
++    bank.observe_sealed_patch(&sequenced_patch(1, 1, 71, 0.4, -0.9, 0.9))
++        .unwrap();
++    let raw = serde_json::to_vec(&bank).unwrap();
++    let profile = SensorProfileProvenance::new(
++        SensorProfile::GroundedObjectSlotsV1,
++        SensoryAbiVersion::CURRENT,
++        TICK,
++    )
++    .unwrap()
++    .identity();
++    let mut sidecar = MemorySidecarState::new_profiled(
++        ORGANISM,
++        profile,
++        MemoryBankConfig::new(4, 64, 4, 0.72, Confidence::new(0.).unwrap()).unwrap(),
++    )
++    .unwrap();
++    sidecar
++        .observe_sealed_patch(&sequenced_patch(1, 1, 71, 0.4, -0.9, 0.9))
++        .unwrap();
++    let portable = sidecar.export_active_bank().unwrap();
++    // Captured before the production change on mainfc7dd78. The old fixture
++    // has contact-like floats but no target-bound phase: never infer a phase.
++    assert_eq!(
++        blake3::hash(&raw).to_hex().as_str(),
++        "9e6f708dc1ade591198a2d2e5e99a741a38a89acf70490efb9118dc1875a176c"
++    );
++    assert_eq!(
++        blake3::hash(&serde_json::to_vec(&portable).unwrap())
++            .to_hex()
++            .as_str(),
++        "809f2bd501e991f532cac13f33dd5498c05fbee25b28551e64190538179507cb"
++    );
++    assert_eq!(
++        portable.records[0].canonical_digest,
++        [
++            5385564082496650174,
++            2716643615302296869,
++            12791915244069648048,
++            16434942257841790803
++        ]
++    );
++    assert_eq!(
++        portable.active_bank_digest,
++        [
++            17353935635923336848,
++            11716519859850928482,
++            12877535766558527199,
++            17377705246078496016
++        ]
++    );
++    assert_eq!(portable.records[0].outcome_contact, None);
++    let restored: MemoryBank = serde_json::from_slice(&raw).unwrap();
++    assert_eq!(serde_json::to_vec(&restored).unwrap(), raw);
++    assert!(expected_meal(&restored, 3) < -0.8);
++    let restored = MemorySidecarState::restore_portable(
++        profile,
++        *sidecar.compaction_checkpoint(),
++        portable.clone(),
++        None,
++    )
++    .unwrap();
++    assert_eq!(restored.export_active_bank().unwrap(), portable);
++}
++
++#[test]
++fn a_genuine_later_meal_can_reverse_both_directions() {
++    for (old, new) in [(-0.9, 0.8), (0.8, -0.9)] {
++        let mut bank = empty_bank();
++        for (sequence, reward, contact) in [
++            (1, old, PhysicalContactKind::Consumed),
++            (2, 0.01, PhysicalContactKind::Touch),
++            (3, new, PhysicalContactKind::Consumed),
++            (4, 0.01, PhysicalContactKind::Touch),
++        ] {
++            let patch = meal_event(
++                &bank,
++                sequence,
++                contact,
++                reward,
++                if reward < 0. { 0.9 } else { 0. },
++            );
++            bank.observe_sealed_patch(&patch).unwrap();
++        }
++        let value = expected_meal(&bank, 5);
++        assert_eq!(value.is_sign_negative(), new.is_sign_negative());
++        assert!(value.abs() > 0.7);
++    }
++}
++
++#[test]
++fn preparation_still_recalls_before_the_first_meal_and_does_not_merge_with_it() {
++    let mut bank = empty_bank();
++    for sequence in 1..=2 {
++        let patch = meal_event(&bank, sequence, PhysicalContactKind::Touch, 0.01, 0.);
++        bank.observe_sealed_patch(&patch).unwrap();
++    }
++    assert_eq!(bank.len(), 1);
++    assert!(expected_meal(&bank, 3) > 0.);
++    let patch = meal_event(&bank, 3, PhysicalContactKind::Consumed, 0.02, 0.);
++    bank.observe_sealed_patch(&patch).unwrap();
++    assert_eq!(
++        bank.len(),
++        2,
++        "numerically compatible distinct phases must not merge"
++    );
++    let records = serde_json::to_value(&bank).unwrap();
++    let contacts = records["candidate_store"]["records"]
++        .as_object()
++        .unwrap()
++        .values()
++        .map(|r| r["outcome_contact"].as_str().unwrap())
++        .collect::<Vec<_>>();
++    assert_eq!(contacts, vec!["Touch", "Consumed"]);
++}
++
++#[test]
++fn legacy_unknown_meal_survives_new_preparation_but_can_be_reversed_by_real_consumption() {
++    let mut bank = empty_bank();
++    bank.observe_sealed_patch(&sequenced_patch(1, 1, 71, 0.4, -0.9, 0.9))
++        .unwrap();
++    let before = serde_json::to_value(&bank).unwrap()["candidate_store"]["records"]["1"].clone();
++    let pickup = meal_event(&bank, 2, PhysicalContactKind::Touch, 0.01, 0.);
++    bank.observe_sealed_patch(&pickup).unwrap();
++    assert!(expected_meal(&bank, 3) < -0.8);
++    assert_eq!(
++        serde_json::to_value(&bank).unwrap()["candidate_store"]["records"]["1"],
++        before
++    );
++    let safe = meal_event(&bank, 3, PhysicalContactKind::Consumed, 0.8, 0.);
++    bank.observe_sealed_patch(&safe).unwrap();
++    assert!(expected_meal(&bank, 4) > 0.7);
++}
++
++#[test]
++fn preparation_at_capacity_cannot_take_the_direct_consumption_reversal_shortcut() {
++    let mut bank = MemoryBank::new(
++        MemoryBankConfig::new(2, 64, 2, 0.72, Confidence::new(0.).unwrap()).unwrap(),
++    )
++    .unwrap();
++    let meal = meal_event(&bank, 1, PhysicalContactKind::Consumed, -0.9, 0.9);
++    bank.observe_sealed_patch(&meal).unwrap();
++    let other = observation_patch(
++        &bank,
++        2,
++        2,
++        slot(0, 72, 0.4, [0.2, 0.5, 0.8]),
++        CandidateActionFamily::Ingest,
++        -0.9,
++        0.9,
++        |outcome| {
++            outcome.physical.target_entity = Some(WorldEntityId(9000));
++        },
++    );
++    bank.observe_sealed_patch(&other).unwrap();
++    let pickup = meal_event(&bank, 3, PhysicalContactKind::Touch, 0.01, 0.);
++    let receipt = bank.observe_sealed_patch(&pickup).unwrap();
++    assert_eq!(
++        receipt.kind,
++        alife_core::MemoryUpdateKind::IgnoredLowerRetention
++    );
++    assert!(expected_meal(&bank, 4) < -0.8);
++    let reversal = meal_event(&bank, 4, PhysicalContactKind::Consumed, 0.8, 0.);
++    let receipt = bank.observe_sealed_patch(&reversal).unwrap();
++    assert!(matches!(
++        receipt.kind,
++        alife_core::MemoryUpdateKind::Evicted {
++            removed: alife_core::MemoryId(1),
++            ..
++        }
++    ));
++    assert!(expected_meal(&bank, 5) > 0.7);
++    assert_eq!(bank.len(), 2);
++}
++
++#[test]
++fn known_phases_survive_compaction_portable_restore_and_are_authenticated() {
++    let config = MemoryBankConfig::new(8, 64, 4, 0.72, Confidence::new(0.).unwrap()).unwrap();
++    let mut sidecar = grounded_sidecar(config);
++    for (sequence, contact) in [
++        (1, PhysicalContactKind::Consumed),
++        (2, PhysicalContactKind::Touch),
++    ] {
++        let patch = meal_event(&empty_bank(), sequence, contact, 0.01, 0.);
++        sidecar.observe_sealed_patch(&patch).unwrap();
++    }
++    let compact = sidecar.prepare_compaction(1, 8, 1).unwrap();
++    sidecar.commit_compaction(compact).unwrap();
++    let portable = sidecar.export_active_bank().unwrap();
++    assert_eq!(portable.records.len(), 2);
++    assert_eq!(
++        portable.records[0].outcome_contact,
++        Some(PhysicalContactKind::Consumed)
++    );
++    assert_eq!(
++        portable.records[1].outcome_contact,
++        Some(PhysicalContactKind::Touch)
++    );
++    let raw = serde_json::to_vec(&portable).unwrap();
++    let profile = portable.profile;
++    let restored = MemorySidecarState::restore_portable(
++        profile,
++        *sidecar.compaction_checkpoint(),
++        serde_json::from_slice(&raw).unwrap(),
++        None,
++    )
++    .unwrap();
++    assert_eq!(
++        serde_json::to_vec(&restored.export_active_bank().unwrap()).unwrap(),
++        raw
++    );
++    let mut tampered = portable.clone();
++    tampered.records[0].outcome_contact = Some(PhysicalContactKind::Touch);
++    assert_ne!(
++        tampered.records[0].recompute_canonical_digest().unwrap(),
++        portable.records[0].canonical_digest
++    );
++    assert!(MemorySidecarState::restore_portable(
++        profile,
++        *sidecar.compaction_checkpoint(),
++        tampered.clone(),
++        None
++    )
++    .is_err());
++    tampered.records[0].canonical_digest =
++        tampered.records[0].recompute_canonical_digest().unwrap();
++    tampered.canonical_digest = tampered.recompute_canonical_digest().unwrap();
++    // Rehashing the portable wrapper cannot change the authenticated active-bank digest.
++    assert!(MemorySidecarState::restore_portable(
++        profile,
++        *sidecar.compaction_checkpoint(),
++        tampered,
++        None
++    )
++    .is_err());
++}
++
++fn distinct_preparation(bank: &MemoryBank, sequence: u64, variant: u64) -> ExperiencePatch {
++    observation_patch(
++        bank,
++        sequence,
++        sequence,
++        slot(0, 71, 0.4, [0., 0.8, 0.9]),
++        CandidateActionFamily::Ingest,
++        0.01,
++        0.,
++        |outcome| {
++            outcome.physical.target_entity = Some(WorldEntityId(9000));
++            outcome.physical.contact = PhysicalContactKind::Touch;
++            outcome.prediction_error = NormalizedScalar::new(1.).unwrap();
++            let mut code = variant;
++            let mut values = [0.; 4];
++            for value in &mut values {
++                *value = [-0.95, 0., 0.95][(code % 3) as usize];
++                code /= 3;
++            }
++            outcome.homeostatic_delta.drives.hunger = values[0];
++            outcome.homeostatic_delta.drives.fear = values[1];
++            outcome.homeostatic_delta.drives.pain = values[2];
++            outcome.homeostatic_delta.drives.curiosity = values[3];
++        },
++    )
++}
++
++#[test]
++fn many_preparations_cannot_hide_a_consumption_from_bounded_runtime_or_write_search() {
++    let mut bank = MemoryBank::new(
++        MemoryBankConfig::new(82, 64, 4, 0.72, Confidence::new(0.).unwrap()).unwrap(),
++    )
++    .unwrap();
++    let meal = meal_event(&bank, 1, PhysicalContactKind::Consumed, -0.9, 0.9);
++    bank.observe_sealed_patch(&meal).unwrap();
++    for variant in 0..81 {
++        let patch = distinct_preparation(&bank, variant + 2, variant);
++        bank.observe_sealed_patch(&patch).unwrap();
++    }
++    assert_eq!(bank.len(), 82);
++    let draft = probe_for_object(84, slot(0, 71, 0.4, [0., 0.8, 0.9]));
++    let (recall, _) = bank
++        .recall_frame_runtime(&draft, &Default::default(), true)
++        .unwrap();
++    assert!(recall.context().candidates[0].family_value[0] < -0.8);
++    assert!(
++        recall.receipt().similarity_evaluations <= 2 * alife_core::RUNTIME_MEMORY_SEARCH_CAP as u32
++    );
++    let reversal = meal_event(&bank, 84, PhysicalContactKind::Consumed, 0.8, 0.);
++    let receipt = bank.observe_sealed_patch(&reversal).unwrap();
++    assert!(matches!(
++        receipt.kind,
++        alife_core::MemoryUpdateKind::Evicted {
++            removed: alife_core::MemoryId(1),
++            ..
++        }
++    ));
++    assert!(expected_meal(&bank, 85) > 0.7);
++}
++
++#[test]
++fn many_newer_preparations_do_not_hide_a_real_reversal_from_sleep_compaction() {
++    let mut sidecar = grounded_sidecar(
++        MemoryBankConfig::new(128, 64, 4, 0.72, Confidence::new(0.).unwrap()).unwrap(),
++    );
++    sidecar
++        .observe_sealed_patch(&meal_event(
++            &empty_bank(),
++            1,
++            PhysicalContactKind::Consumed,
++            -1.,
++            1.,
++        ))
++        .unwrap();
++    sidecar
++        .observe_sealed_patch(&meal_event(
++            &empty_bank(),
++            2,
++            PhysicalContactKind::Consumed,
++            0.8,
++            0.,
++        ))
++        .unwrap();
++    for variant in 0..81 {
++        sidecar
++            .observe_sealed_patch(&distinct_preparation(&empty_bank(), variant + 3, variant))
++            .unwrap();
++    }
++    assert_eq!(sidecar.export_active_bank().unwrap().records.len(), 83);
++    let compact = sidecar.prepare_compaction(1, 2, 1).unwrap();
++    sidecar.commit_compaction(compact).unwrap();
++    let portable = sidecar.export_active_bank().unwrap();
++    assert_eq!(portable.records.len(), 2);
++    assert!(!portable.records.iter().any(|r| r.memory_id_raw == 1));
++    assert!(portable.records.iter().any(|r| r.memory_id_raw == 2));
++}
++
++#[test]
++fn same_tick_consumption_reversal_uses_causal_sequence_order() {
++    let mut bank = empty_bank();
++    for (sequence, tick, reward) in [(1, 1, 0.8), (2, 2, -0.9), (3, 2, 0.8)] {
++        let patch = observation_patch(
++            &bank,
++            sequence,
++            tick,
++            slot(0, 71, 0.4, [0., 0.8, 0.9]),
++            CandidateActionFamily::Ingest,
++            reward,
++            if reward < 0. { 0.9 } else { 0. },
++            |outcome| {
++                outcome.physical.target_entity = Some(WorldEntityId(9000));
++            },
++        );
++        bank.observe_sealed_patch(&patch).unwrap();
++    }
++    assert!(expected_meal(&bank, 3) > 0.7);
++}
++
++#[test]
++fn other_families_keep_unknown_provenance_and_legacy_outcome_selection() {
++    let mut bank = empty_bank();
++    for (sequence, contact, reward) in [
++        (1, PhysicalContactKind::Consumed, -0.9),
++        (2, PhysicalContactKind::Touch, 0.8),
++    ] {
++        let patch = observation_patch(
++            &bank,
++            sequence,
++            sequence,
++            slot(0, 71, 0.4, [0., 0.8, 0.9]),
++            CandidateActionFamily::Contact,
++            reward,
++            0.,
++            |outcome| {
++                outcome.physical.target_entity = Some(WorldEntityId(9000));
++                outcome.physical.contact = contact;
++            },
++        );
++        bank.observe_sealed_patch(&patch).unwrap();
++    }
++    let probe = observation_patch(
++        &bank,
++        3,
++        3,
++        slot(0, 71, 0.4, [0., 0.8, 0.9]),
++        CandidateActionFamily::Contact,
++        0.,
++        0.,
++        |_| {},
++    );
++    assert!(probe.pre_action().perception().context().values()[8] > 0.7);
++    let value = serde_json::to_value(&bank).unwrap();
++    assert!(value["candidate_store"]["records"]
++        .as_object()
++        .unwrap()
++        .values()
++        .all(|r| r.get("outcome_contact").is_none()));
++}
++
++#[test]
++fn provenance_outside_supported_tracked_ingest_scope_is_rejected() {
++    let mut bank = empty_bank();
++    let patch = observation_patch(
++        &bank,
++        1,
++        1,
++        slot(0, 71, 0.4, [0., 0.8, 0.9]),
++        CandidateActionFamily::Contact,
++        0.8,
++        0.,
++        |_| {},
++    );
++    bank.observe_sealed_patch(&patch).unwrap();
++    let mut value = serde_json::to_value(&bank).unwrap();
++    value["candidate_store"]["records"]["1"]["outcome_contact"] = serde_json::json!("Consumed");
++    assert!(serde_json::from_value::<MemoryBank>(value).is_err());
++}
++
++#[test]
++fn untracked_ingest_keeps_legacy_unknown_reversal_rules() {
++    let mut bank = empty_bank();
++    for (sequence, contact, reward) in [
++        (1, PhysicalContactKind::Consumed, -0.9),
++        (2, PhysicalContactKind::Touch, 0.8),
++    ] {
++        let patch = observation_from_draft(
++            &bank,
++            sequence,
++            privileged_runtime_draft(Tick::new(sequence), &[(9000, 0.4)]),
++            reward,
++            0.,
++            |outcome| {
++                outcome.physical.target_entity = Some(WorldEntityId(9000));
++                outcome.physical.contact = contact;
++            },
++        );
++        bank.observe_sealed_patch(&patch).unwrap();
++    }
++    let value = serde_json::to_value(&bank).unwrap();
++    assert!(value["candidate_store"]["records"]
++        .as_object()
++        .unwrap()
++        .values()
++        .all(|r| r.get("outcome_contact").is_none()));
++    let recall = bank
++        .recall_frame(&privileged_runtime_draft(Tick::new(3), &[(9000, 0.4)]))
++        .unwrap();
++    assert!(recall.context().candidates[0].family_value[0] > 0.7);
++}
++
++#[test]
++fn tracked_object_slot_without_a_concrete_action_target_never_gains_contact_provenance() {
++    let mut bank = empty_bank();
++    let source = probe_for_object(1, slot(0, 71, 0.4, [0., 0.8, 0.9]));
++    let mut candidate = source.candidates()[0];
++    candidate.target.entity = None;
++    let draft = PerceptionFrameDraft::new(
++        ORGANISM,
++        source.tick(),
++        source.sensor_profile(),
++        source.sensory().clone(),
++        source.body(),
++        HomeostaticSnapshot::baseline(source.tick()),
++        vec![candidate],
++        source.profile_provenance(),
++        source.grounded_object_slots().to_vec(),
++    )
++    .unwrap();
++    let patch = observation_from_draft(&bank, 1, draft, -0.9, 0.9, |outcome| {
++        outcome.physical.target_entity = None;
++        outcome.physical.contact = PhysicalContactKind::Consumed;
++    });
++    assert_eq!(
++        patch
++            .decision()
++            .episodic_key()
++            .unwrap()
++            .query()
++            .tracked_object_id(),
++        Some(TrackedObjectId(71))
++    );
++    bank.observe_sealed_patch(&patch).unwrap();
++    assert!(
++        serde_json::to_value(&bank).unwrap()["candidate_store"]["records"]["1"]
++            .get("outcome_contact")
++            .is_none()
++    );
++}
++
++#[test]
++fn actual_consumption_teaches_a_saturated_legacy_bank_without_relabeling() {
++    for (old, new) in [(-0.9, 0.8), (0.9, -0.8)] {
++        let mut bank = MemoryBank::new(
++            MemoryBankConfig::new(1, 64, 1, 0.72, Confidence::new(0.).unwrap()).unwrap(),
++        )
++        .unwrap();
++        bank.observe_sealed_patch(&sequenced_patch(1, 1, 71, 0.4, old, 0.9))
++            .unwrap();
++        let pickup = meal_event(&bank, 2, PhysicalContactKind::Touch, 0.01, 0.);
++        assert_eq!(
++            bank.observe_sealed_patch(&pickup).unwrap().kind,
++            alife_core::MemoryUpdateKind::IgnoredLowerRetention
++        );
++        let meal = meal_event(&bank, 3, PhysicalContactKind::Consumed, new, 0.);
++        assert!(matches!(
++            bank.observe_sealed_patch(&meal).unwrap().kind,
++            alife_core::MemoryUpdateKind::Evicted {
++                removed: alife_core::MemoryId(1),
++                ..
++            }
++        ));
++        assert_eq!(
++            expected_meal(&bank, 4).is_sign_negative(),
++            new.is_sign_negative()
++        );
++    }
++}
++
++#[test]
++fn compaction_cannot_resurrect_unknown_harm_over_a_newer_grounded_safe_meal() {
++    let mut sidecar = grounded_sidecar(
++        MemoryBankConfig::new(4, 64, 2, 0.72, Confidence::new(0.).unwrap()).unwrap(),
++    );
++    sidecar
++        .observe_sealed_patch(&sequenced_patch(1, 1, 71, 0.4, -1., 1.))
++        .unwrap();
++    sidecar
++        .observe_sealed_patch(&meal_event(
++            &empty_bank(),
++            2,
++            PhysicalContactKind::Consumed,
++            0.6,
++            0.,
++        ))
++        .unwrap();
++    let before = sidecar.export_active_bank().unwrap();
++    assert_eq!(before.records[0].outcome_contact, None);
++    assert_eq!(before.records.len(), 2);
++    let compact = sidecar.prepare_compaction(1, 1, 1).unwrap();
++    sidecar.commit_compaction(compact).unwrap();
++    let after = sidecar.export_active_bank().unwrap();
++    assert_eq!(after.records.len(), 1);
++    assert_eq!(after.records[0].memory_id_raw, 2);
++    assert_eq!(
++        after.records[0].outcome_contact,
++        Some(PhysicalContactKind::Consumed)
++    );
++}
++
++#[test]
++fn legacy_meal_reversal_keeps_the_existing_nearby_context_similarity_rule() {
++    for capacity in [1, 4] {
++        let mut sidecar = grounded_sidecar(
++            MemoryBankConfig::new(capacity, 64, 1, 0.72, Confidence::new(0.).unwrap()).unwrap(),
++        );
++        sidecar
++            .observe_sealed_patch(&sequenced_patch(1, 1, 71, 0.4, -1., 1.))
++            .unwrap();
++        let newer = observation_patch(
++            &empty_bank(),
++            2,
++            2,
++            slot(0, 71, 0.40001, [0., 0.8, 0.9]),
++            CandidateActionFamily::Ingest,
++            0.6,
++            0.,
++            |outcome| {
++                outcome.physical.target_entity = Some(WorldEntityId(9000));
++                outcome.physical.contact = PhysicalContactKind::Consumed;
++            },
++        );
++        sidecar.observe_sealed_patch(&newer).unwrap();
++        let compact = sidecar.prepare_compaction(1, 1, 1).unwrap();
++        sidecar.commit_compaction(compact).unwrap();
++        let after = sidecar.export_active_bank().unwrap();
++        assert_eq!(after.records.len(), 1);
++        assert_eq!(after.records[0].memory_id_raw, 2);
++        assert_eq!(
++            after.records[0].outcome_contact,
++            Some(PhysicalContactKind::Consumed)
++        );
++    }
++}
+diff --git a/crates/alife_core/tests/n2048_memory_gain_candidate.rs b/crates/alife_core/tests/n2048_memory_gain_candidate.rs
+new file mode 100644
+index 00000000..66088e2c
+--- /dev/null
++++ b/crates/alife_core/tests/n2048_memory_gain_candidate.rs
+@@ -0,0 +1,132 @@
++use alife_core::*;
++fn inputs() -> (BrainGenome, DevelopmentState) {
++    let g = BrainGenome::scaffold(0x2048_2026, BrainCapacityClass::N2048_ID);
++    let d = DevelopmentState::new(g.id, Tick::ZERO, NormalizedScalar::new(1.).unwrap());
++    (g, d)
++}
++#[test]
++fn memory_gain_has_distinct_identity_without_changing_graph_or_plasticity() {
++    let (g, d) = inputs();
++    let profile = SensorProfile::GroundedObjectSlotsV1;
++    let (old, _) =
++        PhenotypeCompiler::compile_n2048_experimental_graph(g.clone(), d.clone(), profile).unwrap();
++    let old_bytes = serde_json::to_vec(&old).unwrap();
++    let (new, inputs) =
++        PhenotypeCompiler::compile_n2048_memory_gain_graph(g.clone(), d.clone(), profile).unwrap();
++    assert_eq!(old.synapses(), new.synapses());
++    assert_eq!(old.projections(), new.projections());
++    assert_eq!(old.neuron_dynamics(), new.neuron_dynamics());
++    assert_eq!(old.plasticity_receptors(), new.plasticity_receptors());
++    assert_eq!(old.budgets().global.active_tiles, 137);
++    assert_eq!(new.budgets().global.active_tiles, 137);
++    assert_eq!(
++        old.candidate_decoder()
++            .memory_channel()
++            .unwrap()
++            .max_candidate_gain(),
++        0.5
++    );
++    assert_eq!(
++        new.candidate_decoder()
++            .memory_channel()
++            .unwrap()
++            .max_candidate_gain(),
++        12.
++    );
++    assert_ne!(old.phenotype_hash(), new.phenotype_hash());
++    let old_selector_bytes =
++        bincode::serde::encode_to_vec(old.foundation_abi(), bincode::config::standard()).unwrap();
++    let new_selector_bytes =
++        bincode::serde::encode_to_vec(new.foundation_abi(), bincode::config::standard()).unwrap();
++    assert_eq!(
++        old_selector_bytes.first(),
++        Some(&0),
++        "legacy experimental enum tag must not move"
++    );
++    assert_eq!(
++        new_selector_bytes.first(),
++        Some(&6),
++        "new selector is appended, never inserted"
++    );
++
++    assert_ne!(
++        old.foundation_abi().selector_digest(),
++        new.foundation_abi().selector_digest()
++    );
++    let asset = FoundationWeightAsset::from_phenotype_for_genetic_birth(&new).unwrap();
++    assert!(asset.is_n2048_memory_gain_candidate());
++    assert!(!asset.is_n2048_experimental_graph());
++    assert!(N2048ExperimentalGraphV1::for_asset(&asset).is_err());
++    let old_asset = FoundationWeightAsset::from_phenotype_for_genetic_birth(&old).unwrap();
++    assert!(N2048MemoryGainCandidateV1::for_asset(&old_asset).is_err());
++    assert!(FoundationAbiBinding::canonical_for_foundation_asset(
++        &BrainCapacityClass::n2048(),
++        &asset
++    )
++    .is_err());
++    assert!(
++        PhenotypeCompiler::compile_n2048_experimental_foundation_candidate(
++            g.clone(),
++            d.clone(),
++            asset.clone()
++        )
++        .is_err()
++    );
++    assert!(
++        PhenotypeCompiler::compile_n2048_memory_gain_foundation_candidate(
++            g.clone(),
++            d.clone(),
++            old_asset
++        )
++        .is_err()
++    );
++    let bytes = asset.encode_canonical().unwrap();
++    assert_eq!(
++        FoundationWeightAsset::decode_canonical(&bytes).unwrap(),
++        asset
++    );
++    let (bound, _) = PhenotypeCompiler::compile_n2048_memory_gain_foundation_candidate(
++        g.clone(),
++        d.clone(),
++        asset,
++    )
++    .unwrap();
++    assert_eq!(new.synapses(), bound.synapses());
++    let wire = serde_json::to_vec(&inputs).unwrap();
++    let restored: PhenotypeCompilerInputs = serde_json::from_slice(&wire).unwrap();
++    assert_eq!(
++        PhenotypeCompiler::compile_validated(&restored, &BrainCapacityClass::n2048()).unwrap(),
++        new
++    );
++    assert_eq!(
++        serde_json::to_vec(
++            &PhenotypeCompiler::compile_n2048_experimental_graph(g, d, profile)
++                .unwrap()
++                .0
++        )
++        .unwrap(),
++        old_bytes
++    );
++}
++#[test]
++fn plan_rejects_unversioned_gain_and_selector_substitution() {
++    let (g, d) = inputs();
++    let (old, _) = PhenotypeCompiler::compile_n2048_experimental_graph(
++        g.clone(),
++        d.clone(),
++        SensorProfile::GroundedObjectSlotsV1,
++    )
++    .unwrap();
++    let (new, _) = PhenotypeCompiler::compile_n2048_memory_gain_graph(
++        g,
++        d,
++        SensorProfile::GroundedObjectSlotsV1,
++    )
++    .unwrap();
++    let mut plan = serde_json::to_value(old.candidate_decoder().memory_channel().unwrap()).unwrap();
++    plan["max_candidate_gain"] = serde_json::json!(12.);
++    assert!(serde_json::from_value::<MemoryChannelPlan>(plan).is_err());
++    let mut wire = serde_json::to_value(&new).unwrap();
++    wire["foundation_abi_selection"] = serde_json::to_value(old.foundation_abi()).unwrap();
++    assert!(serde_json::from_value::<BrainPhenotype>(wire).is_err());
++}
+diff --git a/crates/alife_gpu_backend/shaders/closed_loop_memory_context.wgsl b/crates/alife_gpu_backend/shaders/closed_loop_memory_context.wgsl
+index 0d45342c..b85d7dad 100644
+--- a/crates/alife_gpu_backend/shaders/closed_loop_memory_context.wgsl
++++ b/crates/alife_gpu_backend/shaders/closed_loop_memory_context.wgsl
+@@ -44,7 +44,8 @@ fn add_candidate_memory_context(@builtin(global_invocation_id) gid:vec3<u32>) {
+   let plan = load_memory_channel_plan(memory_plan_offset);
+   let decoder = load_decoder_plan(brain.decoder_plan_offset);
+   let input_stride = decoder.flattened_input_lane_count;
+-  let valid_plan = plan.schema_version == MEMORY_SCHEMA_VERSION
++  let valid_plan = ((plan.schema_version == MEMORY_SCHEMA_VERSION && plan.max_candidate_gain == 0.5)
++    || (plan.schema_version == 2u && plan.max_candidate_gain == 12.0 && plan.memory_decoder_synapse_count == 4096u))
+     && plan.target_latent_lane_start == 24u
+     && plan.family_value_lane_start == 32u
+     && plan.decoder_input_stride == 36u
+diff --git a/crates/alife_gpu_backend/src/closed_loop_buffers/bucket.rs b/crates/alife_gpu_backend/src/closed_loop_buffers/bucket.rs
+index 8a577aeb..a1835612 100644
+--- a/crates/alife_gpu_backend/src/closed_loop_buffers/bucket.rs
++++ b/crates/alife_gpu_backend/src/closed_loop_buffers/bucket.rs
+@@ -1470,11 +1470,14 @@ fn validate_learning_slot_layout(
+         immutable_plan_base,
+         ranges.memory_channel_plan_words.start,
+     )?;
+-    if memory_plan.schema_version != 1
++    if !((memory_plan.schema_version == 1
++        && memory_plan.max_candidate_gain.to_bits() == 0.5_f32.to_bits())
++        || (memory_plan.schema_version == 2
++            && memory_plan.max_candidate_gain.to_bits() == 12.0_f32.to_bits()
++            && memory_plan.memory_decoder_synapse_count == 4096))
+         || memory_plan.target_latent_lane_start != 24
+         || memory_plan.family_value_lane_start != 32
+         || memory_plan.decoder_input_stride != 36
+-        || memory_plan.max_candidate_gain.to_bits() != 0.5_f32.to_bits()
+         || memory_plan.memory_decoder_synapse_count as usize != counts.memory_weight_indices
+         || counts.memory_weight_indices < 96
+         || !counts.memory_weight_indices.is_multiple_of(8)
+diff --git a/crates/alife_gpu_backend/tests/n2048_memory_gain_candidate.rs b/crates/alife_gpu_backend/tests/n2048_memory_gain_candidate.rs
+new file mode 100644
+index 00000000..34db62ad
+--- /dev/null
++++ b/crates/alife_gpu_backend/tests/n2048_memory_gain_candidate.rs
+@@ -0,0 +1,40 @@
++use alife_core::*;
++use alife_gpu_backend::{
++    GpuClassBucketPlan, GpuMemoryChannelPlan, GpuPhenotypeUpload, CLOSED_LOOP_MEMORY_CONTEXT_WGSL,
++};
++#[test]
++fn explicit_gain_upload_uses_the_same_versioned_plan_as_cpu() {
++    let g = BrainGenome::scaffold(0x2048_2026, BrainCapacityClass::N2048_ID);
++    let d = DevelopmentState::new(g.id, Tick::ZERO, NormalizedScalar::new(1.).unwrap());
++    let p = PhenotypeCompiler::compile_n2048_memory_gain_graph(
++        g,
++        d,
++        SensorProfile::GroundedObjectSlotsV1,
++    )
++    .unwrap()
++    .0;
++    let upload = GpuPhenotypeUpload::try_from(&p).unwrap();
++    let plan = upload.memory_channel_plans[0];
++    assert_eq!(plan.schema_version, 2);
++    assert_eq!(plan.max_candidate_gain, 12.);
++    assert_eq!(plan.memory_decoder_synapse_count, 4096);
++    assert_eq!(
++        plan.max_candidate_gain,
++        p.candidate_decoder()
++            .memory_channel()
++            .unwrap()
++            .max_candidate_gain()
++    );
++    let mut bucket = GpuClassBucketPlan::new(BrainCapacityClass::n2048(), 1).unwrap();
++    bucket.insert_phenotype(0, 1, &p).unwrap();
++    let copy =
++        GpuMemoryChannelPlan::try_from(p.candidate_decoder().memory_channel().unwrap()).unwrap();
++    assert_eq!(copy.max_candidate_gain, 12.);
++    let module = naga::front::wgsl::parse_str(CLOSED_LOOP_MEMORY_CONTEXT_WGSL).unwrap();
++    naga::valid::Validator::new(
++        naga::valid::ValidationFlags::all(),
++        naga::valid::Capabilities::empty(),
++    )
++    .validate(&module)
++    .unwrap();
++}
+diff --git a/crates/alife_training/Cargo.toml b/crates/alife_training/Cargo.toml
+index e36c7b68..60b18e08 100644
+--- a/crates/alife_training/Cargo.toml
++++ b/crates/alife_training/Cargo.toml
+@@ -48,3 +48,7 @@ required-features = ["cpu-backend"]
+ [[example]]
+ name = "probe_weight_space_care"
+ required-features = ["cpu-backend"]
++
++[[example]]
++name = "probe_native_learning"
++required-features = ["cpu-backend"]
+diff --git a/crates/alife_training/examples/probe_native_learning.rs b/crates/alife_training/examples/probe_native_learning.rs
+new file mode 100644
+index 00000000..89d8d5ac
+--- /dev/null
++++ b/crates/alife_training/examples/probe_native_learning.rs
+@@ -0,0 +1,1018 @@
++//! Bounded native CPU learning assay. All lives are fresh and disposable.
++//! This never reads retained lives or changes accepted/default founder assets.
++use alife_core::*;
++use alife_runtime::canonical_preparation::foundation_construction_development;
++use alife_training::{cpu::*, AdamWConfig, StageTrainableMask, TrainingSequence};
++use alife_world::*;
++use serde::{Deserialize, Serialize};
++use serde_json::{json, Value};
++use sha2::{Digest, Sha256};
++use std::{fs, io::Write, path::Path, time::Instant};
++
++#[path = "support/care_candidate.rs"]
++mod care_candidate;
++type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
++
++#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
++struct Spec {
++    seed: u64,
++    preparation_ticks: usize,
++    initial_energy: f32,
++    baseline_ticks: usize,
++    life_ticks: usize,
++    max_a_consumptions: usize,
++    nutrition: f32,
++    a_harm: f32,
++    regrow_ticks: u32,
++    minimum_health: f32,
++    maximum_injury: f32,
++    sleep_policy: String,
++}
++impl Spec {
++    fn predeclared(seed: u64) -> Self {
++        Self {
++            seed,
++            preparation_ticks: 600,
++            initial_energy: 0.4,
++            baseline_ticks: 24,
++            life_ticks: 256,
++            max_a_consumptions: 3,
++            nutrition: 0.05,
++            a_harm: 0.35,
++            regrow_ticks: 16,
++            minimum_health: 0.70,
++            maximum_injury: 0.25,
++            sleep_policy: "Request RecoveryProtocol once immediately after the first actual A consumption, regardless of its measured value. Never request without exposure.".into(),
++        }
++    }
++}
++#[derive(Clone, Debug, Serialize, Deserialize)]
++struct Arm {
++    name: String,
++    action_gain: f32,
++    memory_reader: bool,
++    memory_gain: f32,
++    family_valence_reader: bool,
++    filename: String,
++    sha256: String,
++}
++#[derive(Serialize, Deserialize)]
++struct Manifest {
++    schema: String,
++    source_commit: String,
++    executable_sha256: String,
++    archived_v6_sha256: String,
++    experiment: String,
++    retrieval_source_sha256: String,
++    spec: Spec,
++    arms: Vec<Arm>,
++}
++fn digest(bytes: &[u8]) -> String {
++    format!("{:x}", Sha256::digest(bytes))
++}
++fn create(path: &Path) -> Result<fs::File> {
++    Ok(fs::OpenOptions::new()
++        .write(true)
++        .create_new(true)
++        .open(path)?)
++}
++fn write_json(path: &Path, value: &impl Serialize) -> Result<()> {
++    let mut file = create(path)?;
++    serde_json::to_writer_pretty(&mut file, value)?;
++    file.write_all(b"\n")?;
++    file.sync_all()?;
++    Ok(())
++}
++fn write_fresh_diagnostic(path: &Path, value: &impl Serialize) -> Result<String> {
++    let bytes = serde_json::to_vec(value)?;
++    let compressed = zstd::stream::encode_all(bytes.as_slice(), 3)?;
++    let mut file = create(path)?;
++    file.write_all(&compressed)?;
++    file.sync_all()?;
++    Ok(digest(&bytes))
++}
++fn append(file: &mut fs::File, value: &Value) -> Result<()> {
++    serde_json::to_writer(&mut *file, value)?;
++    file.write_all(b"\n")?;
++    file.sync_data()?;
++    Ok(())
++}
++fn candidate(seed: u64, gain: f32) -> Result<FoundationWeightAsset> {
++    candidate_with_memory(seed, gain, false, 0.5)
++}
++fn candidate_with_memory(
++    seed: u64,
++    gain: f32,
++    reader: bool,
++    memory_gain: f32,
++) -> Result<FoundationWeightAsset> {
++    candidate_with_readouts(seed, gain, reader, memory_gain, false)
++}
++fn candidate_with_readouts(
++    seed: u64,
++    gain: f32,
++    reader: bool,
++    memory_gain: f32,
++    family_valence_reader: bool,
++) -> Result<FoundationWeightAsset> {
++    if family_valence_reader && (!reader || memory_gain != 12.) {
++        return Err("the family-value factor requires the frozen target reader and cap 12".into());
++    }
++    let (_, p, source) = if memory_gain == 12. {
++        care_candidate::source_memory_gain(seed)?
++    } else if memory_gain == 0.5 {
++        care_candidate::source(seed, true)?
++    } else {
++        return Err("unsupported memory gain".into());
++    };
++    let (mut weights, _) = care_candidate::whole_care(&p)?;
++    for (synapse, weight) in p.synapses().iter().zip(&mut weights) {
++        if matches!(synapse.kind(), CompiledSynapseKind::Decoder(c)
++            if c.head() == DecoderHeadKind::ActionCandidate)
++        {
++            *weight *= gain;
++        }
++    }
++    if reader {
++        let mut memory_counts = std::collections::BTreeMap::new();
++        for synapse in p.synapses() {
++            if let CompiledSynapseKind::Decoder(c) = synapse.kind() {
++                if c.head() == DecoderHeadKind::MemoryContext {
++                    *memory_counts
++                        .entry((c.family().raw(), c.input_lane()))
++                        .or_insert(0usize) += 1;
++                }
++            }
++        }
++        for (i, synapse) in p.synapses().iter().enumerate() {
++            let CompiledSynapseKind::Decoder(c) = synapse.kind() else {
++                continue;
++            };
++            if c.head() != DecoderHeadKind::MemoryContext {
++                continue;
++            }
++            let total = match (c.family(), c.input_lane()) {
++                (CandidateActionFamily::Ingest, 25) => -16.,
++                (CandidateActionFamily::Ingest, 26) => -64.,
++                (CandidateActionFamily::Ingest, 32) if family_valence_reader => 32.,
++                (CandidateActionFamily::Approach | CandidateActionFamily::Contact, 25) => -8.,
++                (CandidateActionFamily::Approach | CandidateActionFamily::Contact, 26) => -32.,
++                (CandidateActionFamily::Avoid, 25) => 16.,
++                (CandidateActionFamily::Avoid, 26) => 128.,
++                _ => 0.,
++            };
++            let copies = memory_counts[&(c.family().raw(), c.input_lane())];
++            weights[i] = total / copies as f32;
++        }
++    }
++    Ok(FoundationWeightAsset::from_trained_weights(
++        &p,
++        weights,
++        source.manifest().training_stage(),
++    )?)
++}
++// Bind the executable to the actual compiled retrieval source, not a caller's
++// phase-on/off label. Both factor worktrees have identical assay source.
++fn retrieval_source_sha256() -> String {
++    let sources: [(&str, &[u8]); 4] = [
++        (
++            "memory.rs",
++            include_bytes!("../../alife_core/src/memory.rs"),
++        ),
++        (
++            "candidate_index.rs",
++            include_bytes!("../../alife_core/src/memory/candidate_index.rs"),
++        ),
++        (
++            "candidate_recall.rs",
++            include_bytes!("../../alife_core/src/memory/candidate_recall.rs"),
++        ),
++        (
++            "sidecar.rs",
++            include_bytes!("../../alife_core/src/memory/sidecar.rs"),
++        ),
++    ];
++    let mut hash = Sha256::new();
++    for (name, contents) in sources {
++        hash.update(name.as_bytes());
++        hash.update([0]);
++        hash.update((contents.len() as u64).to_le_bytes());
++        hash.update(contents);
++    }
++    format!("{:x}", hash.finalize())
++}
++type ArmSpec = (&'static str, f32, bool, f32, bool);
++fn arm_specs(experiment: &str) -> Result<Vec<ArmSpec>> {
++    Ok(match experiment {
++        "original" => vec![
++            ("original-v6", 1., false, 0.5, false),
++            ("action-gain-quarter", 0.25, false, 0.5, false),
++        ],
++        "memory" => vec![
++            ("reader-off-cap-half", 0.25, false, 0.5, false),
++            ("reader-on-cap-half", 0.25, true, 0.5, false),
++            ("reader-off-cap-twelve", 0.25, false, 12., false),
++            ("reader-on-cap-twelve", 0.25, true, 12., false),
++        ],
++        "family-value" => vec![
++            ("family-value-off", 0.25, true, 12., false),
++            ("family-value-on", 0.25, true, 12., true),
++        ],
++        _ => return Err("unknown predeclared factor design".into()),
++    })
++}
++fn prepare(root: &Path, seed: u64, commit: &str, archive: &Path, experiment: &str) -> Result<()> {
++    if seed == 0 || commit.len() != 40 || !commit.bytes().all(|b| b.is_ascii_hexdigit()) {
++        return Err("a nonzero fixed seed and full source commit are required".into());
++    }
++    let original = candidate(2026110901, 1.)?.encode_canonical()?;
++    let archive_bytes = fs::read(archive)?;
++    if original != archive_bytes {
++        return Err("shared v6 construction is not byte-identical to the archived v6".into());
++    }
++    let specs = arm_specs(experiment)?;
++    fs::create_dir(root)?;
++    let mut arms = Vec::new();
++    for (name, gain, reader, memory_gain, family_valence_reader) in specs {
++        let bytes =
++            candidate_with_readouts(seed, gain, reader, memory_gain, family_valence_reader)?
++                .encode_canonical()?;
++        let filename = format!("{name}.alife-foundation");
++        let mut file = create(&root.join(&filename))?;
++        file.write_all(&bytes)?;
++        file.sync_all()?;
++        arms.push(Arm {
++            name: name.into(),
++            action_gain: gain,
++            memory_reader: reader,
++            memory_gain,
++            family_valence_reader,
++            filename,
++            sha256: digest(&bytes),
++        });
++    }
++    write_json(
++        &root.join("manifest.json"),
++        &Manifest {
++            schema: "fresh-native-learning-pilot-v2".into(),
++            source_commit: commit.into(),
++            executable_sha256: digest(&fs::read(std::env::current_exe()?)?),
++            archived_v6_sha256: digest(&archive_bytes),
++            experiment: experiment.into(),
++            retrieval_source_sha256: retrieval_source_sha256(),
++            spec: Spec::predeclared(seed),
++            arms,
++        },
++    )
++}
++fn load_manifest(root: &Path) -> Result<Manifest> {
++    let manifest: Manifest = serde_json::from_slice(&fs::read(root.join("manifest.json"))?)?;
++    let expected = arm_specs(&manifest.experiment)?;
++    if manifest.schema != "fresh-native-learning-pilot-v2"
++        || manifest.spec != Spec::predeclared(manifest.spec.seed)
++        || manifest.executable_sha256 != digest(&fs::read(std::env::current_exe()?)?)
++        || manifest.retrieval_source_sha256 != retrieval_source_sha256()
++        || manifest.arms.len() != expected.len()
++    {
++        return Err("predeclared manifest, retrieval source or frozen executable mismatch".into());
++    }
++    for (arm, (name, action_gain, memory_reader, memory_gain, family_valence_reader)) in
++        manifest.arms.iter().zip(expected)
++    {
++        if arm.name != name
++            || arm.action_gain != action_gain
++            || arm.memory_reader != memory_reader
++            || arm.memory_gain != memory_gain
++            || arm.family_valence_reader != family_valence_reader
++            || arm.filename != format!("{name}.alife-foundation")
++        {
++            return Err("candidate factor design differs from predeclaration".into());
++        }
++        let bytes = fs::read(root.join(&arm.filename))?;
++        if digest(&bytes) != arm.sha256
++            || bytes
++                != candidate_with_readouts(
++                    manifest.spec.seed,
++                    arm.action_gain,
++                    arm.memory_reader,
++                    arm.memory_gain,
++                    arm.family_valence_reader,
++                )?
++                .encode_canonical()?
++        {
++            return Err("frozen candidate does not match its predeclared construction".into());
++        }
++    }
++    Ok(manifest)
++}
++
++struct Life {
++    host: CpuCanonicalHost,
++    trainer: CpuFoundationTrainer,
++    own: OrganismId,
++    targets: Vec<WorldEntityId>,
++}
++fn make_life(root: &Path, manifest: &Manifest, arm: &Arm, scene: &str) -> Result<Life> {
++    let spec = &manifest.spec;
++    let (config, _, _) = care_candidate::source(spec.seed, true)?;
++    let asset = FoundationWeightAsset::decode_canonical(&fs::read(root.join(&arm.filename))?)?;
++    let mut game = if arm.memory_gain == 12. {
++        create_canonical_new_game_with_n2048_memory_gain_candidate(&config, &asset)?
++    } else {
++        create_canonical_new_game_with_n2048_experimental_candidate(&config, &asset)?
++    };
++    let original = game
++        .world
++        .organism_registry()
++        .iter()
++        .next()
++        .unwrap()
++        .clone();
++    let capacity = BrainCapacityClass::n2048();
++    let development = foundation_construction_development(
++        &original.phenotype().brain_genome,
++        &capacity,
++        &original.phenotype().development_state_at(Tick::ZERO)?,
++    )?;
++    let (p, _) = if arm.memory_gain == 12. {
++        PhenotypeCompiler::compile_n2048_memory_gain_foundation_candidate(
++            original.phenotype().brain_genome.clone(),
++            development,
++            asset.clone(),
++        )?
++    } else {
++        PhenotypeCompiler::compile_n2048_experimental_foundation_candidate(
++            original.phenotype().brain_genome.clone(),
++            development,
++            asset.clone(),
++        )?
++    };
++    let trainer = CpuFoundationTrainer::new(
++        p.clone(),
++        asset,
++        StageTrainableMask::recurrent_only(&p)?,
++        AdamWConfig::default(),
++    )?;
++    let own = original.organism_id();
++    let mut world = HeadlessScenarioBuilder::new(spec.seed)
++        .agent("learner", own, Vec3f::ZERO)
++        .terrain_zone(
++            1,
++            "assay",
++            TerrainZoneKind::Meadow,
++            Vec3f::ZERO,
++            12.,
++            0.,
++            0.,
++        )
++        .build()?;
++    let count = if scene == "learning" { 2 } else { 1 };
++    let mut targets = Vec::new();
++    // Identical geometry, nutrition, chemistry and material. Appearance and
++    // object identity distinguish the two resources, never a hidden harm label.
++    let common = GroundedPhysicalProperties {
++        velocity: Vec3f::ZERO,
++        color: [0.9, 0.2, 0.2],
++        material: [0.35, 0.15, 0.65],
++        shape: [0.2, 0.8, 0.2],
++        chemical: [if scene == "bitter" { -0.85 } else { 0.85 }, 0.1, 0.2],
++        surface_temperature: 0.1,
++        terrain: [0.5, 0.25],
++    };
++    for i in 0..count {
++        let position = if scene == "learning" {
++            Vec3f::new(0.35, 0., if i == 0 { -0.35 } else { 0.35 })
++        } else {
++            Vec3f::new(if scene == "far" { 2.5 } else { 0.25 }, 0., 0.)
++        };
++        let id = world.editor_spawn_object(WorldEditorSpawnSpec {
++            label: if i == 0 { "A" } else { "B" }.into(),
++            kind: WorldObjectKind::Food,
++            organism_id: None,
++            position,
++            nutrition: if scene == "learning" {
++                spec.nutrition
++            } else {
++                0.6
++            },
++            hazard_pain: if scene == "learning" && i == 0 {
++                spec.a_harm
++            } else {
++                0.
++            },
++            radius: 0.5,
++            token_id: None,
++        })?;
++        let mut physical = common;
++        if i == 1 {
++            physical.color = [0.2, 0.2, 0.9];
++            physical.shape = [0.8, 0.2, 0.8];
++        }
++        world.set_grounded_physical_properties(id, physical)?;
++        if scene == "learning" {
++            world.track_resource_lifecycle(id, EcologyZoneId(1), spec.regrow_ticks, 512)?;
++        }
++        targets.push(id);
++    }
++    let mut chemistry = *original.biochemistry();
++    chemistry.body.set_energy(spec.initial_energy)?;
++    world.register_organism_record(WorldOrganismRecord::new(
++        own,
++        world.entity_id("learner").unwrap(),
++        original.genome().clone(),
++        original.phenotype().clone(),
++        chemistry,
++        original.birth_tick(),
++    )?)?;
++    game.world = world;
++    let sampling_seed = (spec.seed ^ (spec.seed >> 32)) as u32;
++    let (host, _) =
++        CpuCanonicalHost::new_prepared_cohort(game, &trainer, sampling_seed, |world| {
++            for _ in 0..spec.preparation_ticks {
++                world.try_advance_tick()?;
++            }
++            Ok::<_, ScaffoldContractError>(())
++        })?;
++    Ok(Life {
++        host,
++        trainer,
++        own,
++        targets,
++    })
++}
++fn offsets(p: &BrainPhenotype, neural: &CpuOrganismCheckpoint) -> Vec<f32> {
++    p.synapses()
++        .iter()
++        .enumerate()
++        .map(|(i, s)| neural.lifetime[i] + s.alpha() * neural.fast[i])
++        .collect()
++}
++fn bank_stats(values: &[f32], old: &[f32]) -> Value {
++    json!({"nonzero":values.iter().filter(|v| **v != 0.).count(),
++        "changed":values.iter().zip(old).filter(|(a,b)| a.to_bits()!=b.to_bits()).count(),
++        "l1":values.iter().map(|v| f64::from(v.abs())).sum::<f64>(),
++        "max_abs":values.iter().map(|v| v.abs()).fold(0.,f32::max),
++        "max_delta":values.iter().zip(old).map(|(a,b)|(a-b).abs()).fold(0.,f32::max)})
++}
++fn replay(
++    trainer: &CpuFoundationTrainer,
++    row: &CpuCollectedDecision,
++    weights: &[f32],
++) -> Result<Vec<f32>> {
++    let mut tick = row.replay_tick.clone();
++    tick.effective_weight_offsets = weights.to_vec();
++    Ok(trainer
++        .evaluate_replay(&TrainingSequence {
++            phenotype_hash: trainer.phenotype().phenotype_hash(),
++            initial: row.initial.clone(),
++            ticks: vec![tick],
++            burn_in_ticks: 0,
++            memory_candidate_gain: trainer
++                .phenotype()
++                .candidate_decoder()
++                .memory_channel()
++                .map_or(0., |m| m.max_candidate_gain()),
++        })?
++        .candidate_logits
++        .remove(0))
++}
++// This detached diagnostic changes only explicit episodic decoder inputs.
++// It never writes the organism, a memory bank, a receptor, or an action.
++fn replay_without_episodic_context(
++    trainer: &CpuFoundationTrainer,
++    row: &CpuCollectedDecision,
++) -> Result<Vec<f32>> {
++    let mut detached = row.clone();
++    for candidate in &mut detached.replay_tick.candidates {
++        candidate.decoder_inputs[24..36].fill(0.);
++    }
++    replay(
++        trainer,
++        &detached,
++        &row.replay_tick.effective_weight_offsets,
++    )
++}
++// Only the Ingest family's acquired valence lane is removed. Target fear/pain,
++// all other families, weights, physiology and sampling state remain unchanged.
++fn replay_without_ingest_family_valence(
++    trainer: &CpuFoundationTrainer,
++    row: &CpuCollectedDecision,
++) -> Result<Vec<f32>> {
++    let mut detached = row.clone();
++    for candidate in &mut detached.replay_tick.candidates {
++        if candidate.family == CandidateActionFamily::Ingest {
++            candidate.decoder_inputs[32] = 0.;
++        }
++    }
++    replay(
++        trainer,
++        &detached,
++        &row.replay_tick.effective_weight_offsets,
++    )
++}
++fn margins(row: &CpuCollectedDecision, logits: &[f32], targets: &[WorldEntityId]) -> Value {
++    let candidates = row.patch.pre_action().perception().candidates();
++    let best = |target, family| {
++        candidates
++            .iter()
++            .zip(logits)
++            .filter(|(c, _)| c.target.entity == Some(target) && c.family == family)
++            .map(|(_, l)| *l)
++            .max_by(f32::total_cmp)
++    };
++    let a = best(targets[0], CandidateActionFamily::Ingest);
++    let b = targets
++        .get(1)
++        .and_then(|&id| best(id, CandidateActionFamily::Ingest));
++    json!({"ingest_a":a,"ingest_b":b,"ingest_a_minus_b":a.zip(b).map(|(a,b)|a-b),
++        "approach_a":best(targets[0],CandidateActionFamily::Approach),
++        "avoid_a":best(targets[0],CandidateActionFamily::Avoid)})
++}
++fn consumed(row: &CpuCollectedDecision, target: WorldEntityId) -> bool {
++    let outcome = row.patch.outcome();
++    let matches = |physical: &PhysicalActionOutcome| {
++        physical.target_entity == Some(target) && physical.contact == PhysicalContactKind::Consumed
++    };
++    matches(&outcome.physical)
++        || outcome
++            .joint
++            .as_ref()
++            .is_some_and(|joint| joint.channel_outcomes.iter().any(|c| matches(&c.physical)))
++}
++fn cold_check(host: &CpuCanonicalHost, trainer: &CpuFoundationTrainer) -> Result<Value> {
++    let checkpoint = host.checkpoint(trainer)?;
++    let bytes = serde_json::to_vec(&checkpoint)?;
++    let mut cold = CpuCanonicalHost::from_checkpoint(serde_json::from_slice(&bytes)?, trainer)?;
++    assert_eq!(bytes, serde_json::to_vec(&cold.checkpoint(trainer)?)?);
++    let mut hot = host.snapshot();
++    let hot_step = hot.step(trainer, 1.);
++    let cold_step = cold.step(trainer, 1.);
++    let next = match (hot_step, cold_step) {
++        (Ok(h), Ok(c)) => {
++            assert_eq!(
++                serde_json::to_vec(&h.decisions)?,
++                serde_json::to_vec(&c.decisions)?
++            );
++            json!({"completed":true,"decisions":h.decisions.len()})
++        }
++        (Err(h), Err(c)) => {
++            assert_eq!(h.to_string(), c.to_string());
++            json!({"completed":false,"identical_atomic_error":h.to_string()})
++        }
++        _ => return Err("hot and cold next-step results diverged".into()),
++    };
++    assert_eq!(
++        serde_json::to_vec(&hot.checkpoint(trainer)?)?,
++        serde_json::to_vec(&cold.checkpoint(trainer)?)?
++    );
++    Ok(json!({"checkpoint_roundtrip_exact":true,"next_step":next,"next_checkpoint_exact":true}))
++}
++
++fn run(root: &Path, manifest: &Manifest, arm: &Arm, scene: &str) -> Result<Value> {
++    let started = Instant::now();
++    let Life {
++        mut host,
++        trainer,
++        own,
++        targets,
++    } = make_life(root, manifest, arm, scene)?;
++    let prefix = format!("{}.{}", arm.name, scene);
++    let mut journal = create(&root.join(format!("{prefix}.jsonl")))?;
++    let founder_before = serde_json::to_vec(&trainer.checkpoint())?;
++    let initial = host.checkpoint(&trainer)?;
++    let initial_offsets = offsets(trainer.phenotype(), &initial.residents[0].neural);
++    let mut previous = initial.clone();
++    let mut anchor: Option<CpuCollectedDecision> = None;
++    let mut last_row: Option<CpuCollectedDecision> = None;
++    let mut counts = vec![0usize; targets.len()];
++    let mut negative_a_meals = 0;
++    let mut negative_a_experienced_valence_meals = 0;
++    let mut request_tick = None;
++    let mut consolidation_count = 0;
++    let mut post_sleep_decisions = 0;
++    let mut decisions = 0;
++    let mut steps = 0;
++    let mut opportunities_a = 0;
++    let mut contact_opportunities_a = 0;
++    let mut paired_ingest_opportunities = 0;
++    let mut paired_contact_opportunities = 0;
++    let mut captured_first_post_harm_a_opportunity = false;
++    let mut stopped = "tick_budget".to_owned();
++    let learning = scene == "learning";
++    let limit = if learning {
++        manifest.spec.life_ticks
++    } else {
++        manifest.spec.baseline_ticks
++    };
++    append(
++        &mut journal,
++        &json!({"event":"start","scene":scene,"arm":arm,"spec":manifest.spec,
++        "backend":"native-cpu","experiment":manifest.experiment,"retrieval_source_sha256":manifest.retrieval_source_sha256,"fresh_disposable":true,"initial_biology":host.world().organism_registry().get(own).unwrap().biochemistry(),
++        "target_objects":targets.iter().map(|id|WorldObjectSaveState::from(host.world().entity(*id).unwrap().clone())).collect::<Vec<_>>(),
++        "no_adam_updates":true,"no_learning_off_comparator":true}),
++    )?;
++    for index in 0..limit {
++        let before_record = host.world().organism_registry().get(own).unwrap();
++        let before_receptors = before_record
++            .biochemistry()
++            .neural_receptor_frame(before_record.phenotype())?;
++        let step = match host.step(&trainer, 1.) {
++            Ok(step) => step,
++            Err(error) => {
++                stopped = format!("host_error: {error}");
++                break;
++            }
++        };
++        steps += 1;
++        consolidation_count += step.sleep_consolidations;
++        let current = host.checkpoint(&trainer)?;
++        let resident = &current.residents[0];
++        let old = &previous.residents[0].neural;
++        let current_offsets = offsets(trainer.phenotype(), &resident.neural);
++        let record = host.world().organism_registry().get(own).unwrap();
++        let mut first_a_consumption = false;
++        for row in &step.decisions {
++            decisions += 1;
++            if request_tick.is_some() && consolidation_count > 0 {
++                post_sleep_decisions += 1;
++            }
++            let frame = row.patch.pre_action().perception();
++            let outcome = row.patch.outcome();
++            let physiology = outcome
++                .measured_physiology
++                .as_ref()
++                .ok_or("measured physiology missing")?;
++            let credit = OutcomeCreditPacket::from_sealed_patch(&row.patch)?
++                .with_biochemical_receptors(&before_receptors)?;
++            let parameters = record.phenotype().brain_genome.plasticity_parameters();
++            let profile = parameters.action_candidate_credit_profile().map_or_else(
++                || parameters.receptor_profile(),
++                |profile| profile.receptor_profile(),
++            );
++            assert_eq!(
++                profile.project(&credit.modulator().frame())?.to_bits(),
++                row.biological_reward.to_bits()
++            );
++            let logits = replay(&trainer, row, &row.replay_tick.effective_weight_offsets)?;
++            let has_ingest = |id| {
++                frame.candidates().iter().any(|c| {
++                    c.family == CandidateActionFamily::Ingest && c.target.entity == Some(id)
++                })
++            };
++            opportunities_a += usize::from(has_ingest(targets[0]));
++            paired_ingest_opportunities +=
++                usize::from(targets.len() == 2 && has_ingest(targets[0]) && has_ingest(targets[1]));
++            let has_contact_ingest = |id| {
++                frame.candidates().iter().any(|c| {
++                    c.family == CandidateActionFamily::Ingest
++                    && c.target.entity == Some(id)
++                    // GroundedObjectSlotV1::candidate_features puts contact in lane 18.
++                    && c.features.0[18] > 0.
++                })
++            };
++            contact_opportunities_a += usize::from(has_contact_ingest(targets[0]));
++            paired_contact_opportunities += usize::from(
++                targets.len() == 2
++                    && has_contact_ingest(targets[0])
++                    && has_contact_ingest(targets[1]),
++            );
++            let mut meals = Vec::new();
++            for (i, &target) in targets.iter().enumerate() {
++                if consumed(row, target) {
++                    counts[i] += 1;
++                    meals.push(i);
++                    if i == 0 {
++                        negative_a_meals += usize::from(
++                            row.biological_reward < 0. && physiology.aversive_harm() > 0.,
++                        );
++                        negative_a_experienced_valence_meals += usize::from(
++                            outcome.experienced_valence().raw() < 0.
++                                && physiology.aversive_harm() > 0.,
++                        );
++                        first_a_consumption = counts[0] == 1;
++                    }
++                }
++            }
++            if anchor.is_none() {
++                write_fresh_diagnostic(
++                    &root.join(format!("{prefix}.anchor.fresh-diagnostic.json.zst")),
++                    row,
++                )?;
++                anchor = Some(row.clone());
++            }
++            let first_reencounter = learning
++                && counts[0] > 0
++                && !first_a_consumption
++                && has_contact_ingest(targets[0])
++                && !captured_first_post_harm_a_opportunity;
++            captured_first_post_harm_a_opportunity |= first_reencounter;
++            let inspect = first_reencounter
++                || index == 0
++                || index % 32 == 0
++                || !meals.is_empty()
++                || (request_tick.is_some() && post_sleep_decisions == 1);
++            let diagnostic = if inspect {
++                let origin = replay(&trainer, row, &initial_offsets)?;
++                let after = replay(&trainer, row, &current_offsets)?;
++                let without_episodic = replay_without_episodic_context(&trainer, row)?;
++                let without_family = replay_without_ingest_family_valence(&trainer, row)?;
++                let before_choice = sample_cpu_joint_action(
++                    trainer.phenotype(),
++                    frame,
++                    &logits,
++                    current.sampling_seed,
++                    row.sampling_counter.unwrap(),
++                    1.,
++                )?;
++                assert_eq!(
++                    serde_json::to_vec(&before_choice)?,
++                    serde_json::to_vec(&row.action)?
++                );
++                let frozen = json!({"schema":"fresh-detached-offset-assay-v1","source_row":row,
++                    "initial_offset_bank":initial_offsets,"post_update_offset_bank":current_offsets,
++                    "post_neural_bank":resident.neural,"candidate_sha256":arm.sha256,
++                    "all_other_sequence_fields_identical":true});
++                let provenance = write_fresh_diagnostic(
++                    &root.join(format!("{prefix}.tick-{index}.fresh-diagnostic.json.zst")),
++                    &frozen,
++                )?;
++                Some(json!({"uncompressed_provenance_sha256":provenance,
++                    "initial_bank":margins(row,&origin,&targets),"actual_pre_update":margins(row,&logits,&targets),
++                    "post_update_bank":margins(row,&after,&targets),
++                    "without_explicit_episodic_context":margins(row,&without_episodic,&targets),
++                    "without_ingest_family_valence_context":margins(row,&without_family,&targets),
++                    "without_ingest_family_valence_choice_same_counter":sample_cpu_joint_action(trainer.phenotype(),frame,&without_family,current.sampling_seed,row.sampling_counter.unwrap(),1.)?,
++                    "without_explicit_episodic_choice_same_counter":sample_cpu_joint_action(trainer.phenotype(),frame,&without_episodic,current.sampling_seed,row.sampling_counter.unwrap(),1.)?,
++                    "post_update_choice_same_counter":sample_cpu_joint_action(trainer.phenotype(),frame,&after,current.sampling_seed,row.sampling_counter.unwrap(),1.)?,
++                    "interpretation":"Detached counterfactuals only. Offset swaps hold actual physiology, recurrent initial state, gates, memory inputs and structural context fixed. The episodic comparison zeroes only decoder input lanes 24 through 35. The family-valence comparison zeroes only Ingest lane 32. Both retain actual offsets and every other sequence field."}))
++            } else {
++                None
++            };
++            let watched = trainer.phenotype().synapses().iter().enumerate().filter(|(_,s)|
++                matches!(s.kind(),CompiledSynapseKind::Decoder(c) if c.head()==DecoderHeadKind::ActionCandidate && c.input_lane()==15 && [CandidateActionFamily::Ingest,CandidateActionFamily::Approach].contains(&c.family()))
++                && s.genetic_weight()!=0.).map(|(i,s)| {
++                    let receptor=&trainer.phenotype().plasticity_receptors()[s.receptor_index() as usize];
++                    json!({"index":i,"kind":s.kind(),"source":s.source(),"genetic":s.genetic_weight(),"alpha":s.alpha(),
++                        "learning_rate":receptor.learning_rate(),"normalization_rate":receptor.normalization_rate(),
++                        "projected_credit":receptor.receptor_profile().project(&credit.modulator().frame()).unwrap(),
++                        "eligibility":resident.neural.eligibility[i],"fast":resident.neural.fast[i],"lifetime":resident.neural.lifetime[i],
++                        "effective":s.genetic_weight()+current_offsets[i],"effective_update":current_offsets[i]-row.replay_tick.effective_weight_offsets[i]})
++                }).collect::<Vec<_>>();
++            append(
++                &mut journal,
++                &json!({"event":"decision","index":index,"tick":step.tick_before,"sampling_counter":row.sampling_counter,
++                "action":row.action,"selected_command":row.patch.decision().selected_action,
++                "candidates":frame.candidates(),"logits":logits,
++                "memory_and_cognitive_inputs":row.replay_tick.candidates.iter().map(|c|&c.decoder_inputs[24..]).collect::<Vec<_>>(),
++                "outcome":outcome,"biological_reward":row.biological_reward,"experienced_valence":outcome.experienced_valence(),
++                "homeostatic_improvement":physiology.homeostatic_improvement(),"aversive_harm":physiology.aversive_harm(),
++                "credit_modulator":credit.modulator(),"consumed_target_indices":meals,"target_margins":margins(row,&logits,&targets),
++                "watched_readouts":watched,"detached_assay":diagnostic}),
++            )?;
++            last_row = Some(row.clone());
++        }
++        append(
++            &mut journal,
++            &json!({"event":"boundary","index":index,"tick":step.tick_after,
++            "sleep":resident.sleep,"sleeping_organisms":step.sleeping_organisms,"consolidations":step.sleep_consolidations,
++            "fast":bank_stats(&resident.neural.fast,&old.fast),"lifetime":bank_stats(&resident.neural.lifetime,&old.lifetime),
++            "eligibility":bank_stats(&resident.neural.eligibility,&old.eligibility),"memory_count":resident.memory.records.len(),
++            "body":record.biochemistry().body,"homeostasis":record.biochemistry().homeostasis,
++            "position":host.world().entity(record.world_entity_id()).unwrap().position,
++            "targets":targets.iter().map(|id|WorldObjectSaveState::from(host.world().entity(*id).unwrap().clone())).collect::<Vec<_>>(),
++            "ecology":host.world().ecology_metrics()}),
++        )?;
++        if learning && first_a_consumption && request_tick.is_none() {
++            host.request_recovery_sleep(own)?;
++            request_tick = Some(host.world().tick());
++            append(
++                &mut journal,
++                &json!({"event":"requested_recovery_sleep","tick":request_tick,"reason":"Predeclared first A-consumption boundary, independent of measured value."}),
++            )?;
++        }
++        previous = current;
++        let biology = host.world().organism_registry().get(own).unwrap();
++        if !biology.lifecycle().is_alive() {
++            stopped = "organism_not_alive".into();
++            break;
++        }
++        if learning
++            && (biology.biochemistry().body.health < manifest.spec.minimum_health
++                || biology.biochemistry().body.injury > manifest.spec.maximum_injury)
++        {
++            stopped = "vitality_safeguard".into();
++            break;
++        }
++        if learning && counts[0] >= manifest.spec.max_a_consumptions {
++            stopped = "harmful_consumption_cap".into();
++            break;
++        }
++        if index % 32 == 0 {
++            eprintln!(
++                "{} {} tick={} A={} B={:?} sleep={:?}",
++                arm.name,
++                scene,
++                index,
++                counts[0],
++                counts.get(1),
++                previous.residents[0].sleep.state().phase
++            );
++        }
++    }
++    assert_eq!(founder_before, serde_json::to_vec(&trainer.checkpoint())?);
++    let final_checkpoint = host.checkpoint(&trainer)?;
++    let final_offsets = offsets(trainer.phenotype(), &final_checkpoint.residents[0].neural);
++    let anchor_assay = if let Some(anchor) = &anchor {
++        let initial_logits = replay(&trainer, anchor, &initial_offsets)?;
++        let final_logits = replay(&trainer, anchor, &final_offsets)?;
++        Some(
++            json!({"initial":margins(anchor,&initial_logits,&targets),"final":margins(anchor,&final_logits,&targets),
++            "fixed_genuine_first_row":true}),
++        )
++    } else {
++        None
++    };
++    let diagnostic_digest = write_fresh_diagnostic(
++        &root.join(format!("{prefix}.final.fresh-diagnostic.json.zst")),
++        &json!({"fresh_generated_only":true,"initial_offsets":initial_offsets,"final_offsets":final_offsets,
++            "anchor_row":anchor,"last_row":last_row,"final_checkpoint":final_checkpoint}),
++    )?;
++    let cold = cold_check(&host, &trainer)?;
++    let record = host.world().organism_registry().get(own).unwrap();
++    let summary = json!({"schema":"fresh-native-life-result-v1","complete":true,"backend":"native-cpu","scene":scene,"arm":arm,
++        "source_commit":manifest.source_commit,"experiment":manifest.experiment,"retrieval_source_sha256":manifest.retrieval_source_sha256,"seed":manifest.spec.seed,"steps":steps,"decisions":decisions,"stop_reason":stopped,
++        "consumptions":counts,"negative_a_meals":negative_a_meals,
++        "negative_a_meals_definition":"Native biological_reward below zero with measured aversive harm above zero.",
++        "negative_a_experienced_valence_meals":negative_a_experienced_valence_meals,
++        "a_ingest_opportunities":opportunities_a,"paired_ingest_opportunities":paired_ingest_opportunities,
++        "a_contact_ingest_opportunities":contact_opportunities_a,"paired_contact_ingest_opportunities":paired_contact_opportunities,
++        "requested_sleep_tick":request_tick,"sleep_consolidations":consolidation_count,"post_sleep_decisions":post_sleep_decisions,
++        "final_body":record.biochemistry().body,"final_homeostasis":record.biochemistry().homeostasis,
++        "final_position":host.world().entity(record.world_entity_id()).unwrap().position,"ecology":host.world().ecology_metrics(),
++        "anchor_assay":anchor_assay,"optimizer_exact":true,"cold_restore":cold,
++        "diagnostic_uncompressed_sha256":diagnostic_digest,"elapsed_seconds":started.elapsed().as_secs_f64(),
++        "learning_claim":"None automatically. Exposure, persistent physiology, native selections and detached bank effects require joint interpretation.",
++        "reversal_tested":false,"unrelated_acquired_retention_tested":false});
++    write_json(&root.join(format!("{prefix}.summary.json")), &summary)?;
++    eprintln!(
++        "{} {} complete: steps={} meals={:?} stop={}",
++        arm.name, scene, steps, counts, stopped
++    );
++    Ok(summary)
++}
++fn main() -> Result<()> {
++    let args = std::env::args().collect::<Vec<_>>();
++    let mode = args.get(1).ok_or("mode: prepare, baseline or pilot")?;
++    let root = Path::new(args.get(2).ok_or("fresh output directory required")?);
++    if matches!(
++        mode.as_str(),
++        "prepare" | "prepare-memory" | "prepare-family"
++    ) {
++        return prepare(
++            root,
++            args.get(3).ok_or("seed required")?.parse()?,
++            args.get(4).ok_or("source commit required")?,
++            Path::new(args.get(5).ok_or("archived v6 candidate required")?),
++            match mode.as_str() {
++                "prepare-memory" => "memory",
++                "prepare-family" => "family-value",
++                _ => "original",
++            },
++        );
++    }
++    let manifest = load_manifest(root)?;
++    let scenes = match mode.as_str() {
++        "baseline" => vec!["positive", "bitter", "far"],
++        "pilot" => vec!["learning"],
++        _ => return Err("unknown mode".into()),
++    };
++    if mode == "pilot" && !root.join("baseline.complete.json").is_file() {
++        return Err("complete and inspect the fixed baseline before the pilot".into());
++    }
++    let mut results = Vec::new();
++    for arm in &manifest.arms {
++        for scene in &scenes {
++            results.push(run(root, &manifest, arm, scene)?);
++        }
++    }
++    write_json(
++        &root.join(format!("{mode}.complete.json")),
++        &json!({"results":results,"automatic_improvement_claim":false}),
++    )
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    #[test]
++    fn quarter_gain_changes_only_action_candidate_genes() {
++        let seed = 2026110901;
++        let (_, p, _) = care_candidate::source(seed, true).unwrap();
++        let original = candidate(seed, 1.).unwrap();
++        let quarter = candidate(seed, 0.25).unwrap();
++        let mut changed = 0;
++        for (s, (a, b)) in p
++            .synapses()
++            .iter()
++            .zip(original.weights().iter().zip(quarter.weights()))
++        {
++            if matches!(s.kind(),CompiledSynapseKind::Decoder(c) if c.head()==DecoderHeadKind::ActionCandidate)
++            {
++                assert_eq!((a * 0.25).to_bits(), b.to_bits());
++                changed += usize::from(a.to_bits() != b.to_bits());
++            } else {
++                assert_eq!(a.to_bits(), b.to_bits());
++            }
++            if *a != 0. {
++                assert_eq!(a.is_sign_negative(), b.is_sign_negative());
++            }
++        }
++        assert!(changed > 0);
++        assert_eq!(
++            FoundationWeightAsset::decode_canonical(&quarter.encode_canonical().unwrap()).unwrap(),
++            quarter
++        );
++    }
++    #[test]
++    fn memory_factor_changes_only_declared_coefficients_and_plan() {
++        let seed = 2026110901;
++        let (_, old, _) = care_candidate::source(seed, true).unwrap();
++        let (_, new, _) = care_candidate::source_memory_gain(seed).unwrap();
++        assert_eq!(old.synapses(), new.synapses());
++        assert_eq!(old.plasticity_receptors(), new.plasticity_receptors());
++        for reader in [false, true] {
++            let small = candidate_with_memory(seed, 0.25, reader, 0.5).unwrap();
++            let large = candidate_with_memory(seed, 0.25, reader, 12.).unwrap();
++            assert_eq!(small.weights(), large.weights());
++            let off = candidate(seed, 0.25).unwrap();
++            for (i, synapse) in old.synapses().iter().enumerate() {
++                match synapse.kind() {
++                    CompiledSynapseKind::Decoder(c)
++                        if c.head() == DecoderHeadKind::MemoryContext =>
++                    {
++                        if !reader {
++                            assert_eq!(small.weights()[i], 0.);
++                        }
++                    }
++                    _ => assert_eq!(small.weights()[i].to_bits(), off.weights()[i].to_bits()),
++                }
++            }
++        }
++        let reader = candidate_with_memory(seed, 0.25, true, 12.).unwrap();
++        for (family, lane, total) in [
++            (CandidateActionFamily::Ingest, 25, -16.),
++            (CandidateActionFamily::Ingest, 26, -64.),
++            (CandidateActionFamily::Approach, 25, -8.),
++            (CandidateActionFamily::Approach, 26, -32.),
++            (CandidateActionFamily::Contact, 25, -8.),
++            (CandidateActionFamily::Contact, 26, -32.),
++            (CandidateActionFamily::Avoid, 25, 16.),
++            (CandidateActionFamily::Avoid, 26, 128.),
++        ] {
++            let sum:f32=old.synapses().iter().zip(reader.weights()).filter_map(|(s,w)|
++                matches!(s.kind(),CompiledSynapseKind::Decoder(c) if c.head()==DecoderHeadKind::MemoryContext
++                    && c.family()==family && c.input_lane()==lane).then_some(*w)).sum();
++            assert!((sum - total).abs() < 0.0001);
++        }
++    }
++    #[test]
++    fn family_value_factor_changes_only_ingest_valence_coordinates() {
++        let seed = 2026110901;
++        let (_, p, _) = care_candidate::source_memory_gain(seed).unwrap();
++        let off = candidate_with_memory(seed, 0.25, true, 12.).unwrap();
++        let on = candidate_with_readouts(seed, 0.25, true, 12., true).unwrap();
++        let mut count = 0;
++        let mut sum = 0.;
++        for (i, synapse) in p.synapses().iter().enumerate() {
++            if matches!(synapse.kind(), CompiledSynapseKind::Decoder(c)
++                if c.head() == DecoderHeadKind::MemoryContext
++                    && c.family() == CandidateActionFamily::Ingest && c.input_lane() == 32)
++            {
++                assert_eq!(off.weights()[i], 0.);
++                assert!(on.weights()[i] > 0.);
++                count += 1;
++                sum += on.weights()[i];
++            } else {
++                assert_eq!(off.weights()[i].to_bits(), on.weights()[i].to_bits());
++            }
++        }
++        assert_eq!(count, 40);
++        assert!((sum - 32.).abs() < 0.0001);
++        assert_eq!(
++            FoundationWeightAsset::decode_canonical(&on.encode_canonical().unwrap()).unwrap(),
++            on
++        );
++        assert!(candidate_with_readouts(seed, 0.25, false, 12., true).is_err());
++        assert!(candidate_with_readouts(seed, 0.25, true, 0.5, true).is_err());
++        assert_eq!(arm_specs("family-value").unwrap().len(), 2);
++        assert!(arm_specs("undeclared").is_err());
++        assert_eq!(retrieval_source_sha256().len(), 64);
++    }
++    #[test]
++    fn predeclared_budget_is_bounded_and_sleep_is_exposure_triggered() {
++        let spec = Spec::predeclared(2026110901);
++        assert!(spec.life_ticks <= 256 && spec.max_a_consumptions <= 3);
++        assert_eq!(spec.regrow_ticks, 16);
++        assert!(spec.sleep_policy.contains("regardless"));
++    }
++}
+diff --git a/crates/alife_training/examples/probe_weight_space_care.rs b/crates/alife_training/examples/probe_weight_space_care.rs
+index 1424c21b..26b5b75d 100644
+--- a/crates/alife_training/examples/probe_weight_space_care.rs
++++ b/crates/alife_training/examples/probe_weight_space_care.rs
+@@ -7,246 +7,10 @@ use serde_json::json;
+ use std::error::Error;
+ type Result<T> = std::result::Result<T, Box<dyn Error>>;
+ 
+-fn source(
+-    seed: u64,
+-    experimental: bool,
+-) -> Result<(
+-    CanonicalNewGameConfig,
+-    BrainPhenotype,
+-    FoundationWeightAsset,
+-)> {
+-    let mut config = CanonicalNewGameConfig::phase3(seed, 1)?;
+-    config.brain_class = BrainScaleTier::Standard2048;
+-    let asset = FoundationWeightAsset::builtin_n2048_v1(config.sensor_profile)?;
+-    let game = create_canonical_new_game_with_n2048_candidate(&config, &asset)?;
+-    let r = game.world.organism_registry().iter().next().unwrap();
+-    let capacity = BrainCapacityClass::n2048();
+-    let genome = r.phenotype().brain_genome.clone();
+-    let development = foundation_construction_development(
+-        &genome,
+-        &capacity,
+-        &r.phenotype().development_state_at(Tick::ZERO)?,
+-    )?;
+-    if experimental {
+-        let (p, _) = PhenotypeCompiler::compile_n2048_experimental_graph(
+-            genome.clone(),
+-            development.clone(),
+-            config.sensor_profile,
+-        )?;
+-        let asset = FoundationWeightAsset::from_trained_weights(
+-            &p,
+-            p.synapses().iter().map(|s| s.genetic_weight()).collect(),
+-            TrainingStageManifest::bootstrap(),
+-        )?;
+-        let (p, _) = PhenotypeCompiler::compile_n2048_experimental_foundation_candidate(
+-            genome,
+-            development,
+-            asset.clone(),
+-        )?;
+-        return Ok((config, p, asset));
+-    }
+-    let p = PhenotypeCompiler::compile(&genome, &capacity, &development, config.sensor_profile)?;
+-    let asset = FoundationWeightAsset::from_trained_weights(
+-        &p,
+-        p.synapses().iter().map(|s| s.genetic_weight()).collect(),
+-        asset.manifest().training_stage(),
+-    )?;
+-    let (p, _) =
+-        PhenotypeCompiler::compile_n2048_foundation_candidate(genome, development, asset.clone())?;
+-    Ok((config, p, asset))
+-}
+-// Whole-weight revision 6. Feedback-informed: explicit signed tonic/need circuits
+-// and a native reference motor population; never an external action policy.
+-fn whole_care(p: &BrainPhenotype) -> Result<(Vec<f32>, Vec<serde_json::Value>)> {
+-    whole_care_with_contact(p, -2.)
+-}
+-fn whole_care_with_contact(
+-    p: &BrainPhenotype,
+-    contact_coefficient: f32,
+-) -> Result<(Vec<f32>, Vec<serde_json::Value>)> {
+-    use std::collections::BTreeSet;
+-    let mut w = vec![0.; p.synapses().len()];
+-    let mut circuits = Vec::new();
+-    let mut incoming = vec![0usize; p.neuron_count() as usize];
+-    let mut outgoing = vec![Vec::new(); p.neuron_count() as usize];
+-    for (i, s) in p.synapses().iter().enumerate() {
+-        if s.kind() == CompiledSynapseKind::Recurrent {
+-            incoming[s.target() as usize] += 1;
+-            outgoing[s.source() as usize].push(i);
+-        }
+-    }
+-    for (i, s) in p.synapses().iter().enumerate() {
+-        if s.kind() != CompiledSynapseKind::Recurrent {
+-            continue;
+-        }
+-        let route = &p.projections()[s.route_index() as usize];
+-        if route.projection_type() == ProjectionType::LateralInhibition {
+-            w[i] = -0.03;
+-        } else if [
+-            LobeKind::WorkingContextExecutive,
+-            LobeKind::MemoryInterface,
+-            LobeKind::MultimodalAssociation,
+-        ]
+-        .contains(&route.source_lobe())
+-            || [
+-                LobeKind::WorkingContextExecutive,
+-                LobeKind::MemoryInterface,
+-                LobeKind::MultimodalAssociation,
+-            ]
+-            .contains(&route.target_lobe())
+-        {
+-            w[i] = 0.12 / incoming[s.target() as usize] as f32;
+-        }
+-    }
+-    let intero = p
+-        .lobe_layout()
+-        .region(LobeKind::InteroceptiveMotivational)
+-        .unwrap();
+-    let reserve = p.lobe_layout().region(LobeKind::FlexibleReserve).unwrap();
+-    let tonic_source = (intero.start..intero.start + intero.len)
+-        .rev()
+-        .find(|n| {
+-            !p.sensor_encoder()
+-                .assignments()
+-                .iter()
+-                .any(|a| a.target_neuron() == *n)
+-        })
+-        .ok_or("no unsensed tonic neuron")?;
+-    let tonic_reserve = reserve.start + 15;
+-    let tonic_first = *outgoing[tonic_source as usize]
+-        .iter()
+-        .find(|&&i| p.synapses()[i].route_index() == 2 && p.synapses()[i].target() == tonic_reserve)
+-        .ok_or("tonic input route absent")?;
+-    let mut need_axes = std::collections::BTreeMap::<u16, (u32, u32)>::new();
+-    for (family, lanes) in [
+-        (CandidateActionFamily::Ingest, vec![0]),
+-        (CandidateActionFamily::Approach, vec![0]),
+-        (CandidateActionFamily::Rest, vec![1]),
+-        (CandidateActionFamily::Avoid, vec![3, 2]),
+-        (CandidateActionFamily::Inspect, vec![5]),
+-        (CandidateActionFamily::Contact, vec![5]),
+-    ] {
+-        let motors = p
+-            .synapses()
+-            .iter()
+-            .filter_map(|s| match s.kind() {
+-                CompiledSynapseKind::Decoder(c)
+-                    if c.head() == DecoderHeadKind::ActionCandidate && c.family() == family =>
+-                {
+-                    Some(s.source())
+-                }
+-                _ => None,
+-            })
+-            .collect::<BTreeSet<_>>();
+-        let reference = *motors.last().unwrap();
+-        let mut selected = BTreeSet::new();
+-        for lane in lanes {
+-            let input = p
+-                .sensor_encoder()
+-                .assignments()
+-                .iter()
+-                .find(|a| {
+-                    a.source_group() == SensorEncoderSourceGroup::Homeostasis
+-                        && a.source_index() == lane
+-                })
+-                .ok_or("essential homeostatic port absent")?
+-                .target_neuron();
+-            let mut found = None;
+-            'paths: for &first in &outgoing[input as usize] {
+-                let first_edge = &p.synapses()[first];
+-                if first_edge.route_index() != 2
+-                    || first_edge.target() == tonic_reserve
+-                    || need_axes
+-                        .iter()
+-                        .any(|(other, (r, _))| *other != lane && *r == first_edge.target())
+-                    || need_axes
+-                        .get(&lane)
+-                        .is_some_and(|(r, _)| *r != first_edge.target())
+-                {
+-                    continue;
+-                }
+-                for &second in &outgoing[first_edge.target() as usize] {
+-                    let second_edge = &p.synapses()[second];
+-                    if second_edge.route_index() != 3
+-                        || need_axes
+-                            .iter()
+-                            .any(|(other, (_, t))| *other != lane && *t == second_edge.target())
+-                        || need_axes
+-                            .get(&lane)
+-                            .is_some_and(|(_, t)| *t != second_edge.target())
+-                    {
+-                        continue;
+-                    }
+-                    let Some(&tonic_second) = outgoing[tonic_reserve as usize].iter().find(|&&i| {
+-                        p.synapses()[i].route_index() == 3
+-                            && p.synapses()[i].target() == second_edge.target()
+-                    }) else {
+-                        continue;
+-                    };
+-                    for &third in &outgoing[second_edge.target() as usize] {
+-                        let target = p.synapses()[third].target();
+-                        if p.synapses()[third].route_index() == 5
+-                            && motors.contains(&target)
+-                            && target != reference
+-                        {
+-                            found = Some((first, second, third, tonic_second, target));
+-                            break 'paths;
+-                        }
+-                    }
+-                }
+-            }
+-            let (first, second, third, tonic_second, motor) =
+-                found.ok_or("compatible tonic and need circuit absent")?;
+-            need_axes.insert(
+-                lane,
+-                (p.synapses()[first].target(), p.synapses()[second].target()),
+-            );
+-            w[first] = 2.;
+-            w[second] = 2.;
+-            w[third] = 4.;
+-            w[tonic_first] = 8.;
+-            w[tonic_second] = -4.;
+-            selected.insert(motor);
+-            circuits.push(json!({"role":"need","family":family,"homeostatic_lane":lane,"source_neuron":input,"motor_neuron":motor,"bridge_synapses":[first,second],"output_synapse":third}));
+-            circuits.push(json!({"role":"tonic","family":family,"source_neuron":tonic_source,"motor_neuron":motor,"bridge_synapses":[tonic_first,tonic_second],"output_synapse":third}));
+-        }
+-        for (i, synapse) in p.synapses().iter().enumerate() {
+-            let CompiledSynapseKind::Decoder(c) = synapse.kind() else {
+-                continue;
+-            };
+-            if c.head() != DecoderHeadKind::ActionCandidate || c.family() != family {
+-                continue;
+-            }
+-            let coefficient = match (family, c.input_lane()) {
+-                (CandidateActionFamily::Ingest, 15) => 12.,
+-                (CandidateActionFamily::Ingest, 2) => -6.,
+-                (CandidateActionFamily::Approach, 15) => 4.,
+-                (CandidateActionFamily::Approach, 2) => -2.,
+-                (CandidateActionFamily::Approach, 18) => contact_coefficient,
+-                (CandidateActionFamily::Rest, 23) => 2.,
+-                (CandidateActionFamily::Avoid, 15) => -10.,
+-                (CandidateActionFamily::Inspect, 6..=8) => 0.5,
+-                (CandidateActionFamily::Contact, 15) => 2.,
+-                _ => 0.,
+-            };
+-            if selected.contains(&synapse.source()) {
+-                w[i] = coefficient;
+-            }
+-            if synapse.source() == reference {
+-                let reference_gain = match family {
+-                    CandidateActionFamily::Approach | CandidateActionFamily::Inspect => 5.,
+-                    CandidateActionFamily::Rest => -1.,
+-                    _ => -5.,
+-                };
+-                if coefficient != 0. {
+-                    w[i] = reference_gain * selected.len() as f32 * coefficient;
+-                }
+-            }
+-        }
+-        circuits.push(json!({"role":"reference","family":family,"reference_motor":reference,"signal_motors":selected}));
+-    }
+-    Ok((w, circuits))
+-}
++#[path = "support/care_candidate.rs"]
++mod care_candidate;
++use care_candidate::{source, whole_care, whole_care_with_contact};
++
+ struct TrialSpec<'a> {
+     seed: u64,
+     arm: &'a str,
+diff --git a/crates/alife_training/examples/support/care_candidate.rs b/crates/alife_training/examples/support/care_candidate.rs
+new file mode 100644
+index 00000000..79db4540
+--- /dev/null
++++ b/crates/alife_training/examples/support/care_candidate.rs
+@@ -0,0 +1,285 @@
++//! Shared construction of the disposable, native v6 care candidate.
++use alife_core::*;
++use alife_runtime::canonical_preparation::foundation_construction_development;
++use alife_world::*;
++use serde_json::json;
++type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
++
++pub fn source(
++    seed: u64,
++    experimental: bool,
++) -> Result<(
++    CanonicalNewGameConfig,
++    BrainPhenotype,
++    FoundationWeightAsset,
++)> {
++    source_with_plan(seed, if experimental { 1 } else { 0 })
++}
++
++// The older weight-space example shares this module but does not use the new plan.
++#[allow(dead_code)]
++pub fn source_memory_gain(
++    seed: u64,
++) -> Result<(
++    CanonicalNewGameConfig,
++    BrainPhenotype,
++    FoundationWeightAsset,
++)> {
++    source_with_plan(seed, 2)
++}
++fn source_with_plan(
++    seed: u64,
++    plan: u8,
++) -> Result<(
++    CanonicalNewGameConfig,
++    BrainPhenotype,
++    FoundationWeightAsset,
++)> {
++    let mut config = CanonicalNewGameConfig::phase3(seed, 1)?;
++    config.brain_class = BrainScaleTier::Standard2048;
++    let asset = FoundationWeightAsset::builtin_n2048_v1(config.sensor_profile)?;
++    let game = create_canonical_new_game_with_n2048_candidate(&config, &asset)?;
++    let r = game.world.organism_registry().iter().next().unwrap();
++    let capacity = BrainCapacityClass::n2048();
++    let genome = r.phenotype().brain_genome.clone();
++    let development = foundation_construction_development(
++        &genome,
++        &capacity,
++        &r.phenotype().development_state_at(Tick::ZERO)?,
++    )?;
++    if plan != 0 {
++        let (p, _) = if plan == 2 {
++            PhenotypeCompiler::compile_n2048_memory_gain_graph(
++                genome.clone(),
++                development.clone(),
++                config.sensor_profile,
++            )?
++        } else {
++            PhenotypeCompiler::compile_n2048_experimental_graph(
++                genome.clone(),
++                development.clone(),
++                config.sensor_profile,
++            )?
++        };
++        let asset = FoundationWeightAsset::from_trained_weights(
++            &p,
++            p.synapses().iter().map(|s| s.genetic_weight()).collect(),
++            TrainingStageManifest::bootstrap(),
++        )?;
++        let (p, _) = if plan == 2 {
++            PhenotypeCompiler::compile_n2048_memory_gain_foundation_candidate(
++                genome,
++                development,
++                asset.clone(),
++            )?
++        } else {
++            PhenotypeCompiler::compile_n2048_experimental_foundation_candidate(
++                genome,
++                development,
++                asset.clone(),
++            )?
++        };
++        return Ok((config, p, asset));
++    }
++    let p = PhenotypeCompiler::compile(&genome, &capacity, &development, config.sensor_profile)?;
++    let asset = FoundationWeightAsset::from_trained_weights(
++        &p,
++        p.synapses().iter().map(|s| s.genetic_weight()).collect(),
++        asset.manifest().training_stage(),
++    )?;
++    let (p, _) =
++        PhenotypeCompiler::compile_n2048_foundation_candidate(genome, development, asset.clone())?;
++    Ok((config, p, asset))
++}
++// Whole-weight revision 6. Feedback-informed: explicit signed tonic/need circuits
++// and a native reference motor population; never an external action policy.
++pub fn whole_care(p: &BrainPhenotype) -> Result<(Vec<f32>, Vec<serde_json::Value>)> {
++    whole_care_with_contact(p, -2.)
++}
++pub fn whole_care_with_contact(
++    p: &BrainPhenotype,
++    contact_coefficient: f32,
++) -> Result<(Vec<f32>, Vec<serde_json::Value>)> {
++    use std::collections::BTreeSet;
++    let mut w = vec![0.; p.synapses().len()];
++    let mut circuits = Vec::new();
++    let mut incoming = vec![0usize; p.neuron_count() as usize];
++    let mut outgoing = vec![Vec::new(); p.neuron_count() as usize];
++    for (i, s) in p.synapses().iter().enumerate() {
++        if s.kind() == CompiledSynapseKind::Recurrent {
++            incoming[s.target() as usize] += 1;
++            outgoing[s.source() as usize].push(i);
++        }
++    }
++    for (i, s) in p.synapses().iter().enumerate() {
++        if s.kind() != CompiledSynapseKind::Recurrent {
++            continue;
++        }
++        let route = &p.projections()[s.route_index() as usize];
++        if route.projection_type() == ProjectionType::LateralInhibition {
++            w[i] = -0.03;
++        } else if [
++            LobeKind::WorkingContextExecutive,
++            LobeKind::MemoryInterface,
++            LobeKind::MultimodalAssociation,
++        ]
++        .contains(&route.source_lobe())
++            || [
++                LobeKind::WorkingContextExecutive,
++                LobeKind::MemoryInterface,
++                LobeKind::MultimodalAssociation,
++            ]
++            .contains(&route.target_lobe())
++        {
++            w[i] = 0.12 / incoming[s.target() as usize] as f32;
++        }
++    }
++    let intero = p
++        .lobe_layout()
++        .region(LobeKind::InteroceptiveMotivational)
++        .unwrap();
++    let reserve = p.lobe_layout().region(LobeKind::FlexibleReserve).unwrap();
++    let tonic_source = (intero.start..intero.start + intero.len)
++        .rev()
++        .find(|n| {
++            !p.sensor_encoder()
++                .assignments()
++                .iter()
++                .any(|a| a.target_neuron() == *n)
++        })
++        .ok_or("no unsensed tonic neuron")?;
++    let tonic_reserve = reserve.start + 15;
++    let tonic_first = *outgoing[tonic_source as usize]
++        .iter()
++        .find(|&&i| p.synapses()[i].route_index() == 2 && p.synapses()[i].target() == tonic_reserve)
++        .ok_or("tonic input route absent")?;
++    let mut need_axes = std::collections::BTreeMap::<u16, (u32, u32)>::new();
++    for (family, lanes) in [
++        (CandidateActionFamily::Ingest, vec![0]),
++        (CandidateActionFamily::Approach, vec![0]),
++        (CandidateActionFamily::Rest, vec![1]),
++        (CandidateActionFamily::Avoid, vec![3, 2]),
++        (CandidateActionFamily::Inspect, vec![5]),
++        (CandidateActionFamily::Contact, vec![5]),
++    ] {
++        let motors = p
++            .synapses()
++            .iter()
++            .filter_map(|s| match s.kind() {
++                CompiledSynapseKind::Decoder(c)
++                    if c.head() == DecoderHeadKind::ActionCandidate && c.family() == family =>
++                {
++                    Some(s.source())
++                }
++                _ => None,
++            })
++            .collect::<BTreeSet<_>>();
++        let reference = *motors.last().unwrap();
++        let mut selected = BTreeSet::new();
++        for lane in lanes {
++            let input = p
++                .sensor_encoder()
++                .assignments()
++                .iter()
++                .find(|a| {
++                    a.source_group() == SensorEncoderSourceGroup::Homeostasis
++                        && a.source_index() == lane
++                })
++                .ok_or("essential homeostatic port absent")?
++                .target_neuron();
++            let mut found = None;
++            'paths: for &first in &outgoing[input as usize] {
++                let first_edge = &p.synapses()[first];
++                if first_edge.route_index() != 2
++                    || first_edge.target() == tonic_reserve
++                    || need_axes
++                        .iter()
++                        .any(|(other, (r, _))| *other != lane && *r == first_edge.target())
++                    || need_axes
++                        .get(&lane)
++                        .is_some_and(|(r, _)| *r != first_edge.target())
++                {
++                    continue;
++                }
++                for &second in &outgoing[first_edge.target() as usize] {
++                    let second_edge = &p.synapses()[second];
++                    if second_edge.route_index() != 3
++                        || need_axes
++                            .iter()
++                            .any(|(other, (_, t))| *other != lane && *t == second_edge.target())
++                        || need_axes
++                            .get(&lane)
++                            .is_some_and(|(_, t)| *t != second_edge.target())
++                    {
++                        continue;
++                    }
++                    let Some(&tonic_second) = outgoing[tonic_reserve as usize].iter().find(|&&i| {
++                        p.synapses()[i].route_index() == 3
++                            && p.synapses()[i].target() == second_edge.target()
++                    }) else {
++                        continue;
++                    };
++                    for &third in &outgoing[second_edge.target() as usize] {
++                        let target = p.synapses()[third].target();
++                        if p.synapses()[third].route_index() == 5
++                            && motors.contains(&target)
++                            && target != reference
++                        {
++                            found = Some((first, second, third, tonic_second, target));
++                            break 'paths;
++                        }
++                    }
++                }
++            }
++            let (first, second, third, tonic_second, motor) =
++                found.ok_or("compatible tonic and need circuit absent")?;
++            need_axes.insert(
++                lane,
++                (p.synapses()[first].target(), p.synapses()[second].target()),
++            );
++            w[first] = 2.;
++            w[second] = 2.;
++            w[third] = 4.;
++            w[tonic_first] = 8.;
++            w[tonic_second] = -4.;
++            selected.insert(motor);
++            circuits.push(json!({"role":"need","family":family,"homeostatic_lane":lane,"source_neuron":input,"motor_neuron":motor,"bridge_synapses":[first,second],"output_synapse":third}));
++            circuits.push(json!({"role":"tonic","family":family,"source_neuron":tonic_source,"motor_neuron":motor,"bridge_synapses":[tonic_first,tonic_second],"output_synapse":third}));
++        }
++        for (i, synapse) in p.synapses().iter().enumerate() {
++            let CompiledSynapseKind::Decoder(c) = synapse.kind() else {
++                continue;
++            };
++            if c.head() != DecoderHeadKind::ActionCandidate || c.family() != family {
++                continue;
++            }
++            let coefficient = match (family, c.input_lane()) {
++                (CandidateActionFamily::Ingest, 15) => 12.,
++                (CandidateActionFamily::Ingest, 2) => -6.,
++                (CandidateActionFamily::Approach, 15) => 4.,
++                (CandidateActionFamily::Approach, 2) => -2.,
++                (CandidateActionFamily::Approach, 18) => contact_coefficient,
++                (CandidateActionFamily::Rest, 23) => 2.,
++                (CandidateActionFamily::Avoid, 15) => -10.,
++                (CandidateActionFamily::Inspect, 6..=8) => 0.5,
++                (CandidateActionFamily::Contact, 15) => 2.,
++                _ => 0.,
++            };
++            if selected.contains(&synapse.source()) {
++                w[i] = coefficient;
++            }
++            if synapse.source() == reference {
++                let reference_gain = match family {
++                    CandidateActionFamily::Approach | CandidateActionFamily::Inspect => 5.,
++                    CandidateActionFamily::Rest => -1.,
++                    _ => -5.,
++                };
++                if coefficient != 0. {
++                    w[i] = reference_gain * selected.len() as f32 * coefficient;
++                }
++            }
++        }
++        circuits.push(json!({"role":"reference","family":family,"reference_motor":reference,"signal_motors":selected}));
++    }
++    Ok((w, circuits))
++}
+diff --git a/crates/alife_training/src/cpu/host.rs b/crates/alife_training/src/cpu/host.rs
+index 0bf9ce5b..7b45f280 100644
+--- a/crates/alife_training/src/cpu/host.rs
++++ b/crates/alife_training/src/cpu/host.rs
+@@ -1357,7 +1357,13 @@ pub(super) fn validate_record_founder(
+             .phenotype()
+             .development_state_at(record.biochemistry().tick)?,
+     )?;
+-    let (compiled, _) = if p.foundation_abi().n2048_experimental_graph().is_some() {
++    let (compiled, _) = if p.foundation_abi().n2048_memory_gain_candidate().is_some() {
++        PhenotypeCompiler::compile_n2048_memory_gain_foundation_candidate(
++            genome.clone(),
++            development,
++            founder.source_foundation.clone(),
++        )?
++    } else if p.foundation_abi().n2048_experimental_graph().is_some() {
+         PhenotypeCompiler::compile_n2048_experimental_foundation_candidate(
+             genome.clone(),
+             development,
+diff --git a/crates/alife_training/tests/cpu_collect_only.rs b/crates/alife_training/tests/cpu_collect_only.rs
+index 224dc591..2dad6b4d 100644
+--- a/crates/alife_training/tests/cpu_collect_only.rs
++++ b/crates/alife_training/tests/cpu_collect_only.rs
+@@ -127,6 +127,54 @@ fn restore_trainer(
+     .unwrap()
+ }
+ 
++#[test]
++#[ignore = "Requires an externally captured fresh checkpoint from the pre-provenance release"]
++fn pre_outcome_provenance_release_restores_exactly_and_continues() {
++    let root =
++        PathBuf::from(std::env::var("ALIFE_OLD_NATIVE_FIXTURE").expect("old native fixture path"));
++    let inputs: PhenotypeCompilerInputs = load(root.join("inputs.json"));
++    let actor: FoundationTrainerCheckpoint = load(root.join("actor.json"));
++    let trainer = restore_trainer(&inputs, actor);
++    let before_actor = serde_json::to_vec(&trainer.checkpoint()).unwrap();
++    let bytes = fs::read(root.join("checkpoint.json")).unwrap();
++    let checkpoint: CpuCanonicalCheckpoint = serde_json::from_slice(&bytes).unwrap();
++    assert!(checkpoint
++        .residents
++        .iter()
++        .any(|resident| !resident.memory.records.is_empty()));
++    assert!(checkpoint
++        .residents
++        .iter()
++        .flat_map(|resident| &resident.memory.records)
++        .all(|record| record.outcome_contact.is_none()));
++    let mut hot = CpuCanonicalHost::from_checkpoint(checkpoint, &trainer).unwrap();
++    assert_eq!(
++        serde_json::to_vec(&hot.checkpoint(&trainer).unwrap()).unwrap(),
++        bytes
++    );
++    let mut cold =
++        CpuCanonicalHost::from_checkpoint(serde_json::from_slice(&bytes).unwrap(), &trainer)
++            .unwrap();
++    let hot_step = hot.step(&trainer, 0.9).unwrap();
++    let cold_step = cold.step(&trainer, 0.9).unwrap();
++    assert_eq!(
++        serde_json::to_vec(&hot_step.decisions).unwrap(),
++        fs::read(root.join("next-decisions.json")).unwrap()
++    );
++    assert_eq!(
++        serde_json::to_vec(&hot_step.decisions).unwrap(),
++        serde_json::to_vec(&cold_step.decisions).unwrap()
++    );
++    assert_eq!(
++        serde_json::to_vec(&hot.checkpoint(&trainer).unwrap()).unwrap(),
++        serde_json::to_vec(&cold.checkpoint(&trainer).unwrap()).unwrap()
++    );
++    assert_eq!(
++        serde_json::to_vec(&trainer.checkpoint()).unwrap(),
++        before_actor
++    );
++}
++
+ #[test]
+ fn fixture_collection_roundtrips_private_recovery_and_admits_without_optimizer_updates() {
+     let root = FixtureDirectory::new();
+diff --git a/crates/alife_training/tests/cpu_memory_gain_candidate.rs b/crates/alife_training/tests/cpu_memory_gain_candidate.rs
+new file mode 100644
+index 00000000..e29951ce
+--- /dev/null
++++ b/crates/alife_training/tests/cpu_memory_gain_candidate.rs
+@@ -0,0 +1,149 @@
++#![cfg(feature = "cpu-backend")]
++use alife_core::*;
++use alife_runtime::canonical_preparation::foundation_construction_development;
++use alife_training::{cpu::*, AdamWConfig, StageTrainableMask};
++use alife_world::*;
++
++fn fixture(memory_gain: bool) -> (CpuCanonicalHost, CpuFoundationTrainer) {
++    let mut config = CanonicalNewGameConfig::phase3(0x2048_2026, 1).unwrap();
++    config.brain_class = BrainScaleTier::Standard2048;
++    let builtin = FoundationWeightAsset::builtin_n2048_v1(config.sensor_profile).unwrap();
++    let first = create_canonical_new_game_with_n2048_candidate(&config, &builtin).unwrap();
++    let record = first.world.organism_registry().iter().next().unwrap();
++    let genome = record.phenotype().brain_genome.clone();
++    let capacity = BrainCapacityClass::n2048();
++    let development = foundation_construction_development(
++        &genome,
++        &capacity,
++        &record.phenotype().development_state_at(Tick::ZERO).unwrap(),
++    )
++    .unwrap();
++    let base = if memory_gain {
++        PhenotypeCompiler::compile_n2048_memory_gain_graph(
++            genome.clone(),
++            development.clone(),
++            config.sensor_profile,
++        )
++        .unwrap()
++        .0
++    } else {
++        PhenotypeCompiler::compile_n2048_experimental_graph(
++            genome.clone(),
++            development.clone(),
++            config.sensor_profile,
++        )
++        .unwrap()
++        .0
++    };
++    let asset = FoundationWeightAsset::from_phenotype_for_genetic_birth(&base).unwrap();
++    let game = if memory_gain {
++        assert!(create_canonical_new_game_with_n2048_candidate(&config, &asset).is_err());
++        create_canonical_new_game_with_n2048_memory_gain_candidate(&config, &asset).unwrap()
++    } else {
++        assert!(
++            create_canonical_new_game_with_n2048_memory_gain_candidate(&config, &asset).is_err()
++        );
++        create_canonical_new_game_with_n2048_experimental_candidate(&config, &asset).unwrap()
++    };
++    // Reconstruct the actual newborn's genome/development, not a surrogate.
++    let record = game.world.organism_registry().iter().next().unwrap();
++    let genome = record.phenotype().brain_genome.clone();
++    let development = foundation_construction_development(
++        &genome,
++        &capacity,
++        &record.phenotype().development_state_at(Tick::ZERO).unwrap(),
++    )
++    .unwrap();
++    let p = if memory_gain {
++        PhenotypeCompiler::compile_n2048_memory_gain_foundation_candidate(
++            genome,
++            development,
++            asset.clone(),
++        )
++        .unwrap()
++        .0
++    } else {
++        PhenotypeCompiler::compile_n2048_experimental_foundation_candidate(
++            genome,
++            development,
++            asset.clone(),
++        )
++        .unwrap()
++        .0
++    };
++    let mut trainer = CpuFoundationTrainer::new(
++        p.clone(),
++        asset,
++        StageTrainableMask::recurrent_only(&p).unwrap(),
++        AdamWConfig::default(),
++    )
++    .unwrap();
++    let mut checkpoint = trainer.checkpoint();
++    checkpoint.optimizer_step = 7;
++    checkpoint.first_moment[0] = 0.125;
++    checkpoint.second_moment[0] = 0.25;
++    checkpoint.update_ages[0] = 7;
++    let before = serde_json::to_vec(&checkpoint).unwrap();
++    trainer.restore_checkpoint(checkpoint).unwrap();
++    assert_eq!(serde_json::to_vec(&trainer.checkpoint()).unwrap(), before);
++    let host = CpuCanonicalHost::new_cohort(game, &trainer, 42).unwrap();
++    (host, trainer)
++}
++#[test]
++fn exact_cpu_checkpoint_cannot_cross_memory_gain_boundary() {
++    let (mut old, old_trainer) = fixture(false);
++    let (mut new, new_trainer) = fixture(true);
++    let mut decisions = 0;
++    for _ in 0..4 {
++        old.step(&old_trainer, 0.7).unwrap();
++        decisions += new.step(&new_trainer, 0.7).unwrap().decisions.len();
++    }
++    assert!(
++        decisions > 0,
++        "checkpoint fixture must execute actual decisions"
++    );
++    let old_save = old.checkpoint(&old_trainer).unwrap();
++    let new_save = new.checkpoint(&new_trainer).unwrap();
++    assert!(
++        new_save
++            .residents
++            .iter()
++            .any(|r| r.neural.last_outcome_tick.is_some()
++                && r.neural
++                    .eligibility
++                    .iter()
++                    .chain(&r.neural.fast)
++                    .chain(&r.neural.lifetime)
++                    .any(|v| *v != 0.0)),
++        "roundtrip must include nontrivial acquired neural state"
++    );
++    assert!(CpuCanonicalHost::from_checkpoint(old_save.clone(), &new_trainer).is_err());
++    assert!(CpuCanonicalHost::from_checkpoint(new_save.clone(), &old_trainer).is_err());
++    assert!(old_trainer
++        .checkpoint()
++        .validate_for(
++            new_trainer.phenotype(),
++            new_trainer.checkpoint().source_foundation_digest
++        )
++        .is_err());
++    assert!(new_trainer
++        .checkpoint()
++        .validate_for(
++            old_trainer.phenotype(),
++            old_trainer.checkpoint().source_foundation_digest
++        )
++        .is_err());
++    let bytes = serde_json::to_vec(&new_save).unwrap();
++    let restored_save = serde_json::from_slice(&bytes).unwrap();
++    let mut restored = CpuCanonicalHost::from_checkpoint(restored_save, &new_trainer).unwrap();
++    assert_eq!(
++        serde_json::to_vec(&restored.checkpoint(&new_trainer).unwrap()).unwrap(),
++        bytes
++    );
++    new.step(&new_trainer, 0.7).unwrap();
++    restored.step(&new_trainer, 0.7).unwrap();
++    assert_eq!(
++        serde_json::to_vec(&new.checkpoint(&new_trainer).unwrap()).unwrap(),
++        serde_json::to_vec(&restored.checkpoint(&new_trainer).unwrap()).unwrap()
++    );
++}
+diff --git a/crates/alife_world/src/headless.rs b/crates/alife_world/src/headless.rs
+index 60753550..9a9280f2 100644
+--- a/crates/alife_world/src/headless.rs
++++ b/crates/alife_world/src/headless.rs
+@@ -5574,7 +5574,6 @@ impl HeadlessWorld {
+             return false;
+         };
+         food.kind == WorldObjectKind::Food
+-            && food.hazard_pain == 0.0
+             && food.carried_by.is_none()
+             && self.player_held_object() != Some(target)
+             && self.grasp_target_is_reachable(organism_id, agent_id, target)
+@@ -8909,6 +8908,107 @@ mod task_6_factorized_motor_tests {
+         assert_eq!(world.entity(agent).unwrap().position, before);
+     }
+ 
++    #[test]
++    fn harmful_food_motor_acquisition_preserves_biology_and_portable_save_continuation() {
++        let (mut world, agent, food, mut bundle) = prepared_world();
++        // Express the inherited nociceptive graph through ordinary biology;
++        // this is a body fixture, not evidence of neural development/learning.
++        for _ in 0..600 {
++            world.try_advance_tick().unwrap();
++        }
++        bundle.tick = world.tick();
++        world.objects.get_mut(&food.raw()).unwrap().hazard_pain = 0.3;
++        world
++            .objects
++            .get_mut(&food.raw())
++            .unwrap()
++            .grounded_physical
++            .chemical[2] = -0.65;
++        bundle
++            .channels
++            .retain(|channel| channel.channel == MotorChannel::Manipulation);
++        let pickup = world.apply_registered_motor_bundle(&bundle, agent).unwrap();
++        assert!(pickup.succeeded);
++        assert_eq!(
++            pickup.channel_receipts[0].command.primitive,
++            HeadlessActionIds::EAT
++        );
++        assert_eq!(pickup.channel_receipts[0].phase, ActionPhase::Preparation);
++        assert_eq!(pickup.body_event.nutrition, 0.0);
++        assert_eq!(pickup.body_event.damage, 0.0);
++        assert_eq!(world.entity(food).unwrap().carried_by, Some(ORGANISM_ID));
++        world.try_advance_tick().unwrap();
++
++        // Retain the acquired object and the exact authoritative genome,
++        // embodiment and physiology, without a migration or reset.
++        let save = crate::PortableSaveFile::from_headless_world(
++            "harmful-food-continuation",
++            &world,
++            crate::RuntimeConfig::deterministic_default(
++                world.seed(),
++                alife_core::BrainScaleTier::Nano512,
++            ),
++            crate::AssetManifest::empty(),
++            Vec::new(),
++        )
++        .unwrap();
++        let mut restored =
++            crate::PortableSaveFile::from_json_str(&serde_json::to_string(&save).unwrap())
++                .unwrap()
++                .restore_headless_world()
++                .unwrap();
++        assert_eq!(world.object_snapshots(), restored.object_snapshots());
++        assert_eq!(
++            world.organism_registry().get(ORGANISM_ID),
++            restored.organism_registry().get(ORGANISM_ID)
++        );
++        bundle.tick = world.tick();
++        bundle.sequence_id = alife_core::ExperienceSequenceId(2);
++        let meal = world.apply_registered_motor_bundle(&bundle, agent).unwrap();
++        assert_eq!(
++            restored
++                .apply_registered_motor_bundle(&bundle, agent)
++                .unwrap(),
++            meal
++        );
++        assert!(meal.succeeded);
++        assert_eq!(meal.channel_receipts[0].phase, ActionPhase::Completed);
++        assert_eq!(
++            meal.channel_receipts[0].physical.contact,
++            PhysicalContactKind::Consumed
++        );
++        assert_eq!(meal.body_event.nutrition, 0.6);
++        assert_eq!(meal.body_event.damage, 0.3);
++        assert!(meal.biology_after.body.injury > meal.biology_before.body.injury);
++        assert!(
++            meal.biology_after.homeostasis.drives.pain
++                > meal.biology_before.homeostasis.drives.pain
++        );
++        assert_eq!(
++            world.ingestion_observations[&ORGANISM_ID.raw()].taste,
++            -0.65
++        );
++        assert_eq!(
++            meal.biology_after,
++            meal.biology_before
++                .advance(
++                    meal.outcome_tick,
++                    meal.body_event,
++                    world
++                        .organism_registry()
++                        .get(ORGANISM_ID)
++                        .unwrap()
++                        .phenotype(),
++                )
++                .unwrap()
++        );
++        assert_eq!(world.object_snapshots(), restored.object_snapshots());
++        assert_eq!(
++            world.organism_registry().get(ORGANISM_ID),
++            restored.organism_registry().get(ORGANISM_ID)
++        );
++    }
++
+     fn posture_bundle(primitive: ActionId, target: Option<WorldEntityId>) -> MotorCommandBundle {
+         let command = ChannelCommand::new(
+             MotorChannel::Posture,
+@@ -11895,6 +11995,79 @@ mod eat_possession_tests {
+         assert_eq!(stale.body_event.nutrition, 0.0);
+     }
+ 
++    #[test]
++    fn food_harm_does_not_change_observed_cues_or_physical_acquisition() {
++        for profile in [
++            SensorProfile::GroundedObjectSlotsV1,
++            SensorProfile::GroundedTerrainVisionV1,
++        ] {
++            let (mut harmless, food) = world();
++            // In front and at tactile contact for either grounded profile.
++            harmless.objects.get_mut(&food.raw()).unwrap().position = Vec3f::new(0.4, 0.0, 0.0);
++            let mut harmful = harmless.clone();
++            harmful.objects.get_mut(&food.raw()).unwrap().hazard_pain = 0.3;
++            let observe = |world: &mut HeadlessWorld| {
++                world
++                    .perception_frame_draft(
++                        ORGANISM,
++                        world.tick(),
++                        profile,
++                        HomeostaticSnapshot::baseline(world.tick()),
++                    )
++                    .unwrap()
++            };
++            let benign_view = observe(&mut harmless);
++            let harmful_view = observe(&mut harmful);
++            assert!(!benign_view.grounded_object_slots().is_empty());
++            assert_eq!(
++                benign_view.grounded_object_slots(),
++                harmful_view.grounded_object_slots()
++            );
++            assert_eq!(benign_view.candidates(), harmful_view.candidates());
++            let selected = HeadlessWorldCommand::eat(ORGANISM, food).unwrap();
++            for (mut world, harm) in [(harmless, 0.0), (harmful, 0.3)] {
++                // Explicit Grab already permits this exact physical target.
++                let mut explicit = world.clone();
++                assert!(
++                    explicit
++                        .apply_command(&grab(food))
++                        .unwrap()
++                        .execution
++                        .succeeded
++                );
++                assert_eq!(world.check_action(&selected), ActionLegality::Legal);
++                let pickup = world.apply_command(&selected).unwrap();
++                assert!(pickup.execution.succeeded);
++                assert_eq!(pickup.command, selected);
++                assert_eq!(pickup.phase, ActionPhase::Preparation);
++                assert_eq!(pickup.body_event.nutrition, 0.0);
++                assert_eq!(pickup.body_event.damage, 0.0);
++                assert_eq!(pickup.grip_transfers[0].kind, GripTransferKind::Acquired);
++                assert_eq!(world.entity(food).unwrap().carried_by, Some(ORGANISM));
++                assert!(!world.entity(food).unwrap().consumed);
++                assert!(!world.ingestion_observations.contains_key(&ORGANISM.raw()));
++                world.advance_tick();
++                explicit.advance_tick();
++                let meal = world.apply_command(&selected).unwrap();
++                let explicit_meal = explicit.apply_command(&selected).unwrap();
++                assert!(meal.execution.succeeded);
++                assert_eq!(
++                    meal.execution.physical.contact,
++                    PhysicalContactKind::Consumed
++                );
++                assert_eq!(meal.body_event, explicit_meal.body_event);
++                assert_eq!(meal.body_event.nutrition, 0.6);
++                assert_eq!(meal.body_event.damage, harm);
++                assert_eq!(world.entity(food).unwrap().carried_by, None);
++                assert!(world.entity(food).unwrap().consumed);
++                assert_eq!(
++                    world.ingestion_observations[&ORGANISM.raw()].taste,
++                    world.entity(food).unwrap().grounded_physical.chemical[2]
++                );
++            }
++        }
++    }
++
+     #[test]
+     fn another_creatures_held_food_cannot_be_eaten_or_stolen() {
+         let (mut world, food) = world();
+@@ -11965,14 +12138,13 @@ mod eat_possession_tests {
+     }
+ 
+     #[test]
+-    fn eat_pickup_never_navigates_or_acquires_unsafe_nonfood_or_player_held_targets() {
+-        for case in ["out_of_reach", "unsafe", "nonfood", "player_held"] {
++    fn eat_pickup_never_navigates_or_acquires_nonfood_or_player_held_targets() {
++        for case in ["out_of_reach", "nonfood", "player_held"] {
+             let (mut world, food) = world();
+             match case {
+                 "out_of_reach" => {
+                     world.objects.get_mut(&food.raw()).unwrap().position = Vec3f::new(4.0, 0.0, 0.0)
+                 }
+-                "unsafe" => world.objects.get_mut(&food.raw()).unwrap().hazard_pain = 0.3,
+                 "nonfood" => {
+                     world.objects.get_mut(&food.raw()).unwrap().kind = WorldObjectKind::Ball
+                 }
+@@ -12021,6 +12193,28 @@ mod eat_possession_tests {
+         assert!(world.physical_contact_reachable(Vec3f::ZERO, world.entity(food).unwrap().position));
+         assert_rejected(&mut world, food);
+         assert_eq!(world.entity(food).unwrap().carried_by, None);
++        // Harm never bypasses this physical constraint either.
++        world.objects.get_mut(&food.raw()).unwrap().hazard_pain = 0.3;
++        assert_rejected(&mut world, food);
++        // A genuine body turn to the unobstructed lateral target resolves the
++        // grip path. Contact alone is not evidence of hand clearance.
++        let turn = HeadlessWorldCommand::structured(
++            ORGANISM,
++            HeadlessActionIds::TURN_LEFT,
++            ActionKind::Look,
++            None,
++            None,
++        )
++        .unwrap();
++        for _ in 0..2 {
++            assert!(world.apply_command(&turn).unwrap().execution.succeeded);
++            world.advance_tick();
++        }
++        let pickup = world
++            .apply_command(&HeadlessWorldCommand::eat(ORGANISM, food).unwrap())
++            .unwrap();
++        assert!(pickup.execution.succeeded);
++        assert_eq!(world.entity(food).unwrap().carried_by, Some(ORGANISM));
+     }
+ 
+     #[test]
+diff --git a/crates/alife_world/src/headless/hands.rs b/crates/alife_world/src/headless/hands.rs
+index ec205b7f..cd323ac9 100644
+--- a/crates/alife_world/src/headless/hands.rs
++++ b/crates/alife_world/src/headless/hands.rs
+@@ -88,9 +88,9 @@ impl HeadlessWorld {
+                 .is_none_or(|owner| owner == command.organism_id)
+             && self
+                 .physical_contact_reachable(self.objects[&agent.raw()].position, object.position)
+-            && (!mobile
+-                || (self.grasp_target_is_reachable(command.organism_id, agent, target)
+-                    && (already_held || object.hazard_pain == 0.0)));
++            // Validate physical capability, not hidden desirability. Ingesting
++            // harmful food retains its ordinary measured consequences.
++            && (!mobile || self.grasp_target_is_reachable(command.organism_id, agent, target));
+         if !valid {
+             return self.hand_preparation_failure(command, target).map(Some);
+         }
+@@ -448,8 +448,8 @@ mod tests {
+     }
+ 
+     #[test]
+-    fn invalid_or_unsafe_requested_target_does_not_release_activity_possession() {
+-        for case in ["reach", "other_owner", "player", "unsafe", "consumed"] {
++    fn invalid_requested_target_does_not_release_activity_possession() {
++        for case in ["reach", "other_owner", "player", "consumed"] {
+             let (mut world, ball, food) = world();
+             world
+                 .apply_command(&command(HeadlessActionIds::PLAY, ball))
+@@ -462,7 +462,6 @@ mod tests {
+                 "player" => {
+                     world.begin_player_hold(food).unwrap();
+                 }
+-                "unsafe" => world.objects.get_mut(&food.raw()).unwrap().hazard_pain = 0.5,
+                 "consumed" => world.objects.get_mut(&food.raw()).unwrap().consumed = true,
+                 _ => unreachable!(),
+             }
+@@ -476,6 +475,86 @@ mod tests {
+         }
+     }
+ 
++    #[test]
++    fn harmful_food_switch_preserves_preparation_and_portable_continuation() {
++        let (mut world, ball, food) = world();
++        world.objects.get_mut(&food.raw()).unwrap().hazard_pain = 0.3;
++        world
++            .objects
++            .get_mut(&food.raw())
++            .unwrap()
++            .grounded_physical
++            .chemical[2] = -0.65;
++        world
++            .apply_command(&command(HeadlessActionIds::PLAY, ball))
++            .unwrap();
++        let selected = command(HeadlessActionIds::EAT, food);
++        // A legal target permits placement, not a simultaneous pickup or meal.
++        let placed = world.apply_command(&selected).unwrap();
++        assert!(placed.execution.succeeded);
++        assert_eq!(placed.phase, ActionPhase::Preparation);
++        assert_eq!(placed.grip_transfers[0].kind, GripTransferKind::Placed);
++        assert_eq!(world.entity(ball).unwrap().carried_by, None);
++        assert_eq!(world.entity(food).unwrap().carried_by, None);
++        assert_no_activity(&placed);
++        world.advance_tick();
++        let pickup = world.apply_command(&selected).unwrap();
++        assert!(pickup.execution.succeeded);
++        assert_eq!(pickup.phase, ActionPhase::Preparation);
++        assert_eq!(pickup.grip_transfers[0].kind, GripTransferKind::Acquired);
++        assert_no_activity(&pickup);
++        world.advance_tick();
++        let mut restored = roundtrip(&world);
++        assert_eq!(restored.object_snapshots(), world.object_snapshots());
++        assert!(restored.entity(food).unwrap().activity_hold);
++        let meal = world.apply_command(&selected).unwrap();
++        assert_eq!(restored.apply_command(&selected).unwrap(), meal);
++        assert!(meal.execution.succeeded);
++        assert_eq!(meal.phase, ActionPhase::Completed);
++        assert_eq!(meal.body_event.nutrition, 0.6);
++        assert_eq!(meal.body_event.damage, 0.3);
++        assert_eq!(world.ingestion_observations[&ORGANISM.raw()].taste, -0.65);
++        assert_eq!(restored.object_snapshots(), world.object_snapshots());
++        assert!(world.entity(food).unwrap().consumed);
++        assert_eq!(world.entity(food).unwrap().carried_by, None);
++    }
++
++    #[test]
++    fn mobile_play_acquisition_uses_the_same_physical_checks_as_explicit_grab() {
++        let (mut world, ball, _) = world();
++        world.objects.get_mut(&ball.raw()).unwrap().hazard_pain = 0.3;
++        let mut explicit = world.clone();
++        assert!(
++            explicit
++                .apply_command(&command(HeadlessActionIds::GRAB, ball))
++                .unwrap()
++                .execution
++                .succeeded
++        );
++        let pickup = world
++            .apply_command(&command(HeadlessActionIds::PLAY, ball))
++            .unwrap();
++        assert!(pickup.execution.succeeded);
++        assert_eq!(pickup.phase, ActionPhase::Preparation);
++        assert_no_activity(&pickup);
++        assert_eq!(
++            world.entity(ball).unwrap().position,
++            explicit.entity(ball).unwrap().position
++        );
++        assert_eq!(world.entity(ball).unwrap().carried_by, Some(ORGANISM));
++        world.advance_tick();
++        explicit.advance_tick();
++        let selected = command(HeadlessActionIds::PLAY, ball);
++        let play = world.apply_command(&selected).unwrap();
++        assert!(play.execution.succeeded);
++        assert_eq!(play.phase, ActionPhase::Completed);
++        assert_eq!(
++            play.body_event,
++            explicit.apply_command(&selected).unwrap().body_event
++        );
++        assert!(play.body_event.play_stimulation > 0.0);
++    }
++
+     #[test]
+     fn no_safe_supported_placement_keeps_old_object_without_new_activity() {
+         let (mut world, ball, food) = world();
+diff --git a/crates/alife_world/src/new_game.rs b/crates/alife_world/src/new_game.rs
+index f6c9d66b..67d8b794 100644
+--- a/crates/alife_world/src/new_game.rs
++++ b/crates/alife_world/src/new_game.rs
+@@ -79,6 +79,15 @@ pub fn create_canonical_new_game(
+ 
+ /// Explicit N2048 experiment using the same ecology and inherited physiology.
+ /// The asset remains bound into each genome for archive and exact restore.
++pub fn create_canonical_new_game_with_n2048_memory_gain_candidate(
++    config: &CanonicalNewGameConfig,
++    foundation: &FoundationWeightAsset,
++) -> Result<CanonicalNewGame, ScaffoldContractError> {
++    if !foundation.is_n2048_memory_gain_candidate() {
++        return Err(ScaffoldContractError::PhenotypeCompile);
++    }
++    create_n2048_candidate_inner(config, foundation)
++}
+ pub fn create_canonical_new_game_with_n2048_experimental_candidate(
+     config: &CanonicalNewGameConfig,
+     foundation: &FoundationWeightAsset,
+@@ -93,7 +102,7 @@ pub fn create_canonical_new_game_with_n2048_candidate(
+     config: &CanonicalNewGameConfig,
+     foundation: &FoundationWeightAsset,
+ ) -> Result<CanonicalNewGame, ScaffoldContractError> {
+-    if foundation.is_n2048_experimental_graph() {
++    if foundation.is_n2048_experimental_graph() || foundation.is_n2048_memory_gain_candidate() {
+         return Err(ScaffoldContractError::PhenotypeCompile);
+     }
+     create_n2048_candidate_inner(config, foundation)
+@@ -127,7 +136,7 @@ pub fn create_canonical_foundation_training_group(
+     foundation: &FoundationWeightAsset,
+ ) -> Result<CanonicalNewGame, ScaffoldContractError> {
+     let mut config = CanonicalNewGameConfig::phase3(world_seed, 1)?;
+-    if foundation.is_n2048_experimental_graph()
++    if (foundation.is_n2048_experimental_graph() || foundation.is_n2048_memory_gain_candidate())
+         || founder_seed_base == 0
+         || foundation.manifest().capacity_class_id() != BrainCapacityClass::N2048_ID
+     {

@@ -687,8 +687,7 @@ impl BrainPhenotype {
             .validate_against(capacity, self.sensor_profile)?;
         if self
             .foundation_abi_selection
-            .n2048_experimental_graph()
-            .is_some()
+            .uses_n2048_experimental_graph()
         {
             super::topology_compile::validate_n2048_experimental_coordinates(self, capacity)?;
         }

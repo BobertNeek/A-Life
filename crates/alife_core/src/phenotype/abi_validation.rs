@@ -170,7 +170,7 @@ pub(super) fn compute_abi_digests(
     projections: &[CompiledProjection],
     synapses: &[CompiledSynapse],
 ) -> (Blake3Digest, Blake3Digest) {
-    if selection.n2048_experimental_graph().is_some() {
+    if selection.uses_n2048_experimental_graph() {
         use crate::blake3_digest::{domain_hasher, Blake3Write};
         let mut route = domain_hasher(b"alife.n2048.experimental-route-abi.v1");
         let mut plasticity = domain_hasher(b"alife.n2048.experimental-plasticity-abi.v1");

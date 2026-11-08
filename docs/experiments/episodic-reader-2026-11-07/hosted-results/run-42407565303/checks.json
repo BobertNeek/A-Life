@@ -1,0 +1,105 @@
+{
+  "attempted_cases": [
+    {
+      "arm": "family-value-off",
+      "seed": 2026111201
+    },
+    {
+      "arm": "family-value-on",
+      "seed": 2026111201
+    },
+    {
+      "arm": "family-value-off",
+      "seed": 2026111202
+    },
+    {
+      "arm": "family-value-on",
+      "seed": 2026111202
+    },
+    {
+      "arm": "family-value-off",
+      "seed": 2026111203
+    },
+    {
+      "arm": "family-value-on",
+      "seed": 2026111203
+    },
+    {
+      "arm": "family-value-off",
+      "seed": 2026111204
+    },
+    {
+      "arm": "family-value-on",
+      "seed": 2026111204
+    }
+  ],
+  "completed_cases": [
+    {
+      "arm": "family-value-off",
+      "seed": 2026111201
+    },
+    {
+      "arm": "family-value-on",
+      "seed": 2026111201
+    },
+    {
+      "arm": "family-value-off",
+      "seed": 2026111202
+    },
+    {
+      "arm": "family-value-on",
+      "seed": 2026111202
+    },
+    {
+      "arm": "family-value-off",
+      "seed": 2026111203
+    },
+    {
+      "arm": "family-value-on",
+      "seed": 2026111203
+    },
+    {
+      "arm": "family-value-off",
+      "seed": 2026111204
+    }
+  ],
+  "exposure_started": true,
+  "failed_cases": [],
+  "failure_code": "sanitizer_schema",
+  "failure_stage": "report",
+  "integration_qualification": "success",
+  "native_build_completed": true,
+  "observed_cases": [
+    {
+      "arm": "family-value-off",
+      "seed": 2026111201
+    },
+    {
+      "arm": "family-value-on",
+      "seed": 2026111201
+    },
+    {
+      "arm": "family-value-off",
+      "seed": 2026111202
+    },
+    {
+      "arm": "family-value-on",
+      "seed": 2026111202
+    },
+    {
+      "arm": "family-value-off",
+      "seed": 2026111203
+    },
+    {
+      "arm": "family-value-on",
+      "seed": 2026111203
+    },
+    {
+      "arm": "family-value-off",
+      "seed": 2026111204
+    }
+  ],
+  "schema": "hosted-transfer-checks-v1",
+  "source_bound": true,
+  "status": "infrastructure_failure"
+}

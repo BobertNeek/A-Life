@@ -1,0 +1,27 @@
+{
+  "old_base": "de3ae7892d235b569e4abc72abaf9168812983cf",
+  "new_base": "de3ae7892d235b569e4abc72abaf9168812983cf",
+  "files_checked": 227,
+  "changes": [
+    {
+      "path": "crates/alife_world/src/headless.rs",
+      "old": "d88ce8b701314e45f5f51d3576deface5f56c682266dc7839ee611ff1f9fe24f",
+      "new": "ed128d1af4c053920a4116f728cb319f3de6d4be9619db53998f3ed0db3dbfe8"
+    },
+    {
+      "path": "crates/alife_world/src/headless/body_clearance_tests.rs",
+      "old": null,
+      "new": "13fd2b112f8c44a2c7660fa087880d20017dfc89652705503d2b917e46901483"
+    },
+    {
+      "path": "crates/alife_world/src/headless/local_steering.rs",
+      "old": "decaea97336e67abd073041a55ee435658781875104683fec20ab4de0d40849b",
+      "new": "07da2a87214c859524b2cd45433aa373f3f7a4eea7d776b7cca52479698a4d17"
+    },
+    {
+      "path": "crates/alife_world/src/headless/player_hand.rs",
+      "old": "3db71d4e6f9dd1b5c97d37e50ee446ad3f2bde6cc1e6f4b2762cf920979b3ee3",
+      "new": "e145af00e664b3903412b97d76d98d392a37ed932681357f708affb9eb6f30c4"
+    }
+  ]
+}

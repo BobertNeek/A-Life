@@ -1470,11 +1470,14 @@ fn validate_learning_slot_layout(
         immutable_plan_base,
         ranges.memory_channel_plan_words.start,
     )?;
-    if memory_plan.schema_version != 1
+    if !((memory_plan.schema_version == 1
+        && memory_plan.max_candidate_gain.to_bits() == 0.5_f32.to_bits())
+        || (memory_plan.schema_version == 2
+            && memory_plan.max_candidate_gain.to_bits() == 12.0_f32.to_bits()
+            && memory_plan.memory_decoder_synapse_count == 4096))
         || memory_plan.target_latent_lane_start != 24
         || memory_plan.family_value_lane_start != 32
         || memory_plan.decoder_input_stride != 36
-        || memory_plan.max_candidate_gain.to_bits() != 0.5_f32.to_bits()
         || memory_plan.memory_decoder_synapse_count as usize != counts.memory_weight_indices
         || counts.memory_weight_indices < 96
         || !counts.memory_weight_indices.is_multiple_of(8)

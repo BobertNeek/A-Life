@@ -1,0 +1,13 @@
+# V12 build qualification before exposure
+
+The phase-off source is e4a4a8e487c7799d9e71e5a6942a73ab28c97d3c. The phase-on source is 612c42015cdc894e80ebdee5d765c9f5a0d5bfa0. Their assay source is identical. Their only source differences are the nine exact qualified PR299 blobs, bound in qualified-phase-bindings.json. Neither includes the geometry correction.
+
+The frozen phase-off executable is phase-off/frozen/probe_native_learning (SHA-256 d842eec7da7894fe586a06d1103ac970f53326deb08751ff32d6ac4a84102bb9). The valid phase-on executable is phase-on/frozen-02/probe_native_learning (SHA-256 556086d44edddd52ac2f80e04b99048992a95292955f9cba1b210ee9c80345b1). Their embedded retrieval source digests independently match their actual source files and differ as expected. Full bindings are in build-bindings.json.
+
+The first phase-on preflight was rejected before any native life. Cargo reused phase-off artifacts in the shared target directory because the second checkout's source timestamps were older. The embedded retrieval digest caught this. The invalid executable, manifest, logs and receipt are preserved under phase-on/frozen and phase-on/pilot-01. No life may use them. Refreshing only source mtimes and rebuilding serially explicitly recompiled every local crate; source content and commit remained unchanged. The valid phase-on experiment directory is phase-on/pilot-02.
+
+Both valid native builds passed four builder/identity tests and the CPU memory-gain checkpoint/cross-restore test. Phase-on also passed 67 retrieval tests (one ignored) and two memory identity tests. Existing v6 assets reproduced the archived byte identity in both prepare steps. The two new assets are byte-identical across the source factor: family-value-off ba006d31a7ceb1f75d22704893494871652b6bc0200ef1a0f31039bab11b1e6a and family-value-on 6edcd6dd1dc5bfedf8f7b73bf605bb480e36c0ba022a316840a6f0bd87629632.
+
+This document is build evidence, not behavioral evidence. Before primary lives, the existing positive baselines must additionally demonstrate actual tracked Consumed provenance in phase-on and omission of phase fields in phase-off. The review_baseline_provenance.py script implements that check without adding exposure. The phase-off/no-family-reader primary life must reproduce the prior v11 reader-on/cap12 actual journal and fresh final state; review_legacy_control.py checks this without another run.
+
+All builds use one job, dev profile, no incremental compilation, and the existing official toolchain. No retained checkpoint or accepted brain was read or modified. All fresh diagnostic snapshots remain local, outside source trees and source patches. Publication and promotion are not part of this experiment.

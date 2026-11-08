@@ -1,0 +1,39 @@
+{
+  "schema": "fixed-native-transfer-plan-v1",
+  "construction_seed": 2026110901,
+  "episodes": [
+    {
+      "seed": 2026111201,
+      "mirror_z": false
+    },
+    {
+      "seed": 2026111202,
+      "mirror_z": true
+    },
+    {
+      "seed": 2026111203,
+      "mirror_z": false
+    },
+    {
+      "seed": 2026111204,
+      "mirror_z": true
+    }
+  ],
+  "max_lives": 8,
+  "max_host_ticks_per_life": 256,
+  "max_a_consumptions": 3,
+  "minimum_health": 0.7,
+  "maximum_injury": 0.25,
+  "preparation_ticks": 600,
+  "initial_energy": 0.4,
+  "nutrition": 0.05,
+  "a_harm": 0.35,
+  "regrow_ticks": 16,
+  "temperature": 1.0,
+  "sleep": "Once after first actual A consumption",
+  "asset_sha256": [
+    "ba006d31a7ceb1f75d22704893494871652b6bc0200ef1a0f31039bab11b1e6a",
+    "6edcd6dd1dc5bfedf8f7b73bf605bb480e36c0ba022a316840a6f0bd87629632"
+  ],
+  "execution_policy": "Initial pull_request opened event and run_attempt 1 only; no replacement or automatic retry."
+}

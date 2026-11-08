@@ -1357,7 +1357,13 @@ pub(super) fn validate_record_founder(
             .phenotype()
             .development_state_at(record.biochemistry().tick)?,
     )?;
-    let (compiled, _) = if p.foundation_abi().n2048_experimental_graph().is_some() {
+    let (compiled, _) = if p.foundation_abi().n2048_memory_gain_candidate().is_some() {
+        PhenotypeCompiler::compile_n2048_memory_gain_foundation_candidate(
+            genome.clone(),
+            development,
+            founder.source_foundation.clone(),
+        )?
+    } else if p.foundation_abi().n2048_experimental_graph().is_some() {
         PhenotypeCompiler::compile_n2048_experimental_foundation_candidate(
             genome.clone(),
             development,

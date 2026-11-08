@@ -1,0 +1,111 @@
+name: Bounded episodic reader transfer
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'crates/alife_core/**'
+      - 'crates/alife_training/**'
+      - 'crates/alife_gpu_backend/**'
+      - 'crates/alife_world/**'
+      - 'crates/alife_runtime/**'
+      - 'docs/experiments/episodic-reader-2026-11-07/**'
+      - '.github/workflows/episodic-reader-transfer.yml'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.cargo/**'
+permissions:
+  contents: read
+concurrency:
+  group: episodic-reader-transfer-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+env:
+  CARGO_BUILD_JOBS: '1'
+  CARGO_INCREMENTAL: '0'
+  CARGO_PROFILE_DEV_DEBUG: '0'
+  CARGO_PROFILE_TEST_DEBUG: '0'
+  RUST_TEST_THREADS: '1'
+  RUST_MIN_STACK: '33554432'
+  VK_ICD_FILENAMES: /no-vulkan-icd.json
+  EXPECTED_SOURCE_REVISION: ${{ github.event.pull_request.head.sha }}
+jobs:
+  integration-qualification:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.99.1'
+          components: rustfmt, clippy
+      - name: Static source and sanitizer contracts
+        run: |
+          python3 -B -m unittest discover -s docs/experiments/episodic-reader-2026-11-07 -p 'test_*transfer*.py'
+      - name: Qualify opt-in identity, CPU restore and GPU upload without hardware
+        env:
+          CARGO_TARGET_DIR: ${{ runner.temp }}/integration-target
+        run: |
+          python3 -c 'import shutil; assert shutil.disk_usage(".").free >= 12*(1<<30), "12 GiB build budget unavailable"'
+          mkdir -p "$RUNNER_TEMP/integration-private-logs"
+          run_check() {
+            name="$1"; shift
+            if "$@" > "$RUNNER_TEMP/integration-private-logs/$name.log" 2>&1; then
+              echo "$name passed"
+            else
+              echo "$name failed; raw diagnostic logs are not published"
+              exit 1
+            fi
+          }
+          run_check format rustfmt --edition 2021 --config skip_children=true --check crates/alife_training/examples/probe_native_learning.rs
+          run_check core cargo test --locked --profile dev -p alife_core --test n2048_memory_gain_candidate
+          run_check cpu cargo test --locked --profile dev -p alife_training --features cpu-backend --test cpu_memory_gain_candidate --example probe_native_learning
+          run_check gpu-upload cargo test --locked --profile dev -p alife_gpu_backend --test n2048_memory_gain_candidate
+          run_check lint-core cargo clippy --locked --profile dev -p alife_core --test n2048_memory_gain_candidate -- -D warnings
+          run_check lint-cpu cargo clippy --locked --profile dev -p alife_training --features cpu-backend --test cpu_memory_gain_candidate --example probe_native_learning -- -D warnings
+          run_check lint-gpu-upload cargo clippy --locked --profile dev -p alife_gpu_backend --test n2048_memory_gain_candidate -- -D warnings
+  frozen-eight-life-study:
+    needs: integration-qualification
+    # The single authorized study ran at 5e6784b (run42407565303).
+    # Its exposure budget is exhausted; preserve this job as disabled history.
+    if: ${{ false && always() && github.event.action == 'opened' && github.run_attempt == 1 && github.event.pull_request.number == 300 && github.repository == 'BobertNeek/A-Life' && github.event.pull_request.head.repo.full_name == 'BobertNeek/A-Life' && github.event.pull_request.head.ref == 'experiment/episodic-reader-transfer-20261107' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      QUALIFICATION_RESULT: ${{ needs.integration-qualification.result }}
+      TRANSFER_EVENT_ACTION: ${{ github.event.action }}
+      TRANSFER_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+      TRANSFER_STUDY_ID: episodic-reader-transfer-2026-11-07
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.99.1'
+      - name: Reconstruct, bind and execute the fixed study serially
+        timeout-minutes: 25
+        run: |
+          python3 -B docs/experiments/episodic-reader-2026-11-07/hosted_transfer.py execute "$RUNNER_TEMP/episodic-transfer" --workspace "$GITHUB_WORKSPACE"
+      - name: Validate sanitized partial or complete report
+        id: publication
+        if: ${{ always() }}
+        run: |
+          python3 -B docs/experiments/episodic-reader-2026-11-07/hosted_transfer.py finalize "$RUNNER_TEMP/episodic-transfer"
+          echo 'validated=true' >> "$GITHUB_OUTPUT"
+      - name: Upload only the seven validated source and report files
+        if: ${{ always() && steps.publication.outputs.validated == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: episodic-reader-transfer-${{ github.event.pull_request.head.sha }}
+          path: |
+            ${{ runner.temp }}/episodic-transfer/public/report.md
+            ${{ runner.temp }}/episodic-transfer/public/summary.json
+            ${{ runner.temp }}/episodic-transfer/public/causal-rows.json
+            ${{ runner.temp }}/episodic-transfer/public/checks.json
+            ${{ runner.temp }}/episodic-transfer/public/build-receipt.json
+            ${{ runner.temp }}/episodic-transfer/public/source-only.patch
+            ${{ runner.temp }}/episodic-transfer/public/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 7

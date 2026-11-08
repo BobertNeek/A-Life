@@ -47,6 +47,8 @@ pub use factorized_selection::{
 };
 pub use genome::ActionCandidateCreditProfileV1;
 pub use n2048_experimental_graph::N2048ExperimentalGraphV1;
+mod n2048_memory_gain_candidate;
+pub use n2048_memory_gain_candidate::N2048MemoryGainCandidateV1;
 pub use nano512_readout_candidate::{Nano512ActionCreditCandidateV2, Nano512ReadoutCandidateV1};
 pub mod lobe;
 pub mod math;

@@ -255,11 +255,32 @@ impl CandidateDecoderPlan {
         Ok(value)
     }
 
+    pub(super) fn with_memory_gain_candidate(mut self) -> Result<Self, ScaffoldContractError> {
+        let count = self
+            .memory_channel
+            .ok_or(ScaffoldContractError::PhenotypeCompile)?
+            .memory_decoder_synapse_count();
+        self.memory_channel = Some(MemoryChannelPlan::try_new_memory_gain_candidate(count)?);
+        self.validate_shape()?;
+        self.canonical_digest = self.recompute_digest()?;
+        Ok(self)
+    }
     pub fn validate_against(
         &self,
         phenotype: &BrainPhenotype,
     ) -> Result<(), ScaffoldContractError> {
         self.validate_local()?;
+        if self
+            .memory_channel
+            .as_ref()
+            .is_some_and(|plan| plan.schema_version() == 2)
+            != phenotype
+                .foundation_abi()
+                .n2048_memory_gain_candidate()
+                .is_some()
+        {
+            return Err(ScaffoldContractError::PhenotypeCompile);
+        }
         self.factorized_motor_channels(phenotype)?;
         let capacity = crate::BrainCapacityClass::supported_for_id(phenotype.brain_class_id())?;
         let execution = capacity.execution();

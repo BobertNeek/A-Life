@@ -1,0 +1,224 @@
+{
+  "schema": "native-learning-source-publication-manifest-v1",
+  "status": "Prepared locally; not published",
+  "frozen_source_base": "f4cdbeed5147de0b52f95d1e4b484d7e5f03e0dc",
+  "frozen_source_head": "e4a4a8e487c7799d9e71e5a6942a73ab28c97d3c",
+  "intended_integration_base": "current main, including PR296 merge 90030ffc",
+  "phase_prerequisite_commit": "2e79b0853e39a5d2329bc0e724196c24fe9c2173",
+  "source_files": [
+    {
+      "path": "crates/alife_core/src/foundation.rs",
+      "sha256": "2dbb1c55d007798640d632c4e581114cec79e65d777f812302e9c92b817cc722",
+      "bytes": 66514,
+      "git_blob": "4bd10dc682a93c7e26ad58c2a45b6ccf482670ee"
+    },
+    {
+      "path": "crates/alife_core/src/legacy_nano512_compatibility.rs",
+      "sha256": "1304f78e0ab44617c5fc45b4f266cdcc75a927ad1122874c7ba308548683853e",
+      "bytes": 46531,
+      "git_blob": "8978dd5d38d61405882aad0b8ded3cb24c4bd979"
+    },
+    {
+      "path": "crates/alife_core/src/lib.rs",
+      "sha256": "a5e101a3f869fcf180eec1ebeb7da6537603513747359188be4653e7fd8d88fd",
+      "bytes": 21699,
+      "git_blob": "1153eeb6c36f84838bbf12dbb7d41a9a1c2be2c9"
+    },
+    {
+      "path": "crates/alife_core/src/n2048_memory_gain_candidate.rs",
+      "sha256": "7782cf9569308e54d9d0a9ba4ed91abe9d5a7572f7bf546c6809ecb317f24496",
+      "bytes": 3477,
+      "git_blob": "9fd9fee1948c4e64905987312a84d5a4b356fc20"
+    },
+    {
+      "path": "crates/alife_core/src/phenotype/abi_validation.rs",
+      "sha256": "b9bebd1b23c651d44d58bdc14533e661ffcb0501919652efbb83d05e66caeddb",
+      "bytes": 11342,
+      "git_blob": "7e3524b8b5885eefd3bb4baf3d7b2d99c013126e"
+    },
+    {
+      "path": "crates/alife_core/src/phenotype/compiler.rs",
+      "sha256": "ae9cc3c841c34ce023ea92601723bf4b1e935889224997ba91eee3ba9e568fe2",
+      "bytes": 16827,
+      "git_blob": "da04d33664f3ca58dc042415d61f23406761bd7b"
+    },
+    {
+      "path": "crates/alife_core/src/phenotype/construction.rs",
+      "sha256": "3d328bb25d8ecd1b376f1e77c52efd52dd1cef63977da9b2da4a16aa0f521de3",
+      "bytes": 16248,
+      "git_blob": "3343f6674cc6e0e93f02c2a6ee9391f1886db795"
+    },
+    {
+      "path": "crates/alife_core/src/phenotype/decoder.rs",
+      "sha256": "0a8c73b9b1d289623e6a28c3390e489edacb79b9b57250fbff7c4b3c9e210338",
+      "bytes": 24118,
+      "git_blob": "5c430a8770719f6b2d91a4f6d0b1e7e9af5acca3"
+    },
+    {
+      "path": "crates/alife_core/src/phenotype/memory_channel.rs",
+      "sha256": "738c4cc5ada85cf722412f7b0c0b534ca71bae9876e88bd23d644764b66c2b61",
+      "bytes": 6472,
+      "git_blob": "884bae10d0d86d05b48fa5a4c647a0adc29b4ea5"
+    },
+    {
+      "path": "crates/alife_core/src/phenotype/record.rs",
+      "sha256": "ed096e2823dae96b81936a100bff515eb51f5c5e1776f74c45e440d536af1ffd",
+      "bytes": 53371,
+      "git_blob": "f15e576503a555d295eee2ecd6f64feee5def8e7"
+    },
+    {
+      "path": "crates/alife_core/tests/n2048_memory_gain_candidate.rs",
+      "sha256": "94ef82bab324d74cd5fd7b99228335dadeface9dd29c50d82d4a0c482b6ce999",
+      "bytes": 4762,
+      "git_blob": "66088e2c7ca9e3c0f6267fe57bafc875bcf60650"
+    },
+    {
+      "path": "crates/alife_gpu_backend/shaders/closed_loop_memory_context.wgsl",
+      "sha256": "3d421cf284bba54e503c95962929c6117533ca698c31c13b866db258eba17fb4",
+      "bytes": 9533,
+      "git_blob": "b85d7dad8b96cb6e630e91da71daf83d70bae9cd"
+    },
+    {
+      "path": "crates/alife_gpu_backend/src/closed_loop_buffers/bucket.rs",
+      "sha256": "2a8449cb9d8368c03f27a6c85135008bb38cd1d8a063aae7c410355539709ad0",
+      "bytes": 202900,
+      "git_blob": "a1835612a5e759519f04c159486cb84659b06750"
+    },
+    {
+      "path": "crates/alife_gpu_backend/tests/n2048_memory_gain_candidate.rs",
+      "sha256": "66b9c456a5d602e14e0e5de8dc94c2fd6f50b5bc2295c87be002b82ff6c1da40",
+      "bytes": 1518,
+      "git_blob": "34db62ade9146529f290667fd1a22673df27ea3a"
+    },
+    {
+      "path": "crates/alife_training/Cargo.toml",
+      "sha256": "911e7de954d941f639321999b9c32976367f823ef14f815c5e03ecd1bd89abbc",
+      "bytes": 1580,
+      "git_blob": "60b18e08f47889d9a42564479df1f38c8fa8205c"
+    },
+    {
+      "path": "crates/alife_training/examples/probe_native_learning.rs",
+      "sha256": "8a41d08368b571f0e0a095132de4714c12f0f5679b34038a97742a78971957c6",
+      "bytes": 44395,
+      "git_blob": "89d8d5ac25dadbc0dad9bcb5e59bc4ed27d0d5f5"
+    },
+    {
+      "path": "crates/alife_training/examples/probe_weight_space_care.rs",
+      "sha256": "7bf0362ad224802332abba0b677a099ae152906e73bb4e2184675ea0182e3350",
+      "bytes": 26508,
+      "git_blob": "26b5b75da78e92fda9335b5a64e2b595b33ffaee"
+    },
+    {
+      "path": "crates/alife_training/examples/support/care_candidate.rs",
+      "sha256": "05a2a603ded22b58a2637e466642ed93eeff83bfc327fe60d7f9c3452a0a01b7",
+      "bytes": 11499,
+      "git_blob": "79db4540fa6e7818ea48c61834500e432353f55b"
+    },
+    {
+      "path": "crates/alife_training/src/cpu/host.rs",
+      "sha256": "60eaa6c66771afcddab619ba0286ed8843896bc34e42c3a10fd8e8c86a0ad8a0",
+      "bytes": 62045,
+      "git_blob": "7b45f2806b4424e33655a85ad2cc47ec5ff26ae1"
+    },
+    {
+      "path": "crates/alife_training/tests/cpu_memory_gain_candidate.rs",
+      "sha256": "d6426ddf88aa641dfaba262f00c992f53b150bf2608a0439e6d0422757c2e907",
+      "bytes": 5616,
+      "git_blob": "e29951cee4e2d67db528cae8e5d488745ebb55b2"
+    },
+    {
+      "path": "crates/alife_world/src/new_game.rs",
+      "sha256": "f729fc649513d81a7bf1f3676fe6e1b6bfc60669f8e6a0e1931007946a74b9cb",
+      "bytes": 23195,
+      "git_blob": "67d8b7945868ab10bf10b291cc5f7f17ea6814c0"
+    }
+  ],
+  "excluded_existing_world_files": [
+    "crates/alife_world/src/headless.rs",
+    "crates/alife_world/src/headless/hands.rs"
+  ],
+  "phase_files_bundled": false,
+  "raw_private_artifacts_bundled": false,
+  "files": [
+    {
+      "path": "README.md",
+      "sha256": "a19aff47aa3e4052feabdf6795b50bc96d9069b2e0e2191b04bab3668f7cc59a",
+      "bytes": 1645
+    },
+    {
+      "path": "geometry-factor/PLAN.md",
+      "sha256": "cdbf0471e192eebdf1ace6090406dbf606bf4180adad647a97b33157587ed514",
+      "bytes": 3278
+    },
+    {
+      "path": "geometry-factor/RESULTS.md",
+      "sha256": "695347ac8c7a6e8f54e7c984b7f73f44811d93d8dba23fccb79966cc69b10720",
+      "bytes": 5269
+    },
+    {
+      "path": "geometry-factor/analyze_factor.py",
+      "sha256": "a3f17458a42fdb69579069e96478a2d947223671d9904c2836232b1309134cff",
+      "bytes": 6424
+    },
+    {
+      "path": "geometry-factor/run-manifest.json",
+      "sha256": "07c400a2dc3e9da8f07f7c49bd9ef99e02c65582c17a16773ff2cb346b3b1e90",
+      "bytes": 3516
+    },
+    {
+      "path": "geometry-factor/source-comparison-current-base.json",
+      "sha256": "6bb862be819c5429939b451dfa999c8e2a780906b404fa0cf20e0e85ca10e714",
+      "bytes": 1052
+    },
+    {
+      "path": "geometry-factor/summary.json",
+      "sha256": "6d8c596f25c64da1e41cccf1d22f2802b35534fed2ba0d6c49c988bd434f4c73",
+      "bytes": 49269
+    },
+    {
+      "path": "native-learning-source-only.patch",
+      "sha256": "14701a4bde26fc422f4d74abbe66ecfb00d5ae761bdcc089ad4f9df45ebc010a",
+      "bytes": 116507
+    },
+    {
+      "path": "notes/BASELINE-RESULTS.md",
+      "sha256": "73bc967cded89d4f0e463fa49a29a59019d29261aacc17e24113c5e3ca0bfff3",
+      "bytes": 1781
+    },
+    {
+      "path": "notes/BUILD-QUALIFICATION.md",
+      "sha256": "1b7619ea26662c93c00cacc7d3c8484a5992db251c7253363b5a451416e6bd96",
+      "bytes": 2713
+    },
+    {
+      "path": "notes/HELD-FOOD-NOTES.md",
+      "sha256": "6492267b3ad1dd06dc3884eb1c34dcf897779acf8e882ea5e50a226c95778442",
+      "bytes": 2341
+    },
+    {
+      "path": "notes/HELD-OUT-PROPOSAL.md",
+      "sha256": "97701c08beb559d1cd7183d1fb083024897f981f92272c1448cc0290f96e9cd9",
+      "bytes": 4540
+    },
+    {
+      "path": "notes/sanitized-summary.json",
+      "sha256": "4bb8a63e683230d39b0b0af7a5b4d34337db812226f70051f60e8cadb020c367",
+      "bytes": 18847
+    },
+    {
+      "path": "notes/v10-native-learning.md",
+      "sha256": "6c233045c2e49b069a1d71e72269b0b2c508da8c753698e78ae2f4e808d4faf8",
+      "bytes": 8206
+    },
+    {
+      "path": "notes/v11-native-learning.md",
+      "sha256": "9925137db8865e2e55afafcc2fe1ce45efb35aeab68954acfb7bf3afc13a38c7",
+      "bytes": 11000
+    },
+    {
+      "path": "notes/v12-native-learning.md",
+      "sha256": "c060953615715a6e322fa06b97f4173a111074ff84637bcb7b7d96d071c21c7a",
+      "bytes": 11431
+    }
+  ]
+}
