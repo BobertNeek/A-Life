@@ -46,3 +46,11 @@ new default-brain admission. No existing private creature/checkpoint is an input
 no acquired state or wire format changes, and no optimizer update is added. The
 failed initial drive batch remains a partial failed attempt; its later fixed-plan
 revision is a separate, negative policy result, not evidence of learned improvement.
+
+## Combined source integration
+
+The later combined head also includes the separately qualified body-withdrawal
+component from PR #306. Its ordinary callers remain disabled. The CPU native
+counts above describe the isolated speech repair, not a local combined rerun.
+The combined head must pass its own hosted checks, and this PR is held until
+#306 lands on main. No brain experiment or exhausted study is activated.
