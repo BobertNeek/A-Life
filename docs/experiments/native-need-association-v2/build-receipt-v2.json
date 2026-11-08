@@ -1,0 +1,38 @@
+{
+  "revision": "reconstruction-v2",
+  "published_source_commit": "493905744d87eee3117b1582854d826e0fac172d",
+  "source_input_count": 708,
+  "source_input_root_sha256": "b42e63748d39c6c17f5d8dad599f38e4fd8a9958f1f3ef2d5f4e2d49ea23b394",
+  "source_patch_sha256": "0490046cf7f30568223bb3248dd3fb59408846a78c7a44af42683c11bfabd0c7",
+  "plan_sha256": "544ab89b84b57c6c6ea3607109bceaf708dc893424ad8e0e265de6f0e9db80e1",
+  "executable_path": "/workspace/shared/native-need-association-reconstruction-v2-target/debug/deps/cpu_need_association-daab3309b6e61b2c",
+  "executable_sha256": "32250e98824998e7186901e1ed892c3de496e4090fef7f2332659257ef6a26bd",
+  "asset_sha256": "1d2978cbd857a7ca99dc1b2cf65be9f6ff417a6f78199282e0431b94332c9377",
+  "toolchain": "Rust 1.99.1",
+  "cargo_locked": true,
+  "build_jobs": 1,
+  "incremental": false,
+  "debug_symbols": false,
+  "qualification": {
+    "core_native_tests_passed": 10,
+    "source_context_tests_passed": 13,
+    "no_step_identity_test_passed": 1,
+    "strict_core_clippy": true,
+    "strict_cpu_clippy": true,
+    "fixture_candidates": 12,
+    "fixture_reader_rows": 4,
+    "reader_atp_q16": 178,
+    "ordinary_atp_q16": 1774,
+    "available_atp_q16": 49151
+  },
+  "log_hashes": {
+    "core-native-v2.log": "58fcde1ba45948fdf5af82a1a39a4879cb4bef89f830033f3657229b444f7a63",
+    "source-native-v2.log": "d78f9b5f0151783822ad97860b795a3eaaff0c109a517ade95a19b11c630786f",
+    "admission-preflight-v2.log": "d391e300367483c8fcc6d6b496d750e213c9be7116eb13cdb05848ca69882e9b",
+    "clippy-core-v2.log": "c108abfee7c92592fb2e362c70afafa44a9bc1e0f3f57dfa6fec9d3c1b023b17",
+    "clippy-training-v2.log": "d98eb4083c990feb0aac877394da479099e30c5364d9b697355e96a7607052be"
+  },
+  "before_exposure": true,
+  "prior_launch_status": "launch_failed_before_process",
+  "created_utc": "2026-11-08T11:28:04.244337+00:00"
+}

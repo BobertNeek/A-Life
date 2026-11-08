@@ -1,0 +1,58 @@
+{
+  "asset_sha256": "1d2978cbd857a7ca99dc1b2cf65be9f6ff417a6f78199282e0431b94332c9377",
+  "changed_candidate_logits": 0,
+  "checkpoint_retention_claim": false,
+  "founder_optimizer_exact": true,
+  "learned_policy_competence_claim": false,
+  "native_decisions": 12,
+  "nonzero_native_readouts": 0,
+  "paired_candidate_support_rows": 0,
+  "paired_observed_support_rows": 0,
+  "plan": {
+    "execution": "ActiveCoordinates",
+    "recipe": {
+      "atp_availability_target": 0.75,
+      "basis": [
+        0.125,
+        0.25,
+        0.25,
+        0.25
+      ],
+      "ceiling": 0.3499999940395355,
+      "gain": 0.3499999940395355,
+      "knots": [
+        0.0,
+        0.25,
+        0.5,
+        0.75
+      ],
+      "magnitudes": [
+        0.1428571492433548,
+        0.1428571492433548,
+        0.1428571492433548,
+        0.1428571492433548,
+        0.1428571492433548,
+        0.0,
+        0.1428571492433548,
+        0.1428571492433548,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "normalization": {
+        "PressureQuantumTanh": {
+          "quantum": 0.0010000000474974513
+        }
+      }
+    },
+    "reference": "Rest"
+  },
+  "prior_launch_status": "launch_failed_before_process",
+  "seed": 2026111301,
+  "source_revision": "reconstruction-v2",
+  "stop": "decision_budget",
+  "stored_intervals": 0,
+  "stored_observed_intervals": 0,
+  "stored_own_intervals": 0,
+  "study": "need-association-admission-v1"
+}

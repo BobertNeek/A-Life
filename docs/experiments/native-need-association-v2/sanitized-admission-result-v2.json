@@ -1,0 +1,278 @@
+{
+  "study": "need-association-admission-v1",
+  "source_revision": "reconstruction-v2",
+  "seed": 2026111301,
+  "native_decisions": 12,
+  "asset_sha256": "1d2978cbd857a7ca99dc1b2cf65be9f6ff417a6f78199282e0431b94332c9377",
+  "source_input_root_sha256": "b42e63748d39c6c17f5d8dad599f38e4fd8a9958f1f3ef2d5f4e2d49ea23b394",
+  "source_patch_sha256": "0490046cf7f30568223bb3248dd3fb59408846a78c7a44af42683c11bfabd0c7",
+  "executable_sha256": "32250e98824998e7186901e1ed892c3de496e4090fef7f2332659257ef6a26bd",
+  "plan_sha256": "544ab89b84b57c6c6ea3607109bceaf708dc893424ad8e0e265de6f0e9db80e1",
+  "build_receipt_sha256": "3ca8ef34ee9f1b9d743eac2f1179825ef4fa561fa91d3ac7bd2a43d2bc3901b8",
+  "result": "completed_admission_null",
+  "exit_code": 101,
+  "stop": "decision_budget",
+  "stored_own_intervals": 0,
+  "stored_observed_intervals": 0,
+  "paired_observed_support_rows": 0,
+  "changed_candidate_logits": 0,
+  "founder_optimizer_exact": true,
+  "source_status_counts": {
+    "{'Unsupported': 'unsupported_representative'}": 2,
+    "{'Unsupported': 'physical_or_biology_binding'}": 10
+  },
+  "selected_family_counts": {
+    "Approach": 2,
+    "Inspect": 3,
+    "Rest": 7
+  },
+  "rows": [
+    {
+      "tick": 0,
+      "sequence": 1,
+      "selected_family": "Approach",
+      "selected_action": 103,
+      "selected_logit": 3.3909380435943604,
+      "motor_candidates": [
+        9,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "source_observation": {
+        "Unsupported": "unsupported_representative"
+      },
+      "pair_count": 0,
+      "reader_rows": 4
+    },
+    {
+      "tick": 1,
+      "sequence": 2,
+      "selected_family": "Inspect",
+      "selected_action": 4,
+      "selected_logit": 6.296153545379639,
+      "motor_candidates": [
+        1,
+        null,
+        null,
+        null,
+        0,
+        null
+      ],
+      "source_observation": {
+        "Unsupported": "physical_or_biology_binding"
+      },
+      "pair_count": 0,
+      "reader_rows": 4
+    },
+    {
+      "tick": 2,
+      "sequence": 3,
+      "selected_family": "Rest",
+      "selected_action": 3,
+      "selected_logit": 7.182110786437988,
+      "motor_candidates": [
+        9,
+        null,
+        null,
+        null,
+        7,
+        null
+      ],
+      "source_observation": {
+        "Unsupported": "physical_or_biology_binding"
+      },
+      "pair_count": 0,
+      "reader_rows": 4
+    },
+    {
+      "tick": 3,
+      "sequence": 4,
+      "selected_family": "Rest",
+      "selected_action": 3,
+      "selected_logit": 7.459456920623779,
+      "motor_candidates": [
+        9,
+        null,
+        null,
+        null,
+        7,
+        null
+      ],
+      "source_observation": {
+        "Unsupported": "physical_or_biology_binding"
+      },
+      "pair_count": 0,
+      "reader_rows": 4
+    },
+    {
+      "tick": 4,
+      "sequence": 5,
+      "selected_family": "Inspect",
+      "selected_action": 4,
+      "selected_logit": 6.661149024963379,
+      "motor_candidates": [
+        1,
+        null,
+        null,
+        null,
+        0,
+        null
+      ],
+      "source_observation": {
+        "Unsupported": "physical_or_biology_binding"
+      },
+      "pair_count": 0,
+      "reader_rows": 4
+    },
+    {
+      "tick": 5,
+      "sequence": 6,
+      "selected_family": "Rest",
+      "selected_action": 3,
+      "selected_logit": 7.595077991485596,
+      "motor_candidates": [
+        9,
+        null,
+        null,
+        null,
+        7,
+        null
+      ],
+      "source_observation": {
+        "Unsupported": "physical_or_biology_binding"
+      },
+      "pair_count": 0,
+      "reader_rows": 4
+    },
+    {
+      "tick": 6,
+      "sequence": 7,
+      "selected_family": "Approach",
+      "selected_action": 101,
+      "selected_logit": 3.866182327270508,
+      "motor_candidates": [
+        1,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "source_observation": {
+        "Unsupported": "unsupported_representative"
+      },
+      "pair_count": 0,
+      "reader_rows": 4
+    },
+    {
+      "tick": 7,
+      "sequence": 8,
+      "selected_family": "Rest",
+      "selected_action": 3,
+      "selected_logit": 7.612066745758057,
+      "motor_candidates": [
+        9,
+        null,
+        null,
+        null,
+        7,
+        null
+      ],
+      "source_observation": {
+        "Unsupported": "physical_or_biology_binding"
+      },
+      "pair_count": 0,
+      "reader_rows": 4
+    },
+    {
+      "tick": 8,
+      "sequence": 9,
+      "selected_family": "Rest",
+      "selected_action": 3,
+      "selected_logit": 7.613612174987793,
+      "motor_candidates": [
+        9,
+        null,
+        null,
+        null,
+        7,
+        null
+      ],
+      "source_observation": {
+        "Unsupported": "physical_or_biology_binding"
+      },
+      "pair_count": 0,
+      "reader_rows": 4
+    },
+    {
+      "tick": 9,
+      "sequence": 10,
+      "selected_family": "Rest",
+      "selected_action": 3,
+      "selected_logit": 7.61414098739624,
+      "motor_candidates": [
+        9,
+        null,
+        null,
+        null,
+        7,
+        null
+      ],
+      "source_observation": {
+        "Unsupported": "physical_or_biology_binding"
+      },
+      "pair_count": 0,
+      "reader_rows": 4
+    },
+    {
+      "tick": 10,
+      "sequence": 11,
+      "selected_family": "Inspect",
+      "selected_action": 4,
+      "selected_logit": 6.008737087249756,
+      "motor_candidates": [
+        1,
+        null,
+        null,
+        null,
+        0,
+        null
+      ],
+      "source_observation": {
+        "Unsupported": "physical_or_biology_binding"
+      },
+      "pair_count": 0,
+      "reader_rows": 4
+    },
+    {
+      "tick": 11,
+      "sequence": 12,
+      "selected_family": "Rest",
+      "selected_action": 3,
+      "selected_logit": 7.614372253417969,
+      "motor_candidates": [
+        9,
+        null,
+        null,
+        null,
+        7,
+        null
+      ],
+      "source_observation": {
+        "Unsupported": "physical_or_biology_binding"
+      },
+      "pair_count": 0,
+      "reader_rows": 4
+    }
+  ],
+  "diagnostic_limit": "The frozen journal records the coarse source rejection and measured drive delta, not each failed binding predicate or raw physical channel receipt. No exact predicate is reconstructed from an unrecorded life.",
+  "claims": {
+    "policy_competence": false,
+    "retention": false,
+    "gpu_parity": false
+  },
+  "no_retry": true
+}

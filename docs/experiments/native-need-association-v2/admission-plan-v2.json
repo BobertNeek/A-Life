@@ -1,0 +1,43 @@
+{
+  "study": "need-association-admission-v1",
+  "source_revision": "reconstruction-v2",
+  "published_source_commit": "493905744d87eee3117b1582854d826e0fac172d",
+  "prior_launch_status": "launch_failed_before_process",
+  "prior_confirmed_native_steps": 0,
+  "seed": 2026111301,
+  "construction_seed": 2026111301,
+  "sampling_seed": 2026111301,
+  "brain_class": "N2048",
+  "sensor_profile": "GroundedObjectSlotsV1",
+  "asset_sha256": "1d2978cbd857a7ca99dc1b2cf65be9f6ff417a6f78199282e0431b94332c9377",
+  "source_input_root_sha256": "b42e63748d39c6c17f5d8dad599f38e4fd8a9958f1f3ef2d5f4e2d49ea23b394",
+  "source_patch_sha256": "0490046cf7f30568223bb3248dd3fb59408846a78c7a44af42683c11bfabd0c7",
+  "action_candidate_aggregate_coefficients": {
+    "Rest_lane_23": 8,
+    "Inspect_lane_18": 8,
+    "Approach_lane_23": 6,
+    "Contact_lane_23": 6,
+    "all_other_action_candidate_coordinates": 0
+  },
+  "other_genes": "unchanged",
+  "ordinary_plasticity": true,
+  "optimizer_updates": 0,
+  "scene": "One fresh subject and one static harmless peer 0.2 metres in positive X, ecology disabled and other scenery removed before host admission; no later edits.",
+  "reference": "own Rest history",
+  "execution": "ActiveCoordinates",
+  "pressure_quantum": 0.001,
+  "gain_and_cap": 0.35,
+  "temperature": 1.0,
+  "native_decision_budget": 12,
+  "stops": [
+    "body health < 0.98",
+    "body energy < 0.65",
+    "sleep or no decision",
+    "host error",
+    "12 decisions"
+  ],
+  "retry_policy": "create-new marker before first step; never replace, extend or retune a started life",
+  "nonvacuity": "At least one stored Own and Observed interval plus later natural paired Observed action/reference support; self-reference alone is insufficient.",
+  "interpretation": "Predictive own-history association. Whole raw successor comparisons may favor Rest. No policy competence, isolated causal utility, cold retention, GPU or trained-genetic-weight claim.",
+  "runtime_output": "Local fresh-only journal, bounded sanitized summary and source/build receipt; no private state publication."
+}

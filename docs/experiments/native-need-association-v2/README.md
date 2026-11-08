@@ -1,5 +1,11 @@
 # Native own-history need association: reconstruction V2
 
+Completed status: V2 was freshly qualified, then its single 12-decision admission
+fixture completed with no stored intervals or paired recall. See [the frozen
+result](RESULTS-v2.md) and [publication scope](PUBLICATION.md). The life is closed;
+the pre-exposure design and historical results below are not a successful native
+learning claim.
+
 This is a protected, opt-in CPU port on a fresh N2048 host. It is not a
 replacement default brain, an Adam training result, GPU parity, or evidence of
 learned policy competence. Its 512-cell arithmetic workspace is auxiliary
