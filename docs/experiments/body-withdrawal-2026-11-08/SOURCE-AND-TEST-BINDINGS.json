@@ -1,0 +1,89 @@
+{
+  "base_commit": "b0b4e5ab85473f1ace63f0629ecf4704e7b0fb81",
+  "base_tree": "0a34d588488c09f9a7fd4d8bc6115be61bdcd750",
+  "frozen_v1_commit": "00507abe4fd0292881d467a9f6791ef53eac9aa7",
+  "prerepair_fixture_commit": "d76e4ed39fab120b88e7c564c0e11638046d2edb",
+  "prerepair_fixture_tree": "12b2b5d80dcde77e6d89af497dec7cea5435aa70",
+  "candidate_commit": "23baecf19e92f42ca9511e07c1e77cce222d43f4",
+  "candidate_tree": "60768b5b398cb9bbce916f4db944bf81efdeb5ab",
+  "source_directory": "/workspace/scratch/ee5e08a3ca9b/body-reflex-main-extract-v2",
+  "changed_files": {
+    "crates/alife_world/src/headless.rs": "5fd69093fad5cc5afa554cc390eafe6705a71d760eadd20b3423f992888dae68",
+    "crates/alife_world/src/headless/contact_withdrawal.rs": "27ffc5dff262320464498fa13990ff10e252ccc91657d710148ea0c67b33833f",
+    "crates/alife_world/tests/body_only_hazard_contact.rs": "c9db2d551fd959e02d10a3800b786f1ba5b7e31782108edf5d31eb3a6c18b740"
+  },
+  "ordinary_api_activation": false,
+  "published": "Source publication metadata is given by the containing Git commit; original tested source identities remain unchanged",
+  "private_lives_accessed": false,
+  "native_target": "/workspace/scratch/ee5e08a3ca9b/motor-reflex-target-v1",
+  "native_target_released": true,
+  "rust_version": "1.99.1",
+  "native_flags": {
+    "jobs": 1,
+    "incremental": 0,
+    "dev_debug": 0,
+    "test_debug": 0
+  },
+  "qualification_status": "passed",
+  "prerepair_results": {
+    "passed": 3,
+    "failed": 2,
+    "ignored": 0,
+    "exit_status": 101
+  },
+  "qualification": {
+    "focused": {
+      "passed": 24,
+      "failed": 0,
+      "ignored": 0,
+      "measured": 0,
+      "filtered_out": 566
+    },
+    "full-world": {
+      "passed": 587,
+      "failed": 0,
+      "ignored": 3,
+      "measured": 0,
+      "filtered_out": 0
+    },
+    "repaired_overlap_cases": [
+      "test headless::task_6_factorized_motor_tests::body_only_overlap_carried_hazard_still_respects_grip_blockers_and_rollback ... ok",
+      "test headless::task_6_factorized_motor_tests::body_only_overlap_own_carried_hazard_does_not_block_external_withdrawal ... ok",
+      "test headless::task_6_factorized_motor_tests::body_only_overlap_peer_inward_boundary_tangent_and_new_entries_still_block ... ok",
+      "test headless::task_6_factorized_motor_tests::body_only_overlap_peer_outward_escape_keeps_one_biology_interval ... ok",
+      "test headless::task_6_factorized_motor_tests::body_only_overlap_unrelated_hazard_sweep_still_blocks_new_contact ... ok"
+    ],
+    "clippy_all_world_targets": "passed: -D warnings",
+    "fmt_workspace": "passed",
+    "ignored_tests": [
+      "test headless::contact_chemistry_tests::contact_endpoint_cost_against_previous_hazard_scan ... ignored, manual CPU endpoint cost comparison; no biology or neural execution",
+      "test headless::task_4_3a2_tests::mating_reach::mating_query_cpu_cost ... ignored, bounded CPU component timing, not a gameplay throughput benchmark",
+      "test manual_extended_headless_soak_preserves_release_gate_invariants ... ignored, manual extended headless soak: cargo test -p alife_world --test headless_soak -- --ignored --nocapture"
+    ]
+  },
+  "full_source_asset_exclusions": [
+    "assets",
+    "crates/alife_game_app/assets",
+    "crates/alife_world/assets"
+  ],
+  "full_source_note": "Complete tracked code/docs/config/fixtures from exact candidate, excluding these three unchanged asset trees. Reconstruct a buildable checkout over exact ordinary main to retain its required public static assets. No .git, build cache, trained checkpoints or private-life files are included.",
+  "unchanged_subtree_identities": {
+    "crates/alife_core": "21e7a4755c953863bfd809d214f2752ddee291c6",
+    "crates/alife_gpu_backend": "321437d5f44e161f87ec2812a49ad04f860288d1",
+    "crates/alife_runtime": "35c3e866ba368592dc78af93a0b69da5e0ba553b",
+    "crates/alife_training": "47dc6ee30c881759c99b82e24d24d3a22c9983a9",
+    "crates/alife_world/src/candidate_enumerator.rs": "f2ffde6ce17541d6ee59447c2e12d24640fe9bbc",
+    "Cargo.toml": "366cb43b6591e35d4b9f20926541ed2ccdb37eff",
+    "Cargo.lock": "8aca9967f014324ad9155f352bfd2172f1c1283b"
+  },
+  "artifact_sha256": {
+    "prerepair-source.tar": "0d86021995fd7ef1dfec99ea7974219c37bdbfd7ba69d93d5b6e8fe2630f49e6",
+    "prerepair-native.log": "3073f5251905289ecd492c3354fee953c80e11ce378b320182c6fc11583cc60b",
+    "prerepair-fixtures.patch": "96671b1c2f358feaea662b602c06ec631cbd1b199b14e85228c041b96eda6ffc",
+    "body-reflex-main-v2.patch": "077448cf8ce41474bc541d54798e78e4da4fe88f7f201456f7e715e33f70ce1f",
+    "body-reflex-main-v2-series.patch": "98ba840de3eb7deaede7c5801b187d8b8c31d85c1d76ae6e3f99f2a4405c6d2f",
+    "repair-only.patch": "38f7250d7affafc3f17145de8c86e772000b7acce05cd31db90985a30170d474",
+    "full-source.tar.gz": "692d73b862051bba8990af4e24a2bb8d81554b5339306a088523472e636901a8"
+  },
+  "review": "Parent read-only review of exact kernel delta and prerepair fixtures found no source blocker; native tests were implementer-run"
+}

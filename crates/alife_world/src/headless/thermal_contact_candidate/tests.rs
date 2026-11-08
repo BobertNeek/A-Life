@@ -643,3 +643,75 @@ fn v2_zero_external_dose_does_not_suppress_legacy_or_v1_sleep_cooling() {
         .unwrap();
     assert_eq!(bytes(&ordinary), bytes(&candidate));
 }
+
+#[test]
+fn physical_withdrawal_uses_both_thermal_endpoints_and_truthful_once_only_receipt() {
+    for entering in [true, false] {
+        let (mut base, own, surface) = fixture(1.0);
+        let x = if entering { -0.750001 } else { 0.749999 };
+        base.editor_move_object(surface, Vec3f::new(x, 0.0, 0.0))
+            .unwrap();
+        let mut no_thermal = base.clone();
+        let events = BTreeMap::from([(
+            OWN.raw(),
+            BodyEventDelta {
+                damage: 0.4,
+                sleep_recovery: 1.0,
+                ..BodyEventDelta::zero()
+            },
+        )]);
+        let plain = no_thermal
+            .try_advance_tick_with_body_contact_candidate(&events)
+            .unwrap();
+        let mut combined = base;
+        let receipt = combined
+            .with_thermal_contact_candidate(config(surface), |world| {
+                world.try_advance_tick_with_body_contact_candidate(&events)
+            })
+            .unwrap();
+        assert_eq!(receipt.outcome_tick, Tick(1));
+        assert_eq!(receipt.responses.len(), 1);
+        let response = &receipt.responses[0];
+        let reflex = response.withdrawal.as_ref().unwrap();
+        assert!(!reflex.blocked);
+        assert!(reflex.displacement.x < -0.00001);
+        assert_eq!(response.withdrawal, plain.responses[0].withdrawal);
+        let final_position = combined.objects[&own.raw()].position;
+        let final_contact = distance(final_position, combined.objects[&surface.raw()].position)
+            <= HEADLESS_CONTACT_RADIUS;
+        assert_eq!(final_contact, entering);
+        let tolerance = combined
+            .organism_registry
+            .get(OWN)
+            .unwrap()
+            .phenotype()
+            .body
+            .temperature_tolerance;
+        let dose = 0.10 * (1.0 / WORLD_TICKS_PER_SECOND as f32);
+        assert_eq!(response.applied_body_event.temperature_stress, dose);
+        assert_eq!(response.applied_body_event.sleep_recovery, 0.0);
+        assert!(
+            (biology(&combined).body.temperature_stress - dose * (1.0 - tolerance)).abs() < 1e-7
+        );
+        assert_eq!(biology(&combined).tick, Tick(1));
+        assert_eq!(
+            biology(&combined).body.injury,
+            biology(&no_thermal).body.injury
+        );
+        assert_eq!(
+            biology(&combined).body.energy,
+            biology(&no_thermal).body.energy
+        );
+        assert_eq!(biology(&no_thermal).body.temperature_stress, 0.0);
+        // Chronic injury does not renew the peripheral movement. Continued
+        // configured thermal load is an independent physical input, not pain.
+        let quiet = combined
+            .with_thermal_contact_candidate(config(surface), |world| {
+                world.try_advance_tick_with_body_contact_candidate(&BTreeMap::new())
+            })
+            .unwrap();
+        assert!(quiet.responses.is_empty());
+        assert_eq!(combined.objects[&own.raw()].position, final_position);
+        assert_eq!(biology(&combined).tick, Tick(2));
+    }
+}

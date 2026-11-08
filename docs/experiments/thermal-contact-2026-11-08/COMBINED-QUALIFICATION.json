@@ -1,0 +1,338 @@
+{
+  "scope": "Combined default-off thermal and body-withdrawal physical components; no ordinary caller activated",
+  "isolated_thermal_remote_head": "59bd18c83184b109be388489c519707ab9a14501",
+  "body_component_remote_head": "c8fcd14f2ee6f88cbde6f60d4201dcb8a9827116",
+  "body_component_merged_main": "2e13e227c6ac4ac8d883ffbaeed9f6291c6cefd0",
+  "body_component_main_tree": "31bfd38e1c384fd9b112bcd948f102959fecb66f",
+  "source_sha256": {
+    "crates/alife_core/src/biochemistry.rs": "0d5ff72f5c7e7305daf4b53f150ce116a9f85ce49738ad8746c4bbfc99f24f2b",
+    "crates/alife_core/src/lib.rs": "b3d6b36fcc0893ffc9d869136e1c9930398bc4e13b40ad7836eacc340d9d2b3e",
+    "crates/alife_core/tests/thermal_reproductive_drive_audit.rs": "1ca0ab3f018a655cdb32f1ab69ba5c9e061ae825d4b3b523642876160af0ba56",
+    "crates/alife_world/src/headless.rs": "9ced0e2fa70fa83a33490dd5074274adf872437f225151bbba6b921950e069a2",
+    "crates/alife_world/src/headless/contact_withdrawal.rs": "27ffc5dff262320464498fa13990ff10e252ccc91657d710148ea0c67b33833f",
+    "crates/alife_world/src/headless/thermal_contact_candidate.rs": "ac6e93d8c6d520fab46f5669a6eb561742ba2e39b7dae39f584be764dd158e5a",
+    "crates/alife_world/src/headless/thermal_contact_candidate/tests.rs": "c3f9dc8d4fa29552d093b65cb01b599b50f922ee22ae0750cd242a367484813b",
+    "crates/alife_world/src/organism.rs": "09f9a61dfe1b36c86134811866d2b489cf70676d7b0a458dc77a738e435cbd24",
+    "crates/alife_world/tests/body_only_hazard_contact.rs": "c9db2d551fd959e02d10a3800b786f1ba5b7e31782108edf5d31eb3a6c18b740"
+  },
+  "commands": [
+    {
+      "command": "cargo test -p alife_world --offline -- --test-threads=1",
+      "passed": 601,
+      "failed": 0,
+      "ignored": 3
+    },
+    {
+      "command": "cargo test -p alife_core --offline --test biochemistry_development --test thermal_reproductive_drive_audit -- --test-threads=1",
+      "passed": 15,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "command": "cargo clippy -p alife_core -p alife_world --all-targets --offline -- -D warnings",
+      "status": "passed"
+    },
+    {
+      "command": "cargo fmt --all --check; git diff --check",
+      "status": "passed"
+    }
+  ],
+  "unique_tests_passed": 616,
+  "focused_test_is_already_in_world_total": true,
+  "logs": {
+    "focused-v1": {
+      "sha256": "f2bd1256da2381e612e8f604498b15995b86c4bba7ee4b0f5868d8d1a1ca6a43",
+      "bytes": 1504,
+      "successful_test_summaries": []
+    },
+    "focused-v2": {
+      "sha256": "bd7b7cedd3d7a8c15db417a4cc2882b93b168aa938103bbd5342ed9f1033b76a",
+      "bytes": 555,
+      "successful_test_summaries": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    "world-v2": {
+      "sha256": "39b3ea7a2aa3e882a7775e2294e9e41a0ea038a970a50bbf7471ede25287e680",
+      "bytes": 67319,
+      "successful_test_summaries": [
+        {
+          "passed": 256,
+          "failed": 0,
+          "ignored": 2
+        },
+        {
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 13,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 7,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 12,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 16,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 13,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 1
+        },
+        {
+          "passed": 13,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 7,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 19,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 12,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 21,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 7,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 16,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 7,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 20,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 20,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 13,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    "core-v2": {
+      "sha256": "4274e2cae2281682a493d129885b8ce2d6a48d2d77ea83d97c5529a94ec56b54",
+      "bytes": 1739,
+      "successful_test_summaries": []
+    },
+    "core-v3": {
+      "sha256": "694a767ee3b60550a652aae3578188508a7561f72f068b35314f2f96313bb44c",
+      "bytes": 1802,
+      "successful_test_summaries": [
+        {
+          "passed": 13,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        }
+      ]
+    },
+    "clippy-v3": {
+      "sha256": "3d8d1eac9e00f2d98875880c3d6da7ac96dd82de70768c8a57bfa29e4dc73dbd",
+      "bytes": 393,
+      "successful_test_summaries": []
+    },
+    "fmt-v3": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "successful_test_summaries": []
+    }
+  },
+  "unsuccessful_checks": [
+    {
+      "log": "focused-v1",
+      "cause": "f32 expected-value operation-order mismatch",
+      "correction": "test expected expression uses the same interval multiplication; production unchanged"
+    },
+    {
+      "log": "core-v2",
+      "cause": "nonexistent developmental_live_physiology target",
+      "correction": "run actual biochemistry_development target; no repeated world run"
+    }
+  ],
+  "toolchain": "official Rust1.99.1; offline jobs1; no incremental writes; no GPU/native autonomous cohort",
+  "source_binding_timing": "source closure recorded after compile start and before observing first result; not a pre-launch attestation; final hashes reflect only corrected expected-value expression",
+  "limitations": [
+    "Exact-head hosted CI remains separate.",
+    "Endpoint contact does not model transient interior-path heat.",
+    "Physical fixture only; no learned behavior or neural-policy improvement.",
+    "Configuration is explicit and nonpersistent; no default surface is activated.",
+    "No checkpoint, whole acquired bank, executable or learned array is published."
+  ]
+}
