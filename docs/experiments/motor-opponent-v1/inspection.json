@@ -1,0 +1,78 @@
+{
+  "coverage": [
+    {
+      "family": "Rest",
+      "lateral_incoming_edges": 0
+    },
+    {
+      "family": "Inspect",
+      "lateral_incoming_edges": 0
+    },
+    {
+      "family": "Approach",
+      "lateral_incoming_edges": 0
+    }
+  ],
+  "lateral_tiles": [
+    [
+      1728,
+      1728
+    ],
+    [
+      1776,
+      1888
+    ],
+    [
+      1792,
+      1840
+    ],
+    [
+      1856,
+      1872
+    ],
+    [
+      1872,
+      1824
+    ],
+    [
+      1920,
+      1904
+    ]
+  ],
+  "opponent_path": {
+    "available": true,
+    "plan": {
+      "approach_signal": 1776,
+      "edge_weights": [
+        2.0,
+        -2.0,
+        6.0,
+        6.0
+      ],
+      "edges": [
+        6682,
+        7743,
+        10361,
+        10366
+      ],
+      "existing_nonzero_edges_overwritten": false,
+      "factor": "Opponent",
+      "fatigue_lane": 1,
+      "relay": 909,
+      "reserve": 1957,
+      "rest_reference": 1759,
+      "schema": "fatigue_opponent_weights_v1",
+      "shared_relay": true,
+      "source": 259
+    }
+  },
+  "phenotype_hash": [
+    306842739744075023,
+    6844103115561330938,
+    13375289776132371971,
+    15357822145197823679
+  ],
+  "replay_steps": 0,
+  "schema": "compiled_motor_opponent_inspection_v1",
+  "world_steps": 0
+}

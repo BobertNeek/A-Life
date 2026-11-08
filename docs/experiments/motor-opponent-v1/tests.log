@@ -1,0 +1,11 @@
+   Compiling alife_training v0.1.0 (/workspace/scratch/ee5e08a3ca9b/multidrive-routing-v1/crates/alife_training)
+    Finished `test` profile [unoptimized] target(s) in 3.94s
+     Running unittests examples/probe_motor_opponent.rs (/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/examples/probe_motor_opponent-37623547f478d693)
+
+running 2 tests
+test tests::compiled_inspection_and_available_path_cuts ... COMPILED_INSPECTION {"coverage":[{"family":"Rest","lateral_incoming_edges":0},{"family":"Inspect","lateral_incoming_edges":0},{"family":"Approach","lateral_incoming_edges":0}],"lateral_tiles":[[1728,1728],[1776,1888],[1792,1840],[1856,1872],[1872,1824],[1920,1904]],"opponent_path":{"available":true,"plan":{"approach_signal":1776,"edge_weights":[2.0,-2.0,6.0,6.0],"edges":[6682,7743,10361,10366],"existing_nonzero_edges_overwritten":false,"factor":"Opponent","fatigue_lane":1,"relay":909,"reserve":1957,"rest_reference":1759,"schema":"fatigue_opponent_weights_v1","shared_relay":true,"source":259}},"phenotype_hash":[306842739744075023,6844103115561330938,13375289776132371971,15357822145197823679],"replay_steps":0,"schema":"compiled_motor_opponent_inspection_v1","world_steps":0}
+ok
+test tests::starts_and_washout_are_explicit_and_cut_is_exact ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.36s
+

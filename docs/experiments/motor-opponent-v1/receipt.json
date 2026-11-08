@@ -1,0 +1,73 @@
+{
+  "schema": "motor_opponent_receipt_v1",
+  "runtime_source_commit": "744460a59886b0fe8d94fe287671c8648234453c",
+  "executable_sha256": "590b852092897fa7735a359cbb561f7d5add2abb8fff2d717df9f4d0dabe9016",
+  "raw_result_sha256": "2972a0c652c6a93338a74e2a0d9d251ce2b4fe614d68c00f793cd02f8fff9340",
+  "raw_result_bytes": 111116333,
+  "arms": 24,
+  "conditions_per_arm": 25,
+  "contexts": 3,
+  "sample_frames": [
+    32,
+    33,
+    34,
+    36,
+    40,
+    48,
+    64,
+    65,
+    66,
+    68,
+    72,
+    80,
+    96
+  ],
+  "evaluations": 624,
+  "frames": 59904,
+  "microsteps": 239616,
+  "input_cut_sequence_assertions": 600,
+  "paired_full_activation_trace_assertions": 300,
+  "frozen_snapshot_checks": 270,
+  "unit_tests_passed": 2,
+  "world_steps": 0,
+  "learning_steps": 0,
+  "scope": "Synthetic fixed encoded contexts, receptor gain 1, explicit four microsteps/frame, inherited branches, initial motor starts -0.5/0/+0.5 with zero EMA/metabolic load. No actual candidate reachability or biological-policy claims.",
+  "files": {
+    "inspection.json": {
+      "sha256": "dfc2aa1ad603d313f9b0d7198aaf53bca06c7a9f85914be89c8fad5401158d53",
+      "bytes": 1245
+    },
+    "README.md": {
+      "sha256": "9ae3beb3035079bb8d6d8dd05b8d8825fe68a7d911f2d2c71dd2f3283512de24",
+      "bytes": 2395
+    },
+    "replay.log": {
+      "sha256": "f69ab19d9ea9cb8608102d487b16b796b2167ac13bbe3e43c24b8a6ad6318567",
+      "bytes": 1138
+    },
+    "tests.log": {
+      "sha256": "b82ce7d5e1ba9c44414eaaf8ddfa61e0439b25d49f6cc4fe2fca4d3ea526624a",
+      "bytes": 1369
+    },
+    "results.json.gz": {
+      "sha256": "33fec03802d8ba056ba802c401db85265552d33c4a717cd20693b71129a4d2c5",
+      "bytes": 3514926
+    },
+    "summary.json": {
+      "sha256": "907cb8f54a28bf3c14fb74932cf323a5f71bdef06aafb7086d103a4e9a243e32",
+      "bytes": 5994651
+    },
+    "RESULTS.md": {
+      "sha256": "48077cbd2916d572e1f2c0363bf6e09c37c22e6c422d0f86cfbe2177c62422f2",
+      "bytes": 4937
+    },
+    "build.log": {
+      "sha256": "0f305e7877dcd0bc7872a6e2f060d4f780b46e0631d149a57ac380e7688ee65e",
+      "bytes": 173
+    },
+    "summarize.py": {
+      "sha256": "92dc00ee0b025b11528a18a43727417881717cd5c30ccae2e7ead1d84fd532c0",
+      "bytes": 4626
+    }
+  }
+}
