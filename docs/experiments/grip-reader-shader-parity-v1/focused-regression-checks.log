@@ -1,0 +1,92 @@
+   Compiling alife_training v0.1.0 (/workspace/scratch/ee5e08a3ca9b/grip-reader-shader-parity-v1/crates/alife_training)
+    Finished `test` profile [unoptimized] target(s) in 11.98s
+     Running unittests src/lib.rs (/workspace/scratch/ee5e08a3ca9b/grip-reader-parity-target-v1/debug/deps/alife_training-502a712293fe7df2)
+
+running 10 tests
+test cpu::organism::grip_reader_shader_parity::software_vulkan_matches_cpu_grip_reader_logits_features_and_eligibility ... grip_reader_adapter=AdapterInfo { name: "SwiftShader Device (Subzero)", vendor: 6880, device: 49374, device_type: Cpu, device_pci_bus_id: "", driver: "SwiftShader driver", driver_info: "", backend: Vulkan, subgroup_min_size: 4, subgroup_max_size: 4, transient_saves_memory: false }; synthetic=true; hardware_qualification=false
+grip_reader_case schema=3 action=2201 sign=-1 evidence=true saturated=false logit=-0.7145312 features=54 memory_eligibility_rows=4096 decoder_rows=8192 max_eligibility_error=0 logit_error=0
+grip_reader_case schema=3 action=2201 sign=1 evidence=true saturated=false logit=0.48546866 features=54 memory_eligibility_rows=4096 decoder_rows=8192 max_eligibility_error=0 logit_error=0
+grip_reader_case schema=3 action=2201 sign=-1 evidence=false saturated=false logit=0 features=54 memory_eligibility_rows=4096 decoder_rows=8192 max_eligibility_error=0 logit_error=0
+grip_reader_case schema=3 action=2202 sign=-1 evidence=true saturated=false logit=-0.669922 features=54 memory_eligibility_rows=4096 decoder_rows=8192 max_eligibility_error=0 logit_error=0
+grip_reader_case schema=3 action=2202 sign=1 evidence=true saturated=false logit=0.6988281 features=54 memory_eligibility_rows=4096 decoder_rows=8192 max_eligibility_error=0 logit_error=0
+grip_reader_case schema=3 action=2202 sign=-1 evidence=false saturated=false logit=0 features=54 memory_eligibility_rows=4096 decoder_rows=8192 max_eligibility_error=0 logit_error=0
+grip_reader_case schema=3 action=212 sign=-1 evidence=true saturated=false logit=-0.060546875 features=54 memory_eligibility_rows=4096 decoder_rows=8192 max_eligibility_error=0 logit_error=0
+grip_reader_case schema=3 action=212 sign=1 evidence=true saturated=false logit=0.0894531 features=54 memory_eligibility_rows=4096 decoder_rows=8192 max_eligibility_error=0 logit_error=0
+grip_reader_case schema=3 action=212 sign=-1 evidence=false saturated=false logit=0 features=54 memory_eligibility_rows=4096 decoder_rows=8192 max_eligibility_error=0 logit_error=0
+grip_reader_case schema=1 action=2202 sign=-1 evidence=true saturated=true logit=-0.5 features=36 memory_eligibility_rows=4096 decoder_rows=8192 max_eligibility_error=0 logit_error=0
+grip_reader_case schema=2 action=2202 sign=-1 evidence=true saturated=true logit=-12 features=36 memory_eligibility_rows=4096 decoder_rows=8192 max_eligibility_error=0 logit_error=0
+grip_reader_case schema=3 action=2202 sign=-1 evidence=true saturated=true logit=-12 features=54 memory_eligibility_rows=4096 decoder_rows=8192 max_eligibility_error=0 logit_error=0
+grip_reader_case schema=1 action=2202 sign=1 evidence=true saturated=true logit=0.5 features=36 memory_eligibility_rows=4096 decoder_rows=8192 max_eligibility_error=0 logit_error=0
+grip_reader_case schema=2 action=2202 sign=1 evidence=true saturated=true logit=12 features=36 memory_eligibility_rows=4096 decoder_rows=8192 max_eligibility_error=0 logit_error=0
+grip_reader_case schema=3 action=2202 sign=1 evidence=true saturated=true logit=12 features=54 memory_eligibility_rows=4096 decoder_rows=8192 max_eligibility_error=0 logit_error=0
+grip_reader_parity_complete cases=15; native_CPU_forward_and_staging=true; unchanged_WGSL_execution=true; cognitive_decoder_absent=true; synthetic=true
+ok
+test cpu::organism::tests::actual_staging_matches_elapsed_traces_route_masks_and_selected_decoders ... ok
+test cpu::organism::tests::eligibility_decay_uses_elapsed_simulation_ticks_including_high_word ... ok
+test cpu::organism::tests::rejected_ungrounded_credit_keeps_pending_and_all_private_state ... ok
+test cpu::organism::tests::speech_eligibility_requires_both_vocal_selection_and_payload_receipt ... ok
+test cpu::organism::tests::waking_credit_gating_preserves_clipping_and_alpha_semantics ... ok
+test cpu::organism::tests::waking_fast_update_matches_documented_production_coordination_vectors ... ok
+test cpu::organism::tests::waking_hebbian_oja_uses_all_three_weight_components_and_alpha ... ok
+test cpu::organism::tests::waking_normalization_follows_signed_local_credit_magnitude ... ok
+test cpu::organism::tests::zero_step_collection_preserves_both_banks_and_native_eligibility_input ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 121 filtered out; finished in 10.13s
+
+   Compiling syn v2.0.117
+   Compiling serde_core v1.0.228
+   Compiling cc v1.2.63
+   Compiling serde v1.0.228
+   Compiling blake3 v1.8.5
+   Compiling serde_derive v1.0.228
+   Compiling thiserror-impl v2.0.18
+   Compiling bytemuck_derive v1.10.2
+   Compiling virtue v0.0.18
+   Compiling serde_json v1.0.150
+   Compiling bincode_derive v2.0.1
+   Compiling bytemuck v1.25.0
+   Compiling thiserror v2.0.18
+   Compiling unty v0.0.4
+   Compiling smallvec v1.15.1
+   Compiling alife_core v0.1.0 (/workspace/scratch/ee5e08a3ca9b/grip-reader-shader-parity-v1/crates/alife_core)
+   Compiling bincode v2.0.1
+    Finished `test` profile [unoptimized] target(s) in 1m 24s
+     Running tests/n2048_grip_reader_candidate.rs (/workspace/scratch/ee5e08a3ca9b/grip-reader-parity-target-v1/debug/deps/n2048_grip_reader_candidate-b56d79c7ea78d323)
+
+running 6 tests
+test legacy_draft_wire_sequence_and_json_are_unchanged ... ok
+test new_interface_has_distinct_identity_and_exactly_sixty_four_declared_retargets ... ok
+test old_profile_arbitrary_operation_numbers_keep_their_old_meaning ... ok
+test operation_port_requires_supported_recall_and_is_zero_for_play_vocal_and_empty_memory ... ok
+test ownership_is_typed_and_bound_without_repurposing_object_lanes ... ok
+test retarget_mapping_and_physical_order_tampering_are_rejected ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.00s
+
+     Running tests/n2048_memory_gain_candidate.rs (/workspace/scratch/ee5e08a3ca9b/grip-reader-parity-target-v1/debug/deps/n2048_memory_gain_candidate-4b3df85edc360adc)
+
+running 2 tests
+test memory_gain_has_distinct_identity_without_changing_graph_or_plasticity ... ok
+test plan_rejects_unversioned_gain_and_selector_substitution ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.58s
+
+   Compiling alife_core v0.1.0 (/workspace/scratch/ee5e08a3ca9b/grip-reader-shader-parity-v1/crates/alife_core)
+   Compiling serde_json v1.0.150
+   Compiling alife_gpu_backend v0.1.0 (/workspace/scratch/ee5e08a3ca9b/grip-reader-shader-parity-v1/crates/alife_gpu_backend)
+    Finished `test` profile [unoptimized] target(s) in 1m 06s
+     Running tests/n2048_grip_reader_candidate.rs (/workspace/scratch/ee5e08a3ca9b/grip-reader-parity-target-v1/debug/deps/n2048_grip_reader_candidate-da7834d2617a0568)
+
+running 2 tests
+test grip_identity_uses_the_same_memory_upload_coordinates_as_cpu ... ok
+test grip_slots_reject_legacy_frames_even_when_numeric_action_matches_release ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.75s
+
+     Running tests/n2048_memory_gain_candidate.rs (/workspace/scratch/ee5e08a3ca9b/grip-reader-parity-target-v1/debug/deps/n2048_memory_gain_candidate-87d6f288b7625f4c)
+
+running 1 test
+test explicit_gain_upload_uses_the_same_versioned_plan_as_cpu ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.33s
+

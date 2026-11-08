@@ -989,3 +989,6 @@ mod tests {
         assert_eq!(decay(0.9, 1u64 << 32), 0.);
     }
 }
+
+#[cfg(all(test, feature = "gpu-tests"))]
+mod grip_reader_shader_parity;
