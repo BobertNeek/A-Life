@@ -213,3 +213,12 @@ release behavior, sustained feeding, GPU-device execution or promotion. No
 retained private life was an input and no autonomous study was run. Subsequent
 world swap work and any new behavior experiment must keep its own source and
 effect attribution; this evidence is not a result on that changed world.
+
+## Failed matched world comparison, 2026-11-08
+
+The separate same-brain old/new world comparison stopped without a returned or
+validated case summary. Its [preserved failure record](../world-swap-2026-11-08/failed-reserved-attempt/README.md)
+keeps the eight original public files, bounded exposure accounting and the
+source-level instrumentation diagnosis. The exact failure event remains unknown.
+The allocation is closed without retry. This is not a behavioral result for this
+grip-aware candidate and does not alter the qualification evidence above.
