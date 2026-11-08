@@ -24,6 +24,21 @@ The fixed test inventory covers:
 - Changed-source rustfmt, static core boundaries, strict selected-target Clippy,
   this helper's source-only tests and the closed study's existing static guards.
 
+Historical Rust copies under `docs/experiments/` are evidence, not compiled
+Cargo inputs. Formatting leaves those exact archived bytes alone. Every other
+changed Rust path must still belong to the tracked `crates/**/*.rs` inventory;
+unexpected non-archive paths fail the same source-binding guard. The source
+inventory, clean-tree/head checks, fixture list and command budgets are unchanged.
+
+At head `328460e9`, hosted run `42444514160` stopped with
+`source_binding_failed` after the static contracts, core boundaries and 38 crate
+format gates passed. Source inspection identified four newly archived Rust copies
+outside the compiled-source inventory as the cause; the sanitized failure did not
+name a path. No functional fixture or Clippy stage ran in that job. The correction
+has 42 passing helper tests, 38 passing closed-study static tests and passing core
+boundaries locally; the actual 38 compiled/four archived changed-path split was
+checked. Hosted functional qualification remains pending, with no study rerun.
+
 Every fixture target is first compiled explicitly with Cargo `--no-run` and JSON
 compiler messages. A separate `--list` invocation binds failure identifiers to
 that target and filter. Execution requires a nonempty test inventory and a matching

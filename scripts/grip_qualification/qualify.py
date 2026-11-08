@@ -302,6 +302,21 @@ def source_inventory(workspace):
     return sources
 
 
+def changed_format_sources(workspace, sources):
+    """Format compiled sources, leaving archived experiment bytes untouched."""
+    changed = git(workspace, "diff", "--name-only", "--diff-filter=ACMR", BASE, "HEAD", "--", "*.rs")
+    selected = []
+    for name in changed.splitlines():
+        # Historical source copies are evidence, not Cargo inputs. They can
+        # intentionally retain another revision's formatting and checksums.
+        if name.startswith("docs/experiments/"):
+            continue
+        if name not in sources:
+            raise GateError("source_binding_failed")
+        selected.append(name)
+    return selected
+
+
 class Runner:
     def __init__(self, workspace, runner_temp, sources):
         self.workspace, self.sources = workspace, sources
@@ -420,10 +435,7 @@ def qualify():
     runner.check("closed_study_static_contracts", ["python3", "-B", "-m", "unittest", "discover",
         "-s", "docs/experiments/episodic-reader-2026-11-07", "-p", "test_*transfer*.py"], 90)
     runner.check("core_boundaries", ["bash", "scripts/check_core_boundaries.sh", "--static"], 30)
-    changed = git(workspace, "diff", "--name-only", "--diff-filter=ACMR", BASE, "HEAD", "--", "*.rs")
-    for name in changed.splitlines():
-        if name not in sources:
-            raise GateError("source_binding_failed")
+    for name in changed_format_sources(workspace, sources):
         runner.check("format/" + name,
             ["rustfmt", "--edition", "2021", "--config", "skip_children=true", "--check", name], 30)
     for suite in SUITES:

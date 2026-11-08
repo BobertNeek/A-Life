@@ -17,6 +17,26 @@ ROOT = Path(__file__).resolve().parents[2]
 PRIVATE = "PRIVATE_CHECKPOINT_neural_world_journal_927"
 
 
+class FormatSourceTests(unittest.TestCase):
+    def test_archived_rust_does_not_block_or_enter_compiled_source_formatting(self):
+        source = "crates/alife_training/examples/probe_grip_reader.rs"
+        archive = "docs/experiments/brain-surgery-2026-11-08/reader-v1/source/" + source
+        with patch.object(q, "git", return_value=source + "\n" + archive) as git:
+            self.assertEqual(q.changed_format_sources(Path("."), {source: 100}), [source])
+        git.assert_called_once_with(Path("."), "diff", "--name-only", "--diff-filter=ACMR",
+                                    q.BASE, "HEAD", "--", "*.rs")
+
+    def test_archive_only_change_does_not_schedule_native_source_formatting(self):
+        with patch.object(q, "git", return_value="docs/experiments/frozen/source.rs"):
+            self.assertEqual(q.changed_format_sources(Path("."), {}), [])
+
+    def test_unknown_compiled_or_nonarchive_rust_is_still_rejected(self):
+        for name in ("crates/alife_training/src/unbound.rs", "build.rs", "docs/source.rs"):
+            with self.subTest(name=name), patch.object(q, "git", return_value=name):
+                with self.assertRaisesRegex(q.GateError, "source_binding_failed"):
+                    q.changed_format_sources(Path("."), {})
+
+
 class ProjectionTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix="grip-source-test-")
