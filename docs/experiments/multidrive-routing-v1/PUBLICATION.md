@@ -8,6 +8,10 @@ The strongest results are the missing recurrent routes in default N2048, missing
 
 The next experiment separates differential readout calibration from upstream operating-point repair before introducing recurrent drive competition. It must preserve legitimate rest, account for ATP availability with the correct sign, and avoid pretending that generic Grab is social contact or arbitrary Avoid is thermoregulation. No newly proposed weights are qualified by this baseline.
 
+## Terminology clarification
+
+The original results call one baseline “settled.” It used a fixed 32-frame warm-up; convergence was not separately established in this baseline. The observed Rest saturation is real, but attributing it specifically to dendrites rather than recurrent input and bias requires the separate input-decomposition control. Original result and receipt bytes remain unchanged.
+
 ## Reference for the Astra handoff
 
 The methodological inspiration remains MIT CSAIL OASYS, [Sparks of Weight-Space Programming](https://rikiyat.github.io/blog/weight-space-programming/). Experiment 4 studies targeted weight repair, experiment 5 constructs whole 20,486-parameter game networks, and experiment 6 uses iterative feedback. A-Life's recurrent, embodied and plastic brain requires its own measurements and protected comparisons. These results are practice for that process, not replication of the paper's performance.
