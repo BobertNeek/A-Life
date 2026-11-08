@@ -1,0 +1,23 @@
+diff --git a/crates/alife_gpu_backend/src/closed_loop_runtime/software_training_test.rs b/crates/alife_gpu_backend/src/closed_loop_runtime/software_training_test.rs
+index 39f2c8d1..f1163cf9 100644
+--- a/crates/alife_gpu_backend/src/closed_loop_runtime/software_training_test.rs
++++ b/crates/alife_gpu_backend/src/closed_loop_runtime/software_training_test.rs
+@@ -28,6 +28,18 @@ impl GpuClosedLoopBackend {
+         Self::new_software_vulkan_fixture(profile, true)
+     }
+ 
++    /// Explicit class-5 software kernel qualification only. This fixture uses
++    /// the sealed research accounting policy and remains a truthful CPU Vulkan
++    /// adapter. It is not hardware qualification or a gameplay fallback.
++    pub fn new_software_vulkan_grounded_drive_research_test(
++        profile: GpuRuntimeProfile,
++    ) -> Result<Self, ScaffoldContractError> {
++        let mut backend = Self::new_software_vulkan_runtime_test(profile)?;
++        backend.activity_policy = BrainActivityPolicyV1::grounded_drive_research_v1();
++        backend.activity_policy.validate_contract()?;
++        Ok(backend)
++    }
++
+     fn new_software_vulkan_fixture(
+         profile: GpuRuntimeProfile,
+         runtime_fixture: bool,

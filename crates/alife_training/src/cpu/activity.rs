@@ -46,13 +46,17 @@ pub fn cpu_activity_budget(
     if !canonical_atp.is_finite() || !(0.0..=1.0).contains(&canonical_atp) {
         return Err(ScaffoldContractError::ScalarOutOfRange);
     }
-    let capacity = BrainCapacityClass::production_for_id(p.brain_class_id())?;
+    let capacity = if p.foundation_abi().n2048_grounded_drive_basis().is_some() {
+        BrainCapacityClass::n2048_grounded_drive_research()
+    } else {
+        BrainCapacityClass::production_for_id(p.brain_class_id())?
+    };
     if candidates > u32::from(capacity.execution().max_candidates())
         || memory_records > u32::from(capacity.execution().max_candidates())
     {
         return Err(ScaffoldContractError::BrainActivityPolicyMismatch);
     }
-    let policy = BrainActivityPolicyV1::production_v1();
+    let policy = BrainActivityPolicyV1::for_phenotype(p);
     let available = (f64::from(canonical_atp) * f64::from(BRAIN_ATP_Q16_MAX)).floor() as u32;
     let identity = BrainDispatchIdentity {
         organism_id_raw: anchor.organism_id.raw(),

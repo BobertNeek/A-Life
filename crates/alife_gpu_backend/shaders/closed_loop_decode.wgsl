@@ -99,7 +99,8 @@ fn decode_candidates(@builtin(global_invocation_id) gid:vec3<u32>) {
   let candidate_record = load_candidate(header.candidate_offset + candidate * 8u);
   let decoder = load_decoder_plan(brain.decoder_plan_offset);
   let frame_word_count = arrayLength(&frame_payload_words);
-  var valid = decoder.schema_version == DECODER_SCHEMA_VERSION
+  var valid = ((decoder.schema_version == DECODER_SCHEMA_VERSION && brain.class_id != 5u)
+      || (decoder.schema_version == 2u && brain.class_id == 5u && decoder.flattened_input_lane_count == 54u))
     && decoder.feature_count == 24u
     && decoder.flattened_input_lane_count >= decoder.feature_count
     && decoder.flattened_input_lane_count <= 64u
@@ -113,7 +114,7 @@ fn decode_candidates(@builtin(global_invocation_id) gid:vec3<u32>) {
       brain.synapse_count
     )
     && candidate_record.candidate_index == candidate
-    && span_within(candidate_record.feature_offset, 24u, frame_word_count);
+    && span_within(candidate_record.feature_offset, select(24u, 54u, decoder.schema_version == 2u), frame_word_count);
   var family = GpuDecoderFamilyRecord(0xffffffffu,0u,0u,0u,0u,0u,0u,0u);
   if (valid) { family = find_decoder_family(decoder, candidate_record.family); }
   valid = valid && family.family_raw == candidate_record.family
@@ -160,7 +161,7 @@ fn decode_candidates(@builtin(global_invocation_id) gid:vec3<u32>) {
   for (var index=0u; index<family.weight_index_count && valid; index++) {
     let map = load_decoder_weight_index(family.weight_index_start + index * 4u);
     valid = map.reserved0 == 0u
-      && map.input_lane < decoder.feature_count
+      && (map.input_lane < decoder.feature_count || (decoder.schema_version == 2u && map.input_lane >= 36u && map.input_lane < 46u))
       && map.motor_index < decoder.motor_width
       && map.global_synapse_id == family.decoder_synapse_start + index
       && map.global_synapse_id >= brain.recurrent_synapse_count

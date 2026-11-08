@@ -71,6 +71,11 @@ pub fn encode_cpu_frame(
     {
         return Err(invalid());
     }
+    let derived_rows = if p.foundation_abi().n2048_grounded_drive_basis().is_some() {
+        Some(prepare_grounded_drive_features(frame)?)
+    } else {
+        None
+    };
     let candidates = frame
         .candidates()
         .iter()
@@ -102,6 +107,10 @@ pub fn encode_cpu_frame(
             inputs[50] = cog.gap_match.raw();
             inputs[51] = cog.prior_residual.raw();
             inputs[52] = f32::from(cog.forecast_available);
+            if let Some(rows) = &derived_rows {
+                // AFTER ordinary cognitive fill, exactly as on GPU.
+                inputs[36..46].copy_from_slice(&rows[i]);
+            }
             finite(&inputs)?;
             let family = p
                 .candidate_decoder()

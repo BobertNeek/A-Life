@@ -56,7 +56,7 @@ pub(super) fn compile_recurrent(
         }
     }
     validate_alpha_keys(genome)?;
-    if capacity.id() == BrainCapacityClass::N2048_ID {
+    if capacity.has_n2048_layout() {
         return compile_n2048_foundation(genome, layout, capacity, &masks, &densities);
     }
     let mut enabled = masks
@@ -330,7 +330,7 @@ pub(super) fn compile_n2048_experimental(
 ) -> Result<RecurrentCompilation, ScaffoldContractError> {
     let (mut projections, mut synapses, mut receipts) =
         compile_recurrent(genome, layout, capacity)?;
-    if capacity.id() != BrainCapacityClass::N2048_ID {
+    if !capacity.has_n2048_layout() {
         return Err(compile_error());
     }
     for (index, projection) in projections.iter_mut().enumerate() {
@@ -441,7 +441,16 @@ pub(super) fn validate_n2048_experimental_coordinates(
     let (projections, synapses, _) =
         compile_n2048_experimental(&genome, phenotype.lobe_layout(), capacity)?;
     if phenotype.projections().get(..projections.len()) != Some(projections.as_slice())
-        || phenotype.synapses().len() != 32768
+        || phenotype.synapses().len()
+            != if phenotype
+                .foundation_abi()
+                .n2048_grounded_drive_basis()
+                .is_some()
+            {
+                34048
+            } else {
+                32768
+            }
         || synapses.iter().zip(phenotype.synapses()).any(|(a, b)| {
             a.source() != b.source()
                 || a.target() != b.target()

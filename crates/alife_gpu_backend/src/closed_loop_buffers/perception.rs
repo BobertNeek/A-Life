@@ -52,6 +52,21 @@ impl GpuPerceptionUpload {
         if !(CANDIDATE_FEATURE_COUNT..=64).contains(&decoder_input_stride) {
             return Err(GpuClosedLoopError::LayoutMismatch);
         }
+        let derived = record.class_id
+            == u32::from(alife_core::BrainCapacityClass::N2048_GROUNDED_DRIVE_RESEARCH_ID.raw());
+        if derived
+            && (decoder_input_stride != 54 || frame.sensor_profile() != slot.sensor_profile())
+        {
+            return Err(GpuClosedLoopError::LayoutMismatch);
+        }
+        let derived_rows = if derived {
+            Some(
+                alife_core::prepare_grounded_drive_features(frame)
+                    .map_err(|_| GpuClosedLoopError::MalformedUpload)?,
+            )
+        } else {
+            None
+        };
         let tick = frame.tick().raw();
         let header = GpuPerceptionHeader {
             // Dynamic dispatches inherit the slot's GPU layout ABI version.
@@ -115,12 +130,18 @@ impl GpuPerceptionUpload {
         );
         frame_payload_words.extend(frame.homeostasis().drives.to_array().map(f32::to_bits));
         frame_payload_words.extend(frame.homeostasis().hormones.to_array().map(f32::to_bits));
-        for candidate in frame.candidates() {
+        for (index, candidate) in frame.candidates().iter().enumerate() {
+            let start = frame_payload_words.len();
             frame_payload_words.extend(candidate.features.0.map(f32::to_bits));
             frame_payload_words.resize(
                 frame_payload_words.len() + decoder_input_stride - CANDIDATE_FEATURE_COUNT,
                 0,
             );
+            if let Some(rows) = &derived_rows {
+                for (lane, value) in rows[index].into_iter().enumerate() {
+                    frame_payload_words[start + 36 + lane] = value.to_bits();
+                }
+            }
         }
         // Context banks follow candidate lanes, preserving the existing 77-lane
         // sensory/body ABI and decoder feature offsets.

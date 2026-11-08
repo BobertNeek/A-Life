@@ -26,12 +26,18 @@ pub mod experience;
 mod factorized_selection;
 pub mod foundation;
 pub mod genome;
+mod grounded_drive_features;
 pub mod grounding;
 pub mod ids;
 pub mod language;
 pub mod learning;
 mod legacy_nano512_compatibility;
 mod n2048_experimental_graph;
+mod n2048_grounded_drive_basis;
+pub use grounded_drive_features::{
+    prepare_grounded_drive_features, GROUNDED_DRIVE_LANE_END, GROUNDED_DRIVE_LANE_START,
+};
+pub use n2048_grounded_drive_basis::N2048GroundedDriveBasisV1;
 mod nano512_readout_candidate;
 pub use cognitive_channel::{
     CognitiveChannelExtensionV1, CognitiveChannelPlanV1,

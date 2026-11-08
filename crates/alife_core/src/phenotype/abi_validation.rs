@@ -170,7 +170,7 @@ pub(super) fn compute_abi_digests(
     projections: &[CompiledProjection],
     synapses: &[CompiledSynapse],
 ) -> (Blake3Digest, Blake3Digest) {
-    if selection.n2048_experimental_graph().is_some() {
+    if selection.uses_n2048_experimental_topology() {
         use crate::blake3_digest::{domain_hasher, Blake3Write};
         let mut route = domain_hasher(b"alife.n2048.experimental-route-abi.v1");
         let mut plasticity = domain_hasher(b"alife.n2048.experimental-plasticity-abi.v1");
@@ -185,7 +185,13 @@ pub(super) fn compute_abi_digests(
             plasticity.write_u32(s.alpha().to_bits());
             plasticity.write_u16(s.receptor_index());
         }
-        if selection.is_n2048_bounded_founder_v1() {
+        if selection.n2048_grounded_drive_basis().is_some() {
+            for word in crate::N2048GroundedDriveBasisV1::recipe_digest() {
+                route.write_u64(word);
+                plasticity.write_u64(word);
+            }
+        }
+        if selection.uses_bounded_fresh_branches() {
             for word in crate::FoundationAbiSelection::bounded_founder_plan_digest() {
                 plasticity.write_u64(word);
             }

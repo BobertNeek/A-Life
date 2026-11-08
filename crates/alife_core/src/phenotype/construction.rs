@@ -46,7 +46,7 @@ fn compile_inner(
     validate_supported_inputs(genome, capacity)?;
     let layout = if inputs.legacy_foundation_compatibility_abi().is_some() {
         crate::legacy_nano512_compatibility::legacy_nano512_runtime_layout()?
-    } else if capacity.id() == BrainCapacityClass::N2048_ID {
+    } else if capacity.has_n2048_layout() {
         crate::N2048FoundationLayoutV1::lobe_layout()
     } else {
         super::layout_compile::compile_layout(
@@ -58,7 +58,7 @@ fn compile_inner(
     let encoder =
         super::io_compile::compile_encoder(genome, development, &layout, inputs.sensor_profile())?;
     let (mut projections, mut synapses, mut receipts) =
-        if inputs.foundation_abi().n2048_experimental_graph().is_some() {
+        if inputs.foundation_abi().uses_n2048_experimental_topology() {
             super::topology_compile::compile_n2048_experimental(genome, &layout, capacity)?
         } else {
             super::topology_compile::compile_recurrent(genome, &layout, capacity)?
@@ -289,7 +289,7 @@ fn compile_inner(
                     .get(usize::from(synapse.route_index()))
                     .ok_or(ScaffoldContractError::PhenotypeCompile)?;
                 let delta = if inputs.n2048_candidate_asset().is_some()
-                    || inputs.foundation_abi().n2048_experimental_graph().is_some()
+                    || inputs.foundation_abi().uses_n2048_experimental_topology()
                 {
                     0.0
                 } else {
@@ -299,7 +299,7 @@ fn compile_inner(
                     )
                 };
                 let exact_candidate = inputs.n2048_candidate_asset().is_some()
-                    || inputs.foundation_abi().n2048_experimental_graph().is_some();
+                    || inputs.foundation_abi().uses_n2048_experimental_topology();
                 let mut composed = if exact_candidate {
                     *weight
                 } else {

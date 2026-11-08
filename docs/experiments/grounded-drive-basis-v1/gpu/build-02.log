@@ -1,0 +1,3 @@
+   Compiling alife_training v0.1.0 (<workspace>/grounded-drive-gpu-parity-v1/crates/alife_training)
+    Finished `test` profile [unoptimized] target(s) in 5.46s
+  Executable tests/grounded_drive_gpu_parity.rs (<artifacts>/grounded-drive-gpu-parity-v1-target/debug/deps/grounded_drive_gpu_parity-8c5623dd9357d217)

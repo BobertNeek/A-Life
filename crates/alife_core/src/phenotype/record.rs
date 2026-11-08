@@ -687,17 +687,24 @@ impl BrainPhenotype {
             .validate_against(capacity, self.sensor_profile)?;
         if self
             .foundation_abi_selection
-            .n2048_experimental_graph()
-            .is_some()
+            .uses_n2048_experimental_topology()
         {
             super::topology_compile::validate_n2048_experimental_coordinates(self, capacity)?;
         }
-        if self.foundation_abi_selection.is_n2048_bounded_founder_v1()
+        if self.foundation_abi_selection.uses_bounded_fresh_branches()
             && (self
                 .cognitive_architecture_plan()
                 .dendritic_branch_capacity()
                 < 64
                 || self.candidate_decoder().motor_width() < 64)
+        {
+            return Err(ScaffoldContractError::PhenotypeCompile);
+        }
+        if self
+            .foundation_abi_selection
+            .n2048_grounded_drive_basis()
+            .is_some()
+            && (self.cognitive_decoder.is_some() || self.cognitive_channel_plan.is_some())
         {
             return Err(ScaffoldContractError::PhenotypeCompile);
         }
@@ -963,7 +970,11 @@ impl BrainPhenotype {
             &self.replay_capture_plan,
             &self.sleep_consolidation_plan,
         )?;
-        let n2048 = capacity.id() == BrainCapacityClass::N2048_ID;
+        let n2048 = capacity.has_n2048_layout();
+        let derived = self
+            .foundation_abi_selection
+            .n2048_grounded_drive_basis()
+            .is_some();
         let n4096 = capacity.id() == BrainCapacityClass::N4096_RESEARCH_ID;
         let cognitive_count = self
             .cognitive_decoder
@@ -976,7 +987,11 @@ impl BrainPhenotype {
             || !memory_channel_valid
             || (n2048
                 && (candidate_count
-                    != crate::N2048FoundationLayoutV1::CANDIDATE_DECODER_SYNAPSE_COUNT
+                    != if derived {
+                        4352
+                    } else {
+                        crate::N2048FoundationLayoutV1::CANDIDATE_DECODER_SYNAPSE_COUNT
+                    }
                     || speech_count
                         != crate::N2048FoundationLayoutV1::SPEECH_DECODER_SYNAPSE_COUNT
                     || memory_count

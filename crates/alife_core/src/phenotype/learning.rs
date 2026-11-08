@@ -646,7 +646,7 @@ fn n2048_section_policy(
     capacity: &BrainCapacityClass,
     projection: &CompiledProjection,
 ) -> Option<FoundationSectionPolicy> {
-    (capacity.id() == BrainCapacityClass::N2048_ID)
+    (capacity.has_n2048_layout())
         .then(|| {
             N2048FoundationLayoutV1::route_specs()
                 .iter()

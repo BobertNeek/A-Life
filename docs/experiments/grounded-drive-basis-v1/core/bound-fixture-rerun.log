@@ -1,0 +1,17 @@
+   Compiling alife_training v0.1.0 (<workspace>/grounded-drive-basis-v1/crates/alife_training)
+    Finished `test` profile [unoptimized] target(s) in 1.46s
+     Running tests/cpu_grounded_drive_basis.rs (<artifacts>/grounded-drive-basis-v1-target/debug/deps/cpu_grounded_drive_basis-030100bfe35b9fa0)
+
+running 2 tests
+test actual_cpu_encode_overwrites_only_reserved_cognitive_lanes_and_matches_gpu_upload ... ok
+test derived_readout_gradient_matches_finite_difference_without_state_or_optimizer_changes ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.30s
+
+    Checking alife_core v0.1.0 (<workspace>/grounded-drive-basis-v1/crates/alife_core)
+    Checking alife_storage v0.1.0 (<workspace>/grounded-drive-basis-v1/crates/alife_storage)
+    Checking alife_world v0.1.0 (<workspace>/grounded-drive-basis-v1/crates/alife_world)
+    Checking alife_gpu_backend v0.1.0 (<workspace>/grounded-drive-basis-v1/crates/alife_gpu_backend)
+    Checking alife_runtime v0.1.0 (<workspace>/grounded-drive-basis-v1/crates/alife_runtime)
+    Checking alife_training v0.1.0 (<workspace>/grounded-drive-basis-v1/crates/alife_training)
+    Finished `dev` profile [unoptimized] target(s) in 50.59s

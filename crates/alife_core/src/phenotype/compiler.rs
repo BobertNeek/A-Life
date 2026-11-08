@@ -13,6 +13,40 @@ use super::{BrainCapacityClass, BrainPhenotype, PhenotypeCompilerInputs};
 pub struct PhenotypeCompiler;
 
 impl PhenotypeCompiler {
+    pub fn compile_n2048_grounded_drive_basis(
+        genome: BrainGenome,
+        development: DevelopmentState,
+        sensor_profile: SensorProfile,
+    ) -> Result<(BrainPhenotype, PhenotypeCompilerInputs), ScaffoldContractError> {
+        let capacity = BrainCapacityClass::n2048_grounded_drive_research();
+        let inputs = PhenotypeCompilerInputs::try_new_with_foundation_selection(
+            genome,
+            &capacity,
+            development,
+            sensor_profile,
+            crate::FoundationAbiSelection::N2048GroundedDriveBasisV1(
+                crate::N2048GroundedDriveBasisV1::fresh(sensor_profile)?,
+            ),
+        )?;
+        Ok((Self::compile_validated(&inputs, &capacity)?, inputs))
+    }
+    pub fn compile_n2048_grounded_drive_basis_candidate(
+        genome: BrainGenome,
+        development: DevelopmentState,
+        asset: FoundationWeightAsset,
+    ) -> Result<(BrainPhenotype, PhenotypeCompilerInputs), ScaffoldContractError> {
+        let capacity = BrainCapacityClass::n2048_grounded_drive_research();
+        let inputs = PhenotypeCompilerInputs::try_new_with_foundation_selection(
+            genome,
+            &capacity,
+            development,
+            asset.manifest().sensor_profile(),
+            crate::FoundationAbiSelection::N2048GroundedDriveBasisV1(
+                crate::N2048GroundedDriveBasisV1::for_asset(&asset)?,
+            ),
+        )?;
+        Ok((Self::compile_validated(&inputs, &capacity)?, inputs))
+    }
     /// Explicit fresh research graph. This does not reinterpret V1 weights.
     pub fn compile_n2048_experimental_graph(
         genome: BrainGenome,
@@ -208,6 +242,15 @@ impl PhenotypeCompiler {
         inputs: &PhenotypeCompilerInputs,
         capacity: &BrainCapacityClass,
     ) -> Result<BrainPhenotype, ScaffoldContractError> {
+        if let Some(recipe) = inputs.foundation_abi().n2048_grounded_drive_basis() {
+            inputs.validate_against(capacity)?;
+            return match recipe.asset()? {
+                Some(asset) => {
+                    super::construction::compile_with_foundation_asset(inputs, capacity, &asset)
+                }
+                None => super::construction::compile(inputs, capacity),
+            };
+        }
         if let Some(recipe) = inputs.foundation_abi().n2048_experimental_graph() {
             inputs.validate_against(capacity)?;
             return match recipe.asset()? {

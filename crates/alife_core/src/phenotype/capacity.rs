@@ -341,6 +341,7 @@ pub struct BrainCapacityClass {
 impl BrainCapacityClass {
     pub const N512_ID: BrainClassId = BrainClassId(1);
     pub const N1024_ID: BrainClassId = BrainClassId(2);
+    pub const N2048_GROUNDED_DRIVE_RESEARCH_ID: BrainClassId = BrainClassId(5);
     pub const N2048_ID: BrainClassId = BrainClassId(3);
     pub const N4096_RESEARCH_ID: BrainClassId = BrainClassId(4);
 
@@ -382,6 +383,21 @@ impl BrainCapacityClass {
         }
     }
 
+    /// Opt-in additive derived-feature capacity. Never a production class.
+    pub const fn n2048_grounded_drive_research() -> Self {
+        Self {
+            id: Self::N2048_GROUNDED_DRIVE_RESEARCH_ID,
+            execution: BrainExecutionBudget::production(
+                2048, 34112, 24640, 5376, 4096, 192, 128, 8192,
+            ),
+        }
+    }
+    pub const fn has_n2048_layout(&self) -> bool {
+        matches!(
+            self.id,
+            Self::N2048_ID | Self::N2048_GROUNDED_DRIVE_RESEARCH_ID
+        )
+    }
     pub const fn n4096_research() -> Self {
         Self {
             id: Self::N4096_RESEARCH_ID,
@@ -405,16 +421,18 @@ impl BrainCapacityClass {
     pub fn supported_for_id(id: BrainClassId) -> Result<Self, ScaffoldContractError> {
         match id {
             Self::N4096_RESEARCH_ID => Ok(Self::n4096_research()),
+            Self::N2048_GROUNDED_DRIVE_RESEARCH_ID => Ok(Self::n2048_grounded_drive_research()),
             _ => Self::production_for_id(id),
         }
     }
 
-    pub const fn supported_classes() -> [Self; 4] {
+    pub const fn supported_classes() -> [Self; 5] {
         [
             Self::n512(),
             Self::n1024(),
             Self::n2048(),
             Self::n4096_research(),
+            Self::n2048_grounded_drive_research(),
         ]
     }
 

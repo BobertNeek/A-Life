@@ -1861,6 +1861,47 @@ impl GpuClosedLoopBackend {
         restore
     }
 
+    /// Explicit new research continuation, requiring the acquired topology.
+    pub fn restore_grounded_drive_research_with_live_topology(
+        &mut self,
+        organism_id: OrganismId,
+        phenotype: BrainPhenotype,
+        topology: GpuLiveTopologyCheckpointV1,
+        request: GpuBrainRestoreRequest,
+    ) -> Result<GpuBrainRestoreReceipt, ScaffoldContractError> {
+        self.ensure_ready()?;
+        self.activity_policy()
+            .validate_class(phenotype.brain_class_id())?;
+        if phenotype
+            .foundation_abi()
+            .n2048_grounded_drive_basis()
+            .is_none()
+        {
+            return Err(ScaffoldContractError::UnsupportedProductionBrainClass);
+        }
+        let snapshot = request.into_snapshot();
+        let checkpoint_digest = snapshot.canonical_digest();
+        let parts = snapshot.into_parts();
+        if organism_id != parts.organism_id
+            || phenotype.phenotype_hash() != parts.phenotype_hash
+            || phenotype.neuron_count() as usize != parts.activation_a_bits.len()
+            || topology.neuron_count != phenotype.neuron_count()
+            || topology.phenotype_hash != phenotype.phenotype_hash()
+        {
+            return Err(ScaffoldContractError::BrainOwnershipMismatch);
+        }
+        let capacity = BrainCapacityClass::n2048_grounded_drive_research();
+        topology.validate_for_capacity(&capacity)?;
+        let handle = self.insert_research_brain(organism_id, phenotype)?;
+        let restore = self
+            .restore_live_topology_checkpoint(handle, &topology)
+            .and_then(|()| self.restore_brain_inner(handle, parts, checkpoint_digest));
+        if restore.is_err() {
+            let _ = self.remove_brain(handle);
+        }
+        restore
+    }
+
     pub fn restore_research_brain(
         &mut self,
         organism_id: OrganismId,

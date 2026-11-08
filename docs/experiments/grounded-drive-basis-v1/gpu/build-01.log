@@ -1,0 +1,136 @@
+   Compiling proc-macro2 v1.0.106
+   Compiling libc v0.2.186
+   Compiling unicode-ident v1.0.24
+   Compiling quote v1.0.45
+   Compiling syn v2.0.117
+   Compiling cfg-if v1.0.4
+   Compiling cfg_aliases v0.2.1
+   Compiling pkg-config v0.3.33
+   Compiling jobserver v0.1.34
+   Compiling shlex v2.0.1
+   Compiling bitflags v2.13.0
+   Compiling find-msvc-tools v0.1.9
+   Compiling cc v1.2.63
+   Compiling thiserror v2.0.18
+   Compiling libm v0.2.16
+   Compiling autocfg v1.5.1
+   Compiling num-traits v0.2.19
+   Compiling thiserror-impl v2.0.18
+   Compiling libloading v0.8.9
+   Compiling bytemuck_derive v1.10.2
+   Compiling arrayvec v0.7.6
+   Compiling equivalent v1.0.2
+   Compiling zerocopy v0.8.52
+   Compiling log v0.4.32
+   Compiling bytemuck v1.25.0
+   Compiling zerocopy-derive v0.8.52
+   Compiling smallvec v1.15.1
+   Compiling allocator-api2 v0.2.21
+   Compiling foldhash v0.2.0
+   Compiling hashbrown v0.16.1
+   Compiling naga v29.0.3
+   Compiling unicode-width v0.2.2
+   Compiling bit-vec v0.9.1
+   Compiling hashbrown v0.17.1
+   Compiling ash v0.38.0+1.3.281
+   Compiling parking_lot_core v0.9.12
+   Compiling once_cell v1.21.4
+   Compiling indexmap v2.14.0
+   Compiling bit-set v0.9.1
+   Compiling codespan-reporting v0.13.1
+   Compiling half v2.7.1
+   Compiling spirv v0.4.0+sdk-1.4.341.0
+   Compiling wayland-sys v0.31.11
+   Compiling scopeguard v1.2.0
+   Compiling foldhash v0.1.5
+   Compiling khronos-egl v6.0.0
+   Compiling serde_core v1.0.228
+   Compiling raw-window-handle v0.6.2
+   Compiling hexf-parse v0.2.1
+   Compiling rustc-hash v1.1.0
+   Compiling wgpu-types v29.0.3
+   Compiling hashbrown v0.15.5
+   Compiling lock_api v0.4.14
+   Compiling dlib v0.5.3
+   Compiling gpu-descriptor-types v0.2.0
+   Compiling wgpu-hal v29.0.3
+   Compiling version_check v0.9.5
+   Compiling presser v0.3.1
+   Compiling gpu-allocator v0.28.0
+   Compiling generic-array v0.14.7
+   Compiling gpu-descriptor v0.3.2
+   Compiling parking_lot v0.12.5
+   Compiling wgpu-naga-bridge v29.0.3
+   Compiling ordered-float v5.3.0
+   Compiling blake3 v1.8.5
+   Compiling glow v0.17.0
+   Compiling renderdoc-sys v1.1.0
+   Compiling profiling v1.0.18
+   Compiling serde v1.0.228
+   Compiling zstd-sys v2.0.16+zstd.1.5.7
+   Compiling wgpu-core v29.0.3
+   Compiling serde_derive v1.0.228
+   Compiling zmij v1.0.21
+   Compiling constant_time_eq v0.4.2
+   Compiling typenum v1.20.1
+   Compiling arrayref v0.3.9
+   Compiling cpufeatures v0.3.0
+   Compiling litrs v1.0.0
+   Compiling document-features v0.2.12
+   Compiling wgpu-core-deps-windows-linux-android v29.0.3
+   Compiling wgpu v29.0.3
+   Compiling serde_json v1.0.150
+   Compiling alife_core v0.1.0 (<workspace>/grounded-drive-gpu-parity-v1/crates/alife_core)
+   Compiling static_assertions v1.1.0
+   Compiling itoa v1.0.18
+   Compiling memchr v2.8.1
+   Compiling zstd-safe v7.2.4
+   Compiling block-buffer v0.10.4
+   Compiling crypto-common v0.1.7
+   Compiling alife_storage v0.1.0 (<workspace>/grounded-drive-gpu-parity-v1/crates/alife_storage)
+   Compiling pollster v0.4.0
+   Compiling alife_gpu_backend v0.1.0 (<workspace>/grounded-drive-gpu-parity-v1/crates/alife_gpu_backend)
+   Compiling alife_world v0.1.0 (<workspace>/grounded-drive-gpu-parity-v1/crates/alife_world)
+   Compiling digest v0.10.7
+   Compiling cpufeatures v0.2.17
+   Compiling sha2 v0.10.9
+   Compiling zstd v0.13.3
+   Compiling alife_runtime v0.1.0 (<workspace>/grounded-drive-gpu-parity-v1/crates/alife_runtime)
+   Compiling base64 v0.22.1
+   Compiling alife_training v0.1.0 (<workspace>/grounded-drive-gpu-parity-v1/crates/alife_training)
+error[E0425]: cannot find type `GpuTrainingStateSnapshot` in this scope
+   --> crates/alife_training/tests/grounded_drive_gpu_parity.rs:244:14
+    |
+244 | fn words(s: &GpuTrainingStateSnapshot, range: &Range<u32>) -> Vec<f32> {
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+   ::: crates/alife_gpu_backend/src/closed_loop_sleep.rs:179:1
+    |
+179 | pub struct GpuLearningStateSnapshot {
+    | ----------------------------------- similarly named struct `GpuLearningStateSnapshot` defined here
+    |
+help: a struct with a similar name exists
+    |
+244 - fn words(s: &GpuTrainingStateSnapshot, range: &Range<u32>) -> Vec<f32> {
+244 + fn words(s: &GpuLearningStateSnapshot, range: &Range<u32>) -> Vec<f32> {
+    |
+
+error[E0425]: cannot find type `GpuTrainingStateSnapshot` in this scope
+   --> crates/alife_training/tests/grounded_drive_gpu_parity.rs:252:15
+    |
+252 | fn neural(s: &GpuTrainingStateSnapshot) -> TrainingInitialState {
+    |               ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+   ::: crates/alife_gpu_backend/src/closed_loop_sleep.rs:179:1
+    |
+179 | pub struct GpuLearningStateSnapshot {
+    | ----------------------------------- similarly named struct `GpuLearningStateSnapshot` defined here
+    |
+help: a struct with a similar name exists
+    |
+252 - fn neural(s: &GpuTrainingStateSnapshot) -> TrainingInitialState {
+252 + fn neural(s: &GpuLearningStateSnapshot) -> TrainingInitialState {
+    |
+
+For more information about this error, try `rustc --explain E0425`.
+error: could not compile `alife_training` (test "grounded_drive_gpu_parity") due to 2 previous errors

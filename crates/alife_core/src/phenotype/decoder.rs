@@ -255,6 +255,13 @@ impl CandidateDecoderPlan {
         Ok(value)
     }
 
+    pub(super) fn with_grounded_drive_basis(mut self) -> Result<Self, ScaffoldContractError> {
+        self.schema_version = 2;
+        self.flattened_input_lane_count = 54;
+        self.canonical_digest = self.recompute_digest()?;
+        self.validate_local()?;
+        Ok(self)
+    }
     pub fn validate_against(
         &self,
         phenotype: &BrainPhenotype,
@@ -268,7 +275,13 @@ impl CandidateDecoderPlan {
             .map_or(u32::from(execution.candidate_feature_count()), |plan| {
                 plan.decoder_input_stride()
             });
-        if self.feature_count != execution.candidate_feature_count()
+        let derived = phenotype
+            .foundation_abi()
+            .n2048_grounded_drive_basis()
+            .is_some();
+        let expected_stride = if derived { 54 } else { expected_stride };
+        if (self.schema_version == 2) != derived
+            || self.feature_count != execution.candidate_feature_count()
             || u32::from(self.flattened_input_lane_count) != expected_stride
             || phenotype.cognitive_channel_plan().map_or(
                 self.flattened_input_lane_count != phenotype.budgets().global.decoder_input_lanes,
@@ -303,13 +316,25 @@ impl CandidateDecoderPlan {
                 .synapses()
                 .get(row.decoder_synapse_start as usize..end as usize)
                 .ok_or(ScaffoldContractError::PhenotypeCompile)?;
-            for synapse in slice {
+            for (local, synapse) in slice.iter().enumerate() {
                 let CompiledSynapseKind::Decoder(coordinate) = synapse.kind() else {
                     return Err(ScaffoldContractError::PhenotypeCompile);
                 };
+                if derived {
+                    let lane = local / 16;
+                    let expected_lane = if lane < 24 { lane } else { lane + 12 };
+                    if slice.len() != 544
+                        || coordinate.input_lane() as usize != expected_lane
+                        || coordinate.motor_index() as usize
+                            != usize::from(row.family.raw()) * 16 + local % 16
+                    {
+                        return Err(ScaffoldContractError::PhenotypeCompile);
+                    }
+                }
                 if coordinate.head() != DecoderHeadKind::ActionCandidate
                     || coordinate.family() != row.family
-                    || coordinate.input_lane() >= self.feature_count
+                    || !(coordinate.input_lane() < self.feature_count
+                        || (derived && (36..46).contains(&coordinate.input_lane())))
                     || coordinate.motor_index() >= self.motor_width
                     || synapse.source() != self.motor_start + u32::from(coordinate.motor_index())
                     || synapse.target() != self.motor_start + u32::from(coordinate.motor_index())
@@ -322,15 +347,18 @@ impl CandidateDecoderPlan {
     }
 
     fn validate_shape(&self) -> Result<(), ScaffoldContractError> {
-        if self.schema_version != DECODER_SCHEMA_VERSION
+        if !matches!(self.schema_version, DECODER_SCHEMA_VERSION | 2)
             || self.motor_width == 0
             || self.feature_count != CANDIDATE_FEATURE_COUNT as u16
             || self.flattened_input_lane_count
-                != self
-                    .memory_channel
-                    .map_or(CANDIDATE_FEATURE_COUNT as u16, |plan| {
-                        u16::try_from(plan.decoder_input_stride()).unwrap_or(u16::MAX)
-                    })
+                != if self.schema_version == 2 {
+                    54
+                } else {
+                    self.memory_channel
+                        .map_or(CANDIDATE_FEATURE_COUNT as u16, |plan| {
+                            u16::try_from(plan.decoder_input_stride()).unwrap_or(u16::MAX)
+                        })
+                }
             || self.families.len() != FAMILY_COUNT
         {
             return Err(ScaffoldContractError::PhenotypeCompile);

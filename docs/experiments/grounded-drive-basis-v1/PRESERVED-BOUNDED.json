@@ -1,0 +1,175 @@
+{
+  "schema": "preserved_bounded_source_and_evidence_v1",
+  "parent": "8ddf89f64311a5d6c8e76e5b219d6665c9ddac4e",
+  "files": [
+    {
+      "path": "crates/alife_core/tests/n2048_bounded_founder.rs",
+      "git_blob": "7d5386e86da52496a3b8059b30c8efb61a523250",
+      "sha256": "fd966774e024fbceb136830dcdb1b53bbfdf2146328eb50e1a26776246e822c8",
+      "bytes": 4327
+    },
+    {
+      "path": "crates/alife_training/src/cpu/host/bounded_founder_tests.rs",
+      "git_blob": "2bfae036bb952df45c12f67f7352d93a5cd6eb9d",
+      "sha256": "dca081ae5bb95e88c6ee33a2ec62561a21ef4afeed6c9db6bd0c314af8e17abd",
+      "bytes": 5333
+    },
+    {
+      "path": "docs/experiments/bounded-founder-v1/INITIAL-PROPOSAL.patch",
+      "git_blob": "87c51ab16362ad4a4b9469f530b0840aa9858ada",
+      "sha256": "aa8e221498ffbc9fbeb87134ca677b85192722d42f44a420a7e86a46a358e6b5",
+      "bytes": 23969
+    },
+    {
+      "path": "docs/experiments/bounded-founder-v1/PRESERVATION-REPAIRS.patch",
+      "git_blob": "86d9ccb971fe9275e3769629cbf10e35df8e2665",
+      "sha256": "31096b064d7d0e6758b0aff19e3a87420ea6f6bf9a0d838756c4ea142e431da0",
+      "bytes": 16103
+    },
+    {
+      "path": "docs/experiments/bounded-founder-v1/PUBLICATION.md",
+      "git_blob": "566c28cc9b9c4c271440c363e0f27892dff7b77e",
+      "sha256": "c40f98f19b88b3eb8ddad3d23bd5896f04207ed725745253e568cfdba17ba54c",
+      "bytes": 1881
+    },
+    {
+      "path": "docs/experiments/bounded-founder-v1/README.md",
+      "git_blob": "cffbde3f1c54074a53f798ae4386db539c9abe1c",
+      "sha256": "feb2840899ad3415506e281964eab360bd7dae90bfc472cea1dbecdce06830d2",
+      "bytes": 4355
+    },
+    {
+      "path": "docs/experiments/bounded-founder-v1/RESULTS.md",
+      "git_blob": "1236ca0e1bade7e0bcd260daf816453f544cdc69",
+      "sha256": "2e3d6a3b8f076249780d67b94e6851580c638fc4dacbd3d49848dfafb75442e4",
+      "bytes": 5698
+    },
+    {
+      "path": "docs/experiments/bounded-founder-v1/admission-v2.log",
+      "git_blob": "8f241cf460e41f833919629118e2238375dbcafe",
+      "sha256": "8534e1db71b8b836f3dc909c89de3d1c48eaa06d3fccd21237a4abc7bf573c43",
+      "bytes": 1085
+    },
+    {
+      "path": "docs/experiments/bounded-founder-v1/admission-v3.log",
+      "git_blob": "eae3405a7798d6bfe35956e1d55b012ec88bbae5",
+      "sha256": "a8845e890f15791a378260b39371a42cd98c92de05000eb2aac1b0aa926f346a",
+      "bytes": 1418
+    },
+    {
+      "path": "docs/experiments/bounded-founder-v1/admission-v4.log",
+      "git_blob": "99449e800465919df8159db27c3994c4c48995da",
+      "sha256": "38917715e9c43580f1653c14ee4913211ae0ef33352f828c47343a490e41d605",
+      "bytes": 644
+    },
+    {
+      "path": "docs/experiments/bounded-founder-v1/clippy-core-v1.log",
+      "git_blob": "2f55094526e54e303bacf9b0081850c15646ccc8",
+      "sha256": "6cb2efb6c596f2a2d07918cfea4507f0dc081dffabac545f327b2cd1a5feda1a",
+      "bytes": 915
+    },
+    {
+      "path": "docs/experiments/bounded-founder-v1/clippy-tests-v1.log",
+      "git_blob": "6fbd743a1cf1fa4b58548a441b026c19449152bf",
+      "sha256": "d374644fffae0fc4e0be6844224413e9d7a314edc3a9b548947d8fb9c3ad8279",
+      "bytes": 176
+    },
+    {
+      "path": "docs/experiments/bounded-founder-v1/clippy-training-v1.log",
+      "git_blob": "de22fa84898be9b7bc0157de2fbe77e479f759ad",
+      "sha256": "277f0f22c75b28ef842f4f1afdba73505030f14324e65cb3cab437c834402b57",
+      "bytes": 2684
+    },
+    {
+      "path": "docs/experiments/bounded-founder-v1/core-final-v1.log",
+      "git_blob": "51c7cd1efab4ca0b6b060c28aa1126eecb70e35c",
+      "sha256": "e1c9cb08d04d2dcbfb2531b9929e395d665affcf485068f0d1cd4b69dd3e4392",
+      "bytes": 3552
+    },
+    {
+      "path": "docs/experiments/bounded-founder-v1/core-v1.log",
+      "git_blob": "4d6ecb0a2f8a7eacfc9805ae05739aa8e2f00dd7",
+      "sha256": "8afca16047d6e7640c212fd99523ded3c91d61a53a6802b60781f69cccf41a7c",
+      "bytes": 4373
+    },
+    {
+      "path": "docs/experiments/bounded-founder-v1/core-v2.log",
+      "git_blob": "b1b0b517ece01a057292bdfb503b8020945d1220",
+      "sha256": "7e732455d9d1a2519fae92f7f98dfa94e59a62c043d02b5e9b51ae3f2f6fef7f",
+      "bytes": 3423
+    },
+    {
+      "path": "docs/experiments/bounded-founder-v1/fmt-v1.log",
+      "git_blob": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "docs/experiments/bounded-founder-v1/host-v4.log",
+      "git_blob": "98b449c9e6e7c94578afff8fde0ff3e334735639",
+      "sha256": "2c084d65afd99f517876ed721d2568d2fb1f57149f459fe49eb87141bb2576b4",
+      "bytes": 911
+    },
+    {
+      "path": "docs/experiments/bounded-founder-v1/legacy-wire-capture-test.rs.txt",
+      "git_blob": "53983187aacaed05ec8009db61e2b1fe5370d3db",
+      "sha256": "b991df7a816943439e4b772dcb20412b2c8f54233e20ba850b1859919e06004d",
+      "bytes": 4427
+    },
+    {
+      "path": "docs/experiments/bounded-founder-v1/legacy-wire-capture.json",
+      "git_blob": "8c760cfc5ccf94eaf137e76178bb5ef010d73090",
+      "sha256": "0af1558f1c86330dc1cf36ceea39fa20c431ffb82d2f6e9d040afaef56909f9e",
+      "bytes": 5142
+    },
+    {
+      "path": "docs/experiments/bounded-founder-v1/nonzero-history-supplement/RESULTS.md",
+      "git_blob": "b82ceb1441aff54be5534188a09f8643311de581",
+      "sha256": "f167f6b20e3310610c50d0b60e0e5517f24354e8f4eecceacf6391f9f6b20f6e",
+      "bytes": 1587
+    },
+    {
+      "path": "docs/experiments/bounded-founder-v1/nonzero-history-supplement/clippy.log",
+      "git_blob": "f5d25eacab37ca69c27691b16723f5ccd1519fe4",
+      "sha256": "73e78a0788f381617c791e709a884acad8b94bfed0142a295b1b5cbda36d5c83",
+      "bytes": 176
+    },
+    {
+      "path": "docs/experiments/bounded-founder-v1/nonzero-history-supplement/receipt.json",
+      "git_blob": "08dc510cc4be8a2e55f2fdd6ab11bd88196a9c09",
+      "sha256": "5cadc008cbe4404f16449251063b3855b68fc54cbc390950a1739a463fe52d1f",
+      "bytes": 1153
+    },
+    {
+      "path": "docs/experiments/bounded-founder-v1/nonzero-history-supplement/test.log",
+      "git_blob": "d231ddcc502a8168d65f587e0528dff81ad4e2ea",
+      "sha256": "22f494e17b06d35eb682408bc7e57bdc0d0adb1b60c9f55052a30f3ee90ddb44",
+      "bytes": 531
+    },
+    {
+      "path": "docs/experiments/bounded-founder-v1/receipt.json",
+      "git_blob": "556c8db65ad888bdd666effa4f81c17cb7f463ce",
+      "sha256": "fbedc96b40a5086877c98844e7c9212fd27dbf1b413cab6dc2f4d6155e94e3af",
+      "bytes": 5468
+    },
+    {
+      "path": "docs/experiments/bounded-founder-v1/wire-capture-v1.log",
+      "git_blob": "5c1acc826892ba24992599d1387a90a9fb3eb0d9",
+      "sha256": "1e6da32999df09688c5caf910cad5ef54123a90e0b66350065b85f43f67cc5cd",
+      "bytes": 1002
+    },
+    {
+      "path": "docs/experiments/bounded-founder-v1/wire-compact-v1.log",
+      "git_blob": "9572d8e192ad358e8312f320caf28c97f99f2cd8",
+      "sha256": "fc55da89c6b4387142e641e5989a79df1a7558e5627020f805ccdc83e08687de",
+      "bytes": 526
+    },
+    {
+      "path": "docs/experiments/bounded-founder-v1/wire-compact-v2.log",
+      "git_blob": "b37add1f45168361ae1c1a5a7344924adc770607",
+      "sha256": "a28d3fb28a5e29186685cebc395a529270499ca4c19588d476775c868f624c12",
+      "bytes": 1108
+    }
+  ],
+  "note": "Shared compiler/runtime files extended by the exact frozen source delta are inventoried in FROZEN-DELTA.json. These bounded-specific files and all bounded evidence remain byte-identical to the additive parent."
+}

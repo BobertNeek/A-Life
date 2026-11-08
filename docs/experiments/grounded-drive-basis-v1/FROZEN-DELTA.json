@@ -1,0 +1,276 @@
+{
+  "schema": "grounded_drive_frozen_delta_v1",
+  "required_source_base": "5997ce7c890b6495e787142fe553e63ed595f46f",
+  "priced_source": "1d39f179790234c5de2ec011811af352f7060a05",
+  "software_fixture": "67e26f53009c9b925b94cac1af5421894b059481",
+  "source_paths": [
+    {
+      "path": "crates/alife_core/src/activity.rs",
+      "origin_commit": "1d39f179790234c5de2ec011811af352f7060a05",
+      "git_blob": "9527bfa2841249c93cb86c63877816a1506a0f90",
+      "sha256": "e4a3209e19dd67f11914d8dba131f55c79dde838a38dd3aac404e11e5c477a67",
+      "bytes": 36020
+    },
+    {
+      "path": "crates/alife_core/src/foundation.rs",
+      "origin_commit": "1d39f179790234c5de2ec011811af352f7060a05",
+      "git_blob": "c0afca822515060dbb1dc9933f886be6bcae7dad",
+      "sha256": "d54b7758fc089856add90bfb37b3da88928d58159e2d61202903ba2a061e278c",
+      "bytes": 67384
+    },
+    {
+      "path": "crates/alife_core/src/genome.rs",
+      "origin_commit": "1d39f179790234c5de2ec011811af352f7060a05",
+      "git_blob": "127798fc1169f35ef415b4115cf866868ce266ec",
+      "sha256": "b949c3e50688c26ec52db97c64c8ce51a9b991cda120e4510f6b0e7aed3864c7",
+      "bytes": 80819
+    },
+    {
+      "path": "crates/alife_core/src/grounded_drive_features.rs",
+      "origin_commit": "1d39f179790234c5de2ec011811af352f7060a05",
+      "git_blob": "fb7514f62e2ca6e3e73b5c8df6760422917effa8",
+      "sha256": "5ca2daf1febff94f08be14bdbb4ef9ef9f49e233c4f7ebb879a5ea3565d5b8bc",
+      "bytes": 3269
+    },
+    {
+      "path": "crates/alife_core/src/legacy_nano512_compatibility.rs",
+      "origin_commit": "1d39f179790234c5de2ec011811af352f7060a05",
+      "git_blob": "1a440e164cfb0310c4dd81e8fdfbe803a58fb8cd",
+      "sha256": "be58c5372ab86c47a650d2221f5c88ecd1bb58716305e0e388e477ff73ba7603",
+      "bytes": 48676
+    },
+    {
+      "path": "crates/alife_core/src/lib.rs",
+      "origin_commit": "1d39f179790234c5de2ec011811af352f7060a05",
+      "git_blob": "7d7ee0205da51fc60e5e1cd9e24f5b7da6ccff76",
+      "sha256": "c3adb0f4eb064f5fa67955d4c762be96de7f5f3b6059b159fc4318605041d7b9",
+      "bytes": 21877
+    },
+    {
+      "path": "crates/alife_core/src/n2048_grounded_drive_basis.rs",
+      "origin_commit": "1d39f179790234c5de2ec011811af352f7060a05",
+      "git_blob": "4ea0012ff2326694624dd743a2bceae8f9679c4b",
+      "sha256": "77e9faf756a139d3de71988cf80d58de6fb96e1aaed20d27e7469a0b759917c4",
+      "bytes": 4424
+    },
+    {
+      "path": "crates/alife_core/src/phenotype/abi_validation.rs",
+      "origin_commit": "1d39f179790234c5de2ec011811af352f7060a05",
+      "git_blob": "9677566ad43c93988c33713c8d175664d1c6a9e8",
+      "sha256": "ae354ad8d5b5b560fd502ccafb1cdd20ece05c37c153ca77ac501790ce53285b",
+      "bytes": 11798
+    },
+    {
+      "path": "crates/alife_core/src/phenotype/capacity.rs",
+      "origin_commit": "1d39f179790234c5de2ec011811af352f7060a05",
+      "git_blob": "13e6613c562cc65aa727d08b42220f8aabeb25e8",
+      "sha256": "3baeee77eeb2773c1b168f48cb01293c0ebf36de449e79686b35732fcb2ecd2d",
+      "bytes": 22330
+    },
+    {
+      "path": "crates/alife_core/src/phenotype/compiler.rs",
+      "origin_commit": "1d39f179790234c5de2ec011811af352f7060a05",
+      "git_blob": "04291fd7d79e84b8d41ac99479c956479d94cc56",
+      "sha256": "b20aaeb50361a4659118a4ec323621cb7d1822d25a1098ade86f63cea8ba2bec",
+      "bytes": 18452
+    },
+    {
+      "path": "crates/alife_core/src/phenotype/construction.rs",
+      "origin_commit": "1d39f179790234c5de2ec011811af352f7060a05",
+      "git_blob": "12cf77f8aa2954afd6af997d6c7669fb768074fe",
+      "sha256": "dc2b29902cba945e3e93acfe168f8b1999ee736d4904eea5899dc3a7ca95b7ae",
+      "bytes": 16046
+    },
+    {
+      "path": "crates/alife_core/src/phenotype/decoder.rs",
+      "origin_commit": "1d39f179790234c5de2ec011811af352f7060a05",
+      "git_blob": "773151514f5bc0e132df23af6e4029c59606f37a",
+      "sha256": "90ee4ac48e478d4b03ad924f90743201bd933f6e3c3a0ddd5a2d4a498e82f4af",
+      "bytes": 24640
+    },
+    {
+      "path": "crates/alife_core/src/phenotype/inputs.rs",
+      "origin_commit": "1d39f179790234c5de2ec011811af352f7060a05",
+      "git_blob": "4eaa1188690eb63a332d15189b0627aac8fd39fd",
+      "sha256": "b2bbc90d833c6007e640e037ef950916d70ec45ef87bc5ac27b8ea7a72ea4203",
+      "bytes": 27569
+    },
+    {
+      "path": "crates/alife_core/src/phenotype/io_compile.rs",
+      "origin_commit": "1d39f179790234c5de2ec011811af352f7060a05",
+      "git_blob": "b9df3eba4707356df1f9f552fbe62d3b4325c61e",
+      "sha256": "6a5f0bf2ee677868691b1cc20fb532e8a9c084c1315fdd781cfaff064323657e",
+      "bytes": 41016
+    },
+    {
+      "path": "crates/alife_core/src/phenotype/learning.rs",
+      "origin_commit": "1d39f179790234c5de2ec011811af352f7060a05",
+      "git_blob": "296b91f448a0006f5de0b2a4228d8020756afd41",
+      "sha256": "65edeebecc60043c94e7c1f790443ab9a5f06ac3161e8b8ed4794c89f95076c8",
+      "bytes": 33962
+    },
+    {
+      "path": "crates/alife_core/src/phenotype/record.rs",
+      "origin_commit": "1d39f179790234c5de2ec011811af352f7060a05",
+      "git_blob": "95c7846077b9f760aa99a44b2e689659940779a7",
+      "sha256": "43c3951db80bfabaf485a8b8d928e2b03a6d8405e0e25cf1df3e30ffdba3e8fb",
+      "bytes": 54253
+    },
+    {
+      "path": "crates/alife_core/src/phenotype/topology_compile.rs",
+      "origin_commit": "1d39f179790234c5de2ec011811af352f7060a05",
+      "git_blob": "15a883ccc43ece7e1cdf38a4d94ff175b2e03fd4",
+      "sha256": "b5d19ff8fcc30c29dc8d610897178481909d32e1149e6d2a31fe5f389a50d3fe",
+      "bytes": 27017
+    },
+    {
+      "path": "crates/alife_core/tests/grounded_drive_pricing.rs",
+      "origin_commit": "1d39f179790234c5de2ec011811af352f7060a05",
+      "git_blob": "8f6e022203ede5cedaf2abc4f4d31a01be33293a",
+      "sha256": "1f13dca88efdde038860edf85ad963027bd0e1f5124a136e374b73f0f4b145d7",
+      "bytes": 1857
+    },
+    {
+      "path": "crates/alife_core/tests/n2048_grounded_drive_basis.rs",
+      "origin_commit": "1d39f179790234c5de2ec011811af352f7060a05",
+      "git_blob": "944af652784e46c71cdb76f6c90093fe83c549cf",
+      "sha256": "13e47ec2e1308eadbe94073265f03925aae6aadf4d1e15871ba0be939364e006",
+      "bytes": 5553
+    },
+    {
+      "path": "crates/alife_gpu_backend/shaders/closed_loop_decode.wgsl",
+      "origin_commit": "1d39f179790234c5de2ec011811af352f7060a05",
+      "git_blob": "b60d4969ffc1278923de410226ab4000b9b5a6df",
+      "sha256": "b37b6b39a461fc7838f9b52a4a80d64808300543607657f40b09c91ae89e8775",
+      "bytes": 29860
+    },
+    {
+      "path": "crates/alife_gpu_backend/shaders/closed_loop_eligibility.wgsl",
+      "origin_commit": "1d39f179790234c5de2ec011811af352f7060a05",
+      "git_blob": "99240057f805c5f4b71c78bf6aaaaa0eeb81a68d",
+      "sha256": "56bf03fbb57721533cc89872cb9d40c3312367cedadb01edaf5075ef1f205006",
+      "bytes": 29106
+    },
+    {
+      "path": "crates/alife_gpu_backend/shaders/closed_loop_memory_context.wgsl",
+      "origin_commit": "1d39f179790234c5de2ec011811af352f7060a05",
+      "git_blob": "d5fea96f776d4a2c54e2d8905b54b1defeb1a457",
+      "sha256": "e9f221c5d243c77d0f30afc8b4f9e30840106e1ca597af2b258ac6911ae90aaf",
+      "bytes": 10206
+    },
+    {
+      "path": "crates/alife_gpu_backend/src/closed_loop_buffers/bucket.rs",
+      "origin_commit": "1d39f179790234c5de2ec011811af352f7060a05",
+      "git_blob": "99cadfb82678a31e4ac217c73123ed5bdc27029a",
+      "sha256": "0ddbb7fd80a5d6bad203650d2d7b83fc0b1e09d13971f8b3fe9624caf8bceb58",
+      "bytes": 202972
+    },
+    {
+      "path": "crates/alife_gpu_backend/src/closed_loop_buffers/perception.rs",
+      "origin_commit": "1d39f179790234c5de2ec011811af352f7060a05",
+      "git_blob": "f6af6d63eca67f8e8e71bd48f8191c5f36f47e57",
+      "sha256": "bca99e61ede4e07da07fc10900ee16b643494ae2dc25ea3bb8edfacfa4f4c306",
+      "bytes": 10172
+    },
+    {
+      "path": "crates/alife_gpu_backend/src/closed_loop_checkpoint.rs",
+      "origin_commit": "1d39f179790234c5de2ec011811af352f7060a05",
+      "git_blob": "413cea80d2adabba4d632bae98edb50eb8e16283",
+      "sha256": "40eddd4cec8d0a726e5ce25bfc4c0faad4d7543a87d06b793266b0fc8b7198bc",
+      "bytes": 118905
+    },
+    {
+      "path": "crates/alife_gpu_backend/src/closed_loop_runtime.rs",
+      "origin_commit": "1d39f179790234c5de2ec011811af352f7060a05",
+      "git_blob": "950620633914413f6e808f1977ddd5900b7651ab",
+      "sha256": "e98469758b87efaaf458c0b533b06e87f3db4396461de8f4f9acd26728382092",
+      "bytes": 286447
+    },
+    {
+      "path": "crates/alife_gpu_backend/src/closed_loop_v11.rs",
+      "origin_commit": "1d39f179790234c5de2ec011811af352f7060a05",
+      "git_blob": "0d9cc3620a1f3f6f4e981edd973b45d70a73dfb0",
+      "sha256": "acecd3ab2cd6ed8d1ef3713d2647866cb54544796acd6dc5da597fe2c989a373",
+      "bytes": 26820
+    },
+    {
+      "path": "crates/alife_gpu_backend/tests/grounded_drive_basis.rs",
+      "origin_commit": "1d39f179790234c5de2ec011811af352f7060a05",
+      "git_blob": "4df97ec221575faf88715912b8e64654013c5ced",
+      "sha256": "00c19d70c62b3df16090803a0b0ba095c54b1dfeff25ec479aa322149e45db3b",
+      "bytes": 4262
+    },
+    {
+      "path": "crates/alife_training/examples/probe_grounded_drive_basis.rs",
+      "origin_commit": "1d39f179790234c5de2ec011811af352f7060a05",
+      "git_blob": "4c0a9ab76edb4407a0bb62f37fdcddb7326efad6",
+      "sha256": "09f6d3acb01b88318f38a82bec39c5a46f316907f65bd689578a372759ed46af",
+      "bytes": 4256
+    },
+    {
+      "path": "crates/alife_training/examples/support/grounded_drive_basis.rs",
+      "origin_commit": "1d39f179790234c5de2ec011811af352f7060a05",
+      "git_blob": "20d23d7f11ecc24c2fa4118364c8cf9660025952",
+      "sha256": "aa3aee42dca43faa2637af7bf88e03036a8b6659d682f7364bd9c065a1d35da8",
+      "bytes": 5718
+    },
+    {
+      "path": "crates/alife_training/src/cpu/activity.rs",
+      "origin_commit": "1d39f179790234c5de2ec011811af352f7060a05",
+      "git_blob": "1a5b9e621c239f98a6769ad45c8de157bf54c713",
+      "sha256": "6102c76bbad0659d12e7ff5f87f20060fcd59690e8d7005cba6a867baadc52f6",
+      "bytes": 4293
+    },
+    {
+      "path": "crates/alife_training/src/cpu/input.rs",
+      "origin_commit": "1d39f179790234c5de2ec011811af352f7060a05",
+      "git_blob": "624d20797861e3119dfde7f155002ffa9f2309e2",
+      "sha256": "2102b6e5c2e9099f9d09cb09986ea7021068f55285865e98dd515d265931d7b2",
+      "bytes": 12879
+    },
+    {
+      "path": "crates/alife_training/src/grounded_drive_transfer.rs",
+      "origin_commit": "1d39f179790234c5de2ec011811af352f7060a05",
+      "git_blob": "3cc4a3b5de270d7b52c37d84b91312efee8af057",
+      "sha256": "3a7d437d8e3091d6f983bf294a4c10189c678e93262b915220f3bc01fa36d203",
+      "bytes": 9046
+    },
+    {
+      "path": "crates/alife_training/src/lib.rs",
+      "origin_commit": "1d39f179790234c5de2ec011811af352f7060a05",
+      "git_blob": "d6b4a33e75ca9830a8456a09d88667d18b273ffb",
+      "sha256": "7132afce321e5147e61f9e2db77c03473dd020dffc80eafdae8d4a960a07aa6d",
+      "bytes": 1222
+    },
+    {
+      "path": "crates/alife_training/tests/cpu_grounded_drive_basis.rs",
+      "origin_commit": "1d39f179790234c5de2ec011811af352f7060a05",
+      "git_blob": "391917b320150dde791d0f1f986b8794cd65e519",
+      "sha256": "f81fbc35500ad182ea3223b9d1b54da2971c4973fef28bd434f7716000db4a8e",
+      "bytes": 6377
+    },
+    {
+      "path": "crates/alife_training/tests/grounded_drive_transfer.rs",
+      "origin_commit": "1d39f179790234c5de2ec011811af352f7060a05",
+      "git_blob": "91b5baddf9102fa069a3e2c4b82149b3e0db57de",
+      "sha256": "372d44b9a18cbc6f520c094871ab09ba923d3bdd38df14c4f71654cb8f4388e6",
+      "bytes": 2805
+    },
+    {
+      "path": "crates/alife_gpu_backend/src/closed_loop_runtime/software_training_test.rs",
+      "origin_commit": "67e26f53009c9b925b94cac1af5421894b059481",
+      "git_blob": "f1163cf943f049ebca688e2fb5eb3c63d01538af",
+      "sha256": "551601f11d4bae0772dc18ca47a7ed0334414d331639783e0fcb0d9e189442ab",
+      "bytes": 10192
+    },
+    {
+      "path": "crates/alife_training/tests/grounded_drive_gpu_parity.rs",
+      "origin_commit": "67e26f53009c9b925b94cac1af5421894b059481",
+      "git_blob": "34e5c671a410dc8afa5d852339cfaa1636f99fd5",
+      "sha256": "61182fa146ae9764bd45dbb7342b6c86c0e4c2812895c84276b1be2a2c87c781",
+      "bytes": 23433
+    }
+  ],
+  "all_source_conflicts": [],
+  "native_execution_of_additive_tree": false
+}

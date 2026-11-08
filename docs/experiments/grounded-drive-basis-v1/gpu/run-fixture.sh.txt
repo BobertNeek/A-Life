@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd <workspace>/grounded-drive-gpu-parity-v1
+ROOT=<workspace>/recovered-toolchain-rust-1.99.1-reset2
+export PATH="$ROOT/rustup/toolchains/1.99.1-x86_64-unknown-linux-gnu/bin:$ROOT/cargo/bin:$PATH"
+export CARGO_HOME="$ROOT/cargo" RUSTUP_HOME="$ROOT/rustup"
+export CARGO_TARGET_DIR=<artifacts>/grounded-drive-gpu-parity-v1-target
+export CARGO_BUILD_JOBS=1 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0
+export VK_DRIVER_FILES=/usr/lib/chromium/vk_swiftshader_icd.json VK_ICD_FILENAMES=/usr/lib/chromium/vk_swiftshader_icd.json
+export XDG_RUNTIME_DIR=/tmp/grounded-drive-gpu-parity-xdg
+mkdir -p "$XDG_RUNTIME_DIR"
+chmod 700 "$XDG_RUNTIME_DIR"
+export RUST_BACKTRACE=1
+cargo test --offline -p alife_training --features cpu-backend,gpu-tests --test grounded_drive_gpu_parity -- --ignored --exact priced_grounded_drive_software_kernels_match_cpu --test-threads=1 --nocapture

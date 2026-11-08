@@ -1,0 +1,27 @@
+   Compiling alife_core v0.1.0 (<workspace>/grounded-drive-basis-v1/crates/alife_core)
+   Compiling alife_world v0.1.0 (<workspace>/grounded-drive-basis-v1/crates/alife_world)
+   Compiling alife_gpu_backend v0.1.0 (<workspace>/grounded-drive-basis-v1/crates/alife_gpu_backend)
+   Compiling alife_runtime v0.1.0 (<workspace>/grounded-drive-basis-v1/crates/alife_runtime)
+   Compiling alife_training v0.1.0 (<workspace>/grounded-drive-basis-v1/crates/alife_training)
+    Finished `test` profile [unoptimized] target(s) in 7m 11s
+     Running tests/cpu_grounded_drive_basis.rs (<artifacts>/grounded-drive-basis-v1-target/debug/deps/cpu_grounded_drive_basis-030100bfe35b9fa0)
+
+running 2 tests
+test actual_cpu_encode_overwrites_only_reserved_cognitive_lanes_and_matches_gpu_upload ... ok
+test derived_readout_gradient_matches_finite_difference_without_state_or_optimizer_changes ... FAILED
+
+failures:
+
+---- derived_readout_gradient_matches_finite_difference_without_state_or_optimizer_changes stdout ----
+
+thread 'derived_readout_gradient_matches_finite_difference_without_state_or_optimizer_changes' (322) panicked at crates/alife_training/tests/cpu_grounded_drive_basis.rs:122:87:
+called `Result::unwrap()` on an `Err` value: Contract(PhenotypeCompile)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    derived_readout_gradient_matches_finite_difference_without_state_or_optimizer_changes
+
+test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.50s
+
+error: test failed, to rerun pass `-p alife_training --test cpu_grounded_drive_basis`

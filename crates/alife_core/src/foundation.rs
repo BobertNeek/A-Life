@@ -21,6 +21,7 @@ const TRAINING_STAGE_DOMAIN: &[u8] = b"alife.foundation.training-stage.v1";
 const PROMOTION_RECEIPT_DOMAIN: &[u8] = b"alife.foundation.promotion-receipt.v1";
 const FOUNDATION_BOOTSTRAP_PROVENANCE_DOMAIN: &[u8] = b"alife.foundation.bootstrap-provenance.v1";
 const FOUNDATION_ASSET_MAGIC_N512: [u8; 8] = *b"ALFN0512";
+const FOUNDATION_ASSET_MAGIC_GROUNDED: [u8; 8] = *b"ALFGD001";
 const FOUNDATION_ASSET_MAGIC_N2048: [u8; 8] = *b"ALFN2048";
 const FOUNDATION_ASSET_CODEC_VERSION: u16 = 1;
 const FOUNDATION_ASSET_MAX_WEIGHTS: usize = 65_536;
@@ -477,6 +478,7 @@ impl FoundationId {
     pub const N512_V1: Self = Self(0x004E_3531_325F_5631);
     pub const N512_READOUT_CANDIDATE_V1: Self = Self(0x4E35_3132_5243_0001);
     pub const N2048_V1: Self = Self(0x4E32_3034_385F_5631);
+    pub const N2048_GROUNDED_DRIVE_BASIS_V1: Self = Self(0x4E32_3034_3844_0001);
     pub const N2048_EXPERIMENTAL_GRAPH_V1: Self = Self(0x4E32_3034_3845_0001);
 
     pub const fn raw(self) -> u64 {
@@ -501,6 +503,7 @@ pub struct FoundationCompatibilityFamilyId(u64);
 impl FoundationCompatibilityFamilyId {
     pub const N512_FOUNDATION: Self = Self(0x4E35_3132_5F00_FA11);
     pub const N2048_FOUNDATION: Self = Self(0x4E32_3034_385F_FA11);
+    pub const N2048_GROUNDED_DRIVE_BASIS: Self = Self(0x4E32_3034_3844_FA11);
     pub const N2048_EXPERIMENTAL_GRAPH: Self = Self(0x4E32_3034_3845_FA11);
 
     pub const fn raw(self) -> u64 {
@@ -707,7 +710,7 @@ impl FoundationManifest {
         weight_asset: FoundationWeightAssetRef,
     ) -> Result<Self, ScaffoldContractError> {
         let selection = phenotype.foundation_abi();
-        let experimental = selection.n2048_experimental_graph().is_some();
+        let experimental = selection.uses_n2048_experimental_topology();
         let selected_layout_digest = if experimental {
             layout_digest(phenotype.lobe_layout())
         } else {
@@ -717,14 +720,20 @@ impl FoundationManifest {
                 .layout_digest()
         };
         let training_stage = TrainingStageManifest::bootstrap();
-        let (foundation_id, compatibility_family_id) = if experimental {
-            (
-                FoundationId::N2048_EXPERIMENTAL_GRAPH_V1,
-                FoundationCompatibilityFamilyId::N2048_EXPERIMENTAL_GRAPH,
-            )
-        } else {
-            foundation_identity_for_class(phenotype.brain_class_id())?
-        };
+        let (foundation_id, compatibility_family_id) =
+            if selection.n2048_grounded_drive_basis().is_some() {
+                (
+                    FoundationId::N2048_GROUNDED_DRIVE_BASIS_V1,
+                    FoundationCompatibilityFamilyId::N2048_GROUNDED_DRIVE_BASIS,
+                )
+            } else if experimental {
+                (
+                    FoundationId::N2048_EXPERIMENTAL_GRAPH_V1,
+                    FoundationCompatibilityFamilyId::N2048_EXPERIMENTAL_GRAPH,
+                )
+            } else {
+                foundation_identity_for_class(phenotype.brain_class_id())?
+            };
         Ok(Self {
             schema_version: 1,
             foundation_id,
@@ -807,7 +816,7 @@ impl FoundationManifest {
         phenotype: &BrainPhenotype,
     ) -> Result<(), ScaffoldContractError> {
         let selection = phenotype.foundation_abi();
-        let experimental = selection.n2048_experimental_graph().is_some();
+        let experimental = selection.uses_n2048_experimental_topology();
         let selected_layout_digest = if experimental {
             layout_digest(phenotype.lobe_layout())
         } else {
@@ -818,14 +827,20 @@ impl FoundationManifest {
         };
         self.training_stage.validate()?;
         self.promotion_receipt.validate(self.training_stage)?;
-        let (foundation_id, compatibility_family_id) = if experimental {
-            (
-                FoundationId::N2048_EXPERIMENTAL_GRAPH_V1,
-                FoundationCompatibilityFamilyId::N2048_EXPERIMENTAL_GRAPH,
-            )
-        } else {
-            foundation_identity_for_class(self.capacity_class_id)?
-        };
+        let (foundation_id, compatibility_family_id) =
+            if selection.n2048_grounded_drive_basis().is_some() {
+                (
+                    FoundationId::N2048_GROUNDED_DRIVE_BASIS_V1,
+                    FoundationCompatibilityFamilyId::N2048_GROUNDED_DRIVE_BASIS,
+                )
+            } else if experimental {
+                (
+                    FoundationId::N2048_EXPERIMENTAL_GRAPH_V1,
+                    FoundationCompatibilityFamilyId::N2048_EXPERIMENTAL_GRAPH,
+                )
+            } else {
+                foundation_identity_for_class(self.capacity_class_id)?
+            };
         if self.schema_version != 1
             || self.foundation_id != foundation_id
             || self.foundation_version != FoundationVersion::V1
@@ -866,6 +881,9 @@ pub struct FoundationWeightAsset {
 }
 
 impl FoundationWeightAsset {
+    pub const fn is_n2048_grounded_drive_basis(&self) -> bool {
+        self.manifest.foundation_id.raw() == FoundationId::N2048_GROUNDED_DRIVE_BASIS_V1.raw()
+    }
     pub const fn is_n2048_experimental_graph(&self) -> bool {
         self.manifest.foundation_id.raw() == FoundationId::N2048_EXPERIMENTAL_GRAPH_V1.raw()
     }
@@ -1165,7 +1183,10 @@ impl FoundationWeightAsset {
     pub fn decode_canonical(bytes: &[u8]) -> Result<Self, ScaffoldContractError> {
         let mut cursor = FoundationAssetCursor::new(bytes);
         let magic = cursor.take(FOUNDATION_ASSET_MAGIC_N2048.len())?;
-        if magic != FOUNDATION_ASSET_MAGIC_N512 && magic != FOUNDATION_ASSET_MAGIC_N2048 {
+        if magic != FOUNDATION_ASSET_MAGIC_N512
+            && magic != FOUNDATION_ASSET_MAGIC_N2048
+            && magic != FOUNDATION_ASSET_MAGIC_GROUNDED
+        {
             return Err(ScaffoldContractError::PhenotypeCompile);
         }
         if cursor.u16()? != FOUNDATION_ASSET_CODEC_VERSION {
@@ -1209,7 +1230,20 @@ impl FoundationWeightAsset {
         self.manifest
             .promotion_receipt
             .validate(self.manifest.training_stage)?;
-        let (foundation_id, compatibility_family_id) = if self.is_n2048_experimental_graph() {
+        let (foundation_id, compatibility_family_id) = if self.is_n2048_grounded_drive_basis() {
+            if self.manifest.capacity_class_id
+                != BrainCapacityClass::N2048_GROUNDED_DRIVE_RESEARCH_ID
+                || self.manifest.layout_digest
+                    != layout_digest(&N2048FoundationLayoutV1::lobe_layout())
+                || self.weights.len() != 34048
+            {
+                return Err(ScaffoldContractError::PhenotypeCompile);
+            }
+            (
+                FoundationId::N2048_GROUNDED_DRIVE_BASIS_V1,
+                FoundationCompatibilityFamilyId::N2048_GROUNDED_DRIVE_BASIS,
+            )
+        } else if self.is_n2048_experimental_graph() {
             if self.manifest.capacity_class_id != BrainCapacityClass::N2048_ID
                 || self.manifest.layout_digest
                     != layout_digest(&N2048FoundationLayoutV1::lobe_layout())
@@ -1392,6 +1426,10 @@ fn foundation_identity_for_class(
             FoundationId::N512_V1,
             FoundationCompatibilityFamilyId::N512_FOUNDATION,
         )),
+        BrainCapacityClass::N2048_GROUNDED_DRIVE_RESEARCH_ID => Ok((
+            FoundationId::N2048_GROUNDED_DRIVE_BASIS_V1,
+            FoundationCompatibilityFamilyId::N2048_GROUNDED_DRIVE_BASIS,
+        )),
         BrainCapacityClass::N2048_ID => Ok((
             FoundationId::N2048_V1,
             FoundationCompatibilityFamilyId::N2048_FOUNDATION,
@@ -1404,6 +1442,7 @@ fn foundation_asset_magic(class_id: BrainClassId) -> Result<[u8; 8], ScaffoldCon
     match class_id {
         BrainCapacityClass::N512_ID => Ok(FOUNDATION_ASSET_MAGIC_N512),
         BrainCapacityClass::N2048_ID => Ok(FOUNDATION_ASSET_MAGIC_N2048),
+        BrainCapacityClass::N2048_GROUNDED_DRIVE_RESEARCH_ID => Ok(FOUNDATION_ASSET_MAGIC_GROUNDED),
         _ => Err(ScaffoldContractError::PhenotypeCompile),
     }
 }

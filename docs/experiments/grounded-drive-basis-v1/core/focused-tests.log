@@ -1,0 +1,116 @@
+   Compiling syn v2.0.117
+   Compiling typenum v1.20.1
+   Compiling generic-array v0.14.7
+   Compiling serde_core v1.0.228
+   Compiling serde_derive v1.0.228
+   Compiling cfg-if v1.0.4
+   Compiling serde v1.0.228
+   Compiling crypto-common v0.1.7
+   Compiling block-buffer v0.10.4
+   Compiling thiserror-impl v2.0.18
+   Compiling bytemuck_derive v1.10.2
+   Compiling cpufeatures v0.3.0
+   Compiling constant_time_eq v0.4.2
+   Compiling arrayvec v0.7.6
+   Compiling arrayref v0.3.9
+   Compiling blake3 v1.8.5
+   Compiling bytemuck v1.25.0
+   Compiling thiserror v2.0.18
+   Compiling digest v0.10.7
+   Compiling zmij v1.0.21
+   Compiling bitflags v2.13.0
+   Compiling itoa v1.0.18
+   Compiling cpufeatures v0.2.17
+   Compiling smallvec v1.15.1
+   Compiling memchr v2.8.1
+   Compiling unty v0.0.4
+   Compiling bincode v2.0.1
+   Compiling serde_json v1.0.150
+   Compiling alife_core v0.1.0 (<workspace>/grounded-drive-basis-v1/crates/alife_core)
+   Compiling sha2 v0.10.9
+    Finished `test` profile [unoptimized] target(s) in 3m 24s
+     Running tests/n2048_bounded_founder.rs (<artifacts>/grounded-drive-basis-v1-target/debug/deps/n2048_bounded_founder-170a13bcf9886370)
+
+running 3 tests
+test exact_asset_admission_rejects_cross_branch_abi ... ok
+test explicit_branch_abi_preserves_coordinates_and_separates_identity ... ok
+test selector_and_recipe_tamper_cannot_reinterpret_phenotype ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.93s
+
+     Running tests/n2048_grounded_drive_basis.rs (<artifacts>/grounded-drive-basis-v1-target/debug/deps/n2048_grounded_drive_basis-313d98d92eafe7e9)
+
+running 3 tests
+test cross_profile_and_selector_tamper_rejected ... ok
+test explicit_additive_capacity_and_exact_coordinates ... ok
+test no_old_asset_relabeling_or_default_admission ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.55s
+
+   Compiling libm v0.2.16
+   Compiling libloading v0.8.9
+   Compiling equivalent v1.0.2
+   Compiling log v0.4.32
+   Compiling thiserror v2.0.18
+   Compiling num-traits v0.2.19
+   Compiling foldhash v0.2.0
+   Compiling allocator-api2 v0.2.21
+   Compiling hashbrown v0.16.1
+   Compiling zerocopy v0.8.52
+   Compiling bytemuck v1.25.0
+   Compiling libc v0.2.186
+   Compiling bit-vec v0.9.1
+   Compiling unicode-width v0.2.2
+   Compiling once_cell v1.21.4
+   Compiling smallvec v1.15.1
+   Compiling hashbrown v0.17.1
+   Compiling indexmap v2.14.0
+   Compiling codespan-reporting v0.13.1
+   Compiling bit-set v0.9.1
+   Compiling half v2.7.1
+   Compiling spirv v0.4.0+sdk-1.4.341.0
+   Compiling hexf-parse v0.2.1
+   Compiling rustc-hash v1.1.0
+   Compiling raw-window-handle v0.6.2
+   Compiling foldhash v0.1.5
+   Compiling scopeguard v1.2.0
+   Compiling lock_api v0.4.14
+   Compiling hashbrown v0.15.5
+   Compiling wgpu-types v29.0.3
+   Compiling naga v29.0.3
+   Compiling ash v0.38.0+1.3.281
+   Compiling parking_lot_core v0.9.12
+   Compiling dlib v0.5.3
+   Compiling gpu-descriptor-types v0.2.0
+   Compiling serde_core v1.0.228
+   Compiling presser v0.3.1
+   Compiling gpu-allocator v0.28.0
+   Compiling gpu-descriptor v0.3.2
+   Compiling wayland-sys v0.31.11
+   Compiling parking_lot v0.12.5
+   Compiling khronos-egl v6.0.0
+   Compiling wgpu-naga-bridge v29.0.3
+   Compiling ordered-float v5.3.0
+   Compiling renderdoc-sys v1.1.0
+   Compiling glow v0.17.0
+   Compiling profiling v1.0.18
+   Compiling wgpu-hal v29.0.3
+   Compiling serde v1.0.228
+   Compiling wgpu-core-deps-windows-linux-android v29.0.3
+   Compiling wgpu-core v29.0.3
+   Compiling static_assertions v1.1.0
+   Compiling wgpu v29.0.3
+   Compiling alife_core v0.1.0 (<workspace>/grounded-drive-basis-v1/crates/alife_core)
+   Compiling pollster v0.4.0
+   Compiling serde_json v1.0.150
+   Compiling alife_gpu_backend v0.1.0 (<workspace>/grounded-drive-basis-v1/crates/alife_gpu_backend)
+    Finished `test` profile [unoptimized] target(s) in 3m 54s
+     Running tests/grounded_drive_basis.rs (<artifacts>/grounded-drive-basis-v1-target/debug/deps/grounded_drive_basis-559519308e10f418)
+
+running 3 tests
+test modified_shaders_parse_and_validate ... ok
+test runtime_projection_matches_gpu_packing_and_rejects_tampering ... ok
+test runtime_projection_rejects_cross_slot_entity_and_same_slot_target_aliases ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.08s
+

@@ -2714,7 +2714,15 @@ impl GpuLiveTopologyCheckpointV1 {
         phenotype: &BrainPhenotype,
         checkpoint: GpuV11Checkpoint,
     ) -> Result<Self, ScaffoldContractError> {
-        let capacity = BrainCapacityClass::production_for_id(phenotype.brain_class_id())?;
+        let capacity = if phenotype
+            .foundation_abi()
+            .n2048_grounded_drive_basis()
+            .is_some()
+        {
+            BrainCapacityClass::n2048_grounded_drive_research()
+        } else {
+            BrainCapacityClass::production_for_id(phenotype.brain_class_id())?
+        };
         phenotype.validate_against(&capacity)?;
         // One bounded CPU plan only; native admission still enforces its actual
         // device budget. This method creates no device or GPU allocation.
@@ -2858,6 +2866,15 @@ fn new_ephemeral_backend_state_plan() -> Result<EphemeralBackendStatePlan, Scaff
 }
 
 impl GpuClosedLoopBackend {
+    /// Explicit class5-only accounting backend; ordinary constructors unchanged.
+    pub fn new_grounded_drive_research_required(
+        profile: GpuRuntimeProfile,
+    ) -> Result<Self, ScaffoldContractError> {
+        let mut backend = Self::new_required(profile)?;
+        backend.activity_policy = BrainActivityPolicyV1::grounded_drive_research_v1();
+        backend.activity_policy.validate_contract()?;
+        Ok(backend)
+    }
     pub fn new_required(profile: GpuRuntimeProfile) -> Result<Self, ScaffoldContractError> {
         Self::new_with_factory_and_profile(&WgpuDeviceFactory, profile)
     }
@@ -3717,6 +3734,7 @@ impl GpuClosedLoopBackend {
     ) -> Result<(), ScaffoldContractError> {
         self.ensure_ready()?;
         self.validate_handle_backend(handle)?;
+        self.activity_policy.validate_class(handle.class_id)?;
         if input.brain_atp_q16 > BRAIN_ATP_Q16_MAX
             || input
                 .last_world_atp_tick
@@ -5088,6 +5106,14 @@ impl GpuClosedLoopBackend {
         &mut self,
         cohort: &GpuCuratedResidencyCohort,
     ) -> GpuCuratedResidencyOutcome {
+        for entry in &cohort.ordered_entries {
+            if let Err(error) = self
+                .activity_policy
+                .validate_class(entry.phenotype.brain_class_id())
+            {
+                return curated_residency_pre_submit(error);
+            }
+        }
         if let Err(error) = self.ensure_ready() {
             self.mark_device_lost();
             return GpuCuratedResidencyOutcome::Unknown {
@@ -5106,6 +5132,8 @@ impl GpuClosedLoopBackend {
         allow_research: bool,
     ) -> Result<GpuBrainHandle, ScaffoldContractError> {
         self.ensure_ready()?;
+        self.activity_policy
+            .validate_class(phenotype.brain_class_id())?;
         organism_id
             .validate()
             .map_err(|_| ScaffoldContractError::BrainOwnershipMismatch)?;
@@ -5114,7 +5142,11 @@ impl GpuClosedLoopBackend {
         }
         let class_id = phenotype.brain_class_id();
         let capacity = if allow_research {
-            if class_id != BrainCapacityClass::N4096_RESEARCH_ID {
+            if !matches!(
+                class_id,
+                BrainCapacityClass::N4096_RESEARCH_ID
+                    | BrainCapacityClass::N2048_GROUNDED_DRIVE_RESEARCH_ID
+            ) {
                 return Err(ScaffoldContractError::UnsupportedProductionBrainClass);
             }
             capacity_for_gpu_class(class_id)?

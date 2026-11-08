@@ -519,12 +519,20 @@ impl BrainGenome {
             innate_priority: InnatePriorityGenes::canonical_founder(),
             seeds,
             lobe_ratios: LobeRatioPlan::ClassDefault,
-            macro_connectome_masks: if brain_class_id == crate::BrainCapacityClass::N2048_ID {
+            macro_connectome_masks: if matches!(
+                brain_class_id,
+                crate::BrainCapacityClass::N2048_ID
+                    | crate::BrainCapacityClass::N2048_GROUNDED_DRIVE_RESEARCH_ID
+            ) {
                 MacroConnectomeMask::n2048_foundation_defaults()
             } else {
                 MacroConnectomeMask::scaffold_defaults()
             },
-            sparse_density_priors: if brain_class_id == crate::BrainCapacityClass::N2048_ID {
+            sparse_density_priors: if matches!(
+                brain_class_id,
+                crate::BrainCapacityClass::N2048_ID
+                    | crate::BrainCapacityClass::N2048_GROUNDED_DRIVE_RESEARCH_ID
+            ) {
                 SparseDensityPrior::n2048_foundation_defaults()
             } else {
                 SparseDensityPrior::scaffold_defaults()

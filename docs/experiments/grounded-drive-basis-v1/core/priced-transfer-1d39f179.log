@@ -1,0 +1,105 @@
+    Checking serde_json v1.0.150
+    Checking alife_core v0.1.0 (<workspace>/grounded-drive-basis-v1/crates/alife_core)
+    Checking alife_gpu_backend v0.1.0 (<workspace>/grounded-drive-basis-v1/crates/alife_gpu_backend)
+    Checking alife_world v0.1.0 (<workspace>/grounded-drive-basis-v1/crates/alife_world)
+    Checking alife_runtime v0.1.0 (<workspace>/grounded-drive-basis-v1/crates/alife_runtime)
+    Checking alife_training v0.1.0 (<workspace>/grounded-drive-basis-v1/crates/alife_training)
+    Finished `dev` profile [unoptimized] target(s) in 1m 39s
+   Compiling alife_core v0.1.0 (<workspace>/grounded-drive-basis-v1/crates/alife_core)
+    Finished `test` profile [unoptimized] target(s) in 3m 25s
+     Running tests/grounded_drive_pricing.rs (<artifacts>/grounded-drive-basis-v1-target/debug/deps/grounded_drive_pricing-d46b1b0a66e77c1b)
+
+running 2 tests
+test incremental_model_keeps_candidate_count_semantics_and_rejects_cross_policy ... ok
+test old_cost_wire_and_rates_are_unchanged ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/n2048_bounded_founder.rs (<artifacts>/grounded-drive-basis-v1-target/debug/deps/n2048_bounded_founder-170a13bcf9886370)
+
+running 3 tests
+test exact_asset_admission_rejects_cross_branch_abi ... ok
+test explicit_branch_abi_preserves_coordinates_and_separates_identity ... ok
+test selector_and_recipe_tamper_cannot_reinterpret_phenotype ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.94s
+
+     Running tests/n2048_foundation_abi.rs (<artifacts>/grounded-drive-basis-v1-target/debug/deps/n2048_foundation_abi-fc158c4c0b23bdcc)
+
+running 15 tests
+test auxiliary_decoder_plan_cannot_rebind_its_authenticated_head_to_another_range ... ok
+test explicit_n2048_candidate_preserves_exact_weights_and_compiler_resume_identity ... ok
+test foundation_and_language_mismatch_reject_before_phenotype_construction ... ok
+test foundation_asset_rejects_every_bound_abi_mismatch ... ok
+test foundation_payload_codec_round_trips_and_rejects_corruption ... ok
+test language_codebook_is_bounded_compositional_and_address_independent ... ok
+test n2048_layout_routes_and_decoder_partitions_are_exact ... ok
+test one_n2048_foundation_asset_reuses_stable_addresses_across_distinct_genomes ... ok
+test persistent_addresses_are_unique_packing_independent_and_blake3_bound ... ok
+test phenotype_identity_binds_language_address_route_and_plasticity_digests ... ok
+test pre_v5_compiler_inputs_are_rejected_instead_of_silently_reinterpreted ... ok
+test production_n2048_birth_loads_immutable_foundation_asset_and_binds_payload_identity ... ok
+test production_n2048_birth_rejects_missing_or_mismatched_foundation_asset_before_gpu_upload ... ok
+test promoted_foundation_requires_and_preserves_explicit_evaluation_provenance ... ok
+test smaller_promoted_classes_retain_valid_compiled_phenotypes ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.18s
+
+     Running tests/n2048_grounded_drive_basis.rs (<artifacts>/grounded-drive-basis-v1-target/debug/deps/n2048_grounded_drive_basis-313d98d92eafe7e9)
+
+running 3 tests
+test cross_profile_and_selector_tamper_rejected ... ok
+test explicit_additive_capacity_and_exact_coordinates ... ok
+test no_old_asset_relabeling_or_default_admission ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.83s
+
+     Running tests/n512_foundation_abi.rs (<artifacts>/grounded-drive-basis-v1-target/debug/deps/n512_foundation_abi-941594efc4838ab2)
+
+running 5 tests
+test checked_n512_assets_are_present_and_canonically_decodable ... ok
+test n2048_builtin_payloads_retain_legacy_digests_and_canonical_bytes ... ok
+test n512_builtins_bind_exact_profiles_and_compile_validated_matches_asset_path ... ok
+test n512_foundations_reject_class_profile_and_forged_cross_wires ... ok
+test n512_genetic_birth_asset_is_bootstrap_and_canonical ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+     Running tests/signed_decoder_foundations.rs (<artifacts>/grounded-drive-basis-v1-target/debug/deps/signed_decoder_foundations-007d9db127de56ea)
+
+running 4 tests
+test exact_n2048_foundation_preserves_negative_decoder_weights_and_rejects_negative_excitation ... ok
+test legacy_nano_candidate_keeps_signed_readouts_and_every_frozen_weight ... ok
+test private_n2048_foundation_replacement_does_not_apply_builtin_birth_signs ... ok
+test retained_nano_founder_asset_remains_canonically_admissible_without_rewriting ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.49s
+
+   Compiling alife_core v0.1.0 (<workspace>/grounded-drive-basis-v1/crates/alife_core)
+   Compiling alife_world v0.1.0 (<workspace>/grounded-drive-basis-v1/crates/alife_world)
+   Compiling alife_gpu_backend v0.1.0 (<workspace>/grounded-drive-basis-v1/crates/alife_gpu_backend)
+   Compiling alife_runtime v0.1.0 (<workspace>/grounded-drive-basis-v1/crates/alife_runtime)
+   Compiling alife_training v0.1.0 (<workspace>/grounded-drive-basis-v1/crates/alife_training)
+    Finished `test` profile [unoptimized] target(s) in 7m 38s
+     Running tests/cpu_grounded_drive_basis.rs (<artifacts>/grounded-drive-basis-v1-target/debug/deps/cpu_grounded_drive_basis-030100bfe35b9fa0)
+
+running 2 tests
+test actual_cpu_encode_overwrites_only_reserved_cognitive_lanes_and_matches_gpu_upload ... ok
+test derived_readout_gradient_matches_finite_difference_without_state_or_optimizer_changes ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.93s
+
+     Running tests/grounded_drive_transfer.rs (<artifacts>/grounded-drive-basis-v1-target/debug/deps/grounded_drive_transfer-7b63fe9866379b76)
+
+running 2 tests
+test complete_address_transfer_preserves_negative_readouts_and_causal_parameters ... ok
+test fresh_unbound_source_is_rejected_with_no_implicit_relabeling ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.85s
+
+    Checking alife_core v0.1.0 (<workspace>/grounded-drive-basis-v1/crates/alife_core)
+    Checking alife_gpu_backend v0.1.0 (<workspace>/grounded-drive-basis-v1/crates/alife_gpu_backend)
+    Checking alife_world v0.1.0 (<workspace>/grounded-drive-basis-v1/crates/alife_world)
+    Checking alife_runtime v0.1.0 (<workspace>/grounded-drive-basis-v1/crates/alife_runtime)
+    Checking alife_training v0.1.0 (<workspace>/grounded-drive-basis-v1/crates/alife_training)
+    Finished `dev` profile [unoptimized] target(s) in 52.44s

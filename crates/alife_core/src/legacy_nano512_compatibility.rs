@@ -82,15 +82,29 @@ pub enum FoundationAbiSelection {
     Nano512ActionCreditCandidateV2(crate::Nano512ActionCreditCandidateV2),
     /// Explicit fresh-state branch ABI; never applied to restored acquired state.
     N2048BoundedFounderV1(crate::N2048ExperimentalGraphV1),
+    N2048GroundedDriveBasisV1(crate::N2048GroundedDriveBasisV1),
 }
 
 impl FoundationAbiSelection {
+    pub const fn n2048_grounded_drive_basis(&self) -> Option<&crate::N2048GroundedDriveBasisV1> {
+        if let Self::N2048GroundedDriveBasisV1(r) = self {
+            Some(r)
+        } else {
+            None
+        }
+    }
+    pub const fn uses_n2048_experimental_topology(&self) -> bool {
+        self.n2048_experimental_graph().is_some() || self.n2048_grounded_drive_basis().is_some()
+    }
+    pub const fn uses_bounded_fresh_branches(&self) -> bool {
+        self.is_n2048_bounded_founder_v1() || self.n2048_grounded_drive_basis().is_some()
+    }
     pub const fn is_n2048_bounded_founder_v1(&self) -> bool {
         matches!(self, Self::N2048BoundedFounderV1(_))
     }
     /// Fixed fresh-founder recipe only. Existing checkpoints retain their own branches.
     pub const fn fresh_dendritic_parameters(&self) -> (f32, f32) {
-        if self.is_n2048_bounded_founder_v1() {
+        if self.uses_bounded_fresh_branches() {
             (0.25, 0.1)
         } else {
             (6.0, -1.0)
@@ -133,7 +147,9 @@ impl FoundationAbiSelection {
     pub const fn canonical_v2(&self) -> Option<&FoundationAbiBinding> {
         match self {
             Self::CanonicalV2(binding) => Some(binding),
-            Self::N2048ExperimentalGraphV1(_) | Self::N2048BoundedFounderV1(_) => None,
+            Self::N2048ExperimentalGraphV1(_)
+            | Self::N2048BoundedFounderV1(_)
+            | Self::N2048GroundedDriveBasisV1(_) => None,
             Self::LegacyNano512CompatibilityV1(_)
             | Self::MigratedN2048FoundationV1(_)
             | Self::Nano512ReadoutCandidateV1(_)
@@ -146,7 +162,9 @@ impl FoundationAbiSelection {
     ) -> Option<&LegacyNano512CompatibilityAbiDescriptor> {
         match self {
             Self::CanonicalV2(_) => None,
-            Self::N2048ExperimentalGraphV1(_) | Self::N2048BoundedFounderV1(_) => None,
+            Self::N2048ExperimentalGraphV1(_)
+            | Self::N2048BoundedFounderV1(_)
+            | Self::N2048GroundedDriveBasisV1(_) => None,
             Self::LegacyNano512CompatibilityV1(descriptor) => Some(descriptor),
             Self::MigratedN2048FoundationV1(_)
             | Self::Nano512ReadoutCandidateV1(_)
@@ -159,7 +177,9 @@ impl FoundationAbiSelection {
     ) -> Option<&MigratedN2048FoundationV1Descriptor> {
         match self {
             Self::MigratedN2048FoundationV1(descriptor) => Some(descriptor),
-            Self::N2048ExperimentalGraphV1(_) | Self::N2048BoundedFounderV1(_) => None,
+            Self::N2048ExperimentalGraphV1(_)
+            | Self::N2048BoundedFounderV1(_)
+            | Self::N2048GroundedDriveBasisV1(_) => None,
             Self::CanonicalV2(_)
             | Self::LegacyNano512CompatibilityV1(_)
             | Self::Nano512ReadoutCandidateV1(_)
@@ -173,6 +193,9 @@ impl FoundationAbiSelection {
         sensor_profile: SensorProfile,
     ) -> Result<(), ScaffoldContractError> {
         match self {
+            Self::N2048GroundedDriveBasisV1(recipe) => {
+                recipe.validate_against(capacity, sensor_profile)
+            }
             Self::Nano512ActionCreditCandidateV2(candidate) => {
                 candidate.asset()?;
                 candidate.validate_cognitive_extension()?;
@@ -219,6 +242,7 @@ impl FoundationAbiSelection {
 
     pub(crate) fn language_codebook(&self) -> LanguageCodebookV1 {
         match self {
+            Self::N2048GroundedDriveBasisV1(_) => LanguageCodebookV1::canonical(),
             Self::Nano512ReadoutCandidateV1(_) | Self::Nano512ActionCreditCandidateV2(_) => {
                 LanguageCodebookV1::canonical()
             }
@@ -233,6 +257,9 @@ impl FoundationAbiSelection {
 
     pub const fn capacity_class_id(&self) -> crate::BrainClassId {
         match self {
+            Self::N2048GroundedDriveBasisV1(_) => {
+                BrainCapacityClass::N2048_GROUNDED_DRIVE_RESEARCH_ID
+            }
             Self::Nano512ReadoutCandidateV1(_) | Self::Nano512ActionCreditCandidateV2(_) => {
                 BrainCapacityClass::N512_ID
             }
@@ -247,6 +274,7 @@ impl FoundationAbiSelection {
 
     pub const fn foundation_id(&self) -> Option<FoundationId> {
         match self {
+            Self::N2048GroundedDriveBasisV1(_) => Some(FoundationId::N2048_GROUNDED_DRIVE_BASIS_V1),
             Self::Nano512ReadoutCandidateV1(_) | Self::Nano512ActionCreditCandidateV2(_) => {
                 Some(FoundationId::N512_READOUT_CANDIDATE_V1)
             }
@@ -261,6 +289,7 @@ impl FoundationAbiSelection {
 
     pub const fn foundation_version(&self) -> Option<FoundationVersion> {
         match self {
+            Self::N2048GroundedDriveBasisV1(_) => Some(FoundationVersion::V1),
             Self::Nano512ReadoutCandidateV1(_) | Self::Nano512ActionCreditCandidateV2(_) => {
                 Some(FoundationVersion::V1)
             }
@@ -279,6 +308,9 @@ impl FoundationAbiSelection {
 
     pub const fn compatibility_family_id(&self) -> Option<FoundationCompatibilityFamilyId> {
         match self {
+            Self::N2048GroundedDriveBasisV1(_) => {
+                Some(FoundationCompatibilityFamilyId::N2048_GROUNDED_DRIVE_BASIS)
+            }
             Self::Nano512ReadoutCandidateV1(_) | Self::Nano512ActionCreditCandidateV2(_) => {
                 Some(FoundationCompatibilityFamilyId::N512_FOUNDATION)
             }
@@ -297,6 +329,7 @@ impl FoundationAbiSelection {
 
     pub fn foundation_weight_asset(&self) -> Option<FoundationWeightAssetRef> {
         match self {
+            Self::N2048GroundedDriveBasisV1(recipe) => recipe.asset_ref(),
             Self::Nano512ActionCreditCandidateV2(candidate) => Some(candidate.source().asset_ref()),
             Self::Nano512ReadoutCandidateV1(candidate) => Some(candidate.asset_ref()),
             Self::CanonicalV2(binding) => binding.foundation_weight_asset(),
@@ -320,6 +353,10 @@ impl FoundationAbiSelection {
 
     pub(crate) fn write_canonical(&self, digest: &mut CanonicalDigestBuilder) {
         match self {
+            Self::N2048GroundedDriveBasisV1(recipe) => {
+                digest.write_u8(10);
+                recipe.write_canonical(digest);
+            }
             Self::N2048BoundedFounderV1(recipe) => {
                 // Tags 7/8 are reserved by separately published memory/grip research.
                 digest.write_u8(9);

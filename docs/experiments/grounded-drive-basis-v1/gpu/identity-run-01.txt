@@ -1,0 +1,13 @@
+Sun Nov  8 16:17:00 UTC 2026
+67e26f53009c9b925b94cac1af5421894b059481
+d0281b30428a0f4ed1b48e568ab1da3cfdbd5e55
+rustc 1.99.1 (58cf8f9c3 2026-10-13)
+binary: rustc
+commit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67
+commit-date: 2026-10-13
+host: x86_64-unknown-linux-gnu
+release: 1.99.1
+LLVM version: 23.1.1
+24a644cc8988b2ca3c0142cabe3e188a56e9726426f8c618c04e8d1863fee32f  <artifacts>/grounded-drive-gpu-parity-v1-target/debug/deps/grounded_drive_gpu_parity-8c5623dd9357d217
+0370ba973a74faa50a2d191fcc14e697b51e8485ec778bafb6539064e66b9a3a  /usr/lib/chromium/libvk_swiftshader.so
+c9eef28b6b984fec220ef0abfecc40b502d46946706e47bfe97707027cb818bd  /usr/lib/chromium/vk_swiftshader_icd.json

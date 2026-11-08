@@ -113,6 +113,18 @@ fn add_candidate_memory_context(@builtin(global_invocation_id) gid:vec3<u32>) {
   }
   let logit_index = brain.candidate_logit_offset + gid.x;
   let base_logit = load_state_f32(logit_index);
+  // Preserve the exact prepared/scored basis through ordinary cognitive fill.
+  let derived = load_decoder_plan(brain.decoder_plan_offset).schema_version == 2u;
+  var derived_values:array<u32,10>;
+  if (derived) {
+    if (brain.class_id != 5u || input_stride != 54u) {
+      atomicOr(&mutable_state_words[brain.diagnostic_offset + MEMORY_CONTEXT_DIAGNOSTIC_LANE], CONTRACT_INVALID_DIAGNOSTIC_BIT);
+      return;
+    }
+    for (var lane=0u; lane<10u; lane++) {
+      derived_values[lane] = frame_payload_words[header.decoder_learning_input_offset + gid.x * input_stride + 36u + lane];
+    }
+  }
   var cognitive_delta = 0.0;
   let cognitive_base = header.memory_context_offset
     + header.candidate_count * MEMORY_RECORD_WORDS;
@@ -160,7 +172,7 @@ fn add_candidate_memory_context(@builtin(global_invocation_id) gid:vec3<u32>) {
         cognitive_rows += 1u;
       }
     }
-    if (cognitive_rows != 0u && cognitive_rows != COGNITIVE_LANE_COUNT) {
+    if ((derived && cognitive_rows != 0u) || (cognitive_rows != 0u && cognitive_rows != COGNITIVE_LANE_COUNT)) {
       atomicOr(&mutable_state_words[brain.diagnostic_offset + MEMORY_CONTEXT_DIAGNOSTIC_LANE], CONTRACT_INVALID_DIAGNOSTIC_BIT);
       return;
     }
@@ -171,6 +183,11 @@ fn add_candidate_memory_context(@builtin(global_invocation_id) gid:vec3<u32>) {
   } else if (cognitive.schema_version != 0u) {
     atomicOr(&mutable_state_words[brain.diagnostic_offset + MEMORY_CONTEXT_DIAGNOSTIC_LANE], CONTRACT_INVALID_DIAGNOSTIC_BIT);
     return;
+  }
+  if (derived) {
+    for (var lane=0u; lane<10u; lane++) {
+      frame_payload_words[header.decoder_learning_input_offset + gid.x * input_stride + 36u + lane] = derived_values[lane];
+    }
   }
   store_state_f32(logit_index,
     base_logit

@@ -1,0 +1,132 @@
+{
+  "schema": "grounded_drive_finite_evidence_provenance_v1",
+  "no_executables_or_state_arrays": true,
+  "records": [
+    {
+      "original_filename": "grounded-drive-474f3f49-check.log",
+      "original_sha256": "89873a1b2d9edadbf0509ece9fd93ed7d245b2c5b5712a946c0c1f42563e6973",
+      "original_bytes": 3666,
+      "publication_path": "docs/experiments/grounded-drive-basis-v1/core/474f3f49-check.log",
+      "publication_sha256": "7b6c30f61632cfbf9d30afe24fba489c55a070388614536ecf59a454e0cc0389",
+      "publication_bytes": 3546,
+      "transformation": "Path-sanitized derived full text; no omitted lines or changed numerical results. Replaced execution workspace and artifact root only."
+    },
+    {
+      "original_filename": "grounded-drive-focused-tests.log",
+      "original_sha256": "6c246e33097c879aaf77eb4e7d776253273a08f07daed20f609f25a21f6c908f",
+      "original_bytes": 4464,
+      "publication_path": "docs/experiments/grounded-drive-basis-v1/core/focused-tests.log",
+      "publication_sha256": "a37e8b9d7202808b118637304cd38f5b8cfbbc8155489ec09ee57fa200cd4664",
+      "publication_bytes": 4386,
+      "transformation": "Path-sanitized derived full text; no omitted lines or changed numerical results. Replaced execution workspace and artifact root only."
+    },
+    {
+      "original_filename": "grounded-drive-legacy-cpu-tests.log",
+      "original_sha256": "aa0e4c0b8048726ee3106af90ae67218880e5ea964a2d762102cc80915203e36",
+      "original_bytes": 6269,
+      "publication_path": "docs/experiments/grounded-drive-basis-v1/core/legacy-cpu-tests.log",
+      "publication_sha256": "7909e1d94014bb968da9aa583685f1f3a46984a041f4a989c4e4ad4f4d80900c",
+      "publication_bytes": 6005,
+      "transformation": "Path-sanitized derived full text; no omitted lines or changed numerical results. Replaced execution workspace and artifact root only."
+    },
+    {
+      "original_filename": "grounded-drive-fixture-rerun.log",
+      "original_sha256": "a7db75a6d5a7024ec690675e44363d404cceb94a304511de4111a9107125a0d7",
+      "original_bytes": 1722,
+      "publication_path": "docs/experiments/grounded-drive-basis-v1/core/fixture-rerun.log",
+      "publication_sha256": "50a93b85adf1a65299bf94c18016c02be2009f6cc8fb58703e32a4bebd97f64c",
+      "publication_bytes": 1616,
+      "transformation": "Path-sanitized derived full text; no omitted lines or changed numerical results. Replaced execution workspace and artifact root only."
+    },
+    {
+      "original_filename": "grounded-drive-bound-fixture-rerun.log",
+      "original_sha256": "2bf49afcdce28e38d6f358304fe7917b6f4bd73b641c54c1de80db32239b3a54",
+      "original_bytes": 1371,
+      "publication_path": "docs/experiments/grounded-drive-basis-v1/core/bound-fixture-rerun.log",
+      "publication_sha256": "a59ca776fe9b7c0a18a13fcd2fc9028c7d4ece33a9a479984cf660f5fcfd659a",
+      "publication_bytes": 1225,
+      "transformation": "Path-sanitized derived full text; no omitted lines or changed numerical results. Replaced execution workspace and artifact root only."
+    },
+    {
+      "original_filename": "grounded-drive-priced-transfer-1d39f179.log",
+      "original_sha256": "8b95ed2e36ff5f537f1a3ad19d7f1d70a7bed01461e8deb0e6269ac64dafecd0",
+      "original_bytes": 6989,
+      "publication_path": "docs/experiments/grounded-drive-basis-v1/core/priced-transfer-1d39f179.log",
+      "publication_sha256": "6c5aca481d4048965610a62c29af136236f9345d1c33f185f0a3add7707fd940",
+      "publication_bytes": 6621,
+      "transformation": "Path-sanitized derived full text; no omitted lines or changed numerical results. Replaced execution workspace and artifact root only."
+    },
+    {
+      "original_filename": "build-01.log",
+      "original_sha256": "acef425ef4a7b2f146244c46397b51d36fcefa2f1c3d2016fe1d5d5f9700cf37",
+      "original_bytes": 5255,
+      "publication_path": "docs/experiments/grounded-drive-basis-v1/gpu/build-01.log",
+      "publication_sha256": "2533f749975cf79f18bab64dd5860d26923fc5503f6813bf75977717a3333371",
+      "publication_bytes": 5135,
+      "transformation": "Path-sanitized derived full text; no omitted lines or changed numerical results. Replaced execution workspace and artifact root only."
+    },
+    {
+      "original_filename": "build-02.log",
+      "original_sha256": "b6884778d54abd73b96c5236274398b4b5454931e99f095993fe8dcb8fb6a673",
+      "original_bytes": 339,
+      "publication_path": "docs/experiments/grounded-drive-basis-v1/gpu/build-02.log",
+      "publication_sha256": "233e8f839c6d0cc6f77395a7a53355eba7515ab2fbda3c94efe84c9cfae2b2ce",
+      "publication_bytes": 313,
+      "transformation": "Path-sanitized derived full text; no omitted lines or changed numerical results. Replaced execution workspace and artifact root only."
+    },
+    {
+      "original_filename": "clippy-01.log",
+      "original_sha256": "e4ea00ab607c6bb21694d27ebe2d863734e3d96b1a5acdc5e1eb3ce1b538e279",
+      "original_bytes": 3196,
+      "publication_path": "docs/experiments/grounded-drive-basis-v1/gpu/clippy-01.log",
+      "publication_sha256": "42198abdbe02f11332519a95051c85819f680cd18f39a67e04cc4563a26a4bff",
+      "publication_bytes": 3076,
+      "transformation": "Path-sanitized derived full text; no omitted lines or changed numerical results. Replaced execution workspace and artifact root only."
+    },
+    {
+      "original_filename": "identity-run-01.txt",
+      "original_sha256": "dca4c17b476ed9e505653be2dc572d22fb7a22577f7e843c1fe6015ce7923709",
+      "original_bytes": 694,
+      "publication_path": "docs/experiments/grounded-drive-basis-v1/gpu/identity-run-01.txt",
+      "publication_sha256": "f370976f66836bd2c933cbc51738fcdf0877164823a2acb195d3991f09da8f68",
+      "publication_bytes": 688,
+      "transformation": "Path-sanitized derived full text; no omitted lines or changed numerical results. Replaced execution workspace and artifact root only."
+    },
+    {
+      "original_filename": "run-01.log",
+      "original_sha256": "2f2abe80675641b0da4e19e184d7edc81d3c3605fb3f0517447745091abed3b7",
+      "original_bytes": 12091,
+      "publication_path": "docs/experiments/grounded-drive-basis-v1/gpu/run-01.log",
+      "publication_sha256": "cf99aff8432b08ba3d56996d2912d8a8657d6a46b8089913ee741ee78e4467d2",
+      "publication_bytes": 12085,
+      "transformation": "Path-sanitized derived full text; no omitted lines or changed numerical results. Replaced execution workspace and artifact root only."
+    },
+    {
+      "original_filename": "run-fixture.sh",
+      "original_sha256": "6ef17cceb22d708aa4a6a1ff6f1f7524855170418bef79eb61dc175a78795832",
+      "original_bytes": 977,
+      "publication_path": "docs/experiments/grounded-drive-basis-v1/gpu/run-fixture.sh.txt",
+      "publication_sha256": "0fe3a5506f8b03f242f68901fe4ba0284349bd497bb45f03d8f50b37ac5adfee",
+      "publication_bytes": 931,
+      "transformation": "Path-sanitized derived full text; no omitted lines or changed numerical results. Replaced execution workspace and artifact root only."
+    },
+    {
+      "original_filename": "software-research-constructor.patch",
+      "original_sha256": "96faf76df2e1390012f93de0646ccf4f8f2baa470df4f3a35a358c9b8c99145d",
+      "original_bytes": 1212,
+      "publication_path": "docs/experiments/grounded-drive-basis-v1/gpu/software-research-constructor.patch",
+      "publication_sha256": "96faf76df2e1390012f93de0646ccf4f8f2baa470df4f3a35a358c9b8c99145d",
+      "publication_bytes": 1212,
+      "transformation": "Original bytes unchanged."
+    },
+    {
+      "original_filename": "GROUNDED_DRIVE_GPU_PARITY_REPORT.md",
+      "original_sha256": "cddf33b09484b2c3e9f587c0d5e5c4339c640369758e0fb36de37a3dcf1f0301",
+      "original_bytes": 8235,
+      "publication_path": "GROUNDED_DRIVE_GPU_PARITY_REPORT.md",
+      "publication_sha256": "e7dc88fc9414b331b33833ce7db521fdd900b993a5e2329272019afcc938347f",
+      "publication_bytes": 8595,
+      "transformation": "Derived report: added publication-status preface and substituted execution workspace/artifact roots only. Not original report bytes."
+    }
+  ]
+}

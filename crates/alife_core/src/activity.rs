@@ -81,8 +81,16 @@ impl BrainAtpCostModel {
         }
     }
 
+    /// Authored incremental accounting: old lump128 plus160 extra readout
+    /// terms at4Q24 each. Not a measurement or sixfold runtime-cost claim.
+    pub const fn grounded_drive_research_v1() -> Self {
+        let mut model = Self::production_v1();
+        model.schema_version = 2;
+        model.decoder_candidate_op_q24 = 128 + 160 * 4;
+        model
+    }
     pub fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
-        if *self != Self::production_v1() {
+        if *self != Self::production_v1() && *self != Self::grounded_drive_research_v1() {
             return Err(ScaffoldContractError::BrainActivityPolicyMismatch);
         }
         Ok(())
@@ -152,11 +160,44 @@ impl BrainActivityPolicyV1 {
         policy
     }
 
+    pub fn grounded_drive_research_v1() -> Self {
+        let mut policy = Self::production_v1();
+        policy.policy_version = 2;
+        policy.cost = BrainAtpCostModel::grounded_drive_research_v1();
+        policy.policy_digest = policy.recompute_digest();
+        policy
+    }
+    pub fn for_phenotype(phenotype: &BrainPhenotype) -> Self {
+        if phenotype
+            .foundation_abi()
+            .n2048_grounded_drive_basis()
+            .is_some()
+        {
+            Self::grounded_drive_research_v1()
+        } else {
+            Self::production_v1()
+        }
+    }
+    /// A global backend policy cannot silently reprice a different class.
+    pub fn validate_class(&self, class: crate::BrainClassId) -> Result<(), ScaffoldContractError> {
+        self.validate_contract()?;
+        if (self.policy_version == 2)
+            != (class == crate::BrainCapacityClass::N2048_GROUNDED_DRIVE_RESEARCH_ID)
+        {
+            return Err(ScaffoldContractError::BrainActivityPolicyMismatch);
+        }
+        Ok(())
+    }
     pub fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
         self.cost.validate_contract()?;
-        let expected = Self::production_v1();
+        let expected = match self.policy_version {
+            BRAIN_ACTIVITY_POLICY_VERSION => Self::production_v1(),
+            2 => Self::grounded_drive_research_v1(),
+            _ => return Err(ScaffoldContractError::BrainActivityPolicyMismatch),
+        };
         if self.schema_version != BRAIN_ACTIVITY_SCHEMA_VERSION
-            || self.policy_version != BRAIN_ACTIVITY_POLICY_VERSION
+            || self.policy_version != expected.policy_version
+            || self.cost != expected.cost
             || self.gpu_time_threshold_ns != expected.gpu_time_threshold_ns
             || self.queue_depth_thresholds != expected.queue_depth_thresholds
             || self.logical_heap_pressure_thresholds_q16
@@ -284,6 +325,7 @@ impl GpuPressureSample {
     ) -> Result<Self, ScaffoldContractError> {
         policy.validate_contract()?;
         input.identity.validate_contract()?;
+        policy.validate_class(crate::BrainClassId(input.identity.class_id_raw))?;
         if input.logical_heap_capacity == 0
             || input.brain_atp_capacity_q16 == 0
             || input.logical_heap_used > input.logical_heap_capacity
@@ -371,6 +413,7 @@ impl GpuPressureSample {
     ) -> Result<(), ScaffoldContractError> {
         policy.validate_contract()?;
         self.dispatch_identity().validate_contract()?;
+        policy.validate_class(crate::BrainClassId(self.class_id_raw))?;
         let source_binding_valid = self.source_dispatch_generation < self.dispatch_generation
             && ((self.source_dispatch_generation == 0) == (self.source_frame_digest == [0; 4]));
         if self.schema_version != policy.schema_version
@@ -507,7 +550,7 @@ impl NeuralThrottleDecision {
         phenotype: &BrainPhenotype,
         execution: &BrainExecutionBudget,
     ) -> Result<(), ScaffoldContractError> {
-        let policy = BrainActivityPolicyV1::production_v1();
+        let policy = BrainActivityPolicyV1::for_phenotype(phenotype);
         self.pressure.validate_for(&policy)?;
         let identity = BrainDispatchIdentity {
             organism_id_raw: self.organism_id_raw,

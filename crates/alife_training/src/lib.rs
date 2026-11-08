@@ -13,6 +13,8 @@ pub mod cpu;
 mod founder_demonstrations;
 mod founder_merge;
 mod founder_readout;
+mod grounded_drive_transfer;
+pub use grounded_drive_transfer::*;
 #[cfg(feature = "receipt-lineage")]
 pub mod native_receipt;
 mod ppo;

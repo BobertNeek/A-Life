@@ -193,8 +193,14 @@ pub(super) fn compile_decoders(
     route_index: u16,
     start: u32,
 ) -> Result<CompiledDecoderSet, ScaffoldContractError> {
-    if capacity.id() == BrainCapacityClass::N2048_ID {
-        return compile_n2048_decoders(genome, layout, route_index, start);
+    if capacity.has_n2048_layout() {
+        return compile_n2048_decoders(
+            genome,
+            layout,
+            route_index,
+            start,
+            capacity.id() == BrainCapacityClass::N2048_GROUNDED_DRIVE_RESEARCH_ID,
+        );
     }
     let motor = layout
         .region(LobeKind::ActionPlanning)
@@ -411,6 +417,7 @@ fn compile_n2048_decoders(
     layout: &LobeLayout,
     action_route_index: u16,
     start: u32,
+    derived: bool,
 ) -> Result<CompiledDecoderSet, ScaffoldContractError> {
     let motor = layout
         .region(LobeKind::ActionPlanning)
@@ -433,7 +440,9 @@ fn compile_n2048_decoders(
         let family_start = start + u32::try_from(synapses.len()).map_err(|_| compile_error())?;
         let first_motor =
             u16::from(raw) * crate::N2048FoundationLayoutV1::CANDIDATE_MOTOR_UNITS_PER_FAMILY;
-        for input_lane in 0..CANDIDATE_FEATURE_COUNT as u16 {
+        for input_lane in
+            (0..CANDIDATE_FEATURE_COUNT as u16).chain(36..if derived { 46 } else { 36 })
+        {
             for motor_index in first_motor
                 ..first_motor + crate::N2048FoundationLayoutV1::CANDIDATE_MOTOR_UNITS_PER_FAMILY
             {
@@ -447,12 +456,16 @@ fn compile_n2048_decoders(
                 synapses.push(CompiledSynapse::new(
                     neuron,
                     neuron,
-                    candidate_decoder_weight(
-                        genome.genetic_prior_seed,
-                        action_route_index,
-                        neuron,
-                        u32::from(input_lane),
-                    ),
+                    if input_lane >= 36 {
+                        0.0
+                    } else {
+                        candidate_decoder_weight(
+                            genome.genetic_prior_seed,
+                            action_route_index,
+                            neuron,
+                            u32::from(input_lane),
+                        )
+                    },
                     super::topology_compile::decoder_alpha(genome, motor.start, neuron),
                     action_route_index,
                     CompiledSynapseKind::Decoder(coordinate),
@@ -468,7 +481,13 @@ fn compile_n2048_decoders(
         );
     }
     let candidate_count = u32::try_from(synapses.len()).map_err(|_| compile_error())?;
-    if candidate_count != crate::N2048FoundationLayoutV1::CANDIDATE_DECODER_SYNAPSE_COUNT {
+    if candidate_count
+        != if derived {
+            4352
+        } else {
+            crate::N2048FoundationLayoutV1::CANDIDATE_DECODER_SYNAPSE_COUNT
+        }
+    {
         return Err(compile_error());
     }
     let memory_channel = super::MemoryChannelPlan::try_new_v1(
@@ -483,6 +502,11 @@ fn compile_n2048_decoders(
         family_plans,
     )?;
 
+    let candidate = if derived {
+        candidate.with_grounded_drive_basis()?
+    } else {
+        candidate
+    };
     let speech_start = start + candidate_count;
     for input_lane in 0_u16..crate::SpeechDecoderLayoutV1::INPUT_WIDTH {
         for output_index in 0_u16..crate::SpeechDecoderLayoutV1::OUTPUT_WIDTH {

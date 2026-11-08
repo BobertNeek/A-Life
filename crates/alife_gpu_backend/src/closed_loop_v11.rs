@@ -224,7 +224,7 @@ impl GpuV11CausalState {
         .min(usize::from(motor_width))
         .min(64);
         let (output_gain, threshold) = phenotype.foundation_abi().fresh_dendritic_parameters();
-        if phenotype.foundation_abi().is_n2048_bounded_founder_v1() && branch_count != 64 {
+        if phenotype.foundation_abi().uses_bounded_fresh_branches() && branch_count != 64 {
             return Err(ScaffoldContractError::GpuLayoutMismatch);
         }
         let mut branches = Vec::with_capacity(branch_count);

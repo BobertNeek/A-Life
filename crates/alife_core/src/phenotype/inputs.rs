@@ -316,6 +316,14 @@ impl PhenotypeCompilerInputs {
         capacity: &BrainCapacityClass,
     ) -> Result<(), ScaffoldContractError> {
         capacity.validate_contract()?;
+        if (capacity.id() == BrainCapacityClass::N2048_GROUNDED_DRIVE_RESEARCH_ID)
+            != self
+                .foundation_abi_selection
+                .n2048_grounded_drive_basis()
+                .is_some()
+        {
+            return Err(ScaffoldContractError::PhenotypeCompile);
+        }
         self.genome.validate_contract()?;
         self.development.validate_contract()?;
         self.foundation_abi_selection

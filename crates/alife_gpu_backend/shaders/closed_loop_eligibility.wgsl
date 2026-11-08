@@ -264,7 +264,11 @@ fn accumulate_decoder_eligibility(@builtin(global_invocation_id) gid:vec3<u32>) 
       let feature_index = header.decoder_learning_input_offset
         + candidate_index * header.decoder_input_stride + metadata.input_lane;
       if (metadata.decoder_head == DECODER_HEAD_ACTION_CANDIDATE) {
-        if (metadata.input_lane >= CANDIDATE_FEATURE_COUNT) { return; }
+        let derived = brain.class_id == 5u
+          && load_decoder_plan(brain.decoder_plan_offset).schema_version == 2u
+          && header.decoder_input_stride == 54u;
+        if (metadata.input_lane >= CANDIDATE_FEATURE_COUNT
+            && !(derived && metadata.input_lane >= 36u && metadata.input_lane < 46u)) { return; }
         local += load_state_f32(activation_offset + metadata.motor_index)
           * bitcast<f32>(frame_payload_words[feature_index]);
       } else {
