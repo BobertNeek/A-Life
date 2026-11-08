@@ -1,0 +1,7 @@
+# V3 build provenance limitation, added after closure
+
+The original v3 archive, measurements, source and binary remain immutable. Its retained build.log/helper-tests.log explicitly show alife_world, alife_runtime and alife_training recompilation from the v3 source path. Later logs show training recompilation. None establishes an alife_core rebuild for that source snapshot.
+
+V3 used the shared warm target. Later copied-worktree builds demonstrated that preserved source mtimes can permit stale dependency reuse. The v3 binary hash and source closure identify the recorded executable and intended source separately; they do not prove every dependency in that binary was rebuilt from those bytes. Core compatibility was exercised by detached identity/decomposition checks and the runtime actual replay/immutability gates, but these are not a hermetic build-provenance proof. Expected warm-core provenance cannot now be established with certainty from retained logs.
+
+The shared target has subsequently been rebuilt by other workers. Current Cargo fingerprints cannot reliably establish the historical v3 dependency contents; no contemporaneous fingerprint archive was retained. Do not substitute a current fingerprint as historical proof. No closed v3 seed is rerun. Treat its measurements as observations of the recorded binary with this source-attribution limit. V4 explicitly touches all copied source inputs and retains final dependency rebuild logs before execution.
