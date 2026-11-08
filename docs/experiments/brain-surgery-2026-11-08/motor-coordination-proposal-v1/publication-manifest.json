@@ -1,0 +1,126 @@
+{
+  "schema": "alife_source_only_proposal_publication_v1",
+  "repository": "BobertNeek/A-Life",
+  "branch": "experiment/brain-surgery-handoff-20261108-1300",
+  "destination": "docs/experiments/brain-surgery-2026-11-08/motor-coordination-proposal-v1",
+  "parent_commit": "4d6159bd9bca3151ea60f037ffce60e1e5315791",
+  "parent_tree": "7df29dde4b222b755bd684f754a517c8cf5d0a2c",
+  "status": "prospective_source_only_not_native_admitted_not_behaviorally_validated",
+  "files": [
+    {
+      "path": "DESIGN.md",
+      "bytes": 28796,
+      "sha256": "a12848a8fff96e22c9dab55e674f7b0c40c0e39cfbba594a5a73016ac572d28f",
+      "git_blob_sha1": "3b3054798ebd96dd4ed746bc486d958827c98955",
+      "provenance": "derived_explanatory_report",
+      "original_sha256": "468d7e270b111381c575599d8362da2a16bae8049a8219be5c272e257888a5e9",
+      "original_bytes": 26777,
+      "changes": [
+        "Public-facing wording and spacing; no runtime/source edits.",
+        "Historical six-test/refinement chronology distinguished from later nine-test pass.",
+        "Linked developmental-context interpretation; no new closed data or native run."
+      ]
+    },
+    {
+      "path": "README.md",
+      "bytes": 4444,
+      "sha256": "153a59243776b0606619ba702bc35ffd3ab8ef4c44d783b2ed7e35d8988539fa",
+      "git_blob_sha1": "03091a48029b153676e3ad0440e3d22a5f271b0c",
+      "provenance": "new_publication_guide"
+    },
+    {
+      "path": "algebra-tests.log",
+      "bytes": 932,
+      "sha256": "9800a911ad1152568ca965be11aafe45afb1f833f5ff1383144745241f56cc21",
+      "git_blob_sha1": "b5d3712be3e3859d5d6eeb794ac09a1454ead86b",
+      "provenance": "exact_original_bytes"
+    },
+    {
+      "path": "circuit-manifest.json",
+      "bytes": 18878,
+      "sha256": "7b7bbe3363b6e3368711d59ebacab45f7e2126690c241e7dc2090ecef28b7ce4",
+      "git_blob_sha1": "2bfe8a7691607057ec7fa3e9f46ebba5aff28e0c",
+      "provenance": "exact_original_bytes"
+    },
+    {
+      "path": "circuit_proposal.py",
+      "bytes": 14400,
+      "sha256": "755391e39aa4fe5d81528f2283645193ca38fa785609ccca53a321d6f9b06e4f",
+      "git_blob_sha1": "09c5ccc4922290badc58586156b7c987a6deb1f0",
+      "provenance": "exact_original_bytes"
+    },
+    {
+      "path": "mediation-m0-manifest.json",
+      "bytes": 31226,
+      "sha256": "3f084d2ca401acd992629a19fa4db763a7ecc7315c62f592b0e0fb2f0e9eac1a",
+      "git_blob_sha1": "7f87df3e34e78582311d4cee3e0d18d620d24e5a",
+      "provenance": "exact_original_bytes"
+    },
+    {
+      "path": "mediation-m1-manifest.json",
+      "bytes": 70716,
+      "sha256": "8f7f2a9efd7b0abf79a631668dfb7aa6e92183c88ab3f631568da9e2e3ef3751",
+      "git_blob_sha1": "7704ba4538796816d56bcbfc7b0b5caba61b0e19",
+      "provenance": "exact_original_bytes"
+    },
+    {
+      "path": "owner-algebra-tests.log",
+      "bytes": 1406,
+      "sha256": "8eee9a93ef974c7b754bdb0ae6ae30e0f94967c1fd9ee439979b6c3aa0ca642a",
+      "git_blob_sha1": "dcff8e0e29f5c374759bce7599e1beca9ed6a2b1",
+      "provenance": "exact_original_bytes"
+    },
+    {
+      "path": "rest-rows-analysis.json",
+      "bytes": 68596,
+      "sha256": "dfbf9011765d6c477db4eb23d9a3f1fa73bec3e8e8d8042751662a9c8fc139fc",
+      "git_blob_sha1": "d68abbf9bbcf5a1aa35acfb5002679525f14353c",
+      "provenance": "exact_original_bytes"
+    },
+    {
+      "path": "test_circuit_proposal.py",
+      "bytes": 4531,
+      "sha256": "6fda845e5340a25e02f88bf0affcff21b475a07a623aa14c8d581a50df73445a",
+      "git_blob_sha1": "f0e189d14666330f5fd1e7b7f658017fad9fe2c2",
+      "provenance": "exact_original_bytes"
+    }
+  ],
+  "hash_closure": "SHA256SUMS covers all files except itself, including this manifest. The Git tree closes all blob identities. Neither manifest nor SHA256SUMS claims a recursive self-hash.",
+  "tests": {
+    "original_six": "passed; exact algebra-tests.log",
+    "later_nine": "passed; exact owner-algebra-tests.log",
+    "later_command": "python -B -m unittest -v test_circuit_proposal.py",
+    "publication_reran_tests": false,
+    "limits": "Pure scalar/algebra and construction tests only; no native replay, life, learning or behavior qualification."
+  },
+  "closed_input": {
+    "raw_sha256": "68ffe6229a770a573fc74075afa04dd7d9d267fc680facafa6044fbff1673a20",
+    "raw_published": false,
+    "scalar_rows": 43,
+    "total_intervals": 640,
+    "moving_rest_rows": 32,
+    "stationary_rest_rows": 11,
+    "independent_trials_claim": false,
+    "developmental_addendum": "https://github.com/BobertNeek/A-Life/blob/599ffadd09dd28912c846e675ca73e3d7e05bf06/docs/experiments/ordinary-physiology-b-v1/DEVELOPMENTAL-CONTEXT-ADDENDUM.md"
+  },
+  "exclusions": [
+    "raw 640-interval diagnostic",
+    "executables",
+    "__pycache__",
+    "learned weights/banks",
+    "checkpoints",
+    "credentials"
+  ],
+  "unchanged": [
+    "runtime source",
+    "existing handoff status notes",
+    "retained creature state",
+    "active class 5 source branch",
+    "host worktree",
+    "default branch"
+  ],
+  "no_native_execution": true,
+  "no_pull_request": true,
+  "no_merge": true,
+  "no_default_promotion": true
+}

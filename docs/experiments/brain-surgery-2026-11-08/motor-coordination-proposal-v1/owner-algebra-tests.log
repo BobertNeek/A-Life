@@ -1,0 +1,14 @@
+test_m0_has_only_execution_sources_in_new_head (test_circuit_proposal.MediationConstructionTests.test_m0_has_only_execution_sources_in_new_head) ... ok
+test_m1_constructor_requires_the_exact_complete_bank (test_circuit_proposal.MediationConstructionTests.test_m1_constructor_requires_the_exact_complete_bank) ... ok
+test_m1_keeps_each_original_proposal_individually (test_circuit_proposal.MediationConstructionTests.test_m1_keeps_each_original_proposal_individually) ... ok
+test_atp_and_extension_sign (test_circuit_proposal.StructuralAndAlgebraTests.test_atp_and_extension_sign) ... ok
+test_no_locomotion_added_readout_exactly_neutral (test_circuit_proposal.StructuralAndAlgebraTests.test_no_locomotion_added_readout_exactly_neutral) ... ok
+test_readout_zero_sum_pairs (test_circuit_proposal.StructuralAndAlgebraTests.test_readout_zero_sum_pairs) ... ok
+test_recovery_only_lowers_observed_movement (test_circuit_proposal.StructuralAndAlgebraTests.test_recovery_only_lowers_observed_movement) ... ok
+test_shared_offset_cannot_reverse_nonnegative_branch_advantage (test_circuit_proposal.StructuralAndAlgebraTests.test_shared_offset_cannot_reverse_nonnegative_branch_advantage) ... ok
+test_unique_append_only_addresses (test_circuit_proposal.StructuralAndAlgebraTests.test_unique_append_only_addresses) ... ok
+
+----------------------------------------------------------------------
+Ran 9 tests in 0.057s
+
+OK

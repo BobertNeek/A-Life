@@ -1,0 +1,4112 @@
+{
+  "selector": "ProspectiveMatchedMotorArbitrationV1_M1AllActionProposalMediation",
+  "status": "source_only_not_admitted_not_executed",
+  "existing_neuron_addresses_unchanged": [
+    0,
+    2047
+  ],
+  "new_neuron_range": [
+    2048,
+    2399
+  ],
+  "active_new_neurons": 348,
+  "reserved_new_neurons": [
+    2140,
+    2141,
+    2142,
+    2143
+  ],
+  "pairs": [
+    {
+      "name": "afferent_hunger",
+      "signal": 2048,
+      "reference": 2049
+    },
+    {
+      "name": "afferent_fatigue",
+      "signal": 2050,
+      "reference": 2051
+    },
+    {
+      "name": "afferent_fear",
+      "signal": 2052,
+      "reference": 2053
+    },
+    {
+      "name": "afferent_pain",
+      "signal": 2054,
+      "reference": 2055
+    },
+    {
+      "name": "afferent_loneliness",
+      "signal": 2056,
+      "reference": 2057
+    },
+    {
+      "name": "afferent_curiosity",
+      "signal": 2058,
+      "reference": 2059
+    },
+    {
+      "name": "afferent_ATP_availability",
+      "signal": 2060,
+      "reference": 2061
+    },
+    {
+      "name": "afferent_unsigned_temperature_stress",
+      "signal": 2062,
+      "reference": 2063
+    },
+    {
+      "name": "afferent_reproductive_readiness",
+      "signal": 2064,
+      "reference": 2065
+    },
+    {
+      "name": "afferent_bound_boredom",
+      "signal": 2066,
+      "reference": 2067
+    },
+    {
+      "name": "afferent_unbound_extension1",
+      "signal": 2068,
+      "reference": 2069
+    },
+    {
+      "name": "hunger_above_setpoint",
+      "signal": 2070,
+      "reference": 2071
+    },
+    {
+      "name": "fatigue_above_setpoint",
+      "signal": 2072,
+      "reference": 2073
+    },
+    {
+      "name": "fear_above_setpoint",
+      "signal": 2074,
+      "reference": 2075
+    },
+    {
+      "name": "pain_above_setpoint",
+      "signal": 2076,
+      "reference": 2077
+    },
+    {
+      "name": "loneliness_above_setpoint",
+      "signal": 2078,
+      "reference": 2079
+    },
+    {
+      "name": "curiosity_above_setpoint",
+      "signal": 2080,
+      "reference": 2081
+    },
+    {
+      "name": "ATP_availability_above_setpoint",
+      "signal": 2082,
+      "reference": 2083
+    },
+    {
+      "name": "unsigned_temperature_stress_above_setpoint",
+      "signal": 2084,
+      "reference": 2085
+    },
+    {
+      "name": "reproductive_readiness_above_setpoint",
+      "signal": 2086,
+      "reference": 2087
+    },
+    {
+      "name": "bound_boredom_above_setpoint",
+      "signal": 2088,
+      "reference": 2089
+    },
+    {
+      "name": "unbound_extension1_above_setpoint",
+      "signal": 2090,
+      "reference": 2091
+    },
+    {
+      "name": "ATP_below_setpoint",
+      "signal": 2092,
+      "reference": 2093
+    },
+    {
+      "name": "recovery_motor_state",
+      "signal": 2094,
+      "reference": 2095
+    },
+    {
+      "name": "voluntary_search_motor_state",
+      "signal": 2096,
+      "reference": 2097
+    },
+    {
+      "name": "fear_motor_state",
+      "signal": 2098,
+      "reference": 2099
+    }
+  ],
+  "drive_setpoints": {
+    "hunger": 0.35,
+    "fatigue": 0.35,
+    "fear": 0.25,
+    "pain": 0.1,
+    "loneliness": 0.35,
+    "curiosity": 0.35,
+    "ATP_availability": 0.5,
+    "unsigned_temperature_stress": 0.1,
+    "reproductive_readiness": 0.5,
+    "bound_boredom": 0.35,
+    "unbound_extension1": 0.5
+  },
+  "new_afferent_contract": "signal=drive; reference=declared setpoint; BOTH receive the SAME interoceptive/regional transform and offset; neither reads hidden world truth",
+  "matched_dynamics": {
+    "activation": "Tanh",
+    "leak": 0.5,
+    "bias": 0.0,
+    "homeostatic_gain": 0.0,
+    "metabolic_tracking_and_cost": "retain_and_charge",
+    "initial_activation": 0.0,
+    "initial_metabolic_load": 0.0,
+    "plasticity": "REQUIRES explicit versioned fixed-parameter admission for all new paired parameters across every learning writer; alpha0/genetic0 is NOT a freeze; ordinary learning elsewhere retained"
+  },
+  "new_branch_semantics": "projection_gain * tanh(max(sum(inputs)-threshold,0))*output_gain; shared local threshold/background then applied to matched neuron pair",
+  "new_branches": [
+    {
+      "target": 2070,
+      "inputs": [
+        [
+          2048,
+          4.0
+        ],
+        [
+          2049,
+          -4.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2071,
+      "inputs": [
+        [
+          2048,
+          0.0
+        ],
+        [
+          2049,
+          -0.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2072,
+      "inputs": [
+        [
+          2050,
+          4.0
+        ],
+        [
+          2051,
+          -4.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2073,
+      "inputs": [
+        [
+          2050,
+          0.0
+        ],
+        [
+          2051,
+          -0.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2074,
+      "inputs": [
+        [
+          2052,
+          4.0
+        ],
+        [
+          2053,
+          -4.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2075,
+      "inputs": [
+        [
+          2052,
+          0.0
+        ],
+        [
+          2053,
+          -0.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2076,
+      "inputs": [
+        [
+          2054,
+          4.0
+        ],
+        [
+          2055,
+          -4.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2077,
+      "inputs": [
+        [
+          2054,
+          0.0
+        ],
+        [
+          2055,
+          -0.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2078,
+      "inputs": [
+        [
+          2056,
+          4.0
+        ],
+        [
+          2057,
+          -4.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2079,
+      "inputs": [
+        [
+          2056,
+          0.0
+        ],
+        [
+          2057,
+          -0.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2080,
+      "inputs": [
+        [
+          2058,
+          4.0
+        ],
+        [
+          2059,
+          -4.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2081,
+      "inputs": [
+        [
+          2058,
+          0.0
+        ],
+        [
+          2059,
+          -0.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2082,
+      "inputs": [
+        [
+          2060,
+          4.0
+        ],
+        [
+          2061,
+          -4.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2083,
+      "inputs": [
+        [
+          2060,
+          0.0
+        ],
+        [
+          2061,
+          -0.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2084,
+      "inputs": [
+        [
+          2062,
+          4.0
+        ],
+        [
+          2063,
+          -4.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2085,
+      "inputs": [
+        [
+          2062,
+          0.0
+        ],
+        [
+          2063,
+          -0.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2086,
+      "inputs": [
+        [
+          2064,
+          4.0
+        ],
+        [
+          2065,
+          -4.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2087,
+      "inputs": [
+        [
+          2064,
+          0.0
+        ],
+        [
+          2065,
+          -0.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2088,
+      "inputs": [
+        [
+          2066,
+          4.0
+        ],
+        [
+          2067,
+          -4.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2089,
+      "inputs": [
+        [
+          2066,
+          0.0
+        ],
+        [
+          2067,
+          -0.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2090,
+      "inputs": [
+        [
+          2068,
+          4.0
+        ],
+        [
+          2069,
+          -4.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2091,
+      "inputs": [
+        [
+          2068,
+          0.0
+        ],
+        [
+          2069,
+          -0.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2092,
+      "inputs": [
+        [
+          2060,
+          -4.0
+        ],
+        [
+          2061,
+          4.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2093,
+      "inputs": [
+        [
+          2060,
+          0.0
+        ],
+        [
+          2061,
+          -0.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2094,
+      "inputs": [
+        [
+          2072,
+          1.25
+        ],
+        [
+          2073,
+          -1.25
+        ],
+        [
+          2092,
+          1.0
+        ],
+        [
+          2093,
+          -1.0
+        ],
+        [
+          2076,
+          0.15
+        ],
+        [
+          2077,
+          -0.15
+        ],
+        [
+          2070,
+          -0.75
+        ],
+        [
+          2071,
+          0.75
+        ],
+        [
+          2098,
+          -1.5
+        ],
+        [
+          2099,
+          1.5
+        ],
+        [
+          2096,
+          -0.5
+        ],
+        [
+          2097,
+          0.5
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2095,
+      "inputs": [
+        [
+          2072,
+          0.0
+        ],
+        [
+          2073,
+          -0.0
+        ],
+        [
+          2092,
+          0.0
+        ],
+        [
+          2093,
+          -0.0
+        ],
+        [
+          2076,
+          0.0
+        ],
+        [
+          2077,
+          -0.0
+        ],
+        [
+          2070,
+          0.0
+        ],
+        [
+          2071,
+          -0.0
+        ],
+        [
+          2098,
+          0.0
+        ],
+        [
+          2099,
+          -0.0
+        ],
+        [
+          2096,
+          0.0
+        ],
+        [
+          2097,
+          -0.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2096,
+      "inputs": [
+        [
+          2070,
+          0.75
+        ],
+        [
+          2071,
+          -0.75
+        ],
+        [
+          2080,
+          0.3
+        ],
+        [
+          2081,
+          -0.3
+        ],
+        [
+          2088,
+          0.2
+        ],
+        [
+          2089,
+          -0.2
+        ],
+        [
+          2094,
+          -1.25
+        ],
+        [
+          2095,
+          1.25
+        ],
+        [
+          2092,
+          -0.5
+        ],
+        [
+          2093,
+          0.5
+        ],
+        [
+          2098,
+          -0.75
+        ],
+        [
+          2099,
+          0.75
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2097,
+      "inputs": [
+        [
+          2070,
+          0.0
+        ],
+        [
+          2071,
+          -0.0
+        ],
+        [
+          2080,
+          0.0
+        ],
+        [
+          2081,
+          -0.0
+        ],
+        [
+          2088,
+          0.0
+        ],
+        [
+          2089,
+          -0.0
+        ],
+        [
+          2094,
+          0.0
+        ],
+        [
+          2095,
+          -0.0
+        ],
+        [
+          2092,
+          0.0
+        ],
+        [
+          2093,
+          -0.0
+        ],
+        [
+          2098,
+          0.0
+        ],
+        [
+          2099,
+          -0.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2098,
+      "inputs": [
+        [
+          2074,
+          1.25
+        ],
+        [
+          2075,
+          -1.25
+        ],
+        [
+          2094,
+          -0.05
+        ],
+        [
+          2095,
+          0.05
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2099,
+      "inputs": [
+        [
+          2074,
+          0.0
+        ],
+        [
+          2075,
+          -0.0
+        ],
+        [
+          2094,
+          0.0
+        ],
+        [
+          2095,
+          -0.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2100,
+      "inputs": [
+        [
+          2084,
+          4.0
+        ],
+        [
+          2085,
+          -4.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2101,
+      "inputs": [
+        [
+          2084,
+          0.0
+        ],
+        [
+          2085,
+          -0.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2102,
+      "inputs": [
+        [
+          2094,
+          4.0
+        ],
+        [
+          2095,
+          -4.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2103,
+      "inputs": [
+        [
+          2094,
+          0.0
+        ],
+        [
+          2095,
+          -0.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2104,
+      "inputs": [
+        [
+          2096,
+          4.0
+        ],
+        [
+          2097,
+          -4.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2105,
+      "inputs": [
+        [
+          2096,
+          0.0
+        ],
+        [
+          2097,
+          -0.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2106,
+      "inputs": [
+        [
+          2098,
+          4.0
+        ],
+        [
+          2099,
+          -4.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2107,
+      "inputs": [
+        [
+          2098,
+          0.0
+        ],
+        [
+          2099,
+          -0.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2108,
+      "inputs": [
+        [
+          2080,
+          4.0
+        ],
+        [
+          2081,
+          -4.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2109,
+      "inputs": [
+        [
+          2080,
+          0.0
+        ],
+        [
+          2081,
+          -0.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2110,
+      "inputs": [
+        [
+          2088,
+          4.0
+        ],
+        [
+          2089,
+          -4.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2111,
+      "inputs": [
+        [
+          2088,
+          0.0
+        ],
+        [
+          2089,
+          -0.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2112,
+      "inputs": [
+        [
+          2094,
+          4.0
+        ],
+        [
+          2095,
+          -4.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2113,
+      "inputs": [
+        [
+          2094,
+          0.0
+        ],
+        [
+          2095,
+          -0.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2114,
+      "inputs": [
+        [
+          2098,
+          4.0
+        ],
+        [
+          2099,
+          -4.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2115,
+      "inputs": [
+        [
+          2098,
+          0.0
+        ],
+        [
+          2099,
+          -0.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2116,
+      "inputs": [
+        [
+          2070,
+          4.0
+        ],
+        [
+          2071,
+          -4.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2117,
+      "inputs": [
+        [
+          2070,
+          0.0
+        ],
+        [
+          2071,
+          -0.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2118,
+      "inputs": [
+        [
+          2078,
+          4.0
+        ],
+        [
+          2079,
+          -4.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2119,
+      "inputs": [
+        [
+          2078,
+          0.0
+        ],
+        [
+          2079,
+          -0.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2120,
+      "inputs": [
+        [
+          2084,
+          4.0
+        ],
+        [
+          2085,
+          -4.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2121,
+      "inputs": [
+        [
+          2084,
+          0.0
+        ],
+        [
+          2085,
+          -0.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2122,
+      "inputs": [
+        [
+          2086,
+          4.0
+        ],
+        [
+          2087,
+          -4.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2123,
+      "inputs": [
+        [
+          2086,
+          0.0
+        ],
+        [
+          2087,
+          -0.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2124,
+      "inputs": [
+        [
+          2094,
+          4.0
+        ],
+        [
+          2095,
+          -4.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2125,
+      "inputs": [
+        [
+          2094,
+          0.0
+        ],
+        [
+          2095,
+          -0.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2126,
+      "inputs": [
+        [
+          2096,
+          4.0
+        ],
+        [
+          2097,
+          -4.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2127,
+      "inputs": [
+        [
+          2096,
+          0.0
+        ],
+        [
+          2097,
+          -0.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2128,
+      "inputs": [
+        [
+          2098,
+          4.0
+        ],
+        [
+          2099,
+          -4.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2129,
+      "inputs": [
+        [
+          2098,
+          0.0
+        ],
+        [
+          2099,
+          -0.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2130,
+      "inputs": [
+        [
+          2084,
+          4.0
+        ],
+        [
+          2085,
+          -4.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2131,
+      "inputs": [
+        [
+          2084,
+          0.0
+        ],
+        [
+          2085,
+          -0.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2132,
+      "inputs": [
+        [
+          2094,
+          4.0
+        ],
+        [
+          2095,
+          -4.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2133,
+      "inputs": [
+        [
+          2094,
+          0.0
+        ],
+        [
+          2095,
+          -0.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2134,
+      "inputs": [
+        [
+          2098,
+          4.0
+        ],
+        [
+          2099,
+          -4.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2135,
+      "inputs": [
+        [
+          2098,
+          0.0
+        ],
+        [
+          2099,
+          -0.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2136,
+      "inputs": [
+        [
+          2070,
+          4.0
+        ],
+        [
+          2071,
+          -4.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2137,
+      "inputs": [
+        [
+          2070,
+          0.0
+        ],
+        [
+          2071,
+          -0.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2138,
+      "inputs": [
+        [
+          2078,
+          4.0
+        ],
+        [
+          2079,
+          -4.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2139,
+      "inputs": [
+        [
+          2078,
+          0.0
+        ],
+        [
+          2079,
+          -0.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    }
+  ],
+  "new_arbitration_readout_head": [
+    {
+      "family": "Rest",
+      "source": 2102,
+      "lane": 23,
+      "weight": 4.0
+    },
+    {
+      "family": "Rest",
+      "source": 2103,
+      "lane": 23,
+      "weight": -4.0
+    },
+    {
+      "family": "Rest",
+      "source": 2104,
+      "lane": 23,
+      "weight": -1.5
+    },
+    {
+      "family": "Rest",
+      "source": 2105,
+      "lane": 23,
+      "weight": 1.5
+    },
+    {
+      "family": "Rest",
+      "source": 2106,
+      "lane": 23,
+      "weight": -4.0
+    },
+    {
+      "family": "Rest",
+      "source": 2107,
+      "lane": 23,
+      "weight": 4.0
+    },
+    {
+      "family": "Rest",
+      "source": 2100,
+      "lane": 43,
+      "weight": -2.0
+    },
+    {
+      "family": "Rest",
+      "source": 2101,
+      "lane": 43,
+      "weight": 2.0
+    },
+    {
+      "family": "Approach",
+      "source": 2124,
+      "lane": 36,
+      "weight": -4.0
+    },
+    {
+      "family": "Approach",
+      "source": 2125,
+      "lane": 36,
+      "weight": 4.0
+    },
+    {
+      "family": "Approach",
+      "source": 2126,
+      "lane": 36,
+      "weight": 1.25
+    },
+    {
+      "family": "Approach",
+      "source": 2127,
+      "lane": 36,
+      "weight": -1.25
+    },
+    {
+      "family": "Approach",
+      "source": 2128,
+      "lane": 36,
+      "weight": -2.0
+    },
+    {
+      "family": "Approach",
+      "source": 2129,
+      "lane": 36,
+      "weight": 2.0
+    },
+    {
+      "family": "Approach",
+      "source": 2116,
+      "lane": 37,
+      "weight": 0.5
+    },
+    {
+      "family": "Approach",
+      "source": 2117,
+      "lane": 37,
+      "weight": -0.5
+    },
+    {
+      "family": "Approach",
+      "source": 2116,
+      "lane": 38,
+      "weight": -0.5
+    },
+    {
+      "family": "Approach",
+      "source": 2117,
+      "lane": 38,
+      "weight": 0.5
+    },
+    {
+      "family": "Approach",
+      "source": 2120,
+      "lane": 39,
+      "weight": -2.0
+    },
+    {
+      "family": "Approach",
+      "source": 2121,
+      "lane": 39,
+      "weight": 2.0
+    },
+    {
+      "family": "Avoid",
+      "source": 2130,
+      "lane": 39,
+      "weight": 3.0
+    },
+    {
+      "family": "Avoid",
+      "source": 2131,
+      "lane": 39,
+      "weight": -3.0
+    },
+    {
+      "family": "Approach",
+      "source": 2120,
+      "lane": 40,
+      "weight": -2.0
+    },
+    {
+      "family": "Approach",
+      "source": 2121,
+      "lane": 40,
+      "weight": 2.0
+    },
+    {
+      "family": "Avoid",
+      "source": 2130,
+      "lane": 40,
+      "weight": 3.0
+    },
+    {
+      "family": "Avoid",
+      "source": 2131,
+      "lane": 40,
+      "weight": -3.0
+    },
+    {
+      "family": "Approach",
+      "source": 2118,
+      "lane": 41,
+      "weight": 0.5
+    },
+    {
+      "family": "Approach",
+      "source": 2119,
+      "lane": 41,
+      "weight": -0.5
+    },
+    {
+      "family": "Approach",
+      "source": 2122,
+      "lane": 41,
+      "weight": 0.25
+    },
+    {
+      "family": "Approach",
+      "source": 2123,
+      "lane": 41,
+      "weight": -0.25
+    },
+    {
+      "family": "Avoid",
+      "source": 2132,
+      "lane": 36,
+      "weight": -2.0
+    },
+    {
+      "family": "Avoid",
+      "source": 2133,
+      "lane": 36,
+      "weight": 2.0
+    },
+    {
+      "family": "Avoid",
+      "source": 2134,
+      "lane": 36,
+      "weight": 5.0
+    },
+    {
+      "family": "Avoid",
+      "source": 2135,
+      "lane": 36,
+      "weight": -5.0
+    },
+    {
+      "family": "Avoid",
+      "source": 2134,
+      "lane": 38,
+      "weight": 2.0
+    },
+    {
+      "family": "Avoid",
+      "source": 2135,
+      "lane": 38,
+      "weight": -2.0
+    },
+    {
+      "family": "Ingest",
+      "source": 2136,
+      "lane": 37,
+      "weight": 4.0
+    },
+    {
+      "family": "Ingest",
+      "source": 2137,
+      "lane": 37,
+      "weight": -4.0
+    },
+    {
+      "family": "Ingest",
+      "source": 2136,
+      "lane": 38,
+      "weight": -4.0
+    },
+    {
+      "family": "Ingest",
+      "source": 2137,
+      "lane": 38,
+      "weight": 4.0
+    },
+    {
+      "family": "Inspect",
+      "source": 2108,
+      "lane": 36,
+      "weight": 0.75
+    },
+    {
+      "family": "Inspect",
+      "source": 2109,
+      "lane": 36,
+      "weight": -0.75
+    },
+    {
+      "family": "Inspect",
+      "source": 2110,
+      "lane": 36,
+      "weight": 0.25
+    },
+    {
+      "family": "Inspect",
+      "source": 2111,
+      "lane": 36,
+      "weight": -0.25
+    },
+    {
+      "family": "Inspect",
+      "source": 2112,
+      "lane": 36,
+      "weight": -0.5
+    },
+    {
+      "family": "Inspect",
+      "source": 2113,
+      "lane": 36,
+      "weight": 0.5
+    },
+    {
+      "family": "Inspect",
+      "source": 2114,
+      "lane": 36,
+      "weight": -0.5
+    },
+    {
+      "family": "Inspect",
+      "source": 2115,
+      "lane": 36,
+      "weight": 0.5
+    },
+    {
+      "family": "Other",
+      "source": 2138,
+      "lane": 42,
+      "weight": 0.25
+    },
+    {
+      "family": "Other",
+      "source": 2139,
+      "lane": 42,
+      "weight": -0.25
+    }
+  ],
+  "extra_cost_before_tile_padding": {
+    "neurons": 352,
+    "sensor_assignments": 22,
+    "branches": 70,
+    "branch_inputs": 184,
+    "recurrent_copy_rows": 256,
+    "decoder_rows": 8754
+  },
+  "no_default_promotion": true,
+  "class5_alone_admits_this": false,
+  "native_execution": false,
+  "legacy_weights_or_optimizer_changed": false,
+  "required_new_identity": [
+    "capacity",
+    "foundation",
+    "encoder",
+    "dynamics",
+    "branch_plan",
+    "decoder_head",
+    "execution_budget"
+  ],
+  "staging_dependency": "current derived object/chem/thermal/peer features only; new affine reference and readout heads still need CPU/WGSL implementation and tests",
+  "important_limits": [
+    "independent T1 motor sampling remains stochastic and can still select moving Rest",
+    "high ATP is availability, not distress",
+    "temperature is unsigned bodily stress",
+    "unbound extension1 has no behavior",
+    "peer is not mate eligibility",
+    "negative taste is not measured poison",
+    "no novelty/play inference invented"
+  ],
+  "variant": "M1",
+  "old_proposal_path": "all 128 legacy action proposal sources enter dedicated fresh signed execution pairs; legacy head retained but non-emitting under explicit routing policy",
+  "execution_pairs": [
+    {
+      "family": "Rest",
+      "controller_signal": 2084,
+      "name": "execute_Rest_2084",
+      "signal": 2100,
+      "reference": 2101
+    },
+    {
+      "family": "Rest",
+      "controller_signal": 2094,
+      "name": "execute_Rest_2094",
+      "signal": 2102,
+      "reference": 2103
+    },
+    {
+      "family": "Rest",
+      "controller_signal": 2096,
+      "name": "execute_Rest_2096",
+      "signal": 2104,
+      "reference": 2105
+    },
+    {
+      "family": "Rest",
+      "controller_signal": 2098,
+      "name": "execute_Rest_2098",
+      "signal": 2106,
+      "reference": 2107
+    },
+    {
+      "family": "Inspect",
+      "controller_signal": 2080,
+      "name": "execute_Inspect_2080",
+      "signal": 2108,
+      "reference": 2109
+    },
+    {
+      "family": "Inspect",
+      "controller_signal": 2088,
+      "name": "execute_Inspect_2088",
+      "signal": 2110,
+      "reference": 2111
+    },
+    {
+      "family": "Inspect",
+      "controller_signal": 2094,
+      "name": "execute_Inspect_2094",
+      "signal": 2112,
+      "reference": 2113
+    },
+    {
+      "family": "Inspect",
+      "controller_signal": 2098,
+      "name": "execute_Inspect_2098",
+      "signal": 2114,
+      "reference": 2115
+    },
+    {
+      "family": "Approach",
+      "controller_signal": 2070,
+      "name": "execute_Approach_2070",
+      "signal": 2116,
+      "reference": 2117
+    },
+    {
+      "family": "Approach",
+      "controller_signal": 2078,
+      "name": "execute_Approach_2078",
+      "signal": 2118,
+      "reference": 2119
+    },
+    {
+      "family": "Approach",
+      "controller_signal": 2084,
+      "name": "execute_Approach_2084",
+      "signal": 2120,
+      "reference": 2121
+    },
+    {
+      "family": "Approach",
+      "controller_signal": 2086,
+      "name": "execute_Approach_2086",
+      "signal": 2122,
+      "reference": 2123
+    },
+    {
+      "family": "Approach",
+      "controller_signal": 2094,
+      "name": "execute_Approach_2094",
+      "signal": 2124,
+      "reference": 2125
+    },
+    {
+      "family": "Approach",
+      "controller_signal": 2096,
+      "name": "execute_Approach_2096",
+      "signal": 2126,
+      "reference": 2127
+    },
+    {
+      "family": "Approach",
+      "controller_signal": 2098,
+      "name": "execute_Approach_2098",
+      "signal": 2128,
+      "reference": 2129
+    },
+    {
+      "family": "Avoid",
+      "controller_signal": 2084,
+      "name": "execute_Avoid_2084",
+      "signal": 2130,
+      "reference": 2131
+    },
+    {
+      "family": "Avoid",
+      "controller_signal": 2094,
+      "name": "execute_Avoid_2094",
+      "signal": 2132,
+      "reference": 2133
+    },
+    {
+      "family": "Avoid",
+      "controller_signal": 2098,
+      "name": "execute_Avoid_2098",
+      "signal": 2134,
+      "reference": 2135
+    },
+    {
+      "family": "Ingest",
+      "controller_signal": 2070,
+      "name": "execute_Ingest_2070",
+      "signal": 2136,
+      "reference": 2137
+    },
+    {
+      "family": "Other",
+      "controller_signal": 2078,
+      "name": "execute_Other_2078",
+      "signal": 2138,
+      "reference": 2139
+    }
+  ],
+  "direct_controller_readouts_active": false,
+  "same_tick_latency_warning": "one more microstep dependency than direct supervision; do not add an unpriced hidden settle pass",
+  "legacy_neural_outputs_exactly_preserved": false,
+  "lifetime_contract": "Every new paired dynamics/branch/readout/copy parameter must be explicitly fixed across ordinary somatic, replay, consolidation, structural and optimizer writes for initial qualification, or updated with a versioned priced symmetric-parameter rule. Zero genetic weight or alpha is not a lifetime freeze. Verify offsets and restore; learning elsewhere continues.",
+  "legacy_execution_pairs": [
+    {
+      "family": "Idle",
+      "local_motor": 0,
+      "proposal_source": 1728,
+      "signal": 2144,
+      "reference": 2145
+    },
+    {
+      "family": "Idle",
+      "local_motor": 1,
+      "proposal_source": 1729,
+      "signal": 2146,
+      "reference": 2147
+    },
+    {
+      "family": "Idle",
+      "local_motor": 2,
+      "proposal_source": 1730,
+      "signal": 2148,
+      "reference": 2149
+    },
+    {
+      "family": "Idle",
+      "local_motor": 3,
+      "proposal_source": 1731,
+      "signal": 2150,
+      "reference": 2151
+    },
+    {
+      "family": "Idle",
+      "local_motor": 4,
+      "proposal_source": 1732,
+      "signal": 2152,
+      "reference": 2153
+    },
+    {
+      "family": "Idle",
+      "local_motor": 5,
+      "proposal_source": 1733,
+      "signal": 2154,
+      "reference": 2155
+    },
+    {
+      "family": "Idle",
+      "local_motor": 6,
+      "proposal_source": 1734,
+      "signal": 2156,
+      "reference": 2157
+    },
+    {
+      "family": "Idle",
+      "local_motor": 7,
+      "proposal_source": 1735,
+      "signal": 2158,
+      "reference": 2159
+    },
+    {
+      "family": "Idle",
+      "local_motor": 8,
+      "proposal_source": 1736,
+      "signal": 2160,
+      "reference": 2161
+    },
+    {
+      "family": "Idle",
+      "local_motor": 9,
+      "proposal_source": 1737,
+      "signal": 2162,
+      "reference": 2163
+    },
+    {
+      "family": "Idle",
+      "local_motor": 10,
+      "proposal_source": 1738,
+      "signal": 2164,
+      "reference": 2165
+    },
+    {
+      "family": "Idle",
+      "local_motor": 11,
+      "proposal_source": 1739,
+      "signal": 2166,
+      "reference": 2167
+    },
+    {
+      "family": "Idle",
+      "local_motor": 12,
+      "proposal_source": 1740,
+      "signal": 2168,
+      "reference": 2169
+    },
+    {
+      "family": "Idle",
+      "local_motor": 13,
+      "proposal_source": 1741,
+      "signal": 2170,
+      "reference": 2171
+    },
+    {
+      "family": "Idle",
+      "local_motor": 14,
+      "proposal_source": 1742,
+      "signal": 2172,
+      "reference": 2173
+    },
+    {
+      "family": "Idle",
+      "local_motor": 15,
+      "proposal_source": 1743,
+      "signal": 2174,
+      "reference": 2175
+    },
+    {
+      "family": "Rest",
+      "local_motor": 0,
+      "proposal_source": 1744,
+      "signal": 2176,
+      "reference": 2177
+    },
+    {
+      "family": "Rest",
+      "local_motor": 1,
+      "proposal_source": 1745,
+      "signal": 2178,
+      "reference": 2179
+    },
+    {
+      "family": "Rest",
+      "local_motor": 2,
+      "proposal_source": 1746,
+      "signal": 2180,
+      "reference": 2181
+    },
+    {
+      "family": "Rest",
+      "local_motor": 3,
+      "proposal_source": 1747,
+      "signal": 2182,
+      "reference": 2183
+    },
+    {
+      "family": "Rest",
+      "local_motor": 4,
+      "proposal_source": 1748,
+      "signal": 2184,
+      "reference": 2185
+    },
+    {
+      "family": "Rest",
+      "local_motor": 5,
+      "proposal_source": 1749,
+      "signal": 2186,
+      "reference": 2187
+    },
+    {
+      "family": "Rest",
+      "local_motor": 6,
+      "proposal_source": 1750,
+      "signal": 2188,
+      "reference": 2189
+    },
+    {
+      "family": "Rest",
+      "local_motor": 7,
+      "proposal_source": 1751,
+      "signal": 2190,
+      "reference": 2191
+    },
+    {
+      "family": "Rest",
+      "local_motor": 8,
+      "proposal_source": 1752,
+      "signal": 2192,
+      "reference": 2193
+    },
+    {
+      "family": "Rest",
+      "local_motor": 9,
+      "proposal_source": 1753,
+      "signal": 2194,
+      "reference": 2195
+    },
+    {
+      "family": "Rest",
+      "local_motor": 10,
+      "proposal_source": 1754,
+      "signal": 2196,
+      "reference": 2197
+    },
+    {
+      "family": "Rest",
+      "local_motor": 11,
+      "proposal_source": 1755,
+      "signal": 2198,
+      "reference": 2199
+    },
+    {
+      "family": "Rest",
+      "local_motor": 12,
+      "proposal_source": 1756,
+      "signal": 2200,
+      "reference": 2201
+    },
+    {
+      "family": "Rest",
+      "local_motor": 13,
+      "proposal_source": 1757,
+      "signal": 2202,
+      "reference": 2203
+    },
+    {
+      "family": "Rest",
+      "local_motor": 14,
+      "proposal_source": 1758,
+      "signal": 2204,
+      "reference": 2205
+    },
+    {
+      "family": "Rest",
+      "local_motor": 15,
+      "proposal_source": 1759,
+      "signal": 2206,
+      "reference": 2207
+    },
+    {
+      "family": "Inspect",
+      "local_motor": 0,
+      "proposal_source": 1760,
+      "signal": 2208,
+      "reference": 2209
+    },
+    {
+      "family": "Inspect",
+      "local_motor": 1,
+      "proposal_source": 1761,
+      "signal": 2210,
+      "reference": 2211
+    },
+    {
+      "family": "Inspect",
+      "local_motor": 2,
+      "proposal_source": 1762,
+      "signal": 2212,
+      "reference": 2213
+    },
+    {
+      "family": "Inspect",
+      "local_motor": 3,
+      "proposal_source": 1763,
+      "signal": 2214,
+      "reference": 2215
+    },
+    {
+      "family": "Inspect",
+      "local_motor": 4,
+      "proposal_source": 1764,
+      "signal": 2216,
+      "reference": 2217
+    },
+    {
+      "family": "Inspect",
+      "local_motor": 5,
+      "proposal_source": 1765,
+      "signal": 2218,
+      "reference": 2219
+    },
+    {
+      "family": "Inspect",
+      "local_motor": 6,
+      "proposal_source": 1766,
+      "signal": 2220,
+      "reference": 2221
+    },
+    {
+      "family": "Inspect",
+      "local_motor": 7,
+      "proposal_source": 1767,
+      "signal": 2222,
+      "reference": 2223
+    },
+    {
+      "family": "Inspect",
+      "local_motor": 8,
+      "proposal_source": 1768,
+      "signal": 2224,
+      "reference": 2225
+    },
+    {
+      "family": "Inspect",
+      "local_motor": 9,
+      "proposal_source": 1769,
+      "signal": 2226,
+      "reference": 2227
+    },
+    {
+      "family": "Inspect",
+      "local_motor": 10,
+      "proposal_source": 1770,
+      "signal": 2228,
+      "reference": 2229
+    },
+    {
+      "family": "Inspect",
+      "local_motor": 11,
+      "proposal_source": 1771,
+      "signal": 2230,
+      "reference": 2231
+    },
+    {
+      "family": "Inspect",
+      "local_motor": 12,
+      "proposal_source": 1772,
+      "signal": 2232,
+      "reference": 2233
+    },
+    {
+      "family": "Inspect",
+      "local_motor": 13,
+      "proposal_source": 1773,
+      "signal": 2234,
+      "reference": 2235
+    },
+    {
+      "family": "Inspect",
+      "local_motor": 14,
+      "proposal_source": 1774,
+      "signal": 2236,
+      "reference": 2237
+    },
+    {
+      "family": "Inspect",
+      "local_motor": 15,
+      "proposal_source": 1775,
+      "signal": 2238,
+      "reference": 2239
+    },
+    {
+      "family": "Approach",
+      "local_motor": 0,
+      "proposal_source": 1776,
+      "signal": 2240,
+      "reference": 2241
+    },
+    {
+      "family": "Approach",
+      "local_motor": 1,
+      "proposal_source": 1777,
+      "signal": 2242,
+      "reference": 2243
+    },
+    {
+      "family": "Approach",
+      "local_motor": 2,
+      "proposal_source": 1778,
+      "signal": 2244,
+      "reference": 2245
+    },
+    {
+      "family": "Approach",
+      "local_motor": 3,
+      "proposal_source": 1779,
+      "signal": 2246,
+      "reference": 2247
+    },
+    {
+      "family": "Approach",
+      "local_motor": 4,
+      "proposal_source": 1780,
+      "signal": 2248,
+      "reference": 2249
+    },
+    {
+      "family": "Approach",
+      "local_motor": 5,
+      "proposal_source": 1781,
+      "signal": 2250,
+      "reference": 2251
+    },
+    {
+      "family": "Approach",
+      "local_motor": 6,
+      "proposal_source": 1782,
+      "signal": 2252,
+      "reference": 2253
+    },
+    {
+      "family": "Approach",
+      "local_motor": 7,
+      "proposal_source": 1783,
+      "signal": 2254,
+      "reference": 2255
+    },
+    {
+      "family": "Approach",
+      "local_motor": 8,
+      "proposal_source": 1784,
+      "signal": 2256,
+      "reference": 2257
+    },
+    {
+      "family": "Approach",
+      "local_motor": 9,
+      "proposal_source": 1785,
+      "signal": 2258,
+      "reference": 2259
+    },
+    {
+      "family": "Approach",
+      "local_motor": 10,
+      "proposal_source": 1786,
+      "signal": 2260,
+      "reference": 2261
+    },
+    {
+      "family": "Approach",
+      "local_motor": 11,
+      "proposal_source": 1787,
+      "signal": 2262,
+      "reference": 2263
+    },
+    {
+      "family": "Approach",
+      "local_motor": 12,
+      "proposal_source": 1788,
+      "signal": 2264,
+      "reference": 2265
+    },
+    {
+      "family": "Approach",
+      "local_motor": 13,
+      "proposal_source": 1789,
+      "signal": 2266,
+      "reference": 2267
+    },
+    {
+      "family": "Approach",
+      "local_motor": 14,
+      "proposal_source": 1790,
+      "signal": 2268,
+      "reference": 2269
+    },
+    {
+      "family": "Approach",
+      "local_motor": 15,
+      "proposal_source": 1791,
+      "signal": 2270,
+      "reference": 2271
+    },
+    {
+      "family": "Avoid",
+      "local_motor": 0,
+      "proposal_source": 1792,
+      "signal": 2272,
+      "reference": 2273
+    },
+    {
+      "family": "Avoid",
+      "local_motor": 1,
+      "proposal_source": 1793,
+      "signal": 2274,
+      "reference": 2275
+    },
+    {
+      "family": "Avoid",
+      "local_motor": 2,
+      "proposal_source": 1794,
+      "signal": 2276,
+      "reference": 2277
+    },
+    {
+      "family": "Avoid",
+      "local_motor": 3,
+      "proposal_source": 1795,
+      "signal": 2278,
+      "reference": 2279
+    },
+    {
+      "family": "Avoid",
+      "local_motor": 4,
+      "proposal_source": 1796,
+      "signal": 2280,
+      "reference": 2281
+    },
+    {
+      "family": "Avoid",
+      "local_motor": 5,
+      "proposal_source": 1797,
+      "signal": 2282,
+      "reference": 2283
+    },
+    {
+      "family": "Avoid",
+      "local_motor": 6,
+      "proposal_source": 1798,
+      "signal": 2284,
+      "reference": 2285
+    },
+    {
+      "family": "Avoid",
+      "local_motor": 7,
+      "proposal_source": 1799,
+      "signal": 2286,
+      "reference": 2287
+    },
+    {
+      "family": "Avoid",
+      "local_motor": 8,
+      "proposal_source": 1800,
+      "signal": 2288,
+      "reference": 2289
+    },
+    {
+      "family": "Avoid",
+      "local_motor": 9,
+      "proposal_source": 1801,
+      "signal": 2290,
+      "reference": 2291
+    },
+    {
+      "family": "Avoid",
+      "local_motor": 10,
+      "proposal_source": 1802,
+      "signal": 2292,
+      "reference": 2293
+    },
+    {
+      "family": "Avoid",
+      "local_motor": 11,
+      "proposal_source": 1803,
+      "signal": 2294,
+      "reference": 2295
+    },
+    {
+      "family": "Avoid",
+      "local_motor": 12,
+      "proposal_source": 1804,
+      "signal": 2296,
+      "reference": 2297
+    },
+    {
+      "family": "Avoid",
+      "local_motor": 13,
+      "proposal_source": 1805,
+      "signal": 2298,
+      "reference": 2299
+    },
+    {
+      "family": "Avoid",
+      "local_motor": 14,
+      "proposal_source": 1806,
+      "signal": 2300,
+      "reference": 2301
+    },
+    {
+      "family": "Avoid",
+      "local_motor": 15,
+      "proposal_source": 1807,
+      "signal": 2302,
+      "reference": 2303
+    },
+    {
+      "family": "Contact",
+      "local_motor": 0,
+      "proposal_source": 1808,
+      "signal": 2304,
+      "reference": 2305
+    },
+    {
+      "family": "Contact",
+      "local_motor": 1,
+      "proposal_source": 1809,
+      "signal": 2306,
+      "reference": 2307
+    },
+    {
+      "family": "Contact",
+      "local_motor": 2,
+      "proposal_source": 1810,
+      "signal": 2308,
+      "reference": 2309
+    },
+    {
+      "family": "Contact",
+      "local_motor": 3,
+      "proposal_source": 1811,
+      "signal": 2310,
+      "reference": 2311
+    },
+    {
+      "family": "Contact",
+      "local_motor": 4,
+      "proposal_source": 1812,
+      "signal": 2312,
+      "reference": 2313
+    },
+    {
+      "family": "Contact",
+      "local_motor": 5,
+      "proposal_source": 1813,
+      "signal": 2314,
+      "reference": 2315
+    },
+    {
+      "family": "Contact",
+      "local_motor": 6,
+      "proposal_source": 1814,
+      "signal": 2316,
+      "reference": 2317
+    },
+    {
+      "family": "Contact",
+      "local_motor": 7,
+      "proposal_source": 1815,
+      "signal": 2318,
+      "reference": 2319
+    },
+    {
+      "family": "Contact",
+      "local_motor": 8,
+      "proposal_source": 1816,
+      "signal": 2320,
+      "reference": 2321
+    },
+    {
+      "family": "Contact",
+      "local_motor": 9,
+      "proposal_source": 1817,
+      "signal": 2322,
+      "reference": 2323
+    },
+    {
+      "family": "Contact",
+      "local_motor": 10,
+      "proposal_source": 1818,
+      "signal": 2324,
+      "reference": 2325
+    },
+    {
+      "family": "Contact",
+      "local_motor": 11,
+      "proposal_source": 1819,
+      "signal": 2326,
+      "reference": 2327
+    },
+    {
+      "family": "Contact",
+      "local_motor": 12,
+      "proposal_source": 1820,
+      "signal": 2328,
+      "reference": 2329
+    },
+    {
+      "family": "Contact",
+      "local_motor": 13,
+      "proposal_source": 1821,
+      "signal": 2330,
+      "reference": 2331
+    },
+    {
+      "family": "Contact",
+      "local_motor": 14,
+      "proposal_source": 1822,
+      "signal": 2332,
+      "reference": 2333
+    },
+    {
+      "family": "Contact",
+      "local_motor": 15,
+      "proposal_source": 1823,
+      "signal": 2334,
+      "reference": 2335
+    },
+    {
+      "family": "Ingest",
+      "local_motor": 0,
+      "proposal_source": 1824,
+      "signal": 2336,
+      "reference": 2337
+    },
+    {
+      "family": "Ingest",
+      "local_motor": 1,
+      "proposal_source": 1825,
+      "signal": 2338,
+      "reference": 2339
+    },
+    {
+      "family": "Ingest",
+      "local_motor": 2,
+      "proposal_source": 1826,
+      "signal": 2340,
+      "reference": 2341
+    },
+    {
+      "family": "Ingest",
+      "local_motor": 3,
+      "proposal_source": 1827,
+      "signal": 2342,
+      "reference": 2343
+    },
+    {
+      "family": "Ingest",
+      "local_motor": 4,
+      "proposal_source": 1828,
+      "signal": 2344,
+      "reference": 2345
+    },
+    {
+      "family": "Ingest",
+      "local_motor": 5,
+      "proposal_source": 1829,
+      "signal": 2346,
+      "reference": 2347
+    },
+    {
+      "family": "Ingest",
+      "local_motor": 6,
+      "proposal_source": 1830,
+      "signal": 2348,
+      "reference": 2349
+    },
+    {
+      "family": "Ingest",
+      "local_motor": 7,
+      "proposal_source": 1831,
+      "signal": 2350,
+      "reference": 2351
+    },
+    {
+      "family": "Ingest",
+      "local_motor": 8,
+      "proposal_source": 1832,
+      "signal": 2352,
+      "reference": 2353
+    },
+    {
+      "family": "Ingest",
+      "local_motor": 9,
+      "proposal_source": 1833,
+      "signal": 2354,
+      "reference": 2355
+    },
+    {
+      "family": "Ingest",
+      "local_motor": 10,
+      "proposal_source": 1834,
+      "signal": 2356,
+      "reference": 2357
+    },
+    {
+      "family": "Ingest",
+      "local_motor": 11,
+      "proposal_source": 1835,
+      "signal": 2358,
+      "reference": 2359
+    },
+    {
+      "family": "Ingest",
+      "local_motor": 12,
+      "proposal_source": 1836,
+      "signal": 2360,
+      "reference": 2361
+    },
+    {
+      "family": "Ingest",
+      "local_motor": 13,
+      "proposal_source": 1837,
+      "signal": 2362,
+      "reference": 2363
+    },
+    {
+      "family": "Ingest",
+      "local_motor": 14,
+      "proposal_source": 1838,
+      "signal": 2364,
+      "reference": 2365
+    },
+    {
+      "family": "Ingest",
+      "local_motor": 15,
+      "proposal_source": 1839,
+      "signal": 2366,
+      "reference": 2367
+    },
+    {
+      "family": "Other",
+      "local_motor": 0,
+      "proposal_source": 1840,
+      "signal": 2368,
+      "reference": 2369
+    },
+    {
+      "family": "Other",
+      "local_motor": 1,
+      "proposal_source": 1841,
+      "signal": 2370,
+      "reference": 2371
+    },
+    {
+      "family": "Other",
+      "local_motor": 2,
+      "proposal_source": 1842,
+      "signal": 2372,
+      "reference": 2373
+    },
+    {
+      "family": "Other",
+      "local_motor": 3,
+      "proposal_source": 1843,
+      "signal": 2374,
+      "reference": 2375
+    },
+    {
+      "family": "Other",
+      "local_motor": 4,
+      "proposal_source": 1844,
+      "signal": 2376,
+      "reference": 2377
+    },
+    {
+      "family": "Other",
+      "local_motor": 5,
+      "proposal_source": 1845,
+      "signal": 2378,
+      "reference": 2379
+    },
+    {
+      "family": "Other",
+      "local_motor": 6,
+      "proposal_source": 1846,
+      "signal": 2380,
+      "reference": 2381
+    },
+    {
+      "family": "Other",
+      "local_motor": 7,
+      "proposal_source": 1847,
+      "signal": 2382,
+      "reference": 2383
+    },
+    {
+      "family": "Other",
+      "local_motor": 8,
+      "proposal_source": 1848,
+      "signal": 2384,
+      "reference": 2385
+    },
+    {
+      "family": "Other",
+      "local_motor": 9,
+      "proposal_source": 1849,
+      "signal": 2386,
+      "reference": 2387
+    },
+    {
+      "family": "Other",
+      "local_motor": 10,
+      "proposal_source": 1850,
+      "signal": 2388,
+      "reference": 2389
+    },
+    {
+      "family": "Other",
+      "local_motor": 11,
+      "proposal_source": 1851,
+      "signal": 2390,
+      "reference": 2391
+    },
+    {
+      "family": "Other",
+      "local_motor": 12,
+      "proposal_source": 1852,
+      "signal": 2392,
+      "reference": 2393
+    },
+    {
+      "family": "Other",
+      "local_motor": 13,
+      "proposal_source": 1853,
+      "signal": 2394,
+      "reference": 2395
+    },
+    {
+      "family": "Other",
+      "local_motor": 14,
+      "proposal_source": 1854,
+      "signal": 2396,
+      "reference": 2397
+    },
+    {
+      "family": "Other",
+      "local_motor": 15,
+      "proposal_source": 1855,
+      "signal": 2398,
+      "reference": 2399
+    }
+  ],
+  "legacy_copy_recurrent_rows": [
+    {
+      "source": 1728,
+      "target": 2144,
+      "weight": 1.0
+    },
+    {
+      "source": 1728,
+      "target": 2145,
+      "weight": 0.0
+    },
+    {
+      "source": 1729,
+      "target": 2146,
+      "weight": 1.0
+    },
+    {
+      "source": 1729,
+      "target": 2147,
+      "weight": 0.0
+    },
+    {
+      "source": 1730,
+      "target": 2148,
+      "weight": 1.0
+    },
+    {
+      "source": 1730,
+      "target": 2149,
+      "weight": 0.0
+    },
+    {
+      "source": 1731,
+      "target": 2150,
+      "weight": 1.0
+    },
+    {
+      "source": 1731,
+      "target": 2151,
+      "weight": 0.0
+    },
+    {
+      "source": 1732,
+      "target": 2152,
+      "weight": 1.0
+    },
+    {
+      "source": 1732,
+      "target": 2153,
+      "weight": 0.0
+    },
+    {
+      "source": 1733,
+      "target": 2154,
+      "weight": 1.0
+    },
+    {
+      "source": 1733,
+      "target": 2155,
+      "weight": 0.0
+    },
+    {
+      "source": 1734,
+      "target": 2156,
+      "weight": 1.0
+    },
+    {
+      "source": 1734,
+      "target": 2157,
+      "weight": 0.0
+    },
+    {
+      "source": 1735,
+      "target": 2158,
+      "weight": 1.0
+    },
+    {
+      "source": 1735,
+      "target": 2159,
+      "weight": 0.0
+    },
+    {
+      "source": 1736,
+      "target": 2160,
+      "weight": 1.0
+    },
+    {
+      "source": 1736,
+      "target": 2161,
+      "weight": 0.0
+    },
+    {
+      "source": 1737,
+      "target": 2162,
+      "weight": 1.0
+    },
+    {
+      "source": 1737,
+      "target": 2163,
+      "weight": 0.0
+    },
+    {
+      "source": 1738,
+      "target": 2164,
+      "weight": 1.0
+    },
+    {
+      "source": 1738,
+      "target": 2165,
+      "weight": 0.0
+    },
+    {
+      "source": 1739,
+      "target": 2166,
+      "weight": 1.0
+    },
+    {
+      "source": 1739,
+      "target": 2167,
+      "weight": 0.0
+    },
+    {
+      "source": 1740,
+      "target": 2168,
+      "weight": 1.0
+    },
+    {
+      "source": 1740,
+      "target": 2169,
+      "weight": 0.0
+    },
+    {
+      "source": 1741,
+      "target": 2170,
+      "weight": 1.0
+    },
+    {
+      "source": 1741,
+      "target": 2171,
+      "weight": 0.0
+    },
+    {
+      "source": 1742,
+      "target": 2172,
+      "weight": 1.0
+    },
+    {
+      "source": 1742,
+      "target": 2173,
+      "weight": 0.0
+    },
+    {
+      "source": 1743,
+      "target": 2174,
+      "weight": 1.0
+    },
+    {
+      "source": 1743,
+      "target": 2175,
+      "weight": 0.0
+    },
+    {
+      "source": 1744,
+      "target": 2176,
+      "weight": 1.0
+    },
+    {
+      "source": 1744,
+      "target": 2177,
+      "weight": 0.0
+    },
+    {
+      "source": 1745,
+      "target": 2178,
+      "weight": 1.0
+    },
+    {
+      "source": 1745,
+      "target": 2179,
+      "weight": 0.0
+    },
+    {
+      "source": 1746,
+      "target": 2180,
+      "weight": 1.0
+    },
+    {
+      "source": 1746,
+      "target": 2181,
+      "weight": 0.0
+    },
+    {
+      "source": 1747,
+      "target": 2182,
+      "weight": 1.0
+    },
+    {
+      "source": 1747,
+      "target": 2183,
+      "weight": 0.0
+    },
+    {
+      "source": 1748,
+      "target": 2184,
+      "weight": 1.0
+    },
+    {
+      "source": 1748,
+      "target": 2185,
+      "weight": 0.0
+    },
+    {
+      "source": 1749,
+      "target": 2186,
+      "weight": 1.0
+    },
+    {
+      "source": 1749,
+      "target": 2187,
+      "weight": 0.0
+    },
+    {
+      "source": 1750,
+      "target": 2188,
+      "weight": 1.0
+    },
+    {
+      "source": 1750,
+      "target": 2189,
+      "weight": 0.0
+    },
+    {
+      "source": 1751,
+      "target": 2190,
+      "weight": 1.0
+    },
+    {
+      "source": 1751,
+      "target": 2191,
+      "weight": 0.0
+    },
+    {
+      "source": 1752,
+      "target": 2192,
+      "weight": 1.0
+    },
+    {
+      "source": 1752,
+      "target": 2193,
+      "weight": 0.0
+    },
+    {
+      "source": 1753,
+      "target": 2194,
+      "weight": 1.0
+    },
+    {
+      "source": 1753,
+      "target": 2195,
+      "weight": 0.0
+    },
+    {
+      "source": 1754,
+      "target": 2196,
+      "weight": 1.0
+    },
+    {
+      "source": 1754,
+      "target": 2197,
+      "weight": 0.0
+    },
+    {
+      "source": 1755,
+      "target": 2198,
+      "weight": 1.0
+    },
+    {
+      "source": 1755,
+      "target": 2199,
+      "weight": 0.0
+    },
+    {
+      "source": 1756,
+      "target": 2200,
+      "weight": 1.0
+    },
+    {
+      "source": 1756,
+      "target": 2201,
+      "weight": 0.0
+    },
+    {
+      "source": 1757,
+      "target": 2202,
+      "weight": 1.0
+    },
+    {
+      "source": 1757,
+      "target": 2203,
+      "weight": 0.0
+    },
+    {
+      "source": 1758,
+      "target": 2204,
+      "weight": 1.0
+    },
+    {
+      "source": 1758,
+      "target": 2205,
+      "weight": 0.0
+    },
+    {
+      "source": 1759,
+      "target": 2206,
+      "weight": 1.0
+    },
+    {
+      "source": 1759,
+      "target": 2207,
+      "weight": 0.0
+    },
+    {
+      "source": 1760,
+      "target": 2208,
+      "weight": 1.0
+    },
+    {
+      "source": 1760,
+      "target": 2209,
+      "weight": 0.0
+    },
+    {
+      "source": 1761,
+      "target": 2210,
+      "weight": 1.0
+    },
+    {
+      "source": 1761,
+      "target": 2211,
+      "weight": 0.0
+    },
+    {
+      "source": 1762,
+      "target": 2212,
+      "weight": 1.0
+    },
+    {
+      "source": 1762,
+      "target": 2213,
+      "weight": 0.0
+    },
+    {
+      "source": 1763,
+      "target": 2214,
+      "weight": 1.0
+    },
+    {
+      "source": 1763,
+      "target": 2215,
+      "weight": 0.0
+    },
+    {
+      "source": 1764,
+      "target": 2216,
+      "weight": 1.0
+    },
+    {
+      "source": 1764,
+      "target": 2217,
+      "weight": 0.0
+    },
+    {
+      "source": 1765,
+      "target": 2218,
+      "weight": 1.0
+    },
+    {
+      "source": 1765,
+      "target": 2219,
+      "weight": 0.0
+    },
+    {
+      "source": 1766,
+      "target": 2220,
+      "weight": 1.0
+    },
+    {
+      "source": 1766,
+      "target": 2221,
+      "weight": 0.0
+    },
+    {
+      "source": 1767,
+      "target": 2222,
+      "weight": 1.0
+    },
+    {
+      "source": 1767,
+      "target": 2223,
+      "weight": 0.0
+    },
+    {
+      "source": 1768,
+      "target": 2224,
+      "weight": 1.0
+    },
+    {
+      "source": 1768,
+      "target": 2225,
+      "weight": 0.0
+    },
+    {
+      "source": 1769,
+      "target": 2226,
+      "weight": 1.0
+    },
+    {
+      "source": 1769,
+      "target": 2227,
+      "weight": 0.0
+    },
+    {
+      "source": 1770,
+      "target": 2228,
+      "weight": 1.0
+    },
+    {
+      "source": 1770,
+      "target": 2229,
+      "weight": 0.0
+    },
+    {
+      "source": 1771,
+      "target": 2230,
+      "weight": 1.0
+    },
+    {
+      "source": 1771,
+      "target": 2231,
+      "weight": 0.0
+    },
+    {
+      "source": 1772,
+      "target": 2232,
+      "weight": 1.0
+    },
+    {
+      "source": 1772,
+      "target": 2233,
+      "weight": 0.0
+    },
+    {
+      "source": 1773,
+      "target": 2234,
+      "weight": 1.0
+    },
+    {
+      "source": 1773,
+      "target": 2235,
+      "weight": 0.0
+    },
+    {
+      "source": 1774,
+      "target": 2236,
+      "weight": 1.0
+    },
+    {
+      "source": 1774,
+      "target": 2237,
+      "weight": 0.0
+    },
+    {
+      "source": 1775,
+      "target": 2238,
+      "weight": 1.0
+    },
+    {
+      "source": 1775,
+      "target": 2239,
+      "weight": 0.0
+    },
+    {
+      "source": 1776,
+      "target": 2240,
+      "weight": 1.0
+    },
+    {
+      "source": 1776,
+      "target": 2241,
+      "weight": 0.0
+    },
+    {
+      "source": 1777,
+      "target": 2242,
+      "weight": 1.0
+    },
+    {
+      "source": 1777,
+      "target": 2243,
+      "weight": 0.0
+    },
+    {
+      "source": 1778,
+      "target": 2244,
+      "weight": 1.0
+    },
+    {
+      "source": 1778,
+      "target": 2245,
+      "weight": 0.0
+    },
+    {
+      "source": 1779,
+      "target": 2246,
+      "weight": 1.0
+    },
+    {
+      "source": 1779,
+      "target": 2247,
+      "weight": 0.0
+    },
+    {
+      "source": 1780,
+      "target": 2248,
+      "weight": 1.0
+    },
+    {
+      "source": 1780,
+      "target": 2249,
+      "weight": 0.0
+    },
+    {
+      "source": 1781,
+      "target": 2250,
+      "weight": 1.0
+    },
+    {
+      "source": 1781,
+      "target": 2251,
+      "weight": 0.0
+    },
+    {
+      "source": 1782,
+      "target": 2252,
+      "weight": 1.0
+    },
+    {
+      "source": 1782,
+      "target": 2253,
+      "weight": 0.0
+    },
+    {
+      "source": 1783,
+      "target": 2254,
+      "weight": 1.0
+    },
+    {
+      "source": 1783,
+      "target": 2255,
+      "weight": 0.0
+    },
+    {
+      "source": 1784,
+      "target": 2256,
+      "weight": 1.0
+    },
+    {
+      "source": 1784,
+      "target": 2257,
+      "weight": 0.0
+    },
+    {
+      "source": 1785,
+      "target": 2258,
+      "weight": 1.0
+    },
+    {
+      "source": 1785,
+      "target": 2259,
+      "weight": 0.0
+    },
+    {
+      "source": 1786,
+      "target": 2260,
+      "weight": 1.0
+    },
+    {
+      "source": 1786,
+      "target": 2261,
+      "weight": 0.0
+    },
+    {
+      "source": 1787,
+      "target": 2262,
+      "weight": 1.0
+    },
+    {
+      "source": 1787,
+      "target": 2263,
+      "weight": 0.0
+    },
+    {
+      "source": 1788,
+      "target": 2264,
+      "weight": 1.0
+    },
+    {
+      "source": 1788,
+      "target": 2265,
+      "weight": 0.0
+    },
+    {
+      "source": 1789,
+      "target": 2266,
+      "weight": 1.0
+    },
+    {
+      "source": 1789,
+      "target": 2267,
+      "weight": 0.0
+    },
+    {
+      "source": 1790,
+      "target": 2268,
+      "weight": 1.0
+    },
+    {
+      "source": 1790,
+      "target": 2269,
+      "weight": 0.0
+    },
+    {
+      "source": 1791,
+      "target": 2270,
+      "weight": 1.0
+    },
+    {
+      "source": 1791,
+      "target": 2271,
+      "weight": 0.0
+    },
+    {
+      "source": 1792,
+      "target": 2272,
+      "weight": 1.0
+    },
+    {
+      "source": 1792,
+      "target": 2273,
+      "weight": 0.0
+    },
+    {
+      "source": 1793,
+      "target": 2274,
+      "weight": 1.0
+    },
+    {
+      "source": 1793,
+      "target": 2275,
+      "weight": 0.0
+    },
+    {
+      "source": 1794,
+      "target": 2276,
+      "weight": 1.0
+    },
+    {
+      "source": 1794,
+      "target": 2277,
+      "weight": 0.0
+    },
+    {
+      "source": 1795,
+      "target": 2278,
+      "weight": 1.0
+    },
+    {
+      "source": 1795,
+      "target": 2279,
+      "weight": 0.0
+    },
+    {
+      "source": 1796,
+      "target": 2280,
+      "weight": 1.0
+    },
+    {
+      "source": 1796,
+      "target": 2281,
+      "weight": 0.0
+    },
+    {
+      "source": 1797,
+      "target": 2282,
+      "weight": 1.0
+    },
+    {
+      "source": 1797,
+      "target": 2283,
+      "weight": 0.0
+    },
+    {
+      "source": 1798,
+      "target": 2284,
+      "weight": 1.0
+    },
+    {
+      "source": 1798,
+      "target": 2285,
+      "weight": 0.0
+    },
+    {
+      "source": 1799,
+      "target": 2286,
+      "weight": 1.0
+    },
+    {
+      "source": 1799,
+      "target": 2287,
+      "weight": 0.0
+    },
+    {
+      "source": 1800,
+      "target": 2288,
+      "weight": 1.0
+    },
+    {
+      "source": 1800,
+      "target": 2289,
+      "weight": 0.0
+    },
+    {
+      "source": 1801,
+      "target": 2290,
+      "weight": 1.0
+    },
+    {
+      "source": 1801,
+      "target": 2291,
+      "weight": 0.0
+    },
+    {
+      "source": 1802,
+      "target": 2292,
+      "weight": 1.0
+    },
+    {
+      "source": 1802,
+      "target": 2293,
+      "weight": 0.0
+    },
+    {
+      "source": 1803,
+      "target": 2294,
+      "weight": 1.0
+    },
+    {
+      "source": 1803,
+      "target": 2295,
+      "weight": 0.0
+    },
+    {
+      "source": 1804,
+      "target": 2296,
+      "weight": 1.0
+    },
+    {
+      "source": 1804,
+      "target": 2297,
+      "weight": 0.0
+    },
+    {
+      "source": 1805,
+      "target": 2298,
+      "weight": 1.0
+    },
+    {
+      "source": 1805,
+      "target": 2299,
+      "weight": 0.0
+    },
+    {
+      "source": 1806,
+      "target": 2300,
+      "weight": 1.0
+    },
+    {
+      "source": 1806,
+      "target": 2301,
+      "weight": 0.0
+    },
+    {
+      "source": 1807,
+      "target": 2302,
+      "weight": 1.0
+    },
+    {
+      "source": 1807,
+      "target": 2303,
+      "weight": 0.0
+    },
+    {
+      "source": 1808,
+      "target": 2304,
+      "weight": 1.0
+    },
+    {
+      "source": 1808,
+      "target": 2305,
+      "weight": 0.0
+    },
+    {
+      "source": 1809,
+      "target": 2306,
+      "weight": 1.0
+    },
+    {
+      "source": 1809,
+      "target": 2307,
+      "weight": 0.0
+    },
+    {
+      "source": 1810,
+      "target": 2308,
+      "weight": 1.0
+    },
+    {
+      "source": 1810,
+      "target": 2309,
+      "weight": 0.0
+    },
+    {
+      "source": 1811,
+      "target": 2310,
+      "weight": 1.0
+    },
+    {
+      "source": 1811,
+      "target": 2311,
+      "weight": 0.0
+    },
+    {
+      "source": 1812,
+      "target": 2312,
+      "weight": 1.0
+    },
+    {
+      "source": 1812,
+      "target": 2313,
+      "weight": 0.0
+    },
+    {
+      "source": 1813,
+      "target": 2314,
+      "weight": 1.0
+    },
+    {
+      "source": 1813,
+      "target": 2315,
+      "weight": 0.0
+    },
+    {
+      "source": 1814,
+      "target": 2316,
+      "weight": 1.0
+    },
+    {
+      "source": 1814,
+      "target": 2317,
+      "weight": 0.0
+    },
+    {
+      "source": 1815,
+      "target": 2318,
+      "weight": 1.0
+    },
+    {
+      "source": 1815,
+      "target": 2319,
+      "weight": 0.0
+    },
+    {
+      "source": 1816,
+      "target": 2320,
+      "weight": 1.0
+    },
+    {
+      "source": 1816,
+      "target": 2321,
+      "weight": 0.0
+    },
+    {
+      "source": 1817,
+      "target": 2322,
+      "weight": 1.0
+    },
+    {
+      "source": 1817,
+      "target": 2323,
+      "weight": 0.0
+    },
+    {
+      "source": 1818,
+      "target": 2324,
+      "weight": 1.0
+    },
+    {
+      "source": 1818,
+      "target": 2325,
+      "weight": 0.0
+    },
+    {
+      "source": 1819,
+      "target": 2326,
+      "weight": 1.0
+    },
+    {
+      "source": 1819,
+      "target": 2327,
+      "weight": 0.0
+    },
+    {
+      "source": 1820,
+      "target": 2328,
+      "weight": 1.0
+    },
+    {
+      "source": 1820,
+      "target": 2329,
+      "weight": 0.0
+    },
+    {
+      "source": 1821,
+      "target": 2330,
+      "weight": 1.0
+    },
+    {
+      "source": 1821,
+      "target": 2331,
+      "weight": 0.0
+    },
+    {
+      "source": 1822,
+      "target": 2332,
+      "weight": 1.0
+    },
+    {
+      "source": 1822,
+      "target": 2333,
+      "weight": 0.0
+    },
+    {
+      "source": 1823,
+      "target": 2334,
+      "weight": 1.0
+    },
+    {
+      "source": 1823,
+      "target": 2335,
+      "weight": 0.0
+    },
+    {
+      "source": 1824,
+      "target": 2336,
+      "weight": 1.0
+    },
+    {
+      "source": 1824,
+      "target": 2337,
+      "weight": 0.0
+    },
+    {
+      "source": 1825,
+      "target": 2338,
+      "weight": 1.0
+    },
+    {
+      "source": 1825,
+      "target": 2339,
+      "weight": 0.0
+    },
+    {
+      "source": 1826,
+      "target": 2340,
+      "weight": 1.0
+    },
+    {
+      "source": 1826,
+      "target": 2341,
+      "weight": 0.0
+    },
+    {
+      "source": 1827,
+      "target": 2342,
+      "weight": 1.0
+    },
+    {
+      "source": 1827,
+      "target": 2343,
+      "weight": 0.0
+    },
+    {
+      "source": 1828,
+      "target": 2344,
+      "weight": 1.0
+    },
+    {
+      "source": 1828,
+      "target": 2345,
+      "weight": 0.0
+    },
+    {
+      "source": 1829,
+      "target": 2346,
+      "weight": 1.0
+    },
+    {
+      "source": 1829,
+      "target": 2347,
+      "weight": 0.0
+    },
+    {
+      "source": 1830,
+      "target": 2348,
+      "weight": 1.0
+    },
+    {
+      "source": 1830,
+      "target": 2349,
+      "weight": 0.0
+    },
+    {
+      "source": 1831,
+      "target": 2350,
+      "weight": 1.0
+    },
+    {
+      "source": 1831,
+      "target": 2351,
+      "weight": 0.0
+    },
+    {
+      "source": 1832,
+      "target": 2352,
+      "weight": 1.0
+    },
+    {
+      "source": 1832,
+      "target": 2353,
+      "weight": 0.0
+    },
+    {
+      "source": 1833,
+      "target": 2354,
+      "weight": 1.0
+    },
+    {
+      "source": 1833,
+      "target": 2355,
+      "weight": 0.0
+    },
+    {
+      "source": 1834,
+      "target": 2356,
+      "weight": 1.0
+    },
+    {
+      "source": 1834,
+      "target": 2357,
+      "weight": 0.0
+    },
+    {
+      "source": 1835,
+      "target": 2358,
+      "weight": 1.0
+    },
+    {
+      "source": 1835,
+      "target": 2359,
+      "weight": 0.0
+    },
+    {
+      "source": 1836,
+      "target": 2360,
+      "weight": 1.0
+    },
+    {
+      "source": 1836,
+      "target": 2361,
+      "weight": 0.0
+    },
+    {
+      "source": 1837,
+      "target": 2362,
+      "weight": 1.0
+    },
+    {
+      "source": 1837,
+      "target": 2363,
+      "weight": 0.0
+    },
+    {
+      "source": 1838,
+      "target": 2364,
+      "weight": 1.0
+    },
+    {
+      "source": 1838,
+      "target": 2365,
+      "weight": 0.0
+    },
+    {
+      "source": 1839,
+      "target": 2366,
+      "weight": 1.0
+    },
+    {
+      "source": 1839,
+      "target": 2367,
+      "weight": 0.0
+    },
+    {
+      "source": 1840,
+      "target": 2368,
+      "weight": 1.0
+    },
+    {
+      "source": 1840,
+      "target": 2369,
+      "weight": 0.0
+    },
+    {
+      "source": 1841,
+      "target": 2370,
+      "weight": 1.0
+    },
+    {
+      "source": 1841,
+      "target": 2371,
+      "weight": 0.0
+    },
+    {
+      "source": 1842,
+      "target": 2372,
+      "weight": 1.0
+    },
+    {
+      "source": 1842,
+      "target": 2373,
+      "weight": 0.0
+    },
+    {
+      "source": 1843,
+      "target": 2374,
+      "weight": 1.0
+    },
+    {
+      "source": 1843,
+      "target": 2375,
+      "weight": 0.0
+    },
+    {
+      "source": 1844,
+      "target": 2376,
+      "weight": 1.0
+    },
+    {
+      "source": 1844,
+      "target": 2377,
+      "weight": 0.0
+    },
+    {
+      "source": 1845,
+      "target": 2378,
+      "weight": 1.0
+    },
+    {
+      "source": 1845,
+      "target": 2379,
+      "weight": 0.0
+    },
+    {
+      "source": 1846,
+      "target": 2380,
+      "weight": 1.0
+    },
+    {
+      "source": 1846,
+      "target": 2381,
+      "weight": 0.0
+    },
+    {
+      "source": 1847,
+      "target": 2382,
+      "weight": 1.0
+    },
+    {
+      "source": 1847,
+      "target": 2383,
+      "weight": 0.0
+    },
+    {
+      "source": 1848,
+      "target": 2384,
+      "weight": 1.0
+    },
+    {
+      "source": 1848,
+      "target": 2385,
+      "weight": 0.0
+    },
+    {
+      "source": 1849,
+      "target": 2386,
+      "weight": 1.0
+    },
+    {
+      "source": 1849,
+      "target": 2387,
+      "weight": 0.0
+    },
+    {
+      "source": 1850,
+      "target": 2388,
+      "weight": 1.0
+    },
+    {
+      "source": 1850,
+      "target": 2389,
+      "weight": 0.0
+    },
+    {
+      "source": 1851,
+      "target": 2390,
+      "weight": 1.0
+    },
+    {
+      "source": 1851,
+      "target": 2391,
+      "weight": 0.0
+    },
+    {
+      "source": 1852,
+      "target": 2392,
+      "weight": 1.0
+    },
+    {
+      "source": 1852,
+      "target": 2393,
+      "weight": 0.0
+    },
+    {
+      "source": 1853,
+      "target": 2394,
+      "weight": 1.0
+    },
+    {
+      "source": 1853,
+      "target": 2395,
+      "weight": 0.0
+    },
+    {
+      "source": 1854,
+      "target": 2396,
+      "weight": 1.0
+    },
+    {
+      "source": 1854,
+      "target": 2397,
+      "weight": 0.0
+    },
+    {
+      "source": 1855,
+      "target": 2398,
+      "weight": 1.0
+    },
+    {
+      "source": 1855,
+      "target": 2399,
+      "weight": 0.0
+    }
+  ],
+  "legacy_signed_readout_rule": {
+    "expected_old_rows": 4352,
+    "input_lanes": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45
+    ],
+    "source_count": 128,
+    "new_rows": 8704,
+    "for_each_exact_old_family_lane_motor_coefficient_w": "append w on matching execution signal and -w on matching execution reference; resolve/validate persistent coordinates, never guessed packed IDs",
+    "initial_parameter_policy": "fixed mirrored copy for mechanism qualification; this is not preservation of old decoder learning. Later learning requires explicitly tied updates and priced/versioned optimizer/eligibility semantics",
+    "old_bank": "retained for provenance and diagnostics, but excluded from decision emission by route/head policy, not by zero genetic weights"
+  },
+  "allocated_synapse_rows_if_class5_base34048": 43058,
+  "legacy_transfer_warning": "ordinary +1 copy receives projection gain and tanh/leak/background; signed pair difference carries the old proposal but rescales, delays and may saturate it. Measure gain, sign and fidelity rather than claiming identity. No semantic compression or guessed average of old neurons.",
+  "remaining_nonmotor_bypasses": "innate scalar, memory and cognitive candidate terms, and independent speech-token decoder remain separately audited; M1 is action-neuron mediation, not a claim all decision components are mediated"
+}

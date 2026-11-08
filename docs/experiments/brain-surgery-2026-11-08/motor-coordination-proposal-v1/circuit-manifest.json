@@ -1,0 +1,1144 @@
+{
+  "selector": "ProspectiveMatchedMotorArbitrationV1",
+  "status": "source_only_not_admitted_not_executed",
+  "existing_neuron_addresses_unchanged": [
+    0,
+    2047
+  ],
+  "new_neuron_range": [
+    2048,
+    2111
+  ],
+  "active_new_neurons": 52,
+  "reserved_new_neurons": [
+    2100,
+    2101,
+    2102,
+    2103,
+    2104,
+    2105,
+    2106,
+    2107,
+    2108,
+    2109,
+    2110,
+    2111
+  ],
+  "pairs": [
+    {
+      "name": "afferent_hunger",
+      "signal": 2048,
+      "reference": 2049
+    },
+    {
+      "name": "afferent_fatigue",
+      "signal": 2050,
+      "reference": 2051
+    },
+    {
+      "name": "afferent_fear",
+      "signal": 2052,
+      "reference": 2053
+    },
+    {
+      "name": "afferent_pain",
+      "signal": 2054,
+      "reference": 2055
+    },
+    {
+      "name": "afferent_loneliness",
+      "signal": 2056,
+      "reference": 2057
+    },
+    {
+      "name": "afferent_curiosity",
+      "signal": 2058,
+      "reference": 2059
+    },
+    {
+      "name": "afferent_ATP_availability",
+      "signal": 2060,
+      "reference": 2061
+    },
+    {
+      "name": "afferent_unsigned_temperature_stress",
+      "signal": 2062,
+      "reference": 2063
+    },
+    {
+      "name": "afferent_reproductive_readiness",
+      "signal": 2064,
+      "reference": 2065
+    },
+    {
+      "name": "afferent_bound_boredom",
+      "signal": 2066,
+      "reference": 2067
+    },
+    {
+      "name": "afferent_unbound_extension1",
+      "signal": 2068,
+      "reference": 2069
+    },
+    {
+      "name": "hunger_above_setpoint",
+      "signal": 2070,
+      "reference": 2071
+    },
+    {
+      "name": "fatigue_above_setpoint",
+      "signal": 2072,
+      "reference": 2073
+    },
+    {
+      "name": "fear_above_setpoint",
+      "signal": 2074,
+      "reference": 2075
+    },
+    {
+      "name": "pain_above_setpoint",
+      "signal": 2076,
+      "reference": 2077
+    },
+    {
+      "name": "loneliness_above_setpoint",
+      "signal": 2078,
+      "reference": 2079
+    },
+    {
+      "name": "curiosity_above_setpoint",
+      "signal": 2080,
+      "reference": 2081
+    },
+    {
+      "name": "ATP_availability_above_setpoint",
+      "signal": 2082,
+      "reference": 2083
+    },
+    {
+      "name": "unsigned_temperature_stress_above_setpoint",
+      "signal": 2084,
+      "reference": 2085
+    },
+    {
+      "name": "reproductive_readiness_above_setpoint",
+      "signal": 2086,
+      "reference": 2087
+    },
+    {
+      "name": "bound_boredom_above_setpoint",
+      "signal": 2088,
+      "reference": 2089
+    },
+    {
+      "name": "unbound_extension1_above_setpoint",
+      "signal": 2090,
+      "reference": 2091
+    },
+    {
+      "name": "ATP_below_setpoint",
+      "signal": 2092,
+      "reference": 2093
+    },
+    {
+      "name": "recovery_motor_state",
+      "signal": 2094,
+      "reference": 2095
+    },
+    {
+      "name": "voluntary_search_motor_state",
+      "signal": 2096,
+      "reference": 2097
+    },
+    {
+      "name": "fear_motor_state",
+      "signal": 2098,
+      "reference": 2099
+    }
+  ],
+  "drive_setpoints": {
+    "hunger": 0.35,
+    "fatigue": 0.35,
+    "fear": 0.25,
+    "pain": 0.1,
+    "loneliness": 0.35,
+    "curiosity": 0.35,
+    "ATP_availability": 0.5,
+    "unsigned_temperature_stress": 0.1,
+    "reproductive_readiness": 0.5,
+    "bound_boredom": 0.35,
+    "unbound_extension1": 0.5
+  },
+  "new_afferent_contract": "signal=drive; reference=declared setpoint; BOTH receive the SAME interoceptive/regional transform and offset; neither reads hidden world truth",
+  "matched_dynamics": {
+    "activation": "Tanh",
+    "leak": 0.5,
+    "bias": 0.0,
+    "homeostatic_gain": 0.0,
+    "metabolic_tracking_and_cost": "retain_and_charge",
+    "initial_activation": 0.0,
+    "initial_metabolic_load": 0.0,
+    "plasticity": "REQUIRES explicit versioned fixed-parameter admission for all new paired parameters across every learning writer; alpha0/genetic0 is NOT a freeze; ordinary learning elsewhere retained"
+  },
+  "new_branch_semantics": "projection_gain * tanh(max(sum(inputs)-threshold,0))*output_gain; shared local threshold/background then applied to matched neuron pair",
+  "new_branches": [
+    {
+      "target": 2070,
+      "inputs": [
+        [
+          2048,
+          4.0
+        ],
+        [
+          2049,
+          -4.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2071,
+      "inputs": [
+        [
+          2048,
+          0.0
+        ],
+        [
+          2049,
+          -0.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2072,
+      "inputs": [
+        [
+          2050,
+          4.0
+        ],
+        [
+          2051,
+          -4.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2073,
+      "inputs": [
+        [
+          2050,
+          0.0
+        ],
+        [
+          2051,
+          -0.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2074,
+      "inputs": [
+        [
+          2052,
+          4.0
+        ],
+        [
+          2053,
+          -4.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2075,
+      "inputs": [
+        [
+          2052,
+          0.0
+        ],
+        [
+          2053,
+          -0.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2076,
+      "inputs": [
+        [
+          2054,
+          4.0
+        ],
+        [
+          2055,
+          -4.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2077,
+      "inputs": [
+        [
+          2054,
+          0.0
+        ],
+        [
+          2055,
+          -0.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2078,
+      "inputs": [
+        [
+          2056,
+          4.0
+        ],
+        [
+          2057,
+          -4.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2079,
+      "inputs": [
+        [
+          2056,
+          0.0
+        ],
+        [
+          2057,
+          -0.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2080,
+      "inputs": [
+        [
+          2058,
+          4.0
+        ],
+        [
+          2059,
+          -4.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2081,
+      "inputs": [
+        [
+          2058,
+          0.0
+        ],
+        [
+          2059,
+          -0.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2082,
+      "inputs": [
+        [
+          2060,
+          4.0
+        ],
+        [
+          2061,
+          -4.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2083,
+      "inputs": [
+        [
+          2060,
+          0.0
+        ],
+        [
+          2061,
+          -0.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2084,
+      "inputs": [
+        [
+          2062,
+          4.0
+        ],
+        [
+          2063,
+          -4.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2085,
+      "inputs": [
+        [
+          2062,
+          0.0
+        ],
+        [
+          2063,
+          -0.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2086,
+      "inputs": [
+        [
+          2064,
+          4.0
+        ],
+        [
+          2065,
+          -4.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2087,
+      "inputs": [
+        [
+          2064,
+          0.0
+        ],
+        [
+          2065,
+          -0.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2088,
+      "inputs": [
+        [
+          2066,
+          4.0
+        ],
+        [
+          2067,
+          -4.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2089,
+      "inputs": [
+        [
+          2066,
+          0.0
+        ],
+        [
+          2067,
+          -0.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2090,
+      "inputs": [
+        [
+          2068,
+          4.0
+        ],
+        [
+          2069,
+          -4.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2091,
+      "inputs": [
+        [
+          2068,
+          0.0
+        ],
+        [
+          2069,
+          -0.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2092,
+      "inputs": [
+        [
+          2060,
+          -4.0
+        ],
+        [
+          2061,
+          4.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2093,
+      "inputs": [
+        [
+          2060,
+          0.0
+        ],
+        [
+          2061,
+          -0.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2094,
+      "inputs": [
+        [
+          2072,
+          1.25
+        ],
+        [
+          2073,
+          -1.25
+        ],
+        [
+          2092,
+          1.0
+        ],
+        [
+          2093,
+          -1.0
+        ],
+        [
+          2076,
+          0.15
+        ],
+        [
+          2077,
+          -0.15
+        ],
+        [
+          2070,
+          -0.75
+        ],
+        [
+          2071,
+          0.75
+        ],
+        [
+          2098,
+          -1.5
+        ],
+        [
+          2099,
+          1.5
+        ],
+        [
+          2096,
+          -0.5
+        ],
+        [
+          2097,
+          0.5
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2095,
+      "inputs": [
+        [
+          2072,
+          0.0
+        ],
+        [
+          2073,
+          -0.0
+        ],
+        [
+          2092,
+          0.0
+        ],
+        [
+          2093,
+          -0.0
+        ],
+        [
+          2076,
+          0.0
+        ],
+        [
+          2077,
+          -0.0
+        ],
+        [
+          2070,
+          0.0
+        ],
+        [
+          2071,
+          -0.0
+        ],
+        [
+          2098,
+          0.0
+        ],
+        [
+          2099,
+          -0.0
+        ],
+        [
+          2096,
+          0.0
+        ],
+        [
+          2097,
+          -0.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2096,
+      "inputs": [
+        [
+          2070,
+          0.75
+        ],
+        [
+          2071,
+          -0.75
+        ],
+        [
+          2080,
+          0.3
+        ],
+        [
+          2081,
+          -0.3
+        ],
+        [
+          2088,
+          0.2
+        ],
+        [
+          2089,
+          -0.2
+        ],
+        [
+          2094,
+          -1.25
+        ],
+        [
+          2095,
+          1.25
+        ],
+        [
+          2092,
+          -0.5
+        ],
+        [
+          2093,
+          0.5
+        ],
+        [
+          2098,
+          -0.75
+        ],
+        [
+          2099,
+          0.75
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2097,
+      "inputs": [
+        [
+          2070,
+          0.0
+        ],
+        [
+          2071,
+          -0.0
+        ],
+        [
+          2080,
+          0.0
+        ],
+        [
+          2081,
+          -0.0
+        ],
+        [
+          2088,
+          0.0
+        ],
+        [
+          2089,
+          -0.0
+        ],
+        [
+          2094,
+          0.0
+        ],
+        [
+          2095,
+          -0.0
+        ],
+        [
+          2092,
+          0.0
+        ],
+        [
+          2093,
+          -0.0
+        ],
+        [
+          2098,
+          0.0
+        ],
+        [
+          2099,
+          -0.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2098,
+      "inputs": [
+        [
+          2074,
+          1.25
+        ],
+        [
+          2075,
+          -1.25
+        ],
+        [
+          2094,
+          -0.05
+        ],
+        [
+          2095,
+          0.05
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    },
+    {
+      "target": 2099,
+      "inputs": [
+        [
+          2074,
+          0.0
+        ],
+        [
+          2075,
+          -0.0
+        ],
+        [
+          2094,
+          0.0
+        ],
+        [
+          2095,
+          -0.0
+        ]
+      ],
+      "threshold": 0.0,
+      "output_gain": 1.0
+    }
+  ],
+  "new_arbitration_readout_head": [
+    {
+      "family": "Rest",
+      "source": 2094,
+      "lane": 23,
+      "weight": 4.0
+    },
+    {
+      "family": "Rest",
+      "source": 2095,
+      "lane": 23,
+      "weight": -4.0
+    },
+    {
+      "family": "Rest",
+      "source": 2096,
+      "lane": 23,
+      "weight": -1.5
+    },
+    {
+      "family": "Rest",
+      "source": 2097,
+      "lane": 23,
+      "weight": 1.5
+    },
+    {
+      "family": "Rest",
+      "source": 2098,
+      "lane": 23,
+      "weight": -4.0
+    },
+    {
+      "family": "Rest",
+      "source": 2099,
+      "lane": 23,
+      "weight": 4.0
+    },
+    {
+      "family": "Rest",
+      "source": 2084,
+      "lane": 43,
+      "weight": -2.0
+    },
+    {
+      "family": "Rest",
+      "source": 2085,
+      "lane": 43,
+      "weight": 2.0
+    },
+    {
+      "family": "Approach",
+      "source": 2094,
+      "lane": 36,
+      "weight": -4.0
+    },
+    {
+      "family": "Approach",
+      "source": 2095,
+      "lane": 36,
+      "weight": 4.0
+    },
+    {
+      "family": "Approach",
+      "source": 2096,
+      "lane": 36,
+      "weight": 1.25
+    },
+    {
+      "family": "Approach",
+      "source": 2097,
+      "lane": 36,
+      "weight": -1.25
+    },
+    {
+      "family": "Approach",
+      "source": 2098,
+      "lane": 36,
+      "weight": -2.0
+    },
+    {
+      "family": "Approach",
+      "source": 2099,
+      "lane": 36,
+      "weight": 2.0
+    },
+    {
+      "family": "Approach",
+      "source": 2070,
+      "lane": 37,
+      "weight": 0.5
+    },
+    {
+      "family": "Approach",
+      "source": 2071,
+      "lane": 37,
+      "weight": -0.5
+    },
+    {
+      "family": "Approach",
+      "source": 2070,
+      "lane": 38,
+      "weight": -0.5
+    },
+    {
+      "family": "Approach",
+      "source": 2071,
+      "lane": 38,
+      "weight": 0.5
+    },
+    {
+      "family": "Approach",
+      "source": 2084,
+      "lane": 39,
+      "weight": -2.0
+    },
+    {
+      "family": "Approach",
+      "source": 2085,
+      "lane": 39,
+      "weight": 2.0
+    },
+    {
+      "family": "Avoid",
+      "source": 2084,
+      "lane": 39,
+      "weight": 3.0
+    },
+    {
+      "family": "Avoid",
+      "source": 2085,
+      "lane": 39,
+      "weight": -3.0
+    },
+    {
+      "family": "Approach",
+      "source": 2084,
+      "lane": 40,
+      "weight": -2.0
+    },
+    {
+      "family": "Approach",
+      "source": 2085,
+      "lane": 40,
+      "weight": 2.0
+    },
+    {
+      "family": "Avoid",
+      "source": 2084,
+      "lane": 40,
+      "weight": 3.0
+    },
+    {
+      "family": "Avoid",
+      "source": 2085,
+      "lane": 40,
+      "weight": -3.0
+    },
+    {
+      "family": "Approach",
+      "source": 2078,
+      "lane": 41,
+      "weight": 0.5
+    },
+    {
+      "family": "Approach",
+      "source": 2079,
+      "lane": 41,
+      "weight": -0.5
+    },
+    {
+      "family": "Approach",
+      "source": 2086,
+      "lane": 41,
+      "weight": 0.25
+    },
+    {
+      "family": "Approach",
+      "source": 2087,
+      "lane": 41,
+      "weight": -0.25
+    },
+    {
+      "family": "Avoid",
+      "source": 2094,
+      "lane": 36,
+      "weight": -2.0
+    },
+    {
+      "family": "Avoid",
+      "source": 2095,
+      "lane": 36,
+      "weight": 2.0
+    },
+    {
+      "family": "Avoid",
+      "source": 2098,
+      "lane": 36,
+      "weight": 5.0
+    },
+    {
+      "family": "Avoid",
+      "source": 2099,
+      "lane": 36,
+      "weight": -5.0
+    },
+    {
+      "family": "Avoid",
+      "source": 2098,
+      "lane": 38,
+      "weight": 2.0
+    },
+    {
+      "family": "Avoid",
+      "source": 2099,
+      "lane": 38,
+      "weight": -2.0
+    },
+    {
+      "family": "Ingest",
+      "source": 2070,
+      "lane": 37,
+      "weight": 4.0
+    },
+    {
+      "family": "Ingest",
+      "source": 2071,
+      "lane": 37,
+      "weight": -4.0
+    },
+    {
+      "family": "Ingest",
+      "source": 2070,
+      "lane": 38,
+      "weight": -4.0
+    },
+    {
+      "family": "Ingest",
+      "source": 2071,
+      "lane": 38,
+      "weight": 4.0
+    },
+    {
+      "family": "Inspect",
+      "source": 2080,
+      "lane": 36,
+      "weight": 0.75
+    },
+    {
+      "family": "Inspect",
+      "source": 2081,
+      "lane": 36,
+      "weight": -0.75
+    },
+    {
+      "family": "Inspect",
+      "source": 2088,
+      "lane": 36,
+      "weight": 0.25
+    },
+    {
+      "family": "Inspect",
+      "source": 2089,
+      "lane": 36,
+      "weight": -0.25
+    },
+    {
+      "family": "Inspect",
+      "source": 2094,
+      "lane": 36,
+      "weight": -0.5
+    },
+    {
+      "family": "Inspect",
+      "source": 2095,
+      "lane": 36,
+      "weight": 0.5
+    },
+    {
+      "family": "Inspect",
+      "source": 2098,
+      "lane": 36,
+      "weight": -0.5
+    },
+    {
+      "family": "Inspect",
+      "source": 2099,
+      "lane": 36,
+      "weight": 0.5
+    },
+    {
+      "family": "Other",
+      "source": 2078,
+      "lane": 42,
+      "weight": 0.25
+    },
+    {
+      "family": "Other",
+      "source": 2079,
+      "lane": 42,
+      "weight": -0.25
+    }
+  ],
+  "extra_cost_before_tile_padding": {
+    "neurons": 64,
+    "sensor_assignments": 22,
+    "branches": 30,
+    "branch_inputs": 104,
+    "decoder_rows": 50
+  },
+  "no_default_promotion": true,
+  "class5_alone_admits_this": false,
+  "native_execution": false,
+  "legacy_weights_or_optimizer_changed": false,
+  "required_new_identity": [
+    "capacity",
+    "foundation",
+    "encoder",
+    "dynamics",
+    "branch_plan",
+    "decoder_head",
+    "execution_budget"
+  ],
+  "staging_dependency": "current derived object/chem/thermal/peer features only; new affine reference and readout heads still need CPU/WGSL implementation and tests",
+  "important_limits": [
+    "independent T1 motor sampling remains stochastic and can still select moving Rest",
+    "high ATP is availability, not distress",
+    "temperature is unsigned bodily stress",
+    "unbound extension1 has no behavior",
+    "peer is not mate eligibility",
+    "negative taste is not measured poison",
+    "no novelty/play inference invented"
+  ]
+}

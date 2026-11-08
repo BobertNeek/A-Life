@@ -1,0 +1,3051 @@
+[
+  {
+    "trial": 12,
+    "case": "food_comfortable",
+    "arm": {
+      "bounded": false,
+      "dedicated_b": false,
+      "tonic_bridges": true
+    },
+    "tick": 4,
+    "moved": true,
+    "representative": {
+      "index": 7,
+      "kind": "Rest",
+      "family": "Rest",
+      "total_logit": 0.015023946762084961
+    },
+    "locomotion": {
+      "index": 1,
+      "kind": "Move",
+      "family": "Approach",
+      "neural_action_readout": 0.028334438800811768,
+      "innate_bias": 0.0,
+      "total_logit": 0.028334438800811768,
+      "id": 101
+    },
+    "competition": [
+      {
+        "index": 1,
+        "id": 101,
+        "family": "Approach",
+        "logit": 0.028334438800811768,
+        "neural": 0.028334438800811768,
+        "p": 0.44238612567221897
+      },
+      {
+        "index": 2,
+        "id": 102,
+        "family": "Avoid",
+        "logit": -1.2150554656982422,
+        "neural": -1.2156593799591064,
+        "p": 0.12758632364704792
+      },
+      {
+        "index": 9,
+        "id": 103,
+        "family": "Approach",
+        "logit": 6.285705467234948e-07,
+        "neural": 6.285705467234948e-07,
+        "p": 0.43002755068073306
+      }
+    ],
+    "rest_logit": 0.015023946762084961,
+    "outcome_tags": [
+      "abi_version",
+      "cognitive_work",
+      "concept_hints",
+      "contradiction_observed",
+      "energy_delta",
+      "frustration_delta",
+      "homeostatic_delta",
+      "joint",
+      "measured_physiology",
+      "memory_hints",
+      "organism_id",
+      "outcome_tick",
+      "pain_delta",
+      "physical",
+      "prediction_error",
+      "reward_valence",
+      "sequence_id",
+      "success",
+      "teacher_feedback"
+    ],
+    "sleeping": false
+  },
+  {
+    "trial": 13,
+    "case": "food_hungry",
+    "arm": {
+      "bounded": false,
+      "dedicated_b": false,
+      "tonic_bridges": true
+    },
+    "tick": 4,
+    "moved": true,
+    "representative": {
+      "index": 7,
+      "kind": "Rest",
+      "family": "Rest",
+      "total_logit": 0.015023946762084961
+    },
+    "locomotion": {
+      "index": 1,
+      "kind": "Move",
+      "family": "Approach",
+      "neural_action_readout": 0.03011453151702881,
+      "innate_bias": 0.0,
+      "total_logit": 0.03011453151702881,
+      "id": 101
+    },
+    "competition": [
+      {
+        "index": 1,
+        "id": 101,
+        "family": "Approach",
+        "logit": 0.03011453151702881,
+        "neural": 0.03011453151702881,
+        "p": 0.4427262478114978
+      },
+      {
+        "index": 2,
+        "id": 102,
+        "family": "Avoid",
+        "logit": -1.213308334350586,
+        "neural": -1.215653657913208,
+        "p": 0.12768020795279492
+      },
+      {
+        "index": 9,
+        "id": 103,
+        "family": "Approach",
+        "logit": 2.4189437226596056e-06,
+        "neural": 2.4189437226596056e-06,
+        "p": 0.4295935442357073
+      }
+    ],
+    "rest_logit": 0.015023946762084961,
+    "outcome_tags": [
+      "abi_version",
+      "cognitive_work",
+      "concept_hints",
+      "contradiction_observed",
+      "energy_delta",
+      "frustration_delta",
+      "homeostatic_delta",
+      "joint",
+      "measured_physiology",
+      "memory_hints",
+      "organism_id",
+      "outcome_tick",
+      "pain_delta",
+      "physical",
+      "prediction_error",
+      "reward_valence",
+      "sequence_id",
+      "success",
+      "teacher_feedback"
+    ],
+    "sleeping": false
+  },
+  {
+    "trial": 14,
+    "case": "bitter_comfortable",
+    "arm": {
+      "bounded": false,
+      "dedicated_b": false,
+      "tonic_bridges": true
+    },
+    "tick": 4,
+    "moved": true,
+    "representative": {
+      "index": 7,
+      "kind": "Rest",
+      "family": "Rest",
+      "total_logit": 0.015023946762084961
+    },
+    "locomotion": {
+      "index": 1,
+      "kind": "Move",
+      "family": "Approach",
+      "neural_action_readout": -0.12110651284456253,
+      "innate_bias": 0.0,
+      "total_logit": -0.1207112967967987,
+      "id": 101
+    },
+    "competition": [
+      {
+        "index": 1,
+        "id": 101,
+        "family": "Approach",
+        "logit": -0.1207112967967987,
+        "neural": -0.12110651284456253,
+        "p": 0.16853436016872633
+      },
+      {
+        "index": 2,
+        "id": 102,
+        "family": "Avoid",
+        "logit": 1.2156593799591064,
+        "neural": 1.2156593799591064,
+        "p": 0.6413083097116448
+      },
+      {
+        "index": 9,
+        "id": 103,
+        "family": "Approach",
+        "logit": 8.390586572204484e-07,
+        "neural": 8.390586572204484e-07,
+        "p": 0.19015733011962901
+      }
+    ],
+    "rest_logit": 0.015023946762084961,
+    "outcome_tags": [
+      "abi_version",
+      "cognitive_work",
+      "concept_hints",
+      "contradiction_observed",
+      "energy_delta",
+      "frustration_delta",
+      "homeostatic_delta",
+      "joint",
+      "measured_physiology",
+      "memory_hints",
+      "organism_id",
+      "outcome_tick",
+      "pain_delta",
+      "physical",
+      "prediction_error",
+      "reward_valence",
+      "sequence_id",
+      "success",
+      "teacher_feedback"
+    ],
+    "sleeping": false
+  },
+  {
+    "trial": 15,
+    "case": "bitter_hungry",
+    "arm": {
+      "bounded": false,
+      "dedicated_b": false,
+      "tonic_bridges": true
+    },
+    "tick": 4,
+    "moved": true,
+    "representative": {
+      "index": 7,
+      "kind": "Rest",
+      "family": "Rest",
+      "total_logit": 0.015023946762084961
+    },
+    "locomotion": {
+      "index": 1,
+      "kind": "Move",
+      "family": "Approach",
+      "neural_action_readout": -0.12866686284542084,
+      "innate_bias": 0.0,
+      "total_logit": -0.12711544334888458,
+      "id": 101
+    },
+    "competition": [
+      {
+        "index": 1,
+        "id": 101,
+        "family": "Approach",
+        "logit": -0.12711544334888458,
+        "neural": -0.12866686284542084,
+        "p": 0.16763923333059608
+      },
+      {
+        "index": 2,
+        "id": 102,
+        "family": "Avoid",
+        "logit": 1.2156550884246826,
+        "neural": 1.2156550884246826,
+        "p": 0.6419977387655239
+      },
+      {
+        "index": 9,
+        "id": 103,
+        "family": "Approach",
+        "logit": 3.229237563573406e-06,
+        "neural": 3.229237563573406e-06,
+        "p": 0.19036302790388
+      }
+    ],
+    "rest_logit": 0.015023946762084961,
+    "outcome_tags": [
+      "abi_version",
+      "cognitive_work",
+      "concept_hints",
+      "contradiction_observed",
+      "energy_delta",
+      "frustration_delta",
+      "homeostatic_delta",
+      "joint",
+      "measured_physiology",
+      "memory_hints",
+      "organism_id",
+      "outcome_tick",
+      "pain_delta",
+      "physical",
+      "prediction_error",
+      "reward_valence",
+      "sequence_id",
+      "success",
+      "teacher_feedback"
+    ],
+    "sleeping": false
+  },
+  {
+    "trial": 16,
+    "case": "object_comfortable",
+    "arm": {
+      "bounded": false,
+      "dedicated_b": false,
+      "tonic_bridges": true
+    },
+    "tick": 4,
+    "moved": true,
+    "representative": {
+      "index": 7,
+      "kind": "Rest",
+      "family": "Rest",
+      "total_logit": 0.015023946762084961
+    },
+    "locomotion": {
+      "index": 1,
+      "kind": "Move",
+      "family": "Approach",
+      "neural_action_readout": -0.0137275829911232,
+      "innate_bias": 0.0,
+      "total_logit": -0.0137275829911232,
+      "id": 101
+    },
+    "competition": [
+      {
+        "index": 1,
+        "id": 101,
+        "family": "Approach",
+        "logit": -0.0137275829911232,
+        "neural": -0.0137275829911232,
+        "p": 0.33026786758961135
+      },
+      {
+        "index": 2,
+        "id": 102,
+        "family": "Avoid",
+        "logit": 0.00019786272605415434,
+        "neural": 4.58824274573999e-07,
+        "p": 0.3348991664615884
+      },
+      {
+        "index": 9,
+        "id": 103,
+        "family": "Approach",
+        "logit": 1.7021646669945767e-07,
+        "neural": 1.7021646669945767e-07,
+        "p": 0.33483296594880024
+      }
+    ],
+    "rest_logit": 0.015023946762084961,
+    "outcome_tags": [
+      "abi_version",
+      "cognitive_work",
+      "concept_hints",
+      "contradiction_observed",
+      "energy_delta",
+      "frustration_delta",
+      "homeostatic_delta",
+      "joint",
+      "measured_physiology",
+      "memory_hints",
+      "organism_id",
+      "outcome_tick",
+      "pain_delta",
+      "physical",
+      "prediction_error",
+      "reward_valence",
+      "sequence_id",
+      "success",
+      "teacher_feedback"
+    ],
+    "sleeping": false
+  },
+  {
+    "trial": 17,
+    "case": "object_curious",
+    "arm": {
+      "bounded": false,
+      "dedicated_b": false,
+      "tonic_bridges": true
+    },
+    "tick": 4,
+    "moved": true,
+    "representative": {
+      "index": 7,
+      "kind": "Rest",
+      "family": "Rest",
+      "total_logit": 0.015023946762084961
+    },
+    "locomotion": {
+      "index": 1,
+      "kind": "Move",
+      "family": "Approach",
+      "neural_action_readout": -0.0137275829911232,
+      "innate_bias": 0.0,
+      "total_logit": -0.0137275829911232,
+      "id": 101
+    },
+    "competition": [
+      {
+        "index": 1,
+        "id": 101,
+        "family": "Approach",
+        "logit": -0.0137275829911232,
+        "neural": -0.0137275829911232,
+        "p": 0.33026743061493885
+      },
+      {
+        "index": 2,
+        "id": 102,
+        "family": "Avoid",
+        "logit": 0.00020181344007141888,
+        "neural": 4.588243029957084e-07,
+        "p": 0.3349000464509771
+      },
+      {
+        "index": 9,
+        "id": 103,
+        "family": "Approach",
+        "logit": 1.7021646669945767e-07,
+        "neural": 1.7021646669945767e-07,
+        "p": 0.334832522934084
+      }
+    ],
+    "rest_logit": 0.015023946762084961,
+    "outcome_tags": [
+      "abi_version",
+      "cognitive_work",
+      "concept_hints",
+      "contradiction_observed",
+      "energy_delta",
+      "frustration_delta",
+      "homeostatic_delta",
+      "joint",
+      "measured_physiology",
+      "memory_hints",
+      "organism_id",
+      "outcome_tick",
+      "pain_delta",
+      "physical",
+      "prediction_error",
+      "reward_valence",
+      "sequence_id",
+      "success",
+      "teacher_feedback"
+    ],
+    "sleeping": false
+  },
+  {
+    "trial": 18,
+    "case": "food_fatigued",
+    "arm": {
+      "bounded": false,
+      "dedicated_b": false,
+      "tonic_bridges": true
+    },
+    "tick": 4,
+    "moved": true,
+    "representative": {
+      "index": 7,
+      "kind": "Rest",
+      "family": "Rest",
+      "total_logit": 0.4014456272125244
+    },
+    "locomotion": {
+      "index": 1,
+      "kind": "Move",
+      "family": "Approach",
+      "neural_action_readout": 0.02893739938735962,
+      "innate_bias": 0.0,
+      "total_logit": 0.02893739938735962,
+      "id": 101
+    },
+    "competition": [
+      {
+        "index": 1,
+        "id": 101,
+        "family": "Approach",
+        "logit": 0.02893739938735962,
+        "neural": 0.02893739938735962,
+        "p": 0.44253425001368213
+      },
+      {
+        "index": 2,
+        "id": 102,
+        "family": "Avoid",
+        "logit": -1.2150444984436035,
+        "neural": -1.2156572341918945,
+        "p": 0.12755351024914138
+      },
+      {
+        "index": 9,
+        "id": 103,
+        "family": "Approach",
+        "logit": 6.309970217444061e-07,
+        "neural": 6.309970217444061e-07,
+        "p": 0.4299122397371765
+      }
+    ],
+    "rest_logit": 0.4014456272125244,
+    "outcome_tags": [
+      "abi_version",
+      "cognitive_work",
+      "concept_hints",
+      "contradiction_observed",
+      "energy_delta",
+      "frustration_delta",
+      "homeostatic_delta",
+      "joint",
+      "measured_physiology",
+      "memory_hints",
+      "organism_id",
+      "outcome_tick",
+      "pain_delta",
+      "physical",
+      "prediction_error",
+      "reward_valence",
+      "sequence_id",
+      "success",
+      "teacher_feedback"
+    ],
+    "sleeping": false
+  },
+  {
+    "trial": 19,
+    "case": "bitter_fatigued",
+    "arm": {
+      "bounded": false,
+      "dedicated_b": false,
+      "tonic_bridges": true
+    },
+    "tick": 4,
+    "moved": true,
+    "representative": {
+      "index": 7,
+      "kind": "Rest",
+      "family": "Rest",
+      "total_logit": 0.4014456272125244
+    },
+    "locomotion": {
+      "index": 1,
+      "kind": "Move",
+      "family": "Approach",
+      "neural_action_readout": -0.12110650539398193,
+      "innate_bias": 0.0,
+      "total_logit": -0.12070288509130478,
+      "id": 101
+    },
+    "competition": [
+      {
+        "index": 1,
+        "id": 101,
+        "family": "Approach",
+        "logit": -0.12070288509130478,
+        "neural": -0.12110650539398193,
+        "p": 0.16853582226510452
+      },
+      {
+        "index": 2,
+        "id": 102,
+        "family": "Avoid",
+        "logit": 1.2156567573547363,
+        "neural": 1.2156567573547363,
+        "p": 0.6413067968756461
+      },
+      {
+        "index": 9,
+        "id": 103,
+        "family": "Approach",
+        "logit": 8.422706514465972e-07,
+        "neural": 8.422706514465972e-07,
+        "p": 0.1901573808592494
+      }
+    ],
+    "rest_logit": 0.4014456272125244,
+    "outcome_tags": [
+      "abi_version",
+      "cognitive_work",
+      "concept_hints",
+      "contradiction_observed",
+      "energy_delta",
+      "frustration_delta",
+      "homeostatic_delta",
+      "joint",
+      "measured_physiology",
+      "memory_hints",
+      "organism_id",
+      "outcome_tick",
+      "pain_delta",
+      "physical",
+      "prediction_error",
+      "reward_valence",
+      "sequence_id",
+      "success",
+      "teacher_feedback"
+    ],
+    "sleeping": false
+  },
+  {
+    "trial": 32,
+    "case": "food_comfortable",
+    "arm": {
+      "bounded": false,
+      "dedicated_b": true,
+      "tonic_bridges": true
+    },
+    "tick": 4,
+    "moved": true,
+    "representative": {
+      "index": 7,
+      "kind": "Rest",
+      "family": "Rest",
+      "total_logit": 0.015023946762084961
+    },
+    "locomotion": {
+      "index": 1,
+      "kind": "Move",
+      "family": "Approach",
+      "neural_action_readout": -0.02621406316757202,
+      "innate_bias": 0.0,
+      "total_logit": -0.02621406316757202,
+      "id": 101
+    },
+    "competition": [
+      {
+        "index": 1,
+        "id": 101,
+        "family": "Approach",
+        "logit": -0.02621406316757202,
+        "neural": -0.02621406316757202,
+        "p": 0.4289755374693826
+      },
+      {
+        "index": 2,
+        "id": 102,
+        "family": "Avoid",
+        "logit": -1.2150554656982422,
+        "neural": -1.2156593799591064,
+        "p": 0.13065476888898667
+      },
+      {
+        "index": 9,
+        "id": 103,
+        "family": "Approach",
+        "logit": 6.286991265369579e-07,
+        "neural": 6.286991265369579e-07,
+        "p": 0.44036969364163087
+      }
+    ],
+    "rest_logit": 0.015023946762084961,
+    "outcome_tags": [
+      "abi_version",
+      "cognitive_work",
+      "concept_hints",
+      "contradiction_observed",
+      "energy_delta",
+      "frustration_delta",
+      "homeostatic_delta",
+      "joint",
+      "measured_physiology",
+      "memory_hints",
+      "organism_id",
+      "outcome_tick",
+      "pain_delta",
+      "physical",
+      "prediction_error",
+      "reward_valence",
+      "sequence_id",
+      "success",
+      "teacher_feedback"
+    ],
+    "sleeping": false
+  },
+  {
+    "trial": 33,
+    "case": "food_hungry",
+    "arm": {
+      "bounded": false,
+      "dedicated_b": true,
+      "tonic_bridges": true
+    },
+    "tick": 4,
+    "moved": true,
+    "representative": {
+      "index": 7,
+      "kind": "Rest",
+      "family": "Rest",
+      "total_logit": 0.015023946762084961
+    },
+    "locomotion": {
+      "index": 1,
+      "kind": "Move",
+      "family": "Approach",
+      "neural_action_readout": -0.02443408966064453,
+      "innate_bias": 0.0,
+      "total_logit": -0.02443408966064453,
+      "id": 101
+    },
+    "competition": [
+      {
+        "index": 1,
+        "id": 101,
+        "family": "Approach",
+        "logit": -0.02443408966064453,
+        "neural": -0.02443408966064453,
+        "p": 0.4293132579963478
+      },
+      {
+        "index": 2,
+        "id": 102,
+        "family": "Avoid",
+        "logit": -1.213308334350586,
+        "neural": -1.215653657913208,
+        "p": 0.13075333546755
+      },
+      {
+        "index": 9,
+        "id": 103,
+        "family": "Approach",
+        "logit": 2.419438033030019e-06,
+        "neural": 2.419438033030019e-06,
+        "p": 0.43993340653610224
+      }
+    ],
+    "rest_logit": 0.015023946762084961,
+    "outcome_tags": [
+      "abi_version",
+      "cognitive_work",
+      "concept_hints",
+      "contradiction_observed",
+      "energy_delta",
+      "frustration_delta",
+      "homeostatic_delta",
+      "joint",
+      "measured_physiology",
+      "memory_hints",
+      "organism_id",
+      "outcome_tick",
+      "pain_delta",
+      "physical",
+      "prediction_error",
+      "reward_valence",
+      "sequence_id",
+      "success",
+      "teacher_feedback"
+    ],
+    "sleeping": false
+  },
+  {
+    "trial": 34,
+    "case": "bitter_comfortable",
+    "arm": {
+      "bounded": false,
+      "dedicated_b": true,
+      "tonic_bridges": true
+    },
+    "tick": 4,
+    "moved": true,
+    "representative": {
+      "index": 7,
+      "kind": "Rest",
+      "family": "Rest",
+      "total_logit": 0.015023946762084961
+    },
+    "locomotion": {
+      "index": 1,
+      "kind": "Move",
+      "family": "Approach",
+      "neural_action_readout": -0.1756572723388672,
+      "innate_bias": 0.0,
+      "total_logit": -0.17526204884052277,
+      "id": 101
+    },
+    "competition": [
+      {
+        "index": 1,
+        "id": 101,
+        "family": "Approach",
+        "logit": -0.17526204884052277,
+        "neural": -0.1756572723388672,
+        "p": 0.16102772846256977
+      },
+      {
+        "index": 2,
+        "id": 102,
+        "family": "Avoid",
+        "logit": 1.2156593799591064,
+        "neural": 1.2156593799591064,
+        "p": 0.6470981644175079
+      },
+      {
+        "index": 9,
+        "id": 103,
+        "family": "Approach",
+        "logit": 8.394126780331135e-07,
+        "neural": 8.394126780331135e-07,
+        "p": 0.19187410711992237
+      }
+    ],
+    "rest_logit": 0.015023946762084961,
+    "outcome_tags": [
+      "abi_version",
+      "cognitive_work",
+      "concept_hints",
+      "contradiction_observed",
+      "energy_delta",
+      "frustration_delta",
+      "homeostatic_delta",
+      "joint",
+      "measured_physiology",
+      "memory_hints",
+      "organism_id",
+      "outcome_tick",
+      "pain_delta",
+      "physical",
+      "prediction_error",
+      "reward_valence",
+      "sequence_id",
+      "success",
+      "teacher_feedback"
+    ],
+    "sleeping": false
+  },
+  {
+    "trial": 35,
+    "case": "bitter_hungry",
+    "arm": {
+      "bounded": false,
+      "dedicated_b": true,
+      "tonic_bridges": true
+    },
+    "tick": 4,
+    "moved": true,
+    "representative": {
+      "index": 7,
+      "kind": "Rest",
+      "family": "Rest",
+      "total_logit": 0.015023946762084961
+    },
+    "locomotion": {
+      "index": 1,
+      "kind": "Move",
+      "family": "Approach",
+      "neural_action_readout": -0.18321534991264343,
+      "innate_bias": 0.0,
+      "total_logit": -0.18166393041610718,
+      "id": 101
+    },
+    "competition": [
+      {
+        "index": 1,
+        "id": 101,
+        "family": "Approach",
+        "logit": -0.18166393041610718,
+        "neural": -0.18321534991264343,
+        "p": 0.16016509575205884
+      },
+      {
+        "index": 2,
+        "id": 102,
+        "family": "Avoid",
+        "logit": 1.2156550884246826,
+        "neural": 1.2156550884246826,
+        "p": 0.6477625218365703
+      },
+      {
+        "index": 9,
+        "id": 103,
+        "family": "Approach",
+        "logit": 3.230599531889311e-06,
+        "neural": 3.230599531889311e-06,
+        "p": 0.19207238241137084
+      }
+    ],
+    "rest_logit": 0.015023946762084961,
+    "outcome_tags": [
+      "abi_version",
+      "cognitive_work",
+      "concept_hints",
+      "contradiction_observed",
+      "energy_delta",
+      "frustration_delta",
+      "homeostatic_delta",
+      "joint",
+      "measured_physiology",
+      "memory_hints",
+      "organism_id",
+      "outcome_tick",
+      "pain_delta",
+      "physical",
+      "prediction_error",
+      "reward_valence",
+      "sequence_id",
+      "success",
+      "teacher_feedback"
+    ],
+    "sleeping": false
+  },
+  {
+    "trial": 36,
+    "case": "object_comfortable",
+    "arm": {
+      "bounded": false,
+      "dedicated_b": true,
+      "tonic_bridges": true
+    },
+    "tick": 4,
+    "moved": true,
+    "representative": {
+      "index": 7,
+      "kind": "Rest",
+      "family": "Rest",
+      "total_logit": 0.015023946762084961
+    },
+    "locomotion": {
+      "index": 1,
+      "kind": "Move",
+      "family": "Approach",
+      "neural_action_readout": -0.05786650627851486,
+      "innate_bias": 0.0,
+      "total_logit": -0.05786650627851486,
+      "id": 101
+    },
+    "competition": [
+      {
+        "index": 1,
+        "id": 101,
+        "family": "Approach",
+        "logit": -0.05786650627851486,
+        "neural": -0.05786650627851486,
+        "p": 0.32057889562756275
+      },
+      {
+        "index": 2,
+        "id": 102,
+        "family": "Avoid",
+        "logit": 0.00019786272605415434,
+        "neural": 4.58824274573999e-07,
+        "p": 0.3397441312924833
+      },
+      {
+        "index": 9,
+        "id": 103,
+        "family": "Approach",
+        "logit": 1.7027194587626582e-07,
+        "neural": 1.7027194587626582e-07,
+        "p": 0.33967697307995387
+      }
+    ],
+    "rest_logit": 0.015023946762084961,
+    "outcome_tags": [
+      "abi_version",
+      "cognitive_work",
+      "concept_hints",
+      "contradiction_observed",
+      "energy_delta",
+      "frustration_delta",
+      "homeostatic_delta",
+      "joint",
+      "measured_physiology",
+      "memory_hints",
+      "organism_id",
+      "outcome_tick",
+      "pain_delta",
+      "physical",
+      "prediction_error",
+      "reward_valence",
+      "sequence_id",
+      "success",
+      "teacher_feedback"
+    ],
+    "sleeping": false
+  },
+  {
+    "trial": 37,
+    "case": "object_curious",
+    "arm": {
+      "bounded": false,
+      "dedicated_b": true,
+      "tonic_bridges": true
+    },
+    "tick": 4,
+    "moved": true,
+    "representative": {
+      "index": 7,
+      "kind": "Rest",
+      "family": "Rest",
+      "total_logit": 0.015023946762084961
+    },
+    "locomotion": {
+      "index": 1,
+      "kind": "Move",
+      "family": "Approach",
+      "neural_action_readout": -0.05786650627851486,
+      "innate_bias": 0.0,
+      "total_logit": -0.05786650627851486,
+      "id": 101
+    },
+    "competition": [
+      {
+        "index": 1,
+        "id": 101,
+        "family": "Approach",
+        "logit": -0.05786650627851486,
+        "neural": -0.05786650627851486,
+        "p": 0.3205784653360696
+      },
+      {
+        "index": 2,
+        "id": 102,
+        "family": "Avoid",
+        "logit": 0.00020181344007141888,
+        "neural": 4.588243029957084e-07,
+        "p": 0.33974501750953473
+      },
+      {
+        "index": 9,
+        "id": 103,
+        "family": "Approach",
+        "logit": 1.7027194587626582e-07,
+        "neural": 1.7027194587626582e-07,
+        "p": 0.3396765171543956
+      }
+    ],
+    "rest_logit": 0.015023946762084961,
+    "outcome_tags": [
+      "abi_version",
+      "cognitive_work",
+      "concept_hints",
+      "contradiction_observed",
+      "energy_delta",
+      "frustration_delta",
+      "homeostatic_delta",
+      "joint",
+      "measured_physiology",
+      "memory_hints",
+      "organism_id",
+      "outcome_tick",
+      "pain_delta",
+      "physical",
+      "prediction_error",
+      "reward_valence",
+      "sequence_id",
+      "success",
+      "teacher_feedback"
+    ],
+    "sleeping": false
+  },
+  {
+    "trial": 38,
+    "case": "food_fatigued",
+    "arm": {
+      "bounded": false,
+      "dedicated_b": true,
+      "tonic_bridges": true
+    },
+    "tick": 4,
+    "moved": true,
+    "representative": {
+      "index": 7,
+      "kind": "Rest",
+      "family": "Rest",
+      "total_logit": 0.4014456272125244
+    },
+    "locomotion": {
+      "index": 1,
+      "kind": "Move",
+      "family": "Approach",
+      "neural_action_readout": -0.030070273205637932,
+      "innate_bias": 0.0,
+      "total_logit": -0.030070273205637932,
+      "id": 101
+    },
+    "competition": [
+      {
+        "index": 1,
+        "id": 101,
+        "family": "Approach",
+        "logit": -0.030070273205637932,
+        "neural": -0.030070273205637932,
+        "p": 0.4280452034926969
+      },
+      {
+        "index": 2,
+        "id": 102,
+        "family": "Avoid",
+        "logit": -1.2153059244155884,
+        "neural": -1.2156562805175781,
+        "p": 0.1308423488296054
+      },
+      {
+        "index": 9,
+        "id": 103,
+        "family": "Approach",
+        "logit": 7.474926064787724e-07,
+        "neural": 7.474926064787724e-07,
+        "p": 0.4411124476776977
+      }
+    ],
+    "rest_logit": 0.4014456272125244,
+    "outcome_tags": [
+      "abi_version",
+      "cognitive_work",
+      "concept_hints",
+      "contradiction_observed",
+      "energy_delta",
+      "frustration_delta",
+      "homeostatic_delta",
+      "joint",
+      "measured_physiology",
+      "memory_hints",
+      "organism_id",
+      "outcome_tick",
+      "pain_delta",
+      "physical",
+      "prediction_error",
+      "reward_valence",
+      "sequence_id",
+      "success",
+      "teacher_feedback"
+    ],
+    "sleeping": false
+  },
+  {
+    "trial": 39,
+    "case": "bitter_fatigued",
+    "arm": {
+      "bounded": false,
+      "dedicated_b": true,
+      "tonic_bridges": true
+    },
+    "tick": 4,
+    "moved": true,
+    "representative": {
+      "index": 7,
+      "kind": "Rest",
+      "family": "Rest",
+      "total_logit": 0.4014456272125244
+    },
+    "locomotion": {
+      "index": 1,
+      "kind": "Move",
+      "family": "Approach",
+      "neural_action_readout": -0.17913508415222168,
+      "innate_bias": 0.0,
+      "total_logit": -0.17873145639896393,
+      "id": 101
+    },
+    "competition": [
+      {
+        "index": 1,
+        "id": 101,
+        "family": "Approach",
+        "logit": -0.17873145639896393,
+        "neural": -0.17913508415222168,
+        "p": 0.16055984270978965
+      },
+      {
+        "index": 2,
+        "id": 102,
+        "family": "Avoid",
+        "logit": 1.2156567573547363,
+        "neural": 1.2156567573547363,
+        "p": 0.6474586552286044
+      },
+      {
+        "index": 9,
+        "id": 103,
+        "family": "Approach",
+        "logit": 8.427058446613955e-07,
+        "neural": 8.427058446613955e-07,
+        "p": 0.19198150206160597
+      }
+    ],
+    "rest_logit": 0.4014456272125244,
+    "outcome_tags": [
+      "abi_version",
+      "cognitive_work",
+      "concept_hints",
+      "contradiction_observed",
+      "energy_delta",
+      "frustration_delta",
+      "homeostatic_delta",
+      "joint",
+      "measured_physiology",
+      "memory_hints",
+      "organism_id",
+      "outcome_tick",
+      "pain_delta",
+      "physical",
+      "prediction_error",
+      "reward_valence",
+      "sequence_id",
+      "success",
+      "teacher_feedback"
+    ],
+    "sleeping": false
+  },
+  {
+    "trial": 50,
+    "case": "neutral_comfortable",
+    "arm": {
+      "bounded": true,
+      "dedicated_b": false,
+      "tonic_bridges": true
+    },
+    "tick": 6,
+    "moved": false,
+    "representative": {
+      "index": 1,
+      "kind": "Rest",
+      "family": "Rest",
+      "total_logit": 0.9132986068725586
+    },
+    "locomotion": {
+      "index": 3,
+      "kind": "Move",
+      "family": "Approach",
+      "neural_action_readout": 1.4868001585455204e-07,
+      "innate_bias": 0.0,
+      "total_logit": 9.610884444555268e-05,
+      "id": 103
+    },
+    "competition": [
+      {
+        "index": 3,
+        "id": 103,
+        "family": "Approach",
+        "logit": 9.610884444555268e-05,
+        "neural": 1.4868001585455204e-07,
+        "p": 1.0
+      }
+    ],
+    "rest_logit": 0.9132986068725586,
+    "outcome_tags": [
+      "abi_version",
+      "cognitive_work",
+      "concept_hints",
+      "contradiction_observed",
+      "energy_delta",
+      "frustration_delta",
+      "homeostatic_delta",
+      "joint",
+      "measured_physiology",
+      "memory_hints",
+      "organism_id",
+      "outcome_tick",
+      "pain_delta",
+      "physical",
+      "prediction_error",
+      "reward_valence",
+      "sequence_id",
+      "success",
+      "teacher_feedback"
+    ],
+    "sleeping": true
+  },
+  {
+    "trial": 50,
+    "case": "neutral_comfortable",
+    "arm": {
+      "bounded": true,
+      "dedicated_b": false,
+      "tonic_bridges": true
+    },
+    "tick": 8,
+    "moved": false,
+    "representative": {
+      "index": 1,
+      "kind": "Rest",
+      "family": "Rest",
+      "total_logit": 1.0874717235565186
+    },
+    "locomotion": {
+      "index": 3,
+      "kind": "Move",
+      "family": "Approach",
+      "neural_action_readout": 5.095527058074367e-07,
+      "innate_bias": 0.0,
+      "total_logit": 0.00027818232774734497,
+      "id": 103
+    },
+    "competition": [
+      {
+        "index": 3,
+        "id": 103,
+        "family": "Approach",
+        "logit": 0.00027818232774734497,
+        "neural": 5.095527058074367e-07,
+        "p": 1.0
+      }
+    ],
+    "rest_logit": 1.0874717235565186,
+    "outcome_tags": [
+      "abi_version",
+      "cognitive_work",
+      "concept_hints",
+      "contradiction_observed",
+      "energy_delta",
+      "frustration_delta",
+      "homeostatic_delta",
+      "joint",
+      "measured_physiology",
+      "memory_hints",
+      "organism_id",
+      "outcome_tick",
+      "pain_delta",
+      "physical",
+      "prediction_error",
+      "reward_valence",
+      "sequence_id",
+      "success",
+      "teacher_feedback"
+    ],
+    "sleeping": true
+  },
+  {
+    "trial": 51,
+    "case": "neutral_fatigued",
+    "arm": {
+      "bounded": true,
+      "dedicated_b": false,
+      "tonic_bridges": true
+    },
+    "tick": 6,
+    "moved": false,
+    "representative": {
+      "index": 1,
+      "kind": "Rest",
+      "family": "Rest",
+      "total_logit": 1.3758867979049683
+    },
+    "locomotion": {
+      "index": 3,
+      "kind": "Move",
+      "family": "Approach",
+      "neural_action_readout": 1.5073328540893272e-07,
+      "innate_bias": 0.0,
+      "total_logit": 9.65144790825434e-05,
+      "id": 103
+    },
+    "competition": [
+      {
+        "index": 3,
+        "id": 103,
+        "family": "Approach",
+        "logit": 9.65144790825434e-05,
+        "neural": 1.5073328540893272e-07,
+        "p": 1.0
+      }
+    ],
+    "rest_logit": 1.3758867979049683,
+    "outcome_tags": [
+      "abi_version",
+      "cognitive_work",
+      "concept_hints",
+      "contradiction_observed",
+      "energy_delta",
+      "frustration_delta",
+      "homeostatic_delta",
+      "joint",
+      "measured_physiology",
+      "memory_hints",
+      "organism_id",
+      "outcome_tick",
+      "pain_delta",
+      "physical",
+      "prediction_error",
+      "reward_valence",
+      "sequence_id",
+      "success",
+      "teacher_feedback"
+    ],
+    "sleeping": true
+  },
+  {
+    "trial": 51,
+    "case": "neutral_fatigued",
+    "arm": {
+      "bounded": true,
+      "dedicated_b": false,
+      "tonic_bridges": true
+    },
+    "tick": 8,
+    "moved": false,
+    "representative": {
+      "index": 1,
+      "kind": "Rest",
+      "family": "Rest",
+      "total_logit": 1.550185203552246
+    },
+    "locomotion": {
+      "index": 3,
+      "kind": "Move",
+      "family": "Approach",
+      "neural_action_readout": 5.132297360432858e-07,
+      "innate_bias": 0.0,
+      "total_logit": 0.0002793982857838273,
+      "id": 103
+    },
+    "competition": [
+      {
+        "index": 3,
+        "id": 103,
+        "family": "Approach",
+        "logit": 0.0002793982857838273,
+        "neural": 5.132297360432858e-07,
+        "p": 1.0
+      }
+    ],
+    "rest_logit": 1.550185203552246,
+    "outcome_tags": [
+      "abi_version",
+      "cognitive_work",
+      "concept_hints",
+      "contradiction_observed",
+      "energy_delta",
+      "frustration_delta",
+      "homeostatic_delta",
+      "joint",
+      "measured_physiology",
+      "memory_hints",
+      "organism_id",
+      "outcome_tick",
+      "pain_delta",
+      "physical",
+      "prediction_error",
+      "reward_valence",
+      "sequence_id",
+      "success",
+      "teacher_feedback"
+    ],
+    "sleeping": true
+  },
+  {
+    "trial": 52,
+    "case": "food_comfortable",
+    "arm": {
+      "bounded": true,
+      "dedicated_b": false,
+      "tonic_bridges": true
+    },
+    "tick": 4,
+    "moved": true,
+    "representative": {
+      "index": 7,
+      "kind": "Rest",
+      "family": "Rest",
+      "total_logit": 0.15581360459327698
+    },
+    "locomotion": {
+      "index": 1,
+      "kind": "Move",
+      "family": "Approach",
+      "neural_action_readout": 0.10057985782623291,
+      "innate_bias": 0.0,
+      "total_logit": 0.10057985782623291,
+      "id": 101
+    },
+    "competition": [
+      {
+        "index": 1,
+        "id": 101,
+        "family": "Approach",
+        "logit": 0.10057985782623291,
+        "neural": 0.10057985782623291,
+        "p": 0.4602744605220778
+      },
+      {
+        "index": 2,
+        "id": 102,
+        "family": "Avoid",
+        "logit": -1.2150554656982422,
+        "neural": -1.2156593799591064,
+        "p": 0.12349339110801448
+      },
+      {
+        "index": 9,
+        "id": 103,
+        "family": "Approach",
+        "logit": 4.653701068946248e-08,
+        "neural": 4.653701068946248e-08,
+        "p": 0.4162321483699077
+      }
+    ],
+    "rest_logit": 0.15581360459327698,
+    "outcome_tags": [
+      "abi_version",
+      "cognitive_work",
+      "concept_hints",
+      "contradiction_observed",
+      "energy_delta",
+      "frustration_delta",
+      "homeostatic_delta",
+      "joint",
+      "measured_physiology",
+      "memory_hints",
+      "organism_id",
+      "outcome_tick",
+      "pain_delta",
+      "physical",
+      "prediction_error",
+      "reward_valence",
+      "sequence_id",
+      "success",
+      "teacher_feedback"
+    ],
+    "sleeping": false
+  },
+  {
+    "trial": 53,
+    "case": "food_hungry",
+    "arm": {
+      "bounded": true,
+      "dedicated_b": false,
+      "tonic_bridges": true
+    },
+    "tick": 4,
+    "moved": true,
+    "representative": {
+      "index": 7,
+      "kind": "Rest",
+      "family": "Rest",
+      "total_logit": 0.15581339597702026
+    },
+    "locomotion": {
+      "index": 1,
+      "kind": "Move",
+      "family": "Approach",
+      "neural_action_readout": 0.1462419033050537,
+      "innate_bias": 0.0,
+      "total_logit": 0.1462419033050537,
+      "id": 101
+    },
+    "competition": [
+      {
+        "index": 1,
+        "id": 101,
+        "family": "Approach",
+        "logit": 0.1462419033050537,
+        "neural": 0.1462419033050537,
+        "p": 0.47153683927649775
+      },
+      {
+        "index": 2,
+        "id": 102,
+        "family": "Avoid",
+        "logit": -1.213308334350586,
+        "neural": -1.215653657913208,
+        "p": 0.12107945626652049
+      },
+      {
+        "index": 9,
+        "id": 103,
+        "family": "Approach",
+        "logit": 1.7631647608595813e-07,
+        "neural": 1.7631647608595813e-07,
+        "p": 0.4073837044569818
+      }
+    ],
+    "rest_logit": 0.15581339597702026,
+    "outcome_tags": [
+      "abi_version",
+      "cognitive_work",
+      "concept_hints",
+      "contradiction_observed",
+      "energy_delta",
+      "frustration_delta",
+      "homeostatic_delta",
+      "joint",
+      "measured_physiology",
+      "memory_hints",
+      "organism_id",
+      "outcome_tick",
+      "pain_delta",
+      "physical",
+      "prediction_error",
+      "reward_valence",
+      "sequence_id",
+      "success",
+      "teacher_feedback"
+    ],
+    "sleeping": false
+  },
+  {
+    "trial": 53,
+    "case": "food_hungry",
+    "arm": {
+      "bounded": true,
+      "dedicated_b": false,
+      "tonic_bridges": true
+    },
+    "tick": 8,
+    "moved": false,
+    "representative": {
+      "index": 1,
+      "kind": "Rest",
+      "family": "Rest",
+      "total_logit": 1.0874769687652588
+    },
+    "locomotion": {
+      "index": 3,
+      "kind": "Move",
+      "family": "Approach",
+      "neural_action_readout": 2.0405882423801813e-06,
+      "innate_bias": 0.0,
+      "total_logit": 0.0017112722853198647,
+      "id": 103
+    },
+    "competition": [
+      {
+        "index": 3,
+        "id": 103,
+        "family": "Approach",
+        "logit": 0.0017112722853198647,
+        "neural": 2.0405882423801813e-06,
+        "p": 1.0
+      }
+    ],
+    "rest_logit": 1.0874769687652588,
+    "outcome_tags": [
+      "abi_version",
+      "cognitive_work",
+      "concept_hints",
+      "contradiction_observed",
+      "energy_delta",
+      "frustration_delta",
+      "homeostatic_delta",
+      "joint",
+      "measured_physiology",
+      "memory_hints",
+      "organism_id",
+      "outcome_tick",
+      "pain_delta",
+      "physical",
+      "prediction_error",
+      "reward_valence",
+      "sequence_id",
+      "success",
+      "teacher_feedback"
+    ],
+    "sleeping": true
+  },
+  {
+    "trial": 54,
+    "case": "bitter_comfortable",
+    "arm": {
+      "bounded": true,
+      "dedicated_b": false,
+      "tonic_bridges": true
+    },
+    "tick": 4,
+    "moved": true,
+    "representative": {
+      "index": 7,
+      "kind": "Rest",
+      "family": "Rest",
+      "total_logit": 0.1558135747909546
+    },
+    "locomotion": {
+      "index": 1,
+      "kind": "Move",
+      "family": "Approach",
+      "neural_action_readout": -0.4299437999725342,
+      "innate_bias": 0.0,
+      "total_logit": -0.42954859137535095,
+      "id": 101
+    },
+    "competition": [
+      {
+        "index": 1,
+        "id": 101,
+        "family": "Approach",
+        "logit": -0.42954859137535095,
+        "neural": -0.4299437999725342,
+        "p": 0.12955631143374569
+      },
+      {
+        "index": 2,
+        "id": 102,
+        "family": "Avoid",
+        "logit": 1.2156593799591064,
+        "neural": 1.2156593799591064,
+        "p": 0.6713721446886777
+      },
+      {
+        "index": 9,
+        "id": 103,
+        "family": "Approach",
+        "logit": 6.175968536581422e-08,
+        "neural": 6.175968536581422e-08,
+        "p": 0.19907154387757667
+      }
+    ],
+    "rest_logit": 0.1558135747909546,
+    "outcome_tags": [
+      "abi_version",
+      "cognitive_work",
+      "concept_hints",
+      "contradiction_observed",
+      "energy_delta",
+      "frustration_delta",
+      "homeostatic_delta",
+      "joint",
+      "measured_physiology",
+      "memory_hints",
+      "organism_id",
+      "outcome_tick",
+      "pain_delta",
+      "physical",
+      "prediction_error",
+      "reward_valence",
+      "sequence_id",
+      "success",
+      "teacher_feedback"
+    ],
+    "sleeping": false
+  },
+  {
+    "trial": 55,
+    "case": "bitter_hungry",
+    "arm": {
+      "bounded": true,
+      "dedicated_b": false,
+      "tonic_bridges": true
+    },
+    "tick": 4,
+    "moved": true,
+    "representative": {
+      "index": 7,
+      "kind": "Rest",
+      "family": "Rest",
+      "total_logit": 0.1558130979537964
+    },
+    "locomotion": {
+      "index": 1,
+      "kind": "Move",
+      "family": "Approach",
+      "neural_action_readout": -0.6251294612884521,
+      "innate_bias": 0.0,
+      "total_logit": -0.6235780715942383,
+      "id": 101
+    },
+    "competition": [
+      {
+        "index": 1,
+        "id": 101,
+        "family": "Approach",
+        "logit": -0.6235780715942383,
+        "neural": -0.6251294612884521,
+        "p": 0.10920245310904864
+      },
+      {
+        "index": 2,
+        "id": 102,
+        "family": "Avoid",
+        "logit": 1.2156550884246826,
+        "neural": 1.2156550884246826,
+        "p": 0.6870703491202816
+      },
+      {
+        "index": 9,
+        "id": 103,
+        "family": "Approach",
+        "logit": 2.3405497984185786e-07,
+        "neural": 2.3405497984185786e-07,
+        "p": 0.20372719777066964
+      }
+    ],
+    "rest_logit": 0.1558130979537964,
+    "outcome_tags": [
+      "abi_version",
+      "cognitive_work",
+      "concept_hints",
+      "contradiction_observed",
+      "energy_delta",
+      "frustration_delta",
+      "homeostatic_delta",
+      "joint",
+      "measured_physiology",
+      "memory_hints",
+      "organism_id",
+      "outcome_tick",
+      "pain_delta",
+      "physical",
+      "prediction_error",
+      "reward_valence",
+      "sequence_id",
+      "success",
+      "teacher_feedback"
+    ],
+    "sleeping": false
+  },
+  {
+    "trial": 56,
+    "case": "object_comfortable",
+    "arm": {
+      "bounded": true,
+      "dedicated_b": false,
+      "tonic_bridges": true
+    },
+    "tick": 4,
+    "moved": true,
+    "representative": {
+      "index": 7,
+      "kind": "Rest",
+      "family": "Rest",
+      "total_logit": 0.15581387281417847
+    },
+    "locomotion": {
+      "index": 1,
+      "kind": "Move",
+      "family": "Approach",
+      "neural_action_readout": -0.04863796755671501,
+      "innate_bias": 0.0,
+      "total_logit": -0.04863796755671501,
+      "id": 101
+    },
+    "competition": [
+      {
+        "index": 1,
+        "id": 101,
+        "family": "Approach",
+        "logit": -0.04863796755671501,
+        "neural": -0.04863796755671501,
+        "p": 0.32259228201854884
+      },
+      {
+        "index": 2,
+        "id": 102,
+        "family": "Avoid",
+        "logit": 0.00019786272605415434,
+        "neural": 4.58824274573999e-07,
+        "p": 0.3387373645851639
+      },
+      {
+        "index": 9,
+        "id": 103,
+        "family": "Approach",
+        "logit": 1.6769131860883135e-08,
+        "neural": 1.6769131860883135e-08,
+        "p": 0.3386703533962872
+      }
+    ],
+    "rest_logit": 0.15581387281417847,
+    "outcome_tags": [
+      "abi_version",
+      "cognitive_work",
+      "concept_hints",
+      "contradiction_observed",
+      "energy_delta",
+      "frustration_delta",
+      "homeostatic_delta",
+      "joint",
+      "measured_physiology",
+      "memory_hints",
+      "organism_id",
+      "outcome_tick",
+      "pain_delta",
+      "physical",
+      "prediction_error",
+      "reward_valence",
+      "sequence_id",
+      "success",
+      "teacher_feedback"
+    ],
+    "sleeping": false
+  },
+  {
+    "trial": 57,
+    "case": "object_curious",
+    "arm": {
+      "bounded": true,
+      "dedicated_b": false,
+      "tonic_bridges": true
+    },
+    "tick": 4,
+    "moved": true,
+    "representative": {
+      "index": 7,
+      "kind": "Rest",
+      "family": "Rest",
+      "total_logit": 0.1558135449886322
+    },
+    "locomotion": {
+      "index": 1,
+      "kind": "Move",
+      "family": "Approach",
+      "neural_action_readout": -0.04863789305090904,
+      "innate_bias": 0.0,
+      "total_logit": -0.04863789305090904,
+      "id": 101
+    },
+    "competition": [
+      {
+        "index": 1,
+        "id": 101,
+        "family": "Approach",
+        "logit": -0.04863789305090904,
+        "neural": -0.04863789305090904,
+        "p": 0.322591866589197
+      },
+      {
+        "index": 2,
+        "id": 102,
+        "family": "Avoid",
+        "logit": 0.00020181344007141888,
+        "neural": 4.588243029957084e-07,
+        "p": 0.33873824138183234
+      },
+      {
+        "index": 9,
+        "id": 103,
+        "family": "Approach",
+        "logit": 1.6769135413596814e-08,
+        "neural": 1.6769135413596814e-08,
+        "p": 0.3386698920289707
+      }
+    ],
+    "rest_logit": 0.1558135449886322,
+    "outcome_tags": [
+      "abi_version",
+      "cognitive_work",
+      "concept_hints",
+      "contradiction_observed",
+      "energy_delta",
+      "frustration_delta",
+      "homeostatic_delta",
+      "joint",
+      "measured_physiology",
+      "memory_hints",
+      "organism_id",
+      "outcome_tick",
+      "pain_delta",
+      "physical",
+      "prediction_error",
+      "reward_valence",
+      "sequence_id",
+      "success",
+      "teacher_feedback"
+    ],
+    "sleeping": false
+  },
+  {
+    "trial": 58,
+    "case": "food_fatigued",
+    "arm": {
+      "bounded": true,
+      "dedicated_b": false,
+      "tonic_bridges": true
+    },
+    "tick": 4,
+    "moved": true,
+    "representative": {
+      "index": 7,
+      "kind": "Rest",
+      "family": "Rest",
+      "total_logit": 0.6111437082290649
+    },
+    "locomotion": {
+      "index": 1,
+      "kind": "Move",
+      "family": "Approach",
+      "neural_action_readout": 0.09921824932098389,
+      "innate_bias": 0.0,
+      "total_logit": 0.09921824932098389,
+      "id": 101
+    },
+    "competition": [
+      {
+        "index": 1,
+        "id": 101,
+        "family": "Approach",
+        "logit": 0.09921824932098389,
+        "neural": 0.09921824932098389,
+        "p": 0.4599504574411278
+      },
+      {
+        "index": 2,
+        "id": 102,
+        "family": "Avoid",
+        "logit": -1.2153059244155884,
+        "neural": -1.2156562805175781,
+        "p": 0.12354365911919192
+      },
+      {
+        "index": 9,
+        "id": 103,
+        "family": "Approach",
+        "logit": 5.426569771316281e-08,
+        "neural": 5.426569771316281e-08,
+        "p": 0.4165058834396803
+      }
+    ],
+    "rest_logit": 0.6111437082290649,
+    "outcome_tags": [
+      "abi_version",
+      "cognitive_work",
+      "concept_hints",
+      "contradiction_observed",
+      "energy_delta",
+      "frustration_delta",
+      "homeostatic_delta",
+      "joint",
+      "measured_physiology",
+      "memory_hints",
+      "organism_id",
+      "outcome_tick",
+      "pain_delta",
+      "physical",
+      "prediction_error",
+      "reward_valence",
+      "sequence_id",
+      "success",
+      "teacher_feedback"
+    ],
+    "sleeping": false
+  },
+  {
+    "trial": 58,
+    "case": "food_fatigued",
+    "arm": {
+      "bounded": true,
+      "dedicated_b": false,
+      "tonic_bridges": true
+    },
+    "tick": 8,
+    "moved": false,
+    "representative": {
+      "index": 1,
+      "kind": "Rest",
+      "family": "Rest",
+      "total_logit": 1.5501890182495117
+    },
+    "locomotion": {
+      "index": 3,
+      "kind": "Move",
+      "family": "Approach",
+      "neural_action_readout": 1.9824228729703464e-06,
+      "innate_bias": 0.0,
+      "total_logit": 0.0016686696326360106,
+      "id": 103
+    },
+    "competition": [
+      {
+        "index": 3,
+        "id": 103,
+        "family": "Approach",
+        "logit": 0.0016686696326360106,
+        "neural": 1.9824228729703464e-06,
+        "p": 1.0
+      }
+    ],
+    "rest_logit": 1.5501890182495117,
+    "outcome_tags": [
+      "abi_version",
+      "cognitive_work",
+      "concept_hints",
+      "contradiction_observed",
+      "energy_delta",
+      "frustration_delta",
+      "homeostatic_delta",
+      "joint",
+      "measured_physiology",
+      "memory_hints",
+      "organism_id",
+      "outcome_tick",
+      "pain_delta",
+      "physical",
+      "prediction_error",
+      "reward_valence",
+      "sequence_id",
+      "success",
+      "teacher_feedback"
+    ],
+    "sleeping": true
+  },
+  {
+    "trial": 59,
+    "case": "bitter_fatigued",
+    "arm": {
+      "bounded": true,
+      "dedicated_b": false,
+      "tonic_bridges": true
+    },
+    "tick": 4,
+    "moved": true,
+    "representative": {
+      "index": 7,
+      "kind": "Rest",
+      "family": "Rest",
+      "total_logit": 0.6111437082290649
+    },
+    "locomotion": {
+      "index": 1,
+      "kind": "Move",
+      "family": "Approach",
+      "neural_action_readout": -0.42994314432144165,
+      "innate_bias": 0.0,
+      "total_logit": -0.4295395314693451,
+      "id": 101
+    },
+    "competition": [
+      {
+        "index": 1,
+        "id": 101,
+        "family": "Approach",
+        "logit": -0.4295395314693451,
+        "neural": -0.42994314432144165,
+        "p": 0.12955756124709245
+      },
+      {
+        "index": 2,
+        "id": 102,
+        "family": "Avoid",
+        "logit": 1.2156567573547363,
+        "neural": 1.2156567573547363,
+        "p": 0.6713707779889302
+      },
+      {
+        "index": 9,
+        "id": 103,
+        "family": "Approach",
+        "logit": 6.199631030767705e-08,
+        "neural": 6.199631030767705e-08,
+        "p": 0.19907166076397742
+      }
+    ],
+    "rest_logit": 0.6111437082290649,
+    "outcome_tags": [
+      "abi_version",
+      "cognitive_work",
+      "concept_hints",
+      "contradiction_observed",
+      "energy_delta",
+      "frustration_delta",
+      "homeostatic_delta",
+      "joint",
+      "measured_physiology",
+      "memory_hints",
+      "organism_id",
+      "outcome_tick",
+      "pain_delta",
+      "physical",
+      "prediction_error",
+      "reward_valence",
+      "sequence_id",
+      "success",
+      "teacher_feedback"
+    ],
+    "sleeping": false
+  },
+  {
+    "trial": 70,
+    "case": "neutral_comfortable",
+    "arm": {
+      "bounded": true,
+      "dedicated_b": true,
+      "tonic_bridges": true
+    },
+    "tick": 6,
+    "moved": false,
+    "representative": {
+      "index": 1,
+      "kind": "Rest",
+      "family": "Rest",
+      "total_logit": 0.9132986068725586
+    },
+    "locomotion": {
+      "index": 3,
+      "kind": "Move",
+      "family": "Approach",
+      "neural_action_readout": 1.347445106603118e-07,
+      "innate_bias": 0.0,
+      "total_logit": 9.609491098672152e-05,
+      "id": 103
+    },
+    "competition": [
+      {
+        "index": 3,
+        "id": 103,
+        "family": "Approach",
+        "logit": 9.609491098672152e-05,
+        "neural": 1.347445106603118e-07,
+        "p": 1.0
+      }
+    ],
+    "rest_logit": 0.9132986068725586,
+    "outcome_tags": [
+      "abi_version",
+      "cognitive_work",
+      "concept_hints",
+      "contradiction_observed",
+      "energy_delta",
+      "frustration_delta",
+      "homeostatic_delta",
+      "joint",
+      "measured_physiology",
+      "memory_hints",
+      "organism_id",
+      "outcome_tick",
+      "pain_delta",
+      "physical",
+      "prediction_error",
+      "reward_valence",
+      "sequence_id",
+      "success",
+      "teacher_feedback"
+    ],
+    "sleeping": true
+  },
+  {
+    "trial": 70,
+    "case": "neutral_comfortable",
+    "arm": {
+      "bounded": true,
+      "dedicated_b": true,
+      "tonic_bridges": true
+    },
+    "tick": 8,
+    "moved": false,
+    "representative": {
+      "index": 1,
+      "kind": "Rest",
+      "family": "Rest",
+      "total_logit": 1.0874717235565186
+    },
+    "locomotion": {
+      "index": 3,
+      "kind": "Move",
+      "family": "Approach",
+      "neural_action_readout": 4.575946661589114e-07,
+      "innate_bias": 0.0,
+      "total_logit": 0.0002781303774099797,
+      "id": 103
+    },
+    "competition": [
+      {
+        "index": 3,
+        "id": 103,
+        "family": "Approach",
+        "logit": 0.0002781303774099797,
+        "neural": 4.575946661589114e-07,
+        "p": 1.0
+      }
+    ],
+    "rest_logit": 1.0874717235565186,
+    "outcome_tags": [
+      "abi_version",
+      "cognitive_work",
+      "concept_hints",
+      "contradiction_observed",
+      "energy_delta",
+      "frustration_delta",
+      "homeostatic_delta",
+      "joint",
+      "measured_physiology",
+      "memory_hints",
+      "organism_id",
+      "outcome_tick",
+      "pain_delta",
+      "physical",
+      "prediction_error",
+      "reward_valence",
+      "sequence_id",
+      "success",
+      "teacher_feedback"
+    ],
+    "sleeping": true
+  },
+  {
+    "trial": 71,
+    "case": "neutral_fatigued",
+    "arm": {
+      "bounded": true,
+      "dedicated_b": true,
+      "tonic_bridges": true
+    },
+    "tick": 6,
+    "moved": false,
+    "representative": {
+      "index": 1,
+      "kind": "Rest",
+      "family": "Rest",
+      "total_logit": 1.3758867979049683
+    },
+    "locomotion": {
+      "index": 3,
+      "kind": "Move",
+      "family": "Approach",
+      "neural_action_readout": 1.362714243668961e-07,
+      "innate_bias": 0.0,
+      "total_logit": 9.65000144788064e-05,
+      "id": 103
+    },
+    "competition": [
+      {
+        "index": 3,
+        "id": 103,
+        "family": "Approach",
+        "logit": 9.65000144788064e-05,
+        "neural": 1.362714243668961e-07,
+        "p": 1.0
+      }
+    ],
+    "rest_logit": 1.3758867979049683,
+    "outcome_tags": [
+      "abi_version",
+      "cognitive_work",
+      "concept_hints",
+      "contradiction_observed",
+      "energy_delta",
+      "frustration_delta",
+      "homeostatic_delta",
+      "joint",
+      "measured_physiology",
+      "memory_hints",
+      "organism_id",
+      "outcome_tick",
+      "pain_delta",
+      "physical",
+      "prediction_error",
+      "reward_valence",
+      "sequence_id",
+      "success",
+      "teacher_feedback"
+    ],
+    "sleeping": true
+  },
+  {
+    "trial": 71,
+    "case": "neutral_fatigued",
+    "arm": {
+      "bounded": true,
+      "dedicated_b": true,
+      "tonic_bridges": true
+    },
+    "tick": 8,
+    "moved": false,
+    "representative": {
+      "index": 1,
+      "kind": "Rest",
+      "family": "Rest",
+      "total_logit": 1.550185203552246
+    },
+    "locomotion": {
+      "index": 3,
+      "kind": "Move",
+      "family": "Approach",
+      "neural_action_readout": 4.612133466252999e-07,
+      "innate_bias": 0.0,
+      "total_logit": 0.0002793462772388011,
+      "id": 103
+    },
+    "competition": [
+      {
+        "index": 3,
+        "id": 103,
+        "family": "Approach",
+        "logit": 0.0002793462772388011,
+        "neural": 4.612133466252999e-07,
+        "p": 1.0
+      }
+    ],
+    "rest_logit": 1.550185203552246,
+    "outcome_tags": [
+      "abi_version",
+      "cognitive_work",
+      "concept_hints",
+      "contradiction_observed",
+      "energy_delta",
+      "frustration_delta",
+      "homeostatic_delta",
+      "joint",
+      "measured_physiology",
+      "memory_hints",
+      "organism_id",
+      "outcome_tick",
+      "pain_delta",
+      "physical",
+      "prediction_error",
+      "reward_valence",
+      "sequence_id",
+      "success",
+      "teacher_feedback"
+    ],
+    "sleeping": true
+  },
+  {
+    "trial": 72,
+    "case": "food_comfortable",
+    "arm": {
+      "bounded": true,
+      "dedicated_b": true,
+      "tonic_bridges": true
+    },
+    "tick": 4,
+    "moved": true,
+    "representative": {
+      "index": 7,
+      "kind": "Rest",
+      "family": "Rest",
+      "total_logit": 0.15581360459327698
+    },
+    "locomotion": {
+      "index": 1,
+      "kind": "Move",
+      "family": "Approach",
+      "neural_action_readout": -0.09324014186859131,
+      "innate_bias": 0.0,
+      "total_logit": -0.09324014186859131,
+      "id": 101
+    },
+    "competition": [
+      {
+        "index": 1,
+        "id": 101,
+        "family": "Approach",
+        "logit": -0.09324014186859131,
+        "neural": -0.09324014186859131,
+        "p": 0.4126411130666384
+      },
+      {
+        "index": 2,
+        "id": 102,
+        "family": "Avoid",
+        "logit": -1.2150554656982422,
+        "neural": -1.2156593799591064,
+        "p": 0.1343922705608953
+      },
+      {
+        "index": 9,
+        "id": 103,
+        "family": "Approach",
+        "logit": 4.679957754660791e-08,
+        "neural": 4.679957754660791e-08,
+        "p": 0.4529666163724662
+      }
+    ],
+    "rest_logit": 0.15581360459327698,
+    "outcome_tags": [
+      "abi_version",
+      "cognitive_work",
+      "concept_hints",
+      "contradiction_observed",
+      "energy_delta",
+      "frustration_delta",
+      "homeostatic_delta",
+      "joint",
+      "measured_physiology",
+      "memory_hints",
+      "organism_id",
+      "outcome_tick",
+      "pain_delta",
+      "physical",
+      "prediction_error",
+      "reward_valence",
+      "sequence_id",
+      "success",
+      "teacher_feedback"
+    ],
+    "sleeping": false
+  },
+  {
+    "trial": 73,
+    "case": "food_hungry",
+    "arm": {
+      "bounded": true,
+      "dedicated_b": true,
+      "tonic_bridges": true
+    },
+    "tick": 4,
+    "moved": true,
+    "representative": {
+      "index": 7,
+      "kind": "Rest",
+      "family": "Rest",
+      "total_logit": 0.15581339597702026
+    },
+    "locomotion": {
+      "index": 1,
+      "kind": "Move",
+      "family": "Approach",
+      "neural_action_readout": -0.047577857971191406,
+      "innate_bias": 0.0,
+      "total_logit": -0.047577857971191406,
+      "id": 101
+    },
+    "competition": [
+      {
+        "index": 1,
+        "id": 101,
+        "family": "Approach",
+        "logit": -0.047577857971191406,
+        "neural": -0.047577857971191406,
+        "p": 0.4236528919400638
+      },
+      {
+        "index": 2,
+        "id": 102,
+        "family": "Avoid",
+        "logit": -1.213308334350586,
+        "neural": -1.215653657913208,
+        "p": 0.13205044286301698
+      },
+      {
+        "index": 9,
+        "id": 103,
+        "family": "Approach",
+        "logit": 1.7732679680193542e-07,
+        "neural": 1.7732679680193542e-07,
+        "p": 0.4442966651969193
+      }
+    ],
+    "rest_logit": 0.15581339597702026,
+    "outcome_tags": [
+      "abi_version",
+      "cognitive_work",
+      "concept_hints",
+      "contradiction_observed",
+      "energy_delta",
+      "frustration_delta",
+      "homeostatic_delta",
+      "joint",
+      "measured_physiology",
+      "memory_hints",
+      "organism_id",
+      "outcome_tick",
+      "pain_delta",
+      "physical",
+      "prediction_error",
+      "reward_valence",
+      "sequence_id",
+      "success",
+      "teacher_feedback"
+    ],
+    "sleeping": false
+  },
+  {
+    "trial": 73,
+    "case": "food_hungry",
+    "arm": {
+      "bounded": true,
+      "dedicated_b": true,
+      "tonic_bridges": true
+    },
+    "tick": 8,
+    "moved": false,
+    "representative": {
+      "index": 1,
+      "kind": "Rest",
+      "family": "Rest",
+      "total_logit": 1.0874767303466797
+    },
+    "locomotion": {
+      "index": 3,
+      "kind": "Move",
+      "family": "Approach",
+      "neural_action_readout": 3.295080887255608e-06,
+      "innate_bias": 0.0,
+      "total_logit": 0.0009713241597637534,
+      "id": 103
+    },
+    "competition": [
+      {
+        "index": 3,
+        "id": 103,
+        "family": "Approach",
+        "logit": 0.0009713241597637534,
+        "neural": 3.295080887255608e-06,
+        "p": 1.0
+      }
+    ],
+    "rest_logit": 1.0874767303466797,
+    "outcome_tags": [
+      "abi_version",
+      "cognitive_work",
+      "concept_hints",
+      "contradiction_observed",
+      "energy_delta",
+      "frustration_delta",
+      "homeostatic_delta",
+      "joint",
+      "measured_physiology",
+      "memory_hints",
+      "organism_id",
+      "outcome_tick",
+      "pain_delta",
+      "physical",
+      "prediction_error",
+      "reward_valence",
+      "sequence_id",
+      "success",
+      "teacher_feedback"
+    ],
+    "sleeping": true
+  },
+  {
+    "trial": 74,
+    "case": "bitter_comfortable",
+    "arm": {
+      "bounded": true,
+      "dedicated_b": true,
+      "tonic_bridges": true
+    },
+    "tick": 4,
+    "moved": true,
+    "representative": {
+      "index": 7,
+      "kind": "Rest",
+      "family": "Rest",
+      "total_logit": 0.1558135747909546
+    },
+    "locomotion": {
+      "index": 1,
+      "kind": "Move",
+      "family": "Approach",
+      "neural_action_readout": -0.6237634420394897,
+      "innate_bias": 0.0,
+      "total_logit": -0.6233680248260498,
+      "id": 101
+    },
+    "competition": [
+      {
+        "index": 1,
+        "id": 101,
+        "family": "Approach",
+        "logit": -0.6233680248260498,
+        "neural": -0.6237634420394897,
+        "p": 0.10922260512467373
+      },
+      {
+        "index": 2,
+        "id": 102,
+        "family": "Avoid",
+        "logit": 1.2156589031219482,
+        "neural": 1.2156589031219482,
+        "p": 0.6870554323158004
+      },
+      {
+        "index": 9,
+        "id": 103,
+        "family": "Approach",
+        "logit": 6.22322957610777e-08,
+        "neural": 6.22322957610777e-08,
+        "p": 0.20372196255952593
+      }
+    ],
+    "rest_logit": 0.1558135747909546,
+    "outcome_tags": [
+      "abi_version",
+      "cognitive_work",
+      "concept_hints",
+      "contradiction_observed",
+      "energy_delta",
+      "frustration_delta",
+      "homeostatic_delta",
+      "joint",
+      "measured_physiology",
+      "memory_hints",
+      "organism_id",
+      "outcome_tick",
+      "pain_delta",
+      "physical",
+      "prediction_error",
+      "reward_valence",
+      "sequence_id",
+      "success",
+      "teacher_feedback"
+    ],
+    "sleeping": false
+  },
+  {
+    "trial": 75,
+    "case": "bitter_hungry",
+    "arm": {
+      "bounded": true,
+      "dedicated_b": true,
+      "tonic_bridges": true
+    },
+    "tick": 4,
+    "moved": true,
+    "representative": {
+      "index": 7,
+      "kind": "Rest",
+      "family": "Rest",
+      "total_logit": 0.1558130979537964
+    },
+    "locomotion": {
+      "index": 1,
+      "kind": "Move",
+      "family": "Approach",
+      "neural_action_readout": -0.8189488649368286,
+      "innate_bias": 0.0,
+      "total_logit": -0.8173974752426147,
+      "id": 101
+    },
+    "competition": [
+      {
+        "index": 1,
+        "id": 101,
+        "family": "Approach",
+        "logit": -0.8173974752426147,
+        "neural": -0.8189488649368286,
+        "p": 0.09172659690717105
+      },
+      {
+        "index": 2,
+        "id": 102,
+        "family": "Avoid",
+        "logit": 1.2156550884246826,
+        "neural": 1.2156550884246826,
+        "p": 0.7005494414281976
+      },
+      {
+        "index": 9,
+        "id": 103,
+        "family": "Approach",
+        "logit": 2.35873855558566e-07,
+        "neural": 2.35873855558566e-07,
+        "p": 0.2077239616646314
+      }
+    ],
+    "rest_logit": 0.1558130979537964,
+    "outcome_tags": [
+      "abi_version",
+      "cognitive_work",
+      "concept_hints",
+      "contradiction_observed",
+      "energy_delta",
+      "frustration_delta",
+      "homeostatic_delta",
+      "joint",
+      "measured_physiology",
+      "memory_hints",
+      "organism_id",
+      "outcome_tick",
+      "pain_delta",
+      "physical",
+      "prediction_error",
+      "reward_valence",
+      "sequence_id",
+      "success",
+      "teacher_feedback"
+    ],
+    "sleeping": false
+  },
+  {
+    "trial": 76,
+    "case": "object_comfortable",
+    "arm": {
+      "bounded": true,
+      "dedicated_b": true,
+      "tonic_bridges": true
+    },
+    "tick": 4,
+    "moved": true,
+    "representative": {
+      "index": 7,
+      "kind": "Rest",
+      "family": "Rest",
+      "total_logit": 0.1558137834072113
+    },
+    "locomotion": {
+      "index": 1,
+      "kind": "Move",
+      "family": "Approach",
+      "neural_action_readout": -0.20196989178657532,
+      "innate_bias": 0.0,
+      "total_logit": -0.20177264511585236,
+      "id": 101
+    },
+    "competition": [
+      {
+        "index": 1,
+        "id": 101,
+        "family": "Approach",
+        "logit": -0.20177264511585236,
+        "neural": -0.20196989178657532,
+        "p": 0.29009558995754064
+      },
+      {
+        "index": 2,
+        "id": 102,
+        "family": "Avoid",
+        "logit": 0.0,
+        "neural": 0.0,
+        "p": 0.35495220064049277
+      },
+      {
+        "index": 9,
+        "id": 103,
+        "family": "Approach",
+        "logit": 2.4683531663072245e-08,
+        "neural": 2.4683531663072245e-08,
+        "p": 0.3549522094019667
+      }
+    ],
+    "rest_logit": 0.1558137834072113,
+    "outcome_tags": [
+      "abi_version",
+      "cognitive_work",
+      "concept_hints",
+      "contradiction_observed",
+      "energy_delta",
+      "frustration_delta",
+      "homeostatic_delta",
+      "joint",
+      "measured_physiology",
+      "memory_hints",
+      "organism_id",
+      "outcome_tick",
+      "pain_delta",
+      "physical",
+      "prediction_error",
+      "reward_valence",
+      "sequence_id",
+      "success",
+      "teacher_feedback"
+    ],
+    "sleeping": false
+  },
+  {
+    "trial": 77,
+    "case": "object_curious",
+    "arm": {
+      "bounded": true,
+      "dedicated_b": true,
+      "tonic_bridges": true
+    },
+    "tick": 4,
+    "moved": true,
+    "representative": {
+      "index": 7,
+      "kind": "Rest",
+      "family": "Rest",
+      "total_logit": 0.1558135449886322
+    },
+    "locomotion": {
+      "index": 1,
+      "kind": "Move",
+      "family": "Approach",
+      "neural_action_readout": -0.20196956396102905,
+      "innate_bias": 0.0,
+      "total_logit": -0.20176832377910614,
+      "id": 101
+    },
+    "competition": [
+      {
+        "index": 1,
+        "id": 101,
+        "family": "Approach",
+        "logit": -0.20176832377910614,
+        "neural": -0.20196956396102905,
+        "p": 0.29009647989503606
+      },
+      {
+        "index": 2,
+        "id": 102,
+        "family": "Avoid",
+        "logit": 0.0,
+        "neural": 0.0,
+        "p": 0.3549517556717498
+      },
+      {
+        "index": 9,
+        "id": 103,
+        "family": "Approach",
+        "logit": 2.4683535215785923e-08,
+        "neural": 2.4683535215785923e-08,
+        "p": 0.354951764433214
+      }
+    ],
+    "rest_logit": 0.1558135449886322,
+    "outcome_tags": [
+      "abi_version",
+      "cognitive_work",
+      "concept_hints",
+      "contradiction_observed",
+      "energy_delta",
+      "frustration_delta",
+      "homeostatic_delta",
+      "joint",
+      "measured_physiology",
+      "memory_hints",
+      "organism_id",
+      "outcome_tick",
+      "pain_delta",
+      "physical",
+      "prediction_error",
+      "reward_valence",
+      "sequence_id",
+      "success",
+      "teacher_feedback"
+    ],
+    "sleeping": false
+  },
+  {
+    "trial": 78,
+    "case": "food_fatigued",
+    "arm": {
+      "bounded": true,
+      "dedicated_b": true,
+      "tonic_bridges": true
+    },
+    "tick": 4,
+    "moved": true,
+    "representative": {
+      "index": 7,
+      "kind": "Rest",
+      "family": "Rest",
+      "total_logit": 0.6111437082290649
+    },
+    "locomotion": {
+      "index": 1,
+      "kind": "Move",
+      "family": "Approach",
+      "neural_action_readout": -0.18029510974884033,
+      "innate_bias": 0.0,
+      "total_logit": -0.18029510974884033,
+      "id": 101
+    },
+    "competition": [
+      {
+        "index": 1,
+        "id": 101,
+        "family": "Approach",
+        "logit": -0.18029510974884033,
+        "neural": -0.18029510974884033,
+        "p": 0.3917135049641244
+      },
+      {
+        "index": 2,
+        "id": 102,
+        "family": "Avoid",
+        "logit": -1.2150444984436035,
+        "neural": -1.2156572341918945,
+        "p": 0.13918184690178698
+      },
+      {
+        "index": 9,
+        "id": 103,
+        "family": "Approach",
+        "logit": 4.6254811536527995e-08,
+        "neural": 4.6254811536527995e-08,
+        "p": 0.4691046481340887
+      }
+    ],
+    "rest_logit": 0.6111437082290649,
+    "outcome_tags": [
+      "abi_version",
+      "cognitive_work",
+      "concept_hints",
+      "contradiction_observed",
+      "energy_delta",
+      "frustration_delta",
+      "homeostatic_delta",
+      "joint",
+      "measured_physiology",
+      "memory_hints",
+      "organism_id",
+      "outcome_tick",
+      "pain_delta",
+      "physical",
+      "prediction_error",
+      "reward_valence",
+      "sequence_id",
+      "success",
+      "teacher_feedback"
+    ],
+    "sleeping": false
+  },
+  {
+    "trial": 79,
+    "case": "bitter_fatigued",
+    "arm": {
+      "bounded": true,
+      "dedicated_b": true,
+      "tonic_bridges": true
+    },
+    "tick": 4,
+    "moved": true,
+    "representative": {
+      "index": 7,
+      "kind": "Rest",
+      "family": "Rest",
+      "total_logit": 0.6111437082290649
+    },
+    "locomotion": {
+      "index": 1,
+      "kind": "Move",
+      "family": "Approach",
+      "neural_action_readout": -0.7129577994346619,
+      "innate_bias": 0.0,
+      "total_logit": -0.7125541567802429,
+      "id": 101
+    },
+    "competition": [
+      {
+        "index": 1,
+        "id": 101,
+        "family": "Approach",
+        "logit": -0.7125541567802429,
+        "neural": -0.7129577994346619,
+        "p": 0.10084316490299002
+      },
+      {
+        "index": 2,
+        "id": 102,
+        "family": "Avoid",
+        "logit": 1.2156567573547363,
+        "neural": 1.2156567573547363,
+        "p": 0.6935181433068609
+      },
+      {
+        "index": 9,
+        "id": 103,
+        "family": "Approach",
+        "logit": 6.151631026796167e-08,
+        "neural": 6.151631026796167e-08,
+        "p": 0.20563869179014904
+      }
+    ],
+    "rest_logit": 0.6111437082290649,
+    "outcome_tags": [
+      "abi_version",
+      "cognitive_work",
+      "concept_hints",
+      "contradiction_observed",
+      "energy_delta",
+      "frustration_delta",
+      "homeostatic_delta",
+      "joint",
+      "measured_physiology",
+      "memory_hints",
+      "organism_id",
+      "outcome_tick",
+      "pain_delta",
+      "physical",
+      "prediction_error",
+      "reward_valence",
+      "sequence_id",
+      "success",
+      "teacher_feedback"
+    ],
+    "sleeping": false
+  }
+]
