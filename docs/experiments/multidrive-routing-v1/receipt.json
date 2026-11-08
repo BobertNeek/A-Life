@@ -1,0 +1,33 @@
+{
+  "base_commit": "10eecff46329d74405a8a8ab25f0e4a4c5fb60b1",
+  "backend": "native_cpu_replay",
+  "toolchain": "rustc 1.99.1",
+  "build_config": "jobs1 debug0 incremental0; dev.package.alife_training.opt-level=1",
+  "command": "cargo build/test --locked --offline -p alife_training --features cpu-backend --example probe_multidrive_routing --config profile.dev.package.alife_training.opt-level=1; copy and hash executable before running",
+  "executable_sha256": "e66bbdc13bc237563e20ec0e04641df423fe5077d16859a74fb25f8e0ed47e1f",
+  "raw_results_sha256": "b1e3472f49f8cd84c352039defa75cb657cd45171293c876ef51018024b4f593",
+  "compressed_results_sha256": "cad11ed3d38506fc6d77ace66d48a26089209de8ae37003438c3e311f2b74c8c",
+  "source_sha256": {
+    "crates/alife_training/examples/probe_multidrive_routing.rs": "83697fca2f19cd9035ada9d6733709ec3757cd0b343f74e1d6e27b29e199da40",
+    "crates/alife_training/examples/support/multidrive_frozen.rs": "bee7e25f1340e1278eee9d34395a4fd3bc201bac3a63dc47879c27a5aaa176e4",
+    "crates/alife_training/src/cpu/replay.rs": "9e9aa4bdf4488954a8cb06df860b3332cf615990d3fce362a80a1c3e1bf5db39",
+    "crates/alife_training/src/types.rs": "c9c721ec41857180907fecd73a777e0d2b772f7ca705bbd6a3828ff27d3baf15",
+    "crates/alife_core/src/phenotype/decoder.rs": "7c2c035a87f0f79501343f006251c78108fe5df6c3d873320e85dda18552b543",
+    "crates/alife_core/src/phenotype/topology_compile.rs": "0dea02518a1651b302d03d89a05a415eadf58e8bd8e1c07f8e4c5e7aa65b58ff",
+    "crates/alife_world/src/new_game.rs": "a925cc546e267b83d52cd8c2a000bc41af030d8f404784fb04c981cd009fe2ee"
+  },
+  "tests_passed": 2,
+  "native_evaluations": 144,
+  "exact_input_cut_sequence_checks": 135,
+  "frames_per_evaluation": 64,
+  "native_frames": 9216,
+  "microsteps_per_frame": 4,
+  "world_steps": 0,
+  "training_steps": 0,
+  "preliminary_fixture_comparison": {
+    "reason": "corrected Idle and Rest intrinsic feature basis using production helper",
+    "max_absolute_motor_activation_difference": 0.0,
+    "preliminary_executable_sha256": "d7c2f0dc39234f7f16feac730bb0d77b96855230d9f8dddc775cc117d8575fc8",
+    "published_results": "corrected final only"
+  }
+}

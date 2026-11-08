@@ -1,0 +1,16 @@
+   Compiling alife_training v0.1.0 (/workspace/scratch/ee5e08a3ca9b/multidrive-routing-v1/crates/alife_training)
+    Finished `dev` profile [unoptimized] target(s) in 1m 29s
+   Compiling alife_core v0.1.0 (/workspace/scratch/ee5e08a3ca9b/multidrive-routing-v1/crates/alife_core)
+   Compiling alife_gpu_backend v0.1.0 (/workspace/scratch/ee5e08a3ca9b/multidrive-routing-v1/crates/alife_gpu_backend)
+   Compiling alife_world v0.1.0 (/workspace/scratch/ee5e08a3ca9b/multidrive-routing-v1/crates/alife_world)
+   Compiling sha2 v0.10.9
+   Compiling alife_runtime v0.1.0 (/workspace/scratch/ee5e08a3ca9b/multidrive-routing-v1/crates/alife_runtime)
+   Compiling alife_training v0.1.0 (/workspace/scratch/ee5e08a3ca9b/multidrive-routing-v1/crates/alife_training)
+    Finished `test` profile [unoptimized] target(s) in 9m 18s
+     Running unittests examples/probe_multidrive_routing.rs (/workspace/scratch/ee5e08a3ca9b/multidrive-cpu-target-v1/debug/examples/probe_multidrive_routing-142d7960d940b849)
+
+running 2 tests
+test tests::atp_is_availability_and_idle_rest_remain_candidates ... ok
+test tests::encoder_injects_each_drive_and_cut_is_exact ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.99s
