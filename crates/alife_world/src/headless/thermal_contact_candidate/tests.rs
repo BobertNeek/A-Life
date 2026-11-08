@@ -715,3 +715,55 @@ fn physical_withdrawal_uses_both_thermal_endpoints_and_truthful_once_only_receip
         assert_eq!(biology(&combined).tick, Tick(2));
     }
 }
+
+#[test]
+fn selected_physical_response_does_not_gate_configured_thermal_dose() {
+    for selected in [false, true] {
+        let (mut world, own, surface) = fixture(1.0);
+        let before_position = world.objects[&own.raw()].position;
+        let selected_ids = if selected {
+            BTreeSet::from([OWN.raw()])
+        } else {
+            BTreeSet::new()
+        };
+        let events = BTreeMap::from([(
+            OWN.raw(),
+            BodyEventDelta {
+                damage: 0.4,
+                sleep_recovery: 1.0,
+                ..BodyEventDelta::zero()
+            },
+        )]);
+        let receipt = world
+            .with_thermal_contact_candidate(config(surface), |world| {
+                world.try_advance_tick_with_selected_body_contacts_in_staged_tick(
+                    &events,
+                    &selected_ids,
+                )
+            })
+            .unwrap();
+        assert_eq!(receipt.outcome_tick, Tick(1));
+        assert_eq!(biology(&world).tick, Tick(1));
+        let dose = 0.10 * (1.0 / WORLD_TICKS_PER_SECOND as f32);
+        let tolerance = world
+            .organism_registry
+            .get(OWN)
+            .unwrap()
+            .phenotype()
+            .body
+            .temperature_tolerance;
+        assert!((biology(&world).body.temperature_stress - dose * (1.0 - tolerance)).abs() < 1e-7);
+        if selected {
+            assert_eq!(receipt.responses.len(), 1);
+            let response = &receipt.responses[0];
+            assert_eq!(response.applied_body_event.temperature_stress, dose);
+            assert_eq!(response.applied_body_event.sleep_recovery, 0.0);
+            assert!(response.sleep_recovery_interrupted);
+            assert!(!response.withdrawal.as_ref().unwrap().blocked);
+            assert_ne!(world.objects[&own.raw()].position, before_position);
+        } else {
+            assert!(receipt.responses.is_empty());
+            assert_eq!(world.objects[&own.raw()].position, before_position);
+        }
+    }
+}

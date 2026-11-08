@@ -47,6 +47,8 @@ mod resident_sync_tests;
 pub(crate) mod semantic_prior;
 #[cfg(all(test, feature = "gpu-tests"))]
 mod sleep_atomicity_tests;
+#[cfg(test)]
+mod sleeping_body_contact_tests;
 mod staged_tick;
 use cpu_preparation::{
     preparation_worker_count, prepare_cpu_rows, CapturedCpuPreparation, CapturedLivePreparation,
@@ -58,7 +60,8 @@ pub use semantic_prior::SemanticPriorMetrics;
 
 use appearance::CreatureAppearanceCache;
 use durability_hold::{
-    brain_atp_world_tick_mode, motor_eligible, sleep_recovery_body_event_due, BrainAtpWorldTickMode,
+    brain_atp_world_tick_mode, motor_eligible, sleep_recovery_body_event_due,
+    sleeping_body_contact_due, BrainAtpWorldTickMode,
 };
 use neural_receptor_cache::ResidentNeuralReceptors;
 
@@ -826,9 +829,15 @@ fn advance_and_synchronize_authority(
     residents: &mut BTreeMap<u64, ResidentCognition>,
     tick_after: Tick,
     body_events: &BTreeMap<u64, BodyEventDelta>,
+    sleeping_body_contacts: &BTreeSet<u64>,
 ) -> Result<AuthorityAdvanceTiming, ScaffoldContractError> {
     let world_advance_started = Instant::now();
-    let advanced_tick = world.try_advance_tick_with_body_events_in_staged_tick(body_events)?;
+    let advanced_tick = world
+        .try_advance_tick_with_selected_body_contacts_in_staged_tick(
+            body_events,
+            sleeping_body_contacts,
+        )?
+        .outcome_tick;
     let world_advance_ns = elapsed_ns(world_advance_started);
     if advanced_tick != tick_after {
         return Err(ScaffoldContractError::NonMonotonicTick);
