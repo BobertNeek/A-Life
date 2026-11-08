@@ -1,0 +1,284 @@
+{
+  "kind": "passive_shadow_analysis",
+  "complete_records": 3944,
+  "public_bytes": 37094628,
+  "trailing_incomplete_record": false,
+  "invocation_complete": true,
+  "failure_records": [],
+  "seeds": [
+    {
+      "seed": 2026112401,
+      "life_attempted": true,
+      "preparation_attempted": 600,
+      "preparation_returned": 600,
+      "primary_attempted": 256,
+      "primary_returned": 256,
+      "primary_fully_projected": 256,
+      "decisions_projected": 256,
+      "summary": {
+        "decisions": 256,
+        "kind": "life_complete",
+        "meals_h_s": [
+          1,
+          14
+        ],
+        "preparation_ticks": 600,
+        "primary_steps": 256,
+        "seed": 2026112401,
+        "stop": "tick_budget"
+      },
+      "last_projected_meals_h_s": [
+        1,
+        14
+      ],
+      "min_projected_health": 0.905276358127594,
+      "max_projected_injury": 0.094723641872406,
+      "last_projected_energy": 0.5310254693031311,
+      "operation_engagement": {
+        "h/2201": {
+          "candidates": 178,
+          "nonzero_port": 177,
+          "exact_ingest_bound": 177,
+          "exact_ingest_bound_nonzero": 177,
+          "port_min": -0.2672111988067627,
+          "port_max": 0.0,
+          "effective_coeff53_min": -3.569535692804493e-05,
+          "effective_coeff53_max": 0.0013130134902894497
+        },
+        "s/2201": {
+          "candidates": 25,
+          "nonzero_port": 21,
+          "exact_ingest_bound": 21,
+          "exact_ingest_bound_nonzero": 21,
+          "port_min": 0.0,
+          "port_max": 0.007818900048732758,
+          "effective_coeff53_min": 0.0,
+          "effective_coeff53_max": 0.001260437536984682
+        },
+        "h/2202": {
+          "candidates": 63,
+          "nonzero_port": 63,
+          "exact_ingest_bound": 62,
+          "exact_ingest_bound_nonzero": 62,
+          "port_min": -0.265980064868927,
+          "port_max": -3.619482959038578e-05,
+          "effective_coeff53_min": 0.0,
+          "effective_coeff53_max": 0.00035971886245533824
+        },
+        "s/2202": {
+          "candidates": 27,
+          "nonzero_port": 27,
+          "exact_ingest_bound": 26,
+          "exact_ingest_bound_nonzero": 26,
+          "port_min": 0.002083722734823823,
+          "port_max": 0.008099815808236599,
+          "effective_coeff53_min": 0.0,
+          "effective_coeff53_max": 0.0003542869526427239
+        }
+      },
+      "shadow_gains": {
+        "0.0": {
+          "candidate_scores": 3294,
+          "representative_changes": 0,
+          "motor_bundle_changes": 0,
+          "max_abs_logit_delta": 0.0,
+          "max_abs_probability_delta": 0.0,
+          "memory_cap_candidates": 18
+        },
+        "0.0625": {
+          "candidate_scores": 3294,
+          "representative_changes": 4,
+          "motor_bundle_changes": 4,
+          "max_abs_logit_delta": 0.13360595703125,
+          "max_abs_probability_delta": 0.012384504079818726,
+          "memory_cap_candidates": 18
+        },
+        "0.25": {
+          "candidate_scores": 3294,
+          "representative_changes": 14,
+          "motor_bundle_changes": 14,
+          "max_abs_logit_delta": 0.534423828125,
+          "max_abs_probability_delta": 0.04249407351016998,
+          "memory_cap_candidates": 18
+        },
+        "1.0": {
+          "candidate_scores": 3294,
+          "representative_changes": 45,
+          "motor_bundle_changes": 45,
+          "max_abs_logit_delta": 2.137688159942627,
+          "max_abs_probability_delta": 0.2660583592951298,
+          "memory_cap_candidates": 18
+        },
+        "4.0": {
+          "candidate_scores": 3294,
+          "representative_changes": 83,
+          "motor_bundle_changes": 83,
+          "max_abs_logit_delta": 8.550225019454956,
+          "max_abs_probability_delta": 0.9667630093172193,
+          "memory_cap_candidates": 19
+        }
+      },
+      "actual_physical_counts": {
+        "s/101/success": 19,
+        "h/210/success": 2,
+        "h/acquired": 13,
+        "h/101/success": 187,
+        "h/physical_meal": 1,
+        "h/consumed": 1,
+        "none/212/success": 22,
+        "s/210/success": 28,
+        "s/acquired": 14,
+        "s/physical_meal": 14,
+        "s/consumed": 14,
+        "none/103/success": 41,
+        "none/1/success": 8,
+        "none/3/success": 12,
+        "none/104/success": 8,
+        "h/102/success": 9,
+        "h/4/success": 17,
+        "h/2201/success": 12,
+        "h/placed": 8,
+        "h/2202/success": 4,
+        "h/released": 4
+      }
+    },
+    {
+      "seed": 2026112402,
+      "life_attempted": true,
+      "preparation_attempted": 600,
+      "preparation_returned": 600,
+      "primary_attempted": 256,
+      "primary_returned": 256,
+      "primary_fully_projected": 256,
+      "decisions_projected": 256,
+      "summary": {
+        "decisions": 256,
+        "kind": "life_complete",
+        "meals_h_s": [
+          1,
+          14
+        ],
+        "preparation_ticks": 600,
+        "primary_steps": 256,
+        "seed": 2026112402,
+        "stop": "tick_budget"
+      },
+      "last_projected_meals_h_s": [
+        1,
+        14
+      ],
+      "min_projected_health": 0.905276358127594,
+      "max_projected_injury": 0.094723641872406,
+      "last_projected_energy": 0.5305277705192566,
+      "operation_engagement": {
+        "s/2201": {
+          "candidates": 30,
+          "nonzero_port": 25,
+          "exact_ingest_bound": 25,
+          "exact_ingest_bound_nonzero": 25,
+          "port_min": 0.0,
+          "port_max": 0.00831422209739685,
+          "effective_coeff53_min": 0.0,
+          "effective_coeff53_max": 0.0006352965719997883
+        },
+        "h/2201": {
+          "candidates": 171,
+          "nonzero_port": 169,
+          "exact_ingest_bound": 169,
+          "exact_ingest_bound_nonzero": 169,
+          "port_min": -0.2637666165828705,
+          "port_max": 0.0,
+          "effective_coeff53_min": 0.0,
+          "effective_coeff53_max": 0.0006378338439390063
+        },
+        "h/2202": {
+          "candidates": 70,
+          "nonzero_port": 70,
+          "exact_ingest_bound": 68,
+          "exact_ingest_bound_nonzero": 68,
+          "port_min": -0.26249992847442627,
+          "port_max": -3.690358062158339e-05,
+          "effective_coeff53_min": -7.697742148593534e-06,
+          "effective_coeff53_max": 2.741309435805306e-05
+        },
+        "s/2202": {
+          "candidates": 23,
+          "nonzero_port": 23,
+          "exact_ingest_bound": 22,
+          "exact_ingest_bound_nonzero": 22,
+          "port_min": 0.002669295994564891,
+          "port_max": 0.008312763646245003,
+          "effective_coeff53_min": -1.2611189958988689e-06,
+          "effective_coeff53_max": 2.7857757231686264e-05
+        }
+      },
+      "shadow_gains": {
+        "0.0": {
+          "candidate_scores": 3300,
+          "representative_changes": 0,
+          "motor_bundle_changes": 0,
+          "max_abs_logit_delta": 0.0,
+          "max_abs_probability_delta": 0.0,
+          "memory_cap_candidates": 50
+        },
+        "0.0625": {
+          "candidate_scores": 3300,
+          "representative_changes": 5,
+          "motor_bundle_changes": 5,
+          "max_abs_logit_delta": 0.1318836212158203,
+          "max_abs_probability_delta": 0.011152029037475586,
+          "memory_cap_candidates": 50
+        },
+        "0.25": {
+          "candidate_scores": 3300,
+          "representative_changes": 17,
+          "motor_bundle_changes": 17,
+          "max_abs_logit_delta": 0.5275324583053589,
+          "max_abs_probability_delta": 0.038644224405288696,
+          "memory_cap_candidates": 50
+        },
+        "1.0": {
+          "candidate_scores": 3300,
+          "representative_changes": 39,
+          "motor_bundle_changes": 39,
+          "max_abs_logit_delta": 2.110122799873352,
+          "max_abs_probability_delta": 0.25727224722504616,
+          "memory_cap_candidates": 50
+        },
+        "4.0": {
+          "candidate_scores": 3300,
+          "representative_changes": 85,
+          "motor_bundle_changes": 85,
+          "max_abs_logit_delta": 8.440521836280823,
+          "max_abs_probability_delta": 0.9630130580626428,
+          "memory_cap_candidates": 50
+        }
+      },
+      "actual_physical_counts": {
+        "h/101/success": 171,
+        "none/103/success": 36,
+        "h/210/success": 2,
+        "h/acquired": 11,
+        "s/101/success": 22,
+        "h/physical_meal": 1,
+        "h/consumed": 1,
+        "s/210/success": 29,
+        "s/acquired": 15,
+        "s/physical_meal": 14,
+        "s/consumed": 14,
+        "none/104/success": 7,
+        "none/1/success": 11,
+        "none/3/success": 15,
+        "none/212/success": 10,
+        "h/102/success": 27,
+        "h/4/success": 22,
+        "h/2201/success": 10,
+        "h/placed": 8,
+        "h/2202/success": 2,
+        "h/released": 2,
+        "s/placed": 1,
+        "s/4/success": 1
+      }
+    }
+  ]
+}

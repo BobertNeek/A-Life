@@ -1,0 +1,7452 @@
+{
+  "baseline": {
+    "foundation_digest": [
+      6,
+      115,
+      1,
+      41,
+      169,
+      221,
+      107,
+      73,
+      124,
+      82,
+      20,
+      109,
+      170,
+      169,
+      167,
+      146,
+      153,
+      0,
+      25,
+      248,
+      148,
+      93,
+      202,
+      48,
+      249,
+      140,
+      180,
+      155,
+      251,
+      13,
+      221,
+      36
+    ],
+    "phenotype_hash": [
+      8535977688849242711,
+      11987561303966721416,
+      6277979854689816011,
+      10232681715766559287
+    ],
+    "optimizer_unchanged": true,
+    "scenarios": [
+      {
+        "name": "sated-alert",
+        "consumed": false,
+        "x": 0.719428,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.019999999552965164,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Attempt",
+          "succeeded": false
+        }
+      },
+      {
+        "name": "hungry-alert",
+        "consumed": false,
+        "x": 0.719434,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.019999999552965164,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Attempt",
+          "succeeded": false
+        }
+      },
+      {
+        "name": "sated-tired",
+        "consumed": false,
+        "x": 0.159982,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.019999999552965164,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Attempt",
+          "succeeded": false
+        }
+      },
+      {
+        "name": "hungry-tired",
+        "consumed": false,
+        "x": 0.159983,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.019999999552965164,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Attempt",
+          "succeeded": false
+        }
+      },
+      {
+        "name": "sated-subreflex-tired",
+        "consumed": false,
+        "x": 0.399744,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.019999999552965164,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Attempt",
+          "succeeded": false
+        }
+      },
+      {
+        "name": "sated-no-visible-target",
+        "consumed": false,
+        "x": 0.0,
+        "rest": 1,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Idle",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            "Vocalize",
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            "Vocalize",
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Idle",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Idle",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Idle",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.019999999552965164,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Attempt",
+          "succeeded": false
+        }
+      },
+      {
+        "name": "bored-toy-low",
+        "consumed": false,
+        "x": 0.09979,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.019999999552965164,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Attempt",
+          "succeeded": false
+        }
+      },
+      {
+        "name": "bored-toy-high",
+        "consumed": false,
+        "x": 0.09979,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.019999999552965164,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Attempt",
+          "succeeded": false
+        }
+      },
+      {
+        "name": "curious-calm",
+        "consumed": false,
+        "x": -0.799356,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.029999999329447746,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Preparation",
+          "succeeded": true
+        }
+      },
+      {
+        "name": "curious-afraid",
+        "consumed": false,
+        "x": -0.799356,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.029999999329447746,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Preparation",
+          "succeeded": true
+        }
+      },
+      {
+        "name": "hungry-loose-maxreach",
+        "consumed": false,
+        "x": 0.719434,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.029999999329447746,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Preparation",
+          "succeeded": true
+        }
+      },
+      {
+        "name": "hungry-loose-maxreach-bitter",
+        "consumed": false,
+        "x": -0.719434,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.029999999329447746,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Preparation",
+          "succeeded": true
+        }
+      },
+      {
+        "name": "hungry-held-sweet",
+        "consumed": true,
+        "x": 0.089983,
+        "rest": 3,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            "Vocalize",
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Idle",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": 0.10000000149011612,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.20000000298023224,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Completed",
+          "succeeded": true
+        }
+      },
+      {
+        "name": "hungry-held-bitter",
+        "consumed": false,
+        "x": -8.1e-05,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": 0.10000000149011612,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.20000000298023224,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Completed",
+          "succeeded": true
+        }
+      },
+      {
+        "name": "hungry-blocked-reach",
+        "consumed": false,
+        "x": 0.533825,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.019999999552965164,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Attempt",
+          "succeeded": false
+        }
+      },
+      {
+        "name": "hungry-contact-sweet",
+        "consumed": true,
+        "x": 0.179943,
+        "rest": 3,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Idle",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.029999999329447746,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Preparation",
+          "succeeded": true
+        }
+      },
+      {
+        "name": "hungry-contact-pain",
+        "consumed": true,
+        "x": -4.5e-05,
+        "rest": 3,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Idle",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.029999999329447746,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Preparation",
+          "succeeded": true
+        }
+      }
+    ]
+  },
+  "candidate": {
+    "foundation_digest": [
+      253,
+      83,
+      243,
+      254,
+      245,
+      100,
+      225,
+      200,
+      84,
+      89,
+      227,
+      217,
+      112,
+      90,
+      53,
+      108,
+      243,
+      182,
+      204,
+      152,
+      72,
+      229,
+      128,
+      86,
+      156,
+      197,
+      149,
+      135,
+      2,
+      202,
+      123,
+      207
+    ],
+    "phenotype_hash": [
+      203527734313972215,
+      12017947524775349749,
+      11260235258607381341,
+      8830046397264581643
+    ],
+    "optimizer_unchanged": true,
+    "scenarios": [
+      {
+        "name": "sated-alert",
+        "consumed": false,
+        "x": 0.179765,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            "Vocalize",
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.019999999552965164,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Attempt",
+          "succeeded": false
+        }
+      },
+      {
+        "name": "hungry-alert",
+        "consumed": false,
+        "x": 0.359632,
+        "rest": 1,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.019999999552965164,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Attempt",
+          "succeeded": false
+        }
+      },
+      {
+        "name": "sated-tired",
+        "consumed": false,
+        "x": 0.039998,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            "Vocalize",
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.019999999552965164,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Attempt",
+          "succeeded": false
+        }
+      },
+      {
+        "name": "hungry-tired",
+        "consumed": false,
+        "x": 0.079996,
+        "rest": 1,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.019999999552965164,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Attempt",
+          "succeeded": false
+        }
+      },
+      {
+        "name": "sated-subreflex-tired",
+        "consumed": false,
+        "x": 0.099898,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            "Vocalize",
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.019999999552965164,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Attempt",
+          "succeeded": false
+        }
+      },
+      {
+        "name": "sated-no-visible-target",
+        "consumed": false,
+        "x": 0.0,
+        "rest": 1,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Idle",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            "Vocalize",
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            "Vocalize",
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Idle",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Idle",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Idle",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.019999999552965164,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Attempt",
+          "succeeded": false
+        }
+      },
+      {
+        "name": "bored-toy-low",
+        "consumed": false,
+        "x": 0.199858,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.019999999552965164,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Attempt",
+          "succeeded": false
+        }
+      },
+      {
+        "name": "bored-toy-high",
+        "consumed": false,
+        "x": 0.199858,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.019999999552965164,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Attempt",
+          "succeeded": false
+        }
+      },
+      {
+        "name": "curious-calm",
+        "consumed": false,
+        "x": -0.799356,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.029999999329447746,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Preparation",
+          "succeeded": true
+        }
+      },
+      {
+        "name": "curious-afraid",
+        "consumed": false,
+        "x": -0.799356,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.029999999329447746,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Preparation",
+          "succeeded": true
+        }
+      },
+      {
+        "name": "hungry-loose-maxreach",
+        "consumed": true,
+        "x": 0.0,
+        "rest": 3,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Idle",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.029999999329447746,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Preparation",
+          "succeeded": true
+        }
+      },
+      {
+        "name": "hungry-loose-maxreach-bitter",
+        "consumed": false,
+        "x": -0.719434,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.029999999329447746,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Preparation",
+          "succeeded": true
+        }
+      },
+      {
+        "name": "hungry-held-sweet",
+        "consumed": true,
+        "x": 0.0,
+        "rest": 3,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            "Vocalize",
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Idle",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": 0.10000000149011612,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.20000000298023224,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Completed",
+          "succeeded": true
+        }
+      },
+      {
+        "name": "hungry-held-bitter",
+        "consumed": false,
+        "x": -8.1e-05,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": 0.10000000149011612,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.20000000298023224,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Completed",
+          "succeeded": true
+        }
+      },
+      {
+        "name": "hungry-blocked-reach",
+        "consumed": false,
+        "x": -0.359956,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.019999999552965164,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Attempt",
+          "succeeded": false
+        }
+      },
+      {
+        "name": "hungry-contact-sweet",
+        "consumed": true,
+        "x": 0.0,
+        "rest": 3,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Idle",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.029999999329447746,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Preparation",
+          "succeeded": true
+        }
+      },
+      {
+        "name": "hungry-contact-pain",
+        "consumed": false,
+        "x": -0.199817,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.029999999329447746,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Preparation",
+          "succeeded": true
+        }
+      }
+    ]
+  },
+  "recalibrated": {
+    "foundation_digest": [
+      215,
+      145,
+      60,
+      181,
+      153,
+      224,
+      173,
+      115,
+      168,
+      216,
+      68,
+      168,
+      55,
+      119,
+      78,
+      228,
+      9,
+      27,
+      200,
+      105,
+      50,
+      118,
+      206,
+      217,
+      190,
+      151,
+      23,
+      7,
+      110,
+      103,
+      244,
+      40
+    ],
+    "phenotype_hash": [
+      5083287765798624346,
+      4399079320219046450,
+      11045821423317576798,
+      6327788456980180021
+    ],
+    "optimizer_unchanged": true,
+    "scenarios": [
+      {
+        "name": "sated-alert",
+        "consumed": false,
+        "x": 0.359631,
+        "rest": 1,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.019999999552965164,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Attempt",
+          "succeeded": false
+        }
+      },
+      {
+        "name": "hungry-alert",
+        "consumed": false,
+        "x": 0.449474,
+        "rest": 1,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.019999999552965164,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Attempt",
+          "succeeded": false
+        }
+      },
+      {
+        "name": "sated-tired",
+        "consumed": false,
+        "x": 0.059996,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            "Vocalize",
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.019999999552965164,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Attempt",
+          "succeeded": false
+        }
+      },
+      {
+        "name": "hungry-tired",
+        "consumed": false,
+        "x": 0.099984,
+        "rest": 1,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.019999999552965164,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Attempt",
+          "succeeded": false
+        }
+      },
+      {
+        "name": "sated-subreflex-tired",
+        "consumed": false,
+        "x": 0.19984,
+        "rest": 1,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.019999999552965164,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Attempt",
+          "succeeded": false
+        }
+      },
+      {
+        "name": "sated-no-visible-target",
+        "consumed": false,
+        "x": 0.0,
+        "rest": 1,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Idle",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            "Vocalize",
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            "Vocalize",
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Idle",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Idle",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Idle",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.019999999552965164,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Attempt",
+          "succeeded": false
+        }
+      },
+      {
+        "name": "bored-toy-low",
+        "consumed": false,
+        "x": 1.7e-05,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.019999999552965164,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Attempt",
+          "succeeded": false
+        }
+      },
+      {
+        "name": "bored-toy-high",
+        "consumed": false,
+        "x": 1.7e-05,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.019999999552965164,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Attempt",
+          "succeeded": false
+        }
+      },
+      {
+        "name": "curious-calm",
+        "consumed": false,
+        "x": -0.799356,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.029999999329447746,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Preparation",
+          "succeeded": true
+        }
+      },
+      {
+        "name": "curious-afraid",
+        "consumed": false,
+        "x": -0.799356,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.029999999329447746,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Preparation",
+          "succeeded": true
+        }
+      },
+      {
+        "name": "hungry-loose-maxreach",
+        "consumed": true,
+        "x": 0.359608,
+        "rest": 1,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.029999999329447746,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Preparation",
+          "succeeded": true
+        }
+      },
+      {
+        "name": "hungry-loose-maxreach-bitter",
+        "consumed": false,
+        "x": -0.719434,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.029999999329447746,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Preparation",
+          "succeeded": true
+        }
+      },
+      {
+        "name": "hungry-held-sweet",
+        "consumed": true,
+        "x": 0.0,
+        "rest": 3,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            "Vocalize",
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Idle",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": 0.10000000149011612,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.20000000298023224,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Completed",
+          "succeeded": true
+        }
+      },
+      {
+        "name": "hungry-held-bitter",
+        "consumed": false,
+        "x": -8.1e-05,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": 0.10000000149011612,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.20000000298023224,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Completed",
+          "succeeded": true
+        }
+      },
+      {
+        "name": "hungry-blocked-reach",
+        "consumed": false,
+        "x": 0.179536,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.019999999552965164,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Attempt",
+          "succeeded": false
+        }
+      },
+      {
+        "name": "hungry-contact-sweet",
+        "consumed": true,
+        "x": 0.0,
+        "rest": 3,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Idle",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.029999999329447746,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Preparation",
+          "succeeded": true
+        }
+      },
+      {
+        "name": "hungry-contact-pain",
+        "consumed": false,
+        "x": -0.199908,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.029999999329447746,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Preparation",
+          "succeeded": true
+        }
+      }
+    ]
+  },
+  "geometry": {
+    "foundation_digest": [
+      192,
+      215,
+      221,
+      52,
+      141,
+      2,
+      69,
+      172,
+      114,
+      134,
+      113,
+      67,
+      110,
+      245,
+      224,
+      239,
+      252,
+      166,
+      248,
+      97,
+      161,
+      44,
+      17,
+      192,
+      189,
+      171,
+      228,
+      50,
+      25,
+      224,
+      147,
+      211
+    ],
+    "phenotype_hash": [
+      18022705563217026694,
+      17822038383235699855,
+      4469659082160354642,
+      6880894987145680266
+    ],
+    "optimizer_unchanged": true,
+    "scenarios": [
+      {
+        "name": "sated-alert",
+        "consumed": false,
+        "x": 0.359619,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.019999999552965164,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Attempt",
+          "succeeded": false
+        }
+      },
+      {
+        "name": "hungry-alert",
+        "consumed": false,
+        "x": 0.359566,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.019999999552965164,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Attempt",
+          "succeeded": false
+        }
+      },
+      {
+        "name": "sated-tired",
+        "consumed": false,
+        "x": 0.079998,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Idle",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.019999999552965164,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Attempt",
+          "succeeded": false
+        }
+      },
+      {
+        "name": "hungry-tired",
+        "consumed": false,
+        "x": 0.099983,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            "Vocalize",
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.019999999552965164,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Attempt",
+          "succeeded": false
+        }
+      },
+      {
+        "name": "sated-subreflex-tired",
+        "consumed": false,
+        "x": 0.199835,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.019999999552965164,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Attempt",
+          "succeeded": false
+        }
+      },
+      {
+        "name": "sated-no-visible-target",
+        "consumed": false,
+        "x": 0.0,
+        "rest": 1,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Idle",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            "Vocalize",
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            "Vocalize",
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Idle",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Idle",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Idle",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.019999999552965164,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Attempt",
+          "succeeded": false
+        }
+      },
+      {
+        "name": "bored-toy-low",
+        "consumed": false,
+        "x": 1.7e-05,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.019999999552965164,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Attempt",
+          "succeeded": false
+        }
+      },
+      {
+        "name": "bored-toy-high",
+        "consumed": false,
+        "x": 1.7e-05,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.019999999552965164,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Attempt",
+          "succeeded": false
+        }
+      },
+      {
+        "name": "curious-calm",
+        "consumed": false,
+        "x": -0.799356,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.029999999329447746,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Preparation",
+          "succeeded": true
+        }
+      },
+      {
+        "name": "curious-afraid",
+        "consumed": false,
+        "x": -0.799356,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.029999999329447746,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Preparation",
+          "succeeded": true
+        }
+      },
+      {
+        "name": "hungry-loose-maxreach",
+        "consumed": false,
+        "x": 0.359566,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.029999999329447746,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Preparation",
+          "succeeded": true
+        }
+      },
+      {
+        "name": "hungry-loose-maxreach-bitter",
+        "consumed": false,
+        "x": -0.719434,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.029999999329447746,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Preparation",
+          "succeeded": true
+        }
+      },
+      {
+        "name": "hungry-held-sweet",
+        "consumed": true,
+        "x": 0.0,
+        "rest": 3,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            "Vocalize",
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Idle",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": 0.10000000149011612,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.20000000298023224,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Completed",
+          "succeeded": true
+        }
+      },
+      {
+        "name": "hungry-held-bitter",
+        "consumed": false,
+        "x": -8.1e-05,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": 0.10000000149011612,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.20000000298023224,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Completed",
+          "succeeded": true
+        }
+      },
+      {
+        "name": "hungry-blocked-reach",
+        "consumed": false,
+        "x": 0.179543,
+        "rest": 1,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.019999999552965164,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Attempt",
+          "succeeded": false
+        }
+      },
+      {
+        "name": "hungry-contact-sweet",
+        "consumed": true,
+        "x": 0.0,
+        "rest": 3,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Idle",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.029999999329447746,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Preparation",
+          "succeeded": true
+        }
+      },
+      {
+        "name": "hungry-contact-pain",
+        "consumed": true,
+        "x": -0.100026,
+        "rest": 3,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Idle",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.029999999329447746,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Preparation",
+          "succeeded": true
+        }
+      }
+    ]
+  },
+  "distance": {
+    "foundation_digest": [
+      218,
+      118,
+      40,
+      170,
+      149,
+      25,
+      110,
+      0,
+      6,
+      188,
+      104,
+      178,
+      233,
+      154,
+      190,
+      250,
+      144,
+      47,
+      236,
+      56,
+      146,
+      213,
+      211,
+      52,
+      7,
+      48,
+      88,
+      131,
+      47,
+      140,
+      231,
+      40
+    ],
+    "phenotype_hash": [
+      5268488797843376087,
+      9077851984236681450,
+      2096207383221921489,
+      12017454062491445597
+    ],
+    "optimizer_unchanged": true,
+    "scenarios": [
+      {
+        "name": "sated-alert",
+        "consumed": false,
+        "x": 0.359623,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Idle",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.019999999552965164,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Attempt",
+          "succeeded": false
+        }
+      },
+      {
+        "name": "hungry-alert",
+        "consumed": false,
+        "x": 0.359566,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.019999999552965164,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Attempt",
+          "succeeded": false
+        }
+      },
+      {
+        "name": "sated-tired",
+        "consumed": false,
+        "x": 0.079999,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Idle",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Idle",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.019999999552965164,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Attempt",
+          "succeeded": false
+        }
+      },
+      {
+        "name": "hungry-tired",
+        "consumed": false,
+        "x": 0.099983,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            "Vocalize",
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.019999999552965164,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Attempt",
+          "succeeded": false
+        }
+      },
+      {
+        "name": "sated-subreflex-tired",
+        "consumed": false,
+        "x": 0.199837,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Idle",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.019999999552965164,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Attempt",
+          "succeeded": false
+        }
+      },
+      {
+        "name": "sated-no-visible-target",
+        "consumed": false,
+        "x": 0.0,
+        "rest": 1,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Idle",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            "Vocalize",
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            "Vocalize",
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Idle",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Idle",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Idle",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.019999999552965164,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Attempt",
+          "succeeded": false
+        }
+      },
+      {
+        "name": "bored-toy-low",
+        "consumed": false,
+        "x": 1.7e-05,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.019999999552965164,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Attempt",
+          "succeeded": false
+        }
+      },
+      {
+        "name": "bored-toy-high",
+        "consumed": false,
+        "x": 1.7e-05,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.019999999552965164,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Attempt",
+          "succeeded": false
+        }
+      },
+      {
+        "name": "curious-calm",
+        "consumed": false,
+        "x": -0.799356,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.029999999329447746,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Preparation",
+          "succeeded": true
+        }
+      },
+      {
+        "name": "curious-afraid",
+        "consumed": false,
+        "x": -0.799356,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.029999999329447746,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Preparation",
+          "succeeded": true
+        }
+      },
+      {
+        "name": "hungry-loose-maxreach",
+        "consumed": false,
+        "x": 0.359566,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.029999999329447746,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Preparation",
+          "succeeded": true
+        }
+      },
+      {
+        "name": "hungry-loose-maxreach-bitter",
+        "consumed": false,
+        "x": -0.719434,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.029999999329447746,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Preparation",
+          "succeeded": true
+        }
+      },
+      {
+        "name": "hungry-held-sweet",
+        "consumed": true,
+        "x": 0.0,
+        "rest": 3,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            "Vocalize",
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Idle",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": 0.10000000149011612,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.20000000298023224,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Completed",
+          "succeeded": true
+        }
+      },
+      {
+        "name": "hungry-held-bitter",
+        "consumed": false,
+        "x": -8.1e-05,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": 0.10000000149011612,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.20000000298023224,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Completed",
+          "succeeded": true
+        }
+      },
+      {
+        "name": "hungry-blocked-reach",
+        "consumed": false,
+        "x": 0.179543,
+        "rest": 1,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.019999999552965164,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Attempt",
+          "succeeded": false
+        }
+      },
+      {
+        "name": "hungry-contact-sweet",
+        "consumed": true,
+        "x": 0.0,
+        "rest": 3,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Idle",
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Rest",
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.029999999329447746,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Preparation",
+          "succeeded": true
+        }
+      },
+      {
+        "name": "hungry-contact-pain",
+        "consumed": false,
+        "x": -0.199908,
+        "rest": 0,
+        "selected": [
+          [
+            "Move",
+            null,
+            null,
+            null,
+            "Inspect",
+            null
+          ],
+          [
+            "Move",
+            null,
+            "Interact",
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ],
+          [
+            "Move",
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        ],
+        "physical_control": {
+          "body_event": {
+            "damage": 0.0,
+            "energy": -0.029999999329447746,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "phase": "Preparation",
+          "succeeded": true
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,23 @@
+# v3 prospective passive operating-point probe
+
+Status: implementation; no seed allocated or native life invoked yet.
+
+Question: Does the operation ingestion-value port engage under real policy-generated memories, and how do the five predeclared gains change same-state scores/probabilities? This is not an efficacy test, learning improvement claim, or candidate promotion.
+
+Exactly two proposed fresh identities:2026112401 and2026112402. Curated source/public plan/as-run scan found only v1 notes explicitly saying unallocated. Biological-drive worker confirmed no overlap; its only constructor seed is2026110901. Parent coordination still precedes reservation. No old22xx/23xx/PR300 lives/checkpoints may be read or restarted.
+
+One fixed inherited reader-OFF genotype/interface, reconstructed with constructor seed2026110901 on common profile4/schema3/stride54 explicit Close/Release and merged atomic-swap world. The standard scene is copied from completed v5: two resources at(.35,0,±.35), nutrition.05, H ingestion pain.35, respawn16/lifetime512, fixed colors, initial energy.4, harmful location counterbalanced by the two scene identities. That energy is initial scene construction, not intervention during a life. No teacher, forced meals, sleep requests, adaptive horizons, or state edits after construction.
+
+Per life: exactly600 world-only preparation ticks;≤256 primary host steps at temperature1.0, ordinary sleep/learning. Stop on death, health<.70, injury>.25, or third physical harmful meal. No extensions if harmful memory fails to arise. All prep/step attempts and returns are logged before/after, with partial-prefix accounting on failure. One native invocation only; no repeats of uncertain/failed exposure.
+
+At each actual returned decision: clone only its in-memory replay inputs, predecision neural starting state, and actual acquired effective offsets. Independently compiled shadow trainers differ genetically only at16 Contact/Other lane53 coefficients, with gains{0,1/16,1/4,1,4}. The same instantaneous acquired offsets are retained across all arms, not recomputed under imagined alternate histories. No shadow trainer, action or weights are inserted into the host. Baseline shadow joint selection must byte-match actual representative/motor choices using the recorded native RNG counter. All variant final recurrent outputs must match OFF, because only direct decoder coefficients differ. Fail closed on mismatch.
+
+Before/after every projection/replay, serialize the internally generated host checkpoint and live/shadow trainer checkpoints in memory and require byte equality. Do not write them out. Record only finite allowlisted per-candidate scalars: input53, target25/26, family32, direct memory raw/clamped, operation/target/family contributions, ActionCandidate and innate components, inherited/effective aggregate coefficients, native logits, representative/motor conditional probabilities, instantaneous same-draw selections, source confidence/sequence/known-Ingest/exact-consumption/target binding, physical heldness/reach, and actual receipt outcomes. No whole bank, optimizer, weight array, neural state, or checkpoint is output. Offsets after each actual life step are not reused for a different time; replay uses the exact preaction offsets captured by that decision.
+
+The qualified v5 transient swap-audit API is transplanted without behavior changes onto v2 source, retaining combined grip atomic-swap tests. We do not use old lives. Passive source design is read-only; fresh in-memory equality assertions exercise every shadow projection. Only detached helper checks and compile/lint run before the2 life invocation, not extra host rollouts.
+
+Bounds:≤2lives,1200 preparation returns,512 primary returns,≤512 decisions,≤32 candidates/decision,5 gains/decision. Public NDJSON≤64MiB total,≤512KiB/record, native wallclock≤30minutes. Closed failure codes only. External runner records exact executable/source/plan identity, reserves allocation before dispatch, and retains partial outputs. Existing v1/v2 bytes remain unchanged.
+
+Interpretation: two sampling identities of one fixed brain are not independent brains/generalization. Counterfactual same-state logits/choices are not alternate physical futures. Learned offsets may override inherited bounds. A gain’s score change alone is not a reason to promote it; harmful-to-eat handling can remain useful. Compare naturally observed operating margins, actual meals and physical costs, not pickup count alone. No invented task labels are introduced.
+
+Method reference: https://rikiyat.github.io/blog/weight-space-programming/ . Iterative feedback motivates testing a missing evidence link; feedforward game results do not validate this recurrent organism.

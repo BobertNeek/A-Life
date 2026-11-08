@@ -1,0 +1,789 @@
+[
+  {
+    "seed": 2026112401,
+    "primary_step": 41,
+    "off_representative": 9,
+    "shadow_representative": 10,
+    "off_motor_indices": [
+      9,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "shadow_motor_indices": [
+      1,
+      null,
+      10,
+      null,
+      null,
+      null
+    ],
+    "selected_candidates": [
+      {
+        "index": 1,
+        "action": 101,
+        "name": "APPROACH",
+        "target": "h",
+        "held": false,
+        "grasp_reachable": true,
+        "input53": 0.0,
+        "off_logit": 1.8821947574615479,
+        "shadow_logit": 1.8821947574615479,
+        "off_representative_probability": 0.44763705134391785,
+        "shadow_representative_probability": 0.45269575715065
+      },
+      {
+        "index": 9,
+        "action": 103,
+        "name": "NO_LOCOMOTION",
+        "target": "none",
+        "held": false,
+        "grasp_reachable": null,
+        "input53": 0.0,
+        "off_logit": 0.0028739431872963905,
+        "shadow_logit": 0.0028739431872963905,
+        "off_representative_probability": 0.0683513879776001,
+        "shadow_representative_probability": 0.06912382692098618
+      },
+      {
+        "index": 10,
+        "action": 212,
+        "name": "NO_MANIPULATION",
+        "target": "none",
+        "held": false,
+        "grasp_reachable": null,
+        "input53": 0.0,
+        "off_logit": -0.4543794095516205,
+        "shadow_logit": -0.4543794095516205,
+        "off_representative_probability": 0.04326779767870903,
+        "shadow_representative_probability": 0.04375676438212395
+      }
+    ],
+    "actual_off_physical": [
+      {
+        "action": 103,
+        "contact_consumed": false,
+        "displacement": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "succeeded": true,
+        "target": "none",
+        "transfers": []
+      }
+    ],
+    "safe_eat_candidates": []
+  },
+  {
+    "seed": 2026112401,
+    "primary_step": 125,
+    "off_representative": 6,
+    "shadow_representative": 5,
+    "off_motor_indices": [
+      1,
+      null,
+      null,
+      null,
+      6,
+      null
+    ],
+    "shadow_motor_indices": [
+      1,
+      null,
+      5,
+      null,
+      null,
+      null
+    ],
+    "selected_candidates": [
+      {
+        "index": 1,
+        "action": 101,
+        "name": "APPROACH",
+        "target": "h",
+        "held": true,
+        "grasp_reachable": true,
+        "input53": 0.0,
+        "off_logit": 1.7696889638900757,
+        "shadow_logit": 1.7696889638900757,
+        "off_representative_probability": 0.4148903489112854,
+        "shadow_representative_probability": 0.41232946515083313
+      },
+      {
+        "index": 5,
+        "action": 213,
+        "name": "PLAY",
+        "target": "h",
+        "held": true,
+        "grasp_reachable": true,
+        "input53": 0.0,
+        "off_logit": -0.3161369264125824,
+        "shadow_logit": -0.3161369264125824,
+        "off_representative_probability": 0.051531244069337845,
+        "shadow_representative_probability": 0.05121317133307457
+      },
+      {
+        "index": 6,
+        "action": 1,
+        "name": "IDLE",
+        "target": "none",
+        "held": false,
+        "grasp_reachable": null,
+        "input53": 0.0,
+        "off_logit": -0.3121492266654968,
+        "shadow_logit": -0.3121492266654968,
+        "off_representative_probability": 0.05173715204000473,
+        "shadow_representative_probability": 0.05141780897974968
+      }
+    ],
+    "actual_off_physical": [
+      {
+        "action": 101,
+        "contact_consumed": false,
+        "displacement": [
+          -0.02972632646560669,
+          0.0,
+          -0.02972632646560669
+        ],
+        "succeeded": true,
+        "target": "h",
+        "transfers": []
+      },
+      {
+        "action": 1,
+        "contact_consumed": false,
+        "displacement": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "succeeded": true,
+        "target": "none",
+        "transfers": []
+      }
+    ],
+    "safe_eat_candidates": []
+  },
+  {
+    "seed": 2026112401,
+    "primary_step": 206,
+    "off_representative": 4,
+    "shadow_representative": 5,
+    "off_motor_indices": [
+      1,
+      null,
+      4,
+      null,
+      null,
+      null
+    ],
+    "shadow_motor_indices": [
+      1,
+      null,
+      5,
+      null,
+      null,
+      null
+    ],
+    "selected_candidates": [
+      {
+        "index": 1,
+        "action": 101,
+        "name": "APPROACH",
+        "target": "h",
+        "held": false,
+        "grasp_reachable": true,
+        "input53": 0.0,
+        "off_logit": 1.7368735074996948,
+        "shadow_logit": 1.7368735074996948,
+        "off_representative_probability": 0.3719326853752136,
+        "shadow_representative_probability": 0.37700995802879333
+      },
+      {
+        "index": 4,
+        "action": 2201,
+        "name": "CLOSE",
+        "target": "h",
+        "held": false,
+        "grasp_reachable": true,
+        "input53": -0.2626161277294159,
+        "off_logit": 0.5135639905929565,
+        "shadow_logit": 0.38225647807121277,
+        "off_representative_probability": 0.10944294929504395,
+        "shadow_representative_probability": 0.09728595614433289
+      },
+      {
+        "index": 5,
+        "action": 213,
+        "name": "PLAY",
+        "target": "h",
+        "held": false,
+        "grasp_reachable": true,
+        "input53": 0.0,
+        "off_logit": -0.2458229959011078,
+        "shadow_logit": -0.2458229959011078,
+        "off_representative_probability": 0.051214177161455154,
+        "shadow_representative_probability": 0.0519133023917675
+      }
+    ],
+    "actual_off_physical": [
+      {
+        "action": 101,
+        "contact_consumed": false,
+        "displacement": [
+          0.030049622058868408,
+          0.0,
+          0.030049622058868408
+        ],
+        "succeeded": true,
+        "target": "h",
+        "transfers": []
+      },
+      {
+        "action": 2201,
+        "contact_consumed": false,
+        "displacement": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "succeeded": true,
+        "target": "h",
+        "transfers": [
+          {
+            "kind": "acquired",
+            "target": "h"
+          }
+        ]
+      }
+    ],
+    "safe_eat_candidates": []
+  },
+  {
+    "seed": 2026112401,
+    "primary_step": 244,
+    "off_representative": 5,
+    "shadow_representative": 4,
+    "off_motor_indices": [
+      1,
+      null,
+      5,
+      null,
+      null,
+      null
+    ],
+    "shadow_motor_indices": [
+      1,
+      null,
+      4,
+      null,
+      null,
+      null
+    ],
+    "selected_candidates": [
+      {
+        "index": 1,
+        "action": 101,
+        "name": "APPROACH",
+        "target": "h",
+        "held": true,
+        "grasp_reachable": true,
+        "input53": 0.0,
+        "off_logit": 1.723607063293457,
+        "shadow_logit": 1.723607063293457,
+        "off_representative_probability": 0.38471588492393494,
+        "shadow_representative_probability": 0.38219621777534485
+      },
+      {
+        "index": 4,
+        "action": 2202,
+        "name": "RELEASE",
+        "target": "h",
+        "held": true,
+        "grasp_reachable": true,
+        "input53": -0.22609765827655792,
+        "off_logit": -0.22007066011428833,
+        "shadow_logit": -0.10702189058065414,
+        "off_representative_probability": 0.05508224293589592,
+        "shadow_representative_probability": 0.061270907521247864
+      },
+      {
+        "index": 5,
+        "action": 213,
+        "name": "PLAY",
+        "target": "h",
+        "held": true,
+        "grasp_reachable": true,
+        "input53": 0.0,
+        "off_logit": -0.20692473649978638,
+        "shadow_logit": -0.20692473649978638,
+        "off_representative_probability": 0.05581113323569298,
+        "shadow_representative_probability": 0.055445607751607895
+      }
+    ],
+    "actual_off_physical": [
+      {
+        "action": 101,
+        "contact_consumed": false,
+        "displacement": [
+          -0.030250072479248047,
+          0.0,
+          -0.030250072479248047
+        ],
+        "succeeded": true,
+        "target": "h",
+        "transfers": []
+      },
+      {
+        "action": 213,
+        "contact_consumed": false,
+        "displacement": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "succeeded": false,
+        "target": "h",
+        "transfers": []
+      }
+    ],
+    "safe_eat_candidates": []
+  },
+  {
+    "seed": 2026112402,
+    "primary_step": 55,
+    "off_representative": 6,
+    "shadow_representative": 7,
+    "off_motor_indices": [
+      1,
+      null,
+      null,
+      null,
+      6,
+      null
+    ],
+    "shadow_motor_indices": [
+      1,
+      null,
+      null,
+      null,
+      7,
+      null
+    ],
+    "selected_candidates": [
+      {
+        "index": 1,
+        "action": 101,
+        "name": "APPROACH",
+        "target": "h",
+        "held": false,
+        "grasp_reachable": true,
+        "input53": 0.0,
+        "off_logit": 1.7546274662017822,
+        "shadow_logit": 1.7546274662017822,
+        "off_representative_probability": 0.4093177020549774,
+        "shadow_representative_probability": 0.4143039286136627
+      },
+      {
+        "index": 6,
+        "action": 1,
+        "name": "IDLE",
+        "target": "none",
+        "held": false,
+        "grasp_reachable": null,
+        "input53": 0.0,
+        "off_logit": -0.42205724120140076,
+        "shadow_logit": -0.42205724120140076,
+        "off_representative_probability": 0.04642355814576149,
+        "shadow_representative_probability": 0.0469890758395195
+      },
+      {
+        "index": 7,
+        "action": 3,
+        "name": "REST",
+        "target": "none",
+        "held": false,
+        "grasp_reachable": null,
+        "input53": 0.0,
+        "off_logit": 0.010315586812794209,
+        "shadow_logit": 0.010315586812794209,
+        "off_representative_probability": 0.07153449207544327,
+        "shadow_representative_probability": 0.07240591198205948
+      }
+    ],
+    "actual_off_physical": [
+      {
+        "action": 101,
+        "contact_consumed": false,
+        "displacement": [
+          -0.023052014410495758,
+          0.0,
+          0.03430385887622833
+        ],
+        "succeeded": true,
+        "target": "h",
+        "transfers": []
+      },
+      {
+        "action": 1,
+        "contact_consumed": false,
+        "displacement": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "succeeded": true,
+        "target": "none",
+        "transfers": []
+      }
+    ],
+    "safe_eat_candidates": []
+  },
+  {
+    "seed": 2026112402,
+    "primary_step": 98,
+    "off_representative": 13,
+    "shadow_representative": 10,
+    "off_motor_indices": [
+      10,
+      null,
+      13,
+      null,
+      null,
+      null
+    ],
+    "shadow_motor_indices": [
+      10,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "selected_candidates": [
+      {
+        "index": 10,
+        "action": 101,
+        "name": "APPROACH",
+        "target": "h",
+        "held": false,
+        "grasp_reachable": true,
+        "input53": 0.0,
+        "off_logit": 4.936100959777832,
+        "shadow_logit": 4.936100959777832,
+        "off_representative_probability": 0.5884085297584534,
+        "shadow_representative_probability": 0.5888091325759888
+      },
+      {
+        "index": 13,
+        "action": 2201,
+        "name": "CLOSE",
+        "target": "h",
+        "held": false,
+        "grasp_reachable": true,
+        "input53": -0.22485171258449554,
+        "off_logit": 0.40203359723091125,
+        "shadow_logit": 0.2896074056625366,
+        "off_representative_probability": 0.006317694205790758,
+        "shadow_representative_probability": 0.00564973521977663
+      }
+    ],
+    "actual_off_physical": [
+      {
+        "action": 101,
+        "contact_consumed": false,
+        "displacement": [
+          -0.04149472713470459,
+          0.0,
+          0.0
+        ],
+        "succeeded": true,
+        "target": "h",
+        "transfers": []
+      },
+      {
+        "action": 2201,
+        "contact_consumed": false,
+        "displacement": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "succeeded": true,
+        "target": "h",
+        "transfers": [
+          {
+            "kind": "placed",
+            "target": "s"
+          },
+          {
+            "kind": "acquired",
+            "target": "h"
+          }
+        ]
+      }
+    ],
+    "safe_eat_candidates": [
+      {
+        "index": 3,
+        "off_logit": 4.382791042327881,
+        "shadow_logit": 4.382791042327881,
+        "off_probability": 0.33836039900779724,
+        "shadow_probability": 0.3385907709598541
+      }
+    ]
+  },
+  {
+    "seed": 2026112402,
+    "primary_step": 107,
+    "off_representative": 4,
+    "shadow_representative": 1,
+    "off_motor_indices": [
+      1,
+      null,
+      4,
+      null,
+      null,
+      null
+    ],
+    "shadow_motor_indices": [
+      1,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "selected_candidates": [
+      {
+        "index": 1,
+        "action": 101,
+        "name": "APPROACH",
+        "target": "h",
+        "held": false,
+        "grasp_reachable": true,
+        "input53": 0.0,
+        "off_logit": 1.735913872718811,
+        "shadow_logit": 1.735913872718811,
+        "off_representative_probability": 0.3905903697013855,
+        "shadow_representative_probability": 0.39519959688186646
+      },
+      {
+        "index": 4,
+        "action": 2201,
+        "name": "CLOSE",
+        "target": "h",
+        "held": false,
+        "grasp_reachable": true,
+        "input53": -0.23737990856170654,
+        "off_logit": 0.41468483209609985,
+        "shadow_logit": 0.2959944009780884,
+        "off_representative_probability": 0.10421232134103775,
+        "shadow_representative_probability": 0.09364129602909088
+      }
+    ],
+    "actual_off_physical": [
+      {
+        "action": 101,
+        "contact_consumed": false,
+        "displacement": [
+          -0.041779279708862305,
+          0.0,
+          0.0
+        ],
+        "succeeded": true,
+        "target": "h",
+        "transfers": []
+      },
+      {
+        "action": 2201,
+        "contact_consumed": false,
+        "displacement": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "succeeded": true,
+        "target": "h",
+        "transfers": [
+          {
+            "kind": "acquired",
+            "target": "h"
+          }
+        ]
+      }
+    ],
+    "safe_eat_candidates": []
+  },
+  {
+    "seed": 2026112402,
+    "primary_step": 148,
+    "off_representative": 9,
+    "shadow_representative": 10,
+    "off_motor_indices": [
+      9,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "shadow_motor_indices": [
+      1,
+      null,
+      10,
+      null,
+      null,
+      null
+    ],
+    "selected_candidates": [
+      {
+        "index": 1,
+        "action": 101,
+        "name": "APPROACH",
+        "target": "h",
+        "held": false,
+        "grasp_reachable": true,
+        "input53": 0.0,
+        "off_logit": 1.804985761642456,
+        "shadow_logit": 1.804985761642456,
+        "off_representative_probability": 0.39964786171913147,
+        "shadow_representative_probability": 0.4043048322200775
+      },
+      {
+        "index": 9,
+        "action": 103,
+        "name": "NO_LOCOMOTION",
+        "target": "none",
+        "held": false,
+        "grasp_reachable": null,
+        "input53": 0.0,
+        "off_logit": -0.04062968119978905,
+        "shadow_logit": -0.04062968119978905,
+        "off_representative_probability": 0.06311563402414322,
+        "shadow_representative_probability": 0.06385109573602676
+      },
+      {
+        "index": 10,
+        "action": 212,
+        "name": "NO_MANIPULATION",
+        "target": "none",
+        "held": false,
+        "grasp_reachable": null,
+        "input53": 0.0,
+        "off_logit": -0.3064928352832794,
+        "shadow_logit": -0.3064928352832794,
+        "off_representative_probability": 0.048380907624959946,
+        "shadow_representative_probability": 0.04894467443227768
+      }
+    ],
+    "actual_off_physical": [
+      {
+        "action": 103,
+        "contact_consumed": false,
+        "displacement": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "succeeded": true,
+        "target": "none",
+        "transfers": []
+      }
+    ],
+    "safe_eat_candidates": []
+  },
+  {
+    "seed": 2026112402,
+    "primary_step": 174,
+    "off_representative": 7,
+    "shadow_representative": 6,
+    "off_motor_indices": [
+      1,
+      null,
+      null,
+      null,
+      7,
+      null
+    ],
+    "shadow_motor_indices": [
+      1,
+      null,
+      null,
+      null,
+      6,
+      null
+    ],
+    "selected_candidates": [
+      {
+        "index": 1,
+        "action": 101,
+        "name": "APPROACH",
+        "target": "h",
+        "held": true,
+        "grasp_reachable": true,
+        "input53": 0.0,
+        "off_logit": 1.7213003635406494,
+        "shadow_logit": 1.7213003635406494,
+        "off_representative_probability": 0.40092751383781433,
+        "shadow_representative_probability": 0.3982808589935303
+      },
+      {
+        "index": 6,
+        "action": 1,
+        "name": "IDLE",
+        "target": "none",
+        "held": false,
+        "grasp_reachable": null,
+        "input53": 0.0,
+        "off_logit": -0.2852235734462738,
+        "shadow_logit": -0.2852235734462738,
+        "off_representative_probability": 0.05390680953860283,
+        "shadow_representative_probability": 0.053550951182842255
+      },
+      {
+        "index": 7,
+        "action": 3,
+        "name": "REST",
+        "target": "none",
+        "held": false,
+        "grasp_reachable": null,
+        "input53": 0.0,
+        "off_logit": 0.006030438467860222,
+        "shadow_logit": 0.006030438467860222,
+        "off_representative_probability": 0.07213293015956879,
+        "shadow_representative_probability": 0.07165675610303879
+      }
+    ],
+    "actual_off_physical": [
+      {
+        "action": 101,
+        "contact_consumed": false,
+        "displacement": [
+          -0.04187774658203125,
+          0.0,
+          0.0
+        ],
+        "succeeded": true,
+        "target": "h",
+        "transfers": []
+      },
+      {
+        "action": 3,
+        "contact_consumed": false,
+        "displacement": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "succeeded": true,
+        "target": "none",
+        "transfers": []
+      }
+    ],
+    "safe_eat_candidates": []
+  }
+]

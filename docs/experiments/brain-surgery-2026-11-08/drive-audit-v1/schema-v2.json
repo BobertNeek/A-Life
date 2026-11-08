@@ -1,0 +1,18 @@
+{
+  "field_rules": {
+    "aggregate_success": "Exact raw outcome.success. Does not establish every selected channel succeeded.",
+    "channel": "Slots0\u20134 are fixed native channel names; slot5 species ID not serialized, marked unknown.",
+    "channel_physical_records": "Exact joint.channel_outcomes physical records matched to named channel. Empty list means none recorded, not failure.",
+    "consumed_contact_observed": "Exact comparison of recorded contact strings to Consumed; event flag, not persistent entity state.",
+    "final_consumed": "Exact final scene consumed Boolean.",
+    "joint_channel_observations": "Exact recorded executed/intensity/displacement observations, not inferred selection or primitive.",
+    "persistent_consumed_after_tick": "Always null/unknown: persistent per-tick consumed state was not logged.",
+    "physical_success": "Always null/unknown: raw has aggregate success only, not channel success.",
+    "raw_row_index": "Zero-based index in original scenario rows.",
+    "resolved_primitive": "Always null/unknown: raw did not serialize resolved Move/Interact or other motor primitive. Do not infer from kind or ID.",
+    "selected_candidate": "Null for unselected slot; otherwise exact candidate action_id/family/kind/target copied using selected candidate_index."
+  },
+  "schema_version": "alife.drive_action_projection.v2",
+  "scope": "Projection of existing disposable controlled records only. No native execution or learned checkpoint.",
+  "structure": "arms[] -> scenarios[] -> ticks[] -> selected_channels[6]"
+}

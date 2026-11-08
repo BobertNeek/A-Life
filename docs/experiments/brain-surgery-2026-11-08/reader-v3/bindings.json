@@ -1,0 +1,40 @@
+{
+  "source_base_commit": "2da9dd323ad6f074556a851174a2edbc9e34e216",
+  "prerequisite_v2_archive_sha256": "c16a15a28c2e0141f519f8898fb6f1807fcb201e22af521c6565ad90f2ede407",
+  "source_patch_sha256": "6f818ebf3e296ee58d0cc3f1df326aab4691c0309b5d5800da66a81937fb3c52",
+  "source_closure_file_sha256": "ba94fe127bbf2ab8d6dc8a914d069fff7ec867974bc2a63c7cb4e903e1e73760",
+  "plan_sha256": "fb31ce35f4a181491379bf39095a8af3594fd4c75ea2c2a4fa1a740de91b621b",
+  "executable_sha256": "e94f2a12116c2dc28b747924a3690933063cb67026b8c7bcf1b9ed648dc9c83d",
+  "off_asset_blake3": "0bf3400adc03e001be609717a5a325232bc8f86a734cf60ff7a740cab29de7f1",
+  "gains": [
+    0,
+    0.0625,
+    0.25,
+    1,
+    4
+  ],
+  "seeds": [
+    2026112401,
+    2026112402
+  ],
+  "backend": "CPU",
+  "toolchain": "Rust1.99.1",
+  "jobs": 1,
+  "incremental": false,
+  "debug": 0,
+  "rust_min_stack": 33554432,
+  "max_lives": 2,
+  "preparation_per_life": 600,
+  "max_primary_per_life": 256,
+  "max_public_bytes": 67108864,
+  "max_wallclock_seconds": 1800,
+  "source_files_changed": [
+    "crates/alife_game_app/src/production_voxel_renderer/hearthling.rs",
+    "crates/alife_training/Cargo.toml",
+    "crates/alife_training/examples/probe_grip_shadow.rs",
+    "crates/alife_training/src/cpu/host/swap_audit.rs",
+    "crates/alife_training/src/cpu/host.rs",
+    "crates/alife_world/src/headless/swap_audit.rs",
+    "crates/alife_world/src/headless.rs"
+  ]
+}
