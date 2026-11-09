@@ -1,0 +1,75 @@
+diff --git a/crates/alife_training/src/cpu/grouped_decoder_tests.rs b/crates/alife_training/src/cpu/grouped_decoder_tests.rs
+index d5af11ec52bb2cb6020f90671fe10da883041beb..75de7a9085fa05eec021ea0c073448150ec6a15b 100644
+--- a/crates/alife_training/src/cpu/grouped_decoder_tests.rs
++++ b/crates/alife_training/src/cpu/grouped_decoder_tests.rs
+@@ -615,3 +615,6 @@ fn grouped_decoder_preserves_nonzero_frozen_banks_and_structural_sentinels() {
+         );
+     }
+ }
++
++#[path = "grouped_full_literal_witness.rs"]
++mod full_literal_witness;
+diff --git a/crates/alife_training/src/cpu/grouped_full_literal_witness.rs b/crates/alife_training/src/cpu/grouped_full_literal_witness.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..9f9ed868f791b4e3ba172bf651f26615592436cb
+--- /dev/null
++++ b/crates/alife_training/src/cpu/grouped_full_literal_witness.rs
+@@ -0,0 +1,58 @@
++//! Source-identical disposable FULL GDE1 fixture witness for base/revision comparison.
++use super::*;
++#[test]
++#[ignore = "explicit qualified FULL GDE1 byte witness export"]
++fn grouped_full_literal_witness() {
++    let directory = std::env::var("ALIFE_GROUPED_FULL_WITNESS_DIR")
++        .expect("explicit witness destination required");
++    let directory = std::path::Path::new(&directory);
++    std::fs::create_dir_all(directory).unwrap();
++    let (mut host, inputs) = learning_fixture();
++    let initial = host.checkpoint().unwrap().encode().unwrap();
++    std::fs::write(directory.join("initial.envelope"), &initial).unwrap();
++    for (index, temperature) in [0.73_f32, 1.17_f32].into_iter().enumerate() {
++        let step = host.step(temperature).unwrap();
++        let decision_bytes = serde_json::to_vec(&(
++            step.tick_before,
++            step.tick_after,
++            step.sleeping_organisms,
++            step.sleep_consolidations,
++            step.decisions
++                .iter()
++                .map(|d| {
++                    (
++                        d.organism_id,
++                        &d.action,
++                        d.sampling_counter,
++                        &d.source_diagnostic_logits,
++                        &d.biological_emissions,
++                        &d.brain_work,
++                        &d.patch,
++                        &d.motor,
++                        &d.physical,
++                        d.sleep_phase,
++                        d.sleep_trigger,
++                    )
++                })
++                .collect::<Vec<_>>(),
++        ))
++        .unwrap();
++        std::fs::write(directory.join(format!("step-{index}.json")), decision_bytes).unwrap();
++        assert!(
++            host.last_credit(step.decisions[0].organism_id)
++                .unwrap()
++                .changed_fast_coordinates
++                > 0
++        );
++        let checkpoint = host.checkpoint().unwrap();
++        let wire = checkpoint.encode().unwrap();
++        std::fs::write(directory.join(format!("after-{index}.envelope")), &wire).unwrap();
++        host = CpuGroupedM2DecoderHostV1::restore(
++            CpuGroupedM2DecoderCheckpointV1::decode(&wire).unwrap(),
++            &inputs,
++            MediationModeV1::Full,
++        )
++        .unwrap();
++        assert_eq!(host.checkpoint().unwrap().encode().unwrap(), wire);
++    }
++}
