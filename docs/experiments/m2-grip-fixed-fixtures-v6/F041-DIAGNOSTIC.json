@@ -1,0 +1,1214 @@
+{
+  "changes": [
+    {
+      "before_record": {
+        "bytes": 94580,
+        "path": "crates/alife_training/src/cpu/host.rs",
+        "sha256": "9780f3fd94e8668ecd622cf8111d481b957a388ee53d965257e6773132500bc8"
+      },
+      "patch_record": {
+        "bytes": 522,
+        "path": "patches/f041-genetic-source-development.patch",
+        "sha256": "f6b9042cf498dd0ecb11b3a2b0d3d9b3e5a8d48c67f904133ec2ce52e23cb863"
+      },
+      "source_record": {
+        "bytes": 94765,
+        "path": "crates/alife_training/src/cpu/host.rs",
+        "sha256": "10abab65412efce66fee5a4caa4cabd52aeeecb50c7d00415e01cabab42516ac"
+      }
+    },
+    {
+      "before_record": {
+        "bytes": 6320,
+        "path": "crates/alife_training/tests/grip_options_host.rs",
+        "sha256": "6a4c23f051953566fe797cd117c9872bae1260abffe510699db2d1be04b16bf5"
+      },
+      "patch_record": {
+        "bytes": 26748,
+        "path": "patches/f041-safe-phase-diagnostic.patch",
+        "sha256": "4d3415928f90f9083b74d9948d2ed2956a1ce93130a8dd0032a00ff08ae636fc"
+      },
+      "source_record": {
+        "bytes": 27513,
+        "path": "crates/alife_training/tests/grip_options_host.rs",
+        "sha256": "b5b1217e61d80674061947823e76fc06e5524912b21167258e24e0c90eef8906"
+      }
+    },
+    {
+      "before_record": {
+        "bytes": 12344,
+        "path": "crates/alife_core/src/grounded_drive_genetics.rs",
+        "sha256": "267385ca44fef3c155257c677a98ad544d3e7a79663d34437288506090b23a33"
+      },
+      "patch_record": {
+        "bytes": 939,
+        "path": "patches/f041-research-identity-correction.patch",
+        "sha256": "c7128e3e55d8051896daf1794da34901b5472f4ea340ed78dfda0cc43987bc6f"
+      },
+      "source_record": {
+        "bytes": 12642,
+        "path": "crates/alife_core/src/grounded_drive_genetics.rs",
+        "sha256": "6a29f586c3073a39141a0c81587bbff84a6f275886ba5595dfc1631f024b8c26"
+      }
+    },
+    {
+      "before_record": {
+        "bytes": 36622,
+        "path": "crates/alife_training/src/cpu/grouped_host_envelope.rs",
+        "sha256": "62e9c4e5969b1eea11ff9711616a7b0c0f20cb978a8e5bb8794fb29fcd29a26e"
+      },
+      "patch_record": {
+        "bytes": 967,
+        "path": "patches/f041-policy-owned-physical-profile.patch",
+        "sha256": "49dbfcfb90c76ed433a0822e81a834253dd58dd030171649b9e6a7e837fee69b"
+      },
+      "source_record": {
+        "bytes": 36854,
+        "path": "crates/alife_training/src/cpu/grouped_host_envelope.rs",
+        "sha256": "e332a47785d46c13d7d381c6472dbe86aed9a48d0f52c1cf25c4f2f0c66a14f5"
+      }
+    }
+  ],
+  "checks": [
+    "ORDINARY_IDENTITY_REJECTS_RESEARCH",
+    "FIRST_DECISIONS_ONE",
+    "FIRST_RECEIPTS_ONE",
+    "FIRST_SOURCE_COUNT_ONE",
+    "COORDINATION_POSITIVE",
+    "COORDINATION_GRADIENT_FINITE",
+    "KERNEL_NEURONS256",
+    "KERNEL_SENSORY256",
+    "KERNEL_REDUCTIONS256",
+    "KERNEL_READOUTS128",
+    "KERNEL_RECALL_ZERO",
+    "WARM_DECISIONS_ONE",
+    "COLD_DECISIONS_ONE"
+  ],
+  "committed_biology_intervals_upper_bound": 3,
+  "diagnostic_limits": "If the process aborts before libtest flushes captured output, NO_PHASE_REPORTED is possible. It is not evidence a phase completed.",
+  "error_projection_context": "One optional terminal GRIP_F041_ERROR enum immediately after the exact FIRST_STEP_BEGIN prefix. Only original first-step Result::Err is classified; original error is returned unchanged to unwrap. Panics before Err may have no classification. No raw error, assertion, values, identifiers or state are printed.",
+  "errors": [
+    {
+      "code": "HOSTCONTRACTINVALID_ID",
+      "id": 1,
+      "pattern": "CpuHostError::Contract(ScaffoldContractError::InvalidId)",
+      "rust_enum": "Error1"
+    },
+    {
+      "code": "HOSTCONTRACTNON_FINITE_FLOAT",
+      "id": 2,
+      "pattern": "CpuHostError::Contract(ScaffoldContractError::NonFiniteFloat)",
+      "rust_enum": "Error2"
+    },
+    {
+      "code": "HOSTCONTRACTSCALAR_OUT_OF_RANGE",
+      "id": 3,
+      "pattern": "CpuHostError::Contract(ScaffoldContractError::ScalarOutOfRange)",
+      "rust_enum": "Error3"
+    },
+    {
+      "code": "HOSTCONTRACTNON_MONOTONIC_TICK",
+      "id": 4,
+      "pattern": "CpuHostError::Contract(ScaffoldContractError::NonMonotonicTick)",
+      "rust_enum": "Error4"
+    },
+    {
+      "code": "HOSTCONTRACTINVALID_ACTION_DECISION",
+      "id": 5,
+      "pattern": "CpuHostError::Contract(ScaffoldContractError::InvalidActionDecision)",
+      "rust_enum": "Error5"
+    },
+    {
+      "code": "HOSTCONTRACTINVALID_PERCEPTION_FRAME",
+      "id": 6,
+      "pattern": "CpuHostError::Contract(ScaffoldContractError::InvalidPerceptionFrame)",
+      "rust_enum": "Error6"
+    },
+    {
+      "code": "HOSTCONTRACTINVALID_ACTION_CANDIDATE",
+      "id": 7,
+      "pattern": "CpuHostError::Contract(ScaffoldContractError::InvalidActionCandidate)",
+      "rust_enum": "Error7"
+    },
+    {
+      "code": "HOSTCONTRACTINVALID_DECISION_EVIDENCE",
+      "id": 8,
+      "pattern": "CpuHostError::Contract(ScaffoldContractError::InvalidDecisionEvidence)",
+      "rust_enum": "Error8"
+    },
+    {
+      "code": "HOSTCONTRACTEVIDENCE_KIND_MISMATCH",
+      "id": 9,
+      "pattern": "CpuHostError::Contract(ScaffoldContractError::EvidenceKindMismatch)",
+      "rust_enum": "Error9"
+    },
+    {
+      "code": "HOSTCONTRACTPHENOTYPE_COMPILE",
+      "id": 10,
+      "pattern": "CpuHostError::Contract(ScaffoldContractError::PhenotypeCompile)",
+      "rust_enum": "Error10"
+    },
+    {
+      "code": "HOSTCONTRACTUNSUPPORTED_PRODUCTION_BRAIN_CLASS",
+      "id": 11,
+      "pattern": "CpuHostError::Contract(ScaffoldContractError::UnsupportedProductionBrainClass)",
+      "rust_enum": "Error11"
+    },
+    {
+      "code": "HOSTCONTRACTSENSOR_PROFILE_MISMATCH",
+      "id": 12,
+      "pattern": "CpuHostError::Contract(ScaffoldContractError::SensorProfileMismatch)",
+      "rust_enum": "Error12"
+    },
+    {
+      "code": "HOSTCONTRACTINVALID_MEMORY_QUERY",
+      "id": 13,
+      "pattern": "CpuHostError::Contract(ScaffoldContractError::InvalidMemoryQuery)",
+      "rust_enum": "Error13"
+    },
+    {
+      "code": "HOSTCONTRACTBRAIN_OWNERSHIP_MISMATCH",
+      "id": 14,
+      "pattern": "CpuHostError::Contract(ScaffoldContractError::BrainOwnershipMismatch)",
+      "rust_enum": "Error14"
+    },
+    {
+      "code": "HOSTCONTRACTLEARNING_EVIDENCE_MISMATCH",
+      "id": 15,
+      "pattern": "CpuHostError::Contract(ScaffoldContractError::LearningEvidenceMismatch)",
+      "rust_enum": "Error15"
+    },
+    {
+      "code": "HOSTCONTRACTLEARNING_REPLAY_REJECTED",
+      "id": 16,
+      "pattern": "CpuHostError::Contract(ScaffoldContractError::LearningReplayRejected)",
+      "rust_enum": "Error16"
+    },
+    {
+      "code": "HOSTCONTRACTBRAIN_ACTIVITY_POLICY_MISMATCH",
+      "id": 17,
+      "pattern": "CpuHostError::Contract(ScaffoldContractError::BrainActivityPolicyMismatch)",
+      "rust_enum": "Error17"
+    },
+    {
+      "code": "HOSTCONTRACTBRAIN_ACTIVITY_SEQUENCE_MISMATCH",
+      "id": 18,
+      "pattern": "CpuHostError::Contract(ScaffoldContractError::BrainActivitySequenceMismatch)",
+      "rust_enum": "Error18"
+    },
+    {
+      "code": "HOSTCONTRACTBRAIN_ATP_EXHAUSTED",
+      "id": 19,
+      "pattern": "CpuHostError::Contract(ScaffoldContractError::BrainAtpExhausted)",
+      "rust_enum": "Error19"
+    },
+    {
+      "code": "TRAININGCONTRACTINVALID_ID",
+      "id": 20,
+      "pattern": "CpuHostError::Training(alife_training::TrainingError::Contract(ScaffoldContractError::InvalidId))",
+      "rust_enum": "Error20"
+    },
+    {
+      "code": "TRAININGCONTRACTNON_FINITE_FLOAT",
+      "id": 21,
+      "pattern": "CpuHostError::Training(alife_training::TrainingError::Contract(ScaffoldContractError::NonFiniteFloat))",
+      "rust_enum": "Error21"
+    },
+    {
+      "code": "TRAININGCONTRACTSCALAR_OUT_OF_RANGE",
+      "id": 22,
+      "pattern": "CpuHostError::Training(alife_training::TrainingError::Contract(ScaffoldContractError::ScalarOutOfRange))",
+      "rust_enum": "Error22"
+    },
+    {
+      "code": "TRAININGCONTRACTNON_MONOTONIC_TICK",
+      "id": 23,
+      "pattern": "CpuHostError::Training(alife_training::TrainingError::Contract(ScaffoldContractError::NonMonotonicTick))",
+      "rust_enum": "Error23"
+    },
+    {
+      "code": "TRAININGCONTRACTINVALID_ACTION_DECISION",
+      "id": 24,
+      "pattern": "CpuHostError::Training(alife_training::TrainingError::Contract(ScaffoldContractError::InvalidActionDecision))",
+      "rust_enum": "Error24"
+    },
+    {
+      "code": "TRAININGCONTRACTINVALID_PERCEPTION_FRAME",
+      "id": 25,
+      "pattern": "CpuHostError::Training(alife_training::TrainingError::Contract(ScaffoldContractError::InvalidPerceptionFrame))",
+      "rust_enum": "Error25"
+    },
+    {
+      "code": "TRAININGCONTRACTINVALID_ACTION_CANDIDATE",
+      "id": 26,
+      "pattern": "CpuHostError::Training(alife_training::TrainingError::Contract(ScaffoldContractError::InvalidActionCandidate))",
+      "rust_enum": "Error26"
+    },
+    {
+      "code": "TRAININGCONTRACTINVALID_DECISION_EVIDENCE",
+      "id": 27,
+      "pattern": "CpuHostError::Training(alife_training::TrainingError::Contract(ScaffoldContractError::InvalidDecisionEvidence))",
+      "rust_enum": "Error27"
+    },
+    {
+      "code": "TRAININGCONTRACTEVIDENCE_KIND_MISMATCH",
+      "id": 28,
+      "pattern": "CpuHostError::Training(alife_training::TrainingError::Contract(ScaffoldContractError::EvidenceKindMismatch))",
+      "rust_enum": "Error28"
+    },
+    {
+      "code": "TRAININGCONTRACTPHENOTYPE_COMPILE",
+      "id": 29,
+      "pattern": "CpuHostError::Training(alife_training::TrainingError::Contract(ScaffoldContractError::PhenotypeCompile))",
+      "rust_enum": "Error29"
+    },
+    {
+      "code": "TRAININGCONTRACTUNSUPPORTED_PRODUCTION_BRAIN_CLASS",
+      "id": 30,
+      "pattern": "CpuHostError::Training(alife_training::TrainingError::Contract(ScaffoldContractError::UnsupportedProductionBrainClass))",
+      "rust_enum": "Error30"
+    },
+    {
+      "code": "TRAININGCONTRACTSENSOR_PROFILE_MISMATCH",
+      "id": 31,
+      "pattern": "CpuHostError::Training(alife_training::TrainingError::Contract(ScaffoldContractError::SensorProfileMismatch))",
+      "rust_enum": "Error31"
+    },
+    {
+      "code": "TRAININGCONTRACTINVALID_MEMORY_QUERY",
+      "id": 32,
+      "pattern": "CpuHostError::Training(alife_training::TrainingError::Contract(ScaffoldContractError::InvalidMemoryQuery))",
+      "rust_enum": "Error32"
+    },
+    {
+      "code": "TRAININGCONTRACTBRAIN_OWNERSHIP_MISMATCH",
+      "id": 33,
+      "pattern": "CpuHostError::Training(alife_training::TrainingError::Contract(ScaffoldContractError::BrainOwnershipMismatch))",
+      "rust_enum": "Error33"
+    },
+    {
+      "code": "TRAININGCONTRACTLEARNING_EVIDENCE_MISMATCH",
+      "id": 34,
+      "pattern": "CpuHostError::Training(alife_training::TrainingError::Contract(ScaffoldContractError::LearningEvidenceMismatch))",
+      "rust_enum": "Error34"
+    },
+    {
+      "code": "TRAININGCONTRACTLEARNING_REPLAY_REJECTED",
+      "id": 35,
+      "pattern": "CpuHostError::Training(alife_training::TrainingError::Contract(ScaffoldContractError::LearningReplayRejected))",
+      "rust_enum": "Error35"
+    },
+    {
+      "code": "TRAININGCONTRACTBRAIN_ACTIVITY_POLICY_MISMATCH",
+      "id": 36,
+      "pattern": "CpuHostError::Training(alife_training::TrainingError::Contract(ScaffoldContractError::BrainActivityPolicyMismatch))",
+      "rust_enum": "Error36"
+    },
+    {
+      "code": "TRAININGCONTRACTBRAIN_ACTIVITY_SEQUENCE_MISMATCH",
+      "id": 37,
+      "pattern": "CpuHostError::Training(alife_training::TrainingError::Contract(ScaffoldContractError::BrainActivitySequenceMismatch))",
+      "rust_enum": "Error37"
+    },
+    {
+      "code": "TRAININGCONTRACTBRAIN_ATP_EXHAUSTED",
+      "id": 38,
+      "pattern": "CpuHostError::Training(alife_training::TrainingError::Contract(ScaffoldContractError::BrainAtpExhausted))",
+      "rust_enum": "Error38"
+    },
+    {
+      "code": "HOST_STATE_CPU_ACTIVITY_WORLD_CLOCK_MISMATCH",
+      "id": 39,
+      "pattern": "CpuHostError::State(\"CPU activity world clock mismatch\")",
+      "rust_enum": "Error39",
+      "static_reason": "CPU activity world clock mismatch"
+    },
+    {
+      "code": "HOST_STATE_CPU_NEURAL_WORK_EXCEEDS_CANONICAL_ATP_AVAILABILITY",
+      "id": 40,
+      "pattern": "CpuHostError::State(\"CPU neural work exceeds canonical ATP availability\")",
+      "rust_enum": "Error40",
+      "static_reason": "CPU neural work exceeds canonical ATP availability"
+    },
+    {
+      "code": "HOST_STATE_CPU_SYNAPSE_WORK_OVERFLOW",
+      "id": 41,
+      "pattern": "CpuHostError::State(\"CPU synapse work overflow\")",
+      "rust_enum": "Error41",
+      "static_reason": "CPU synapse work overflow"
+    },
+    {
+      "code": "HOST_STATE_CPU_TILE_WORK_OVERFLOW",
+      "id": 42,
+      "pattern": "CpuHostError::State(\"CPU tile work overflow\")",
+      "rust_enum": "Error42",
+      "static_reason": "CPU tile work overflow"
+    },
+    {
+      "code": "HOST_STATE_CLOSED_GROUPED_POLICY_OWNER_MISMATCH",
+      "id": 43,
+      "pattern": "CpuHostError::State(\"closed grouped policy owner mismatch\")",
+      "rust_enum": "Error43",
+      "static_reason": "closed grouped policy owner mismatch"
+    },
+    {
+      "code": "HOST_STATE_DYNAMIC_EDGE_ENTERS_FIXED_CONTROLLER",
+      "id": 44,
+      "pattern": "CpuHostError::State(\"dynamic edge enters fixed controller\")",
+      "rust_enum": "Error44",
+      "static_reason": "dynamic edge enters fixed controller"
+    },
+    {
+      "code": "HOST_STATE_GRIP_POLICY_OWNER_MISMATCH",
+      "id": 45,
+      "pattern": "CpuHostError::State(\"grip policy owner mismatch\")",
+      "rust_enum": "Error45",
+      "static_reason": "grip policy owner mismatch"
+    },
+    {
+      "code": "HOST_STATE_GROUPED_M2_CONSUMED_SLEEP_BOUNDARY_MISMATCH",
+      "id": 46,
+      "pattern": "CpuHostError::State(\"grouped M2 consumed sleep boundary mismatch\")",
+      "rust_enum": "Error46",
+      "static_reason": "grouped M2 consumed sleep boundary mismatch"
+    },
+    {
+      "code": "HOST_STATE_GROUPED_M2_INCOMPLETE_PHYSICAL_BOUNDARY",
+      "id": 47,
+      "pattern": "CpuHostError::State(\"grouped M2 incomplete physical boundary\")",
+      "rust_enum": "Error47",
+      "static_reason": "grouped M2 incomplete physical boundary"
+    },
+    {
+      "code": "HOST_STATE_GROUPED_M2_PHYSICAL_BOUNDARY_MISMATCH",
+      "id": 48,
+      "pattern": "CpuHostError::State(\"grouped M2 physical boundary mismatch\")",
+      "rust_enum": "Error48",
+      "static_reason": "grouped M2 physical boundary mismatch"
+    },
+    {
+      "code": "HOST_STATE_GROUPED_M2_PHYSICAL_RECEIPT_SELECTION_MISMATCH",
+      "id": 49,
+      "pattern": "CpuHostError::State(\"grouped M2 physical receipt selection mismatch\")",
+      "rust_enum": "Error49",
+      "static_reason": "grouped M2 physical receipt selection mismatch"
+    },
+    {
+      "code": "HOST_STATE_GROUPED_M2_RECOVERY_MOTOR_TRANSACTION_REJECTED",
+      "id": 50,
+      "pattern": "CpuHostError::State(\"grouped M2 recovery motor transaction rejected\")",
+      "rust_enum": "Error50",
+      "static_reason": "grouped M2 recovery motor transaction rejected"
+    },
+    {
+      "code": "HOST_STATE_GROUPED_M2_REPLAY_PROVENANCE_OMITTED",
+      "id": 51,
+      "pattern": "CpuHostError::State(\"grouped M2 replay provenance omitted\")",
+      "rust_enum": "Error51",
+      "static_reason": "grouped M2 replay provenance omitted"
+    },
+    {
+      "code": "HOST_STATE_GROUPED_M2_SLEEP_ORGANISM_MISSING",
+      "id": 52,
+      "pattern": "CpuHostError::State(\"grouped M2 sleep organism missing\")",
+      "rust_enum": "Error52",
+      "static_reason": "grouped M2 sleep organism missing"
+    },
+    {
+      "code": "HOST_STATE_GROUPED_M2_SUCCESSFUL_SLEEP_RECEIPT_NOT_CONSUMED",
+      "id": 53,
+      "pattern": "CpuHostError::State(\"grouped M2 successful sleep receipt not consumed\")",
+      "rust_enum": "Error53",
+      "static_reason": "grouped M2 successful sleep receipt not consumed"
+    },
+    {
+      "code": "HOST_STATE_GROUPED_M2_VOLUNTARY_RECEIPT_ALREADY_CONSUMED",
+      "id": 54,
+      "pattern": "CpuHostError::State(\"grouped M2 voluntary receipt already consumed\")",
+      "rust_enum": "Error54",
+      "static_reason": "grouped M2 voluntary receipt already consumed"
+    },
+    {
+      "code": "HOST_STATE_GROUPED_M2_VOLUNTARY_RECEIPT_OUTSIDE_AWAKE",
+      "id": 55,
+      "pattern": "CpuHostError::State(\"grouped M2 voluntary receipt outside Awake\")",
+      "rust_enum": "Error55",
+      "static_reason": "grouped M2 voluntary receipt outside Awake"
+    },
+    {
+      "code": "HOST_STATE_GROUPED_CANDIDATE_COUNT",
+      "id": 56,
+      "pattern": "CpuHostError::State(\"grouped candidate count\")",
+      "rust_enum": "Error56",
+      "static_reason": "grouped candidate count"
+    },
+    {
+      "code": "HOST_STATE_GROUPED_PHYSICAL_FRAME_MISMATCH",
+      "id": 57,
+      "pattern": "CpuHostError::State(\"grouped physical frame mismatch\")",
+      "rust_enum": "Error57",
+      "static_reason": "grouped physical frame mismatch"
+    },
+    {
+      "code": "HOST_STATE_GROUPED_PHYSICAL_SAMPLE_PROVENANCE_MISMATCH",
+      "id": 58,
+      "pattern": "CpuHostError::State(\"grouped physical/sample provenance mismatch\")",
+      "rust_enum": "Error58",
+      "static_reason": "grouped physical/sample provenance mismatch"
+    },
+    {
+      "code": "HOST_STATE_GROUPED_SAMPLE_PHYSICAL_OPERATION_MISMATCH",
+      "id": 59,
+      "pattern": "CpuHostError::State(\"grouped sample/physical operation mismatch\")",
+      "rust_enum": "Error59",
+      "static_reason": "grouped sample/physical operation mismatch"
+    },
+    {
+      "code": "HOST_STATE_GROUPED_SOURCE_FRAME_OR_CLOCK_MISMATCH",
+      "id": 60,
+      "pattern": "CpuHostError::State(\"grouped/source frame or clock mismatch\")",
+      "rust_enum": "Error60",
+      "static_reason": "grouped/source frame or clock mismatch"
+    },
+    {
+      "code": "HOST_STATE_GROUPED_SOURCE_GENERATION_MISMATCH",
+      "id": 61,
+      "pattern": "CpuHostError::State(\"grouped/source generation mismatch\")",
+      "rust_enum": "Error61",
+      "static_reason": "grouped/source generation mismatch"
+    },
+    {
+      "code": "HOST_STATE_INVALID_CLOSED_GROUPED_MEMORY_SLEEP_BOUNDARY",
+      "id": 62,
+      "pattern": "CpuHostError::State(\"invalid closed grouped memory-sleep boundary\")",
+      "rust_enum": "Error62",
+      "static_reason": "invalid closed grouped memory-sleep boundary"
+    },
+    {
+      "code": "HOST_STATE_INVALID_GROUPED_M2_PHYSICAL_RECEIPT",
+      "id": 63,
+      "pattern": "CpuHostError::State(\"invalid grouped M2 physical receipt\")",
+      "rust_enum": "Error63",
+      "static_reason": "invalid grouped M2 physical receipt"
+    },
+    {
+      "code": "HOST_STATE_INVALID_GROUPED_OPERATION",
+      "id": 64,
+      "pattern": "CpuHostError::State(\"invalid grouped operation\")",
+      "rust_enum": "Error64",
+      "static_reason": "invalid grouped operation"
+    },
+    {
+      "code": "HOST_STATE_LIVING_COLLECTOR_POLICY_CHANGED_EXPORT_RECOMPILE_A_FRESH_COHORT_OR_EXPLICITLY_REBASE_A_SIMULATOR_BRANCH",
+      "id": 65,
+      "pattern": "CpuHostError::State(\"living collector policy changed: export/recompile a fresh cohort or explicitly rebase a simulator branch\")",
+      "rust_enum": "Error65",
+      "static_reason": "living collector policy changed: export/recompile a fresh cohort or explicitly rebase a simulator branch"
+    },
+    {
+      "code": "HOST_STATE_MISSING_CANONICAL_COGNITIVE_CONTEXT",
+      "id": 66,
+      "pattern": "CpuHostError::State(\"missing canonical cognitive context\")",
+      "rust_enum": "Error66",
+      "static_reason": "missing canonical cognitive context"
+    },
+    {
+      "code": "HOST_STATE_MISSING_GROUPED_CANONICAL_ORGANISM",
+      "id": 67,
+      "pattern": "CpuHostError::State(\"missing grouped canonical organism\")",
+      "rust_enum": "Error67",
+      "static_reason": "missing grouped canonical organism"
+    },
+    {
+      "code": "HOST_STATE_MISSING_GROUPED_CONTROLLER",
+      "id": 68,
+      "pattern": "CpuHostError::State(\"missing grouped controller\")",
+      "rust_enum": "Error68",
+      "static_reason": "missing grouped controller"
+    },
+    {
+      "code": "HOST_STATE_MISSING_GROUPED_NEURAL_RECEIPT",
+      "id": 69,
+      "pattern": "CpuHostError::State(\"missing grouped neural receipt\")",
+      "rust_enum": "Error69",
+      "static_reason": "missing grouped neural receipt"
+    },
+    {
+      "code": "HOST_STATE_MISSING_GROUPED_PHYSICAL_BUNDLE",
+      "id": 70,
+      "pattern": "CpuHostError::State(\"missing grouped physical bundle\")",
+      "rust_enum": "Error70",
+      "static_reason": "missing grouped physical bundle"
+    },
+    {
+      "code": "HOST_STATE_MISSING_GROUPED_PHYSICAL_OWNER",
+      "id": 71,
+      "pattern": "CpuHostError::State(\"missing grouped physical owner\")",
+      "rust_enum": "Error71",
+      "static_reason": "missing grouped physical owner"
+    },
+    {
+      "code": "HOST_STATE_MISSING_GROUPED_PHYSICAL_RECEIPT",
+      "id": 72,
+      "pattern": "CpuHostError::State(\"missing grouped physical receipt\")",
+      "rust_enum": "Error72",
+      "static_reason": "missing grouped physical receipt"
+    },
+    {
+      "code": "HOST_STATE_MISSING_GROUPED_PHYSICAL_SELECTION",
+      "id": 73,
+      "pattern": "CpuHostError::State(\"missing grouped physical selection\")",
+      "rust_enum": "Error73",
+      "static_reason": "missing grouped physical selection"
+    },
+    {
+      "code": "HOST_STATE_MISSING_GROUPED_RECEIPT",
+      "id": 74,
+      "pattern": "CpuHostError::State(\"missing grouped receipt\")",
+      "rust_enum": "Error74",
+      "static_reason": "missing grouped receipt"
+    },
+    {
+      "code": "HOST_STATE_MISSING_GROUPED_REPLAY_EVENT",
+      "id": 75,
+      "pattern": "CpuHostError::State(\"missing grouped replay event\")",
+      "rust_enum": "Error75",
+      "static_reason": "missing grouped replay event"
+    },
+    {
+      "code": "HOST_STATE_MISSING_GROUPED_REPLAY_OWNER",
+      "id": 76,
+      "pattern": "CpuHostError::State(\"missing grouped replay owner\")",
+      "rust_enum": "Error76",
+      "static_reason": "missing grouped replay owner"
+    },
+    {
+      "code": "HOST_STATE_MISSING_GROUPED_SOURCE_RECEIPT",
+      "id": 77,
+      "pattern": "CpuHostError::State(\"missing grouped source receipt\")",
+      "rust_enum": "Error77",
+      "static_reason": "missing grouped source receipt"
+    },
+    {
+      "code": "HOST_STATE_MISSING_LEGACY_GROUPED_SAMPLE",
+      "id": 78,
+      "pattern": "CpuHostError::State(\"missing legacy grouped sample\")",
+      "rust_enum": "Error78",
+      "static_reason": "missing legacy grouped sample"
+    },
+    {
+      "code": "HOST_STATE_MISSING_NATIVE_PROPOSAL",
+      "id": 79,
+      "pattern": "CpuHostError::State(\"missing native proposal\")",
+      "rust_enum": "Error79",
+      "static_reason": "missing native proposal"
+    },
+    {
+      "code": "HOST_STATE_MISSING_OPTIONAL_VOCAL_SAMPLE",
+      "id": 80,
+      "pattern": "CpuHostError::State(\"missing optional Vocal sample\")",
+      "rust_enum": "Error80",
+      "static_reason": "missing optional Vocal sample"
+    },
+    {
+      "code": "HOST_STATE_MISSING_OPTIONAL_CONTROLLER",
+      "id": 81,
+      "pattern": "CpuHostError::State(\"missing optional controller\")",
+      "rust_enum": "Error81",
+      "static_reason": "missing optional controller"
+    },
+    {
+      "code": "HOST_STATE_MISSING_OPTIONAL_NATIVE_OUTPUT",
+      "id": 82,
+      "pattern": "CpuHostError::State(\"missing optional native output\")",
+      "rust_enum": "Error82",
+      "static_reason": "missing optional native output"
+    },
+    {
+      "code": "HOST_STATE_MISSING_OPTIONAL_SAMPLE",
+      "id": 83,
+      "pattern": "CpuHostError::State(\"missing optional sample\")",
+      "rust_enum": "Error83",
+      "static_reason": "missing optional sample"
+    },
+    {
+      "code": "HOST_STATE_MISSING_OPTIONAL_SCORES",
+      "id": 84,
+      "pattern": "CpuHostError::State(\"missing optional scores\")",
+      "rust_enum": "Error84",
+      "static_reason": "missing optional scores"
+    },
+    {
+      "code": "HOST_STATE_MISSING_ORGANISM",
+      "id": 85,
+      "pattern": "CpuHostError::State(\"missing organism\")",
+      "rust_enum": "Error85",
+      "static_reason": "missing organism"
+    },
+    {
+      "code": "HOST_STATE_MISSING_POST_ACTION_ORGANISM",
+      "id": 86,
+      "pattern": "CpuHostError::State(\"missing post-action organism\")",
+      "rust_enum": "Error86",
+      "static_reason": "missing post-action organism"
+    },
+    {
+      "code": "HOST_STATE_MIXED_M0_M1_CONTROLLER",
+      "id": 87,
+      "pattern": "CpuHostError::State(\"mixed M0/M1 controller\")",
+      "rust_enum": "Error87",
+      "static_reason": "mixed M0/M1 controller"
+    },
+    {
+      "code": "HOST_STATE_NEW_ORGANISM_REQUIRES_BRAIN_ADMISSION",
+      "id": 88,
+      "pattern": "CpuHostError::State(\"new organism requires brain admission\")",
+      "rust_enum": "Error88",
+      "static_reason": "new organism requires brain admission"
+    },
+    {
+      "code": "HOST_STATE_NOT_A_GROUPED_M2_RESIDENT",
+      "id": 89,
+      "pattern": "CpuHostError::State(\"not a grouped M2 resident\")",
+      "rust_enum": "Error89",
+      "static_reason": "not a grouped M2 resident"
+    },
+    {
+      "code": "HOST_STATE_OPTIONAL_VOCAL_INCOMPLETE_OWNER",
+      "id": 90,
+      "pattern": "CpuHostError::State(\"optional Vocal incomplete owner\")",
+      "rust_enum": "Error90",
+      "static_reason": "optional Vocal incomplete owner"
+    },
+    {
+      "code": "HOST_STATE_OPTIONAL_SAMPLER_OWNER_MISMATCH",
+      "id": 91,
+      "pattern": "CpuHostError::State(\"optional sampler owner mismatch\")",
+      "rust_enum": "Error91",
+      "static_reason": "optional sampler owner mismatch"
+    },
+    {
+      "code": "HOST_STATE_OPTIONAL_STAGED_SAMPLE_MISMATCH",
+      "id": 92,
+      "pattern": "CpuHostError::State(\"optional staged sample mismatch\")",
+      "rust_enum": "Error92",
+      "static_reason": "optional staged sample mismatch"
+    },
+    {
+      "code": "HOST_STATE_RESEARCH_ROSTER_DIFFERS_FROM_ADMITTED_PRIVATE_STATE",
+      "id": 93,
+      "pattern": "CpuHostError::State(\"research roster differs from admitted private state\")",
+      "rust_enum": "Error93",
+      "static_reason": "research roster differs from admitted private state"
+    },
+    {
+      "code": "HOST_STATE_SAMPLING_COUNTER_OVERFLOW",
+      "id": 94,
+      "pattern": "CpuHostError::State(\"sampling counter overflow\")",
+      "rust_enum": "Error94",
+      "static_reason": "sampling counter overflow"
+    },
+    {
+      "code": "HOST_STATE_SEALED_TOPOLOGY_OBSERVATION_REJECTED",
+      "id": 95,
+      "pattern": "CpuHostError::State(\"sealed topology observation rejected\")",
+      "rust_enum": "Error95",
+      "static_reason": "sealed topology observation rejected"
+    },
+    {
+      "code": "HOST_STATE_SEMANTIC_PREPARATION_CHANGED_ORDINARY_PERCEPTION",
+      "id": 96,
+      "pattern": "CpuHostError::State(\"semantic preparation changed ordinary perception\")",
+      "rust_enum": "Error96",
+      "static_reason": "semantic preparation changed ordinary perception"
+    },
+    {
+      "code": "HOST_STATE_SEQUENCE_OVERFLOW",
+      "id": 97,
+      "pattern": "CpuHostError::State(\"sequence overflow\")",
+      "rust_enum": "Error97",
+      "static_reason": "sequence overflow"
+    },
+    {
+      "code": "HOST_STATE_SOURCE_DYNAMIC_PRICE_OVERFLOW",
+      "id": 98,
+      "pattern": "CpuHostError::State(\"source dynamic price overflow\")",
+      "rust_enum": "Error98",
+      "static_reason": "source dynamic price overflow"
+    },
+    {
+      "code": "HOST_STATE_SOURCE_DYNAMIC_WORK_OVERFLOW",
+      "id": 99,
+      "pattern": "CpuHostError::State(\"source dynamic work overflow\")",
+      "rust_enum": "Error99",
+      "static_reason": "source dynamic work overflow"
+    },
+    {
+      "code": "HOST_STATE_SOURCE_STRUCTURAL_WORK_OVERFLOW",
+      "id": 100,
+      "pattern": "CpuHostError::State(\"source structural work overflow\")",
+      "rust_enum": "Error100",
+      "static_reason": "source structural work overflow"
+    },
+    {
+      "code": "HOST_STATE_STRUCTURAL_PRICE_OVERFLOW",
+      "id": 101,
+      "pattern": "CpuHostError::State(\"structural price overflow\")",
+      "rust_enum": "Error101",
+      "static_reason": "structural price overflow"
+    },
+    {
+      "code": "HOST_CONTRACT_OTHER",
+      "id": 102,
+      "pattern": "CpuHostError::Contract(_)",
+      "rust_enum": "Error102"
+    },
+    {
+      "code": "TRAINING_CONTRACT_OTHER",
+      "id": 103,
+      "pattern": "CpuHostError::Training(alife_training::TrainingError::Contract(_))",
+      "rust_enum": "Error103"
+    },
+    {
+      "code": "TRAINING_ORGANISM",
+      "id": 104,
+      "pattern": "CpuHostError::Training(alife_training::TrainingError::Organism(_))",
+      "rust_enum": "Error104"
+    },
+    {
+      "code": "TRAINING_GPU_SUBMISSION",
+      "id": 105,
+      "pattern": "CpuHostError::Training(alife_training::TrainingError::GpuSubmission)",
+      "rust_enum": "Error105"
+    },
+    {
+      "code": "TRAINING_MALFORMED_READBACK",
+      "id": 106,
+      "pattern": "CpuHostError::Training(alife_training::TrainingError::MalformedReadback)",
+      "rust_enum": "Error106"
+    },
+    {
+      "code": "HOST_ORGANISM",
+      "id": 107,
+      "pattern": "CpuHostError::Organism(_)",
+      "rust_enum": "Error107"
+    },
+    {
+      "code": "HOST_PERSISTENCE",
+      "id": 108,
+      "pattern": "CpuHostError::Persistence(_)",
+      "rust_enum": "Error108"
+    },
+    {
+      "code": "HOST_JSON",
+      "id": 109,
+      "pattern": "CpuHostError::Json(_)",
+      "rust_enum": "Error109"
+    },
+    {
+      "code": "HOST_STATE_OTHER",
+      "id": 110,
+      "pattern": "CpuHostError::State(_)",
+      "rust_enum": "Error110"
+    },
+    {
+      "code": "HOST_PREPARATION",
+      "id": 111,
+      "pattern": "CpuHostError::Preparation(_)",
+      "rust_enum": "Error111"
+    }
+  ],
+  "event_order": [
+    [
+      "phase",
+      1
+    ],
+    [
+      "phase",
+      2
+    ],
+    [
+      "phase",
+      3
+    ],
+    [
+      "phase",
+      4
+    ],
+    [
+      "phase",
+      5
+    ],
+    [
+      "phase",
+      6
+    ],
+    [
+      "phase",
+      7
+    ],
+    [
+      "check",
+      1
+    ],
+    [
+      "phase",
+      8
+    ],
+    [
+      "phase",
+      9
+    ],
+    [
+      "phase",
+      10
+    ],
+    [
+      "phase",
+      11
+    ],
+    [
+      "phase",
+      12
+    ],
+    [
+      "phase",
+      13
+    ],
+    [
+      "phase",
+      14
+    ],
+    [
+      "phase",
+      15
+    ],
+    [
+      "phase",
+      16
+    ],
+    [
+      "phase",
+      17
+    ],
+    [
+      "phase",
+      18
+    ],
+    [
+      "phase",
+      19
+    ],
+    [
+      "phase",
+      20
+    ],
+    [
+      "phase",
+      21
+    ],
+    [
+      "phase",
+      22
+    ],
+    [
+      "phase",
+      23
+    ],
+    [
+      "phase",
+      24
+    ],
+    [
+      "phase",
+      25
+    ],
+    [
+      "phase",
+      26
+    ],
+    [
+      "phase",
+      27
+    ],
+    [
+      "phase",
+      28
+    ],
+    [
+      "phase",
+      29
+    ],
+    [
+      "check",
+      2
+    ],
+    [
+      "check",
+      3
+    ],
+    [
+      "check",
+      4
+    ],
+    [
+      "phase",
+      30
+    ],
+    [
+      "phase",
+      31
+    ],
+    [
+      "phase",
+      32
+    ],
+    [
+      "phase",
+      33
+    ],
+    [
+      "check",
+      5
+    ],
+    [
+      "phase",
+      34
+    ],
+    [
+      "phase",
+      35
+    ],
+    [
+      "check",
+      6
+    ],
+    [
+      "phase",
+      36
+    ],
+    [
+      "phase",
+      37
+    ],
+    [
+      "phase",
+      38
+    ],
+    [
+      "phase",
+      39
+    ],
+    [
+      "phase",
+      40
+    ],
+    [
+      "phase",
+      41
+    ],
+    [
+      "phase",
+      42
+    ],
+    [
+      "phase",
+      43
+    ],
+    [
+      "phase",
+      44
+    ],
+    [
+      "phase",
+      45
+    ],
+    [
+      "check",
+      7
+    ],
+    [
+      "check",
+      8
+    ],
+    [
+      "check",
+      9
+    ],
+    [
+      "check",
+      10
+    ],
+    [
+      "check",
+      11
+    ],
+    [
+      "phase",
+      46
+    ],
+    [
+      "phase",
+      47
+    ],
+    [
+      "phase",
+      48
+    ],
+    [
+      "phase",
+      49
+    ],
+    [
+      "phase",
+      50
+    ],
+    [
+      "phase",
+      51
+    ],
+    [
+      "phase",
+      52
+    ],
+    [
+      "phase",
+      53
+    ],
+    [
+      "phase",
+      54
+    ],
+    [
+      "phase",
+      55
+    ],
+    [
+      "phase",
+      56
+    ],
+    [
+      "phase",
+      57
+    ],
+    [
+      "check",
+      12
+    ],
+    [
+      "check",
+      13
+    ],
+    [
+      "phase",
+      58
+    ],
+    [
+      "phase",
+      59
+    ],
+    [
+      "phase",
+      60
+    ],
+    [
+      "phase",
+      61
+    ],
+    [
+      "phase",
+      62
+    ],
+    [
+      "phase",
+      63
+    ],
+    [
+      "phase",
+      64
+    ],
+    [
+      "phase",
+      65
+    ],
+    [
+      "phase",
+      66
+    ]
+  ],
+  "fixture_scope": "Original f041 calls and assertions preserved. Only first-step error is projected through fixed enum/static-reason matches, returned unchanged, then original unwrap failure. All phase/check events and one ordinary class5 rejection assertion remain as V5.",
+  "native_execution_performed": false,
+  "observed_failure": "V5 attempt1 reached HOST_NEW_DONE, INITIAL_FROZEN_SNAPSHOT_DONE and FIRST_STEP_BEGIN; ordinary class5 rejection passed. No fixture passed. Partial internal first-step work is unknown. Warm/cold successors were not reached. The old profile5-only physical receipt gate is an independently sufficient defect if reached, not proof it was the observed V5 site.",
+  "ordinary_identity_rejection_calls": 1,
+  "phases": [
+    "RECIPE_BUILD_BEGIN",
+    "RECIPE_BUILD_DONE",
+    "GRIP_COMPILE_BEGIN",
+    "GRIP_COMPILE_DONE",
+    "ASSET_CREATE_BEGIN",
+    "ASSET_CREATE_DONE",
+    "ORDINARY_IDENTITY_REJECT_BEGIN",
+    "ORDINARY_IDENTITY_REJECT_DONE",
+    "GENOTYPE_BIND_BEGIN",
+    "GENOTYPE_BIND_DONE",
+    "TRAINER_NEW_BEGIN",
+    "TRAINER_NEW_DONE",
+    "TRAINER_RESTORE_BEGIN",
+    "TRAINER_RESTORE_DONE",
+    "WORLD_NEW_BEGIN",
+    "WORLD_NEW_DONE",
+    "WORLD_RECORD_BEGIN",
+    "WORLD_RECORD_DONE",
+    "SCENE_BUILD_BEGIN",
+    "SCENE_BUILD_DONE",
+    "SCENE_REGISTER_BEGIN",
+    "SCENE_REGISTER_DONE",
+    "HOST_NEW_BEGIN",
+    "HOST_NEW_DONE",
+    "INITIAL_FROZEN_SNAPSHOT_BEGIN",
+    "INITIAL_FROZEN_SNAPSHOT_DONE",
+    "FIRST_STEP_BEGIN",
+    "FIRST_STEP_DONE",
+    "FIRST_COUNTS_BEGIN",
+    "FIRST_COUNTS_DONE",
+    "SCORE_PROBABILITIES_BEGIN",
+    "SCORE_PROBABILITIES_DONE",
+    "COORDINATION_SUPPORT_BEGIN",
+    "COORDINATION_SUPPORT_DONE",
+    "SCORE_EVALUATION_BEGIN",
+    "SCORE_EVALUATION_DONE",
+    "FIRST_RECEIPT_CHECKS_BEGIN",
+    "FIRST_RECEIPT_CHECKS_DONE",
+    "FIRST_FROZEN_CHECK_BEGIN",
+    "FIRST_FROZEN_CHECK_DONE",
+    "CHECKPOINT_ENCODE_BEGIN",
+    "CHECKPOINT_ENCODE_DONE",
+    "WRONG_ENVELOPE_REJECTION_BEGIN",
+    "WRONG_ENVELOPE_REJECTION_DONE",
+    "GRIP_KERNEL_CHECKS_BEGIN",
+    "GRIP_KERNEL_CHECKS_DONE",
+    "CHECKPOINT_DECODE_BEGIN",
+    "CHECKPOINT_DECODE_DONE",
+    "COLD_RESTORE_BEGIN",
+    "COLD_RESTORE_DONE",
+    "COLD_WIRE_CHECK_BEGIN",
+    "COLD_WIRE_CHECK_DONE",
+    "WARM_SUCCESSOR_BEGIN",
+    "WARM_SUCCESSOR_DONE",
+    "COLD_SUCCESSOR_BEGIN",
+    "COLD_SUCCESSOR_DONE",
+    "SUCCESSOR_COUNTS_BEGIN",
+    "SUCCESSOR_COUNTS_DONE",
+    "SUCCESSOR_ACTION_PATCH_BEGIN",
+    "SUCCESSOR_ACTION_PATCH_DONE",
+    "FINAL_WIRE_CHECK_BEGIN",
+    "FINAL_WIRE_CHECK_DONE",
+    "FINAL_WARM_FROZEN_BEGIN",
+    "FINAL_WARM_FROZEN_DONE",
+    "FINAL_COLD_FROZEN_BEGIN",
+    "FINAL_COLD_FROZEN_DONE"
+  ],
+  "production_scope": "All V5 admission corrections retained. The only new production delta is observe_physical expected-profile derivation from trusted resident grip ownership, validated as GripOptionsPolicy before exactly profile6 is admitted. Non-grip path still admits exactly profile5. Every other receipt/frame/organism/tick/source/selection guard remains unchanged.",
+  "schema": "m2-grip-f041-source-fix-diagnostic-v6",
+  "source_forwards_upper_bound": 3
+}

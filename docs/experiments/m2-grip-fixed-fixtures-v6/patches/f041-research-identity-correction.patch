@@ -1,0 +1,23 @@
+--- a/crates/alife_core/src/grounded_drive_genetics.rs
++++ b/crates/alife_core/src/grounded_drive_genetics.rs
+@@ -260,10 +260,13 @@
+         return Err(ScaffoldContractError::PhenotypeCompile);
+     }
+     let m = asset.manifest();
+-    FoundationGeneticIdentity::new(
+-        m.foundation_id().raw(),
+-        m.foundation_version().raw() as u16,
+-        m.compatibility_family_id().raw(),
+-        m.capacity_class_id(),
+-    )
+-}
++    // The canonical grip asset already binds this unpromoted research identity.
++    // Ordinary FoundationGeneticIdentity::new deliberately rejects class 5.
++    Ok(FoundationGeneticIdentity {
++        foundation_id: m.foundation_id().raw(),
++        version: u16::try_from(m.foundation_version().raw())
++            .map_err(|_| ScaffoldContractError::PhenotypeCompile)?,
++        compatibility_family_id: m.compatibility_family_id().raw(),
++        brain_class_id: m.capacity_class_id(),
++    })
++}

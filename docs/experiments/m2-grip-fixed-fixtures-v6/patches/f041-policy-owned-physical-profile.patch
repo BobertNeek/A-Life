@@ -1,0 +1,20 @@
+--- a/crates/alife_training/src/cpu/grouped_host_envelope.rs
++++ b/crates/alife_training/src/cpu/grouped_host_envelope.rs
+@@ -204,10 +204,16 @@
+         physical: &alife_world::SleepChoiceWorldReceiptV1,
+         sleep: &mut SleepController,
+     ) -> Result<(), CpuHostError> {
++        let expected_profile = if self.grip_options.is_some() {
++            self.validate_policy::<GripOptionsPolicy>()?;
++            SensorProfile::GroundedGripSleepChoiceV1
++        } else {
++            SensorProfile::GroundedObjectSlotsSleepChoiceV1
++        };
+         if physical.motor.bundle != *bundle
+             || frame.organism_id() != bundle.organism_id
+             || frame.tick() != bundle.tick
+-            || frame.sensor_profile() != SensorProfile::GroundedObjectSlotsSleepChoiceV1
++            || frame.sensor_profile() != expected_profile
+         {
+             return Err(CpuHostError::State(
+                 "grouped M2 physical receipt selection mismatch",

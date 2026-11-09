@@ -1,0 +1,192 @@
+{
+  "directory": "/tmp/m2-grip-fixed-fixtures-v4",
+  "files": [
+    {
+      "bytes": 504,
+      "path": "ACTIVATE.template.json",
+      "sha256": "40ba40f57c43a48dcb5639b3c6f29e9addd5acf6bd65cd5b3cfd3a3a1d2fa0b6"
+    },
+    {
+      "bytes": 9422,
+      "path": "ARCHIVE-MANIFEST.json",
+      "sha256": "b6a5f63bddf731c8a369fe1f3ad16dc02db22946940b7043619a213cbcb32a11"
+    },
+    {
+      "bytes": 50306,
+      "path": "CONTINUATION.json",
+      "sha256": "6c12659cf7058e1ff61175e4e85d4181f238aa9ad2aaa9ea297bee92ce32b9c9"
+    },
+    {
+      "bytes": 1849,
+      "path": "F012-CORRECTION.json",
+      "sha256": "fa8abb7522f5e28167f634477429c397f5b657a16bc876ebb069fda960551702"
+    },
+    {
+      "bytes": 2409,
+      "path": "F019-CORRECTION.json",
+      "sha256": "c0dfb3e1436eee621e27bf8392e4ed6e81a0b4c942c0aebbe839c29c14fd5457"
+    },
+    {
+      "bytes": 7317,
+      "path": "F041-DIAGNOSTIC.json",
+      "sha256": "f335a6e06a1c0865e5f91d7620e595d36be69c90e5fb796d98aac73a117fac14"
+    },
+    {
+      "bytes": 485,
+      "path": "FIXTURE-INVENTORY.md",
+      "sha256": "6a4a0d62cb86bd5d5a3f98d20d4780fe62d52784794123cc63e7d62f08780e32"
+    },
+    {
+      "bytes": 5506,
+      "path": "FIXTURES.json",
+      "sha256": "ad7f474482891e2300490c267acb98e15c5c24dc86412f0f05d6e3dc0d255adc"
+    },
+    {
+      "bytes": 1375,
+      "path": "PREPARATION.json",
+      "sha256": "aaec6952b952f3810a35f49fe7c93e30bab16ed6ea2522574ac416f425166658"
+    },
+    {
+      "bytes": 1845,
+      "path": "PRIOR-TYPECHECK-RESULT.json",
+      "sha256": "3ef6c8feb21d59f28e4fd88af90911f86bc5da01ebbde463628388ac5f623071"
+    },
+    {
+      "bytes": 4343,
+      "path": "PRIOR-V1-PRESERVATION.json",
+      "sha256": "381de519eb397987b003cb953491aaeb9b10aeb915749b56a340a8cd63c7edcc"
+    },
+    {
+      "bytes": 4650,
+      "path": "PRIOR-V2-PRESERVATION.json",
+      "sha256": "94fa6434320ee85f0f38287b4daec46abdb3b6e2b1c70b97f20f330dfcf89454"
+    },
+    {
+      "bytes": 5283,
+      "path": "PRIOR-V3-PRESERVATION.json",
+      "sha256": "9514362ed4c3694496dda7ac7f44ed9e34798a57c1f26b1c10fcb43a4027ee7a"
+    },
+    {
+      "bytes": 4245,
+      "path": "PRIOR-V5-PRESERVATION.json",
+      "sha256": "bba8ce529bc0971c826533e74cb1473c3c1c57eb0c6c8b4a5d26ce6c8d7059c9"
+    },
+    {
+      "bytes": 3562,
+      "path": "README.md",
+      "sha256": "05a23c834b91ae7d38dd0c2f4de3cfffc8994cc0eed15ee97d021daba588533b"
+    },
+    {
+      "bytes": 10186,
+      "path": "REMOTE-FILES.json",
+      "sha256": "c8b5e7345353312d7399fd23e8171cf050d1850d42303d6f182b3b6b0189a4f7"
+    },
+    {
+      "bytes": 9899,
+      "path": "REUSE-MANIFEST.json",
+      "sha256": "3ca039e1613554f1d57ff826171f3d157a0f481252cb997d1ff9108e58a678c4"
+    },
+    {
+      "bytes": 1216,
+      "path": "RUNNER-SEMANTICS.json",
+      "sha256": "e9ab45be511abe9827bae595299c7f00d95369f038ba2c1463fae44d66085527"
+    },
+    {
+      "bytes": 55208,
+      "path": "SOURCE-AUDIT.json",
+      "sha256": "1822e5a1a4529c8809414cafa80b492696edb5ae4b9fedde62ddea6edea262e2"
+    },
+    {
+      "bytes": 283,
+      "path": "STATIC-CHECK.json",
+      "sha256": "0ee59f1b0e3e19ea0370041bf507a0a919f1b09f3589e8c77cb4e278ec9c986d"
+    },
+    {
+      "bytes": 1762,
+      "path": "TEST-ONLY-DELTA.json",
+      "sha256": "5ca7d62259b6298ed72d13579474fca0ceb8ab2b7dacbb6d9360eff0b215a9d2"
+    },
+    {
+      "bytes": 36872,
+      "path": "TRIGGER-AUDIT.json",
+      "sha256": "67dcbac891629300bfaa609d771e094e85144397bf21e45f2630121050eabba7"
+    },
+    {
+      "bytes": 4383,
+      "path": "WORKFLOW-PRESERVATION.json",
+      "sha256": "604610421f6989b2e1c661c3d4e7af3bc477be182b4334678b32c84e1cff8a8a"
+    },
+    {
+      "bytes": 4861,
+      "path": "packet_inputs.py",
+      "sha256": "40f3e1b45c2d1ab3e02df8acc410a0b238b31049648f0fcd2848bbd57bbce0ce"
+    },
+    {
+      "bytes": 4417,
+      "path": "patches/f012-mixed-map-correction.patch",
+      "sha256": "6071ea77383d198a9b8a06a662925373b30db7b039d903bee6200ea534b22f8d"
+    },
+    {
+      "bytes": 2645,
+      "path": "patches/f019-interval-velocity-expectation.patch",
+      "sha256": "13ce534c71f5f76bfc9291a82a34469583dda3b5cb3e867d59bed46c891baa27"
+    },
+    {
+      "bytes": 522,
+      "path": "patches/f041-genetic-source-development.patch",
+      "sha256": "f6b9042cf498dd0ecb11b3a2b0d3d9b3e5a8d48c67f904133ec2ce52e23cb863"
+    },
+    {
+      "bytes": 12332,
+      "path": "patches/f041-safe-phase-diagnostic.patch",
+      "sha256": "a20ea220796abeb38032d0c874fd0ba565d0062973b6bb2a946e98add67fb7e1"
+    },
+    {
+      "bytes": 3446,
+      "path": "patches/gpu-upload-gate.patch",
+      "sha256": "e71af51d4829939b2e91b9c1a4bc2e18f2bc95d8135462412d5a03421be2885a"
+    },
+    {
+      "bytes": 2897,
+      "path": "publication.json",
+      "sha256": "a427ef3290b4d7e78f13349cc1831b2206594f775bb19abe14189756118eb1e7"
+    },
+    {
+      "bytes": 45275,
+      "path": "run_hosted.py",
+      "sha256": "2e6ca23525e706e1c714a25fb1c9034833d6030bfca483bea3c3419da0c65fab"
+    },
+    {
+      "bytes": 8594,
+      "path": "seal.json",
+      "sha256": "34aec82dd3cf3d191d602239f489eae833df2b20dd54e6e85d9249f0783c37bb"
+    },
+    {
+      "bytes": 4042,
+      "path": "seal_package.py",
+      "sha256": "2f687837b7d288a37b6db66108975c01d43658578c29aa887e6aa59831203221"
+    },
+    {
+      "bytes": 201688,
+      "path": "source-manifest.json",
+      "sha256": "58049e7652df5686f2356740bd8565b0052f768fb2aa2b23132bd824423a1e53"
+    },
+    {
+      "bytes": 124231,
+      "path": "source-only-m2-grip-fixed-fixtures-v4-update.tar.gz",
+      "sha256": "5e6aa4481a8b4b1d43e54a04b68885651999053543a98562a27757e5c88768d7"
+    },
+    {
+      "bytes": 29157,
+      "path": "static_checks.py",
+      "sha256": "37e37f54ae0b2f65d1bbccc56396cde44c97190336f6a56aee566032eabaa452"
+    },
+    {
+      "bytes": 1587,
+      "path": "workflow.yml",
+      "sha256": "6f4f1406323372b465393d9d5077c03ad1398dc7f59c68458f8c61ea4ea382a4"
+    }
+  ],
+  "schema": "m2-grip-fixed-prior-v4-preservation-v5",
+  "status": "V4 attempt1 failed; no passed fixture. All local files retained byte-identically."
+}

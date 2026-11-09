@@ -1,0 +1,1829 @@
+{
+  "accepted_main": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "aggregate_exact_known_dose": {
+    "gpu_upload_N512_compile_calls": 2,
+    "grip_maintenance_neuron_updates": 1332,
+    "grip_maintenance_partitions": 3,
+    "grip_ports_bank_forwards": 8,
+    "grip_ports_neuron_updates": 2048,
+    "integrated_cold_intervals": 1,
+    "integrated_committed_registered_intervals": 3,
+    "integrated_rolled_back_registered_intervals": 0,
+    "integrated_source_forwards": 3,
+    "integrated_warm_intervals": 2,
+    "legacy_baseline_decodes": 0,
+    "ordinary_identity_rejection_calls": 1,
+    "primitive_attempts": 25,
+    "primitive_fixture_biology_intervals": 0,
+    "primitive_fixture_source_forwards": 0,
+    "primitive_fixture_worlds": 8,
+    "primitive_rejected_attempts": 9,
+    "primitive_successes": 16
+  },
+  "all_authored_grip_test_count": 42,
+  "continuation_contract": "CONTINUATION.json:40 retained historical passes, V3/V4 f041 failures, one fresh V5 f041 attempt and five pending GPU fixtures.",
+  "executed_tests": 0,
+  "execution_contract": [
+    "Compile only alife_training/test grip_options_host with cpu-backend and --no-run.",
+    "List exactly f041 before one execution.",
+    "Preserve original assertions; fail at first unexpected result; no rerun.",
+    "On failure emit only strict fixed phase/check enums.",
+    "Retain40 historical passes separately; f042-f046 remain pending."
+  ],
+  "f012_test_only_correction": {
+    "after_sha256": "fd4c1b7764a16c79e1cfc0179d82ce7211fa7dd10560e04d23b24d313874645e",
+    "before_sha256": "c82760480220f3b32ba92b130d4e6990fef158d55f94abd8e549e3129784abda",
+    "patch_sha256": "6071ea77383d198a9b8a06a662925373b30db7b039d903bee6200ea534b22f8d",
+    "record": "F012-CORRECTION.json"
+  },
+  "f019_test_only_correction": {
+    "after_sha256": "6edbbf73fdbbe4073582c963bf2fe9ebb5b942e1b0f46bc93be515b6ebc99e6b",
+    "patch_sha256": "13ce534c71f5f76bfc9291a82a34469583dda3b5cb3e867d59bed46c891baa27",
+    "record": "F019-CORRECTION.json"
+  },
+  "f041_diagnostic": "F041-DIAGNOSTIC.json",
+  "f041_identity_correction": "Hash-bound grip_research_identity called ordinary production-only identity constructor for class5. V5 uses checked research literal after unchanged exact canonical asset/unpromoted checks; ordinary gate unchanged.",
+  "f041_physical_profile_correction": "observe_physical previously admitted only profile5 even for trusted grip resident/profile6; now trusted validated owner selects one exact expected profile. This independent source defect is not claimed as observed V5 site.",
+  "f041_test_only_error_projection": "Original first-step Err mapped only to fixed code catalogue; original error returned unchanged to unwrap, no extra step/recipe/source call or data output.",
+  "full_v5_source_closure_audit": {
+    "canonical_asset_validation_file_unchanged": "crates/alife_core/src/foundation.rs",
+    "changed_from_v4": [
+      "crates/alife_core/src/grounded_drive_genetics.rs",
+      "crates/alife_training/tests/grip_options_host.rs"
+    ],
+    "extra_compiler_constructor_work_not_claimed_zero": true,
+    "full_source_reconstructed_in_memory": true,
+    "github_writes": 0,
+    "inherited_leaves": 1313,
+    "inherited_workflows": 15,
+    "local_fixture_bodies_executed": 0,
+    "local_native_invocations": 0,
+    "main": "c3aec16df33861f1316d127736f5f60eea327ede",
+    "main_tree": "9140d525fe1af16fed6539c3178a1a45e1fb04d0",
+    "ordinary_admission_files_unchanged": [
+      "crates/alife_core/src/evolutionary_genetics.rs",
+      "crates/alife_core/src/phenotype/capacity.rs"
+    ],
+    "prior_packets_verified": true,
+    "protected_genetic_asset_inputs_unchanged": [
+      {
+        "bytes": 131613,
+        "path": "assets/brain_foundations/n2048-v1-grounded.alife-foundation",
+        "sha256": "c7a44324cb903547bf1bcd6e031013397b60bfa1a4d9122cf39887ce533d5e39"
+      },
+      {
+        "bytes": 131581,
+        "path": "assets/brain_foundations/n2048-v1-privileged.alife-foundation",
+        "sha256": "677221a7fdecd3754a18fa078a50148783b8d07aa473788489a09e5d90fd3f0d"
+      },
+      {
+        "bytes": 7673,
+        "path": "assets/brain_foundations/n512-v1-grounded.alife-foundation",
+        "sha256": "66a507eb252ad341addbf8c10e65e9255589403183056760d330e95de48781f2"
+      },
+      {
+        "bytes": 7673,
+        "path": "assets/brain_foundations/n512-v1-privileged.alife-foundation",
+        "sha256": "0b2dbea947951bf0607ef81ed842911e965e0335cbb8f92dd0f94fcba9365cd8"
+      },
+      {
+        "bytes": 7673,
+        "path": "assets/founders/scaled-choice-nociceptive-v1/candidate.alife-foundation",
+        "sha256": "c58aae6d46e794eb211d1cd299981a56ab0ebfcf5e2fc13379fcb1323c1f3a7c"
+      },
+      {
+        "bytes": 7673,
+        "path": "assets/founders/scaled-choice-nociceptive-v1/historical/2026-09-08-scaled-choice-32416/candidate.alife-foundation",
+        "sha256": "2d04957b75bda89f73c48c15aed28b9d71c5ec85b408db5bb0f0db1603f922d9"
+      },
+      {
+        "bytes": 361,
+        "path": "assets/ui/care_dock/failed.png",
+        "sha256": "12aecb08ab0da8b5f54e61993fa3abcd434d17feae759e181b72f66a42168444"
+      },
+      {
+        "bytes": 1461,
+        "path": "assets/ui/care_dock/food.png",
+        "sha256": "4aea24f44451d834bfb48128a7da48daeca6b8394a476b90698fd58008607fb6"
+      },
+      {
+        "bytes": 514,
+        "path": "assets/ui/care_dock/pending.png",
+        "sha256": "cc2fa81d2c2638cda7a428361301d4da2ea9cefc095352b98893652926e04385"
+      },
+      {
+        "bytes": 491,
+        "path": "assets/ui/care_dock/placement.png",
+        "sha256": "fdb3d7bef9dd1030a85097e3cd8a09128608ce80402af50bb15182a5703eb1c1"
+      },
+      {
+        "bytes": 1076,
+        "path": "assets/ui/care_dock/praise.png",
+        "sha256": "99d1c7e08541b509f14ef1a1e862c6ec4115eb6f5830462947f696c384c5eb6e"
+      },
+      {
+        "bytes": 790,
+        "path": "assets/ui/care_dock/speech.png",
+        "sha256": "5c25324c085069518af2fc211f23e968a4176de91767895ac7a284479574f16e"
+      },
+      {
+        "bytes": 945,
+        "path": "assets/ui/care_dock/touch.png",
+        "sha256": "f7bc3c5336b8e8977ff79adf894c64a9f706d71516c01dd66382e89f2b7728ca"
+      },
+      {
+        "bytes": 2584,
+        "path": "assets/ui/care_dock/toy.png",
+        "sha256": "fc8365b85bf2b3372fc8753996845fdaf48346636f624c67f3ee8bfc7403df87"
+      },
+      {
+        "bytes": 453,
+        "path": "assets/ui/care_dock/unavailable.png",
+        "sha256": "207a3fdcb29a7befb085e407a41d5f678494dd8ae199c11a5c4f82856e6978bf"
+      },
+      {
+        "bytes": 1446,
+        "path": "assets/ui/speech_composer/broadcast.png",
+        "sha256": "12f4e276e22f58d8ef9177fc1133024b2631341c70bdcfa3a7479aee8fb94801"
+      },
+      {
+        "bytes": 801,
+        "path": "assets/ui/speech_composer/cancel.png",
+        "sha256": "50b3b47634eb33d763686906656375b835b8a1e25125e188fc45405faff070ce"
+      },
+      {
+        "bytes": 2707,
+        "path": "assets/ui/speech_composer/help.png",
+        "sha256": "8c8d206bebb6ab3cff59f8dcb839aeab4523f707e39c63074093c2ccc458634e"
+      },
+      {
+        "bytes": 709,
+        "path": "assets/ui/speech_composer/selected.png",
+        "sha256": "faae12d00c40117b94eae866ca620a69f4c62aedce981919c961b851662c6abd"
+      },
+      {
+        "bytes": 664,
+        "path": "assets/ui/speech_composer/send.png",
+        "sha256": "180014c4c5b2aaf21ebe84780dee383c318983ec46bdccd556d4f17ba243151e"
+      },
+      {
+        "bytes": 2678,
+        "path": "assets/ui/status_hud/calm.png",
+        "sha256": "8797aa4d0333a4c9821037cae744b6a398f14a4e0b4eafca1da6c122070cbc24"
+      },
+      {
+        "bytes": 1226,
+        "path": "assets/ui/status_hud/energy.png",
+        "sha256": "90ffb99108c256665be0393051c0c00477ce89eef8f5c489ce4632d8f7178d53"
+      },
+      {
+        "bytes": 1028,
+        "path": "assets/ui/status_hud/fast.png",
+        "sha256": "669123e211b9ba3a5a827e32dd7bff861df0814be284c497019e78a75acb4ef3"
+      },
+      {
+        "bytes": 3079,
+        "path": "assets/ui/status_hud/fatigue.png",
+        "sha256": "d9547c425d199461dc7c0884648023f1f9d2d075aced913e6395ab7dbbd01852"
+      },
+      {
+        "bytes": 2179,
+        "path": "assets/ui/status_hud/holding_food.png",
+        "sha256": "68e8a5f98f33d8bd1aaab80d657ac7ac418d5a5f7ff02a3165be70e711a2807b"
+      },
+      {
+        "bytes": 2676,
+        "path": "assets/ui/status_hud/hunger.png",
+        "sha256": "8a23923ecb14a774b44469cf7460ab624cebd34881444b388883692c4a719d4c"
+      },
+      {
+        "bytes": 529,
+        "path": "assets/ui/status_hud/paused.png",
+        "sha256": "bef2cc45cf1ec5b08cc63c02449e26b1292a63a4cbf24be3697e615d61577a38"
+      },
+      {
+        "bytes": 1039,
+        "path": "assets/ui/status_hud/playing.png",
+        "sha256": "238165d3637341604ddf563cc9fbc2db52dd84a660065f70c025f8bd0b65c9fc"
+      },
+      {
+        "bytes": 2288,
+        "path": "assets/ui/status_hud/population.png",
+        "sha256": "741825c172d8e65a80bb96152a3b96ad2af3fa397b1a44713131f5d4520c8030"
+      },
+      {
+        "bytes": 1408,
+        "path": "assets/ui/status_hud/praise.png",
+        "sha256": "839501382db8ab97a424c0500b9e218c76478f3db7c0d32a255f3ff082117a42"
+      },
+      {
+        "bytes": 1502,
+        "path": "assets/ui/status_hud/selection.png",
+        "sha256": "18f355e5709b44e3337a2c2aa626250818b640092795f80d28265faea959fd6d"
+      },
+      {
+        "bytes": 2383,
+        "path": "assets/ui/status_hud/sleep.png",
+        "sha256": "28300e159fe98806842a411474147c4639cb11b8bad62d6bc6f693ea68dca986"
+      },
+      {
+        "bytes": 1474,
+        "path": "assets/ui/status_hud/warning.png",
+        "sha256": "46298b1669bfff9ddbea5c49bae9b05cc66c6609d22f3430896d6db8ef9287ac"
+      }
+    ],
+    "schema": "m2-grip-v5-full-source-audit-v1",
+    "source_inputs_verified": 866,
+    "total_source_input_bytes": 27402714,
+    "unchanged_from_v4": 864
+  },
+  "full_v6_source_closure_audit": {
+    "canonical_asset_validation_file_unchanged": "crates/alife_core/src/foundation.rs",
+    "changed_from_v5": [
+      "crates/alife_training/src/cpu/grouped_host_envelope.rs",
+      "crates/alife_training/tests/grip_options_host.rs"
+    ],
+    "extra_compiler_constructor_work_not_claimed_zero": true,
+    "full_source_reconstructed_in_memory": true,
+    "github_writes": 0,
+    "inherited_leaves": 1313,
+    "inherited_workflows": 15,
+    "local_fixture_bodies_executed": 0,
+    "local_native_invocations": 0,
+    "main": "c3aec16df33861f1316d127736f5f60eea327ede",
+    "main_tree": "9140d525fe1af16fed6539c3178a1a45e1fb04d0",
+    "ordinary_admission_files_unchanged": [
+      "crates/alife_core/src/evolutionary_genetics.rs",
+      "crates/alife_core/src/phenotype/capacity.rs"
+    ],
+    "prior_packets_verified": true,
+    "protected_genetic_asset_inputs_unchanged": [
+      {
+        "bytes": 131613,
+        "path": "assets/brain_foundations/n2048-v1-grounded.alife-foundation",
+        "sha256": "c7a44324cb903547bf1bcd6e031013397b60bfa1a4d9122cf39887ce533d5e39"
+      },
+      {
+        "bytes": 131581,
+        "path": "assets/brain_foundations/n2048-v1-privileged.alife-foundation",
+        "sha256": "677221a7fdecd3754a18fa078a50148783b8d07aa473788489a09e5d90fd3f0d"
+      },
+      {
+        "bytes": 7673,
+        "path": "assets/brain_foundations/n512-v1-grounded.alife-foundation",
+        "sha256": "66a507eb252ad341addbf8c10e65e9255589403183056760d330e95de48781f2"
+      },
+      {
+        "bytes": 7673,
+        "path": "assets/brain_foundations/n512-v1-privileged.alife-foundation",
+        "sha256": "0b2dbea947951bf0607ef81ed842911e965e0335cbb8f92dd0f94fcba9365cd8"
+      },
+      {
+        "bytes": 7673,
+        "path": "assets/founders/scaled-choice-nociceptive-v1/candidate.alife-foundation",
+        "sha256": "c58aae6d46e794eb211d1cd299981a56ab0ebfcf5e2fc13379fcb1323c1f3a7c"
+      },
+      {
+        "bytes": 7673,
+        "path": "assets/founders/scaled-choice-nociceptive-v1/historical/2026-09-08-scaled-choice-32416/candidate.alife-foundation",
+        "sha256": "2d04957b75bda89f73c48c15aed28b9d71c5ec85b408db5bb0f0db1603f922d9"
+      },
+      {
+        "bytes": 361,
+        "path": "assets/ui/care_dock/failed.png",
+        "sha256": "12aecb08ab0da8b5f54e61993fa3abcd434d17feae759e181b72f66a42168444"
+      },
+      {
+        "bytes": 1461,
+        "path": "assets/ui/care_dock/food.png",
+        "sha256": "4aea24f44451d834bfb48128a7da48daeca6b8394a476b90698fd58008607fb6"
+      },
+      {
+        "bytes": 514,
+        "path": "assets/ui/care_dock/pending.png",
+        "sha256": "cc2fa81d2c2638cda7a428361301d4da2ea9cefc095352b98893652926e04385"
+      },
+      {
+        "bytes": 491,
+        "path": "assets/ui/care_dock/placement.png",
+        "sha256": "fdb3d7bef9dd1030a85097e3cd8a09128608ce80402af50bb15182a5703eb1c1"
+      },
+      {
+        "bytes": 1076,
+        "path": "assets/ui/care_dock/praise.png",
+        "sha256": "99d1c7e08541b509f14ef1a1e862c6ec4115eb6f5830462947f696c384c5eb6e"
+      },
+      {
+        "bytes": 790,
+        "path": "assets/ui/care_dock/speech.png",
+        "sha256": "5c25324c085069518af2fc211f23e968a4176de91767895ac7a284479574f16e"
+      },
+      {
+        "bytes": 945,
+        "path": "assets/ui/care_dock/touch.png",
+        "sha256": "f7bc3c5336b8e8977ff79adf894c64a9f706d71516c01dd66382e89f2b7728ca"
+      },
+      {
+        "bytes": 2584,
+        "path": "assets/ui/care_dock/toy.png",
+        "sha256": "fc8365b85bf2b3372fc8753996845fdaf48346636f624c67f3ee8bfc7403df87"
+      },
+      {
+        "bytes": 453,
+        "path": "assets/ui/care_dock/unavailable.png",
+        "sha256": "207a3fdcb29a7befb085e407a41d5f678494dd8ae199c11a5c4f82856e6978bf"
+      },
+      {
+        "bytes": 1446,
+        "path": "assets/ui/speech_composer/broadcast.png",
+        "sha256": "12f4e276e22f58d8ef9177fc1133024b2631341c70bdcfa3a7479aee8fb94801"
+      },
+      {
+        "bytes": 801,
+        "path": "assets/ui/speech_composer/cancel.png",
+        "sha256": "50b3b47634eb33d763686906656375b835b8a1e25125e188fc45405faff070ce"
+      },
+      {
+        "bytes": 2707,
+        "path": "assets/ui/speech_composer/help.png",
+        "sha256": "8c8d206bebb6ab3cff59f8dcb839aeab4523f707e39c63074093c2ccc458634e"
+      },
+      {
+        "bytes": 709,
+        "path": "assets/ui/speech_composer/selected.png",
+        "sha256": "faae12d00c40117b94eae866ca620a69f4c62aedce981919c961b851662c6abd"
+      },
+      {
+        "bytes": 664,
+        "path": "assets/ui/speech_composer/send.png",
+        "sha256": "180014c4c5b2aaf21ebe84780dee383c318983ec46bdccd556d4f17ba243151e"
+      },
+      {
+        "bytes": 2678,
+        "path": "assets/ui/status_hud/calm.png",
+        "sha256": "8797aa4d0333a4c9821037cae744b6a398f14a4e0b4eafca1da6c122070cbc24"
+      },
+      {
+        "bytes": 1226,
+        "path": "assets/ui/status_hud/energy.png",
+        "sha256": "90ffb99108c256665be0393051c0c00477ce89eef8f5c489ce4632d8f7178d53"
+      },
+      {
+        "bytes": 1028,
+        "path": "assets/ui/status_hud/fast.png",
+        "sha256": "669123e211b9ba3a5a827e32dd7bff861df0814be284c497019e78a75acb4ef3"
+      },
+      {
+        "bytes": 3079,
+        "path": "assets/ui/status_hud/fatigue.png",
+        "sha256": "d9547c425d199461dc7c0884648023f1f9d2d075aced913e6395ab7dbbd01852"
+      },
+      {
+        "bytes": 2179,
+        "path": "assets/ui/status_hud/holding_food.png",
+        "sha256": "68e8a5f98f33d8bd1aaab80d657ac7ac418d5a5f7ff02a3165be70e711a2807b"
+      },
+      {
+        "bytes": 2676,
+        "path": "assets/ui/status_hud/hunger.png",
+        "sha256": "8a23923ecb14a774b44469cf7460ab624cebd34881444b388883692c4a719d4c"
+      },
+      {
+        "bytes": 529,
+        "path": "assets/ui/status_hud/paused.png",
+        "sha256": "bef2cc45cf1ec5b08cc63c02449e26b1292a63a4cbf24be3697e615d61577a38"
+      },
+      {
+        "bytes": 1039,
+        "path": "assets/ui/status_hud/playing.png",
+        "sha256": "238165d3637341604ddf563cc9fbc2db52dd84a660065f70c025f8bd0b65c9fc"
+      },
+      {
+        "bytes": 2288,
+        "path": "assets/ui/status_hud/population.png",
+        "sha256": "741825c172d8e65a80bb96152a3b96ad2af3fa397b1a44713131f5d4520c8030"
+      },
+      {
+        "bytes": 1408,
+        "path": "assets/ui/status_hud/praise.png",
+        "sha256": "839501382db8ab97a424c0500b9e218c76478f3db7c0d32a255f3ff082117a42"
+      },
+      {
+        "bytes": 1502,
+        "path": "assets/ui/status_hud/selection.png",
+        "sha256": "18f355e5709b44e3337a2c2aa626250818b640092795f80d28265faea959fd6d"
+      },
+      {
+        "bytes": 2383,
+        "path": "assets/ui/status_hud/sleep.png",
+        "sha256": "28300e159fe98806842a411474147c4639cb11b8bad62d6bc6f693ea68dca986"
+      },
+      {
+        "bytes": 1474,
+        "path": "assets/ui/status_hud/warning.png",
+        "sha256": "46298b1669bfff9ddbea5c49bae9b05cc66c6609d22f3430896d6db8ef9287ac"
+      }
+    ],
+    "schema": "m2-grip-v6-full-source-audit-v1",
+    "source_inputs_verified": 866,
+    "total_source_input_bytes": 27416115,
+    "unchanged_from_v5": 864
+  },
+  "gaps": [
+    "No nested deferred_grip_map_fixture tests: included final perception_grip_map.rs defines no #[test].",
+    "No dedicated grip_options_host.rs or policy/grip_options.rs unit tests beyond listed coordination tests and integration target.",
+    "No explicit grip-host rejected source-forward/work-limit/registered-transaction rollback fixture found among authored grip tests. Primitive failed-swap unchanged constraints are not registered biology rollback coverage.",
+    "Integrated cold continuation does not prove action-specific Close or Release chosen; primitive tests provide those semantics separately.",
+    "Full recursive compiler reconstruction count for integration and ignored source reconstruction is not certified. Null means unresolved, never zero. This is disclosed resource work, not an independent permission/admission gate for the bounded authorized integration fixture.",
+    "The added valid profile6 frame gate fixture closes the frame-upload rejection gap only; new-profile slot construction and hardware remain unqualified."
+  ],
+  "independent_runner_review": {
+    "concrete_blocking_flaws_found": [],
+    "native_execution": false,
+    "observations": [
+      "Exact list then run admission and binary hashes are enforced; expected pass count is exactly1 and ignored=0.",
+      "Cargo --no-run artifact must have profile.test=true, matching target name, selected crate source root, expected features, executable beneath private target, one unique result.",
+      "Private stdout/stderr bytes are bounded and never emitted; public summary contains whitelisted codes, pinned identities, counters and sanitized compiler diagnostic path/code/line only.",
+      "All child processes start a new session; runner samples session RSS and kills process group plus remaining session descendants on all exits.",
+      "Time, sampled RSS, disk, free-space, output and per-file size guards apply. These are sampled resource limits, not hard instantaneous RSS caps.",
+      "Manifest construction asserts old865 records plus single additive source; all old records verified after applying test-only patch.",
+      "Final packet still under preparation: source-manifest-v5.json and source-manifest.json not materialized at audit moment; workflow seal placeholder still pending. This is a freeze prerequisite, not a demonstrated runner logic bug."
+    ],
+    "optional_hardening": [
+      "Reverify all bound source records after the final fixture for an explicit post-test preservation certificate. Current runner verifies after builds and before test execution."
+    ],
+    "pure_python_protocol_cases_passed": 9,
+    "runner_sha256": "4fa5c3cb5030a3b18efaddfa8a20be5705ec4548a4e12ac948dda22f08d39101",
+    "subsequent_hardening": "The final runner now reverifies every bound source record after the last fixture. Source-manifest-v5.json is intentionally supplied by immutable REUSE-MANIFEST, not duplicated locally; final seal/transport verification covers it."
+  },
+  "independent_runner_review_scope": "The retained review describes V1. V2 preserves all other runner functions apart from version literals and narrowly extends restore_test_fixture; V2 static checks enforce that delta. No new native pass is claimed.",
+  "intermediate_sample_owner_order": "Native forward sets motor.last_receipt; GripOptionsPolicy::select sets grip.last; stage already validates their paired presence and changes only neural pending binding. No grouped sample/owner fields are cleared before observe_physical, and close occurs afterward.",
+  "inventory": [
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "compiler_reconstructions": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "exact_name": "legacy_profile_tags_and_ambiguous_rejection_are_literal",
+      "features": [],
+      "ignored": false,
+      "notes": [],
+      "package": "alife_core",
+      "selection": "retained_historical_pass_not_executed_v4",
+      "source_path": "crates/alife_core/tests/grip_profile_wire.rs",
+      "source_sha256": "1e8c4621497bde04b19c0ec3ae780a382717690aad497f893749c82627c38cb1",
+      "target": "grip_profile_wire",
+      "target_kind": "test"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "compiler_reconstructions": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "exact_name": "own_target_has_no_fabricated_visual_features",
+      "features": [],
+      "ignored": false,
+      "notes": [],
+      "package": "alife_core",
+      "selection": "retained_historical_pass_not_executed_v4",
+      "source_path": "crates/alife_core/tests/grip_profile_wire.rs",
+      "source_sha256": "1e8c4621497bde04b19c0ec3ae780a382717690aad497f893749c82627c38cb1",
+      "target": "grip_profile_wire",
+      "target_kind": "test"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "compiler_reconstructions": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "exact_name": "exact_grip_memory_operations_do_not_alias_contact_or_other",
+      "features": [],
+      "ignored": false,
+      "notes": [],
+      "package": "alife_core",
+      "selection": "retained_historical_pass_not_executed_v4",
+      "source_path": "crates/alife_core/tests/grip_profile_wire.rs",
+      "source_sha256": "1e8c4621497bde04b19c0ec3ae780a382717690aad497f893749c82627c38cb1",
+      "target": "grip_profile_wire",
+      "target_kind": "test"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "compiler_reconstructions": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "exact_name": "legacy_full_objects_and_sequences_keep_exact_eleven_fields",
+      "features": [],
+      "ignored": false,
+      "notes": [],
+      "package": "alife_core",
+      "selection": "retained_historical_pass_not_executed_v4",
+      "source_path": "crates/alife_core/tests/grip_perception_compatibility.rs",
+      "source_sha256": "fd4c1b7764a16c79e1cfc0179d82ce7211fa7dd10560e04d23b24d313874645e",
+      "target": "grip_perception_compatibility",
+      "target_kind": "test"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "compiler_reconstructions": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "exact_name": "legacy_numeric_maps_decode_full_fields_without_extension",
+      "features": [],
+      "ignored": false,
+      "notes": [],
+      "package": "alife_core",
+      "selection": "retained_historical_pass_not_executed_v4",
+      "source_path": "crates/alife_core/tests/grip_perception_compatibility.rs",
+      "source_sha256": "fd4c1b7764a16c79e1cfc0179d82ce7211fa7dd10560e04d23b24d313874645e",
+      "target": "grip_perception_compatibility",
+      "target_kind": "test"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "compiler_reconstructions": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "exact_name": "legacy_nested_bincode_does_not_consume_the_next_draft_or_tail",
+      "features": [],
+      "ignored": false,
+      "notes": [],
+      "package": "alife_core",
+      "selection": "retained_historical_pass_not_executed_v4",
+      "source_path": "crates/alife_core/tests/grip_perception_compatibility.rs",
+      "source_sha256": "fd4c1b7764a16c79e1cfc0179d82ce7211fa7dd10560e04d23b24d313874645e",
+      "target": "grip_perception_compatibility",
+      "target_kind": "test"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "compiler_reconstructions": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "exact_name": "new_empty_and_nonempty_frames_roundtrip_all_transports",
+      "features": [],
+      "ignored": false,
+      "notes": [],
+      "package": "alife_core",
+      "selection": "retained_historical_pass_not_executed_v4",
+      "source_path": "crates/alife_core/tests/grip_perception_compatibility.rs",
+      "source_sha256": "fd4c1b7764a16c79e1cfc0179d82ce7211fa7dd10560e04d23b24d313874645e",
+      "target": "grip_perception_compatibility",
+      "target_kind": "test"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "compiler_reconstructions": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "exact_name": "new_extension_is_required_after_digest_even_without_visual_slots",
+      "features": [],
+      "ignored": false,
+      "notes": [],
+      "package": "alife_core",
+      "selection": "retained_historical_pass_not_executed_v4",
+      "source_path": "crates/alife_core/tests/grip_perception_compatibility.rs",
+      "source_sha256": "fd4c1b7764a16c79e1cfc0179d82ce7211fa7dd10560e04d23b24d313874645e",
+      "target": "grip_perception_compatibility",
+      "target_kind": "test"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "compiler_reconstructions": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "exact_name": "legacy_metadata_does_not_gain_authority_and_empty_grip_cannot_claim_a_held_target",
+      "features": [],
+      "ignored": false,
+      "notes": [],
+      "package": "alife_core",
+      "selection": "retained_historical_pass_not_executed_v4",
+      "source_path": "crates/alife_core/tests/grip_perception_compatibility.rs",
+      "source_sha256": "fd4c1b7764a16c79e1cfc0179d82ce7211fa7dd10560e04d23b24d313874645e",
+      "target": "grip_perception_compatibility",
+      "target_kind": "test"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "compiler_reconstructions": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "exact_name": "legacy_named_own_grip_metadata_remains_ignored_before_and_after_profile",
+      "features": [],
+      "ignored": false,
+      "notes": [],
+      "package": "alife_core",
+      "selection": "retained_historical_pass_not_executed_v4",
+      "source_path": "crates/alife_core/tests/grip_perception_compatibility.rs",
+      "source_sha256": "fd4c1b7764a16c79e1cfc0179d82ce7211fa7dd10560e04d23b24d313874645e",
+      "target": "grip_perception_compatibility",
+      "target_kind": "test"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "compiler_reconstructions": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "exact_name": "new_named_own_grip_metadata_is_typed_only_after_profile_and_duplicates_fail",
+      "features": [],
+      "ignored": false,
+      "notes": [],
+      "package": "alife_core",
+      "selection": "retained_historical_pass_not_executed_v4",
+      "source_path": "crates/alife_core/tests/grip_perception_compatibility.rs",
+      "source_sha256": "fd4c1b7764a16c79e1cfc0179d82ce7211fa7dd10560e04d23b24d313874645e",
+      "target": "grip_perception_compatibility",
+      "target_kind": "test"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "compiler_reconstructions": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "legacy_baseline_decodes": 14,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "exact_name": "legacy_non_string_nested_metadata_and_duplicate_numeric_unknowns_are_ignored",
+      "features": [],
+      "ignored": false,
+      "notes": [
+        "V2 test-only MixedMap correction; fourteen independent legacy baseline decodes added. Ordinary fields retain serde_json."
+      ],
+      "package": "alife_core",
+      "selection": "retained_historical_pass_not_executed_v4",
+      "source_path": "crates/alife_core/tests/grip_perception_compatibility.rs",
+      "source_sha256": "fd4c1b7764a16c79e1cfc0179d82ce7211fa7dd10560e04d23b24d313874645e",
+      "target": "grip_perception_compatibility",
+      "target_kind": "test"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "compiler_reconstructions": null,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "exact_name": "sealed_source_descriptor_asset_and_restore_preserve_every_numerical_row",
+      "features": [],
+      "ignored": true,
+      "notes": [
+        "Ignored recursive reconstruction requires separate complete compiler-dose audit; do not use --ignored."
+      ],
+      "package": "alife_core",
+      "selection": "pending_not_executed_v4",
+      "source_path": "crates/alife_core/tests/grip_source_reconstruction.rs",
+      "source_sha256": "eaaf4e0f023f687b4a969ec8366bd624fc1f7237f5ea25be733cc4fe330079c9",
+      "target": "grip_source_reconstruction",
+      "target_kind": "test"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "compiler_reconstructions": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "exact_name": "grip_sensory::tests::occluded_own_hold_retains_proprioception_without_visual_slots",
+      "features": [],
+      "ignored": false,
+      "notes": [],
+      "package": "alife_core",
+      "selection": "retained_historical_pass_not_executed_v4",
+      "source_path": "crates/alife_core/src/grip_sensory.rs",
+      "source_sha256": "fafeda901f9d8a589d48d5e38d837291b9bbcb5864aee1b666e09be5af9b60aa",
+      "target": "lib",
+      "target_kind": "lib"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "compiler_reconstructions": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "exact_name": "grip_sensory::tests::contradictory_known_target_relation_is_rejected",
+      "features": [],
+      "ignored": false,
+      "notes": [],
+      "package": "alife_core",
+      "selection": "retained_historical_pass_not_executed_v4",
+      "source_path": "crates/alife_core/src/grip_sensory.rs",
+      "source_sha256": "fafeda901f9d8a589d48d5e38d837291b9bbcb5864aee1b666e09be5af9b60aa",
+      "target": "lib",
+      "target_kind": "lib"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "compiler_reconstructions": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "exact_name": "grip_sensory::tests::other_holder_is_never_an_exposed_relation",
+      "features": [],
+      "ignored": false,
+      "notes": [],
+      "package": "alife_core",
+      "selection": "retained_historical_pass_not_executed_v4",
+      "source_path": "crates/alife_core/src/grip_sensory.rs",
+      "source_sha256": "fafeda901f9d8a589d48d5e38d837291b9bbcb5864aee1b666e09be5af9b60aa",
+      "target": "lib",
+      "target_kind": "lib"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "compiler_reconstructions": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "exact_name": "grip_sensory::tests::sensory_extension_roundtrips_and_checks_its_version",
+      "features": [],
+      "ignored": false,
+      "notes": [],
+      "package": "alife_core",
+      "selection": "retained_historical_pass_not_executed_v4",
+      "source_path": "crates/alife_core/src/grip_sensory.rs",
+      "source_sha256": "fafeda901f9d8a589d48d5e38d837291b9bbcb5864aee1b666e09be5af9b60aa",
+      "target": "lib",
+      "target_kind": "lib"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "compiler_reconstructions": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "exact_name": "memory::candidate_recall::grip_scope_tests::grip_family_recall_requires_exact_target_and_operation",
+      "features": [],
+      "ignored": false,
+      "notes": [],
+      "package": "alife_core",
+      "selection": "retained_historical_pass_not_executed_v4",
+      "source_path": "crates/alife_core/src/memory/grip_scope_tests.rs",
+      "source_sha256": "6392803126e15f24a4b62a7721cb1a6167642aaba7f8bc6059b80c242ddcd752",
+      "target": "lib",
+      "target_kind": "lib"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "compiler_reconstructions": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "exact_name": "memory::candidate_recall::grip_scope_tests::unknown_release_target_stays_zero",
+      "features": [],
+      "ignored": false,
+      "notes": [],
+      "package": "alife_core",
+      "selection": "retained_historical_pass_not_executed_v4",
+      "source_path": "crates/alife_core/src/memory/grip_scope_tests.rs",
+      "source_sha256": "6392803126e15f24a4b62a7721cb1a6167642aaba7f8bc6059b80c242ddcd752",
+      "target": "lib",
+      "target_kind": "lib"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "compiler_reconstructions": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 1,
+        "partition_forwards": 0,
+        "primitive_attempts": 7,
+        "primitive_rejected_attempts": 3,
+        "primitive_successes": 4,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "exact_name": "headless::grip_options::tests::close_release_are_independent_idempotent_intents",
+      "features": [],
+      "ignored": false,
+      "notes": [
+        "Unregistered synthetic agent. Direct world primitive receipts mutate constraints/velocity but never advance registered biology. Rejected attempts still call finish_action; unchanged snapshots do not prove an executed registered transaction rollback."
+      ],
+      "package": "alife_world",
+      "selection": "retained_historical_pass_not_executed_v4",
+      "source_path": "crates/alife_world/src/headless/grip_options.rs",
+      "source_sha256": "6edbbf73fdbbe4073582c963bf2fe9ebb5b942e1b0f46bc93be515b6ebc99e6b",
+      "target": "lib",
+      "target_kind": "lib"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "compiler_reconstructions": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 1,
+        "partition_forwards": 0,
+        "primitive_attempts": 2,
+        "primitive_rejected_attempts": 0,
+        "primitive_successes": 2,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "exact_name": "headless::grip_options::tests::offscreen_hold_has_own_identity_without_a_visual_slot",
+      "features": [],
+      "ignored": false,
+      "notes": [
+        "Unregistered synthetic agent. Direct world primitive receipts mutate constraints/velocity but never advance registered biology. Rejected attempts still call finish_action; unchanged snapshots do not prove an executed registered transaction rollback."
+      ],
+      "package": "alife_world",
+      "selection": "retained_historical_pass_not_executed_v4",
+      "source_path": "crates/alife_world/src/headless/grip_options.rs",
+      "source_sha256": "6edbbf73fdbbe4073582c963bf2fe9ebb5b942e1b0f46bc93be515b6ebc99e6b",
+      "target": "lib",
+      "target_kind": "lib"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "compiler_reconstructions": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 1,
+        "partition_forwards": 0,
+        "primitive_attempts": 2,
+        "primitive_rejected_attempts": 0,
+        "primitive_successes": 2,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "exact_name": "headless::grip_options::tests::old_source_keeps_arbitrary_grip_ids_as_legacy_toggle",
+      "features": [],
+      "ignored": false,
+      "notes": [
+        "Unregistered synthetic agent. Direct world primitive receipts mutate constraints/velocity but never advance registered biology. Rejected attempts still call finish_action; unchanged snapshots do not prove an executed registered transaction rollback."
+      ],
+      "package": "alife_world",
+      "selection": "retained_historical_pass_not_executed_v4",
+      "source_path": "crates/alife_world/src/headless/grip_options.rs",
+      "source_sha256": "6edbbf73fdbbe4073582c963bf2fe9ebb5b942e1b0f46bc93be515b6ebc99e6b",
+      "target": "lib",
+      "target_kind": "lib"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "compiler_reconstructions": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 1,
+        "partition_forwards": 0,
+        "primitive_attempts": 2,
+        "primitive_rejected_attempts": 1,
+        "primitive_successes": 1,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "exact_name": "headless::grip_options::tests::failed_swap_retains_previous_constraint",
+      "features": [],
+      "ignored": false,
+      "notes": [
+        "Unregistered synthetic agent. Direct world primitive receipts mutate constraints/velocity but never advance registered biology. Rejected attempts still call finish_action; unchanged snapshots do not prove an executed registered transaction rollback."
+      ],
+      "package": "alife_world",
+      "selection": "retained_historical_pass_not_executed_v4",
+      "source_path": "crates/alife_world/src/headless/grip_options.rs",
+      "source_sha256": "6edbbf73fdbbe4073582c963bf2fe9ebb5b942e1b0f46bc93be515b6ebc99e6b",
+      "target": "lib",
+      "target_kind": "lib"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "compiler_reconstructions": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 1,
+        "partition_forwards": 0,
+        "primitive_attempts": 3,
+        "primitive_rejected_attempts": 3,
+        "primitive_successes": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "exact_name": "headless::grip_options::tests::other_held_and_consumed_targets_cannot_be_acquired_or_released",
+      "features": [],
+      "ignored": false,
+      "notes": [
+        "Unregistered synthetic agent. Direct world primitive receipts mutate constraints/velocity but never advance registered biology. Rejected attempts still call finish_action; unchanged snapshots do not prove an executed registered transaction rollback."
+      ],
+      "package": "alife_world",
+      "selection": "retained_historical_pass_not_executed_v4",
+      "source_path": "crates/alife_world/src/headless/grip_options.rs",
+      "source_sha256": "6edbbf73fdbbe4073582c963bf2fe9ebb5b942e1b0f46bc93be515b6ebc99e6b",
+      "target": "lib",
+      "target_kind": "lib"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "compiler_reconstructions": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 1,
+        "partition_forwards": 0,
+        "primitive_attempts": 3,
+        "primitive_rejected_attempts": 1,
+        "primitive_successes": 2,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "exact_name": "headless::grip_options::tests::ordinary_move_can_make_a_far_close_reachable",
+      "features": [],
+      "ignored": false,
+      "notes": [
+        "Unregistered synthetic agent. Direct world primitive receipts mutate constraints/velocity but never advance registered biology. Rejected attempts still call finish_action; unchanged snapshots do not prove an executed registered transaction rollback."
+      ],
+      "package": "alife_world",
+      "selection": "retained_historical_pass_not_executed_v4",
+      "source_path": "crates/alife_world/src/headless/grip_options.rs",
+      "source_sha256": "6edbbf73fdbbe4073582c963bf2fe9ebb5b942e1b0f46bc93be515b6ebc99e6b",
+      "target": "lib",
+      "target_kind": "lib"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "compiler_reconstructions": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 1,
+        "partition_forwards": 0,
+        "primitive_attempts": 2,
+        "primitive_rejected_attempts": 0,
+        "primitive_successes": 2,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "exact_name": "headless::grip_options::tests::legacy_release_number_roundtrips_and_remains_old_toggle",
+      "features": [],
+      "ignored": false,
+      "notes": [
+        "Unregistered synthetic agent. Direct world primitive receipts mutate constraints/velocity but never advance registered biology. Rejected attempts still call finish_action; unchanged snapshots do not prove an executed registered transaction rollback."
+      ],
+      "package": "alife_world",
+      "selection": "retained_historical_pass_not_executed_v4",
+      "source_path": "crates/alife_world/src/headless/grip_options.rs",
+      "source_sha256": "6edbbf73fdbbe4073582c963bf2fe9ebb5b942e1b0f46bc93be515b6ebc99e6b",
+      "target": "lib",
+      "target_kind": "lib"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "compiler_reconstructions": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_registered_body_biology_initializations": 1,
+        "fresh_worlds": 1,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "rejected_profile_requests": 1,
+        "rejected_recovery_requests": 1,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "exact_name": "headless::grip_options::tests::forged_valid_grip_draft_cannot_upgrade_old_source_admission",
+      "features": [],
+      "ignored": false,
+      "notes": [
+        "One Nano512 canonical fresh newborn, founder_count=1. Builtin foundation decode is not phenotype reconstruction. Ordinary CreatureGenome::express returns body/chemistry/BrainGenome only. initial_creature_save sets gpu_brain=None; admission and rejected request do not compile BrainPhenotype or step biology."
+      ],
+      "package": "alife_world",
+      "selection": "retained_historical_pass_not_executed_v4",
+      "source_path": "crates/alife_world/src/headless/grip_options.rs",
+      "source_sha256": "6edbbf73fdbbe4073582c963bf2fe9ebb5b942e1b0f46bc93be515b6ebc99e6b",
+      "target": "lib",
+      "target_kind": "lib"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "compiler_reconstructions": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 1,
+        "partition_forwards": 0,
+        "primitive_attempts": 4,
+        "primitive_rejected_attempts": 1,
+        "primitive_successes": 3,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "exact_name": "headless::grip_options::tests::empty_release_is_idempotent_but_stale_empty_cannot_open_a_new_hold",
+      "features": [],
+      "ignored": false,
+      "notes": [
+        "Unregistered synthetic agent. Direct world primitive receipts mutate constraints/velocity but never advance registered biology. Rejected attempts still call finish_action; unchanged snapshots do not prove an executed registered transaction rollback."
+      ],
+      "package": "alife_world",
+      "selection": "retained_historical_pass_not_executed_v4",
+      "source_path": "crates/alife_world/src/headless/grip_options.rs",
+      "source_sha256": "6edbbf73fdbbe4073582c963bf2fe9ebb5b942e1b0f46bc93be515b6ebc99e6b",
+      "target": "lib",
+      "target_kind": "lib"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "compiler_reconstructions": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "neuron_updates": 0,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "readout_products": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "exact_name": "cpu::grip_ports_v3::tests::unknown_relation_never_becomes_free_or_self_held",
+      "features": [
+        "cpu-backend"
+      ],
+      "ignored": false,
+      "notes": [],
+      "package": "alife_training",
+      "selection": "retained_historical_pass_not_executed_v4",
+      "source_path": "crates/alife_training/src/cpu/grip_ports_v3.rs",
+      "source_sha256": "b494dd15ad1b677495e6484589f6b9c354a3498403531ab013d2865a6476357e",
+      "target": "lib",
+      "target_kind": "lib"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "compiler_reconstructions": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "neuron_updates": 0,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "readout_products": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "exact_name": "cpu::grip_ports_v3::tests::distinct_intents_remain_admissible_when_held",
+      "features": [
+        "cpu-backend"
+      ],
+      "ignored": false,
+      "notes": [],
+      "package": "alife_training",
+      "selection": "retained_historical_pass_not_executed_v4",
+      "source_path": "crates/alife_training/src/cpu/grip_ports_v3.rs",
+      "source_sha256": "b494dd15ad1b677495e6484589f6b9c354a3498403531ab013d2865a6476357e",
+      "target": "lib",
+      "target_kind": "lib"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "compiler_reconstructions": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "neuron_updates": 0,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "readout_products": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "exact_name": "cpu::grip_ports_v3::tests::stale_wrong_target_or_operation_recall_is_rejected",
+      "features": [
+        "cpu-backend"
+      ],
+      "ignored": false,
+      "notes": [],
+      "package": "alife_training",
+      "selection": "retained_historical_pass_not_executed_v4",
+      "source_path": "crates/alife_training/src/cpu/grip_ports_v3.rs",
+      "source_sha256": "b494dd15ad1b677495e6484589f6b9c354a3498403531ab013d2865a6476357e",
+      "target": "lib",
+      "target_kind": "lib"
+    },
+    {
+      "dose": {
+        "bank_forwards": 1,
+        "committed_registered_biology_intervals": 0,
+        "compiler_reconstructions": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "neuron_updates": 256,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "readout_products": 128,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "exact_name": "cpu::grip_ports_v3::tests::unrelated_other_has_exact_zero_output_and_credit",
+      "features": [
+        "cpu-backend"
+      ],
+      "ignored": false,
+      "notes": [],
+      "package": "alife_training",
+      "selection": "retained_historical_pass_not_executed_v4",
+      "source_path": "crates/alife_training/src/cpu/grip_ports_v3.rs",
+      "source_sha256": "b494dd15ad1b677495e6484589f6b9c354a3498403531ab013d2865a6476357e",
+      "target": "lib",
+      "target_kind": "lib"
+    },
+    {
+      "dose": {
+        "bank_forwards": 3,
+        "committed_registered_biology_intervals": 0,
+        "compiler_reconstructions": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "neuron_updates": 768,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "readout_products": 384,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "exact_name": "cpu::grip_ports_v3::tests::cold_restore_preserves_nonzero_state_and_next_output",
+      "features": [
+        "cpu-backend"
+      ],
+      "ignored": false,
+      "notes": [],
+      "package": "alife_training",
+      "selection": "retained_historical_pass_not_executed_v4",
+      "source_path": "crates/alife_training/src/cpu/grip_ports_v3.rs",
+      "source_sha256": "b494dd15ad1b677495e6484589f6b9c354a3498403531ab013d2865a6476357e",
+      "target": "lib",
+      "target_kind": "lib"
+    },
+    {
+      "dose": {
+        "bank_forwards": 3,
+        "committed_registered_biology_intervals": 0,
+        "compiler_reconstructions": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "neuron_updates": 768,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "readout_products": 384,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "exact_name": "cpu::grip_ports_v3::tests::exact_memory_derivative_matches_finite_difference",
+      "features": [
+        "cpu-backend"
+      ],
+      "ignored": false,
+      "notes": [],
+      "package": "alife_training",
+      "selection": "retained_historical_pass_not_executed_v4",
+      "source_path": "crates/alife_training/src/cpu/grip_ports_v3.rs",
+      "source_sha256": "b494dd15ad1b677495e6484589f6b9c354a3498403531ab013d2865a6476357e",
+      "target": "lib",
+      "target_kind": "lib"
+    },
+    {
+      "dose": {
+        "bank_forwards": 1,
+        "committed_registered_biology_intervals": 0,
+        "compiler_reconstructions": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "neuron_updates": 256,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "readout_products": 128,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "exact_name": "cpu::grip_ports_v3::tests::unknown_held_release_does_not_displace_no_manip_maintenance",
+      "features": [
+        "cpu-backend"
+      ],
+      "ignored": false,
+      "notes": [],
+      "package": "alife_training",
+      "selection": "retained_historical_pass_not_executed_v4",
+      "source_path": "crates/alife_training/src/cpu/grip_ports_v3.rs",
+      "source_sha256": "b494dd15ad1b677495e6484589f6b9c354a3498403531ab013d2865a6476357e",
+      "target": "lib",
+      "target_kind": "lib"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "compiler_reconstructions": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "neuron_updates": 0,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "readout_products": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "exact_name": "cpu::grip_ports_v3::tests::empty_release_is_body_effort_without_object_recall",
+      "features": [
+        "cpu-backend"
+      ],
+      "ignored": false,
+      "notes": [],
+      "package": "alife_training",
+      "selection": "retained_historical_pass_not_executed_v4",
+      "source_path": "crates/alife_training/src/cpu/grip_ports_v3.rs",
+      "source_sha256": "b494dd15ad1b677495e6484589f6b9c354a3498403531ab013d2865a6476357e",
+      "target": "lib",
+      "target_kind": "lib"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "compiler_reconstructions": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "exact_name": "cpu::grip_integration::maintenance_tests::release_native_base_is_maintenance_not_other_value",
+      "features": [
+        "cpu-backend"
+      ],
+      "ignored": false,
+      "notes": [],
+      "package": "alife_training",
+      "selection": "retained_historical_pass_not_executed_v4",
+      "source_path": "crates/alife_training/src/cpu/grip_integration.rs",
+      "source_sha256": "061e3edb09b82c39e3e69d6a921ebdaa765359af1469f3f2c257040389160beb",
+      "target": "lib",
+      "target_kind": "lib"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "compiler_reconstructions": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "exact_name": "cpu::motor_mediation::confidence::policy::grip_options::coordination::tests::fixed_near_far_move_then_reach_and_noop",
+      "features": [
+        "cpu-backend"
+      ],
+      "ignored": false,
+      "notes": [],
+      "package": "alife_training",
+      "selection": "retained_historical_pass_not_executed_v4",
+      "source_path": "crates/alife_training/src/cpu/motor_mediation/confidence/policy/grip_options/coordination.rs",
+      "source_sha256": "76bc240fce06f376508ef008f1b9346e48acc31c7298a8071aa778e6b61b2075",
+      "target": "lib",
+      "target_kind": "lib"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "compiler_reconstructions": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "exact_name": "cpu::motor_mediation::confidence::policy::grip_options::coordination::tests::no_kind_or_mobility_or_held_semantic_oracle",
+      "features": [
+        "cpu-backend"
+      ],
+      "ignored": false,
+      "notes": [],
+      "package": "alife_training",
+      "selection": "retained_historical_pass_not_executed_v4",
+      "source_path": "crates/alife_training/src/cpu/motor_mediation/confidence/policy/grip_options/coordination.rs",
+      "source_sha256": "76bc240fce06f376508ef008f1b9346e48acc31c7298a8071aa778e6b61b2075",
+      "target": "lib",
+      "target_kind": "lib"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "compiler_reconstructions": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "neuron_updates": 444,
+        "partition_forwards": 1,
+        "primitive_attempts": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "exact_name": "cpu::motor_mediation::grip_maintenance_score_tests::matched_native_inputs_preserve_maintenance_before_grip_effort",
+      "features": [
+        "cpu-backend"
+      ],
+      "ignored": false,
+      "notes": [],
+      "package": "alife_training",
+      "selection": "retained_historical_pass_not_executed_v4",
+      "source_path": "crates/alife_training/src/cpu/motor_mediation.rs",
+      "source_sha256": "32e4a1304e63fa4ff01df85f1678f82b3793ccee5d1a2c0ad6d341171c5cf028",
+      "target": "lib",
+      "target_kind": "lib"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "compiler_reconstructions": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "neuron_updates": 888,
+        "partition_forwards": 2,
+        "primitive_attempts": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "exact_name": "cpu::motor_mediation::grip_maintenance_score_tests::warm_unequal_slots_use_exact_authoritative_maintenance_output",
+      "features": [
+        "cpu-backend"
+      ],
+      "ignored": false,
+      "notes": [],
+      "package": "alife_training",
+      "selection": "retained_historical_pass_not_executed_v4",
+      "source_path": "crates/alife_training/src/cpu/motor_mediation.rs",
+      "source_sha256": "32e4a1304e63fa4ff01df85f1678f82b3793ccee5d1a2c0ad6d341171c5cf028",
+      "target": "lib",
+      "target_kind": "lib"
+    },
+    {
+      "dose": {
+        "bank_forwards": 3,
+        "cold_branch_intervals": 1,
+        "cold_restored_world_branches": 1,
+        "committed_registered_biology_intervals": 3,
+        "fixtures_with_unenumerated_compiler_work": 1,
+        "fresh_fixture_recipe_builds": 1,
+        "fresh_worlds": 3,
+        "grip_neuron_updates": 768,
+        "host_bundle_attempts": 3,
+        "ordinary_identity_rejection_calls": 1,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 3,
+        "warm_branch_intervals": 2
+      },
+      "exact_name": "grounded_scene_pair_scores_and_cold_continuation",
+      "features": [
+        "cpu-backend"
+      ],
+      "ignored": false,
+      "notes": [
+        "Recipe build creates one canonical newborn world; grip new-game creates another; explicit scene builder creates third and replaces second; cold checkpoint restore adds one continued branch. World clones/transaction scratch copies are not included in fresh-world count. Three source forwards are explicit, one per selected host step; additional constructor/restore compiler work remains uncounted and is bounded by hosted time/RSS/output guards. Two other-host checkpoint decodes are rejected; these are not source-forward or biology attempts. No intended host rollback attempt is present."
+      ],
+      "package": "alife_training",
+      "selection": "execute_once_v6",
+      "source_path": "crates/alife_training/tests/grip_options_host.rs",
+      "source_sha256": "b5b1217e61d80674061947823e76fc06e5524912b21167258e24e0c90eef8906",
+      "target": "grip_options_host",
+      "target_kind": "test"
+    },
+    {
+      "dose": {
+        "compiler_reconstructions": 0,
+        "fresh_worlds": 0,
+        "hardware_dispatches": 0,
+        "registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "exact_name": "closed_loop_wgsl_parses_validates_and_exposes_only_the_required_entries",
+      "features": [],
+      "ignored": false,
+      "notes": [
+        "Naga CPU parse/validation only. Never enable gpu-tests."
+      ],
+      "package": "alife_gpu_backend",
+      "selection": "pending_not_executed_v4",
+      "source_path": "crates/alife_gpu_backend/tests/closed_loop_wgsl.rs",
+      "source_sha256": "4d70845ded390eb866183539b6342599ea1b4d4761a3751806aa49bcfdeef493",
+      "target": "closed_loop_wgsl",
+      "target_kind": "test"
+    },
+    {
+      "dose": {
+        "compiler_reconstructions": 0,
+        "fresh_worlds": 0,
+        "hardware_dispatches": 0,
+        "registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "exact_name": "naga_reflection_matches_the_exact_seven_heap_bindings_and_access_modes",
+      "features": [],
+      "ignored": false,
+      "notes": [
+        "Naga CPU parse/validation only. Never enable gpu-tests."
+      ],
+      "package": "alife_gpu_backend",
+      "selection": "pending_not_executed_v4",
+      "source_path": "crates/alife_gpu_backend/tests/closed_loop_wgsl.rs",
+      "source_sha256": "4d70845ded390eb866183539b6342599ea1b4d4761a3751806aa49bcfdeef493",
+      "target": "closed_loop_wgsl",
+      "target_kind": "test"
+    },
+    {
+      "dose": {
+        "compiler_kind": "PhenotypeCompiler::compile N512 scaffold, seed41",
+        "compiler_reconstructions": 1,
+        "fresh_worlds": 0,
+        "hardware_dispatches": 0,
+        "registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "exact_name": "perception::perception_upload_translates_the_validated_same_tick_frame_without_scores",
+      "features": [],
+      "ignored": false,
+      "notes": [
+        "CPU upload structure only; does not exercise grip-frame rejection."
+      ],
+      "package": "alife_gpu_backend",
+      "selection": "pending_not_executed_v4",
+      "source_path": "crates/alife_gpu_backend/tests/closed_loop_buffer_contracts/perception.rs",
+      "source_sha256": "c64900b78e00407ed58eeed48cb1bf35706557131149e12a674d772dfeb0ef0b",
+      "target": "closed_loop_buffer_contracts",
+      "target_kind": "test"
+    },
+    {
+      "dose": {
+        "compiler_kind": "PhenotypeCompiler::compile N512 scaffold, seed41",
+        "compiler_reconstructions": 1,
+        "fresh_worlds": 0,
+        "hardware_dispatches": 0,
+        "registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "exact_name": "perception::dynamic_upload_validation_rejects_activation_side_offsets_counts_and_reserved_words",
+      "features": [],
+      "ignored": false,
+      "notes": [
+        "CPU upload structure only; does not exercise grip-frame rejection."
+      ],
+      "package": "alife_gpu_backend",
+      "selection": "pending_not_executed_v4",
+      "source_path": "crates/alife_gpu_backend/tests/closed_loop_buffer_contracts/perception.rs",
+      "source_sha256": "c64900b78e00407ed58eeed48cb1bf35706557131149e12a674d772dfeb0ef0b",
+      "target": "closed_loop_buffer_contracts",
+      "target_kind": "test"
+    }
+  ],
+  "planned_additive_fixture": {
+    "dose": {
+      "biology_intervals": 0,
+      "fresh_N512_compile_calls": 1,
+      "fresh_worlds": 0,
+      "grip_upload_rejections": 1,
+      "hardware_dispatches": 0,
+      "legacy_upload_successes": 2,
+      "source_forwards": 0,
+      "total_upload_entry_calls": 3
+    },
+    "exact_name": "valid_grip_profile_is_rejected_while_matching_legacy_upload_succeeds",
+    "features": [
+      "training-rollout"
+    ],
+    "package": "alife_gpu_backend",
+    "patch_sha256": "e71af51d4829939b2e91b9c1a4bc2e18f2bc95d8135462412d5a03421be2885a",
+    "requirements": [
+      "Exact test exists in separately authored additive patch; base V5 source remains unchanged."
+    ],
+    "source": "Parent collaboration message confirming authorization and design.",
+    "source_sha256": "405656f47ac6a2668bc7f5faa81a7a80dc3d11be17e097ee69ef2b53583f0794",
+    "status": "authored_test_only_overlay_source_and_patch_hashes_verified_not_executed",
+    "target": "grip_profile_upload_gate",
+    "target_kind": "test"
+  },
+  "production_changed_from_v4": [
+    "crates/alife_core/src/grounded_drive_genetics.rs"
+  ],
+  "recursive_compiler_audit": {
+    "definition": "Count numerical BrainPhenotype construction/reconstruction, not descriptor/wire/genome/body structural validation. Grip BrainPhenotype validation is NOT structural: it reconstructs its entire frozen source.",
+    "forged_admission": {
+      "callgraph": [
+        "create_canonical_new_game_with_awake_rest_research_v1 -> builtin_nano512_v1 -> decode_canonical -> validate_self_contained (asset parsing only)",
+        "create_new_game_with_identity_and_research: founder_count=1 -> CreatureGenome::express -> body/chemistry/development/BrainGenome expression; no BrainPhenotype lowering",
+        "WorldOrganismRecord::newborn/new_inner/validate_contract -> ordinary express and biochemical validation",
+        "initial_creature_save -> gpu_brain=None",
+        "SleepChoiceWorldAdmissionV1::for_organism -> world bindings and record biology checks",
+        "RecoveryRequestV1::new -> frame/bundle validation -> mismatched profile rejection before world dispatch"
+      ],
+      "fresh_body_biology_initializations": 1,
+      "full_neural_reconstructions": 0
+    },
+    "integrated_host": {
+      "fixed_outer_bounds": {
+        "cold_step_calls": 1,
+        "explicit_cold_restore_calls": 1,
+        "host_residents": 1,
+        "host_source_step_calls": 3,
+        "max_candidate_slots": 32,
+        "recipe_builds": 1,
+        "warm_step_calls": 2
+      },
+      "remaining_to_trace": [
+        "trainer new/from_checkpoint and stage mask validation",
+        "GroupedMotorStateV1 fresh/validate and full native policy admission",
+        "CpuCanonicalHost new/restore/validate_founder/checkpoint_inner",
+        "nested serde deserialization validators in host checkpoint decode and cold world records",
+        "all checkpoint/wire/frozen helper calls, including assertion expression evaluation",
+        "per-candidate source/frame validation during the three fixed host steps"
+      ],
+      "status": "included_authorized_bounded_fixture_with_disclosed_uncounted_reconstruction",
+      "uncertainty": "Many reachable validation, serde restore, trainer, checkpoint and per-candidate host paths call full grip BrainPhenotype reconstruction; invocation multiplicity has not been completely traced. A guessed wrapper count or arbitrary upper bound would be invalid.",
+      "verified_edges": [
+        {
+          "from": "PhenotypeCompiler::compile_n2048_grounded_grip_sleep_choice",
+          "numeric_source_rebuilds_per_call": 1,
+          "to": "compile_validated(grip) -> BrainPhenotype::lower_grounded_grip_source -> compile_validated(frozen grounded source) -> construction::compile_with_foundation_asset"
+        },
+        {
+          "from": "BrainPhenotype::validate_against(grip)",
+          "numeric_source_rebuilds_per_call": 1,
+          "to": "lower_grounded_grip_source(recipe.compiler_inputs()) -> compile_validated(frozen source)"
+        },
+        {
+          "from": "CreatureGenome::express_n2048_grip_sleep_choice_research",
+          "numeric_source_rebuilds_per_call": 3,
+          "to": "retained.express_n2048_grounded_drive_research + compile_n2048_grip_sleep_choice_candidate"
+        },
+        {
+          "from": "compile_n2048_grip_sleep_choice_candidate",
+          "numeric_source_rebuilds_per_call": 2,
+          "to": "compile_n2048_grounded_drive_basis_candidate + compile_n2048_grounded_grip_sleep_choice"
+        },
+        {
+          "additional_validation_rebuilds": "unresolved",
+          "explicit_source_rebuilds": 1,
+          "from": "CpuGroupedM2HostV1::restore_payload",
+          "to": "compile_validated(expected_source), trainer::from_checkpoint, canonical host restore, validate_source_biology, checkpoint_payload"
+        },
+        {
+          "from": "checkpoint_payload",
+          "loop_bound": 1,
+          "rebuild_multiplicity": "unresolved",
+          "to": "validate_founder; one-resident loop validate_resident_authority/state.motor.validate; checkpoint_inner"
+        }
+      ]
+    }
+  },
+  "schema": "m2-grip-fixed-fixture-source-audit-v5",
+  "selected_gpu_regression_count": 4,
+  "source_inputs": 866,
+  "source_manifest": "source-manifest.json",
+  "test_changed_from_v4": [
+    "crates/alife_training/tests/grip_options_host.rs"
+  ],
+  "v4_failed_attempt": {
+    "full_attempt_dose_is_upper_bound": true,
+    "host_admission_reached": false,
+    "passed_test_bodies": 0,
+    "safe_result_path": "PRIOR-V4-SAFE-RESULT.json"
+  },
+  "v5_failed_attempt": {
+    "activation_head": "8b8a50370ede860cb1fd791c559c59f17dd68290",
+    "attempt": 1,
+    "derived_partial_exposure_upper_bound": {
+      "confirmed_committed_registered_intervals": 0,
+      "fixture_passes": 0,
+      "grip_bank_forwards_inside_reached_calls_upper_bound": 1,
+      "grip_neuron_updates_upper_bound": 256,
+      "reached_explicit_host_step_calls": 1,
+      "recursive_pure_compiler_work_count": null,
+      "source_forwards_inside_reached_calls_upper_bound": 1,
+      "staged_registered_physical_transactions_upper_bound": 1,
+      "unreached_cold_successor_calls": 1,
+      "unreached_warm_successor_calls": 1
+    },
+    "dose_reporting": "Original safe summary remains unchanged and charges the full3-call plan. The exact phase prefix proves only first call was entered; later warm/cold calls were not reached. Partial internal source/physical work is unknown, never represented as zero. The outer host commits self only after inner returns Ok; failed call has no confirmed committed interval.",
+    "job_id": 129441691598,
+    "measured_phase_prefix": "FIRST_STEP_BEGIN; ordinary class5 rejection true; no FIRST_STEP_DONE",
+    "observed_result": "TEST_EXECUTION",
+    "passed_fixture_ids": [],
+    "safe_summary": {
+      "activation_head": "8b8a50370ede860cb1fd791c559c59f17dd68290",
+      "activation_marker_sha256": "7ec8df2390c4f9f5fbe61a5e060bf5015f35036ccbe4866148dfe0324eae4a86",
+      "attempted_fixture_ids": [
+        "f041"
+      ],
+      "binary_identities": [
+        {
+          "sha256": "b06c7630f6533067091dc030e94db85b47c10f39ce5ff0ee08bcff8ede091560",
+          "target_id": "training_grip_options_host"
+        }
+      ],
+      "bound_files": 866,
+      "cargo_lock_sha256": "99b01e0353263fd5bbf0261320898e8395d45583f2045e3433d3e2a1f50070eb",
+      "code": "TEST_EXECUTION",
+      "compiled_target_ids": [
+        "training_grip_options_host"
+      ],
+      "completed": [],
+      "confirmed_passed_test_bodies": 0,
+      "correction_patch_sha256": "0ce2a14320e13e31b9727d41d979798910c31e9663dcaca043c0900c5c96774a",
+      "dependency_correction_patch_sha256": "fa468c4ca23f88c2f90f561176283fb1bf0f53c24280fee6c6dcdd093f5ed712",
+      "diagnostics": [],
+      "elapsed_seconds": 245,
+      "f041_failure": {
+        "checks": [
+          {
+            "check": "ORDINARY_IDENTITY_REJECTS_RESEARCH",
+            "passed": true
+          }
+        ],
+        "last_observed_phase": "FIRST_STEP_BEGIN",
+        "phase_count": 27
+      },
+      "grip_patch_sha256": "acf8cc50353ba76cb7adf5af1db5845ee6e6b2e2261d0ee823821428e2e4d054",
+      "launched_fixture_processes": 1,
+      "listed_fixture_ids": [
+        "f041"
+      ],
+      "main": "c3aec16df33861f1316d127736f5f60eea327ede",
+      "output_bytes": 137053,
+      "passed_fixture_ids": [],
+      "peak_rss_bytes": 1731256320,
+      "peak_workspace_bytes": 2046940536,
+      "plan_id": "m2-grip-fixed-fixtures-v5",
+      "prepared_head": "3c698ebe0bd4e9b66d4890d36044dfb541200123",
+      "research_base": "fbf2a517f93098b5d936878a3d26bbb8d0391c38",
+      "schema": "m2-grip-fixed-fixture-summary-v5",
+      "seal_sha256": "fb529c1707f7e6a465a30e8e980de4c1b0eb91b7b48b34d4ac4ed9535e10cb55",
+      "source_audited_attempt_dose": {
+        "bank_forwards": 3,
+        "cold_branch_intervals": 1,
+        "cold_restored_world_branches": 1,
+        "committed_registered_biology_intervals": 3,
+        "fixtures_with_unenumerated_compiler_work": 1,
+        "fresh_fixture_recipe_builds": 1,
+        "fresh_worlds": 3,
+        "grip_neuron_updates": 768,
+        "host_bundle_attempts": 3,
+        "ordinary_identity_rejection_calls": 1,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 3,
+        "warm_branch_intervals": 2
+      },
+      "source_audited_passed_dose": {},
+      "source_manifest_sha256": "e6bce07f7808bd55fc4c1fc47772f5333c05f35939aa16df5ba626041a490c4c",
+      "stage": "run_f041",
+      "toolchain": {
+        "cargo": "cargo 1.99.1 (5f94df478 2026-08-27)",
+        "cargo_binary_sha256": "a670e02cfa39ac2e53f77a2d911ca1fc9e2c479b0603ec956625be1daf24e3af",
+        "host": "x86_64-unknown-linux-gnu",
+        "llvm": "23.1.1",
+        "rust_commit": "58cf8f9c35b355199727627d07ae34a4e2846d67",
+        "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+        "rustc_binary_sha256": "b53b780f77f952062f8ca8a3b70aef2390b1e45ad91939be94afdc9543026853"
+      }
+    },
+    "safe_summary_record": {
+      "bytes": 2537,
+      "path": "PRIOR-FIXTURE-V5-SAFE-RESULT.json",
+      "sha256": "fe9bed13bb59b66a38ba081707cc04592feb242199be3295586f127eb23937cb"
+    },
+    "workflow_run_url": "https://github.com/BobertNeek/A-Life/actions/runs/42699947283"
+  }
+}

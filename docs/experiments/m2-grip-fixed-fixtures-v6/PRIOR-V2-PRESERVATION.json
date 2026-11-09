@@ -1,0 +1,151 @@
+{
+  "files": [
+    {
+      "bytes": 504,
+      "path": "ACTIVATE.template.json",
+      "sha256": "910c117055ede688f7ad3ba839e7509cb954ffc7266d5a72521da71cbb378b4d"
+    },
+    {
+      "bytes": 7307,
+      "path": "ARCHIVE-MANIFEST.json",
+      "sha256": "657ae3af286af1d453eacbdbca48da97b409064d383b66fd150858966b77e1ac"
+    },
+    {
+      "bytes": 1849,
+      "path": "F012-CORRECTION.json",
+      "sha256": "fa8abb7522f5e28167f634477429c397f5b657a16bc876ebb069fda960551702"
+    },
+    {
+      "bytes": 4937,
+      "path": "FIXTURE-INVENTORY.md",
+      "sha256": "3249b6f7b253a45f9db938d1edd348ab4fa98f87dc6ce7517c99183c15117d38"
+    },
+    {
+      "bytes": 44371,
+      "path": "FIXTURES.json",
+      "sha256": "eba55a06a4be169c74ab3c576aedd8ca668e17e4721e32011cb18d328039366f"
+    },
+    {
+      "bytes": 1083,
+      "path": "PREPARATION.json",
+      "sha256": "b62be22dedf21345c32e723fd54690d8d7a5d5e92505ccc93bc867877a65d46f"
+    },
+    {
+      "bytes": 1845,
+      "path": "PRIOR-TYPECHECK-RESULT.json",
+      "sha256": "3ef6c8feb21d59f28e4fd88af90911f86bc5da01ebbde463628388ac5f623071"
+    },
+    {
+      "bytes": 4343,
+      "path": "PRIOR-V1-PRESERVATION.json",
+      "sha256": "381de519eb397987b003cb953491aaeb9b10aeb915749b56a340a8cd63c7edcc"
+    },
+    {
+      "bytes": 4245,
+      "path": "PRIOR-V5-PRESERVATION.json",
+      "sha256": "bba8ce529bc0971c826533e74cb1473c3c1c57eb0c6c8b4a5d26ce6c8d7059c9"
+    },
+    {
+      "bytes": 11489,
+      "path": "README.md",
+      "sha256": "a15e473bc5c424887edabfc91d0d5f46fbd97596790aa9db084b2d73ebf60cf7"
+    },
+    {
+      "bytes": 9068,
+      "path": "REMOTE-FILES.json",
+      "sha256": "6ab759acceca408d4943d081386763d796a0223c45c71bcd959348d3298e7f80"
+    },
+    {
+      "bytes": 9899,
+      "path": "REUSE-MANIFEST.json",
+      "sha256": "a42a394aebfc63f52eea6c061269d3a796f8ad32c1ae1b803956787685d11ba6"
+    },
+    {
+      "bytes": 1363,
+      "path": "RUNNER-SEMANTICS.json",
+      "sha256": "8a59ac42cbbbb877c0930322b280d71bd20def97b90bbc0fa3a6b3478543cf1a"
+    },
+    {
+      "bytes": 53367,
+      "path": "SOURCE-AUDIT.json",
+      "sha256": "792ea770d76134570ddb0e07ad015cfa9c3ac40d947720d49598af8e0d380e26"
+    },
+    {
+      "bytes": 285,
+      "path": "STATIC-CHECK.json",
+      "sha256": "aa98af4570ac972e18e00357483d60efdc98ce4025bce440a83f9e4da0e9e463"
+    },
+    {
+      "bytes": 1762,
+      "path": "TEST-ONLY-DELTA.json",
+      "sha256": "5ca7d62259b6298ed72d13579474fca0ceb8ab2b7dacbb6d9360eff0b215a9d2"
+    },
+    {
+      "bytes": 36872,
+      "path": "TRIGGER-AUDIT.json",
+      "sha256": "4ddfd84118d9e903d0338e2b5928c9993c7bfbdb9fe35f8fed44333498df7dd5"
+    },
+    {
+      "bytes": 4383,
+      "path": "WORKFLOW-PRESERVATION.json",
+      "sha256": "48f907f798d82398dbab78856d8b25598bb82b7740e7cc57a6a539c1d8cbdeb4"
+    },
+    {
+      "bytes": 3674,
+      "path": "packet_inputs.py",
+      "sha256": "90c9787373e0a3f96133b1a828a914af6c76bf2e0143d09402f6e5f4d5b8ae22"
+    },
+    {
+      "bytes": 4417,
+      "path": "patches/f012-mixed-map-correction.patch",
+      "sha256": "6071ea77383d198a9b8a06a662925373b30db7b039d903bee6200ea534b22f8d"
+    },
+    {
+      "bytes": 3446,
+      "path": "patches/gpu-upload-gate.patch",
+      "sha256": "e71af51d4829939b2e91b9c1a4bc2e18f2bc95d8135462412d5a03421be2885a"
+    },
+    {
+      "bytes": 2838,
+      "path": "publication.json",
+      "sha256": "a68ed324b0bf82dddfb9bc69518a3332d3fe04ed1310596f265c39e4daef6c4e"
+    },
+    {
+      "bytes": 36265,
+      "path": "run_hosted.py",
+      "sha256": "a9a020a6ab8448d5af98bbdcf4d13d31d3946b264775679957b8f833d6425292"
+    },
+    {
+      "bytes": 7273,
+      "path": "seal.json",
+      "sha256": "6ea1950cd5e4f9a31ff83f1846989af7c035137cdfd4f5de4d50137f8c564cbe"
+    },
+    {
+      "bytes": 4042,
+      "path": "seal_package.py",
+      "sha256": "f531450faf24c2773490b0bc3fe7319561f6bc3587331994be3793cdfbe1e8e9"
+    },
+    {
+      "bytes": 201467,
+      "path": "source-manifest.json",
+      "sha256": "8f88728916761ada6a4529a31ff041313b495afe156d8bceb33e9040eb2e2e19"
+    },
+    {
+      "bytes": 113219,
+      "path": "source-only-m2-grip-fixed-fixtures-v2-update.tar.gz",
+      "sha256": "ea2a1864cbc5a9276f1c1113a23841963d64ff9599dd3e8044bb91e358c85619"
+    },
+    {
+      "bytes": 28830,
+      "path": "static_checks.py",
+      "sha256": "f96ea10f4538e104a5c8146f5b31db4715603852fee70f7983b51835872cf38f"
+    },
+    {
+      "bytes": 1587,
+      "path": "workflow.yml",
+      "sha256": "fe5bc6c1ebb3ff6ad8fdcdc18ff129e75181522ed913524bc5267d5da992a6bd"
+    }
+  ],
+  "local_directory": "/workspace/shared/m2-grip-fixed-fixtures-v2",
+  "schema": "m2-grip-fixed-v2-preservation-v3"
+}

@@ -1,0 +1,125 @@
+{
+  "accepted_main_cargo_lock_sha256": "a8323d85b09d781596a62e7f383e2dc36cd57628c002f4dfcd75a8b49b4031eb",
+  "binary_input_policy": "Use only byte-identical existing main-owned assets for compiler includes; no binary assets are uploaded.",
+  "cargo_lock_sha256": "99b01e0353263fd5bbf0261320898e8395d45583f2045e3433d3e2a1f50070eb",
+  "engine_rlib_reuse": false,
+  "features_never_disabled": true,
+  "fresh_target_and_cargo_home": true,
+  "immediate_prior_cargo_lock_sha256": "2b637c0f2b2cd34fb9fe2f9a5f9a3a7b490f0b7f8d5f1f7c8764f29077d0ebdd",
+  "metadata_additions": [
+    {
+      "bytes": 5142,
+      "content": "Source contract hash/length receipts only; no captured bytes.",
+      "path": "docs/experiments/bounded-founder-v1/legacy-wire-capture.json",
+      "sha256": "0af1558f1c86330dc1cf36ceea39fa20c431ffb82d2f6e9d040afaef56909f9e"
+    },
+    {
+      "bytes": 31226,
+      "content": "Source-authored fixed M0 topology/configuration; status source_only_not_admitted_not_executed.",
+      "path": "docs/experiments/motor-lobe-native-m0-v1/mediation-m0-manifest.json",
+      "sha256": "3f084d2ca401acd992629a19fa4db763a7ecc7315c62f592b0e0fb2f0e9eac1a"
+    }
+  ],
+  "package_versions_changed": false,
+  "registry_packages": 589,
+  "registry_packages_added": false,
+  "registry_sources": [
+    "registry+https://github.com/rust-lang/crates.io-index"
+  ],
+  "schema": "m2-grip-dependencies-v3",
+  "source_change": "Only world dev-dependency bincode.workspace=true and its existing Cargo.lock dependency edge.",
+  "source_replacement": false,
+  "stages": [
+    {
+      "declared_default_features": [],
+      "default_features_enabled": true,
+      "expected_root_features": [],
+      "explicit_features": [],
+      "package": "alife_core",
+      "stage": "core",
+      "targets": [
+        "--all-targets"
+      ]
+    },
+    {
+      "declared_default_features": [],
+      "default_features_enabled": true,
+      "expected_root_features": [],
+      "explicit_features": [],
+      "package": "alife_world",
+      "stage": "world",
+      "targets": [
+        "--all-targets"
+      ]
+    },
+    {
+      "declared_default_features": [],
+      "default_features_enabled": true,
+      "expected_root_features": [
+        "default",
+        "training-rollout"
+      ],
+      "explicit_features": [
+        "training-rollout"
+      ],
+      "package": "alife_gpu_backend",
+      "stage": "gpu",
+      "targets": [
+        "--all-targets"
+      ]
+    },
+    {
+      "declared_default_features": [],
+      "default_features_enabled": true,
+      "expected_root_features": [
+        "default",
+        "training-rollout"
+      ],
+      "explicit_features": [
+        "training-rollout"
+      ],
+      "package": "alife_runtime",
+      "stage": "runtime",
+      "targets": [
+        "--all-targets"
+      ]
+    },
+    {
+      "declared_default_features": [],
+      "default_features_enabled": true,
+      "expected_root_features": [
+        "cpu-backend",
+        "default",
+        "receipt-lineage"
+      ],
+      "explicit_features": [
+        "cpu-backend"
+      ],
+      "package": "alife_training",
+      "stage": "training",
+      "targets": [
+        "--lib",
+        "--test",
+        "grip_options_host"
+      ]
+    },
+    {
+      "declared_default_features": [],
+      "default_features_enabled": true,
+      "expected_root_features": [
+        "cpu-training",
+        "default",
+        "foundation-training",
+        "gpu-runtime"
+      ],
+      "explicit_features": [
+        "cpu-training"
+      ],
+      "package": "alife_game_app",
+      "stage": "gameapp",
+      "targets": [
+        "--all-targets"
+      ]
+    }
+  ]
+}
