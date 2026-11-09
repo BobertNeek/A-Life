@@ -1,0 +1,2879 @@
+diff --git a/crates/alife_core/src/lib.rs b/crates/alife_core/src/lib.rs
+index 70d642acc..53f35ad5b 100644
+--- a/crates/alife_core/src/lib.rs
++++ b/crates/alife_core/src/lib.rs
+@@ -244,14 +244,17 @@ pub use lobe::{
+ };
+ pub use math::{validate_finite, validate_finite_slice, Aabb, Pose, Quatf, Vec2f, Vec3f, Velocity};
+ pub use memory::{
+-    sleep_memory_replay_digest_v1, CandidateMemoryRecallReceipt, FinalizedMemoryRecall, MemoryBank,
+-    MemoryBankConfig, MemoryBucketReceiptKey, MemoryCompactionCheckpoint, MemoryCompactionIdentity,
++    sleep_meal_memory_replay_digest_v1, sleep_memory_replay_digest_v1,
++    CandidateMemoryRecallReceipt, FinalizedMemoryRecall, MealAssociationWriteV1,
++    MealMemorySleepProofV1, MealMemoryTransactionReceiptV1, MemoryBank, MemoryBankConfig,
++    MemoryBucketReceiptKey, MemoryCompactionCheckpoint, MemoryCompactionIdentity,
+     MemoryCompactionPhase, MemoryCompactionReceipt, MemoryConsolidationBatch, MemoryConsolidator,
+     MemoryExpectancy, MemoryMatch, MemoryOutcomeSummary, MemoryQuery, MemoryRecallChannel,
+     MemoryRecallDegradation, MemoryRecallReceipt, MemoryRecord, MemorySidecarState,
+     MemoryUpdateKind, MemoryUpdateReceipt, PortableMemoryBankAssetV2, PortableMemoryRecordV2,
+     PreparedMemoryCompaction, PreparedMemoryRecall, RuntimeMemoryRecallCache,
+-    SleepMemorySourceProofV1, TargetMemoryBucketReceiptKey, MEMORY_BANK_MAX_CAPACITY,
++    SleepMemorySourceProofV1, SupplementalMealProofV1, TargetMemoryBucketReceiptKey,
++    MEAL_MEMORY_POLICY_V1, MEAL_MEMORY_TRANSACTION_SCHEMA_V1, MEMORY_BANK_MAX_CAPACITY,
+     MEMORY_FAMILY_SEARCH_CAP, MEMORY_FEATURE_VECTOR_MAX_LEN, MEMORY_MERGE_SIMILARITY,
+     MEMORY_MIN_SIMILARITY, MEMORY_RECALL_SCHEMA_VERSION, MEMORY_RECALL_TOP_K,
+     MEMORY_TARGET_SEARCH_CAP, MEMORY_TOTAL_SEARCH_CAP, RUNTIME_MEMORY_SEARCH_CAP,
+diff --git a/crates/alife_core/src/memory.rs b/crates/alife_core/src/memory.rs
+index 8449aed4c..50a2fe858 100644
+--- a/crates/alife_core/src/memory.rs
++++ b/crates/alife_core/src/memory.rs
+@@ -2366,4 +2366,17 @@ mod encoded_context_tests;
+ mod recovery_scope_tests;
+ 
+ mod scoped_replay;
+-pub use scoped_replay::{sleep_memory_replay_digest_v1, SleepMemorySourceProofV1};
++pub use scoped_replay::{
++    sleep_meal_memory_replay_digest_v1, sleep_memory_replay_digest_v1, MealMemorySleepProofV1,
++    SleepMemorySourceProofV1,
++};
++
++mod supplemental_meal;
++pub use supplemental_meal::{
++    MealAssociationWriteV1, MealMemoryTransactionReceiptV1, SupplementalMealProofV1,
++    MEAL_MEMORY_POLICY_V1, MEAL_MEMORY_TRANSACTION_SCHEMA_V1,
++};
++#[cfg(test)]
++mod supplemental_meal_tests;
++
++mod meal_recall;
+diff --git a/crates/alife_core/src/memory/candidate_recall.rs b/crates/alife_core/src/memory/candidate_recall.rs
+index 3602c38d6..2979d525f 100644
+--- a/crates/alife_core/src/memory/candidate_recall.rs
++++ b/crates/alife_core/src/memory/candidate_recall.rs
+@@ -957,3 +957,6 @@ mod outcome_provenance_tests {
+         );
+     }
+ }
++
++// New readers are explicit; no global change to accepted legacy banks.
++pub(super) mod meal_v1;
+diff --git a/crates/alife_core/src/memory/candidate_recall/meal_v1.rs b/crates/alife_core/src/memory/candidate_recall/meal_v1.rs
+new file mode 100644
+index 000000000..eec8753e5
+--- /dev/null
++++ b/crates/alife_core/src/memory/candidate_recall/meal_v1.rs
+@@ -0,0 +1,249 @@
++//! Explicit meal-aware audited recall. The legacy functions remain unchanged.
++//! This duplicates their bounded selection path intentionally while the fresh
++//! host is not admitted; only the opt-in path adds same-sequence deduplication.
++use super::*;
++
++pub(in crate::memory) fn recall_target_channel(
++    store: &CandidateMemoryStoreV2,
++    query: &CandidateMemoryQueryV2,
++    exact_key: &TargetMemoryBucketKey,
++) -> Result<TargetRecallResult, ScaffoldContractError> {
++    recall_target_channel_with_budget(store, query, exact_key, MEMORY_TARGET_SEARCH_CAP)
++}
++
++pub(in crate::memory) fn recall_target_channel_with_budget(
++    store: &CandidateMemoryStoreV2,
++    query: &CandidateMemoryQueryV2,
++    exact_key: &TargetMemoryBucketKey,
++    search_cap: usize,
++) -> Result<TargetRecallResult, ScaffoldContractError> {
++    if query.tracked_object_id().is_none() {
++        return Ok(TargetRecallResult {
++            values: [0.0; MEMORY_LATENT_V1_COUNT],
++            confidence: Confidence::new(0.0)?,
++            source_count: 0,
++            best_source: None,
++            eligible: 0,
++            searched: 0,
++            matches: 0,
++            category_read: false,
++            social_emission: None,
++        });
++    }
++    let ids = collect_shortlist(
++        &neighbor_target_keys(exact_key),
++        |key| store.target_namespace_index.get(key),
++        store,
++        exact_key.target_bins,
++        search_cap,
++    );
++    let mut eligible = ids.0;
++    let mut searched = u32::try_from(ids.1.len()).unwrap_or(u32::MAX);
++    let mut matches = ids
++        .1
++        .into_iter()
++        .filter_map(|id| {
++            let record = store.records.get(&id.raw())?;
++            let score = target_similarity(query.features(), &record.query_features);
++            (score >= MEMORY_MIN_SIMILARITY).then_some((id, score))
++        })
++        .collect::<Vec<_>>();
++    // Recognition borrows no stranger/category evidence. Reuse this exact
++    // individual's already bounded search before ordinary target truncation.
++    let mut social_matches = matches
++        .iter()
++        .copied()
++        .filter(|(id, _)| {
++            let record = &store.records[&id.raw()];
++            matches!(
++                CandidateActionFamily::try_from_raw(record.family_raw as u8),
++                Ok(CandidateActionFamily::Inspect
++                    | CandidateActionFamily::Approach
++                    | CandidateActionFamily::Contact)
++            ) || (record.family_raw == u16::from(CandidateActionFamily::Other.raw())
++                && (record.action_kind_raw == ActionKind::Hold.raw()
++                    || record.action_kind_raw == ActionKind::Interact.raw()))
++        })
++        .collect::<Vec<_>>();
++    social_matches.sort_by(|(left, left_score), (right, right_score)| {
++        right_score
++            .total_cmp(left_score)
++            .then_with(|| {
++                store.records[&right.raw()]
++                    .last_tick
++                    .cmp(&store.records[&left.raw()].last_tick)
++            })
++            .then_with(|| right.raw().cmp(&left.raw()))
++    });
++    deduplicate_current_sources(store, &mut social_matches);
++    social_matches.truncate(MEMORY_RECALL_TOP_K);
++    let (social_values, social_confidence, _, _) =
++        aggregate_family_matches(store, &social_matches, query.tick())?;
++    let social_emission = (social_values[0] > 0.0 && social_confidence.raw() > 0.0)
++        .then(|| {
++            crate::NeuralEmission::new(
++                crate::NeuralEmissionClass::SocialState,
++                social_values[0],
++                social_confidence.raw(),
++            )
++        })
++        .transpose()?;
++    // A matching individual's episodes win. Only an unknown/mismatching
++    // individual may borrow evidence from equivalent observable properties.
++    let generalized = eligible == 0 && has_category_cues(query.features());
++    if generalized {
++        let key = exact_key.category_key(query.features());
++        let category_ids = store.target_category_index.get(&key);
++        eligible = eligible.saturating_add(category_ids.map_or(0, |ids| ids.len() as u32));
++        for id in category_ids
++            .into_iter()
++            .flatten()
++            .take(search_cap.saturating_sub(searched as usize))
++        {
++            searched += 1;
++            let record = &store.records[&id.raw()];
++            let score = target_similarity(query.features(), &record.query_features);
++            if score >= MEMORY_MIN_SIMILARITY
++                && equivalent_category_cues(query.features(), &record.query_features)
++            {
++                matches.push((*id, score));
++            }
++        }
++    }
++    sort_and_truncate_matches(store, &mut matches);
++    let (values, confidence, source_count, best_source) =
++        aggregate_target_matches(store, &matches, query.tick())?;
++    let confidence = Confidence::new(confidence.raw() * if generalized { 0.75 } else { 1.0 })?;
++    Ok(TargetRecallResult {
++        values,
++        confidence,
++        source_count,
++        best_source,
++        eligible,
++        searched,
++        matches: u16::try_from(matches.len())
++            .map_err(|_| ScaffoldContractError::InvalidMemoryQuery)?,
++        category_read: generalized,
++        social_emission,
++    })
++}
++
++pub(in crate::memory) fn recall_family_channel(
++    store: &CandidateMemoryStoreV2,
++    query: &CandidateMemoryQueryV2,
++    exact_key: &MemoryBucketKey,
++) -> Result<FamilyRecallResult, ScaffoldContractError> {
++    recall_family_channel_with_budget(store, query, exact_key, MEMORY_FAMILY_SEARCH_CAP)
++}
++
++pub(in crate::memory) fn recall_family_channel_with_budget(
++    store: &CandidateMemoryStoreV2,
++    query: &CandidateMemoryQueryV2,
++    exact_key: &MemoryBucketKey,
++    search_cap: usize,
++) -> Result<FamilyRecallResult, ScaffoldContractError> {
++    let ids = collect_shortlist(
++        &neighbor_family_keys(exact_key),
++        |key| {
++            if query.tracked_object_id().is_some() {
++                store.family_namespace_index.get(key)
++            } else {
++                store.family_index.get(&(key.clone(), 0))
++            }
++        },
++        store,
++        exact_key.target_bins,
++        search_cap,
++    );
++    let mut eligible = ids.0;
++    let mut searched = u32::try_from(ids.1.len()).unwrap_or(u32::MAX);
++    let mut matches = ids
++        .1
++        .into_iter()
++        .filter_map(|id| {
++            let record = store.records.get(&id.raw())?;
++            let score = family_similarity(query.features(), &record.query_features);
++            (score >= MEMORY_MIN_SIMILARITY).then_some((id, score))
++        })
++        .collect::<Vec<_>>();
++    if query.tracked_object_id().is_some() && query.action_family() == CandidateActionFamily::Ingest
++    {
++        // A painless pickup is not evidence that consuming the same object is
++        // safe. Only a genuine later consummation can reverse that expectation.
++        let preferred = if matches.iter().any(|(id, _)| {
++            store.records[&id.raw()].outcome_contact == Some(PhysicalContactKind::Consumed)
++        }) {
++            Some(Some(PhysicalContactKind::Consumed))
++        } else if matches
++            .iter()
++            .any(|(id, _)| store.records[&id.raw()].outcome_contact.is_none())
++        {
++            Some(None)
++        } else {
++            None
++        };
++        if let Some(preferred) = preferred {
++            matches.retain(|(id, _)| store.records[&id.raw()].outcome_contact == preferred);
++        }
++    }
++    select_current_individual_outcome(store, &mut matches);
++    let generalized =
++        eligible == 0 && query.tracked_object_id().is_some() && has_category_cues(query.features());
++    if generalized {
++        let key = exact_key.category_key(query.features());
++        let category_ids = store.family_category_index.get(&key);
++        eligible = eligible.saturating_add(category_ids.map_or(0, |ids| ids.len() as u32));
++        for id in category_ids
++            .into_iter()
++            .flatten()
++            .take(search_cap.saturating_sub(searched as usize))
++        {
++            searched += 1;
++            let record = &store.records[&id.raw()];
++            let score = family_similarity(query.features(), &record.query_features);
++            if score >= MEMORY_MIN_SIMILARITY
++                && equivalent_category_cues(query.features(), &record.query_features)
++            {
++                matches.push((*id, score));
++            }
++        }
++    }
++    sort_and_truncate_matches(store, &mut matches);
++    let (values, confidence, source_count, best_source) =
++        aggregate_family_matches(store, &matches, query.tick())?;
++    let confidence = Confidence::new(confidence.raw() * if generalized { 0.75 } else { 1.0 })?;
++    Ok(FamilyRecallResult {
++        values,
++        confidence,
++        source_count,
++        best_source,
++        eligible,
++        searched,
++        matches: u16::try_from(matches.len())
++            .map_err(|_| ScaffoldContractError::InvalidMemoryQuery)?,
++        category_read: generalized,
++    })
++}
++
++// A transaction can index one real episode under two associations. Count its
++// currently retained source sequence once BEFORE top-K truncation. Records only
++// retain their latest source sequence; this is not a full lineage independence
++// estimate after merges. Previously accepted legacy banks may have siblings;
++// only this explicit reader deduplicates them.
++fn deduplicate_current_sources(store: &CandidateMemoryStoreV2, matches: &mut Vec<(MemoryId, f32)>) {
++    let mut sources = BTreeSet::new();
++    matches.retain(|(id, _)| {
++        let record = &store.records[&id.raw()];
++        sources.insert((record.organism_id_raw, record.source_sequence_id.raw()))
++    });
++}
++
++fn sort_and_truncate_matches(store: &CandidateMemoryStoreV2, matches: &mut Vec<(MemoryId, f32)>) {
++    matches.sort_by(|(left_id, left_score), (right_id, right_score)| {
++        right_score
++            .total_cmp(left_score)
++            .then_with(|| left_id.raw().cmp(&right_id.raw()))
++    });
++    deduplicate_current_sources(store, matches);
++    matches.truncate(MEMORY_RECALL_TOP_K);
++}
+diff --git a/crates/alife_core/src/memory/meal_recall.rs b/crates/alife_core/src/memory/meal_recall.rs
+new file mode 100644
+index 000000000..81c4b3db8
+--- /dev/null
++++ b/crates/alife_core/src/memory/meal_recall.rs
+@@ -0,0 +1,184 @@
++//! Audited opt-in reader paired with the supplemental meal writer.
++//! Existing ordinary/runtime readers deliberately retain their legacy behavior.
++use super::candidate_recall::meal_v1::{recall_family_channel, recall_target_channel};
++use super::*;
++
++impl MemoryBank {
++    /// Use with the opt-in meal writer. No existing host selects this reader.
++    pub fn recall_frame_with_meal_v1(
++        &self,
++        draft: &PerceptionFrameDraft,
++    ) -> Result<PreparedMemoryRecall, ScaffoldContractError> {
++        if draft.profile_provenance().identity().profile_id.raw() != 5 {
++            return Err(ScaffoldContractError::InvalidMemoryQuery);
++        }
++        self.config.validate_contract()?;
++        if self.len != 0 {
++            return Err(ScaffoldContractError::MemoryModeConflict);
++        }
++        draft
++            .validate_contract()
++            .map_err(|_| ScaffoldContractError::InvalidMemoryQuery)?;
++        let profile = draft.profile_provenance().identity();
++        // Cache only within this immutable draft. IDs/digests retain provenance;
++        // equality of actual features, not quantized bins, establishes reuse.
++        let mut target_counts = [0_u16; crate::MAX_GROUNDED_OBJECT_SLOTS + 1];
++        let mut family_counts = [[0_u16; 8]; crate::MAX_GROUNDED_OBJECT_SLOTS + 1];
++        let target_slot = |candidate: &crate::ActionCandidate| match candidate.observation {
++            crate::CandidateObservationRef::ObjectSlot(slot) => usize::from(slot),
++            crate::CandidateObservationRef::None => crate::MAX_GROUNDED_OBJECT_SLOTS,
++        };
++        for candidate in draft.candidates() {
++            let slot = target_slot(candidate);
++            target_counts[slot] += 1;
++            family_counts[slot][usize::from(candidate.family.raw())] += 1;
++        }
++        let mut target_cache = std::collections::BTreeMap::new();
++        let mut family_cache = std::collections::BTreeMap::new();
++        let mut candidate_queries = Vec::with_capacity(draft.candidates().len());
++        let mut candidate_contexts = Vec::with_capacity(draft.candidates().len());
++        let mut candidate_receipts = Vec::with_capacity(draft.candidates().len());
++        let mut exact_bucket_reads = 0_u32;
++        let mut neighbor_bucket_reads = 0_u32;
++        let mut similarity_evaluations = 0_u32;
++        let mut degradations = Vec::new();
++        let mut social_recognition = std::collections::BTreeMap::new();
++
++        for candidate in draft.candidates() {
++            let query = MemoryQueryEncoderV2::encode_validated_candidate(draft, candidate)?;
++            let (target_bucket, family_bucket) = keys_for_query(&query);
++            let has_target = query.tracked_object_id().is_some();
++            let slot = target_slot(candidate);
++            let target_cache_key = (target_counts[slot] > 1)
++                .then(|| (target_bucket.clone(), target_recall_features(&query)));
++            let family_cache_key = (family_counts[slot][usize::from(candidate.family.raw())] > 1)
++                .then(|| (family_bucket.clone(), query.features().map(f32::to_bits)));
++            let (target, target_reused_from) = match target_cache_key
++                .as_ref()
++                .and_then(|key| target_cache.get(key))
++            {
++                Some((index, result)) => (Clone::clone(result), Some(*index)),
++                None => {
++                    let result =
++                        recall_target_channel(&self.candidate_store, &query, &target_bucket)?;
++                    if has_target {
++                        exact_bucket_reads = exact_bucket_reads.saturating_add(1);
++                        neighbor_bucket_reads = neighbor_bucket_reads.saturating_add(
++                            neighbor_target_keys(&target_bucket).len().saturating_sub(1) as u32
++                                + u32::from(result.category_read),
++                        );
++                    }
++                    similarity_evaluations = similarity_evaluations.saturating_add(result.searched);
++                    if let Some(key) = target_cache_key {
++                        target_cache.insert(key, (candidate.candidate_index, result.clone()));
++                    }
++                    (result, None)
++                }
++            };
++            let (family, family_reused_from) = match family_cache_key
++                .as_ref()
++                .and_then(|key| family_cache.get(key))
++            {
++                Some((index, result)) => (Clone::clone(result), Some(*index)),
++                None => {
++                    let result =
++                        recall_family_channel(&self.candidate_store, &query, &family_bucket)?;
++                    exact_bucket_reads = exact_bucket_reads.saturating_add(1);
++                    neighbor_bucket_reads = neighbor_bucket_reads.saturating_add(
++                        neighbor_family_keys(&family_bucket).len().saturating_sub(1) as u32
++                            + u32::from(result.category_read),
++                    );
++                    similarity_evaluations = similarity_evaluations.saturating_add(result.searched);
++                    if let Some(key) = family_cache_key {
++                        family_cache.insert(key, (candidate.candidate_index, result.clone()));
++                    }
++                    (result, None)
++                }
++            };
++            if target.eligible > target.searched {
++                degradations.push(MemoryRecallDegradation::SearchShortlisted {
++                    candidate_index: candidate.candidate_index,
++                    channel: MemoryRecallChannel::TargetLatent,
++                    eligible: target.eligible,
++                    searched: target.searched,
++                });
++            }
++            if family.eligible > family.searched {
++                degradations.push(MemoryRecallDegradation::SearchShortlisted {
++                    candidate_index: candidate.candidate_index,
++                    channel: MemoryRecallChannel::FamilyValue,
++                    eligible: family.eligible,
++                    searched: family.searched,
++                });
++            }
++            runtime::retain_observed_social_recognition(
++                draft,
++                candidate,
++                &query,
++                target.social_emission,
++                &mut social_recognition,
++            )?;
++            candidate_contexts.push(CandidateMemoryContextV1 {
++                candidate_index: candidate.candidate_index,
++                target_latent: target.values,
++                family_value: family.values,
++                target_confidence: target.confidence,
++                family_confidence: family.confidence,
++                target_source_count: target.source_count,
++                family_source_count: family.source_count,
++                best_target_source: target.best_source,
++                best_family_source: family.best_source,
++            });
++            candidate_receipts.push(CandidateMemoryRecallReceipt {
++                candidate_index: candidate.candidate_index,
++                query_digest: query.canonical_digest(),
++                target_bucket: target_bucket.receipt(),
++                family_bucket: family_bucket.receipt(),
++                target_eligible: target.eligible,
++                target_searched: target.searched,
++                target_matches: target.matches,
++                family_eligible: family.eligible,
++                family_searched: family.searched,
++                family_matches: family.matches,
++                target_reused_from,
++                family_reused_from,
++            });
++            candidate_queries.push(query);
++        }
++
++        let context = EpisodicRetrievalContextV1::new(draft.tick(), profile, candidate_contexts)?;
++        let encoded_context = context.to_perception_context_block()?;
++        let context_digest = encoded_context.canonical_digest();
++        let receipt = MemoryRecallReceipt {
++            runtime_approximate: false,
++            schema_version: MEMORY_RECALL_SCHEMA_VERSION,
++            organism_id_raw: draft.organism_id().raw(),
++            input_generation: self.candidate_store.generation,
++            bank_digest: self.candidate_store.digest(self.capacity())?,
++            base_frame_digest: draft.base_digest(),
++            context_digest,
++            candidate_count: u16::try_from(draft.candidates().len())
++                .map_err(|_| ScaffoldContractError::InvalidMemoryQuery)?,
++            exact_bucket_reads,
++            neighbor_bucket_reads,
++            similarity_evaluations,
++            candidates: candidate_receipts,
++            degradations,
++        };
++        receipt.validate_contract()?;
++        let prepared = PreparedMemoryRecall {
++            context,
++            encoded_context,
++            candidate_queries,
++            base_frame_digest: draft.base_digest(),
++            receipt,
++            cognitive_context: None,
++            social_recognition,
++        };
++        // Input, query, context, bank and receipt checks above remain strict.
++        // Re-encoding this freshly derived private result is a debug diagnostic.
++        #[cfg(debug_assertions)]
++        prepared.validate_for_draft(draft)?;
++        Ok(prepared)
++    }
++}
+diff --git a/crates/alife_core/src/memory/scoped_replay.rs b/crates/alife_core/src/memory/scoped_replay.rs
+index d4fffb050..f3615bcb7 100644
+--- a/crates/alife_core/src/memory/scoped_replay.rs
++++ b/crates/alife_core/src/memory/scoped_replay.rs
+@@ -187,6 +187,76 @@ impl SleepMemorySourceProofV1 {
+         Ok(resolved)
+     }
+ 
++    // Explicit new-mode lookup. The legacy resolver above is unchanged.
++    fn resolve_for_meal_v1(
++        &self,
++        bank: &MemoryBank,
++    ) -> Result<Option<MemoryId>, ScaffoldContractError> {
++        if self.write.output_generation > bank.candidate_store.generation {
++            return Err(ScaffoldContractError::InvalidDecisionEvidence);
++        }
++        let Some(retained) = self.retained_id() else {
++            return Ok(None);
++        };
++        let Some(source) = bank.candidate_store.records.get(&retained.raw()) else {
++            return Ok(None);
++        };
++        source.validate_contract()?;
++        let query = self.query();
++        let expected_operation = crate::memory_query::memory_operation_id(
++            query.profile(),
++            query.action_family(),
++            query.action_kind(),
++            query.action_id(),
++        )?;
++        if source.family_key().receipt() != self.write.bucket
++            || source.profile() != query.profile()
++            || source.organism_id_raw != query.organism_id().raw()
++            || source.family_raw != u16::from(query.action_family().raw())
++            || source.operation_id()? != expected_operation
++        {
++            return Err(ScaffoldContractError::InvalidDecisionEvidence);
++        }
++        if source.action_kind_raw != query.action_kind().raw()
++            || source.action_id_raw != query.action_id().raw()
++        {
++            // Known non-recovery families deliberately preserve their first
++            // representative label on merge. A valid write proof does not make
++            // that later label provable from the retained source record.
++            if query.action_family() != CandidateActionFamily::Rest && source.observation_count > 1
++            {
++                return Ok(None);
++            }
++            return Err(ScaffoldContractError::InvalidDecisionEvidence);
++        }
++        if source.source_sequence_id != self.event.sequence_id
++            && !matches!(
++                self.write.kind,
++                MemoryUpdateKind::Inserted { .. } | MemoryUpdateKind::Evicted { .. }
++            )
++        {
++            // Equal ticks do not establish sequence membership. Only the
++            // original insertion receipt can prove a retained-first source;
++            // older merged receipts are interior/unavailable, even at one tick.
++            return Ok(None);
++        }
++        // The proof already authenticates the exact retained ID and its
++        // target-bearing bucket. Do not re-resolve by action/family alone: two
++        // same-sequence associations can have the same action on different
++        // targets, and a remaining sibling must not hide a merged first source.
++        if source.source_sequence_id == self.event.sequence_id {
++            if source.last_tick != self.event.originating_tick {
++                return Err(ScaffoldContractError::InvalidDecisionEvidence);
++            }
++            return Ok(Some(retained));
++        }
++        Ok(
++            (source.source_sequence_id.raw() > self.event.sequence_id.raw()
++                && source.first_tick == self.event.originating_tick)
++                .then_some(retained),
++        )
++    }
++
+     fn recompute_digest(&self) -> Result<[u64; 4], ScaffoldContractError> {
+         let mut d = CanonicalDigestBuilder::new(b"ALIFE-SLEEP-MEMORY-SOURCE-PROOF-V1");
+         for word in self.key.canonical_digest() {
+@@ -300,3 +370,210 @@ pub fn sleep_memory_replay_digest_v1(
+     }
+     Ok(digest.finish256())
+ }
++
++/// Versioned two-association provenance for one original replay event. The meal
++/// never acquires a synthetic replay event, predictor target, or synaptic update.
++/// Kept outside all legacy host/checkpoint structs until a fresh host is admitted.
++#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++pub struct MealMemorySleepProofV1 {
++    transaction: MealMemoryTransactionReceiptV1,
++    representative: SleepMemorySourceProofV1,
++    canonical_digest: [u64; 4],
++}
++
++impl MealMemorySleepProofV1 {
++    pub fn capture(
++        patch: &ExperiencePatch,
++        event: SleepReplayEvent,
++        target: &PredictionTargetReceipt,
++        transaction: MealMemoryTransactionReceiptV1,
++    ) -> Result<Self, ScaffoldContractError> {
++        transaction.validate_against_patch(patch)?;
++        let representative = SleepMemorySourceProofV1::capture(
++            patch,
++            event,
++            target,
++            transaction.representative_projection()?,
++        )?;
++        let mut proof = Self {
++            transaction,
++            representative,
++            canonical_digest: [0; 4],
++        };
++        proof.canonical_digest = proof.recompute_digest()?;
++        proof.validate_against(&event, target)?;
++        Ok(proof)
++    }
++
++    pub fn transaction(&self) -> &MealMemoryTransactionReceiptV1 {
++        &self.transaction
++    }
++    pub fn representative_source(&self) -> &SleepMemorySourceProofV1 {
++        &self.representative
++    }
++    pub fn canonical_digest(&self) -> [u64; 4] {
++        self.canonical_digest
++    }
++
++    pub fn validate_against(
++        &self,
++        event: &SleepReplayEvent,
++        target: &PredictionTargetReceipt,
++    ) -> Result<(), ScaffoldContractError> {
++        self.transaction.validate_contract()?;
++        self.representative.validate_against(event, target)?;
++        if self.representative.write != self.transaction.representative_projection()?
++            || self.representative.key != self.transaction.representative_key
++            || self.canonical_digest != self.recompute_digest()?
++        {
++            return Err(ScaffoldContractError::InvalidDecisionEvidence);
++        }
++        Ok(())
++    }
++
++    /// Audit retained association IDs without expanding the replay event list.
++    /// Interior merged observations remain unavailable, not inferred lineage.
++    pub fn resolve_associations(
++        &self,
++        bank: &MemoryBank,
++    ) -> Result<[Option<MemoryId>; 2], ScaffoldContractError> {
++        self.transaction.validate_contract()?;
++        if self.canonical_digest != self.recompute_digest()?
++            || self.representative.canonical_digest != self.representative.recompute_digest()?
++            || self.representative.write != self.transaction.representative_projection()?
++            || self.representative.key != self.transaction.representative_key
++            || self.transaction.output_generation > bank.candidate_store.generation
++        {
++            return Err(ScaffoldContractError::InvalidDecisionEvidence);
++        }
++        if self.transaction.output_generation == bank.candidate_store.generation
++            && self.transaction.after_digest != bank.candidate_store.digest(bank.config.capacity)?
++        {
++            return Err(ScaffoldContractError::InvalidDecisionEvidence);
++        }
++        let representative = self.representative.resolve_for_meal_v1(bank)?;
++        let Some(write) = &self.transaction.supplemental else {
++            return Ok([representative, None]);
++        };
++        let Some(id) = super::supplemental_meal::retained_id(write.kind) else {
++            return Ok([representative, None]);
++        };
++        let Some(record) = bank.candidate_store.records.get(&id.raw()) else {
++            return Ok([representative, None]);
++        };
++        record.validate_contract()?;
++        let query = &write.proof.query;
++        let (_, family) = keys_for_query(query);
++        if record.family_key().receipt() != family.receipt()
++            || record.profile() != query.profile()
++            || record.organism_id_raw != query.organism_id().raw()
++            || record.outcome_contact != Some(PhysicalContactKind::Consumed)
++        {
++            return Err(ScaffoldContractError::InvalidDecisionEvidence);
++        }
++        if record.action_id_raw != query.action_id().raw()
++            || record.action_kind_raw != query.action_kind().raw()
++        {
++            return Ok([representative, None]);
++        }
++        let current = record.source_sequence_id == self.transaction.sealed_sequence_id
++            && record.last_tick == query.tick();
++        let retained_first = record.source_sequence_id.raw()
++            > self.transaction.sealed_sequence_id.raw()
++            && record.first_tick == query.tick()
++            && matches!(
++                write.kind,
++                MemoryUpdateKind::Inserted { .. } | MemoryUpdateKind::Evicted { .. }
++            );
++        Ok([representative, (current || retained_first).then_some(id)])
++    }
++
++    fn recompute_digest(&self) -> Result<[u64; 4], ScaffoldContractError> {
++        let mut d = CanonicalDigestBuilder::new(b"ALIFE-MEAL-MEMORY-SLEEP-PROOF-V1");
++        d.write_u16(self.transaction.schema_version);
++        for word in self.representative.canonical_digest() {
++            d.write_u64(word);
++        }
++        if let Some(write) = &self.transaction.supplemental {
++            d.write_some();
++            let p = &write.proof;
++            d.write_u16(p.schema_version);
++            d.write_u64(p.sealed_sequence_id.raw());
++            for word in p.query.canonical_digest() {
++                d.write_u64(word);
++            }
++            d.write_u16(p.channel.canonical_key());
++            d.write_u64(p.target_entity.raw());
++            d.write_u64(p.dispatch_generation);
++            for word in p.phenotype_hash.0 {
++                d.write_u64(word);
++            }
++            for word in p
++                .frame_digest
++                .0
++                .into_iter()
++                .chain(p.bundle_digest)
++                .chain(p.patch_causal_digest)
++            {
++                d.write_u64(word);
++            }
++            // V1 admits only Consumed. Reject unknown/new phases in validation.
++            d.write_u8(match p.physical_contact {
++                PhysicalContactKind::None => 0,
++                PhysicalContactKind::Touch => 1,
++                PhysicalContactKind::Collision => 2,
++                PhysicalContactKind::Blocked => 3,
++                PhysicalContactKind::Consumed => 4,
++                PhysicalContactKind::Moved => 5,
++            });
++            match write.kind {
++                MemoryUpdateKind::IgnoredLowInformation => d.write_u8(0),
++                MemoryUpdateKind::IgnoredLowerRetention => d.write_u8(1),
++                MemoryUpdateKind::Inserted { inserted } => {
++                    d.write_u8(2);
++                    d.write_u64(inserted.raw());
++                }
++                MemoryUpdateKind::Merged { into } => {
++                    d.write_u8(3);
++                    d.write_u64(into.raw());
++                }
++                MemoryUpdateKind::Evicted { removed, inserted } => {
++                    d.write_u8(4);
++                    d.write_u64(removed.raw());
++                    d.write_u64(inserted.raw());
++                }
++            }
++        } else {
++            d.write_none();
++        }
++        Ok(d.finish256())
++    }
++}
++
++/// Binds exactly one multi-association proof to each original replay event.
++pub fn sleep_meal_memory_replay_digest_v1(
++    evidence: &crate::sleep::SleepReplayEvidence,
++    proofs: &[MealMemorySleepProofV1],
++) -> Result<[u64; 4], ScaffoldContractError> {
++    evidence.validate_contract()?;
++    if proofs.len() != evidence.batch.events.len() {
++        return Err(ScaffoldContractError::InvalidDecisionEvidence);
++    }
++    let mut d = CanonicalDigestBuilder::new(b"ALIFE-SLEEP-MEAL-MEMORY-REPLAY-V1");
++    for word in evidence.canonical_digest {
++        d.write_u64(word);
++    }
++    d.write_sequence_len(proofs.len());
++    for ((proof, event), target) in proofs
++        .iter()
++        .zip(&evidence.batch.events)
++        .zip(&evidence.prediction_targets)
++    {
++        proof.validate_against(event, target)?;
++        for word in proof.canonical_digest() {
++            d.write_u64(word);
++        }
++    }
++    Ok(d.finish256())
++}
+diff --git a/crates/alife_core/src/memory/sidecar.rs b/crates/alife_core/src/memory/sidecar.rs
+index c9345a7b3..d051c4ec5 100644
+--- a/crates/alife_core/src/memory/sidecar.rs
++++ b/crates/alife_core/src/memory/sidecar.rs
+@@ -476,6 +476,20 @@ impl MemorySidecarState {
+         self.bank.recall_frame(draft)
+     }
+ 
++    /// Audited reader for the explicitly opted-in meal transaction. Ordinary
++    /// and cached runtime reader entry points retain exact legacy semantics.
++    pub fn recall_frame_with_meal_v1(
++        &self,
++        draft: &PerceptionFrameDraft,
++    ) -> Result<PreparedMemoryRecall, ScaffoldContractError> {
++        if draft.organism_id() != self.organism_id
++            || draft.profile_provenance().identity() != self.profile
++        {
++            return Err(ScaffoldContractError::InvalidMemoryQuery);
++        }
++        self.bank.recall_frame_with_meal_v1(draft)
++    }
++
+     pub fn recall_frame_runtime(
+         &self,
+         draft: &PerceptionFrameDraft,
+@@ -537,6 +551,40 @@ impl MemorySidecarState {
+         Ok(receipt)
+     }
+ 
++    /// Opt-in transaction; stage bank, derived checkpoint and receipt together.
++    /// Failure leaves the entire sidecar, including cached checkpoint, unchanged.
++    pub fn observe_sealed_patch_with_meal_v1(
++        &mut self,
++        patch: &ExperiencePatch,
++        frame: &PerceptionFrame,
++    ) -> Result<MealMemoryTransactionReceiptV1, ScaffoldContractError> {
++        if matches!(
++            self.compaction.phase,
++            MemoryCompactionPhase::Pending { .. } | MemoryCompactionPhase::Staged { .. }
++        ) {
++            return Err(ScaffoldContractError::MemoryCompactionConflict);
++        }
++        if patch.pre_action().organism_id != self.organism_id
++            || patch.header().sensor_profile.identity() != self.profile
++        {
++            return Err(ScaffoldContractError::InvalidMemoryQuery);
++        }
++        let mut staged = self.clone();
++        let receipt = staged
++            .bank
++            .observe_sealed_patch_with_meal_v1(patch, frame)?;
++        staged.canonical_checkpoint.take();
++        staged.runtime_checks_deferred = false;
++        staged.compaction.active_generation = receipt.output_generation;
++        staged.compaction.active_digest = receipt.after_digest;
++        staged.compaction.phase = MemoryCompactionPhase::Idle;
++        staged.staged_bank = None;
++        staged.compaction.validate_contract()?;
++        receipt.validate_against_patch(patch)?;
++        *self = staged;
++        Ok(receipt)
++    }
++
+     pub fn prepare_compaction(
+         &mut self,
+         cycle_id: u64,
+diff --git a/crates/alife_core/src/memory/supplemental_meal.rs b/crates/alife_core/src/memory/supplemental_meal.rs
+new file mode 100644
+index 000000000..510232ed4
+--- /dev/null
++++ b/crates/alife_core/src/memory/supplemental_meal.rs
+@@ -0,0 +1,567 @@
++//! Explicit opt-in supplemental meal association. Never called by legacy hosts.
++//!
++//! One sealed world experience may have two indexed associations, not two
++//! physical events, optimizer steps, biology advances, or independent samples.
++use super::*;
++use crate::{DecisionEvidence, MotorChannel, PhenotypeHash, WorldEntityId};
++
++pub const MEAL_MEMORY_TRANSACTION_SCHEMA_V1: u16 = 1;
++pub const MEAL_MEMORY_POLICY_V1: &str = "m2-exact-consumed-joint-association-v1";
++
++/// Transient provenance bound to an exact selected command and finalized frame.
++/// The physiological values remain joint-context association, not Eat causality.
++#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++pub struct SupplementalMealProofV1 {
++    pub schema_version: u16,
++    pub sealed_sequence_id: ExperienceSequenceId,
++    pub query: CandidateMemoryQueryV2,
++    pub channel: MotorChannel,
++    pub target_entity: WorldEntityId,
++    pub dispatch_generation: u64,
++    pub phenotype_hash: PhenotypeHash,
++    pub frame_digest: PerceptionFrameDigest,
++    pub bundle_digest: [u64; 4],
++    pub patch_causal_digest: [u64; 4],
++    pub physical_contact: PhysicalContactKind,
++}
++
++#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++pub struct MealAssociationWriteV1 {
++    pub proof: SupplementalMealProofV1,
++    pub kind: MemoryUpdateKind,
++}
++
++/// Fixed bound: the representative plus zero or one meal association. The
++/// generation/digests describe the whole transaction, never an intermediate bank.
++#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++pub struct MealMemoryTransactionReceiptV1 {
++    pub schema_version: u16,
++    pub sealed_sequence_id: ExperienceSequenceId,
++    pub representative_key: EpisodicDecisionKeyV2,
++    pub representative: MemoryUpdateKind,
++    pub supplemental: Option<MealAssociationWriteV1>,
++    pub input_generation: u64,
++    pub output_generation: u64,
++    pub before_digest: [u64; 4],
++    pub after_digest: [u64; 4],
++    pub record_count: u32,
++    pub capacity: u32,
++    pub merge_count: u64,
++    pub eviction_count: u64,
++}
++
++impl SupplementalMealProofV1 {
++    pub fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
++        self.query.validate_contract()?;
++        self.sealed_sequence_id.validate()?;
++        self.target_entity.validate()?;
++        if self.schema_version != MEAL_MEMORY_TRANSACTION_SCHEMA_V1
++            || self.channel != MotorChannel::Manipulation
++            || self.query.profile().profile_id.raw() != 5
++            || self.query.action_family() != CandidateActionFamily::Ingest
++            || self.query.action_kind() != ActionKind::Interact
++            || self.query.tracked_object_id().is_none()
++            || self.physical_contact != PhysicalContactKind::Consumed
++            || self.dispatch_generation == 0
++        {
++            return Err(ScaffoldContractError::InvalidDecisionEvidence);
++        }
++        Ok(())
++    }
++
++    pub fn validate_against_patch(
++        &self,
++        patch: &ExperiencePatch,
++        frame: &PerceptionFrame,
++    ) -> Result<(), ScaffoldContractError> {
++        self.validate_contract()?;
++        if derive_supplemental_meal(patch, frame)?.as_ref() != Some(self) {
++            return Err(ScaffoldContractError::InvalidDecisionEvidence);
++        }
++        Ok(())
++    }
++}
++
++fn validate_frame_binding(
++    patch: &ExperiencePatch,
++    frame: &PerceptionFrame,
++) -> Result<(), ScaffoldContractError> {
++    patch.validate_contract()?;
++    frame.validate_contract()?;
++    if frame != patch.pre_action().perception()
++        || frame.profile_provenance().identity().profile_id.raw() != 5
++        || !matches!(
++            patch.decision().evidence,
++            DecisionEvidence::NeuralClosedLoopCpu(_)
++        )
++    {
++        return Err(ScaffoldContractError::InvalidDecisionEvidence);
++    }
++    Ok(())
++}
++
++fn derive_supplemental_meal(
++    patch: &ExperiencePatch,
++    frame: &PerceptionFrame,
++) -> Result<Option<SupplementalMealProofV1>, ScaffoldContractError> {
++    validate_frame_binding(patch, frame)?;
++    let Some(bundle) = patch.selected_bundle() else {
++        return Ok(None);
++    };
++    let Some(joint) = patch.outcome().joint.as_ref() else {
++        return Ok(None);
++    };
++    // Legacy receipts can omit the whole channel list. No inference from the
++    // aggregate outcome is allowed; all selected channels need exact receipts.
++    if joint.channel_outcomes.len() != bundle.channels.len() {
++        return Ok(None);
++    }
++    let mut selected = bundle
++        .channels
++        .iter()
++        .filter(|c| c.channel == MotorChannel::Manipulation);
++    let Some(command) = selected.next() else {
++        return Ok(None);
++    };
++    if selected.next().is_some() {
++        return Ok(None);
++    }
++    let Some(binding) = command.target else {
++        return Ok(None);
++    };
++    let Some(target) = binding.entity else {
++        return Ok(None);
++    };
++    let mut candidates = frame
++        .candidates()
++        .iter()
++        .filter(|c| c.action_id == command.primitive && c.target == binding);
++    let Some(candidate) = candidates.next() else {
++        return Ok(None);
++    };
++    if candidates.next().is_some()
++        || candidate.family != CandidateActionFamily::Ingest
++        || candidate.kind != ActionKind::Interact
++    {
++        return Ok(None);
++    }
++    let query = MemoryQueryEncoderV2::encode_from_frame(frame, candidate)?;
++    if query.tracked_object_id().is_none() {
++        return Ok(None);
++    }
++    let mut matching = joint
++        .channel_outcomes
++        .iter()
++        .filter(|r| r.channel == command.channel);
++    let Some(receipt) = matching.next() else {
++        return Ok(None);
++    };
++    if matching.next().is_some()
++        || receipt.physical.contact != PhysicalContactKind::Consumed
++        || receipt.physical.target_entity != Some(target)
++    {
++        return Ok(None);
++    }
++    // Fail closed on competing biologically consequential contact. A targetless
++    // Rest or Inspect elsewhere with no physical contact does not veto the meal.
++    for sibling in &bundle.channels {
++        let mut receipts = joint
++            .channel_outcomes
++            .iter()
++            .filter(|r| r.channel == sibling.channel);
++        let Some(receipt) = receipts.next() else {
++            return Ok(None);
++        };
++        if receipts.next().is_some() {
++            return Ok(None);
++        }
++        if sibling.channel != command.channel
++            && receipt.physical.contact != PhysicalContactKind::None
++            && receipt.physical.target_entity != Some(target)
++        {
++            return Ok(None);
++        }
++    }
++    let original = patch
++        .decision()
++        .episodic_key()
++        .ok_or(ScaffoldContractError::InvalidMemoryQuery)?
++        .query();
++    if original.action_family() == CandidateActionFamily::Ingest
++        && original.action_id() == query.action_id()
++        && original.action_kind() == query.action_kind()
++        && original.tracked_object_id() == query.tracked_object_id()
++        && patch.decision().selected_action.target_entity == Some(target)
++    {
++        return Ok(None);
++    }
++    let evidence = patch.decision().neural_evidence()?;
++    let proof = SupplementalMealProofV1 {
++        schema_version: MEAL_MEMORY_TRANSACTION_SCHEMA_V1,
++        sealed_sequence_id: patch.header().sequence_id,
++        query,
++        channel: command.channel,
++        target_entity: target,
++        dispatch_generation: evidence.dispatch_generation,
++        phenotype_hash: evidence.phenotype_hash,
++        frame_digest: frame.frame_digest(),
++        bundle_digest: bundle.canonical_digest()?,
++        patch_causal_digest: patch.causal_digest()?,
++        physical_contact: receipt.physical.contact,
++    };
++    proof.validate_contract()?;
++    Ok(Some(proof))
++}
++
++pub(super) fn retained_id(kind: MemoryUpdateKind) -> Option<MemoryId> {
++    match kind {
++        MemoryUpdateKind::Inserted { inserted } | MemoryUpdateKind::Evicted { inserted, .. } => {
++            Some(inserted)
++        }
++        MemoryUpdateKind::Merged { into } => Some(into),
++        MemoryUpdateKind::IgnoredLowInformation | MemoryUpdateKind::IgnoredLowerRetention => None,
++    }
++}
++
++impl MealMemoryTransactionReceiptV1 {
++    pub fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
++        self.sealed_sequence_id.validate()?;
++        self.representative_key.validate_contract()?;
++        if self.schema_version != MEAL_MEMORY_TRANSACTION_SCHEMA_V1
++            || self.output_generation
++                != self
++                    .input_generation
++                    .checked_add(1)
++                    .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?
++            || self.representative_key.query().profile().profile_id.raw() != 5
++            || self.capacity == 0
++            || self.record_count > self.capacity
++        {
++            return Err(ScaffoldContractError::InvalidDecisionEvidence);
++        }
++        if let Some(id) = retained_id(self.representative) {
++            id.validate()?;
++        }
++        if let Some(supplemental) = &self.supplemental {
++            supplemental.proof.validate_contract()?;
++            let query = &supplemental.proof.query;
++            if supplemental.proof.sealed_sequence_id != self.sealed_sequence_id
++                || query.organism_id() != self.representative_key.query().organism_id()
++                || query.profile() != self.representative_key.query().profile()
++                || query.tick() != self.representative_key.query().tick()
++                || query.base_frame_digest() != self.representative_key.query().base_frame_digest()
++                || supplemental.proof.frame_digest != self.representative_key.final_frame_digest()
++                || (retained_id(supplemental.kind).is_some()
++                    && retained_id(supplemental.kind) == retained_id(self.representative))
++            {
++                return Err(ScaffoldContractError::InvalidDecisionEvidence);
++            }
++            if let Some(id) = retained_id(supplemental.kind) {
++                id.validate()?;
++            }
++            if let MemoryUpdateKind::Evicted { removed, .. } = supplemental.kind {
++                if Some(removed) == retained_id(self.representative) {
++                    return Err(ScaffoldContractError::InvalidDecisionEvidence);
++                }
++            }
++        }
++        Ok(())
++    }
++
++    /// Exact boundary audit, including persistent digest and every retained
++    /// association ID. For later merged/evicted banks use the sleep source proof.
++    pub fn validate_committed_bank(&self, bank: &MemoryBank) -> Result<(), ScaffoldContractError> {
++        self.validate_contract()?;
++        let owner = self.representative_key.query().organism_id().raw();
++        if bank.candidate_store.generation != self.output_generation
++            || bank.candidate_store.digest(bank.config.capacity)? != self.after_digest
++            || bank.candidate_store.records.len() != self.record_count as usize
++            || bank.config.capacity != self.capacity as usize
++            || bank.candidate_store.merge_count != self.merge_count
++            || bank.candidate_store.eviction_count != self.eviction_count
++            || bank.candidate_store.last_sequence_by_organism.get(&owner)
++                != Some(&self.sealed_sequence_id.raw())
++        {
++            return Err(ScaffoldContractError::InvalidDecisionEvidence);
++        }
++        let validate_row = |query: &CandidateMemoryQueryV2,
++                            kind: MemoryUpdateKind,
++                            consumed: bool| {
++            if let Some(id) = retained_id(kind) {
++                let record = bank
++                    .candidate_store
++                    .records
++                    .get(&id.raw())
++                    .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
++                let (_, family) = keys_for_query(query);
++                if record.source_sequence_id != self.sealed_sequence_id
++                    || record.last_tick != query.tick()
++                    || record.family_key().receipt() != family.receipt()
++                    || (consumed && record.outcome_contact != Some(PhysicalContactKind::Consumed))
++                {
++                    return Err(ScaffoldContractError::InvalidDecisionEvidence);
++                }
++            }
++            Ok(())
++        };
++        validate_row(self.representative_key.query(), self.representative, false)?;
++        if let Some(write) = &self.supplemental {
++            validate_row(&write.proof.query, write.kind, true)?;
++        }
++        Ok(())
++    }
++
++    /// Representative-only view of the ONE committed transaction for existing
++    /// replay code. It does not represent an independently committed first write.
++    pub fn representative_projection(&self) -> Result<MemoryUpdateReceipt, ScaffoldContractError> {
++        self.validate_contract()?;
++        let (target, family) = keys_for_query(self.representative_key.query());
++        Ok(MemoryUpdateReceipt {
++            runtime_approximate: false,
++            sealed_sequence_id: self.sealed_sequence_id,
++            organism_id_raw: self.representative_key.query().organism_id().raw(),
++            bucket: family.receipt(),
++            target_bucket: target.receipt(),
++            input_generation: self.input_generation,
++            output_generation: self.output_generation,
++            kind: self.representative,
++            record_count: self.record_count,
++            capacity: self.capacity,
++            merge_count: self.merge_count,
++            eviction_count: self.eviction_count,
++            before_digest: self.before_digest,
++            after_digest: self.after_digest,
++        })
++    }
++
++    pub fn validate_against_patch(
++        &self,
++        patch: &ExperiencePatch,
++    ) -> Result<(), ScaffoldContractError> {
++        self.validate_contract()?;
++        if patch.header().sequence_id != self.sealed_sequence_id
++            || patch.decision().episodic_key() != Some(&self.representative_key)
++            || derive_supplemental_meal(patch, patch.pre_action().perception())?
++                != self.supplemental.as_ref().map(|write| write.proof.clone())
++        {
++            return Err(ScaffoldContractError::InvalidDecisionEvidence);
++        }
++        Ok(())
++    }
++}
++
++impl MemoryBank {
++    /// Fresh opt-in API. Pair with `recall_frame_with_meal_v1` and
++    /// `MealMemorySleepProofV1`; ordinary/cached readers intentionally remain
++    /// legacy, even for accepted old banks containing same-sequence records.
++    /// Old writers, saved layouts and host defaults are unchanged.
++    /// All operations run in a private clone; only the final validated bank is
++    /// committed. No second call to an ordinary same-sequence writer occurs.
++    pub fn observe_sealed_patch_with_meal_v1(
++        &mut self,
++        patch: &ExperiencePatch,
++        frame: &PerceptionFrame,
++    ) -> Result<MealMemoryTransactionReceiptV1, ScaffoldContractError> {
++        let supplemental_proof = derive_supplemental_meal(patch, frame)?;
++        let mut staged = self.clone();
++        // Reuse the original representative policy exactly, including ignore,
++        // phase, merge, contradiction and retention behavior. This is staging.
++        let representative = staged.observe_sealed_patch(patch)?;
++        let supplemental = if let Some(proof) = supplemental_proof {
++            let mut record = candidate_record_from_patch(
++                MemoryId(staged.candidate_store.next_memory_id),
++                patch,
++            )?;
++            let query = &proof.query;
++            record.action_id_raw = query.action_id().raw();
++            record.action_kind_raw = query.action_kind().raw();
++            record.family_raw = u16::from(query.action_family().raw());
++            record.tracked_object_id_raw = query.tracked_object_id().unwrap().raw();
++            record.query_features = query.features().to_vec();
++            record.outcome_contact = Some(PhysicalContactKind::Consumed);
++            record.confidence = patch
++                .selected_bundle()
++                .unwrap()
++                .channels
++                .iter()
++                .find(|command| command.channel == proof.channel)
++                .unwrap()
++                .confidence
++                .raw();
++            // Joint physiological valence is retained, not reassigned channel
++            // reward. Actual physical consumption establishes contact only.
++            record.target_latent[6] = 1.0;
++            record.validate_contract()?;
++            let kind = staged.stage_supplemental_meal_record(
++                query,
++                record,
++                retained_id(representative.kind),
++            )?;
++            Some(MealAssociationWriteV1 { proof, kind })
++        } else {
++            None
++        };
++        let receipt = MealMemoryTransactionReceiptV1 {
++            schema_version: MEAL_MEMORY_TRANSACTION_SCHEMA_V1,
++            sealed_sequence_id: patch.header().sequence_id,
++            representative_key: patch.decision().episodic_key().unwrap().clone(),
++            representative: representative.kind,
++            supplemental,
++            input_generation: representative.input_generation,
++            output_generation: representative.output_generation,
++            before_digest: representative.before_digest,
++            after_digest: staged.candidate_store.digest(staged.config.capacity)?,
++            record_count: u32::try_from(staged.candidate_store.records.len())
++                .map_err(|_| ScaffoldContractError::ScalarOutOfRange)?,
++            capacity: representative.capacity,
++            merge_count: staged.candidate_store.merge_count,
++            eviction_count: staged.candidate_store.eviction_count,
++        };
++        receipt.validate_against_patch(patch)?;
++        receipt.validate_committed_bank(&staged)?;
++        // Rebuild-derived equality catches a stale index before committing any
++        // state. The persistent digest validates every record and source bound.
++        let mut reindexed = staged.candidate_store.clone();
++        reindexed.rebuild_indices();
++        if reindexed != staged.candidate_store {
++            return Err(ScaffoldContractError::InvalidMemoryQuery);
++        }
++        *self = staged;
++        Ok(receipt)
++    }
++
++    fn stage_supplemental_meal_record(
++        &mut self,
++        query: &CandidateMemoryQueryV2,
++        candidate_record: CandidateMemoryRecordV2,
++        protected: Option<MemoryId>,
++    ) -> Result<MemoryUpdateKind, ScaffoldContractError> {
++        let (_, family_key) = keys_for_query(query);
++        let mut merge_id = None;
++        let mut contradiction_id = None;
++        for id in self
++            .candidate_store
++            .family_index
++            .get(&(family_key.clone(), candidate_record.outcome_scope_key()))
++            .into_iter()
++            .flatten()
++            .take(MEMORY_FAMILY_SEARCH_CAP)
++        {
++            if Some(*id) == protected {
++                continue;
++            }
++            let record = &self.candidate_store.records[&id.raw()];
++            if record.identity() != candidate_record.identity()
++                || !record.same_outcome_scope(&candidate_record)
++                || family_similarity(&candidate_record.query_features, &record.query_features)
++                    < MEMORY_MERGE_SIMILARITY
++            {
++                continue;
++            }
++            let selected = if compatible_memory_outcomes(record, &candidate_record) {
++                &mut merge_id
++            } else {
++                &mut contradiction_id
++            };
++            if selected.is_none_or(|previous: MemoryId| id.raw() < previous.raw()) {
++                *selected = Some(*id);
++            }
++        }
++        // Identical existing consumed-vs-legacy-unknown safeguard. Preparation
++        // cannot enter this helper or gain consumed replacement privileges.
++        for id in self
++            .candidate_store
++            .family_index
++            .get(&(family_key, 0))
++            .into_iter()
++            .flatten()
++            .take(MEMORY_FAMILY_SEARCH_CAP)
++        {
++            if Some(*id) != protected
++                && candidate_record
++                    .consumption_supersedes_unknown(&self.candidate_store.records[&id.raw()])
++                && contradiction_id.is_none_or(|previous: MemoryId| id.raw() < previous.raw())
++            {
++                contradiction_id = Some(*id);
++            }
++        }
++        if let Some(into) = merge_id {
++            let old = self.candidate_store.records[&into.raw()].clone();
++            let merged = merge_candidate_records(&old, &candidate_record)?;
++            let count = self
++                .candidate_store
++                .merge_count
++                .checked_add(1)
++                .ok_or(ScaffoldContractError::ScalarOutOfRange)?;
++            self.candidate_store.remove_record_from_indices(&old);
++            self.candidate_store.records.insert(into.raw(), merged);
++            self.candidate_store.insert_record_into_indices(into);
++            self.candidate_store.merge_count = count;
++            // No retrieval corroboration boost: the representative's recalled
++            // family cannot impersonate the selected meal candidate's evidence.
++            return Ok(MemoryUpdateKind::Merged { into });
++        }
++        let inserted = candidate_record.memory_id;
++        let next = self
++            .candidate_store
++            .next_memory_id
++            .checked_add(1)
++            .ok_or(ScaffoldContractError::ScalarOutOfRange)?;
++        let removed = if self.candidate_store.records.len() == self.config.capacity {
++            let chosen = contradiction_id
++                .and_then(|id| self.candidate_store.records.get(&id.raw()))
++                .or_else(|| {
++                    self.candidate_store
++                        .records
++                        .values()
++                        .filter(|record| Some(record.memory_id) != protected)
++                        .min_by_key(|record| {
++                            (
++                                retention_priority(record, query.tick()),
++                                record.last_tick.raw(),
++                                record.memory_id.raw(),
++                            )
++                        })
++                });
++            let Some(chosen) = chosen else {
++                return Ok(MemoryUpdateKind::IgnoredLowerRetention);
++            };
++            if contradiction_id != Some(chosen.memory_id)
++                && retention_priority(&candidate_record, query.tick())
++                    < retention_priority(chosen, query.tick())
++            {
++                return Ok(MemoryUpdateKind::IgnoredLowerRetention);
++            }
++            Some(chosen.clone())
++        } else {
++            None
++        };
++        let kind = if let Some(removed) = removed {
++            let count = self
++                .candidate_store
++                .eviction_count
++                .checked_add(1)
++                .ok_or(ScaffoldContractError::ScalarOutOfRange)?;
++            self.candidate_store.remove_record_from_indices(&removed);
++            self.candidate_store
++                .records
++                .remove(&removed.memory_id.raw());
++            self.candidate_store.eviction_count = count;
++            MemoryUpdateKind::Evicted {
++                removed: removed.memory_id,
++                inserted,
++            }
++        } else {
++            MemoryUpdateKind::Inserted { inserted }
++        };
++        self.candidate_store
++            .records
++            .insert(inserted.raw(), candidate_record);
++        self.candidate_store.insert_record_into_indices(inserted);
++        self.candidate_store.next_memory_id = next;
++        Ok(kind)
++    }
++}
+diff --git a/crates/alife_core/src/memory/supplemental_meal_tests.rs b/crates/alife_core/src/memory/supplemental_meal_tests.rs
+new file mode 100644
+index 000000000..786651700
+--- /dev/null
++++ b/crates/alife_core/src/memory/supplemental_meal_tests.rs
+@@ -0,0 +1,1417 @@
++//! Synthetic CPU core-contract fixtures, not proof of host physical integration.
++//! Every admitted input is a real V12 sealed patch and its finalized frame.
++use super::*;
++use crate::experience::ChannelPhysicalOutcome;
++use crate::*;
++
++const OWNER: OrganismId = OrganismId(811);
++const FOOD: WorldEntityId = WorldEntityId(71);
++const OTHER: WorldEntityId = WorldEntityId(72);
++
++fn config(capacity: usize) -> MemoryBankConfig {
++    MemoryBankConfig::new(
++        capacity,
++        64,
++        capacity.min(4),
++        0.72,
++        Confidence::new(0.0).unwrap(),
++    )
++    .unwrap()
++}
++fn bank(capacity: usize) -> MemoryBank {
++    MemoryBank::new(config(capacity)).unwrap()
++}
++fn profile() -> SensorProfile {
++    SensorProfile::GroundedObjectSlotsSleepChoiceV1
++}
++fn identity() -> SensorProfileIdentity {
++    SensorProfileProvenance::new(profile(), SensoryAbiVersion::CURRENT, Tick::ZERO)
++        .unwrap()
++        .identity()
++}
++fn physical(target: Option<WorldEntityId>, contact: PhysicalContactKind) -> PhysicalActionOutcome {
++    PhysicalActionOutcome {
++        contact,
++        target_entity: target,
++        displacement: Vec3f::ZERO,
++        collision_normal: None,
++        energy_cost: NormalizedScalar::new(0.1).unwrap(),
++    }
++}
++
++#[derive(Clone)]
++struct Case {
++    representative: CandidateActionFamily,
++    representative_target: Option<WorldEntityId>,
++    sibling_contact: PhysicalContactKind,
++    sibling_receipt_target: Option<WorldEntityId>,
++    meal_contact: PhysicalContactKind,
++    meal_receipt_target: Option<WorldEntityId>,
++    meal_command_target: Option<WorldEntityId>,
++    success: bool,
++    // Legacy scenario knob: positive hunger relief or negative fresh pain,
++    // not a host-authored reward. Inherited physiology determines valence.
++    reward: f32,
++    receipts: u8, // 0 complete, 1 absent, 2 missing manipulation, 3 duplicate
++    duplicate_candidate: bool,
++    alternate_ingest_target: bool,
++    cpu: bool,
++}
++impl Default for Case {
++    fn default() -> Self {
++        Self {
++            representative: CandidateActionFamily::Rest,
++            representative_target: None,
++            sibling_contact: PhysicalContactKind::None,
++            sibling_receipt_target: None,
++            meal_contact: PhysicalContactKind::Consumed,
++            meal_receipt_target: Some(FOOD),
++            meal_command_target: Some(FOOD),
++            success: true,
++            reward: 0.7,
++            receipts: 0,
++            duplicate_candidate: false,
++            alternate_ingest_target: false,
++            cpu: true,
++        }
++    }
++}
++fn fixture(
++    sequence: u64,
++    case: Case,
++) -> Result<(ExperiencePatch, PerceptionFrame), ScaffoldContractError> {
++    let tick = Tick::new(sequence * 2);
++    let sequence = ExperienceSequenceId(sequence);
++    let outcome_tick = Tick::new(tick.raw() + 1);
++    let spec = BrainClassSpec::for_tier(BrainScaleTier::Nano512);
++    let phenotype = CreatureGenome::early_mammal_founder(
++        321,
++        FoundationGeneticIdentity::new(811, 1, 1, spec.id)?,
++    )?
++    .express()?;
++    let genome = &phenotype.brain_genome;
++    // Synthetic measured states isolate the intended consequence from world
++    // simulation. Preserve the founder's valuation and a common genome, while
++    // constructing each state's private graph at its own authoritative tick.
++    let mut before = BiochemistryState::new(&phenotype, tick)?;
++    // At a given tick, consequence/reversal cases share the pre-action state.
++    // Inherited age-dependent hormones still differ across source ticks.
++    before.homeostasis.drives.hunger = 1.0;
++    before.homeostasis.drives.pain = 0.0;
++    before.body.set_energy(0.5)?;
++    let mut after = BiochemistryState::new(&phenotype, outcome_tick)?;
++    after.homeostasis = before.homeostasis;
++    after.homeostasis.tick = outcome_tick;
++    after.homeostasis.drives.hunger = 1.0 - if case.reward >= 0.0 { case.reward } else { 0.4 };
++    after.homeostasis.drives.pain = (-case.reward).max(0.0);
++    after.body = before.body;
++    after.body.set_energy(0.4)?;
++    let physiology = MeasuredPhysiologyTransition::new(before, after)?;
++    let slots: Vec<_> = [61, 62]
++        .into_iter()
++        .enumerate()
++        .map(|(i, id)| GroundedObjectSlotV1 {
++            slot_index: i as u16,
++            tracked_object_id: TrackedObjectId(id),
++            bearing: [0.0; 2],
++            distance: 0.4,
++            relative_velocity: [0.0; 3],
++            color: [0.0; 3],
++            material: [0.0; 3],
++            shape: [0.0; 3],
++            chemical: [0.0; 3],
++            contact: 0.0,
++            proprioception: [0.0; 2],
++            temperature: 0.0,
++            terrain: [0.0; 2],
++            confidence: Confidence::new(0.9).unwrap(),
++        })
++        .collect();
++    let make_candidate = |index, id, kind, family, target: Option<WorldEntityId>| {
++        let slot = if target == Some(OTHER) { 1 } else { 0 };
++        ActionCandidate::new(
++            index,
++            ActionId(id),
++            kind,
++            family,
++            if target.is_some() {
++                CandidateObservationRef::ObjectSlot(slot as u16)
++            } else {
++                CandidateObservationRef::None
++            },
++            ActionTarget::new(target, target.map(|_| Vec3f::new(0.4, 0.0, 0.0))),
++            if target.is_some() {
++                slots[slot].candidate_features().unwrap()
++            } else {
++                CandidateFeatureVector::zero()
++            },
++            Confidence::new(0.9).unwrap(),
++            NormalizedScalar::new(0.2).unwrap(),
++            DurationTicks::new(1),
++            DurationTicks::new(2),
++        )
++        .unwrap()
++    };
++    let (id, kind, channel) = match case.representative {
++        CandidateActionFamily::Rest => (3, ActionKind::Rest, MotorChannel::Posture),
++        CandidateActionFamily::Inspect => (501, ActionKind::Inspect, MotorChannel::Orientation),
++        CandidateActionFamily::Ingest => (210, ActionKind::Interact, MotorChannel::Manipulation),
++        _ => unreachable!(),
++    };
++    let mut candidates = vec![make_candidate(
++        0,
++        id,
++        kind,
++        case.representative,
++        case.representative_target,
++    )];
++    if case.representative != CandidateActionFamily::Ingest || case.alternate_ingest_target {
++        candidates.push(make_candidate(
++            1,
++            210,
++            ActionKind::Interact,
++            CandidateActionFamily::Ingest,
++            Some(FOOD),
++        ));
++    }
++    if case.duplicate_candidate {
++        candidates.push(make_candidate(
++            candidates.len() as u16,
++            210,
++            ActionKind::Interact,
++            CandidateActionFamily::Ingest,
++            Some(FOOD),
++        ));
++    }
++    let draft = PerceptionFrameDraft::new(
++        OWNER,
++        tick,
++        profile(),
++        SensorySnapshot::new(
++            OWNER,
++            tick,
++            Vec3f::ZERO,
++            SensoryChannels::ZERO,
++            Default::default(),
++        )?,
++        BodySnapshot {
++            pose: Pose::IDENTITY,
++            velocity: Velocity::ZERO,
++        },
++        physiology.before.homeostasis,
++        candidates,
++        SensorProfileProvenance::new(profile(), SensoryAbiVersion::CURRENT, tick)?,
++        slots,
++    )?;
++    let (frame, recall) = bank(8).recall_frame(&draft)?.finalize(draft)?;
++    let selection = NeuralActionSelection {
++        candidate_index: 0,
++        logit: 0.7,
++        confidence: Confidence::new(0.8)?,
++        active_tiles: 8,
++        active_synapses: 64,
++    };
++    let command = frame.candidates()[0].to_command(OWNER, Confidence::new(0.8)?)?;
++    let decision = if case.cpu {
++        DecisionSnapshot::from_cpu_neural_selection(
++            sequence,
++            PhenotypeHash([1, 2, 3, 4]),
++            sequence.raw(),
++            0,
++            &frame,
++            selection,
++            command,
++        )?
++    } else {
++        DecisionSnapshot::from_neural_selection(
++            sequence,
++            PhenotypeHash([1, 2, 3, 4]),
++            sequence.raw(),
++            0,
++            &frame,
++            selection,
++            command,
++        )?
++    }
++    .with_finalized_memory_recall(&frame, &recall, 0)?;
++    let development = DevelopmentState::new(genome.id, tick, NormalizedScalar::new(0.5)?)
++        .with_enabled_lobes([
++            LobeKind::PerceptualIntegration,
++            LobeKind::TemporalPredictive,
++            LobeKind::ActionPlanning,
++        ]);
++    let pre = if case.cpu {
++        PreActionSnapshot::from_cpu_neural_frame(
++            sequence,
++            spec.id,
++            PhenotypeHash([1, 2, 3, 4]),
++            genome.id,
++            genome.schema_version,
++            development,
++            frame.clone(),
++        )?
++    } else {
++        PreActionSnapshot::from_neural_frame(
++            sequence,
++            spec.id,
++            PhenotypeHash([1, 2, 3, 4]),
++            genome.id,
++            genome.schema_version,
++            development,
++            frame.clone(),
++        )?
++    };
++    let make_command = |channel, id, target: Option<WorldEntityId>| {
++        ChannelCommand::new(
++            channel,
++            ActionId(id),
++            target.map(|entity| ActionTarget::new(Some(entity), Some(Vec3f::new(0.4, 0.0, 0.0)))),
++            Vec3f::ZERO,
++            Intensity::new(1.0).unwrap(),
++            DurationTicks::new(1),
++            0.0,
++            Confidence::new(0.8).unwrap(),
++            0,
++        )
++        .unwrap()
++    };
++    let mut commands = vec![make_command(
++        channel,
++        id,
++        if case.alternate_ingest_target {
++            Some(FOOD)
++        } else {
++            case.representative_target
++        },
++    )];
++    let meal_physical = physical(case.meal_receipt_target, case.meal_contact);
++    let mut receipts = if case.representative == CandidateActionFamily::Ingest {
++        vec![ChannelPhysicalOutcome::new(channel, meal_physical)?]
++    } else {
++        commands.push(make_command(
++            MotorChannel::Manipulation,
++            210,
++            case.meal_command_target,
++        ));
++        vec![
++            ChannelPhysicalOutcome::new(
++                channel,
++                physical(case.sibling_receipt_target, case.sibling_contact),
++            )?,
++            ChannelPhysicalOutcome::new(MotorChannel::Manipulation, meal_physical)?,
++        ]
++    };
++    match case.receipts {
++        1 => receipts.clear(),
++        2 => {
++            receipts.pop();
++        }
++        3 => receipts.push(receipts[0]),
++        _ => {}
++    }
++    let bundle = MotorCommandBundle::new(OWNER, sequence, tick, commands)?;
++    let joint =
++        JointPhysicalOutcome::new(meal_physical, vec![])?.with_channel_outcomes(receipts)?;
++    let work = CognitiveWorkReceipt::from_counters(8, 64, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)?;
++    let outcome = PostActionOutcome::new(
++        OWNER,
++        sequence,
++        outcome_tick,
++        case.success,
++        meal_physical,
++        HomeostaticDelta::zero(),
++        SignedValence::ZERO,
++        NormalizedScalar::new(0.0)?,
++        NormalizedScalar::new(0.0)?,
++        SignedValence::new(-0.1)?,
++        NormalizedScalar::new(0.2)?,
++    )?
++    .with_measured_physiology(physiology)?
++    .with_v12_joint(joint, work)?;
++    let prediction = PredictionTargetReceipt::for_successor(
++        OWNER,
++        sequence,
++        ActionId(id),
++        tick,
++        frame.frame_digest().0,
++        SemanticStateVector::new(vec![0.5, 0.25])?,
++        JointMotorCondition::from_bundle(&bundle)?,
++        SemanticStateVector::new(vec![0.9, 0.1])?,
++    )?;
++    let patch = ExperiencePatch::new_v12_with_decision(
++        pre,
++        decision,
++        bundle,
++        outcome,
++        prediction,
++        work,
++        CognitiveContextFrame::empty(OWNER, sequence, tick)?,
++    )?;
++    Ok((patch, frame))
++}
++fn retained_id(kind: MemoryUpdateKind) -> Option<MemoryId> {
++    match kind {
++        MemoryUpdateKind::Inserted { inserted } | MemoryUpdateKind::Evicted { inserted, .. } => {
++            Some(inserted)
++        }
++        MemoryUpdateKind::Merged { into } => Some(into),
++        _ => None,
++    }
++}
++fn assert_withheld(case: Case) {
++    let (patch, frame) = fixture(1, case).unwrap();
++    let mut old = bank(8);
++    old.observe_sealed_patch(&patch).unwrap();
++    let mut new = bank(8);
++    let receipt = new
++        .observe_sealed_patch_with_meal_v1(&patch, &frame)
++        .unwrap();
++    assert!(receipt.supplemental.is_none());
++    assert_eq!(
++        new, old,
++        "withheld supplement must preserve old API semantics"
++    );
++}
++
++// Each rejection family first proves a valid fixture reaches a committed meal
++// association. An unrelated seal failure therefore cannot make a negative pass.
++fn assert_positive_meal_control() {
++    let (patch, frame) = fixture(1, Case::default()).expect("positive sealed V12 control");
++    let mut b = bank(8);
++    let receipt = b
++        .observe_sealed_patch_with_meal_v1(&patch, &frame)
++        .expect("positive meal transaction commits");
++    assert!(receipt
++        .supplemental
++        .as_ref()
++        .and_then(|write| retained_id(write.kind))
++        .is_some());
++    receipt.validate_committed_bank(&b).unwrap();
++    assert_eq!(receipt.output_generation, 1);
++    assert_eq!(b.candidate_store.last_sequence_by_organism[&OWNER.raw()], 1);
++}
++
++#[test]
++fn meal_consumed_rest_and_inspect_preserve_representative_and_single_event() {
++    assert_positive_meal_control();
++    for (family, target) in [
++        (CandidateActionFamily::Rest, None),
++        (CandidateActionFamily::Inspect, Some(FOOD)),
++        (CandidateActionFamily::Inspect, Some(OTHER)),
++    ] {
++        let (patch, frame) = fixture(
++            1,
++            Case {
++                representative: family,
++                representative_target: target,
++                ..Case::default()
++            },
++        )
++        .unwrap();
++        let mut old = bank(8);
++        let original = old.observe_sealed_patch(&patch).unwrap();
++        let mut new = bank(8);
++        let receipt = new
++            .observe_sealed_patch_with_meal_v1(&patch, &frame)
++            .unwrap();
++        println!("meal boundary family={family:?} target={target:?} sequence={} old_digest={:?} before_digest={:?} after_digest={:?} old_record_count={} new_record_count={} generation={} representative={:?} supplemental={:?}",
++            receipt.sealed_sequence_id.raw(), original.after_digest, receipt.before_digest,
++            receipt.after_digest, original.record_count, receipt.record_count,
++            receipt.output_generation, receipt.representative,
++            receipt.supplemental.as_ref().map(|write| write.kind));
++        receipt.validate_committed_bank(&new).unwrap();
++        assert_eq!(receipt.schema_version, 1);
++        assert_eq!(receipt.representative, original.kind);
++        let representative = retained_id(original.kind).unwrap();
++        assert_eq!(
++            new.candidate_store.records[&representative.raw()],
++            old.candidate_store.records[&representative.raw()]
++        );
++        let meal = receipt.supplemental.unwrap();
++        assert_eq!(meal.proof.channel, MotorChannel::Manipulation);
++        assert_eq!(meal.proof.target_entity, FOOD);
++        assert_eq!(meal.proof.dispatch_generation, 1);
++        assert_eq!(meal.proof.frame_digest, frame.frame_digest());
++        assert_eq!(meal.proof.physical_contact, PhysicalContactKind::Consumed);
++        assert_eq!(
++            meal.proof.query.action_family(),
++            CandidateActionFamily::Ingest
++        );
++        assert_eq!(
++            meal.proof.query.tracked_object_id(),
++            Some(TrackedObjectId(61))
++        );
++        let source = &new.candidate_store.records[&retained_id(meal.kind).unwrap().raw()];
++        assert_eq!(source.outcome_contact, Some(PhysicalContactKind::Consumed));
++        assert_eq!(source.source_sequence_id, patch.header().sequence_id);
++        assert_eq!(source.observation_count, 1);
++        assert_eq!(receipt.input_generation + 1, receipt.output_generation);
++        assert_eq!(new.candidate_store.generation, 1);
++        assert_eq!(
++            new.candidate_store.last_sequence_by_organism[&OWNER.raw()],
++            1
++        );
++        assert_eq!(receipt.sealed_sequence_id, patch.header().sequence_id);
++        assert_eq!(receipt.record_count, 2);
++        assert_ne!(receipt.before_digest, receipt.after_digest);
++    }
++}
++
++#[test]
++fn meal_requires_exact_consumed_channel_evidence() {
++    assert_positive_meal_control();
++    for contact in [
++        PhysicalContactKind::None,
++        PhysicalContactKind::Touch,
++        PhysicalContactKind::Moved,
++        PhysicalContactKind::Blocked,
++        PhysicalContactKind::Collision,
++    ] {
++        assert_withheld(Case {
++            meal_contact: contact,
++            ..Case::default()
++        });
++    }
++    for target in [None, Some(OTHER)] {
++        assert_withheld(Case {
++            meal_receipt_target: target,
++            ..Case::default()
++        });
++        assert_withheld(Case {
++            meal_command_target: target,
++            ..Case::default()
++        });
++    }
++    assert_withheld(Case {
++        receipts: 1,
++        ..Case::default()
++    });
++    assert_withheld(Case {
++        duplicate_candidate: true,
++        ..Case::default()
++    });
++}
++
++#[test]
++fn meal_duplicate_or_partial_channel_receipts_cannot_seal() {
++    assert_positive_meal_control();
++    for receipts in [2, 3] {
++        assert!(fixture(
++            1,
++            Case {
++                receipts,
++                ..Case::default()
++            }
++        )
++        .is_err());
++    }
++}
++
++#[test]
++fn meal_competing_physical_contact_is_fail_closed_including_unknown_target() {
++    assert_positive_meal_control();
++    for contact in [PhysicalContactKind::Touch, PhysicalContactKind::Moved] {
++        for target in [None, Some(OTHER)] {
++            assert_withheld(Case {
++                representative: CandidateActionFamily::Inspect,
++                representative_target: Some(FOOD),
++                sibling_contact: contact,
++                sibling_receipt_target: target,
++                ..Case::default()
++            });
++        }
++        let (patch, frame) = fixture(
++            1,
++            Case {
++                representative: CandidateActionFamily::Inspect,
++                representative_target: Some(FOOD),
++                sibling_contact: contact,
++                sibling_receipt_target: Some(FOOD),
++                ..Case::default()
++            },
++        )
++        .unwrap();
++        assert!(bank(8)
++            .observe_sealed_patch_with_meal_v1(&patch, &frame)
++            .unwrap()
++            .supplemental
++            .is_some());
++    }
++}
++
++#[test]
++fn meal_already_representative_is_not_double_counted() {
++    assert_positive_meal_control();
++    assert_withheld(Case {
++        representative: CandidateActionFamily::Ingest,
++        representative_target: Some(FOOD),
++        ..Case::default()
++    });
++}
++
++#[test]
++fn meal_replay_foreign_frame_and_generation_overflow_are_atomic() {
++    assert_positive_meal_control();
++    let (patch, frame) = fixture(1, Case::default()).unwrap();
++    let mut b = bank(8);
++    b.observe_sealed_patch_with_meal_v1(&patch, &frame).unwrap();
++    let before = b.clone();
++    assert!(b.observe_sealed_patch_with_meal_v1(&patch, &frame).is_err());
++    assert_eq!(b, before);
++    let (next, next_frame) = fixture(2, Case::default()).unwrap();
++    assert!(b.observe_sealed_patch_with_meal_v1(&next, &frame).is_err());
++    assert_eq!(b, before);
++    b.candidate_store.generation = u64::MAX;
++    let before = b.clone();
++    assert!(b
++        .observe_sealed_patch_with_meal_v1(&next, &next_frame)
++        .is_err());
++    assert_eq!(b, before);
++}
++
++#[test]
++fn meal_capacity_never_evicts_the_just_retained_representative() {
++    assert_positive_meal_control();
++    let (patch, frame) = fixture(1, Case::default()).unwrap();
++    let mut old = bank(1);
++    old.observe_sealed_patch(&patch).unwrap();
++    let mut new = bank(1);
++    new.observe_sealed_patch_with_meal_v1(&patch, &frame)
++        .unwrap();
++    assert_eq!(new.candidate_store.records, old.candidate_store.records);
++    assert_eq!(new.candidate_store.generation, 1);
++}
++
++#[test]
++fn meal_merge_cold_roundtrip_preserves_source_counts_without_inflation() {
++    assert_positive_meal_control();
++    let mut sidecar = MemorySidecarState::new_profiled(OWNER, identity(), config(8)).unwrap();
++    for sequence in 1..=3 {
++        let (patch, frame) = fixture(sequence, Case::default()).unwrap();
++        sidecar
++            .observe_sealed_patch_with_meal_v1(&patch, &frame)
++            .unwrap();
++    }
++    let b = sidecar.bank();
++    assert_eq!(b.candidate_store.generation, 3);
++    assert_eq!(b.candidate_store.records.len(), 2);
++    assert!(b
++        .candidate_store
++        .records
++        .values()
++        .all(|r| r.observation_count == 3));
++    let restored: MemoryBank = serde_json::from_slice(&serde_json::to_vec(b).unwrap()).unwrap();
++    assert_eq!(&restored, b);
++    let active = sidecar.export_active_bank().unwrap();
++    let cold = MemorySidecarState::restore_portable(
++        identity(),
++        *sidecar.compaction_checkpoint(),
++        active.clone(),
++        None,
++    )
++    .unwrap();
++    assert_eq!(cold.export_active_bank().unwrap(), active);
++    assert_eq!(
++        cold.bank().candidate_store.records,
++        b.candidate_store.records
++    );
++    let (_, probe) = fixture(100, Case::default()).unwrap();
++    let draft = PerceptionFrameDraft::new(
++        OWNER,
++        probe.tick(),
++        probe.sensor_profile(),
++        probe.sensory().clone(),
++        probe.body(),
++        *probe.homeostasis(),
++        probe.candidates().to_vec(),
++        probe.profile_provenance(),
++        probe.grounded_object_slots().to_vec(),
++    )
++    .unwrap();
++    for memory in [b, &restored, cold.bank()] {
++        let recall = memory.recall_frame_with_meal_v1(&draft).unwrap();
++        let ingest = &recall.context().candidates[1];
++        assert_eq!(
++            ingest.family_source_count, 1,
++            "merged meal observations are one source"
++        );
++        assert_eq!(
++            ingest.target_source_count, 1,
++            "targetless Rest is not another food source"
++        );
++    }
++}
++
++#[test]
++fn meal_second_allocation_failure_rolls_back_representative_and_sequence() {
++    assert_positive_meal_control();
++    let (patch, frame) = fixture(1, Case::default()).unwrap();
++    let mut b = bank(8);
++    // The representative can allocate MAX-1; the supplemental allocation then
++    // overflows. Neither half of that attempted transaction may be committed.
++    b.candidate_store.next_memory_id = u64::MAX - 1;
++    let before = b.clone();
++    assert!(b.observe_sealed_patch_with_meal_v1(&patch, &frame).is_err());
++    assert_eq!(b, before);
++}
++
++#[test]
++fn meal_sidecar_replay_is_atomic_and_cold_state_can_continue_merging() {
++    assert_positive_meal_control();
++    let mut sidecar = MemorySidecarState::new_profiled(OWNER, identity(), config(8)).unwrap();
++    let (patch, frame) = fixture(1, Case::default()).unwrap();
++    sidecar
++        .observe_sealed_patch_with_meal_v1(&patch, &frame)
++        .unwrap();
++    let before = sidecar.clone();
++    assert!(sidecar
++        .observe_sealed_patch_with_meal_v1(&patch, &frame)
++        .is_err());
++    assert_eq!(sidecar, before);
++    let mut restored = MemorySidecarState::restore_portable(
++        identity(),
++        *sidecar.compaction_checkpoint(),
++        sidecar.export_active_bank().unwrap(),
++        None,
++    )
++    .unwrap();
++    let (next, next_frame) = fixture(2, Case::default()).unwrap();
++    restored
++        .observe_sealed_patch_with_meal_v1(&next, &next_frame)
++        .unwrap();
++    sidecar
++        .observe_sealed_patch_with_meal_v1(&next, &next_frame)
++        .unwrap();
++    assert_eq!(
++        restored.export_active_bank().unwrap(),
++        sidecar.export_active_bank().unwrap()
++    );
++    assert_eq!(restored.bank().candidate_store.records.len(), 2);
++    assert!(restored
++        .bank()
++        .candidate_store
++        .records
++        .values()
++        .all(|r| r.observation_count == 2));
++}
++
++#[test]
++fn meal_harmful_consumed_outcome_is_remembered_despite_aggregate_failure() {
++    assert_positive_meal_control();
++    let (patch, frame) = fixture(
++        1,
++        Case {
++            success: false,
++            reward: -0.7,
++            ..Case::default()
++        },
++    )
++    .unwrap();
++    let mut b = bank(8);
++    let receipt = b.observe_sealed_patch_with_meal_v1(&patch, &frame).unwrap();
++    let meal = receipt.supplemental.unwrap();
++    let record = &b.candidate_store.records[&retained_id(meal.kind).unwrap().raw()];
++    assert_eq!(record.outcome_contact, Some(PhysicalContactKind::Consumed));
++    assert!(record.family_value[0] < 0.0);
++    assert_eq!(record.family_value[1], 0.0);
++}
++
++#[test]
++fn meal_gpu_input_is_rejected_without_changing_bank() {
++    assert_positive_meal_control();
++    let (patch, frame) = fixture(
++        1,
++        Case {
++            cpu: false,
++            ..Case::default()
++        },
++    )
++    .unwrap();
++    let mut b = bank(8);
++    let before = b.clone();
++    assert!(b.observe_sealed_patch_with_meal_v1(&patch, &frame).is_err());
++    assert_eq!(b, before);
++}
++
++#[test]
++fn meal_proof_is_bound_to_sealed_channel_frame_and_transaction() {
++    assert_positive_meal_control();
++    let (patch, frame) = fixture(1, Case::default()).unwrap();
++    let receipt = bank(8)
++        .observe_sealed_patch_with_meal_v1(&patch, &frame)
++        .unwrap();
++    receipt.validate_against_patch(&patch).unwrap();
++    let proof = receipt.supplemental.as_ref().unwrap().proof.clone();
++    proof.validate_against_patch(&patch, &frame).unwrap();
++    for change in 0..5 {
++        let mut wrong = proof.clone();
++        match change {
++            0 => wrong.target_entity = OTHER,
++            1 => wrong.dispatch_generation += 1,
++            2 => wrong.channel = MotorChannel::Orientation,
++            3 => wrong.physical_contact = PhysicalContactKind::Touch,
++            _ => wrong.sealed_sequence_id = ExperienceSequenceId(2),
++        }
++        assert!(wrong.validate_against_patch(&patch, &frame).is_err());
++    }
++    let projection = receipt.representative_projection().unwrap();
++    assert_eq!(projection.sealed_sequence_id, receipt.sealed_sequence_id);
++    assert_eq!(projection.input_generation, receipt.input_generation);
++    assert_eq!(projection.output_generation, receipt.output_generation);
++    assert_eq!(projection.before_digest, receipt.before_digest);
++    assert_eq!(projection.after_digest, receipt.after_digest);
++}
++
++#[test]
++fn meal_harmful_reversal_at_capacity_does_not_average_away_contradiction() {
++    assert_positive_meal_control();
++    let mut b = bank(2);
++    let (positive, frame) = fixture(1, Case::default()).unwrap();
++    b.observe_sealed_patch_with_meal_v1(&positive, &frame)
++        .unwrap();
++    let (negative, frame) = fixture(
++        2,
++        Case {
++            success: false,
++            reward: -0.9,
++            ..Case::default()
++        },
++    )
++    .unwrap();
++    let receipt = b
++        .observe_sealed_patch_with_meal_v1(&negative, &frame)
++        .unwrap();
++    let representative = retained_id(receipt.representative).unwrap();
++    let meal = retained_id(receipt.supplemental.unwrap().kind).unwrap();
++    assert_ne!(representative, meal);
++    assert_eq!(b.candidate_store.records.len(), 2);
++    let source = &b.candidate_store.records[&meal.raw()];
++    assert!(source.family_value[0] < 0.0);
++    assert_eq!(source.observation_count, 1);
++    assert_eq!(source.source_sequence_id, ExperienceSequenceId(2));
++    assert_eq!(source.outcome_contact, Some(PhysicalContactKind::Consumed));
++    assert_eq!(b.candidate_store.generation, 2);
++}
++
++fn meal_sleep_source(patch: &ExperiencePatch) -> (SleepReplayEvent, PredictionTargetReceipt) {
++    let key = patch.decision().episodic_key().unwrap();
++    let query = key.query();
++    (
++        SleepReplayEvent {
++            sequence_id: patch.header().sequence_id,
++            originating_tick: query.tick(),
++            frame_digest: key.final_frame_digest(),
++            candidate_feature_digest: query.candidate_feature_digest(),
++            action_id: query.action_id(),
++            family: query.action_family(),
++            modulator: NeuromodulatorSample::from_components(0.4, 0.1, 0.2, 0.0, 0.3).unwrap(),
++        },
++        patch.prediction_target().unwrap().clone(),
++    )
++}
++
++#[test]
++fn meal_sleep_exact_identity_falls_through_other_current_sequence_association() {
++    assert_positive_meal_control();
++    let mut b = bank(8);
++    let (first, frame) = fixture(1, Case::default()).unwrap();
++    let transaction = b.observe_sealed_patch_with_meal_v1(&first, &frame).unwrap();
++    let expected = [
++        retained_id(transaction.representative),
++        retained_id(transaction.supplemental.as_ref().unwrap().kind),
++    ];
++    let (event, target) = meal_sleep_source(&first);
++    let proof = MealMemorySleepProofV1::capture(&first, event, &target, transaction).unwrap();
++    assert_eq!(proof.resolve_associations(&b).unwrap(), expected);
++    // Only Rest advances to sequence 2. The meal sibling still has sequence 1,
++    // but it must not hide the retained-first Rest source for sequence 1.
++    let (second, frame) = fixture(
++        2,
++        Case {
++            meal_contact: PhysicalContactKind::Touch,
++            ..Case::default()
++        },
++    )
++    .unwrap();
++    let write = b
++        .observe_sealed_patch_with_meal_v1(&second, &frame)
++        .unwrap();
++    assert!(write.supplemental.is_none());
++    assert!(matches!(
++        write.representative,
++        MemoryUpdateKind::Merged { .. }
++    ));
++    assert_eq!(
++        b.candidate_store.records[&expected[0].unwrap().raw()].source_sequence_id,
++        ExperienceSequenceId(2)
++    );
++    assert_eq!(
++        b.candidate_store.records[&expected[1].unwrap().raw()].source_sequence_id,
++        ExperienceSequenceId(1)
++    );
++    // Legacy resolution intentionally retains its old sibling-shadowing error.
++    assert!(proof.representative_source().resolve(&b).is_err());
++    assert_eq!(proof.resolve_associations(&b).unwrap(), expected);
++    let cold: MemoryBank = serde_json::from_slice(&serde_json::to_vec(&b).unwrap()).unwrap();
++    assert_eq!(proof.resolve_associations(&cold).unwrap(), expected);
++}
++
++#[test]
++fn meal_sleep_wrapper_cold_roundtrip_authenticates_both_ids_and_tampering() {
++    assert_positive_meal_control();
++    let (patch, frame) = fixture(1, Case::default()).unwrap();
++    let mut b = bank(8);
++    let transaction = b.observe_sealed_patch_with_meal_v1(&patch, &frame).unwrap();
++    let expected = [
++        retained_id(transaction.representative),
++        retained_id(transaction.supplemental.as_ref().unwrap().kind),
++    ];
++    let (event, target) = meal_sleep_source(&patch);
++    let proof = MealMemorySleepProofV1::capture(&patch, event, &target, transaction).unwrap();
++    let encoded = serde_json::to_vec(&proof).unwrap();
++    let restored: MealMemorySleepProofV1 = serde_json::from_slice(&encoded).unwrap();
++    restored.validate_against(&event, &target).unwrap();
++    assert_eq!(restored.resolve_associations(&b).unwrap(), expected);
++    assert_eq!(restored.transaction(), proof.transaction());
++    assert_eq!(serde_json::to_vec(&restored).unwrap(), encoded);
++    // A validly shaped but altered proof must not survive its sealed digest.
++    for field in ["dispatch_generation", "target_entity"] {
++        let mut value = serde_json::to_value(&proof).unwrap();
++        value["transaction"]["supplemental"]["proof"][field] = serde_json::json!(99);
++        if let Ok(altered) = serde_json::from_value::<MealMemorySleepProofV1>(value) {
++            assert!(altered.validate_against(&event, &target).is_err());
++            assert!(altered.resolve_associations(&b).is_err());
++        }
++    }
++    let mut wrong = event;
++    wrong.action_id = ActionId(700);
++    assert!(restored.validate_against(&wrong, &target).is_err());
++    let mut wrong_target = target.clone();
++    wrong_target.decision = ActionId(700);
++    assert!(restored.validate_against(&event, &wrong_target).is_err());
++}
++
++#[test]
++fn meal_sleep_merged_interior_sources_do_not_create_extra_replay_events() {
++    assert_positive_meal_control();
++    let mut b = bank(8);
++    let mut proofs = Vec::new();
++    let mut targets = Vec::new();
++    let mut journal =
++        SleepReplayJournal::new(ReplayCapturePlan::try_new(vec![3], 1, 3, 3).unwrap()).unwrap();
++    for sequence in 1..=3 {
++        let (patch, frame) = fixture(sequence, Case::default()).unwrap();
++        let transaction = b.observe_sealed_patch_with_meal_v1(&patch, &frame).unwrap();
++        let (event, target) = meal_sleep_source(&patch);
++        proofs.push(MealMemorySleepProofV1::capture(&patch, event, &target, transaction).unwrap());
++        journal.push(event, &[0.75]).unwrap();
++        targets.push(target);
++    }
++    let first = proofs[0].resolve_associations(&b).unwrap();
++    assert!(first.iter().all(Option::is_some));
++    assert_ne!(first[0], first[1]);
++    assert_eq!(proofs[1].resolve_associations(&b).unwrap(), [None, None]);
++    assert_eq!(proofs[2].resolve_associations(&b).unwrap(), first);
++    let evidence = crate::sleep::SleepReplayEvidence::new(
++        journal.build_bounded_batch(3, 3, u32::MAX).unwrap(),
++        targets,
++    )
++    .unwrap();
++    assert_eq!(evidence.batch.events.len(), 3);
++    assert_eq!(evidence.prediction_targets.len(), 3);
++    let original = evidence.clone();
++    let digest = sleep_meal_memory_replay_digest_v1(&evidence, &proofs).unwrap();
++    assert_ne!(digest, evidence.canonical_digest);
++    assert_eq!(
++        evidence, original,
++        "association audit does not expand physical replay"
++    );
++    let mut duplicated = proofs.clone();
++    duplicated.push(proofs[0].clone());
++    assert!(sleep_meal_memory_replay_digest_v1(&evidence, &duplicated).is_err());
++    let mut reversed = proofs;
++    reversed.swap(0, 2);
++    assert!(sleep_meal_memory_replay_digest_v1(&evidence, &reversed).is_err());
++}
++
++#[test]
++fn meal_same_target_inspection_is_one_target_source_before_top_k() {
++    assert_positive_meal_control();
++    for max_matches in [1, 4] {
++        let mut b = MemoryBank::new(
++            MemoryBankConfig::new(8, 64, max_matches, 0.72, Confidence::new(0.0).unwrap()).unwrap(),
++        )
++        .unwrap();
++        let case = Case {
++            representative: CandidateActionFamily::Inspect,
++            representative_target: Some(FOOD),
++            ..Case::default()
++        };
++        let (patch, frame) = fixture(1, case.clone()).unwrap();
++        b.observe_sealed_patch_with_meal_v1(&patch, &frame).unwrap();
++        assert_eq!(b.candidate_store.records.len(), 2);
++        let (_, probe) = fixture(100, case).unwrap();
++        let draft = PerceptionFrameDraft::new(
++            OWNER,
++            probe.tick(),
++            probe.sensor_profile(),
++            probe.sensory().clone(),
++            probe.body(),
++            *probe.homeostasis(),
++            probe.candidates().to_vec(),
++            probe.profile_provenance(),
++            probe.grounded_object_slots().to_vec(),
++        )
++        .unwrap();
++        let recalled = b.recall_frame_with_meal_v1(&draft).unwrap();
++        for candidate in &recalled.context().candidates {
++            assert_eq!(candidate.target_source_count, 1);
++            assert_eq!(candidate.family_source_count, 1);
++        }
++    }
++}
++
++#[test]
++fn meal_legacy_unknown_omitted_field_and_no_supplement_are_byte_preserved() {
++    assert_positive_meal_control();
++    let mut old = bank(8);
++    let mut opt_in = bank(8);
++    for sequence in 1..=3 {
++        let (patch, frame) = fixture(
++            sequence,
++            Case {
++                receipts: 1,
++                ..Case::default()
++            },
++        )
++        .unwrap();
++        old.observe_sealed_patch(&patch).unwrap();
++        let transaction = opt_in
++            .observe_sealed_patch_with_meal_v1(&patch, &frame)
++            .unwrap();
++        assert!(transaction.supplemental.is_none());
++        assert_eq!(
++            serde_json::to_vec(&opt_in).unwrap(),
++            serde_json::to_vec(&old).unwrap()
++        );
++    }
++    assert!(old
++        .candidate_store
++        .records
++        .values()
++        .all(|record| record.outcome_contact.is_none()));
++    let bytes = serde_json::to_vec(&old).unwrap();
++    assert!(!String::from_utf8(bytes.clone())
++        .unwrap()
++        .contains("outcome_contact"));
++    let restored: MemoryBank = serde_json::from_slice(&bytes).unwrap();
++    assert_eq!(serde_json::to_vec(&restored).unwrap(), bytes);
++    assert_eq!(restored, old);
++}
++
++#[test]
++fn meal_preparation_at_capacity_never_relabels_or_replaces_consumed_source() {
++    assert_positive_meal_control();
++    let mut b = bank(2);
++    let (patch, frame) = fixture(1, Case::default()).unwrap();
++    let transaction = b.observe_sealed_patch_with_meal_v1(&patch, &frame).unwrap();
++    let meal_id = retained_id(transaction.supplemental.unwrap().kind).unwrap();
++    let meal = b.candidate_store.records[&meal_id.raw()].clone();
++    for (sequence, contact) in [
++        (2, PhysicalContactKind::Touch),
++        (3, PhysicalContactKind::Moved),
++    ] {
++        let (patch, frame) = fixture(
++            sequence,
++            Case {
++                meal_contact: contact,
++                reward: -0.9,
++                success: false,
++                ..Case::default()
++            },
++        )
++        .unwrap();
++        let mut ordinary = b.clone();
++        ordinary.observe_sealed_patch(&patch).unwrap();
++        let transaction = b.observe_sealed_patch_with_meal_v1(&patch, &frame).unwrap();
++        assert!(transaction.supplemental.is_none());
++        assert_eq!(b, ordinary);
++        assert_eq!(b.candidate_store.records[&meal_id.raw()], meal);
++    }
++}
++
++#[test]
++fn meal_actual_consumption_supersedes_contradictory_legacy_unknown_at_capacity_only() {
++    assert_positive_meal_control();
++    let mut b = bank(2);
++    let (legacy, _) = fixture(
++        1,
++        Case {
++            representative: CandidateActionFamily::Ingest,
++            representative_target: Some(FOOD),
++            receipts: 1,
++            reward: -0.99,
++            success: false,
++            ..Case::default()
++        },
++    )
++    .unwrap();
++    let legacy_id = retained_id(b.observe_sealed_patch(&legacy).unwrap().kind).unwrap();
++    let legacy_record = b.candidate_store.records[&legacy_id.raw()].clone();
++    assert_eq!(legacy_record.outcome_contact, None);
++    let (unrelated, _) = fixture(
++        2,
++        Case {
++            representative: CandidateActionFamily::Inspect,
++            representative_target: Some(OTHER),
++            receipts: 1,
++            reward: 0.85,
++            ..Case::default()
++        },
++    )
++    .unwrap();
++    let unrelated_id = retained_id(b.observe_sealed_patch(&unrelated).unwrap().kind).unwrap();
++    assert_eq!(b.candidate_store.records.len(), 2);
++    // Legacy JSON omits the scope field. Restoring it must not manufacture a
++    // consumed label from the old aggregate contact or positive/negative value.
++    let encoded = serde_json::to_vec(&b).unwrap();
++    assert!(!String::from_utf8(encoded.clone())
++        .unwrap()
++        .contains("outcome_contact"));
++    b = serde_json::from_slice(&encoded).unwrap();
++    for (sequence, contact) in [
++        (3, PhysicalContactKind::Touch),
++        (4, PhysicalContactKind::Moved),
++    ] {
++        let (patch, frame) = fixture(
++            sequence,
++            Case {
++                representative: CandidateActionFamily::Inspect,
++                representative_target: Some(OTHER),
++                meal_contact: contact,
++                ..Case::default()
++            },
++        )
++        .unwrap();
++        let write = b.observe_sealed_patch_with_meal_v1(&patch, &frame).unwrap();
++        assert!(write.supplemental.is_none());
++        assert_eq!(retained_id(write.representative), Some(unrelated_id));
++        assert_eq!(b.candidate_store.records[&legacy_id.raw()], legacy_record);
++    }
++    let (consumed, frame) = fixture(
++        6,
++        Case {
++            representative: CandidateActionFamily::Inspect,
++            representative_target: Some(OTHER),
++            ..Case::default()
++        },
++    )
++    .unwrap();
++    let mut ordinary = b.clone();
++    ordinary.observe_sealed_patch(&consumed).unwrap();
++    let write = b
++        .observe_sealed_patch_with_meal_v1(&consumed, &frame)
++        .unwrap();
++    assert_eq!(retained_id(write.representative), Some(unrelated_id));
++    let meal_write = write.supplemental.unwrap();
++    assert!(
++        matches!(meal_write.kind, MemoryUpdateKind::Evicted { removed, .. } if removed == legacy_id)
++    );
++    assert!(!b.candidate_store.records.contains_key(&legacy_id.raw()));
++    assert_eq!(
++        b.candidate_store.records[&unrelated_id.raw()],
++        ordinary.candidate_store.records[&unrelated_id.raw()]
++    );
++    let meal = &b.candidate_store.records[&retained_id(meal_write.kind).unwrap().raw()];
++    assert_eq!(meal.outcome_contact, Some(PhysicalContactKind::Consumed));
++    assert_eq!(meal.observation_count, 1);
++    assert_eq!(meal.source_sequence_id, ExperienceSequenceId(6));
++    assert!(meal.family_value[0] > 0.0);
++}
++
++#[test]
++fn meal_distinct_ingest_representative_resolves_by_exact_target_and_retained_id() {
++    assert_positive_meal_control();
++    // Synthetic V12 separation: the representative is Ingest(OTHER), while the
++    // one executed manipulation command consumes FOOD. No extra body event.
++    let (patch, frame) = fixture(
++        1,
++        Case {
++            representative: CandidateActionFamily::Ingest,
++            representative_target: Some(OTHER),
++            alternate_ingest_target: true,
++            ..Case::default()
++        },
++    )
++    .unwrap();
++    let mut b = bank(8);
++    let transaction = b.observe_sealed_patch_with_meal_v1(&patch, &frame).unwrap();
++    let representative_id = retained_id(transaction.representative).unwrap();
++    let supplemental_id = retained_id(transaction.supplemental.as_ref().unwrap().kind).unwrap();
++    assert_ne!(representative_id, supplemental_id);
++    assert_eq!(b.candidate_store.records.len(), 2);
++    let representative = &b.candidate_store.records[&representative_id.raw()];
++    let supplemental = &b.candidate_store.records[&supplemental_id.raw()];
++    assert_eq!(representative.action_id_raw, supplemental.action_id_raw);
++    assert_eq!(representative.family_raw, supplemental.family_raw);
++    assert_eq!(representative.tracked_object_id_raw, 62);
++    assert_eq!(supplemental.tracked_object_id_raw, 61);
++    assert_eq!(representative.outcome_contact, None);
++    assert_eq!(
++        supplemental.outcome_contact,
++        Some(PhysicalContactKind::Consumed)
++    );
++    let (event, target) = meal_sleep_source(&patch);
++    let proof = MealMemorySleepProofV1::capture(&patch, event, &target, transaction).unwrap();
++    proof.validate_against(&event, &target).unwrap();
++    assert_eq!(
++        proof.representative_source().resolve(&b).unwrap(),
++        Some(representative_id)
++    );
++    assert_eq!(
++        proof.resolve_associations(&b).unwrap(),
++        [Some(representative_id), Some(supplemental_id)]
++    );
++    let cold: MemoryBank = serde_json::from_slice(&serde_json::to_vec(&b).unwrap()).unwrap();
++    assert_eq!(
++        proof.resolve_associations(&cold).unwrap(),
++        [Some(representative_id), Some(supplemental_id)]
++    );
++}
++
++#[test]
++fn meal_source_deduplication_precedes_fixed_top_k_cutoff() {
++    assert_positive_meal_control();
++    let mut b = bank(8);
++    // Six equally similar records from three real sequences. Without dedup
++    // before fixed K=4, the first two sibling pairs hide the third sequence.
++    for (sequence, reward) in [(1, 0.8), (2, -0.8), (3, 0.2)] {
++        let (patch, frame) = fixture(
++            sequence,
++            Case {
++                representative: CandidateActionFamily::Inspect,
++                representative_target: Some(FOOD),
++                reward,
++                success: reward >= 0.0,
++                ..Case::default()
++            },
++        )
++        .unwrap();
++        let write = b.observe_sealed_patch_with_meal_v1(&patch, &frame).unwrap();
++        write.validate_committed_bank(&b).unwrap();
++    }
++    assert_eq!(b.candidate_store.records.len(), 6);
++    let (_, probe) = fixture(
++        100,
++        Case {
++            representative: CandidateActionFamily::Inspect,
++            representative_target: Some(FOOD),
++            ..Case::default()
++        },
++    )
++    .unwrap();
++    let draft = PerceptionFrameDraft::new(
++        OWNER,
++        probe.tick(),
++        probe.sensor_profile(),
++        probe.sensory().clone(),
++        probe.body(),
++        *probe.homeostasis(),
++        probe.candidates().to_vec(),
++        probe.profile_provenance(),
++        probe.grounded_object_slots().to_vec(),
++    )
++    .unwrap();
++    let recall = b.recall_frame_with_meal_v1(&draft).unwrap();
++    assert!(recall
++        .context()
++        .candidates
++        .iter()
++        .all(|candidate| candidate.target_source_count == 3));
++    assert!(recall
++        .receipt()
++        .candidates
++        .iter()
++        .all(|candidate| candidate.target_matches == 3));
++}
++
++#[test]
++fn meal_reader_is_opt_in_for_previously_valid_same_sequence_legacy_bank() {
++    assert_positive_meal_control();
++    let mut b = bank(8);
++    for (sequence, representative) in [
++        (1, CandidateActionFamily::Inspect),
++        (2, CandidateActionFamily::Ingest),
++    ] {
++        let (patch, _) = fixture(
++            sequence,
++            Case {
++                representative,
++                representative_target: Some(FOOD),
++                receipts: 1,
++                ..Case::default()
++            },
++        )
++        .unwrap();
++        b.observe_sealed_patch(&patch).unwrap();
++    }
++    assert_eq!(b.candidate_store.records.len(), 2);
++    // Literal accepted legacy shape: distinct IDs/families with the same latest
++    // source sequence, no outcome_contact metadata. Old validation permits it.
++    let ids: Vec<_> = b.candidate_store.records.keys().copied().collect();
++    for (index, record) in b.candidate_store.records.values_mut().enumerate() {
++        record.source_sequence_id = ExperienceSequenceId(1);
++        record.target_latent = [if index == 0 { 0.25 } else { 0.75 }; MEMORY_LATENT_V1_COUNT];
++        assert!(record.outcome_contact.is_none());
++    }
++    b.candidate_store.rebuild_indices();
++    b.candidate_store
++        .validate_for_capacity(b.capacity())
++        .unwrap();
++    let literal_bank = include_bytes!("testdata/legacy_same_sequence_bank_fbf.json").to_vec();
++    assert_eq!(serde_json::to_vec(&b).unwrap(), literal_bank);
++    let restored: MemoryBank = serde_json::from_slice(&literal_bank).unwrap();
++    assert_eq!(serde_json::to_vec(&restored).unwrap(), literal_bank);
++    let (_, probe) = fixture(
++        100,
++        Case {
++            representative: CandidateActionFamily::Inspect,
++            representative_target: Some(FOOD),
++            ..Case::default()
++        },
++    )
++    .unwrap();
++    let draft = PerceptionFrameDraft::new(
++        OWNER,
++        probe.tick(),
++        probe.sensor_profile(),
++        probe.sensory().clone(),
++        probe.body(),
++        *probe.homeostasis(),
++        probe.candidates().to_vec(),
++        probe.profile_provenance(),
++        probe.grounded_object_slots().to_vec(),
++    )
++    .unwrap();
++    let ordinary = restored.recall_frame(&draft).unwrap();
++    let meal = restored.recall_frame_with_meal_v1(&draft).unwrap();
++    let (runtime, _) = restored
++        .recall_frame_runtime(&draft, &Default::default(), true)
++        .unwrap();
++    // Independent enumeration of the fbf target scoring contract: weighted
++    // cosine over state 0..40, target 57..81 and legacy profile 81..83, then
++    // descending score and ascending ID on ties. No production recall helper.
++    fn cosine(a: &[f32], b: &[f32], range: std::ops::Range<usize>) -> f32 {
++        let (mut dot, mut aa, mut bb) = (0.0_f32, 0.0_f32, 0.0_f32);
++        for i in range {
++            dot += a[i] * b[i];
++            aa += a[i] * a[i];
++            bb += b[i] * b[i];
++        }
++        if aa == 0.0 && bb == 0.0 {
++            1.0
++        } else if aa == 0.0 || bb == 0.0 {
++            0.0
++        } else {
++            (dot / (aa.sqrt() * bb.sqrt())).clamp(-1.0, 1.0)
++        }
++    }
++    for candidate in draft.candidates() {
++        let query = MemoryQueryEncoderV2::encode_candidate(&draft, candidate).unwrap();
++        let mut scores: Vec<_> = restored
++            .candidate_store
++            .records
++            .values()
++            .map(|record| {
++                let q = query.features();
++                let r = &record.query_features;
++                (
++                    record.memory_id,
++                    0.45 * cosine(q, r, 0..40)
++                        + 0.50 * cosine(q, r, 57..81)
++                        + 0.05 * cosine(q, r, 81..83),
++                )
++            })
++            .collect();
++        assert!(scores.iter().all(|(_, score)| *score >= 0.72));
++        // new() uses tick as age. Tick-4's inherited hormones are closer to
++        // tick-200 than tick-2's. The old ascending-ID tie breaker does not fire.
++        assert!(scores[1].1 > scores[0].1);
++        scores.sort_by(|a, b| b.1.total_cmp(&a.1).then_with(|| a.0.raw().cmp(&b.0.raw())));
++        assert_eq!(
++            scores.iter().map(|(id, _)| *id).collect::<Vec<_>>(),
++            vec![MemoryId(ids[1]), MemoryId(ids[0])]
++        );
++        let total = scores.iter().map(|(_, score)| *score).sum::<f32>();
++        let expected = scores
++            .iter()
++            .map(|(id, score)| {
++                restored.candidate_store.records[&id.raw()].target_latent[0] * (*score / total)
++            })
++            .sum::<f32>();
++        assert_eq!(expected, 0.5003887);
++        println!(
++            "legacy-independent-target-scores candidate={} scores={scores:?} value={expected}",
++            candidate.candidate_index
++        );
++    }
++    // Full literal output from the restored fbf reader, corroborated by the
++    // independent ranking/value derivation above. This covers all values,
++    // confidence/count/source order, and the encoded retrieval context digest.
++    let expected = EpisodicRetrievalContextV1::new(
++        draft.tick(),
++        identity(),
++        vec![
++            CandidateMemoryContextV1 {
++                candidate_index: 0,
++                target_latent: [0.5003887; MEMORY_LATENT_V1_COUNT],
++                family_value: [0.08571429, 1.0, 0.0, -0.099999994],
++                target_confidence: Confidence::new(0.70421875).unwrap(),
++                family_confidence: Confidence::new(0.729412).unwrap(),
++                target_source_count: 2,
++                family_source_count: 1,
++                best_target_source: Some(MemoryId(2)),
++                best_family_source: Some(MemoryId(1)),
++            },
++            CandidateMemoryContextV1 {
++                candidate_index: 1,
++                target_latent: [0.5003887; MEMORY_LATENT_V1_COUNT],
++                family_value: [0.08571429, 1.0, 0.0, -0.099999994],
++                target_confidence: Confidence::new(0.70421875).unwrap(),
++                family_confidence: Confidence::new(0.7396956).unwrap(),
++                target_source_count: 2,
++                family_source_count: 1,
++                best_target_source: Some(MemoryId(2)),
++                best_family_source: Some(MemoryId(2)),
++            },
++        ],
++    )
++    .unwrap();
++    assert_eq!(ordinary.context(), &expected);
++    assert_eq!(runtime.context(), &expected);
++    let expected_digest = expected
++        .to_perception_context_block()
++        .unwrap()
++        .canonical_digest();
++    assert_eq!(ordinary.receipt().context_digest, expected_digest);
++    assert_eq!(runtime.receipt().context_digest, expected_digest);
++    for candidate in &meal.context().candidates {
++        assert_eq!(candidate.target_source_count, 1);
++        assert_eq!(candidate.best_target_source, Some(MemoryId(ids[1])));
++        assert_eq!(candidate.target_latent, [0.75; MEMORY_LATENT_V1_COUNT]);
++    }
++    println!(
++        "legacy-literal-context-digest={expected_digest:?} bank-digest={:?}",
++        ordinary.receipt().bank_digest
++    );
++    assert_eq!(ordinary.receipt().candidates[0].target_matches, 2);
++    assert_eq!(meal.receipt().candidates[0].target_matches, 1);
++    assert_eq!(serde_json::to_vec(&restored).unwrap(), literal_bank);
++    let second = restored.recall_frame(&draft).unwrap();
++    assert_eq!(ordinary.context(), second.context());
++    assert_eq!(ordinary.receipt(), second.receipt());
++    println!(
++        "legacy-same-sequence-bank-bytes={}",
++        String::from_utf8(literal_bank).unwrap()
++    );
++}
+diff --git a/crates/alife_core/src/memory/testdata/legacy_same_sequence_bank_fbf.json b/crates/alife_core/src/memory/testdata/legacy_same_sequence_bank_fbf.json
+new file mode 100644
+index 000000000..96f780250
+--- /dev/null
++++ b/crates/alife_core/src/memory/testdata/legacy_same_sequence_bank_fbf.json
+@@ -0,0 +1 @@
++{"config":{"capacity":8,"max_feature_len":64,"max_match_count":4,"min_match_score":0.72,"empty_confidence":0.0},"candidate_store":{"generation":2,"next_memory_id":3,"merge_count":0,"eviction_count":0,"records":{"1":{"schema_version":2,"memory_id":1,"organism_id_raw":811,"source_sequence_id":1,"first_tick":2,"last_tick":2,"profile_id_raw":5,"profile_schema_version":1,"sensory_abi_version_raw":1,"query_version_raw":2,"action_id_raw":501,"action_kind_raw":3,"family_raw":2,"tracked_object_id_raw":61,"query_features":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.9,1.0,0.0019936205,0.0009968103,0.0,0.0014952153,0.004485646,0.75,0.0,0.0009968103,0.0,0.0,0.0019936205,0.0019936205,0.004984051,0.004984051,0.0059808614,0.004984051,0.004984051,0.004984051,0.0019936205,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.4,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"target_latent":[0.25,0.25,0.25,0.25,0.25,0.25,0.25,0.25],"family_value":[0.08571429,1.0,0.0,-0.099999994],"confidence":0.8,"salience_q16":13107,"observation_count":1},"2":{"schema_version":2,"memory_id":2,"organism_id_raw":811,"source_sequence_id":1,"first_tick":4,"last_tick":4,"profile_id_raw":5,"profile_schema_version":1,"sensory_abi_version_raw":1,"query_version_raw":2,"action_id_raw":210,"action_kind_raw":5,"family_raw":6,"tracked_object_id_raw":61,"query_features":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.9,1.0,0.003987241,0.0019936205,0.0,0.0029904307,0.008971292,0.75,0.0,0.0019936205,0.0,0.0,0.003987241,0.003987241,0.009968102,0.009968102,0.011961723,0.009968102,0.009968102,0.009968102,0.003987241,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.4,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"target_latent":[0.75,0.75,0.75,0.75,0.75,0.75,0.75,0.75],"family_value":[0.08571429,1.0,0.0,-0.099999994],"confidence":0.8,"salience_q16":13107,"observation_count":1}},"last_sequence_by_organism":{"811":2}},"records":[null,null,null,null,null,null,null,null],"lifetime_records":[],"next_write_index":0,"len":0,"next_memory_id":1,"last_inserted_ticks":[]}
+\ No newline at end of file
+diff --git a/crates/alife_core/src/memory_query.rs b/crates/alife_core/src/memory_query.rs
+index 57efc7d8f..0766e08e1 100644
+--- a/crates/alife_core/src/memory_query.rs
++++ b/crates/alife_core/src/memory_query.rs
+@@ -595,7 +595,7 @@ impl MemoryQueryEncoderV2 {
+         )
+     }
+ 
+-    fn encode_from_frame(
++    pub(crate) fn encode_from_frame(
+         frame: &PerceptionFrame,
+         candidate: &ActionCandidate,
+     ) -> Result<CandidateMemoryQueryV2, ScaffoldContractError> {
