@@ -1,0 +1,12 @@
+{
+  "fixture_list_sha256": "e1c48300d8c2d9474350171615aa2506054fc7f2648265fe3300bf0704cd9ef3",
+  "main": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "plan_id": "m2-fixed-fixtures-v2",
+  "prepared_head": "8e039f5b0a282b741cdd73cc06934c57825ac060",
+  "schema": "m2-hosted-activation-v1",
+  "seal_sha256": "84c4921137a9473519007679c2af8567c771341deba90d698cf4587480156f94",
+  "variants": [
+    "boredom",
+    "reflex"
+  ]
+}
