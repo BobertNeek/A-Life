@@ -1,0 +1,37 @@
+{
+  "boredom": {
+    "bytes": 68449,
+    "path": "patches/fbf-to-boredom.patch",
+    "sha256": "7e4f7e94daeb39b68df7761e8e3c7dc0b2e822e7aa882f524391702f0fe73e2f"
+  },
+  "gde": {
+    "bytes": 129923,
+    "path": "patches/fbf-to-gde.patch",
+    "sha256": "87b1ce316ef724305d2d4d4df60c263bfc182fc5991b743a0cd7372fd4892ee4"
+  },
+  "gde-witness": {
+    "bytes": 3289,
+    "path": "patches/gde-to-witness-only.patch",
+    "sha256": "8e46484cf67161359488f3f6a47dcaf36719929a080fb16d620348492f5c2b3c"
+  },
+  "gds": {
+    "bytes": 64012,
+    "path": "patches/gde-to-gds.patch",
+    "sha256": "f8d49437d057d84297715b31eb9256c8b5fe1e9b9f1e4fe606aeeefb2fc6628c"
+  },
+  "meal-core": {
+    "bytes": 120043,
+    "path": "patches/fbf-to-meal-core.patch",
+    "sha256": "6de53b500c9a87313d8b52bf010809798febdd9597eefe46667fff2427b7c3ca"
+  },
+  "meal-host": {
+    "bytes": 122483,
+    "path": "patches/meal-core-to-host.patch",
+    "sha256": "c4422c612c3ae6e2826394c34b1690a585af0e2773a669cdb059719020c0a8dd"
+  },
+  "reflex": {
+    "bytes": 74202,
+    "path": "patches/fbf-to-reflex.patch",
+    "sha256": "3bd0e0d55eaa531caaf661b629326d9a622e26c001eb999d4b598d07f66158f5"
+  }
+}
