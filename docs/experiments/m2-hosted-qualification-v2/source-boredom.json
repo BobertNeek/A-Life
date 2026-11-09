@@ -1,0 +1,31 @@
+{
+  "base_manifest_sha256": "0684bedcd89d365d2a5f0cb557ab14a9a2d5606098dcf55119eba82f99b96255",
+  "overrides": [
+    {
+      "bytes": 21654,
+      "path": "crates/alife_training/src/cpu/motor_mediation/confidence/boredom/tests.rs",
+      "sha256": "91d08ed0bf24194b2a6733e8a403f2f566142ce4ff2be5587586894adb62c202"
+    },
+    {
+      "bytes": 17511,
+      "path": "crates/alife_training/src/cpu/motor_mediation/confidence/boredom.rs",
+      "sha256": "8db8a9f87a3e6b88b3e4060dc713604daaf56d11b27946cbee4be727bc144e4a"
+    },
+    {
+      "bytes": 22346,
+      "path": "crates/alife_training/src/cpu/motor_mediation/confidence.rs",
+      "sha256": "75ae31b30dca20ad280c9d3cbc439a08e445ccf832f1e77f4315619d683ce06c"
+    },
+    {
+      "bytes": 36938,
+      "path": "crates/alife_training/src/cpu/motor_mediation.rs",
+      "sha256": "5b2d4ea2a55555d26d1148c3e59db0681c5e7ebc9c36b4e8c6aa10327fc44405"
+    },
+    {
+      "bytes": 3743,
+      "path": "docs/experiments/m2-boredom-routing-v1/recipe.json",
+      "sha256": "65a9de085b1b7bfa4c979358dd8723fc0f0edc36a975955a8f3456b3b71a4bfe"
+    }
+  ],
+  "source": "fbf+source-only-overlay"
+}
