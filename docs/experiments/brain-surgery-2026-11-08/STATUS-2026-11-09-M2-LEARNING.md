@@ -10,7 +10,23 @@ Accepted main remains `c3aec16df33861f1316d127736f5f60eea327ede`, with opt-in in
 
 The [previous chronological handoff](https://github.com/BobertNeek/A-Life/blob/4b21a3e43a9e4ce9c4ecd591a5e7677f429ae7fc/docs/experiments/brain-surgery-2026-11-08/STATUS-2026-11-08-2058UTC.md) retains the earlier candidates, failures, original sleep pilot, physiology and source identities.
 
-## Latest decision, 13:18 UTC
+## Latest tested progress, 15:50 UTC
+
+The fresh comparison remains 32+32 intervals with the same meal eaten later by the candidate. No new autonomous life has been added.
+
+- **Avoid calibration:** a new detached native assay completed 1,152 source iterations across three source arms and eight fixed hunger/fear/pain contexts. The unchanged positive-cue Avoid logit changed from +1.992369 cold to −6.675733 after 48 iterations at zero drives. The existing six-row matched-reference repair held this unwanted zero-drive term near zero, while its output-cut sham restored the original bias. High-minus-low fear/pain contrast was preserved within 1.252e−6. Absolute high-drive logits and Ingest/Contact pedestals also changed, so this is mechanism evidence, not improved feeding or hazard recognition. Its failed first attempt is retained; that attempt’s unlogged exposure is bounded to 0, 384 or 768 iterations, not asserted as known.
+- **Recovery/motion prototype:** one compile and exactly eleven synthetic Rust tests passed. Exact normalization, positive support, zero-weight equivalence, representative/posture binding and derivatives are covered. A separate 54-context scalar oracle also passed. This soft compatibility factor releases at maximal fear/pain, but remains administrative and biologically unpriced, not a new neural lobe, equal-compute result or lived recovery benefit.
+- **Optional cache preservation:** all 26 fixed V2 executions passed. Seven complete uncached/cached frames, 9,505,949 bytes, are directly byte-equal; the prior five-file legacy witness is also exact. Actual qualification used 43 source forwards, 35 world advances and 15 disposable recipe fixtures. This composition has no measured speedup; prior standalone timing does not apply.
+- **Registered grip ABI:** the separate [first source-only typecheck](https://github.com/BobertNeek/A-Life/actions/runs/42647779547) ran once at `9f68e9c278f037c845e38354243570db223e5e43`. All core targets typechecked; a world fixture’s exhaustive profile match failed with E0004 at gpu_memory_grounding_persistence.rs:201. Later targets did not run. There were zero test bodies, source forwards, world commands or body advances. The corrective overlay keeps the full target list and preserves this result.
+- **Joint meal producer:** source now composes Optional Quiet rather than restoring compulsory empty vocalization. A pre-execution check corrected its planned meal fixture: loose-food Eat first acquires, so actual acquisition and subsequent consumption require separate registered intervals. The host tests remain unrun; the fifteen core memory tests remain passed.
+
+### Paper reread and next practice checkpoint
+
+Reread [Sparks of Weight-Space Programming](https://rikiyat.github.io/blog/weight-space-programming/) on 9 November. The targeted repair’s temporary circuit and the feedback experiment’s separation of practice from held-out scoring remain useful principles. Its unsuccessful Gemma repair also distinguishes removing a blockage from adding a missing capability. These results do not establish benefits for our recurrent, plastic creatures.
+
+Apply that discipline here: keep the matched-reference intervention distinct from behavioral evaluation, keep administrative coordination distinct from neural implementation, and test preservation separately from competence. Revisit the original paper again at the next substantive candidate revision while work continues, recording any changed hypothesis rather than merely repeating its headline.
+
+## Earlier decision, 13:18 UTC
 
 The [fresh 32+32 result and final-state recovery addendum](https://github.com/BobertNeek/A-Life/blob/bb6e2bd3527c102d7e6c317e08b813a3d89681f0/docs/experiments/brain-surgery-2026-11-08/m2-fresh-coordination-comparison-v1/READ-RESULTS-FIRST.md) are complete. Geometric arbitration raised successful bundles 7 to 12, but both ate the same 0.65 meal, candidate later (16 versus 8). The apparent gain was extra grip cycling plus one no-op; actual AwakeRest was 0 versus baseline 1. This is not established better self-care or learned coordination.
 
