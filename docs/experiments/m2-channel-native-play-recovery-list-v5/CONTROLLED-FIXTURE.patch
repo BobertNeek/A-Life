@@ -1,0 +1,245 @@
+--- a/crates/alife_training/src/cpu/channel_native_host_tests.rs
++++ b/crates/alife_training/src/cpu/channel_native_host_tests.rs
+@@ -221,3 +221,6 @@
+         Err(CpuHostError::State("fixed channel-native fault after physical transaction"))
+     }
+ }
++
++#[path="channel_native_play_recovery_tests.rs"]
++mod controlled;
+--- /dev/null
++++ b/crates/alife_training/src/cpu/channel_native_play_recovery_tests.rs
+@@ -0,0 +1,147 @@
++//! Controlled physics, not an autonomous draw or learned-state intervention.
++use super::*;
++use serde_json::{json,Value};
++const CONTROL_MAGIC:&[u8]=b"ALIFE-CHANNEL-NATIVE-CONTROLLED-PHYSICS\0V1\0";
++const CONTROL_POLICY:&str="channel-native-controlled-physics-v1;not-autonomous;actor-credit-forbidden";
++struct Controlled<const PLAY:bool>;
++impl<const PLAY:bool> GroupedPolicyStrategy for Controlled<PLAY> {
++    type Action=ChannelNativeActionV1;
++    const OPTIONAL:bool=false;
++    const CHANNEL_NATIVE:bool=true;
++    const MAGIC:&'static [u8]=CONTROL_MAGIC;
++    const LINEAGE:&'static str="fresh-disposable-controlled-physics-v1/no-import";
++    const POLICY:&'static str=CONTROL_POLICY;
++    fn select(f:&CpuFoundationTrainer,r:&mut Resident,frame:&PerceptionFrame,_o:&CpuDecisionOutput,seed:u32,counter:u32,t:f64)->Result<Selection<Self::Action>,CpuHostError> {
++        frame.validate_contract()?;
++        let source=r.neural.channel_native_source()?.clone();
++        let state=r.grouped.as_mut().ok_or(CpuHostError::State("missing controlled owner"))?;
++        if state.optional_vocal.is_some()||state.last_action.is_some()||state.channel_native.as_ref().is_none_or(|s|s.schema!=CHANNEL_RESIDENT){return Err(CpuHostError::State("controlled owner mismatch"));}
++        let native=&state.motor.last_receipt.as_ref().ok_or(CpuHostError::State("missing real source"))?.native.scores;
++        let scores=ChannelNativeScoresV1::bind_native(f.phenotype(),frame,native,source)?;
++        let action=scores.controlled_physics_fixture(PLAY,seed,counter,t)?;
++        let (index,motors)=scores.physical_selection(&action)?;
++        if PLAY {
++            let i=motors[2].ok_or(CpuHostError::State("missing actual Play candidate"))?;
++            let c=&frame.candidates()[i as usize];
++            if c.action_id!=HeadlessActionIds::PLAY || c.target==ActionTarget::NONE {return Err(CpuHostError::State("Play not grounded"));}
++        }
++        assert!(scores.native_score_gradient(&action).is_err());
++        state.channel_native.as_mut().unwrap().last=Some(ChannelNativeSelectionV1{scores,action:action.clone()});
++        Ok((action,index,motors,None))
++    }
++    fn stage(r:&mut Resident,p:&BrainPhenotype,a:&Self::Action,b:CpuDecisionBinding)->Result<(),CpuHostError>{ChannelNativePolicy::stage(r,p,a,b)}
++    fn close(n:&mut CpuOrganismState,f:&CpuFoundationTrainer,p:&ExperiencePatch,r:&NeuralReceptorFrame)->Result<(),CpuHostError>{ChannelNativePolicy::close(n,f,p,r)}
++    fn administrative_receipt(r:&Resident)->Result<Option<crate::cpu::ChannelNativeAdministrativeReceiptV1>,CpuHostError>{ChannelNativePolicy::administrative_receipt(r)}
++}
++fn build_with_toy<P: GroupedPolicyStrategy>() -> (CpuGroupedM2HostV1, PhenotypeCompilerInputs) {
++    let recipe = recipe::build(FIXTURE_SEED, true).unwrap();
++    let mut founder = CpuFoundationTrainer::new(
++        recipe.phenotype.clone(),
++        recipe.asset.clone(),
++        StageTrainableMask::recurrent_only(&recipe.phenotype).unwrap(),
++        AdamWConfig::default(),
++    )
++    .unwrap();
++    // Disposable optimizer sentinels, not trained or imported acquired state.
++    let mut optimizer = founder.checkpoint();
++    optimizer.optimizer_step = 23;
++    optimizer.update_ages[0] = 23;
++    optimizer.first_moment[0] = 0.03125;
++    optimizer.second_moment[0] = 0.0625;
++    founder =
++        CpuFoundationTrainer::from_checkpoint(recipe.phenotype.clone(), recipe.asset, optimizer)
++            .unwrap();
++    // This fixture must retain the audited zero payload head; no token seeding.
++    assert!(founder.phenotype().synapses().iter().enumerate().filter(|(_,s)|
++        matches!(s.kind(),CompiledSynapseKind::Decoder(c) if c.head()==DecoderHeadKind::SpeechPayload))
++        .all(|(i,_)|founder.weights()[i].to_bits()==0_f32.to_bits()));
++    let mut game =
++        create_grounded_drive_research_new_game(&recipe.config, &recipe.genotype).unwrap();
++    let newborn = game
++        .world
++        .organism_registry()
++        .iter()
++        .next()
++        .unwrap()
++        .clone();
++    let mut blank = HeadlessScenarioBuilder::new(FIXTURE_SEED)
++        .agent("learner", newborn.organism_id(), Vec3f::ZERO)
++        .build()
++        .unwrap();
++    blank
++        .register_grounded_drive_research_record(newborn)
++        .unwrap();
++    game.world = blank;
++    let inputs = recipe.inputs;
++    let (host, ()) = CpuGroupedM2HostV1::new_prepared_policy::<P, _, String>(
++        game,
++        founder,
++        inputs.clone(),
++        (FIXTURE_SEED ^ (FIXTURE_SEED >> 32)) as u32,
++        MediationModeV1::Full,
++        |world| {
++            let (_,entity)=world.organism_entity_ids()[0];
++            let pos=world.entity(entity).ok_or("missing fresh body")?.position;
++            world.spawn_toy("controlled-fixed-activity-toy",Vec3f::new(pos.x+0.1,pos.y,pos.z),false).map_err(|e|e.to_string())?;
++            Ok(())
++        },
++    )
++    .unwrap();
++    (host, inputs)
++}
++fn wire(h:&CpuGroupedM2HostV1)->Vec<u8>{
++    let payload=h.checkpoint_payload::<Controlled<true>>().unwrap();
++    let mut wire=CONTROL_MAGIC.to_vec();wire.extend(serde_json::to_vec(&payload).unwrap());wire
++}
++fn restore(bytes:&[u8],inputs:&PhenotypeCompilerInputs)->CpuGroupedM2HostV1 {
++    let value:Value=serde_json::from_slice(bytes.strip_prefix(CONTROL_MAGIC).unwrap()).unwrap();
++    assert_eq!(value["policy"],CONTROL_POLICY);
++    assert_eq!(value["source_lineage"],Controlled::<true>::LINEAGE);
++    let mut payload:GroupedPayloadV1=serde_json::from_value(value).unwrap();payload.restore_sampler_bits().unwrap();
++    CpuGroupedM2HostV1::restore_payload::<Controlled<true>>(payload,inputs,MediationModeV1::Full,bytes.to_vec()).unwrap()
++}
++fn banks(h:&CpuGroupedM2HostV1)->Vec<u8>{
++    let r=h.host.residents.values().next().unwrap();let n=r.neural.checkpoint().unwrap();
++    serde_json::to_vec(&(h.founder.checkpoint(),n.lifetime,n.fast,n.eligibility,n.weight_generation,n.neural.dendrites,r.v11.checkpoint())).unwrap()
++}
++fn interval<const PLAY:bool>(h:&mut CpuGroupedM2HostV1,label:&str,ordinal:u32)->(Value,Vec<u8>) {
++    let id=h.world().organism_registry().iter().next().unwrap().organism_id();
++    let before=*h.world().organism_registry().get(id).unwrap().biochemistry();
++    let source_before=h.host.residents.get(&id.raw()).unwrap().neural.checkpoint().unwrap().dispatch_generation;
++    let observed=h.host.grouped_policy_step_observed::<Controlled<PLAY>>(&h.founder,0.73).unwrap();
++    assert_eq!(observed.step.decisions.len(),1);assert_eq!(observed.world_receipts.len(),1);
++    let d=&observed.step.decisions[0];let actual=&observed.world_receipts[0];
++    assert_eq!(d.motor.native.core.source_execution_count,1);assert_eq!(d.motor.native.core.final_generation,source_before+1);
++    assert_eq!(actual.biology_before,before);assert_eq!(actual.biology_after.tick.raw(),before.tick.raw()+1);
++    let after=*h.world().organism_registry().get(id).unwrap().biochemistry();
++    assert_eq!(after.tick,observed.step.tick_after);assert_eq!(after.tick.raw(),before.tick.raw()+1);
++    assert_eq!(d.physical.operation,Some(RecoveryOperationV1::AwakeRest));
++    assert_eq!(d.physical.sleep_recovery,0.);assert_eq!(d.physical.actual_displacement,Vec3f::ZERO);
++    assert!(actual.bundle.channels.iter().all(|c|c.channel!=MotorChannel::Vocal));
++    let manipulation=actual.channel_receipts.iter().find(|c|c.command.channel==MotorChannel::Manipulation).unwrap();
++    assert_eq!(manipulation.command.primitive,if PLAY{HeadlessActionIds::PLAY}else{HeadlessActionIds::NO_MANIPULATION});
++    assert_eq!(actual.bundle.channels.iter().find(|c|c.channel==MotorChannel::Locomotion).unwrap().primitive,HeadlessActionIds::NO_LOCOMOTION);
++    // No success/stimulation/recovery floor: investigation and zero dose are data.
++    let row=json!({"label":label,"ordinal":ordinal,"tick_before":before.tick.raw(),"tick_after":after.tick.raw(),"generation_before":source_before,"generation_after":d.motor.native.core.final_generation,"play_selected":PLAY,"phase":format!("{:?}",manipulation.phase),"posture_phase":format!("{:?}",actual.channel_receipts.iter().find(|c|c.command.channel==MotorChannel::Posture).unwrap().phase),"stimulation":actual.body_event.play_stimulation,"investigation":actual.body_event.investigation,"perceived_novelty":actual.body_event.perceived_novelty,"awake_dose":d.physical.awake_recovery,"sleep_dose":d.physical.sleep_recovery,"energy_before":before.body.energy,"energy_after":after.body.energy,"boredom_before":before.homeostasis.drives.extension[0],"boredom_after":after.homeostasis.drives.extension[0],"source_executions":1,"biology_intervals":1,"optimizer_updates":0});
++    println!("\nCONTROL_PHYSICS_V1 {}",row);
++    (row,serde_json::to_vec(&(&d.action,&d.patch,&d.motor,&d.biological_emissions)).unwrap())
++}
++#[test]
++fn grounded_play_and_quiet_awake_rest_share_prefix_and_cold_source() {
++    let (mut common,inputs)=build_with_toy::<Controlled<true>>();let initial_banks=banks(&common);
++    // Exactly three planned attempts, never extend until stimulation occurs.
++    for i in 0..3 {interval::<true>(&mut common,"prefix",i);assert_eq!(banks(&common),initial_banks);}
++    let prefix=wire(&common);
++    assert!(CpuChannelNativeM2HostCheckpointV1::decode(&prefix).is_err());
++    let mut cold_play=restore(&prefix,&inputs);let mut quiet=restore(&prefix,&inputs);
++    assert_eq!(wire(&cold_play),prefix);assert_eq!(wire(&quiet),prefix);
++    let (play,play_evidence)=interval::<true>(&mut common,"play",3);
++    let (cold,cold_evidence)=interval::<true>(&mut cold_play,"cold_play",4);
++    assert_eq!(play_evidence,cold_evidence);assert_eq!(wire(&common),wire(&cold_play));
++    for key in ["energy_before","energy_after","awake_dose","sleep_dose","stimulation","investigation","phase","boredom_before","boredom_after"]{assert_eq!(play[key],cold[key]);}
++    let (rest,_)=interval::<false>(&mut quiet,"no_manip",5);
++    assert_eq!(play["energy_before"],rest["energy_before"]);assert_eq!(play["boredom_before"],rest["boredom_before"]);
++    assert_eq!(banks(&common),initial_banks);assert_eq!(banks(&cold_play),initial_banks);assert_eq!(banks(&quiet),initial_banks);
++    // Differences are measured, not forced to match or interpreted as benefit.
++    println!("\nCONTROL_ENDPOINT_V1 {}",json!({"intervals":6,"prefix_intervals":3,"treatment_intervals":3,"source_executions":6,"biology_intervals":6,"optimizer_updates":0,"cold_equal":true,"play_energy":play["energy_after"],"quiet_energy":rest["energy_after"],"play_awake_dose":play["awake_dose"],"quiet_awake_dose":rest["awake_dose"],"play_stimulation":play["stimulation"],"quiet_stimulation":rest["stimulation"]}));
++}
+--- a/crates/alife_training/src/cpu/motor_mediation/confidence/policy/optional_vocal/channel_native.rs
++++ b/crates/alife_training/src/cpu/motor_mediation/confidence/policy/optional_vocal/channel_native.rs
+@@ -54,6 +54,11 @@
+     metadata_candidate: Option<u16>,
+     log_probability_bits: u64,
+     proof: DrawProof,
++    // Only disposable test assembly can represent this controlled intervention.
++    // Production deserialization rejects this field; no native RNG claim.
++    #[cfg(test)]
++    #[serde(default,skip_serializing_if="Option::is_none")]
++    controlled_physics: Option<bool>,
+ }
+ struct Factor { choices: Vec<Choice>, p: Vec<f64>, lp: Vec<f64> }
+ struct Distribution { channels: [Factor; 6], operations: [f64; 2], operation_lp: [Option<f64>; 2] }
+@@ -166,7 +171,8 @@
+         let physical=self.physical(&motors,operation)?;
+         Ok(BundleAction { domain:ACTION_DOMAIN.into(), policy:CHANNEL_NATIVE_POLICY_V1.into(), owner_domain:OWNER_DOMAIN.into(),
+             motors,operation,metadata_candidate:self.compatibility_metadata(&physical)?,log_probability_bits:lp.to_bits(),
+-            proof:DrawProof {domain:PROOF_DOMAIN.into(),scores_digest:hash(SCORE_DOMAIN,self)?,seed,counter,temperature_bits:t.to_bits(),factors} })
++            proof:DrawProof {domain:PROOF_DOMAIN.into(),scores_digest:hash(SCORE_DOMAIN,self)?,seed,counter,temperature_bits:t.to_bits(),factors},
++            #[cfg(test)] controlled_physics:None })
+     }
+     // Existing core builder treats Idle/Gesture only through its compatibility
+     // command. Choose that already-sampled posture row first, never force it.
+@@ -183,6 +189,16 @@
+             motor_candidates:e.physical,speech,metadata_candidate:a.metadata_candidate})
+     }
+     fn evaluate(&self,a:&BundleAction)->Result<Evaluation,TrainingError> {
++        #[cfg(test)]
++        if let Some(play)=a.controlled_physics {
++            let expected=self.controlled_physics_fixture(play,a.proof.seed,a.proof.counter,f64::from_bits(a.proof.temperature_bits))?;
++            if *a!=expected {return Err(invalid());}
++            let mut e=self.evaluate_selection(a.motors,a.operation,f64::from_bits(a.proof.temperature_bits))?;
++            // Deterministic controlled intervention, not nominal actor likelihood.
++            e.log_probability=0.;e.derivative.ordinary.fill(0.);e.derivative.group=0.;e.derivative.operations=[0.;2];
++            return Ok(e);
++        }
++
+         if *a!=self.sample(a.proof.seed,a.proof.counter,f64::from_bits(a.proof.temperature_bits))? {return Err(invalid());}
+         self.evaluate_selection(a.motors,a.operation,f64::from_bits(a.proof.temperature_bits))
+     }
+@@ -254,6 +270,7 @@
+     /// not an assertion of the old policy's sampled action or family reward.
+     /// Idle's ordinary component includes both posture and Quiet contributions.
+     pub fn native_score_gradient(&self,a:&BundleAction)->Result<RecoveryGroupGradientV2,TrainingError> {
++        #[cfg(test)] if a.controlled_physics.is_some() {return Err(invalid());}
+         let e=self.evaluate(a)?;
+         Ok(RecoveryGroupGradientV2 {binding:self.input.native_binding.clone(),
+             ordinary:e.derivative.ordinary,group:e.derivative.group,operations:e.derivative.operations})
+@@ -308,3 +325,36 @@
+             selected_physical_rows:e.physical.iter().flatten().count() as u8,body_price_qualified:false})
+     }
+ }
++
++#[cfg(test)]
++impl ChannelScores {
++    /// Exact controlled-physics fixture, never an autonomous sampled action.
++    /// Every physical selection must belong to the real bound frame/support.
++    pub(in crate::cpu) fn controlled_physics_fixture(&self,play:bool,seed:u32,counter:u32,t:f64)->Result<BundleAction,TrainingError> {
++        self.validate()?;
++        let d=self.distribution(t)?;
++        let find=|id:u32,slot:usize|->Result<u16,TrainingError>{
++            let matches=self.input.native_binding.identities.iter().enumerate().filter_map(|(i,identity)|{
++                let row:(ActionId,ActionTarget,ActionKind,CandidateActionFamily)=serde_json::from_str(identity).ok()?;
++                (row.0.raw()==id && self.input.eligible_mask&(1<<i)!=0 && self.input.native_binding.forced[i]==Some(slot)).then_some(i as u16)
++            }).collect::<Vec<_>>();
++            if matches.len()!=1 {return Err(invalid());} Ok(matches[0])
++        };
++        let mut motors=[Choice::NoOp;6];
++        motors[0]=Choice::Candidate(find(103,0)?); // genuine NoLocomotion
++        if d.channels[1].choices!=vec![Choice::NoOp] {motors[1]=Choice::Candidate(find(606,1)?);}
++        motors[2]=Choice::Candidate(find(if play{213}else{212},2)?);
++        motors[3]=if self.input.native_binding.enabled[3] {Choice::Quiet}else{Choice::NoOp};
++        motors[4]=Choice::Rest;
++        let operation=Some(1); // actual supported AwakeRest, never BodySleep
++        let e=self.evaluate_selection(motors,operation,t)?;
++        let action=BundleAction {domain:"channel-native-controlled-physics-action-v1".into(),
++            policy:"channel-native-controlled-physics-v1;not-autonomous;actor-credit-forbidden".into(),
++            owner_domain:"channel-native-controlled-physics-fixture-owner-v1".into(),
++            motors,operation,metadata_candidate:self.compatibility_metadata(&e.physical)?,log_probability_bits:0_f64.to_bits(),
++            proof:DrawProof {domain:"channel-native-controlled-physics-proof-v1;no-rng-draw".into(),
++                scores_digest:hash(SCORE_DOMAIN,self)?,seed,counter,temperature_bits:t.to_bits(),factors:vec![]},
++            controlled_physics:Some(play)};
++        Ok(action)
++    }
++}

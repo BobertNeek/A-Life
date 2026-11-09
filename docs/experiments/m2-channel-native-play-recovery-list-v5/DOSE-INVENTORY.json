@@ -1,0 +1,17 @@
+{
+  "fixed_tests": 1,
+  "common_prefix": 3,
+  "treatments": 3,
+  "world_intervals": 6,
+  "source_forwards": 6,
+  "biology_intervals": 6,
+  "fresh_births": 1,
+  "cold_restores": 2,
+  "optimizer_updates": 0,
+  "learned_state_resets": 0,
+  "trained_checkpoint_file_reads": 0,
+  "autonomous_draws": 0,
+  "actual_novelty_aware_host_dispatch": true,
+  "valid_zero_stimulation": true,
+  "valid_zero_recovery": true
+}

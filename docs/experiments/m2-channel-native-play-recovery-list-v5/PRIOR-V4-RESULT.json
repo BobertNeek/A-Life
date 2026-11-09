@@ -1,0 +1,23 @@
+{
+  "autonomous_sampler_qualified_by_this_run": false,
+  "code": "TEST_PROTOCOL",
+  "controlled_endpoint": null,
+  "controlled_observations": [],
+  "controlled_physics_qualified": false,
+  "diagnostics": [],
+  "excluded_old_test_count": 396,
+  "peak_rss_bytes": 1738280960,
+  "peak_workspace_bytes": 2046299012,
+  "phase_snapshots": [],
+  "plan_id": "m2-channel-native-play-recovery-diag-v4",
+  "planned_tests": 1,
+  "planned_world_step_calls_max": 6,
+  "private_output_counted_bytes": 675279,
+  "results": [],
+  "schema": "channel-native-controlled-physics-summary-v4",
+  "source_forward_calls_max": 6,
+  "stage": "list-exact",
+  "test_processes_attempted": 0,
+  "test_projection_sha256": "17e1310f96fe4bdb4dc7c2fd7ade4df0aecc95f4ab59b28f50f0f5175a57f22a",
+  "trained_checkpoint_file_reads": 0
+}

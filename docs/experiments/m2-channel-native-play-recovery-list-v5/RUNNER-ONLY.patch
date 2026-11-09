@@ -1,0 +1,38 @@
+--- v4/run_hosted.py
++++ v5/run_hosted.py
+@@ -5,7 +5,7 @@
+ """
+ import math,hashlib,json,os,pathlib,re,resource,selectors,shutil,signal,subprocess,sys,time,tarfile,io,tomllib
+ ROOT=pathlib.Path(__file__).resolve().parent
+-PLAN="m2-channel-native-play-recovery-diag-v4"
++PLAN="m2-channel-native-play-recovery-list-v5"
+ BRANCH="refs/heads/qualification/"+PLAN
+ PACKET="docs/experiments/"+PLAN
+ MARKER=PACKET+"/ACTIVATE.json"
+@@ -282,7 +282,7 @@
+     if not re.fullmatch('[0-9a-f]{40}',before) or before=='0'*40 or not re.fullmatch('[0-9a-f]{40}',head): fail('ADMISSION')
+     if event.get('after')!=head or event.get('ref')!=BRANCH or any(event.get(k) is not False for k in ('created','deleted','forced')): fail('ADMISSION')
+     if parents!=[head,before] or changed!='A\t'+MARKER+'\n': fail('ADMISSION')
+-    expected={'schema':'m2-channel-native-controlled-diagnostic-activation-v4','plan_id':PLAN,'main':MAIN,'research_base':BASE,'prepared_head':before,'seal_sha256':seal,'source_manifest_sha256':source_sha,'attempt':1,'fixed_disposable_qualification_only':True}
++    expected={'schema':'m2-channel-native-controlled-listing-activation-v5','plan_id':PLAN,'main':MAIN,'research_base':BASE,'prepared_head':before,'seal_sha256':seal,'source_manifest_sha256':source_sha,'attempt':1,'fixed_disposable_qualification_only':True}
+     if marker!=expected: fail('ADMISSION')
+     return before
+ 
+@@ -532,7 +532,7 @@
+     if len(raw)>65536:fail('TEST_PROTOCOL')
+     try:text=raw.decode('utf-8','strict')
+     except UnicodeError:fail('TEST_PROTOCOL')
+-    lines=text.splitlines();required=[n+': test' for n in sorted(expected)]+['',str(len(expected))+' tests, 0 benchmarks']
++    lines=text.splitlines();required=[n+': test' for n in sorted(expected)]+['',str(len(expected))+(' test' if len(expected)==1 else ' tests')+', 0 benchmarks']
+     if lines!=required:fail('TEST_PROTOCOL')
+ 
+ 
+@@ -727,7 +727,7 @@
+     for d in STATE['diagnostics']:
+         if set(d)!={'code','path','line','stage'} or re.fullmatch(r'E\d{4}',d['code'])is None or d['path']not in BOUND or type(d['line'])is not int or d['stage']not in allowed:return '{"code":"INTERNAL"}'
+         diagnostics.append(d)
+-    result={'schema':'channel-native-controlled-physics-summary-v4','plan_id':PLAN,'code':code if code in CODES else'INTERNAL','stage':STATE['stage'],'diagnostics':diagnostics,'test_processes_attempted':STATE['test_processes_attempted'],'results':STATE['test_results'],'planned_tests':1,'planned_world_step_calls_max':6,'source_forward_calls_max':6,'trained_checkpoint_file_reads':0,'controlled_physics_qualified':code=='OK','autonomous_sampler_qualified_by_this_run':False,'controlled_observations':STATE.get('controlled_observations',[]),'controlled_endpoint':STATE.get('controlled_endpoint'),'phase_snapshots':STATE.get('phase_snapshots',[]),'excluded_old_test_count':STATE.get('excluded_old_test_count',0),'test_projection_sha256':STATE.get('test_projection_sha256',''),'peak_rss_bytes':STATE['peak_rss_bytes'],'peak_workspace_bytes':STATE['peak_workspace_bytes'],'private_output_counted_bytes':STATE['output_bytes']}
++    result={'schema':'channel-native-controlled-physics-summary-v5','plan_id':PLAN,'code':code if code in CODES else'INTERNAL','stage':STATE['stage'],'diagnostics':diagnostics,'test_processes_attempted':STATE['test_processes_attempted'],'results':STATE['test_results'],'planned_tests':1,'planned_world_step_calls_max':6,'source_forward_calls_max':6,'trained_checkpoint_file_reads':0,'controlled_physics_qualified':code=='OK','autonomous_sampler_qualified_by_this_run':False,'controlled_observations':STATE.get('controlled_observations',[]),'controlled_endpoint':STATE.get('controlled_endpoint'),'phase_snapshots':STATE.get('phase_snapshots',[]),'excluded_old_test_count':STATE.get('excluded_old_test_count',0),'test_projection_sha256':STATE.get('test_projection_sha256',''),'peak_rss_bytes':STATE['peak_rss_bytes'],'peak_workspace_bytes':STATE['peak_workspace_bytes'],'private_output_counted_bytes':STATE['output_bytes']}
+     raw=json.dumps(result,separators=(',',':'),sort_keys=True,allow_nan=False)
+     return raw if len(raw.encode())<=32768 else'{"code":"OUTPUT_LIMIT"}'
+ 

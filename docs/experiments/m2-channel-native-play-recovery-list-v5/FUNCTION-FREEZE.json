@@ -1,0 +1,63 @@
+{
+  "changed_runner_functions": {
+    "summary": {
+      "after_sha256": "fb083b9aaec78c49383824b628ac89e90907c11ac29914eafbf565e10cc81054",
+      "before_sha256": "fc94b314ec1cc38c7f9f65bf5ec1218ea04ade625950b4d10c01300bd4d9ea48",
+      "reason": "version identifier only"
+    },
+    "test_listing": {
+      "after_sha256": "fdbf4347e9be7768fb0b2164a120b2f15b38ba2b649e9cc9506e2c218bc7d30e",
+      "before_sha256": "3f411c52320010877ed16b754bfd20a96efaea289450ba261976e14a8589d743",
+      "reason": "singular discovery footer"
+    },
+    "validate_activation": {
+      "after_sha256": "814057b65fba4f08fd200c53d8c9ef6a92f43d9bd65e0c9f5f8c426ed1277b88",
+      "before_sha256": "b9ffe8acef74ca8461d2403f6314cccf173494e886ae2046affe9fa44f1affdd",
+      "reason": "version identifier only"
+    }
+  },
+  "parent_seal_sha256": "ff14ec3d8d81087dad0bbff8658b83d6d4e11986c47954bcd1f8d5539f2e0b59",
+  "source_manifest_metadata_only_changes": [
+    "schema",
+    "test_projection"
+  ],
+  "unchanged_function_count": 36,
+  "unchanged_runner_functions": {
+    "admit": "072ef15d3b55de875ebb9393dde052b02884f072b7b6bf6ed97a1a8f67116397",
+    "build": "2be9735df5bd2c6c6b20d212c45bde9629a7b725b39c24c943d5bca4b06c5cdf",
+    "capsule_source": "e5b746378689a7e9847154f8c245b5e3f2770861275687c8d76fa80fe9019d6a",
+    "check_limits": "2c33d0818f6d1117d728d11b095d2c944c86a93e61d64920a88344c681aa0bc9",
+    "child_setup": "974a5c02d2c5e0587816ad646910d1c097dc4fa5b70b32ecf1c333e384f31590",
+    "choose_role": "13c316b943949537acf2c854b036eeaa39643da5348dbf5db287546d69a4d2b9",
+    "diagnostic_rows": "c85a230536281cba42798be92a50f18010339bd202edbd5549dc07b02b586c03",
+    "digest_file": "6bf3e73ea9b35fddd346912e2372eb00500eee40ff397511b5400f39181e22ed",
+    "exact_path": "1cc8fdceb7629dcfde896cfb0db890b9fde065cd98b2287c3a493d7ee510b408",
+    "exclude_old_test_registration": "710be940dc57f0d1d264dd80e49a4db4f8863e107b61f339ea41f12b942a5971",
+    "fail": "dc52e37c56c1addbd7a34417b7e325ecb80cc7cd9731bff9add576ee463ef19d",
+    "kill_session": "c6b2e3ddc3365d7844617f3555c294604b8b4f8c3d54ae9c8008354587e921d0",
+    "local_dep_path": "b080d3a5b8d366161105f07e8542e075e2a02705392ad9816a2edca566fdc3cf",
+    "main": "28cc59598493a98615186bd8444a4281931e4786cbd487eb744cebca32980297",
+    "overlay_members": "a28e05c8712f6f8e3cc9641c43cf59d04f4b3f0903f747cebc6a57a74ed85ebe",
+    "package_roots": "70b8a327b5b64e380b8ba1bf04fbdd04f9fdd82f73c42f6979e44290266455b3",
+    "parse_control_rows": "dcbb85c30d9ce6b781266c9dd7fca15c681546bb1dfa1a36ba77781efbdde212",
+    "parse_depinfo": "108537160ed0e704d11a7a464cb97907029453dd29f7fc9440e7bf192263073a",
+    "parse_phase_rows": "2d7dd96d14b88b66c5001fc1389ecbd7a0c15d0ec4b36109cb94930f3deaf29f",
+    "private_git": "6d9a7ae7d79f54ecece737dc82fa5764ceecb6f3d09e42173cf46239c415d079",
+    "project_test_registration": "4a977131c32bf3d52b10f0355419a5f66cb3d8fee2534e2e251273dfb7689e97",
+    "read_json": "2de3db996f391dfee8364c3876df2dd757146cd3b3b9e6aefbf089785a3d835f",
+    "restore_sources": "04cbbb199be34682639a59c8f11fdf19e5e03520cb94087fee7a4207305c4842",
+    "run": "00f991c4e1440278320073a1a1ed7f0d720f29f58e384275491379c0fe65392a",
+    "run_tests": "e94fcc891065f1fe2ad807f10bc85993f061f4997d1fa8238a18c087b05ceef1",
+    "safe_path": "001274e241f9be87498587fb4d66772ea2db70742dc0f9d89ca247319cc43fd9",
+    "session_rss": "51f2488f82867adf667384903c1564bf1771acc2bc98a38dddac4872ea57ae74",
+    "setup_toolchain": "2400f54ff41de4c5db339dce11d6a35f4870f716af52559a76c8cf1d19ae7051",
+    "sha": "fc33541dab55897936faef1ad2869e455cbd6942f02508b99b41efdccc29be21",
+    "size": "e0cc92fe0df63d1a5a5436e10a0f5fb3a0dff8915f48fe8f4469572ca86f6205",
+    "test_report": "1ce504987bf407bce97e933177f768d520609005a08d5e88cc0953620c654aa4",
+    "validate_env_dep": "79122e4f2f90b4e0bbd9388024d5df5bd70796a2388d14cc4115c755c1ece9a5",
+    "validate_tree_preservation": "c8b75567964f2b236e3aabd1eda623cc191af706a3c00e9df7ef58cf451d6aa5",
+    "verify_depinfo": "c0246799548d821d43164c88400a842ff499a6f2d0463e09305681ec3021e3b2",
+    "verify_record": "f566035ab8241b28b6f004aa2272538dd565be5a8b3761dd509c5b83899984f2",
+    "verify_workflows": "3a8548d8ac3a07dfba204d0f3612f1c16248e2168679576c7664a783a213e7a4"
+  }
+}

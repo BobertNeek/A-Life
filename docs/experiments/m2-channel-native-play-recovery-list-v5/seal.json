@@ -1,0 +1,128 @@
+{
+  "files": [
+    {
+      "bytes": 16734,
+      "path": "CONTROLLED-FIXTURE.patch",
+      "sha256": "1e66aace2dd0037402831871450cf9615e78e7235c63066d459e063a35732cdc"
+    },
+    {
+      "bytes": 11431,
+      "path": "DIAGNOSTIC-ONLY.patch",
+      "sha256": "2262a694f16b640b832d7ecc93a60b819b8e5d2f0262cc49cbcf0dc00567573c"
+    },
+    {
+      "bytes": 410,
+      "path": "DOSE-INVENTORY.json",
+      "sha256": "c7b9509ee657c29bc36aa2ba24724bad7d3b72e14d01fa26dbbb5584b36bbea1"
+    },
+    {
+      "bytes": 329,
+      "path": "FIXED-INVENTORY.json",
+      "sha256": "e24a3359182f93ec3f9e8be1bce5f55b0ac6b8e054fa45e83462c355ed55629c"
+    },
+    {
+      "bytes": 1410,
+      "path": "FIXTURE-DOSE-AUDIT.json",
+      "sha256": "15c2e72bf73198ab120e7cef970406eb5f1f112b23047a90cc70254af11576ca"
+    },
+    {
+      "bytes": 4227,
+      "path": "FUNCTION-FREEZE.json",
+      "sha256": "cb97a30818202a786790ab037b8343bfd2e9e755ef74f9f8ce17ff62368a7f1e"
+    },
+    {
+      "bytes": 92558,
+      "path": "INHERITED-WORKFLOW-FIXTURES.json",
+      "sha256": "e45e6ea9f0b5de64ad00a3fbc108cbefcce48f5eab8b9c32caceaa9650497fcd"
+    },
+    {
+      "bytes": 2456,
+      "path": "LIBTEST-DISCOVERY-PROOF.json",
+      "sha256": "5131bcb8d5acd12b81d95a00d1c3b5bdddaffe453de20764f9d5b1a2a1756abf"
+    },
+    {
+      "bytes": 511,
+      "path": "OUTPUT-POLICY.json",
+      "sha256": "448d6a11dafae6fbab5c9eaf91ad888be5e549f4ddbd33dd6c0fc3ab7b5ad327"
+    },
+    {
+      "bytes": 161,
+      "path": "PINNED-LIBTEST-LIST.txt",
+      "sha256": "09798773eecdf813e1a2f8eab1c4386bb11895ff0347c1f790eacc094f8cde80"
+    },
+    {
+      "bytes": 257,
+      "path": "PINNED-LIBTEST-RUN.txt",
+      "sha256": "122c6a74c498bf5347db3b0d8bf7461b9cea56719f71dde30e129435f81c6929"
+    },
+    {
+      "bytes": 797,
+      "path": "PRIOR-V4-RESULT.json",
+      "sha256": "78b2a981461c514cddd6b1e9596725499dbcd6e5d24ef945b196e5d77eede86e"
+    },
+    {
+      "bytes": 5048,
+      "path": "README.md",
+      "sha256": "3a9de2306f293c1d9aabeea0dde08dc71d9728e8202f227792da7ba3b7fe00fd"
+    },
+    {
+      "bytes": 1556,
+      "path": "REUSE-INPUTS.json",
+      "sha256": "aada70fe37b86fa42ffdfb89863a551df0c460c326dc2ff00ea762ce921b9a9e"
+    },
+    {
+      "bytes": 4175,
+      "path": "RUNNER-ONLY.patch",
+      "sha256": "ec3a96b21c6c458d331f13ad744011ee526debfdcc91df876f928a7c95040038"
+    },
+    {
+      "bytes": 2532,
+      "path": "SOURCE-CLOSURE-STATIC.json",
+      "sha256": "083051c7f219e7ebc9a4a3082864978df1c8a914174335f3406c05f5fc42b96d"
+    },
+    {
+      "bytes": 4066,
+      "path": "SOURCE-PROOF.json",
+      "sha256": "47fa1abec546dfb1b4fd3502bb6cf9d431a86e5e9add472093a8632a1222572d"
+    },
+    {
+      "bytes": 2878,
+      "path": "STATIC-RESULTS.json",
+      "sha256": "4c734235ceb3ea95c7a9b6acb87eadfa9f6edf039710002a51d26fd584b3c168"
+    },
+    {
+      "bytes": 3478,
+      "path": "V4-PRESERVATION.json",
+      "sha256": "5b44262c68c317e3efc47232e10356ac2fc8a132d6249bf7ae0b83375050ef65"
+    },
+    {
+      "bytes": 4382,
+      "path": "WORKFLOW-PRESERVATION.json",
+      "sha256": "13e5a1512ee206a474c99e3a66dd435e288d0626c748755b9fae1ff3f677e556"
+    },
+    {
+      "bytes": 472290,
+      "path": "host-source-capsule.tar.gz",
+      "sha256": "073edda7bf4949c6bb146a836be23d8832e5f2552afd06b1881cd86de3de99af"
+    },
+    {
+      "bytes": 44634,
+      "path": "run_hosted.py",
+      "sha256": "318f373f657d33848d22a7656cd4a3a08f0f3b1ec2eb5aa1742ad474e8f07957"
+    },
+    {
+      "bytes": 413345,
+      "path": "source-manifest.json",
+      "sha256": "c4d27a2ec90cbd31d0ef9cd9975fe15fe44384b0ec7f6c8f15627c8b17379ef3"
+    },
+    {
+      "bytes": 14882,
+      "path": "static_checks.py",
+      "sha256": "894ccfdccd5e79636ed05280ae74d9a09c309fa47364d6dfa34bbcb30a5a8d1a"
+    }
+  ],
+  "native_qualified": false,
+  "plan_id": "m2-channel-native-play-recovery-list-v5",
+  "publication_state": "not_published",
+  "source_ready": true
+}

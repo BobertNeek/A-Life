@@ -1,0 +1,58 @@
+{
+  "accepted_main": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "accepted_main_leaves": 1313,
+  "excluded_old_test_count": 396,
+  "expected_exact_execution_filtered_out": 0,
+  "expected_executable_inventory": [
+    "cpu::host::grouped_host_envelope::channel_native::tests::controlled::grounded_play_and_quiet_awake_rest_share_prefix_and_cold_source"
+  ],
+  "inherited_workflows": 15,
+  "matches_observed_v4_projection": true,
+  "native_invocations": 0,
+  "reachable_main_files": 716,
+  "registration_chain": [
+    {
+      "declaration": "#[cfg(feature = \"cpu-backend\")]\npub mod cpu;",
+      "path": "crates/alife_training/src/lib.rs",
+      "source_sha256": "7132afce321e5147e61f9e2db77c03473dd020dffc80eafdae8d4a960a07aa6d"
+    },
+    {
+      "declaration": "mod host;",
+      "path": "crates/alife_training/src/cpu/mod.rs",
+      "source_sha256": "48b84489a1a1fe5104bb9f5d424bdb84416177cc18ae799c905e336b340b3619"
+    },
+    {
+      "declaration": "#[path = \"grouped_host_envelope.rs\"]\nmod grouped_host_envelope;",
+      "path": "crates/alife_training/src/cpu/host.rs",
+      "source_sha256": "8cc33e068d80247eaf825953bdeda132f7caa9c2dc80ed5cec8cb98105c49cb4"
+    },
+    {
+      "declaration": "#[path = \"channel_native_host.rs\"]\nmod channel_native;",
+      "path": "crates/alife_training/src/cpu/grouped_host_envelope.rs",
+      "source_sha256": "d8b0abb3fb47474466fb5a7775034ea5ab6d1ebb259c4b64b62027e03db1d934"
+    },
+    {
+      "declaration": "#[cfg(test)]\n#[path = \"channel_native_host_tests.rs\"]\nmod tests;",
+      "path": "crates/alife_training/src/cpu/channel_native_host.rs",
+      "source_sha256": "003c66316c9af9416e64b533e89c42dde5620168c32e8bd8fa31ea2b9b7c5e5d"
+    },
+    {
+      "declaration": "#[path=\"channel_native_play_recovery_tests.rs\"]\nmod controlled;",
+      "path": "crates/alife_training/src/cpu/channel_native_host_tests.rs",
+      "source_sha256": "8b24df6f1d859c04500a86306078b9e2312b5c8ecfb0fffffb4ed3c2afea8292"
+    }
+  ],
+  "remaining_plain_test_registrations": [
+    {
+      "path": "crates/alife_training/src/cpu/channel_native_play_recovery_tests.rs",
+      "test": "grounded_play_and_quiet_awake_rest_share_prefix_and_cold_source"
+    }
+  ],
+  "reuse_commit": "80332c3a4b30a8a84f5bcb6a7ee0a20a47c7b19d",
+  "reuse_files_verified": 8,
+  "sampler_files": 818,
+  "sampler_files_verified_before_projection": true,
+  "schema": "controlled-play-static-closure-v5",
+  "test_projection_sha256": "17e1310f96fe4bdb4dc7c2fd7ade4df0aecc95f4ab59b28f50f0f5175a57f22a",
+  "world_calls": 0
+}

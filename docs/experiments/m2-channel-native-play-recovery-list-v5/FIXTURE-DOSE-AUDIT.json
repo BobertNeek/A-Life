@@ -1,0 +1,31 @@
+{
+  "all_other_fixture_helpers": "construction, snapshot/encode/decode/restore and comparison only; no extra observed step, forward probe, optimizer or invalid-temperature step",
+  "constructor_restore_audit": "new_prepared_policy and restore_payload initialize or restore validated state and checkpoint bytes, without a grouped world step",
+  "fixture_sha256": "6400587f658d6c2d5d90b4c1c8ff61865a48818ef9d017c424c22e81c41dd510",
+  "native_invocations": 0,
+  "per_successful_interval_guards": [
+    "one source execution",
+    "source generation increases exactly one",
+    "one physical receipt",
+    "biology tick increases exactly one",
+    "actual AwakeRest",
+    "no sleep recovery",
+    "zero displacement",
+    "no Vocal",
+    "exact requested manipulation and NoLocomotion"
+  ],
+  "planned_common_prefix_intervals": 3,
+  "planned_postprefix_intervals": 3,
+  "postprefix_calls": [
+    "interval::<true>(common,play,3)",
+    "interval::<true>(cold_play,cold_play,4)",
+    "interval::<false>(quiet,no_manip,5)"
+  ],
+  "prefix_calls": "for i in 0..3",
+  "qualification": "static call-site audit only; actual counters remain hosted measured data",
+  "schema": "controlled-fixture-dose-static-v5",
+  "single_actual_host_step_call_site": "interval::<PLAY> invokes grouped_policy_step_observed::<Controlled<PLAY>> once",
+  "total_source_forwards_max": 6,
+  "total_world_intervals_max": 6,
+  "world_calls": 0
+}

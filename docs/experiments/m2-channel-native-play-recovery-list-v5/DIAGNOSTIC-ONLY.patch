@@ -1,0 +1,162 @@
+--- a/crates/alife_training/src/cpu/channel_native_play_recovery_tests.rs
++++ b/crates/alife_training/src/cpu/channel_native_play_recovery_tests.rs
+@@ -1,6 +1,18 @@
+ //! Controlled physics, not an autonomous draw or learned-state intervention.
+ use super::*;
+ use serde_json::{json,Value};
++use std::sync::atomic::{AtomicU32,Ordering};
++use std::io::Write;
++static ATTEMPTED:AtomicU32=AtomicU32::new(0);
++static RETURNED:AtomicU32=AtomicU32::new(0);
++static VERIFIED:AtomicU32=AtomicU32::new(0);
++static RESTORED:AtomicU32=AtomicU32::new(0);
++static ORDINAL:AtomicU32=AtomicU32::new(0);
++fn phase(label:&str){
++    println!("\nCONTROL_PHASE_V1 {}",json!({"phase":label,"ordinal":ORDINAL.load(Ordering::SeqCst),"attempted":ATTEMPTED.load(Ordering::SeqCst),"returned":RETURNED.load(Ordering::SeqCst),"verified":VERIFIED.load(Ordering::SeqCst),"restored":RESTORED.load(Ordering::SeqCst)}));
++    std::io::stdout().flush().unwrap();
++}
++
+ const CONTROL_MAGIC:&[u8]=b"ALIFE-CHANNEL-NATIVE-CONTROLLED-PHYSICS\0V1\0";
+ const CONTROL_POLICY:&str="channel-native-controlled-physics-v1;not-autonomous;actor-credit-forbidden";
+ struct Controlled<const PLAY:bool>;
+@@ -12,14 +24,18 @@
+     const LINEAGE:&'static str="fresh-disposable-controlled-physics-v1/no-import";
+     const POLICY:&'static str=CONTROL_POLICY;
+     fn select(f:&CpuFoundationTrainer,r:&mut Resident,frame:&PerceptionFrame,_o:&CpuDecisionOutput,seed:u32,counter:u32,t:f64)->Result<Selection<Self::Action>,CpuHostError> {
++        phase("decision_preparation");
+         frame.validate_contract()?;
++        phase("novelty_context_ready");
+         let source=r.neural.channel_native_source()?.clone();
+         let state=r.grouped.as_mut().ok_or(CpuHostError::State("missing controlled owner"))?;
+         if state.optional_vocal.is_some()||state.last_action.is_some()||state.channel_native.as_ref().is_none_or(|s|s.schema!=CHANNEL_RESIDENT){return Err(CpuHostError::State("controlled owner mismatch"));}
+         let native=&state.motor.last_receipt.as_ref().ok_or(CpuHostError::State("missing real source"))?.native.scores;
+         let scores=ChannelNativeScoresV1::bind_native(f.phenotype(),frame,native,source)?;
++        phase("source_bound");
+         let action=scores.controlled_physics_fixture(PLAY,seed,counter,t)?;
+         let (index,motors)=scores.physical_selection(&action)?;
++        phase("controlled_ready");
+         if PLAY {
+             let i=motors[2].ok_or(CpuHostError::State("missing actual Play candidate"))?;
+             let c=&frame.candidates()[i as usize];
+@@ -29,12 +45,14 @@
+         state.channel_native.as_mut().unwrap().last=Some(ChannelNativeSelectionV1{scores,action:action.clone()});
+         Ok((action,index,motors,None))
+     }
+-    fn stage(r:&mut Resident,p:&BrainPhenotype,a:&Self::Action,b:CpuDecisionBinding)->Result<(),CpuHostError>{ChannelNativePolicy::stage(r,p,a,b)}
+-    fn close(n:&mut CpuOrganismState,f:&CpuFoundationTrainer,p:&ExperiencePatch,r:&NeuralReceptorFrame)->Result<(),CpuHostError>{ChannelNativePolicy::close(n,f,p,r)}
++    fn stage(r:&mut Resident,p:&BrainPhenotype,a:&Self::Action,b:CpuDecisionBinding)->Result<(),CpuHostError>{phase("staging_started");let result=ChannelNativePolicy::stage(r,p,a,b);phase(if result.is_ok(){"staging_returned"}else{"staging_rejected"});result}
++    fn close(n:&mut CpuOrganismState,f:&CpuFoundationTrainer,p:&ExperiencePatch,r:&NeuralReceptorFrame)->Result<(),CpuHostError>{phase("physical_outcome_available");let result=ChannelNativePolicy::close(n,f,p,r);phase(if result.is_ok(){"outcome_close_returned"}else{"outcome_close_rejected"});result}
+     fn administrative_receipt(r:&Resident)->Result<Option<crate::cpu::ChannelNativeAdministrativeReceiptV1>,CpuHostError>{ChannelNativePolicy::administrative_receipt(r)}
+ }
+ fn build_with_toy<P: GroupedPolicyStrategy>() -> (CpuGroupedM2HostV1, PhenotypeCompilerInputs) {
++    phase("construction_recipe");
+     let recipe = recipe::build(FIXTURE_SEED, true).unwrap();
++    phase("construction_founder");
+     let mut founder = CpuFoundationTrainer::new(
+         recipe.phenotype.clone(),
+         recipe.asset.clone(),
+@@ -55,6 +73,7 @@
+     assert!(founder.phenotype().synapses().iter().enumerate().filter(|(_,s)|
+         matches!(s.kind(),CompiledSynapseKind::Decoder(c) if c.head()==DecoderHeadKind::SpeechPayload))
+         .all(|(i,_)|founder.weights()[i].to_bits()==0_f32.to_bits()));
++    phase("construction_world");
+     let mut game =
+         create_grounded_drive_research_new_game(&recipe.config, &recipe.genotype).unwrap();
+     let newborn = game
+@@ -73,6 +92,7 @@
+         .unwrap();
+     game.world = blank;
+     let inputs = recipe.inputs;
++    phase("construction_host");
+     let (host, ()) = CpuGroupedM2HostV1::new_prepared_policy::<P, _, String>(
+         game,
+         founder,
+@@ -80,6 +100,7 @@
+         (FIXTURE_SEED ^ (FIXTURE_SEED >> 32)) as u32,
+         MediationModeV1::Full,
+         |world| {
++            phase("construction_toy");
+             let (_,entity)=world.organism_entity_ids()[0];
+             let pos=world.entity(entity).ok_or("missing fresh body")?.position;
+             world.spawn_toy("controlled-fixed-activity-toy",Vec3f::new(pos.x+0.1,pos.y,pos.z),false).map_err(|e|e.to_string())?;
+@@ -87,28 +108,39 @@
+         },
+     )
+     .unwrap();
++    phase("construction_ready");
+     (host, inputs)
+ }
+ fn wire(h:&CpuGroupedM2HostV1)->Vec<u8>{
++    phase("checkpoint_encode");
+     let payload=h.checkpoint_payload::<Controlled<true>>().unwrap();
+     let mut wire=CONTROL_MAGIC.to_vec();wire.extend(serde_json::to_vec(&payload).unwrap());wire
+ }
+ fn restore(bytes:&[u8],inputs:&PhenotypeCompilerInputs)->CpuGroupedM2HostV1 {
++    phase("restore_decode");
+     let value:Value=serde_json::from_slice(bytes.strip_prefix(CONTROL_MAGIC).unwrap()).unwrap();
+     assert_eq!(value["policy"],CONTROL_POLICY);
+     assert_eq!(value["source_lineage"],Controlled::<true>::LINEAGE);
++    phase("restore_binding");
+     let mut payload:GroupedPayloadV1=serde_json::from_value(value).unwrap();payload.restore_sampler_bits().unwrap();
+-    CpuGroupedM2HostV1::restore_payload::<Controlled<true>>(payload,inputs,MediationModeV1::Full,bytes.to_vec()).unwrap()
++    phase("restore_resume");
++    let result=CpuGroupedM2HostV1::restore_payload::<Controlled<true>>(payload,inputs,MediationModeV1::Full,bytes.to_vec()).unwrap();
++    RESTORED.fetch_add(1,Ordering::SeqCst);phase("restore_ready");result
+ }
+ fn banks(h:&CpuGroupedM2HostV1)->Vec<u8>{
+     let r=h.host.residents.values().next().unwrap();let n=r.neural.checkpoint().unwrap();
+     serde_json::to_vec(&(h.founder.checkpoint(),n.lifetime,n.fast,n.eligibility,n.weight_generation,n.neural.dendrites,r.v11.checkpoint())).unwrap()
+ }
+ fn interval<const PLAY:bool>(h:&mut CpuGroupedM2HostV1,label:&str,ordinal:u32)->(Value,Vec<u8>) {
++    ORDINAL.store(ordinal,Ordering::SeqCst);phase("interval_prepare");
+     let id=h.world().organism_registry().iter().next().unwrap().organism_id();
+     let before=*h.world().organism_registry().get(id).unwrap().biochemistry();
+     let source_before=h.host.residents.get(&id.raw()).unwrap().neural.checkpoint().unwrap().dispatch_generation;
+-    let observed=h.host.grouped_policy_step_observed::<Controlled<PLAY>>(&h.founder,0.73).unwrap();
++    ATTEMPTED.fetch_add(1,Ordering::SeqCst);phase("dispatch_started");
++    let result=h.host.grouped_policy_step_observed::<Controlled<PLAY>>(&h.founder,0.73);
++    RETURNED.fetch_add(1,Ordering::SeqCst);phase(if result.is_ok(){"dispatch_returned"}else{"dispatch_rejected"});
++    let observed=result.unwrap();
++    phase("body_checks");
+     assert_eq!(observed.step.decisions.len(),1);assert_eq!(observed.world_receipts.len(),1);
+     let d=&observed.step.decisions[0];let actual=&observed.world_receipts[0];
+     assert_eq!(d.motor.native.core.source_execution_count,1);assert_eq!(d.motor.native.core.final_generation,source_before+1);
+@@ -124,24 +156,38 @@
+     // No success/stimulation/recovery floor: investigation and zero dose are data.
+     let row=json!({"label":label,"ordinal":ordinal,"tick_before":before.tick.raw(),"tick_after":after.tick.raw(),"generation_before":source_before,"generation_after":d.motor.native.core.final_generation,"play_selected":PLAY,"phase":format!("{:?}",manipulation.phase),"posture_phase":format!("{:?}",actual.channel_receipts.iter().find(|c|c.command.channel==MotorChannel::Posture).unwrap().phase),"stimulation":actual.body_event.play_stimulation,"investigation":actual.body_event.investigation,"perceived_novelty":actual.body_event.perceived_novelty,"awake_dose":d.physical.awake_recovery,"sleep_dose":d.physical.sleep_recovery,"energy_before":before.body.energy,"energy_after":after.body.energy,"boredom_before":before.homeostasis.drives.extension[0],"boredom_after":after.homeostasis.drives.extension[0],"source_executions":1,"biology_intervals":1,"optimizer_updates":0});
+     println!("\nCONTROL_PHYSICS_V1 {}",row);
++    VERIFIED.fetch_add(1,Ordering::SeqCst);phase("interval_verified");
+     (row,serde_json::to_vec(&(&d.action,&d.patch,&d.motor,&d.biological_emissions)).unwrap())
+ }
+ #[test]
+ fn grounded_play_and_quiet_awake_rest_share_prefix_and_cold_source() {
++    phase("construction_started");
+     let (mut common,inputs)=build_with_toy::<Controlled<true>>();let initial_banks=banks(&common);
+     // Exactly three planned attempts, never extend until stimulation occurs.
++    phase("shared_prefix_started");
+     for i in 0..3 {interval::<true>(&mut common,"prefix",i);assert_eq!(banks(&common),initial_banks);}
++    phase("shared_prefix_complete");
+     let prefix=wire(&common);
++    phase("checkpoint_ready");
+     assert!(CpuChannelNativeM2HostCheckpointV1::decode(&prefix).is_err());
++    phase("cold_restore_started");
+     let mut cold_play=restore(&prefix,&inputs);let mut quiet=restore(&prefix,&inputs);
++    phase("restore_comparison");
+     assert_eq!(wire(&cold_play),prefix);assert_eq!(wire(&quiet),prefix);
++    phase("play_treatment_started");
+     let (play,play_evidence)=interval::<true>(&mut common,"play",3);
++    phase("cold_treatment_started");
+     let (cold,cold_evidence)=interval::<true>(&mut cold_play,"cold_play",4);
++    phase("cold_comparison");
+     assert_eq!(play_evidence,cold_evidence);assert_eq!(wire(&common),wire(&cold_play));
+     for key in ["energy_before","energy_after","awake_dose","sleep_dose","stimulation","investigation","phase","boredom_before","boredom_after"]{assert_eq!(play[key],cold[key]);}
++    phase("quiet_treatment_started");
+     let (rest,_)=interval::<false>(&mut quiet,"no_manip",5);
++    phase("body_comparison");
+     assert_eq!(play["energy_before"],rest["energy_before"]);assert_eq!(play["boredom_before"],rest["boredom_before"]);
++    phase("bank_comparison");
+     assert_eq!(banks(&common),initial_banks);assert_eq!(banks(&cold_play),initial_banks);assert_eq!(banks(&quiet),initial_banks);
+     // Differences are measured, not forced to match or interpreted as benefit.
+     println!("\nCONTROL_ENDPOINT_V1 {}",json!({"intervals":6,"prefix_intervals":3,"treatment_intervals":3,"source_executions":6,"biology_intervals":6,"optimizer_updates":0,"cold_equal":true,"play_energy":play["energy_after"],"quiet_energy":rest["energy_after"],"play_awake_dose":play["awake_dose"],"quiet_awake_dose":rest["awake_dose"],"play_stimulation":play["stimulation"],"quiet_stimulation":rest["stimulation"]}));
++    phase("complete");
+ }

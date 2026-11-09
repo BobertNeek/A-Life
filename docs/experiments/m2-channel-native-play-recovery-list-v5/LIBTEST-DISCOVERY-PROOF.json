@@ -1,0 +1,27 @@
+{
+  "cause_scope": "Pinned harness output necessarily fails V4 singular-footer expectation; no evidence of a missing or wrong registered test name. Raw V4 listing was not published or retained. Static reconstruction independently verifies registration and projection.",
+  "exact_test_name": "cpu::host::grouped_host_envelope::channel_native::tests::controlled::grounded_play_and_quiet_awake_rest_share_prefix_and_cold_source",
+  "final_result_parser_already_zero_filtered": true,
+  "official_discovery_finish_source": "    fn write_discovery_finish(&mut self, state: &ConsoleTestDiscoveryState) -> io::Result<()> {\n        fn plural(count: usize, s: &str) -> String {\n            match count {\n                1 => format!(\"1 {s}\"),\n                n => format!(\"{n} {s}s\"),\n            }\n        }\n\n        if state.tests != 0 || state.benchmarks != 0 {\n            self.write_plain(\"\\n\")?;\n        }\n\n        self.write_plain(format!(\n            \"{}, {}\\n\",\n            plural(state.tests, \"test\"),\n            plural(state.benchmarks, \"benchmark\")\n        ))\n    }\n\n",
+  "one_test_footer": "1 test, 0 benchmarks",
+  "rust_commit": "58cf8f9c35b355199727627d07ae34a4e2846d67",
+  "rust_release": "1.99.1",
+  "schema": "pinned-libtest-listing-proof-v5",
+  "sources": [
+    {
+      "bytes": 9907,
+      "sha256": "6b4fe7856c2d737301fef5f25a5a2b66abed4b8cf68341851c1cf88f05d54839",
+      "url": "https://github.com/rust-lang/rust/blob/58cf8f9c35b355199727627d07ae34a4e2846d67/library/test/src/formatters/pretty.rs"
+    },
+    {
+      "bytes": 11197,
+      "sha256": "642e58299e051663027df9cc4db8ba5676bef3b8a2565f0f3aecfdabaa36272f",
+      "url": "https://github.com/rust-lang/rust/blob/58cf8f9c35b355199727627d07ae34a4e2846d67/library/test/src/console.rs"
+    }
+  ],
+  "v4_actual_listing_bytes_retained": false,
+  "v4_capsule_sha256": "073edda7bf4949c6bb146a836be23d8832e5f2552afd06b1881cd86de3de99af",
+  "v4_expected_footer": "1 tests, 0 benchmarks",
+  "v4_test_listing_source": "def test_listing(raw,expected):\n    if len(raw)>65536:fail('TEST_PROTOCOL')\n    try:text=raw.decode('utf-8','strict')\n    except UnicodeError:fail('TEST_PROTOCOL')\n    lines=text.splitlines();required=[n+': test' for n in sorted(expected)]+['',str(len(expected))+' tests, 0 benchmarks']\n    if lines!=required:fail('TEST_PROTOCOL')",
+  "v4_test_listing_source_sha256": "3f411c52320010877ed16b754bfd20a96efaea289450ba261976e14a8589d743"
+}

@@ -1,0 +1,7 @@
+[
+  {
+    "source": "crates/alife_training/src/cpu/channel_native_play_recovery_tests.rs",
+    "test": "grounded_play_and_quiet_awake_rest_share_prefix_and_cold_source",
+    "exact_name": "cpu::host::grouped_host_envelope::channel_native::tests::controlled::grounded_play_and_quiet_awake_rest_share_prefix_and_cold_source"
+  }
+]
