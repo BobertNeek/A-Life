@@ -510,3 +510,44 @@ All 866 source bindings held. Sampled peak RSS was 1,732,943,872 bytes; accounte
 Reread [Sparks of Weight-Space Programming](https://rikiyat.github.io/blog/weight-space-programming/) again at this revision. Its targeted temporary circuit and practice-versus-unseen evaluation split remain useful. Its failed Gemma intervention also warns against treating removal of a bottleneck as creation of missing competence. Here the current corrections address build, test protocol and source admission. They are prerequisites for measurement, not new evidence of learned care.
 
 New staging remains bounded in the separate /tmp filesystem. The local /workspace reserve is retained; no evidence, cache, old life, source snapshot or trained bank was deleted or replaced. These research owners remain separate from default/gameplay promotion.
+
+
+## 2026-11-09 21:20 UTC: real Play compatibility and current meal opportunity measured
+
+[Exact sanitized runner results and bindings](https://github.com/BobertNeek/A-Life/blob/94fb0e307e551bf91c69b054aecdab676422d8a4/docs/experiments/brain-surgery-2026-11-08/continuation-results-20261109-2120/RESULTS.json) preserve all four outcomes below. Every new run was attempt 1 of its separately sealed packet. No failed run was replayed.
+
+### Controlled Play can coexist with AwakeRest here; it did not stimulate this new toy
+
+[Controlled Play V5](https://github.com/BobertNeek/A-Life/actions/runs/42699800420), activation `ab032b59d7bbe213387adae8ea9e86181a5eb85d`, passed its single fixed full-host fixture. The only correction from V4 was the exact libtest discovery footer: official Rust prints singular `1 test`. All 107 scientific source files and the six-interval intervention remained unchanged.
+
+Actual totals were six source executions, six world/biology intervals and two cold restores; source/bank preservation and complete warm/cold checkpoint equality passed, with zero optimizer updates or trained-checkpoint file reads. Each controlled Play and quiet comparison delivered AwakeRest dose 1, sleep dose 0 and no displacement. The new toy was still novel and under investigation: every Play had investigation 1 and stimulation 0. Matched terminal boredom was the same, 0.00079999998. Play ended at energy 0.79181599617 versus quiet 0.79182976484, an extra cost of 0.00001376867.
+
+This establishes actual bundle/recovery compatibility in this fixed context. It does not establish useful stimulation, a boredom benefit, autonomous selection or neural candidate benefit. The three-prefix horizon was not extended until stimulation appeared. The earlier separate low-level reducer result and its positive matched no-op advantage remain distinct evidence.
+
+### Meal V4 paid for a real later decision, with no observed choice or reported Eat-probability effect
+
+[Compilation-fix V4 current-opportunity qualification](https://github.com/BobertNeek/A-Life/actions/runs/42700219085), activation `bcfeadd5ac008e9734d141b0e65b948dc507cabb`, passed after the nine-byte `+ ?Sized` test-helper correction. The scientific V3 owner/law/fixture and strict V1, graded V1 and meal V2 controls were unchanged.
+
+Actual acquisition and consumption were followed by one ordinary unforced third decision. Exactly three source/world intervals completed; world tick, body age, sequence, dispatch generation and replay records each advanced three. Cold/archive equality and frozen optimizer banks passed.
+
+The new fixture's historical V3 query still admitted only its consumed source, context weight 0.66654497385 and signed association +0.05356970057. At the actual third opportunity, all five same-frame, same-source, same-RNG readers chose the same non-Eat bundle. Its selected potential was zero and selected-bundle source weights were null. All five reported the same second-root Eat probability, **3.79010295%**.
+
+Those null weights describe the selected bundle, whose manipulation was not Eat. They do not prove every one of the 1,330 possible bundles lacked a match or that the complete distributions were identical. The supported result is no observed change in this sampled action or reported Eat marginal. Bounded aggregate/first-rejection diagnostics are being prepared before changing any matcher gate or gain. Future grip and consumption remain Unknown; no food was renewed, hunger forced, candidate cap bypassed or fifth object added.
+
+### Exact post-physical-error rollback now passed
+
+[Strengthened one-fixture qualification](https://github.com/BobertNeek/A-Life/actions/runs/42700337119), activation `ee2b5b88bd9409a1306ae4448f7d654e2efe4e73`, passed. It required the exact injected post-physical error, then full byte-identical rollback. Production code was unchanged. The narrowed fixture has a one-source/one-world-call ceiling and omits the later NaN check. The earlier 13-test result remains separately attributed.
+
+**Accounting correction for that earlier suite:** its published four-source ceiling was undercounted. Source audit gives an upper bound of **five source forwards and four world calls**: three warm/cold calls, up to one fault-path call and one later NaN call that validates temperature after forwarding. The old generic error assertion did not identify the fault location, and its safe summary logged no measured aggregate. Five/four is an audited bound, not retroactively observed exact exposure.
+
+Before this new run, review caught and corrected stale singular/footer/filtered-count parsing, one workflow metadata label and the hidden extra NaN forward. The full source capsule was verified as source/docs/config before publication. The one successful run was not used to relabel the earlier packet as already qualified.
+
+### Grip V5 fixed admission, then stopped inside its first step
+
+[Grip V5](https://github.com/BobertNeek/A-Life/actions/runs/42699947283), activation `8b8a50370ede860cb1fd791c559c59f17dd68290`, compiled/listed f041 and launched it once. Its grip-only helper now follows the established checked research-identity construction after exact self-contained asset validation. Ordinary production class-5 rejection remained true. Asset creation, genotype binding, trainer/world/scene registration, host admission and the initial frozen snapshot all completed.
+
+It then failed after FIRST_STEP_BEGIN and before FIRST_STEP_DONE. No fixture or committed interval is confirmed. The first of three planned host calls was entered; its internal work is unobserved, bounded by at most one explicit source forward, one grip-bank forward and one staged physical transaction. Later warm/cold successors were not reached. Recursive constructor/compiler numerical work is not represented as zero.
+
+Source tracing found another independently sufficient defect: shared physical-receipt observation required profile 5 even for the trusted grip resident's profile 6. A narrow correction derives exactly one expected profile from resident ownership and validates the grip policy; it does not accept either profile based on the incoming frame. It retains every selection, source, asset, organism and tick guard. A separately frozen f041 continuation will also classify only allowlisted static failure reasons. This does not identify V5's actual internal error retrospectively.
+
+Forty historical grip passes remain separate; f041 and GPU f042–f046 are still pending. All new trees preserve accepted-main source and its 15 inherited workflows. Main/defaults, acquired lives and all old evidence remain untouched.
