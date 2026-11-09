@@ -1,0 +1,356 @@
+{
+  "provenance": {
+    "schema": "grouped-m2-fresh-pair-curated-results-v1",
+    "created_utc": "2026-11-09T08:32:14.470446+00:00",
+    "status": "both arms completed and native exports verified",
+    "seed_hex": "0x034D32424C000901",
+    "seed_decimal": 237901615644805377,
+    "sampler_seed": 1330461507,
+    "primary_source_constructions_completed": 1,
+    "actual_shared_preparation_intervals": 240,
+    "actual_primary_world_intervals": [
+      1200,
+      1200
+    ],
+    "actual_primary_total_world_updates": 2640,
+    "new_preparation_on_arm_start_or_export": 0,
+    "published_intervals_replayed": 0,
+    "attempt1": {
+      "seed_hex": "0x4D32424C00090001",
+      "status": "source-construction checked-multiply overflow; permanently retained consumed claim",
+      "source_constructions_attempted": 1,
+      "source_constructions_completed": 0,
+      "world_preparation_intervals": 0,
+      "native_calls": 0
+    },
+    "host_runtime_commit": "32e109372be39a19cabf7d9fc7cbcd9ca7c91c19",
+    "driver_commit": "7f905465b79291fd52d1fd65568a9d10e716576a",
+    "driver_tree": "97038260661c31c4ba5586097a5bddce9498eaba",
+    "driver_code_sha256": "b17d9051bae1845a691e375183acd3608e1c8d73c34c003f8018e27d5e3637b8",
+    "executable_sha256": "8d3827d4eb54c35d6af191469f45a096b482fcc28942347b53784b435f829d73",
+    "protocol_v6_sha256": "7ffb754b25fa926410b29a59caffcd1b46e0d95f513970a11484207ebb7d5814",
+    "reservation_sha256": "3e35f6bb27c6dea79fc4fda76c40a637f4302e85113543967b395a6001ccdc23",
+    "analysis_script_sha256": "c08588e6a6484d6d190f1faebde37df81ec6e853358f3e462282dd5c5a545e8d",
+    "assembler_sha256": "b3ca0f9de090bf80bebbf4882864d79315fbf7b4de5ff084f179d8317e283d61",
+    "exports": [
+      {
+        "arm": 0,
+        "mode": "Full",
+        "export_receipt_sha256": "a2694a310d0e93d146d66ad3f1fb346b3c07777cb2a2dd68e4d4e2226b0da701",
+        "trace_sha256": "ace9054993c90695af42afd5528f6ffe1374cb45286e9782dc317e63caa5bfaf",
+        "final_checkpoint_sha256": "86bb50827c808ecbde79bd96441a786479344202fade0084f6ee051473bfb534",
+        "native_result_sha256": "67d185bf2a2f882c9b0ac613badb913becf5522d12d897571bc67c24ee360479"
+      },
+      {
+        "arm": 1,
+        "mode": "DriveSham",
+        "export_receipt_sha256": "3bba45cd09fcfafc9ad5461bcd415a20d5accf2fbe9d8a0a7106a4e4b9025852",
+        "trace_sha256": "77aa91a7a3a5f81173d7aaf68d336a972d7998432d07741982d3014d9452a8a1",
+        "final_checkpoint_sha256": "99729c785e27d662cb95590a8264744367c287732f40a0622a072693b14874bf",
+        "native_result_sha256": "f6c2461dbfab8ec5f6e0020707e27629e61565c4afc11f0c95f9a7f68c55bf0d"
+      }
+    ],
+    "common_prefix_selection": "Minimum of both complete observed horizons:1200, identical to each full horizon. No additional native prefix replay or favorable-window selection.",
+    "analysis_label_revision": "Missing measured execution observations for primitives212/104 are reported as absent, never as executed=false. Frozen source/raw data unchanged.",
+    "source_reader_audit": "Actual packed Rest MemoryContext512 rows and SpeechPayload1024 rows are zero in source/founder; no CognitiveContext extension. Global bounded memory reader remains592 nonzero rows in other families. No retuning.",
+    "not_uploaded": "All raw checkpoints, scientific traces, journals, bank arrays, executable and assets stay local. This directory contains curated scalars/metadata only.",
+    "storage": {
+      "arms": [
+        {
+          "arm": 0,
+          "packet_count": 1200,
+          "physical_packet_data_bytes": 4018317830,
+          "maximum_packet_bytes": 3704548,
+          "charged_journal_entry_bytes_including_hardlink_aliases": 8036649746,
+          "export_unique_file_data_bytes": 77798516,
+          "export_allocated_unique_file_bytes": 77807616,
+          "raw_trace_bytes": 74810757,
+          "final_checkpoint_bytes": 2976427
+        },
+        {
+          "arm": 1,
+          "packet_count": 1200,
+          "physical_packet_data_bytes": 3213424234,
+          "maximum_packet_bytes": 2904056,
+          "charged_journal_entry_bytes_including_hardlink_aliases": 6426862579,
+          "export_unique_file_data_bytes": 33715033,
+          "export_allocated_unique_file_bytes": 33722368,
+          "raw_trace_bytes": 30886496,
+          "final_checkpoint_bytes": 2795647
+        }
+      ],
+      "free_disk_bytes_at_curation": 5700304896,
+      "free_floor_bytes": 4294967296,
+      "packet_cap_bytes": 8388608,
+      "charged_arm_cap_bytes": 11811160064,
+      "raw_trace_cap_bytes": 536870912,
+      "no_resource_stop": true,
+      "no_packet_history_export_copy": true,
+      "no_hard_power_loss_claim": true
+    }
+  },
+  "arms": [
+    {
+      "mode": "Full",
+      "world_intervals": 1200,
+      "decisions": 1163,
+      "actual_AwakeRest": 566,
+      "actual_BodySleep": 5,
+      "no_applied_recovery": 592,
+      "sleeping_intervals": 37,
+      "closed_memory_consolidations": 5,
+      "fully_observed_cycles": 4,
+      "partial_cycles": 1,
+      "initial": {
+        "tick": 240,
+        "age": 240,
+        "F": 0.13101535,
+        "P": 0.06604884,
+        "ATP": 0.65918416,
+        "H": 1.0,
+        "body_energy": 0.7921858
+      },
+      "final": {
+        "tick": 1440,
+        "age": 1440,
+        "phase": "Waking",
+        "F": 0.0,
+        "P": 0.0,
+        "ATP": 0.5504626,
+        "H": 1.0,
+        "body_energy": 0.5975229
+      },
+      "minimum_health": 1.0,
+      "max_F_P": [
+        0.13221879303455353,
+        0.2397875040769577
+      ],
+      "reference_crossings": [],
+      "source_optimizer_and_synaptic_banks_closed": true,
+      "operation_MC": {
+        "operation_context.AwakeRest.cognitive_clipped": {
+          "n": 1163,
+          "nonzero_count": 0,
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "operation_context.AwakeRest.memory_clipped": {
+          "n": 1163,
+          "nonzero_count": 0,
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "operation_context.AwakeRest.raw_cognitive": {
+          "n": 1163,
+          "nonzero_count": 0,
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "operation_context.AwakeRest.raw_memory": {
+          "n": 1163,
+          "nonzero_count": 0,
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "operation_context.BodySleep.cognitive_clipped": {
+          "n": 1163,
+          "nonzero_count": 0,
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "operation_context.BodySleep.memory_clipped": {
+          "n": 1163,
+          "nonzero_count": 0,
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "operation_context.BodySleep.raw_cognitive": {
+          "n": 1163,
+          "nonzero_count": 0,
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "operation_context.BodySleep.raw_memory": {
+          "n": 1163,
+          "nonzero_count": 0,
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        }
+      },
+      "conditional_sleep": {
+        "n": 1163,
+        "nonzero_count": 1163,
+        "mean": 0.008255670777403076,
+        "min": 0.0032363201261100863,
+        "max": 0.03322734413096562
+      },
+      "physical_sleep_marginal": {
+        "n": 1163,
+        "nonzero_count": 1163,
+        "mean": 0.003909900363316941,
+        "min": 0.0014816583955810736,
+        "max": 0.01610485574186802
+      },
+      "actual_common_Rest_mass": {
+        "n": 1163,
+        "nonzero_count": 1163,
+        "mean": 0.4704343061728749,
+        "min": 0.4039530877403228,
+        "max": 0.49418730348567114
+      },
+      "pressure_logodds": {
+        "n": 1163,
+        "nonzero_count": 1163,
+        "mean": -4.898569777210724,
+        "min": -5.730076789855957,
+        "max": -3.3705902099609375
+      },
+      "signed_pressure_opponent": {
+        "n": 1163,
+        "nonzero_count": 1163,
+        "mean": -0.3309214451590717,
+        "min": -0.38818362,
+        "max": -0.2266442
+      }
+    },
+    {
+      "mode": "DriveSham",
+      "world_intervals": 1200,
+      "decisions": 411,
+      "actual_AwakeRest": 99,
+      "actual_BodySleep": 99,
+      "no_applied_recovery": 213,
+      "sleeping_intervals": 789,
+      "closed_memory_consolidations": 99,
+      "fully_observed_cycles": 98,
+      "partial_cycles": 1,
+      "initial": {
+        "tick": 240,
+        "age": 240,
+        "F": 0.13101535,
+        "P": 0.06604884,
+        "ATP": 0.65918416,
+        "H": 1.0,
+        "body_energy": 0.7921858
+      },
+      "final": {
+        "tick": 1440,
+        "age": 1440,
+        "phase": "Waking",
+        "F": 0.0,
+        "P": 0.0,
+        "ATP": 0.6120067,
+        "H": 1.0,
+        "body_energy": 0.72316843
+      },
+      "minimum_health": 1.0,
+      "max_F_P": [
+        0.131015345454216,
+        0.06665555387735367
+      ],
+      "reference_crossings": [],
+      "source_optimizer_and_synaptic_banks_closed": true,
+      "operation_MC": {
+        "operation_context.AwakeRest.cognitive_clipped": {
+          "n": 411,
+          "nonzero_count": 0,
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "operation_context.AwakeRest.memory_clipped": {
+          "n": 411,
+          "nonzero_count": 0,
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "operation_context.AwakeRest.raw_cognitive": {
+          "n": 411,
+          "nonzero_count": 0,
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "operation_context.AwakeRest.raw_memory": {
+          "n": 411,
+          "nonzero_count": 0,
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "operation_context.BodySleep.cognitive_clipped": {
+          "n": 411,
+          "nonzero_count": 0,
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "operation_context.BodySleep.memory_clipped": {
+          "n": 411,
+          "nonzero_count": 0,
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "operation_context.BodySleep.raw_cognitive": {
+          "n": 411,
+          "nonzero_count": 0,
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        },
+        "operation_context.BodySleep.raw_memory": {
+          "n": 411,
+          "nonzero_count": 0,
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0
+        }
+      },
+      "conditional_sleep": {
+        "n": 411,
+        "nonzero_count": 411,
+        "mean": 0.5,
+        "min": 0.5,
+        "max": 0.5
+      },
+      "physical_sleep_marginal": {
+        "n": 411,
+        "nonzero_count": 411,
+        "mean": 0.23318176069249685,
+        "min": 0.19999475663522384,
+        "max": 0.23422347161273965
+      },
+      "actual_common_Rest_mass": {
+        "n": 411,
+        "nonzero_count": 411,
+        "mean": 0.4663635213849937,
+        "min": 0.3999895132704477,
+        "max": 0.4684469432254793
+      },
+      "pressure_logodds": {
+        "n": 411,
+        "nonzero_count": 0,
+        "mean": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "signed_pressure_opponent": {
+        "n": 411,
+        "nonzero_count": 0,
+        "mean": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      }
+    }
+  ]
+}
