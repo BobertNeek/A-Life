@@ -1,0 +1,42 @@
+[
+  {
+    "arm": 0,
+    "meal_record_retention": [
+      {
+        "memory_id": 8,
+        "present": true,
+        "exact_meal_canonical_digest_retained": true,
+        "final_sealed_sequence": 8
+      }
+    ],
+    "final_body": {
+      "health": 1.0,
+      "energy": 0.8934183,
+      "injury": 0.0,
+      "sleeping": false
+    },
+    "final_hunger": 0.2692189,
+    "final_fatigue": 0.015725384,
+    "final_sleep_pressure": 0.08544814
+  },
+  {
+    "arm": 1,
+    "meal_record_retention": [
+      {
+        "memory_id": 16,
+        "present": true,
+        "exact_meal_canonical_digest_retained": true,
+        "final_sealed_sequence": 16
+      }
+    ],
+    "final_body": {
+      "health": 1.0,
+      "energy": 0.8940318,
+      "injury": 0.0,
+      "sleeping": false
+    },
+    "final_hunger": 0.25194374,
+    "final_fatigue": 0.1694961,
+    "final_sleep_pressure": 0.08544814
+  }
+]
