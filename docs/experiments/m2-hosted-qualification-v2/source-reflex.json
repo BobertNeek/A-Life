@@ -12,9 +12,9 @@
       "sha256": "30716114dac2030f38541a885d532642cfd9ed6e56a758b03d9208c59620fd04"
     },
     {
-      "bytes": 29569,
+      "bytes": 30098,
       "path": "crates/alife_world/src/headless/sleep_choice_research/recovery_reflex.rs",
-      "sha256": "54a80c4d143c9b97b4b19aa04b7322985b45a8e3f1000ca44e2400ae2113bc0b"
+      "sha256": "a3aac6701e4c454843394e92dc77dc3381ceb6ee76240334abb06a3c5c3b67ea"
     },
     {
       "bytes": 10994,
@@ -27,5 +27,5 @@
       "sha256": "d4e92f0f24317226919eb57d4ffb69ca371bc3ccd4e726f31dfa342607781e10"
     }
   ],
-  "source": "fbf+source-only-world-reflex-overlay"
+  "source": "fbf+source-only-world-reflex-overlay-v2-private-channel-key"
 }
