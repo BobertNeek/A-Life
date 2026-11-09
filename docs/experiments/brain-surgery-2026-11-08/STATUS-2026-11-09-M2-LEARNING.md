@@ -175,3 +175,60 @@ Full remains complete at 1,200 intervals with 1,163 decisions, 566 AwakeRest dos
 The first hosted fixed-fixture qualification actually ran on branch qualification/m2-fixed-fixtures-v2, exact activation head 2092ccfc919c3ddfef4ac1cd645700f70d5d5ab1. [Run 42575100065](https://github.com/BobertNeek/A-Life/actions/runs/42575100065) stopped both boredom and reflex jobs during toolchain setup. Sanitized receipts report TOOLCHAIN with completed_count=0. No native build, fixture, source forward or world interval ran. Installer diagnostics were private and not retained, so the exact install-versus-query failure is unknown. Rust 1.99.1's official release and compiler identity are independently verified; do not infer the version is nonexistent.
 
 V2 and its activation remain terminal, with no retry or marker reuse. A separate source-only V3 correction is being prepared to use the audited official setup recipe in the normal hosted rustup home, explicit rustup-run tool invocations, static setup-stage codes and validated compiler facts. Variant sources, call ceilings and privacy limits remain unchanged. V3 has not been published or activated.
+
+
+## 9 November, 08:05 UTC: completed pair and qualified silence
+
+### Both primary arms reached the fixed horizon
+
+Both arms completed 1,200 intervals with exit 0 and no health/resource stop. These are preliminary terminal counts while the unchanged zero-forward export/audits finish:
+
+| Measure | Full | Drive-Sham |
+|---|---:|---:|
+| Neural decisions | 1,163 | 411 |
+| Actual AwakeRest doses | 566 | 99 |
+| BodySleep starts | 5 | 99 |
+| Decision intervals with neither recovery applied | 592 | 213 |
+| Sleeping/no-decision intervals | 37 | 789 |
+| Consolidations | 5 | 99 |
+| Fully observed complete sleep cycles | 4 | 98 |
+| Terminal body energy | 0.59752 | 0.72317 |
+| Terminal brain ATP | 0.55046 | 0.61201 |
+
+Both endpoints are Waking with one partial cycle. Neither will be extended to finish that cycle. Hunger is 1, fatigue and sleep pressure are 0, with no fatigue 0.35 or pressure 0.6 reference crossing. Source/optimizer closure checks stayed intact; both operation M/C contributions remain zero. This is one matched source/body under two drive settings in a blank scene, with learning closed, not independent animals, a feeding test or a welfare ranking.
+
+The compulsory empty-Vocal limitation remains prominent. Full's 1,163 failed utterances and frustration=1 are directly audited; no good physical recovery is relabeled as a failed recovery merely because its bundle also failed speech. No stored values or current genes are rewritten. Full and Sham exports are unchanged, zero-forward processes; no interval has been replayed.
+
+### Optional silence passed its bounded native qualification
+
+All ten optional-policy controls pass. Both complete legacy-output witnesses agree exactly: SHA256 81ca210d66550b89ba0cc6ae71e1699cf175a6f169cfbb2b41e2a32ff2e04f37. The package performed exactly ten source forwards, eight sampled bundles, seven committed intervals and three direct synthetic speech checks. Three actual optional-host decisions omit Vocal and produce no utterance, while preserving once-only source/work, frozen weights and optimizer sentinels, and exact warm/cold continuation. Genuine missing-payload speech and cooldown still fail when explicitly tested.
+
+The original source, failed negative fixture and subsequent narrow repairs remain preserved. This is CPU correctness, not learned silence, native language competence, an ecological result or a GPU qualification. Broad workspace/Clippy qualification was not run. The original all-channel AND/frustration rule remains.
+
+The [qualified source and report](https://github.com/BobertNeek/A-Life/blob/71cf256d933b1625a0f52c52289846f231b28c1b/docs/experiments/brain-surgery-2026-11-08/QUALIFIED-OPTIONAL-VOCAL.md) include the complete nine-file reconstruction patch, per-file source manifest and separate qualification instrumentation. Production patch SHA256 is dc851232abeb8a655cba7fbf6089389dc51dd0e2717d199e8d15e269d123c49e; source closure is 19be3cc2612f110b564699ad2d566219b51d411fb57c3cc8af1bc9ced194dc7e. No acquired state or executable was uploaded.
+
+### Validation overhead: a different cache actually helps
+
+The compiler-output successor passed all 22 declared preservation cases and the five complete old GRPHOST outputs, 7,116,876 bytes total. Old accepted signed-zero cases, source/input/recipe guards, acquired/private state, rollback, sleep and cold restore remain intact within that scope. This is a different candidate from the rejected 18%-slower full-source proof cache.
+
+Eight alternating same-state administrative pairs took 7,198.370 ms original versus 302.226 ms cached, 95.80% less validation time, faster in every pair. The cache retains about 5,291,371 requested heap bytes plus its 1,776-byte structure and estimated 16-byte Arc header; allocator overhead is excluded. The benchmark executes no world/body/neural calls. It does not establish a full study speedup, biological energy saving, broad profile parity or safe composition with every new host.
+
+The [source and bounded qualification](https://github.com/BobertNeek/A-Life/blob/32fcb55ec4964d6a16bf62994844400a0b1ec51a/docs/experiments/brain-surgery-2026-11-08/QUALIFIED-COMPILER-OUTPUT-CACHE.md) are archived with test and administrative instrumentation. Source patch SHA256 is b162bf6c7cccd845756f93834026c3c8a9972a5f6845e8be149cbbefb0c2f4dd. No active study, checkpoint cadence or source-work price changed. The next object-rich comparison stays uncached: composition would need a separate generic-restore qualification and must not delay the first useful behavioral test.
+
+### Valuation audit: separate need, consequence and memory salience
+
+Source inspection and 13 reduced f32 arithmetic controls confirm measured fatigue relief is valued at -1/7 times after-minus-before. Hunger, fear, pain relief, loneliness and temperature stress use the same negative scale; measured ATP and body-energy improvement use +1/7. New pain/injury is charged once through a maximum-based injury term, not counted three times. Boredom uses -0.08; explicit praise uses +0.3 only for a positive pulse. Disappointment is 0.03 times honest frustration. Regulatory/receptor tone is not itself reward.
+
+Sleep pressure is correctly measured and regulates choice but has zero value in this named M2 V1 experiment. A fresh measured-pressure-value-v1 candidate with -1/7 is a justified scale hypothesis, not an implemented change or an optimum. All other profile bits and ordinary zero-pressure admission would stay. Sleep supplies no ATP boost or nutrition.
+
+At that proposed scale, the recorded first pressure relief contributes about +0.0215 before other consequences, below the ordinary 0.05 value-salience gate unless another genuine event qualifies. Do not increase reward merely to force a memory or remove disappointment to hide real speech failure. A value-only change cannot make the zero Rest reader respond or demonstrate learning. Need, actual outcome valuation, episodic salience, a readout and plasticity are distinct links.
+
+### Next actual scene and hosted feedback
+
+A fresh object-rich protocol is being prepared/qualified for legacy versus optional Vocal: ordinary near Root food, farther Fruit, a stationary toy and a real obstacle, with one shared 240-tick body-only preparation and 64 fixed intervals per arm. Primary seed 0x034F42564F430901 is explicitly reserved after a bounded public/source scan and owner checks; no global freshness proof is claimed. It has not become a new learned or ecological result. Actual feeding, targets, grip transfers, success/frustration and memory coverage will be measured, including an honest no-feeding result if that happens. The ordinary representative-only memory writer remains; the meal repair is not silently included.
+
+A separately named passive research return copies authoritative physical phase/grip receipts without changing existing step types, policy, world, saved bytes or debit. Its warm/cold inertness fixture is a prerequisite to using it. Private state/journals stay local; publication remains source and derived summaries only.
+
+Hosted V4 at [run 42581718810](https://github.com/BobertNeek/A-Life/actions/runs/42581718810), exact head 788f8a7005fd380364d4af34da2f4e9120b93fa2, passed all six boredom-route CPU controls. Low/high boredom, real receptor projection, urgency suppression, exact Play target isolation, equal work and cold identity are mechanism checks, not autonomous play or relief. The M2 host still does not admit that appendage.
+
+Reflex now compiles, but its first quiet/no-reflex preservation fixture failed; the remaining 21 did not run. Local diagnosis is limited to that same disposable fixed fixture and preserves the original failure. Zero completed fixtures is not zero possible body work. Source inspection suggests the oracle may compare an old staged-tick call with a new standalone call; that remains a hypothesis until reproduced. No old-world preservation guard will be weakened to make it pass, and actual M2 reflex integration remains off.
