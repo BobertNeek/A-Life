@@ -61,7 +61,7 @@ The first reserved high 64-bit mnemonic overflowed canonical founder_seed_base �
 
 The original driver proof used 136 fixed calls. Four infrastructure fixes were then qualified with a prospectively separate 50-call proof: authoritative root binding, source publication before preparation, attempted-call accounting and complete ordered sleep-phase evidence. Both cold sequences are exact, with all 24 warm checkpoint/science pairs matching the original fixture. Later admission-only checks use that unchanged-runtime evidence rather than relabel it as execution of a new binary.
 
-Attempt 2's shared template completed exactly 240 world-only ticks once; both initial arms match except declared mode/authority. Initial fatigue was 0.13101535, pressure 0.06604884, ATP 0.65918416, hunger 1 and energy 0.7921858. There were no neural decisions or optimizer updates during preparation. Full is running; Sham has not started at the latest analyzed prefix below.
+Attempt 2's shared template completed exactly 240 world-only ticks once; both initial arms match except declared mode/authority. Initial fatigue was 0.13101535, pressure 0.06604884, ATP 0.65918416, body health 1 and energy 0.7921858. There were no neural decisions or optimizer updates during preparation. Full is running; Sham has not started at the latest analyzed prefix below.
 
 ### First analyzed 150-interval prefix
 
@@ -83,7 +83,7 @@ Do not first trade away recoverability based on an assumption that fsync is slow
 
 ## Later bounded milestones, 04:53 UTC
 
-The latest analyzed 600-interval Full prefix has 580 decisions: 273 applied AwakeRest, three BodySleep starts and 304 without applied recovery. Two sleep cycles are complete; the third is consolidating at that cut. There are 20 sleep intervals. Sleep starts still occur at pressure 0.10387–0.16119 and fatigue 0–0.00121; neither declared fatigue nor pressure threshold has been crossed. At world tick 840, hunger is 1, energy about 0.69507 and ATP about 0.59931, with no health loss. This is a historical analyzed prefix, not a completed Full/Sham comparison. Sham has not started. It suggests that sensible physiology and a working signed neural route do not by themselves eliminate stochastic low-pressure sleep.
+The latest analyzed 600-interval Full prefix has 580 decisions: 273 applied AwakeRest, three BodySleep starts and 304 without applied recovery. Two sleep cycles are complete; the third is consolidating at that cut. There are 20 sleep intervals. Sleep starts still occur at pressure 0.10387–0.16119 and fatigue 0–0.00121; neither declared fatigue nor pressure threshold has been crossed. At world tick 840, body health is 1, energy about 0.69507 and ATP about 0.59931, with no health loss. This is a historical analyzed prefix, not a completed Full/Sham comparison. Sham has not started. It suggests that sensible physiology and a working signed neural route do not by themselves eliminate stochastic low-pressure sleep.
 
 A separate immutable-validation cache prototype passed 20 selected preservation cases after one retained fixture-construction failure was corrected. Counters show one reconstruction at fresh/cold admission, no repeat on warm validation and no recompile through ordinary warm sleep/waking; valid changed identities fall through to the old validator without replacing the original proof. The five old full-wire outputs remain exact. These are fixed disposable unit fixtures, not a new care cohort.
 
@@ -95,7 +95,7 @@ The more promising successor is to memoize pure compiler/recipe outputs from exa
 
 ## Full horizon and optimized-profile fixture, 05:26 UTC
 
-Full has now completed exactly 1,200 intervals with exit 0 at its declared horizon, in about 2 hours 25 minutes. There are 1,163 decisions: 566 applied AwakeRest, five BodySleep starts and 592 without applied recovery. Five consolidations occurred, but only four complete sleep cycles were observed: cycle five is Waking at the fixed endpoint. Do not extend the horizon to make it complete. Hunger remains 1, energy ends near 0.59752 and ATP near 0.55046, with intact health and endpoint fatigue/pressure zero. No fatigue-0.35 or pressure-0.6 crossing occurred. Constant source/optimizer closure rows are not the complete export audit, which remains pending.
+Full has now completed exactly 1,200 intervals with exit 0 at its declared horizon, in about 2 hours 25 minutes. There are 1,163 decisions: 566 applied AwakeRest, five BodySleep starts and 592 without applied recovery. Five consolidations occurred, but only four complete sleep cycles were observed: cycle five is Waking at the fixed endpoint. Do not extend the horizon to make it complete. Body health remains 1, energy ends near 0.59752 and ATP near 0.55046, with intact health and endpoint fatigue/pressure zero. No fatigue-0.35 or pressure-0.6 crossing occurred. Constant source/optimizer closure rows are not the complete export audit, which remains pending.
 
 DriveSham started at 05:25:58 from its untouched matched age-240/source-generation-zero initial checkpoint. No second source construction, preparation, replay or coefficient change occurred. Full is immutable. Both complete native exports follow paired execution. There is no Full-versus-Sham result yet.
 
@@ -195,7 +195,7 @@ Both arms completed 1,200 intervals with exit 0 and no health/resource stop. The
 | Terminal body energy | 0.59752 | 0.72317 |
 | Terminal brain ATP | 0.55046 | 0.61201 |
 
-Both endpoints are Waking with one partial cycle. Neither will be extended to finish that cycle. Hunger is 1, fatigue and sleep pressure are 0, with no fatigue 0.35 or pressure 0.6 reference crossing. Source/optimizer closure checks stayed intact; both operation M/C contributions remain zero. This is one matched source/body under two drive settings in a blank scene, with learning closed, not independent animals, a feeding test or a welfare ranking.
+Both endpoints are Waking with one partial cycle. Neither will be extended to finish that cycle. Body health is 1, fatigue and sleep pressure are 0, with no fatigue 0.35 or pressure 0.6 reference crossing. Source/optimizer closure checks stayed intact; both operation M/C contributions remain zero. This is one matched source/body under two drive settings in a blank scene, with learning closed, not independent animals, a feeding test or a welfare ranking.
 
 The compulsory empty-Vocal limitation remains prominent. Full's 1,163 failed utterances and frustration=1 are directly audited; no good physical recovery is relabeled as a failed recovery merely because its bundle also failed speech. No stored values or current genes are rewritten. Full and Sham exports are unchanged, zero-forward processes; no interval has been replayed.
 
@@ -232,3 +232,32 @@ A separately named passive research return copies authoritative physical phase/g
 Hosted V4 at [run 42581718810](https://github.com/BobertNeek/A-Life/actions/runs/42581718810), exact head 788f8a7005fd380364d4af34da2f4e9120b93fa2, passed all six boredom-route CPU controls. Low/high boredom, real receptor projection, urgency suppression, exact Play target isolation, equal work and cold identity are mechanism checks, not autonomous play or relief. The M2 host still does not admit that appendage.
 
 Reflex now compiles, but its first quiet/no-reflex preservation fixture failed; the remaining 21 did not run. Local diagnosis is limited to that same disposable fixed fixture and preserves the original failure. Zero completed fixtures is not zero possible body work. Source inspection suggests the oracle may compare an old staged-tick call with a new standalone call; that remains a hypothesis until reproduced. No old-world preservation guard will be weakened to make it pass, and actual M2 reflex integration remains off.
+
+
+## 9 November, 09:02 UTC: actual food, completed recovery audits and a label correction
+
+### Correction: H was health, not hunger
+
+Earlier versions of this handoff called the compact H=1 field hunger. That was my interpretation error. The pinned summarizer maps H to body.health; the scientific assembler and original raw data were correct. The four earlier prose statements above now explicitly say body health. No biology, source coefficient, checkpoint or measured trajectory was changed.
+
+The prepared body's actual hunger was 0.35475585. In the old blank-scene pair, separately recorded decision-time hunger ranged from about 0.3548 to 0.5486 in Full and 0.3548 to 0.4568 in Drive-Sham; these are decision-time ranges, not endpoint values. In the new object-rich legacy arm, hunger rose from 0.35475585 to 0.36594921 across the six food-free intervals. Only the real interval-6 nutrition dose reduced it to 0.16935121. There is no unexplained premeal hunger relief to repair. Source tracing confirms reserve-deficit hunger emission plus relaxation toward an inherited baseline, and no hunger-targeted neural emitter in this candidate.
+
+### The old recovery pair is fully audited
+
+Both frozen 1,200-interval Full and Drive-Sham exports passed complete prefix authority/source/optimizer checks and a genuine final-checkpoint cold restore, with all exported hashes matching. These audits ran zero new forward intervals. The terminal counts above stand, but their earlier audit-pending status is now historical. The compulsory empty-Vocal and zero Rest-reader limitations remain decisive; this is not evidence of learned recovery or ecological benefit. The original complete states and journals remain local and unchanged.
+
+A single unchanged Full checkpoint also underwent an in-memory lossless compression measurement, with no compressed state saved or uploaded. Its original 2,976,427 bytes compressed to 124,505 bytes at zlib level 1 and 95,007 at level 6; both decompressions matched length, SHA256 and every original byte. This is one checkpoint, not a proven journal/corpus bound or an installed optimization. It suggests testing a bounded compressed journal for future studies while retaining every complete snapshot, rather than weakening recovery cadence.
+
+### Both fresh object-rich arms ate, with different honest outcomes
+
+The current frozen comparison has stopped at its original trace-budget guard: legacy completed 54 intervals and optional Vocal 53, so 53 is the common prefix. This is a resource-censored partial comparison, not the planned 64-interval result. Neither arm will be extended or replayed. Both zero-forward exports have passed complete packet/source/optimizer validation. The frozen common-prefix audit is still running, with no additional neural calls. In that common 53-interval window, legacy had 0/53 successful joint outcomes and frustration sum 53; optional Vocal had 7/53 successes and frustration sum 46. Optional chose Quiet in all 53 decisions with a current absent payload; legacy issued 53 empty Vocal commands. Neither spoke. The 46 remaining optional-policy failures are genuine: this correction does not solve object interaction.
+
+Legacy acquired the near Root at interval 0 and applied exactly one positive nutrition dose, 0.65, at interval 6 when consumption depleted it. Its actual bundle still had success=false and frustration=1 because compulsory empty speech failed. Optional Vocal applied the same food dose at interval 12; that meal's actual bundle had success=true and frustration=0. Both retained an exact Ingest/Consumed episodic association. The legacy meal association was positive despite honest disappointment: approximately +0.0505035, with body energy increasing by about 0.1075043. Positive nutrition, whole-bundle success and the stored association are separate observations.
+
+This is not faster feeding: optional Vocal ate later. It is evidence that an unnecessary speech command can be removed without falsifying speech validation, and that actual successful feeding need not carry compulsory failure. One fresh source/body under two policy domains is not two independent animals or a same-draw Vocal-only causal comparison. Weights remain closed; no synaptic learning, lasting self-care advantage or generalization is established. The scene and all original policies, genes and recorded intervals remain frozen.
+
+### Reflex repair separated a real validator defect from two bad fixtures
+
+The hosted quiet-preservation failure was reproduced locally. The new validator reduced an empty f32 sum to negative zero while the legitimate producer used positive zero; bit-exact evidence validation rejected the real Posture-only receipt before physical withdrawal. A scoped fold beginning at +0.0 fixes that validator path while retaining exact comparison and rejecting forged -0.0. The corrected quiet control passed all three postures with unchanged old motor/body/world results.
+
+Subsequent controls exposed fixture assumptions rather than reasons to weaken physics. Player pickup changes the creature's pose, so the pain source must be placed relative to its actual post-pickup location and real contact verified. Setting every organ's energy to zero creates a terminal body, not a living creature with an unavailable actuator. The corrected held/released fixture now passes: genuine contact cannot move a held creature; after release it withdraws; a living, nonterminal creature with explicitly absent Translation hardware correctly cannot move. The original zero-energy body remains a separate pure terminal assertion. Twelve remaining controls are running under a fixed local budget. This local root uses a mixed verified compilation profile; matching hosted confirmation and M2-host integration remain unqualified.
