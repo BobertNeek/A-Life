@@ -10,7 +10,20 @@ Accepted main remains `c3aec16df33861f1316d127736f5f60eea327ede`, with opt-in in
 
 The [previous chronological handoff](https://github.com/BobertNeek/A-Life/blob/4b21a3e43a9e4ce9c4ecd591a5e7677f429ae7fc/docs/experiments/brain-surgery-2026-11-08/STATUS-2026-11-08-2058UTC.md) retains the earlier candidates, failures, original sleep pilot, physiology and source identities.
 
-## Latest qualification results, 18:00 UTC
+## Latest fixed-fixture findings, 18:30 UTC
+
+The [grip fixture run](https://github.com/BobertNeek/A-Life/actions/runs/42674144296) compiled all nine test binaries and inventoried all 46 exact names. Eleven fixtures passed, then legacy nested-metadata fixture f012 failed and execution stopped. No world, registered-biology or source-forward fixture had run. Source review points to a test-adapter defect: it routes ordinary externally tagged candidate-observation enums through a deferred-value adapter intended only for grip metadata. This is not yet a corrected-test result or proof of a production acceptance regression. A minimal test-only correction is being checked against the legacy baseline; the old failure remains retained.
+
+The separately owned graded observed-cue kernel passed all **nine pure Rust tests**, once, in 0.0934 seconds. The standalone binary is 2,823,944 bytes; its compile and exact inventory also passed. These tests cover monotonic attenuation, strict chemistry and whole-role structure, reach/contact, nonzero temperature/terrain penalties and signed evidence revision. There were no recipes, neural forwards or world steps. Real transfer remains unproven. In particular, this first graded route requires entity targets for every selected role and does not yet cover ordinary targetless Idle/no-op/recovery contexts.
+
+The Play runtime qualification's nominal source commits were found to exist only locally. Before launch, source reconstruction was corrected to start from the reachable accepted-main snapshot plus published source deltas; all 799 baseline, 813 original and 818 owned input hashes match exactly. Its [V2 attempt](https://github.com/BobertNeek/A-Life/actions/runs/42675788238) then stopped at admission with zero compilation, tests or exposure. The publisher had included one unsealed archive-manifest file that the exact runner allowlist excludes. No required file was missing. The correction must remove that transport mismatch and add an exact published-inventory check, not weaken admission or alter brain weights.
+
+The channel-native sampler's first narrow Rust assembly compile stopped at E0583 because an attributed module path changed Rust's child-module search directory. No binary, inventory, tests or world work resulted. A source-reasoned assembly-only repair is prepared; it is not a policy failure or a passed Rust qualification.
+
+All source and evidence survived the executor reconnection. Existing/default brains, acquired lives, old study results and the original paper reference remain unchanged.
+
+## Earlier qualification results, 18:00 UTC
+
 
 **Grip source stack now typechecks.** The safer, addition-only [V5 hosted run](https://github.com/BobertNeek/A-Life/actions/runs/42668976822) completed successfully at exact head `5d9d01328725d9bf87c386ae923863f18f77fa1a`. All six stages passed: core, world, GPU, runtime, training and game app. All 865 source bindings held, with no compiler diagnostics. Elapsed 288 seconds; sampled peak RSS 1,603,866,624 bytes. Every one of main's 1,313 original files, including all 15 inherited workflows, remained byte-identical. Only the new source packet/workflow and sole activation marker were added. No inherited workflow launched. There were zero test bodies, neural forwards, world commands or body advances. This removes the type/linkage blocker, not the runtime qualification or behavioral question. The denied V4 deletion design remains abandoned.
 
