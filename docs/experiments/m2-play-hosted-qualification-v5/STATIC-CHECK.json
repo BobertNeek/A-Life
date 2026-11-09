@@ -1,0 +1,24 @@
+{
+  "checks": [
+    "activation-rejects-creation-rerun-forge",
+    "tree-additions-only",
+    "tar-exact-inventory",
+    "exact17-tests-and-strict-probes",
+    "public-diagnostic-projection",
+    "bounded-pipes-source-contract",
+    "outside-paths-fail-closed",
+    "selected-test-attributes",
+    "depinfo-env-and-make-grammar",
+    "reachable-main-exact-reconstruction",
+    "v4-v5-transport-ast-admission-unchanged",
+    "legacy-arm0-fixture-annotation-only",
+    "exact-remote-inventory-preseal-preview-both-phases-sealed-tar-and-unsealed-extras"
+  ],
+  "compiler_invocations": 0,
+  "github_writes": 0,
+  "native_invocations": 0,
+  "passed": true,
+  "preseal_preview_not_remote_evidence": true,
+  "schema": "m2-play-static-v1",
+  "synthetic_only": true
+}

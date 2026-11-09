@@ -1,0 +1,12 @@
+{
+  "correction": "Omit local transport metadata from the remote packet; admission unchanged.",
+  "evidence": "Parent-verified safe summary and exact remote inventory comparison.",
+  "extra_remote_path": "ARCHIVE-MANIFEST.json",
+  "no_v2_retry": true,
+  "prior_head": "96af010c5f693959329840f84ee0592052f58c8a",
+  "prior_job": 129356656925,
+  "prior_result": "BINDING at admission; no compilation or fixture execution.",
+  "prior_run": 42675788238,
+  "runtime_tests_dose_source_bindings_unchanged": true,
+  "schema": "m2-play-transport-correction-v3"
+}

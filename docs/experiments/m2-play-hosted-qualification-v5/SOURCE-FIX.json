@@ -1,0 +1,147 @@
+{
+  "actual_test_body_equality": [
+    {
+      "actual_test_prefix_sha256": "899abf5c9176480791587907f835ef4e8edf2473df0bc3401cab3dc9aebba3ff",
+      "bytes": 3195,
+      "excludes_following_adapters": false,
+      "id": "legacy-05",
+      "identical": true
+    },
+    {
+      "actual_test_prefix_sha256": "4bc6cab5383e1005a740339ff95207dd5c5805e54ff006b761db39a5627e2e83",
+      "bytes": 1283,
+      "excludes_following_adapters": false,
+      "id": "legacy-06",
+      "identical": true
+    },
+    {
+      "actual_test_prefix_sha256": "51aa78000a3c703d5a1182ecfba5f515cd2e4b98d00187147c3055d97ce47121",
+      "bytes": 1819,
+      "excludes_following_adapters": true,
+      "id": "legacy-07",
+      "identical": true
+    },
+    {
+      "actual_test_prefix_sha256": "e4849b4add3d750d3d227e3f67375e96d47cfd71cccfe699a2d165ac65eadc35",
+      "bytes": 830,
+      "excludes_following_adapters": false,
+      "id": "legacy-08",
+      "identical": true
+    },
+    {
+      "actual_test_prefix_sha256": "c807b94c003b47e5515fc901e3efeb7b1e0513d80ee7359fb64de688a9af498f",
+      "bytes": 3627,
+      "excludes_following_adapters": false,
+      "id": "legacy-09",
+      "identical": true
+    }
+  ],
+  "after": {
+    "bytes": 16569,
+    "path": "crates/alife_training/src/cpu/optional_vocal_host_tests.rs",
+    "sha256": "48f194a711c9b9a920ab1208ed034254b6f7b53e00669960287ab38d71cf3cac"
+  },
+  "append_only_owned_patch_hunk": {
+    "bytes": 968,
+    "path": "fixture-annotation-hunk",
+    "sha256": "9e2faaf00a41839b20bf3041f30fc37fe4dc871f3dd41b266d90b79226d04374"
+  },
+  "before": {
+    "bytes": 16554,
+    "path": "crates/alife_training/src/cpu/optional_vocal_host_tests.rs",
+    "sha256": "df00d3ec681027490fb9a390fe9dc56913cb0c50250cbd4814892d449d12b8b0"
+  },
+  "exact_annotations": {
+    "OptionalVocalPolicy::<0>::select": 2,
+    "OptionalVocalPolicy::<0>::stage": 1
+  },
+  "fragment_boundary_note": "Existing legacy-07 function_fragment spans the actual test plus following adapter impls until the next test. Its hash changes only because it includes the three explicit ARM0 annotations; actual test prefix before the adapter marker is byte-identical. Three end offsets shift15bytes.",
+  "manifest_sha256": "e2689a6cf2a6f68ec9dac3683e19b0e4778f5c2bc71e4e79e70e56ffe849f9df",
+  "native_verification": "NOT_RUN; source bindings and Python virtual/static checks only",
+  "new_patch": {
+    "bytes": 639609,
+    "path": "OWNED-RUNTIME.patch",
+    "sha256": "898844fde8024acf2a5d7d9d46b44300c6e0d3f65e9b849ddef203b8737ce10d"
+  },
+  "old_patch": {
+    "bytes": 638641,
+    "path": "OWNED-RUNTIME.patch",
+    "sha256": "a0008dc28712139f426595fa2f519bc2d71b0852156d01ab5110e3bbf4ab0099"
+  },
+  "original60_813_inputs_identical_to_v4": true,
+  "owned76_817_inputs_identical_to_v4": true,
+  "prior_manifest_sha256": "c7523f51c70ad914be064df540b50217cfe5c1f2930067a7a47d3149e3237b07",
+  "prior_v4_restricted_constant_fix_unchanged": true,
+  "reason": "V4 owned libtest build E0284: default const ARM=0 is not inferred for three associated GroupedPolicyStrategy calls in legacy test adapters.",
+  "schema": "m2-play-fixture-const-annotation-v5",
+  "source": "crates/alife_training/src/cpu/optional_vocal_host_tests.rs",
+  "test_identities_actual_bodies_attributes_commands_and_dose_unchanged": true,
+  "test_inventory_binding_only_changes": [
+    {
+      "changed_fields": {
+        "source_sha256": {
+          "after": "48f194a711c9b9a920ab1208ed034254b6f7b53e00669960287ab38d71cf3cac",
+          "before": "df00d3ec681027490fb9a390fe9dc56913cb0c50250cbd4814892d449d12b8b0"
+        }
+      },
+      "id": "legacy-05",
+      "name": "cpu::host::grouped_host_envelope::optional_vocal::tests::optional_host_source_once_quiet_physics_and_exact_next_boundary"
+    },
+    {
+      "changed_fields": {
+        "source_sha256": {
+          "after": "48f194a711c9b9a920ab1208ed034254b6f7b53e00669960287ab38d71cf3cac",
+          "before": "df00d3ec681027490fb9a390fe9dc56913cb0c50250cbd4814892d449d12b8b0"
+        }
+      },
+      "id": "legacy-06",
+      "name": "cpu::host::grouped_host_envelope::optional_vocal::tests::optional_host_rejects_opposite_policy_and_bad_temperature_transactionally"
+    },
+    {
+      "changed_fields": {
+        "function_end_byte": {
+          "after": 12094,
+          "before": 12079
+        },
+        "function_fragment_sha256": {
+          "after": "c0b6b035d311afb5d46fc0549837fad3bc545b7e772713bbe2f82067c3c59914",
+          "before": "5c3c33a7301d753a7ac13c98ba9522d32d56f6e7917c200bdeba1e4e67b0e0e8"
+        },
+        "source_sha256": {
+          "after": "48f194a711c9b9a920ab1208ed034254b6f7b53e00669960287ab38d71cf3cac",
+          "before": "df00d3ec681027490fb9a390fe9dc56913cb0c50250cbd4814892d449d12b8b0"
+        }
+      },
+      "id": "legacy-07",
+      "name": "cpu::host::grouped_host_envelope::optional_vocal::tests::quiet_does_not_change_real_empty_payload_or_cooldown_failure"
+    },
+    {
+      "changed_fields": {
+        "function_end_byte": {
+          "after": 12933,
+          "before": 12918
+        },
+        "source_sha256": {
+          "after": "48f194a711c9b9a920ab1208ed034254b6f7b53e00669960287ab38d71cf3cac",
+          "before": "df00d3ec681027490fb9a390fe9dc56913cb0c50250cbd4814892d449d12b8b0"
+        }
+      },
+      "id": "legacy-08",
+      "name": "cpu::host::grouped_host_envelope::optional_vocal::tests::optional_pending_owner_rejects_legacy_stage_and_close"
+    },
+    {
+      "changed_fields": {
+        "function_end_byte": {
+          "after": 16569,
+          "before": 16554
+        },
+        "source_sha256": {
+          "after": "48f194a711c9b9a920ab1208ed034254b6f7b53e00669960287ab38d71cf3cac",
+          "before": "df00d3ec681027490fb9a390fe9dc56913cb0c50250cbd4814892d449d12b8b0"
+        }
+      },
+      "id": "legacy-09",
+      "name": "cpu::host::grouped_host_envelope::optional_vocal::tests::optional_extracted_inner_source_and_canonical_owners_reject_old_loaders"
+    }
+  ]
+}
