@@ -1,0 +1,2093 @@
+diff --git a/crates/alife_training/src/cpu/grouped_decoder_sham_envelope.rs b/crates/alife_training/src/cpu/grouped_decoder_sham_envelope.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..1057ff175b5bbc8914e9468841b6b31451ce26d4
+--- /dev/null
++++ b/crates/alife_training/src/cpu/grouped_decoder_sham_envelope.rs
+@@ -0,0 +1,164 @@
++//! Distinct fresh GDS1 admission. The closed and all old checkpoint prefixes
++//! are rejected before any source, world or positional enum decoding.
++use super::*;
++const SHAM_MAGIC: &[u8] =
++    b"ALIFE-GROUPED-M2-DECODER-SHAM-HOST\0V1\0SCORE-TRACE-SUPPRESS-FAST1\0PROFILE5\0SAMPLER-BITS1\0";
++pub(super) const SHAM_LINEAGE: &str =
++    "fresh-grouped-m2-decoder-sham-v1/confidence-v2/class5/no-historical-import";
++pub(super) const SHAM_POLICY: &str = "grouped-decoder-fast-write-sham-v1;equal-semantic-work;eligibility-only;candidate-fast-discarded;action-memory-only;one-source-tape;fixed-appendage;no-lifetime-normalization-synaptic-sleep-adam-bptt;canonical-memory-predictor;one-cognitive-debit";
++
++pub struct CpuGroupedM2DecoderShamHostV1 {
++    pub(super) inner: CpuGroupedM2HostV1,
++}
++#[derive(Debug, Clone)]
++pub struct CpuGroupedM2DecoderShamCheckpointV1 {
++    payload: GroupedPayloadV1,
++}
++impl CpuGroupedM2DecoderShamCheckpointV1 {
++    pub fn encode(&self) -> Result<Vec<u8>, CpuHostError> {
++        let mut wire = SHAM_MAGIC.to_vec();
++        wire.extend(serde_json::to_vec(&self.payload)?);
++        Ok(wire)
++    }
++    pub fn decode(wire: &[u8]) -> Result<Self, CpuHostError> {
++        let body = wire.strip_prefix(SHAM_MAGIC).ok_or(CpuHostError::State(
++            "not a fresh grouped decoder fast-write sham V1 envelope",
++        ))?;
++        let metadata: serde_json::Value = serde_json::from_slice(body)?;
++        if metadata["schema_version"] != 1
++            || metadata["source_lineage"] != SHAM_LINEAGE
++            || metadata["policy"] != SHAM_POLICY
++            || metadata["runtime_profile_raw"] != 5
++            || metadata["selector_tag"] != 12
++            || metadata["decoder_stride"] != 55
++            || metadata["recipe_digest"] != RECOVERY_GROUP_CONFIDENCE_RECIPE_SHA256
++        {
++            return Err(CpuHostError::State(
++                "grouped decoder outer identity mismatch",
++            ));
++        }
++        // Inspect the mode-tagged controller metadata before decoding any source
++        // or world payload, even if a foreign envelope was manually relabeled.
++        let (schema, work) = GroupedMotorStateV1::sham_identity();
++        if !metadata["controllers"]
++            .as_object()
++            .is_some_and(|controllers| {
++                controllers.values().all(|c| {
++                    c.get("decoder_learning").is_none()
++                        && c["decoder_sham"]["policy"] == GROUPED_DECODER_SHAM_POLICY_V1
++                        && c["decoder_sham"]["work_policy"] == GROUPED_DECODER_SHAM_WORK_V1
++                        && c["motor"]["schema"] == schema
++                        && c["motor"]["work_policy"] == work
++                })
++            })
++        {
++            return Err(CpuHostError::State("not a sham controller identity"));
++        }
++        let mut payload: GroupedPayloadV1 = serde_json::from_value(metadata.clone())?;
++        payload.restore_sampler_bits()?;
++        if payload.controllers.values().any(|s| {
++            s.decoder_sham.is_none() || s.decoder_learning.is_some() || !s.motor.decoder_sham()
++        }) || serde_json::from_slice::<serde_json::Value>(&serde_json::to_vec(&payload)?)?
++            != metadata
++        {
++            return Err(CpuHostError::State("grouped decoder noncanonical state"));
++        }
++        Ok(Self { payload })
++    }
++}
++impl CpuGroupedM2DecoderShamHostV1 {
++    pub fn new_prepared<T, E: std::fmt::Display>(
++        game: CanonicalNewGame,
++        founder: CpuFoundationTrainer,
++        source_inputs: PhenotypeCompilerInputs,
++        sampling_seed: u32,
++        mode: MediationModeV1,
++        prepare: impl FnOnce(&mut HeadlessWorld) -> Result<T, E>,
++    ) -> Result<(Self, T), CpuHostError> {
++        if founder.phenotype().synapses().iter().any(|s| matches!(s.kind(), CompiledSynapseKind::Decoder(d) if d.head() == DecoderHeadKind::CognitiveContext)) {
++            return Err(CpuHostError::State("GDS1 does not admit a CognitiveContext decoder"));
++        }
++        let (mut inner, prepared) = CpuGroupedM2HostV1::new_prepared(
++            game,
++            founder,
++            source_inputs,
++            sampling_seed,
++            mode,
++            prepare,
++        )?;
++        for r in inner.host.residents.values_mut() {
++            let state = r
++                .grouped
++                .as_mut()
++                .ok_or(CpuHostError::State("missing fresh grouped owner"))?;
++            state.motor.enable_decoder_sham_fresh()?;
++            state.decoder_sham = Some(GroupedDecoderShamStateV1 {
++                policy: GROUPED_DECODER_SHAM_POLICY_V1.into(),
++                work_policy: GROUPED_DECODER_SHAM_WORK_V1.into(),
++                last_credit: None,
++            });
++            r.sealed_authority = None;
++        }
++        inner.host.seal_all_residents()?;
++        Ok((Self { inner }, prepared))
++    }
++    pub fn world(&self) -> &HeadlessWorld {
++        self.inner.world()
++    }
++    pub fn sleep_state(&self, organism: OrganismId) -> Option<alife_core::sleep::SleepState> {
++        self.inner.sleep_state(organism)
++    }
++    pub fn step(&mut self, temperature: f32) -> Result<CpuGroupedM2HostStepV1, CpuHostError> {
++        self.inner
++            .host
++            .grouped_step(&self.inner.founder, temperature)
++    }
++    pub fn checkpoint(&self) -> Result<CpuGroupedM2DecoderShamCheckpointV1, CpuHostError> {
++        Ok(CpuGroupedM2DecoderShamCheckpointV1 {
++            payload: self.inner.checkpoint_for_write_policy(false, true)?.payload,
++        })
++    }
++    pub fn restore(
++        checkpoint: CpuGroupedM2DecoderShamCheckpointV1,
++        expected_source: &PhenotypeCompilerInputs,
++        expected_mode: MediationModeV1,
++    ) -> Result<Self, CpuHostError> {
++        let wire = checkpoint.encode()?;
++        let inner = CpuGroupedM2HostV1::restore_for_write_policy(
++            CpuGroupedM2HostCheckpointV1 {
++                payload: checkpoint.payload,
++            },
++            expected_source,
++            expected_mode,
++            false,
++            true,
++        )?;
++        let result = Self { inner };
++        if result.checkpoint()?.encode()? != wire {
++            return Err(CpuHostError::State(
++                "decoder restore rewrote acquired state",
++            ));
++        }
++        Ok(result)
++    }
++    pub fn last_credit(&self, owner: OrganismId) -> Option<&GroupedDecoderShamCreditReceiptV1> {
++        self.inner
++            .host
++            .residents
++            .get(&owner.raw())?
++            .grouped
++            .as_ref()?
++            .decoder_sham
++            .as_ref()?
++            .last_credit
++            .as_ref()
++    }
++    pub fn actor_optimization(&mut self) -> Result<(), CpuHostError> {
++        Err(CpuHostError::State("GDS1 Adam/BPTT closed"))
++    }
++    pub fn synaptic_sleep_consolidation(&mut self) -> Result<(), CpuHostError> {
++        Err(CpuHostError::State(
++            "GDS1 synaptic sleep closed; memory sleep only",
++        ))
++    }
++}
+diff --git a/crates/alife_training/src/cpu/grouped_decoder_sham_tests.rs b/crates/alife_training/src/cpu/grouped_decoder_sham_tests.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..b1ad6d29a5e77b67fa3379c33a399a77aba9544a
+--- /dev/null
++++ b/crates/alife_training/src/cpu/grouped_decoder_sham_tests.rs
+@@ -0,0 +1,400 @@
++//! Desired GDS1 assertions. Not executed until a native lane is granted.
++use super::*;
++use crate::cpu::{CpuGroupedM2DecoderShamCheckpointV1, CpuGroupedM2DecoderShamHostV1};
++fn sham_fixture(preparation: u64) -> (CpuGroupedM2DecoderShamHostV1, PhenotypeCompilerInputs) {
++    let (mut inner, inputs) = fixture(preparation);
++    for r in inner.host.residents.values_mut() {
++        assert_eq!(r.next_sequence, 1);
++        let state = r.grouped.as_mut().unwrap();
++        state.motor.enable_decoder_sham_fresh().unwrap();
++        state.decoder_sham = Some(GroupedDecoderShamStateV1 {
++            policy: GROUPED_DECODER_SHAM_POLICY_V1.into(),
++            work_policy: GROUPED_DECODER_SHAM_WORK_V1.into(),
++            last_credit: None,
++        });
++        r.sealed_authority = None;
++    }
++    inner.host.seal_all_residents().unwrap();
++    (CpuGroupedM2DecoderShamHostV1 { inner }, inputs)
++}
++fn source(host: &CpuGroupedM2HostV1) -> CpuOrganismCheckpoint {
++    host.host
++        .residents
++        .values()
++        .next()
++        .unwrap()
++        .neural
++        .checkpoint()
++        .unwrap()
++}
++#[test]
++fn grouped_sham_first_step_equal_work_and_only_fast_write_difference() {
++    let (mut full, _) = learning_fixture();
++    let (mut sham, _) = sham_fixture(240);
++    let initial = source(&sham.inner);
++    assert_eq!(initial, source(&full.inner));
++    let founder = bytes(&sham.inner.founder.checkpoint());
++    let structural = bytes(
++        &sham
++            .inner
++            .host
++            .residents
++            .values()
++            .next()
++            .unwrap()
++            .v11
++            .checkpoint(),
++    );
++    let f = full.step(0.73).unwrap();
++    let s = sham.step(0.73).unwrap();
++    assert_eq!(f.decisions.len(), 1);
++    assert_eq!(s.decisions.len(), 1);
++    let f = &f.decisions[0];
++    let s = &s.decisions[0];
++    assert_eq!(f.action, s.action);
++    assert_eq!(f.sampling_counter, s.sampling_counter);
++    assert_eq!(f.source_diagnostic_logits, s.source_diagnostic_logits);
++    assert_eq!(bytes(&f.diagnostic.sequence), bytes(&s.diagnostic.sequence));
++    assert_eq!(
++        bytes(&f.diagnostic.receptors),
++        bytes(&s.diagnostic.receptors)
++    );
++    assert_eq!(bytes(&f.motor.native.scores), bytes(&s.motor.native.scores));
++    assert_eq!(
++        f.motor.native.core.appended_activations,
++        s.motor.native.core.appended_activations
++    );
++    assert_eq!(
++        f.motor.native.extension_activations,
++        s.motor.native.extension_activations
++    );
++    assert_ne!(f.motor.native.schema, s.motor.native.schema);
++    assert_eq!(bytes(&f.brain_work), bytes(&s.brain_work));
++    assert_eq!(f.motor.reservation_q24, s.motor.reservation_q24);
++    assert_eq!(
++        f.motor.applied_body_energy_debit.to_bits(),
++        s.motor.applied_body_energy_debit.to_bits()
++    );
++    assert_eq!(bytes(&f.patch), bytes(&s.patch));
++    assert_eq!(bytes(&f.physical), bytes(&s.physical));
++    let record = full.world().organism_registry().get(f.organism_id).unwrap();
++    let development = record
++        .phenotype()
++        .development_state_at(f.motor.tick)
++        .unwrap();
++    let mut wrong_mode = f.diagnostic.staged.clone();
++    assert!(wrong_mode
++        .apply_grouped_decoder_sham_credit(
++            &full.inner.founder,
++            &f.patch,
++            &f.diagnostic.receptors,
++            &development,
++            record.phenotype().brain_genome.plasticity_parameters()
++        )
++        .is_err());
++    let fc = full.last_credit(f.organism_id).unwrap();
++    let sc = sham.last_credit(s.organism_id).unwrap();
++    assert_eq!(fc.learning_ops, sc.credit.learning_ops);
++    assert_eq!(fc.nonzero_eligibility, sc.credit.nonzero_eligibility);
++    assert!(sc.credit.nonzero_eligibility > 0);
++    assert_eq!(
++        fc.full_fast_write_counts()
++            .unwrap()
++            .hypothetical_changed_fast_coordinates,
++        sc.writes.hypothetical_changed_fast_coordinates
++    );
++    assert!(sc.writes.hypothetical_changed_fast_coordinates > 0);
++    assert_eq!(sc.writes.applied_changed_fast_coordinates, 0);
++    assert_eq!(sc.credit.changed_fast_coordinates, 0);
++    assert_eq!(
++        sc.credit.output_weight_generation,
++        initial.weight_generation
++    );
++    assert!(sc.credit.full_fast_write_counts().is_err());
++    let acquired = source(&sham.inner);
++    let mut acquired_full = source(&full.inner);
++    assert_eq!(bytes(&initial.fast), bytes(&acquired.fast));
++    assert_eq!(bytes(&initial.lifetime), bytes(&acquired.lifetime));
++    let p = sham.inner.founder.phenotype();
++    for (i, synapse) in p.synapses().iter().enumerate() {
++        if !grouped_decoder_coordinate(synapse.kind()) {
++            assert_eq!(
++                initial.eligibility[i].to_bits(),
++                acquired.eligibility[i].to_bits()
++            );
++        }
++    }
++    // Every source field except FULL's allowed fast values/generation agrees.
++    acquired_full.fast = acquired.fast.clone();
++    acquired_full.weight_generation = acquired.weight_generation;
++    assert_eq!(acquired_full, acquired);
++    assert_eq!(founder, bytes(&sham.inner.founder.checkpoint()));
++    assert_eq!(
++        structural,
++        bytes(
++            &sham
++                .inner
++                .host
++                .residents
++                .values()
++                .next()
++                .unwrap()
++                .v11
++                .checkpoint()
++        )
++    );
++    // Receipt scores still describe the pre-update sample in both modes.
++    for d in [f, s] {
++        assert_eq!(
++            d.motor
++                .native
++                .scores
++                .evaluate(&d.action)
++                .unwrap()
++                .joint_log_probability
++                .to_bits(),
++            d.action.old_joint_log_probability.to_bits()
++        );
++    }
++}
++#[test]
++fn grouped_sham_exact_cold_continuation_and_cross_mode_rejection() {
++    let (mut warm, inputs) = sham_fixture(240);
++    warm.step(0.73).unwrap();
++    // Explicit synthetic nonzero preservation sentinels, not acquired fast learning.
++    inject_frozen_sentinels(&mut warm.inner);
++    let frozen = |host: &CpuGroupedM2DecoderShamHostV1| {
++        let n = source(&host.inner);
++        let p = host.inner.founder.phenotype();
++        let other_traces = p
++            .synapses()
++            .iter()
++            .enumerate()
++            .filter(|(_, s)| !grouped_decoder_coordinate(s.kind()))
++            .map(|(i, _)| n.eligibility[i].to_bits())
++            .collect::<Vec<_>>();
++        bytes(&(
++            n.fast,
++            n.lifetime,
++            other_traces,
++            n.neural.dendrites,
++            host.inner.founder.checkpoint(),
++            host.inner
++                .host
++                .residents
++                .values()
++                .next()
++                .unwrap()
++                .v11
++                .checkpoint(),
++        ))
++    };
++    let frozen_before = frozen(&warm);
++    let wire = warm.checkpoint().unwrap().encode().unwrap();
++    assert!(CpuGroupedM2DecoderCheckpointV1::decode(&wire).is_err());
++    assert!(CpuGroupedM2HostCheckpointV1::decode(&wire).is_err());
++    let (mut full, _) = learning_fixture();
++    full.step(0.73).unwrap();
++    assert!(CpuGroupedM2DecoderShamCheckpointV1::decode(
++        &full.checkpoint().unwrap().encode().unwrap()
++    )
++    .is_err());
++    let (closed, _) = fixture(240);
++    assert!(CpuGroupedM2DecoderShamCheckpointV1::decode(
++        &closed.checkpoint().unwrap().encode().unwrap()
++    )
++    .is_err());
++    let boundary = wire.iter().position(|x| *x == b'{').unwrap();
++    let mut invalid_body = wire[..boundary].to_vec();
++    invalid_body.extend_from_slice(b"not-json");
++    assert!(matches!(
++        CpuGroupedM2DecoderCheckpointV1::decode(&invalid_body),
++        Err(CpuHostError::State(_))
++    ));
++    // A relabeled FULL controller still fails generic mode metadata before
++    // deliberately invalid source JSON can reach its positional decoder.
++    let full_wire = full.checkpoint().unwrap().encode().unwrap();
++    let full_boundary = full_wire.iter().position(|x| *x == b'{').unwrap();
++    let mut metadata: serde_json::Value = serde_json::from_slice(&wire[boundary..]).unwrap();
++    let foreign: serde_json::Value = serde_json::from_slice(&full_wire[full_boundary..]).unwrap();
++    metadata["controllers"] = foreign["controllers"].clone();
++    metadata["source_inputs"] = serde_json::json!("not-a-source");
++    let mut relabeled = wire[..boundary].to_vec();
++    relabeled.extend(serde_json::to_vec(&metadata).unwrap());
++    assert!(matches!(
++        CpuGroupedM2DecoderShamCheckpointV1::decode(&relabeled),
++        Err(CpuHostError::State(_))
++    ));
++    let mut cold = CpuGroupedM2DecoderShamHostV1::restore(
++        CpuGroupedM2DecoderShamCheckpointV1::decode(&wire).unwrap(),
++        &inputs,
++        MediationModeV1::Full,
++    )
++    .unwrap();
++    assert_eq!(wire, cold.checkpoint().unwrap().encode().unwrap());
++    for t in [1.17, 0.73, 1.37] {
++        let a = warm.step(t).unwrap();
++        let b = cold.step(t).unwrap();
++        assert_eq!(a.decisions.len(), b.decisions.len());
++        for (a, b) in a.decisions.iter().zip(&b.decisions) {
++            assert_eq!(a.action, b.action);
++            assert_eq!(bytes(&a.patch), bytes(&b.patch));
++        }
++        assert_eq!(
++            warm.checkpoint().unwrap().encode().unwrap(),
++            cold.checkpoint().unwrap().encode().unwrap()
++        );
++        assert_eq!(source(&warm.inner).weight_generation, 0);
++        assert_eq!(frozen(&warm), frozen_before);
++        assert_eq!(frozen(&cold), frozen_before);
++    }
++    let before_failure = warm.checkpoint().unwrap().encode().unwrap();
++    assert!(warm.step(f32::NAN).is_err());
++    assert_eq!(before_failure, warm.checkpoint().unwrap().encode().unwrap());
++    // No request to equate later FULL/SHAM trajectories after weights diverge.
++}
++#[test]
++fn grouped_sham_rejects_full_credit_wrong_provenance_and_reuse() {
++    let (mut host, _) = sham_fixture(240);
++    let step = host.step(0.73).unwrap();
++    let d = &step.decisions[0];
++    let evidence = &d.diagnostic;
++    let record = host.world().organism_registry().get(d.organism_id).unwrap();
++    let development = record
++        .phenotype()
++        .development_state_at(step.tick_before)
++        .unwrap();
++    let parameters = record.phenotype().brain_genome.plasticity_parameters();
++    let apply = |state: &mut CpuOrganismState, receptors: &NeuralReceptorFrame| {
++        state.apply_grouped_decoder_sham_credit(
++            &host.inner.founder,
++            &d.patch,
++            receptors,
++            &development,
++            parameters,
++        )
++    };
++    let mut pending = evidence.staged.clone();
++    assert!(pending
++        .apply_grouped_decoder_credit(
++            &host.inner.founder,
++            &d.patch,
++            &evidence.receptors,
++            &development,
++            parameters
++        )
++        .is_err());
++    assert!(pending.checkpoint().is_err());
++    for kind in 0..9 {
++        let mut bad = evidence.staged.clone();
++        bad.corrupt_grouped_binding_for_test(kind);
++        assert!(apply(&mut bad, &evidence.receptors).is_err());
++    }
++    let mut wrong = evidence.receptors.clone();
++    wrong.source_tick = Tick(wrong.source_tick.raw() + 1);
++    assert!(apply(&mut pending, &wrong).is_err());
++    let credit = apply(&mut pending, &evidence.receptors).unwrap();
++    assert_eq!(&credit, host.last_credit(d.organism_id).unwrap());
++    let acquired = pending.checkpoint().unwrap();
++    assert!(apply(&mut pending, &evidence.receptors).is_err());
++    assert_eq!(acquired, pending.checkpoint().unwrap());
++    // Mode alone cannot be switched on an acquired controller, even internally.
++    let mut motor = host
++        .inner
++        .host
++        .residents
++        .values()
++        .next()
++        .unwrap()
++        .grouped
++        .as_ref()
++        .unwrap()
++        .motor
++        .clone();
++    assert!(motor.enable_decoder_learning_fresh().is_err());
++    assert!(motor.enable_decoder_sham_fresh().is_err());
++    // Sidecar mode tampering invalidates resident authority and export.
++    let r = host.inner.host.residents.values_mut().next().unwrap();
++    r.grouped
++        .as_mut()
++        .unwrap()
++        .decoder_sham
++        .as_mut()
++        .unwrap()
++        .work_policy
++        .push_str("-wrong");
++    assert!(host.checkpoint().is_err());
++}
++#[test]
++fn grouped_sham_nonzero_trace_survives_memory_sleep_and_waking() {
++    let (mut host, inputs) = sham_fixture(1200);
++    let initial = source(&host.inner);
++    let mut physical_sleep = false;
++    let mut acquired = false;
++    let mut consolidations = 0;
++    let mut waking = false;
++    let mut resumed = false;
++    for interval in 0..24 {
++        let before = source(&host.inner);
++        eprintln!("GDS1_SLEEP_STEP_ATTEMPT interval={interval}");
++        let step = host.step(0.73).unwrap();
++        eprintln!(
++            "GDS1_SLEEP_STEP_COMPLETE interval={interval} decisions={} consolidations={}",
++            step.decisions.len(),
++            step.sleep_consolidations
++        );
++        let after = source(&host.inner);
++        assert_eq!(bytes(&initial.fast), bytes(&after.fast));
++        assert_eq!(after.weight_generation, 0);
++        acquired |= after.eligibility.iter().any(|x| *x != 0.);
++        for d in &step.decisions {
++            physical_sleep |= d.physical.successful_stationary_body_sleep;
++            if waking {
++                resumed = true;
++            }
++        }
++        if step.sleep_consolidations > 0 {
++            assert!(acquired);
++            assert_eq!(before, after);
++            let r = host.inner.host.residents.values().next().unwrap();
++            validate_grouped_sleep_boundary(r).unwrap();
++            let sham_digest = grouped_sleep_output_digest(r).unwrap();
++            let mut swapped = r.clone();
++            swapped.grouped.as_mut().unwrap().decoder_sham = None;
++            assert_ne!(sham_digest, grouped_sleep_output_digest(&swapped).unwrap());
++            if let ConsolidationState::Committed {
++                cycle_id,
++                output_generation,
++                ..
++            } = r.sleep.state().consolidation
++            {
++                assert_eq!(cycle_id, output_generation);
++            } else {
++                panic!("missing committed memory-only cycle");
++            }
++        }
++        consolidations += step.sleep_consolidations;
++        waking |= host
++            .inner
++            .host
++            .residents
++            .values()
++            .any(|r| r.sleep.state().phase == SleepPhase::Waking);
++        let wire = host.checkpoint().unwrap().encode().unwrap();
++        host = CpuGroupedM2DecoderShamHostV1::restore(
++            CpuGroupedM2DecoderShamCheckpointV1::decode(&wire).unwrap(),
++            &inputs,
++            MediationModeV1::Full,
++        )
++        .unwrap();
++        assert_eq!(wire, host.checkpoint().unwrap().encode().unwrap());
++        if consolidations > 0 && waking && resumed {
++            break;
++        }
++    }
++    assert!(
++        physical_sleep && acquired && waking && resumed,
++        "Declared bound did not observe sham sleep/trace/wake chain; do not force or retune"
++    );
++    assert_eq!(consolidations, 1);
++}
+diff --git a/crates/alife_training/src/cpu/grouped_decoder_tests.rs b/crates/alife_training/src/cpu/grouped_decoder_tests.rs
+index d5af11ec52bb2cb6020f90671fe10da883041beb..a709f6b5a8a737b02d8cc5009186cfaa9257ce5c 100644
+--- a/crates/alife_training/src/cpu/grouped_decoder_tests.rs
++++ b/crates/alife_training/src/cpu/grouped_decoder_tests.rs
+@@ -615,3 +615,9 @@ fn grouped_decoder_preserves_nonzero_frozen_banks_and_structural_sentinels() {
+         );
+     }
+ }
++
++#[path = "grouped_decoder_sham_tests.rs"]
++mod sham;
++
++#[path = "grouped_full_literal_witness.rs"]
++mod full_literal_witness;
+diff --git a/crates/alife_training/src/cpu/grouped_full_literal_witness.rs b/crates/alife_training/src/cpu/grouped_full_literal_witness.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..9f9ed868f791b4e3ba172bf651f26615592436cb
+--- /dev/null
++++ b/crates/alife_training/src/cpu/grouped_full_literal_witness.rs
+@@ -0,0 +1,58 @@
++//! Source-identical disposable FULL GDE1 fixture witness for base/revision comparison.
++use super::*;
++#[test]
++#[ignore = "explicit qualified FULL GDE1 byte witness export"]
++fn grouped_full_literal_witness() {
++    let directory = std::env::var("ALIFE_GROUPED_FULL_WITNESS_DIR")
++        .expect("explicit witness destination required");
++    let directory = std::path::Path::new(&directory);
++    std::fs::create_dir_all(directory).unwrap();
++    let (mut host, inputs) = learning_fixture();
++    let initial = host.checkpoint().unwrap().encode().unwrap();
++    std::fs::write(directory.join("initial.envelope"), &initial).unwrap();
++    for (index, temperature) in [0.73_f32, 1.17_f32].into_iter().enumerate() {
++        let step = host.step(temperature).unwrap();
++        let decision_bytes = serde_json::to_vec(&(
++            step.tick_before,
++            step.tick_after,
++            step.sleeping_organisms,
++            step.sleep_consolidations,
++            step.decisions
++                .iter()
++                .map(|d| {
++                    (
++                        d.organism_id,
++                        &d.action,
++                        d.sampling_counter,
++                        &d.source_diagnostic_logits,
++                        &d.biological_emissions,
++                        &d.brain_work,
++                        &d.patch,
++                        &d.motor,
++                        &d.physical,
++                        d.sleep_phase,
++                        d.sleep_trigger,
++                    )
++                })
++                .collect::<Vec<_>>(),
++        ))
++        .unwrap();
++        std::fs::write(directory.join(format!("step-{index}.json")), decision_bytes).unwrap();
++        assert!(
++            host.last_credit(step.decisions[0].organism_id)
++                .unwrap()
++                .changed_fast_coordinates
++                > 0
++        );
++        let checkpoint = host.checkpoint().unwrap();
++        let wire = checkpoint.encode().unwrap();
++        std::fs::write(directory.join(format!("after-{index}.envelope")), &wire).unwrap();
++        host = CpuGroupedM2DecoderHostV1::restore(
++            CpuGroupedM2DecoderCheckpointV1::decode(&wire).unwrap(),
++            &inputs,
++            MediationModeV1::Full,
++        )
++        .unwrap();
++        assert_eq!(host.checkpoint().unwrap().encode().unwrap(), wire);
++    }
++}
+diff --git a/crates/alife_training/src/cpu/grouped_host_envelope.rs b/crates/alife_training/src/cpu/grouped_host_envelope.rs
+index 60ac43c4a7027fba341a17e07245f96fd72f37e8..055705b07b397531d277b3eb31a48cbe779df1aa 100644
+--- a/crates/alife_training/src/cpu/grouped_host_envelope.rs
++++ b/crates/alife_training/src/cpu/grouped_host_envelope.rs
+@@ -25,6 +25,8 @@ struct VoluntarySleepReceiptV1 {
+ pub(super) struct GroupedResidentV1 {
+     #[serde(default, skip_serializing_if = "Option::is_none")]
+     pub(super) decoder_learning: Option<GroupedDecoderLearningStateV1>,
++    #[serde(default, skip_serializing_if = "Option::is_none")]
++    pub(super) decoder_sham: Option<GroupedDecoderShamStateV1>,
+     pub(super) motor: GroupedMotorStateV1,
+     pub(super) memory_proofs: Vec<SleepMemorySourceProofV1>,
+     pub(super) last_physical: Option<alife_world::SleepChoicePhysicalReceiptV1>,
+@@ -40,13 +42,27 @@ pub(super) struct GroupedDecoderLearningStateV1 {
+     policy: String,
+     pub(super) last_credit: Option<GroupedDecoderCreditReceiptV1>,
+ }
++#[derive(Debug, Clone, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++pub(super) struct GroupedDecoderShamStateV1 {
++    policy: String,
++    work_policy: String,
++    pub(super) last_credit: Option<GroupedDecoderShamCreditReceiptV1>,
++}
+ impl GroupedResidentV1 {
++    pub(super) fn decoder_credit_active(&self) -> bool {
++        self.decoder_learning.is_some() || self.decoder_sham.is_some()
++    }
++
+     pub(super) fn validate_source_boundary(
+         &self,
+         source: &CpuOrganismCheckpoint,
+         activity: &CpuActivityState,
+     ) -> Result<(), CpuHostError> {
+-        if self.motor.decoder_learning() != self.decoder_learning.is_some() {
++        if self.decoder_learning.is_some() && self.decoder_sham.is_some()
++            || self.motor.decoder_learning() != self.decoder_credit_active()
++            || self.motor.decoder_sham() != self.decoder_sham.is_some()
++        {
+             return Err(CpuHostError::State(
+                 "grouped decoder policy/controller mismatch",
+             ));
+@@ -80,6 +96,37 @@ impl GroupedResidentV1 {
+                 }
+             }
+         }
++        if let Some(sham) = &self.decoder_sham {
++            if sham.policy != GROUPED_DECODER_SHAM_POLICY_V1
++                || sham.work_policy != GROUPED_DECODER_SHAM_WORK_V1
++                || source.weight_generation != 0
++            {
++                return Err(CpuHostError::State("grouped sham rule/generation mismatch"));
++            }
++            match &sham.last_credit {
++                None if source.dispatch_generation == 0 => (),
++                Some(s)
++                    if s.credit.policy == sham.policy
++                        && s.work_policy == sham.work_policy
++                        && s.writes.applied_changed_fast_coordinates == 0
++                        && s.credit.changed_fast_coordinates == 0
++                        && s.writes.hypothetical_changed_fast_coordinates as usize
++                            <= source.fast.len()
++                        && s.credit.dispatch_generation == source.dispatch_generation
++                        && s.credit.source_weight_generation == 0
++                        && s.credit.output_weight_generation == 0
++                        && self
++                            .last_physical
++                            .as_ref()
++                            .is_some_and(|p| p.sequence_id == s.credit.sequence_id)
++                        && self
++                            .motor
++                            .last_receipt
++                            .as_ref()
++                            .is_some_and(|m| m.frame_digest == s.credit.frame_digest) => {}
++                _ => return Err(CpuHostError::State("grouped sham credit boundary mismatch")),
++            }
++        }
+         match (&self.motor.last_receipt, &self.last_physical) {
+             (None, None)
+                 if source.dispatch_generation == 0
+@@ -496,7 +543,10 @@ pub struct CpuGroupedM2HostDecisionV1 {
+ /// synchronous, closed-memory completion contract, never pending GPU work.
+ pub(super) fn grouped_sleep_output_digest(r: &Resident) -> Result<[u64; 4], CpuHostError> {
+     json_digest(
+-        if r.grouped
++        if r.grouped.as_ref().is_some_and(|g| g.decoder_sham.is_some()) {
++            b"ALIFE-GROUPED-M2-DECODER-FAST-WRITE-SHAM-V1-MEMORY-ONLY-SLEEP".as_slice()
++        } else if r
++            .grouped
+             .as_ref()
+             .is_some_and(|g| g.decoder_learning.is_some())
+         {
+@@ -636,6 +686,7 @@ impl CpuGroupedM2HostV1 {
+             )?;
+             r.grouped = Some(GroupedResidentV1 {
+                 decoder_learning: None,
++                decoder_sham: None,
+                 motor: motor.clone(),
+                 memory_proofs: Vec::new(),
+                 last_physical: None,
+@@ -674,6 +725,16 @@ impl CpuGroupedM2HostV1 {
+         &self,
+         learning: bool,
+     ) -> Result<CpuGroupedM2HostCheckpointV1, CpuHostError> {
++        self.checkpoint_for_write_policy(learning, false)
++    }
++    fn checkpoint_for_write_policy(
++        &self,
++        learning: bool,
++        sham: bool,
++    ) -> Result<CpuGroupedM2HostCheckpointV1, CpuHostError> {
++        if learning && sham {
++            return Err(CpuHostError::State("ambiguous decoder mode"));
++        }
+         self.host.validate_founder(&self.founder)?;
+         for (&id, r) in &self.host.residents {
+             validate_grouped_sleep_boundary(r)?;
+@@ -693,7 +754,8 @@ impl CpuGroupedM2HostV1 {
+                 .grouped
+                 .as_ref()
+                 .ok_or(CpuHostError::State("missing grouped state"))?;
+-            if state.decoder_learning.is_some() != learning {
++            if state.decoder_learning.is_some() != learning || state.decoder_sham.is_some() != sham
++            {
+                 return Err(CpuHostError::State("wrong grouped checkpoint policy"));
+             }
+             state.motor.validate(self.founder.phenotype())?;
+@@ -710,8 +772,22 @@ impl CpuGroupedM2HostV1 {
+         Ok(CpuGroupedM2HostCheckpointV1 {
+             payload: GroupedPayloadV1 {
+                 schema_version: 1,
+-                source_lineage: if learning { DECODER_LINEAGE } else { LINEAGE }.into(),
+-                policy: if learning { DECODER_POLICY } else { POLICY }.into(),
++                source_lineage: if sham {
++                    SHAM_LINEAGE
++                } else if learning {
++                    DECODER_LINEAGE
++                } else {
++                    LINEAGE
++                }
++                .into(),
++                policy: if sham {
++                    SHAM_POLICY
++                } else if learning {
++                    DECODER_POLICY
++                } else {
++                    POLICY
++                }
++                .into(),
+                 runtime_profile_raw: 5,
+                 selector_tag: 12,
+                 decoder_stride: 55,
+@@ -763,17 +839,43 @@ impl CpuGroupedM2HostV1 {
+         expected_mode: MediationModeV1,
+         learning: bool,
+     ) -> Result<Self, CpuHostError> {
++        Self::restore_for_write_policy(checkpoint, expected_source, expected_mode, learning, false)
++    }
++    fn restore_for_write_policy(
++        checkpoint: CpuGroupedM2HostCheckpointV1,
++        expected_source: &PhenotypeCompilerInputs,
++        expected_mode: MediationModeV1,
++        learning: bool,
++        sham: bool,
++    ) -> Result<Self, CpuHostError> {
++        if learning && sham {
++            return Err(CpuHostError::State("ambiguous decoder mode"));
++        }
+         let wire = checkpoint.encode()?;
+         let c = checkpoint.payload;
+         if c.sampler_bits != grouped_sampler_bits(&c.controllers) {
+             return Err(CpuHostError::State("grouped exact sampler bits differ"));
+         }
+         if c.schema_version != 1
+-            || c.source_lineage != if learning { DECODER_LINEAGE } else { LINEAGE }
+-            || c.policy != if learning { DECODER_POLICY } else { POLICY }
+-            || c.controllers
+-                .values()
+-                .any(|state| state.decoder_learning.is_some() != learning)
++            || c.source_lineage
++                != if sham {
++                    SHAM_LINEAGE
++                } else if learning {
++                    DECODER_LINEAGE
++                } else {
++                    LINEAGE
++                }
++            || c.policy
++                != if sham {
++                    SHAM_POLICY
++                } else if learning {
++                    DECODER_POLICY
++                } else {
++                    POLICY
++                }
++            || c.controllers.values().any(|state| {
++                state.decoder_learning.is_some() != learning || state.decoder_sham.is_some() != sham
++            })
+             || c.runtime_profile_raw != 5
+             || c.selector_tag != 12
+             || c.decoder_stride != 55
+@@ -817,7 +919,11 @@ impl CpuGroupedM2HostV1 {
+             source_inputs: c.source_inputs,
+             mode: c.mode,
+         };
+-        if result.checkpoint_for_policy(learning)?.encode()? != wire {
++        if result
++            .checkpoint_for_write_policy(learning, sham)?
++            .encode()?
++            != wire
++        {
+             return Err(CpuHostError::State(
+                 "grouped M2 restore would rewrite acquired state",
+             ));
+@@ -836,3 +942,7 @@ mod tests;
+ #[path = "grouped_decoder_envelope.rs"]
+ mod decoder_envelope;
+ pub use decoder_envelope::*;
++
++#[path = "grouped_decoder_sham_envelope.rs"]
++mod sham_envelope;
++pub use sham_envelope::*;
+diff --git a/crates/alife_training/src/cpu/grouped_host_loop.rs b/crates/alife_training/src/cpu/grouped_host_loop.rs
+index ca47bacbbac8c4c4ea758e727527da46fb009692..0b3fb0654211dd997c6d85b49b1430aa8ca2e46c 100644
+--- a/crates/alife_training/src/cpu/grouped_host_loop.rs
++++ b/crates/alife_training/src/cpu/grouped_host_loop.rs
+@@ -466,7 +466,7 @@ impl CpuCanonicalHost {
+                 active_activation_side: output.active_activation_side,
+                 joint_selection: joint,
+             };
+-            let learning_ops = if r.grouped.as_ref().unwrap().decoder_learning.is_some() {
++            let learning_ops = if r.grouped.as_ref().unwrap().decoder_credit_active() {
+                 r.neural.stage_grouped_decoder_selection(
+                     p,
+                     &action,
+@@ -739,6 +739,19 @@ impl CpuCanonicalHost {
+                     return Err(CpuHostError::State("grouped decoder work mismatch"));
+                 }
+                 learning.last_credit = Some(credited);
++            } else if let Some(sham) = &mut r.grouped.as_mut().unwrap().decoder_sham {
++                let parameters = after.phenotype().brain_genome.plasticity_parameters();
++                let credited = r.neural.apply_grouped_decoder_sham_credit(
++                    founder,
++                    &patch,
++                    &credit_receptors,
++                    &development,
++                    parameters,
++                )?;
++                if credited.credit.learning_ops != learning_ops {
++                    return Err(CpuHostError::State("grouped sham work mismatch"));
++                }
++                sham.last_credit = Some(credited);
+             } else {
+                 r.neural
+                     .close_grouped_outcome(founder, &patch, &credit_receptors)?;
+@@ -917,7 +930,7 @@ fn grouped_dynamic_work(
+     let learning = if r
+         .grouped
+         .as_ref()
+-        .is_some_and(|s| s.decoder_learning.is_some())
++        .is_some_and(|s| s.decoder_credit_active())
+     {
+         super::super::grouped_decoder_work_bound(p, activity.work.decoder_candidate_ops)?
+             .checked_mul(4)
+diff --git a/crates/alife_training/src/cpu/motor_mediation/confidence/host.rs b/crates/alife_training/src/cpu/motor_mediation/confidence/host.rs
+index 07aa8146917d8bb3218c4481976555d97725c5d0..64ececdea9d74c4c8f7f05b362c77de60ba9d973 100644
+--- a/crates/alife_training/src/cpu/motor_mediation/confidence/host.rs
++++ b/crates/alife_training/src/cpu/motor_mediation/confidence/host.rs
+@@ -3,6 +3,8 @@
+ use super::*;
+ use crate::cpu::replay::Tape;
+ 
++const SHAM_SCHEMA: &str = "grouped-m2-host-appendage-v1-confidence-v2-decoder-fast-write-sham-v1";
++const SHAM_WORK: &str = "grouped-local-decoder-fast-write-sham-v1;equal-semantic-pullback-trace-projection-candidate-update;suppress-fast-writes";
+ const LEARNING_SCHEMA: &str = "grouped-m2-host-appendage-v1-confidence-v2-decoder-score-trace-v1";
+ const LEARNING_WORK: &str =
+     "grouped-local-decoder-score-trace-v1;source-once;fixed-appendage;priced-pullback-and-update";
+@@ -84,9 +86,24 @@ impl GroupedMotorStateV1 {
+         self.work_policy = LEARNING_WORK.into();
+         Ok(())
+     }
++    pub(crate) fn enable_decoder_sham_fresh(&mut self) -> Result<(), TrainingError> {
++        if self.schema != HOST_SCHEMA || self.generation != 0 || self.last_receipt.is_some() {
++            return Err(invalid());
++        }
++        self.schema = SHAM_SCHEMA.into();
++        self.work_policy = SHAM_WORK.into();
++        Ok(())
++    }
+     pub(crate) fn decoder_learning(&self) -> bool {
+-        self.schema == LEARNING_SCHEMA
++        self.schema == LEARNING_SCHEMA || self.schema == SHAM_SCHEMA
++    }
++    pub(crate) fn decoder_sham(&self) -> bool {
++        self.schema == SHAM_SCHEMA
+     }
++    pub(crate) fn sham_identity() -> (&'static str, &'static str) {
++        (SHAM_SCHEMA, SHAM_WORK)
++    }
++
+     pub(crate) fn matches(&self, inputs: &PhenotypeCompilerInputs, mode: MediationModeV1) -> bool {
+         self.source_inputs == *inputs && self.mode == mode
+     }
+@@ -96,7 +113,8 @@ impl GroupedMotorStateV1 {
+             &BrainCapacityClass::n2048_grounded_drive_research(),
+         )?;
+         if !((self.schema == HOST_SCHEMA && self.work_policy == GROUPED_HOST_WORK_POLICY_V1)
+-            || (self.schema == LEARNING_SCHEMA && self.work_policy == LEARNING_WORK))
++            || (self.schema == LEARNING_SCHEMA && self.work_policy == LEARNING_WORK)
++            || (self.schema == SHAM_SCHEMA && self.work_policy == SHAM_WORK))
+             || self.m2_recipe != M2_RECIPE_SHA256
+             || self.group_recipe != RECOVERY_GROUP_CONFIDENCE_RECIPE_SHA256
+             || self.mode == MediationModeV1::DirectSource
+@@ -466,8 +484,8 @@ impl GroupedMotorReceiptV1 {
+             frame.frame_digest(),
+             core.source_generation,
+         )?;
+-        if native.schema != LEARNING_SCHEMA
+-            || core.schema != LEARNING_SCHEMA
++        if (native.schema != LEARNING_SCHEMA && native.schema != SHAM_SCHEMA)
++            || core.schema != native.schema
+             || core.final_generation != binding.dispatch_generation
+             || self.frame_digest != binding.frame_digest
+             || self.tick != frame.tick()
+@@ -606,3 +624,9 @@ impl GroupedMotorReceiptV1 {
+         Ok((result, work))
+     }
+ }
++
++impl GroupedMotorReceiptV1 {
++    pub(crate) fn decoder_sham(&self) -> bool {
++        self.native.schema == SHAM_SCHEMA
++    }
++}
+diff --git a/crates/alife_training/src/cpu/organism.rs b/crates/alife_training/src/cpu/organism.rs
+index f113e266aafd4c3209a8c4e554f6f8be6602a16e..19c7b266a6c89eb27f10d9a4371c8923ff2da64d 100644
+--- a/crates/alife_training/src/cpu/organism.rs
++++ b/crates/alife_training/src/cpu/organism.rs
+@@ -44,6 +44,7 @@ pub struct CpuDecisionBinding {
+ struct Pending {
+     grouped_closed: bool,
+     grouped_learning: bool,
++    grouped_write_mode: GroupedDecoderWriteModeV1,
+     grouped_receptors: Option<NeuralReceptorFrame>,
+     weight_generation: u64,
+     grouped_learning_work: Option<u64>,
+@@ -283,6 +284,12 @@ impl CpuOrganismState {
+         };
+         q.validate_for(p)?;
+         let grouped_learning = matches!(&composite, Some(CompositeForward::Grouped(motor, ..)) if motor.decoder_learning());
++        let grouped_write_mode = if matches!(&composite, Some(CompositeForward::Grouped(motor, ..)) if motor.decoder_sham())
++        {
++            GroupedDecoderWriteModeV1::SuppressFast
++        } else {
++            GroupedDecoderWriteModeV1::ApplyFast
++        };
+         let grouped_receptors = match &composite {
+             Some(CompositeForward::Grouped(_, _, receptors, ..)) if grouped_learning => {
+                 Some((*receptors).clone())
+@@ -333,6 +340,7 @@ impl CpuOrganismState {
+         self.pending = Some(Pending {
+             grouped_closed,
+             grouped_learning,
++            grouped_write_mode,
+             grouped_receptors,
+             weight_generation: self.checkpoint.weight_generation,
+             grouped_learning_work: None,
+diff --git a/crates/alife_training/src/cpu/organism_grouped_decoder.rs b/crates/alife_training/src/cpu/organism_grouped_decoder.rs
+index d5ee1abe4359a87b2a4a1d789cfb5f4a95e3376e..c28c1f60df2fdc67e3696468f10a44e949a7eaaf 100644
+--- a/crates/alife_training/src/cpu/organism_grouped_decoder.rs
++++ b/crates/alife_training/src/cpu/organism_grouped_decoder.rs
+@@ -6,6 +6,40 @@ use alife_core::{MotorCommandBundle, PerceptionFrame};
+ 
+ pub const GROUPED_DECODER_CREDIT_POLICY_V1: &str = "grouped-decoder-score-trace-v1;action-and-memory;fast-and-eligibility-only;no-oja;no-lifetime;no-synaptic-sleep;no-adam-bptt";
+ 
++pub const GROUPED_DECODER_SHAM_POLICY_V1: &str = "grouped-decoder-fast-write-sham-v1;score-trace-unchanged;eligibility-only;hypothetical-fast;no-fast-writes-generation";
++pub const GROUPED_DECODER_SHAM_WORK_V1: &str =
++    "gds1-equal-gde1-semantic-derivative-trace-projection-candidate-update-v1";
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub(crate) enum GroupedDecoderWriteModeV1 {
++    ApplyFast,
++    SuppressFast,
++}
++#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
++#[serde(deny_unknown_fields)]
++pub struct GroupedDecoderFastWriteCountsV1 {
++    pub hypothetical_changed_fast_coordinates: u32,
++    pub applied_changed_fast_coordinates: u32,
++}
++#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
++#[serde(deny_unknown_fields)]
++pub struct GroupedDecoderShamCreditReceiptV1 {
++    pub credit: GroupedDecoderCreditReceiptV1,
++    pub writes: GroupedDecoderFastWriteCountsV1,
++    pub work_policy: String,
++}
++impl GroupedDecoderCreditReceiptV1 {
++    /// FULL receipts retain their qualified wire shape. This view is not persisted.
++    pub fn full_fast_write_counts(&self) -> Result<GroupedDecoderFastWriteCountsV1, TrainingError> {
++        if self.policy != GROUPED_DECODER_CREDIT_POLICY_V1 {
++            return Err(invalid());
++        }
++        Ok(GroupedDecoderFastWriteCountsV1 {
++            hypothetical_changed_fast_coordinates: self.changed_fast_coordinates,
++            applied_changed_fast_coordinates: self.changed_fast_coordinates,
++        })
++    }
++}
++
+ pub(crate) fn grouped_decoder_coordinate(kind: CompiledSynapseKind) -> bool {
+     matches!(kind, CompiledSynapseKind::Decoder(d) if matches!(d.head(), DecoderHeadKind::ActionCandidate | DecoderHeadKind::MemoryContext))
+ }
+@@ -58,6 +92,8 @@ impl CpuOrganismState {
+         let (representative, motors) = motor.native.scores.physical_selection(action)?;
+         binding.joint_selection.validate_bundle(bundle)?;
+         if !pending.grouped_learning
++            || (pending.grouped_write_mode == GroupedDecoderWriteModeV1::SuppressFast)
++                != motor.decoder_sham()
+             || !pending.grouped_closed
+             || pending.binding.is_some()
+             || pending.staged.is_some()
+@@ -121,6 +157,54 @@ impl CpuOrganismState {
+         development: &DevelopmentState,
+         parameters: &PlasticityGenomeParameters,
+     ) -> Result<GroupedDecoderCreditReceiptV1, TrainingError> {
++        self.apply_grouped_decoder_credit_mode(
++            founder,
++            patch,
++            receptors,
++            development,
++            parameters,
++            GroupedDecoderWriteModeV1::ApplyFast,
++        )
++        .map(|(receipt, _)| receipt)
++    }
++    pub(crate) fn apply_grouped_decoder_sham_credit(
++        &mut self,
++        founder: &CpuFoundationTrainer,
++        patch: &ExperiencePatch,
++        receptors: &NeuralReceptorFrame,
++        development: &DevelopmentState,
++        parameters: &PlasticityGenomeParameters,
++    ) -> Result<GroupedDecoderShamCreditReceiptV1, TrainingError> {
++        let (credit, writes) = self.apply_grouped_decoder_credit_mode(
++            founder,
++            patch,
++            receptors,
++            development,
++            parameters,
++            GroupedDecoderWriteModeV1::SuppressFast,
++        )?;
++        Ok(GroupedDecoderShamCreditReceiptV1 {
++            credit,
++            writes,
++            work_policy: GROUPED_DECODER_SHAM_WORK_V1.into(),
++        })
++    }
++    #[allow(clippy::too_many_arguments)]
++    fn apply_grouped_decoder_credit_mode(
++        &mut self,
++        founder: &CpuFoundationTrainer,
++        patch: &ExperiencePatch,
++        receptors: &NeuralReceptorFrame,
++        development: &DevelopmentState,
++        parameters: &PlasticityGenomeParameters,
++        mode: GroupedDecoderWriteModeV1,
++    ) -> Result<
++        (
++            GroupedDecoderCreditReceiptV1,
++            GroupedDecoderFastWriteCountsV1,
++        ),
++        TrainingError,
++    > {
+         let p = founder.phenotype();
+         if p.phenotype_hash() != self.checkpoint.phenotype_hash
+             || founder
+@@ -140,6 +224,7 @@ impl CpuOrganismState {
+             .validate_decision(patch.decision())?;
+         if !pending.grouped_learning
+             || !pending.grouped_closed
++            || pending.grouped_write_mode != mode
+             || pending.grouped_receptors.as_ref() != Some(receptors)
+             || self.checkpoint.weight_generation != pending.weight_generation
+             || credit.policy_backend() != alife_core::PolicyBackend::NeuralClosedLoopCpu
+@@ -167,6 +252,7 @@ impl CpuOrganismState {
+         let modulator = credit.modulator().frame();
+         let mut next = self.checkpoint.clone();
+         let mut changed = 0;
++        let mut hypothetical = 0;
+         let mut nonzero = 0;
+         for (i, s) in p.synapses().iter().enumerate() {
+             if !grouped_decoder_coordinate(s.kind()) {
+@@ -189,9 +275,13 @@ impl CpuOrganismState {
+                 min,
+                 max,
+             )?;
+-            changed += u32::from(updated.to_bits() != next.fast[i].to_bits());
++            let would_change = u32::from(updated.to_bits() != next.fast[i].to_bits());
++            hypothetical += would_change;
+             nonzero += u32::from(staged[i] != 0.);
+-            next.fast[i] = updated;
++            if mode == GroupedDecoderWriteModeV1::ApplyFast {
++                changed += would_change;
++                next.fast[i] = updated;
++            }
+             next.eligibility[i] = staged[i];
+         }
+         if changed != 0 {
+@@ -200,7 +290,11 @@ impl CpuOrganismState {
+         next.last_decision_tick = Some(pending.tick);
+         next.last_outcome_tick = Some(credit.outcome_tick().raw());
+         let receipt = GroupedDecoderCreditReceiptV1 {
+-            policy: GROUPED_DECODER_CREDIT_POLICY_V1.into(),
++            policy: match mode {
++                GroupedDecoderWriteModeV1::ApplyFast => GROUPED_DECODER_CREDIT_POLICY_V1,
++                GroupedDecoderWriteModeV1::SuppressFast => GROUPED_DECODER_SHAM_POLICY_V1,
++            }
++            .into(),
+             sequence_id: credit.sequence_id(),
+             frame_digest: credit.frame_digest(),
+             dispatch_generation: binding.dispatch_generation,
+@@ -212,7 +306,13 @@ impl CpuOrganismState {
+         };
+         self.checkpoint = next;
+         self.pending = None;
+-        Ok(receipt)
++        Ok((
++            receipt,
++            GroupedDecoderFastWriteCountsV1 {
++                hypothetical_changed_fast_coordinates: hypothetical,
++                applied_changed_fast_coordinates: changed,
++            },
++        ))
+     }
+ }
+ fn grouped_decoder_fast_update(
+diff --git a/docs/experiments/grouped-decoder-fast-write-sham-v1/DESIGN.md b/docs/experiments/grouped-decoder-fast-write-sham-v1/DESIGN.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..233362c3e015cc817ccbf97710626a03fb39b70a
+--- /dev/null
++++ b/docs/experiments/grouped-decoder-fast-write-sham-v1/DESIGN.md
+@@ -0,0 +1,124 @@
++# GDS1 equal-semantic-work fast-write sham
++
++The original source-only successor to qualified FULL GDE1 now has a bounded
++[qualification result](QUALIFICATION.md). Its historical design follows.
++
++Source-only successor branch to qualified FULL GDE1 commit
++`2f2cd592ef7a05d199dd1bc3353afdd7f49bcee7`. The qualified branch and tested
++`ed5f2f5a13e9d7b3851272adeeec7c73b605f7aa` remain recoverable. No native
++compilation, test, world interval or scientific seed run has been authorized for
++this extension. Test names below describe desired assertions, not results.
++
++## Meaning of the sham
++
++GDS1 uses the exact GDE1 raw grouped derivative, bounded staged trace, inherited
++receptor projection, delayed trace and candidate fast arithmetic. One shared
++credit core executes them once. The mode is bound in pending state at the actual
++source forward and checked again at staging and sealed credit. FULL calls the
++ApplyFast mode; sham calls SuppressFast. Both consume one pending boundary.
++
++For each declared ActionCandidate/MemoryContext coordinate, both modes compute
++`candidate = bounded_fast_update(F, eta, alpha, receptor_projection, delayed_E)`.
++Both count candidate-versus-current bit changes and commit staged eligibility.
++Only FULL assigns the candidate fast value. Sham neither assigns it nor advances
++weight generation. Decision/outcome timestamps and normal source dispatch still
++advance. This is suppression before assignment, not a write followed by undo,
++a second biological transaction, or an optimizer running in secret.
++
++Typed counts distinguish hypothetical bit changes from applied bit changes.
++FULL's existing receipt fields and serialization remain unchanged; a checked,
++nonpersisted accessor derives its equal hypothetical/applied counts. GDS1 has a
++new receipt carrying both counts, the existing causal receipt fields, and its
++own work-policy identity. New persisted fields are strings/integers, not f64.
++
++The same semantic pullback, trace and candidate-update units are reserved and
++charged in both modes. Those prices do not measure wall time, allocations or
++administrative assignments. The sham has a distinct work identity, not a claim
++that it is the older lower-cost closed policy. Actual arithmetic and charges
++remain once per lived decision, including candidate updates that produce no bit
++change. No rate, source/genes, sampler, controller row or normalization changes.
++
++Only declared eligibility can evolve in the sham. All fast values, lifetime,
++other eligibility, dendritic/structural banks and optimizer moments/ages remain
++closed. Canonical memory/predictor/body behavior is unchanged. The memory-only
++sleep output uses a distinct mode-bound digest domain and the real cycle ID;
++source weight generation stays zero. The existing resident authority hashes the
++entire grouped sidecar, including the sham policy, work identity and controller.
++
++## Admission and preservation
++
++A fresh GDS1 wrapper has a distinct outer byte prefix, lineage, policy,
++controller schema and work identity. Full, closed and sham decoders reject one
++another's prefixes before any JSON/source decoding. The constructor is a fresh
++admission through the same canonical preparation; there is no checkpoint or
++acquired-life conversion API. Enabling either mode on an already mode-tagged or
++executed controller is rejected. Restore checks mode, receipts, generation,
++exact sampler mirrors, sleep output and resident authority.
++
++The optional sham sidecar is omitted when absent. The entire qualified FULL
++wrapper source is unchanged, as are selected legacy/direct bodies and the
++closed literal witness. Shared envelope dispatch and credit code intentionally
++change to admit the new mode, so source identity alone cannot prove FULL byte
++preservation. `scripts/check_grouped_decoder_sham_legacy.py` records narrowly
++scoped exact source witnesses in `LEGACY-SOURCE-WITNESS.json`; it makes no runtime
++claim.
++
++## Authored native gates, all pending
++
++1. Same fresh 240-tick fixture, first actual FULL/sham step: exact source context,
++   receptors, sample, work counters, reservation, body debit, sealed patch and
++   physical receipt. FULL applied changes equal sham hypothetical changes;
++   sham applied changes/generation are zero, with nonzero eligibility. Apart
++   from FULL's allowed fast values/generation, source state must agree. Sampled
++   scores remain pre-update. No equality is required on later divergent lives.
++2. Exact warm/cold sham continuation after acquired traces plus clearly labeled
++   synthetic nonzero recurrent, dendritic/structural and optimizer sentinels.
++   Every fast/lifetime/other-trace sentinel must stay unchanged. A failed late
++   NaN-temperature step must roll back atomically.
++3. Wrong owner/frame/action/sequence/source/dispatch/side/feature/phenotype and
++   receptor-frame checks, wrong FULL-versus-sham credit entry point, duplicate
++   credit, controller conversion, mode-sidecar tampering and cross-mode restore.
++4. Ordinary 1,200-tick preparation and at most 24 native intervals: observe actual
++   BodySleep, nonzero traces, exactly one memory-only consolidation, exact cold
++   continuation, Waking and resumed decisions. Check mode-specific sleep digest
++   and cycle identity. If the event is absent, record the failed bound; do not
++   force actions, retune coefficients or search seeds.
++5. Run affected existing GDE1 and closed compatibility checks, strict lint, and
++   both literal wire witnesses. No broader experiment/cohort is authorized.
++
++## Exact old FULL witness plan
++
++`grouped_full_literal_witness.rs` is a small ignored helper requiring
++`ALIFE_GROUPED_FULL_WITNESS_DIR`. It uses only qualified GDE1 APIs and the existing
++`learning_fixture()` from the old source, temperatures 0.73 and 1.17, and exact
++cold restore after both steps. It exports the full initial envelope, both full
++acquired envelopes and both decision tuples. It also requires actual fast
++changes in the ordinary fixture. None of those state exports belong in the
++source patch or a public artifact.
++
++After a resource/lane grant, compile and run this identical helper on the
++qualified FULL source and on this branch, serially. No additional checkout is
++needed: preserve clean commits, temporarily use a new test-only branch at
++`2f2cd592` in the same worktree, add only the identical helper and its test-module
++line, retain its binary/hashes/output, then return to the new source. Never
++move or alter the qualified branch. Compare all five complete outputs byte for
++byte, not only source activations. The original closed witness remains
++source-identical and can separately compare against its retained exact outputs.
++No old FULL preservation claim is made before that comparison runs.
++
++## Source-review corrections and limits
++
++The first source pass caught the raw-gradient receipt guard still admitting only
++the old FULL controller schema; the guard now admits either explicit learning
++schema while requiring matching native/core identities. The numeric derivative
++is unchanged. This was caught before compilation or execution.
++
++This sham isolates fast-write permission under equal declared semantic learning
++work. It does not isolate per-channel causal reward, remove physiological
++computation costs, demonstrate benefit, make eligibility a full recurrent
++optimizer, or provide GPU/default-game integration. It is not the unrelated
++meal-memory primitive, six-weight taste repair or active recovery study.
++
++Methodological reference: https://rikiyat.github.io/blog/weight-space-programming/
++(targeted repair, whole-controller integration and feedback iteration). Source
++freezing, meaningful failures and eventual validation remain separate milestones.
+diff --git a/docs/experiments/grouped-decoder-fast-write-sham-v1/LEGACY-SOURCE-WITNESS.json b/docs/experiments/grouped-decoder-fast-write-sham-v1/LEGACY-SOURCE-WITNESS.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..7bc81e21829e6be5692850d9b4944d5193324bc8
+--- /dev/null
++++ b/docs/experiments/grouped-decoder-fast-write-sham-v1/LEGACY-SOURCE-WITNESS.json
+@@ -0,0 +1,78 @@
++{
++  "base": "2f2cd592ef7a05d199dd1bc3353afdd7f49bcee7",
++  "interpretation": "Exact selected source bodies only; shared mode branches still require native FULL/closed byte witnesses.",
++  "checks": [
++    {
++      "source": "crates/alife_training/src/cpu/grouped_decoder_envelope.rs",
++      "function": null,
++      "sha256": "369802fa114364d1ae1172abdcd5bdc3e35a9decc3f9c92160109e70e4637766",
++      "unchanged": true
++    },
++    {
++      "source": "crates/alife_training/src/cpu/grouped_closed_literal_witness.rs",
++      "function": null,
++      "sha256": "93e26a73aa733b268786737e2f7bd4d75bd449f122b5716e5dfa20cb9ff65b57",
++      "unchanged": true
++    },
++    {
++      "source": "crates/alife_training/src/cpu/organism.rs",
++      "function": "stage_selection",
++      "sha256": "d77c1278ad03bfc64db55fa7731fcb2260dacb005abc966eeeb469004b634fd9",
++      "unchanged": true
++    },
++    {
++      "source": "crates/alife_training/src/cpu/organism.rs",
++      "function": "apply_credit",
++      "sha256": "26a23b1ba617f518927105e0589fa07e1190a0632fd8937f94e3cd4580111ce2",
++      "unchanged": true
++    },
++    {
++      "source": "crates/alife_training/src/cpu/organism.rs",
++      "function": "stage_grouped_closed_selection",
++      "sha256": "1e7e8826111cd6c932cd7c320abf149b472d8332e0c152d52b0b0e73d6919dda",
++      "unchanged": true
++    },
++    {
++      "source": "crates/alife_training/src/cpu/organism.rs",
++      "function": "close_grouped_outcome",
++      "sha256": "4aef43548b346ddf7576e1e3769bfe2b4ff377c7130a34c0a0c6ab697bf309e6",
++      "unchanged": true
++    },
++    {
++      "source": "crates/alife_training/src/cpu/organism_grouped_decoder.rs",
++      "function": "grouped_decoder_fast_update",
++      "sha256": "534e25b1a8a61fa6d2eed3e29ff18fe85bd41c6c22c84f0cd8a83b9571591428",
++      "unchanged": true
++    },
++    {
++      "source": "crates/alife_training/src/cpu/organism_grouped_decoder.rs",
++      "function": "grouped_decoder_work_bound",
++      "sha256": "39dcc32d0e3718c3b02637d160da6ab17aa584af3571f88ff51326608aa59e3c",
++      "unchanged": true
++    },
++    {
++      "source": "crates/alife_training/src/cpu/host.rs",
++      "function": "resident_digest",
++      "sha256": "5ce86fbbe907cf37ea896dccca8a58d976f615ad4c384b0210d574c88390a172",
++      "unchanged": true
++    },
++    {
++      "source": "crates/alife_training/src/cpu/host.rs",
++      "function": "resident_authority",
++      "sha256": "0b8382f54a07e8b4677ab722719369497ee41ae2dd6c338e886a1222f7f5908b",
++      "unchanged": true
++    },
++    {
++      "source": "crates/alife_training/src/cpu/host.rs",
++      "function": "validate_resident_authority",
++      "sha256": "5ccd8ffb7369c1cc3f934fc4432d4efd9b0fd8b2e534a8c153d4d37212161562",
++      "unchanged": true
++    },
++    {
++      "source": "crates/alife_training/src/cpu/motor_mediation/confidence/policy.rs",
++      "function": null,
++      "sha256": "3874aa84e0a9515bd3fd1b57bc5c6d2ae413387ed22d0588c03b6bbbb9b55b9a",
++      "unchanged": true
++    }
++  ]
++}
+diff --git a/docs/experiments/grouped-decoder-fast-write-sham-v1/NATIVE-BINDING.json b/docs/experiments/grouped-decoder-fast-write-sham-v1/NATIVE-BINDING.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..43e6619e567ff0171851276b5caaff48d580d1b5
+--- /dev/null
++++ b/docs/experiments/grouped-decoder-fast-write-sham-v1/NATIVE-BINDING.json
+@@ -0,0 +1,171 @@
++{
++  "status": "metadata-only plan, no native execution authorized",
++  "candidate_source_commit": "2a36370f6734f31d8637f8931dacff0e8e6efbea",
++  "qualified_full_source_commit": "2f2cd592ef7a05d199dd1bc3353afdd7f49bcee7",
++  "reference_active_source_commit": "7f905465b79291fd52d1fd65568a9d10e716576a",
++  "unchanged_dependency_source_tree_hashes": {
++    "alife_core": "3dc435ea4277a0f5b80f57e348dd486cd0e6cff4",
++    "alife_world": "be29dbcfc3f0c4a351a2d570a97eaf12516f7e94",
++    "alife_gpu_backend": "96ede7bbdbd3d64c972d7c31d170f7db41917b1f",
++    "alife_runtime": "5f99d4617a09e5644ffe373d01327f70119bb778",
++    "alife_storage": "a6dab094076cd9de477f53362983bf39198c35d3"
++  },
++  "reference_manifest_sha256": "726b2450e992f307f6345b727471945c9a92432f734c93623b70e14127bf5272",
++  "training_root_features": [
++    "cpu-backend",
++    "default",
++    "receipt-lineage"
++  ],
++  "training_root_flags": [
++    "opt-level=0",
++    "debuginfo=0",
++    "debug-assertions=yes",
++    "overflow-checks=yes",
++    "embed-bitcode=no",
++    "strip=debuginfo",
++    "codegen-units=1"
++  ],
++  "note": "The root library is compiled as a --test harness separately for old FULL and GDS. No existing alife_training rlib or cache implementation is linked. This is dev0 dependency qualification, not the optimized Cargo test profile.",
++  "dependencies": [
++    {
++      "name": "alife_world",
++      "rlib": "/workspace/scratch/ee5e08a3ca9b/recovery-sleep-durable-target-v3/debug/deps/libalife_world-7260bfeb331cd3a0.rlib",
++      "bytes": 57915720,
++      "sha256": "200da3eb8627dafa7d4691ec89530de44af4cb01eae87f4004b72cfbec6b77fe",
++      "features": "[]",
++      "profile": 656555795690433346,
++      "parent_fingerprint_u64": 8391189705549342036,
++      "rustc_fingerprint": 11835527281324007204
++    },
++    {
++      "name": "alife_runtime",
++      "rlib": "/workspace/scratch/ee5e08a3ca9b/recovery-sleep-durable-target-v3/debug/deps/libalife_runtime-d483614a6c5351ce.rlib",
++      "bytes": 40166022,
++      "sha256": "1a1656ff643b5feda90e7e60637726db579238f8b0b9442721838dd42135dadb",
++      "features": "[\"default\", \"training-rollout\"]",
++      "profile": 656555795690433346,
++      "parent_fingerprint_u64": 8595621831728754468,
++      "rustc_fingerprint": 11835527281324007204
++    },
++    {
++      "name": "thiserror",
++      "rlib": "/workspace/scratch/ee5e08a3ca9b/recovery-sleep-durable-target-v3/debug/deps/libthiserror-b53aba970f9bf1ae.rlib",
++      "bytes": 34256,
++      "sha256": "7675f6142fbb970a5dbe3ead6c00c649d27012f3a855a716a45f16a9e7ee3879",
++      "features": "[\"default\", \"std\"]",
++      "profile": 656555795690433346,
++      "parent_fingerprint_u64": 12560933005739625213,
++      "rustc_fingerprint": 11835527281324007204
++    },
++    {
++      "name": "naga",
++      "rlib": "/workspace/scratch/ee5e08a3ca9b/recovery-sleep-durable-target-v3/debug/deps/libnaga-63fac1e9c9e76222.rlib",
++      "bytes": 32653480,
++      "sha256": "01b3efd9811c0bb5cc3c46c79c8fe9662153240042848e72a0a03a5c1f57f101",
++      "features": "[\"default\", \"glsl-out\", \"hlsl-out\", \"spv-out\", \"wgsl-in\"]",
++      "profile": 18438953524458395397,
++      "parent_fingerprint_u64": 13597263145478215654,
++      "rustc_fingerprint": 11835527281324007204
++    },
++    {
++      "name": "zstd",
++      "rlib": "/workspace/scratch/ee5e08a3ca9b/recovery-sleep-durable-target-v3/debug/deps/libzstd-07e3d4e740f2fced.rlib",
++      "bytes": 360310,
++      "sha256": "76ea3435eccc201549e4532c8008be1599efeff883b98c7450b2b2374ca65d9f",
++      "features": "[\"arrays\", \"default\", \"legacy\", \"zdict_builder\"]",
++      "profile": 656555795690433346,
++      "parent_fingerprint_u64": 3020967467071285801,
++      "rustc_fingerprint": 11835527281324007204
++    },
++    {
++      "name": "alife_gpu_backend",
++      "rlib": "/workspace/scratch/ee5e08a3ca9b/recovery-sleep-durable-target-v3/debug/deps/libalife_gpu_backend-1604aec0a2565beb.rlib",
++      "bytes": 22468784,
++      "sha256": "c4546d4969e9b1d884f3d5c0ed82cbaaf23fc8e73c8eaa386d13573295103e0a",
++      "features": "[\"default\", \"training-rollout\"]",
++      "profile": 656555795690433346,
++      "parent_fingerprint_u64": 10421586340541348614,
++      "rustc_fingerprint": 11835527281324007204
++    },
++    {
++      "name": "serde_json",
++      "rlib": "/workspace/scratch/ee5e08a3ca9b/recovery-sleep-durable-target-v3/debug/deps/libserde_json-4909800a82ecea08.rlib",
++      "bytes": 2467956,
++      "sha256": "5d0413c7add5f6d53081b3eeb73c442d450c43bca629af31e2aae4bca83d00c8",
++      "features": "[\"default\", \"std\", \"unbounded_depth\"]",
++      "profile": 656555795690433346,
++      "parent_fingerprint_u64": 201380336893844670,
++      "rustc_fingerprint": 11835527281324007204
++    },
++    {
++      "name": "sha2",
++      "rlib": "/workspace/scratch/ee5e08a3ca9b/recovery-sleep-durable-target-v3/debug/deps/libsha2-584eac0ed8c9c447.rlib",
++      "bytes": 891072,
++      "sha256": "b7bc5b88a1196146fcbd1023be29b59bf642b469f48f1b627bf12aa3801d3b8c",
++      "features": "[\"default\", \"std\"]",
++      "profile": 656555795690433346,
++      "parent_fingerprint_u64": 10990015802140379714,
++      "rustc_fingerprint": 11835527281324007204
++    },
++    {
++      "name": "alife_core",
++      "rlib": "/workspace/scratch/ee5e08a3ca9b/recovery-sleep-durable-target-v3/debug/deps/libalife_core-933849778b8ff010.rlib",
++      "bytes": 59181618,
++      "sha256": "183354d823892d79230d96935466af35b82fa1b7b2be1ea54f50ef724b6f7669",
++      "features": "[]",
++      "profile": 656555795690433346,
++      "parent_fingerprint_u64": 15160926520684014109,
++      "rustc_fingerprint": 11835527281324007204
++    },
++    {
++      "name": "wgpu",
++      "rlib": "/workspace/scratch/ee5e08a3ca9b/recovery-sleep-durable-target-v3/debug/deps/libwgpu-893bd0adbca736b1.rlib",
++      "bytes": 7022548,
++      "sha256": "706419c4f5382ddbbfbb6453cb059f1ed0bf0a83a08627e59aef2a712c871da9",
++      "features": "[\"default\", \"dx12\", \"gles\", \"metal\", \"parking_lot\", \"std\", \"vulkan\", \"web\", \"webgpu\", \"wgsl\"]",
++      "profile": 656555795690433346,
++      "parent_fingerprint_u64": 8049197877363764406,
++      "rustc_fingerprint": 11835527281324007204
++    },
++    {
++      "name": "base64",
++      "rlib": "/workspace/scratch/ee5e08a3ca9b/recovery-sleep-durable-target-v3/debug/deps/libbase64-6902f67cbd01db74.rlib",
++      "bytes": 523306,
++      "sha256": "96a8ae32bf63d5721144f7b8ae5d43e5ad83eed6ca48c7593c5585ce584bc25e",
++      "features": "[\"alloc\", \"default\", \"std\"]",
++      "profile": 656555795690433346,
++      "parent_fingerprint_u64": 3636868802077556387,
++      "rustc_fingerprint": 11835527281324007204
++    },
++    {
++      "name": "serde",
++      "rlib": "/workspace/scratch/ee5e08a3ca9b/recovery-sleep-durable-target-v3/debug/deps/libserde-d2b92067b57ae43f.rlib",
++      "bytes": 956806,
++      "sha256": "d8ff1ebbc8a1f75b4d1163b01c961f0b621e95ff71d7c37aa91a0a1ddcc090e5",
++      "features": "[\"default\", \"derive\", \"serde_derive\", \"std\"]",
++      "profile": 656555795690433346,
++      "parent_fingerprint_u64": 15144559386436543076,
++      "rustc_fingerprint": 11835527281324007204
++    },
++    {
++      "name": "bytemuck",
++      "rlib": "/workspace/scratch/ee5e08a3ca9b/recovery-sleep-durable-target-v3/debug/deps/libbytemuck-80a1e20cb3f6e09c.rlib",
++      "bytes": 553584,
++      "sha256": "69c196b0313c7f89cc4a42d9c59c39392ccd9738bab9a8d173ac4b883cdc5626",
++      "features": "[\"bytemuck_derive\", \"derive\", \"extern_crate_alloc\", \"min_const_generics\"]",
++      "profile": 16853726086361359911,
++      "parent_fingerprint_u64": 1768463208259113218,
++      "rustc_fingerprint": 11835527281324007204
++    },
++    {
++      "name": "pollster",
++      "rlib": "/workspace/scratch/ee5e08a3ca9b/recovery-sleep-durable-target-v3/debug/deps/libpollster-b322fcc4f67d03d6.rlib",
++      "bytes": 52974,
++      "sha256": "39b6850b44cdccf35e3d6ab0f9503cec411a42017fd8fb58e3d9190689e66f98",
++      "features": "[]",
++      "profile": 656555795690433346,
++      "parent_fingerprint_u64": 11949819260693916790,
++      "rustc_fingerprint": 11835527281324007204
++    }
++  ]
++}
+diff --git a/docs/experiments/grouped-decoder-fast-write-sham-v1/NATIVE-PLAN.md b/docs/experiments/grouped-decoder-fast-write-sham-v1/NATIVE-PLAN.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..7a07ef1919d8118976754819f4b7a06680a98767
+--- /dev/null
++++ b/docs/experiments/grouped-decoder-fast-write-sham-v1/NATIVE-PLAN.md
+@@ -0,0 +1,146 @@
++# Bounded GDS1 native qualification plan
++
++Historical pre-launch plan. The later allocation and executed results are in
++[QUALIFICATION.md](QUALIFICATION.md).
++
++Status at plan freeze: prepared, not launched. Cache owner explicitly released lane 2. The
++coordinator has not allocated storage for this plan. No compile, test harness,
++world run, new target, full checkout or deletion occurred while preparing it.
++
++## Binding and reusable artifacts
++
++- GDS runtime/tests: `2a36370f6734f31d8637f8931dacff0e8e6efbea`.
++- Qualified FULL baseline: `2f2cd592ef7a05d199dd1bc3353afdd7f49bcee7`.
++- Existing worktree: `grouped-m2-decoder-credit-v1`; no new checkout.
++- Compiler: recovered official Rust 1.99.1, edition 2021.
++- Reuse the 14 exact external libraries in `NATIVE-BINDING.json`, from
++  `recovery-sleep-durable-target-v3/debug/deps`. Their bytes/hashes were checked.
++  Five local dependency source trees (core, world, GPU backend, runtime, storage)
++  are identical at fbf2a517, qualified FULL, GDS and the frozen active source.
++- Compile only the training root as a test harness. Do not link an existing
++  alife_training library, cache branch or meal-memory branch. No Cargo command,
++  dependency compilation or target modification is needed.
++- Root features: `cpu-backend`, `default`, `receipt-lineage`; no `gpu-tests`.
++  Flags: opt-level 0, debug info 0, debug assertions/overflow checks enabled,
++  embed-bitcode disabled, strip debug info, one codegen unit, no incremental.
++  Both old FULL and GDS use the exact same dependencies and flags. This is dev0
++  dependency qualification, not the earlier optimized Cargo test profile.
++- Use the cache owner's recorded `compile-v4.command.json` as a command template,
++  replacing only the root input/output/cwd and CARGO_MANIFEST_DIR with this
++  worktree's selected source. Reverify every dependency hash immediately before
++  compiling. Do not copy the cache source overlay or infer cache acceptance.
++
++## Serial sequence after resource allocation
++
++1. Record the approved filesystem floor and packet-growth cap, source/feature/
++   compiler/dependency hashes and a byte baseline. Run the existing read-only
++   legacy-source witness and formatting/diff checks. The qualified FULL wrapper
++   source and selected legacy bodies must still match their recorded hashes.
++2. Preserve the clean GDS branch. In the same worktree, create a separate
++   test-only branch from qualified FULL. Add only the identical
++   `grouped_full_literal_witness.rs` and its module declaration to the existing
++   decoder tests. Keep the qualified branch ref unchanged. Save the exact
++   test-only source commit and diff, not a whole source archive.
++3. Root-only compile the baseline test harness with the exact dev0 graph. Retain
++   its binary/hash. Run exactly the FULL witness below. No general baseline
++   suite or cohort is launched. Check space and actual output lengths.
++4. Return to the clean GDS source. Root-only compile its test harness with the
++   same flags/graph. Retain the binary/hash. Check space before each test. Run
++   exactly the four sham tests below, serially, then the identical FULL witness.
++5. Require all five FULL baseline/candidate output files to match byte for byte:
++   complete initial envelope, both acquired envelopes and both full decision
++   tuples. Preserve source and binary hashes, native results and mismatch/failure
++   evidence. Keep original qualified artifacts untouched.
++6. Report the result and remaining lint/compatibility limits. Full old-suite
++   reruns, strict lint, extra native diagnostics and any scientific comparison
++   are separate gates unless explicitly included in the renewed allocation.
++   The cache owner established ordinary rustc only, not direct strict Clippy;
++   no Clippy reuse or pass is inferred from that work.
++
++Proposed packet directory is
++`/workspace/shared/grouped-decoder-sham-qualification-v1`. Compiler output and TMPDIR both live inside that
++accounted packet, not a new Cargo target. Do not create it until allocation.
++Unset optional GDE1 evidence-export variables; only the two explicit witness
++runs export complete state, privately/local. No state export is published.
++
++## Exact native selection
++
++Test prefix:
++`cpu::host::grouped_host_envelope::tests::decoder::sham::`
++
++Run each of these once with `--exact --test-threads=1 --nocapture`:
++
++1. `grouped_sham_first_step_equal_work_and_only_fast_write_difference`
++   Two fresh 240-tick preparations, one FULL and one sham step at 0.73. Compare
++   sample/context/receptors/work/reservation/debit/sealed patch; check FULL
++   applied versus sham hypothetical counts and the narrow state difference.
++2. `grouped_sham_exact_cold_continuation_and_cross_mode_rejection`
++   Three fresh 240-tick preparations (sham, FULL, closed). Eight successful
++   steps total and one intentional NaN failure; same-mode cold continuation
++   uses 1.17, 0.73 and 1.37. Synthetic frozen sentinels are explicitly labeled.
++   Reject foreign prefixes, relabeled foreign controller metadata, and preserve
++   rollback bytes. No later FULL/sham trajectory equality is demanded.
++3. `grouped_sham_rejects_full_credit_wrong_provenance_and_reuse`
++   One fresh 240-tick preparation and one sham step. Subsequent wrong-mode,
++   corrupted-provenance and duplicate attempts use staged diagnostic copies;
++   they are not additional lived outcomes or world steps.
++4. `grouped_sham_nonzero_trace_survives_memory_sleep_and_waking`
++   One fresh 1,200-tick preparation, at most 24 native intervals at 0.73. Require
++   actual sleep, acquired traces, exactly one memory consolidation, cold restore,
++   waking and resumed decisions; all fast/generation values stay fixed. An
++   absent event is a failed declared bound, not permission to force or search.
++
++FULL witness selector, once on each source:
++`cpu::host::grouped_host_envelope::tests::decoder::full_literal_witness::grouped_full_literal_witness`
++
++Run with `--exact --ignored --test-threads=1 --nocapture` and separate explicit
++`ALIFE_GROUPED_FULL_WITNESS_DIR` destinations. Witness source SHA-256:
++`4b9cecd40964f677f47a131d316b313b8b322ce20d204d9cf80fe67c1bb0a943`.
++Each run uses one fresh 240-tick preparation and exactly two FULL steps at 0.73
++and 1.17, with complete native cold restore after each.
++
++Total bound across these six selected test executions: eight 240-tick and one
++1,200-tick preparations (3,120 ordinary preparation ticks), at most 40 native
++step attempts, including one intentional failed step. At most 39 complete steps;
++sleep-only intervals may produce no decision. All use the existing GRPHOST seed
++`0x03475250484F5354`, never the primary scientific seed. No broad suite, seed
++sweep or action/reward/coefficient override is included.
++
++## Footprint and stop conditions
++
++The closest measured root-only dev0 test binary is 84,989,816 bytes. The old
++qualified GDE1 test binary is 75,180,584 bytes under its different dependency
++profile. These are observations, not promises about the new binary.
++
++Conservative budget in MiB:
++
++- Two retained test binaries: 95 each, 190 total.
++- Additional temporary object/link output during one serial compile: 96.
++- Two sets of five complete FULL witness outputs: 20 total.
++- Logs, source identity/diff and small manifests: 4.
++- Planned peak: 310. Requested cap: 320 (335,544,320 bytes).
++
++Expected retained output is roughly 180–215 MiB, but allocation uses the peak,
++not that expectation. Reuse external libraries read-only; do not count hardlinks
++as freeing disk. No deletion, replacement of qualified binaries or extra archive
++is planned. The temporary allowance is conservative, not a measured hard quota.
++
++Check filesystem free space and packet bytes before every compile/test/export
++stage, poll compilation growth, and stop before another stage if the approved
++floor/cap cannot accommodate its remaining reservation. A 300 MiB soft-abort
++threshold leaves 20 MiB under the cap for observation/termination latency; this
++is monitoring, not a filesystem guarantee. Any unexpected dependency build is
++a stop, not a reason to switch targets silently. Preserve failures. A further
++candidate binary after a failed completed build is not silently squeezed into
++the two-binary budget; reconcile storage before that retry.
++
++At the comparison owner's 04:56:49 UTC snapshot: free 11,117,506,560 bytes,
++remaining primary-history projection 5,618,102,038, export/control reserve
++233,175,552, floor 4,294,967,296. Arithmetic surplus was 971,261,674 bytes.
++This 320 MiB plan would leave 635,717,354 bytes of uncertain margin. The primary
++Sham history is still unobserved and the projection is not a guarantee. The
++recommended action is to wait for Full's terminal measurement (then expected
++in about 28 minutes) and reconcile again. No allocation or launch is implied.
++
++The coordinator explicitly agreed to this deferral after reviewing the snapshot.
++Remain on hold until a new resource allocation, even though lane 2 is free.
+diff --git a/docs/experiments/grouped-decoder-fast-write-sham-v1/QUALIFICATION.md b/docs/experiments/grouped-decoder-fast-write-sham-v1/QUALIFICATION.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..166942d71cfbf7a31923e4ad4ca4330cc9935e3d
+--- /dev/null
++++ b/docs/experiments/grouped-decoder-fast-write-sham-v1/QUALIFICATION.md
+@@ -0,0 +1,115 @@
++# GDS1 bounded native result
++
++The four authored sham cases passed, and the literal qualified FULL baseline and
++new-source FULL witness matched exactly. This qualifies the declared narrow CPU
++mechanism and bounded preservation cases, not a scientific benefit claim or a
++workspace/GPU release. No broad suite or strict lint was run in this packet.
++
++## Source and build binding
++
++- Original GDS runtime: `2a36370f6734f31d8637f8931dacff0e8e6efbea`.
++- Tested source: `b08e0d928b9545462ee13ff7c94dc351c25bda86`. Its only code change
++  after the frozen plan is test-only printing of actual sleep attempts and
++  completions, with the same `0..24` loop, fixture, assertions and dynamics.
++- Qualified FULL remains `2f2cd592ef7a05d199dd1bc3353afdd7f49bcee7`. Separate
++  baseline branch `f98fed57f54c0e76fd513af45be7730f5c54fc02` adds only the
++  identical witness and module declaration. No qualified branch was moved.
++- Both harnesses used Rust 1.99.1, the exact 14 dev0 rlibs recorded in
++  [NATIVE-BINDING.json](NATIVE-BINDING.json), opt-level 0, no debug data, enabled
++  debug assertions/overflow checks, one codegen unit and no incremental build.
++  No Cargo, dependency compilation, cache implementation or new target was used.
++- The existing worktree was switched between preserved branches; no new full
++  checkout or deletion was needed. No active scientific checkout was edited.
++
++Both root compiles passed on their first attempt (33.61 and 34.64 seconds).
++Inventories were checked before exact filters: 221 baseline tests and 225
++candidate tests existed, but only the six declared selections were executed.
++
++## Measured gates
++
++Six selected executions passed, each with one pass, zero failures and zero
++ignored executions. The two normally ignored witness invocations were explicitly
++run with `--ignored`; the four sham cases were not ignored. There were no
++unexpected compile/test failures. One intentional NaN step was rejected and its
++complete pre/post checkpoint bytes matched, as required by the rollback test.
++Exact counts, log hashes and elapsed times are in
++[VALIDATION-SCALARS.json](VALIDATION-SCALARS.json).
++
++1. **Equal first-step mechanism.** Same fresh source/context, receptor frame,
++   sample, work, reservation, body debit, sealed patch and physical receipt.
++   FULL applied 144 fast bit changes; the sham computed 144 hypothetical changes
++   but applied zero, retained weight generation zero, and had 144 nonzero
++   declared eligibility entries. Semantic learning work was 23,753 units and
++   the body debit was `0.00021549001` in both. The scalar values are from the
++   FULL baseline receipt, linked by the passed pair assertions and FULL byte
++   witness. Pre-update sample scores stayed intact after FULL writes.
++2. **Preservation and cold continuation.** Exact warm/cold continuation with
++   acquired sham traces and explicitly synthetic nonzero recurrent fast,
++   lifetime, other eligibility, dendritic/structural and optimizer sentinels.
++   Those closed banks remained unchanged. Foreign modes, relabeled foreign
++   controller metadata, authority tampering and late rollback were rejected.
++3. **Causal binding.** Wrong owner/frame/action/sequence/source generation,
++   dispatch, activation side, feature, phenotype and exact receptor frame were
++   rejected, as were wrong FULL/sham credit entry points, duplicate credit and
++   attempts to convert an executed controller. Diagnostic staged copies did not
++   create extra world outcomes.
++4. **Actual sham memory sleep.** The existing 1,200-tick preparation produced
++   actual BodySleep, acquired nonzero traces, exactly one memory consolidation,
++   Waking and resumed decisions. There were exactly **10 attempts and 10
++   completed intervals**, of which two contained decisions. Consolidation was
++   at interval 4, and the resumed decision at interval 9. Complete cold restore
++   followed every interval. All fast values and weight generation remained
++   unchanged; the memory output was mode-bound and used its real cycle ID.
++
++No equal-future-trajectory requirement was imposed. Equal semantic work means
++identical arithmetic/charging for identical context and sampled factors. After
++FULL weights change and encountered states or samples differ, actual counted
++work and trajectories may legitimately diverge. These are aggregate
++compute-inclusive joint outcomes, not isolated causal channel rewards.
++
++## Literal FULL preservation
++
++Witness source SHA-256:
++`4b9cecd40964f677f47a131d316b313b8b322ce20d204d9cf80fe67c1bb0a943`.
++It was identical on both sources and used the existing fresh fixture at 0.73
++then 1.17, with exact cold restore after each step and actual acquired FULL
++fast changes.
++
++All five complete files matched byte for byte, **7,125,723 bytes per revision**:
++initial envelope, both acquired envelopes and both complete next-step decision
++tuples. Their hashes are in the scalar summary. This is not a tolerance or an
++activation-only comparison, but it also does not prove every possible history.
++The 12 recorded source witnesses passed, including the entire qualified FULL
++wrapper, selected direct/closed bodies and the unchanged closed witness.
++
++Binary SHA-256 values:
++- Baseline, 84,308,768 bytes:
++  `6700c8864ef78e3c3d5f873eab293f4fb6f9236ce59b4e70dd43806e0eb0a736`.
++- Candidate, 84,551,704 bytes:
++  `ad317cf23552fd827e1d6fbc2bce726c800385efacbfeaea91a3021e0ee77949`.
++
++## Exposure, storage and limits
++
++Exactly the planned eight 240-tick and one 1,200-tick fresh preparations ran:
++**3,120 ordinary preparation ticks**. Total native exposure was **26 attempts,
++25 completed steps and one intentional rejection**, below the maximum 40
++attempts. No repeat, scientific seed, extra life, forced action, concentration,
++rate or gain adjustment was added.
++
++The 320 MiB allocation was checked before each stage against journal metadata,
++remaining packet counts times `(global observed maximum + 256 KiB)`, export
++reserve and the 4 GiB floor. The primary owner was notified. No payloads from
++the primary experiment were read. The largest conservative compile-stage global
++disk-delta estimate was 191,271,202 bytes; it deliberately includes concurrent
++primary growth. Native completion accounting was 184,295,776 bytes, including
++a conservative 1 MiB allowance for small source/Git/directory metadata. Final
++notes add a small amount. The 300 MiB soft stop was not approached. These are
++sampled accounting measurements, not a filesystem quota or storage guarantee.
++
++Native work ended before final reporting. Original baseline/candidate binaries,
++complete local outputs, rollback/provenance results and all logs are retained
++privately in the qualification packet. Source delivery excludes those raw
++outputs. No strict Clippy, broad old-suite rerun, GPU/default-game integration,
++existing-life migration or scientific learning comparison is claimed here.
++The earlier GDE1 quantization finding still applies: a fast-weight change alone
++is not evidence of changed behavior or improvement.
+diff --git a/docs/experiments/grouped-decoder-fast-write-sham-v1/VALIDATION-SCALARS.json b/docs/experiments/grouped-decoder-fast-write-sham-v1/VALIDATION-SCALARS.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..b46ff7565418c0c3d0ebbc6ed4b4de4e0c8e122f
+--- /dev/null
++++ b/docs/experiments/grouped-decoder-fast-write-sham-v1/VALIDATION-SCALARS.json
+@@ -0,0 +1,184 @@
++{
++  "schema": "gds1-bounded-native-validation-v1",
++  "runtime_source": "2a36370f6734f31d8637f8931dacff0e8e6efbea",
++  "tested_source": "b08e0d928b9545462ee13ff7c94dc351c25bda86",
++  "diagnostic_delta": "test-only attempt/completion printing in unchanged 24-interval sleep loop",
++  "qualified_full_base": "2f2cd592ef7a05d199dd1bc3353afdd7f49bcee7",
++  "full_witness_only_source": "f98fed57f54c0e76fd513af45be7730f5c54fc02",
++  "native_test_executions": [
++    {
++      "stage": "full-witness",
++      "passed": 1,
++      "failed": 0,
++      "ignored": 0,
++      "filtered_out": 220,
++      "elapsed_seconds": 58.64580718599609,
++      "log_sha256": "a2f2ce7f68a0a2d1e995d846c3e80f50e58d9a3a701354106584c08134601024"
++    },
++    {
++      "stage": "sham-equal-work",
++      "passed": 1,
++      "failed": 0,
++      "ignored": 0,
++      "filtered_out": 224,
++      "elapsed_seconds": 43.69000647799112,
++      "log_sha256": "d1434cf04330af76e2f6f080b91074e2312b25ede872eb272824ec1676883787"
++    },
++    {
++      "stage": "sham-cold-cross-mode",
++      "passed": 1,
++      "failed": 0,
++      "ignored": 0,
++      "filtered_out": 224,
++      "elapsed_seconds": 120.97984876700502,
++      "log_sha256": "eb584d13a5a352d8bde6e778a502a426a543d5e887dc4c19c8d643673fe82d95"
++    },
++    {
++      "stage": "sham-provenance",
++      "passed": 1,
++      "failed": 0,
++      "ignored": 0,
++      "filtered_out": 224,
++      "elapsed_seconds": 21.652054554011556,
++      "log_sha256": "4f0f999d2b876d68fe9eb435450e56021a8ad0e24d75bddd0cd49d9fd6b81f77"
++    },
++    {
++      "stage": "sham-sleep",
++      "passed": 1,
++      "failed": 0,
++      "ignored": 0,
++      "filtered_out": 224,
++      "elapsed_seconds": 192.77576955899713,
++      "log_sha256": "05db2226a235d4c5b202bda9757c59a33c7eb0708c59271f6bcef7e429241083"
++    },
++    {
++      "stage": "gds-full-witness",
++      "passed": 1,
++      "failed": 0,
++      "ignored": 0,
++      "filtered_out": 224,
++      "elapsed_seconds": 58.24257914700138,
++      "log_sha256": "7cf6f3321fc07065988add931c9ceb1c5d541f44b2583693c0e314eac6872710"
++    }
++  ],
++  "unexpected_compile_failures": 0,
++  "unexpected_test_failures": 0,
++  "intentional_failed_step_rollback_checks": 1,
++  "exposures": {
++    "runs": [
++      {
++        "stage": "full-witness",
++        "preparation_ticks": 240,
++        "native_attempts": 2,
++        "complete_steps": 2,
++        "passed": true
++      },
++      {
++        "stage": "sham-equal-work",
++        "preparation_ticks": 480,
++        "native_attempts": 2,
++        "complete_steps": 2,
++        "passed": true
++      },
++      {
++        "stage": "sham-cold-cross-mode",
++        "preparation_ticks": 720,
++        "native_attempts": 9,
++        "complete_steps": 8,
++        "intentional_failed_steps": 1,
++        "passed": true
++      },
++      {
++        "stage": "sham-provenance",
++        "preparation_ticks": 240,
++        "native_attempts": 1,
++        "complete_steps": 1,
++        "passed": true
++      },
++      {
++        "stage": "sham-sleep",
++        "preparation_ticks": 1200,
++        "native_attempts": 10,
++        "complete_steps": 10,
++        "decision_intervals": 2,
++        "decisions": 2,
++        "memory_consolidations": 1,
++        "passed": true
++      },
++      {
++        "stage": "gds-full-witness",
++        "preparation_ticks": 240,
++        "native_attempts": 2,
++        "complete_steps": 2,
++        "passed": true
++      }
++    ],
++    "total_preparation_ticks": 3120,
++    "total_native_attempts": 26,
++    "total_complete_steps": 25
++  },
++  "full_byte_comparison": {
++    "all_five_complete_outputs_byte_identical": true,
++    "bytes_per_revision": 7125723,
++    "files": [
++      {
++        "file": "after-0.envelope",
++        "bytes": 2378954,
++        "sha256": "ec737da48d17e188e68828ebaae071c6787bfdcafc089524af4d32d0e58e4f13",
++        "exactly_equal": true
++      },
++      {
++        "file": "after-1.envelope",
++        "bytes": 2388561,
++        "sha256": "6967550ce47596bfac98aa1d5af5941e9aa32ef70fde6d80c54a87bc40c4d171",
++        "exactly_equal": true
++      },
++      {
++        "file": "initial.envelope",
++        "bytes": 2253716,
++        "sha256": "a33472d47b070364123fc76baedac56162066c10e4aa852709cb1850a9b617c9",
++        "exactly_equal": true
++      },
++      {
++        "file": "step-0.json",
++        "bytes": 51286,
++        "sha256": "f0ac4f0318032f88b44901fda0757190d19d47bff73ba0ba077a63046a5ae419",
++        "exactly_equal": true
++      },
++      {
++        "file": "step-1.json",
++        "bytes": 53206,
++        "sha256": "9e4d918cf3878917624c462667a94e4d68a1279f7260f9e666771e3cca51d94f",
++        "exactly_equal": true
++      }
++    ],
++    "baseline_source": "f98fed57f54c0e76fd513af45be7730f5c54fc02",
++    "candidate_source": "b08e0d928b9545462ee13ff7c94dc351c25bda86",
++    "baseline_binary": {
++      "bytes": 84308768,
++      "sha256": "6700c8864ef78e3c3d5f873eab293f4fb6f9236ce59b4e70dd43806e0eb0a736"
++    },
++    "candidate_binary": {
++      "bytes": 84551704,
++      "sha256": "ad317cf23552fd827e1d6fbc2bce726c800385efacbfeaea91a3021e0ee77949"
++    }
++  },
++  "first_paired_step_scalars": {
++    "full_applied_fast_bit_changes": 144,
++    "sham_hypothetical_fast_bit_changes": 144,
++    "sham_applied_fast_bit_changes": 0,
++    "nonzero_declared_eligibility": 144,
++    "semantic_learning_ops": 23753,
++    "body_energy_debit": 0.00021549001,
++    "source_execution_count": 1,
++    "interpretation": "FULL baseline scalar receipt plus passed exact-pair assertions and complete FULL byte witness; compute-inclusive joint feedback, not isolated physical reward or benefit."
++  },
++  "profile": "root-only test harness, Rust 1.99.1 dev0 with exact 14 frozen dev0 rlibs; no Cargo/dependency build",
++  "limits": [
++    "No strict lint, broad suite, workspace or GPU validation in this packet.",
++    "No new old-closed native witness; selected legacy source bodies were checked exactly.",
++    "Complete FULL byte witness covers the fixed initial and two-step continuation, not every history.",
++    "Equal semantic work is conditional on the same inputs/sample; future divergent states need not consume identical total work.",
++    "No scientific learning comparison, seed sweep, trained brain, causal channel reward or benefit claim."
++  ]
++}
+diff --git a/scripts/check_grouped_decoder_sham_legacy.py b/scripts/check_grouped_decoder_sham_legacy.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..0d6eb40a3808d166cc0311e9e3d52aa586ee951f
+--- /dev/null
++++ b/scripts/check_grouped_decoder_sham_legacy.py
+@@ -0,0 +1,43 @@
++#!/usr/bin/env python3
++"""Read-only, bounded source witnesses; not a runtime-equivalence proof."""
++import hashlib
++import json
++from pathlib import Path
++import re
++import subprocess
++
++BASE = "2f2cd592ef7a05d199dd1bc3353afdd7f49bcee7"
++ROOT = Path(__file__).resolve().parents[1]
++PREFIX = "crates/alife_training/src/cpu/"
++
++def body(text, name):
++    match = re.search(r"\bfn " + re.escape(name) + r"\b", text)
++    assert match, name
++    start = match.start()
++    brace = text.index("{", match.end())
++    depth = 0
++    # These selected bodies contain balanced braces in their literals/comments.
++    for end in range(brace, len(text)):
++        depth += (text[end] == "{") - (text[end] == "}")
++        if depth == 0:
++            return text[start:end + 1]
++    raise AssertionError(name)
++
++checks = {
++    "grouped_decoder_envelope.rs": None,
++    "grouped_closed_literal_witness.rs": None,
++    "organism.rs": ["stage_selection", "apply_credit", "stage_grouped_closed_selection", "close_grouped_outcome"],
++    "organism_grouped_decoder.rs": ["grouped_decoder_fast_update", "grouped_decoder_work_bound"],
++    "host.rs": ["resident_digest", "resident_authority", "validate_resident_authority"],
++    "motor_mediation/confidence/policy.rs": None,
++}
++results = []
++for file, names in checks.items():
++    path = PREFIX + file
++    old = subprocess.check_output(["git", "show", BASE + ":" + path], cwd=ROOT, text=True)
++    new = (ROOT / path).read_text()
++    for name in names or [None]:
++        left, right = (body(old, name), body(new, name)) if name else (old, new)
++        assert left == right, (path, name)
++        results.append({"source": path, "function": name, "sha256": hashlib.sha256(right.encode()).hexdigest(), "unchanged": True})
++print(json.dumps({"base": BASE, "interpretation": "Exact selected source bodies only; shared mode branches still require native FULL/closed byte witnesses.", "checks": results}, indent=2))
