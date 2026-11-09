@@ -1,0 +1,63 @@
+//! Separately owned final-checkpoint-only recovery. No host forward or world step.
+#![allow(dead_code)]
+#[path = "/workspace/shared/m2-fresh-coordination-comparison-v1/source/crates/alife_training/examples/support/grouped_m2_journal_v1.rs"]
+mod journal;
+#[path = "/workspace/shared/m2-fresh-coordination-comparison-v1/source/crates/alife_training/examples/support/grouped_m2_raw_v1.rs"]
+mod raw;
+use alife_core::PhenotypeCompilerInputs;
+use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
+use std::{path::Path, io::Write};
+type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+fn hash(bytes: &[u8]) -> String { format!("{:x}", Sha256::digest(bytes)) }
+const ROOT: &str = "/workspace/shared/m2-fresh-coordination-comparison-v1/primary-v1";
+fn check(arm: usize, inputs: &PhenotypeCompilerInputs, input_bytes: &[u8]) -> Result<Value> {
+    let dir = Path::new(ROOT).join(format!("arm-{arm}/JOURNAL-M2-V1"));
+    let manifest = journal::bounded_read(&dir.join("MANIFEST.json"),16384)?;
+    let binding: journal::Binding = serde_json::from_slice(&manifest)?;
+    let terminal: Value = serde_json::from_slice(&journal::bounded_read(&dir.join("TERMINAL.json"),16384)?)?;
+    if binding.arm != arm || binding.horizon != 32 || binding.initial_tick != 240 || binding.seed != 0x034154434F4F0901
+        || terminal["binding"] != serde_json::to_value(&binding)? || terminal["stop"] != "horizon"
+        || terminal["committed_intervals"] != 32 || terminal["tick"] != 272 || binding.inputs_sha256 != hash(input_bytes) {
+        return Err("final owner, horizon, input or terminal binding failed".into());
+    }
+    // Only this arm's final compressed complete pair is read. No prefix walk.
+    let wire = journal::bounded_read(&dir.join("000031.pairz"),journal::MAX_PACKET)?;
+    if wire.len()<32 { return Err("short raw packet".into()); }
+    let meta_len=u64::from_le_bytes(wire[8..16].try_into()?) as usize;
+    if meta_len>16384 || 32+meta_len>wire.len() { return Err("packet metadata bound".into()); }
+    let header: journal::Header=serde_json::from_slice(&wire[32..32+meta_len])?;
+    let packet=journal::decode_packet(&wire,&binding,31,&header.previous_commit_sha256)?;
+    if terminal["last_commit_sha256"] != packet.digest || terminal["final_checkpoint_sha256"] != hash(&packet.checkpoint) {
+        return Err("final pair or checkpoint seal failed".into());
+    }
+    let closed=raw::closure(&packet.checkpoint)?;
+    if hash(&serde_json::to_vec(&closed)?) != binding.closure_sha256 || closed.get("founder") != binding.source_headers.get("founder") {
+        return Err("source or founder/optimizer closure mismatch".into());
+    }
+    println!("{}",json!({"event":"restore_attempt","arm":arm,"tick":272,"host_forwards":0,"body_steps":0}));
+    std::io::stdout().flush()?;
+    // Exactly one existing restore API per arm. Those APIs internally validate
+    // and serialize their saved boundary; the one caller-owned checkpoint encode
+    // below verifies the returned host, without selecting or forwarding anything.
+    let (tick,restored) = if arm==0 {
+        let cp=alife_training::cpu::CpuOptionalVocalM2HostCheckpointV1::decode(&packet.checkpoint).map_err(|_|"optional decode failed")?;
+        let h=alife_training::cpu::CpuOptionalVocalM2HostV1::restore(cp,inputs,alife_training::cpu::MediationModeV1::Full).map_err(|_|"optional restore failed")?;
+        (h.world().tick().raw(),h.checkpoint().map_err(|_|"optional owned checkpoint failed")?.encode().map_err(|_|"optional owned encoding failed")?)
+    } else {
+        let cp=coordinated_training::cpu::CpuCoordinatedTargetM2HostCheckpointV1::decode(&packet.checkpoint).map_err(|_|"coordination decode failed")?;
+        let h=coordinated_training::cpu::CpuCoordinatedTargetM2HostV1::restore(cp,inputs,coordinated_training::cpu::MediationModeV1::Full).map_err(|_|"coordination restore failed")?;
+        (h.world().tick().raw(),h.checkpoint().map_err(|_|"coordination owned checkpoint failed")?.encode().map_err(|_|"coordination owned encoding failed")?)
+    };
+    if tick!=272 || restored!=packet.checkpoint || raw::closure(&restored)?!=closed { return Err("restored final bytes/tick/seals differ".into()); }
+    Ok(json!({"arm":arm,"tick":tick,"restores":1,"caller_owned_checkpoint_encodes":1,"complete_checkpoint_bytes":restored.len(),"checkpoint_sha256":hash(&restored),"final_raw_pair_sha256":packet.digest,"source_closure_sha256":binding.closure_sha256,"founder_optimizer_sha256":closed["founder"],"exact_original_private_state_bytes":true,"host_forwards":0,"body_steps":0,"raw_output_written":false}))
+}
+fn run()->Result<()> {
+    let inputs_bytes=journal::bounded_read(&Path::new(ROOT).join("INPUTS.private.json"),journal::MAX_PACKET)?;
+    let inputs:PhenotypeCompilerInputs=serde_json::from_slice(&inputs_bytes)?;
+    let mut reports=Vec::new();
+    for arm in 0..2 { let report=check(arm,&inputs,&inputs_bytes)?;println!("{}",json!({"event":"restore_pass","result":report}));std::io::stdout().flush()?;reports.push(report); }
+    println!("{}",json!({"event":"complete","schema":"final-checkpoint-only-native-recovery-v1","arms":reports,"full_native_prefix_compare":"previous timeout retained; not rerun or replaced","host_forwards":0,"body_steps":0}));
+    Ok(())
+}
+fn main(){if let Err(e)=run(){eprintln!("{}",json!({"event":"failed_stop_no_retry","error":e.to_string(),"host_forwards":0,"body_steps":0}));std::process::exit(1);}}
