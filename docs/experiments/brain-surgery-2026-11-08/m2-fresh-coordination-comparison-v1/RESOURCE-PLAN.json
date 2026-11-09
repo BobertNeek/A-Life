@@ -1,0 +1,12 @@
+{
+  "cumulative_cap_bytes": 671088640,
+  "actual_disk_floor": 4294967296,
+  "memavailable_floor": 2147483648,
+  "compiler_rss_cap": 2684354560,
+  "runtime_rss_cap": 805306368,
+  "fixed_fixture_body_calls": 240,
+  "fixed_fixture_forward_commits": 8,
+  "primary_forward_commits": 64,
+  "no_primary_authorization_yet": true,
+  "measured_free": 5065244672
+}
