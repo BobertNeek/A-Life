@@ -1,0 +1,11 @@
+{
+  "attempt": 1,
+  "main": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "plan_id": "m2-grip-hosted-typecheck-v1",
+  "prepared_head": "PENDING_VERIFIED_IMMUTABLE_GITHUB_COMMIT",
+  "research_base": "fbf2a517f93098b5d936878a3d26bbb8d0391c38",
+  "schema": "m2-grip-typecheck-activation-v1",
+  "seal_sha256": "72d1acb824753379f60f066bc55eb1ad04eab7ed09a07194a2ea2c3a02b4c948",
+  "source_manifest_sha256": "605f4800b6c57f02b95f0a27ed8c17c09d9a027c7c58b1e01830020c368e154c",
+  "typecheck_only": true
+}

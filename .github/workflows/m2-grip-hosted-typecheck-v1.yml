@@ -1,0 +1,44 @@
+name: M2 grip source typecheck v1
+on:
+  push:
+    branches: [qualification/m2-grip-hosted-typecheck-v1]
+    paths: [docs/experiments/m2-grip-hosted-typecheck-v1/ACTIVATE.json]
+permissions:
+  contents: read
+concurrency:
+  group: m2-grip-hosted-typecheck-v1
+  cancel-in-progress: false
+jobs:
+  source-typecheck:
+    if: >-
+      github.repository == 'BobertNeek/A-Life' &&
+      github.ref == 'refs/heads/qualification/m2-grip-hosted-typecheck-v1' &&
+      github.event.created == false && github.event.deleted == false &&
+      github.event.forced == false && github.run_attempt == '1'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      EXPECTED_SEAL_SHA256: 72d1acb824753379f60f066bc55eb1ad04eab7ed09a07194a2ea2c3a02b4c948
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - name: Read immutable grip source packet
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          path: bundle
+          persist-credentials: false
+          fetch-depth: 2
+          lfs: false
+          submodules: false
+      - name: Read exact accepted main
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: c3aec16df33861f1316d127736f5f60eea327ede
+          path: source
+          persist-credentials: false
+          fetch-depth: 1
+          lfs: false
+          submodules: false
+      - name: Admit, restore, install pinned official Rust, and check serially
+        shell: bash
+        run: python3 bundle/docs/experiments/m2-grip-hosted-typecheck-v1/run_hosted.py

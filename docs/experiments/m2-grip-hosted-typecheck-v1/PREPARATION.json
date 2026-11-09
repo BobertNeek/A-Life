@@ -1,0 +1,16 @@
+{
+  "bound_files": 864,
+  "inherited_closure_files_verified": 120,
+  "main": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "native_invocations": 0,
+  "network_calls": 0,
+  "nominal_supplement_bytes": 136753,
+  "nominal_supplement_files": 17,
+  "reconstruction_verified": true,
+  "registered_grip_paths_verified": 144,
+  "research_source": "fbf2a517f93098b5d936878a3d26bbb8d0391c38",
+  "schema": "m2-grip-source-preparation-v1",
+  "source_ready": true,
+  "toolchain_status": "Official recipe reused from independently successful V3 setup; this new grip job has not run.",
+  "unresolved_includes": []
+}
