@@ -1,0 +1,1877 @@
+diff --git a/crates/alife_training/src/cpu/motor_mediation/confidence/boredom/tests.rs b/crates/alife_training/src/cpu/motor_mediation/confidence/boredom/tests.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/alife_training/src/cpu/motor_mediation/confidence/boredom/tests.rs
+@@ -0,0 +1,643 @@
++//! Authored synthetic/detached gates. These are NOT world-life/learning tests.
++//! No result is claimed until compiled and run on an approved build lane.
++use super::*;
++
++fn fresh(mode: MediationModeV1, control: M2BoredomControlV1) -> M2BoredomDetachedCpuV1 {
++    let (i, a) = super::super::tests::source();
++    M2BoredomDetachedCpuV1::fresh(&i, &a, mode, control).unwrap()
++}
++fn drives(boredom: f32) -> DriveSnapshot {
++    DriveSnapshot {
++        hunger: 0.35,
++        fatigue: 0.35,
++        fear: 0.25,
++        pain: 0.10,
++        loneliness: 0.35,
++        curiosity: 0.35,
++        brain_atp: 0.75,
++        temperature_stress: 0.10,
++        reproductive_drive: 0.50,
++        extension: [boredom, 0.],
++    }
++}
++fn slot() -> GroundedObjectSlotV1 {
++    GroundedObjectSlotV1 {
++        slot_index: 0,
++        tracked_object_id: TrackedObjectId(41),
++        bearing: [0.; 2],
++        distance: 0.1,
++        relative_velocity: [0.; 3],
++        color: [0.; 3],
++        material: [0.; 3],
++        shape: [0.; 3],
++        chemical: [0.; 3],
++        contact: 0.,
++        proprioception: [0.; 2],
++        temperature: 0.,
++        terrain: [0.; 2],
++        confidence: Confidence::new(1.).unwrap(),
++    }
++}
++#[allow(clippy::too_many_arguments)]
++fn candidate(
++    i: usize,
++    id: u32,
++    kind: ActionKind,
++    family: CandidateActionFamily,
++    observation: CandidateObservationRef,
++    target: ActionTarget,
++    features: CandidateFeatureVector,
++) -> ActionCandidate {
++    ActionCandidate::new(
++        i as u16,
++        ActionId(id),
++        kind,
++        family,
++        observation,
++        target,
++        features,
++        Confidence::new(1.).unwrap(),
++        NormalizedScalar::new(0.).unwrap(),
++        DurationTicks::new(1),
++        DurationTicks::new(1),
++    )
++    .unwrap()
++}
++fn rebuild(
++    d: DriveSnapshot,
++    candidates: Vec<ActionCandidate>,
++    slots: Vec<GroundedObjectSlotV1>,
++) -> PerceptionFrame {
++    let t = Tick::new(1);
++    let profile = SensorProfile::GroundedObjectSlotsSleepChoiceV1;
++    let mut h = HomeostaticSnapshot::baseline(t);
++    h.drives = d;
++    h.hormones.sleep_pressure = 0.6;
++    PerceptionFrame::new(
++        OrganismId(1),
++        t,
++        profile,
++        SensorySnapshot::new(
++            OrganismId(1),
++            t,
++            Vec3f::ZERO,
++            SensoryChannels::ZERO,
++            Default::default(),
++        )
++        .unwrap(),
++        BodySnapshot {
++            pose: Pose::IDENTITY,
++            velocity: Velocity::ZERO,
++        },
++        h,
++        candidates,
++        SensorProfileProvenance::new(profile, SensoryAbiVersion::CURRENT, t).unwrap(),
++        slots,
++    )
++    .unwrap()
++}
++fn frame(d: DriveSnapshot, include_play: bool) -> PerceptionFrame {
++    let specs = [
++        (1, ActionKind::Idle, CandidateActionFamily::Idle),
++        (3, ActionKind::Rest, CandidateActionFamily::Rest),
++        (400, ActionKind::Vocalize, CandidateActionFamily::Other),
++        (103, ActionKind::Move, CandidateActionFamily::Approach),
++        (212, ActionKind::Interact, CandidateActionFamily::Contact),
++        (104, ActionKind::Hold, CandidateActionFamily::Other),
++        (700, ActionKind::Rest, CandidateActionFamily::Rest),
++    ];
++    let mut cs: Vec<_> = specs
++        .into_iter()
++        .enumerate()
++        .map(|(i, (id, k, f))| {
++            candidate(
++                i,
++                id,
++                k,
++                f,
++                CandidateObservationRef::None,
++                ActionTarget::NONE,
++                CandidateFeatureVector::zero().with_intrinsic_action_basis(k),
++            )
++        })
++        .collect();
++    let s = slot();
++    let target = ActionTarget::new(Some(WorldEntityId(10)), Some(Vec3f::ZERO));
++    // GRAB is also the same-target release primitive in the real dispatcher.
++    // Here this is candidate isolation only, not a physical release receipt.
++    for (id, k, f) in [
++        (211, ActionKind::Interact, CandidateActionFamily::Contact),
++        (
++            ActionKind::Inspect.canonical_id().raw(),
++            ActionKind::Inspect,
++            CandidateActionFamily::Inspect,
++        ),
++        (900, ActionKind::Interact, CandidateActionFamily::Other),
++    ] {
++        cs.push(candidate(
++            cs.len(),
++            id,
++            k,
++            f,
++            CandidateObservationRef::ObjectSlot(0),
++            target,
++            s.candidate_features().unwrap(),
++        ));
++    }
++    if include_play {
++        cs.push(candidate(
++            cs.len(),
++            213,
++            ActionKind::Interact,
++            CandidateActionFamily::Other,
++            CandidateObservationRef::ObjectSlot(0),
++            target,
++            s.candidate_features().unwrap(),
++        ));
++    }
++    rebuild(d, cs, vec![s])
++}
++fn receptors(t: Tick, signal: f32) -> NeuralReceptorFrame {
++    NeuralReceptorFrame {
++        schema_version: BIOCHEMICAL_GRAPH_SCHEMA_VERSION,
++        source_chemistry_version: BIOCHEMICAL_GRAPH_SCHEMA_VERSION,
++        source_tick: t,
++        activations: [
++            NeuralReceptorClass::InteroceptiveInput,
++            NeuralReceptorClass::RegionalExcitability,
++            NeuralReceptorClass::ProjectionGain,
++            NeuralReceptorClass::LocalThreshold,
++            NeuralReceptorClass::StructuralGrowth,
++            NeuralReceptorClass::Sleep,
++            NeuralReceptorClass::Consolidation,
++        ]
++        .into_iter()
++        .map(|class| NeuralReceptorActivation { class, signal })
++        .collect(),
++    }
++}
++fn modulation(e: &M2BoredomDetachedCpuV1, r: &NeuralReceptorFrame) -> MediationModulationV1 {
++    let x = NeuralReceptorEffects::from_frame(
++        r,
++        &NeuralReceptorPhenotype::compile(e.source()).unwrap(),
++    )
++    .unwrap();
++    MediationModulationV1 {
++        interoceptive_gain: x.interoceptive_gain,
++        regional_gain: x.regional_excitability,
++        projection_gain: x.projection_gain,
++        threshold: x.local_threshold_shift,
++        offset: ((x.structural_growth_gate + x.sleep_gate + x.consolidation_gate) / 3. - 0.5)
++            * 0.05,
++    }
++}
++fn tick(
++    e: &M2BoredomDetachedCpuV1,
++    f: &PerceptionFrame,
++    r: &NeuralReceptorFrame,
++) -> TrainingReplayTick {
++    let mut t = super::super::tests::tick(&e.group, f);
++    let m = modulation(e, r);
++    t.projection_gain = m.projection_gain;
++    t.local_threshold_shift = m.threshold;
++    t
++}
++fn run(
++    e: &mut M2BoredomDetachedCpuV1,
++    f: &PerceptionFrame,
++    r: &NeuralReceptorFrame,
++) -> M2BoredomProbeResultV1 {
++    let t = tick(e, f, r);
++    let rows = e.bind_rows(f, &t).unwrap();
++    e.step(
++        f,
++        t,
++        &rows,
++        r,
++        u32::MAX >> (32 - rows.len()),
++        [true; 6],
++        u64::MAX,
++    )
++    .unwrap()
++}
++fn synthetic(
++    e: &mut M2BoredomDetachedCpuV1,
++    f: &PerceptionFrame,
++    r: &NeuralReceptorFrame,
++) -> MediationReceiptV1 {
++    let t = tick(e, f, r);
++    let m = modulation(e, r);
++    let mut state = e.group.core.snapshot();
++    let mut components = vec![[0.; 5]; t.candidates.len()];
++    let mut raw = [0.; 12];
++    raw[..11].copy_from_slice(&f.homeostasis().drives.to_array());
++    raw[11] = f.homeostasis().hormones.sleep_pressure;
++    let mut gates = [0.; SLOTS];
++    for b in play_bindings(f).unwrap() {
++        gates[b.candidate_index] = 1.;
++    }
++    let mut run = BoredomRunV1 {
++        recipe: &e.recipe,
++        banks: &mut e.play,
++        gates,
++        control: e.control,
++        work: M2BoredomWorkV1::default(),
++    };
++    let out = run_partition_banks_with_boredom(
++        &e.group.core.recipe,
++        e.mode,
++        state.source_hash,
++        &mut state.activations,
++        &mut state.ema,
++        &mut state.metabolic,
++        &mut components,
++        &t.candidates,
++        raw,
++        0.6,
++        m,
++        Some(&mut run),
++    )
++    .unwrap();
++    assert_eq!(run.work, M2BoredomWorkV1::EXPECTED);
++    assert_eq!(run.work.cost_q24(), 456);
++    out
++}
++fn eval_bits(e: &TrainingReplayEvaluation) -> Vec<u8> {
++    serde_json::to_vec(
++        &[
++            &e.candidate_logits,
++            &e.final_activations,
++            &e.final_activity_ema,
++            &e.final_metabolic_load,
++        ]
++        .map(|b| {
++            b.iter()
++                .map(|r| r.iter().map(|x| x.to_bits()).collect::<Vec<_>>())
++                .collect::<Vec<_>>()
++        }),
++    )
++    .unwrap()
++}
++
++#[test]
++fn boredom_recipe_native_counts_and_signed_zero_are_closed() {
++    let r = PlayLowered::pinned(RECIPE).unwrap();
++    assert_eq!(r.recipe.nodes[0].id, 2508);
++    assert_eq!(r.recipe.nodes[1].id, 2509);
++    assert_eq!(
++        r.branches
++            .branches()
++            .iter()
++            .map(|b| b.inputs.len())
++            .sum::<usize>(),
++        24
++    );
++    assert!(PlayLowered::pinned(&(RECIPE.to_owned() + " ")).is_err());
++    let mut e = fresh(MediationModeV1::Full, M2BoredomControlV1::Full);
++    for z in [0., -0.] {
++        let f = frame(drives(z), true);
++        let r = receptors(f.tick(), 0.);
++        let out = synthetic(&mut e, &f, &r);
++        assert_eq!(out.components.last().unwrap()[4].to_bits(), 0f32.to_bits());
++        assert_eq!(
++            e.play.activations[0].to_bits(),
++            e.play.activations[1].to_bits()
++        );
++        assert!(out
++            .core_logits
++            .iter()
++            .all(|x| x.is_finite() && x.abs() <= 4.));
++    }
++    let (i, a) = super::super::tests::source();
++    let mut bad = e.snapshot().unwrap();
++    bad.play.activations[0] = f32::NAN;
++    assert!(M2BoredomDetachedCpuV1::restore(&i, &a, e.mode, e.control, bad).is_err());
++    let mut bad = e.snapshot().unwrap();
++    bad.play.activations[0] = 12.01;
++    assert!(M2BoredomDetachedCpuV1::restore(&i, &a, e.mode, e.control, bad).is_err());
++}
++
++#[test]
++fn boredom_low_high_and_urgency_recovery_use_real_receptor_projection() {
++    let mut e = fresh(MediationModeV1::Full, M2BoredomControlV1::Full);
++    for signal in [0., 0.5, 1.] {
++        let low = frame(drives(0.1), true);
++        let high = frame(drives(0.6), true);
++        let r = receptors(high.tick(), signal);
++        let lo = synthetic(&mut e, &low, &r);
++        let hi = synthetic(&mut e, &high, &r);
++        let p = high.candidates().len() - 1;
++        assert_eq!(lo.components[p][4].to_bits(), 0f32.to_bits());
++        assert!(hi.components[p][4] > 0.);
++        assert!(hi.core_logits[p] > lo.core_logits[p]);
++        let pair = e.play.activations;
++        for axis in [1, 2, 3, 7, 6] {
++            let mut urgent = drives(0.6);
++            match axis {
++                1 => urgent.fatigue = 1.,
++                2 => urgent.fear = 1.,
++                3 => urgent.pain = 1.,
++                7 => urgent.temperature_stress = 1.,
++                6 => urgent.brain_atp = 0.,
++                _ => unreachable!(),
++            }
++            let f = frame(urgent, true);
++            let inhibited = synthetic(&mut e, &f, &r);
++            assert_eq!(inhibited.components[p][4].to_bits(), 0f32.to_bits());
++            assert_eq!(inhibited.raw_drives[9].to_bits(), 0.6f32.to_bits());
++            assert_eq!(
++                inhibited.positive_opponents[9].to_bits(),
++                hi.positive_opponents[9].to_bits()
++            );
++            let recovered = synthetic(&mut e, &high, &r);
++            assert_eq!(e.play.activations.map(f32::to_bits), pair.map(f32::to_bits));
++            assert_eq!(
++                recovered.components[p][4].to_bits(),
++                hi.components[p][4].to_bits()
++            );
++        }
++        let mut hunger = drives(0.6);
++        hunger.hunger = 1.;
++        hunger.curiosity = 1.; // Distinct curiosity axis does not replace boredom.
++        let h = synthetic(&mut e, &frame(hunger, true), &r);
++        assert_eq!(h.components[p][4].to_bits(), hi.components[p][4].to_bits());
++        assert_eq!(e.play.activations.map(f32::to_bits), pair.map(f32::to_bits));
++    }
++}
++
++#[test]
++fn boredom_only_exact_play_changes_noop_vocal_grab_and_other_bits() {
++    let f = frame(drives(0.8), true);
++    let r = receptors(f.tick(), 0.5);
++    let mut full = fresh(MediationModeV1::Full, M2BoredomControlV1::Full);
++    let mut sham = fresh(
++        MediationModeV1::Full,
++        M2BoredomControlV1::EqualWorkReadoutSham,
++    );
++    let a = synthetic(&mut full, &f, &r);
++    let b = synthetic(&mut sham, &f, &r);
++    assert_eq!(full.play.activations, sham.play.activations);
++    for i in 0..f.candidates().len() - 1 {
++        assert_eq!(
++            a.components[i].map(f32::to_bits),
++            b.components[i].map(f32::to_bits)
++        );
++        assert_eq!(a.core_logits[i].to_bits(), b.core_logits[i].to_bits());
++    }
++    let absent = frame(drives(0.8), false);
++    let absent_a = synthetic(&mut full, &absent, &r);
++    assert_eq!(
++        absent_a.core_logits,
++        a.core_logits[..a.core_logits.len() - 1]
++    );
++    let mut ds = fresh(MediationModeV1::DriveSham, M2BoredomControlV1::Full);
++    let d = synthetic(&mut ds, &f, &r);
++    assert_eq!(d.components.last().unwrap()[4].to_bits(), 0f32.to_bits());
++}
++
++#[test]
++fn boredom_exact_target_provenance_and_malformed_play_fail_before_source() {
++    let mut e = fresh(MediationModeV1::Full, M2BoredomControlV1::Full);
++    let f = frame(drives(0.8), true);
++    let r = receptors(f.tick(), 0.);
++    let t = tick(&e, &f, &r);
++    let rows = e.bind_rows(&f, &t).unwrap();
++    let before = serde_json::to_vec(&e.snapshot().unwrap()).unwrap();
++    let bindings = play_bindings(&f).unwrap();
++    assert_eq!(bindings.len(), 1);
++    assert_eq!(bindings[0].tracked_object_id, TrackedObjectId(41));
++    assert_eq!(bindings[0].target, f.candidates().last().unwrap().target);
++    for (kind, family) in [
++        (ActionKind::Vocalize, CandidateActionFamily::Other),
++        (ActionKind::Interact, CandidateActionFamily::Contact),
++    ] {
++        let mut cs = f.candidates().to_vec();
++        let last = cs.last_mut().unwrap();
++        last.kind = kind;
++        last.family = family;
++        let bad = rebuild(drives(0.8), cs, vec![slot()]);
++        assert!(e.bind_rows(&bad, &tick(&e, &bad, &r)).is_err());
++    }
++    let mut cs = f.candidates().to_vec();
++    let n = cs.len() - 1;
++    cs[n] = candidate(
++        n,
++        213,
++        ActionKind::Idle,
++        CandidateActionFamily::Idle,
++        CandidateObservationRef::None,
++        ActionTarget::NONE,
++        CandidateFeatureVector::zero().with_intrinsic_action_basis(ActionKind::Idle),
++    );
++    assert!(play_bindings(&rebuild(drives(0.8), cs, vec![slot()])).is_err());
++    let legacy = PerceptionFrame::new(
++        f.organism_id(),
++        f.tick(),
++        SensorProfile::GroundedObjectSlotsV1,
++        f.sensory().clone(),
++        f.body(),
++        *f.homeostasis(),
++        f.candidates()
++            .iter()
++            .filter(|c| c.action_id != ActionId(700))
++            .cloned()
++            .enumerate()
++            .map(|(i, mut c)| {
++                c.candidate_index = i as u16;
++                c
++            })
++            .collect(),
++        SensorProfileProvenance::new(
++            SensorProfile::GroundedObjectSlotsV1,
++            SensoryAbiVersion::CURRENT,
++            f.tick(),
++        )
++        .unwrap(),
++        vec![slot()],
++    )
++    .unwrap();
++    assert!(play_bindings(&legacy).is_err());
++    let mut cs = f.candidates().to_vec();
++    for c in &mut cs {
++        if matches!(c.observation, CandidateObservationRef::ObjectSlot(_)) {
++            c.target.entity = Some(WorldEntityId(11));
++        }
++    }
++    let changed = rebuild(drives(0.8), cs, vec![slot()]);
++    let t2 = tick(&e, &changed, &r);
++    assert!(e
++        .step(
++            &changed,
++            t2,
++            &rows,
++            &r,
++            (1 << rows.len()) - 1,
++            [true; 6],
++            u64::MAX
++        )
++        .is_err());
++    assert_eq!(serde_json::to_vec(&e.snapshot().unwrap()).unwrap(), before);
++    let mut rs = r.clone();
++    rs.source_tick = Tick::new(2);
++    assert!(e
++        .step(
++            &f,
++            t.clone(),
++            &rows,
++            &rs,
++            (1 << rows.len()) - 1,
++            [true; 6],
++            u64::MAX
++        )
++        .is_err());
++    assert!(e
++        .step(&f, t, &rows, &r, (1 << rows.len()) - 1, [true; 6], 0)
++        .is_err());
++    assert_eq!(serde_json::to_vec(&e.snapshot().unwrap()).unwrap(), before);
++}
++
++#[test]
++fn boredom_source_once_legacy_bytes_equal_work_and_cold_identity() {
++    let (i, a) = super::super::tests::source();
++    let f = frame(drives(0.8), true);
++    let r = receptors(f.tick(), 0.5);
++    for mode in [MediationModeV1::Full, MediationModeV1::DriveSham] {
++        let mut new = fresh(mode, M2BoredomControlV1::EqualWorkReadoutSham);
++        let mut old = RecoveryGroupDetachedCpuV2::fresh(&i, &a, mode).unwrap();
++        let t = tick(&new, &f, &r);
++        let rows = old.bind_rows(&f, &t).unwrap();
++        let old_out = old
++            .step(
++                &f,
++                t,
++                &rows,
++                modulation(&new, &r),
++                (1 << rows.len()) - 1,
++                [true; 6],
++                u64::MAX,
++            )
++            .unwrap();
++        let new_out = run(&mut new, &f, &r);
++        assert_eq!(
++            eval_bits(&new_out.source_evaluation),
++            eval_bits(&old_out.source_evaluation)
++        );
++        assert_eq!(new_out.receipt.core.source_execution_count, 1);
++        assert_eq!(
++            new_out.receipt.core.core_logits,
++            old_out.receipt.core.core_logits
++        );
++        assert_eq!(
++            new_out.receipt.group_activations,
++            old_out.receipt.extension_activations
++        );
++        assert_eq!(
++            new_out.receipt.group_logit.to_bits(),
++            old_out.receipt.scores.group.to_bits()
++        );
++        assert_eq!(
++            new_out.receipt.operation_logits,
++            old_out.receipt.scores.operations
++        );
++        assert_eq!(
++            new_out.receipt.total_arithmetic_reservation_q24,
++            old_out.receipt.core.detached_arithmetic_reservation_q24
++                + old_out.receipt.extension_arithmetic_q24
++                + 456
++        );
++        let old_bytes = serde_json::to_vec(&old.snapshot()).unwrap();
++        let old_restored =
++            RecoveryGroupDetachedCpuV2::restore(&i, &a, mode, old.snapshot()).unwrap();
++        assert_eq!(
++            serde_json::to_vec(&old_restored.snapshot()).unwrap(),
++            old_bytes
++        );
++        let snapshot = new.snapshot().unwrap();
++        let bytes = serde_json::to_vec(&snapshot).unwrap();
++        let mut cold = M2BoredomDetachedCpuV1::restore(
++            &i,
++            &a,
++            mode,
++            new.control,
++            serde_json::from_slice(&bytes).unwrap(),
++        )
++        .unwrap();
++        assert_eq!(
++            serde_json::to_vec(&cold.snapshot().unwrap()).unwrap(),
++            bytes
++        );
++        let warm = run(&mut new, &f, &r);
++        let cold_out = run(&mut cold, &f, &r);
++        assert_eq!(
++            serde_json::to_vec(&warm.receipt).unwrap(),
++            serde_json::to_vec(&cold_out.receipt).unwrap()
++        );
++        assert_eq!(new.snapshot().unwrap(), cold.snapshot().unwrap());
++        let other = if mode == MediationModeV1::Full {
++            MediationModeV1::DriveSham
++        } else {
++            MediationModeV1::Full
++        };
++        assert!(
++            M2BoredomDetachedCpuV1::restore(&i, &a, other, new.control, snapshot.clone()).is_err()
++        );
++        assert!(M2BoredomDetachedCpuV1::restore(
++            &i,
++            &a,
++            mode,
++            M2BoredomControlV1::Full,
++            snapshot.clone()
++        )
++        .is_err());
++        let inner: RecoveryGroupSnapshotV2 = serde_json::from_str(&snapshot.group_json).unwrap();
++        assert!(RecoveryGroupDetachedCpuV2::restore(&i, &a, mode, inner.clone()).is_err());
++        let core = serde_json::from_str(&inner.core_json).unwrap();
++        assert!(MediationDetachedCpuV1::restore(&i, &a, mode, core).is_err());
++        let mut swapped = snapshot;
++        swapped.group_json = serde_json::to_string(&old.snapshot()).unwrap();
++        assert!(M2BoredomDetachedCpuV1::restore(&i, &a, mode, new.control, swapped).is_err());
++        assert!(serde_json::from_slice::<M2BoredomSnapshotV1>(&old_bytes).is_err());
++    }
++}
++
++#[test]
++fn boredom_full_and_readout_sham_keep_identical_reservation_and_source() {
++    for has_play in [false, true] {
++        let f = frame(drives(0.8), has_play);
++        let r = receptors(f.tick(), 1.);
++        let mut full = fresh(MediationModeV1::Full, M2BoredomControlV1::Full);
++        let mut sham = fresh(
++            MediationModeV1::Full,
++            M2BoredomControlV1::EqualWorkReadoutSham,
++        );
++        let a = run(&mut full, &f, &r);
++        let b = run(&mut sham, &f, &r);
++        assert_eq!(a.receipt.play_work, b.receipt.play_work);
++        assert_eq!(
++            a.receipt.total_arithmetic_reservation_q24,
++            b.receipt.total_arithmetic_reservation_q24
++        );
++        assert_eq!(
++            eval_bits(&a.source_evaluation),
++            eval_bits(&b.source_evaluation)
++        );
++        assert_eq!(full.group.core.state.source, sham.group.core.state.source);
++        assert_eq!(full.play, sham.play);
++        let (i, weights) = super::super::tests::source();
++        let mut cold = M2BoredomDetachedCpuV1::restore(
++            &i,
++            &weights,
++            full.mode,
++            full.control,
++            full.snapshot().unwrap(),
++        )
++        .unwrap();
++        let warm = run(&mut full, &f, &r);
++        let resumed = run(&mut cold, &f, &r);
++        assert_eq!(
++            serde_json::to_vec(&warm.receipt).unwrap(),
++            serde_json::to_vec(&resumed.receipt).unwrap()
++        );
++        assert_eq!(full.snapshot().unwrap(), cold.snapshot().unwrap());
++    }
++}
+diff --git a/crates/alife_training/src/cpu/motor_mediation/confidence/boredom.rs b/crates/alife_training/src/cpu/motor_mediation/confidence/boredom.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/alife_training/src/cpu/motor_mediation/confidence/boredom.rs
+@@ -0,0 +1,481 @@
++//! Opt-in SOURCE-ONLY M2 Play route. No world host or acquired-state migration.
++//! The extra native pair is inserted before the existing bounded D proposal port.
++use super::*;
++
++pub const M2_BOREDOM_RECIPE_SHA256: &str =
++    "65a9de085b1b7bfa4c979358dd8723fc0f0edc36a975955a8f3456b3b71a4bfe";
++const RECIPE: &str =
++    include_str!("../../../../../../docs/experiments/m2-boredom-routing-v1/recipe.json");
++const SCHEMA: &str = "detached-m2-boredom-play-v1-not-a-world-host";
++pub(in crate::cpu::motor_mediation) const CORE_SCHEMA: &str = "detached-m2-boredom-play-core-v1";
++pub(in crate::cpu::motor_mediation) const GROUP_SCHEMA: &str = "detached-m2-boredom-play-group-v1";
++
++#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
++pub enum M2BoredomControlV1 {
++    Full,
++    EqualWorkReadoutSham,
++}
++
++/// Fixed semantic work in every mode, including all absent candidate slots.
++/// Constants/validation, binding, derivative diagnostics and serialization are
++/// unpriced bookkeeping, as in detached M2. This is not a host ATP debit.
++#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++pub struct M2BoredomWorkV1 {
++    pub phases: u64,
++    pub neuron_updates: u64,
++    pub assignments: u64,
++    pub branches: u64,
++    pub branch_inputs: u64,
++    pub drive_products: u64,
++}
++impl M2BoredomWorkV1 {
++    pub const EXPECTED: Self = Self {
++        phases: 1,
++        neuron_updates: 2,
++        assignments: 2,
++        branches: 2,
++        branch_inputs: 24,
++        drive_products: 64,
++    };
++    // Private: only the small fixed EXPECTED or measured counters call this.
++    pub(in crate::cpu::motor_mediation) fn cost_q24(self) -> u64 {
++        self.neuron_updates * 32
++            + self.assignments * 4
++            + self.branches * 16
++            + self.branch_inputs * 4
++            + self.drive_products * 4
++    }
++}
++
++#[derive(Deserialize)]
++struct PlayRecipe {
++    nodes: [Node; 2],
++    branches: Vec<Branch>,
++    play_readout: [f32; 2],
++}
++struct PlayLowered {
++    recipe: PlayRecipe,
++    branches: DendriticBranchSet,
++}
++impl PlayLowered {
++    fn pinned(bytes: &str) -> Result<Self, TrainingError> {
++        if format!("{:x}", Sha256::digest(bytes.as_bytes())) != M2_BOREDOM_RECIPE_SHA256 {
++            return Err(invalid());
++        }
++        let recipe: PlayRecipe = serde_json::from_str(bytes).map_err(|_| invalid())?;
++        if recipe
++            .nodes
++            .iter()
++            .enumerate()
++            .any(|(i, n)| n.id != 2508 + i || n.phase != 7)
++            || recipe.branches.len() != 2
++            || recipe.play_readout != [0.25, -0.25]
++            || recipe.branches.iter().enumerate().any(|(i, b)| {
++                b.target != 2508 + i as u32
++                    || b.inputs.len() != 12
++                    || b.inputs.iter().any(|(s, _)| !(2048..2108).contains(s))
++            })
++        {
++            return Err(invalid());
++        }
++        let branches = DendriticBranchSet::new(
++            recipe
++                .branches
++                .iter()
++                .map(|b| {
++                    DendriticBranch::new(
++                        b.target - START as u32,
++                        b.threshold,
++                        b.gain,
++                        b.inputs
++                            .iter()
++                            .map(|&(s, w)| DendriticInputRef::new(s - START as u32, w))
++                            .collect::<Result<Vec<_>, _>>()?,
++                    )
++                })
++                .collect::<Result<Vec<_>, ScaffoldContractError>>()?,
++        )?;
++        branches.validate_for_neuron_count(462)?;
++        Ok(Self { recipe, branches })
++    }
++}
++
++#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++struct PlayBanks {
++    activations: [f32; 2],
++    ema: [f32; 2],
++    metabolic: [f32; 2],
++}
++impl PlayBanks {
++    fn zero() -> Self {
++        Self {
++            activations: [0.; 2],
++            ema: [0.; 2],
++            metabolic: [0.; 2],
++        }
++    }
++    fn validate(&self) -> Result<(), TrainingError> {
++        // Identity soma: offset - threshold + projection * branch in [-8,12]
++        // under the declared modulation envelope; no accumulated carry (leak1).
++        if self
++            .activations
++            .iter()
++            .any(|x| !x.is_finite() || !(-8. ..=12.).contains(x))
++        {
++            return Err(invalid());
++        }
++        if self
++            .ema
++            .iter()
++            .chain(&self.metabolic)
++            .any(|x| !x.is_finite() || !(0. ..=1.).contains(x))
++        {
++            return Err(invalid());
++        }
++        Ok(())
++    }
++}
++
++/// This is observed candidate provenance, not a claim of physical toy legality.
++#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++pub struct M2PlayBindingV1 {
++    pub candidate_index: usize,
++    pub action_id: ActionId,
++    pub target: ActionTarget,
++    pub observation: CandidateObservationRef,
++    pub tracked_object_id: TrackedObjectId,
++    pub feature_digest: CandidateFeatureDigest,
++}
++fn play_bindings(frame: &PerceptionFrame) -> Result<Vec<M2PlayBindingV1>, TrainingError> {
++    // Validates frame/profile, features, canonical slot order, target presence,
++    // per-slot exact target consistency and entity-to-slot uniqueness.
++    prepare_sleep_choice_grounded_drive_features_v1(frame)?;
++    let mut result = vec![];
++    for (i, c) in frame.candidates().iter().enumerate() {
++        if c.action_id != ActionId(213) {
++            continue;
++        }
++        let CandidateObservationRef::ObjectSlot(slot) = c.observation else {
++            return Err(invalid());
++        };
++        if c.kind != ActionKind::Interact
++            || c.family != CandidateActionFamily::Other
++            || c.target.entity.is_none()
++            || c.target.position.is_none()
++        {
++            return Err(invalid());
++        }
++        c.target.validate()?;
++        let observed = frame
++            .grounded_object_slots()
++            .get(usize::from(slot))
++            .ok_or_else(invalid)?;
++        if observed.slot_index != slot || observed.candidate_features()? != c.features {
++            return Err(invalid());
++        }
++        result.push(M2PlayBindingV1 {
++            candidate_index: i,
++            action_id: c.action_id,
++            target: c.target,
++            observation: c.observation,
++            tracked_object_id: observed.tracked_object_id,
++            feature_digest: c.feature_digest()?,
++        });
++    }
++    Ok(result)
++}
++
++/// Private borrowed appendage only: cannot own or execute the source.
++pub(in crate::cpu::motor_mediation) struct BoredomRunV1<'a> {
++    recipe: &'a PlayLowered,
++    banks: &'a mut PlayBanks,
++    gates: [f32; SLOTS],
++    control: M2BoredomControlV1,
++    work: M2BoredomWorkV1,
++}
++impl BoredomRunV1<'_> {
++    pub(in crate::cpu::motor_mediation) fn forward(
++        &mut self,
++        opponents: &[f32],
++        m: MediationModulationV1,
++    ) -> Result<[f32; SLOTS], TrainingError> {
++        if opponents.len() != ADDED || self.work != M2BoredomWorkV1::default() {
++            return Err(invalid());
++        }
++        m.validate()?;
++        finite(opponents)?;
++        self.banks.validate()?;
++        let previous = self.banks.clone();
++        self.work.phases += 1;
++        for (i, node) in self.recipe.recipe.nodes.iter().enumerate() {
++            let b = &self.recipe.branches.branches()[i];
++            let dendritic = native_kernel::dendritic_activation(opponents, b);
++            let result = native_kernel::neuron_step(
++                &node.dynamics,
++                CellState {
++                    activation: previous.activations[i],
++                    ema: previous.ema[i],
++                    metabolic: previous.metabolic[i],
++                },
++                m.offset,
++                0.,
++                dendritic,
++                m.projection_gain,
++                m.threshold,
++            );
++            self.banks.activations[i] = result.state.activation;
++            self.banks.ema[i] = result.state.ema;
++            self.banks.metabolic[i] = result.state.metabolic;
++            self.work.neuron_updates += 1;
++            self.work.assignments += 1;
++            self.work.branches += 1;
++            self.work.branch_inputs += b.inputs.len() as u64;
++        }
++        self.banks.validate()?;
++        let mut readouts = [0.; SLOTS];
++        let enabled = f32::from(self.control == M2BoredomControlV1::Full);
++        for (slot, value) in readouts.iter_mut().enumerate() {
++            for (cell, weight) in self.recipe.recipe.play_readout.iter().enumerate() {
++                *value += self.banks.activations[cell] * (self.gates[slot] * enabled * weight);
++                self.work.drive_products += 1;
++            }
++        }
++        finite(&readouts)?;
++        if self.work != M2BoredomWorkV1::EXPECTED {
++            return Err(invalid());
++        }
++        Ok(readouts)
++    }
++}
++
++#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++pub struct M2BoredomSnapshotV1 {
++    schema: String,
++    recipe: String,
++    mode: MediationModeV1,
++    control: M2BoredomControlV1,
++    generation: u64,
++    // New inner schemas as well: unwrapping does not admit this to old restores.
++    group_json: String,
++    play: PlayBanks,
++}
++#[derive(Debug, Clone, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++pub struct M2BoredomReceiptV1 {
++    pub schema: String,
++    pub recipe: String,
++    pub mode: MediationModeV1,
++    pub control: M2BoredomControlV1,
++    pub frame_digest: PerceptionFrameDigest,
++    pub core: MediationReceiptV1,
++    pub group_components: [f32; 5],
++    pub group_activations: [f32; 16],
++    pub group_logit: f64,
++    pub operation_logits: [f64; 2],
++    pub group_arithmetic_q24: u64,
++    pub group_source_products: u64,
++    pub play_bindings: Vec<M2PlayBindingV1>,
++    pub play_activations: [f32; 2],
++    pub play_work: M2BoredomWorkV1,
++    pub total_arithmetic_reservation_q24: u64,
++}
++pub struct M2BoredomProbeResultV1 {
++    pub source_evaluation: TrainingReplayEvaluation,
++    pub receipt: M2BoredomReceiptV1,
++    // No exposed sampler, old-policy action, gradient or update API until a
++    // separate policy identity and world admission are qualified. The internal
++    // old group binding is used only for shared arithmetic and is not exported.
++}
++pub struct M2BoredomDetachedCpuV1 {
++    group: RecoveryGroupDetachedCpuV2,
++    recipe: PlayLowered,
++    mode: MediationModeV1,
++    control: M2BoredomControlV1,
++    play: PlayBanks,
++}
++impl M2BoredomDetachedCpuV1 {
++    pub fn fresh(
++        inputs: &PhenotypeCompilerInputs,
++        asset: &FoundationWeightAsset,
++        mode: MediationModeV1,
++        control: M2BoredomControlV1,
++    ) -> Result<Self, TrainingError> {
++        // Existing fresh admission still requires genetic source, exact 2048 /
++        // 34048 capacity and no M0. It rejects DirectSource. No imported banks.
++        let mut group = RecoveryGroupDetachedCpuV2::fresh(inputs, asset, mode)?;
++        group.core.state.schema = CORE_SCHEMA.into();
++        group.core.state.recipe = M2_BOREDOM_RECIPE_SHA256.into();
++        group.state.schema = GROUP_SCHEMA.into();
++        group.state.recipe = M2_BOREDOM_RECIPE_SHA256.into();
++        group.state.core_json =
++            serde_json::to_string(&group.core.snapshot()).map_err(|_| invalid())?;
++        Ok(Self {
++            group,
++            recipe: PlayLowered::pinned(RECIPE)?,
++            mode,
++            control,
++            play: PlayBanks::zero(),
++        })
++    }
++    pub fn source(&self) -> &BrainPhenotype {
++        self.group.source()
++    }
++    pub fn source_state(&self) -> &TrainingInitialState {
++        self.group.source_state()
++    }
++    pub fn bind_rows(
++        &self,
++        frame: &PerceptionFrame,
++        tick: &TrainingReplayTick,
++    ) -> Result<Vec<MediationRowV1>, TrainingError> {
++        play_bindings(frame)?;
++        self.group.bind_rows(frame, tick)
++    }
++    pub fn snapshot(&self) -> Result<M2BoredomSnapshotV1, TrainingError> {
++        Ok(M2BoredomSnapshotV1 {
++            schema: SCHEMA.into(),
++            recipe: M2_BOREDOM_RECIPE_SHA256.into(),
++            mode: self.mode,
++            control: self.control,
++            generation: self.group.core.state.generation,
++            group_json: serde_json::to_string(&self.group.snapshot()).map_err(|_| invalid())?,
++            play: self.play.clone(),
++        })
++    }
++    pub fn restore(
++        inputs: &PhenotypeCompilerInputs,
++        asset: &FoundationWeightAsset,
++        mode: MediationModeV1,
++        control: M2BoredomControlV1,
++        snapshot: M2BoredomSnapshotV1,
++    ) -> Result<Self, TrainingError> {
++        if snapshot.schema != SCHEMA
++            || snapshot.recipe != M2_BOREDOM_RECIPE_SHA256
++            || snapshot.mode != mode
++            || snapshot.control != control
++        {
++            return Err(invalid());
++        }
++        snapshot.play.validate()?;
++        let state: RecoveryGroupSnapshotV2 =
++            serde_json::from_str(&snapshot.group_json).map_err(|_| invalid())?;
++        if state.schema != GROUP_SCHEMA || state.recipe != M2_BOREDOM_RECIPE_SHA256 {
++            return Err(invalid());
++        }
++        for (bank, bounded) in [
++            (&state.activations, false),
++            (&state.ema, true),
++            (&state.metabolic, true),
++        ] {
++            if bank
++                .iter()
++                .any(|x| !x.is_finite() || (bounded && !(0. ..=1.).contains(x)))
++            {
++                return Err(invalid());
++            }
++        }
++        let core: MediationDetachedSnapshotV1 =
++            serde_json::from_str(&state.core_json).map_err(|_| invalid())?;
++        if core.generation != snapshot.generation {
++            return Err(invalid());
++        }
++        let mut fresh = Self::fresh(inputs, asset, mode, control)?;
++        // Shared validation still checks exact schema, recipe, source hash/asset,
++        // mode, dendrites and every bank's bounds. No old-envelope retagging.
++        fresh.group.core = MediationDetachedCpuV1::restore_into(fresh.group.core, core)?;
++        fresh.group.state = state;
++        fresh.play = snapshot.play;
++        Ok(fresh)
++    }
++    #[allow(clippy::too_many_arguments)]
++    pub fn step(
++        &mut self,
++        frame: &PerceptionFrame,
++        tick: TrainingReplayTick,
++        rows: &[MediationRowV1],
++        receptors: &NeuralReceptorFrame,
++        attempt_mask: u32,
++        available_effectors: [bool; 6],
++        available_arithmetic_q24: u64,
++    ) -> Result<M2BoredomProbeResultV1, TrainingError> {
++        receptors.validate_contract()?;
++        if receptors.source_tick != frame.tick() {
++            return Err(invalid());
++        }
++        let effects = NeuralReceptorEffects::from_frame(
++            receptors,
++            &NeuralReceptorPhenotype::compile(self.source())?,
++        )?;
++        let m = MediationModulationV1 {
++            interoceptive_gain: effects.interoceptive_gain,
++            regional_gain: effects.regional_excitability,
++            projection_gain: effects.projection_gain,
++            threshold: effects.local_threshold_shift,
++            offset: ((effects.structural_growth_gate
++                + effects.sleep_gate
++                + effects.consolidation_gate)
++                / 3.
++                - 0.5)
++                * 0.05,
++        };
++        m.validate()?;
++        let bindings = play_bindings(frame)?;
++        let mut gates = [0.; SLOTS];
++        for b in &bindings {
++            gates[b.candidate_index] = 1.;
++        }
++        // Entire extra bank is staged. Group step already rolls the source back
++        // on any late error, and publishes group banks only after all checks.
++        let mut next = self.play.clone();
++        let mut run = BoredomRunV1 {
++            recipe: &self.recipe,
++            banks: &mut next,
++            gates,
++            control: self.control,
++            work: M2BoredomWorkV1::default(),
++        };
++        let result = self.group.step_with_boredom(
++            frame,
++            tick,
++            rows,
++            m,
++            attempt_mask,
++            available_effectors,
++            available_arithmetic_q24,
++            Some(&mut run),
++        )?;
++        let work = run.work;
++        // Preflight reservation in the group already checked this same sum.
++        let total = result.receipt.core.detached_arithmetic_reservation_q24
++            + result.receipt.extension_arithmetic_q24;
++        self.play = next;
++        Ok(M2BoredomProbeResultV1 {
++            source_evaluation: result.source_evaluation,
++            receipt: M2BoredomReceiptV1 {
++                schema: SCHEMA.into(),
++                recipe: M2_BOREDOM_RECIPE_SHA256.into(),
++                mode: self.mode,
++                control: self.control,
++                frame_digest: frame.frame_digest(),
++                group_components: result.receipt.group_components,
++                group_activations: result.receipt.extension_activations,
++                group_logit: result.receipt.scores.group,
++                operation_logits: result.receipt.scores.operations,
++                group_arithmetic_q24: result.receipt.extension_arithmetic_q24,
++                group_source_products: result.receipt.extension_source_products,
++                core: result.receipt.core,
++                play_bindings: bindings,
++                play_activations: self.play.activations,
++                play_work: work,
++                total_arithmetic_reservation_q24: total,
++            },
++        })
++    }
++}
++
++#[cfg(test)]
++mod tests;
+diff --git a/crates/alife_training/src/cpu/motor_mediation/confidence.rs b/crates/alife_training/src/cpu/motor_mediation/confidence.rs
+--- a/crates/alife_training/src/cpu/motor_mediation/confidence.rs
++++ b/crates/alife_training/src/cpu/motor_mediation/confidence.rs
+@@ -245,6 +245,37 @@
+         available_effectors: [bool; 6],
+         available_arithmetic_q24: u64,
+     ) -> Result<RecoveryGroupProbeResultV2, TrainingError> {
++        self.step_with_boredom(
++            frame,
++            tick,
++            rows,
++            modulation,
++            attempt_mask,
++            available_effectors,
++            available_arithmetic_q24,
++            None,
++        )
++    }
++    #[allow(clippy::too_many_arguments)]
++    fn step_with_boredom(
++        &mut self,
++        frame: &PerceptionFrame,
++        tick: TrainingReplayTick,
++        rows: &[MediationRowV1],
++        modulation: MediationModulationV1,
++        attempt_mask: u32,
++        available_effectors: [bool; 6],
++        available_arithmetic_q24: u64,
++        boredom: Option<&mut boredom::BoredomRunV1<'_>>,
++    ) -> Result<RecoveryGroupProbeResultV2, TrainingError> {
++        let (schema, recipe) = if boredom.is_some() {
++            (boredom::GROUP_SCHEMA, M2_BOREDOM_RECIPE_SHA256)
++        } else {
++            (GROUP_SCHEMA, RECOVERY_GROUP_CONFIDENCE_RECIPE_SHA256)
++        };
++        if self.state.schema != schema || self.state.recipe != recipe {
++            return Err(invalid());
++        }
+         let binding = RecoveryGroupBindingV2::bind(
+             self.core.source(),
+             frame,
+@@ -270,6 +301,7 @@
+             source_products,
+             extension_cost,
+             core_budget,
++            boredom,
+         );
+         if result.is_err() {
+             self.core.state = before;
+@@ -287,9 +319,12 @@
+         source_products: u64,
+         extension_cost: u64,
+         core_budget: u64,
++        boredom: Option<&mut boredom::BoredomRunV1<'_>>,
+     ) -> Result<RecoveryGroupProbeResultV2, TrainingError> {
+         let input_tick = tick.clone();
+-        let base = self.core.step(frame, tick, rows, m, core_budget)?;
++        let base = self
++            .core
++            .step_with_boredom(frame, tick, rows, m, core_budget, boredom)?;
+         let p = &self.core.source;
+         let activation = &base.source_evaluation.final_activations[0];
+         let canonical =
+@@ -378,8 +413,8 @@
+         }
+         next.core_json = serde_json::to_string(&self.core.snapshot()).map_err(|_| invalid())?;
+         let receipt = RecoveryGroupNativeReceiptV2 {
+-            schema: GROUP_SCHEMA.into(),
+-            recipe: RECOVERY_GROUP_CONFIDENCE_RECIPE_SHA256.into(),
++            schema: self.state.schema.clone(),
++            recipe: self.state.recipe.clone(),
+             core: base.receipt,
+             group_components: common,
+             group_jacobian: group_jac,
+@@ -542,3 +577,7 @@
+ 
+ mod host;
+ pub use host::{GroupedAppendWorkV1, GroupedMotorReceiptV1, GroupedMotorStateV1};
++
++// Separately admitted source-only extension; never enabled by the old host.
++pub(super) mod boredom;
++pub use boredom::*;
+diff --git a/crates/alife_training/src/cpu/motor_mediation.rs b/crates/alife_training/src/cpu/motor_mediation.rs
+--- a/crates/alife_training/src/cpu/motor_mediation.rs
++++ b/crates/alife_training/src/cpu/motor_mediation.rs
+@@ -177,6 +177,23 @@
+         generation: u64,
+         source_hash: PhenotypeHash,
+     ) -> Result<Self, TrainingError> {
++        Self::bind_recipe(
++            frame,
++            index,
++            prefix,
++            generation,
++            source_hash,
++            M2_RECIPE_SHA256,
++        )
++    }
++    fn bind_recipe(
++        frame: &PerceptionFrame,
++        index: usize,
++        prefix: &TrainingReplayCandidate,
++        generation: u64,
++        source_hash: PhenotypeHash,
++        recipe: &str,
++    ) -> Result<Self, TrainingError> {
+         if frame.sensor_profile() != SensorProfile::GroundedObjectSlotsSleepChoiceV1
+             || frame.candidates().len() > SLOTS
+         {
+@@ -207,7 +224,7 @@
+         Ok(Self {
+             source_generation: generation,
+             source_hash,
+-            recipe: M2_RECIPE_SHA256.into(),
++            recipe: recipe.into(),
+             frame_digest: frame.frame_digest(),
+             candidate_index: index,
+             action_id: c.action_id,
+@@ -226,7 +243,26 @@
+         generation: u64,
+         source_hash: PhenotypeHash,
+     ) -> Result<(), TrainingError> {
+-        let expected = Self::bind(frame, index, prefix, generation, source_hash)?;
++        self.validate_recipe(
++            frame,
++            index,
++            prefix,
++            generation,
++            source_hash,
++            M2_RECIPE_SHA256,
++        )
++    }
++    #[allow(clippy::too_many_arguments)]
++    fn validate_recipe(
++        &self,
++        frame: &PerceptionFrame,
++        index: usize,
++        prefix: &TrainingReplayCandidate,
++        generation: u64,
++        source_hash: PhenotypeHash,
++        recipe: &str,
++    ) -> Result<(), TrainingError> {
++        let expected = Self::bind_recipe(frame, index, prefix, generation, source_hash, recipe)?;
+         if serde_json::to_vec(self).map_err(|_| invalid())?
+             != serde_json::to_vec(&expected).map_err(|_| invalid())?
+         {
+@@ -421,12 +457,13 @@
+             .iter()
+             .enumerate()
+             .map(|(i, c)| {
+-                MediationRowV1::bind(
++                MediationRowV1::bind_recipe(
+                     frame,
+                     i,
+                     c,
+                     self.state.generation,
+                     self.source.phenotype_hash(),
++                    &self.state.recipe,
+                 )
+             })
+             .collect()
+@@ -447,12 +484,17 @@
+         mode: MediationModeV1,
+         snapshot: MediationDetachedSnapshotV1,
+     ) -> Result<Self, TrainingError> {
+-        let mut fresh = Self::fresh(inputs, asset, mode)?;
+-        if snapshot.schema != SCHEMA
+-            || snapshot.recipe != M2_RECIPE_SHA256
++        Self::restore_into(Self::fresh(inputs, asset, mode)?, snapshot)
++    }
++    fn restore_into(
++        mut fresh: Self,
++        snapshot: MediationDetachedSnapshotV1,
++    ) -> Result<Self, TrainingError> {
++        if snapshot.schema != fresh.state.schema
++            || snapshot.recipe != fresh.state.recipe
+             || snapshot.source_hash != fresh.state.source_hash
+             || snapshot.source_asset != fresh.state.source_asset
+-            || snapshot.mode != mode
++            || snapshot.mode != fresh.state.mode
+             || snapshot.source.dendrites != fresh.state.source.dendrites
+         {
+             return Err(invalid());
+@@ -494,6 +536,33 @@
+         modulation: MediationModulationV1,
+         available_arithmetic_q24: u64,
+     ) -> Result<MediationProbeResultV1, TrainingError> {
++        self.step_with_boredom(
++            frame,
++            tick,
++            rows,
++            modulation,
++            available_arithmetic_q24,
++            None,
++        )
++    }
++    #[allow(clippy::too_many_arguments)]
++    fn step_with_boredom(
++        &mut self,
++        frame: &PerceptionFrame,
++        tick: TrainingReplayTick,
++        rows: &[MediationRowV1],
++        modulation: MediationModulationV1,
++        available_arithmetic_q24: u64,
++        boredom: Option<&mut confidence::boredom::BoredomRunV1<'_>>,
++    ) -> Result<MediationProbeResultV1, TrainingError> {
++        let (schema, recipe) = if boredom.is_some() {
++            (confidence::boredom::CORE_SCHEMA, M2_BOREDOM_RECIPE_SHA256)
++        } else {
++            (SCHEMA, M2_RECIPE_SHA256)
++        };
++        if self.state.schema != schema || self.state.recipe != recipe {
++            return Err(invalid());
++        }
+         modulation.validate()?;
+         if tick.microstep_count == 0
+             || rows.len() != tick.candidates.len()
+@@ -523,13 +592,24 @@
+                 return Err(invalid());
+             }
+ 
+-            row.validate(
+-                frame,
+-                i,
+-                c,
+-                self.state.generation,
+-                self.source.phenotype_hash(),
+-            )?;
++            if boredom.is_none() {
++                row.validate(
++                    frame,
++                    i,
++                    c,
++                    self.state.generation,
++                    self.source.phenotype_hash(),
++                )?;
++            } else {
++                row.validate_recipe(
++                    frame,
++                    i,
++                    c,
++                    self.state.generation,
++                    self.source.phenotype_hash(),
++                    &self.state.recipe,
++                )?;
++            }
+         }
+         let q = TrainingSequence {
+             phenotype_hash: self.source.phenotype_hash(),
+@@ -545,7 +625,14 @@
+         q.validate_for(&self.source)?;
+         let t = &q.ticks[0];
+         let generation = self.state.generation.checked_add(1).ok_or_else(invalid)?;
+-        let reservation = self.arithmetic_cost(t)?;
++        let reservation = self
++            .arithmetic_cost(t)?
++            .checked_add(if boredom.is_some() {
++                M2BoredomWorkV1::EXPECTED.cost_q24()
++            } else {
++                0
++            })
++            .ok_or_else(invalid)?;
+         if available_arithmetic_q24 < reservation {
+             return Err(invalid());
+         }
+@@ -584,17 +671,34 @@
+             })
+             .collect();
+         let mut next = self.state.clone();
+-        let mut receipt = run_partitions(
+-            &self.recipe,
+-            &mut next,
+-            &mut components,
+-            &t.candidates,
+-            drives,
+-            self.pressure_reference,
+-            modulation,
+-        )?;
+-        receipt.schema = SCHEMA.into();
+-        receipt.recipe = M2_RECIPE_SHA256.into();
++        let mut receipt = if let Some(boredom) = boredom {
++            run_partition_banks_with_boredom(
++                &self.recipe,
++                next.mode,
++                next.source_hash,
++                &mut next.activations,
++                &mut next.ema,
++                &mut next.metabolic,
++                &mut components,
++                &t.candidates,
++                drives,
++                self.pressure_reference,
++                modulation,
++                Some(boredom),
++            )?
++        } else {
++            run_partitions(
++                &self.recipe,
++                &mut next,
++                &mut components,
++                &t.candidates,
++                drives,
++                self.pressure_reference,
++                modulation,
++            )?
++        };
++        receipt.schema = self.state.schema.clone();
++        receipt.recipe = self.state.recipe.clone();
+         receipt.source_hash = self.source.phenotype_hash();
+         receipt.source_generation = self.state.generation;
+         receipt.final_generation = generation;
+@@ -720,6 +824,36 @@
+     pressure_reference: f32,
+     m: MediationModulationV1,
+ ) -> Result<MediationReceiptV1, TrainingError> {
++    run_partition_banks_with_boredom(
++        recipe,
++        mode,
++        source_hash,
++        activations,
++        ema,
++        metabolic,
++        components,
++        candidates,
++        drives,
++        pressure_reference,
++        m,
++        None,
++    )
++}
++#[allow(clippy::too_many_arguments)]
++fn run_partition_banks_with_boredom(
++    recipe: &Lowered,
++    mode: MediationModeV1,
++    source_hash: PhenotypeHash,
++    activations: &mut [f32],
++    ema: &mut [f32],
++    metabolic: &mut [f32],
++    components: &mut [[f32; 5]],
++    candidates: &[TrainingReplayCandidate],
++    drives: [f32; 12],
++    pressure_reference: f32,
++    m: MediationModulationV1,
++    mut boredom: Option<&mut confidence::boredom::BoredomRunV1<'_>>,
++) -> Result<MediationReceiptV1, TrainingError> {
+     if components.len() != candidates.len() || candidates.len() > SLOTS {
+         return Err(invalid());
+     }
+@@ -748,12 +882,24 @@
+             }
+         }
+         if phase == 3 {
++            // New identity only: pair runs after need opponents, before D ports.
++            let play = match boredom.as_mut() {
++                Some(run) => Some(run.forward(activations, m)?),
++                None => None,
++            };
+             for slot in 0..SLOTS {
+                 let mut d = 0.;
+                 for r in &recipe.manifest.drive_proposal_readouts {
+                     let input = candidates.get(slot).map_or(0., |c| cue(r, c));
+                     d += activations[r.source - START] * (input * r.weight);
+                     work.drive_products += 1;
++                }
++                // Zero/absent/sham rows were executed above. Preserve exact
++                // legacy bits, including signed zero, outside the typed Play port.
++                if let Some(play) = &play {
++                    if play[slot] != 0. {
++                        d += play[slot];
++                    }
+                 }
+                 if slot < components.len() {
+                     components[slot][4] = d;
+diff --git a/docs/experiments/m2-boredom-routing-v1/README.md b/docs/experiments/m2-boredom-routing-v1/README.md
+new file mode 100644
+--- /dev/null
++++ b/docs/experiments/m2-boredom-routing-v1/README.md
+@@ -0,0 +1,168 @@
++# Source-only M2 boredom-to-Play route V1
++
++Status: source-only formatted revision V2, not compiled or natively executed.
++Official rustfmt parsed/formatted all four Rust files and its check passed
++(edition 2021, skip_children=true). No Rust type checking is implied.
++This patch is an opt-in
++detached arithmetic candidate, not a world-host admission or an intervention in
++any existing organism. No seed, life, world, checkpoint, build target or native
++test was created or run. It does not establish useful play, relief, learning,
++ecological balance, GPU parity or production readiness.
++
++## Exact intervention
++
++Keep the pinned M2 recipe and recovery-confidence recipe unchanged. The existing
++source has 2,048 cells, M2 has 444, and the recovery extension has 16. New cells
++2508 and 2509 are a matched expression/common pair, giving 2,510 total cells.
++They never reuse M0's unrelated 2110 coordinate. Both have Identity activation,
++leak 1, bias 0, homeostatic gain 0, metabolic decay .01 and activity EMA decay .95.
++
++The declared phase order is 1, 2, **7**, 3, 4, 5, 6. Phase 7 runs after M2's
++raw/reference/opponent cells and before the existing five proposal ports. Its
++expression branch is the standard native dendrite:
++
++    q = 4*(a2095-a2097)
++        - 4*(a2055-a2057) - 4*(a2060-a2062) - 4*(a2065-a2067)
++        - 4*(a2085-a2087) - 4*(a2080-a2082)
++    b = tanh(max(q, 0))
++
++The implementation evaluates the manifest's individual products in their fixed
++order, rather than using the algebraic grouping above. The common branch has
++the same 12 source references and zero coefficients. Both branches use threshold
++0 and output gain 1, and both somas receive the identical offset, projection
++gain and local threshold through the same native kernel as the source. With
++leak 1 and homeostatic gain 0, their signed difference reflects this tick's
++expression, not persistent suppression after urgency resolves. EMA/metabolic
++banks still evolve and persist normally.
++
++Only exact observed Play action 213, Interact, Other, ObjectSlot, with its slot's
++features and an entity-plus-position target receives the two readout rows
++`+.25*a2508 - .25*a2509`. This enters the existing D component before its .25
++divisor, bounded paired ports and final integration. No post-policy probability
++correction, compulsory action or second source execution exists.
++
++The pair uses actual boredom axis 9/extension[0], not curiosity axis 5. Its
++inhibitors are positive-only fatigue, fear, pain, unsigned temperature stress
++and ATP **deficit**. ATP's base branch is reference-minus-availability, with
++reference .75. There is no ordinary-hunger veto. Actual biological boredom is
++never reduced or overwritten by this appendage. DriveSham replaces only the
++appendage drive inputs with references, as before; raw physiology stays present.
++
++The `.25` readout and `4` branch weights are provisional authored hypotheses,
++not measured biological calibration or equality with the M0 PlayV2 result.
++The API derives modulation using the actual `NeuralReceptorPhenotype` and
++`NeuralReceptorEffects::from_frame` path. The tests supply synthetic receptor
++frames and drive snapshots, not chemistry-generated ecological histories.
++
++## Identity and permissions of this API
++
++`M2BoredomDetachedCpuV1::fresh` accepts the existing strict genetic-only source
++admission, with Full or DriveSham core mode and Full or EqualWorkReadoutSham
++readout control. DirectSource is rejected. It does not import ordinary host,
++M0, M1, legacy M2 or existing-life state. Its outer envelope and both inner
++snapshots have new schemas and recipe identity. Old public restores still
++construct their original expected schemas and reject these snapshots, including
++an extracted inner snapshot. The new restore rejects an old inner envelope.
++Mode, control, generation, source hash/asset, dimensions, finite/bounded state
++and exact dendrites are checked before state is accepted.
++
++The old host source, its work counters, policy sampler, output identities and
++world-loop code are untouched. Shared private arithmetic gains an optional
++borrowed pair; old entry points pass None. Old recipes, dimensions and public
++state layouts do not change. Explicitly zero Play contributions do not add zero
++to old D values, preserving their bit patterns outside the new typed port.
++
++The new result exports source evaluation and separately identified native
++arithmetic receipts, **not old grouped sampled-action objects**. The old policy
++binding is used internally only to reuse group arithmetic. No new sampler,
++policy-gradient API, actor, waking plasticity or host dispatch is exposed. A
++separate typed policy/world-admission composition remains required before a
++world test. This avoids quietly admitting new scores under an old action owner.
++
++Binding validates Profile5, frame/slot features and the existing projector's
++slot-to-target and entity-to-slot consistency checks. Receipt provenance retains
++the tracked-object ID, exact target, observation slot, feature digest, frame
++digest and source generation. It cannot certify that a world entity is a toy,
++reachable, unowned or physically usable. Same-ID malformed Play fails closed;
++ordinary Other, Vocal, no-op and GRAB/same-target-release candidates gain no new
++row. A mask or missing compiled effector cannot manufacture an eligible action.
++
++## Parameters and work
++
++There are 816 fixed appendage synaptic/readout rows: the old 814 plus two Play
++readout rows. There are now 38 native branches, with 96 branch-input weights
++(old 72 plus 24). The new component has 40 explicit floating-point parameter
++scalars: 24 input weights, four branch threshold/gain values, ten soma-dynamics
++values and two readout weights. The activation enum and phase/address labels
++are not floating-point trainable parameters. All of these parameters are fixed.
++No source row, source optimizer coordinate or biological emitter changes.
++
++Per decision, in every control and whether Play is offered or absent, phase 7
++executes two soma updates, two assignments, two branches, 24 branch-input
++products and two readout products for each of 32 padded candidate slots.
++Additional semantic reservation is:
++
++    2*32 + 2*4 + 2*16 + 24*4 + 64*4 = 456 Q24
++
++Total appendage arithmetic is 27,344 + 1,016 + 4*common_Rest_source_products
+++ 456 Q24. For 544 common products this is 30,992 Q24, with 462 appendage
++cell updates. Source work is additional and candidate-dependent as before.
++ReadoutSham executes the same pair and products with zero readout gates;
++DriveSham executes the same work at reference drive inputs. Group source
++readouts still execute once on the same already-computed source tape.
++Validation, sampling bookkeeping (internal only), serialization and diagnostic
++Jacobian construction retain the detached base's unpriced status. These are
++semantic units, not measured wall time, chemical ATP loss or a qualified host
++bill. No biological debit is applied by this detached evaluator.
++
++## Authored qualification gates, not results
++
++Six test functions in `confidence/boredom/tests.rs` cover:
++
++- Recipe bytes, counts, signed zero and finite/bounded new banks.
++- Boredom below/above .35 under the actual receptor projection; each urgency
++  input suppressing expression, subsequent recovery, preserved actual boredom
++  and no hunger-only or curiosity substitution.
++- Exact Play-only differences, ordinary Other/Vocal/GRAB/no-op isolation,
++  absent Play, equal-work readout sham and DriveSham.
++- Exact target/tracked provenance, malformed same-ID cases, Profile5-only
++  admission, changed-target stale rows, stale receptor tick, budget rejection
++  and unchanged state on rejected calls.
++- The same real source evaluation as the old route, old-state round-trip bytes,
++  source-once receipt, extra reservation, new warm/cold bytes, mode/control
++  rejection and opposite-identity restore rejection in both directions.
++- Full/readout-sham equal source/work, absent/present Play, and active Full
++  warm/cold continuation.
++
++Official rustfmt parse/format and formatting checks passed for V2. No compiler
++check, Clippy or native test has run on this patch. Source review and these
++source-only checks cannot establish compilation or
++passing runtime behavior. Existing legacy tests must also be rerun after
++approval on a released build lane, including the unchanged host checks.
++
++After explicit build-lane approval, a focused command is:
++
++    cargo test -p alife_training --features cpu-backend --lib cpu::motor_mediation::confidence::boredom::tests -- --test-threads=1
++
++This is a future command, not an execution record. Run formatting and strict
++Clippy and the full mediation/legacy-state regressions on the final same source.
++Do not point Cargo at an active frozen study checkout or reuse a live output
++directory. World admission and canonical novelty-aware physical tests are later
++gates, not authorized by the detached command above.
++
++## Biological interpretation and next decision
++
++Canonical grouped dispatch multiplies Play stimulation by `1 - actual
++interaction novelty`. A first unfamiliar toy interaction may investigate while
++delivering little play stimulation; later genuinely familiar interactions may
++deliver more. Direct toy-activation arithmetic must not be presented as relief
++from the canonical path. Physical failure gives no fabricated relief.
++
++Before choosing these weights, inspect the new component against source,
++innate, actual memory and cognitive components at admitted operating points.
++If .25 is negligible or saturates the existing D port, report that result and
++create a new named revision rather than silently tuning action selection.
++The target remains useful self-care with ordinary rest, satiation and no-ops,
++not perpetual action. Experiments 4/5/6 of
++https://rikiyat.github.io/blog/weight-space-programming/ motivate bounded edits,
++coherent wiring and measured iteration, but do not validate this controller.
+diff --git a/docs/experiments/m2-boredom-routing-v1/recipe.json b/docs/experiments/m2-boredom-routing-v1/recipe.json
+new file mode 100644
+--- /dev/null
++++ b/docs/experiments/m2-boredom-routing-v1/recipe.json
+@@ -0,0 +1,192 @@
++{
++  "schema": "m2-boredom-play-native-recipe-v1",
++  "admission": "fresh detached grouped Profile5 only; no world host, checkpoint migration, actor, plasticity, GPU or production admission",
++  "base_recipe_sha256": "285841b7e9a6d26c60142b6e2dd25f04a0bef0bec943c6203834155e89af0278",
++  "group_recipe_sha256": "eecb44a40ac6bbb7c3e742f10ec749668245c11f089b48cf257aeb4749dd4dff",
++  "total_neurons": 2510,
++  "new_fixed_weight_rows": 816,
++  "new_branch_input_weights": 24,
++  "new_branch_threshold_gain_scalars": 4,
++  "new_neuron_dynamics_scalars": 10,
++  "new_readout_weights": 2,
++  "total_added_float_parameters": 40,
++  "phase_order": [
++    1,
++    2,
++    7,
++    3,
++    4,
++    5,
++    6
++  ],
++  "maximum_candidates": 32,
++  "nodes": [
++    {
++      "id": 2508,
++      "phase": 7,
++      "logical": "m2.boredom.v1/expression",
++      "activation": "Identity",
++      "leak": 1.0,
++      "bias": 0.0,
++      "homeostatic_gain": 0.0,
++      "metabolic_decay": 0.01,
++      "activity_ema_decay": 0.95
++    },
++    {
++      "id": 2509,
++      "phase": 7,
++      "logical": "m2.boredom.v1/common",
++      "activation": "Identity",
++      "leak": 1.0,
++      "bias": 0.0,
++      "homeostatic_gain": 0.0,
++      "metabolic_decay": 0.01,
++      "activity_ema_decay": 0.95
++    }
++  ],
++  "branches": [
++    {
++      "target": 2508,
++      "threshold": 0.0,
++      "gain": 1.0,
++      "inputs": [
++        [
++          2095,
++          4.0
++        ],
++        [
++          2097,
++          -4.0
++        ],
++        [
++          2055,
++          -4.0
++        ],
++        [
++          2057,
++          4.0
++        ],
++        [
++          2060,
++          -4.0
++        ],
++        [
++          2062,
++          4.0
++        ],
++        [
++          2065,
++          -4.0
++        ],
++        [
++          2067,
++          4.0
++        ],
++        [
++          2085,
++          -4.0
++        ],
++        [
++          2087,
++          4.0
++        ],
++        [
++          2080,
++          -4.0
++        ],
++        [
++          2082,
++          4.0
++        ]
++      ]
++    },
++    {
++      "target": 2509,
++      "threshold": 0.0,
++      "gain": 1.0,
++      "inputs": [
++        [
++          2095,
++          0.0
++        ],
++        [
++          2097,
++          0.0
++        ],
++        [
++          2055,
++          0.0
++        ],
++        [
++          2057,
++          0.0
++        ],
++        [
++          2060,
++          0.0
++        ],
++        [
++          2062,
++          0.0
++        ],
++        [
++          2065,
++          0.0
++        ],
++        [
++          2067,
++          0.0
++        ],
++        [
++          2085,
++          0.0
++        ],
++        [
++          2087,
++          0.0
++        ],
++        [
++          2080,
++          0.0
++        ],
++        [
++          2082,
++          0.0
++        ]
++      ]
++    }
++  ],
++  "play_readout": [
++    0.25,
++    -0.25
++  ],
++  "candidate_contract": "action213, Interact, Other, ObjectSlot, exact slot features and entity+position target; Profile5 ground-drive projector validates slot/target aliases; typed binding retains tracked identity and frame digest",
++  "controls": [
++    "Full",
++    "EqualWorkReadoutSham"
++  ],
++  "core_modes": [
++    "Full",
++    "DriveSham"
++  ],
++  "work": {
++    "phases": 1,
++    "neuron_updates": 2,
++    "assignments": 2,
++    "branches": 2,
++    "branch_inputs": 24,
++    "drive_products": 64,
++    "cost_q24": 456
++  },
++  "excluded": [
++    "ordinary hunger veto",
++    "host dispatch",
++    "toy affordance clairvoyance",
++    "boredom concentration changes",
++    "forced action",
++    "second source execution"
++  ],
++  "interpretation": "Unmeasured hypothesis. Arithmetic fixtures do not demonstrate actual play, relief, learning or ecological improvement. Canonical Play stimulation is multiplied by 1 minus actual interaction novelty.",
++  "total_appendage_neurons": 462,
++  "total_appendage_branches": 38
++}
