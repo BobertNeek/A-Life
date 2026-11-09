@@ -1,0 +1,10 @@
+{
+  "schema": "m2-runner-pure-synthetic-tests-v2",
+  "cases": 31,
+  "passed": 31,
+  "failed_cases": [],
+  "subprocess_invocations": 0,
+  "native_builds": 0,
+  "native_fixtures": 0,
+  "world_ticks": 0
+}
