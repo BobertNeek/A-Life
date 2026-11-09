@@ -1,0 +1,514 @@
+--- a/crates/alife_training/Cargo.toml
++++ b/crates/alife_training/Cargo.toml
+@@ -25,6 +25,8 @@
+ serde_json.workspace = true
+ 
+ [features]
++# Future opaque research journals only; no automatic old-loader fallback.
++lossless-research-journal = ["dep:sha2", "dep:zstd"]
+ default = []
+ receipt-lineage = ["dep:serde_json", "dep:sha2", "dep:base64", "serde_json/unbounded_depth"]
+ cpu-backend = ["receipt-lineage", "dep:zstd"]
+--- a/crates/alife_training/src/lib.rs
++++ b/crates/alife_training/src/lib.rs
+@@ -1,5 +1,8 @@
+ //! Offline foundation training on the compiled neural graph, using WGSL or CPU.
+ #![recursion_limit = "256"]
++
++#[cfg(feature = "lossless-research-journal")]
++pub mod lossless_journal_v1;
+ 
+ mod backend_handoff;
+ #[cfg(feature = "receipt-lineage")]
+--- /dev/null
++++ b/crates/alife_training/src/lossless_journal_v1.rs
+@@ -0,0 +1,489 @@
++//! Opt-in, opaque-byte research journal. No organism/checkpoint interpretation.
++//! Unix local filesystems only; directory fsync and atomic hard links required.
++//! A private, trusted parent directory is required (not a hostile shared tree).
++use sha2::{Digest, Sha256};
++use std::{
++    fs::{self, File, OpenOptions},
++    io::{self, Read, Write},
++    path::{Path, PathBuf},
++};
++const MAGIC: &[u8; 8] = b"M2ZJNL01";
++const OWNER: &[u8] = b"alife-m2-lossless-research-journal-v1\n";
++const HEADER: usize = 104;
++pub const MAX_RAW: u64 = 64 * 1024 * 1024;
++pub const MAX_COMPRESSED: u64 = 65 * 1024 * 1024;
++const WINDOW_LOG: u32 = 23;
++fn bad(message: &str) -> io::Error {
++    io::Error::new(io::ErrorKind::InvalidData, message)
++}
++fn hash(bytes: &[u8]) -> [u8; 32] {
++    Sha256::digest(bytes).into()
++}
++#[derive(Clone, Copy, Debug)]
++pub struct Limits {
++    pub raw: u64,
++    pub compressed: u64,
++}
++impl Limits {
++    fn check(self) -> io::Result<()> {
++        if self.raw > MAX_RAW || self.compressed > MAX_COMPRESSED || self.compressed < 13 {
++            return Err(bad("unsupported limits"));
++        }
++        Ok(())
++    }
++}
++impl Default for Limits {
++    fn default() -> Self {
++        Self {
++            raw: MAX_RAW,
++            compressed: MAX_COMPRESSED,
++        }
++    }
++}
++#[derive(Debug)]
++pub struct Snapshot {
++    pub sequence: u64,
++    pub raw_sha256: [u8; 32],
++    pub raw: Vec<u8>,
++}
++struct Capped {
++    bytes: Vec<u8>,
++    max: usize,
++}
++impl Write for Capped {
++    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
++        if bytes.len() > self.max.saturating_sub(self.bytes.len()) {
++            return Err(bad("compressed limit"));
++        }
++        self.bytes.extend_from_slice(bytes);
++        Ok(bytes.len())
++    }
++    fn flush(&mut self) -> io::Result<()> {
++        Ok(())
++    }
++}
++/// Compression bytes are not scientific identity: identity is the original raw SHA.
++/// Codec upgrades may produce different frames for the same original bytes.
++pub fn encode(sequence: u64, raw: &[u8], limits: Limits) -> io::Result<Vec<u8>> {
++    limits.check()?;
++    if raw.len() as u64 > limits.raw {
++        return Err(bad("raw limit"));
++    }
++    let mut encoder = zstd::stream::write::Encoder::new(
++        Capped {
++            bytes: Vec::new(),
++            max: limits.compressed as usize,
++        },
++        1,
++    )?;
++    encoder.window_log(WINDOW_LOG)?;
++    encoder.include_checksum(true)?;
++    encoder.set_pledged_src_size(Some(raw.len() as u64))?;
++    encoder.write_all(raw)?;
++    let frame = encoder.finish()?.bytes;
++    let mut record = Vec::with_capacity(HEADER + frame.len());
++    record.extend_from_slice(MAGIC);
++    record.extend_from_slice(&1u32.to_le_bytes()); // version
++    record.extend_from_slice(&1u32.to_le_bytes()); // codec: standard single zstd frame
++    record.extend_from_slice(&sequence.to_le_bytes());
++    record.extend_from_slice(&(raw.len() as u64).to_le_bytes());
++    record.extend_from_slice(&(frame.len() as u64).to_le_bytes());
++    record.extend_from_slice(&hash(raw));
++    record.extend_from_slice(&hash(&frame));
++    record.extend_from_slice(&frame);
++    Ok(record)
++}
++/// Bounded input and streaming output; returns no raw bytes until full validation.
++/// Rejects extra frames, skippable frames and trailing bytes, even within the limit.
++pub fn decode(mut reader: impl Read, sequence: u64, limits: Limits) -> io::Result<Snapshot> {
++    limits.check()?;
++    let mut header = [0u8; HEADER];
++    reader.read_exact(&mut header)?;
++    if &header[..8] != MAGIC
++        || header[8..12] != 1u32.to_le_bytes()
++        || header[12..16] != 1u32.to_le_bytes()
++    {
++        return Err(bad("unknown journal format/version/codec"));
++    }
++    let field = |at| u64::from_le_bytes(header[at..at + 8].try_into().unwrap());
++    let raw_len = field(24);
++    let compressed_len = field(32);
++    if field(16) != sequence
++        || raw_len > limits.raw
++        || compressed_len > limits.compressed
++        || compressed_len < 13
++    {
++        return Err(bad("sequence or declared length outside contract"));
++    }
++    let mut frame = vec![0; compressed_len as usize];
++    reader.read_exact(&mut frame)?;
++    let mut extra = [0];
++    if reader.read(&mut extra)? != 0 {
++        return Err(bad("trailing record bytes"));
++    }
++    if hash(&frame) != header[72..104] {
++        return Err(bad("compressed SHA mismatch"));
++    }
++    if frame[..4] != [0x28, 0xb5, 0x2f, 0xfd]
++        || zstd::zstd_safe::find_frame_compressed_size(&frame)
++            .map_err(|_| bad("invalid zstd frame"))?
++            != frame.len()
++    {
++        return Err(bad("expected exactly one standard zstd frame"));
++    }
++    let mut decoder = zstd::stream::read::Decoder::with_buffer(frame.as_slice())?.single_frame();
++    decoder.window_log_max(WINDOW_LOG)?;
++    let mut raw = Vec::new();
++    let mut digest = Sha256::new();
++    let mut chunk = [0u8; 16 * 1024];
++    loop {
++        // Read at most remaining + 1; catches oversized output without an unbounded allocation.
++        let cap = ((raw_len - raw.len() as u64).saturating_add(1)).min(chunk.len() as u64) as usize;
++        let count = decoder.read(&mut chunk[..cap])?;
++        if count == 0 {
++            break;
++        }
++        if count as u64 > raw_len - raw.len() as u64 {
++            return Err(bad("decompressed size exceeds declaration"));
++        }
++        digest.update(&chunk[..count]);
++        raw.extend_from_slice(&chunk[..count]);
++    }
++    if !decoder.finish().is_empty()
++        || raw.len() as u64 != raw_len
++        || digest.finalize().as_slice() != &header[40..72]
++    {
++        return Err(bad("incomplete frame, raw size or SHA mismatch"));
++    }
++    Ok(Snapshot {
++        sequence,
++        raw_sha256: header[40..72].try_into().unwrap(),
++        raw,
++    })
++}
++fn sync_dir(path: &Path) -> io::Result<()> {
++    File::open(path)?.sync_all()
++}
++fn new_synced_file(path: &Path, bytes: &[u8]) -> io::Result<()> {
++    let mut file = OpenOptions::new().create_new(true).write(true).open(path)?;
++    file.write_all(bytes)?;
++    let mut permissions = file.metadata()?.permissions();
++    permissions.set_readonly(true);
++    file.set_permissions(permissions)?;
++    file.sync_all()
++}
++/// No append/resume into old journals. Creation is an exclusive, permanent claim.
++/// Errors may leave a partial directory: do not retry that directory or erase it.
++pub struct Journal {
++    root: PathBuf,
++    limits: Limits,
++}
++impl Journal {
++    pub fn create(root: &Path, limits: Limits) -> io::Result<Self> {
++        limits.check()?;
++        let parent = root
++            .parent()
++            .filter(|p| !p.as_os_str().is_empty())
++            .ok_or_else(|| bad("explicit parent required"))?;
++        fs::create_dir(root)?;
++        sync_dir(parent)?;
++        new_synced_file(&root.join("OWNER"), OWNER)?;
++        sync_dir(root)?;
++        Ok(Self {
++            root: root.to_owned(),
++            limits,
++        })
++    }
++    /// A permanent sequence claim prevents overwrite/retry even after process failure.
++    /// An error after hard_link has uncertain durability; the complete final file can
++    /// already exist. Stop this run and inspect with read_snapshot, never republish.
++    pub fn publish(&self, sequence: u64, raw: &[u8]) -> io::Result<[u8; 32]> {
++        self.publish_inner(sequence, raw, |_| {})
++    }
++    fn publish_inner(
++        &self,
++        sequence: u64,
++        raw: &[u8],
++        mut phase: impl FnMut(u8),
++    ) -> io::Result<[u8; 32]> {
++        let record = encode(sequence, raw, self.limits)?;
++        let claim = self.root.join(format!("{sequence:020}.claim"));
++        fs::create_dir(&claim)?;
++        sync_dir(&self.root)?;
++        phase(1);
++        let staged = claim.join("snapshot.pending");
++        new_synced_file(&staged, &record)?;
++        sync_dir(&claim)?;
++        phase(2);
++        fs::hard_link(&staged, self.root.join(format!("{sequence:020}.m2z")))?;
++        phase(3);
++        sync_dir(&self.root)?;
++        phase(4);
++        // Keep claim and staged hard link as immutable recovery evidence, not a copy.
++        Ok(hash(raw))
++    }
++}
++/// Reads only the explicit new format; never falls back to an old/raw loader.
++pub fn read_snapshot(root: &Path, sequence: u64, limits: Limits) -> io::Result<Snapshot> {
++    let mut owner = Vec::new();
++    File::open(root.join("OWNER"))?
++        .take((OWNER.len() + 1) as u64)
++        .read_to_end(&mut owner)?;
++    if owner != OWNER {
++        return Err(bad("journal owner mismatch"));
++    }
++    decode(
++        File::open(root.join(format!("{sequence:020}.m2z")))?,
++        sequence,
++        limits,
++    )
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use std::{process::Command, time::Instant};
++    fn limits() -> Limits {
++        Limits {
++            raw: 2 * 1024 * 1024,
++            compressed: 3 * 1024 * 1024,
++        }
++    }
++    fn root(name: &str) -> PathBuf {
++        PathBuf::from(std::env::var_os("JOURNAL_TEST_ROOT").expect("isolated fixture root"))
++            .join(format!("{}-{name}", std::process::id()))
++    }
++    fn rehash(record: &mut [u8]) {
++        let h = hash(&record[HEADER..]);
++        record[72..104].copy_from_slice(&h);
++    }
++    #[test]
++    fn opaque_roundtrip_and_timings() {
++        let mut random = Vec::new();
++        let mut x = 0x12345678u32;
++        for _ in 0..1024 * 1024 {
++            x ^= x << 13;
++            x ^= x >> 17;
++            x ^= x << 5;
++            random.push(x as u8);
++        }
++        for raw in [
++            vec![],
++            vec![0xff],
++            (0..=255).collect(),
++            vec![0xab; 1024 * 1024],
++            random,
++        ] {
++            let start = Instant::now();
++            let record = encode(7, &raw, limits()).unwrap();
++            let compression = start.elapsed();
++            let start = Instant::now();
++            let snapshot = decode(&record[..], 7, limits()).unwrap();
++            let decompression = start.elapsed();
++            assert_eq!(snapshot.raw, raw);
++            assert_eq!(snapshot.raw_sha256, hash(&raw));
++            assert_eq!(snapshot.sequence, 7);
++            println!(
++                "synthetic raw={} record={} encode_us={} decode_us={} raw_sha={:x}",
++                raw.len(),
++                record.len(),
++                compression.as_micros(),
++                decompression.as_micros(),
++                Sha256::digest(&raw)
++            );
++        }
++        assert_eq!(
++            hash(b"abc"),
++            [
++                0xba, 0x78, 0x16, 0xbf, 0x8f, 0x01, 0xcf, 0xea, 0x41, 0x41, 0x40, 0xde, 0x5d, 0xae,
++                0x22, 0x23, 0xb0, 0x03, 0x61, 0xa3, 0x96, 0x17, 0x7a, 0x9c, 0xb4, 0x10, 0xff, 0x61,
++                0xf2, 0x00, 0x15, 0xad
++            ]
++        );
++    }
++    #[test]
++    fn malformed_contracts() {
++        let good = encode(7, b"opaque synthetic fixture bytes only", limits()).unwrap();
++        for len in 0..good.len() {
++            assert!(
++                decode(&good[..len], 7, limits()).is_err(),
++                "truncation {len}"
++            );
++        }
++        for at in 0..good.len() {
++            let mut b = good.clone();
++            b[at] ^= 0x80;
++            assert!(decode(&b[..], 7, limits()).is_err(), "mutation {at}");
++        }
++        for at in [24, 32] {
++            let mut b = good.clone();
++            b[at..at + 8].copy_from_slice(&u64::MAX.to_le_bytes());
++            assert!(decode(&b[..], 7, limits()).is_err());
++        }
++        for n in [0, 1, 100] {
++            let mut b = good.clone();
++            b[24..32].copy_from_slice(&(n as u64).to_le_bytes());
++            assert!(decode(&b[..], 7, limits()).is_err());
++        }
++        assert!(decode(&good[..], 8, limits()).is_err());
++        assert!(encode(0, &[1; 100], Limits { raw: 1, ..limits() }).is_err());
++        assert!(encode(
++            0,
++            &[1; 100],
++            Limits {
++                compressed: 13,
++                ..limits()
++            }
++        )
++        .is_err());
++        assert!(decode(
++            &good[..],
++            7,
++            Limits {
++                raw: MAX_RAW + 1,
++                ..limits()
++            }
++        )
++        .is_err());
++        let mut b = good.clone();
++        b.push(0);
++        assert!(decode(&b[..], 7, limits()).is_err());
++        // Correct outer hash and length cannot authorize a second frame.
++        let mut b = good.clone();
++        b.extend_from_slice(&good[HEADER..]);
++        let len = (b.len() - HEADER) as u64;
++        b[32..40].copy_from_slice(&len.to_le_bytes());
++        rehash(&mut b);
++        assert!(decode(&b[..], 7, limits()).is_err());
++        let mut b = good.clone();
++        b[HEADER..HEADER + 4].copy_from_slice(&[0x50, 0x2a, 0x4d, 0x18]);
++        rehash(&mut b);
++        assert!(decode(&b[..], 7, limits()).is_err());
++        // Decoder must reject damaged frame even if outer compressed hash was recomputed.
++        let mut b = good.clone();
++        let last = b.len() - 1;
++        b[last] ^= 1;
++        rehash(&mut b);
++        assert!(decode(&b[..], 7, limits()).is_err());
++        // Bomb declares tiny output but expands to 1 MiB: reject after <=2 output bytes.
++        let mut b = encode(7, &vec![0; 1024 * 1024], limits()).unwrap();
++        b[24..32].copy_from_slice(&1u64.to_le_bytes());
++        assert!(decode(&b[..], 7, limits()).is_err());
++    }
++    #[test]
++    fn publication_claims() {
++        let path = root("publish");
++        let journal = Journal::create(&path, limits()).unwrap();
++        assert!(Journal::create(&path, limits()).is_err());
++        journal.publish(1, b"first opaque snapshot").unwrap();
++        assert!(journal.publish(1, b"replacement").is_err());
++        assert_eq!(
++            read_snapshot(&path, 1, limits()).unwrap().raw,
++            b"first opaque snapshot"
++        );
++        assert!(read_snapshot(&path, 2, limits()).is_err());
++        fs::create_dir(path.join(format!("{:020}.claim", 2))).unwrap();
++        assert!(journal.publish(2, b"partial cannot retry").is_err());
++        journal.publish(3, b"second complete snapshot").unwrap();
++        assert_eq!(
++            read_snapshot(&path, 3, limits()).unwrap().raw,
++            b"second complete snapshot"
++        );
++    }
++    #[test]
++    fn oversized_window_is_rejected() {
++        // Opaque zero stream only. Unknown pledged size forces a normal window header.
++        let mut encoder = zstd::stream::write::Encoder::new(Vec::new(), 1).unwrap();
++        encoder.window_log(24).unwrap();
++        for _ in 0..1024 {
++            encoder.write_all(&[0u8; 16 * 1024]).unwrap();
++        }
++        let frame = encoder.finish().unwrap();
++        let mut record = encode(7, b"", limits()).unwrap();
++        record.truncate(HEADER);
++        record[24..32].copy_from_slice(&(16u64 * 1024 * 1024).to_le_bytes());
++        record[32..40].copy_from_slice(&(frame.len() as u64).to_le_bytes());
++        record.extend_from_slice(&frame);
++        rehash(&mut record);
++        let error = decode(&record[..], 7, Limits::default()).unwrap_err();
++        assert!(error.to_string().contains("too much memory"), "{error}");
++    }
++    #[test]
++    fn concurrent_publish_has_one_winner() {
++        let path = root("race");
++        let journal = std::sync::Arc::new(Journal::create(&path, limits()).unwrap());
++        let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
++        let handles: Vec<_> = [b"opaque A".as_slice(), b"opaque B".as_slice()]
++            .into_iter()
++            .map(|raw| {
++                let journal = journal.clone();
++                let barrier = barrier.clone();
++                std::thread::spawn(move || {
++                    barrier.wait();
++                    journal.publish(9, raw).is_ok()
++                })
++            })
++            .collect();
++        assert_eq!(
++            handles
++                .into_iter()
++                .filter_map(|h| h.join().ok())
++                .filter(|ok| *ok)
++                .count(),
++            1
++        );
++        let restored = read_snapshot(&path, 9, limits()).unwrap().raw;
++        assert!(restored == b"opaque A" || restored == b"opaque B");
++    }
++    #[test]
++    fn old_or_wrong_owner_is_rejected() {
++        let path = root("owner");
++        fs::create_dir(&path).unwrap();
++        new_synced_file(&path.join("OWNER"), b"old-raw-journal\n").unwrap();
++        assert!(read_snapshot(&path, 0, limits()).is_err());
++        assert!(decode(b"old raw checkpoint bytes".as_slice(), 0, limits()).is_err());
++    }
++    #[test]
++    fn crash_child() {
++        let Ok(phase) = std::env::var("JOURNAL_CRASH_PHASE") else {
++            return;
++        };
++        let phase: u8 = phase.parse().unwrap();
++        let path = PathBuf::from(std::env::var_os("JOURNAL_CRASH_PATH").unwrap());
++        let journal = Journal::create(&path, limits()).unwrap();
++        journal
++            .publish_inner(5, b"complete crash fixture", |p| {
++                if p == phase {
++                    std::process::exit(73)
++                }
++            })
++            .unwrap();
++        panic!("crash phase not reached");
++    }
++    #[test]
++    fn process_failure_boundaries() {
++        for phase in 1..=4 {
++            let path = root(&format!("crash-{phase}"));
++            let status = Command::new(std::env::current_exe().unwrap())
++                .args(["--exact", "tests::crash_child", "--nocapture"])
++                .env("JOURNAL_CRASH_PHASE", phase.to_string())
++                .env("JOURNAL_CRASH_PATH", &path)
++                .status()
++                .unwrap();
++            assert_eq!(status.code(), Some(73));
++            let journal = Journal {
++                root: path.clone(),
++                limits: limits(),
++            };
++            assert!(journal.publish(5, b"retry forbidden").is_err());
++            if phase < 3 {
++                assert!(read_snapshot(&path, 5, limits()).is_err());
++            } else {
++                assert_eq!(
++                    read_snapshot(&path, 5, limits()).unwrap().raw,
++                    b"complete crash fixture"
++                );
++            }
++        }
++    }
++}
