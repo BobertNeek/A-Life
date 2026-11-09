@@ -1,0 +1,11 @@
+{
+  "attempt": 1,
+  "fixed_fixtures_only": true,
+  "main": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "plan_id": "m2-grip-fixed-fixtures-v2",
+  "prepared_head": "4b6766082ebb0a9de18576e477e3b0aefa38aa22",
+  "research_base": "fbf2a517f93098b5d936878a3d26bbb8d0391c38",
+  "schema": "m2-grip-fixed-fixture-activation-v2",
+  "seal_sha256": "6ea1950cd5e4f9a31ff83f1846989af7c035137cdfd4f5de4d50137f8c564cbe",
+  "source_manifest_sha256": "8f88728916761ada6a4529a31ff041313b495afe156d8bceb33e9040eb2e2e19"
+}
