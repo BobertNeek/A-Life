@@ -1,0 +1,31 @@
+{
+  "base_manifest_sha256": "0684bedcd89d365d2a5f0cb557ab14a9a2d5606098dcf55119eba82f99b96255",
+  "overrides": [
+    {
+      "bytes": 25465,
+      "path": "crates/alife_world/src/headless/awake_translation.rs",
+      "sha256": "bfe75d8ce063bb564ccdc63ad4982cf6bbe143c45d0b18f2caa7718947c9b49f"
+    },
+    {
+      "bytes": 33099,
+      "path": "crates/alife_world/src/headless/sleep_choice_research/recovery_reflex/tests.rs",
+      "sha256": "30716114dac2030f38541a885d532642cfd9ed6e56a758b03d9208c59620fd04"
+    },
+    {
+      "bytes": 29569,
+      "path": "crates/alife_world/src/headless/sleep_choice_research/recovery_reflex.rs",
+      "sha256": "54a80c4d143c9b97b4b19aa04b7322985b45a8e3f1000ca44e2400ae2113bc0b"
+    },
+    {
+      "bytes": 10994,
+      "path": "crates/alife_world/src/headless/sleep_choice_research.rs",
+      "sha256": "85bd868ace382ef78370ab23eb8d1c260a63b08ca85b282217966385fe7c758a"
+    },
+    {
+      "bytes": 586887,
+      "path": "crates/alife_world/src/headless.rs",
+      "sha256": "d4e92f0f24317226919eb57d4ffb69ca371bc3ccd4e726f31dfa342607781e10"
+    }
+  ],
+  "source": "fbf+source-only-world-reflex-overlay"
+}
