@@ -1,0 +1,26 @@
+{
+  "separately_attributed_executables": [
+    {
+      "receipt_sha256": "b665e50a0a91db63bfda1c2445e8e12e11cba55720dfb46b0252d3194b70155d",
+      "driver_commit": "2e14a6d4cc0a0086cf88c27c40de30d9c957c200",
+      "actual_native_calls_on_that_executable": 136,
+      "actual_preparation_intervals_on_that_executable": 1200,
+      "primary_seed_executed": false
+    },
+    {
+      "receipt_sha256": "5e2c13072debd852e32f902af8ad689cadf7560efe8f7432736d208a34ca492f",
+      "driver_commit": "93ff181050a9f7274a0535f2fba6b248f6e52734",
+      "actual_native_calls_on_that_executable": 50,
+      "actual_preparation_intervals_on_that_executable": 1200,
+      "primary_seed_executed": false
+    },
+    {
+      "receipt_sha256": "f56c6b7ee1e85c77dd34539599afd40090b34be51e9c0405f43e9e3173877894",
+      "driver_commit": "7f905465b79291fd52d1fd65568a9d10e716576a",
+      "actual_native_calls_on_that_executable": 0,
+      "actual_preparation_intervals_on_that_executable": 0,
+      "primary_seed_executed": false
+    }
+  ],
+  "interpretation": "The current admission-only delta reused unchanged-runtime proof; the old136 and repaired50 native calls are not claimed to have run on the final executable."
+}
