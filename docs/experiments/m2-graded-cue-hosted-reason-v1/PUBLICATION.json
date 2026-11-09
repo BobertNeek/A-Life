@@ -1,0 +1,10 @@
+{
+  "branch": "qualification/m2-graded-cue-hosted-reason-v1",
+  "main": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "prepared_commit": "PENDING_VERIFY_REMOTE",
+  "repository": "BobertNeek/A-Life",
+  "research_base": "logical7f905/fbf only, not remotely fetchable refs",
+  "rule": "One new additions-only prepared child of exact accepted main, preserve15 inherited workflow modes/bytes, no PR. Do not create branch until prepared tree verified. Branch-creation event must not run. Activation separately authorized sole-marker direct child, run_attempt1 only. No prior branch/ref publication claim; confirmed original overlay blob only.",
+  "status": "SOURCE_ONLY_NO_GITHUB_WRITES",
+  "research_checkout": "c3aec16df33861f1316d127736f5f60eea327ede"
+}

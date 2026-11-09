@@ -1,0 +1,25 @@
+{
+  "reachable_base": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "published_patch_commit": "ff991c39ca4a11f72eb56f015f8b3dab71baff20",
+  "source_only_virtual_apply": true,
+  "patch_order": [
+    "concatenated main-to-fbf library parts01,02,03",
+    "fbf nominal supplement",
+    "explicit frozen nominal residual",
+    "original101overlay",
+    "graded source overlay"
+  ],
+  "residual_missing": [
+    "crates/alife_training/examples/probe_grouped_m2_durable_v1.rs",
+    "crates/alife_training/examples/support/grouped_m2_journal_v1.rs",
+    "crates/alife_training/examples/support/grouped_m2_qualification_v1.rs",
+    "crates/alife_training/examples/support/grouped_m2_raw_v1.rs"
+  ],
+  "residual_different": [
+    "crates/alife_training/Cargo.toml"
+  ],
+  "residual_files": 5,
+  "verified_target_files": 823,
+  "grip_runtime_applied": false,
+  "native_or_git_writes": false
+}

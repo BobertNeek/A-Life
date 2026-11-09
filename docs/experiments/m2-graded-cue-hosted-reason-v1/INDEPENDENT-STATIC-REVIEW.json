@@ -1,0 +1,23 @@
+{
+  "concrete_blockers": [],
+  "native_invocations": 0,
+  "optional_hardening_deferred": [
+    "cross-check contradictory diagnostic flags against each other; fixed sealed fixture remains authoritative"
+  ],
+  "reviewer": "independent source audit",
+  "unmeasured": [
+    "Rust compilation",
+    "actual cue transfer",
+    "host cold behavior"
+  ],
+  "verified": [
+    "Cargo target paths and lock dependencies",
+    "archive expansion bounds",
+    "sole-marker attempt-one activation",
+    "exact-one test listing",
+    "failure/extra/trailing/reason rejection",
+    "raw error string removal",
+    "dep-info local source binding"
+  ],
+  "verified_rust_toml_lock_inputs": 792
+}

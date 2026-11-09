@@ -1,0 +1,18 @@
+{
+  "actual_counter_assertions": [
+    "world tick",
+    "body age",
+    "next sequence",
+    "dispatch generation",
+    "replay records"
+  ],
+  "autonomous_study": false,
+  "detached_extra_forwards": 0,
+  "old30_reruns": 0,
+  "preparation_ticks": 240,
+  "pure9_reruns": 0,
+  "receipt_assertions": "First actual Acquired without Consumed; then actual Consumed root2 with Flee representative toy4; exact source/public query and closed bank invariants.",
+  "recipes": 1,
+  "registered_source_world_intervals": 2,
+  "test_name": "cpu::host::grouped_host_envelope::joint_episode::tests::graded_registered_two_root_reason_and_self_match_diagnostic"
+}

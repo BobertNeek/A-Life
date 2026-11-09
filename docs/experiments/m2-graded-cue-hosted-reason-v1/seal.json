@@ -1,0 +1,133 @@
+{
+  "files": [
+    {
+      "bytes": 646,
+      "path": "DOSE-INVENTORY.json",
+      "sha256": "d9164b8dd7561de52dac7db959044bc6bd81f2292105b4c9972de73724e07d59"
+    },
+    {
+      "bytes": 4865,
+      "path": "FUNCTION-FREEZE.json",
+      "sha256": "17c547c091bcfcd91c587d391200a23327ffa05a59622c6afd5132b0aabd8879"
+    },
+    {
+      "bytes": 679,
+      "path": "INDEPENDENT-STATIC-REVIEW.json",
+      "sha256": "39ec559fd7e7c53f8360f16c229dcdf57d98992d9d34ca3fb25ac3386ea947af"
+    },
+    {
+      "bytes": 92558,
+      "path": "INHERITED-WORKFLOW-FIXTURES.json",
+      "sha256": "e45e6ea9f0b5de64ad00a3fbc108cbefcce48f5eab8b9c32caceaa9650497fcd"
+    },
+    {
+      "bytes": 468,
+      "path": "OUTPUT-POLICY.json",
+      "sha256": "ab6fa5b72053941a72fc6625e966b78c4e787bf8aa9215eebe58bb373380fbe8"
+    },
+    {
+      "bytes": 642,
+      "path": "PACKAGING-DELTA.json",
+      "sha256": "df7a2e27950d202faf5f498e4ef5b7e860b7e383c53ff4eeb3d8f2b121c96473"
+    },
+    {
+      "bytes": 751,
+      "path": "PUBLICATION.json",
+      "sha256": "3e9a800e2752be6f6acdda719c7fa4583c99444bf3eb99ae29e62b2484d9aa6a"
+    },
+    {
+      "bytes": 881,
+      "path": "REACHABLE-SOURCE-RECONSTRUCTION.json",
+      "sha256": "5bec9814a9501efd0bd505dc2d7e7b997dbbf2b7f75fc91a73e88c5a1d664980"
+    },
+    {
+      "bytes": 4732,
+      "path": "README.md",
+      "sha256": "45842091bdc2aec6d2027f1cac8ecab304c96d75a334e727f8ece8d6dd90fbcb"
+    },
+    {
+      "bytes": 1239,
+      "path": "RECONSTRUCTION-PATCHES.json",
+      "sha256": "5c1ba1800b77a7f9147b3457fa5911edfc837aa9cf40b4ade438291e2c655ab2"
+    },
+    {
+      "bytes": 4326,
+      "path": "REUSE-MANIFEST.json",
+      "sha256": "b66478623c6228f85d3a493248c74a004a8e12f4f3bba4ef0146092dc84c96e7"
+    },
+    {
+      "bytes": 492,
+      "path": "STATIC-RESULTS.json",
+      "sha256": "676bfdfaae450766363aad10fc1ec27859657bedf654bda2d958c14968f4ed0d"
+    },
+    {
+      "bytes": 5379,
+      "path": "TRIGGER-AUDIT.json",
+      "sha256": "24002e2c1c44edb23de601c37a4993c520445974ba858e48dd0e841052ae40a5"
+    },
+    {
+      "bytes": 4382,
+      "path": "WORKFLOW-PRESERVATION.json",
+      "sha256": "13e5a1512ee206a474c99e3a66dd435e288d0626c748755b9fae1ff3f677e556"
+    },
+    {
+      "bytes": 291571,
+      "path": "graded-source-overlay.tar.gz",
+      "sha256": "08fd683a04b5dfb54868765a3a2e64f41c2355a4186c48d3ed8ad363fa7d064d"
+    },
+    {
+      "bytes": 35031,
+      "path": "nominal-frozen-input-residual.tar.gz",
+      "sha256": "03e8bf144fad68aa2f8c6991cce13b3e3b87dc7bcf37d232731e1b37d55b6a4b"
+    },
+    {
+      "bytes": 136753,
+      "path": "patches/fbf-nominal-source-supplement.patch",
+      "sha256": "ddd07c85685b27056664d9b8650fa736d8eff257f5d477485efd7d14e5e5b051"
+    },
+    {
+      "bytes": 563200,
+      "path": "patches/main-to-fbf-library-closure.part-01.patch",
+      "sha256": "44c9ee9e269bec25ebb924054754a0e71ddc7b73104a132699171a9776430e07"
+    },
+    {
+      "bytes": 563195,
+      "path": "patches/main-to-fbf-library-closure.part-02.patch",
+      "sha256": "a2fb1711dee71d569aea8643ba5dd02d16c992bf9f378b219e4b86cb51edafae"
+    },
+    {
+      "bytes": 415718,
+      "path": "patches/main-to-fbf-library-closure.part-03.patch",
+      "sha256": "95d7a29b145111d4f24297c97ecd0766673f9275b5dd89400958c714a24ae72d"
+    },
+    {
+      "bytes": 456096,
+      "path": "qualified-original-overlay.tar.gz",
+      "sha256": "28b472731e2f28002ec0a73a7947ecde48ee3fb0c39f2efa313a1f7c9ecbbe49"
+    },
+    {
+      "bytes": 39436,
+      "path": "run_hosted.py",
+      "sha256": "1cbc61949ee75cccf4f801c7b85ab2170cb08a304cf2fc5493ea36eacdc3f5da"
+    },
+    {
+      "bytes": 493770,
+      "path": "source-manifest.json",
+      "sha256": "c0321462297d23743d4da1e32d6cce141ac9396bc73a9807fce3252e8c5b2f1e"
+    },
+    {
+      "bytes": 3375,
+      "path": "static_checks.py",
+      "sha256": "f3d885120d7f6d5101947f5632ffde0e48affbf64ac45837a81def89884f49be"
+    },
+    {
+      "bytes": 7481,
+      "path": "upstream-toolchain-action.yml",
+      "sha256": "0b52547c145ae18d8631c9ab711e4d917e9e489cea800368f338c25a56e0aee2"
+    }
+  ],
+  "native_qualified": false,
+  "plan_id": "m2-graded-cue-hosted-reason-v1",
+  "publication_state": "not_published",
+  "source_ready": true
+}

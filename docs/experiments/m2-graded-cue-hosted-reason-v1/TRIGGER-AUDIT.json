@@ -1,0 +1,191 @@
+{
+  "accepted_main": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "inherited_count": 15,
+  "inherited_eligible_on_activate": 0,
+  "inherited_eligible_on_prepare": 0,
+  "inherited_files": [
+    {
+      "events": [
+        "pull_request",
+        "push"
+      ],
+      "path": ".github/workflows/care-frontier-sampler.yml",
+      "push_branches": [
+        "main"
+      ],
+      "qualification_push_matches": false,
+      "sha256": "ce23d4dff5832deec885e4b086769cc46bf7c780ce990543d45e2a8383dfc938"
+    },
+    {
+      "events": [
+        "pull_request",
+        "push"
+      ],
+      "path": ".github/workflows/care-recipe-import.yml",
+      "push_branches": [
+        "main"
+      ],
+      "qualification_push_matches": false,
+      "sha256": "58cdcf0114c81639b041ff793bdcdc4f428cfd1f252a45b3462876bb86eb3231"
+    },
+    {
+      "events": [
+        "pull_request",
+        "push"
+      ],
+      "path": ".github/workflows/care-scenario-batches.yml",
+      "push_branches": [
+        "main"
+      ],
+      "qualification_push_matches": false,
+      "sha256": "8451c3ce325c89e394a221409f6bb8955f0554e158d325b8edeb99862839fe0a"
+    },
+    {
+      "events": [
+        "push",
+        "pull_request"
+      ],
+      "path": ".github/workflows/ci.yml",
+      "push_branches": [
+        "main"
+      ],
+      "qualification_push_matches": false,
+      "sha256": "a40abd2944cdd2a2e8f24a9fc6df71228e90e29b69a14353d0800b2fc8025b27"
+    },
+    {
+      "events": [
+        "push",
+        "pull_request"
+      ],
+      "path": ".github/workflows/cpu-foundation-backend.yml",
+      "push_branches": [
+        "main"
+      ],
+      "qualification_push_matches": false,
+      "sha256": "9a1d4080e0a98f7c067d6b6dbe86cb8157f158d5cc9b43e8525e8203ac0af7ac"
+    },
+    {
+      "events": [
+        "push",
+        "pull_request"
+      ],
+      "path": ".github/workflows/group50-training.yml",
+      "push_branches": [
+        "main",
+        "group50-ci/**"
+      ],
+      "qualification_push_matches": false,
+      "sha256": "078bbfff6f62d260c7acc3455341640983e82fd9e70e7599091647bb28ea540d"
+    },
+    {
+      "events": [
+        "pull_request",
+        "push"
+      ],
+      "path": ".github/workflows/jules-retirement-contracts.yml",
+      "push_branches": [
+        "main"
+      ],
+      "qualification_push_matches": false,
+      "sha256": "ba9ac86fcbfd263bd361d327636c94e139e3054d23c9d088ee9824c1e4959bbc"
+    },
+    {
+      "events": [
+        "pull_request",
+        "push",
+        "workflow_dispatch"
+      ],
+      "path": ".github/workflows/jules-review.yml",
+      "push_branches": [
+        "codex/**"
+      ],
+      "qualification_push_matches": false,
+      "sha256": "b3623495eadaee4c996266a7dde75c242050bb393661ca58caa3350b99f592d2"
+    },
+    {
+      "events": [
+        "pull_request",
+        "push"
+      ],
+      "path": ".github/workflows/llm-care-map.yml",
+      "push_branches": [
+        "main"
+      ],
+      "qualification_push_matches": false,
+      "sha256": "c324e648540e09f41ff59820ff7511f6fc0ca342613ab079550f56b4d0cabd4a"
+    },
+    {
+      "events": [
+        "push",
+        "pull_request",
+        "workflow_dispatch"
+      ],
+      "path": ".github/workflows/offline-software-vulkan.yml",
+      "push_branches": [
+        "main"
+      ],
+      "qualification_push_matches": false,
+      "sha256": "6f42f581dab85d28a8b2f2450b9568392a1ae340bd296a01cc20a9de27afd7e7"
+    },
+    {
+      "events": [
+        "pull_request"
+      ],
+      "path": ".github/workflows/resident-output-budget.yml",
+      "push_branches": [],
+      "qualification_push_matches": false,
+      "sha256": "e6186b527ecdc858a3ee688669d7cf290a4233d2f2d0bd3427bf3a248050d7b7"
+    },
+    {
+      "events": [
+        "push",
+        "pull_request"
+      ],
+      "path": ".github/workflows/simulator-rehearsal.yml",
+      "push_branches": [
+        "main"
+      ],
+      "qualification_push_matches": false,
+      "sha256": "ede52b3e73ef0725add8f54d51f6413ef8763db23b3ed9c2b5ed2a9513385f01"
+    },
+    {
+      "events": [
+        "push",
+        "pull_request"
+      ],
+      "path": ".github/workflows/training-retention-host.yml",
+      "push_branches": [
+        "main"
+      ],
+      "qualification_push_matches": false,
+      "sha256": "45cad082b08976e1944ae00047598b42a54d52185fc66bd59faae83bb9d0c20b"
+    },
+    {
+      "events": [
+        "workflow_dispatch",
+        "pull_request"
+      ],
+      "path": ".github/workflows/windows-resident-experimental.yml",
+      "push_branches": [],
+      "qualification_push_matches": false,
+      "sha256": "57190936e57bbecf8e3de03d325e4ea1ebd9c22086618ffeb43be3c0ddb14f2f"
+    },
+    {
+      "events": [
+        "workflow_dispatch",
+        "pull_request",
+        "push"
+      ],
+      "path": ".github/workflows/windows-training-artifact.yml",
+      "push_branches": [
+        "main"
+      ],
+      "qualification_push_matches": false,
+      "sha256": "d1ab71666c97c0257b4c1cd4e0abb26bc352dcf01960c736f663ddbcac76f891"
+    }
+  ],
+  "proof": "Explicit branch exclusions, independent of changed-path timeouts/new-branch diff breadth. New own job separately denies creation, deletion, force and retries. No PR, dispatch, schedule or workflow_run action authorized. External repository integrations not audited.",
+  "push_count": 13,
+  "qualification_branch": "qualification/m2-graded-cue-hosted-reason-v1",
+  "schema": "m2-play-trigger-audit-v1"
+}

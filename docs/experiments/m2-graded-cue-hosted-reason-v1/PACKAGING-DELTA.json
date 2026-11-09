@@ -1,0 +1,9 @@
+{
+  "Cargo_API_status": "Not compiled with Cargo; private/public API errors remain a source-only risk and must stop hosted execution without patching/retry.",
+  "Cargo_lock_change": "Add already locked blake3 to alife_training dependency list to match frozen Cargo.toml. No registry version/checksum changes.",
+  "frozen_diagnostic_closure": "1414fefd5e5cec012accbfb59d9ed20b393de1b5afd881626136afe99a0633d0",
+  "implementation_changes": 0,
+  "private_fixtures": "All required fixture source is explicitly bound/materialized from declared base/overlay; no local rlibs/session data used.",
+  "source_mode_changes": 0,
+  "weights_changes": 0
+}

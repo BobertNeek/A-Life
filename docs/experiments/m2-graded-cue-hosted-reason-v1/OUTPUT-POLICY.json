@@ -1,0 +1,18 @@
+{
+  "forbidden": [
+    "raw frames",
+    "episodes",
+    "checkpoints",
+    "binaries",
+    "journals",
+    "assertion/panic text",
+    "raw logs"
+  ],
+  "future_consumption": "Unknown",
+  "future_grip": "Unknown",
+  "miss_valid": true,
+  "missing_cue_valid": true,
+  "private_pipes": "32MiB combined max; captured2MiB max; fixture report64KiB max; individual source reason report32KiB",
+  "public": "one bounded32KiB projected scalar JSON summary",
+  "uploads": []
+}
