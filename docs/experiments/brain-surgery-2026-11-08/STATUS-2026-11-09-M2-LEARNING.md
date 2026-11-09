@@ -551,3 +551,34 @@ It then failed after FIRST_STEP_BEGIN and before FIRST_STEP_DONE. No fixture or 
 Source tracing found another independently sufficient defect: shared physical-receipt observation required profile 5 even for the trusted grip resident's profile 6. A narrow correction derives exactly one expected profile from resident ownership and validates the grip policy; it does not accept either profile based on the incoming frame. It retains every selection, source, asset, organism and tick guard. A separately frozen f041 continuation will also classify only allowlisted static failure reasons. This does not identify V5's actual internal error retrospectively.
 
 Forty historical grip passes remain separate; f041 and GPU f042–f046 are still pending. All new trees preserve accepted-main source and its 15 inherited workflows. Main/defaults, acquired lives and all old evidence remain untouched.
+
+
+## 2026-11-09 21:40 UTC: grip host passed; Play's familiarity gap explained
+
+### Grip f041 now passes in its own continuation
+
+[Run 42702857894 / job 129451879077](https://github.com/BobertNeek/A-Life/actions/runs/42702857894/job/129451879077), activation `90ec935b0f6c8ff13600218fc57b0910ab1c2259`, completed attempt 1 with one compiled/listed/launched/passed f041 fixture. [Exact sanitized result](https://github.com/BobertNeek/A-Life/blob/6e5f2ba0d0a1810e5f87bb80d7a050bdd62b0d60/docs/experiments/brain-surgery-2026-11-08/grip-f041-v6/RESULTS.json).
+
+The narrow receipt correction derives profile 6 only from a trusted grip resident whose policy/owner/sample state validates. Ordinary residents still require profile 5; the incoming frame cannot select its own admission. Source review checked that this validation is valid at the actual intermediate close phase: selected grip and native sample metadata remain present until physical observation consumes them. All other bundle, source, asset, organism and tick guards remain unchanged.
+
+The passed source path contains three explicit source/grip forwards, three committed intervals, 768 grip-bank updates and the ordinary production-identity rejection. Warm/cold continuation and fixed source/count assertions passed. Recursive numerical constructor/compiler work remains separately bounded and not fully enumerated. Elapsed 392 seconds; sampled RSS peak 1,734,582,272 bytes; accounted workspace peak 2,047,067,658 bytes.
+
+Report this as one new f041 pass plus forty historical passes, not a fresh 41-test batch. The five remaining f042–f046 fixtures are being prepared separately. They are CPU Naga WGSL parse/reflection, upload-buffer and profile-rejection contracts: zero hardware dispatches, source forwards or world intervals, with three declared N512 constructions. No hardware/GPU parity, autonomous grip benefit, default promotion or old-life migration follows from f041.
+
+### Persistent novel Play is a memory-attribution gap, not a waiting period
+
+[Source-bound diagnosis and prospective correction](https://github.com/BobertNeek/A-Life/blob/a72ee0fbbbcc186af010a1d9258bb8e53786d5eb/docs/experiments/brain-surgery-2026-11-08/play-contact-familiarity/SOURCE-DIAGNOSIS.md) checks the exact qualified capsule and all 107 source records, with 410 source/arithmetic checks and zero additional native/physical work.
+
+In the controlled pattern, compatibility metadata falls back to targetless NoLocomotion, action 103, rather than the actual Play target. That one metadata row becomes the legacy episodic key. Object familiarity counts retained target-bound Look/Inspect/Interact/Hold observations, so this targetless Move cannot make the toy familiar. One qualifying target observation would immediately reduce novelty from 1 to 0.5; there is no time threshold. Physics correctly turns novelty 1 into investigation 1 and stimulation 0.
+
+Merely changing the representative is not the repair: it would risk assigning whole-joint consequences to Play, and a separate meaningful-event gate does not unconditionally retain novel Completed Play Touch. That second gate was not measured as a separate rejection in V5.
+
+A fresh-owner retained-contact familiarity bank is now being implemented and reviewed. It must bind real completed contact to the original source/frame/command/bundle/receipt, deduplicate owner/profile/sequence/target, preserve rollback/cold restore, forget on eviction and store UnknownJointValue rather than an isolated Play reward. Existing representative/value/actor paths stay unchanged. Its exact representation and memory work must be measured; admission reserves bounded work before dispatch and actual debit/reporting must be consistent.
+
+The prospective biological fixture is fixed at four source/world/biology intervals and two cold restores, not an extension of V5. It may test the predicted novelty/stimulation change after one actual retained contact, but must not require benefit or force a candidate. New direct novelty receptors are outside this repair: flat novelty lane 41 has no direct sensor mapping and grounded candidate lanes 44–45 remain zero. Those are source facts, not a neural ablation or a claim of complete novelty blindness.
+
+### Other active continuations
+
+- **Meal V5:** the first-rejection/full-support diagnostic is sealed and approved for one new qualification, with 134 static controls and all 829 source files reconstructed. Production matcher/sampler remain literal prefixes; native dose remains 240 preparation ticks plus three source/world intervals. Added administration is two frozen-score support enumerations, 1,330 bundle queries and 2,660 source-admission pairs. Complete action/row identity and signed/null/zero contracts were independently reviewed. Exact publication/activation and a native result remain pending.
+- **Play runtime new05:** V6's 799/813/818 source reconstruction and typed-float test correction remain verified. Publication stalled on a large source-patch upload before any tree/ref/activation or test. That uncertain upload is not being retried. A separately resealed transport will reconstruct the identical V6 patch from the already published V5 patch plus a small exact delta, retaining all final source hashes. No physics/weight/fixture dose is being altered. New06, eleven legacy fixtures and two default-wire probes remain pending.
+- **Preservation:** all published qualification trees still preserve all 1,313 accepted-main leaves and 15 inherited workflows. Main remains `c3aec16df33861f1316d127736f5f60eea327ede`. No retained evidence/cache was deleted, no private life/checkpoint was imported, and no source or brain was promoted to gameplay/default.
