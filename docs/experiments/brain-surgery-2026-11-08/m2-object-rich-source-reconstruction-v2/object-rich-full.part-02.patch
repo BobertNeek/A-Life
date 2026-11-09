@@ -1,0 +1,2747 @@
++        pressure_reference_bits: pressure_reference.to_bits(),
++    })?);
++    out.push(b'\n');
++    Ok(out)
++}
++#[derive(Clone, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++struct Freeze {
++    schema: String,
++    host_commit: String,
++    host_tree: String,
++    driver_commit: String,
++    driver_code_sha256: String,
++    executable_sha256: String,
++    protocol_sha256: String,
++    qualification_sha256: String,
++    qualification_json: String,
++    reservation_sha256: String,
++    seed: u64,
++    preparation: u64,
++    horizon: u64,
++    temperature_bits: u32,
++    projected_pair_bytes: u64,
++    headroom_bytes: u64,
++}
++fn check_freeze(f: &Freeze) -> Result<()> {
++    if f.schema != "object-rich-optional-vocal-source-build-freeze-v1"
++        || f.host_commit != HOST_COMMIT
++        || f.host_tree != HOST_TREE
++        || f.driver_commit != DRIVER_COMMIT
++        || f.driver_commit.len() != 40
++        || !f.driver_commit.bytes().all(|b| b.is_ascii_hexdigit())
++        || f.driver_code_sha256 != code_hash()
++        || f.executable_sha256 != executable_hash()?
++        || f.protocol_sha256 != hash(PROTOCOL)
++        || f.seed != SEED
++        || f.preparation != PREPARATION
++        || f.horizon != HORIZON
++        || f.temperature_bits != TEMPERATURE.to_bits()
++    {
++        return Err("source/executable/protocol freeze differs".into());
++    }
++    let q: Value = serde_json::from_str(&f.qualification_json)?;
++    if hash(f.qualification_json.as_bytes()) != f.qualification_sha256
++        || q["complete"] != true
++        || q["schema"] != "object-rich-optional-vocal-driver-qualification-v1"
++        || q["driver_code_sha256"] != code_hash()
++        || q["executable_sha256"] != f.executable_sha256
++        || q["protocol_sha256"] != hash(PROTOCOL)
++        || q["actual_native_calls"] != 16
++        || q["actual_preparation_intervals"] != 240
++        || q["primary_seed_executed"] != false
++        || q["observer_inertness_and_cold_exact"] != true
++    {
++        return Err("exact qualification missing or changed".into());
++    }
++    let max = q["maximum_packet_bytes"]
++        .as_u64()
++        .ok_or("qualification packet maximum absent")?;
++    if max
++        .checked_add(262144)
++        .is_none_or(|n| n > journal::MAX_PACKET)
++        || f.projected_pair_bytes != 2 * HORIZON * journal::MAX_PACKET
++        || f.headroom_bytes != 2 * journal::MAX_PACKET + 64 * 1024 * 1024
++    {
++        return Err("fixed whole-packet or allocation budget differs".into());
++    }
++    Ok(())
++}
++fn freeze(qualification_root: &Path, reservation: &Path, out: &Path) -> Result<()> {
++    seed_admission_preflight(SEED, 1)?;
++    canonical_reservation(reservation)?;
++    let (q, qbytes): (Value, _) = read_typed(
++        &qualification_root.join("QUALIFICATION_COMPLETE.json"),
++        1024 * 1024,
++    )?;
++    if q["schema"] != "object-rich-optional-vocal-driver-qualification-v1"
++        || q["complete"] != true
++        || q["driver_code_sha256"] != code_hash()
++        || q["executable_sha256"] != executable_hash()?
++        || q["driver_commit"] != DRIVER_COMMIT
++        || q["protocol_sha256"] != hash(PROTOCOL)
++        || q["primary_seed_executed"] != false
++    {
++        return Err("missing exact qualified driver evidence".into());
++    }
++    let (r, rbytes): (Value, _) = read_typed(reservation, 1024 * 1024)?;
++    if r["study"] != STUDY
++        || r["seed_decimal"] != SEED
++        || r["preparation_attempted"] != false
++        || r["source_constructed"] != false
++        || r["native_calls"] != 0
++    {
++        return Err("reservation is not the untouched primary seed".into());
++    }
++    let f = Freeze {
++        schema: "object-rich-optional-vocal-source-build-freeze-v1".into(),
++        host_commit: HOST_COMMIT.into(),
++        host_tree: HOST_TREE.into(),
++        driver_commit: DRIVER_COMMIT.into(),
++        driver_code_sha256: code_hash(),
++        executable_sha256: executable_hash()?,
++        protocol_sha256: hash(PROTOCOL),
++        qualification_sha256: hash(&qbytes),
++        qualification_json: String::from_utf8(qbytes.clone())?,
++        reservation_sha256: hash(&rbytes),
++        seed: SEED,
++        preparation: PREPARATION,
++        horizon: HORIZON,
++        temperature_bits: TEMPERATURE.to_bits(),
++        projected_pair_bytes: q["projected_pair_physical_bytes"]
++            .as_u64()
++            .ok_or("qualified projection absent")?,
++        headroom_bytes: q["metadata_initial_export_headroom"]
++            .as_u64()
++            .ok_or("qualified headroom absent")?,
++    };
++    check_freeze(&f)?;
++    if journal::free_bytes(out.parent().ok_or("freeze parent absent")?)?
++        < journal::MIN_FREE_BYTES
++            .checked_add(f.projected_pair_bytes)
++            .and_then(|n| n.checked_add(f.headroom_bytes))
++            .ok_or("freeze budget overflow")?
++    {
++        return Err("freeze filesystem below guard".into());
++    }
++    journal::publish_artifact(
++        out.parent().ok_or("freeze parent absent")?,
++        out.file_name()
++            .and_then(|v| v.to_str())
++            .ok_or("freeze filename invalid")?,
++        &serde_json::to_vec(&f)?,
++        64 * 1024,
++    )
++}
++#[derive(Clone, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++struct PreparedArm {
++    arm: usize,
++    mode: String,
++    initial_sha256: String,
++    closure_sha256: String,
++    source_headers: BTreeMap<String, String>,
++}
++#[derive(Clone, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++struct Prepared {
++    schema: String,
++    activation_sha256: String,
++    pre_preparation_source_sha256: String,
++    freeze_sha256: String,
++    source_manifest_sha256: String,
++    inputs_sha256: String,
++    initial_matched_sha256: String,
++    actual_preparation_intervals: u64,
++    initial_tick: u64,
++    initial_neural_decisions: u64,
++    sampling_seed: u32,
++    pressure_reference_bits: u32,
++    arms: Vec<PreparedArm>,
++}
++fn binding(f: &Freeze, p: &Prepared, p_hash: &str, arm: usize) -> Result<journal::Binding> {
++    let a = p.arms.get(arm).ok_or("prepared arm absent")?;
++    if a.arm != arm || a.mode != mode_name(arm)? {
++        return Err("prepared arm identity differs".into());
++    }
++    Ok(journal::Binding {
++        schema: "object-rich-optional-vocal-durable-v1".into(),
++        study_id: STUDY.into(),
++        arm,
++        mode: a.mode.clone(),
++        seed: SEED,
++        sampling_seed: p.sampling_seed,
++        initial_tick: p.initial_tick,
++        horizon: HORIZON,
++        temperature_bits: TEMPERATURE.to_bits(),
++        host_source_commit: HOST_COMMIT.into(),
++        host_source_tree: HOST_TREE.into(),
++        driver_source_commit: DRIVER_COMMIT.into(),
++        driver_source_sha256: code_hash(),
++        executable_sha256: f.executable_sha256.clone(),
++        protocol_sha256: f.protocol_sha256.clone(),
++        qualification_sha256: f.qualification_sha256.clone(),
++        preparation_sha256: p_hash.into(),
++        source_manifest_sha256: p.source_manifest_sha256.clone(),
++        inputs_sha256: p.inputs_sha256.clone(),
++        initial_sha256: a.initial_sha256.clone(),
++        initial_matched_sha256: p.initial_matched_sha256.clone(),
++        closure_sha256: a.closure_sha256.clone(),
++        source_headers: a.source_headers.clone(),
++        max_packet_bytes: journal::MAX_PACKET,
++        max_arm_bytes: journal::MAX_ARM_BYTES,
++        min_free_bytes: journal::MIN_FREE_BYTES,
++    })
++}
++// Publication must succeed before the closure can advance any body or native state.
++fn bind_then_prepare<T>(
++    root: &Path,
++    source: &[u8],
++    inputs: &[u8],
++    source_bound: &[u8],
++    prepare_once: impl FnOnce() -> Result<T>,
++) -> Result<T> {
++    journal::publish_artifact(root, "SOURCE.json", source, journal::MAX_PACKET)?;
++    journal::publish_artifact(root, "INPUTS.private.json", inputs, journal::MAX_PACKET)?;
++    journal::publish_artifact(
++        root,
++        "SOURCE_BOUND_BEFORE_PREPARATION.json",
++        source_bound,
++        64 * 1024,
++    )?;
++    prepare_once()
++}
++fn counted_call<T, E>(
++    attempted: &mut u64,
++    call: impl FnOnce() -> std::result::Result<T, E>,
++) -> std::result::Result<T, E> {
++    *attempted += 1;
++    call()
++}
++fn prepare(root: &Path, freeze_path: &Path, reservation: &Path) -> Result<()> {
++    seed_admission_preflight(SEED, 1)?;
++    canonical_reservation(reservation)?;
++    let (f, fbytes): (Freeze, _) = read_typed(freeze_path, 64 * 1024)?;
++    check_freeze(&f)?;
++    let rbytes = journal::bounded_read(reservation, 1024 * 1024)?;
++    if hash(&rbytes) != f.reservation_sha256 {
++        return Err("reserved seed changed before preparation".into());
++    }
++    let parent = root.parent().ok_or("root parent absent")?.canonicalize()?;
++    if root.exists() || root.is_symlink() {
++        return Err("preparation root already exists; never recreate".into());
++    }
++    if journal::free_bytes(&parent)?
++        < journal::MIN_FREE_BYTES
++            .checked_add(f.projected_pair_bytes)
++            .and_then(|n| n.checked_add(f.headroom_bytes))
++            .ok_or("preparation budget overflow")?
++    {
++        return Err("preparation storage guard".into());
++    }
++    let absolute = parent.join(root.file_name().ok_or("root filename absent")?);
++    // One reservation can admit only one attempted preparation, even at another root.
++    let claim_name = format!(
++        "{}.activation.json",
++        reservation
++            .file_name()
++            .and_then(|v| v.to_str())
++            .ok_or("reservation filename invalid")?
++    );
++    let claim = ActivationClaim {
++        schema: "object-rich-optional-vocal-preparation-claim-v1".into(),
++        study: STUDY.into(),
++        root: absolute,
++        freeze_sha256: hash(&fbytes),
++        reservation_sha256: f.reservation_sha256.clone(),
++        claim_implies_preparation_attempt: true,
++        claim_implies_world_step: false,
++    };
++    let claim_bytes = serde_json::to_vec(&claim)?;
++    journal::publish_artifact(
++        reservation.parent().ok_or("reservation parent absent")?,
++        &claim_name,
++        &claim_bytes,
++        64 * 1024,
++    )?;
++    fs::create_dir(root)?;
++    validate_activation(&claim, root, &hash(&fbytes), &f.reservation_sha256)?;
++    journal::publish_artifact(root, "FREEZE.json", &fbytes, 64 * 1024)?;
++    journal::publish_artifact(root, "RESERVATION.json", &rbytes, 1024 * 1024)?;
++    write_new(
++        root,
++        "PREPARATION_ATTEMPT.json",
++        &json!({"schema":"object-rich-optional-vocal-preparation-attempt-v1","source":DRIVER_COMMIT,"seed":SEED,"actual_steps_known_at_claim":0,"automatic_retry":false}),
++    )?;
++    let mut actual = 0;
++    let mut stage = "source_construction";
++    let mut source_completed = false;
++    let result = (|| -> Result<()> {
++        // Exactly one candidate is constructed, durably bound before any body step.
++        let r = recipe::build(SEED, true)?;
++        source_completed = true;
++        stage = "source_contract_before_biology";
++        let source_contract = source_contract(&r)?;
++        write_new(root, "SOURCE-CONTRACT.json", &source_contract)?;
++        source_completed = true;
++        stage = "source_binding_before_biology";
++        let source = serde_json::to_vec(&r.metadata)?;
++        let inputs = serde_json::to_vec(&r.inputs)?;
++        let source_bound = serde_json::to_vec(&json!({
++            "schema":"object-rich-optional-vocal-pre-preparation-source-v1",
++            "freeze_sha256":hash(&fbytes),"activation_sha256":hash(&claim_bytes),
++            "source_manifest_sha256":hash(&source),"inputs_sha256":hash(&inputs),
++            "genotype_sha256":r.metadata["genotype_sha256"],
++            "foundation_asset":r.metadata["target_asset"],
++            "actual_preparation_intervals":0,"native_calls":0,
++            "single_constructed_source_candidate":true
++        }))?;
++        let hosts = bind_then_prepare(root, &source, &inputs, &source_bound, || {
++            stage = "newborn_admission_and_shared_world_preparation";
++            fresh_pair(&r, PREPARATION, false, &mut actual, root)
++        })?;
++        stage = "initial_matched_pair_publication";
++        let mut arms = Vec::new();
++        let mut matched = None;
++        for (arm, h) in hosts.iter().enumerate() {
++            let bytes = cp(h)?;
++            let m = hash(&raw::matched_initial(&bytes, mode_name(arm)?)?);
++            if matched.as_ref().is_some_and(|old| old != &m) {
++                return Err("pair mismatch at publication".into());
++            }
++            matched = Some(m);
++            let d = root.join(format!("arm-{arm}"));
++            fs::create_dir(&d)?;
++            journal::publish_artifact(&d, "initial.private.m2", &bytes, journal::MAX_PACKET)?;
++            arms.push(PreparedArm {
++                arm,
++                mode: mode_name(arm)?.into(),
++                initial_sha256: hash(&bytes),
++                closure_sha256: closure_hash(&bytes)?,
++                source_headers: raw::source_headers(&bytes)?,
++            });
++        }
++        let p = Prepared {
++            schema: "object-rich-optional-vocal-preparation-v1".into(),
++            activation_sha256: hash(&claim_bytes),
++            pre_preparation_source_sha256: hash(&source_bound),
++            freeze_sha256: hash(&fbytes),
++            source_manifest_sha256: hash(&source),
++            inputs_sha256: hash(&inputs),
++            initial_matched_sha256: matched.ok_or("matched pair absent")?,
++            actual_preparation_intervals: actual,
++            initial_tick: PREPARATION,
++            initial_neural_decisions: 0,
++            sampling_seed: sampling_seed(SEED),
++            pressure_reference_bits: r
++                .phenotype
++                .cognitive_architecture()
++                .sleep_trigger_threshold()
++                .to_bits(),
++            arms,
++        };
++        let pbytes = serde_json::to_vec(&p)?;
++        // Complete preparation receipt is last; a partial tree cannot be run.
++        for arm in 0..2 {
++            journal::init_journal(
++                &root.join(format!("arm-{arm}/JOURNAL-M2-V1")),
++                &binding(&f, &p, &hash(&pbytes), arm)?,
++            )?;
++        }
++        journal::publish_artifact(root, "PREPARATION_COMPLETE.json", &pbytes, 64 * 1024)?;
++        Ok(())
++    })();
++    if let Err(e) = &result {
++        let _ = write_new(
++            root,
++            "PREPARATION_FAILED.json",
++            &json!({"error":e.to_string(),"failure_stage":stage,"source_construction_attempted":true,"source_construction_completed":source_completed,"actual_preparation_intervals":actual,"native_calls":0,"no_retry":true,"seed_consumed":actual>0}),
++        );
++    }
++    result
++}
++struct Loaded {
++    binding: journal::Binding,
++    inputs: PhenotypeCompilerInputs,
++    initial: Vec<u8>,
++    pressure_reference: f32,
++    journal: PathBuf,
++}
++fn load(root: &Path, arm: usize) -> Result<Loaded> {
++    mode(arm)?;
++    let (f, fbytes): (Freeze, _) = read_typed(&root.join("FREEZE.json"), 64 * 1024)?;
++    check_freeze(&f)?;
++    canonical_reservation(Path::new(RESERVATION_PATH))?;
++    let (claim, claim_bytes): (ActivationClaim, _) =
++        read_typed(Path::new(ACTIVATION_PATH), 64 * 1024)?;
++    validate_activation(&claim, root, &hash(&fbytes), &f.reservation_sha256)?;
++    if hash(&journal::bounded_read(
++        Path::new(RESERVATION_PATH),
++        1024 * 1024,
++    )?) != f.reservation_sha256
++    {
++        return Err("authoritative reserved source identity changed".into());
++    }
++    let (p, pbytes): (Prepared, _) =
++        read_typed(&root.join("PREPARATION_COMPLETE.json"), 64 * 1024)?;
++    if p.schema != "object-rich-optional-vocal-preparation-v1"
++        || p.activation_sha256 != hash(&claim_bytes)
++        || p.freeze_sha256 != hash(&fbytes)
++        || p.actual_preparation_intervals != PREPARATION
++        || p.initial_tick != PREPARATION
++        || p.initial_neural_decisions != 0
++        || p.sampling_seed != sampling_seed(SEED)
++        || p.arms.len() != 2
++        || root.join("PREPARATION_FAILED.json").exists()
++    {
++        return Err("incomplete or changed preparation".into());
++    }
++    let (source_bound, source_bound_bytes): (Value, _) = read_typed(
++        &root.join("SOURCE_BOUND_BEFORE_PREPARATION.json"),
++        64 * 1024,
++    )?;
++    if hash(&source_bound_bytes) != p.pre_preparation_source_sha256
++        || source_bound["schema"] != "object-rich-optional-vocal-pre-preparation-source-v1"
++        || source_bound["freeze_sha256"] != p.freeze_sha256
++        || source_bound["activation_sha256"] != p.activation_sha256
++        || source_bound["source_manifest_sha256"] != p.source_manifest_sha256
++        || source_bound["inputs_sha256"] != p.inputs_sha256
++        || source_bound["actual_preparation_intervals"] != 0
++        || source_bound["native_calls"] != 0
++        || source_bound["single_constructed_source_candidate"] != true
++    {
++        return Err("pre-preparation source identity differs".into());
++    }
++    if hash(&journal::bounded_read(
++        &root.join("SOURCE.json"),
++        journal::MAX_PACKET,
++    )?) != p.source_manifest_sha256
++    {
++        return Err("source metadata changed".into());
++    }
++    let (inputs, ibytes): (PhenotypeCompilerInputs, _) =
++        read_typed(&root.join("INPUTS.private.json"), journal::MAX_PACKET)?;
++    if hash(&ibytes) != p.inputs_sha256 {
++        return Err("source input bytes changed".into());
++    }
++    let b = binding(&f, &p, &hash(&pbytes), arm)?;
++    let initial = journal::bounded_read(
++        &root.join(format!("arm-{arm}/initial.private.m2")),
++        journal::MAX_PACKET,
++    )?;
++    if hash(&initial) != b.initial_sha256
++        || hash(&raw::matched_initial(&initial, mode_name(arm)?)?) != b.initial_matched_sha256
++        || raw::source_headers(&initial)? != b.source_headers
++    {
++        return Err("initial source/matched bytes changed".into());
++    }
++    raw::fresh(&initial, PREPARATION, b.sampling_seed)?;
++    validate_cp(&initial, b.initial_tick, &b.closure_sha256)?;
++    let pressure = inputs
++        .genome()
++        .cognitive_architecture()
++        .sleep_trigger_threshold();
++    if pressure.to_bits() != p.pressure_reference_bits {
++        return Err("compiled pressure reference changed".into());
++    }
++    Ok(Loaded {
++        binding: b,
++        inputs,
++        initial,
++        pressure_reference: pressure,
++        journal: root
++            .canonicalize()?
++            .join(format!("arm-{arm}/JOURNAL-M2-V1")),
++    })
++}
++fn run(root: &Path, arm: usize) -> Result<()> {
++    let a = load(root, arm)?;
++    let b = &a.binding;
++    let _lock = journal::lock(&a.journal)?;
++    let mut r = journal::recover_without_trace(&a.journal, b, &a.initial, |bytes, tick| {
++        validate_cp(bytes, tick, &b.closure_sha256)
++    })?;
++    if a.journal.join("BLOCKED-PUBLICATION").exists() {
++        return Err("known failure blocks continuation".into());
++    }
++    if a.journal.join("TERMINAL.json").exists() {
++        println!("terminal no-op; {} committed intervals", r.next);
++        return Ok(());
++    }
++    let result = (|| -> Result<()> {
++        let mut h = restore(
++            &r.checkpoint,
++            &a.inputs,
++            arm,
++            b.initial_tick + r.next,
++            &b.closure_sha256,
++        )?;
++        if r.trace_bytes
++            .checked_add(b.max_packet_bytes)
++            .is_none_or(|n| n > journal::MAX_TRACE_BYTES)
++            || journal::resource_stop(b, r.storage_bytes, journal::free_bytes(&a.journal)?)
++        {
++            journal::terminal(
++                &a.journal,
++                b,
++                &r,
++                "pre-step storage or science-trace ceiling",
++            )?;
++            return Ok(());
++        }
++        write_new(
++            &a.journal,
++            &format!(
++                "PROCESS-{}-{}.json",
++                std::process::id(),
++                std::time::SystemTime::now()
++                    .duration_since(std::time::UNIX_EPOCH)?
++                    .as_nanos()
++            ),
++            &json!({"schema":"object-rich-optional-vocal-process-v1","arm":arm,"next_offset":r.next,"previous_commit_sha256":r.previous,"process_id":std::process::id(),"retained_temp_entries":r.ignored_temps,"unpublished_inflight_work_is_uncertain":true,"published_intervals_replayed":0}),
++        )?;
++        r.storage_bytes = fs::read_dir(&a.journal)?.try_fold(0_u64, |sum, e| -> Result<u64> {
++            sum.checked_add(e?.metadata()?.len())
++                .ok_or_else(|| "storage overflow".into())
++        })?;
++        while r.next < b.horizon {
++            if r.trace_bytes
++                .checked_add(b.max_packet_bytes)
++                .is_none_or(|n| n > journal::MAX_TRACE_BYTES)
++                || journal::resource_stop(b, r.storage_bytes, journal::free_bytes(&a.journal)?)
++            {
++                journal::terminal(
++                    &a.journal,
++                    b,
++                    &r,
++                    "pre-step storage or science-trace ceiling",
++                )?;
++                return Ok(());
++            }
++            let before = observe(&h)?;
++            if !before.alive
++                || before.body.health < 0.5
++                || before.body.energy < 0.05
++                || before.body.injury > 0.
++                || !before.body.health.is_finite()
++                || !before.body.energy.is_finite()
++                || !before.body.injury.is_finite()
++            {
++                journal::terminal(&a.journal, b, &r, "health/energy/death")?;
++                return Ok(());
++            }
++            let attempt_name = format!("ATTEMPT-{:06}.json", r.next);
++            if a.journal.join(&attempt_name).exists() {
++                return Err("unresolved attempted interval cannot replay".into());
++            }
++            write_new(
++                &a.journal,
++                &attempt_name,
++                &json!({"offset":r.next,"tick":before.tick,"previous_commit_sha256":r.previous,"attempt_before_call":true,"no_retry":true}),
++            )?;
++            r.storage_bytes = r
++                .storage_bytes
++                .checked_add(2 * fs::metadata(a.journal.join(&attempt_name))?.len())
++                .ok_or("attempt storage overflow")?;
++            let produced = (|| -> Result<(Vec<u8>, Vec<u8>, u64, bool)> {
++                let step = h.step(f32::from_bits(b.temperature_bits))?;
++                let bytes = cp(&h)?;
++                validate_cp(&bytes, b.initial_tick + r.next + 1, &b.closure_sha256)?;
++                let rows = science(
++                    &before,
++                    &observe(&h)?,
++                    &step,
++                    r.next,
++                    &bytes,
++                    &b.closure_sha256,
++                    a.pressure_reference,
++                )?;
++                let packet = journal::make_packet(b, r.next, &r.previous, &bytes, &rows)?;
++                journal::decode_packet(&packet, b, r.next, &r.previous)?;
++                let fresh_harm = step.decisions.iter().any(|d| {
++                    d["research_world_receipt"]["body_event"]["damage"]
++                        .as_f64()
++                        .is_some_and(|v| v > 0.)
++                });
++                Ok((bytes, packet, rows.len() as u64, fresh_harm))
++            })();
++            let (bytes, packet, trace_bytes, fresh_harm) = match produced {
++                Ok(v) => v,
++                Err(e) => {
++                    journal::stop_after_failure(
++                        &a.journal,
++                        b,
++                        &r,
++                        &format!("step/audit/serialization failure: {e}"),
++                    );
++                    return Err(e);
++                }
++            };
++            if let Err(e) = journal::publish(&a.journal, &format!("{:06}.packet", r.next), &packet)
++            {
++                let reason = format!("known publication/storage failure: {e}");
++                journal::record_publication_failure(
++                    &a.journal, b, &mut r, &bytes, &packet, &reason,
++                )?;
++                return Err(reason.into());
++            }
++            r.trace_bytes = r
++                .trace_bytes
++                .checked_add(trace_bytes)
++                .ok_or("trace accounting overflow")?;
++            r.next += 1;
++            r.previous = hash(&packet);
++            r.checkpoint = bytes;
++            r.storage_bytes = r
++                .storage_bytes
++                .checked_add(2 * packet.len() as u64)
++                .ok_or("storage overflow after commit")?;
++            if fresh_harm {
++                journal::terminal(&a.journal, b, &r, "new measured physical damage")?;
++                return Ok(());
++            }
++            if r.next.is_multiple_of(16) {
++                println!("arm {arm}: {} atomically committed intervals", r.next);
++            }
++        }
++        journal::terminal(&a.journal, b, &r, "horizon")
++    })();
++    if let Err(error) = &result {
++        if !a.journal.join("TERMINAL.json").exists()
++            && !a.journal.join("BLOCKED-PUBLICATION").exists()
++        {
++            journal::stop_after_failure(
++                &a.journal,
++                b,
++                &r,
++                &format!("known driver/storage failure: {error}"),
++            );
++        }
++    }
++    result
++}
++fn export(root: &Path, arm: usize, out: &Path) -> Result<()> {
++    let a = load(root, arm)?;
++    let _lock = journal::lock(&a.journal)?;
++    let b = &a.binding;
++    let r = journal::recover(&a.journal, b, &a.initial, |bytes, tick| {
++        validate_cp(bytes, tick, &b.closure_sha256)
++    })?;
++    let h = restore(
++        &r.checkpoint,
++        &a.inputs,
++        arm,
++        b.initial_tick + r.next,
++        &b.closure_sha256,
++    )?;
++    let terminal = if a.journal.join("TERMINAL.json").is_file() {
++        Some(read_typed::<Value>(&a.journal.join("TERMINAL.json"), 64 * 1024)?.0)
++    } else {
++        None
++    };
++    let summary = summarize(
++        &r.trace,
++        &observe(&h)?,
++        r.next,
++        terminal.as_ref(),
++        &r.previous,
++    )?;
++    fs::create_dir(out)?;
++    journal::publish_artifact(out, "TRACE.private.jsonl", &r.trace, journal::MAX_ARM_BYTES)?;
++    journal::publish_artifact(out, "final.private.m2", &r.checkpoint, journal::MAX_PACKET)?;
++    let result = serde_json::to_vec(&summary)?;
++    journal::publish_artifact(out, "RESULT.json", &result, journal::MAX_PACKET)?;
++    write_new(
++        out,
++        "EXPORT_COMPLETE.json",
++        &json!({"schema":"object-rich-optional-vocal-export-v1","binding":b,"committed_intervals":r.next,"terminal":terminal.is_some(),"last_commit_sha256":r.previous,"trace_sha256":hash(&r.trace),"checkpoint_sha256":hash(&r.checkpoint),"result_sha256":hash(&result),"private_raw_data_not_for_upload":true}),
++    )
++}
++#[derive(Debug, Serialize)]
++struct CycleProgress {
++    start_tick: u64,
++    entering_tick: Option<u64>,
++    consolidating_tick: Option<u64>,
++    waking_tick: Option<u64>,
++    ordered: bool,
++}
++impl CycleProgress {
++    fn new(start_tick: u64, first_phase: SleepPhase, observed_tick: u64) -> Self {
++        Self {
++            start_tick,
++            entering_tick: (first_phase == SleepPhase::EnteringSleep).then_some(observed_tick),
++            consolidating_tick: None,
++            waking_tick: None,
++            ordered: first_phase == SleepPhase::EnteringSleep,
++        }
++    }
++    fn observe(&mut self, phase: SleepPhase, tick: u64) {
++        match phase {
++            SleepPhase::EnteringSleep
++                if self.consolidating_tick.is_none() && self.waking_tick.is_none() => {}
++            SleepPhase::Consolidating
++                if self.entering_tick.is_some() && self.waking_tick.is_none() =>
++            {
++                self.consolidating_tick.get_or_insert(tick);
++            }
++            SleepPhase::Waking if self.consolidating_tick.is_some() => {
++                self.waking_tick.get_or_insert(tick);
++            }
++            _ => self.ordered = false,
++        }
++    }
++    fn complete(&self) -> bool {
++        self.ordered
++            && self.entering_tick.is_some()
++            && self.consolidating_tick.is_some()
++            && self.waking_tick.is_some()
++    }
++}
++fn summarize(
++    trace: &[u8],
++    final_state: &Observation,
++    count: u64,
++    terminal: Option<&Value>,
++    last: &str,
++) -> Result<Value> {
++    let mut decisions = 0_u64;
++    let mut physical = [0_u64; 3];
++    let mut attempted = [0_u64; 3];
++    let mut executed_noops = 0_u64;
++    let mut no_decision = 0_u64;
++    let mut consolidations = 0_u64;
++    let mut phase_counts = BTreeMap::<String, u64>::new();
++    let mut crosses = [[0_u64; 2]; 2];
++    let mut observed = 0;
++    let mut started_cycles = BTreeMap::<u64, CycleProgress>::new();
++    let mut completed_cycles = Vec::new();
++    let mut sleep_starts = Vec::new();
++    let mut crossing_events = Vec::new();
++    let mut first_up = [None, None];
++    let mut maxima = [f32::NEG_INFINITY; 2];
++    let mut minimum_health = f32::INFINITY;
++    let mut minimum_energy = f32::INFINITY;
++    let mut initially_at_or_above_reference = None;
++    for line in trace.split(|b| *b == b'\n').filter(|l| !l.is_empty()) {
++        let v: Value = serde_json::from_slice(line)?;
++        if v["status"] == "committed" {
++            let rows = v["decisions"].as_array().ok_or("decisions missing")?;
++            decisions += rows.len() as u64;
++            if rows.is_empty() {
++                no_decision += 1;
++            }
++            consolidations += v["consolidations"]
++                .as_u64()
++                .ok_or("consolidations missing")?;
++            for d in rows {
++                for (value, counts) in [
++                    (&d["physical"]["operation"], &mut attempted),
++                    (&d["applied_recovery"], &mut physical),
++                ] {
++                    match value.as_str() {
++                        Some("AwakeRest") => counts[0] += 1,
++                        Some("BodySleep") => counts[1] += 1,
++                        None => counts[2] += 1,
++                        _ => return Err("unknown recovery operation".into()),
++                    }
++                }
++                for noop in d["real_noop_receipts"]
++                    .as_array()
++                    .ok_or("no-op receipts absent")?
++                {
++                    if noop["measured"]["executed"] == true {
++                        executed_noops += 1;
++                    }
++                }
++            }
++        } else if v["status"] == "observed" {
++            observed += 1;
++            let before: Observation = serde_json::from_value(v["before"].clone())?;
++            let after: Observation = serde_json::from_value(v["after"].clone())?;
++            if before.phase == SleepPhase::Awake && after.phase != SleepPhase::Awake {
++                let cycle = after.sleep.active_cycle_id;
++                started_cycles.insert(
++                    cycle,
++                    CycleProgress::new(before.tick, after.phase, after.tick),
++                );
++                sleep_starts.push(json!({"cycle":cycle,"tick":before.tick,"trigger":after.sleep.last_trigger,"phase":after.phase}));
++            }
++            if let Some(progress) = started_cycles.get_mut(&after.sleep.active_cycle_id) {
++                progress.observe(after.phase, after.tick);
++            }
++            if before.phase == SleepPhase::Waking && after.phase == SleepPhase::Awake {
++                let cycle = before.sleep.active_cycle_id;
++                if started_cycles
++                    .get(&cycle)
++                    .is_some_and(CycleProgress::complete)
++                {
++                    let progress = started_cycles.remove(&cycle).ok_or("cycle disappeared")?;
++                    completed_cycles.push(json!({"cycle":cycle,"start_tick":progress.start_tick,"entering_observed_tick":progress.entering_tick,"consolidating_observed_tick":progress.consolidating_tick,"waking_observed_tick":progress.waking_tick,"returned_awake_tick":after.tick}));
++                }
++            }
++            *phase_counts
++                .entry(format!("{:?}", after.phase))
++                .or_default() += 1;
++            let pressure = f32::from_bits(
++                v["pressure_reference_bits"]
++                    .as_u64()
++                    .ok_or("pressure bits absent")? as u32,
++            );
++            minimum_health = minimum_health
++                .min(before.body.health)
++                .min(after.body.health);
++            minimum_energy = minimum_energy
++                .min(before.body.energy)
++                .min(after.body.energy);
++            if initially_at_or_above_reference.is_none() {
++                initially_at_or_above_reference = Some([
++                    before.homeostasis.drives.fatigue >= 0.35,
++                    before.homeostasis.hormones.sleep_pressure >= pressure,
++                ]);
++            }
++            for (axis, (pre, post, threshold)) in [
++                (
++                    before.homeostasis.drives.fatigue,
++                    after.homeostasis.drives.fatigue,
++                    0.35_f32,
++                ),
++                (
++                    before.homeostasis.hormones.sleep_pressure,
++                    after.homeostasis.hormones.sleep_pressure,
++                    pressure,
++                ),
++            ]
++            .into_iter()
++            .enumerate()
++            {
++                maxima[axis] = maxima[axis].max(pre).max(post);
++                if pre < threshold && post >= threshold {
++                    crosses[axis][0] += 1;
++                    first_up[axis].get_or_insert(after.tick);
++                    crossing_events.push(json!({"axis":if axis==0{"fatigue"}else{"sleep_pressure"},"direction":"up","tick":after.tick,"before":pre,"after":post,"reference_bits":threshold.to_bits()}));
++                }
++                if pre >= threshold && post < threshold {
++                    crosses[axis][1] += 1;
++                    crossing_events.push(json!({"axis":if axis==0{"fatigue"}else{"sleep_pressure"},"direction":"down","tick":after.tick,"before":pre,"after":post,"reference_bits":threshold.to_bits()}));
++                }
++            }
++        } else {
++            return Err("unknown science row".into());
++        }
++    }
++    if observed != count {
++        return Err("summary interval count differs".into());
++    }
++    if count == 0 {
++        maxima = [
++            final_state.homeostasis.drives.fatigue,
++            final_state.homeostasis.hormones.sleep_pressure,
++        ];
++        minimum_health = final_state.body.health;
++        minimum_energy = final_state.body.energy;
++    }
++    Ok(
++        json!({"schema":"object-rich-optional-vocal-summary-v1","committed_intervals":count,"decisions":decisions,"intervals_without_decision":no_decision,"physical_awake_rest":physical[0],"physical_body_sleep":physical[1],"physical_none":physical[2],"requested_awake_rest_body_sleep_none":attempted,"executed_noop_primitives":executed_noops,"physical_count_basis":"AwakeRest actual positive recovery dose; BodySleep successful stationary physical receipt; none means no applied recovery operation, not necessarily no other action","closed_memory_consolidations":consolidations,"sleep_controller_cycles_completed":final_state.sleep.cycles_completed,"observed_sleep_starts":sleep_starts,"fully_observed_complete_cycles":completed_cycles,"partial_observed_cycle_starts":started_cycles,"phase_intervals":phase_counts,"fatigue_reference_crossings_up_down":crosses[0],"pressure_reference_crossings_up_down":crosses[1],"reference_crossing_events":crossing_events,"first_up_crossing_ticks_F_P":first_up,"initially_at_or_above_reference_F_P":initially_at_or_above_reference,"maxima_F_P":maxima,"minimum_health":minimum_health,"minimum_body_energy":minimum_energy,"final_state":final_state,"terminal":terminal,"horizon_complete":terminal.is_some_and(|t|t["stop"]=="horizon")&&count==HORIZON,"last_commit_sha256":last,"source_and_optimizer_closed":true,"scope":"one source/body, two policies with different RNG domains/support; no synaptic learning or generalized ecological competence","raw_checkpoint_and_science_bytes_preserved":true}),
++    )
++}
++fn compare_prefix(root: &Path, out: &Path) -> Result<()> {
++    let a = load(root, 0)?;
++    let b = load(root, 1)?;
++    let _guard_a = journal::lock(&a.journal)?;
++    let _guard_b = journal::lock(&b.journal)?;
++    let ra = journal::recover(&a.journal, &a.binding, &a.initial, |bytes, tick| {
++        validate_cp(bytes, tick, &a.binding.closure_sha256)
++    })?;
++    let rb = journal::recover(&b.journal, &b.binding, &b.initial, |bytes, tick| {
++        validate_cp(bytes, tick, &b.binding.closure_sha256)
++    })?;
++    let common = ra.next.min(rb.next);
++    let mut summaries = Vec::new();
++    for (loaded, recovered) in [(&a, &ra), (&b, &rb)] {
++        let mut end = 0;
++        let mut lines = 0;
++        if common > 0 {
++            for (i, byte) in recovered.trace.iter().enumerate() {
++                if *byte == b'\n' {
++                    lines += 1;
++                    if lines == 2 * common {
++                        end = i + 1;
++                        break;
++                    }
++                }
++            }
++        }
++        if common > 0 && lines != 2 * common {
++            return Err("common prefix rows missing".into());
++        }
++        let prefix = &recovered.trace[..end];
++        let initial_host = restore(
++            &loaded.initial,
++            &loaded.inputs,
++            loaded.binding.arm,
++            loaded.binding.initial_tick,
++            &loaded.binding.closure_sha256,
++        )?;
++        let mut last_state = observe(&initial_host)?;
++        for row in prefix.split(|b| *b == b'\n').filter(|r| !r.is_empty()) {
++            let value: Value = serde_json::from_slice(row)?;
++            if value["status"] == "observed" {
++                last_state = serde_json::from_value(value["after"].clone())?;
++            }
++        }
++        let last = if common == 0 {
++            hash(&loaded.initial)
++        } else {
++            hash(&journal::bounded_read(
++                &loaded.journal.join(format!("{:06}.packet", common - 1)),
++                journal::MAX_PACKET,
++            )?)
++        };
++        summaries.push(summarize(prefix, &last_state, common, None, &last)?);
++    }
++    fs::create_dir(out)?;
++    write_new(
++        out,
++        "COMMON_OBSERVED_PREFIX.json",
++        &json!({"schema":"object-rich-optional-vocal-common-prefix-v1","common_committed_intervals":common,"full_observed_intervals":[ra.next,rb.next],"selection_rule":"minimum of both complete committed prefixes, no favorable window selection","arms":summaries,"single_seed_not_generalization":true}),
++    )
++}
++fn main() -> Result<()> {
++    let args = std::env::args().skip(1).collect::<Vec<_>>();
++    match args.as_slice(){
++        [cmd,out] if cmd=="--qualify"=>qualification::qualify(Path::new(out)),
++        [cmd,dir] if cmd=="--lock-child"=>{let result=journal::lock(Path::new(dir));std::process::exit(if result.is_ok(){0}else{7});},
++        [cmd,q,res,out] if cmd=="--freeze"=>freeze(Path::new(q),Path::new(res),Path::new(out)),
++        [cmd,root,f,res] if cmd=="--prepare"=>prepare(Path::new(root),Path::new(f),Path::new(res)),
++        [cmd,root,arm] if cmd=="--run"=>run(Path::new(root),arm.parse()?),
++        [cmd,root,arm,out] if cmd=="--export"=>export(Path::new(root),arm.parse()?,Path::new(out)),
++        [cmd,root,out] if cmd=="--compare-prefix"=>compare_prefix(Path::new(root),Path::new(out)),
++        _=>Err("explicit commands only: --qualify OUT | --freeze QUALIFICATION RESERVATION OUT | --prepare ROOT FREEZE RESERVATION | --run ROOT ARM | --export ROOT ARM OUT | --compare-prefix ROOT OUT".into()),
++    }
++}
++
++#[cfg(test)]
++mod driver_tests {
++    use super::*;
++    #[test]
++    fn seed_domain_max_next_overflow_and_fixed_cases_are_pure() {
++        let max = (u64::MAX - 1) / 16;
++        assert_eq!(max, 0x0FFF_FFFF_FFFF_FFFF);
++        assert_eq!(
++            seed_admission_preflight(max, 1).unwrap(),
++            0xFFFF_FFFF_FFFF_FFF1
++        );
++        assert_eq!(
++            seed_admission_preflight(max, 8).unwrap(),
++            0xFFFF_FFFF_FFFF_FFF8
++        );
++        assert!(seed_admission_preflight(max + 1, 1).is_err());
++        assert!(seed_admission_preflight(u64::MAX, 1).is_err());
++        assert!(seed_admission_preflight(0, 1).is_err());
++        assert!(seed_admission_preflight(1, 0).is_err());
++        assert!(seed_admission_preflight(1, 9).is_err());
++        assert!(seed_admission_preflight(0x4D32_424C_0009_0001, 1).is_err());
++        assert_eq!(
++            seed_admission_preflight(SEED, 1).unwrap(),
++            0x34F4_2564_F430_9011
++        );
++        assert!(seed_admission_preflight(FIXTURE_SEED, 1).is_ok());
++    }
++    #[test]
++    fn activation_rejects_completed_root_copy_and_changed_identity() -> Result<()> {
++        let temp = std::env::temp_dir().join(format!("m2-activation-{}", journal::unique()?));
++        fs::create_dir(&temp)?;
++        let original = temp.join("original");
++        let copied = temp.join("copy");
++        fs::create_dir(&original)?;
++        fs::create_dir(&copied)?;
++        let claim = ActivationClaim {
++            schema: "object-rich-optional-vocal-preparation-claim-v1".into(),
++            study: STUDY.into(),
++            root: original.canonicalize()?,
++            freeze_sha256: "freeze".into(),
++            reservation_sha256: "reservation".into(),
++            claim_implies_preparation_attempt: true,
++            claim_implies_world_step: false,
++        };
++        validate_activation(&claim, &original, "freeze", "reservation")?;
++        assert!(validate_activation(&claim, &copied, "freeze", "reservation").is_err());
++        assert!(validate_activation(&claim, &original, "changed", "reservation").is_err());
++        assert!(validate_activation(&claim, &original, "freeze", "changed").is_err());
++        // Retain disposable test evidence under task allocation.
++        Ok(())
++    }
++    #[test]
++    fn source_binding_publication_precedes_preparation_and_failure_blocks_it() -> Result<()> {
++        let temp = std::env::temp_dir().join(format!("m2-source-binding-{}", journal::unique()?));
++        fs::create_dir(&temp)?;
++        let mut calls = 0;
++        bind_then_prepare(&temp, b"source", b"inputs", b"binding", || {
++            assert_eq!(fs::read(temp.join("SOURCE.json"))?, b"source");
++            assert_eq!(fs::read(temp.join("INPUTS.private.json"))?, b"inputs");
++            assert_eq!(
++                fs::read(temp.join("SOURCE_BOUND_BEFORE_PREPARATION.json"))?,
++                b"binding"
++            );
++            calls += 1;
++            Ok(())
++        })?;
++        assert_eq!(calls, 1);
++        assert!(
++            bind_then_prepare(&temp, b"source", b"inputs", b"binding", || {
++                calls += 1;
++                Ok(())
++            })
++            .is_err()
++        );
++        assert_eq!(calls, 1);
++        let failed = temp.join("failed");
++        fs::create_dir(&failed)?;
++        fs::write(
++            failed.join("SOURCE_BOUND_BEFORE_PREPARATION.json"),
++            b"existing",
++        )?;
++        assert!(
++            bind_then_prepare(&failed, b"source", b"inputs", b"binding", || {
++                calls += 1;
++                Ok(())
++            })
++            .is_err()
++        );
++        assert_eq!(calls, 1);
++        // Retain disposable test evidence under task allocation.
++        Ok(())
++    }
++    #[test]
++    fn failed_native_invocation_is_counted_before_returning_error() {
++        let mut calls = 0;
++        let failed: std::result::Result<(), &str> =
++            counted_call(&mut calls, || Err("fixed failure"));
++        assert!(failed.is_err());
++        assert_eq!(calls, 1);
++        let success: std::result::Result<(), &str> = counted_call(&mut calls, || Ok(()));
++        assert!(success.is_ok());
++        assert_eq!(calls, 2);
++    }
++    #[test]
++    fn complete_cycle_requires_ordered_entering_consolidating_waking() {
++        let mut full = CycleProgress::new(0, SleepPhase::EnteringSleep, 1);
++        full.observe(SleepPhase::Consolidating, 3);
++        assert!(!full.complete());
++        full.observe(SleepPhase::Waking, 7);
++        assert!(full.complete());
++        let mut skipped = CycleProgress::new(0, SleepPhase::EnteringSleep, 1);
++        skipped.observe(SleepPhase::Waking, 7);
++        assert!(!skipped.complete());
++        let mut partial = CycleProgress::new(0, SleepPhase::ForcedRecoverySleep, 1);
++        partial.observe(SleepPhase::Consolidating, 3);
++        partial.observe(SleepPhase::Waking, 7);
++        assert!(!partial.complete());
++        let mut wrong_order = CycleProgress::new(0, SleepPhase::EnteringSleep, 1);
++        wrong_order.observe(SleepPhase::Waking, 2);
++        wrong_order.observe(SleepPhase::Consolidating, 3);
++        wrong_order.observe(SleepPhase::Waking, 7);
++        assert!(!wrong_order.complete());
++    }
++}
+diff --git a/crates/alife_training/examples/support/grouped_m2_journal_v1.rs b/crates/alife_training/examples/support/grouped_m2_journal_v1.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..16ac60126d174b8340dcd22958a98a869656f401
+--- /dev/null
++++ b/crates/alife_training/examples/support/grouped_m2_journal_v1.rs
+@@ -0,0 +1,993 @@
++// Grouped M2 durable transport only. Checkpoint and science bytes remain opaque.
++// Adapted from the qualified recovery-sleep V3 publication/recovery core.
++use serde::{Deserialize, Serialize};
++use serde_json::{json, Value};
++use sha2::{Digest, Sha256};
++use std::{
++    collections::BTreeMap,
++    fs::{self, File, OpenOptions},
++    io::{Read, Write},
++    path::Path,
++};
++pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
++pub const MAGIC: &[u8; 8] = b"ALOVJ001";
++pub const MAX_PACKET: u64 = 5 * 1024 * 1024;
++pub const MAX_TRACE_BYTES: u64 = 20 * 1024 * 1024;
++pub const MAX_ARM_BYTES: u64 = 650 * 1024 * 1024;
++pub const MIN_FREE_BYTES: u64 = 4 * 1024 * 1024 * 1024 + 233_175_552 + 226_492_416;
++pub const METADATA_RESERVE: u64 = 64 * 1024;
++const MAX_METADATA: u64 = 16 * 1024;
++fn hash(bytes: &[u8]) -> String {
++    format!("{:x}", Sha256::digest(bytes))
++}
++#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
++#[serde(deny_unknown_fields)]
++pub struct Binding {
++    pub schema: String,
++    pub study_id: String,
++    pub arm: usize,
++    pub mode: String,
++    pub seed: u64,
++    pub sampling_seed: u32,
++    pub initial_tick: u64,
++    pub horizon: u64,
++    pub temperature_bits: u32,
++    pub host_source_commit: String,
++    pub host_source_tree: String,
++    pub driver_source_commit: String,
++    pub driver_source_sha256: String,
++    pub executable_sha256: String,
++    pub protocol_sha256: String,
++    pub qualification_sha256: String,
++    pub preparation_sha256: String,
++    pub source_manifest_sha256: String,
++    pub inputs_sha256: String,
++    pub initial_sha256: String,
++    pub initial_matched_sha256: String,
++    pub closure_sha256: String,
++    pub source_headers: BTreeMap<String, String>,
++    pub max_packet_bytes: u64,
++    pub max_arm_bytes: u64,
++    pub min_free_bytes: u64,
++}
++#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
++#[serde(deny_unknown_fields)]
++pub struct Header {
++    pub binding: Binding,
++    pub offset: u64,
++    pub tick_before: u64,
++    pub tick_after: u64,
++    pub previous_commit_sha256: String,
++    pub checkpoint_sha256: String,
++    pub trace_sha256: String,
++    pub checkpoint_bytes: u64,
++    pub trace_bytes: u64,
++}
++pub struct Packet {
++    pub header: Header,
++    pub checkpoint: Vec<u8>,
++    pub trace: Vec<u8>,
++    pub digest: String,
++}
++pub struct Recovery {
++    pub next: u64,
++    pub previous: String,
++    pub checkpoint: Vec<u8>,
++    pub trace: Vec<u8>,
++    pub trace_bytes: u64,
++    pub storage_bytes: u64,
++    pub ignored_temps: usize,
++}
++pub fn unique() -> Result<String> {
++    Ok(format!(
++        "{}-{}",
++        std::process::id(),
++        std::time::SystemTime::now()
++            .duration_since(std::time::UNIX_EPOCH)?
++            .as_nanos()
++    ))
++}
++pub fn sync_dir(dir: &Path) -> Result<()> {
++    File::open(dir)?.sync_all()?;
++    Ok(())
++}
++pub fn publish(dir: &Path, name: &str, wire: &[u8]) -> Result<()> {
++    publish_with_fault(dir, name, wire, 0)
++}
++pub fn publish_with_fault(dir: &Path, name: &str, wire: &[u8], fault: u8) -> Result<()> {
++    regular_dir(dir)?;
++    if !allowed_name(name)
++        || name.starts_with(".tmp-")
++        || wire.len() as u64
++            > if packet_name(name) {
++                MAX_PACKET
++            } else {
++                MAX_METADATA
++            }
++    {
++        return Err("invalid publication name or oversized payload".into());
++    }
++    publish_atomic(dir, name, wire, fault)
++}
++/// Publish a caller-bounded preparation or export artifact outside the journal.
++/// This does not relax the journal's recovery allowlist.
++pub fn publish_artifact(dir: &Path, name: &str, bytes: &[u8], limit: u64) -> Result<()> {
++    let mut parts = Path::new(name).components();
++    let normal =
++        matches!(parts.next(), Some(std::path::Component::Normal(_))) && parts.next().is_none();
++    if !normal
++        || name.contains('/')
++        || name.contains('\\')
++        || name.contains('\0')
++        || name.starts_with(".tmp-")
++        || name == "LOCK"
++        || limit > MAX_ARM_BYTES
++        || bytes.len() as u64 > limit
++    {
++        return Err("invalid artifact filename or payload bound".into());
++    }
++    publish_atomic(dir, name, bytes, 0)
++}
++fn publish_atomic(dir: &Path, name: &str, wire: &[u8], fault: u8) -> Result<()> {
++    regular_dir(dir)?;
++    // hard_link is an atomic CREATE-NEW publication: unlike POSIX rename it
++    // cannot replace an existing committed packet, even after a racing check.
++    // The same-directory temporary is synced first. Directory sync is checked.
++    // Keep temps as evidence, including successful aliases (no extra data blocks).
++    let tmp = dir.join(format!(".tmp-{}", unique()?));
++    let mut f = OpenOptions::new().create_new(true).write(true).open(&tmp)?;
++    f.write_all(wire)?;
++    f.sync_all()?;
++    if fault == 1 {
++        return Err("fixed test: failure before publication".into());
++    }
++    fs::hard_link(&tmp, dir.join(name))?;
++    if fault == 2 {
++        return Err("fixed test: failure after publication before directory sync".into());
++    }
++    sync_dir(dir)?;
++    Ok(())
++}
++pub fn bounded_read(path: &Path, limit: u64) -> Result<Vec<u8>> {
++    if !fs::symlink_metadata(path)?.file_type().is_file() || fs::metadata(path)?.len() > limit {
++        return Err(format!("not a bounded regular file: {}", path.display()).into());
++    }
++    let mut out = Vec::new();
++    File::open(path)?
++        .take(limit.checked_add(1).ok_or("read limit overflow")?)
++        .read_to_end(&mut out)?;
++    if out.len() as u64 > limit {
++        return Err("file exceeds bounded read".into());
++    }
++    Ok(out)
++}
++pub fn make_packet(
++    binding: &Binding,
++    offset: u64,
++    previous: &str,
++    cp: &[u8],
++    trace: &[u8],
++) -> Result<Vec<u8>> {
++    validate_binding(binding)?;
++    if offset >= binding.horizon {
++        return Err("interval outside horizon".into());
++    }
++    let tick_before = binding
++        .initial_tick
++        .checked_add(offset)
++        .ok_or("tick overflow")?;
++    let header = Header {
++        binding: binding.clone(),
++        offset,
++        tick_before,
++        tick_after: tick_before.checked_add(1).ok_or("tick overflow")?,
++        previous_commit_sha256: previous.into(),
++        checkpoint_sha256: hash(cp),
++        trace_sha256: hash(trace),
++        checkpoint_bytes: cp.len() as u64,
++        trace_bytes: trace.len() as u64,
++    };
++    validate_trace(trace, &header)?;
++    encode_packet(&header, cp, trace)
++}
++fn encode_packet(h: &Header, cp: &[u8], trace: &[u8]) -> Result<Vec<u8>> {
++    validate_binding(&h.binding)?;
++    let meta = serde_json::to_vec(h)?;
++    let total = [meta.len(), cp.len(), trace.len()]
++        .into_iter()
++        .try_fold(32_usize, |sum, n| sum.checked_add(n))
++        .ok_or("packet length overflow")?;
++    if total as u64 > h.binding.max_packet_bytes || meta.len() > 16 * 1024 {
++        return Err("packet size ceiling exceeded; interval unpublished".into());
++    }
++    let mut out = Vec::with_capacity(total);
++    out.extend_from_slice(MAGIC);
++    for n in [meta.len(), cp.len(), trace.len()] {
++        out.extend_from_slice(&(n as u64).to_le_bytes());
++    }
++    out.extend_from_slice(&meta);
++    out.extend_from_slice(cp);
++    out.extend_from_slice(trace);
++    if out.len() as u64 > h.binding.max_packet_bytes {
++        return Err("packet size ceiling exceeded; interval unpublished".into());
++    }
++    Ok(out)
++}
++pub fn decode_packet(
++    wire: &[u8],
++    binding: &Binding,
++    offset: u64,
++    previous: &str,
++) -> Result<Packet> {
++    validate_binding(binding)?;
++    let tick_before = binding
++        .initial_tick
++        .checked_add(offset)
++        .ok_or("tick overflow")?;
++    let tick_after = tick_before.checked_add(1).ok_or("tick overflow")?;
++    if wire.len() < 32 || wire.len() as u64 > binding.max_packet_bytes || &wire[..8] != MAGIC {
++        return Err("invalid packet prefix or size".into());
++    }
++    let lengths = [8, 16, 24].map(|p| u64::from_le_bytes(wire[p..p + 8].try_into().unwrap()));
++    let sum = lengths
++        .iter()
++        .try_fold(32_u64, |a, b| a.checked_add(*b))
++        .ok_or("packet length overflow")?;
++    if sum != wire.len() as u64 || lengths[0] > 16 * 1024 {
++        return Err("packet lengths differ".into());
++    }
++    let a = 32 + lengths[0] as usize;
++    let b = a + lengths[1] as usize;
++    let h: Header = serde_json::from_slice(&wire[32..a])?;
++    if serde_json::to_vec(&h)? != wire[32..a]
++        || &h.binding != binding
++        || h.offset != offset
++        || h.previous_commit_sha256 != previous
++        || h.tick_before != tick_before
++        || h.tick_after != tick_after
++        || offset >= binding.horizon
++        || h.checkpoint_bytes != lengths[1]
++        || h.trace_bytes != lengths[2]
++        || h.checkpoint_sha256 != hash(&wire[a..b])
++        || h.trace_sha256 != hash(&wire[b..])
++    {
++        return Err("packet identity, order, hash or length mismatch".into());
++    }
++    validate_trace(&wire[b..], &h)?;
++    Ok(Packet {
++        header: h,
++        checkpoint: wire[a..b].to_vec(),
++        trace: wire[b..].to_vec(),
++        digest: hash(wire),
++    })
++}
++fn validate_trace(trace: &[u8], h: &Header) -> Result<()> {
++    let rows = trace.split(|c| *c == b'\n').collect::<Vec<_>>();
++    if rows.len() != 3 || !rows[2].is_empty() {
++        return Err("packet needs both complete scientific rows".into());
++    }
++    let commit: Value = serde_json::from_slice(rows[0])?;
++    let observation: Value = serde_json::from_slice(rows[1])?;
++    if commit["schema"] != "object-rich-optional-vocal-commit-v1"
++        || observation["schema"] != "object-rich-optional-vocal-observation-v1"
++        || commit["checkpoint_sha256"] != h.checkpoint_sha256
++        || commit["status"] != "committed"
++        || observation["status"] != "observed"
++        || commit["offset"] != h.offset
++        || observation["offset"] != h.offset
++        || commit["tick_before"] != h.tick_before
++        || commit["tick_after"] != h.tick_after
++        || observation["before"]["tick"] != h.tick_before
++        || observation["after"]["tick"] != h.tick_after
++        || !commit["decisions"].is_array()
++        || !commit["consolidations"].is_u64()
++    {
++        return Err("scientific row identity or completeness mismatch".into());
++    }
++    Ok(())
++}
++/// Recover exact raw science for bounded qualification/export consumers.
++pub fn recover(
++    dir: &Path,
++    binding: &Binding,
++    initial: &[u8],
++    validate_cp: impl Fn(&[u8], u64) -> Result<()>,
++) -> Result<Recovery> {
++    recover_impl(dir, binding, initial, validate_cp, true)
++}
++/// Validate every packet and scientific row, retaining only the latest checkpoint.
++/// The returned trace is empty; trace_bytes still accounts for the entire prefix
++/// and enforces its export ceiling. This is the bounded-memory primary resume path.
++pub fn recover_without_trace(
++    dir: &Path,
++    binding: &Binding,
++    initial: &[u8],
++    validate_cp: impl Fn(&[u8], u64) -> Result<()>,
++) -> Result<Recovery> {
++    recover_impl(dir, binding, initial, validate_cp, false)
++}
++fn recover_impl(
++    dir: &Path,
++    binding: &Binding,
++    initial: &[u8],
++    validate_cp: impl Fn(&[u8], u64) -> Result<()>,
++    retain_trace: bool,
++) -> Result<Recovery> {
++    regular_dir(dir)?;
++    validate_binding(binding)?;
++    if initial.len() as u64 > binding.max_packet_bytes || hash(initial) != binding.initial_sha256 {
++        return Err("initial checkpoint changed".into());
++    }
++    let expected_manifest = serde_json::to_vec(binding)?;
++    if bounded_read(&dir.join("MANIFEST.json"), 16 * 1024)? != expected_manifest {
++        return Err("journal manifest changed".into());
++    }
++    if bounded_read(&dir.join("CLAIM.json"), MAX_METADATA)? != expected_manifest {
++        return Err("fresh grouped-M2 guard claim differs from manifest".into());
++    }
++    validate_cp(initial, binding.initial_tick)?;
++    let mut names = Vec::new();
++    let mut entry_count = 0_u64;
++    let mut storage_bytes = 0_u64;
++    let mut ignored_temps = 0;
++    // Charge every directory entry conservatively, even retained hardlink aliases.
++    for entry in fs::read_dir(dir)? {
++        let entry = entry?;
++        entry_count += 1;
++        if entry_count > binding.horizon.saturating_mul(4).saturating_add(128) {
++            return Err("journal entry count exceeds bounded horizon allowance".into());
++        }
++        let name = entry
++            .file_name()
++            .into_string()
++            .map_err(|_| "non-UTF8 journal name")?;
++        let meta = fs::symlink_metadata(entry.path())?;
++        if !meta.is_file() || meta.file_type().is_symlink() {
++            return Err("journal contains nonregular entry".into());
++        }
++        if !allowed_name(&name)
++            || meta.len()
++                > if packet_name(&name) || name.starts_with(".tmp-") {
++                    binding.max_packet_bytes
++                } else {
++                    MAX_METADATA
++                }
++        {
++            return Err(format!("unknown or oversized journal entry: {name}").into());
++        }
++        storage_bytes = storage_bytes
++            .checked_add(meta.len())
++            .ok_or("storage overflow")?;
++        if name.starts_with(".tmp-") {
++            ignored_temps += 1;
++            continue;
++        }
++        if name.ends_with(".packet") {
++            names.push(name);
++        } else if name != "CLAIM.json"
++            && name != "MANIFEST.json"
++            && name != "LOCK"
++            && name != "BLOCKED-PUBLICATION"
++            && !name.starts_with("PROCESS-")
++            && !attempt_name(&name)
++            && name != "TERMINAL.json"
++        {
++            return Err(format!("unknown journal entry: {name}").into());
++        }
++    }
++    if storage_bytes > binding.max_arm_bytes {
++        return Err("journal exceeds storage ceiling".into());
++    }
++    bounded_read(&dir.join("LOCK"), 0)?;
++    names.sort();
++    let mut r = Recovery {
++        next: 0,
++        previous: hash(initial),
++        checkpoint: initial.to_vec(),
++        trace: Vec::new(),
++        trace_bytes: 0,
++        storage_bytes,
++        ignored_temps,
++    };
++    for name in names {
++        if name != format!("{:06}.packet", r.next) {
++            return Err("duplicate, omitted or out-of-order committed packet".into());
++        }
++        let wire = bounded_read(&dir.join(name), binding.max_packet_bytes)?;
++        let p = decode_packet(&wire, binding, r.next, &r.previous)?;
++        validate_cp(&p.checkpoint, p.header.tick_after)?;
++        // Every valid prefix must remain exportable, including no-trace resume.
++        r.trace_bytes = checked_trace_len(r.trace_bytes, p.trace.len() as u64)?;
++        r.next += 1;
++        r.previous = p.digest;
++        r.checkpoint = p.checkpoint;
++        if retain_trace {
++            append_trace(&mut r.trace, &p.trace)?;
++        }
++    }
++    if dir.join("TERMINAL.json").exists() {
++        let t: Value =
++            serde_json::from_slice(&bounded_read(&dir.join("TERMINAL.json"), 16 * 1024)?)?;
++        if t["schema"] != "object-rich-optional-vocal-terminal-v1"
++            || t["binding"] != serde_json::to_value(binding)?
++            || t["committed_intervals"] != r.next
++            || t["last_commit_sha256"] != r.previous
++            || t["final_checkpoint_sha256"] != hash(&r.checkpoint)
++            || t["tick"] != binding.initial_tick + r.next
++            || !t["stop"].is_string()
++        {
++            return Err("terminal record differs from complete committed prefix".into());
++        }
++    }
++    Ok(r)
++}
++pub fn lock(dir: &Path) -> Result<File> {
++    regular_dir(dir)?;
++    bounded_read(&dir.join("LOCK"), 0)?;
++    let f = OpenOptions::new()
++        .read(true)
++        .write(true)
++        .open(dir.join("LOCK"))?;
++    f.try_lock()
++        .map_err(|e| format!("journal already has an active writer: {e}"))?;
++    Ok(f)
++}
++pub fn free_bytes(dir: &Path) -> Result<u64> {
++    // POSIX df reports available blocks for this exact filesystem. Fail closed
++    // on missing utility or unexpected output; no fragile ABI-specific statvfs.
++    let out = std::process::Command::new("df")
++        .args(["-Pk", "--"])
++        .arg(dir)
++        .env("LC_ALL", "C")
++        .output()?;
++    if !out.status.success() {
++        return Err("free-space inspection failed".into());
++    }
++    let text = String::from_utf8(out.stdout)?;
++    let row = text
++        .lines()
++        .last()
++        .ok_or("missing df output")?
++        .split_whitespace()
++        .collect::<Vec<_>>();
++    if row.len() < 6 {
++        return Err("invalid df output".into());
++    }
++    Ok(row[3]
++        .parse::<u64>()?
++        .checked_mul(1024)
++        .ok_or("df overflow")?)
++}
++pub fn resource_stop(b: &Binding, used: u64, free: u64) -> bool {
++    validate_binding(b).is_err()
++        || b.max_packet_bytes
++            .checked_mul(2)
++            .and_then(|n| n.checked_add(METADATA_RESERVE))
++            .and_then(|n| used.checked_add(n))
++            .is_none_or(|n| n > b.max_arm_bytes)
++        || b.min_free_bytes
++            .checked_add(b.max_packet_bytes)
++            .is_none_or(|n| free < n)
++}
++pub fn terminal(dir: &Path, b: &Binding, r: &Recovery, reason: &str) -> Result<()> {
++    validate_binding(b)?;
++    if r.next > b.horizon {
++        return Err("terminal exceeds horizon".into());
++    }
++    publish(
++        dir,
++        "TERMINAL.json",
++        &serde_json::to_vec(
++            &json!({"schema":"object-rich-optional-vocal-terminal-v1","binding":b,"stop":reason,"committed_intervals":r.next,"last_commit_sha256":r.previous,"final_checkpoint_sha256":hash(&r.checkpoint),"tick":b.initial_tick+r.next}),
++        )?,
++    )
++}
++pub fn stop_after_failure(dir: &Path, b: &Binding, r: &Recovery, reason: &str) {
++    if let Err(stop_error) = terminal(dir, b, r, reason) {
++        let blocker = OpenOptions::new()
++            .create_new(true)
++            .write(true)
++            .open(dir.join("BLOCKED-PUBLICATION"));
++        if let Ok(f) = blocker {
++            let _ = f.sync_all();
++            let _ = sync_dir(dir);
++        }
++        eprintln!("STOP RECORD FAILURE: {stop_error}. Do not resume automatically; storage may be unable to persist the blocker. {reason}");
++    }
++}
++pub fn record_publication_failure(
++    dir: &Path,
++    b: &Binding,
++    r: &mut Recovery,
++    cp: &[u8],
++    packet: &[u8],
++    reason: &str,
++) -> Result<()> {
++    let decoded = match decode_packet(packet, b, r.next, &r.previous) {
++        Ok(p) if p.checkpoint == cp => p,
++        _ => {
++            stop_after_failure(
++                dir,
++                b,
++                r,
++                "invalid failed-publication packet; journal blocked",
++            );
++            return Err("invalid failed-publication packet".into());
++        }
++    };
++    let mut trace_failure = None;
++    let published = dir.join(format!("{:06}.packet", r.next));
++    match fs::symlink_metadata(&published) {
++        Ok(_) => {
++            match bounded_read(&published, b.max_packet_bytes) {
++                Ok(actual) if actual == packet => {}
++                _ => {
++                    stop_after_failure(
++                        dir,
++                        b,
++                        r,
++                        "conflicting publication destination; journal invalid",
++                    );
++                    return Err("publication destination conflicts or cannot be read".into());
++                }
++            }
++            // A successful link is committed even when its directory sync failed.
++            // Reconcile before emitting any terminal status; never replay it.
++            r.next += 1;
++            r.previous = decoded.digest;
++            r.checkpoint = decoded.checkpoint;
++            // Update durable prefix identity first. Aggregate memory exhaustion
++            // must never erase a known-visible commit or cause its replay.
++            match r.trace_bytes.checked_add(decoded.trace.len() as u64) {
++                Some(total) => {
++                    // Preserve the exact visible byte count even if an invalid
++                    // caller allowed a publication beyond the export ceiling.
++                    r.trace_bytes = total;
++                    if total > MAX_TRACE_BYTES {
++                        trace_failure =
++                            Some("raw science exceeds 512 MiB aggregate memory cap".into());
++                    }
++                }
++                None => trace_failure = Some("raw science length overflow".into()),
++            }
++            if trace_failure.is_none() {
++                if let Err(error) = append_trace(&mut r.trace, &decoded.trace) {
++                    trace_failure = Some(error.to_string());
++                }
++            }
++        }
++        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
++        Err(e) => {
++            stop_after_failure(
++                dir,
++                b,
++                r,
++                "publication outcome cannot be inspected; journal blocked",
++            );
++            return Err(e.into());
++        }
++    }
++    let stop_reason = match &trace_failure {
++        Some(error) => format!("{reason}; raw science aggregation stopped: {error}"),
++        None => reason.to_owned(),
++    };
++    stop_after_failure(dir, b, r, &stop_reason);
++    // Count what actually exists, including a prelink temporary, a successful
++    // link's retained alias, and all terminal/blocker publication evidence.
++    // Do not assume a failed write produced zero bytes or exactly one temp.
++    let (storage_bytes, ignored_temps) = storage_snapshot(dir, b)?;
++    r.storage_bytes = storage_bytes;
++    r.ignored_temps = ignored_temps;
++    if let Some(error) = trace_failure {
++        return Err(error.into());
++    }
++    Ok(())
++}
++
++fn checked_trace_len(current: u64, additional: u64) -> Result<u64> {
++    let total = current
++        .checked_add(additional)
++        .ok_or("raw science length overflow")?;
++    if total > MAX_TRACE_BYTES {
++        return Err("raw science exceeds 512 MiB aggregate memory cap".into());
++    }
++    Ok(total)
++}
++fn append_trace(trace: &mut Vec<u8>, incoming: &[u8]) -> Result<()> {
++    checked_trace_len(trace.len() as u64, incoming.len() as u64)?;
++    // Bound before requesting allocation; avoid Vec's speculative growth factor.
++    trace.try_reserve_exact(incoming.len())?;
++    trace.extend_from_slice(incoming);
++    Ok(())
++}
++
++fn storage_snapshot(dir: &Path, b: &Binding) -> Result<(u64, usize)> {
++    regular_dir(dir)?;
++    let mut storage_bytes = 0_u64;
++    let mut ignored_temps = 0;
++    for (index, entry) in fs::read_dir(dir)?.enumerate() {
++        if index as u64 >= b.horizon.saturating_mul(4).saturating_add(128) {
++            return Err("journal entry count exceeds bounded horizon allowance".into());
++        }
++        let entry = entry?;
++        let name = entry
++            .file_name()
++            .into_string()
++            .map_err(|_| "non-UTF8 journal name")?;
++        let meta = fs::symlink_metadata(entry.path())?;
++        if !meta.file_type().is_file() || !allowed_name(&name) {
++            return Err("cannot account for nonregular or unknown journal entry".into());
++        }
++        let limit = if packet_name(&name) || name.starts_with(".tmp-") {
++            b.max_packet_bytes
++        } else {
++            MAX_METADATA
++        };
++        if meta.len() > limit {
++            return Err("oversized journal entry".into());
++        }
++        storage_bytes = storage_bytes
++            .checked_add(meta.len())
++            .ok_or("storage overflow")?;
++        if name.starts_with(".tmp-") {
++            ignored_temps += 1;
++        }
++    }
++    Ok((storage_bytes, ignored_temps))
++}
++
++fn regular_dir(dir: &Path) -> Result<()> {
++    if !fs::symlink_metadata(dir)?.file_type().is_dir() {
++        return Err("journal path is not a real directory".into());
++    }
++    Ok(())
++}
++fn packet_name(name: &str) -> bool {
++    name.len() == 13
++        && name.ends_with(".packet")
++        && name.as_bytes()[..6].iter().all(u8::is_ascii_digit)
++}
++fn attempt_name(name: &str) -> bool {
++    name.len() == 19
++        && name.starts_with("ATTEMPT-")
++        && name.ends_with(".json")
++        && name.as_bytes()[8..14].iter().all(u8::is_ascii_digit)
++}
++fn allowed_name(name: &str) -> bool {
++    if name.contains('/') || name.contains('\\') || name.len() > 128 {
++        return false;
++    }
++    matches!(
++        name,
++        "MANIFEST.json" | "LOCK" | "CLAIM.json" | "BLOCKED-PUBLICATION" | "TERMINAL.json"
++    ) || packet_name(name)
++        || (name.starts_with("PROCESS-") && name.len() > 8)
++        || attempt_name(name)
++        || (name.starts_with(".tmp-") && name.len() > 5)
++}
++fn validate_binding(b: &Binding) -> Result<()> {
++    if b.schema != "object-rich-optional-vocal-durable-v1"
++        || b.study_id.is_empty()
++        || b.horizon == 0
++        || b.horizon > 1_000_000
++        || b.initial_tick.checked_add(b.horizon).is_none()
++        || b.max_packet_bytes == 0
++        || b.max_packet_bytes > MAX_PACKET
++        || b.max_arm_bytes == 0
++        || b.max_arm_bytes > MAX_ARM_BYTES
++        || b.min_free_bytes < MIN_FREE_BYTES
++        || serde_json::to_vec(b)?.len() as u64 > MAX_METADATA
++    {
++        return Err("invalid grouped-M2 binding or resource bounds".into());
++    }
++    Ok(())
++}
++/// Fresh directory only. The claim is guard-only identity: it does not establish
++/// a process start, a scientific decision, or an executed world interval.
++/// Interrupted initialization is intentionally not repaired during resume.
++pub fn init_journal(dir: &Path, b: &Binding) -> Result<()> {
++    validate_binding(b)?;
++    let manifest = serde_json::to_vec(b)?;
++    fs::create_dir(dir)?;
++    sync_dir(dir.parent().ok_or("journal parent missing")?)?;
++    let f = OpenOptions::new()
++        .create_new(true)
++        .write(true)
++        .open(dir.join("LOCK"))?;
++    f.sync_all()?;
++    publish(dir, "MANIFEST.json", &manifest)?;
++    // CREATE-NEW hardlink preserves any unknown conflicting claim unchanged.
++    fs::hard_link(dir.join("MANIFEST.json"), dir.join("CLAIM.json"))?;
++    sync_dir(dir)?;
++    Ok(())
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    fn binding() -> Binding {
++        Binding {
++            schema: "object-rich-optional-vocal-durable-v1".into(),
++            study_id: "transport-unit".into(),
++            arm: 0,
++            mode: "transport-only".into(),
++            seed: 7,
++            sampling_seed: 8,
++            initial_tick: 10,
++            horizon: 4,
++            temperature_bits: 1.0_f32.to_bits(),
++            host_source_commit: "host".into(),
++            host_source_tree: "tree".into(),
++            driver_source_commit: "driver".into(),
++            driver_source_sha256: "source".into(),
++            executable_sha256: "executable".into(),
++            protocol_sha256: "protocol".into(),
++            qualification_sha256: "qualification".into(),
++            preparation_sha256: "preparation".into(),
++            source_manifest_sha256: "manifest".into(),
++            inputs_sha256: "inputs".into(),
++            initial_sha256: hash(b"initial"),
++            initial_matched_sha256: "matched".into(),
++            closure_sha256: "closure".into(),
++            source_headers: BTreeMap::new(),
++            max_packet_bytes: MAX_PACKET,
++            max_arm_bytes: MAX_ARM_BYTES,
++            min_free_bytes: MIN_FREE_BYTES,
++        }
++    }
++    fn science(cp: &[u8]) -> Vec<u8> {
++        // Deliberately noncanonical whitespace and number spelling prove that
++        // scientific payload bytes are preserved rather than re-serialized.
++        format!("{{ \"schema\":\"object-rich-optional-vocal-commit-v1\",\"status\":\"committed\",\"offset\":0,\"tick_before\":10,\"tick_after\":11,\"decisions\":[],\"consolidations\":0,\"checkpoint_sha256\":\"{}\",\"extra\":1.00}}\n{{\"schema\":\"object-rich-optional-vocal-observation-v1\",\"status\":\"observed\",\"offset\":0,\"before\":{{\"tick\":10}},\"after\":{{\"tick\":11}}}}\n",hash(cp)).into_bytes()
++    }
++    struct Scratch(std::path::PathBuf);
++    impl Scratch {
++        fn new() -> Self {
++            Self(std::env::temp_dir().join(format!(
++                "object-rich-optional-vocal-journal-test-{}",
++                unique().unwrap()
++            )))
++        }
++    }
++    impl Drop for Scratch {
++        fn drop(&mut self) {
++            // Retain disposable test evidence under the task allocation.
++        }
++    }
++    #[test]
++    fn full_horizon_attempt_packets_and_aliases_recover_without_replay() {
++        let d = Scratch::new();
++        let mut b = binding();
++        b.horizon = 64;
++        init_journal(&d.0, &b).unwrap();
++        let mut previous = b.initial_sha256.clone();
++        for offset in 0..b.horizon {
++            let cp = format!("opaque checkpoint {offset}").into_bytes();
++            let mut rows = science(&cp)
++                .split(|c| *c == b'\n')
++                .filter(|l| !l.is_empty())
++                .map(|line| serde_json::from_slice::<Value>(line).unwrap())
++                .collect::<Vec<_>>();
++            rows[0]["offset"] = offset.into();
++            rows[0]["tick_before"] = (10 + offset).into();
++            rows[0]["tick_after"] = (11 + offset).into();
++            rows[1]["offset"] = offset.into();
++            rows[1]["before"]["tick"] = (10 + offset).into();
++            rows[1]["after"]["tick"] = (11 + offset).into();
++            let mut trace = Vec::new();
++            for row in rows {
++                trace.extend(serde_json::to_vec(&row).unwrap());
++                trace.push(b'\n');
++            }
++            publish_artifact(
++                &d.0,
++                &format!("ATTEMPT-{offset:06}.json"),
++                b"{\"attempt_before_call\":true}",
++                MAX_METADATA,
++            )
++            .unwrap();
++            let packet = make_packet(&b, offset, &previous, &cp, &trace).unwrap();
++            publish(&d.0, &format!("{offset:06}.packet"), &packet).unwrap();
++            previous = hash(&packet);
++        }
++        let r = recover(&d.0, &b, b"initial", |_, _| Ok(())).unwrap();
++        assert_eq!(r.next, 64);
++        assert_eq!(r.checkpoint, b"opaque checkpoint 63");
++        assert!(r.ignored_temps >= 129);
++        terminal(&d.0, &b, &r, "horizon").unwrap();
++        let final_recovered = recover_without_trace(&d.0, &b, b"initial", |_, _| Ok(())).unwrap();
++        assert_eq!(final_recovered.next, 64);
++        assert_eq!(final_recovered.previous, previous);
++        assert!(publish(&d.0, "000063.packet", b"replacement").is_err());
++        fs::hard_link(d.0.join("000063.packet"), d.0.join("000064.packet")).unwrap();
++        assert!(recover_without_trace(&d.0, &b, b"initial", |_, _| Ok(())).is_err());
++        for bad in [
++            "ATTEMPT-.json",
++            "ATTEMPT-00000x.json",
++            "ATTEMPT-0000000.json",
++        ] {
++            assert!(!allowed_name(bad));
++        }
++        // A durable unresolved attempt is retained, not reinterpreted as a commit.
++        let pending = Scratch::new();
++        init_journal(&pending.0, &b).unwrap();
++        publish_artifact(&pending.0, "ATTEMPT-000000.json", b"{}", MAX_METADATA).unwrap();
++        let r = recover_without_trace(&pending.0, &b, b"initial", |_, _| Ok(())).unwrap();
++        assert_eq!(r.next, 0);
++        assert!(pending
++            .0
++            .join(format!("ATTEMPT-{:06}.json", r.next))
++            .exists());
++        assert!(publish_artifact(&pending.0, "ATTEMPT-000000.json", b"{}", MAX_METADATA).is_err());
++    }
++    #[test]
++    fn trace_cap_is_checked_without_large_allocations() {
++        assert_eq!(
++            checked_trace_len(MAX_TRACE_BYTES - 1, 1).unwrap(),
++            MAX_TRACE_BYTES
++        );
++        assert!(checked_trace_len(MAX_TRACE_BYTES, 1).is_err());
++        assert!(checked_trace_len(u64::MAX, 1).is_err());
++        let mut raw = b"raw".to_vec();
++        append_trace(&mut raw, b" bytes").unwrap();
++        assert_eq!(raw, b"raw bytes");
++    }
++    #[test]
++    fn no_trace_recovery_validates_and_preserves_latest_checkpoint() {
++        let d = Scratch::new();
++        let b = binding();
++        init_journal(&d.0, &b).unwrap();
++        let cp = b"opaque checkpoint";
++        let wire = make_packet(&b, 0, &b.initial_sha256, cp, &science(cp)).unwrap();
++        publish(&d.0, "000000.packet", &wire).unwrap();
++        let seen = std::cell::Cell::new(0);
++        let r = recover_without_trace(&d.0, &b, b"initial", |_, _| {
++            seen.set(seen.get() + 1);
++            Ok(())
++        })
++        .unwrap();
++        assert_eq!(seen.get(), 2);
++        assert_eq!(r.next, 1);
++        assert_eq!(r.checkpoint, cp);
++        assert!(r.trace.is_empty());
++        assert_eq!(r.trace_bytes, science(cp).len() as u64);
++        assert!(recover_without_trace(&d.0, &b, b"initial", |_, tick| {
++            if tick == 11 {
++                Err("invalid checkpoint".into())
++            } else {
++                Ok(())
++            }
++        })
++        .is_err());
++        let mut corrupt = wire;
++        *corrupt.last_mut().unwrap() ^= 1;
++        fs::write(d.0.join("000000.packet"), corrupt).unwrap();
++        assert!(recover_without_trace(&d.0, &b, b"initial", |_, _| Ok(())).is_err());
++    }
++    #[test]
++    fn raw_packet_roundtrip_and_negatives() {
++        let b = binding();
++        let cp = b"opaque checkpoint";
++        let trace = science(cp);
++        let wire = make_packet(&b, 0, &b.initial_sha256, cp, &trace).unwrap();
++        let p = decode_packet(&wire, &b, 0, &b.initial_sha256).unwrap();
++        assert_eq!(p.checkpoint, cp);
++        assert_eq!(p.trace, trace);
++        assert!(decode_packet(&wire, &b, 1, &b.initial_sha256).is_err());
++        assert!(decode_packet(&wire, &b, 0, "wrong predecessor").is_err());
++        let mut corrupt = wire.clone();
++        *corrupt.last_mut().unwrap() ^= 1;
++        assert!(decode_packet(&corrupt, &b, 0, &b.initial_sha256).is_err());
++        assert!(make_packet(&b, 0, &b.initial_sha256, cp, b"{}\n{}\n").is_err());
++        assert!(make_packet(&b, b.horizon, &b.initial_sha256, cp, &trace).is_err());
++    }
++    #[test]
++    fn lock_claim_and_recovery_do_not_initialize() {
++        let d = Scratch::new();
++        let b = binding();
++        assert!(lock(&d.0).is_err());
++        assert!(recover(&d.0, &b, b"initial", |_, _| Ok(())).is_err());
++        assert!(!d.0.exists());
++        init_journal(&d.0, &b).unwrap();
++        assert!(init_journal(&d.0, &b).is_err());
++        let guard = lock(&d.0).unwrap();
++        assert!(lock(&d.0).is_err());
++        drop(guard);
++        assert_eq!(
++            bounded_read(&d.0.join("CLAIM.json"), MAX_METADATA).unwrap(),
++            serde_json::to_vec(&b).unwrap()
++        );
++        fs::write(d.0.join("CLAIM.json"), b"unknown conflicting claim").unwrap();
++        assert!(recover(&d.0, &b, b"initial", |_, _| Ok(())).is_err());
++    }
++    #[test]
++    fn prelink_and_postlink_failure_reconcile_without_replay() {
++        for fault in [1, 2] {
++            let d = Scratch::new();
++            let b = binding();
++            init_journal(&d.0, &b).unwrap();
++            let _guard = lock(&d.0).unwrap();
++            let mut r = recover(&d.0, &b, b"initial", |_, _| Ok(())).unwrap();
++            let cp = b"opaque checkpoint";
++            let trace = science(cp);
++            let wire = make_packet(&b, 0, &r.previous, cp, &trace).unwrap();
++            assert!(publish_with_fault(&d.0, "000000.packet", &wire, fault).is_err());
++            record_publication_failure(&d.0, &b, &mut r, cp, &wire, "injected failure").unwrap();
++            let replay = recover(&d.0, &b, b"initial", |_, _| Ok(())).unwrap();
++            assert_eq!(r.trace_bytes, replay.trace_bytes);
++            assert_eq!(r.storage_bytes, replay.storage_bytes);
++            assert_eq!(r.ignored_temps, replay.ignored_temps);
++            assert_eq!(replay.next, if fault == 2 { 1 } else { 0 });
++            assert_eq!(replay.trace, if fault == 2 { trace } else { Vec::new() });
++            assert!(d.0.join("TERMINAL.json").is_file());
++            assert!(replay.storage_bytes >= wire.len() as u64 * u64::from(fault));
++            assert!(publish(&d.0, "TERMINAL.json", b"replace").is_err());
++        }
++    }
++    #[test]
++    fn visible_commit_survives_trace_cap_failure() {
++        let d = Scratch::new();
++        let b = binding();
++        init_journal(&d.0, &b).unwrap();
++        let mut r = recover_without_trace(&d.0, &b, b"initial", |_, _| Ok(())).unwrap();
++        let cp = b"opaque checkpoint";
++        let trace = science(cp);
++        let wire = make_packet(&b, 0, &r.previous, cp, &trace).unwrap();
++        assert!(publish_with_fault(&d.0, "000000.packet", &wire, 2).is_err());
++        // Inject a bad caller's accounting without allocating 512 MiB.
++        r.trace_bytes = MAX_TRACE_BYTES;
++        assert!(
++            record_publication_failure(&d.0, &b, &mut r, cp, &wire, "injected failure").is_err()
++        );
++        assert_eq!(r.next, 1);
++        assert_eq!(r.checkpoint, cp);
++        assert_eq!(r.trace_bytes, MAX_TRACE_BYTES + trace.len() as u64);
++        assert!(r.trace.is_empty());
++        assert!(d.0.join("TERMINAL.json").is_file());
++        let terminal: Value = serde_json::from_slice(
++            &bounded_read(&d.0.join("TERMINAL.json"), MAX_METADATA).unwrap(),
++        )
++        .unwrap();
++        assert_eq!(terminal["committed_intervals"], 1);
++        assert_eq!(terminal["final_checkpoint_sha256"], hash(cp));
++    }
++    #[test]
++    fn artifact_publication_is_bounded_create_new_and_not_journal_permission() {
++        let d = Scratch::new();
++        fs::create_dir(&d.0).unwrap();
++        let bytes = vec![b'x'; MAX_METADATA as usize + 1];
++        publish_artifact(&d.0, "initial.private.m2", &bytes, MAX_PACKET).unwrap();
++        assert_eq!(
++            bounded_read(&d.0.join("initial.private.m2"), MAX_PACKET).unwrap(),
++            bytes
++        );
++        assert!(publish_artifact(&d.0, "initial.private.m2", b"replace", MAX_PACKET).is_err());
++        assert!(publish(&d.0, "initial.private.m2", b"x").is_err());
++        for name in [
++            "",
++            ".",
++            "..",
++            "../outside",
++            "a/b",
++            "a\\b",
++            ".tmp-reserved",
++            "LOCK",
++        ] {
++            assert!(publish_artifact(&d.0, name, b"x", MAX_PACKET).is_err());
++        }
++        assert!(publish_artifact(&d.0, "SOURCE.json", b"xx", 1).is_err());
++        assert!(publish_artifact(&d.0, "SOURCE.json", b"x", MAX_ARM_BYTES + 1).is_err());
++    }
++    #[test]
++    fn unknown_names_and_resource_limits_fail_closed() {
++        let d = Scratch::new();
++        let b = binding();
++        init_journal(&d.0, &b).unwrap();
++        assert!(publish(&d.0, "../escape", b"x").is_err());
++        fs::write(d.0.join("not-allowed"), b"x").unwrap();
++        assert!(recover(&d.0, &b, b"initial", |_, _| Ok(())).is_err());
++        assert!(resource_stop(&b, u64::MAX, u64::MAX));
++        assert!(resource_stop(&b, 0, MIN_FREE_BYTES));
++        assert!(!resource_stop(&b, 0, MIN_FREE_BYTES + MAX_PACKET));
++    }
++}
+diff --git a/crates/alife_training/examples/support/grouped_m2_raw_v1.rs b/crates/alife_training/examples/support/grouped_m2_raw_v1.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..b8d2b6d01963d10bd61105d0c1c6085ea0a86700
+--- /dev/null
++++ b/crates/alife_training/examples/support/grouped_m2_raw_v1.rs
+@@ -0,0 +1,681 @@
++//! Read-only raw JSON slicing. Never deserialize/re-emit authoritative M2 bytes.
++use super::{hash, Result};
++use std::collections::BTreeMap;
++
++pub const MAGIC: &[u8] =
++    b"ALIFE-GROUPED-M2-HOST\0V1\0CONFIDENCE-V2\0SYNAPTIC-CLOSED\0PROFILE5\0SAMPLER-BITS1\0";
++#[derive(Clone, Copy)]
++pub struct Raw<'a>(pub &'a [u8]);
++impl<'a> Raw<'a> {
++    pub fn object(self) -> Result<BTreeMap<String, Self>> {
++        let bytes = self.0;
++        if bytes.first() != Some(&b'{') {
++            return Err("raw object expected".into());
++        }
++        let mut pos = 1;
++        let mut out = BTreeMap::new();
++        loop {
++            ws(bytes, &mut pos);
++            if bytes.get(pos) == Some(&b'}') {
++                pos += 1;
++                break;
++            }
++            let (key, end) = read::<String>(&bytes[pos..])?;
++            pos += end;
++            ws(bytes, &mut pos);
++            if bytes.get(pos) != Some(&b':') {
++                return Err("raw colon expected".into());
++            }
++            pos += 1;
++            ws(bytes, &mut pos);
++            let start = pos;
++            let (_, len) = read::<serde::de::IgnoredAny>(&bytes[pos..])?;
++            pos += len;
++            if out.insert(key, Raw(&bytes[start..pos])).is_some() {
++                return Err("duplicate raw key".into());
++            }
++            ws(bytes, &mut pos);
++            match bytes.get(pos) {
++                Some(b',') => pos += 1,
++                Some(b'}') => {
++                    pos += 1;
++                    break;
++                }
++                _ => return Err("raw object delimiter".into()),
++            }
++        }
++        ws(bytes, &mut pos);
++        if pos != bytes.len() {
++            return Err("raw object trailing bytes".into());
++        }
++        Ok(out)
++    }
++    pub fn array(self) -> Result<Vec<Self>> {
++        let bytes = self.0;
++        if bytes.first() != Some(&b'[') {
++            return Err("raw array expected".into());
++        }
++        let mut pos = 1;
++        let mut out = Vec::new();
++        loop {
++            ws(bytes, &mut pos);
++            if bytes.get(pos) == Some(&b']') {
++                pos += 1;
++                break;
++            }
++            let start = pos;
++            let (_, len) = read::<serde::de::IgnoredAny>(&bytes[pos..])?;
++            pos += len;
++            out.push(Raw(&bytes[start..pos]));
++            ws(bytes, &mut pos);
++            match bytes.get(pos) {
++                Some(b',') => pos += 1,
++                Some(b']') => {
++                    pos += 1;
++                    break;
++                }
++                _ => return Err("raw array delimiter".into()),
++            }
++        }
++        ws(bytes, &mut pos);
++        if pos != bytes.len() {
++            return Err("raw array trailing bytes".into());
++        }
++        Ok(out)
++    }
++    pub fn field(self, name: &str) -> Result<Self> {
++        self.object()?
++            .remove(name)
++            .ok_or_else(|| format!("missing raw field {name}").into())
++    }
++    pub fn path(self, path: &[&str]) -> Result<Self> {
++        path.iter().try_fold(self, |v, key| v.field(key))
++    }
++    pub fn one(self) -> Result<Self> {
++        let values = self.array()?;
++        if values.len() != 1 {
++            return Err("exactly one raw resident expected".into());
++        }
++        Ok(values[0])
++    }
++    pub fn value<T: serde::de::DeserializeOwned>(self) -> Result<T> {
++        Ok(serde_json::from_slice(self.0)?)
++    }
++}
++fn ws(bytes: &[u8], pos: &mut usize) {
++    while bytes.get(*pos).is_some_and(u8::is_ascii_whitespace) {
++        *pos += 1;
++    }
++}
++fn read<T: serde::de::DeserializeOwned>(bytes: &[u8]) -> Result<(T, usize)> {
++    let mut stream = serde_json::Deserializer::from_slice(bytes).into_iter::<T>();
++    let value = stream.next().ok_or("missing raw JSON value")??;
++    Ok((value, stream.byte_offset()))
++}
++pub const OPTIONAL_MAGIC: &[u8] = b"ALIFE-OPTIONAL-VOCAL-M2-HOST\0V1\0IDLE-QUIET\0SOURCE-PAYLOAD\0SYNAPTIC-CLOSED\0PROFILE5\0BITS1\0";
++const LEGACY_LINEAGE: &str = "fresh-grouped-m2-host-v1/confidence-v2/class5/no-historical-import";
++const OPTIONAL_LINEAGE: &str = "fresh-optional-vocal-m2-host-v1/class5/no-historical-import";
++const LEGACY_POLICY: &str = "synaptic-learning-closed;source-once;typed-grouped-sampling;profile5;canonical-memory-predictor-body;no-structural-sleep;one-cognitive-debit;source-logit-regional-arousal;memory-sleep-output-generation-is-cycle-id";
++const OPTIONAL_POLICY: &str = "m2-optional-vocal-v1;closed;idle-mediated-quiet;source-payload-removal;cooldown-physical;no-gradient";
++const OPTIONAL_OWNER: &str = "optional-vocal-m2-resident-v1";
++
++/// Slicing is not validation. The caller must decode/restore with the matching
++/// typed policy loader before using these raw-only comparisons as evidence.
++pub fn payload(cp: &[u8]) -> Result<Raw<'_>> {
++    Ok(Raw(cp
++        .strip_prefix(MAGIC)
++        .or_else(|| cp.strip_prefix(OPTIONAL_MAGIC))
++        .ok_or("not M2 raw wire")?))
++}
++
++fn exact_string(raw: Raw<'_>, expected: &str) -> Result<()> {
++    if raw.value::<String>()? != expected {
++        return Err("wrong initial policy owner marker".into());
++    }
++    Ok(())
++}
++
++// A path is a vector, not a dotted string: controller keys cannot impersonate
++// nested fields. Only these validated, explicit locations can be omitted.
++fn path(parts: &[&str]) -> Vec<String> {
++    parts.iter().map(|s| (*s).to_owned()).collect()
++}
++
++/// The only differing bytes allowed are envelope identity, exact outer policy
++/// markers, the two exact schema markers, the fresh optional owner object and
++/// the policy-derived organism brain digest. Full mode is NOT masked.
++/// Every other subtree is included, even fields unknown to this helper. Scalar
++/// tokens are copied verbatim, never deserialized as floats or re-emitted.
++/// Object keys are sorted; arrays retain order and length. Length framing avoids
++/// ambiguous concatenation. This is a comparison encoding, NOT a checkpoint.
++pub fn matched_initial(cp: &[u8], policy_name: &str) -> Result<Vec<u8>> {
++    let optional = match policy_name {
++        "LegacyGroupedM2/Full" => false,
++        "OptionalVocalM2/Full" => true,
++        _ => return Err("unknown initial policy name".into()),
++    };
++    if cp.starts_with(OPTIONAL_MAGIC) != optional {
++        return Err("initial envelope policy mismatch".into());
++    }
++    let p = payload(cp)?;
++    exact_string(
++        p.field("source_lineage")?,
++        if optional {
++            OPTIONAL_LINEAGE
++        } else {
++            LEGACY_LINEAGE
++        },
++    )?;
++    exact_string(
++        p.field("policy")?,
++        if optional {
++            OPTIONAL_POLICY
++        } else {
++            LEGACY_POLICY
++        },
++    )?;
++    exact_string(p.field("mode")?, "Full")?;
++    if p.field("schema_version")?.value::<u16>()? != 1 {
++        return Err("wrong outer schema".into());
++    }
++    let canonical = p.field("canonical")?;
++    if canonical.field("schema_version")?.value::<u16>()? != if optional { 0x4f56 } else { 2 } {
++        return Err("wrong canonical policy schema".into());
++    }
++    let neural = canonical.field("residents")?.one()?.field("neural")?;
++    if neural.field("schema_version")?.value::<u32>()? != if optional { 0x4f56_0001 } else { 2 } {
++        return Err("wrong neural policy schema".into());
++    }
++    let controllers = p.field("controllers")?.object()?;
++    if controllers.len() != 1 {
++        return Err("initial controller roster differs".into());
++    }
++    let (owner, controller) = controllers.iter().next().ok_or("missing controller")?;
++    // Exact resident ownership is also enforced by typed restore; reject any
++    // controller key not naming the one neural resident in this projection.
++    if owner != &neural.field("organism_id")?.value::<u64>()?.to_string() {
++        return Err("initial controller owner differs".into());
++    }
++    exact_string(controller.path(&["motor", "mode"])?, "Full")?;
++    let fields = controller.object()?;
++    match (optional, fields.get("optional_vocal")) {
++        (false, None) => (),
++        (true, Some(marker)) => {
++            let marker = marker.object()?;
++            if marker.len() != 2 || !marker.contains_key("schema") || !marker.contains_key("last") {
++                return Err("unexpected optional owner fields".into());
++            }
++            exact_string(marker["schema"], OPTIONAL_OWNER)?;
++            if marker["last"].0 != b"null" {
++                return Err("optional owner is not fresh".into());
++            }
++        }
++        _ => return Err("initial optional owner presence differs".into()),
++    }
++    let record = p
++        .path(&["canonical", "world", "world", "organism_records"])?
++        .one()?;
++    record.path(&["state_graph", "brain", "content_digest"])?;
++    let mut omit = vec![
++        path(&["source_lineage"]),
++        path(&["policy"]),
++        path(&["canonical", "schema_version"]),
++        path(&["canonical", "residents", "0", "neural", "schema_version"]),
++        path(&[
++            "canonical",
++            "world",
++            "world",
++            "organism_records",
++            "0",
++            "state_graph",
++            "brain",
++            "content_digest",
++        ]),
++    ];
++    omit.push(path(&["controllers", owner, "optional_vocal"]));
++    let mut out = b"M2-INITIAL-RAW-PROJECTION-V1\0".to_vec();
++    project(p, &mut Vec::new(), &omit, &mut out)?;
++    Ok(out)
++}
++fn framed(bytes: &[u8], out: &mut Vec<u8>) {
++    out.extend_from_slice(&(bytes.len() as u64).to_le_bytes());
++    out.extend_from_slice(bytes);
++}
++fn project(
++    raw: Raw<'_>,
++    here: &mut Vec<String>,
++    omit: &[Vec<String>],
++    out: &mut Vec<u8>,
++) -> Result<()> {
++    // Preserve entire unaffected subtrees verbatim. Only containers on an exact
++    // exemption path need structural encoding, including the two resident arrays.
++    if !omit.iter().any(|p| p.starts_with(here.as_slice())) {
++        out.push(b'R');
++        framed(raw.0, out);
++        return Ok(());
++    }
++    match raw.0.first() {
++        Some(b'{') => {
++            out.push(b'O');
++            for (key, value) in raw.object()? {
++                here.push(key.clone());
++                if !omit.contains(here) {
++                    out.push(b'K');
++                    framed(key.as_bytes(), out);
++                    project(value, here, omit, out)?;
++                }
++                here.pop();
++            }
++            out.push(b'E');
++        }
++        Some(b'[') => {
++            out.push(b'A');
++            let items = raw.array()?;
++            out.extend_from_slice(&(items.len() as u64).to_le_bytes());
++            for (i, item) in items.into_iter().enumerate() {
++                here.push(i.to_string());
++                project(item, here, omit, out)?;
++                here.pop();
++            }
++        }
++        _ => return Err("projection path does not reach container".into()),
++    }
++    Ok(())
++}
++/// Exact hashes of every prohibited write bank and immutable source field.
++/// Dynamic activation, memory/predictor, sleep and biology are deliberately not frozen.
++pub fn closure(cp: &[u8]) -> Result<BTreeMap<String, String>> {
++    let p = payload(cp)?;
++    let mut out = BTreeMap::new();
++    for key in [
++        "schema_version",
++        "source_lineage",
++        "policy",
++        "runtime_profile_raw",
++        "selector_tag",
++        "decoder_stride",
++        "mode",
++        "source_inputs",
++        "recipe_digest",
++        "source_asset",
++        "founder",
++    ] {
++        out.insert(key.into(), hash(p.field(key)?.0));
++    }
++    out.insert(
++        "canonical.schema_version".into(),
++        hash(p.path(&["canonical", "schema_version"])?.0),
++    );
++    let resident = p.path(&["canonical", "residents"])?.one()?;
++    let neural = resident.field("neural")?;
++    for key in [
++        "schema_version",
++        "organism_id",
++        "phenotype_hash",
++        "fast",
++        "lifetime",
++        "eligibility",
++        "weight_generation",
++    ] {
++        out.insert(format!("resident.neural.{key}"), hash(neural.field(key)?.0));
++    }
++    out.insert(
++        "resident.neural.dendrites".into(),
++        hash(neural.path(&["neural", "dendrites"])?.0),
++    );
++    out.insert(
++        "resident.neural_topology".into(),
++        hash(resident.field("neural_topology")?.0),
++    );
++    let record = p
++        .path(&["canonical", "world", "world", "organism_records"])?
++        .one()?;
++    for key in [
++        "genome",
++        "phenotype",
++        "birth_tick",
++        "organism_id",
++        "world_entity_id",
++    ] {
++        out.insert(format!("record.{key}"), hash(record.field(key)?.0));
++    }
++    for (owner, c) in p.field("controllers")?.object()? {
++        // Freeze optional ownership/schema, not its legitimate evolving last selection.
++        out.insert(
++            format!("controller.{owner}.optional_owner"),
++            match c.object()?.get("optional_vocal") {
++                Some(v) => hash(v.field("schema")?.0),
++                None => hash(b"absent"),
++            },
++        );
++        let motor = c.field("motor")?;
++        for key in [
++            "schema",
++            "source_inputs",
++            "source_hash",
++            "mode",
++            "m2_recipe",
++            "group_recipe",
++            "work_policy",
++        ] {
++            out.insert(
++                format!("controller.{owner}.{key}"),
++                hash(motor.field(key)?.0),
++            );
++        }
++    }
++    Ok(out)
++}
++pub fn source_headers(cp: &[u8]) -> Result<BTreeMap<String, String>> {
++    let p = payload(cp)?;
++    let mut result = BTreeMap::new();
++    result.insert(
++        "canonical.schema_version".into(),
++        hash(p.path(&["canonical", "schema_version"])?.0),
++    );
++    result.insert(
++        "resident.neural.schema_version".into(),
++        hash(
++            p.path(&["canonical", "residents"])?
++                .one()?
++                .path(&["neural", "schema_version"])?
++                .0,
++        ),
++    );
++    for (owner, c) in p.field("controllers")?.object()? {
++        result.insert(
++            format!("controller.{owner}.optional_owner"),
++            match c.object()?.get("optional_vocal") {
++                Some(v) => hash(v.field("schema")?.0),
++                None => hash(b"absent"),
++            },
++        );
++    }
++    for key in [
++        "source_lineage",
++        "policy",
++        "runtime_profile_raw",
++        "selector_tag",
++        "decoder_stride",
++        "recipe_digest",
++        "source_inputs",
++        "source_asset",
++        "founder",
++    ] {
++        result.insert(key.into(), hash(p.field(key)?.0));
++    }
++    for (owner, c) in p.field("controllers")?.object()? {
++        for key in ["schema", "m2_recipe", "group_recipe", "work_policy"] {
++            result.insert(
++                format!("controller.{owner}.{key}"),
++                hash(c.path(&["motor", key])?.0),
++            );
++        }
++    }
++    let record = p
++        .path(&["canonical", "world", "world", "organism_records"])?
++        .one()?;
++    // The record genotype is checked by the native restore and the complete
++    // prepared-pair comparison; source_inputs/source_asset seal its compiled source.
++    result.insert("initial_record_sha256".into(), hash(record.0));
++    Ok(result)
++}
++pub fn fresh(cp: &[u8], preparation: u64, sampler: u32) -> Result<()> {
++    // Both policies are Full in this research pair. Also proves the optional
++    // owner has exactly its fresh schema and null last-selection state.
++    matched_initial(
++        cp,
++        if cp.starts_with(OPTIONAL_MAGIC) {
++            "OptionalVocalM2/Full"
++        } else {
++            "LegacyGroupedM2/Full"
++        },
++    )?;
++    let p = payload(cp)?;
++    let canonical = p.field("canonical")?;
++    if canonical.field("sampling_seed")?.value::<u32>()? != sampler
++        || canonical.field("sampling_counter")?.value::<u32>()? != 0
++    {
++        return Err("fresh sampler differs".into());
++    }
++    let r = canonical.field("residents")?.one()?;
++    let n = r.field("neural")?;
++    if r.field("next_sequence")?.value::<u64>()? != 1
++        || !r.field("replay")?.array()?.is_empty()
++        || n.field("last_decision_tick")?.0 != b"null"
++        || n.field("last_outcome_tick")?.0 != b"null"
++        || n.field("dispatch_generation")?.value::<u64>()? != 0
++    {
++        return Err("fresh neural history differs".into());
++    }
++    for key in ["fast", "lifetime", "eligibility"] {
++        if n.field(key)?
++            .value::<Vec<f32>>()?
++            .iter()
++            .any(|v| v.to_bits() != 0)
++        {
++            return Err("fresh acquired bank is nonzero".into());
++        }
++    }
++    if canonical
++        .path(&["world", "world", "tick"])?
++        .value::<u64>()?
++        != preparation
++    {
++        return Err("fresh prepared tick differs".into());
++    }
++    Ok(())
++}
++
++#[cfg(test)]
++mod projection_tests {
++    use super::*;
++    // Deliberately synthetic JSON, not a usable host/world/seed/checkpoint.
++    // Tests exercise the projection boundary only; typed loader validation is
++    // a separate required caller obligation.
++    fn packet(optional: bool) -> Vec<u8> {
++        let mut value = serde_json::json!({
++            "schema_version": 1,
++            "source_lineage": if optional { OPTIONAL_LINEAGE } else { LEGACY_LINEAGE },
++            "policy": if optional { OPTIONAL_POLICY } else { LEGACY_POLICY },
++            "mode": "Full",
++            "source_inputs": {"synthetic_source": [7, 9]},
++            "source_asset": {"weights": [11]},
++            "founder": {"optimizer": {"ages": [9007199254740993u64], "moments": [0]}},
++            "canonical": {
++                "schema_version": if optional { 0x4f56u32 } else { 2 },
++                "sampling_seed": 42, "sampling_counter": 0,
++                "tracked_objects": [{"id": 3, "position": [1, 2]}],
++                "residents": [{"neural": {
++                    "schema_version": if optional { 0x4f56_0001u32 } else { 2 },
++                    "organism_id": 7, "neural": {"activations": [0, 1], "dendrites": [2]},
++                    "inactive_activations": [0], "eligibility": [0], "dispatch_generation": 0
++                }, "memory": [4], "sleep": {"clock": 8}}],
++                "world": {"world": {"tick": 10, "rng": [5, 6], "scene": [{"id": 3}],
++                    "organism_records": [{"body": {"chemicals": [4, 5]},
++                        "state_graph": {"brain": {"content_digest": if optional { 20 } else { 10 }, "other": 17}}}]
++                }}
++            },
++            "controllers": {"7": {"motor": {"mode": "Full", "source_hash": [8], "last_receipt": null},
++                "last_action": null, "memory_proofs": []}},
++            "sampler_bits": {"7": {"ordinary": null, "group": null, "operations": null, "action": null}}
++        });
++        if optional {
++            value["controllers"]["7"]["optional_vocal"] =
++                serde_json::json!({"schema": OPTIONAL_OWNER, "last": null});
++        }
++        let mut result = if optional { OPTIONAL_MAGIC } else { MAGIC }.to_vec();
++        result.extend(serde_json::to_vec(&value).unwrap());
++        result
++    }
++    fn edit(optional: bool, pointer: &str, value: serde_json::Value) -> Vec<u8> {
++        let bytes = packet(optional);
++        let mut json: serde_json::Value =
++            serde_json::from_slice(payload(&bytes).unwrap().0).unwrap();
++        *json.pointer_mut(pointer).unwrap() = value;
++        let mut result = if optional { OPTIONAL_MAGIC } else { MAGIC }.to_vec();
++        result.extend(serde_json::to_vec(&json).unwrap());
++        result
++    }
++    fn projection(bytes: &[u8], optional: bool) -> Result<Vec<u8>> {
++        matched_initial(
++            bytes,
++            if optional {
++                "OptionalVocalM2/Full"
++            } else {
++                "LegacyGroupedM2/Full"
++            },
++        )
++    }
++    #[test]
++    fn exact_known_policy_differences_compare_equal() {
++        assert_eq!(
++            projection(&packet(false), false).unwrap(),
++            projection(&packet(true), true).unwrap()
++        );
++    }
++    #[test]
++    fn every_retained_bank_is_compared() {
++        let expected = projection(&packet(false), false).unwrap();
++        for pointer in [
++            "/canonical/world/world/organism_records/0/body/chemicals/1",
++            "/canonical/world/world/rng/0",
++            "/canonical/world/world/tick",
++            "/canonical/sampling_counter",
++            "/canonical/tracked_objects/0/position/0",
++            "/canonical/world/world/scene/0/id",
++            "/founder/optimizer/ages/0",
++            "/founder/optimizer/moments/0",
++            "/canonical/residents/0/neural/neural/activations/1",
++            "/canonical/residents/0/neural/neural/dendrites/0",
++            "/canonical/residents/0/neural/inactive_activations/0",
++            "/canonical/residents/0/neural/eligibility/0",
++            "/canonical/residents/0/memory/0",
++            "/canonical/residents/0/sleep/clock",
++            "/controllers/7/motor/source_hash/0",
++            "/controllers/7/memory_proofs",
++            "/source_inputs/synthetic_source/0",
++            "/source_asset/weights/0",
++            "/sampler_bits/7/ordinary",
++            "/canonical/world/world/organism_records/0/state_graph/brain/other",
++        ] {
++            assert_ne!(
++                expected,
++                projection(&edit(true, pointer, serde_json::json!(99)), true).unwrap(),
++                "{pointer}"
++            );
++        }
++    }
++    #[test]
++    fn owner_schema_and_optional_state_are_not_wildcards() {
++        for pointer in [
++            "/source_lineage",
++            "/policy",
++            "/mode",
++            "/controllers/7/motor/mode",
++            "/controllers/7/optional_vocal/schema",
++        ] {
++            assert!(projection(&edit(true, pointer, serde_json::json!("unknown")), true).is_err());
++        }
++        for pointer in [
++            "/schema_version",
++            "/canonical/schema_version",
++            "/canonical/residents/0/neural/schema_version",
++            "/canonical/residents/0/neural/organism_id",
++        ] {
++            assert!(projection(&edit(true, pointer, serde_json::json!(999)), true).is_err());
++        }
++        for marker in [
++            serde_json::json!(null),
++            serde_json::json!({"schema": OPTIONAL_OWNER}),
++            serde_json::json!({"schema": OPTIONAL_OWNER, "last": {"state": 1}}),
++            serde_json::json!({"schema": OPTIONAL_OWNER, "last": null, "extra_schema": 1}),
++        ] {
++            assert!(
++                projection(&edit(true, "/controllers/7/optional_vocal", marker), true).is_err()
++            );
++        }
++        // Legacy cannot carry even a null optional field; optional cannot omit it.
++        assert!(projection(
++            &edit(
++                false,
++                "/controllers/7",
++                serde_json::json!({
++                    "motor": {"mode": "Full"}, "optional_vocal": null
++                })
++            ),
++            false
++        )
++        .is_err());
++        assert!(projection(
++            &edit(
++                true,
++                "/controllers/7",
++                serde_json::json!({
++                    "motor": {"mode": "Full"}
++                })
++            ),
++            true
++        )
++        .is_err());
++        assert!(matched_initial(&packet(false), "Full").is_err());
++        assert!(projection(&packet(true), false).is_err());
++        assert!(projection(&packet(false), true).is_err());
++    }
++    #[test]
++    fn unrecognized_schema_fields_are_retained_not_exempted() {
++        let original = packet(true);
++        let mut value: serde_json::Value =
++            serde_json::from_slice(payload(&original).unwrap().0).unwrap();
++        value["canonical"]["extra_schema"] = serde_json::json!(1);
++        value["controllers"]["7"]["motor"]["schema_version"] = serde_json::json!(27);
++        let mut changed = OPTIONAL_MAGIC.to_vec();
++        changed.extend(serde_json::to_vec(&value).unwrap());
++        assert_ne!(
++            projection(&original, true).unwrap(),
++            projection(&changed, true).unwrap()
++        );
++    }
++    #[test]
++    fn exact_decimal_tokens_and_array_order_survive() {
++        // Tokens that a float round trip could conflate remain distinct.
++        let original = String::from_utf8(packet(true)).unwrap();
++        for token in ["1.00000000000000001", "1.00000000000000002", "-0.0"] {
++            let changed = original.replace("9007199254740993", token);
++            assert_ne!(
++                projection(original.as_bytes(), true).unwrap(),
++                projection(changed.as_bytes(), true).unwrap()
++            );
++        }
++        let a = original.replace("9007199254740993", "1.00000000000000001");
++        let b = original.replace("9007199254740993", "1.00000000000000002");
++        assert_ne!(
++            projection(a.as_bytes(), true).unwrap(),
++            projection(b.as_bytes(), true).unwrap()
++        );
++        assert_ne!(
++            projection(&packet(true), true).unwrap(),
++            projection(
++                &edit(
++                    true,
++                    "/canonical/world/world/rng",
++                    serde_json::json!([6, 5])
++                ),
++                true
++            )
++            .unwrap()
++        );
++        assert_ne!(
++            projection(&packet(true), true).unwrap(),
++            projection(
++                &edit(
++                    true,
++                    "/canonical/world/world/rng",
++                    serde_json::json!([5, 6, 0])
++                ),
++                true
++            )
++            .unwrap()
++        );
++    }
++}
+diff --git a/crates/alife_training/examples/support/object_rich_host_v1.rs b/crates/alife_training/examples/support/object_rich_host_v1.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..5e77a9f5e107b87cf013aae1091f5fb5acc3c434
+--- /dev/null
++++ b/crates/alife_training/examples/support/object_rich_host_v1.rs
+@@ -0,0 +1,152 @@
++//! Typed routing and separately named passive output. No checkpoint conversion.
++use super::*;
++pub enum Host {
++    Legacy(CpuGroupedM2HostV1),
++    Optional(CpuOptionalVocalM2HostV1),
++}
++pub struct Step {
++    pub tick_before: Tick,
++    pub tick_after: Tick,
