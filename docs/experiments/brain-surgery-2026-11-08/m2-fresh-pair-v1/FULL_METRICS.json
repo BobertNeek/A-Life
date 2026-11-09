@@ -1,0 +1,1798 @@
+{
+  "schema": "grouped-m2-curated-descriptive-metrics-v1",
+  "committed_intervals": 1200,
+  "mode": "Full",
+  "sampling_seed": 1330461507,
+  "first": {
+    "tick": 240,
+    "age": 240,
+    "F": 0.13101535,
+    "P": 0.06604884,
+    "ATP": 0.65918416,
+    "H": 1.0,
+    "body_energy": 0.7921858
+  },
+  "last": {
+    "tick": 1440,
+    "age": 1440,
+    "phase": "Waking",
+    "F": 0.0,
+    "P": 0.0,
+    "ATP": 0.5504626,
+    "H": 1.0,
+    "body_energy": 0.5975229
+  },
+  "net_trajectory_change_not_causal_benefit": {
+    "F": -0.13101535,
+    "P": -0.06604884,
+    "ATP": -0.10872156,
+    "H": 0.0,
+    "body_energy": -0.19466290000000008
+  },
+  "counts": {
+    "closed_memory_consolidations": 5,
+    "sleeping_organism_intervals": 37,
+    "decisions": 1163,
+    "applied.none": 592,
+    "attempted.none": 592,
+    "representative_selected.primitive_104": 183,
+    "eligible_operation_distributions": 1163,
+    "decisions_with_both_operation_raw_and_clipped_MC_zero": 1163,
+    "noop_attempt.103": 1163,
+    "noop_measured_observation_present.103": 1163,
+    "noop_measured_executed_true.103": 1163,
+    "noop_attempt.212": 1163,
+    "noop_measured_observation_absent.212": 1163,
+    "noop_attempt.104": 390,
+    "noop_measured_observation_absent.104": 390,
+    "applied.AwakeRest": 566,
+    "attempted.AwakeRest": 566,
+    "representative_selected.primitive_212": 200,
+    "operation_selected.AwakeRest": 566,
+    "representative_selected.RestGroup": 284,
+    "representative_selected.primitive_103": 191,
+    "representative_selected.primitive_1": 202,
+    "representative_selected.primitive_400": 103,
+    "applied.BodySleep": 5,
+    "attempted.BodySleep": 5,
+    "operation_selected.BodySleep": 5,
+    "intervals_without_decision": 37
+  },
+  "actual_factor_draw_counts": {
+    "0": 1163,
+    "2": 972,
+    "4": 963,
+    "5": 1060,
+    "6": 494,
+    "8": 287,
+    "1": 284
+  },
+  "phase_intervals": {
+    "Awake": 1162,
+    "EnteringSleep": 20,
+    "Consolidating": 5,
+    "Waking": 13
+  },
+  "observed_sleep_starts": [
+    {
+      "cycle": 1,
+      "tick": 380,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 2,
+      "tick": 655,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 3,
+      "tick": 835,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 4,
+      "tick": 1028,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 5,
+      "tick": 1434,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    }
+  ],
+  "fully_observed_cycles": [
+    {
+      "start_tick": 380,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 381
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 385
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 386
+        }
+      ],
+      "ordered": true,
+      "cycle": 1,
+      "returned_awake_tick": 389
+    },
+    {
+      "start_tick": 655,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 656
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 660
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 661
+        }
+      ],
+      "ordered": true,
+      "cycle": 2,
+      "returned_awake_tick": 664
+    },
+    {
+      "start_tick": 835,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 836
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 840
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 841
+        }
+      ],
+      "ordered": true,
+      "cycle": 3,
+      "returned_awake_tick": 844
+    },
+    {
+      "start_tick": 1028,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 1029
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 1033
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 1034
+        }
+      ],
+      "ordered": true,
+      "cycle": 4,
+      "returned_awake_tick": 1037
+    }
+  ],
+  "partial_observed_cycles": {
+    "5": {
+      "start_tick": 1434,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 1435
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 1439
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 1440
+        }
+      ],
+      "ordered": true
+    }
+  },
+  "reference_crossings": [],
+  "first_up_crossing": {},
+  "native_references": {
+    "hunger": 0.35,
+    "fatigue": 0.35,
+    "fear": 0.25,
+    "pain": 0.1,
+    "loneliness": 0.35,
+    "curiosity": 0.35,
+    "brain_atp": 0.75,
+    "temperature_stress": 0.1,
+    "reproductive_drive": 0.5,
+    "extension_0": 0.35,
+    "extension_1": 0.0,
+    "sleep_pressure": 0.6
+  },
+  "statistics": {
+    "actual_draw_factor.0.log_probability": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": -1.7550050660932184,
+      "min": -2.613121505186407,
+      "max": -1.38972557809847
+    },
+    "actual_draw_factor.1.log_probability": {
+      "n": 284,
+      "nonzero_count": 284,
+      "mean": -0.07134507463227872,
+      "min": -4.842115345586845,
+      "max": -0.0034411090883674105
+    },
+    "actual_draw_factor.2.log_probability": {
+      "n": 972,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "actual_draw_factor.4.log_probability": {
+      "n": 963,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "actual_draw_factor.5.log_probability": {
+      "n": 1060,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "actual_draw_factor.6.log_probability": {
+      "n": 494,
+      "nonzero_count": 494,
+      "mean": -0.6789760090168743,
+      "min": -0.9007892225038855,
+      "max": -0.5204746945345491
+    },
+    "actual_draw_factor.8.log_probability": {
+      "n": 287,
+      "nonzero_count": 287,
+      "mean": -0.02506191271222893,
+      "min": -4.836272535393479,
+      "max": -0.003570242638162057
+    },
+    "appendage_work.assignments": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 444.0,
+      "min": 444,
+      "max": 444
+    },
+    "appendage_work.branch_inputs": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 72.0,
+      "min": 72,
+      "max": 72
+    },
+    "appendage_work.branches": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 36.0,
+      "min": 36,
+      "max": 36
+    },
+    "appendage_work.drive_products": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 1920.0,
+      "min": 1920,
+      "max": 1920
+    },
+    "appendage_work.final_products": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 64.0,
+      "min": 64,
+      "max": 64
+    },
+    "appendage_work.neuron_updates": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 444.0,
+      "min": 444,
+      "max": 444
+    },
+    "appendage_work.phases": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 4.0,
+      "min": 4,
+      "max": 4
+    },
+    "appendage_work.recurrent_products": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 640.0,
+      "min": 640,
+      "max": 640
+    },
+    "brain_work.decoder_candidate_ops": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 7.0,
+      "min": 7,
+      "max": 7
+    },
+    "brain_work.memory_context_ops": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 7.0,
+      "min": 7,
+      "max": 7
+    },
+    "brain_work.microsteps": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 3.0,
+      "min": 3,
+      "max": 3
+    },
+    "brain_work.neuron_updates": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 6604.0,
+      "min": 6604,
+      "max": 6604
+    },
+    "brain_work.synapse_ops": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 54478.0,
+      "min": 54478,
+      "max": 54478
+    },
+    "brain_work.tile_visits": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 313.0,
+      "min": 313,
+      "max": 313
+    },
+    "charged_cognitive_work.concept_ops": {
+      "n": 1163,
+      "nonzero_count": 1162,
+      "mean": 31.546001719690455,
+      "min": 0,
+      "max": 32
+    },
+    "charged_cognitive_work.dendritic_ops": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 1327.0,
+      "min": 1327,
+      "max": 1327
+    },
+    "charged_cognitive_work.focal_target_ops": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0,
+      "max": 0
+    },
+    "charged_cognitive_work.gap_ops": {
+      "n": 1163,
+      "nonzero_count": 360,
+      "mean": 7.209802235597593,
+      "min": 0,
+      "max": 32
+    },
+    "charged_cognitive_work.learning_ops": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0,
+      "max": 0
+    },
+    "charged_cognitive_work.memory_ops": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 28.594153052450558,
+      "min": 21,
+      "max": 29
+    },
+    "charged_cognitive_work.neural_updates": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 6604.0,
+      "min": 6604,
+      "max": 6604
+    },
+    "charged_cognitive_work.policy_version": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 1.0,
+      "min": 1,
+      "max": 1
+    },
+    "charged_cognitive_work.prediction_ops": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 13.0,
+      "min": 13,
+      "max": 13
+    },
+    "charged_cognitive_work.replay_ops": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0,
+      "max": 0
+    },
+    "charged_cognitive_work.schema_version": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 1.0,
+      "min": 1,
+      "max": 1
+    },
+    "charged_cognitive_work.sleep_ops": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0,
+      "max": 0
+    },
+    "charged_cognitive_work.structural_ops": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0,
+      "max": 0
+    },
+    "charged_cognitive_work.synapses_evaluated": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 54478.0,
+      "min": 54478,
+      "max": 54478
+    },
+    "charged_cognitive_work.weighted_total": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 62489.34995700774,
+      "min": 62443,
+      "max": 62514
+    },
+    "common_Rest_components.appended_drive": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 0.005133073314938474,
+      "min": -0.0019350797,
+      "max": 0.01965344
+    },
+    "common_Rest_components.cognitive_clipped": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "common_Rest_components.innate": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "common_Rest_components.memory_clipped": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "common_Rest_components.source_action": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 1.049246625210661,
+      "min": -0.3480876,
+      "max": 1.0900614
+    },
+    "common_Rest_score": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 0.2768313035509859,
+      "min": -0.02474522590637207,
+      "max": 0.3851886987686157
+    },
+    "factor_distribution.Locomotion.primitive_103.log_probability": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "factor_distribution.Locomotion.primitive_103.probability": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "factor_distribution.Manipulation.primitive_212.log_probability": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "factor_distribution.Manipulation.primitive_212.probability": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "factor_distribution.Posture.RestGroup.log_probability": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": -0.5645470024624566,
+      "min": -0.7055963323360256,
+      "max": -0.518985589378973
+    },
+    "factor_distribution.Posture.RestGroup.probability": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 0.5687328000046016,
+      "min": 0.4938140091738763,
+      "max": 0.595123941921348
+    },
+    "factor_distribution.Posture.primitive_104.log_probability": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": -0.8413783060134429,
+      "min": -0.9041742881475887,
+      "max": -0.6808511064296535
+    },
+    "factor_distribution.Posture.primitive_104.probability": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 0.4312671999953981,
+      "min": 0.40487605807865196,
+      "max": 0.5061859908261237
+    },
+    "factor_distribution.Vocal.primitive_400.log_probability": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "factor_distribution.Vocal.primitive_400.probability": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "factor_distribution.representative.RestGroup.log_probability": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": -1.4784119578986084,
+      "min": -1.7286410148616236,
+      "max": -1.3890880130757781
+    },
+    "factor_distribution.representative.RestGroup.probability": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 0.22813976064987432,
+      "min": 0.17752550063050043,
+      "max": 0.2493025616646089
+    },
+    "factor_distribution.representative.primitive_1.log_probability": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": -1.7552432614495943,
+      "min": -1.7780897945152516,
+      "max": -1.7038957889552515
+    },
+    "factor_distribution.representative.primitive_1.probability": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 0.17287861943407096,
+      "min": 0.16896058864904656,
+      "max": 0.18197321210851408
+    },
+    "factor_distribution.representative.primitive_103.log_probability": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": -1.7552432614495943,
+      "min": -1.7780897945152516,
+      "max": -1.7038957889552515
+    },
+    "factor_distribution.representative.primitive_103.probability": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 0.17287861943407096,
+      "min": 0.16896058864904656,
+      "max": 0.18197321210851408
+    },
+    "factor_distribution.representative.primitive_104.log_probability": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": -1.7552432614495943,
+      "min": -1.7780897945152516,
+      "max": -1.7038957889552515
+    },
+    "factor_distribution.representative.primitive_104.probability": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 0.17287861943407096,
+      "min": 0.16896058864904656,
+      "max": 0.18197321210851408
+    },
+    "factor_distribution.representative.primitive_212.log_probability": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": -1.7552432614495943,
+      "min": -1.7780897945152516,
+      "max": -1.7038957889552515
+    },
+    "factor_distribution.representative.primitive_212.probability": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 0.17287861943407096,
+      "min": 0.16896058864904656,
+      "max": 0.18197321210851408
+    },
+    "factor_distribution.representative.primitive_400.log_probability": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": -2.522536518375701,
+      "min": -2.6389934123514243,
+      "max": -2.3564168106992893
+    },
+    "factor_distribution.representative.primitive_400.probability": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 0.08034576161384277,
+      "min": 0.07143313709332759,
+      "max": 0.09475915559666909
+    },
+    "interval_end.ATP": {
+      "n": 1200,
+      "nonzero_count": 1200,
+      "mean": 0.5996657930916673,
+      "min": 0.5504626,
+      "max": 0.6586603
+    },
+    "interval_end.F": {
+      "n": 1200,
+      "nonzero_count": 592,
+      "mean": 0.001316094673000015,
+      "min": 0.0,
+      "max": 0.1322188
+    },
+    "interval_end.H": {
+      "n": 1200,
+      "nonzero_count": 1200,
+      "mean": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "interval_end.P": {
+      "n": 1200,
+      "nonzero_count": 1158,
+      "mean": 0.08663205741549995,
+      "min": 0.0,
+      "max": 0.2397875
+    },
+    "interval_end.body_energy": {
+      "n": 1200,
+      "nonzero_count": 1200,
+      "mean": 0.6948312362750005,
+      "min": 0.5975229,
+      "max": 0.79201955
+    },
+    "interval_net_change_not_causal_benefit.ATP": {
+      "n": 1200,
+      "nonzero_count": 1200,
+      "mean": -9.060129999999999e-05,
+      "min": -0.0005238600000000426,
+      "max": -6.035999999998154e-05
+    },
+    "interval_net_change_not_causal_benefit.F": {
+      "n": 1200,
+      "nonzero_count": 873,
+      "mean": -0.00010917945833333334,
+      "min": -0.1322188,
+      "max": 0.0012099987
+    },
+    "interval_net_change_not_causal_benefit.H": {
+      "n": 1200,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "interval_net_change_not_causal_benefit.P": {
+      "n": 1200,
+      "nonzero_count": 1163,
+      "mean": -5.5040700000000044e-05,
+      "min": -0.2397875,
+      "max": 0.0006099987
+    },
+    "interval_net_change_not_causal_benefit.body_energy": {
+      "n": 1200,
+      "nonzero_count": 1195,
+      "mean": -0.0001622190833333334,
+      "min": -0.00017274000000000456,
+      "max": 0.0
+    },
+    "interval_start.ATP": {
+      "n": 1200,
+      "nonzero_count": 1200,
+      "mean": 0.5997563943916674,
+      "min": 0.5505335,
+      "max": 0.65918416
+    },
+    "interval_start.F": {
+      "n": 1200,
+      "nonzero_count": 593,
+      "mean": 0.0014252741313333503,
+      "min": 0.0,
+      "max": 0.1322188
+    },
+    "interval_start.H": {
+      "n": 1200,
+      "nonzero_count": 1200,
+      "mean": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "interval_start.P": {
+      "n": 1200,
+      "nonzero_count": 1159,
+      "mean": 0.08668709811549996,
+      "min": 0.0,
+      "max": 0.2397875
+    },
+    "interval_start.body_energy": {
+      "n": 1200,
+      "nonzero_count": 1200,
+      "mean": 0.6949934553583339,
+      "min": 0.5975232,
+      "max": 0.7921858
+    },
+    "joint.log_probability": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": -2.0670161740883284,
+      "min": -7.163527552716568,
+      "max": -1.4017104144552968
+    },
+    "joint.probability": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 0.14484575607725186,
+      "min": 0.0007743182813265574,
+      "max": 0.2461755414361609
+    },
+    "native_actual_raw_drive.brain_atp": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 0.5997329421238183,
+      "min": 0.55093116,
+      "max": 0.65918416
+    },
+    "native_actual_raw_drive.curiosity": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 0.44878321030093726,
+      "min": 0.39335778,
+      "max": 0.44999963
+    },
+    "native_actual_raw_drive.extension_0": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 0.16372733996990538,
+      "min": 0.047999933,
+      "max": 0.27960357
+    },
+    "native_actual_raw_drive.extension_1": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "native_actual_raw_drive.fatigue": {
+      "n": 1163,
+      "nonzero_count": 593,
+      "mean": 0.0014706181922614103,
+      "min": 0.0,
+      "max": 0.1322188
+    },
+    "native_actual_raw_drive.fear": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 0.09972959739982569,
+      "min": 0.08741285,
+      "max": 0.09999991
+    },
+    "native_actual_raw_drive.hunger": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 0.4747246993207221,
+      "min": 0.35475585,
+      "max": 0.5486033
+    },
+    "native_actual_raw_drive.loneliness": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 0.14959437108340773,
+      "min": 0.13111928,
+      "max": 0.14999983
+    },
+    "native_actual_raw_drive.pain": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "native_actual_raw_drive.reproductive_drive": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 0.09972959739982569,
+      "min": 0.08741285,
+      "max": 0.09999991
+    },
+    "native_actual_raw_drive.sleep_pressure": {
+      "n": 1163,
+      "nonzero_count": 1159,
+      "mean": 0.08944498515786754,
+      "min": 0.0,
+      "max": 0.2397875
+    },
+    "native_actual_raw_drive.temperature_stress": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "native_modulation.interoceptive_gain": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 0.5,
+      "min": 0.5,
+      "max": 0.5
+    },
+    "native_modulation.offset": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": -0.01676577877901977,
+      "min": -0.017727593,
+      "max": -0.015501777
+    },
+    "native_modulation.projection_gain": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 0.5,
+      "min": 0.5,
+      "max": 0.5
+    },
+    "native_modulation.regional_gain": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 0.7872789160447115,
+      "min": 0.5700208,
+      "max": 0.890625
+    },
+    "native_modulation.threshold": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 0.25,
+      "min": 0.25,
+      "max": 0.25
+    },
+    "native_ordinary_score.primitive_1": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "native_ordinary_score.primitive_103": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "native_ordinary_score.primitive_104": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "native_ordinary_score.primitive_212": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "native_ordinary_score.primitive_3": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 0.2768313035509859,
+      "min": -0.02474522590637207,
+      "max": 0.3851886987686157
+    },
+    "native_ordinary_score.primitive_400": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": -0.7672932569261061,
+      "min": -0.8925780057907104,
+      "max": -0.6205204725265503
+    },
+    "native_ordinary_score.primitive_700": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 0.2768313035509859,
+      "min": -0.02474522590637207,
+      "max": 0.3851886987686157
+    },
+    "native_work.applied_body_energy_debit": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 0.000156223391951853,
+      "min": 0.0001561075,
+      "max": 0.00015628501
+    },
+    "native_work.available_atp_q16": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 39302.99054170249,
+      "min": 36105,
+      "max": 43199
+    },
+    "native_work.extension_arithmetic_q24": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 3192.0,
+      "min": 3192,
+      "max": 3192
+    },
+    "native_work.extension_source_products": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 544.0,
+      "min": 544,
+      "max": 544
+    },
+    "native_work.reservation_q16": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 2044.0,
+      "min": 2044,
+      "max": 2044
+    },
+    "native_work.reservation_q24": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 523236.0,
+      "min": 523236,
+      "max": 523236
+    },
+    "operation_context.AwakeRest.cognitive_clipped": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "operation_context.AwakeRest.memory_clipped": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "operation_context.AwakeRest.raw_cognitive": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "operation_context.AwakeRest.raw_memory": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "operation_context.BodySleep.cognitive_clipped": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "operation_context.BodySleep.memory_clipped": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "operation_context.BodySleep.raw_cognitive": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "operation_context.BodySleep.raw_memory": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "operation_pressure.saved_BodySleep_vs_AwakeRest_logodds": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": -4.898569777210724,
+      "min": -5.730076789855957,
+      "max": -3.3705902099609375
+    },
+    "operation_pressure.saved_afferent_pair_difference": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": -0.33092144498195286,
+      "min": -0.38818363,
+      "max": -0.22664420000000002
+    },
+    "operation_pressure.saved_local_jacobian_AwakeRest": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": -7.29477851152193,
+      "min": -7.385235,
+      "max": -7.2346473
+    },
+    "operation_pressure.saved_local_jacobian_BodySleep": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 7.29477851152193,
+      "min": 7.2346473,
+      "max": 7.385235
+    },
+    "operation_pressure.signed_opponent": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": -0.3309214451590717,
+      "min": -0.38818362,
+      "max": -0.2266442
+    },
+    "operation_pressure.zero_MC_saved_conditional_BodySleep": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 0.008255670777403076,
+      "min": 0.0032363201261100863,
+      "max": 0.03322734413096562
+    },
+    "operation_pressure.zero_MC_saved_logodds": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": -4.898569777210724,
+      "min": -5.730076789855957,
+      "max": -3.3705902099609375
+    },
+    "physical_components.primitive_1.appended_drive": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_1.cognitive_clipped": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_1.innate": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": -0.0,
+      "max": -0.0
+    },
+    "physical_components.primitive_1.memory_clipped": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_1.source_action": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_103.appended_drive": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_103.cognitive_clipped": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_103.innate": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_103.memory_clipped": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_103.source_action": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_104.appended_drive": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_104.cognitive_clipped": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_104.innate": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": -0.0,
+      "max": -0.0
+    },
+    "physical_components.primitive_104.memory_clipped": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_104.source_action": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_212.appended_drive": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_212.cognitive_clipped": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_212.innate": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": -0.0,
+      "max": -0.0
+    },
+    "physical_components.primitive_212.memory_clipped": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_212.source_action": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_3.appended_drive": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 0.005133073314938474,
+      "min": -0.0019350797,
+      "max": 0.01965344
+    },
+    "physical_components.primitive_3.cognitive_clipped": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_3.innate": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_3.memory_clipped": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_3.source_action": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 1.049246625210661,
+      "min": -0.3480876,
+      "max": 1.0900614
+    },
+    "physical_components.primitive_400.appended_drive": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": -0.07633085075924341,
+      "min": -0.08999353,
+      "max": -0.060967386
+    },
+    "physical_components.primitive_400.cognitive_clipped": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_400.innate": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": -0.0,
+      "max": -0.0
+    },
+    "physical_components.primitive_400.memory_clipped": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_400.source_action": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_700.appended_drive": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 0.005133073314938474,
+      "min": -0.0019350797,
+      "max": 0.01965344
+    },
+    "physical_components.primitive_700.cognitive_clipped": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_700.innate": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_700.memory_clipped": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_700.source_action": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 1.049246625210661,
+      "min": -0.3480876,
+      "max": 1.0900614
+    },
+    "physical_net_change_not_causal_benefit.AwakeRest.ATP": {
+      "n": 566,
+      "nonzero_count": 566,
+      "mean": -8.892109540636102e-05,
+      "min": -0.0005062000000000122,
+      "max": -6.0460000000039926e-05
+    },
+    "physical_net_change_not_causal_benefit.AwakeRest.F": {
+      "n": 566,
+      "nonzero_count": 278,
+      "mean": -0.0014884340906360497,
+      "min": -0.1322188,
+      "max": 0.0
+    },
+    "physical_net_change_not_causal_benefit.AwakeRest.H": {
+      "n": 566,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_net_change_not_causal_benefit.AwakeRest.P": {
+      "n": 566,
+      "nonzero_count": 566,
+      "mean": 0.0006055043477031797,
+      "min": 0.0005980700000000061,
+      "max": 0.0006099987
+    },
+    "physical_net_change_not_causal_benefit.AwakeRest.body_energy": {
+      "n": 566,
+      "nonzero_count": 566,
+      "mean": -0.00016657697879858354,
+      "min": -0.0001682700000000814,
+      "max": -0.00016614999999997604
+    },
+    "physical_net_change_not_causal_benefit.BodySleep.ATP": {
+      "n": 5,
+      "nonzero_count": 5,
+      "mean": -8.39200000000151e-05,
+      "min": -8.51200000000496e-05,
+      "max": -8.353999999999306e-05
+    },
+    "physical_net_change_not_causal_benefit.BodySleep.F": {
+      "n": 5,
+      "nonzero_count": 3,
+      "mean": -0.0009679881200000001,
+      "min": -0.0024199432,
+      "max": 0.0
+    },
+    "physical_net_change_not_causal_benefit.BodySleep.H": {
+      "n": 5,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_net_change_not_causal_benefit.BodySleep.P": {
+      "n": 5,
+      "nonzero_count": 5,
+      "mean": -0.15345299099999998,
+      "min": -0.2397875,
+      "max": -0.10386782
+    },
+    "physical_net_change_not_causal_benefit.BodySleep.body_energy": {
+      "n": 5,
+      "nonzero_count": 5,
+      "mean": -0.00016635400000000188,
+      "min": -0.00016654999999998754,
+      "max": -0.0001662700000000239
+    },
+    "physical_net_change_not_causal_benefit.none.ATP": {
+      "n": 592,
+      "nonzero_count": 592,
+      "mean": -9.333130067567542e-05,
+      "min": -0.0005238600000000426,
+      "max": -6.035999999998154e-05
+    },
+    "physical_net_change_not_causal_benefit.none.F": {
+      "n": 592,
+      "nonzero_count": 592,
+      "mean": 0.0012099295369932478,
+      "min": 0.0012034499999999948,
+      "max": 0.0012099987
+    },
+    "physical_net_change_not_causal_benefit.none.H": {
+      "n": 592,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_net_change_not_causal_benefit.none.P": {
+      "n": 592,
+      "nonzero_count": 592,
+      "mean": 0.0006055754293918923,
+      "min": 0.0005980399999999941,
+      "max": 0.0006099987
+    },
+    "physical_net_change_not_causal_benefit.none.body_energy": {
+      "n": 592,
+      "nonzero_count": 592,
+      "mean": -0.00016812584459459753,
+      "min": -0.00017274000000000456,
+      "max": -0.00016614999999997604
+    },
+    "preactual_by_applied_operation.AwakeRest.ATP": {
+      "n": 566,
+      "nonzero_count": 566,
+      "mean": 0.5986635199646642,
+      "min": 0.55109835,
+      "max": 0.6586603
+    },
+    "preactual_by_applied_operation.AwakeRest.F": {
+      "n": 566,
+      "nonzero_count": 278,
+      "mean": 0.0014884340906360497,
+      "min": 0.0,
+      "max": 0.1322188
+    },
+    "preactual_by_applied_operation.AwakeRest.H": {
+      "n": 566,
+      "nonzero_count": 566,
+      "mean": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "preactual_by_applied_operation.AwakeRest.P": {
+      "n": 566,
+      "nonzero_count": 564,
+      "mean": 0.08989214465141346,
+      "min": 0.0,
+      "max": 0.23859139
+    },
+    "preactual_by_applied_operation.AwakeRest.body_energy": {
+      "n": 566,
+      "nonzero_count": 566,
+      "mean": 0.6928912342756175,
+      "min": 0.59802634,
+      "max": 0.79201955
+    },
+    "preactual_by_applied_operation.BodySleep.ATP": {
+      "n": 5,
+      "nonzero_count": 5,
+      "mean": 0.5970908400000001,
+      "min": 0.55093116,
+      "max": 0.63649255
+    },
+    "preactual_by_applied_operation.BodySleep.F": {
+      "n": 5,
+      "nonzero_count": 3,
+      "mean": 0.0009679881200000001,
+      "min": 0.0,
+      "max": 0.0024199432
+    },
+    "preactual_by_applied_operation.BodySleep.H": {
+      "n": 5,
+      "nonzero_count": 5,
+      "mean": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "preactual_by_applied_operation.BodySleep.P": {
+      "n": 5,
+      "nonzero_count": 5,
+      "mean": 0.15345299099999998,
+      "min": 0.10386782,
+      "max": 0.2397875
+    },
+    "preactual_by_applied_operation.BodySleep.body_energy": {
+      "n": 5,
+      "nonzero_count": 5,
+      "mean": 0.689995444,
+      "min": 0.59769267,
+      "max": 0.76873845
+    },
+    "preactual_by_applied_operation.none.ATP": {
+      "n": 592,
+      "nonzero_count": 592,
+      "mean": 0.6007777114695944,
+      "min": 0.5510148,
+      "max": 0.65918416
+    },
+    "preactual_by_applied_operation.none.F": {
+      "n": 592,
+      "nonzero_count": 312,
+      "mean": 0.0014578299353040635,
+      "min": 0.0,
+      "max": 0.13101535
+    },
+    "preactual_by_applied_operation.none.H": {
+      "n": 592,
+      "nonzero_count": 592,
+      "mean": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "preactual_by_applied_operation.none.P": {
+      "n": 592,
+      "nonzero_count": 590,
+      "mean": 0.08847685626841213,
+      "min": 0.0,
+      "max": 0.23918946
+    },
+    "preactual_by_applied_operation.none.body_energy": {
+      "n": 592,
+      "nonzero_count": 592,
+      "mean": 0.696900687618243,
+      "min": 0.59786004,
+      "max": 0.7921858
+    },
+    "raw_cognitive.primitive_1": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "raw_cognitive.primitive_103": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "raw_cognitive.primitive_104": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "raw_cognitive.primitive_212": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "raw_cognitive.primitive_3": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "raw_cognitive.primitive_400": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "raw_cognitive.primitive_700": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "raw_memory.primitive_1": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "raw_memory.primitive_103": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "raw_memory.primitive_104": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "raw_memory.primitive_212": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "raw_memory.primitive_3": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "raw_memory.primitive_400": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "raw_memory.primitive_700": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "recovery_probabilities.actual_AwakeRest": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 0.4665244058095583,
+      "min": 0.3981040161617362,
+      "max": 0.4881510982626062
+    },
+    "recovery_probabilities.actual_BodySleep": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 0.003909900363316941,
+      "min": 0.0014816583955810736,
+      "max": 0.01610485574186802
+    },
+    "recovery_probabilities.actual_posture_rest_probability": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 0.4704343061728749,
+      "min": 0.4039530877403228,
+      "max": 0.49418730348567114
+    },
+    "recovery_probabilities.conditional_AwakeRest_given_Rest": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 0.9917443292225971,
+      "min": 0.9667726558690344,
+      "max": 0.9967636798738899
+    },
+    "recovery_probabilities.conditional_BodySleep_given_Rest": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 0.008255670777403076,
+      "min": 0.0032363201261100863,
+      "max": 0.03322734413096562
+    },
+    "recovery_probabilities.posture_rest_probability": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 0.5687328000046016,
+      "min": 0.4938140091738763,
+      "max": 0.595123941921348
+    },
+    "recovery_probabilities.representative_rest_probability": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 0.22813976064987432,
+      "min": 0.17752550063050043,
+      "max": 0.2493025616646089
+    },
+    "recovery_scores.operation_AwakeRest": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 2.449284888605362,
+      "min": 1.6852951049804688,
+      "max": 2.8650383949279785
+    },
+    "recovery_scores.operation_BodySleep": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": -2.449284888605362,
+      "min": -2.8650383949279785,
+      "max": -1.6852951049804688
+    },
+    "sampling.counter": {
+      "n": 1163,
+      "nonzero_count": 1162,
+      "mean": 581.0,
+      "min": 0,
+      "max": 1162
+    },
+    "sampling.temperature": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "source_diagnostic_logits.primitive_1": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "source_diagnostic_logits.primitive_103": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "source_diagnostic_logits.primitive_104": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "source_diagnostic_logits.primitive_212": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "source_diagnostic_logits.primitive_3": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 1.049246625210661,
+      "min": -0.3480876,
+      "max": 1.0900614
+    },
+    "source_diagnostic_logits.primitive_400": {
+      "n": 1163,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "source_diagnostic_logits.primitive_700": {
+      "n": 1163,
+      "nonzero_count": 1163,
+      "mean": 1.049246625210661,
+      "min": -0.3480876,
+      "max": 1.0900614
+    }
+  },
+  "closed_source_hash_constant": "a61f4a341bc307ee0bb8876b9f58b6d52f55dd8a499030b01d017d8a91177e9c",
+  "maximum_observed_packet_bytes": null,
+  "scope": "Single recovery-only source. All12 appended-drive sham. No synaptic learning or generalization claim. Net changes are not isolated action benefits. Conditional operation probabilities are not common Rest mass. Core raw_drives are actual physiology even in DriveSham; the encoded append inputs are reference-neutralized by the frozen native mode.",
+  "raw_checkpoint_or_science_data_emitted": false,
+  "input_validation": "Frozen native full-prefix checkpoint/authority audit and genuine latest cold restore passed; exact exported trace hash independently verified.",
+  "export_receipt_sha256": "a2694a310d0e93d146d66ad3f1fb346b3c07777cb2a2dd68e4d4e2226b0da701",
+  "exported_trace_sha256": "ace9054993c90695af42afd5528f6ffe1374cb45286e9782dc317e63caa5bfaf",
+  "native_final_checkpoint_sha256": "86bb50827c808ecbde79bd96441a786479344202fade0084f6ee051473bfb534",
+  "endpoint_classification": "Completed 1200-world-interval horizon; Waking at endpoint leaves last cycle partially observed, without extension."
+}
