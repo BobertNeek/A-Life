@@ -1,7 +1,7 @@
 {
-  "schema": "m2-runner-pure-synthetic-tests-v3",
-  "cases": 46,
-  "passed": 46,
+  "schema": "m2-runner-pure-synthetic-tests-v4",
+  "cases": 52,
+  "passed": 52,
   "failed_cases": [],
   "subprocess_invocations": 0,
   "native_builds": 0,
