@@ -10,7 +10,18 @@ Accepted main remains `c3aec16df33861f1316d127736f5f60eea327ede`, with opt-in in
 
 The [previous chronological handoff](https://github.com/BobertNeek/A-Life/blob/4b21a3e43a9e4ce9c4ecd591a5e7677f429ae7fc/docs/experiments/brain-surgery-2026-11-08/STATUS-2026-11-08-2058UTC.md) retains the earlier candidates, failures, original sleep pilot, physiology and source identities.
 
-## Latest tested progress, 17:45 UTC
+## Latest qualification results, 18:00 UTC
+
+**Grip source stack now typechecks.** The safer, addition-only [V5 hosted run](https://github.com/BobertNeek/A-Life/actions/runs/42668976822) completed successfully at exact head `5d9d01328725d9bf87c386ae923863f18f77fa1a`. All six stages passed: core, world, GPU, runtime, training and game app. All 865 source bindings held, with no compiler diagnostics. Elapsed 288 seconds; sampled peak RSS 1,603,866,624 bytes. Every one of main's 1,313 original files, including all 15 inherited workflows, remained byte-identical. Only the new source packet/workflow and sole activation marker were added. No inherited workflow launched. There were zero test bodies, neural forwards, world commands or body advances. This removes the type/linkage blocker, not the runtime qualification or behavioral question. The denied V4 deletion design remains abandoned.
+
+**Reusable cue-memory host: 30/30 fixtures passed, actual transfer still missed.** These include the real acquisition/consumption producer with distinct representative, populated cue sidecar restore/tamper rejection, cold continuation, old/new owner rejection, signed-value contracts and six direct semantic-mode evidence negatives. There were two fresh fixed recipes, 480 ordinary preparation ticks and five registered intervals, with no extra detached forwards. The actual second Root candidate was present and its query valid, but neither exact nor cue lookup returned an episode. The first failing guard was not logged; even positive original-event self-match was not asserted, so capture/storage rejection remains possible. This is not demonstrated real cross-instance memory transfer.
+
+Compilation evidence has an explicit limitation: V2 stopped on a missing direct blake3 extern and a missing fallible-digest propagation; no test bodies ran. V3 corrected those, but its 41,786,424-byte executable exceeded the forecast 32 MiB new-artifact cap. The guard stopped and compiler exit/time/RSS telemetry was lost. That cap excursion is retained. Without recompiling, a separately frozen post-build plan inventoried and ran the measured existing binary once with hard pipe bounds, child regular-file writes disabled, the original 4 GiB disk floor and 160 MiB aggregate cap. All 30 tests passed in 158.88 seconds, sampled peak RSS 119,128,064 bytes. It does not retroactively make the compile attempt clean.
+
+Source tracing shows why exact cue equivalence is unlikely between normal Roots: chemistry, shape and material agree, but per-spawn color, temperature and terrain descriptors differ. These are source-derived differences, not a logged diagnosis of the first actual rejection. The conservative matcher is retained while a separate, operation-aware graded observed-cue candidate and reason-coded capture/self-match diagnostics are developed. It must not infer possession, future ingestion or isolated meal causality.
+
+## Earlier tested progress, 17:45 UTC
+
 
 The earlier 32+32 comparison remains unchanged: geometric coordination produced more successful commands but did not improve feeding and increased fatigue. No new autonomous life or learned brain has been promoted.
 
