@@ -1,0 +1,29 @@
+{
+  "ancestor_v2_commit": "675524c3c8b337d5a9aaa56931ad4bad8b05ba30",
+  "grip_runtime_applied": false,
+  "native_or_git_writes": false,
+  "patch_order": [
+    "concatenated main-to-fbf library parts01,02,03",
+    "fbf nominal supplement",
+    "explicit frozen nominal residual",
+    "original101overlay",
+    "graded source overlay",
+    "frozen six-file V2 overlay",
+    "six-file canonical targetless V3 overlay"
+  ],
+  "published_patch_commit": "ff991c39ca4a11f72eb56f015f8b3dab71baff20",
+  "reachable_base": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "residual_different": [
+    "crates/alife_training/Cargo.toml"
+  ],
+  "residual_files": 5,
+  "residual_missing": [
+    "crates/alife_training/examples/probe_grouped_m2_durable_v1.rs",
+    "crates/alife_training/examples/support/grouped_m2_journal_v1.rs",
+    "crates/alife_training/examples/support/grouped_m2_qualification_v1.rs",
+    "crates/alife_training/examples/support/grouped_m2_raw_v1.rs"
+  ],
+  "schema": "canonical-targetless-reconstruction-v3",
+  "source_only_virtual_apply": true,
+  "verified_target_files": 827
+}

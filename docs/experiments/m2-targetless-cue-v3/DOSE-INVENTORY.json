@@ -1,0 +1,31 @@
+{
+  "actual_counter_assertions": [
+    "world tick",
+    "body age",
+    "next sequence",
+    "dispatch generation",
+    "replay records"
+  ],
+  "committed_third_paths": 1,
+  "counterfactual_world_paths": 0,
+  "detached_extra_forwards": 0,
+  "not_held_out_replication": true,
+  "old30_reruns": 0,
+  "ordinary_unforced_current_opportunities": 1,
+  "preparation_ticks": 240,
+  "pure9_reruns": 0,
+  "reader_comparisons": [
+    "v3_on",
+    "off",
+    "strict_v1",
+    "graded_v1",
+    "meal_v2"
+  ],
+  "recipes": 1,
+  "registered_source_world_intervals": 3,
+  "schema": "fixed-current-opportunity-dose-v3",
+  "scripted_producer_intervals": 2,
+  "source_forwards": 3,
+  "success_does_not_require_eating_or_positive_effect": true,
+  "test_name": "cpu::host::grouped_host_envelope::joint_episode::tests::canonical_targetless_three_interval_current_opportunity_v3"
+}

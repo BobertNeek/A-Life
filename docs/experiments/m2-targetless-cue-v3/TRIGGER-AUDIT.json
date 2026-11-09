@@ -1,0 +1,12 @@
+{
+  "activation_diff": "A\tdocs/experiments/m2-targetless-cue-v3/ACTIVATE.json\n",
+  "activation_push_runs": 1,
+  "inherited_workflows_preserved": 15,
+  "own_workflow_additions": 1,
+  "prepared_push_runs": 0,
+  "pull_request_runs": 0,
+  "required_branch": "qualification/m2-targetless-cue-v3",
+  "reruns_rejected": true,
+  "schema": "targetless-trigger-audit-v3",
+  "workflow_dispatch_supported": false
+}

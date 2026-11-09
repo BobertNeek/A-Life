@@ -1,0 +1,143 @@
+{
+  "files": [
+    {
+      "bytes": 456096,
+      "confirmed_git_blob": "002402b88cebc86c128b46e6705eb823e3b00116",
+      "destination_path": "docs/experiments/m2-targetless-cue-v3/qualified-original-overlay.tar.gz",
+      "git_blob_sha1": "002402b88cebc86c128b46e6705eb823e3b00116",
+      "path": "qualified-original-overlay.tar.gz",
+      "remote_state": "Exact bytes verified locally; publisher must verify pinned source blob before reuse.",
+      "sha256": "28b472731e2f28002ec0a73a7947ecde48ee3fb0c39f2efa313a1f7c9ecbbe49",
+      "source_artifact": "/workspace/shared/m2-play-runtime-integration-v1/hosted/qualified-original-overlay.tar.gz",
+      "source_commit": "f68c4f8ed01ce0d057bc9343d1bc50ddf7695ad4",
+      "source_path": "docs/experiments/m2-graded-cue-hosted-reason-v1/qualified-original-overlay.tar.gz"
+    },
+    {
+      "bytes": 7481,
+      "confirmed_git_blob": null,
+      "destination_path": "docs/experiments/m2-targetless-cue-v3/upstream-toolchain-action.yml",
+      "git_blob_sha1": "62252504fab44d94e1bf3a73df1c976b3dec35c4",
+      "path": "upstream-toolchain-action.yml",
+      "remote_state": "Exact bytes verified locally; publisher must verify pinned source blob before reuse.",
+      "sha256": "0b52547c145ae18d8631c9ab711e4d917e9e489cea800368f338c25a56e0aee2",
+      "source_artifact": "/workspace/shared/m2-grip-options-v1/hosted-typecheck-v2/upstream-toolchain-action.yml",
+      "source_commit": "f68c4f8ed01ce0d057bc9343d1bc50ddf7695ad4",
+      "source_path": "docs/experiments/m2-graded-cue-hosted-reason-v1/upstream-toolchain-action.yml"
+    },
+    {
+      "bytes": 563200,
+      "confirmed_git_blob": "6df92f6933b9279c86373ec0b4b7c0a66770d199",
+      "destination_path": "docs/experiments/m2-targetless-cue-v3/patches/main-to-fbf-library-closure.part-01.patch",
+      "git_blob_sha1": "6df92f6933b9279c86373ec0b4b7c0a66770d199",
+      "path": "patches/main-to-fbf-library-closure.part-01.patch",
+      "remote_state": "Exact bytes verified locally; publisher must verify pinned source blob before reuse.",
+      "sha256": "44c9ee9e269bec25ebb924054754a0e71ddc7b73104a132699171a9776430e07",
+      "source_artifact": "/workspace/shared/m2-grip-options-v1/hosted-typecheck-v2/patches/main-to-fbf-library-closure.part-01.patch",
+      "source_commit": "f68c4f8ed01ce0d057bc9343d1bc50ddf7695ad4",
+      "source_path": "docs/experiments/m2-graded-cue-hosted-reason-v1/patches/main-to-fbf-library-closure.part-01.patch"
+    },
+    {
+      "bytes": 563195,
+      "confirmed_git_blob": "7f27884da807987fb3eb63ca442724a14ee46468",
+      "destination_path": "docs/experiments/m2-targetless-cue-v3/patches/main-to-fbf-library-closure.part-02.patch",
+      "git_blob_sha1": "7f27884da807987fb3eb63ca442724a14ee46468",
+      "path": "patches/main-to-fbf-library-closure.part-02.patch",
+      "remote_state": "Exact bytes verified locally; publisher must verify pinned source blob before reuse.",
+      "sha256": "a2fb1711dee71d569aea8643ba5dd02d16c992bf9f378b219e4b86cb51edafae",
+      "source_artifact": "/workspace/shared/m2-grip-options-v1/hosted-typecheck-v2/patches/main-to-fbf-library-closure.part-02.patch",
+      "source_commit": "f68c4f8ed01ce0d057bc9343d1bc50ddf7695ad4",
+      "source_path": "docs/experiments/m2-graded-cue-hosted-reason-v1/patches/main-to-fbf-library-closure.part-02.patch"
+    },
+    {
+      "bytes": 415718,
+      "confirmed_git_blob": "ef007c906168887cd275564f541a48714806608b",
+      "destination_path": "docs/experiments/m2-targetless-cue-v3/patches/main-to-fbf-library-closure.part-03.patch",
+      "git_blob_sha1": "ef007c906168887cd275564f541a48714806608b",
+      "path": "patches/main-to-fbf-library-closure.part-03.patch",
+      "remote_state": "Exact bytes verified locally; publisher must verify pinned source blob before reuse.",
+      "sha256": "95d7a29b145111d4f24297c97ecd0766673f9275b5dd89400958c714a24ae72d",
+      "source_artifact": "/workspace/shared/m2-grip-options-v1/hosted-typecheck-v2/patches/main-to-fbf-library-closure.part-03.patch",
+      "source_commit": "f68c4f8ed01ce0d057bc9343d1bc50ddf7695ad4",
+      "source_path": "docs/experiments/m2-graded-cue-hosted-reason-v1/patches/main-to-fbf-library-closure.part-03.patch"
+    },
+    {
+      "bytes": 136753,
+      "confirmed_git_blob": "99d4927cccaaf74172282cbb8e50ea9609e56250",
+      "destination_path": "docs/experiments/m2-targetless-cue-v3/patches/fbf-nominal-source-supplement.patch",
+      "git_blob_sha1": "99d4927cccaaf74172282cbb8e50ea9609e56250",
+      "path": "patches/fbf-nominal-source-supplement.patch",
+      "remote_state": "Exact bytes verified locally; publisher must verify pinned source blob before reuse.",
+      "sha256": "ddd07c85685b27056664d9b8650fa736d8eff257f5d477485efd7d14e5e5b051",
+      "source_artifact": "/workspace/shared/m2-grip-options-v1/hosted-typecheck-v2/patches/fbf-nominal-source-supplement.patch",
+      "source_commit": "f68c4f8ed01ce0d057bc9343d1bc50ddf7695ad4",
+      "source_path": "docs/experiments/m2-graded-cue-hosted-reason-v1/patches/fbf-nominal-source-supplement.patch"
+    },
+    {
+      "bytes": 291571,
+      "destination_path": "docs/experiments/m2-targetless-cue-v3/graded-source-overlay.tar.gz",
+      "git_blob_sha1": "635e1b64a8af58bf319810fcd0dd22f278e4ab98",
+      "path": "graded-source-overlay.tar.gz",
+      "remote_state": "Exact bytes verified locally; publisher must verify pinned source blob before reuse.",
+      "sha256": "08fd683a04b5dfb54868765a3a2e64f41c2355a4186c48d3ed8ad363fa7d064d",
+      "source_artifact": "/workspace/shared/m2-graded-cue-hosted-reason-v1/graded-source-overlay.tar.gz",
+      "source_commit": "f68c4f8ed01ce0d057bc9343d1bc50ddf7695ad4",
+      "source_path": "docs/experiments/m2-graded-cue-hosted-reason-v1/graded-source-overlay.tar.gz"
+    },
+    {
+      "bytes": 35031,
+      "destination_path": "docs/experiments/m2-targetless-cue-v3/nominal-frozen-input-residual.tar.gz",
+      "git_blob_sha1": "c99974096d25e7f02cd57ecdbb4616de7bdf588c",
+      "path": "nominal-frozen-input-residual.tar.gz",
+      "remote_state": "Exact bytes verified locally; publisher must verify pinned source blob before reuse.",
+      "sha256": "03e8bf144fad68aa2f8c6991cce13b3e3b87dc7bcf37d232731e1b37d55b6a4b",
+      "source_artifact": "/workspace/shared/m2-graded-cue-hosted-reason-v1/nominal-frozen-input-residual.tar.gz",
+      "source_commit": "f68c4f8ed01ce0d057bc9343d1bc50ddf7695ad4",
+      "source_path": "docs/experiments/m2-graded-cue-hosted-reason-v1/nominal-frozen-input-residual.tar.gz"
+    },
+    {
+      "bytes": 1239,
+      "destination_path": "docs/experiments/m2-targetless-cue-v3/RECONSTRUCTION-PATCHES.json",
+      "git_blob_sha1": "4476e4433a6c505f8661321895b6dcb416277d73",
+      "path": "RECONSTRUCTION-PATCHES.json",
+      "remote_state": "Exact bytes verified locally; publisher must verify pinned source blob before reuse.",
+      "sha256": "5c1ba1800b77a7f9147b3457fa5911edfc837aa9cf40b4ade438291e2c655ab2",
+      "source_artifact": "/workspace/shared/m2-graded-cue-hosted-reason-v1/RECONSTRUCTION-PATCHES.json",
+      "source_commit": "f68c4f8ed01ce0d057bc9343d1bc50ddf7695ad4",
+      "source_path": "docs/experiments/m2-graded-cue-hosted-reason-v1/RECONSTRUCTION-PATCHES.json"
+    },
+    {
+      "bytes": 4382,
+      "destination_path": "docs/experiments/m2-targetless-cue-v3/WORKFLOW-PRESERVATION.json",
+      "git_blob_sha1": "9829225d82b5439bde4bdc763c917daeb8ccd4d7",
+      "path": "WORKFLOW-PRESERVATION.json",
+      "remote_state": "Exact bytes verified locally; publisher must verify pinned source blob before reuse.",
+      "sha256": "13e5a1512ee206a474c99e3a66dd435e288d0626c748755b9fae1ff3f677e556",
+      "source_artifact": "/workspace/shared/m2-graded-cue-hosted-reason-v1/WORKFLOW-PRESERVATION.json",
+      "source_commit": "f68c4f8ed01ce0d057bc9343d1bc50ddf7695ad4",
+      "source_path": "docs/experiments/m2-graded-cue-hosted-reason-v1/WORKFLOW-PRESERVATION.json"
+    },
+    {
+      "bytes": 92558,
+      "destination_path": "docs/experiments/m2-targetless-cue-v3/INHERITED-WORKFLOW-FIXTURES.json",
+      "git_blob_sha1": "e72d47b58b2e4b6b5bd78246216ef66dad6a394a",
+      "path": "INHERITED-WORKFLOW-FIXTURES.json",
+      "remote_state": "Exact bytes verified locally; publisher must verify pinned source blob before reuse.",
+      "sha256": "e45e6ea9f0b5de64ad00a3fbc108cbefcce48f5eab8b9c32caceaa9650497fcd",
+      "source_artifact": "/workspace/shared/m2-graded-cue-hosted-reason-v1/INHERITED-WORKFLOW-FIXTURES.json",
+      "source_commit": "f68c4f8ed01ce0d057bc9343d1bc50ddf7695ad4",
+      "source_path": "docs/experiments/m2-graded-cue-hosted-reason-v1/INHERITED-WORKFLOW-FIXTURES.json"
+    },
+    {
+      "bytes": 21381,
+      "destination_path": "docs/experiments/m2-targetless-cue-v3/meal-kinematic-source-overlay.tar.gz",
+      "git_blob_sha1": "e83d4bec0464ecaeba27185e481362912a73b01b",
+      "path": "meal-kinematic-source-overlay.tar.gz",
+      "remote_state": "Retrieved exact pinned GitHub source bytes and verified against V2 seal.",
+      "sha256": "897b88b5a9f63e13aec92800430b2559637727b61ac1807f770898d3d693091f",
+      "source_artifact": "/tmp/m2-targetless-cue-v3/inputs/v2/meal-kinematic-source-overlay.tar.gz",
+      "source_commit": "675524c3c8b337d5a9aaa56931ad4bad8b05ba30",
+      "source_path": "docs/experiments/m2-graded-eat-kinematics-v2/meal-kinematic-source-overlay.tar.gz"
+    }
+  ],
+  "repository": "BobertNeek/A-Life"
+}

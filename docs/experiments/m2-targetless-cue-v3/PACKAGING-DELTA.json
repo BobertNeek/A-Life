@@ -1,0 +1,77 @@
+{
+  "ancestor_commit": "675524c3c8b337d5a9aaa56931ad4bad8b05ba30",
+  "ancestor_source_manifest_sha256": "7d41aa405f2f7f6641cedce7eb49e52056cca1071e132f760d32df0c02cab8b1",
+  "core_wire_changes": 0,
+  "frozen_reader_files": [
+    {
+      "bytes": 14914,
+      "path": "crates/alife_training/src/cpu/visible_cue_joint.rs",
+      "sha256": "d6866512d96bd1b994d88b372a5413b8cd2b7d270caf0fd6f9fa01efc9cb891e"
+    },
+    {
+      "bytes": 3753,
+      "path": "crates/alife_training/src/cpu/cue_wire.rs",
+      "sha256": "a5506f1db546746f4d251cd361c31b14edb50d8667e80daa2da39aab562ae0fc"
+    },
+    {
+      "bytes": 5116,
+      "path": "crates/alife_training/src/cpu/graded_lookup.rs",
+      "sha256": "4a5b6332b3ad0618f0222f8a6301eb18b482834987590518985f988e2d199cdd"
+    },
+    {
+      "bytes": 8449,
+      "path": "crates/alife_training/src/cpu/meal_cue_v2_contracts.rs",
+      "sha256": "7ca2288a01480df3d91d3a047efa51238027d7f1c395d67b2ecb86a450d81d22"
+    },
+    {
+      "bytes": 14215,
+      "path": "crates/alife_core/src/memory/joint_episode.rs",
+      "sha256": "5abc24f39d55d725f9bb1c1e40813d1efbe62eaf1515c56421bd313b26b761e1"
+    }
+  ],
+  "literal_v2_module_prefix": true,
+  "native_source_producer_changes": 0,
+  "new_files": [
+    "crates/alife_training/src/cpu/canonical_cue_v3.rs",
+    "crates/alife_training/src/cpu/canonical_cue_v3_contracts.rs"
+  ],
+  "new_owner_wire": {
+    "cross_load": "V1 and V2 inputs not accepted as V3; V3 inputs not accepted as V1/V2; nested storage validates legacy source commitments.",
+    "owner": "fresh-canonical-targetless-joint-v3/profile5/exact-role-registry/no-migration",
+    "schema": 3
+  },
+  "schema": "canonical-targetless-source-delta-v3",
+  "six_overlay_files": [
+    {
+      "bytes": 13782,
+      "path": "crates/alife_training/src/cpu/canonical_cue_v3.rs",
+      "sha256": "5aa338f2e303370f88eb360c2f116283ef0c92fb231069bb0439ae5e4fd153ad"
+    },
+    {
+      "bytes": 7140,
+      "path": "crates/alife_training/src/cpu/canonical_cue_v3_contracts.rs",
+      "sha256": "d1f60d3257880dcc1e0f06f9d889c9099081194b4bc8029adfbd7a223a165629"
+    },
+    {
+      "bytes": 13529,
+      "path": "crates/alife_training/src/cpu/joint_episode_host.rs",
+      "sha256": "ae4972f46639a972eb40243860620ca53468bf4a6faa261db3d8e67299f57ca1"
+    },
+    {
+      "bytes": 21622,
+      "path": "crates/alife_training/src/cpu/joint_episode_host_tests.rs",
+      "sha256": "4ba545e8f70f7d85b95f079180f0e9cf19a7178dccf379f2d13702df2e6e8ffe"
+    },
+    {
+      "bytes": 10878,
+      "path": "crates/alife_training/src/cpu/meal_cue_v2.rs",
+      "sha256": "6991d4ab25b0be17b4a42ba23d492d32a49708d9fd3121b45046e76c0d2fb869"
+    },
+    {
+      "bytes": 19113,
+      "path": "crates/alife_training/src/cpu/motor_mediation/confidence/policy/optional_vocal/joint_episode.rs",
+      "sha256": "a6648782a9982b628c7f87ddfefbac3fe236ddd401ba61ffc79af8a03fcde0c4"
+    }
+  ],
+  "world_physics_changes": 0
+}
