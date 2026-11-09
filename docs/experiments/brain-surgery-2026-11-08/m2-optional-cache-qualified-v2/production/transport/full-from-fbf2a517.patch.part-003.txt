@@ -1,0 +1,2387 @@
+es.len() {
++            return Err("raw array trailing bytes".into());
++        }
++        Ok(out)
++    }
++    pub fn field(self, name: &str) -> Result<Self> {
++        self.object()?
++            .remove(name)
++            .ok_or_else(|| format!("missing raw field {name}").into())
++    }
++    pub fn path(self, path: &[&str]) -> Result<Self> {
++        path.iter().try_fold(self, |v, key| v.field(key))
++    }
++    pub fn one(self) -> Result<Self> {
++        let values = self.array()?;
++        if values.len() != 1 {
++            return Err("exactly one raw resident expected".into());
++        }
++        Ok(values[0])
++    }
++    pub fn value<T: serde::de::DeserializeOwned>(self) -> Result<T> {
++        Ok(serde_json::from_slice(self.0)?)
++    }
++}
++fn ws(bytes: &[u8], pos: &mut usize) {
++    while bytes.get(*pos).is_some_and(u8::is_ascii_whitespace) {
++        *pos += 1;
++    }
++}
++fn read<T: serde::de::DeserializeOwned>(bytes: &[u8]) -> Result<(T, usize)> {
++    let mut stream = serde_json::Deserializer::from_slice(bytes).into_iter::<T>();
++    let value = stream.next().ok_or("missing raw JSON value")??;
++    Ok((value, stream.byte_offset()))
++}
++pub const OPTIONAL_MAGIC: &[u8] = b"ALIFE-OPTIONAL-VOCAL-M2-HOST\0V1\0IDLE-QUIET\0SOURCE-PAYLOAD\0SYNAPTIC-CLOSED\0PROFILE5\0BITS1\0";
++const LEGACY_LINEAGE: &str = "fresh-grouped-m2-host-v1/confidence-v2/class5/no-historical-import";
++const OPTIONAL_LINEAGE: &str = "fresh-optional-vocal-m2-host-v1/class5/no-historical-import";
++const LEGACY_POLICY: &str = "synaptic-learning-closed;source-once;typed-grouped-sampling;profile5;canonical-memory-predictor-body;no-structural-sleep;one-cognitive-debit;source-logit-regional-arousal;memory-sleep-output-generation-is-cycle-id";
++const OPTIONAL_POLICY: &str = "m2-optional-vocal-v1;closed;idle-mediated-quiet;source-payload-removal;cooldown-physical;no-gradient";
++const OPTIONAL_OWNER: &str = "optional-vocal-m2-resident-v1";
++
++/// Slicing is not validation. The caller must decode/restore with the matching
++/// typed policy loader before using these raw-only comparisons as evidence.
++pub fn payload(cp: &[u8]) -> Result<Raw<'_>> {
++    Ok(Raw(cp
++        .strip_prefix(MAGIC)
++        .or_else(|| cp.strip_prefix(OPTIONAL_MAGIC))
++        .ok_or("not M2 raw wire")?))
++}
++
++fn exact_string(raw: Raw<'_>, expected: &str) -> Result<()> {
++    if raw.value::<String>()? != expected {
++        return Err("wrong initial policy owner marker".into());
++    }
++    Ok(())
++}
++
++// A path is a vector, not a dotted string: controller keys cannot impersonate
++// nested fields. Only these validated, explicit locations can be omitted.
++fn path(parts: &[&str]) -> Vec<String> {
++    parts.iter().map(|s| (*s).to_owned()).collect()
++}
++
++/// The only differing bytes allowed are envelope identity, exact outer policy
++/// markers, the two exact schema markers, the fresh optional owner object and
++/// the policy-derived organism brain digest. Full mode is NOT masked.
++/// Every other subtree is included, even fields unknown to this helper. Scalar
++/// tokens are copied verbatim, never deserialized as floats or re-emitted.
++/// Object keys are sorted; arrays retain order and length. Length framing avoids
++/// ambiguous concatenation. This is a comparison encoding, NOT a checkpoint.
++pub fn matched_initial(cp: &[u8], policy_name: &str) -> Result<Vec<u8>> {
++    let optional = match policy_name {
++        "LegacyGroupedM2/Full" => false,
++        "OptionalVocalM2/Full" => true,
++        _ => return Err("unknown initial policy name".into()),
++    };
++    if cp.starts_with(OPTIONAL_MAGIC) != optional {
++        return Err("initial envelope policy mismatch".into());
++    }
++    let p = payload(cp)?;
++    exact_string(
++        p.field("source_lineage")?,
++        if optional {
++            OPTIONAL_LINEAGE
++        } else {
++            LEGACY_LINEAGE
++        },
++    )?;
++    exact_string(
++        p.field("policy")?,
++        if optional {
++            OPTIONAL_POLICY
++        } else {
++            LEGACY_POLICY
++        },
++    )?;
++    exact_string(p.field("mode")?, "Full")?;
++    if p.field("schema_version")?.value::<u16>()? != 1 {
++        return Err("wrong outer schema".into());
++    }
++    let canonical = p.field("canonical")?;
++    if canonical.field("schema_version")?.value::<u16>()? != if optional { 0x4f56 } else { 2 } {
++        return Err("wrong canonical policy schema".into());
++    }
++    let neural = canonical.field("residents")?.one()?.field("neural")?;
++    if neural.field("schema_version")?.value::<u32>()? != if optional { 0x4f56_0001 } else { 2 } {
++        return Err("wrong neural policy schema".into());
++    }
++    let controllers = p.field("controllers")?.object()?;
++    if controllers.len() != 1 {
++        return Err("initial controller roster differs".into());
++    }
++    let (owner, controller) = controllers.iter().next().ok_or("missing controller")?;
++    // Exact resident ownership is also enforced by typed restore; reject any
++    // controller key not naming the one neural resident in this projection.
++    if owner != &neural.field("organism_id")?.value::<u64>()?.to_string() {
++        return Err("initial controller owner differs".into());
++    }
++    exact_string(controller.path(&["motor", "mode"])?, "Full")?;
++    let fields = controller.object()?;
++    match (optional, fields.get("optional_vocal")) {
++        (false, None) => (),
++        (true, Some(marker)) => {
++            let marker = marker.object()?;
++            if marker.len() != 2 || !marker.contains_key("schema") || !marker.contains_key("last") {
++                return Err("unexpected optional owner fields".into());
++            }
++            exact_string(marker["schema"], OPTIONAL_OWNER)?;
++            if marker["last"].0 != b"null" {
++                return Err("optional owner is not fresh".into());
++            }
++        }
++        _ => return Err("initial optional owner presence differs".into()),
++    }
++    let record = p
++        .path(&["canonical", "world", "world", "organism_records"])?
++        .one()?;
++    record.path(&["state_graph", "brain", "content_digest"])?;
++    let mut omit = vec![
++        path(&["source_lineage"]),
++        path(&["policy"]),
++        path(&["canonical", "schema_version"]),
++        path(&["canonical", "residents", "0", "neural", "schema_version"]),
++        path(&[
++            "canonical",
++            "world",
++            "world",
++            "organism_records",
++            "0",
++            "state_graph",
++            "brain",
++            "content_digest",
++        ]),
++    ];
++    omit.push(path(&["controllers", owner, "optional_vocal"]));
++    let mut out = b"M2-INITIAL-RAW-PROJECTION-V1\0".to_vec();
++    project(p, &mut Vec::new(), &omit, &mut out)?;
++    Ok(out)
++}
++fn framed(bytes: &[u8], out: &mut Vec<u8>) {
++    out.extend_from_slice(&(bytes.len() as u64).to_le_bytes());
++    out.extend_from_slice(bytes);
++}
++fn project(
++    raw: Raw<'_>,
++    here: &mut Vec<String>,
++    omit: &[Vec<String>],
++    out: &mut Vec<u8>,
++) -> Result<()> {
++    // Preserve entire unaffected subtrees verbatim. Only containers on an exact
++    // exemption path need structural encoding, including the two resident arrays.
++    if !omit.iter().any(|p| p.starts_with(here.as_slice())) {
++        out.push(b'R');
++        framed(raw.0, out);
++        return Ok(());
++    }
++    match raw.0.first() {
++        Some(b'{') => {
++            out.push(b'O');
++            for (key, value) in raw.object()? {
++                here.push(key.clone());
++                if !omit.contains(here) {
++                    out.push(b'K');
++                    framed(key.as_bytes(), out);
++                    project(value, here, omit, out)?;
++                }
++                here.pop();
++            }
++            out.push(b'E');
++        }
++        Some(b'[') => {
++            out.push(b'A');
++            let items = raw.array()?;
++            out.extend_from_slice(&(items.len() as u64).to_le_bytes());
++            for (i, item) in items.into_iter().enumerate() {
++                here.push(i.to_string());
++                project(item, here, omit, out)?;
++                here.pop();
++            }
++        }
++        _ => return Err("projection path does not reach container".into()),
++    }
++    Ok(())
++}
++/// Exact hashes of every prohibited write bank and immutable source field.
++/// Dynamic activation, memory/predictor, sleep and biology are deliberately not frozen.
++pub fn closure(cp: &[u8]) -> Result<BTreeMap<String, String>> {
++    let p = payload(cp)?;
++    let mut out = BTreeMap::new();
++    for key in [
++        "schema_version",
++        "source_lineage",
++        "policy",
++        "runtime_profile_raw",
++        "selector_tag",
++        "decoder_stride",
++        "mode",
++        "source_inputs",
++        "recipe_digest",
++        "source_asset",
++        "founder",
++    ] {
++        out.insert(key.into(), hash(p.field(key)?.0));
++    }
++    out.insert(
++        "canonical.schema_version".into(),
++        hash(p.path(&["canonical", "schema_version"])?.0),
++    );
++    let resident = p.path(&["canonical", "residents"])?.one()?;
++    let neural = resident.field("neural")?;
++    for key in [
++        "schema_version",
++        "organism_id",
++        "phenotype_hash",
++        "fast",
++        "lifetime",
++        "eligibility",
++        "weight_generation",
++    ] {
++        out.insert(format!("resident.neural.{key}"), hash(neural.field(key)?.0));
++    }
++    out.insert(
++        "resident.neural.dendrites".into(),
++        hash(neural.path(&["neural", "dendrites"])?.0),
++    );
++    out.insert(
++        "resident.neural_topology".into(),
++        hash(resident.field("neural_topology")?.0),
++    );
++    let record = p
++        .path(&["canonical", "world", "world", "organism_records"])?
++        .one()?;
++    for key in [
++        "genome",
++        "phenotype",
++        "birth_tick",
++        "organism_id",
++        "world_entity_id",
++    ] {
++        out.insert(format!("record.{key}"), hash(record.field(key)?.0));
++    }
++    for (owner, c) in p.field("controllers")?.object()? {
++        // Freeze optional ownership/schema, not its legitimate evolving last selection.
++        out.insert(
++            format!("controller.{owner}.optional_owner"),
++            match c.object()?.get("optional_vocal") {
++                Some(v) => hash(v.field("schema")?.0),
++                None => hash(b"absent"),
++            },
++        );
++        let motor = c.field("motor")?;
++        for key in [
++            "schema",
++            "source_inputs",
++            "source_hash",
++            "mode",
++            "m2_recipe",
++            "group_recipe",
++            "work_policy",
++        ] {
++            out.insert(
++                format!("controller.{owner}.{key}"),
++                hash(motor.field(key)?.0),
++            );
++        }
++    }
++    Ok(out)
++}
++pub fn source_headers(cp: &[u8]) -> Result<BTreeMap<String, String>> {
++    let p = payload(cp)?;
++    let mut result = BTreeMap::new();
++    result.insert(
++        "canonical.schema_version".into(),
++        hash(p.path(&["canonical", "schema_version"])?.0),
++    );
++    result.insert(
++        "resident.neural.schema_version".into(),
++        hash(
++            p.path(&["canonical", "residents"])?
++                .one()?
++                .path(&["neural", "schema_version"])?
++                .0,
++        ),
++    );
++    for (owner, c) in p.field("controllers")?.object()? {
++        result.insert(
++            format!("controller.{owner}.optional_owner"),
++            match c.object()?.get("optional_vocal") {
++                Some(v) => hash(v.field("schema")?.0),
++                None => hash(b"absent"),
++            },
++        );
++    }
++    for key in [
++        "source_lineage",
++        "policy",
++        "runtime_profile_raw",
++        "selector_tag",
++        "decoder_stride",
++        "recipe_digest",
++        "source_inputs",
++        "source_asset",
++        "founder",
++    ] {
++        result.insert(key.into(), hash(p.field(key)?.0));
++    }
++    for (owner, c) in p.field("controllers")?.object()? {
++        for key in ["schema", "m2_recipe", "group_recipe", "work_policy"] {
++            result.insert(
++                format!("controller.{owner}.{key}"),
++                hash(c.path(&["motor", key])?.0),
++            );
++        }
++    }
++    let record = p
++        .path(&["canonical", "world", "world", "organism_records"])?
++        .one()?;
++    // The record genotype is checked by the native restore and the complete
++    // prepared-pair comparison; source_inputs/source_asset seal its compiled source.
++    result.insert("initial_record_sha256".into(), hash(record.0));
++    Ok(result)
++}
++pub fn fresh(cp: &[u8], preparation: u64, sampler: u32) -> Result<()> {
++    // Both policies are Full in this research pair. Also proves the optional
++    // owner has exactly its fresh schema and null last-selection state.
++    matched_initial(
++        cp,
++        if cp.starts_with(OPTIONAL_MAGIC) {
++            "OptionalVocalM2/Full"
++        } else {
++            "LegacyGroupedM2/Full"
++        },
++    )?;
++    let p = payload(cp)?;
++    let canonical = p.field("canonical")?;
++    if canonical.field("sampling_seed")?.value::<u32>()? != sampler
++        || canonical.field("sampling_counter")?.value::<u32>()? != 0
++    {
++        return Err("fresh sampler differs".into());
++    }
++    let r = canonical.field("residents")?.one()?;
++    let n = r.field("neural")?;
++    if r.field("next_sequence")?.value::<u64>()? != 1
++        || !r.field("replay")?.array()?.is_empty()
++        || n.field("last_decision_tick")?.0 != b"null"
++        || n.field("last_outcome_tick")?.0 != b"null"
++        || n.field("dispatch_generation")?.value::<u64>()? != 0
++    {
++        return Err("fresh neural history differs".into());
++    }
++    for key in ["fast", "lifetime", "eligibility"] {
++        if n.field(key)?
++            .value::<Vec<f32>>()?
++            .iter()
++            .any(|v| v.to_bits() != 0)
++        {
++            return Err("fresh acquired bank is nonzero".into());
++        }
++    }
++    if canonical
++        .path(&["world", "world", "tick"])?
++        .value::<u64>()?
++        != preparation
++    {
++        return Err("fresh prepared tick differs".into());
++    }
++    Ok(())
++}
++
++#[cfg(test)]
++mod projection_tests {
++    use super::*;
++    // Deliberately synthetic JSON, not a usable host/world/seed/checkpoint.
++    // Tests exercise the projection boundary only; typed loader validation is
++    // a separate required caller obligation.
++    fn packet(optional: bool) -> Vec<u8> {
++        let mut value = serde_json::json!({
++            "schema_version": 1,
++            "source_lineage": if optional { OPTIONAL_LINEAGE } else { LEGACY_LINEAGE },
++            "policy": if optional { OPTIONAL_POLICY } else { LEGACY_POLICY },
++            "mode": "Full",
++            "source_inputs": {"synthetic_source": [7, 9]},
++            "source_asset": {"weights": [11]},
++            "founder": {"optimizer": {"ages": [9007199254740993u64], "moments": [0]}},
++            "canonical": {
++                "schema_version": if optional { 0x4f56u32 } else { 2 },
++                "sampling_seed": 42, "sampling_counter": 0,
++                "tracked_objects": [{"id": 3, "position": [1, 2]}],
++                "residents": [{"neural": {
++                    "schema_version": if optional { 0x4f56_0001u32 } else { 2 },
++                    "organism_id": 7, "neural": {"activations": [0, 1], "dendrites": [2]},
++                    "inactive_activations": [0], "eligibility": [0], "dispatch_generation": 0
++                }, "memory": [4], "sleep": {"clock": 8}}],
++                "world": {"world": {"tick": 10, "rng": [5, 6], "scene": [{"id": 3}],
++                    "organism_records": [{"body": {"chemicals": [4, 5]},
++                        "state_graph": {"brain": {"content_digest": if optional { 20 } else { 10 }, "other": 17}}}]
++                }}
++            },
++            "controllers": {"7": {"motor": {"mode": "Full", "source_hash": [8], "last_receipt": null},
++                "last_action": null, "memory_proofs": []}},
++            "sampler_bits": {"7": {"ordinary": null, "group": null, "operations": null, "action": null}}
++        });
++        if optional {
++            value["controllers"]["7"]["optional_vocal"] =
++                serde_json::json!({"schema": OPTIONAL_OWNER, "last": null});
++        }
++        let mut result = if optional { OPTIONAL_MAGIC } else { MAGIC }.to_vec();
++        result.extend(serde_json::to_vec(&value).unwrap());
++        result
++    }
++    fn edit(optional: bool, pointer: &str, value: serde_json::Value) -> Vec<u8> {
++        let bytes = packet(optional);
++        let mut json: serde_json::Value =
++            serde_json::from_slice(payload(&bytes).unwrap().0).unwrap();
++        *json.pointer_mut(pointer).unwrap() = value;
++        let mut result = if optional { OPTIONAL_MAGIC } else { MAGIC }.to_vec();
++        result.extend(serde_json::to_vec(&json).unwrap());
++        result
++    }
++    fn projection(bytes: &[u8], optional: bool) -> Result<Vec<u8>> {
++        matched_initial(
++            bytes,
++            if optional {
++                "OptionalVocalM2/Full"
++            } else {
++                "LegacyGroupedM2/Full"
++            },
++        )
++    }
++    #[test]
++    fn exact_known_policy_differences_compare_equal() {
++        assert_eq!(
++            projection(&packet(false), false).unwrap(),
++            projection(&packet(true), true).unwrap()
++        );
++    }
++    #[test]
++    fn every_retained_bank_is_compared() {
++        let expected = projection(&packet(false), false).unwrap();
++        for pointer in [
++            "/canonical/world/world/organism_records/0/body/chemicals/1",
++            "/canonical/world/world/rng/0",
++            "/canonical/world/world/tick",
++            "/canonical/sampling_counter",
++            "/canonical/tracked_objects/0/position/0",
++            "/canonical/world/world/scene/0/id",
++            "/founder/optimizer/ages/0",
++            "/founder/optimizer/moments/0",
++            "/canonical/residents/0/neural/neural/activations/1",
++            "/canonical/residents/0/neural/neural/dendrites/0",
++            "/canonical/residents/0/neural/inactive_activations/0",
++            "/canonical/residents/0/neural/eligibility/0",
++            "/canonical/residents/0/memory/0",
++            "/canonical/residents/0/sleep/clock",
++            "/controllers/7/motor/source_hash/0",
++            "/controllers/7/memory_proofs",
++            "/source_inputs/synthetic_source/0",
++            "/source_asset/weights/0",
++            "/sampler_bits/7/ordinary",
++            "/canonical/world/world/organism_records/0/state_graph/brain/other",
++        ] {
++            assert_ne!(
++                expected,
++                projection(&edit(true, pointer, serde_json::json!(99)), true).unwrap(),
++                "{pointer}"
++            );
++        }
++    }
++    #[test]
++    fn owner_schema_and_optional_state_are_not_wildcards() {
++        for pointer in [
++            "/source_lineage",
++            "/policy",
++            "/mode",
++            "/controllers/7/motor/mode",
++            "/controllers/7/optional_vocal/schema",
++        ] {
++            assert!(projection(&edit(true, pointer, serde_json::json!("unknown")), true).is_err());
++        }
++        for pointer in [
++            "/schema_version",
++            "/canonical/schema_version",
++            "/canonical/residents/0/neural/schema_version",
++            "/canonical/residents/0/neural/organism_id",
++        ] {
++            assert!(projection(&edit(true, pointer, serde_json::json!(999)), true).is_err());
++        }
++        for marker in [
++            serde_json::json!(null),
++            serde_json::json!({"schema": OPTIONAL_OWNER}),
++            serde_json::json!({"schema": OPTIONAL_OWNER, "last": {"state": 1}}),
++            serde_json::json!({"schema": OPTIONAL_OWNER, "last": null, "extra_schema": 1}),
++        ] {
++            assert!(
++                projection(&edit(true, "/controllers/7/optional_vocal", marker), true).is_err()
++            );
++        }
++        // Legacy cannot carry even a null optional field; optional cannot omit it.
++        assert!(projection(
++            &edit(
++                false,
++                "/controllers/7",
++                serde_json::json!({
++                    "motor": {"mode": "Full"}, "optional_vocal": null
++                })
++            ),
++            false
++        )
++        .is_err());
++        assert!(projection(
++            &edit(
++                true,
++                "/controllers/7",
++                serde_json::json!({
++                    "motor": {"mode": "Full"}
++                })
++            ),
++            true
++        )
++        .is_err());
++        assert!(matched_initial(&packet(false), "Full").is_err());
++        assert!(projection(&packet(true), false).is_err());
++        assert!(projection(&packet(false), true).is_err());
++    }
++    #[test]
++    fn unrecognized_schema_fields_are_retained_not_exempted() {
++        let original = packet(true);
++        let mut value: serde_json::Value =
++            serde_json::from_slice(payload(&original).unwrap().0).unwrap();
++        value["canonical"]["extra_schema"] = serde_json::json!(1);
++        value["controllers"]["7"]["motor"]["schema_version"] = serde_json::json!(27);
++        let mut changed = OPTIONAL_MAGIC.to_vec();
++        changed.extend(serde_json::to_vec(&value).unwrap());
++        assert_ne!(
++            projection(&original, true).unwrap(),
++            projection(&changed, true).unwrap()
++        );
++    }
++    #[test]
++    fn exact_decimal_tokens_and_array_order_survive() {
++        // Tokens that a float round trip could conflate remain distinct.
++        let original = String::from_utf8(packet(true)).unwrap();
++        for token in ["1.00000000000000001", "1.00000000000000002", "-0.0"] {
++            let changed = original.replace("9007199254740993", token);
++            assert_ne!(
++                projection(original.as_bytes(), true).unwrap(),
++                projection(changed.as_bytes(), true).unwrap()
++            );
++        }
++        let a = original.replace("9007199254740993", "1.00000000000000001");
++        let b = original.replace("9007199254740993", "1.00000000000000002");
++        assert_ne!(
++            projection(a.as_bytes(), true).unwrap(),
++            projection(b.as_bytes(), true).unwrap()
++        );
++        assert_ne!(
++            projection(&packet(true), true).unwrap(),
++            projection(
++                &edit(
++                    true,
++                    "/canonical/world/world/rng",
++                    serde_json::json!([6, 5])
++                ),
++                true
++            )
++            .unwrap()
++        );
++        assert_ne!(
++            projection(&packet(true), true).unwrap(),
++            projection(
++                &edit(
++                    true,
++                    "/canonical/world/world/rng",
++                    serde_json::json!([5, 6, 0])
++                ),
++                true
++            )
++            .unwrap()
++        );
++    }
++}
+--- /dev/null
++++ b/crates/alife_training/examples/support/object_rich_host_v1.rs
+@@ -0,0 +1,152 @@
++//! Typed routing and separately named passive output. No checkpoint conversion.
++use super::*;
++pub enum Host {
++    Legacy(CpuGroupedM2HostV1),
++    Optional(CpuOptionalVocalM2HostV1),
++}
++pub struct Step {
++    pub tick_before: Tick,
++    pub tick_after: Tick,
++    pub decisions: Vec<Value>,
++    pub sleeping_organisms: usize,
++    pub sleep_consolidations: usize,
++}
++fn transfer(t: &GripTransfer) -> Value {
++    json!({"object":t.object,"kind":format!("{:?}",t.kind),"previous_owner":t.previous_owner,"new_owner":t.new_owner,"previous_position":t.previous_position,"new_position":t.new_position})
++}
++fn world_receipt(r: &HeadlessMotorTransactionReceipt) -> Value {
++    let channels=r.channel_receipts.iter().map(|c|json!({"command":c.command,"phase":format!("{:?}",c.phase),"grip_transfers":c.grip_transfers.iter().map(transfer).collect::<Vec<_>>(),"play_stimulation":c.play_stimulation,"investigation":c.investigation,"observation":c.observation,"physical":c.physical})).collect::<Vec<_>>();
++    json!({"bundle":r.bundle,"outcome_tick":r.outcome_tick,"succeeded":r.succeeded,"joint":r.joint,"channels":channels,"grip_transfers":r.grip_transfers.iter().map(transfer).collect::<Vec<_>>(),"body_event":r.body_event,"biology_before":r.biology_before,"biology_after":r.biology_after})
++}
++fn common<A: Serialize>(
++    d: &CpuGroupedM2HostDecisionV1<A>,
++    probability: Value,
++    evaluation: Value,
++    observer: Option<&HeadlessMotorTransactionReceipt>,
++    optional: Option<&OptionalVocalScoresV1>,
++) -> Result<Value> {
++    if d.motor.native.core.source_execution_count != 1 {
++        return Err("source did not run exactly once".into());
++    }
++    let noops=d.patch.selected_bundle().map(|b|b.channels.iter().filter(|c|matches!(c.primitive.raw(),103|104|212)).map(|c|json!({"channel":c.channel,"primitive":c.primitive.raw(),"measured":d.patch.outcome().joint.as_ref().and_then(|j|j.channel_observations.iter().find(|o|o.channel==c.channel))})).collect::<Vec<_>>()).unwrap_or_default();
++    if let Some(r) = observer {
++        if d.patch.selected_bundle() != Some(&r.bundle)
++            || d.physical.outcome_tick != r.outcome_tick
++            || d.patch.outcome().joint.as_ref() != Some(&r.joint)
++        {
++            return Err("passive world receipt does not match sealed decision".into());
++        }
++    }
++    Ok(
++        json!({"organism_id":d.organism_id,"action":d.action,"probabilities":probability,"evaluation":evaluation,"sampling_counter":d.sampling_counter,"source_diagnostic_logits":d.source_diagnostic_logits,"biological_emissions":d.biological_emissions,"brain_work":d.brain_work,"motor":d.motor,"physical":d.physical,"applied_recovery":applied_recovery(&d.physical),"real_noop_receipts":noops,"patch":d.patch,"sleep_phase":d.sleep_phase,"sleep_trigger":d.sleep_trigger,"research_world_receipt":observer.map(world_receipt),"optional_scores":optional,"payload_present":optional.map(|s|s.source().payload_present()),"same_context_legacy_probabilities":null}),
++    )
++}
++impl Host {
++    pub fn world(&self) -> &HeadlessWorld {
++        match self {
++            Self::Legacy(h) => h.world(),
++            Self::Optional(h) => h.world(),
++        }
++    }
++    pub fn sleep_state(&self, id: OrganismId) -> Option<alife_core::sleep::SleepState> {
++        match self {
++            Self::Legacy(h) => h.sleep_state(id),
++            Self::Optional(h) => h.sleep_state(id),
++        }
++    }
++    pub fn wire(&self) -> Result<Vec<u8>> {
++        Ok(match self {
++            Self::Legacy(h) => h.checkpoint()?.encode()?,
++            Self::Optional(h) => h.checkpoint()?.encode()?,
++        })
++    }
++    pub fn advance(&mut self, t: f32, observe: bool) -> Result<Step> {
++        match self {
++            Self::Legacy(h) => {
++                let (s, receipts) = if observe {
++                    let r = h.step_research_observed(t)?;
++                    (r.step, r.world_receipts)
++                } else {
++                    (h.step(t)?, vec![])
++                };
++                if observe && receipts.len() != s.decisions.len() {
++                    return Err("observer decision count differs".into());
++                }
++                let mut decisions = Vec::new();
++                for (i, d) in s.decisions.iter().enumerate() {
++                    let eval = d.motor.native.scores.evaluate(&d.action)?;
++                    if eval.joint_log_probability.to_bits()
++                        != d.action.old_joint_log_probability.to_bits()
++                        || d.action.counter != d.sampling_counter
++                    {
++                        return Err("legacy probability/counter differs".into());
++                    }
++                    decisions.push(common(
++                        d,
++                        serde_json::to_value(
++                            d.motor.native.scores.probabilities(d.action.temperature)?,
++                        )?,
++                        serde_json::to_value(eval)?,
++                        receipts.get(i),
++                        None,
++                    )?);
++                }
++                Ok(Step {
++                    tick_before: s.tick_before,
++                    tick_after: s.tick_after,
++                    decisions,
++                    sleeping_organisms: s.sleeping_organisms,
++                    sleep_consolidations: s.sleep_consolidations,
++                })
++            }
++            Self::Optional(h) => {
++                let (s, receipts) = if observe {
++                    let r = h.step_research_observed(t)?;
++                    (r.step, r.world_receipts)
++                } else {
++                    (h.step(t)?, vec![])
++                };
++                if observe && receipts.len() != s.decisions.len() {
++                    return Err("observer decision count differs".into());
++                }
++                let mut decisions = Vec::new();
++                for (i, d) in s.decisions.iter().enumerate() {
++                    let scores = h
++                        .last_selection_scores(d.organism_id)
++                        .ok_or("optional scores absent")?;
++                    let eval = scores.evaluate(&d.action)?;
++                    if eval.joint_log_probability.to_bits()
++                        != d.action.joint_log_probability().to_bits()
++                        || d.action.counter() != d.sampling_counter
++                    {
++                        return Err("optional probability/counter differs".into());
++                    }
++                    let mut row = common(
++                        d,
++                        serde_json::to_value(scores.probabilities(d.action.temperature())?)?,
++                        serde_json::to_value(eval)?,
++                        receipts.get(i),
++                        Some(scores),
++                    )?;
++                    row["same_context_legacy_probabilities"] = serde_json::to_value(
++                        d.motor
++                            .native
++                            .scores
++                            .probabilities(d.action.temperature())?,
++                    )?;
++                    decisions.push(row);
++                }
++                Ok(Step {
++                    tick_before: s.tick_before,
++                    tick_after: s.tick_after,
++                    decisions,
++                    sleeping_organisms: s.sleeping_organisms,
++                    sleep_consolidations: s.sleep_consolidations,
++                })
++            }
++        }
++    }
++    pub fn step(&mut self, t: f32) -> Result<Step> {
++        self.advance(t, true)
++    }
++}
+--- /dev/null
++++ b/crates/alife_training/examples/support/object_rich_qualification_v1.rs
+@@ -0,0 +1,217 @@
++//! One bounded fresh fixture. Existing old public step output and state must match
++//! observed warm versus ordinary-entry-point cold continuation, at every boundary.
++use super::*;
++const INTERVALS: u64 = 4;
++fn binding(arm: usize, r: &recipe::Recipe, initial: &[u8]) -> Result<journal::Binding> {
++    Ok(journal::Binding {
++        schema: "object-rich-optional-vocal-durable-v1".into(),
++        study_id: "object-rich-optional-vocal-fixed-fixture-v1".into(),
++        arm,
++        mode: mode_name(arm)?.into(),
++        seed: FIXTURE_SEED,
++        sampling_seed: sampling_seed(FIXTURE_SEED),
++        initial_tick: 240,
++        horizon: INTERVALS,
++        temperature_bits: 1_f32.to_bits(),
++        host_source_commit: HOST_COMMIT.into(),
++        host_source_tree: HOST_TREE.into(),
++        driver_source_commit: DRIVER_COMMIT.into(),
++        driver_source_sha256: code_hash(),
++        executable_sha256: executable_hash()?,
++        protocol_sha256: hash(PROTOCOL),
++        qualification_sha256: "fixed-fixture-not-primary".into(),
++        preparation_sha256: hash(b"one 240-tick fresh pre-neural template; no primary seed"),
++        source_manifest_sha256: hash(&serde_json::to_vec(&r.metadata)?),
++        inputs_sha256: hash(&serde_json::to_vec(&r.inputs)?),
++        initial_sha256: hash(initial),
++        initial_matched_sha256: hash(&raw::matched_initial(initial, mode_name(arm)?)?),
++        closure_sha256: closure_hash(initial)?,
++        source_headers: raw::source_headers(initial)?,
++        max_packet_bytes: journal::MAX_PACKET,
++        max_arm_bytes: journal::MAX_ARM_BYTES,
++        min_free_bytes: journal::MIN_FREE_BYTES,
++    })
++}
++fn original_science(rows: &[u8]) -> Result<Vec<u8>> {
++    let mut out = Vec::new();
++    for line in rows.split(|c| *c == b'\n').filter(|l| !l.is_empty()) {
++        let mut v: Value = serde_json::from_slice(line)?;
++        if let Some(decisions) = v["decisions"].as_array_mut() {
++            for d in decisions {
++                d["research_world_receipt"] = Value::Null;
++            }
++        }
++        out.extend(serde_json::to_vec(&v)?);
++        out.push(b'\n');
++    }
++    Ok(out)
++}
++pub fn qualify(out: &Path) -> Result<()> {
++    seed_admission_preflight(FIXTURE_SEED, 1)?;
++    if out.exists() {
++        return Err("fixed qualification directory exists; no retry".into());
++    }
++    fs::create_dir(out)?;
++    write_new(
++        out,
++        "QUALIFICATION_ATTEMPT.json",
++        &json!({"seed":FIXTURE_SEED,"primary_seed_executed":false,"maximum_native_calls":16,"maximum_body_calls":240,"source_candidates":1,"automatic_retry":false,"executable_sha256":executable_hash()?,"driver_code_sha256":code_hash()}),
++    )?;
++    let mut actual = 0;
++    let mut native = 0_u64;
++    let mut max_packet = 0_u64;
++    let mut max_initial = 0_u64;
++    let mut max_science = 0_u64;
++    let mut max_positive_growth = 0_u64;
++    let mut details = Vec::new();
++    let result = (|| -> Result<()> {
++        let r = recipe::build(FIXTURE_SEED, true)?;
++        write_new(out, "SOURCE-CONTRACT.json", &source_contract(&r)?)?;
++        write_new(out, "SOURCE.json", &r.metadata)?;
++        write_new(
++            out,
++            "SOURCE_BOUND_BEFORE_PREPARATION.json",
++            &json!({"genotype":r.metadata["genotype_sha256"],"inputs":r.inputs.canonical_digest(),"native_calls":0,"body_calls":0}),
++        )?;
++        let hosts = fresh_pair(&r, 240, true, &mut actual, out)?;
++        let reference = r
++            .phenotype
++            .cognitive_architecture()
++            .sleep_trigger_threshold();
++        for (arm, mut warm) in hosts.into_iter().enumerate() {
++            let d = out.join(format!("arm-{arm}"));
++            fs::create_dir(&d)?;
++            let initial = cp(&warm)?;
++            max_initial = max_initial.max(initial.len() as u64);
++            journal::publish_artifact(&d, "initial.private.m2", &initial, journal::MAX_PACKET)?;
++            let b = binding(arm, &r, &initial)?;
++            let warm_dir = d.join("warm");
++            let cold_dir = d.join("cold");
++            journal::init_journal(&warm_dir, &b)?;
++            journal::init_journal(&cold_dir, &b)?;
++            let mut warm_previous = hash(&initial);
++            let mut cold_previous = hash(&initial);
++            let mut cold_bytes =
++                journal::bounded_read(&d.join("initial.private.m2"), journal::MAX_PACKET)?;
++            let mut arm_decisions = 0_u64;
++            let mut actual_transfers = 0_u64;
++            let mut previous_warm_size = None;
++            for offset in 0..INTERVALS {
++                let before = observe(&warm)?;
++                write_new(
++                    &warm_dir,
++                    &format!("ATTEMPT-{offset:06}.json"),
++                    &json!({"offset":offset,"observer":true,"attempt_before_call":true}),
++                )?;
++                let step = counted_call(&mut native, || warm.advance(1., true))?;
++                let after = observe(&warm)?;
++                let bytes = cp(&warm)?;
++                validate_cp(&bytes, 241 + offset, &b.closure_sha256)?;
++                let rows = science(
++                    &before,
++                    &after,
++                    &step,
++                    offset,
++                    &bytes,
++                    &b.closure_sha256,
++                    reference,
++                )?;
++                arm_decisions += step.decisions.len() as u64;
++                for row in &step.decisions {
++                    let receipt = &row["research_world_receipt"];
++                    if !receipt.is_object() {
++                        return Err("observed decision missing real receipt".into());
++                    }
++                    actual_transfers += receipt["grip_transfers"]
++                        .as_array()
++                        .ok_or("grip array missing")?
++                        .len() as u64;
++                }
++                let packet = journal::make_packet(&b, offset, &warm_previous, &bytes, &rows)?;
++                journal::publish(&warm_dir, &format!("{offset:06}.packet"), &packet)?;
++                warm_previous = hash(&packet);
++                if let Some(previous) = previous_warm_size {
++                    max_positive_growth =
++                        max_positive_growth.max((packet.len() as u64).saturating_sub(previous));
++                }
++                previous_warm_size = Some(packet.len() as u64);
++                max_packet = max_packet.max(packet.len() as u64);
++                max_science = max_science.max(rows.len() as u64);
++                // Load only this fixture's own cold published prefix. Never use warm
++                // acquired state to initialize the cold trajectory.
++                let mut cold =
++                    restore(&cold_bytes, &r.inputs, arm, 240 + offset, &b.closure_sha256)?;
++                let cold_before = observe(&cold)?;
++                write_new(
++                    &cold_dir,
++                    &format!("ATTEMPT-{offset:06}.json"),
++                    &json!({"offset":offset,"observer":false,"attempt_before_call":true}),
++                )?;
++                let cold_step = counted_call(&mut native, || cold.advance(1., false))?;
++                let cold_wire = cp(&cold)?;
++                let cold_rows = science(
++                    &cold_before,
++                    &observe(&cold)?,
++                    &cold_step,
++                    offset,
++                    &cold_wire,
++                    &b.closure_sha256,
++                    reference,
++                )?;
++                if cold_wire != bytes || original_science(&cold_rows)? != original_science(&rows)? {
++                    return Err(
++                        "observer changed old output/state or cold continuation differs".into(),
++                    );
++                }
++                let cold_packet =
++                    journal::make_packet(&b, offset, &cold_previous, &cold_wire, &cold_rows)?;
++                journal::publish(&cold_dir, &format!("{offset:06}.packet"), &cold_packet)?;
++                let loaded = journal::bounded_read(
++                    &cold_dir.join(format!("{offset:06}.packet")),
++                    journal::MAX_PACKET,
++                )?;
++                let decoded = journal::decode_packet(&loaded, &b, offset, &cold_previous)?;
++                if decoded.checkpoint != cold_wire || decoded.trace != cold_rows {
++                    return Err("cold packet roundtrip differs".into());
++                }
++                cold_previous = decoded.digest;
++                cold_bytes = decoded.checkpoint;
++                max_packet = max_packet.max(cold_packet.len() as u64);
++                max_science = max_science.max(cold_rows.len() as u64);
++            }
++            // Exercise the actual durable recovery/export path, including attempt
++            // records and their retained atomic aliases, without further native calls.
++            for dir in [&warm_dir, &cold_dir] {
++                let recovered = journal::recover_without_trace(dir, &b, &initial, |wire, tick| {
++                    validate_cp(wire, tick, &b.closure_sha256)
++                })?;
++                if recovered.next != INTERVALS || recovered.checkpoint != cold_bytes {
++                    return Err("qualified durable recovery does not match final state".into());
++                }
++            }
++            details.push(json!({"arm":arm,"policy":mode_name(arm)?,"warm_calls":4,"cold_calls":4,"decisions_per_trajectory":arm_decisions,"authoritative_grip_transfers_observed":actual_transfers,"every_original_output_and_checkpoint_exact":true,"observer_only_fields_excluded_from_original_output_comparison":["research_world_receipt"],"closed_source_optimizer_sentinels":true,"final_checkpoint_sha256":hash(&cold_bytes)}));
++        }
++        if actual != 240
++            || native != 16
++            || max_packet
++                .checked_add(262144 + (max_positive_growth * HORIZON).max(1024 * 1024))
++                .is_none_or(|v| v > journal::MAX_PACKET)
++        {
++            return Err("fixed dose or whole-packet forecast failed".into());
++        }
++        write_new(
++            out,
++            "QUALIFICATION_COMPLETE.json",
++            &json!({"schema":"object-rich-optional-vocal-driver-qualification-v1","complete":true,"driver_commit":DRIVER_COMMIT,"driver_code_sha256":code_hash(),"executable_sha256":executable_hash()?,"protocol_sha256":hash(PROTOCOL),"actual_native_calls":native,"actual_preparation_intervals":actual,"primary_seed_executed":false,"observer_inertness_and_cold_exact":true,"maximum_packet_bytes":max_packet,"maximum_positive_packet_growth_per_interval":max_positive_growth,"projected_packet_bytes":max_packet+262144+(max_positive_growth*HORIZON).max(1024*1024),"projection_is_not_a_growth_guarantee":true,"maximum_initial_checkpoint_bytes":max_initial,"maximum_science_row_pair_bytes":max_science,"projected_pair_physical_bytes":2*HORIZON*journal::MAX_PACKET,"metadata_initial_export_headroom":2*journal::MAX_PACKET+64*1024*1024,"arms":details,"no_behavioral_benefit_claim":true,"no_extra_calls_for_event_coverage":true}),
++        )?;
++        Ok(())
++    })();
++    if let Err(e) = &result {
++        let _ = write_new(
++            out,
++            "QUALIFICATION_FAILED.json",
++            &json!({"error":e.to_string(),"actual_native_calls_attempted":native,"actual_preparation_intervals_completed":actual,"no_retry":true}),
++        );
++    }
++    result
++}
+--- /dev/null
++++ b/crates/alife_training/examples/support/object_rich_scene_v1.rs
+@@ -0,0 +1,197 @@
++//! Fixed ordinary object recipes and read-only scene/candidate evidence.
++//! No actions, physiology edits, priming or object renewal occur here.
++use super::*;
++pub fn scene(seed: u64, id: OrganismId) -> Result<HeadlessWorld> {
++    let mut w = HeadlessScenarioBuilder::new(seed)
++        .agent("learner", id, Vec3f::ZERO)
++        .food("near-root", Vec3f::new(1., 0., -0.5), 0.65)
++        .food("far-fruit", Vec3f::new(2.75, 0., 1.75), 0.45)
++        .toy("activity-toy", Vec3f::new(0.8, 0., 2.1), false)
++        .obstacle("obstacle", Vec3f::new(1.8, 0., 0.65), 0.35)
++        .build()?;
++    w.set_food_variety(
++        w.entity_id("near-root").ok_or("near root missing")?,
++        FoodVariety::Root,
++    )?;
++    w.set_food_variety(
++        w.entity_id("far-fruit").ok_or("fruit missing")?,
++        FoodVariety::Fruit,
++    )?;
++    Ok(w)
++}
++fn point(v: Vec3f) -> [f64; 3] {
++    [f64::from(v.x), f64::from(v.y), f64::from(v.z)]
++}
++fn distance(a: Vec3f, b: Vec3f) -> f64 {
++    point(a)
++        .into_iter()
++        .zip(point(b))
++        .map(|(a, b)| (a - b).powi(2))
++        .sum::<f64>()
++        .sqrt()
++}
++fn segment_distance(a: Vec3f, b: Vec3f, p: Vec3f) -> f64 {
++    let a = point(a);
++    let b = point(b);
++    let p = point(p);
++    let v = std::array::from_fn::<_, 3, _>(|i| b[i] - a[i]);
++    let denom = v.iter().map(|v| v * v).sum::<f64>();
++    let t = if denom == 0. {
++        0.
++    } else {
++        ((0..3).map(|i| (p[i] - a[i]) * v[i]).sum::<f64>() / denom).clamp(0., 1.)
++    };
++    (0..3)
++        .map(|i| (a[i] + t * v[i] - p[i]).powi(2))
++        .sum::<f64>()
++        .sqrt()
++}
++pub fn snapshot(w: &HeadlessWorld) -> Result<Value> {
++    let r = w
++        .organism_registry()
++        .iter()
++        .next()
++        .ok_or("resident absent")?;
++    let actor = w.entity(r.world_entity_id()).ok_or("body entity absent")?;
++    let obstacle = w
++        .entity(w.entity_id("obstacle").ok_or("obstacle absent")?)
++        .ok_or("obstacle record absent")?;
++    let grip = Vec3f::new(
++        actor.position.x + actor.body_yaw.cos() * 0.5,
++        actor.position.y,
++        actor.position.z + actor.body_yaw.sin() * 0.5,
++    );
++    let objects=w.object_snapshots().iter().map(|o| {
++        let p=o.grounded_physical;
++        json!({"id":o.id,"label":o.label,"kind":format!("{:?}",o.kind),"position":o.position,
++          "body_yaw":o.body_yaw,"head_yaw":o.head_yaw,"radius":o.radius,"nutrition":o.nutrition,
++          "hazard_pain":o.hazard_pain,"consumed":o.consumed,"carried_by":o.carried_by,"activity_hold":o.activity_hold,
++          "tracking_key":format!("{:?}",o.tracking_key),"distance":distance(actor.position,o.position),
++          "within_center_manipulation_reach":distance(actor.position,o.position)<=1.25,
++          "actor_target_obstacle_clearance":segment_distance(actor.position,o.position,obstacle.position)-f64::from(obstacle.radius),
++          "target_grip_obstacle_clearance":segment_distance(o.position,grip,obstacle.position)-f64::from(obstacle.radius),
++          "properties":{"velocity":p.velocity,"color":p.color,"material":p.material,"shape":p.shape,"chemical":p.chemical,"surface_temperature":p.surface_temperature,"terrain":p.terrain}})
++    }).collect::<Vec<_>>();
++    if !r.lifecycle().is_alive() {
++        return Ok(
++            json!({"tick":w.tick(),"objects":objects,"candidate_count":null,"candidates":[],"grounded_slots":[],"perception_unavailable_reason":"dead lifecycle; no candidate admission attempted","utterances":w.audible_utterances()}),
++        );
++    }
++    let mut perception = w.clone();
++    let admission = SleepChoiceWorldAdmissionV1::for_organism(&perception, r.organism_id())?;
++    let (draft, _) = perception.perception_sleep_choice_draft_with_bindings(
++        &admission,
++        w.tick(),
++        r.biochemistry().homeostasis,
++    )?;
++    Ok(
++        json!({"tick":w.tick(),"objects":objects,"candidate_count":draft.candidates().len(),"candidates":draft.candidates(),
++       "grounded_slots":draft.grounded_object_slots(),"manipulation_effector_gain":r.embodiment().effector_gain(EffectorCapability::Manipulation),
++       "locomotion_body_radius":LocomotionLimits::default().body_radius,"actor_obstacle_clearance":distance(actor.position,obstacle.position)-f64::from(obstacle.radius+LocomotionLimits::default().body_radius),
++       "actor_grip_obstacle_clearance":segment_distance(actor.position,grip,obstacle.position)-f64::from(obstacle.radius),
++       "ordinary_contact_radius":0.75,"ordinary_manipulation_radius":1.25,"terrain_present":w.terrain().is_some(),
++       "read_only_perception_clone":true,"utterances":w.audible_utterances()}),
++    )
++}
++pub fn initial_audit(w: &HeadlessWorld) -> Result<Value> {
++    let evidence = snapshot(w)?;
++    if w.terrain().is_some()
++        || w.object_count() != 5
++        || evidence["candidate_count"] != 31
++        || evidence["actor_obstacle_clearance"]
++            .as_f64()
++            .is_none_or(|v| v <= 0.)
++        || evidence["actor_grip_obstacle_clearance"]
++            .as_f64()
++            .is_none_or(|v| v <= 0.)
++        || evidence["manipulation_effector_gain"]
++            .as_f64()
++            .is_none_or(|v| v <= 0.)
++    {
++        return Err("fixed scene capacity/body/effector check failed".into());
++    }
++    let actual = w.object_snapshots();
++    for o in &actual {
++        if o.consumed || o.carried_by.is_some() || o.activity_hold || o.hazard_pain != 0. {
++            return Err("fixed scene is not fresh harmless unheld objects".into());
++        }
++    }
++    let r = w
++        .organism_registry()
++        .iter()
++        .next()
++        .ok_or("resident absent")?;
++    let actor = w.entity(r.world_entity_id()).ok_or("actor absent")?;
++    let expected: [(&str, Vec3f, f32, Option<[f32; 3]>); 4] = [
++        (
++            "near-root",
++            Vec3f::new(1., 0., -0.5),
++            0.75,
++            Some([0.8, 0.25, 0.35]),
++        ),
++        (
++            "far-fruit",
++            Vec3f::new(2.75, 0., 1.75),
++            0.75,
++            Some([0.85, 0.65, 0.8]),
++        ),
++        (
++            "activity-toy",
++            Vec3f::new(0.8, 0., 2.1),
++            0.5,
++            Some([0., 0., 0.]),
++        ),
++        ("obstacle", Vec3f::new(1.8, 0., 0.65), 0.35, None),
++    ];
++    let candidates = evidence["candidates"]
++        .as_array()
++        .ok_or("candidate evidence absent")?;
++    for (label, position, radius, chemistry) in expected {
++        let id = w.entity_id(label).ok_or("fixed object absent")?;
++        let o = w.entity(id).ok_or("fixed object record absent")?;
++        if o.position != position
++            || o.radius.to_bits() != radius.to_bits()
++            || chemistry.is_some_and(|c| o.grounded_physical.chemical != c)
++        {
++            return Err("fixed object geometry/recipe changed".into());
++        }
++        let n = candidates
++            .iter()
++            .filter(|c| c["target"]["entity"] == json!(id))
++            .count();
++        if n != 6 {
++            return Err(format!(
++                "fixed target {label} lacks all six canonical candidates (got {n})"
++            )
++            .into());
++        }
++    }
++    let near = w.entity(w.entity_id("near-root").unwrap()).unwrap();
++    if distance(actor.position, near.position) > 1.25 || near.nutrition != 0.65 {
++        return Err("ordinary near food not in center reach".into());
++    }
++    let near_row = evidence["objects"]
++        .as_array()
++        .unwrap()
++        .iter()
++        .find(|o| o["label"] == "near-root")
++        .unwrap();
++    for field in [
++        "actor_target_obstacle_clearance",
++        "target_grip_obstacle_clearance",
++    ] {
++        if near_row[field].as_f64().is_none_or(|v| v <= 0.) {
++            return Err("ordinary near-food grip segment obstructed".into());
++        }
++    }
++    for i in 1..actual.len() {
++        for j in i + 1..actual.len() {
++            if distance(actual[i].position, actual[j].position)
++                <= f64::from(actual[i].radius + actual[j].radius)
++            {
++                return Err("non-agent object bounds overlap".into());
++            }
++        }
++    }
++    Ok(evidence)
++}
+--- /dev/null
++++ b/crates/alife_training/src/cpu/grouped_host_cache_tests.rs
+@@ -0,0 +1,250 @@
++//! Candidate-only tests; no run has been authorized by adding this source.
++use super::*;
++use sha2::{Digest, Sha256};
++
++fn clear(host: &mut CpuGroupedM2HostV1) {
++    for resident in host.host.residents.values_mut() {
++        resident
++            .grouped
++            .as_mut()
++            .unwrap()
++            .motor
++            .clear_validation_cache();
++    }
++}
++fn all_warm(host: &CpuGroupedM2HostV1) -> bool {
++    host.host.residents.values().all(|resident| {
++        resident
++            .grouped
++            .as_ref()
++            .unwrap()
++            .motor
++            .validation_cache_is_warm()
++    })
++}
++fn witness(wire: &[u8], len: usize, sha: &str) {
++    assert_eq!(wire.len(), len);
++    assert_eq!(format!("{:x}", Sha256::digest(wire)), sha);
++}
++fn decision_bytes(step: &CpuGroupedM2HostStepV1) -> Vec<u8> {
++    bytes(&(
++        step.tick_before,
++        step.tick_after,
++        step.sleeping_organisms,
++        step.sleep_consolidations,
++        step.decisions
++            .iter()
++            .map(|d| {
++                (
++                    d.organism_id,
++                    &d.action,
++                    d.sampling_counter,
++                    &d.source_diagnostic_logits,
++                    &d.biological_emissions,
++                    &d.brain_work,
++                    &d.patch,
++                    &d.motor,
++                    &d.physical,
++                    d.sleep_phase,
++                    d.sleep_trigger,
++                )
++            })
++            .collect::<Vec<_>>(),
++    ))
++}
++
++#[test]
++fn grouped_cache_exact_five_file_baseline_witness_and_restore_counts() {
++    let start = GroupedMotorStateV1::validation_compile_count();
++    let (mut host, inputs) = fixture(240);
++    assert!(all_warm(&host));
++    assert_eq!(GroupedMotorStateV1::validation_compile_count(), start + 1);
++    let initial = host.checkpoint().unwrap().encode().unwrap();
++    witness(
++        &initial,
++        2_253_590,
++        "fe6385e4406ce7e99cbc992d4fbde3d44805835992ea9ad07c02a2c3dc6b8594",
++    );
++    let expected = [
++        (
++            51_263,
++            "516d1776531106ba2368242894b1816799e41a84d2e0d54cbbe2c019632e131e",
++            2_375_809,
++            "25b61a7550b424a8391c12960ce3b77a3c22b8ad5013cfe2daf8608bce6e56cf",
++        ),
++        (
++            53_031,
++            "f8f48d90074f7463c96787074b0b4ac66c814153b70f5dbcc5e16845ffa36275",
++            2_383_183,
++            "cde1d9c9a853402a9af2cf955b359c6d24c3ef34fed7926cd917b0e1f2e30d5c",
++        ),
++    ];
++    let mut total = initial.len();
++    for (index, temperature) in [0.73_f32, 1.17].into_iter().enumerate() {
++        let count = GroupedMotorStateV1::validation_compile_count();
++        let step = host.step(temperature).unwrap();
++        let decision = decision_bytes(&step);
++        let checkpoint = host.checkpoint().unwrap();
++        let wire = checkpoint.encode().unwrap();
++        let (decision_len, decision_sha, wire_len, wire_sha) = expected[index];
++        witness(&decision, decision_len, decision_sha);
++        witness(&wire, wire_len, wire_sha);
++        total += decision.len() + wire.len();
++        assert_eq!(GroupedMotorStateV1::validation_compile_count(), count);
++        let decoded = decode_exact(&checkpoint);
++        assert!(decoded
++            .payload
++            .controllers
++            .values()
++            .all(|c| !c.motor.validation_cache_is_warm()));
++        for candidate in [checkpoint, decoded] {
++            let before = GroupedMotorStateV1::validation_compile_count();
++            let restored =
++                CpuGroupedM2HostV1::restore(candidate, &inputs, MediationModeV1::Full).unwrap();
++            assert!(all_warm(&restored));
++            assert_eq!(GroupedMotorStateV1::validation_compile_count(), before + 1);
++            assert_eq!(restored.checkpoint().unwrap().encode().unwrap(), wire);
++            assert_eq!(GroupedMotorStateV1::validation_compile_count(), before + 1);
++        }
++    }
++    assert_eq!(total, 7_116_876);
++}
++
++#[test]
++fn grouped_cache_seals_nonzero_banks_body_and_rollback_are_unchanged() {
++    let (mut host, inputs) = fixture(240);
++    host.step(0.73).unwrap();
++    inject_frozen_sentinels(&mut host);
++    let acquired = frozen(&host);
++    let original = host.checkpoint().unwrap();
++    let wire = original.encode().unwrap();
++    let world = bytes(&original.payload.canonical.world);
++    let seals = host
++        .host
++        .residents
++        .values()
++        .map(|r| resident_digest(r, host.host.sampling_seed, host.host.sampling_counter).unwrap())
++        .collect::<Vec<_>>();
++    assert!(all_warm(&host));
++    clear(&mut host);
++    for (r, seal) in host.host.residents.values().zip(&seals) {
++        assert_eq!(
++            &resident_digest(r, host.host.sampling_seed, host.host.sampling_counter).unwrap(),
++            seal
++        );
++    }
++    let count = GroupedMotorStateV1::validation_compile_count();
++    let captured = host.checkpoint().unwrap();
++    assert_eq!(GroupedMotorStateV1::validation_compile_count(), count + 1);
++    assert_eq!(captured.encode().unwrap(), wire);
++    assert_eq!(bytes(&captured.payload.canonical.world), world);
++    assert_eq!(frozen(&host), acquired);
++    for empty in [false, true] {
++        if empty {
++            clear(&mut host);
++        }
++        assert!(host.step(f32::NAN).is_err());
++        assert_eq!(host.checkpoint().unwrap().encode().unwrap(), wire);
++        assert_eq!(frozen(&host), acquired);
++    }
++    let mut cold =
++        CpuGroupedM2HostV1::restore(decode_exact(&original), &inputs, MediationModeV1::Full)
++            .unwrap();
++    let a = host.step(0.73).unwrap();
++    let b = cold.step(0.73).unwrap();
++    assert_eq!(decision_bytes(&a), decision_bytes(&b));
++    assert_eq!(frozen(&host), acquired);
++    assert_eq!(frozen(&cold), acquired);
++    assert_eq!(
++        host.checkpoint().unwrap().encode().unwrap(),
++        cold.checkpoint().unwrap().encode().unwrap()
++    );
++}
++
++#[test]
++fn grouped_cache_does_not_authorize_changed_asset_receipt_or_float_mirror() {
++    let (mut host, inputs) = fixture(240);
++    host.step(0.73).unwrap();
++    let checkpoint = host.checkpoint().unwrap();
++    let mut forged: serde_json::Value =
++        serde_json::from_slice(&bytes(&checkpoint.payload)).unwrap();
++    let owner = checkpoint
++        .payload
++        .controllers
++        .keys()
++        .next()
++        .unwrap()
++        .to_string();
++    forged["controllers"][&owner]["motor"]["validation_cache"] = serde_json::json!({"warm": true});
++    let mut forged_wire = MAGIC.to_vec();
++    forged_wire.extend(bytes(&forged));
++    assert!(CpuGroupedM2HostCheckpointV1::decode(&forged_wire).is_err());
++    for empty in [false, true] {
++        for mutation in 0..3 {
++            let mut motor = checkpoint
++                .payload
++                .controllers
++                .values()
++                .next()
++                .unwrap()
++                .motor
++                .clone();
++            if empty {
++                motor.clear_validation_cache();
++            }
++            let receipt = motor.last_receipt.as_mut().unwrap();
++            match mutation {
++                0 => receipt.native.core.source_execution_count = 2,
++                1 => receipt.applied_body_energy_debit = f32::NAN,
++                _ => receipt.native.core.appended_activations[0] += 0.25,
++            }
++            assert!(motor.validate(host.founder.phenotype()).is_err());
++        }
++        let mut bad = checkpoint.clone();
++        if empty {
++            for controller in bad.payload.controllers.values_mut() {
++                controller.motor.clear_validation_cache();
++            }
++        }
++        let mut value: serde_json::Value =
++            serde_json::from_slice(&bytes(&bad.payload.source_asset)).unwrap();
++        value["weights"][0] = (value["weights"][0].as_f64().unwrap() + 0.25).into();
++        bad.payload.source_asset = serde_json::from_value(value).unwrap();
++        assert!(CpuGroupedM2HostV1::restore(bad, &inputs, MediationModeV1::Full).is_err());
++        let mut bad = checkpoint.clone();
++        if empty {
++            for controller in bad.payload.controllers.values_mut() {
++                controller.motor.clear_validation_cache();
++            }
++        }
++        *bad.payload
++            .sampler_bits
++            .values_mut()
++            .next()
++            .unwrap()
++            .group
++            .as_mut()
++            .unwrap() ^= 1;
++        assert!(CpuGroupedM2HostV1::restore(bad, &inputs, MediationModeV1::Full).is_err());
++    }
++}
++
++#[test]
++fn grouped_cache_empty_owner_cannot_export_pending_work() {
++    let (mut host, _) = fixture(240);
++    clear(&mut host);
++    assert!(host
++        .host
++        .grouped_step_inner(&host.founder, f32::NAN, &mut |draft, _| Ok(draft))
++        .is_err());
++    assert!(host
++        .host
++        .residents
++        .values()
++        .next()
++        .unwrap()
++        .neural
++        .checkpoint()
++        .is_err());
++    assert!(host.checkpoint().is_err());
++}
+--- a/crates/alife_training/src/cpu/grouped_host_envelope.rs
++++ b/crates/alife_training/src/cpu/grouped_host_envelope.rs
+@@ -6,6 +6,15 @@
+ };
+ use super::*;
+ use serde::{Deserialize, Serialize};
++#[path = "optional_vocal_host.rs"]
++mod optional_vocal;
++pub use optional_vocal::{
++    CpuOptionalVocalM2HostCheckpointV1, CpuOptionalVocalM2HostDecisionV1,
++    CpuOptionalVocalM2HostStepV1, CpuOptionalVocalM2HostV1,
++};
++pub(super) use optional_vocal::{
++    GroupedPolicyStrategy, LegacyGroupedPolicy, OptionalVocalResidentV1,
++};
+ 
+ const MAGIC: &[u8] =
+     b"ALIFE-GROUPED-M2-HOST\0V1\0CONFIDENCE-V2\0SYNAPTIC-CLOSED\0PROFILE5\0SAMPLER-BITS1\0";
+@@ -28,6 +37,9 @@
+     pub(super) last_physical: Option<alife_world::SleepChoicePhysicalReceiptV1>,
+     consumed_voluntary: Option<VoluntarySleepReceiptV1>,
+     pub(super) last_action: Option<RecoveryGroupJointActionV2>,
++    // Absent legacy field must serialize to no bytes, preserving old envelopes.
++    #[serde(default, skip_serializing_if = "Option::is_none")]
++    pub(super) optional_vocal: Option<OptionalVocalResidentV1>,
+     last_bundle: Option<MotorCommandBundle>,
+     last_joint: Option<JointActionSelectionV1>,
+     last_representative: Option<u16>,
+@@ -103,16 +115,13 @@
+                     && self.last_action.is_none()
+                     && self.last_bundle.is_none()
+                     && self.last_joint.is_none()
+-                    && self.last_representative.is_none() =>
++                    && self.last_representative.is_none()
++                    && self.optional_vocal.as_ref().is_none_or(|v| v.is_fresh()) =>
+             {
+                 Ok(())
+             }
+             (Some(physical), Some(motor)) => {
+-                let action = self
+-                    .last_action
+-                    .as_ref()
+-                    .ok_or(CpuHostError::State("missing grouped sample proof"))?;
+-                let (representative, slots) = motor.native.scores.physical_selection(action)?;
++                let (representative, slots, selected_operation) = self.physical_selection()?;
+                 let bundle = self
+                     .last_bundle
+                     .as_ref()
+@@ -132,7 +141,7 @@
+                         "grouped physical/sample provenance mismatch",
+                     ));
+                 }
+-                let operation = match action.operation {
++                let operation = match selected_operation {
+                     None => None,
+                     Some(0) => Some(RecoveryOperationV1::BodySleep),
+                     Some(1) => Some(RecoveryOperationV1::AwakeRest),
+@@ -216,11 +225,7 @@
+         if motor.frame_digest != frame.frame_digest() || motor.tick != frame.tick() {
+             return Err(CpuHostError::State("grouped physical frame mismatch"));
+         }
+-        let action = self
+-            .last_action
+-            .as_ref()
+-            .ok_or(CpuHostError::State("missing grouped sample"))?;
+-        let (representative, slots) = motor.native.scores.physical_selection(action)?;
++        let (representative, slots, _) = self.physical_selection()?;
+         self.last_joint = Some(JointActionSelectionV1::new(
+             slots.map(|i| i.map_or(0, |i| i + 1)),
+             bundle,
+@@ -393,6 +398,12 @@
+             || metadata["selector_tag"] != 12
+             || metadata["decoder_stride"] != 55
+             || metadata["recipe_digest"] != RECOVERY_GROUP_CONFIDENCE_RECIPE_SHA256
++            || metadata["canonical"]["schema_version"] != 2
++            || !metadata["canonical"]["residents"]
++                .as_array()
++                .is_some_and(|rows| {
++                    !rows.is_empty() && rows.iter().all(|r| r["neural"]["schema_version"] == 2)
++                })
+         {
+             return Err(CpuHostError::State(
+                 "grouped M2 outer lineage/profile/policy mismatch",
+@@ -400,6 +411,9 @@
+         }
+         let mut payload: GroupedPayloadV1 = serde_json::from_value(metadata.clone())?;
+         payload.restore_sampler_bits()?;
++        for state in payload.controllers.values() {
++            state.validate_policy::<LegacyGroupedPolicy>()?;
++        }
+         // Legacy nested types have intentionally permissive historical codecs.
+         // This new opaque envelope must not silently erase unknown fields or
+         // invent omitted defaults anywhere in its exact continuation payload.
+@@ -414,16 +428,22 @@
+         Ok(Self { payload })
+     }
+ }
+-pub struct CpuGroupedM2HostStepV1 {
++/// Separately named, process-local research output. Never saved or consumed by policy.
++/// The ordinary step return type and entry point remain unchanged.
++pub struct CpuGroupedM2ResearchStepV1<A = RecoveryGroupJointActionV2> {
++    pub step: CpuGroupedM2HostStepV1<A>,
++    pub world_receipts: Vec<alife_world::HeadlessMotorTransactionReceipt>,
++}
++pub struct CpuGroupedM2HostStepV1<A = RecoveryGroupJointActionV2> {
+     pub tick_before: Tick,
+     pub tick_after: Tick,
+-    pub decisions: Vec<CpuGroupedM2HostDecisionV1>,
++    pub decisions: Vec<CpuGroupedM2HostDecisionV1<A>>,
+     pub sleeping_organisms: usize,
+     pub sleep_consolidations: usize,
+ }
+-pub struct CpuGroupedM2HostDecisionV1 {
++pub struct CpuGroupedM2HostDecisionV1<A = RecoveryGroupJointActionV2> {
+     pub organism_id: OrganismId,
+-    pub action: RecoveryGroupJointActionV2,
++    pub action: A,
+     pub sampling_counter: u32,
+     /// Direct source physical-row readouts, not grouped sampling logits.
+     /// Also used by the declared source-logit regional-arousal emission policy.
+@@ -441,7 +461,14 @@
+ /// synchronous, closed-memory completion contract, never pending GPU work.
+ pub(super) fn grouped_sleep_output_digest(r: &Resident) -> Result<[u64; 4], CpuHostError> {
+     json_digest(
+-        b"ALIFE-GROUPED-M2-MEMORY-SLEEP-OUTPUT-V1",
++        if r.grouped
++            .as_ref()
++            .is_some_and(|g| g.optional_vocal.is_some())
++        {
++            b"ALIFE-OPTIONAL-VOCAL-M2-MEMORY-SLEEP-OUTPUT-V1".as_slice()
++        } else {
++            b"ALIFE-GROUPED-M2-MEMORY-SLEEP-OUTPUT-V1".as_slice()
++        },
+         &(
+             r.neural.checkpoint()?,
+             r.memory.export_active_bank()?,
+@@ -532,6 +559,23 @@
+         Ok(())
+     }
+     pub fn new_prepared<T, E: std::fmt::Display>(
++        game: CanonicalNewGame,
++        founder: CpuFoundationTrainer,
++        source_inputs: PhenotypeCompilerInputs,
++        sampling_seed: u32,
++        mode: MediationModeV1,
++        prepare: impl FnOnce(&mut HeadlessWorld) -> Result<T, E>,
++    ) -> Result<(Self, T), CpuHostError> {
++        Self::new_prepared_policy::<LegacyGroupedPolicy, T, E>(
++            game,
++            founder,
++            source_inputs,
++            sampling_seed,
++            mode,
++            prepare,
++        )
++    }
++    fn new_prepared_policy<P: GroupedPolicyStrategy, T, E: std::fmt::Display>(
+         game: CanonicalNewGame,
+         founder: CpuFoundationTrainer,
+         source_inputs: PhenotypeCompilerInputs,
+@@ -561,6 +605,15 @@
+                     "grouped M2 is fresh-only, cannot reset acquired resident",
+                 ));
+             }
++            if P::OPTIONAL {
++                // This is the fresh birth path above, before any decision or
++                // acquired state. Construct the new source owner directly.
++                r.neural = CpuOrganismState::new_optional_vocal(
++                    founder.phenotype(),
++                    OrganismId(id),
++                    r.neural.neural_state().clone(),
++                )?;
++            }
+             let profile = super::sleep_choice_profile_identity();
+             r.memory = MemorySidecarState::new_profiled(
+                 OrganismId(id),
+@@ -578,6 +631,7 @@
+                 last_physical: None,
+                 consumed_voluntary: None,
+                 last_action: None,
++                optional_vocal: P::OPTIONAL.then(OptionalVocalResidentV1::fresh),
+                 last_bundle: None,
+                 last_joint: None,
+                 last_representative: None,
+@@ -605,6 +659,13 @@
+             .map(|resident| resident.sleep.state())
+     }
+     pub fn checkpoint(&self) -> Result<CpuGroupedM2HostCheckpointV1, CpuHostError> {
++        Ok(CpuGroupedM2HostCheckpointV1 {
++            payload: self.checkpoint_payload::<LegacyGroupedPolicy>()?,
++        })
++    }
++    fn checkpoint_payload<P: GroupedPolicyStrategy>(
++        &self,
++    ) -> Result<GroupedPayloadV1, CpuHostError> {
+         self.host.validate_founder(&self.founder)?;
+         for (&id, r) in &self.host.residents {
+             validate_grouped_sleep_boundary(r)?;
+@@ -624,58 +685,58 @@
+                 .grouped
+                 .as_ref()
+                 .ok_or(CpuHostError::State("missing grouped state"))?;
++            state.validate_policy::<P>()?;
++            state.validate_optional_source(&self.founder, &r.neural)?;
+             state.motor.validate(self.founder.phenotype())?;
+             state.validate_source_boundary(&r.neural.checkpoint()?, &r.activity)?;
+             state.validate_replay(&r.replay)?;
+-            if state.last_action.as_ref().is_some_and(|a| {
+-                a.seed != self.host.sampling_seed
+-                    || a.counter.checked_add(1) != Some(self.host.sampling_counter)
++            if state.sampling_cursor().is_some_and(|(seed, counter)| {
++                seed != self.host.sampling_seed
++                    || counter.checked_add(1) != Some(self.host.sampling_counter)
+             }) {
+                 return Err(CpuHostError::State("grouped sampling cursor mismatch"));
+             }
+             state.validate_boundary(OrganismId(id), r.next_sequence, self.host.world.tick())?;
+         }
+-        Ok(CpuGroupedM2HostCheckpointV1 {
+-            payload: GroupedPayloadV1 {
+-                schema_version: 1,
+-                source_lineage: LINEAGE.into(),
+-                policy: POLICY.into(),
+-                runtime_profile_raw: 5,
+-                selector_tag: 12,
+-                decoder_stride: 55,
+-                mode: self.mode,
+-                source_inputs: self.source_inputs.clone(),
+-                recipe_digest: RECOVERY_GROUP_CONFIDENCE_RECIPE_SHA256.into(),
+-                source_asset: self.founder.source_foundation.clone(),
+-                founder: self.founder.checkpoint(),
+-                canonical: self.host.checkpoint_inner(&self.founder)?,
+-                sampler_bits: grouped_sampler_bits(
+-                    &self
+-                        .host
+-                        .residents
+-                        .iter()
+-                        .map(|(&id, r)| {
+-                            r.grouped
+-                                .clone()
+-                                .map(|g| (id, g))
+-                                .ok_or(CpuHostError::State("missing grouped state"))
+-                        })
+-                        .collect::<Result<BTreeMap<_, _>, CpuHostError>>()?,
+-                ),
+-                controllers: self
++        Ok(GroupedPayloadV1 {
++            schema_version: 1,
++            source_lineage: P::LINEAGE.into(),
++            policy: P::POLICY.into(),
++            runtime_profile_raw: 5,
++            selector_tag: 12,
++            decoder_stride: 55,
++            mode: self.mode,
++            source_inputs: self.source_inputs.clone(),
++            recipe_digest: RECOVERY_GROUP_CONFIDENCE_RECIPE_SHA256.into(),
++            source_asset: self.founder.source_foundation.clone(),
++            founder: self.founder.checkpoint(),
++            canonical: self.host.checkpoint_inner(&self.founder)?,
++            sampler_bits: grouped_sampler_bits(
++                &self
+                     .host
+                     .residents
+                     .iter()
+                     .map(|(&id, r)| {
+-                        Ok((
+-                            id,
+-                            r.grouped
+-                                .clone()
+-                                .ok_or(CpuHostError::State("missing grouped M2 controller"))?,
+-                        ))
++                        r.grouped
++                            .clone()
++                            .map(|g| (id, g))
++                            .ok_or(CpuHostError::State("missing grouped state"))
+                     })
+-                    .collect::<Result<_, CpuHostError>>()?,
+-            },
++                    .collect::<Result<BTreeMap<_, _>, CpuHostError>>()?,
++            ),
++            controllers: self
++                .host
++                .residents
++                .iter()
++                .map(|(&id, r)| {
++                    Ok((
++                        id,
++                        r.grouped
++                            .clone()
++                            .ok_or(CpuHostError::State("missing grouped M2 controller"))?,
++                    ))
++                })
++                .collect::<Result<_, CpuHostError>>()?,
+         })
+     }
+     pub fn restore(
+@@ -684,13 +745,25 @@
+         expected_mode: MediationModeV1,
+     ) -> Result<Self, CpuHostError> {
+         let wire = checkpoint.encode()?;
+-        let c = checkpoint.payload;
++        Self::restore_payload::<LegacyGroupedPolicy>(
++            checkpoint.payload,
++            expected_source,
++            expected_mode,
++            wire,
++        )
++    }
++    fn restore_payload<P: GroupedPolicyStrategy>(
++        mut c: GroupedPayloadV1,
++        expected_source: &PhenotypeCompilerInputs,
++        expected_mode: MediationModeV1,
++        wire: Vec<u8>,
++    ) -> Result<Self, CpuHostError> {
+         if c.sampler_bits != grouped_sampler_bits(&c.controllers) {
+             return Err(CpuHostError::State("grouped exact sampler bits differ"));
+         }
+         if c.schema_version != 1
+-            || c.source_lineage != LINEAGE
+-            || c.policy != POLICY
++            || c.source_lineage != P::LINEAGE
++            || c.policy != P::POLICY
+             || c.runtime_profile_raw != 5
+             || c.selector_tag != 12
+             || c.decoder_stride != 55
+@@ -701,6 +774,34 @@
+             return Err(CpuHostError::State(
+                 "grouped M2 source, controller, profile or policy mismatch",
+             ));
++        }
++        if c.canonical.schema_version
++            != if P::OPTIONAL {
++                OPTIONAL_VOCAL_CANONICAL_SCHEMA
++            } else {
++                2
++            }
++            || c.canonical.residents.iter().any(|r| {
++                r.neural.schema_version
++                    != if P::OPTIONAL {
++                        crate::cpu::organism::OPTIONAL_VOCAL_NEURAL_SCHEMA
++                    } else {
++                        2
++                    }
++            })
++        {
++            return Err(CpuHostError::State(
++                "inner canonical/source policy mismatch",
++            ));
++        }
++        for state in c.controllers.values() {
++            state.validate_policy::<P>()?;
++        }
++        // Restore is a cold admission boundary for every typed policy, including
++        // in-process checkpoint clones. Clear only the transient compiler output;
++        // source, owner, mutable banks and receipts retain their existing checks.
++        for state in c.controllers.values_mut() {
++            state.motor.clear_validation_cache();
+         }
+         let p = PhenotypeCompiler::compile_validated(
+             expected_source,
+@@ -734,12 +835,22 @@
+             source_inputs: c.source_inputs,
+             mode: c.mode,
+         };
+-        if result.checkpoint()?.encode()? != wire {
++        let payload = result.checkpoint_payload::<P>()?;
++        let mut restored_wire = P::MAGIC.to_vec();
++        restored_wire.extend(serde_json::to_vec(&payload)?);
++        if restored_wire != wire {
+             return Err(CpuHostError::State(
+                 "grouped M2 restore would rewrite acquired state",
+             ));
+         }
+         Ok(result)
++    }
++    pub fn step_research_observed(
++        &mut self,
++        temperature: f32,
++    ) -> Result<CpuGroupedM2ResearchStepV1, CpuHostError> {
++        self.host
++            .grouped_policy_step_observed::<LegacyGroupedPolicy>(&self.founder, temperature)
+     }
+     pub fn step(&mut self, temperature: f32) -> Result<CpuGroupedM2HostStepV1, CpuHostError> {
+         self.host.grouped_step(&self.founder, temperature)
+--- a/crates/alife_training/src/cpu/grouped_host_loop.rs
++++ b/crates/alife_training/src/cpu/grouped_host_loop.rs
+@@ -6,10 +6,46 @@
+         founder: &CpuFoundationTrainer,
+         temperature: f32,
+     ) -> Result<CpuGroupedM2HostStepV1, CpuHostError> {
++        self.grouped_policy_step::<LegacyGroupedPolicy>(founder, temperature)
++    }
++    pub(super) fn grouped_policy_step<P: GroupedPolicyStrategy>(
++        &mut self,
++        founder: &CpuFoundationTrainer,
++        temperature: f32,
++    ) -> Result<CpuGroupedM2HostStepV1<P::Action>, CpuHostError> {
++        self.grouped_policy_step_with_receipts::<P>(founder, temperature, None)
++    }
++    pub(super) fn grouped_policy_step_observed<P: GroupedPolicyStrategy>(
++        &mut self,
++        founder: &CpuFoundationTrainer,
++        temperature: f32,
++    ) -> Result<CpuGroupedM2ResearchStepV1<P::Action>, CpuHostError> {
++        let mut world_receipts = Vec::new();
++        let step = self.grouped_policy_step_with_receipts::<P>(
++            founder,
++            temperature,
++            Some(&mut world_receipts),
++        )?;
++        Ok(CpuGroupedM2ResearchStepV1 {
++            step,
++            world_receipts,
++        })
++    }
++    fn grouped_policy_step_with_receipts<P: GroupedPolicyStrategy>(
++        &mut self,
++        founder: &CpuFoundationTrainer,
++        temperature: f32,
++        receipts: Option<&mut Vec<alife_world::HeadlessMotorTransactionReceipt>>,
++    ) -> Result<CpuGroupedM2HostStepV1<P::Action>, CpuHostError> {
+         self.validate_founder(founder)?;
+         for (&id, r) in &self.residents {
+             super::grouped_host_envelope::validate_grouped_sleep_boundary(r)?;
+-            if r.grouped.is_none() || r.motor.is_some() || r.sleep_choice.is_some() {
++            if r.grouped
++                .as_ref()
++                .is_none_or(|g| g.validate_policy::<P>().is_err())
++                || r.motor.is_some()
++                || r.sleep_choice.is_some()
++            {
+                 return Err(CpuHostError::State("not a grouped M2 resident"));
+             }
+             let record = self
+@@ -23,10 +59,17 @@
+         for r in next.residents.values_mut() {
+             r.sealed_authority = None;
+         }
+-        let result = next.grouped_step_inner(founder, temperature, &mut |draft, _| Ok(draft))?;
++        let result = next.grouped_policy_step_inner_with_receipts::<P>(
++            founder,
++            temperature,
++            &mut |draft, _| Ok(draft),
++            receipts,
++        )?;
+         *self = next;
+         Ok(result)
+     }
++    // Retained internal legacy test hook; production uses the shared typed loop.
++    #[allow(dead_code)]
+     pub(super) fn grouped_step_inner(
+         &mut self,
+         founder: &CpuFoundationTrainer,
+@@ -36,6 +79,29 @@
+             ExperienceSequenceId,
+         ) -> Result<PerceptionFrameDraft, ScaffoldContractError>,
+     ) -> Result<CpuGroupedM2HostStepV1, CpuHostError> {
++        self.grouped_policy_step_inner::<LegacyGroupedPolicy>(founder, temperature, prepare)
++    }
++    pub(super) fn grouped_policy_step_inner<P: GroupedPolicyStrategy>(
++        &mut self,
++        founder: &CpuFoundationTrainer,
++        temperature: f32,
++        prepare: &mut impl FnMut(
++            PerceptionFrameDraft,
++            ExperienceSequenceId,
++        ) -> Result<PerceptionFrameDraft, ScaffoldContractError>,
++    ) -> Result<CpuGroupedM2HostStepV1<P::Action>, CpuHostError> {
++        self.grouped_policy_step_inner_with_receipts::<P>(founder, temperature, prepare, None)
++    }
++    fn grouped_policy_step_inner_with_receipts<P: GroupedPolicyStrategy>(
++        &mut self,
++        founder: &CpuFoundationTrainer,
++        temperature: f32,
++        prepare: &mut impl FnMut(
++            PerceptionFrameDraft,
++            ExperienceSequenceId,
++        ) -> Result<PerceptionFrameDraft, ScaffoldContractError>,
++        mut receipts: Option<&mut Vec<alife_world::HeadlessMotorTransactionReceipt>>,
++    ) -> Result<CpuGroupedM2HostStepV1<P::Action>, CpuHostError> {
+         let p = founder.phenotype();
+         let tick = self.world.tick();
+         let mut decisions = Vec::new();
+@@ -348,16 +414,30 @@
+                 .grouped
+                 .as_mut()
+                 .ok_or(CpuHostError::State("missing grouped controller"))?;
+-            let output = r.neural.advance_grouped(
+-                founder,
+-                context,
+-                &effects,
+-                &mut state.motor,
+-                &frame,
+-                &receptors,
+-                capabilities,
+-                attempt_mask,
+-            )?;
++            state.validate_policy::<P>()?;
++            let output = if P::OPTIONAL {
++                r.neural.advance_optional_vocal(
++                    founder,
++                    context,
++                    &effects,
++                    &mut state.motor,
++                    &frame,
++                    &receptors,
++                    capabilities,
++                    attempt_mask,
++                )?
++            } else {
++                r.neural.advance_grouped(
++                    founder,
++                    context,
++                    &effects,
++                    &mut state.motor,
++                    &frame,
++                    &receptors,
++                    capabilities,
++                    attempt_mask,
++                )?
++            };
+             let motor = state
+                 .motor
+                 .last_receipt
+@@ -369,34 +449,19 @@
+             r.activity.remaining_atp_q16 = activity.available_atp_q16 - activity.debit_atp_q16;
+             r.activity.source_frame_digest = frame.frame_digest().0;
+             let sampling_counter = self.sampling_counter;
+-            let scores = r
+-                .grouped
+-                .as_ref()
+-                .unwrap()
+-                .motor
+-                .last_receipt
+-                .as_ref()
+-                .unwrap()
+-                .native
+-                .scores
+-                .clone();
+-            let action =
+-                scores.sample(self.sampling_seed, sampling_counter, f64::from(temperature))?;
+-            let (index, motor_candidates) = scores.physical_selection(&action)?;
+-            r.grouped.as_mut().unwrap().last_action = Some(action.clone());
++            let (action, index, motor_candidates, speech) = P::select(
++                founder,
++                r,
++                &frame,
++                &output,
++                self.sampling_seed,
++                sampling_counter,
++                f64::from(temperature),
++            )?;
+             self.sampling_counter = self
+                 .sampling_counter
+                 .checked_add(1)
+                 .ok_or(CpuHostError::State("sampling counter overflow"))?;
+-            let speech = if motor_candidates[3].is_some() {
+-                decode_cpu_speech(
+-                    founder,
+-                    &r.neural.neural_state().activations,
+-                    &output.replay_tick.effective_weight_offsets,
+-                )?
+-            } else {
+-                None
+-            };
+             let candidate = &frame.candidates()[index as usize];
+             let confidence =
+                 Confidence::new((candidate.sensor_confidence.raw() * 65535.).round() / 65535.)?;
+@@ -455,10 +520,10 @@
+                 command,
+             )?
+             .with_finalized_memory_recall(&frame, &recall, index)?;
+-            r.neural.stage_grouped_closed_selection(
++            P::stage(
++                r,
+                 p,
+                 &action,
+-                &scores,
+                 CpuDecisionBinding {
+                     sequence_id: sequence,
+                     frame_digest: frame.frame_digest(),
+@@ -558,6 +623,11 @@
+                 }
+                 physical.motor
+             };
++            // The transaction already completed on staged state. Copies are output only.
++            // On any later error the observed entry point returns no receipt or step.
++            if let Some(out) = receipts.as_deref_mut() {
++                out.push(receipt.clone());
++            }
+             let successor = grounded_successor_state(
+                 &self.world,
+                 record.world_entity_id(),
+@@ -681,8 +751,7 @@
+                 pre_context,
+             )?;
+             let credit_receptors = receptors;
+-            r.neural
+-                .close_grouped_outcome(founder, &patch, &credit_receptors)?;
++            P::close(&mut r.neural, founder, &patch, &credit_receptors)?;
+             r.language_grounding.observe_sealed(&patch)?;
+             let memory_write = r.memory.observe_sealed_patch(&patch)?;
+             let topology_receipt = r.topology.observe_sealed_patch(&patch);
+--- a/crates/alife_training/src/cpu/grouped_host_tests.rs
++++ b/crates/alife_training/src/cpu/grouped_host_tests.rs
+@@ -372,7 +372,9 @@
+     let mut consolidated = 0;
+     let mut saw_waking = false;
+     for _ in 0..24 {
++        let compile_count = GroupedMotorStateV1::validation_compile_count();
+         let step = host.step(0.73).unwrap();
++        assert_eq!(GroupedMotorStateV1::validation_compile_count(), compile_count);
+         if saw_waking && !step.decisions.is_empty() {
+             resumed = true;
+         }
+@@ -443,9 +445,14 @@
+         assert!(frozen(&host) == before, "frozen source state changed");
+         let checkpoint = host.checkpoint().unwrap();
+         let wire = checkpoint.encode().unwrap();
++        let before_restore = GroupedMotorStateV1::validation_compile_count();
+         host =
+             CpuGroupedM2HostV1::restore(decode_exact(&checkpoint), &inputs, MediationModeV1::Full)
+                 .unwrap();
++        assert_eq!(
++            GroupedMotorStateV1::validation_compile_count(),
++            before_restore + 1
++        );
+         assert!(
+             host.checkpoint().unwrap().encode().unwrap() == wire,
+             "cold bytes differ"
+@@ -726,3 +733,6 @@
+ 
+ #[path = "grouped_host_food_tests.rs"]
+ mod food_tests;
++
++#[path = "grouped_host_cache_tests.rs"]
++mod validation_cache_tests;
+--- a/crates/alife_training/src/cpu/host.rs
++++ b/crates/alife_training/src/cpu/host.rs
+@@ -6,8 +6,8 @@
+ #[path = "grouped_host_loop.rs"]
+ mod grouped_host_loop;
+ use super::*;
+-use grouped_host_envelope::GroupedResidentV1;
+ pub use grouped_host_envelope::*;
++use grouped_host_envelope::{GroupedPolicyStrategy, GroupedResidentV1, LegacyGroupedPolicy};
+ #[path = "motor_host_envelope.rs"]
+ mod motor_host_envelope;
+ #[path = "sleep_choice_envelope.rs"]
+@@ -116,6 +116,7 @@
+     pub language_grounding: LanguageGroundingLedger,
+     replay: Vec<CpuReplayEvent>,
+ }
++const OPTIONAL_VOCAL_CANONICAL_SCHEMA: u16 = 0x4f56;
+ #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+ pub struct CpuCanonicalCheckpoint {
+     pub schema_version: u16,
+@@ -606,8 +607,26 @@
+                 })
+             })
+             .collect::<Result<_, CpuHostError>>()?;
++        let optional = self.residents.values().any(|r| {
++            r.grouped
++                .as_ref()
++                .is_some_and(|g| g.optional_vocal.is_some())
++        });
++        if optional
++            && self.residents.values().any(|r| {
++                r.grouped
++                    .as_ref()
++                    .is_none_or(|g| g.optional_vocal.is_none())
++            })
++        {
++            return Err(CpuHostError::State("mixed optional canonical ownership"));
++        }
+         Ok(CpuCanonicalCheckpoint {
+-            schema_version: 2,
++            schema_version: if optional {
++                OPTIONAL_VOCAL_CANONICAL_SCHEMA
++            } else {
++                2
++            },
+             phenotype_hash: self.phenotype_hash,
+             founder_weight_digest: self.founder_weight_digest,
+             sampling_seed: self.sampling_seed,
+@@ -667,6 +686,38 @@
+         mut sleep_choices: Option<BTreeMap<u64, SleepChoiceResidentV1>>,
+         mut grouped_states: Option<BTreeMap<u64, GroupedResidentV1>>,
+     ) -> Result<Self, CpuHostError> {
++        let optional_admission = grouped_states
++            .as_ref()
++            .is_some_and(|states| states.values().any(|s| s.optional_vocal.is_some()));
++        if optional_admission
++            && grouped_states
++                .as_ref()
++                .unwrap()
++                .values()
++                .any(|s| s.optional_vocal.is_none())
++        {
++            return Err(CpuHostError::State("mixed optional restore ownership"));
++        }
++        let expected_schema = if optional_admission {
++            OPTIONAL_VOCAL_CANONICAL_SCHEMA
++        } else {
++            2
++        };
++        let expected_neural_schema = if optional_admission {
++            super::organism::OPTIONAL_VOCAL_NEURAL_SCHEMA
++        } else {
++            2
++        };
++        if checkpoint.schema_version != expected_schema
++            || checkpoint
++                .residents
++                .iter()
++                .any(|r| r.neural.schema_version != expected_neural_schema)
++        {
++            return Err(CpuHostError::State(
++                "canonical or source policy owner mismatch",
++            ));
++        }
+         let grouped_admission = grouped_states.is_some();
+         let composite = controllers.is_some();
+         let sleep_choice_admission = sleep_choices.is_some();
+@@ -698,7 +749,7 @@
+                 "version1 CPU checkpoint lacks tracked-object identity; exact private-life restore requires version2",
+             ));
+         }
+-        if checkpoint.schema_version != 2
++        if checkpoint.schema_version != expected_schema
+             || checkpoint.world.config.brain_policy.policy != PolicyBackend::NeuralClosedLoopCpu
+         {
+             return Err(CpuHostError::State(
+@@ -848,7 +899,11 @@
+                 sleep_choice,
+                 sealed_authority: None,
+                 v11: GpuV11CausalState::restore(r.neural_topology)?,
+-                neural: CpuOrganismState::from_checkpoint(p, r.neural)?,
++                neural: if optional_admission {
++                    CpuOrganismState::from_optional_vocal_checkpoint(p, r.neural)?
++                } else {
++                    CpuOrganismState::from_checkpoint(p, r.neural)?
++                },
+                 activity: r.activity,
+                 memory: MemorySidecarState::restore_portable(
+                     profile,
+@@ -2031,7 +2086,11 @@
+         if r.motor.is_some() || r.sleep_choice.is_some() {
+             return Err(CpuHostError::State("mixed grouped M2 private identity"));
+         }
+-        json_digest(b"ALIFE-CPU-GROUPED-M2-PRIVATE-V1", &(prefix, state))
++        if state.optional_vocal.is_some() {
++            json_digest(b"ALIFE-CPU-OPTIONAL-VOCAL-M2-PRIVATE-V1", &(prefix, state))
++        } else {
++            json_digest(b"ALIFE-CPU-GROUPED-M2-PRIVATE-V1", &(prefix, state))
++        }
+     } else if let Some(state) = &r.sleep_choice {
+         if r.motor.is_some() {
+             return Err(CpuHostError::State("mixed M0/M1 private identity"));
+--- a/crates/alife_training/src/cpu/motor_mediation/confidence/host.rs
++++ b/crates/alife_training/src/cpu/motor_mediation/confidence/host.rs
+@@ -2,6 +2,10 @@
+ //! dendrites, synaptic parameters, optimizer, or detached owner live here.
+ use super::*;
+ use crate::cpu::replay::Tape;
++use std::sync::{Arc, OnceLock};
++#[path = "host_validation_cache.rs"]
++mod validation_cache;
++use validation_cache::CachedGroupedCompilation;
+ 
+ const HOST_SCHEMA: &str = "grouped-m2-host-appendage-v1-confidence-v2-learning-closed";
+ pub const GROUPED_HOST_WORK_POLICY_V1: &str =
+@@ -25,6 +29,10 @@
+     group_ema: [f32; 16],
+     group_metabolic: [f32; 16],
+     pub last_receipt: Option<GroupedMotorReceiptV1>,
++    // Process-local proof only. A decoded controller always starts empty; no
++    // cache identity, recipe object or counter enters bytes or authority seals.
++    #[serde(skip)]
++    validation_cache: OnceLock<Arc<CachedGroupedCompilation>>,
+ }
+ #[derive(Debug, Clone, Serialize, Deserialize)]
+ #[serde(deny_unknown_fields)]
+@@ -69,6 +77,7 @@
+             group_ema: [0.; 16],
+             group_metabolic: [0.; 16],
+             last_receipt: None,
++            validation_cache: OnceLock::new(),
+         };
+         state.validate(source)?;
+         Ok(state)
+@@ -76,30 +85,27 @@
+     pub(crate) fn matches(&self, inputs: &PhenotypeCompilerInputs, mode: MediationModeV1) -> bool {
+         self.source_inputs == *inputs && self.mode == mode
+     }
++    pub(crate) fn clear_validation_cache(&mut self) {
++        // Public restore is a trust boundary even for an in-process checkpoint
++        // clone. Its full validation must not inherit a prior admission proof.
++        self.validation_cache = OnceLock::new();
++    }
+     pub(crate) fn validate(&self, source: &BrainPhenotype) -> Result<(), TrainingError> {
+-        let expected = PhenotypeCompiler::compile_validated(
+-            &self.source_inputs,
+-            &BrainCapacityClass::n2048_grounded_drive_research(),
+-        )?;
+-        if self.schema != HOST_SCHEMA
+-            || self.work_policy != GROUPED_HOST_WORK_POLICY_V1
+-            || self.m2_recipe != M2_RECIPE_SHA256
+-            || self.group_recipe != RECOVERY_GROUP_CONFIDENCE_RECIPE_SHA256
+-            || self.mode == MediationModeV1::DirectSource
+-            || expected != *source
+-            || self.source_hash != source.phenotype_hash()
+-            || source.neuron_count() != 2048
+-            || source.synapses().len() != 34048
+-            || source.foundation_abi().motor_lobe_m0().is_some()
+-            || !source
+-                .candidate_decoder()
+-                .factorized_motor_channels(source)?
+-                .contains(&MotorChannel::Posture)
+-        {
+-            return Err(invalid());
+-        }
+-        Lowered::pinned(MANIFEST)?;
+-        Self::group_recipe()?;
++        self.validated(source).map(|_| ())
++    }
++    fn validated(
++        &self,
++        source: &BrainPhenotype,
++    ) -> Result<Arc<CachedGroupedCompilation>, TrainingError> {
++        let validated = match self.validation_cache.get() {
++            Some(validated) if validated.matches_inputs(&self.source_inputs) => Arc::clone(validated),
++            // A different exact identity is a cache miss, not evidence that the
++            // original validator would reject it. Keep its full accepted domain.
++            _ => Arc::new(CachedGroupedCompilation::compile(&self.source_inputs)?),
++        };
++        validated.validate_source(self, source)?;
++        // Every mutable bank and receipt check runs on every hit. Publish a
++        // completed immutable proof only after these checks also succeed.
+         for (bank, count, bounded) in [
+             (self.activations.as_slice(), ADDED, false),
+             (self.ema.as_slice(), ADDED, true),
+@@ -149,7 +155,19 @@
+             }
+             _ => return Err(invalid()),
+         }
+-        Ok(())
++        // A miss never replaces the owner's original immutable proof. A valid
++        // changed identity may keep taking the slow path until fresh admission.
++        // Concurrent empty-owner checks retain only one completed proof.
++        let _ = self.validation_cache.set(Arc::clone(&validated));
++        Ok(validated)
++    }
++    #[cfg(test)]
++    pub(crate) fn validation_compile_count() -> usize {
++        validation_cache::compile_count()
++    }
++    #[cfg(test)]
++    pub(crate) fn validation_cache_is_warm(&self) -> bool {
++        self.validation_cache.get().is_some()
+     }
+     fn group_recipe() -> Result<GroupRecipe, TrainingError> {
+         if format!("{:x}", Sha256::digest(GROUP_RECIPE.as_bytes()))
+@@ -218,7 +236,7 @@
+         effectors: [bool; 6],
+         attempt_mask: u32,
+     ) -> Result<Tape, TrainingError> {
+-        self.validate(source)?;
++        let validated = self.validated(source)?;
+         q.validate_for(source)?;
+         receptors.validate_contract()?;
+         if q.ticks.len() != 1
+@@ -307,9 +325,9 @@
+                 ]
+             })
+             .collect::<Vec<_>>();
+-        let recipe = Lowered::pinned(MANIFEST)?;
++        let recipe = &validated.core;
+         let mut core = run_partition_banks(
+-            &recipe,
++            recipe,
+             self.mode,
+             self.source_hash,
+             &mut next.activations,
+@@ -383,7 +401,7 @@
+                 * (cue(r, &virtual_candidate) * r.weight);
+         }
+         let (group, group_jac, operations, op_jac, pressure_jac) = extension_forward_banks(
+-            &Self::group_recipe()?,
++            &validated.group,
+             &mut next.group_activations,
+             &mut next.group_ema,
+             &mut next.group_metabolic,
+@@ -430,3 +448,7 @@
+ 
+ #[cfg(test)]
+ mod tests;
++
++#[cfg(test)]
++#[path = "host_validation_cache_tests.rs"]
++mod validation_cache_tests;
+--- /dev/null
++++ b/crates/alife_training/src/cpu/motor_mediation/confidence/host_validation_cache.rs
+@@ -0,0 +1,200 @@
++//! Source-only successor: cache compiler output, never source validation.
++use super::*;
++#[cfg(test)]
++use serde::ser::SerializeSeq;
++use std::io::{self, Write};
++
++// BrainGenome omits innate_priority when all genes compare equal to zero.
++// Include the raw genes so their -0 bits cannot disappear from the compiler
++// input key. Other skips reachable from admitted inputs are Options only.
++// The source phenotype is deliberately NOT a cache key or validation proof.
++pub(super) fn input_identity(inputs: &PhenotypeCompilerInputs) -> impl Serialize + '_ {
++    (inputs, &inputs.genome().innate_priority)
++}
++#[cfg(test)]
++struct DecoderGainBits<'a>(&'a [CandidateDecoderFamilyPlan]);
++#[cfg(test)]
++impl Serialize for DecoderGainBits<'_> {
++    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
++        let mut seq = serializer.serialize_seq(Some(self.0.len()))?;
++        for family in self.0 {
++            seq.serialize_element(&family.innate_gain().to_bits())?;
++        }
++        seq.end()
++    }
++}
++/// In-memory comparison encoding only, NOT the checkpoint wire format. Every
++/// finite float is emitted as a tagged exact IEEE bit string, including -0.
++/// No digest collision or PartialEq float equivalence can authorize a hit.
++/// Nonfinite values serialize as null and cannot match a validated float.
++struct FloatBits;
++impl serde_json::ser::Formatter for FloatBits {
++    fn write_f32<W: ?Sized + Write>(&mut self, out: &mut W, value: f32) -> io::Result<()> {
++        write!(out, "\"f32:{:08x}\"", value.to_bits())
++    }
++    fn write_f64<W: ?Sized + Write>(&mut self, out: &mut W, value: f64) -> io::Result<()> {
++        write!(out, "\"f64:{:016x}\"", value.to_bits())
++    }
++}
++
++pub(super) struct ExactIdentity(Vec<u8>);
++impl ExactIdentity {
++    pub(super) fn capture<T: Serialize>(value: &T) -> Result<Self, TrainingError> {
++        let mut bytes = Vec::new();
++        value
++            .serialize(&mut serde_json::Serializer::with_formatter(
++                &mut bytes, FloatBits,
++            ))
++            .map_err(|_| invalid())?;
++        Ok(Self(bytes))
++    }
++    pub(super) fn check<T: Serialize>(&self, value: &T) -> Result<(), TrainingError> {
++        let mut comparator = CompareBytes { remaining: &self.0 };
++        value
++

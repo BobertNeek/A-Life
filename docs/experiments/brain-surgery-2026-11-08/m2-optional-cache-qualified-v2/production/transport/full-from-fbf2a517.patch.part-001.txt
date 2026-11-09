@@ -1,0 +1,2131 @@
+--- /dev/null
++++ b/PROTOCOL.md
+@@ -0,0 +1,67 @@
++# One object-rich legacy versus optional-Vocal M2 comparison
++
++Status: source/protocol preparation only. New allocation and native window are not yet admitted. No source/body fixture, source construction, maturation, compilation or primary execution has occurred. The existing Full/DriveSham lives, raw checkpoints, journals and source driver remain untouched.
++
++## Question and limitations
++
++Compare the unchanged LegacyGroupedM2 Full policy with qualified OptionalVocalM2 Full for one fresh B1 source and one shared 240-tick body-aged world. This estimates a full-policy contrast. Optional Vocal changes representative support and its RNG domain, so these are not same-draw vocal-only alternative futures or two independent animals. No inference of population benefit, ecological competence, learned silence or synaptic learning follows from one bounded pair. If neither eats, report no feeding. The former blank-world Full arm's 1,163 forced empty Vocal selections and aggregate failure/frustration 1 motivate the correction but are not this pair's baseline observations.
++
++The source has all 512 Rest-reader genes zero, pressure value coefficient zero and synaptic learning closed. Episodic storage/recall, predictor and physiology may change. No GDE1, GDS, meal-memory repair, boredom/Play appendage, reflex integration, pressure value, runtime cache, six-row repair, or new gene change is composed. The original method reference is https://rikiyat.github.io/blog/weight-space-programming/ (experiments 4/5/6). Creatures 3 / Docking Station are functional design references, not copied labels or empirical validation.
++
++## Fixed identities and calls
++
++- Authoritative reservation: /workspace/shared/m2-object-rich-optional-vocal-v1-seed-reservation.json.
++- Primary seed: 0x034F42564F430901, decimal 238482243738339585. Founder seed = seed*16+1 = 3815715899813433361, within u64. Common initial sampling seed = 1275874135, counter zero. Later policy-domain draws/counters remain their own, never resynchronized.
++- One source recipe and one prepared template; two fresh owners. Legacy first, optional second, serially. Full mode in both. Temperature 1.0, normal world timestep 1/20 second. Exactly 240 ordinary body-only preparation ticks once; no neural forwards during preparation. Maximum 64 subsequent intervals per arm, including sleeping/no-decision intervals: 368 primary world calls, at most 128 source forwards/bundles. No extension or replacement after outcomes.
++- Qualification uses existing fixed GRPHOST seed 0x03475250484F5354 only, with one fresh source/template, exactly 240 body-only ticks, four research-observed warm and four ordinary-entry-point genuine cold-continuation intervals per policy: maximum 16 native calls and 240 body ticks. A cold call is explicit disposable qualification, never primary replay. No synthetic speech, forced possession or direct action calls are part of this dose. Coverage that does not occur, including eating/sleep/waking, remains absent; inherited separate host qualifications are cited separately.
++- At every interval boundary stop before the next call for death, health <0.5, body energy <0.05, new positive injury or physical damage, non-finite values, contract failure, or resource guard. A new injury stops the affected arm after its already-executed boundary is retained. Keep unequal horizons and compare only the common observed prefix as well as full separate outcomes.
++- Attempt-before-call records are create-new and durable before each body or neural call. A known failure terminates/blocks that owner. Never rerun a consumed interval. An uncertain in-flight call is not retried: reconcile visible publication and retain uncertainty. No automatic resume, reseed, sweep, tuning, forced action, chemistry edit, adaptive respawn/reward, artificial hunger or immortality.
++
++## Exact ordinary scene
++
++Flat world, one registered learner at (0,0,0), body/head yaw zero, normal lifetime. Spawn order is learner, near-root, far-fruit, activity-toy, obstacle. Use standard HeadlessScenarioBuilder food constructors and the existing ordinary FoodVariety recipes; use standard stationary toy constructor. The obstacle is an ordinary obstacle object. No external teacher, peer, injected memories, forced initial grip, terrain or ecology renewal.
++
++- near-root: Food at (1.0,0,-0.5), ordinary builder radius 0.75; FoodVariety::Root, nutrition 0.65, hazard_pain 0, chemistry [0.8,0.25,0.35], normal root material/shape/color recipe. Initial center distance sqrt(1.25)=1.118034, less than EAT_RADIUS 1.25; not initially held or consumed. Actual Eat may first prepare/acquire and need a later choice to consume. Food is not a solid obstacle; the ordinary center-based carry/contact abstraction is retained, not silently replaced by non-overlapping sphere semantics.
++- far-fruit: Food at (2.75,0,1.75), ordinary builder radius 0.75; FoodVariety::Fruit, nutrition 0.45, hazard_pain 0, chemistry [0.85,0.65,0.8], normal fruit material/shape/color recipe. Initial center distance 3.259601 >1.25, requiring approach for manipulation.
++- activity-toy: stationary ActivityToy at (0.8,0,2.1), standard spawn_toy(false) radius 0.5, nutrition/hazard zero, ordinary toy chemistry [0,0,0], ordinary toy material/shape. Distance 2.247221 >1.25. A legal Play opportunity is not a qualified boredom-driven optional-Play circuit or guaranteed play.
++- obstacle: Obstacle at (1.8,0,0.65), radius 0.35, nutrition/hazard zero and its ordinary deterministic physical properties. Its center is 0.417996 from the origin-to-fruit center segment (static arithmetic must verify actual value); sight and body-clearance use different bounds. It can constrain a straight body path toward the fruit while leaving the near food's actor-target and target-grip segments clear. No claim of pathfinding success is prespecified.
++
++Before any primary dispatch, native fixture and the actual shared prepared template must report exact object IDs, positions/radii/properties, actual world locomotion collision radius and registered manipulation effector gain, zero initial possession, solid-segment distances, source profile5 sensing and authoritative candidates. No speculative heldness sensor: possession is world state and receipt evidence only. Four non-agent objects fit all four object candidate slots: three intrinsic + four*6 object rows + three channel no-ops + AwakeRest =31 <=32; grounded slot capacity is16. Require all four distinct target IDs and near-root Eat/Grab, fruit Approach and toy Play in the actual initial candidate set, with canonical Idle and both recovery operations. Candidate existence is not execution success. Check actual count, no truncation, actual gaze/occlusion and body/obstacle clearance, and unblocked near-root/grip segments. Failure stops before primary neural dispatch; do not move objects or select another source to make the scene pass. Report the failure as preparation/fixture failure.
++
++## Source and admission
++
++Exact code baseline fbf2a517f93098b5d936878a3d26bbb8d0391c38, tree020d7a4b036d0309a4ffdd762536c36e945f7496. Apply only qualified optional-Vocal nine-file source closure19be3cc2612f110b564699ad2d566219b51d411fb57c3cc8af1bc9ced194dc7e, patchdc851232abeb8a655cba7fbf6089389dc51dd0e2717d199e8d15e269d123c49e. The separate qualification instrumentation patch is not production code. Verify source/input file hashes rather than assuming current main or a parent working tree is identical.
++
++Reuse the B1+bounded-reader+four-head+awake-rest+new-timer source recipe unchanged from durable driver7f905465b79291fd52d1fd65568a9d10e716576a. Before the first preparation tick, construct once and durably bind full genotype, expressed chemistry, phenotype, address map, founder asset/optimizer, source inputs, all source/gene recipe digests, actual timer/reference bits, source closure, toolchain, build closure, executable, policy IDs, scene, reservation and protocol. No existing acquired state is an input.
++
++Admit both policies via their real newborn-first new_prepared APIs. The legacy closure executes 240 ordinary ticks once, capturing the newly prepared world. The optional closure installs that same owned pre-neural template and does zero additional ticks. Initial states must have zero dispatch history, no pending outcomes, zero fast/lifetime/eligibility and identical legitimate body, scene, world clock/RNG, source and founder/optimizer projections. Their outer bytes intentionally differ. Validate both typed envelopes separately; compare complete raw-byte subtrees, allowing only verified exact outer policy/lineage, canonical/neural schema markers, the optional owner's fresh marker, and the policy-derived authority digest. Do not drop whole controllers, canonical state, RNG or neural banks. Persist both initial bytes and their exact projection hashes, not a fabricated shared whole-envelope hash.
++
++Every committed boundary repeats complete closed-source/genotype/founder optimizer/weight/moment/integer-age/fast/lifetime/eligibility/dendrite/structural checks with unchanged cadence. Dynamic activations, metabolism, ordinary memory and predictor are not immutable banks.
++
++## Measurements and interpretation
++
++Per interval preserve full native state plus original scientific rows atomically in one framed packet. No-decision intervals remain observations. Include actual before/after body energy, health, injury, hunger, fatigue, sleep pressure, ATP, all sealed outcome physiology, cognitive debit, actual recovery phase/dose/cycle and source execution count/work. Separate Q24 work from ATP chemistry and body energy debit.
++
++Preserve complete candidates, exact representative/channel/conditional-operation distributions and joint log probability from each correct policy. Optional rows include source-current zero/nonzero speech-payload readiness, selected Quiet/Vocal, true utterances and exact optional scores. Same-context native legacy probabilities on an optional row are a bounded local diagnostic only, not another lived future; do not execute alternative actions or invent present-payload words. Legacy rows do not infer payload absence solely from silence.
++
++Preserve selected/attempted action targets and channels, actual physical channel outcomes, ActionPhase and Acquired/Placed/Released/Consumed transfers where authoritative receipts expose them; supplement with world object positions, owners and consumption transitions without pretending these substitute for unavailable phase receipts. State any receipt coverage gap explicitly. An absent channel observation is unknown, not execution=false. Track target approach, reach and contact, current held objects, real nutrition and feeding-driven hunger/energy changes separately from aggregate changes and work debit. Count success and frustration across all selected channels.
++
++Report actual episodic memory size, write/merge/eviction coverage, record family/target, valence and retained/recalled exact Ingest-consumption provenance. The current one-representative writer can miss target-specific Ingest episodes when a different representative's bundle eats. Do not call all physical meals remembered, and do not call episodic updates neural learning. Keep initial and terminal closure hashes and terminal reason. No favorable-window selection or inferential p-value from one pair.
++
++## Durable transport and fixed qualification
++
++Version a narrow copy of the durable driver and opaque journal helper; do not edit the frozen old driver. Preserve create-new activation/root ownership, preparation source binding before biology, sync-before-publication, complete checkpoint+science packets, exact source/executable binding, raw float bytes and complete per-interval closure validation. Attempt records precede native calls. The atomic hard-link temporary aliases stay, counted twice for logical journal guards and once by inode for physical allocation. Do not delete failed artifacts or test temporary directories. A copied root cannot authorize replay. Post-run audits are zero-forward and may read only this task's own new state.
++
++Pure driver/journal tests cover seed arithmetic, policy/projection discrimination, create-new root ownership, attempted-call counting, source-publication order, packet tamper/truncation/duplicate/publication failures and resource bounds. They create zero organisms and execute zero world calls. Native fixed qualification compares every warm research-observed and genuine cold ordinary-entry-point boundary of four intervals per policy, every original step field and full raw checkpoint bytes. Observer-only science is retained separately and checked against the already-produced authoritative transaction receipts, never inferred from final possession. It also checks, closed-bank sentinels, policy/load isolation and actual scene/candidate conditions. No extra native call to force an event. If a check fails, retain the failure and stop; fixes need a new explicit qualification dose and resource reconciliation before any rerun.
++
++## Build and resource proposal
++
++Source/report preparation <=8MiB. Read-only verified dependencies from recovery-sleep-durable-target-v3; official Rust1.99.1 from recovered-toolchain-rust-1.99.1-reset2. Direct rustc only, dev0, one codegen unit, no debug info, incremental off, serial root library/driver/test builds. No Cargo/dependency rebuild or protected target writes. Compilation starts only in the coordinator's released native window. Native libraries and full visible link-search artifacts are hashed read-only. No use or assumption of the separately qualified compiler-output cache.
++
++Proposed cumulative directory-inclusive allocation is1,073,741,824B (1GiB), with all successful, failed and partial outputs retained. 5,242,880B is a whole framed checkpoint+science packet cap, not a checkpoint-only budget. Primary maximum128 packets +2 initial checkpoints uses681,574,400B (650MiB); no persistent extra template copy. Fixed qualification max16 packets +2 initial states uses94,371,840B (90MiB), with additional qualification metadata in theshared metadata allowance. Source8MiB, retained root/library/test executables160MiB, qualification90MiB, primary650MiB, logs/manifests/attempts24MiB, scientific exports52MiB and unused/failure contingency40MiB total1GiB. Compiler temporary peak144MiB exists only in the serial pre-primary build phase (maximum380MiB phase budget including retained outputs, source, metadata and contingency). It still counts toward the same1GiB physical allocation at every moment. Any leftover partial compiler output remains charged as retained build output; no deletion is assumed or permitted. Build ceilings include retained failed binaries; a failure is not permission to exceed allocation or delete prior output.
++
++Per arm conservatively charge retained aliases against650MiB logical journal ceiling, and cap aggregate science at20MiB (two full exports plus two5MiB final states fit52MiB). Before every stage/next interval, require the remaining admitted allocation and its full next-stage growth to fit above existing233,175,552B paired-export/control reserve +4,294,967,296B free floor +226,492,416B independent recovery-reflex fixture allocation; the completed cache qualifier's retained103MB is already charged in measured free space. Do not infer release of those reservations from idle processes. Monitor directory blocks and inode-deduplicated physical allocation, free disk, child process RSS and available memory. Compiler forecast <=1.8GiB RSS, stage timeout600s; primary per-arm timeout1800s, with interrupted unknown work retained and no extension. These are monitored bounds, not filesystem quotas. Before activation, measured complete fixed-fixture packet maxima plus262,144B margin plus max(1MiB,64 times maximum observed positive per-interval packet growth) must fit5MiB and all1GiB component budgets; otherwise stop before primary source construction. No lower measurement cadence or output stripping to make it fit.
++
++## Publication
++
++This owner performs no external publication/activation yet. Parent receives source-only plan and concrete local evidence. Private state, journals, checkpoints, learned banks, executable and input payloads are never uploaded. Later reviewed summaries and source-only patches may be published under the existing project authorization. Report source-only static checks as static, compiled checks as compiled, qualification as its own dose, and primary results only after they exist.
+--- /dev/null
++++ b/RUNTIME-SOURCE.json
+@@ -0,0 +1,444 @@
++{
++  "base_commit": "fbf2a517f93098b5d936878a3d26bbb8d0391c38",
++  "qualified_optional_patch_sha256": "dc851232abeb8a655cba7fbf6089389dc51dd0e2717d199e8d15e269d123c49e",
++  "passive_wrapper_only_additional_runtime_change": true,
++  "cache_composed": false,
++  "files": [
++    {
++      "path": "crates/alife_training/shaders/critic_residual.wgsl",
++      "sha256": "5c9dce3fb14e7599fc18c5d8ee011055a2c033936df56405be27553422eceb4c",
++      "bytes": 2918
++    },
++    {
++      "path": "crates/alife_training/shaders/foundation_ppo.wgsl",
++      "sha256": "d3f7c6d819e42c6d42cc789b2adee8370736cc2831aa077b10124ab52b2134e5",
++      "bytes": 16277
++    },
++    {
++      "path": "crates/alife_training/shaders/foundation_train.wgsl",
++      "sha256": "7fe3c0291d972077018e10c44a0cb6b89c0a19d8aca0de6c314f4420bcbb7ee9",
++      "bytes": 31654
++    },
++    {
++      "path": "crates/alife_training/shaders/founder_readout.wgsl",
++      "sha256": "6015a1bba6fbb59bff7574e6b36ce12f18c05e13b960ed187f99a545a44a0068",
++      "bytes": 1773
++    },
++    {
++      "path": "crates/alife_training/src/backend_handoff.rs",
++      "sha256": "80147760064ddcf85d8a00d0e4ee27b430f6382dd4c95e72eb8b608876dac9e4",
++      "bytes": 20806
++    },
++    {
++      "path": "crates/alife_training/src/bin/experiment_connection_budget.rs",
++      "sha256": "a52d146d7871959e3758f18bbbd98224f8de82c04752947d9a18082fec467ee3",
++      "bytes": 1943
++    },
++    {
++      "path": "crates/alife_training/src/bin/merge_founder_inference.rs",
++      "sha256": "45ea38ef8d042fc193d66e5d5d1aac358cbf5e4c565593e79d1743b30827d807",
++      "bytes": 18611
++    },
++    {
++      "path": "crates/alife_training/src/bin/train_cpu_foundation.rs",
++      "sha256": "e6042f7dd8926e832ce87e8fd412c037381d61d1b83120edd372bca6dcfcadc2",
++      "bytes": 3866
++    },
++    {
++      "path": "crates/alife_training/src/connection_budget_experiment.rs",
++      "sha256": "05e49e01bbf53733a92898125cead430d0e2f69100e1eea34b751a403cdf358a",
++      "bytes": 23742
++    },
++    {
++      "path": "crates/alife_training/src/cpu/activity.rs",
++      "sha256": "6102c76bbad0659d12e7ff5f87f20060fcd59690e8d7005cba6a867baadc52f6",
++      "bytes": 4293
++    },
++    {
++      "path": "crates/alife_training/src/cpu/cohort.rs",
++      "sha256": "5465e094eac9555d1a9e599f176ea0e097215d55f439fad7a9ea1cceb52a673f",
++      "bytes": 17878
++    },
++    {
++      "path": "crates/alife_training/src/cpu/collector_output.rs",
++      "sha256": "4287197b87fac6be87f3e02a66f1a4341cfab8c9bf2f30d414ec81346dfcc9ea",
++      "bytes": 28245
++    },
++    {
++      "path": "crates/alife_training/src/cpu/collector_shard.rs",
++      "sha256": "29484fd97dd18b097825fbd682488704ace1fc9a5f34f7a449258b19d3b22537",
++      "bytes": 16705
++    },
++    {
++      "path": "crates/alife_training/src/cpu/continuation.rs",
++      "sha256": "1867e1bddf9e0a3385c92d8b7055160fffeb6f7544a1580b8b0265019e65d8b1",
++      "bytes": 43783
++    },
++    {
++      "path": "crates/alife_training/src/cpu/cooperative_round.rs",
++      "sha256": "71e1a7d36df36084a5ca6c9ed1cdbdc2c3dca384a2ad756f0a77520e818b2650",
++      "bytes": 22684
++    },
++    {
++      "path": "crates/alife_training/src/cpu/cooperative_source.rs",
++      "sha256": "30c9a47045dd9d1100993bf552bb332fdd90c4b88d5e09927f36c7fcddeca131",
++      "bytes": 28087
++    },
++    {
++      "path": "crates/alife_training/src/cpu/fresh_founder.rs",
++      "sha256": "f207b1d5f1f0aab0393eca656914ab76ab200cd2425733db6a7b766659142db1",
++      "bytes": 9462
++    },
++    {
++      "path": "crates/alife_training/src/cpu/grouped_host_envelope.rs",
++      "sha256": "923bb595549d60673c865f2b3371617d3819122b36090512b3528d09be6e81e6",
++      "bytes": 34710
++    },
++    {
++      "path": "crates/alife_training/src/cpu/grouped_host_fixture.rs",
++      "sha256": "9852c275e33ebd10749958c9f7c515546be8514229d9602682dcfe36a5a75053",
++      "bytes": 8555
++    },
++    {
++      "path": "crates/alife_training/src/cpu/grouped_host_food_tests.rs",
++      "sha256": "f1ef509ab2db06c4895e8f45659ee55db4e272e3dd3080c01d2295393af9d598",
++      "bytes": 15335
++    },
++    {
++      "path": "crates/alife_training/src/cpu/grouped_host_loop.rs",
++      "sha256": "8d65d82d8a0f4d5edeb4ea35891b769394620745e49aedaa2af3969d85a602f4",
++      "bytes": 40171
++    },
++    {
++      "path": "crates/alife_training/src/cpu/grouped_host_tests.rs",
++      "sha256": "310d4b6e88e3668c5cf4b04a8cc0dcd471cdd4e155e493d0ceaa9c76ada28f9f",
++      "bytes": 26895
++    },
++    {
++      "path": "crates/alife_training/src/cpu/host/bounded_founder_tests.rs",
++      "sha256": "3adba4a2e6fe329d2918a3d185e8a4489e0e312fe59c1ae9cac0b2f38703cfc3",
++      "bytes": 4274
++    },
++    {
++      "path": "crates/alife_training/src/cpu/host.rs",
++      "sha256": "51658f2de3b646f3fb470ce23a4776f79cb5a549e5c91242d5722d8aa46e3380",
++      "bytes": 91157
++    },
++    {
++      "path": "crates/alife_training/src/cpu/hotpath_bench.rs",
++      "sha256": "54adcf1bc2515e0e976cc664e4fd614ee7c0c37afba3547e5ed42150f2fe3571",
++      "bytes": 15799
++    },
++    {
++      "path": "crates/alife_training/src/cpu/input.rs",
++      "sha256": "df95fd3c93f1adb4345cff079c88cff093244275fc01f7d203847f0452960a6e",
++      "bytes": 16057
++    },
++    {
++      "path": "crates/alife_training/src/cpu/mod.rs",
++      "sha256": "48b84489a1a1fe5104bb9f5d424bdb84416177cc18ae799c905e336b340b3619",
++      "bytes": 15795
++    },
++    {
++      "path": "crates/alife_training/src/cpu/motor_host.rs",
++      "sha256": "c3babf3600b2e4a70ccffdb53ab1de9a0309a519926f12cc7d79cfbfd811600e",
++      "bytes": 14395
++    },
++    {
++      "path": "crates/alife_training/src/cpu/motor_host_envelope.rs",
++      "sha256": "4f597a4c73693b9e9faf36d78dcc144a656c7020531d27e0859ab1e2af858805",
++      "bytes": 7113
++    },
++    {
++      "path": "crates/alife_training/src/cpu/motor_lobe/tests.rs",
++      "sha256": "00eb86faebf866e3cccf97fbad480d6894ddd29bac49ba9cd98903d0f8f29711",
++      "bytes": 15020
++    },
++    {
++      "path": "crates/alife_training/src/cpu/motor_lobe.rs",
++      "sha256": "d988d0708ac13069bd985d6b512035075ebe4265efe353157e3b078690e4efea",
++      "bytes": 9936
++    },
++    {
++      "path": "crates/alife_training/src/cpu/motor_mediation/confidence/host/tests.rs",
++      "sha256": "e8b26ba8b310eb327250a64188becebfc152cce2fc6e9512466894439635c791",
++      "bytes": 11064
++    },
++    {
++      "path": "crates/alife_training/src/cpu/motor_mediation/confidence/host.rs",
++      "sha256": "7f5cdf9120370298da1fa71c0c5422d354d1ff79f3d6709fe6d42b92c822120e",
++      "bytes": 17373
++    },
++    {
++      "path": "crates/alife_training/src/cpu/motor_mediation/confidence/policy/optional_vocal/tests.rs",
++      "sha256": "6328b054f71280a067151cefddffdc97edabbd54703ced1a383f63d93f9ff97f",
++      "bytes": 14140
++    },
++    {
++      "path": "crates/alife_training/src/cpu/motor_mediation/confidence/policy/optional_vocal.rs",
++      "sha256": "a8f72e4c1d01dce4f3e0f97ad01d346731125c93d40965e4a35a99d992d86d13",
++      "bytes": 25481
++    },
++    {
++      "path": "crates/alife_training/src/cpu/motor_mediation/confidence/policy.rs",
++      "sha256": "6f86942ab7ded73dcd07f47d3be223e826bd2d8dfb35893bdfa92b754d88d56e",
++      "bytes": 25064
++    },
++    {
++      "path": "crates/alife_training/src/cpu/motor_mediation/confidence/tests.rs",
++      "sha256": "004c05db9bd429e516af0a419163570efbf6a4c1d7ae5af4552416b8fb18098f",
++      "bytes": 38650
++    },
++    {
++      "path": "crates/alife_training/src/cpu/motor_mediation/confidence.rs",
++      "sha256": "f0466c35b37eceeebf51d15991b695490c8170371c58d3b30b27e72ecc7126e3",
++      "bytes": 21089
++    },
++    {
++      "path": "crates/alife_training/src/cpu/motor_mediation/grouped/policy.rs",
++      "sha256": "139502ce4e26e9df9537a36b48d9d53e399fba4f99b627ddbd21bcd2583900fc",
++      "bytes": 22940
++    },
++    {
++      "path": "crates/alife_training/src/cpu/motor_mediation/grouped/tests.rs",
++      "sha256": "7049c5fc6230135d7ed6a1e69997d5e80d960a0557e80281fcce386bf487878d",
++      "bytes": 28427
++    },
++    {
++      "path": "crates/alife_training/src/cpu/motor_mediation/grouped.rs",
++      "sha256": "e47a1ac6d3a7e03127b12daca120841807c49e503a102e30c92f475df93389ce",
++      "bytes": 19784
++    },
++    {
++      "path": "crates/alife_training/src/cpu/motor_mediation/tests.rs",
++      "sha256": "df103a03a793582369590f30f1202bb1520956ca4f0e074f25cb51491ba35934",
++      "bytes": 30706
++    },
++    {
++      "path": "crates/alife_training/src/cpu/motor_mediation.rs",
++      "sha256": "e0f63b89d13d4f6b9f1629b4e55b476af30951eb211bd6ad2e3193d4929dea1c",
++      "bytes": 32458
++    },
++    {
++      "path": "crates/alife_training/src/cpu/native_kernel.rs",
++      "sha256": "2e389fede80f2add63536cd40b9ec54aef9a3145061ca4032aa60c3acb9afdef",
++      "bytes": 1845
++    },
++    {
++      "path": "crates/alife_training/src/cpu/objective.rs",
++      "sha256": "efb4dc0c8fa8827fca186dca9a46880146fe26f03ed8d45e733ecb3f2f71aef7",
++      "bytes": 22305
++    },
++    {
++      "path": "crates/alife_training/src/cpu/optional_vocal_host.rs",
++      "sha256": "583b3d1c3b95ada238045f2279e39c398ca2d29f9b3ff98857a7bfa06e6b2fa3",
++      "bytes": 16781
++    },
++    {
++      "path": "crates/alife_training/src/cpu/optional_vocal_host_tests.rs",
++      "sha256": "df00d3ec681027490fb9a390fe9dc56913cb0c50250cbd4814892d449d12b8b0",
++      "bytes": 16554
++    },
++    {
++      "path": "crates/alife_training/src/cpu/organism.rs",
++      "sha256": "0c8fad9ff7ec1a0260e9584ba6039b1d7887cbf693bf6128b060c1dfd4df3e55",
++      "bytes": 54848
++    },
++    {
++      "path": "crates/alife_training/src/cpu/private_checkpoint.rs",
++      "sha256": "db2afd6a1821b1367f48cc831f9a62b5be9589b8fedeceb759fa4fb9edeb9972",
++      "bytes": 15445
++    },
++    {
++      "path": "crates/alife_training/src/cpu/replay/cadence_assay.rs",
++      "sha256": "a5bbc155b6676f4d010439693f64d2876db8f9d4ffaf22cddf9fac3487fa5c25",
++      "bytes": 11550
++    },
++    {
++      "path": "crates/alife_training/src/cpu/replay/cadence_rows.rs",
++      "sha256": "7fec2d8d2825f9e77074efa872a5c5f1db11ffa0758db932e9f37fd1a9a57631",
++      "bytes": 1383
++    },
++    {
++      "path": "crates/alife_training/src/cpu/replay.rs",
++      "sha256": "5a9ab34d2b763f5b6924fddbe29770f10697da6866c2ca572f1e43f871d800e9",
++      "bytes": 24671
++    },
++    {
++      "path": "crates/alife_training/src/cpu/round_output.rs",
++      "sha256": "d65501c2d895d1348076be292876cef416ac57ef08bd85d9f2d592f52b280850",
++      "bytes": 16331
++    },
++    {
++      "path": "crates/alife_training/src/cpu/sleep_choice_envelope.rs",
++      "sha256": "d63890fa02d2475f36269e75b1cdd538967450b96b2d8bda9440bd720265e4f4",
++      "bytes": 18126
++    },
++    {
++      "path": "crates/alife_training/src/cpu/sleep_choice_host_tests.rs",
++      "sha256": "3f31f8d5e18e90821382d2e1ec6b3e5a08b58c3af1ec8ea5d76baafab220e50f",
++      "bytes": 45721
++    },
++    {
++      "path": "crates/alife_training/src/cpu/sleep_choice_motor.rs",
++      "sha256": "e1a832e7e45a947fd96e6a1c4852c34f5aa6a8ea32cb64a53fd6ad5d96beda97",
++      "bytes": 14637
++    },
++    {
++      "path": "crates/alife_training/src/cpu/sleep_choice_replay.rs",
++      "sha256": "9d5f4ee32bff154c617983f4127f9daba70273eb596709b7202377333f422b12",
++      "bytes": 11341
++    },
++    {
++      "path": "crates/alife_training/src/current_checkpoint/new_life.rs",
++      "sha256": "9684430fc1f93a103f823169ab7e57ee5189e79877e0d77cb85aabff5b126c31",
++      "bytes": 18239
++    },
++    {
++      "path": "crates/alife_training/src/current_checkpoint/same_individual/progress.rs",
++      "sha256": "8abe6bbfef717b2b55ad3a8d93a2af6900dd3c8c4cfcdbb90085d78831f2f05f",
++      "bytes": 2324
++    },
++    {
++      "path": "crates/alife_training/src/current_checkpoint/same_individual.rs",
++      "sha256": "284ca72452fc9999ca1a564baf34e0a8555e462da40d6a28466d1cdf35bc8741",
++      "bytes": 34221
++    },
++    {
++      "path": "crates/alife_training/src/current_checkpoint/terminal.rs",
++      "sha256": "ffc39490c072cd1afc94353d2c9eca6fb0dc23908e5d8f185317ad06d68ace1c",
++      "bytes": 5354
++    },
++    {
++      "path": "crates/alife_training/src/current_checkpoint/training_attempt.rs",
++      "sha256": "a07d84ce9054ecc4a836c75a46ed385c43b241071f55c2b6e5cd471687943a7e",
++      "bytes": 13897
++    },
++    {
++      "path": "crates/alife_training/src/current_checkpoint.rs",
++      "sha256": "b5eab586eb656e8f50083ff45feef8c74020f629f358ff4e65338b7cafca2c9e",
++      "bytes": 9395
++    },
++    {
++      "path": "crates/alife_training/src/founder_demonstrations.rs",
++      "sha256": "6f20371dfc74a1790ad57bc24da6638d5ffcc4239bb7283d4da08d5aeac2f8d7",
++      "bytes": 7335
++    },
++    {
++      "path": "crates/alife_training/src/founder_merge.rs",
++      "sha256": "207217698a899c84f9bbc12729e05c97ab02b6eb4c1e1dbff88a7858e678d0e2",
++      "bytes": 12796
++    },
++    {
++      "path": "crates/alife_training/src/founder_readout.rs",
++      "sha256": "f9e519fa7d6c541d94b6bd9b053bde4b2061cf106b69e77ddc00c0d84b856d0a",
++      "bytes": 15157
++    },
++    {
++      "path": "crates/alife_training/src/grounded_drive_transfer.rs",
++      "sha256": "3a7d437d8e3091d6f983bf294a4c10189c678e93262b915220f3bc01fa36d203",
++      "bytes": 9046
++    },
++    {
++      "path": "crates/alife_training/src/lib.rs",
++      "sha256": "7132afce321e5147e61f9e2db77c03473dd020dffc80eafdae8d4a960a07aa6d",
++      "bytes": 1222
++    },
++    {
++      "path": "crates/alife_training/src/native_receipt/packs.rs",
++      "sha256": "f172c3a7782c055dc1e95f03ecdb7ae798a3adc98b57d8d5d6f2011c3ab83751",
++      "bytes": 24346
++    },
++    {
++      "path": "crates/alife_training/src/native_receipt.rs",
++      "sha256": "7130f177ae538ce51ef9f792e41aa91fecad0f199e15ef9a88a87a5d45315b87",
++      "bytes": 43776
++    },
++    {
++      "path": "crates/alife_training/src/ppo/batch_update_tests.rs",
++      "sha256": "a6b4d1e31b133ce9d1b09ac8507f1666723cc0e1e28d39fac1fff3f0bf917456",
++      "bytes": 8272
++    },
++    {
++      "path": "crates/alife_training/src/ppo/critic_calibration/gpu_tests.rs",
++      "sha256": "59caab7b897db37bcb5f6adb040a715c7c330e9c1c3e823a15b09e04b416d48a",
++      "bytes": 5785
++    },
++    {
++      "path": "crates/alife_training/src/ppo/critic_calibration.rs",
++      "sha256": "7f27f48ec3ad4649b875ca5ad62d15cd7bce239092f67388724020f31db19ab1",
++      "bytes": 17302
++    },
++    {
++      "path": "crates/alife_training/src/ppo.rs",
++      "sha256": "c6c6ff34ecc25a2d40641b96dce4656852a9cf20bc21eecb458e5aeaf243a5f8",
++      "bytes": 77486
++    },
++    {
++      "path": "crates/alife_training/src/rehearsal.rs",
++      "sha256": "d9dea1c17b3275a5527f275d2567a4a00733143d26b1b8f678c1b6960642796c",
++      "bytes": 22229
++    },
++    {
++      "path": "crates/alife_training/src/trainer/checkpoint_readback/tests.rs",
++      "sha256": "85436df41f6f21292bab41deedbabd14a3dbd181275277a1cda01dac653a598a",
++      "bytes": 7001
++    },
++    {
++      "path": "crates/alife_training/src/trainer/checkpoint_readback.rs",
++      "sha256": "d7b021c87714d7cbd1ae20a07d064cef6f3c392b16167cf7358ca889ed3576ef",
++      "bytes": 3012
++    },
++    {
++      "path": "crates/alife_training/src/trainer/dynamic_dispatch_tests.rs",
++      "sha256": "b7968fa1e672dd47b504b81ff3f329a80d6c402777e6f0edd4b35333b355bae2",
++      "bytes": 21997
++    },
++    {
++      "path": "crates/alife_training/src/trainer/packed_checkpoint_gpu_tests.rs",
++      "sha256": "dfcf32143fcc8d9d9eab0b03f019d57581bdf20ebe8aa947982420f66333874f",
++      "bytes": 11644
++    },
++    {
++      "path": "crates/alife_training/src/trainer/replay_packing_assay.rs",
++      "sha256": "1dfe0f567b2e3fb4b000703141dff4d089da307b1f5fe1491f758bb5f34cb5e8",
++      "bytes": 13022
++    },
++    {
++      "path": "crates/alife_training/src/trainer/replay_packing_memory.rs",
++      "sha256": "5c816f5433365a5774035443d61615900a3e0b368e5d8ce1945541660350b8e2",
++      "bytes": 7649
++    },
++    {
++      "path": "crates/alife_training/src/trainer/replay_packing_tests.rs",
++      "sha256": "efbb48347af26d6522e4c12c8e455d47716f5ab1fb11c6e562bc8eace4879aa3",
++      "bytes": 9592
++    },
++    {
++      "path": "crates/alife_training/src/trainer.rs",
++      "sha256": "7e7f94aba2e510992afef8284be4c5e943684850e2cef6d39faefadea985b6dc",
++      "bytes": 115771
++    },
++    {
++      "path": "crates/alife_training/src/types.rs",
++      "sha256": "084740de68e72c9dab7b8bc1c0da4c11d26a403627d14a5ffd4ca7e536de85af",
++      "bytes": 28630
++    },
++    {
++      "path": "docs/experiments/motor-mediation-m2-design-v1/recipe.json",
++      "sha256": "285841b7e9a6d26c60142b6e2dd25f04a0bef0bec943c6203834155e89af0278",
++      "bytes": 272049
++    },
++    {
++      "path": "docs/experiments/recovery-group-arbitration-v1/recipe.json",
++      "sha256": "df6ca716a24f8f8793e542cea35612771e90e463e1d21304e7812ad1c9d267ad",
++      "bytes": 6145
++    },
++    {
++      "path": "docs/experiments/recovery-group-confidence-v2/recipe.json",
++      "sha256": "eecb44a40ac6bbb7c3e742f10ec749668245c11f089b48cf257aeb4749dd4dff",
++      "bytes": 6546
++    }
++  ],
++  "closure": "449c29cec8eb4e60d0927d5634f60721d5b036aa31b61ddd7da1cb732204cee9"
++}
+--- /dev/null
++++ b/crates/alife_training/examples/probe_grouped_m2_durable_v1.rs
+@@ -0,0 +1,1509 @@
++//! Explicit fresh CPU experiment. No old-life import, automatic retry or upload.
++#[path = "support/grouped_m2_journal_v1.rs"]
++mod journal;
++#[path = "support/grouped_m2_qualification_v1.rs"]
++mod qualification;
++#[path = "support/grouped_m2_raw_v1.rs"]
++mod raw;
++#[allow(dead_code)]
++#[path = "support/recovery_sleep_recipe_v1.rs"]
++mod recipe;
++use alife_core::*;
++use alife_training::{cpu::*, AdamWConfig, StageTrainableMask};
++use alife_world::*;
++use serde::{Deserialize, Serialize};
++use serde_json::{json, Value};
++use sha2::{Digest, Sha256};
++use std::{
++    collections::BTreeMap,
++    fs,
++    path::{Path, PathBuf},
++};
++type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
++const STUDY: &str = "grouped-m2-fresh-world-pair-v1-attempt2";
++const RESERVATION_PATH: &str =
++    "/workspace/shared/grouped-m2-fresh-world-pair-v1-attempt2-seed-reservation.json";
++// Pure source/admission preflight: no genome, host, world, body or sampler is constructed.
++fn seed_admission_preflight(seed: u64, founder_count: u16) -> Result<u64> {
++    CanonicalNewGameConfig::phase3(seed, founder_count)
++        .map_err(|e| format!("pre-claim seed/config admission: {e}"))?;
++    seed.checked_mul(16)
++        .and_then(|base| base.checked_add(u64::from(founder_count)))
++        .ok_or_else(|| format!(
++            "pre-claim seed-domain overflow: seed {seed:#018x}, founder_count {founder_count}, maximum seed {:#018x}",
++            (u64::MAX - u64::from(founder_count)) / 16
++        ).into())
++}
++fn canonical_reservation(path: &Path) -> Result<()> {
++    if path.canonicalize()? != Path::new(RESERVATION_PATH)
++        || fs::symlink_metadata(path)?.file_type().is_symlink()
++    {
++        return Err("not the authoritative primary reservation path".into());
++    }
++    Ok(())
++}
++const ACTIVATION_PATH: &str =
++    "/workspace/shared/grouped-m2-fresh-world-pair-v1-attempt2-seed-reservation.json.activation.json";
++#[derive(Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++struct ActivationClaim {
++    schema: String,
++    study: String,
++    root: PathBuf,
++    freeze_sha256: String,
++    reservation_sha256: String,
++    claim_implies_preparation_attempt: bool,
++    claim_implies_world_step: bool,
++}
++fn validate_activation(
++    claim: &ActivationClaim,
++    root: &Path,
++    freeze_sha256: &str,
++    reservation_sha256: &str,
++) -> Result<()> {
++    if claim.schema != "grouped-m2-preparation-claim-v1"
++        || claim.study != STUDY
++        || claim.root != root.canonicalize()?
++        || claim.freeze_sha256 != freeze_sha256
++        || claim.reservation_sha256 != reservation_sha256
++        || !claim.claim_implies_preparation_attempt
++        || claim.claim_implies_world_step
++    {
++        return Err("authoritative activation root or identity differs".into());
++    }
++    Ok(())
++}
++const SEED: u64 = 0x034D_3242_4C00_0901;
++const FIXTURE_SEED: u64 = 0x0347_5250_484F_5354; // existing qualified host unit fixture
++const PREPARATION: u64 = 240;
++const HORIZON: u64 = 1200;
++const TEMPERATURE: f32 = 1.;
++const HOST_COMMIT: &str = "32e109372be39a19cabf7d9fc7cbcd9ca7c91c19";
++const HOST_TREE: &str = "b8089fc1ee4517cc6815eabbfab89da494152189";
++const DRIVER_COMMIT: &str = match option_env!("ALIFE_GROUPED_M2_DRIVER_SOURCE_COMMIT") {
++    Some(s) => s,
++    None => "unqualified-development-build",
++};
++const PROTOCOL: &[u8] =
++    include_bytes!("../../../docs/experiments/grouped-m2-durable-pair-v1/PROTOCOL.md");
++fn hash(bytes: &[u8]) -> String {
++    format!("{:x}", Sha256::digest(bytes))
++}
++fn code_hash() -> String {
++    let mut h = Sha256::new();
++    for bytes in [
++        include_bytes!("probe_grouped_m2_durable_v1.rs").as_slice(),
++        include_bytes!("support/grouped_m2_journal_v1.rs").as_slice(),
++        include_bytes!("support/grouped_m2_raw_v1.rs").as_slice(),
++        include_bytes!("support/grouped_m2_qualification_v1.rs").as_slice(),
++        include_bytes!("support/recovery_sleep_recipe_v1.rs").as_slice(),
++        include_bytes!("support/grounded_r0_dedicated_fatigue.rs").as_slice(),
++        include_bytes!("support/multidrive_frozen.rs").as_slice(),
++        include_bytes!("support/grounded_r0_motor_operating_point.rs").as_slice(),
++        PROTOCOL,
++    ] {
++        h.update((bytes.len() as u64).to_le_bytes());
++        h.update(bytes);
++    }
++    format!("{:x}", h.finalize())
++}
++fn executable_hash() -> Result<String> {
++    Ok(hash(&journal::bounded_read(
++        &std::env::current_exe()?,
++        512 * 1024 * 1024,
++    )?))
++}
++fn sampling_seed(seed: u64) -> u32 {
++    (seed ^ (seed >> 32)) as u32
++}
++fn mode(arm: usize) -> Result<MediationModeV1> {
++    match arm {
++        0 => Ok(MediationModeV1::Full),
++        1 => Ok(MediationModeV1::DriveSham),
++        _ => Err("only the two declared arms exist".into()),
++    }
++}
++fn mode_name(arm: usize) -> Result<&'static str> {
++    Ok(match mode(arm)? {
++        MediationModeV1::Full => "Full",
++        MediationModeV1::DriveSham => "DriveSham",
++        _ => unreachable!(),
++    })
++}
++fn cp(host: &CpuGroupedM2HostV1) -> Result<Vec<u8>> {
++    Ok(host.checkpoint()?.encode()?)
++}
++fn write_new<T: Serialize>(dir: &Path, name: &str, value: &T) -> Result<()> {
++    journal::publish_artifact(dir, name, &serde_json::to_vec(value)?, journal::MAX_PACKET)
++}
++fn read_typed<T: serde::de::DeserializeOwned>(path: &Path, max: u64) -> Result<(T, Vec<u8>)> {
++    let bytes = journal::bounded_read(path, max)?;
++    Ok((serde_json::from_slice(&bytes)?, bytes))
++}
++fn closure_hash(cp: &[u8]) -> Result<String> {
++    Ok(hash(&serde_json::to_vec(&raw::closure(cp)?)?))
++}
++fn validate_cp(bytes: &[u8], tick: u64, expected_closure: &str) -> Result<()> {
++    let typed = CpuGroupedM2HostCheckpointV1::decode(bytes)?;
++    if typed.encode()? != bytes {
++        return Err("native M2 byte roundtrip differs".into());
++    }
++    if raw::payload(bytes)?
++        .path(&["canonical", "world", "world", "tick"])?
++        .value::<u64>()?
++        != tick
++        || closure_hash(bytes)? != expected_closure
++    {
++        return Err("M2 tick or closed source bank differs".into());
++    }
++    Ok(())
++}
++fn restore(
++    bytes: &[u8],
++    inputs: &PhenotypeCompilerInputs,
++    arm: usize,
++    tick: u64,
++    closure: &str,
++) -> Result<CpuGroupedM2HostV1> {
++    validate_cp(bytes, tick, closure)?;
++    let host = CpuGroupedM2HostV1::restore(
++        CpuGroupedM2HostCheckpointV1::decode(bytes)?,
++        inputs,
++        mode(arm)?,
++    )?;
++    if host.world().tick().raw() != tick || cp(&host)? != bytes {
++        return Err("cold M2 restore differs".into());
++    }
++    Ok(host)
++}
++fn trainer(r: &recipe::Recipe, sentinel: bool) -> Result<CpuFoundationTrainer> {
++    let mut trainer = CpuFoundationTrainer::new(
++        r.phenotype.clone(),
++        r.asset.clone(),
++        StageTrainableMask::recurrent_only(&r.phenotype)?,
++        AdamWConfig::default(),
++    )?;
++    if sentinel {
++        let mut c = trainer.checkpoint();
++        c.optimizer_step = 23;
++        c.update_ages[0] = 23;
++        c.first_moment[0] = 0.03125;
++        c.second_moment[0] = 0.0625;
++        trainer = CpuFoundationTrainer::from_checkpoint(r.phenotype.clone(), r.asset.clone(), c)?;
++    }
++    Ok(trainer)
++}
++fn newborn(r: &recipe::Recipe) -> Result<CanonicalNewGame> {
++    let mut game = create_grounded_drive_research_new_game(&r.config, &r.genotype)?;
++    let born = game
++        .world
++        .organism_registry()
++        .iter()
++        .next()
++        .ok_or("newborn absent")?
++        .clone();
++    let mut world = HeadlessScenarioBuilder::new(r.config.world_seed)
++        .agent("learner", born.organism_id(), Vec3f::ZERO)
++        .build()?;
++    world.register_grounded_drive_research_record(born)?;
++    game.world = world;
++    Ok(game)
++}
++/// Admission remains newborn-first. Only the first closure advances biology;
++/// the second clones that newly prepared, neurologically inexperienced world.
++fn fresh_pair(
++    r: &recipe::Recipe,
++    preparation: u64,
++    sentinel: bool,
++    actual: &mut u64,
++) -> Result<[CpuGroupedM2HostV1; 2]> {
++    let seed = r.config.world_seed;
++    let game = newborn(r)?;
++    let second = game.clone();
++    let (full, template) = CpuGroupedM2HostV1::new_prepared(
++        game,
++        trainer(r, sentinel)?,
++        r.inputs.clone(),
++        sampling_seed(seed),
++        mode(0)?,
++        |world| -> Result<HeadlessWorld> {
++            for _ in 0..preparation {
++                world.try_advance_tick()?;
++                *actual += 1;
++            }
++            if world.age_death_disabled()
++                || world.tick().raw() != preparation
++                || !world
++                    .organism_registry()
++                    .iter()
++                    .next()
++                    .ok_or("prepared body absent")?
++                    .lifecycle()
++                    .is_alive()
++            {
++                return Err("normal fresh preparation failed".into());
++            }
++            Ok(world.clone())
++        },
++    )?;
++    let (sham, ()) = CpuGroupedM2HostV1::new_prepared(
++        second,
++        trainer(r, sentinel)?,
++        r.inputs.clone(),
++        sampling_seed(seed),
++        mode(1)?,
++        |world| -> Result<()> {
++            *world = template;
++            Ok(())
++        },
++    )?;
++    let a = cp(&full)?;
++    let b = cp(&sham)?;
++    raw::fresh(&a, preparation, sampling_seed(seed))?;
++    raw::fresh(&b, preparation, sampling_seed(seed))?;
++    if raw::matched_initial(&a, "Full")? != raw::matched_initial(&b, "DriveSham")?
++        || *actual != preparation
++    {
++        return Err("fresh matched pair/preparation accounting differs".into());
++    }
++    Ok([full, sham])
++}
++#[derive(Debug, Clone, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++struct Observation {
++    tick: u64,
++    body: BodyState,
++    homeostasis: HomeostaticSnapshot,
++    age: u64,
++    phase: SleepPhase,
++    cycle: u64,
++    sleep: alife_core::sleep::SleepState,
++    alive: bool,
++    work: CognitiveWorkReceipt,
++    cognitive_body_energy_debit: f32,
++    food_context: String,
++}
++fn observe(h: &CpuGroupedM2HostV1) -> Result<Observation> {
++    let r = h
++        .world()
++        .organism_registry()
++        .iter()
++        .next()
++        .ok_or("resident absent")?;
++    if h.world().age_death_disabled() {
++        return Err("normal lifetime disabled".into());
++    }
++    Ok(Observation {
++        tick: h.world().tick().raw(),
++        body: r.biochemistry().body,
++        homeostasis: r.biochemistry().homeostasis,
++        age: r.biochemistry().development.age_ticks.raw(),
++        phase: r.sleep_phase(),
++        cycle: r.sleep_cycle_id(),
++        sleep: h
++            .sleep_state(r.organism_id())
++            .ok_or("sleep controller absent")?,
++        alive: r.lifecycle().is_alive(),
++        work: *r.cognitive_work(),
++        cognitive_body_energy_debit: r.cognitive_energy_debit(),
++        food_context: "bland scene; no food, toy or peer".into(),
++    })
++}
++#[derive(Serialize)]
++struct NoopReceipt {
++    channel: MotorChannel,
++    primitive: u32,
++    measured: Option<MeasuredChannelObservation>,
++}
++fn applied_recovery(p: &SleepChoicePhysicalReceiptV1) -> Option<RecoveryOperationV1> {
++    if p.operation == Some(RecoveryOperationV1::AwakeRest) && p.awake_recovery > 0. {
++        Some(RecoveryOperationV1::AwakeRest)
++    } else if p.successful_stationary_body_sleep {
++        Some(RecoveryOperationV1::BodySleep)
++    } else {
++        None
++    }
++}
++#[derive(Serialize)]
++struct DecisionRow<'a> {
++    organism_id: OrganismId,
++    action: &'a RecoveryGroupJointActionV2,
++    probabilities: RecoveryGroupProbabilitiesV2,
++    evaluation: RecoveryGroupEvaluationV2,
++    sampling_counter: u32,
++    source_diagnostic_logits: &'a [f32],
++    biological_emissions: &'a NeuralEmissionFrame,
++    brain_work: &'a BrainWorkCounters,
++    motor: &'a GroupedMotorReceiptV1,
++    physical: &'a SleepChoicePhysicalReceiptV1,
++    applied_recovery: Option<RecoveryOperationV1>,
++    real_noop_receipts: Vec<NoopReceipt>,
++    patch: &'a ExperiencePatch,
++    sleep_phase: SleepPhase,
++    sleep_trigger: Option<alife_core::sleep::SleepTrigger>,
++}
++#[derive(Serialize)]
++struct CommitRow<'a> {
++    schema: &'static str,
++    status: &'static str,
++    offset: u64,
++    tick_before: u64,
++    tick_after: u64,
++    decisions: Vec<DecisionRow<'a>>,
++    sleeping_organisms: usize,
++    consolidations: usize,
++    checkpoint_sha256: String,
++    closed_source_sha256: String,
++}
++#[derive(Serialize)]
++struct ObservationRow<'a> {
++    schema: &'static str,
++    status: &'static str,
++    offset: u64,
++    before: &'a Observation,
++    after: &'a Observation,
++    net_change_not_causal_benefit: [f32; 5],
++    fatigue_reference_bits: u32,
++    pressure_reference_bits: u32,
++}
++fn science(
++    before: &Observation,
++    after: &Observation,
++    step: &CpuGroupedM2HostStepV1,
++    offset: u64,
++    bytes: &[u8],
++    closure: &str,
++    pressure_reference: f32,
++) -> Result<Vec<u8>> {
++    if step.tick_before.raw() != before.tick
++        || step.tick_after.raw() != after.tick
++        || after.tick != before.tick + 1
++    {
++        return Err("science clock differs".into());
++    }
++    let mut decisions = Vec::new();
++    for d in &step.decisions {
++        let scores = &d.motor.native.scores;
++        let evaluation = scores.evaluate(&d.action)?;
++        if evaluation.joint_log_probability.to_bits()
++            != d.action.old_joint_log_probability.to_bits()
++            || d.action.counter != d.sampling_counter
++            || d.motor.native.core.source_execution_count != 1
++            || d.motor.native.core.references[11].to_bits() != pressure_reference.to_bits()
++        {
++            return Err("native grouped factor/source identity differs".into());
++        }
++        decisions.push(DecisionRow {
++            organism_id: d.organism_id,
++            action: &d.action,
++            probabilities: scores.probabilities(d.action.temperature)?,
++            evaluation,
++            sampling_counter: d.sampling_counter,
++            source_diagnostic_logits: &d.source_diagnostic_logits,
++            biological_emissions: &d.biological_emissions,
++            brain_work: &d.brain_work,
++            motor: &d.motor,
++            physical: &d.physical,
++            applied_recovery: applied_recovery(&d.physical),
++            real_noop_receipts: d
++                .patch
++                .selected_bundle()
++                .map(|bundle| {
++                    bundle
++                        .channels
++                        .iter()
++                        .filter(|c| matches!(c.primitive.raw(), 103 | 104 | 212))
++                        .map(|c| NoopReceipt {
++                            channel: c.channel,
++                            primitive: c.primitive.raw(),
++                            measured: d
++                                .patch
++                                .outcome()
++                                .joint
++                                .as_ref()
++                                .and_then(|joint| {
++                                    joint
++                                        .channel_observations
++                                        .iter()
++                                        .find(|o| o.channel == c.channel)
++                                })
++                                .cloned(),
++                        })
++                        .collect()
++                })
++                .unwrap_or_default(),
++            patch: &d.patch,
++            sleep_phase: d.sleep_phase,
++            sleep_trigger: d.sleep_trigger,
++        });
++    }
++    let mut raw = serde_json::to_vec(&CommitRow {
++        schema: "grouped-m2-commit-v1",
++        status: "committed",
++        offset,
++        tick_before: before.tick,
++        tick_after: after.tick,
++        decisions,
++        sleeping_organisms: step.sleeping_organisms,
++        consolidations: step.sleep_consolidations,
++        checkpoint_sha256: hash(bytes),
++        closed_source_sha256: closure.into(),
++    })?;
++    raw.push(b'\n');
++    raw.extend(serde_json::to_vec(&ObservationRow {
++        schema: "grouped-m2-observation-v1",
++        status: "observed",
++        offset,
++        before,
++        after,
++        net_change_not_causal_benefit: [
++            after.homeostasis.drives.fatigue - before.homeostasis.drives.fatigue,
++            after.homeostasis.hormones.sleep_pressure - before.homeostasis.hormones.sleep_pressure,
++            after.homeostasis.drives.brain_atp - before.homeostasis.drives.brain_atp,
++            after.body.health - before.body.health,
++            after.body.energy - before.body.energy,
++        ],
++        fatigue_reference_bits: 0.35_f32.to_bits(),
++        pressure_reference_bits: pressure_reference.to_bits(),
++    })?);
++    raw.push(b'\n');
++    Ok(raw)
++}
++#[derive(Clone, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++struct Freeze {
++    schema: String,
++    host_commit: String,
++    host_tree: String,
++    driver_commit: String,
++    driver_code_sha256: String,
++    executable_sha256: String,
++    protocol_sha256: String,
++    qualification_sha256: String,
++    qualification_json: String,
++    reservation_sha256: String,
++    seed: u64,
++    preparation: u64,
++    horizon: u64,
++    temperature_bits: u32,
++    projected_pair_bytes: u64,
++    headroom_bytes: u64,
++}
++fn check_freeze(f: &Freeze) -> Result<()> {
++    if f.schema != "grouped-m2-source-build-freeze-v1"
++        || f.host_commit != HOST_COMMIT
++        || f.host_tree != HOST_TREE
++        || f.driver_commit != DRIVER_COMMIT
++        || f.driver_commit.len() != 40
++        || !f.driver_commit.bytes().all(|b| b.is_ascii_hexdigit())
++        || f.driver_code_sha256 != code_hash()
++        || f.executable_sha256 != executable_hash()?
++        || f.protocol_sha256 != hash(PROTOCOL)
++        || f.seed != SEED
++        || f.preparation != PREPARATION
++        || f.horizon != HORIZON
++        || f.temperature_bits != TEMPERATURE.to_bits()
++    {
++        return Err("source/executable/protocol freeze differs".into());
++    }
++    let q: Value = serde_json::from_str(&f.qualification_json)?;
++    if hash(f.qualification_json.as_bytes()) != f.qualification_sha256
++        || q["schema"] != "grouped-m2-driver-qualification-v1"
++        || q["complete"] != true
++        || q["resource_projection_adequate"] != true
++        || q["driver_commit"] != DRIVER_COMMIT
++        || q["driver_code_sha256"] != code_hash()
++        || q["executable_sha256"] != f.executable_sha256
++        || q["protocol_sha256"] != hash(PROTOCOL)
++        || q["primary_seed_executed"] != false
++        || q["composite_proof"] != true
++        || q["qualification_scope"]
++            != "admission-only; unchanged native runtime via exact prior proof"
++        || q["actual_native_calls"] != 0
++        || q["actual_preparation_intervals"] != 0
++        || q["reused_runtime_native_calls_not_this_executable"] != 50
++        || q["reused_runtime_qualification_sha256"]
++            != "5e2c13072debd852e32f902af8ad689cadf7560efe8f7432736d208a34ca492f"
++        || q["reference_native_calls_not_this_executable"] != 136
++        || q["measurement_bounds_include_longer_reference"] != true
++    {
++        return Err("embedded exact qualification differs".into());
++    }
++    let number = |name: &str| -> Result<u64> {
++        q[name]
++            .as_u64()
++            .ok_or_else(|| format!("qualification number absent: {name}").into())
++    };
++    let projected_packet = number("maximum_packet_bytes")?
++        .checked_add(number("observed_packet_growth_bytes")?.max(256 * 1024))
++        .ok_or("projection overflow")?;
++    let pair = projected_packet
++        .checked_mul(2 * HORIZON)
++        .ok_or("pair projection overflow")?;
++    let trace = number("maximum_science_row_pair_bytes")?
++        .checked_mul(HORIZON)
++        .ok_or("trace projection overflow")?;
++    let initial = number("maximum_initial_checkpoint_bytes")?;
++    let headroom = trace
++        .checked_mul(2)
++        .and_then(|n| n.checked_add(2 * initial))
++        .and_then(|n| n.checked_add(2 * projected_packet))
++        .and_then(|n| n.checked_add(64 * 1024 * 1024))
++        .ok_or("headroom overflow")?;
++    if pair != f.projected_pair_bytes
++        || headroom != f.headroom_bytes
++        || number("projected_pair_physical_bytes")? != pair
++        || number("metadata_initial_export_headroom")? != headroom
++        || projected_packet > journal::MAX_PACKET
++        || trace >= journal::MAX_TRACE_BYTES
++    {
++        return Err("frozen qualified budget differs".into());
++    }
++    Ok(())
++}
++fn freeze(qualification_root: &Path, reservation: &Path, out: &Path) -> Result<()> {
++    seed_admission_preflight(SEED, 1)?;
++    canonical_reservation(reservation)?;
++    let (q, qbytes): (Value, _) = read_typed(
++        &qualification_root.join("QUALIFICATION_COMPLETE.json"),
++        1024 * 1024,
++    )?;
++    if q["schema"] != "grouped-m2-driver-qualification-v1"
++        || q["complete"] != true
++        || q["driver_code_sha256"] != code_hash()
++        || q["executable_sha256"] != executable_hash()?
++        || q["driver_commit"] != DRIVER_COMMIT
++        || q["protocol_sha256"] != hash(PROTOCOL)
++        || q["primary_seed_executed"] != false
++    {
++        return Err("missing exact qualified driver evidence".into());
++    }
++    let (r, rbytes): (Value, _) = read_typed(reservation, 1024 * 1024)?;
++    if r["study_id"] != STUDY
++        || r["seed_decimal"] != SEED
++        || r["seed_consumed"] != false
++        || r["preparation_attempted"] != false
++        || r["process_starts"] != 0
++        || r["attempts"] != json!([])
++    {
++        return Err("reservation is not the untouched primary seed".into());
++    }
++    let f = Freeze {
++        schema: "grouped-m2-source-build-freeze-v1".into(),
++        host_commit: HOST_COMMIT.into(),
++        host_tree: HOST_TREE.into(),
++        driver_commit: DRIVER_COMMIT.into(),
++        driver_code_sha256: code_hash(),
++        executable_sha256: executable_hash()?,
++        protocol_sha256: hash(PROTOCOL),
++        qualification_sha256: hash(&qbytes),
++        qualification_json: String::from_utf8(qbytes.clone())?,
++        reservation_sha256: hash(&rbytes),
++        seed: SEED,
++        preparation: PREPARATION,
++        horizon: HORIZON,
++        temperature_bits: TEMPERATURE.to_bits(),
++        projected_pair_bytes: q["projected_pair_physical_bytes"]
++            .as_u64()
++            .ok_or("qualified projection absent")?,
++        headroom_bytes: q["metadata_initial_export_headroom"]
++            .as_u64()
++            .ok_or("qualified headroom absent")?,
++    };
++    check_freeze(&f)?;
++    if journal::free_bytes(out.parent().ok_or("freeze parent absent")?)?
++        < journal::MIN_FREE_BYTES
++            .checked_add(f.projected_pair_bytes)
++            .and_then(|n| n.checked_add(f.headroom_bytes))
++            .ok_or("freeze budget overflow")?
++    {
++        return Err("freeze filesystem below guard".into());
++    }
++    journal::publish_artifact(
++        out.parent().ok_or("freeze parent absent")?,
++        out.file_name()
++            .and_then(|v| v.to_str())
++            .ok_or("freeze filename invalid")?,
++        &serde_json::to_vec(&f)?,
++        64 * 1024,
++    )
++}
++#[derive(Clone, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++struct PreparedArm {
++    arm: usize,
++    mode: String,
++    initial_sha256: String,
++    closure_sha256: String,
++    source_headers: BTreeMap<String, String>,
++}
++#[derive(Clone, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++struct Prepared {
++    schema: String,
++    activation_sha256: String,
++    pre_preparation_source_sha256: String,
++    freeze_sha256: String,
++    source_manifest_sha256: String,
++    inputs_sha256: String,
++    initial_matched_sha256: String,
++    actual_preparation_intervals: u64,
++    initial_tick: u64,
++    initial_neural_decisions: u64,
++    sampling_seed: u32,
++    pressure_reference_bits: u32,
++    arms: Vec<PreparedArm>,
++}
++fn binding(f: &Freeze, p: &Prepared, p_hash: &str, arm: usize) -> Result<journal::Binding> {
++    let a = p.arms.get(arm).ok_or("prepared arm absent")?;
++    if a.arm != arm || a.mode != mode_name(arm)? {
++        return Err("prepared arm identity differs".into());
++    }
++    Ok(journal::Binding {
++        schema: "grouped-m2-durable-v1".into(),
++        study_id: STUDY.into(),
++        arm,
++        mode: a.mode.clone(),
++        seed: SEED,
++        sampling_seed: p.sampling_seed,
++        initial_tick: p.initial_tick,
++        horizon: HORIZON,
++        temperature_bits: TEMPERATURE.to_bits(),
++        host_source_commit: HOST_COMMIT.into(),
++        host_source_tree: HOST_TREE.into(),
++        driver_source_commit: DRIVER_COMMIT.into(),
++        driver_source_sha256: code_hash(),
++        executable_sha256: f.executable_sha256.clone(),
++        protocol_sha256: f.protocol_sha256.clone(),
++        qualification_sha256: f.qualification_sha256.clone(),
++        preparation_sha256: p_hash.into(),
++        source_manifest_sha256: p.source_manifest_sha256.clone(),
++        inputs_sha256: p.inputs_sha256.clone(),
++        initial_sha256: a.initial_sha256.clone(),
++        initial_matched_sha256: p.initial_matched_sha256.clone(),
++        closure_sha256: a.closure_sha256.clone(),
++        source_headers: a.source_headers.clone(),
++        max_packet_bytes: journal::MAX_PACKET,
++        max_arm_bytes: journal::MAX_ARM_BYTES,
++        min_free_bytes: journal::MIN_FREE_BYTES,
++    })
++}
++// Publication must succeed before the closure can advance any body or native state.
++fn bind_then_prepare<T>(
++    root: &Path,
++    source: &[u8],
++    inputs: &[u8],
++    source_bound: &[u8],
++    prepare_once: impl FnOnce() -> Result<T>,
++) -> Result<T> {
++    journal::publish_artifact(root, "SOURCE.json", source, journal::MAX_PACKET)?;
++    journal::publish_artifact(root, "INPUTS.private.json", inputs, journal::MAX_PACKET)?;
++    journal::publish_artifact(
++        root,
++        "SOURCE_BOUND_BEFORE_PREPARATION.json",
++        source_bound,
++        64 * 1024,
++    )?;
++    prepare_once()
++}
++fn counted_call<T, E>(
++    attempted: &mut u64,
++    call: impl FnOnce() -> std::result::Result<T, E>,
++) -> std::result::Result<T, E> {
++    *attempted += 1;
++    call()
++}
++fn prepare(root: &Path, freeze_path: &Path, reservation: &Path) -> Result<()> {
++    seed_admission_preflight(SEED, 1)?;
++    canonical_reservation(reservation)?;
++    let (f, fbytes): (Freeze, _) = read_typed(freeze_path, 64 * 1024)?;
++    check_freeze(&f)?;
++    let rbytes = journal::bounded_read(reservation, 1024 * 1024)?;
++    if hash(&rbytes) != f.reservation_sha256 {
++        return Err("reserved seed changed before preparation".into());
++    }
++    let parent = root.parent().ok_or("root parent absent")?.canonicalize()?;
++    if root.exists() || root.is_symlink() {
++        return Err("preparation root already exists; never recreate".into());
++    }
++    if journal::free_bytes(&parent)?
++        < journal::MIN_FREE_BYTES
++            .checked_add(f.projected_pair_bytes)
++            .and_then(|n| n.checked_add(f.headroom_bytes))
++            .ok_or("preparation budget overflow")?
++    {
++        return Err("preparation storage guard".into());
++    }
++    let absolute = parent.join(root.file_name().ok_or("root filename absent")?);
++    // One reservation can admit only one attempted preparation, even at another root.
++    let claim_name = format!(
++        "{}.activation.json",
++        reservation
++            .file_name()
++            .and_then(|v| v.to_str())
++            .ok_or("reservation filename invalid")?
++    );
++    let claim = ActivationClaim {
++        schema: "grouped-m2-preparation-claim-v1".into(),
++        study: STUDY.into(),
++        root: absolute,
++        freeze_sha256: hash(&fbytes),
++        reservation_sha256: f.reservation_sha256.clone(),
++        claim_implies_preparation_attempt: true,
++        claim_implies_world_step: false,
++    };
++    let claim_bytes = serde_json::to_vec(&claim)?;
++    journal::publish_artifact(
++        reservation.parent().ok_or("reservation parent absent")?,
++        &claim_name,
++        &claim_bytes,
++        64 * 1024,
++    )?;
++    fs::create_dir(root)?;
++    validate_activation(&claim, root, &hash(&fbytes), &f.reservation_sha256)?;
++    journal::publish_artifact(root, "FREEZE.json", &fbytes, 64 * 1024)?;
++    journal::publish_artifact(root, "RESERVATION.json", &rbytes, 1024 * 1024)?;
++    write_new(
++        root,
++        "PREPARATION_ATTEMPT.json",
++        &json!({"schema":"grouped-m2-preparation-attempt-v1","source":DRIVER_COMMIT,"seed":SEED,"actual_steps_known_at_claim":0,"automatic_retry":false}),
++    )?;
++    let mut actual = 0;
++    let mut stage = "source_construction";
++    let mut source_completed = false;
++    let result = (|| -> Result<()> {
++        // Exactly one candidate is constructed, durably bound before any body step.
++        let r = recipe::build(SEED, true)?;
++        source_completed = true;
++        stage = "source_binding_before_biology";
++        let source = serde_json::to_vec(&r.metadata)?;
++        let inputs = serde_json::to_vec(&r.inputs)?;
++        let source_bound = serde_json::to_vec(&json!({
++            "schema":"grouped-m2-pre-preparation-source-v1",
++            "freeze_sha256":hash(&fbytes),"activation_sha256":hash(&claim_bytes),
++            "source_manifest_sha256":hash(&source),"inputs_sha256":hash(&inputs),
++            "genotype_sha256":r.metadata["genotype_sha256"],
++            "foundation_asset":r.metadata["target_asset"],
++            "actual_preparation_intervals":0,"native_calls":0,
++            "single_constructed_source_candidate":true
++        }))?;
++        let hosts = bind_then_prepare(root, &source, &inputs, &source_bound, || {
++            stage = "newborn_admission_and_shared_world_preparation";
++            fresh_pair(&r, PREPARATION, false, &mut actual)
++        })?;
++        stage = "initial_matched_pair_publication";
++        let mut arms = Vec::new();
++        let mut matched = None;
++        for (arm, h) in hosts.iter().enumerate() {
++            let bytes = cp(h)?;
++            let m = hash(&raw::matched_initial(&bytes, mode_name(arm)?)?);
++            if matched.as_ref().is_some_and(|old| old != &m) {
++                return Err("pair mismatch at publication".into());
++            }
++            matched = Some(m);
++            let d = root.join(format!("arm-{arm}"));
++            fs::create_dir(&d)?;
++            journal::publish_artifact(&d, "initial.private.m2", &bytes, journal::MAX_PACKET)?;
++            arms.push(PreparedArm {
++                arm,
++                mode: mode_name(arm)?.into(),
++                initial_sha256: hash(&bytes),
++                closure_sha256: closure_hash(&bytes)?,
++                source_headers: raw::source_headers(&bytes)?,
++            });
++        }
++        let p = Prepared {
++            schema: "grouped-m2-preparation-v1".into(),
++            activation_sha256: hash(&claim_bytes),
++            pre_preparation_source_sha256: hash(&source_bound),
++            freeze_sha256: hash(&fbytes),
++            source_manifest_sha256: hash(&source),
++            inputs_sha256: hash(&inputs),
++            initial_matched_sha256: matched.ok_or("matched pair absent")?,
++            actual_preparation_intervals: actual,
++            initial_tick: PREPARATION,
++            initial_neural_decisions: 0,
++            sampling_seed: sampling_seed(SEED),
++            pressure_reference_bits: r
++                .phenotype
++                .cognitive_architecture()
++                .sleep_trigger_threshold()
++                .to_bits(),
++            arms,
++        };
++        let pbytes = serde_json::to_vec(&p)?;
++        // Complete preparation receipt is last; a partial tree cannot be run.
++        for arm in 0..2 {
++            journal::init_journal(
++                &root.join(format!("arm-{arm}/JOURNAL-M2-V1")),
++                &binding(&f, &p, &hash(&pbytes), arm)?,
++            )?;
++        }
++        journal::publish_artifact(root, "PREPARATION_COMPLETE.json", &pbytes, 64 * 1024)?;
++        Ok(())
++    })();
++    if let Err(e) = &result {
++        let _ = write_new(
++            root,
++            "PREPARATION_FAILED.json",
++            &json!({"error":e.to_string(),"failure_stage":stage,"source_construction_attempted":true,"source_construction_completed":source_completed,"actual_preparation_intervals":actual,"native_calls":0,"no_retry":true,"seed_consumed":actual>0}),
++        );
++    }
++    result
++}
++struct Loaded {
++    binding: journal::Binding,
++    inputs: PhenotypeCompilerInputs,
++    initial: Vec<u8>,
++    pressure_reference: f32,
++    journal: PathBuf,
++}
++fn load(root: &Path, arm: usize) -> Result<Loaded> {
++    mode(arm)?;
++    let (f, fbytes): (Freeze, _) = read_typed(&root.join("FREEZE.json"), 64 * 1024)?;
++    check_freeze(&f)?;
++    canonical_reservation(Path::new(RESERVATION_PATH))?;
++    let (claim, claim_bytes): (ActivationClaim, _) =
++        read_typed(Path::new(ACTIVATION_PATH), 64 * 1024)?;
++    validate_activation(&claim, root, &hash(&fbytes), &f.reservation_sha256)?;
++    if hash(&journal::bounded_read(
++        Path::new(RESERVATION_PATH),
++        1024 * 1024,
++    )?) != f.reservation_sha256
++    {
++        return Err("authoritative reserved source identity changed".into());
++    }
++    let (p, pbytes): (Prepared, _) =
++        read_typed(&root.join("PREPARATION_COMPLETE.json"), 64 * 1024)?;
++    if p.schema != "grouped-m2-preparation-v1"
++        || p.activation_sha256 != hash(&claim_bytes)
++        || p.freeze_sha256 != hash(&fbytes)
++        || p.actual_preparation_intervals != PREPARATION
++        || p.initial_tick != PREPARATION
++        || p.initial_neural_decisions != 0
++        || p.sampling_seed != sampling_seed(SEED)
++        || p.arms.len() != 2
++        || root.join("PREPARATION_FAILED.json").exists()
++    {
++        return Err("incomplete or changed preparation".into());
++    }
++    let (source_bound, source_bound_bytes): (Value, _) = read_typed(
++        &root.join("SOURCE_BOUND_BEFORE_PREPARATION.json"),
++        64 * 1024,
++    )?;
++    if hash(&source_bound_bytes) != p.pre_preparation_source_sha256
++        || source_bound["schema"] != "grouped-m2-pre-preparation-source-v1"
++        || source_bound["freeze_sha256"] != p.freeze_sha256
++        || source_bound["activation_sha256"] != p.activation_sha256
++        || source_bound["source_manifest_sha256"] != p.source_manifest_sha256
++        || source_bound["inputs_sha256"] != p.inputs_sha256
++        || source_bound["actual_preparation_intervals"] != 0
++        || source_bound["native_calls"] != 0
++        || source_bound["single_constructed_source_candidate"] != true
++    {
++        return Err("pre-preparation source identity differs".into());
++    }
++    if hash(&journal::bounded_read(
++        &root.join("SOURCE.json"),
++        journal::MAX_PACKET,
++    )?) != p.source_manifest_sha256
++    {
++        return Err("source metadata changed".into());
++    }
++    let (inputs, ibytes): (PhenotypeCompilerInputs, _) =
++        read_typed(&root.join("INPUTS.private.json"), journal::MAX_PACKET)?;
++    if hash(&ibytes) != p.inputs_sha256 {
++        return Err("source input bytes changed".into());
++    }
++    let b = binding(&f, &p, &hash(&pbytes), arm)?;
++    let initial = journal::bounded_read(
++        &root.join(format!("arm-{arm}/initial.private.m2")),
++        journal::MAX_PACKET,
++    )?;
++    if hash(&initial) != b.initial_sha256
++        || hash(&raw::matched_initial(&initial, mode_name(arm)?)?) != b.initial_matched_sha256
++        || raw::source_headers(&initial)? != b.source_headers
++    {
++        return Err("initial source/matched bytes changed".into());
++    }
++    raw::fresh(&initial, PREPARATION, b.sampling_seed)?;
++    validate_cp(&initial, b.initial_tick, &b.closure_sha256)?;
++    let pressure = inputs
++        .genome()
++        .cognitive_architecture()
++        .sleep_trigger_threshold();
++    if pressure.to_bits() != p.pressure_reference_bits {
++        return Err("compiled pressure reference changed".into());
++    }
++    Ok(Loaded {
++        binding: b,
++        inputs,
++        initial,
++        pressure_reference: pressure,
++        journal: root
++            .canonicalize()?
++            .join(format!("arm-{arm}/JOURNAL-M2-V1")),
++    })
++}
++fn run(root: &Path, arm: usize) -> Result<()> {
++    let a = load(root, arm)?;
++    let b = &a.binding;
++    let _lock = journal::lock(&a.journal)?;
++    let mut r = journal::recover_without_trace(&a.journal, b, &a.initial, |bytes, tick| {
++        validate_cp(bytes, tick, &b.closure_sha256)
++    })?;
++    if a.journal.join("BLOCKED-PUBLICATION").exists() {
++        return Err("known failure blocks continuation".into());
++    }
++    if a.journal.join("TERMINAL.json").exists() {
++        println!("terminal no-op; {} committed intervals", r.next);
++        return Ok(());
++    }
++    let result = (|| -> Result<()> {
++        let mut h = restore(
++            &r.checkpoint,
++            &a.inputs,
++            arm,
++            b.initial_tick + r.next,
++            &b.closure_sha256,
++        )?;
++        if r.trace_bytes
++            .checked_add(b.max_packet_bytes)
++            .is_none_or(|n| n > journal::MAX_TRACE_BYTES)
++            || journal::resource_stop(b, r.storage_bytes, journal::free_bytes(&a.journal)?)
++        {
++            journal::terminal(
++                &a.journal,
++                b,
++                &r,
++                "pre-step storage or science-trace ceiling",
++            )?;
++            return Ok(());
++        }
++        write_new(
++            &a.journal,
++            &format!(
++                "PROCESS-{}-{}.json",
++                std::process::id(),
++                std::time::SystemTime::now()
++                    .duration_since(std::time::UNIX_EPOCH)?
++                    .as_nanos()
++            ),
++            &json!({"schema":"grouped-m2-process-v1","arm":arm,"next_offset":r.next,"previous_commit_sha256":r.previous,"process_id":std::process::id(),"retained_temp_entries":r.ignored_temps,"unpublished_inflight_work_is_uncertain":true,"published_intervals_replayed":0}),
++        )?;
++        r.storage_bytes = fs::read_dir(&a.journal)?.try_fold(0_u64, |sum, e| -> Result<u64> {
++            sum.checked_add(e?.metadata()?.len())
++                .ok_or_else(|| "storage overflow".into())
++        })?;
++        while r.next < b.horizon {
++            if r.trace_bytes
++                .checked_add(b.max_packet_bytes)
++                .is_none_or(|n| n > journal::MAX_TRACE_BYTES)
++                || journal::resource_stop(b, r.storage_bytes, journal::free_bytes(&a.journal)?)
++            {
++                journal::terminal(
++                    &a.journal,
++                    b,
++                    &r,
++                    "pre-step storage or science-trace ceiling",
++                )?;
++                return Ok(());
++            }
++            let before = observe(&h)?;
++            if !before.alive || before.body.health < 0.5 || before.body.energy < 0.05 {
++                journal::terminal(&a.journal, b, &r, "health/energy/death")?;
++                return Ok(());
++            }
++            let produced = (|| -> Result<(Vec<u8>, Vec<u8>, u64)> {
++                let step = h.step(f32::from_bits(b.temperature_bits))?;
++                let bytes = cp(&h)?;
++                validate_cp(&bytes, b.initial_tick + r.next + 1, &b.closure_sha256)?;
++                let rows = science(
++                    &before,
++                    &observe(&h)?,
++                    &step,
++                    r.next,
++                    &bytes,
++                    &b.closure_sha256,
++                    a.pressure_reference,
++                )?;
++                let packet = journal::make_packet(b, r.next, &r.previous, &bytes, &rows)?;
++                journal::decode_packet(&packet, b, r.next, &r.previous)?;
++                Ok((bytes, packet, rows.len() as u64))
++            })();
++            let (bytes, packet, trace_bytes) = match produced {
++                Ok(v) => v,
++                Err(e) => {
++                    journal::stop_after_failure(
++                        &a.journal,
++                        b,
++                        &r,
++                        &format!("step/audit/serialization failure: {e}"),
++                    );
++                    return Err(e);
++                }
++            };
++            if let Err(e) = journal::publish(&a.journal, &format!("{:06}.packet", r.next), &packet)
++            {
++                let reason = format!("known publication/storage failure: {e}");
++                journal::record_publication_failure(
++                    &a.journal, b, &mut r, &bytes, &packet, &reason,
++                )?;
++                return Err(reason.into());
++            }
++            r.trace_bytes = r
++                .trace_bytes
++                .checked_add(trace_bytes)
++                .ok_or("trace accounting overflow")?;
++            r.next += 1;
++            r.previous = hash(&packet);
++            r.checkpoint = bytes;
++            r.storage_bytes = r
++                .storage_bytes
++                .checked_add(2 * packet.len() as u64)
++                .ok_or("storage overflow after commit")?;
++            if r.next.is_multiple_of(60) {
++                println!("arm {arm}: {} atomically committed intervals", r.next);
++            }
++        }
++        journal::terminal(&a.journal, b, &r, "horizon")
++    })();
++    if let Err(error) = &result {
++        if !a.journal.join("TERMINAL.json").exists()
++            && !a.journal.join("BLOCKED-PUBLICATION").exists()
++        {
++            journal::stop_after_failure(
++                &a.journal,
++                b,
++                &r,
++                &format!("known driver/storage failure: {error}"),
++            );
++        }
++    }
++    result
++}
++fn export(root: &Path, arm: usize, out: &Path) -> Result<()> {
++    let a = load(root, arm)?;
++    let _lock = journal::lock(&a.journal)?;
++    let b = &a.binding;
++    let r = journal::recover(&a.journal, b, &a.initial, |bytes, tick| {
++        validate_cp(bytes, tick, &b.closure_sha256)
++    })?;
++    let h = restore(
++        &r.checkpoint,
++        &a.inputs,
++        arm,
++        b.initial_tick + r.next,
++        &b.closure_sha256,
++    )?;
++    let terminal = if a.journal.join("TERMINAL.json").is_file() {
++        Some(read_typed::<Value>(&a.journal.join("TERMINAL.json"), 64 * 1024)?.0)
++    } else {
++        None
++    };
++    let summary = summarize(
++        &r.trace,
++        &observe(&h)?,
++        r.next,
++        terminal.as_ref(),
++        &r.previous,
++    )?;
++    fs::create_dir(out)?;
++    journal::publish_artifact(out, "TRACE.private.jsonl", &r.trace, journal::MAX_ARM_BYTES)?;
++    journal::publish_artifact(out, "final.private.m2", &r.checkpoint, journal::MAX_PACKET)?;
++    let result = serde_json::to_vec(&summary)?;
++    journal::publish_artifact(out, "RESULT.json", &result, journal::MAX_PACKET)?;
++    write_new(
++        out,
++        "EXPORT_COMPLETE.json",
++        &json!({"schema":"grouped-m2-export-v1","binding":b,"committed_intervals":r.next,"terminal":terminal.is_some(),"last_commit_sha256":r.previous,"trace_sha256":hash(&r.trace),"checkpoint_sha256":hash(&r.checkpoint),"result_sha256":hash(&result),"private_raw_data_not_for_upload":true}),
++    )
++}
++#[derive(Debug, Serialize)]
++struct CycleProgress {
++    start_tick: u64,
++    entering_tick: Option<u64>,
++    consolidating_tick: Option<u64>,
++    waking_tick: Option<u64>,
++    ordered: bool,
++}
++impl CycleProgress {
++    fn new(start_tick: u64, first_phase: SleepPhase, observed_tick: u64) -> Self {
++        Self {
++            start_tick,
++            entering_tick: (first_phase == SleepPhase::EnteringSleep).then_some(observed_tick),
++            consolidating_tick: None,
++            waking_tick: None,
++            ordered: first_phase == SleepPhase::EnteringSleep,
++        }
++    }
++    fn observe(&mut self, phase: SleepPhase, tick: u64) {
++        match phase {
++            SleepPhase::EnteringSleep
++                if self.consolidating_tick.is_none() && self.waking_tick.is_none() => {}
++            SleepPhase::Consolidating
++                if self.entering_tick.is_some() && self.waking_tick.is_none() =>
++            {
++                self.consolidating_tick.get_or_insert(tick);
++            }
++            SleepPhase::Waking if self.consolidating_tick.is_some() => {
++                self.waking_tick.get_or_insert(tick);
++            }
++            _ => self.ordered = false,
++        }
++    }
++    fn complete(&self) -> bool {
++        self.ordered
++            && self.entering_tick.is_some()
++            && self.consolidating_tick.is_some()
++            && self.waking_tick.is_some()
++    }
++}
++fn summarize(
++    trace: &[u8],
++    final_state: &Observation,
++    count: u64,
++    terminal: Option<&Value>,
++    last: &str,
++) -> Result<Value> {
++    let mut decisions = 0_u64;
++    let mut physical = [0_u64; 3];
++    let mut attempted = [0_u64; 3];
++    let mut executed_noops = 0_u64;
++    let mut no_decision = 0_u64;
++    let mut consolidations = 0_u64;
++    let mut phase_counts = BTreeMap::<String, u64>::new();
++    let mut crosses = [[0_u64; 2]; 2];
++    let mut observed = 0;
++    let mut started_cycles = BTreeMap::<u64, CycleProgress>::new();
++    let mut completed_cycles = Vec::new();
++    let mut sleep_starts = Vec::new();
++    let mut crossing_events = Vec::new();
++    let mut first_up = [None, None];
++    let mut maxima = [f32::NEG_INFINITY; 2];
++    let mut minimum_health = f32::INFINITY;
++    let mut minimum_energy = f32::INFINITY;
++    let mut initially_at_or_above_reference = None;
++    for line in trace.split(|b| *b == b'\n').filter(|l| !l.is_empty()) {
++        let v: Value = serde_json::from_slice(line)?;
++        if v["status"] == "committed" {
++            let rows = v["decisions"].as_array().ok_or("decisions missing")?;
++            decisions += rows.len() as u64;
++            if rows.is_empty() {
++                no_decision += 1;
++            }
++            consolidations += v["consolidations"]
++                .as_u64()
++                .ok_or("consolidations missing")?;
++            for d in rows {
++                for (value, counts) in [
++                    (&d["physical"]["operation"], &mut attempted),
++                    (&d["applied_recovery"], &mut physical),
++                ] {
++                    match value.as_str() {
++                        Some("AwakeRest") => counts[0] += 1,
++                        Some("BodySleep") => counts[1] += 1,
++                        None => counts[2] += 1,
++                        _ => return Err("unknown recovery operation".into()),
++                    }
++                }
++                for noop in d["real_noop_receipts"]
++                    .as_array()
++                    .ok_or("no-op receipts absent")?
++                {
++                    if noop["measured"]["executed"] == true {
++                        executed_noops += 1;
++                    }
++                }
++            }
++        } else if v["status"] == "observed" {
++            observed += 1;
++            let before: Observation = serde_json::from_value(v["before"].clone())?;
++            let after: Observation = serde_json::from_value(v["after"].clone())?;
++            if before.phase == SleepPhase::Awake && after.phase != SleepPhase::Awake {
++                let cycle = after.sleep.active_cycle_id;
++                started_cycles.insert(
++                    cycle,
++                    CycleProgress::new(before.tick, after.phase, after.tick),
++                );
++                sleep_starts.push(json!({"cycle":cycle,"tick":before.tick,"trigger":after.sleep.last_trigger,"phase":after.phase}));
++            }
++            if let Some(progress) = started_cycles.get_mut(&after.sleep.active_cycle_id) {
++                progress.observe(after.phase, after.tick);
++            }
++            if before.phase == SleepPhase::Waking && after.phase == SleepPhase::Awake {
++                let cycle = before.sleep.active_cycle_id;
++                if started_cycles
++                    .get(&cycle)
++                    .is_some_and(CycleProgress::complete)
++                {
++                    let progress = started_cycles.remove(&cycle).ok_or("cycle disappeared")?;
++                    completed_cycles.push(json!({"cycle":cycle,"start_tick":progress.start_tick,"entering_observed_tick":progress.entering_tick,"consolidating_observed_tick":progress.consolidating_tick,"waking_observed_tick":progress.waking_tick,"returned_awake_tick":after.tick}));
++                }
++            }
++            *phase_counts
++                .entry(format!("{:?}", after.phase))
++                .or_default() += 1;
++            let pressure = f32::from_bits(
++                v["pressure_reference_bits"]
++                    .as_u64()
++                    .ok_or("pressure bits absent")? as u32,
++            );
++            minimum_health = minimum_health
++                .min(before.body.health)
++                .min(after.body.health);
++            minimum_energy = minimum_energy
++                .min(before.body.energy)
++                .min(after.body.energy);
++            if initially_at_or_above_reference.is_none() {
++                initially_at_or_above_reference = Some([
++                    before.homeostasis.drives.fatigue >= 0.35,
++                    before.homeostasis.hormones.sleep_pressure >= pressure,
++                ]);
++            }
++            for (axis, (pre, post, threshold)) in [
++                (
++                    before.homeostasis.drives.fatigue,
++                    after.homeostasis.drives.fatigue,
++                    0.35_f32,
++                ),
++                (
++                    before.homeostasis.hormones.sleep_pressure,
++                    after.homeostasis.hormones.sleep_pressure,
++                    pressure,
++                ),
++            ]
++            .into_iter()
++            .enumerate()
++            {
++                maxima[axis] = maxima[axis].max(pre).max(post);
++                if pre < threshold && post >= threshold {
++                    crosses[axis][0] += 1;
++                    first_up[axis].get_or_insert(after.tick);
++                    crossing_events.push(json!({"axis":if axis==0{"fatigue"}else{"sleep_pressure"},"direction":"up","tick":after.tick,"before":pre,"after":post,"reference_bits":threshold.to_bits()}));
++                }
++                if pre >= threshold && post < threshold {
++                    crosses[axis][1] += 1;
++                    crossing_events.push(json!({"axis":if axis==0{"fatigue"}else{"sleep_pressure"},"direction":"down","tick":after.tick,"before":pre,"after":post,"reference_bits":threshold.to_bits()}));
++                }
++            }
++        } else {
++            return Err("unknown science row".into());
++        }
++    }
++    if observed != count {
++        return Err("summary interval count differs".into());
++    }
++    if count == 0 {
++        maxima = [
++            final_state.homeostasis.drives.fatigue,
++            final_state.homeostasis.hormones.sleep_pressure,
++        ];
++        minimum_health = final_state.body.health;
++        minimum_energy = final_state.body.energy;
++    }
++    Ok(
++        json!({"schema":"grouped-m2-summary-v1","committed_intervals":count,"decisions":decisions,"intervals_without_decision":no_decision,"physical_awake_rest":physical[0],"physical_body_sleep":physical[1],"physical_none":physical[2],"requested_awake_rest_body_sleep_none":attempted,"executed_noop_primitives":executed_noops,"physical_count_basis":"AwakeRest actual positive recovery dose; BodySleep successful stationary physical receipt; none means no applied recovery operation, not necessarily no other action","closed_memory_consolidations":consolidations,"sleep_controller_cycles_completed":final_state.sleep.cycles_completed,"observed_sleep_starts":sleep_starts,"fully_observed_complete_cycles":completed_cycles,"partial_observed_cycle_starts":started_cycles,"phase_intervals":phase_counts,"fatigue_reference_crossings_up_down":crosses[0],"pressure_reference_crossings_up_down":crosses[1],"reference_crossing_events":crossing_events,"first_up_crossing_ticks_F_P":first_up,"initially_at_or_above_reference_F_P":initially_at_or_above_reference,"maxima_F_P":maxima,"minimum_health":minimum_health,"minimum_body_energy":minimum_energy,"final_state":final_state,"terminal":terminal,"horizon_complete":terminal.is_some_and(|t|t["stop"]=="horizon")&&count==HORIZON,"last_commit_sha256":last,"source_and_optimizer_closed":true,"scope":"one recovery-only seed; all12 appended-drive sham; net changes not causal benefit; no synaptic learning/generalization/ecological promotion","raw_checkpoint_and_science_bytes_preserved":true}),
++    )
++}
++fn compare_prefix(root: &Path, out: &Path) -> Result<()> {
++    let a = load(root, 0)?;
++    let b = load(root, 1)?;
++    let _guard_a = journal::lock(&a.journal)?;
++    let _guard_b = journal::lock(&b.journal)?;
++    let ra = journal::recover(&a.journal, &a.binding, &a.initial, |bytes, tick| {
++        validate_cp(bytes, tick, &a.binding.closure_sha256)
++    })?;
++    let rb = journal::recover(&b.journal, &b.binding, &b.initial, |bytes, tick| {
++        validate_cp(bytes, tick, &b.binding.closure_sha256)
++    })?;
++    let common = ra.next.min(rb.next);
++    let mut summaries = Vec::new();
++    for (loaded, recovered) in [(&a, &ra), (&b, &rb)] {
++        let mut end = 0;
++        let mut lines = 0;
++        if common > 0 {
++            for (i, byte) in recovered.trace.iter().enumerate() {
++                if *byte == b'\n' {
++                    lines += 1;
++                    if lines == 2 * common {
++                        end = i + 1;
++                        break;
++                    }
++                }
++            }
++        }
++        if common > 0 && lines != 2 * common {
++            return Err("common prefix rows missing".into());
++        }
++        let prefix = &recovered.trace[..end];
++        let initial_host = restore(
++            &loaded.initial,
++            &loaded.inputs,
++            loaded.binding.arm,
++            loaded.binding.initial_tick,
++            &loaded.binding.closure_sha256,
++        )?;
++        let mut last_state = observe(&initial_host)?;
++        for row in prefix.split(|b| *b == b'\n').filter(|r| !r.is_empty()) {
++            let value: Value = serde_json::from_slice(row)?;
++            if value["status"] == "observed" {
++                last_state = serde_json::from_value(value["after"].clone())?;
++            }
++        }
++        let last = if common == 0 {
++            hash(&loaded.initial)
++        } else {
++            hash(&journal::bounded_read(
++                &loaded.journal.join(format!("{:06}.packet", common - 1)),
++                journal::MAX_PACKET,
++            )?)
++        };
++        summaries.push(summarize(prefix, &last_state, common, None, &last)?);
++    }
++    fs::create_dir(out)?;
++    write_new(
++        out,
++        "COMMON_OBSERVED_PREFIX.json",
++        &json!({"schema":"grouped-m2-common-prefix-v1","common_committed_intervals":common,"full_observed_intervals":[ra.next,rb.next],"selection_rule":"minimum of both complete committed prefixes, no favorable window selection","arms":summaries,"single_seed_not_generalization":true}),
++    )
++}
++fn main() -> Result<()> {
++    let args = std::env::args().skip(1).collect::<Vec<_>>();
++    match args.as_slice(){
++        [cmd,reference,out] if cmd=="--qualify-reference"=>qualification::qualify(Path::new(reference),Path::new(out)),
++        [cmd,reference,out] if cmd=="--qualify-admission"=>qualification::qualify_admission(Path::new(reference),Path::new(out)),
++        [cmd,dir] if cmd=="--lock-child"=>{let result=journal::lock(Path::new(dir));std::process::exit(if result.is_ok(){0}else{7});},
++        [cmd,q,res,out] if cmd=="--freeze"=>freeze(Path::new(q),Path::new(res),Path::new(out)),
++        [cmd,root,f,res] if cmd=="--prepare"=>prepare(Path::new(root),Path::new(f),Path::new(res)),
++        [cmd,root,arm] if cmd=="--run"=>run(Path::new(root),arm.parse()?),
++        [cmd,root,arm,out] if cmd=="--export"=>export(Path::new(root),arm.parse()?,Path::new(out)),
++        [cmd,root,out] if cmd=="--compare-prefix"=>compare_prefix(Path::new(root),Path::new(out)),
++        _=>Err("explicit commands only: --qualify-admission PRIOR_50_CALL_QUALIFICATION OUT | --qualify-reference ORIGINAL_QUALIFICATION OUT | --freeze QUALIFICATION RESERVATION OUT | --prepare ROOT FREEZE RESERVATION | --run ROOT ARM | --export ROOT ARM OUT | --compare-prefix ROOT OUT".into()),
++    }
++}
++
++#[cfg(test)]
++mod driver_tests {
++    use super::*;
++    #[test]
++    fn seed_domain_max_next_overflow_and_fixed_cases_are_pure() {
++        let max = (u64::MAX - 1) / 16;
++        assert_eq!(max, 0x0FFF_FFFF_FFFF_FFFF);
++        assert_eq!(
++            seed_admission_preflight(max, 1).unwrap(),
++            0xFFFF_FFFF_FFFF_FFF1
++        );
++        assert_eq!(
++            seed_admission_preflight(max, 8).unwrap(),
++            0xFFFF_FFFF_FFFF_FFF8
++        );
++        assert!(seed_admission_preflight(max + 1, 1).is_err());
++        assert!(seed_admission_preflight(u64::MAX, 1).is_err());
++        assert!(seed_admission_preflight(0, 1).is_err());
++        assert!(seed_admission_preflight(1, 0).is_err());
++        assert!(seed_admission_preflight(1, 9).is_err());
++        assert!(seed_admission_preflight(0x4D32_424C_0009_0001, 1).is_err());
++        assert_eq!(
++            seed_admission_preflight(SEED, 1).unwrap(),
++            0x34D3_2424_C000_9011
++        );
++        assert!(seed_admission_preflight(FIXTURE_SEED, 1).is_ok());
++    }
++    #[test]
++    fn activation_rejects_completed_root_copy_and_changed_identity() -> Result<()> {
++        let temp = std::env::temp_dir().join(format!("m2-activation-{}", journal::unique()?));
++        fs::create_dir(&temp)?;
++        let original = temp.join("original");
++        let copied = temp.join("copy");
++        fs::create_dir(&original)?;
++        fs::create_dir(&copied)?;
++        let claim = ActivationClaim {
++            schema: "grouped-m2-preparation-claim-v1".into(),
++            study: STUDY.into(),
++            root: original.canonicalize()?,
++            freeze_sha256: "freeze".into(),
++            reservation_sha256: "reservation".into(),
++            claim_implies_preparation_attempt: true,
++            claim_implies_world_step: false,
++        };
++        validate_activation(&claim, &original, "freeze", "reservation")?;
++        assert!(validate_activation(&claim, &copied, "freeze", "reservation").is_err());
++        assert!(validate_activation(&claim, &original, "changed", "reservation").is_err());
++        assert!(validate_activation(&claim, &original, "freeze", "changed").is_err());
++        fs::remove_dir_all(temp)?;
++        Ok(())
++    }
++    #[test]
++    fn source_binding_publication_precedes_preparation_and_failure_blocks_it() -> Result<()> {
++        let temp = std::env::temp_dir().join(format!("m2-source-binding-{}", journal::unique()?));
++        fs::create_dir(&temp)?;
++        let mut calls = 0;
++        bind_then_prepare(&temp, b"source", b"inputs", b"binding", || {
++            assert_eq!(fs::read(temp.join("SOURCE.json"))?, b"source");
++            assert_eq!(fs::read(temp.join("INPUTS.private.json"))?, b"inputs");
++            assert_eq!(
++                fs::read(temp.join("SOURCE_BOUND_BEFORE_PREPARATION.json"))?,
++                b"binding"
++            );
++            calls += 1;
++            Ok(())
++        })?;
++        assert_eq!(calls, 1);
++        assert!(
++            bind_then_prepare(&temp, b"source", b"inputs", b"binding", || {
++                calls += 1;
++                Ok(())
++            })
++            .is_err()
++        );
++        assert_eq!(calls, 1);
++        let failed = temp.join("failed");
++        fs::create_dir(&failed)?;
++        fs::write(
++            failed.join("SOURCE_BOUND_BEFORE_PREPARATION.json"),
++            b"existing",
++        )?;
++        assert!(
++            bind_then_prepare(&failed, b"source", b"inputs", b"binding", || {
++                calls += 1;
++                Ok(())
++            })
++            .is_err()
++        );
++        assert_eq!(calls, 1);
++        fs::remove_dir_all(temp)?;
++        Ok(())
++    }
++    #[test]
++    fn failed_native_invocation_is_counted_before_returning_error() {
++        let mut calls = 0;
++        let failed: std::result::Result<(), &str> =
++            counted_call(&mut calls, || Err("fixed failure"));
++        assert!(failed.is_err());
++        assert_eq!(calls, 1);
++        let success: std::result::Result<(), &str> = counted_call(&mut calls, || Ok(()));
++        assert!(success.is_ok());
++        assert_eq!(calls, 2);
++    }
++    #[test]
++    fn complete_cycle_requires_ordered_entering_consolidating_waking() {
++        let mut full = CycleProgress::new(0, SleepPhase::EnteringSleep, 1);
++        full.observe(SleepPhase::Consolidating, 3);
++        assert!(!full.complete());
++        full.observe(SleepPhase::Waking, 7);
++        assert!(full.complete());
++        let mut skipped = CycleProgress::new(0, SleepPhase::EnteringSleep, 1);
++        skipped.observe(SleepPhase::Waking, 7);
++        assert!(!skipped.complete());
++        let mut partial = CycleProgress::new(0, SleepPhase::ForcedRecoverySleep, 1);
++        partial.observe(SleepPhase::Consolidating, 3);
++        partial.observe(SleepPhase::Waking, 7);
++        assert!(!partial.complete());
++        let mut wrong_order = CycleProgress::new(0, SleepPhase::EnteringSleep, 1);
++        wrong_order.observe(SleepPhase::Waking, 2);
++        wrong_order.observe(SleepPhase::Consolidating, 3);
++        wrong_order.observe(SleepPhase::Waking, 7);
++        assert!(!wrong_order.complete());
++    }
++}
+--- /dev/null
++++ b/crates/alife_training/examples/probe_object_rich_optional_vocal_v1.rs
+@@ -0,0 +1,1465 @@
++//! Explicit fresh CPU experiment. No old-life import, automatic retry or upload.
++#[path = "support/grouped_m2_journal_v1.rs"]
++mod journal;
++#[path = "support/object_rich_host_v1.rs"]
++mod policy_host;
++#[path = "support/object_rich_qualification_v1.rs"]
++mod qualification;
++#[path = "support/grouped_m2_raw_v1.rs"]
++mod raw;
++#[allow(dead_code)]
++#[path = "support/recovery_sleep_recipe_v1.rs"]
++mod recipe;
++#[path = "support/object_rich_scene_v1.rs"]
++mod scene;
++use alife_core::*;
++use alife_training::{cpu::*, AdamWConfig, StageTrainableMask};
++use alife_world::*;
++use policy_host::{Host, Step};
++use serde::{Deserialize, Serialize};
++use serde_json::{json, Value};
++use sha2::{Digest, Sha256};
++use std::{
++    collections::BTreeMap,
++    fs,
++    path::{Path, PathBuf},
++};
++type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
++const STUDY: &str = "m2-object-rich-optional-vocal-v1";
++const RESERVATION_PATH: &str =
++    "/workspace/shared/m2-object-rich-optional-vocal-v1-seed-reservation.json";
++// Pure source/admission preflight: no genome, host, world, body or sampler is constructed.
++fn seed_admission_preflight(seed: u64, founder_count: u16) -> Result<u64> {
++    CanonicalNewGameConfig::phase3(seed, founder_count)
++        .map_err(|e| format!("pre-claim seed/config admission: {e}"))?;
++    seed.checked_mul(16)
++        .and_then(|base| base.checked_add(u64::from(founder_count)))
++        .ok_or_else(|| format!(
++            "pre-claim seed-domain overflow: seed {seed:#018x}, founder_count {founder_count}, maximum seed {:#018x}",
++            (u64::MAX - u64::from(founder_count)) / 16
++        ).into())
++}
++fn canonical_reservation(path: &Path) -> Result<()> {
++    if path.canonicalize()? != Path::new(RESERVATION_PATH)
++        || fs::symlink_metadata(path)?.file_type().is_symlink()
++    {
++        return Err("not the authoritative primary reservation path".into());
++    }
++    Ok(())
++}
++const ACTIVATION_PATH: &str =
++    "/workspace/shared/m2-object-rich-optional-vocal-v1-seed-reservation.json.activation.json";
++#[derive(Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++struct ActivationClaim {
++    schema: String,
++    study: String,
++    root: PathBuf,
++    freeze_sha256: String,
++    reservation_sha256: String,
++    claim_implies_preparation_attempt: bool,
++    claim_implies_world_step: bool,
++}
++fn validate_activation(
++    claim: &ActivationClaim,
++    root: &Path,
++    freeze_sha256: &str,
++    reservation_sha256: &str,
++) -> Result<()> {
++    if claim.schema != "object-rich-optional-vocal-preparation-claim-v1"
++        || claim.study != STUDY
++        || claim.root != root.canonicalize()?
++        || claim.freeze_sha256 != freeze_sha256
++        || claim.reservation_sha256 != reservation_sha256
++        || !claim.claim_implies_preparation_attempt
++        || claim.claim_implies_world_step
++    {
++        return Err("authoritative activation root or identity differs".into());
++    }
++    Ok(())
++}
++const SEED: u64 = 0x034F_4256_4F43_0901;
++const FIXTURE_SEED: u64 = 0x0347_5250_484F_5354; // existing qualified host unit fixture
++const PREPARATION: u64 = 240;
++const HORIZON: u64 = 64;
++const TEMPERATURE: f32 = 1.;
++const HOST_COMMIT: &str = "fbf2a517f93098b5d936878a3d26bbb8d0391c38";
++const HOST_TREE: &str = "020d7a4b036d0309a4ffdd762536c36e945f7496";
++const DRIVER_COMMIT: &str = match option_env!("ALIFE_GROUPED_M2_DRIVER_SOURCE_COMMIT") {
++    Some(s) => s,
++    None => "unqualified-development-build",
++};
++const PROTOCOL: &[u8] = include_bytes!("../../../PROTOCOL.md");
++fn hash(bytes: &[u8]) -> String {
++    format!("{:x}", Sha256::digest(bytes))
++}
++fn code_hash() -> String {
++    let mut h = Sha256::new();
++    for bytes in [
++        include_bytes!("pr

@@ -1,0 +1,238 @@
+{
+  "purpose": "Source-only publication transport mapping; does not authorize publication.",
+  "original_packet": "/workspace/shared/m2-optional-cache-qualified-source-handoff-v2",
+  "original_full_patch": {
+    "local_path": "/workspace/shared/m2-optional-cache-qualified-source-handoff-v2/production/full-from-fbf2a517.patch",
+    "publication_path": "production/full-from-fbf2a517.patch",
+    "bytes": 416772,
+    "sha256": "9412792ee0b3ed9a1ac0f68bc83350a1721cd6db96df7415031731164a75ce67",
+    "upload_directly": false
+  },
+  "concat_order": [
+    "production/transport/full-from-fbf2a517.patch.part-001.txt",
+    "production/transport/full-from-fbf2a517.patch.part-002.txt",
+    "production/transport/full-from-fbf2a517.patch.part-003.txt",
+    "production/transport/full-from-fbf2a517.patch.part-004.txt",
+    "production/transport/full-from-fbf2a517.patch.part-005.txt"
+  ],
+  "uploads": [
+    {
+      "local_path": "/workspace/shared/m2-optional-cache-qualified-source-handoff-v2/README.md",
+      "publication_path": "README.md",
+      "bytes": 6007,
+      "sha256": "42ddd0856b7095baddf610b29e9a66f21df1d97891ebbdfe99d59315a28f1bde"
+    },
+    {
+      "local_path": "/workspace/shared/m2-optional-cache-qualified-source-handoff-v2/RESOURCE-CURATED.json",
+      "publication_path": "RESOURCE-CURATED.json",
+      "bytes": 1303,
+      "sha256": "6e788fdd3ee9727466e19849469fa2f588fa098391dd39894d20f3dcca967137"
+    },
+    {
+      "local_path": "/workspace/shared/m2-optional-cache-qualified-source-handoff-v2/RESULTS-CURATED.json",
+      "publication_path": "RESULTS-CURATED.json",
+      "bytes": 22335,
+      "sha256": "15ca42607853e0e6e2444458813d10541f69a722dd0251f640f9e14db247d818"
+    },
+    {
+      "local_path": "/workspace/shared/m2-optional-cache-qualified-source-handoff-v2/SHA256SUMS.txt",
+      "publication_path": "SHA256SUMS.txt",
+      "bytes": 3467,
+      "sha256": "a14bd2ba0e9512840e706f7e2371b52fd02ba2f3a2222a147ab07905b7ef1147"
+    },
+    {
+      "local_path": "/workspace/shared/m2-optional-cache-qualified-source-handoff-v2/manifests/build-settings.json",
+      "publication_path": "manifests/build-settings.json",
+      "bytes": 820,
+      "sha256": "ac82d48f086e5c54d2b64f33c7d09743d0bbe1aa664e1e6f61d9d03c4c1a9926"
+    },
+    {
+      "local_path": "/workspace/shared/m2-optional-cache-qualified-source-handoff-v2/manifests/candidate-SOURCE.json",
+      "publication_path": "manifests/candidate-SOURCE.json",
+      "bytes": 40785,
+      "sha256": "b7dc2f231d90db1d62f7087241c75144d6166e857b913488ce60f51a16f1fd90"
+    },
+    {
+      "local_path": "/workspace/shared/m2-optional-cache-qualified-source-handoff-v2/manifests/candidate-v2-SOURCE.json",
+      "publication_path": "manifests/candidate-v2-SOURCE.json",
+      "bytes": 27259,
+      "sha256": "5fa3032a227628df766212dbeb335645a5b048630cbc607947e5fa5975b3df6f"
+    },
+    {
+      "local_path": "/workspace/shared/m2-optional-cache-qualified-source-handoff-v2/manifests/control-SOURCE.json",
+      "publication_path": "manifests/control-SOURCE.json",
+      "bytes": 36620,
+      "sha256": "243ae717e47dc3b4334f59b0c9aaadabab6baec50b74b73a706ce9a4b1ca10d9"
+    },
+    {
+      "local_path": "/workspace/shared/m2-optional-cache-qualified-source-handoff-v2/manifests/control-v2-SOURCE.json",
+      "publication_path": "manifests/control-v2-SOURCE.json",
+      "bytes": 23462,
+      "sha256": "84d6a1c26074a2cee9f434d76128ffa9bbdaccc6dd53670c8933b0090d676a62"
+    },
+    {
+      "local_path": "/workspace/shared/m2-optional-cache-qualified-source-handoff-v2/manifests/dependencies.json",
+      "publication_path": "manifests/dependencies.json",
+      "bytes": 2946,
+      "sha256": "2025363043f72aa40b365054009c6a363fa241d7410435b499c5503ed916411a"
+    },
+    {
+      "local_path": "/workspace/shared/m2-optional-cache-qualified-source-handoff-v2/manifests/production-source.json",
+      "publication_path": "manifests/production-source.json",
+      "bytes": 43692,
+      "sha256": "2d7ed51a0812c87f4146e339165ac410a400fb1a4a9aaf6267ce23d40b90033e"
+    },
+    {
+      "local_path": "/workspace/shared/m2-optional-cache-qualified-source-handoff-v2/production/incremental.patch",
+      "publication_path": "production/incremental.patch",
+      "bytes": 47101,
+      "sha256": "b822e24c3e72d107c37e95c9ee9885d6b50c6061eb76d8247afe02ca3c83badc"
+    },
+    {
+      "local_path": "/workspace/shared/m2-optional-cache-qualified-source-handoff-v2/qualification/candidate-instrumentation.patch",
+      "publication_path": "qualification/candidate-instrumentation.patch",
+      "bytes": 78024,
+      "sha256": "fa4b7ad9359fff6c58985e6fbce3d589bbe1eeca2aa0e3fb3190f8e70f1f471a"
+    },
+    {
+      "local_path": "/workspace/shared/m2-optional-cache-qualified-source-handoff-v2/qualification/candidate-v2/crates/alife_training/src/cpu/grouped_host_envelope_v2.rs",
+      "publication_path": "qualification/candidate-v2/crates/alife_training/src/cpu/grouped_host_envelope_v2.rs",
+      "bytes": 35075,
+      "sha256": "e7a859cdfe16388a8e33d8a0384f9a12ad9ec39b95feaa305c8286df8e5bcc07"
+    },
+    {
+      "local_path": "/workspace/shared/m2-optional-cache-qualified-source-handoff-v2/qualification/candidate-v2/crates/alife_training/src/cpu/host_v2.rs",
+      "publication_path": "qualification/candidate-v2/crates/alife_training/src/cpu/host_v2.rs",
+      "bytes": 91160,
+      "sha256": "0c8092f278cf63d271e1cc79b4b40e46dae89be60a15db95677837985fabef93"
+    },
+    {
+      "local_path": "/workspace/shared/m2-optional-cache-qualified-source-handoff-v2/qualification/candidate-v2/crates/alife_training/src/cpu/mod_v2.rs",
+      "publication_path": "qualification/candidate-v2/crates/alife_training/src/cpu/mod_v2.rs",
+      "bytes": 15818,
+      "sha256": "82e19170fc0e00d82eb9b63cfa9c0900ed7ab06c3b9351066913875fb4e954de"
+    },
+    {
+      "local_path": "/workspace/shared/m2-optional-cache-qualified-source-handoff-v2/qualification/candidate-v2/crates/alife_training/src/cpu/optional_vocal_host_tests_v2.rs",
+      "publication_path": "qualification/candidate-v2/crates/alife_training/src/cpu/optional_vocal_host_tests_v2.rs",
+      "bytes": 27906,
+      "sha256": "b94d1b8a503a2bba404f328d46fde4a3a225bc830442e2d7c57461d785849b20"
+    },
+    {
+      "local_path": "/workspace/shared/m2-optional-cache-qualified-source-handoff-v2/qualification/candidate-v2/crates/alife_training/src/cpu/optional_vocal_host_v2.rs",
+      "publication_path": "qualification/candidate-v2/crates/alife_training/src/cpu/optional_vocal_host_v2.rs",
+      "bytes": 16784,
+      "sha256": "31cb8a3ffcf71b4f12bbcefdbfca6dc2033d02be20471df829eb3c8305e212e5"
+    },
+    {
+      "local_path": "/workspace/shared/m2-optional-cache-qualified-source-handoff-v2/qualification/candidate-v2/crates/alife_training/src/lib_v2.rs",
+      "publication_path": "qualification/candidate-v2/crates/alife_training/src/lib_v2.rs",
+      "bytes": 1286,
+      "sha256": "3021f15b8b5d7dabb8bc99d4aae52b87a71637671de0322bc30768f426d3ae3c"
+    },
+    {
+      "local_path": "/workspace/shared/m2-optional-cache-qualified-source-handoff-v2/qualification/candidate-v2-private-delta.patch",
+      "publication_path": "qualification/candidate-v2-private-delta.patch",
+      "bytes": 8368,
+      "sha256": "d766440515a66ec3208039659f3920cd1bbed241b526b66b3888dcacf2b8dac7"
+    },
+    {
+      "local_path": "/workspace/shared/m2-optional-cache-qualified-source-handoff-v2/qualification/codec-v2-extra.rs",
+      "publication_path": "qualification/codec-v2-extra.rs",
+      "bytes": 6319,
+      "sha256": "1c97fe22eb9d310d688a71403579b2e60fdf8ce018e4ea41687f40c0f7ae227a"
+    },
+    {
+      "local_path": "/workspace/shared/m2-optional-cache-qualified-source-handoff-v2/qualification/control-instrumentation.patch",
+      "publication_path": "qualification/control-instrumentation.patch",
+      "bytes": 79004,
+      "sha256": "34dce6ac486180553d9404a17dad2a49177a2661f1edff267ef402a20cf995a0"
+    },
+    {
+      "local_path": "/workspace/shared/m2-optional-cache-qualified-source-handoff-v2/qualification/control-v2/crates/alife_training/src/cpu/grouped_host_envelope_v2.rs",
+      "publication_path": "qualification/control-v2/crates/alife_training/src/cpu/grouped_host_envelope_v2.rs",
+      "bytes": 34713,
+      "sha256": "58e9928c1ae3c317191be20fadcf41c6869d477cd3b06ff97be111a6a2f24379"
+    },
+    {
+      "local_path": "/workspace/shared/m2-optional-cache-qualified-source-handoff-v2/qualification/control-v2/crates/alife_training/src/cpu/host_v2.rs",
+      "publication_path": "qualification/control-v2/crates/alife_training/src/cpu/host_v2.rs",
+      "bytes": 91160,
+      "sha256": "0c8092f278cf63d271e1cc79b4b40e46dae89be60a15db95677837985fabef93"
+    },
+    {
+      "local_path": "/workspace/shared/m2-optional-cache-qualified-source-handoff-v2/qualification/control-v2/crates/alife_training/src/cpu/mod_v2.rs",
+      "publication_path": "qualification/control-v2/crates/alife_training/src/cpu/mod_v2.rs",
+      "bytes": 15818,
+      "sha256": "82e19170fc0e00d82eb9b63cfa9c0900ed7ab06c3b9351066913875fb4e954de"
+    },
+    {
+      "local_path": "/workspace/shared/m2-optional-cache-qualified-source-handoff-v2/qualification/control-v2/crates/alife_training/src/cpu/optional_vocal_host_tests_v2.rs",
+      "publication_path": "qualification/control-v2/crates/alife_training/src/cpu/optional_vocal_host_tests_v2.rs",
+      "bytes": 27301,
+      "sha256": "17f7f7db897f6a76e9c55b6639372823ef290cf42691904653a599e947b34362"
+    },
+    {
+      "local_path": "/workspace/shared/m2-optional-cache-qualified-source-handoff-v2/qualification/control-v2/crates/alife_training/src/cpu/optional_vocal_host_v2.rs",
+      "publication_path": "qualification/control-v2/crates/alife_training/src/cpu/optional_vocal_host_v2.rs",
+      "bytes": 16784,
+      "sha256": "31cb8a3ffcf71b4f12bbcefdbfca6dc2033d02be20471df829eb3c8305e212e5"
+    },
+    {
+      "local_path": "/workspace/shared/m2-optional-cache-qualified-source-handoff-v2/qualification/control-v2/crates/alife_training/src/lib_v2.rs",
+      "publication_path": "qualification/control-v2/crates/alife_training/src/lib_v2.rs",
+      "bytes": 1286,
+      "sha256": "3021f15b8b5d7dabb8bc99d4aae52b87a71637671de0322bc30768f426d3ae3c"
+    },
+    {
+      "local_path": "/workspace/shared/m2-optional-cache-qualified-source-handoff-v2/qualification/control-v2-private-delta.patch",
+      "publication_path": "qualification/control-v2-private-delta.patch",
+      "bytes": 8383,
+      "sha256": "1bc60584f315518e424cbdc9a57558878d6126a09e1c2866a1c316e39cde689c"
+    },
+    {
+      "local_path": "/workspace/shared/m2-optional-cache-qualified-source-handoff-v2/qualification/qualification_sink.rs",
+      "publication_path": "qualification/qualification_sink.rs",
+      "bytes": 998,
+      "sha256": "56e0f641b917a2e1cc0c3316e329461235a11c80bc6bf3033b22bb3499fec8e4"
+    },
+    {
+      "local_path": "/workspace/shared/m2-optional-cache-qualified-source-transport-v2/full-from-fbf2a517.patch.part-001.txt",
+      "publication_path": "production/transport/full-from-fbf2a517.patch.part-001.txt",
+      "bytes": 100000,
+      "sha256": "ddffb59f274125221bc344cc164c5fc9ff6a6973626208fbb550f0669e6fe84c"
+    },
+    {
+      "local_path": "/workspace/shared/m2-optional-cache-qualified-source-transport-v2/full-from-fbf2a517.patch.part-002.txt",
+      "publication_path": "production/transport/full-from-fbf2a517.patch.part-002.txt",
+      "bytes": 100000,
+      "sha256": "143dba485984f0a57877e18043d3da9d4d5cfc6fc9cb8fc0d014ef803ff3c5f4"
+    },
+    {
+      "local_path": "/workspace/shared/m2-optional-cache-qualified-source-transport-v2/full-from-fbf2a517.patch.part-003.txt",
+      "publication_path": "production/transport/full-from-fbf2a517.patch.part-003.txt",
+      "bytes": 100000,
+      "sha256": "91cc77419d7362fa4c58fc05b799ef6a96b3ad4672e162e4c7f0ff0dc47e7879"
+    },
+    {
+      "local_path": "/workspace/shared/m2-optional-cache-qualified-source-transport-v2/full-from-fbf2a517.patch.part-004.txt",
+      "publication_path": "production/transport/full-from-fbf2a517.patch.part-004.txt",
+      "bytes": 100000,
+      "sha256": "4e3947e490dc1afe66cc991ae0febd92833c9c8e387d3fc2dde4fe4207ea6d63"
+    },
+    {
+      "local_path": "/workspace/shared/m2-optional-cache-qualified-source-transport-v2/full-from-fbf2a517.patch.part-005.txt",
+      "publication_path": "production/transport/full-from-fbf2a517.patch.part-005.txt",
+      "bytes": 16772,
+      "sha256": "b2df64d4fdb7b69cd37c34b0030b907b793336acd115d311fe57e5e586b78e2e"
+    },
+    {
+      "local_path": "/workspace/shared/m2-optional-cache-qualified-source-transport-v2/READ-FIRST.md",
+      "publication_path": "production/transport/READ-FIRST.md",
+      "bytes": 1241,
+      "sha256": "dcfa118c3ecb3f99c2b83a34ae275188b2e88164a74fef9fdf476628a6743ce9"
+    }
+  ],
+  "unchanged_original_files": 31,
+  "unchanged_direct_uploads": 30
+}

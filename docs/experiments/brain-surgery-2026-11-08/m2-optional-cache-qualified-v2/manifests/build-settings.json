@@ -1,0 +1,38 @@
+{
+  "edition": "2021",
+  "crate": "alife_training",
+  "features": [
+    "cpu-backend",
+    "default",
+    "receipt-lineage"
+  ],
+  "target": "x86_64-unknown-linux-gnu",
+  "rust": "1.99.1",
+  "rustc_flags": [
+    "--test",
+    "--cfg",
+    "feature=\"cpu-backend\"",
+    "--cfg",
+    "feature=\"default\"",
+    "--cfg",
+    "feature=\"receipt-lineage\"",
+    "-C",
+    "opt-level=0",
+    "-C",
+    "debuginfo=0",
+    "-C",
+    "debug-assertions=yes",
+    "-C",
+    "overflow-checks=yes",
+    "-C",
+    "embed-bitcode=no",
+    "-C",
+    "strip=debuginfo",
+    "-C",
+    "codegen-units=1",
+    "--emit",
+    "link"
+  ],
+  "test_threads": 1,
+  "note": "Build root is crates/alife_training/src/lib_v2.rs. Dependencies must be rebuilt/provided separately using repository Cargo.lock. No binary or Cargo target is included."
+}

@@ -1,0 +1,35 @@
+{
+  "status": "complete_optional_only_native_window_released",
+  "results_sha256": "94c69d1fc6d26dbe3b7da3eaf38cb59366c9278071072a83e6249df5601ba880",
+  "all_source_identity_checks": {
+    "optional": {
+      "original_frozen_files_unchanged": 101,
+      "future_candidate_files_unchanged": 104
+    },
+    "coordinated": {
+      "original_frozen_files_unchanged": 103,
+      "future_candidate_files_unchanged": 106
+    }
+  },
+  "binary_identities": {
+    "control": {
+      "bytes": 24663520,
+      "sha256": "549f0a8608edf2ca62c55e63c5222fe2dfb3527dcb8867e3eced5e123037f23e",
+      "source_sha256": "0ced68cf7e4a9240d4f85ba7cbda2cb438b6299c2f25d0a99505fcef5a819200"
+    },
+    "candidate": {
+      "bytes": 47915016,
+      "sha256": "02808cd5a8af7fd1a11a459f34f29622945c0ed6ec8905edf02934a19f159ae8",
+      "source_sha256": "0e845eb50d0903eeb08b29d52f4ed1928cc7ba758087e3484ca989577ebee302"
+    }
+  },
+  "retained_raw_total_bytes": 26129458,
+  "peak_compiler_session_rss_sampled": 1018228736,
+  "peak_packet_allocated_including_final_sample": 106090496,
+  "actual_free_bytes": 4681261056,
+  "unused_native_reservation_released": true,
+  "not_published": true,
+  "not_migrated": true,
+  "curated": true,
+  "original_resource_sha256": "5d8cb2fa0b44a2c224f20f4583c29de6aab29e9e684f431382e3edf84542d3e8"
+}

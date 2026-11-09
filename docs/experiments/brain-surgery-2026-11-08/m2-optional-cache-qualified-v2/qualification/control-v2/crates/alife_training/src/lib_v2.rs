@@ -1,0 +1,48 @@
+//! Offline foundation training on the compiled neural graph, using WGSL or CPU.
+#![recursion_limit = "256"]
+
+mod backend_handoff;
+#[cfg(feature = "receipt-lineage")]
+mod current_checkpoint;
+#[cfg(feature = "receipt-lineage")]
+pub use current_checkpoint::*;
+#[cfg(feature = "cpu-backend")]
+pub mod connection_budget_experiment;
+#[cfg(feature = "cpu-backend")]
+#[path = "cpu/mod_v2.rs"]
+pub mod cpu;
+mod founder_demonstrations;
+mod founder_merge;
+mod founder_readout;
+mod grounded_drive_transfer;
+pub use grounded_drive_transfer::*;
+#[cfg(feature = "receipt-lineage")]
+pub mod native_receipt;
+mod ppo;
+mod trainer;
+mod types;
+
+pub use backend_handoff::*;
+pub use founder_demonstrations::*;
+pub use founder_merge::*;
+pub use founder_readout::*;
+pub use ppo::*;
+pub use trainer::FoundationTrainer;
+pub use types::*;
+
+#[derive(Debug, thiserror::Error)]
+pub enum TrainingError {
+    #[error("training world organism error: {0}")]
+    Organism(#[from] alife_world::OrganismRegistryError),
+    #[error("training contract error: {0}")]
+    Contract(#[from] alife_core::ScaffoldContractError),
+    #[error("GPU training submission failed")]
+    GpuSubmission,
+    #[error("GPU training readback was malformed")]
+    MalformedReadback,
+}
+
+pub mod rehearsal;
+
+#[cfg(test)]
+mod qualification_sink;
