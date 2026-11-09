@@ -1,0 +1,11 @@
+{
+  "attempt": 1,
+  "fixed_disposable_qualification_only": true,
+  "main": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "plan_id": "m2-play-hosted-qualification-v6",
+  "prepared_head": "f3056ebfa683b1d280b0d9371456c5c184760c6d",
+  "research_base": "7f905465b79291fd52d1fd65568a9d10e716576a",
+  "schema": "m2-play-qualification-activation-v1",
+  "seal_sha256": "e91cfd08d062e38746e60270b6258bebb9375e2d9b16fc01cc1659071d0e3e0e",
+  "source_manifest_sha256": "eac26aabc32d23c20840f345048f264a42991608aa75684ca98d67158de0a101"
+}
