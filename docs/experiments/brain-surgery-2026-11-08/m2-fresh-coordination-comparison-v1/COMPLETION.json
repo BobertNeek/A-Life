@@ -1,0 +1,52 @@
+{
+  "status": "primary_completed_both_horizons_final_native_compare_timeout",
+  "primary_body_only_ticks": 240,
+  "primary_source_candidates": 1,
+  "primary_forwards_and_commits": 64,
+  "fixed_fixture_body_ticks": 240,
+  "fixed_fixture_forwards": 8,
+  "primary_retries_extensions_reseeds": 0,
+  "raw_packet_chain_and_science_audit": "PASS 64/64",
+  "original_token_source_optimizer_genetic_audit": "PASS 64/64 plus shared cross-arm equality",
+  "native_per_interval_roundtrip_and_closed_source": "PASS before each of 64 publications",
+  "final_native_compare": "TIMEOUT at declared 180 seconds; no summary, no retry, no forward; final native cold restore not confirmed",
+  "uncompressed_exports": 0,
+  "terminals": [
+    {
+      "arm": 0,
+      "stop": "horizon",
+      "intervals": 32,
+      "final_checkpoint_sha256": "b300b7745d02cc58b97b9c8eb3cd0a3ffebc42a4e11172b443f789ebe39b57b3",
+      "last_raw_pair_sha256": "5227b48afe657592a48dcf8a84241fab375d1dfbde18e46a6323427b0a536cfa"
+    },
+    {
+      "arm": 1,
+      "stop": "horizon",
+      "intervals": 32,
+      "final_checkpoint_sha256": "1b1e54f809be9df3c75caf8abb7a730e68e371db0f010ca80ea1ebd19eb2ff91",
+      "last_raw_pair_sha256": "92b9e3fa16e33429d0f1227dbf6e54788746f331723f60631ec6de11d36c91ee"
+    }
+  ],
+  "original_pair_bytes": 184762771,
+  "encoded_pair_inode_bytes": 5390709,
+  "source_and_dispatch_unchanged": true,
+  "actual_packet_allocation_bytes_before_final_receipt": 204419072,
+  "cumulative_cap_bytes": 671088640,
+  "free_bytes": 4847906816,
+  "disk_floor": 4294967296,
+  "unused_reservation_released_after_report": true,
+  "artifacts": {
+    "PRIMARY-RESULTS.md": "f3b5c5b5bb90656111e7edd92324f79878f7691b69933a6019841fb1be25af94",
+    "PRIMARY-AGGREGATES.json": "219c2a4848e77412a2c53f740f35e04b892c5c8062bb40c3a6af75e7c96bf27b",
+    "PRIMARY-NOOP-RECOVERY-MEMORY.json": "da4d7cb19ce7a5114cfc3841604ad0817691aeb9b8188e4868dd1f8c91c136f0",
+    "PRIMARY-CLOSED-BANK-AUDIT.json": "f1536dfafa1e28a4cd9bb57cb41f8c15d0a5817fa3766a6732b21c634f515d60",
+    "FINAL-BIOLOGY-MEAL-MEMORY.json": "b75c91044bad00ecb736d7424a333fbe6c7ef89a476122298e17a9e243244155",
+    "run-primary-arm-0.result.json": "4ffca7dfe45e64ab224c0d9af7277d1a008ee167f500122dd7c565b1ec18d3c0",
+    "run-primary-arm-1.result.json": "357865aeb6d5b1adc32b23df35d457ab602dd5031731f3b87ba9d824df74f749",
+    "compare-primary-v1.result.json": "d035bb72965cf0b5cdc96641c14763566ce1c37d1c8177b11a3a40ef8e9418b8"
+  },
+  "reservation_sha256": "9bafe5c6fa349dcf1a2239f123f980291a38f02ea8bcde6724ab08350e4cf33a",
+  "driver_executable_sha256": "f96325dd72915712151c6e48e65611cda3aa5ca263b768fb8390d347c109f13e",
+  "source_freeze_sha256": "7252e2dfb4359b1487afae9473e3eaf6162f97b1008b786f03d04910ddafcc47",
+  "no_other_owner_mutation": true
+}
