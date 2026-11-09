@@ -1,0 +1,352 @@
+--- successor/crates/alife_training/src/cache_admin_main.rs
++++ admin/crates/alife_training/src/cache_admin_main.rs
+@@ -0,0 +1,46 @@
++//! Offline foundation training on the compiled neural graph, using WGSL or CPU.
++#![recursion_limit = "256"]
++
++mod backend_handoff;
++#[cfg(feature = "receipt-lineage")]
++mod current_checkpoint;
++#[cfg(feature = "receipt-lineage")]
++pub use current_checkpoint::*;
++#[cfg(feature = "cpu-backend")]
++pub mod connection_budget_experiment;
++#[cfg(feature = "cpu-backend")]
++pub mod cpu;
++mod founder_demonstrations;
++mod founder_merge;
++mod founder_readout;
++mod grounded_drive_transfer;
++pub use grounded_drive_transfer::*;
++#[cfg(feature = "receipt-lineage")]
++pub mod native_receipt;
++mod ppo;
++mod trainer;
++mod types;
++
++pub use backend_handoff::*;
++pub use founder_demonstrations::*;
++pub use founder_merge::*;
++pub use founder_readout::*;
++pub use ppo::*;
++pub use trainer::FoundationTrainer;
++pub use types::*;
++
++#[derive(Debug, thiserror::Error)]
++pub enum TrainingError {
++    #[error("training world organism error: {0}")]
++    Organism(#[from] alife_world::OrganismRegistryError),
++    #[error("training contract error: {0}")]
++    Contract(#[from] alife_core::ScaffoldContractError),
++    #[error("GPU training submission failed")]
++    GpuSubmission,
++    #[error("GPU training readback was malformed")]
++    MalformedReadback,
++}
++
++pub mod rehearsal;
++
++fn main() { cpu::GroupedMotorStateV1::run_administrative_qualification(); }
+--- successor/crates/alife_training/src/cpu/grouped_host_cache_tests.rs
++++ admin/crates/alife_training/src/cpu/grouped_host_cache_tests.rs
+@@ -25,6 +25,7 @@
+ fn witness(wire: &[u8], len: usize, sha: &str) {
+     assert_eq!(wire.len(), len);
+     assert_eq!(format!("{:x}", Sha256::digest(wire)), sha);
++    eprintln!("CACHE_WITNESS bytes={len} sha256={sha} complete_bytes_checked=true");
+ }
+ fn decision_bytes(step: &CpuGroupedM2HostStepV1) -> Vec<u8> {
+     bytes(&(
+--- successor/crates/alife_training/src/cpu/grouped_host_loop.rs
++++ admin/crates/alife_training/src/cpu/grouped_host_loop.rs
+@@ -36,6 +36,8 @@
+             ExperienceSequenceId,
+         ) -> Result<PerceptionFrameDraft, ScaffoldContractError>,
+     ) -> Result<CpuGroupedM2HostStepV1, CpuHostError> {
++        #[cfg(test)]
++        eprintln!("CACHE_COUNTS grouped_inner_attempt tick={} temperature_bits={}", self.world.tick().raw(), temperature.to_bits());
+         let p = founder.phenotype();
+         let tick = self.world.tick();
+         let mut decisions = Vec::new();
+@@ -793,6 +795,8 @@
+             .world
+             .try_advance_tick_with_body_events_in_staged_tick(&body_events)?;
+         self.seal_all_residents()?;
++        #[cfg(test)]
++        eprintln!("CACHE_COUNTS grouped_inner_completed tick={}", self.world.tick().raw());
+         Ok(CpuGroupedM2HostStepV1 {
+             tick_before: tick,
+             tick_after,
+--- successor/crates/alife_training/src/cpu/grouped_host_tests.rs
++++ admin/crates/alife_training/src/cpu/grouped_host_tests.rs
+@@ -8,7 +8,9 @@
+ // Fixed distinct mnemonic "GRPHOST", declared before the first test run.
+ const SEED: u64 = 0x0347_5250_484F_5354;
+ fn fixture(preparation: u64) -> (CpuGroupedM2HostV1, PhenotypeCompilerInputs) {
++    eprintln!("CACHE_COUNTS source_recipe_attempt seed=GRPHOST preparation={preparation}");
+     let recipe = recipe::build(SEED, true).unwrap();
++    eprintln!("CACHE_COUNTS source_recipe_completed seed=GRPHOST");
+     let mut trainer = CpuFoundationTrainer::new(
+         recipe.phenotype.clone(),
+         recipe.asset.clone(),
+@@ -48,9 +50,11 @@
+         (SEED ^ (SEED >> 32)) as u32,
+         MediationModeV1::Full,
+         |world| -> Result<(), String> {
++            eprintln!("CACHE_COUNTS body_preparation_attempt ticks={preparation}");
+             for _ in 0..preparation {
+                 world.try_advance_tick().map_err(|e| e.to_string())?;
+             }
++            eprintln!("CACHE_COUNTS body_preparation_completed ticks={preparation}");
+             assert!(!world.age_death_disabled());
+             assert!(world
+                 .organism_registry()
+--- successor/crates/alife_training/src/cpu/motor_mediation/confidence/host.rs
++++ admin/crates/alife_training/src/cpu/motor_mediation/confidence/host.rs
+@@ -161,7 +161,7 @@
+         let _ = self.validation_cache.set(Arc::clone(&validated));
+         Ok(validated)
+     }
+-    #[cfg(test)]
++    #[cfg(any(test, cache_admin))]
+     pub(crate) fn validation_compile_count() -> usize {
+         validation_cache::compile_count()
+     }
+@@ -306,7 +306,11 @@
+         m.validate()?;
+         // THE ONLY source execution. Current recurrent banks, acquired dendrites,
+         // frozen structural rows and effective lifetime+alpha*fast are in q.
++        #[cfg(test)]
++        eprintln!("CACHE_COUNTS motor_source_forward_attempt");
+         let tape = SparseGraph::new(source).forward_mediation_source(source, weights, q)?;
++        #[cfg(test)]
++        eprintln!("CACHE_COUNTS motor_source_forward_completed");
+         let mut next = self.clone();
+         let mut drives = [0.; 12];
+         drives[..11].copy_from_slice(&frame.homeostasis().drives.to_array());
+@@ -452,3 +456,9 @@
+ #[cfg(test)]
+ #[path = "host_validation_cache_tests.rs"]
+ mod validation_cache_tests;
++
++#[cfg(cache_admin)]
++#[path = "host_admin_benchmark.rs"]
++mod admin_benchmark;
++#[cfg(cache_admin)]
++impl GroupedMotorStateV1 { pub(crate) fn run_administrative_qualification() { admin_benchmark::run(); } }
+--- successor/crates/alife_training/src/cpu/motor_mediation/confidence/host_admin_benchmark.rs
++++ admin/crates/alife_training/src/cpu/motor_mediation/confidence/host_admin_benchmark.rs
+@@ -0,0 +1,166 @@
++//! Administrative qualification only; not included in the candidate patch.
++use super::*;
++use std::time::Instant;
++fn uncached_reference(state: &GroupedMotorStateV1, source: &BrainPhenotype) -> Result<(), TrainingError> {
++        let expected = PhenotypeCompiler::compile_validated(
++            &state.source_inputs,
++            &BrainCapacityClass::n2048_grounded_drive_research(),
++        )?;
++        if state.schema != HOST_SCHEMA
++            || state.work_policy != GROUPED_HOST_WORK_POLICY_V1
++            || state.m2_recipe != M2_RECIPE_SHA256
++            || state.group_recipe != RECOVERY_GROUP_CONFIDENCE_RECIPE_SHA256
++            || state.mode == MediationModeV1::DirectSource
++            || expected != *source
++            || state.source_hash != source.phenotype_hash()
++            || source.neuron_count() != 2048
++            || source.synapses().len() != 34048
++            || source.foundation_abi().motor_lobe_m0().is_some()
++            || !source
++                .candidate_decoder()
++                .factorized_motor_channels(source)?
++                .contains(&MotorChannel::Posture)
++        {
++            return Err(invalid());
++        }
++        Lowered::pinned(MANIFEST)?;
++        GroupedMotorStateV1::group_recipe()?;
++        for (bank, count, bounded) in [
++            (state.activations.as_slice(), ADDED, false),
++            (state.ema.as_slice(), ADDED, true),
++            (state.metabolic.as_slice(), ADDED, true),
++            (state.group_activations.as_slice(), 16, false),
++            (state.group_ema.as_slice(), 16, true),
++            (state.group_metabolic.as_slice(), 16, true),
++        ] {
++            if bank.len() != count
++                || bank
++                    .iter()
++                    .any(|x| !x.is_finite() || (bounded && !(0. ..=1.).contains(x)))
++            {
++                return Err(invalid());
++            }
++        }
++        match &state.last_receipt {
++            None if state.generation == 0 => (),
++            Some(r) if state.generation > 0 => {
++                let core = &r.native.core;
++                if core.source_hash != state.source_hash
++                    || core.mode != state.mode
++                    || core.final_generation != state.generation
++                    || core.source_generation.checked_add(1) != Some(state.generation)
++                    || core.source_execution_count != 1
++                    || core.appended_activations != state.activations
++                    || r.native.extension_activations != state.group_activations
++                    || r.native.schema != HOST_SCHEMA
++                    || r.native.recipe != state.group_recipe
++                    || core.schema != HOST_SCHEMA
++                    || core.recipe != state.m2_recipe
++                    || r.raw_memory.len() != core.components.len()
++                    || r.raw_cognitive.len() != core.components.len()
++                    || core.work != MediationWorkV1::expected()
++                    || !r.applied_body_energy_debit.is_finite()
++                    || r.applied_body_energy_debit < 0.
++                {
++                    return Err(invalid());
++                }
++                finite(&r.raw_memory)?;
++                finite(&r.raw_cognitive)?;
++                r.native.scores.validate_host_identity(
++                    state.source_hash,
++                    r.frame_digest,
++                    core.source_generation,
++                )?;
++            }
++            _ => return Err(invalid()),
++        }
++        Ok(())
++    }
++
++fn source_with_heads(head_count: u8, zero_priorities: bool) -> (BrainPhenotype, PhenotypeCompilerInputs, FoundationWeightAsset) {
++    let g = BrainGenome::scaffold(
++        0x4752_5031,
++        BrainCapacityClass::N2048_GROUNDED_DRIVE_RESEARCH_ID,
++    );
++    let a = g.cognitive_architecture();
++    let heads = alife_core::genome::CognitiveArchitectureGenomeParameters::try_new_v1(
++        a.attention_capacity(),
++        a.active_concept_limit(),
++        a.active_gap_limit(),
++        a.predictor_capacity(),
++        a.predictor_learning_rate(),
++        head_count,
++        a.motor_head_width(),
++        a.dendritic_branch_capacity(),
++        a.structural_candidate_budget(),
++        a.structural_edit_budget(),
++        a.sleep_trigger_threshold(),
++        a.sleep_replay_rate(),
++        a.sleep_consolidation_rate(),
++        a.attention_learning_rate(),
++        a.concept_learning_rate(),
++        a.motor_learning_rate(),
++        a.structural_learning_rate(),
++    )
++    .unwrap();
++    let mut g = g.with_cognitive_architecture(heads).unwrap();
++    if zero_priorities {
++        g.innate_priority = Default::default();
++    }
++    let d = DevelopmentState::new(g.id, Tick::ZERO, NormalizedScalar::new(1.).unwrap());
++    let (p, i) = PhenotypeCompiler::compile_n2048_grounded_drive_basis(
++        g,
++        d,
++        SensorProfile::GroundedObjectSlotsV1,
++    )
++    .unwrap();
++    let a = FoundationWeightAsset::from_trained_weights(
++        &p,
++        p.synapses().iter().map(|s| s.genetic_weight()).collect(),
++        TrainingStageManifest::bootstrap(),
++    )
++    .unwrap();
++    let (p, i) = PhenotypeCompiler::compile_n2048_grounded_drive_basis_candidate(
++        i.genome().clone(),
++        i.development().clone(),
++        a.clone(),
++    )
++    .unwrap();
++    (p, i, a)
++}
++
++fn timed(old: bool, state: &GroupedMotorStateV1, source: &BrainPhenotype) -> f64 {
++    let start = Instant::now();
++    if old { uncached_reference(state, source).unwrap(); }
++    else { state.validate(source).unwrap(); }
++    start.elapsed().as_secs_f64() * 1000.
++}
++pub(super) fn run() {
++    let (source, inputs, asset) = source_with_heads(4, false);
++    eprintln!("ADMIN_SOURCE construction=standard_fixed_arithmetic public_compile_entries=2 world_ticks=0 neural_steps=0");
++    let state = GroupedMotorStateV1::fresh(&inputs, &source, MediationModeV1::Full).unwrap();
++    let before = serde_json::to_vec(&state).unwrap();
++    let source_before = serde_json::to_vec(&source).unwrap();
++    let asset_before = asset.encode_canonical().unwrap();
++    let initial_count = GroupedMotorStateV1::validation_compile_count();
++    eprintln!("ADMIN_PROOF {:?}", state.validation_cache.get().unwrap());
++    let mut reference = Vec::new();
++    let mut cached = Vec::new();
++    for pair in 0..8 {
++        let (a, b) = if pair % 2 == 0 {
++            (timed(true, &state, &source), timed(false, &state, &source))
++        } else {
++            let b = timed(false, &state, &source);
++            (timed(true, &state, &source), b)
++        };
++        reference.push(a); cached.push(b);
++        assert_eq!(serde_json::to_vec(&state).unwrap(), before);
++        assert_eq!(serde_json::to_vec(&source).unwrap(), source_before);
++        assert_eq!(asset.encode_canonical().unwrap(), asset_before);
++        assert_eq!(GroupedMotorStateV1::validation_compile_count(), initial_count);
++        eprintln!("ADMIN_PAIR pair={pair} original_ms={a} cached_ms={b} cached_compile_delta=0 state_source_asset_bytes_equal=true");
++    }
++    eprintln!("ADMIN_SUMMARY reference_compile_entries=8 cached_compile_entries=0 original_total_ms={} cached_total_ms={}", reference.iter().sum::<f64>(), cached.iter().sum::<f64>());
++
++    eprintln!("ADMIN_FINISHED source_constructions=1 public_compile_entries=2 world_ticks=0 neural_steps=0 cache_compile_entries_total={}", GroupedMotorStateV1::validation_compile_count());
++}
+--- successor/crates/alife_training/src/cpu/motor_mediation/confidence/host_validation_cache.rs
++++ admin/crates/alife_training/src/cpu/motor_mediation/confidence/host_validation_cache.rs
+@@ -100,7 +100,7 @@
+ }
+ impl CachedGroupedCompilation {
+     pub(super) fn compile(inputs: &PhenotypeCompilerInputs) -> Result<Self, TrainingError> {
+-        #[cfg(test)]
++        #[cfg(any(test, cache_admin))]
+         COMPILE_ATTEMPTS.with(|count| count.set(count.get() + 1));
+         let expected = PhenotypeCompiler::compile_validated(
+             inputs,
+@@ -145,13 +145,13 @@
+     }
+ }
+ 
+-#[cfg(test)]
++#[cfg(any(test, cache_admin))]
+ thread_local! {
+     // Test-thread local, counts only this cache's compiler calls, not other
+     // required admission/restore compilers. Never serialized or production.
+     static COMPILE_ATTEMPTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+ }
+-#[cfg(test)]
++#[cfg(any(test, cache_admin))]
+ pub(super) fn compile_count() -> usize {
+     COMPILE_ATTEMPTS.with(std::cell::Cell::get)
+ }
+--- successor/crates/alife_training/src/cpu/motor_mediation/confidence/host_validation_cache_tests.rs
++++ admin/crates/alife_training/src/cpu/motor_mediation/confidence/host_validation_cache_tests.rs
+@@ -375,6 +375,7 @@
+     PhenotypeCompilerInputs,
+     FoundationWeightAsset,
+ ) {
++    eprintln!("CACHE_COUNTS synthetic_zero_source_construction public_compile_entries=2 world_ticks=0");
+     let g = BrainGenome::scaffold(
+         0x4752_5031,
+         BrainCapacityClass::N2048_GROUNDED_DRIVE_RESEARCH_ID,
+--- successor/crates/alife_training/src/cpu/motor_mediation/confidence/tests.rs
++++ admin/crates/alife_training/src/cpu/motor_mediation/confidence/tests.rs
+@@ -5,6 +5,7 @@
+     SOURCE.get_or_init(|| source_with_heads(4)).clone()
+ }
+ fn source_with_heads(head_count: u8) -> (PhenotypeCompilerInputs, FoundationWeightAsset) {
++    eprintln!("CACHE_COUNTS arithmetic_source_construction head_count={head_count} public_compile_entries=2 world_ticks=0");
+     let g = BrainGenome::scaffold(
+         0x4752_5031,
+         BrainCapacityClass::N2048_GROUNDED_DRIVE_RESEARCH_ID,
