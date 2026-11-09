@@ -2,13 +2,11 @@
 
 ## Current checkpoint: 9 November 2026
 
-- Grip fixed qualification is complete across separately attributed runs: six new V6/V7 passes plus forty historical receipts, not a fresh 46-test sweep. [Latest five CPU GPU-backend contracts](https://github.com/BobertNeek/A-Life/actions/runs/42705473214) used no hardware dispatch.
-- [Play runtime new05 cold-boundary passed](https://github.com/BobertNeek/A-Life/actions/runs/42705534641). New06, eleven legacy fixtures and two default-wire probes are still pending in a separate continuation.
-- [Controlled Play physics passed](https://github.com/BobertNeek/A-Life/actions/runs/42699800420), but the novel toy produced investigation rather than stimulation, with no boredom benefit. A source-bound target-familiarity repair is being implemented, not yet host-qualified.
-- [Meal's real later decision qualified](https://github.com/BobertNeek/A-Life/actions/runs/42700219085) without an observed sampled-action or reported Eat-probability change. A source-only full-support/rejection diagnostic is prepared for a new fixed run.
-- Main/defaults and acquired lives remain unchanged. None of these fixed CPU results establishes autonomous care or new learned competence.
-
-The dated sections below preserve the complete chronology, including failures that later corrections do not erase.
+- Grip's declared fixed qualification has passing receipts across revisions: six new V6/V7 CPU passes plus forty historical passes, not a fresh 46-test sweep. [Latest five backend contracts](https://github.com/BobertNeek/A-Life/actions/runs/42705473214) used no hardware dispatch.
+- Play's fixed source-bound qualification is complete across retained V5/V6 passes and [V7's twelve remaining fixtures plus two matching default-wire probes](https://github.com/BobertNeek/A-Life/actions/runs/42714479314). This is not a new autonomous-care or gameplay result.
+- [Controlled Play physics passed](https://github.com/BobertNeek/A-Life/actions/runs/42699800420), but the novel toy produced investigation rather than stimulation. A separately owned actual-contact familiarity repair remains staged, unqualified and fail-closed.
+- [Meal full-support diagnosis passed](https://github.com/BobertNeek/A-Life/actions/runs/42713751829): the drive-context guard blocks both sources before later matching gates. The differing axis is not yet measured; post-meal state change may be legitimate. No guard or gain was loosened.
+- Main/defaults and acquired lives remain unchanged. Dated sections below preserve all prior failures, exact scopes and corrections.
 
 ## Method and scope
 
@@ -607,3 +605,18 @@ The meal first-rejection diagnostic remains unactivated. Its source-only packagi
 Contact familiarity remains implementation work, not a host result. Its 64-record pure bank/codec tests pass, with measured 12,512-byte resident/maximum encoding, no resident/decode heap index and explicit bounded scans. New owner/schema/proof/source/RNG plumbing is staged; actual host constructor/restore/action cross-owner tests and consistent work admission/debit remain prerequisites to the four-interval physical qualification. The first conservative admission requires a wholly successful joint transaction because current channel receipts do not expose independent per-channel success. This can undercount contacts when an unrelated channel fails; it avoids inventing success.
 
 Main is still `c3aec16df33861f1316d127736f5f60eea327ede`. All defaults, retained lives, prior evidence and inherited workflows remain preserved. These results qualify specific CPU contracts, not autonomous care or new learned competence.
+
+
+## 2026-11-09 23:05 UTC: fixed Play qualification complete; memory context and retention clarified
+
+[Play V7](https://github.com/BobertNeek/A-Life/actions/runs/42714479314), activation `b2ef698bf1a32badcfc71be2fff8818a05dbd877`, passed at attempt 1. All three exact builds completed, all twelve remaining fixtures passed and both original60/owned76 default-wire probes matched byte counts and SHA256 at boundaries 0, 1 and 2. Retain V5 new01–new04 and V6 new05 as earlier passes; they were not rerun. The fixed source-bound CPU qualification has no remaining declared test/probe gap, but is not a fresh seventeen-fixture batch, broad hardware qualification or demonstrated useful Play.
+
+[Meal diagnostic V6](https://github.com/BobertNeek/A-Life/actions/runs/42713751829), activation `53c6a3207095daec7e4a5d1cc89a086e8f5bc58b`, passed its three-interval fixture and all cold/archive/bank assertions. Its unchanged production reader rejected both original sources first at Drives for every enumerated support row. Query capture succeeded; no later role, operation or chemistry predicate was reached. The fixed computed on/off distributions were unchanged. The diagnostic did not emit which drive differed, so do not label hunger, ATP or any other component as the measured cause.
+
+Source audit identifies eleven raw pre-action unit-range lanes: hunger, fatigue, fear, pain, loneliness, curiosity, brain_atp, temperature_stress, reproductive_drive, extension[0] and extension[1]. They are not weighted neural activations or uniformly biological deficits. The later query is the real third predecision frame after consumption, while the original source context is pre-action. A changed post-meal need state may appropriately alter value; storage, eligibility and motivation are distinct questions. The 0.15 guard and all gains remain unchanged.
+
+The exact source bank retains 64 accepted joint events, FIFO by admission. Every valid event consumes a slot, including negative, non-consumed and missing-cue events. There is no merge, time-to-live, recall refresh or clock-based expiry: an event survives 63 subsequent admissions and is removed by the 64th. Body-only waiting would artificially hold this event window and cannot establish reusable recall during normal cognition. Further work will identify the actual differing lane and appropriate later opportunity without forcing hunger, renewing food, adding an object or bypassing retention.
+
+The contact-familiarity repair has staged new owner/schema/source-pending/proof/RNG domains and 31 passing pure bank/predicate/work tests. Final hardened source is not yet native-qualified. Independent review identified incomplete command-receipt binding before execution. The fix must bind the complete expected command after the world's real embodiment/locomotor intensity adaptation, using the executing staged world's prephysical body, not an assumed-equal perception copy. Canonical hashes normalize signed zero, so any declared field-bit equality requires explicit bit checks. Physical dispatch remains closed while this and actual API/codec qualification are completed. The four-interval physical draft is still separate and unactivated.
+
+Local contact cargo checks produced a retained /tmp reserve excursion; passed earlier checks do not qualify the later hardened overlays. No artifact was deleted and neither reserve was lowered. /tmp is now read-only, all future builds are hosted, and only small source/receipt saves use a guarded, collectively capped 2 MiB workspace area with a fresh 4 GiB reserve check before each write. Existing code, logs, compiled outputs and learned baseline remain preserved.
