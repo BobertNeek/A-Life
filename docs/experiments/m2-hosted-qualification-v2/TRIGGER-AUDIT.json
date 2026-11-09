@@ -1,6 +1,6 @@
 {
-  "baseline": "8e039f5b0a282b741cdd73cc06934c57825ac060",
-  "branch": "qualification/m2-fixed-fixtures-v3",
+  "baseline": "dcace9456304e58e442a7423f934102eac1f4323",
+  "branch": "qualification/m2-fixed-fixtures-v4",
   "documentation": [
     {
       "finding": "Push workflows can run from commits not merged into default. Ref creation is a distinct create event; do not assume a ref-creation API write is the activating commit push.",
@@ -16,14 +16,15 @@
     }
   ],
   "existing_matching_push_workflows": 0,
-  "limitation": "Read-only audit. Recheck the complete workflow inventory, all blobs, marker absence and run ledger on the new prepared V3 head before exactly one new V3 marker-add commit. No activation has been performed by this preparation.",
-  "new_marker": "docs/experiments/m2-hosted-qualification-v3/ACTIVATE.json",
-  "new_workflow": ".github/workflows/m2-fixed-fixtures-v3.yml",
+  "limitation": "Read-only audit. Recheck complete workflow inventory, all blobs, marker absence and run ledger on the new prepared V4 head before one new V4 marker-add commit. No publication or activation by this preparation.",
+  "new_marker": "docs/experiments/m2-hosted-qualification-v4/ACTIVATE.json",
+  "new_workflow": ".github/workflows/m2-fixed-fixtures-v4.yml",
   "no_pr": true,
-  "no_v2_rerun_or_marker_reuse": true,
+  "no_prior_rerun_or_marker_reuse": true,
   "no_workflow_dispatch": true,
-  "v2_activation_head": "2092ccfc919c3ddfef4ac1cd645700f70d5d5ab1",
   "v2_terminal_run": 42575100065,
+  "v3_activation_head": "c3bf62432ecefd2ec22c8a586013f84dcd4ff548",
+  "v3_terminal_run": 42578269916,
   "workflow_records": [
     {
       "events": [
@@ -37,7 +38,8 @@
         "main"
       ],
       "sha256": "ce23d4dff5832deec885e4b086769cc46bf7c780ce990543d45e2a8383dfc938",
-      "source_verified_at_prepared_head": true
+      "source_verified_at_prepared_head": true,
+      "unchanged_on_v4": true
     },
     {
       "events": [
@@ -51,7 +53,8 @@
         "main"
       ],
       "sha256": "58cdcf0114c81639b041ff793bdcdc4f428cfd1f252a45b3462876bb86eb3231",
-      "source_verified_at_prepared_head": true
+      "source_verified_at_prepared_head": true,
+      "unchanged_on_v4": true
     },
     {
       "events": [
@@ -65,7 +68,8 @@
         "main"
       ],
       "sha256": "8451c3ce325c89e394a221409f6bb8955f0554e158d325b8edeb99862839fe0a",
-      "source_verified_at_prepared_head": true
+      "source_verified_at_prepared_head": true,
+      "unchanged_on_v4": true
     },
     {
       "events": [
@@ -79,7 +83,8 @@
         "main"
       ],
       "sha256": "a40abd2944cdd2a2e8f24a9fc6df71228e90e29b69a14353d0800b2fc8025b27",
-      "source_verified_at_prepared_head": true
+      "source_verified_at_prepared_head": true,
+      "unchanged_on_v4": true
     },
     {
       "events": [
@@ -93,7 +98,8 @@
         "main"
       ],
       "sha256": "9a1d4080e0a98f7c067d6b6dbe86cb8157f158d5cc9b43e8525e8203ac0af7ac",
-      "source_verified_at_prepared_head": true
+      "source_verified_at_prepared_head": true,
+      "unchanged_on_v4": true
     },
     {
       "events": [
@@ -108,7 +114,8 @@
         "group50-ci/**"
       ],
       "sha256": "078bbfff6f62d260c7acc3455341640983e82fd9e70e7599091647bb28ea540d",
-      "source_verified_at_prepared_head": true
+      "source_verified_at_prepared_head": true,
+      "unchanged_on_v4": true
     },
     {
       "events": [
@@ -122,7 +129,8 @@
         "main"
       ],
       "sha256": "ba9ac86fcbfd263bd361d327636c94e139e3054d23c9d088ee9824c1e4959bbc",
-      "source_verified_at_prepared_head": true
+      "source_verified_at_prepared_head": true,
+      "unchanged_on_v4": true
     },
     {
       "events": [
@@ -137,7 +145,8 @@
         "codex/**"
       ],
       "sha256": "b3623495eadaee4c996266a7dde75c242050bb393661ca58caa3350b99f592d2",
-      "source_verified_at_prepared_head": true
+      "source_verified_at_prepared_head": true,
+      "unchanged_on_v4": true
     },
     {
       "events": [
@@ -151,7 +160,8 @@
         "main"
       ],
       "sha256": "c324e648540e09f41ff59820ff7511f6fc0ca342613ab079550f56b4d0cabd4a",
-      "source_verified_at_prepared_head": true
+      "source_verified_at_prepared_head": true,
+      "unchanged_on_v4": true
     },
     {
       "events": [
@@ -166,7 +176,8 @@
         "main"
       ],
       "sha256": "6f42f581dab85d28a8b2f2450b9568392a1ae340bd296a01cc20a9de27afd7e7",
-      "source_verified_at_prepared_head": true
+      "source_verified_at_prepared_head": true,
+      "unchanged_on_v4": true
     },
     {
       "events": [
@@ -177,7 +188,8 @@
       "path": ".github/workflows/resident-output-budget.yml",
       "push_branches": [],
       "sha256": "e6186b527ecdc858a3ee688669d7cf290a4233d2f2d0bd3427bf3a248050d7b7",
-      "source_verified_at_prepared_head": true
+      "source_verified_at_prepared_head": true,
+      "unchanged_on_v4": true
     },
     {
       "events": [
@@ -191,7 +203,8 @@
         "main"
       ],
       "sha256": "ede52b3e73ef0725add8f54d51f6413ef8763db23b3ed9c2b5ed2a9513385f01",
-      "source_verified_at_prepared_head": true
+      "source_verified_at_prepared_head": true,
+      "unchanged_on_v4": true
     },
     {
       "events": [
@@ -205,7 +218,8 @@
         "main"
       ],
       "sha256": "45cad082b08976e1944ae00047598b42a54d52185fc66bd59faae83bb9d0c20b",
-      "source_verified_at_prepared_head": true
+      "source_verified_at_prepared_head": true,
+      "unchanged_on_v4": true
     },
     {
       "events": [
@@ -217,7 +231,8 @@
       "path": ".github/workflows/windows-resident-experimental.yml",
       "push_branches": [],
       "sha256": "57190936e57bbecf8e3de03d325e4ea1ebd9c22086618ffeb43be3c0ddb14f2f",
-      "source_verified_at_prepared_head": true
+      "source_verified_at_prepared_head": true,
+      "unchanged_on_v4": true
     },
     {
       "events": [
@@ -232,7 +247,8 @@
         "main"
       ],
       "sha256": "d1ab71666c97c0257b4c1cd4e0abb26bc352dcf01960c736f663ddbcac76f891",
-      "source_verified_at_prepared_head": true
+      "source_verified_at_prepared_head": true,
+      "unchanged_on_v4": true
     },
     {
       "events": [
@@ -247,7 +263,22 @@
       ],
       "sha256": "bf04a92c7a662ca16448ebe199c54a7eb10a1c541ff86220afe67dc381890723",
       "source_verified_at_prepared_head": true,
-      "unchanged_on_v3": true
+      "unchanged_on_v4": true
+    },
+    {
+      "events": [
+        "push"
+      ],
+      "git_blob": "b10ee30b021fea7a1083d5c2281bb0630cd096f0",
+      "marker_branch_push_matches": false,
+      "marker_path": "docs/experiments/m2-hosted-qualification-v3/ACTIVATE.json",
+      "path": ".github/workflows/m2-fixed-fixtures-v3.yml",
+      "push_branches": [
+        "qualification/m2-fixed-fixtures-v3"
+      ],
+      "sha256": "446bae9c31eb0970ad602c938b7ed1586443c901cc72e392648ef083d86a37c1",
+      "source_verified_at_prepared_head": true,
+      "unchanged_on_v4": true
     }
   ]
 }
