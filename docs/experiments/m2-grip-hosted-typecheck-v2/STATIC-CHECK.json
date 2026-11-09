@@ -1,0 +1,11 @@
+{
+  "checks_run": 24,
+  "errors": 0,
+  "failures": 0,
+  "native_invocations": 0,
+  "network_calls": 0,
+  "passed": true,
+  "schema": "m2-grip-static-check-v2",
+  "scope": "Python syntax, pure synthetic guards/projections, source recovery and metadata only",
+  "test_bodies": 0
+}

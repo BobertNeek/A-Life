@@ -1,0 +1,44 @@
+{
+  "activation_head": "9f68e9c278f037c845e38354243570db223e5e43",
+  "activation_marker_sha256": "9e33a9ac3e464bcf7deebeec387ce9c661f5d81016857196f28881d9581490a2",
+  "body_advances": 0,
+  "bound_files": 864,
+  "cargo_lock_sha256": "2b637c0f2b2cd34fb9fe2f9a5f9a3a7b490f0b7f8d5f1f7c8764f29077d0ebdd",
+  "code": "CHECK",
+  "completed": [
+    "core"
+  ],
+  "diagnostics": [
+    {
+      "code": "E0004",
+      "line": 201,
+      "path": "crates/alife_world/tests/gpu_memory_grounding_persistence.rs",
+      "stage": "world"
+    }
+  ],
+  "elapsed_seconds": 78,
+  "grip_patch_sha256": "acf8cc50353ba76cb7adf5af1db5845ee6e6b2e2261d0ee823821428e2e4d054",
+  "main": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "native_test_bodies": 0,
+  "output_bytes": 168639,
+  "peak_rss_bytes": 1603649536,
+  "peak_workspace_bytes": 1170391003,
+  "plan_id": "m2-grip-hosted-typecheck-v1",
+  "prepared_head": "4a3a39be5f8a4a95f662ed2e7c3a67ed50b62da1",
+  "research_base": "fbf2a517f93098b5d936878a3d26bbb8d0391c38",
+  "schema": "m2-grip-typecheck-summary-v1",
+  "seal_sha256": "72d1acb824753379f60f066bc55eb1ad04eab7ed09a07194a2ea2c3a02b4c948",
+  "source_forwards": 0,
+  "source_manifest_sha256": "605f4800b6c57f02b95f0a27ed8c17c09d9a027c7c58b1e01830020c368e154c",
+  "stage": "world",
+  "toolchain": {
+    "cargo": "cargo 1.99.1 (5f94df478 2026-08-27)",
+    "cargo_binary_sha256": "a670e02cfa39ac2e53f77a2d911ca1fc9e2c479b0603ec956625be1daf24e3af",
+    "host": "x86_64-unknown-linux-gnu",
+    "llvm": "23.1.1",
+    "rust_commit": "58cf8f9c35b355199727627d07ae34a4e2846d67",
+    "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+    "rustc_binary_sha256": "b53b780f77f952062f8ca8a3b70aef2390b1e45ad91939be94afdc9543026853"
+  },
+  "world_commands": 0
+}

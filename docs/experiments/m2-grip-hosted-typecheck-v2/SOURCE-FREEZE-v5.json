@@ -1,0 +1,10 @@
+{
+  "schema": "grip-source-freeze-v5",
+  "status": "source-only-correction-no-native-qualification",
+  "base_commit": "fbf2a517f93098b5d936878a3d26bbb8d0391c38",
+  "mapped_paths": 147,
+  "source_closure": "434abe6295edbb7badfc2bc71b8876ba8cee3dd91e87478f46f3ce408850b150",
+  "parent_patch_sha256": "acf8cc50353ba76cb7adf5af1db5845ee6e6b2e2261d0ee823821428e2e4d054",
+  "correction_patch_sha256": "0ce2a14320e13e31b9727d41d979798910c31e9663dcaca043c0900c5c96774a",
+  "correction_patch_bytes": 2369
+}

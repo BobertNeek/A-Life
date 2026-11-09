@@ -1,0 +1,23 @@
+{
+  "bound_files": 864,
+  "correction_bytes": 2369,
+  "correction_files": 3,
+  "correction_sha256": "0ce2a14320e13e31b9727d41d979798910c31e9663dcaca043c0900c5c96774a",
+  "hosted_v2_native_invocations": 0,
+  "inherited_closure_files_verified": 120,
+  "main": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "native_invocations": 0,
+  "network_calls": 0,
+  "nominal_supplement_bytes": 136753,
+  "nominal_supplement_files": 17,
+  "reconstruction_verified": true,
+  "registered_grip_paths_verified": 147,
+  "research_source": "fbf2a517f93098b5d936878a3d26bbb8d0391c38",
+  "schema": "m2-grip-source-preparation-v2",
+  "source_ready": true,
+  "source_reconstruction": "main -> exact inherited fbf library closure -> nominal supplement -> immutable grip V4 -> three-file V5 correction",
+  "toolchain_status": "Same official Rust 1.99.1 setup succeeded on hosted v1. New v2 not executed.",
+  "unresolved_includes": [],
+  "v1_preserved": true,
+  "v4_preserved": true
+}

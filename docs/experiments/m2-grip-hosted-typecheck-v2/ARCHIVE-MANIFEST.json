@@ -1,0 +1,156 @@
+{
+  "activation_present": false,
+  "archive": "source-only-m2-grip-typecheck-v2-update.tar.gz",
+  "bytes": 91955,
+  "member_count": 23,
+  "members": [
+    {
+      "archive_path": "docs/experiments/m2-grip-hosted-typecheck-v2/ACTIVATE.template.json",
+      "bytes": 497,
+      "path": "ACTIVATE.template.json",
+      "sha256": "e389f8d65fa5ce3a6687bed8814858b48c64bd832e2f9a4a27fa8d6f69e1896e"
+    },
+    {
+      "archive_path": "docs/experiments/m2-grip-hosted-typecheck-v2/CORRECTION.json",
+      "bytes": 1112,
+      "path": "CORRECTION.json",
+      "sha256": "da3fbc5accd7a6c532cf6305c127ee8f0648c479004f220338d3a68b34d67cea"
+    },
+    {
+      "archive_path": "docs/experiments/m2-grip-hosted-typecheck-v2/FIRST-RESULT-PROVENANCE.json",
+      "bytes": 597,
+      "path": "FIRST-RESULT-PROVENANCE.json",
+      "sha256": "dd20f7931ef484d22f402d4f0b08266211873a36faa7798991cdb496642cbd77"
+    },
+    {
+      "archive_path": "docs/experiments/m2-grip-hosted-typecheck-v2/FIRST-RESULT-v1.json",
+      "bytes": 1727,
+      "path": "FIRST-RESULT-v1.json",
+      "sha256": "6a30825b6cabbd06503440ffde910f2bbde524c46c1224a4540534d2583c74c4"
+    },
+    {
+      "archive_path": "docs/experiments/m2-grip-hosted-typecheck-v2/PREPARATION.json",
+      "bytes": 958,
+      "path": "PREPARATION.json",
+      "sha256": "37a463d1cd4bd0011d5e12cab33e116f7b575461a7345ab821a34fbaa5452e59"
+    },
+    {
+      "archive_path": "docs/experiments/m2-grip-hosted-typecheck-v2/README.md",
+      "bytes": 7742,
+      "path": "README.md",
+      "sha256": "cc2de16aa6595b886e9e457d62c8ccdfb7e0ec4410c9a316e0620822bde202bc"
+    },
+    {
+      "archive_path": "docs/experiments/m2-grip-hosted-typecheck-v2/REUSE-MANIFEST.json",
+      "bytes": 5666,
+      "path": "REUSE-MANIFEST.json",
+      "sha256": "d659b1f49cff38620c75de17e66389a8a8ef7b6baf49c7f8c62048ca40205677"
+    },
+    {
+      "archive_path": "docs/experiments/m2-grip-hosted-typecheck-v2/RUNNER-SEMANTICS.json",
+      "bytes": 1873,
+      "path": "RUNNER-SEMANTICS.json",
+      "sha256": "ca5ec133bbe26a82e660fd9314a969180732dba28461fc163300c92ae57f836b"
+    },
+    {
+      "archive_path": "docs/experiments/m2-grip-hosted-typecheck-v2/SOURCE-DELTA.json",
+      "bytes": 2330,
+      "path": "SOURCE-DELTA.json",
+      "sha256": "57dd8fb173f0eb8959ef8e0967cafceec9c91d970055241d4b2fcdd5c9c9646a"
+    },
+    {
+      "archive_path": "docs/experiments/m2-grip-hosted-typecheck-v2/SOURCE-FREEZE-v5.json",
+      "bytes": 498,
+      "path": "SOURCE-FREEZE-v5.json",
+      "sha256": "b320f11d7737cb48345c775da1a47b61d78cd2399fda99f6a35f306ee7953069"
+    },
+    {
+      "archive_path": "docs/experiments/m2-grip-hosted-typecheck-v2/STATIC-CHECK.json",
+      "bytes": 279,
+      "path": "STATIC-CHECK.json",
+      "sha256": "0ce1f37c6044ea2b1d8b4586e640cea7cfa55f3e424b88c06ed482965e89548f"
+    },
+    {
+      "archive_path": "docs/experiments/m2-grip-hosted-typecheck-v2/V1-PRESERVATION.json",
+      "bytes": 4338,
+      "path": "V1-PRESERVATION.json",
+      "sha256": "d7b6c4ddea7ca193586a90b5d92a1f8464d97d24d7441f2671d950af035945bc"
+    },
+    {
+      "archive_path": "docs/experiments/m2-grip-hosted-typecheck-v2/patches/grip-v4-to-v5.patch",
+      "bytes": 2369,
+      "path": "patches/grip-v4-to-v5.patch",
+      "sha256": "0ce2a14320e13e31b9727d41d979798910c31e9663dcaca043c0900c5c96774a"
+    },
+    {
+      "archive_path": "docs/experiments/m2-grip-hosted-typecheck-v2/prepare_v2.py",
+      "bytes": 9131,
+      "path": "prepare_v2.py",
+      "sha256": "4a1649542f6176a741d3f31e2990d2eb115effb9e3c3fbf01c3674f5e6888e90"
+    },
+    {
+      "archive_path": "docs/experiments/m2-grip-hosted-typecheck-v2/publication.json",
+      "bytes": 4748,
+      "path": "publication.json",
+      "sha256": "e7ed1dbda372137fc566f48db27caa61b810bc648b082a40f486f1451c74ddcd"
+    },
+    {
+      "archive_path": "docs/experiments/m2-grip-hosted-typecheck-v2/recovery.json",
+      "bytes": 3369,
+      "path": "recovery.json",
+      "sha256": "7bfb3b36df7ed5e9678623e09de08bf43982f2d6b1ade8de11761de5c5a05590"
+    },
+    {
+      "archive_path": "docs/experiments/m2-grip-hosted-typecheck-v2/registered-source-v5.json",
+      "bytes": 27898,
+      "path": "registered-source-v5.json",
+      "sha256": "93a96de95d9562b57d2891e41dfcd36e99cf73bb8d94971c0ad17fd87593c72e"
+    },
+    {
+      "archive_path": "docs/experiments/m2-grip-hosted-typecheck-v2/run_hosted.py",
+      "bytes": 24418,
+      "path": "run_hosted.py",
+      "sha256": "6118bafa12d8a2cfb6216d7747b371b00815757ee8648caa4ed69cb05daddf9c"
+    },
+    {
+      "archive_path": "docs/experiments/m2-grip-hosted-typecheck-v2/seal.json",
+      "bytes": 5028,
+      "path": "seal.json",
+      "sha256": "5d9766bf930f799a96fa8cf23324fadbc45b73a7130121cc976de455db2ad0c6"
+    },
+    {
+      "archive_path": "docs/experiments/m2-grip-hosted-typecheck-v2/seal_package.py",
+      "bytes": 5838,
+      "path": "seal_package.py",
+      "sha256": "9e406dbe76f326905465c06736d7fad1724965992b9d67dcb39851519785a37b"
+    },
+    {
+      "archive_path": "docs/experiments/m2-grip-hosted-typecheck-v2/source-manifest.json",
+      "bytes": 199844,
+      "path": "source-manifest.json",
+      "sha256": "c9d9fb1107462a855cb2237c6e3433cf78699cda37a86b5cf7f1751a43ea7d22"
+    },
+    {
+      "archive_path": "docs/experiments/m2-grip-hosted-typecheck-v2/static_checks.py",
+      "bytes": 18333,
+      "path": "static_checks.py",
+      "sha256": "66dfe7502480b63c62d184f5edcbc8299943f128b4bdc80da3e7d3b63e96197c"
+    },
+    {
+      "archive_path": ".github/workflows/m2-grip-hosted-typecheck-v2.yml",
+      "bytes": 1585,
+      "path": "workflow.yml",
+      "sha256": "d7fa73ccca48078d835a5111de211ad773f9625933bafd7924a88c0c3a985897"
+    }
+  ],
+  "reuse_source_commit": "4a3a39be5f8a4a95f662ed2e7c3a67ed50b62da1",
+  "reused_blob_count": 11,
+  "reused_source_bytes": 2377527,
+  "schema": "m2-grip-source-archive-v2",
+  "seal_sha256": "5d9766bf930f799a96fa8cf23324fadbc45b73a7130121cc976de455db2ad0c6",
+  "sha256": "ed1eddb4ba2f3cab34d669d16891c747a492b5f6ba60d995532e08d79aad16e3",
+  "source_bytes": 330178,
+  "source_manifest_sha256": "c9d9fb1107462a855cb2237c6e3433cf78699cda37a86b5cf7f1751a43ea7d22",
+  "source_only": true,
+  "transport": "update-only; combine every archive member with every REUSE-MANIFEST.json blob at its exact destination"
+}

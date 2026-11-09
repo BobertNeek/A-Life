@@ -1,0 +1,27 @@
+{
+  "files": [
+    {
+      "before_sha256": "703dee960def8f714e3c66a57be54883cf2a82588aeb4f44f9168d971fd78944",
+      "bytes": 7916,
+      "path": "crates/alife_world/tests/gpu_memory_grounding_persistence.rs",
+      "sha256": "449e2cefe441246f62e96ef718bc942495e371234728a1ad6998b12f8fde5d30"
+    },
+    {
+      "before_sha256": "ccec9ba0828157c58d263d4e0d4f6b322f63eb889139cdb62474e7b90337fc65",
+      "bytes": 34959,
+      "path": "crates/alife_game_app/src/gpu_evidence.rs",
+      "sha256": "347a9ed6976769b6c6632ecb58a77abc5a98313879f3540e0fa7e50ec546907f"
+    },
+    {
+      "before_sha256": "19f51f9c8a4e966707a1b962f73f2655dbe3bce298192e22be1c0b6a19ba2113",
+      "bytes": 93721,
+      "path": "crates/alife_game_app/src/gpu_evidence/soak.rs",
+      "sha256": "8602edeb851aa36160901ec775ad26596f4340caaec1732473cc26861b362933"
+    }
+  ],
+  "native_execution": false,
+  "parent_patch_sha256": "acf8cc50353ba76cb7adf5af1db5845ee6e6b2e2261d0ee823821428e2e4d054",
+  "patch_bytes": 2369,
+  "patch_sha256": "0ce2a14320e13e31b9727d41d979798910c31e9663dcaca043c0900c5c96774a",
+  "schema": "grip-correction-v5"
+}

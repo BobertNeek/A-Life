@@ -1,0 +1,61 @@
+{
+  "allowed_changes": [
+    "Literal m2-grip-hosted-typecheck-v1 identifiers become m2-grip-hosted-typecheck-v2 for plan, branch, packet, marker path and sole workflow path.",
+    "Activation schema changes from m2-grip-typecheck-activation-v1 to m2-grip-typecheck-activation-v2.",
+    "Summary schema changes from m2-grip-typecheck-summary-v1 to m2-grip-typecheck-summary-v2.",
+    "restore_sources reports the unchanged full V4 grip hash from recovery.steps[-2] rather than [-1], because the new correction is appended.",
+    "restore_sources additionally reports correction_patch_sha256 from recovery.steps[-1]."
+  ],
+  "functions_differing_after_version_normalization": [
+    "restore_sources"
+  ],
+  "native_invocations": 0,
+  "not_changed": [
+    "stages",
+    "targets",
+    "features",
+    "serial execution",
+    "toolchain setup",
+    "limits",
+    "resource accounting",
+    "diagnostic projection",
+    "admission checks",
+    "dependency/source verification",
+    "output bounds",
+    "no test/body execution"
+  ],
+  "schema": "m2-grip-runner-preservation-v2",
+  "unchanged_constants": {
+    "EXPECTED_FEATURES": true,
+    "LIMITS": true,
+    "STAGES": true
+  },
+  "unchanged_functions_after_version_normalization": [
+    "admit",
+    "check_limits",
+    "check_stage",
+    "child_setup",
+    "diagnostic_rows",
+    "digest_file",
+    "exact_path",
+    "fail",
+    "kill_session",
+    "local_dep_path",
+    "main",
+    "private_git",
+    "read_json",
+    "run",
+    "safe_path",
+    "session_rss",
+    "setup_toolchain",
+    "sha",
+    "size",
+    "summary",
+    "validate_activation",
+    "verify_depinfo",
+    "verify_record"
+  ],
+  "v1_runner_sha256": "0eaf76934d79774c1ffb63cbad58973ad77c883767b3fe0dc1b95e45d5fd4b49",
+  "v2_runner_sha256": "6118bafa12d8a2cfb6216d7747b371b00815757ee8648caa4ed69cb05daddf9c",
+  "whole_file_normalized_exact_match": true
+}

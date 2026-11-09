@@ -1,0 +1,108 @@
+{
+  "files": [
+    {
+      "bytes": 30715,
+      "destination_path": "docs/experiments/m2-grip-hosted-typecheck-v2/closure.json",
+      "git_blob_sha1": "fe1257e7455c8fd7e3bd8c886d000c5fe8175870",
+      "mode": "100644",
+      "path": "closure.json",
+      "sha256": "2c11006004bb24ac13ffb01bf2ebdf9d2eed5a63720f138d433f811a3fcc881d",
+      "source_path": "docs/experiments/m2-grip-hosted-typecheck-v1/closure.json"
+    },
+    {
+      "bytes": 3224,
+      "destination_path": "docs/experiments/m2-grip-hosted-typecheck-v2/dependencies.json",
+      "git_blob_sha1": "359c9100695ac05b46329fc5e2ec86ec24009beb",
+      "mode": "100644",
+      "path": "dependencies.json",
+      "sha256": "f79217694ffc496aa9c0f0825f6c16f52d52d5a85a933792f55847fd96bd3bfc",
+      "source_path": "docs/experiments/m2-grip-hosted-typecheck-v1/dependencies.json"
+    },
+    {
+      "bytes": 2476,
+      "destination_path": "docs/experiments/m2-grip-hosted-typecheck-v2/source_patch.py",
+      "git_blob_sha1": "78ea389554f95f22d5f96507f853c76862c95cee",
+      "mode": "100644",
+      "path": "source_patch.py",
+      "sha256": "e8ef4a5a27c4ce0486f2ec752c7c6789752e10355410f8ef6b914aa386b5ad42",
+      "source_path": "docs/experiments/m2-grip-hosted-typecheck-v1/source_patch.py"
+    },
+    {
+      "bytes": 3028,
+      "destination_path": "docs/experiments/m2-grip-hosted-typecheck-v2/TOOLCHAIN-PROVENANCE.json",
+      "git_blob_sha1": "6853dc6ed955d120ea20f1d5a35785662891803c",
+      "mode": "100644",
+      "path": "TOOLCHAIN-PROVENANCE.json",
+      "sha256": "122c4b3e6538442cdd14fe81923c4ae45f5276126d6d3d8afc3001e779adb99c",
+      "source_path": "docs/experiments/m2-grip-hosted-typecheck-v1/TOOLCHAIN-PROVENANCE.json"
+    },
+    {
+      "bytes": 1812,
+      "destination_path": "docs/experiments/m2-grip-hosted-typecheck-v2/TOOLCHAIN-PRIOR-RESULTS.json",
+      "git_blob_sha1": "13b053f695a6b60b627af10d26cf421e9d62a78c",
+      "mode": "100644",
+      "path": "TOOLCHAIN-PRIOR-RESULTS.json",
+      "sha256": "66d8ecd21368bbd8836081d1846cf877508454f2dfa91655da3eaf87d80f22e3",
+      "source_path": "docs/experiments/m2-grip-hosted-typecheck-v1/TOOLCHAIN-PRIOR-RESULTS.json"
+    },
+    {
+      "bytes": 7481,
+      "destination_path": "docs/experiments/m2-grip-hosted-typecheck-v2/upstream-toolchain-action.yml",
+      "git_blob_sha1": "62252504fab44d94e1bf3a73df1c976b3dec35c4",
+      "mode": "100644",
+      "path": "upstream-toolchain-action.yml",
+      "sha256": "0b52547c145ae18d8631c9ab711e4d917e9e489cea800368f338c25a56e0aee2",
+      "source_path": "docs/experiments/m2-grip-hosted-typecheck-v1/upstream-toolchain-action.yml"
+    },
+    {
+      "bytes": 136753,
+      "destination_path": "docs/experiments/m2-grip-hosted-typecheck-v2/patches/fbf-nominal-source-supplement.patch",
+      "git_blob_sha1": "99d4927cccaaf74172282cbb8e50ea9609e56250",
+      "mode": "100644",
+      "path": "patches/fbf-nominal-source-supplement.patch",
+      "sha256": "ddd07c85685b27056664d9b8650fa736d8eff257f5d477485efd7d14e5e5b051",
+      "source_path": "docs/experiments/m2-grip-hosted-typecheck-v1/patches/fbf-nominal-source-supplement.patch"
+    },
+    {
+      "bytes": 649925,
+      "destination_path": "docs/experiments/m2-grip-hosted-typecheck-v2/patches/fbf-to-grip-v4.patch",
+      "git_blob_sha1": "6caac64b53ea977e3f7494b999c0c671244344b9",
+      "mode": "100644",
+      "path": "patches/fbf-to-grip-v4.patch",
+      "sha256": "acf8cc50353ba76cb7adf5af1db5845ee6e6b2e2261d0ee823821428e2e4d054",
+      "source_path": "docs/experiments/m2-grip-hosted-typecheck-v1/patches/fbf-to-grip-v4.patch"
+    },
+    {
+      "bytes": 563200,
+      "destination_path": "docs/experiments/m2-grip-hosted-typecheck-v2/patches/main-to-fbf-library-closure.part-01.patch",
+      "git_blob_sha1": "6df92f6933b9279c86373ec0b4b7c0a66770d199",
+      "mode": "100644",
+      "path": "patches/main-to-fbf-library-closure.part-01.patch",
+      "sha256": "44c9ee9e269bec25ebb924054754a0e71ddc7b73104a132699171a9776430e07",
+      "source_path": "docs/experiments/m2-grip-hosted-typecheck-v1/patches/main-to-fbf-library-closure.part-01.patch"
+    },
+    {
+      "bytes": 563195,
+      "destination_path": "docs/experiments/m2-grip-hosted-typecheck-v2/patches/main-to-fbf-library-closure.part-02.patch",
+      "git_blob_sha1": "7f27884da807987fb3eb63ca442724a14ee46468",
+      "mode": "100644",
+      "path": "patches/main-to-fbf-library-closure.part-02.patch",
+      "sha256": "a2fb1711dee71d569aea8643ba5dd02d16c992bf9f378b219e4b86cb51edafae",
+      "source_path": "docs/experiments/m2-grip-hosted-typecheck-v1/patches/main-to-fbf-library-closure.part-02.patch"
+    },
+    {
+      "bytes": 415718,
+      "destination_path": "docs/experiments/m2-grip-hosted-typecheck-v2/patches/main-to-fbf-library-closure.part-03.patch",
+      "git_blob_sha1": "ef007c906168887cd275564f541a48714806608b",
+      "mode": "100644",
+      "path": "patches/main-to-fbf-library-closure.part-03.patch",
+      "sha256": "95d7a29b145111d4f24297c97ecd0766673f9275b5dd89400958c714a24ae72d",
+      "source_path": "docs/experiments/m2-grip-hosted-typecheck-v1/patches/main-to-fbf-library-closure.part-03.patch"
+    }
+  ],
+  "repository": "BobertNeek/A-Life",
+  "rule": "Copy only these exact immutable blobs to listed v2 destinations. No old workflow, marker, or executable input is eligible. Never substitute activation head or a moving branch.",
+  "schema": "grip-v2-existing-blob-reuse-v1",
+  "verification_source": "Parent-reported immutable prepared head; local bytes independently hash-verified. Parent must verify exact remote source tree entries before writing.",
+  "verified_source_commit": "4a3a39be5f8a4a95f662ed2e7c3a67ed50b62da1"
+}

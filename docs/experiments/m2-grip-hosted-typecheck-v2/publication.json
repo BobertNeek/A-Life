@@ -1,0 +1,100 @@
+{
+  "activation": "Only after verifying published prepared head, add ACTIVATE.json as the sole changed path in one direct child commit. No rewrite/retry/marker reuse.",
+  "archive_mode": "update-only; parent must combine listed immutable reused blobs with all archive members at exact v2 destinations before creating the prepared commit",
+  "branch": "qualification/m2-grip-hosted-typecheck-v2",
+  "branch_birth": "Create the dedicated remote branch at the already-prepared commit tree with all 15 inherited workflows removed and activation absent. Never create or point it first at main, an old study, or a tree containing broad inherited push workflows.",
+  "branch_local_deletions": [
+    {
+      "bytes": 1360,
+      "path": ".github/workflows/care-frontier-sampler.yml",
+      "sha256": "ce23d4dff5832deec885e4b086769cc46bf7c780ce990543d45e2a8383dfc938"
+    },
+    {
+      "bytes": 1042,
+      "path": ".github/workflows/care-recipe-import.yml",
+      "sha256": "58cdcf0114c81639b041ff793bdcdc4f428cfd1f252a45b3462876bb86eb3231"
+    },
+    {
+      "bytes": 1570,
+      "path": ".github/workflows/care-scenario-batches.yml",
+      "sha256": "8451c3ce325c89e394a221409f6bb8955f0554e158d325b8edeb99862839fe0a"
+    },
+    {
+      "bytes": 14654,
+      "path": ".github/workflows/ci.yml",
+      "sha256": "a40abd2944cdd2a2e8f24a9fc6df71228e90e29b69a14353d0800b2fc8025b27"
+    },
+    {
+      "bytes": 12946,
+      "path": ".github/workflows/cpu-foundation-backend.yml",
+      "sha256": "9a1d4080e0a98f7c067d6b6dbe86cb8157f158d5cc9b43e8525e8203ac0af7ac"
+    },
+    {
+      "bytes": 3752,
+      "path": ".github/workflows/group50-training.yml",
+      "sha256": "078bbfff6f62d260c7acc3455341640983e82fd9e70e7599091647bb28ea540d"
+    },
+    {
+      "bytes": 893,
+      "path": ".github/workflows/jules-retirement-contracts.yml",
+      "sha256": "ba9ac86fcbfd263bd361d327636c94e139e3054d23c9d088ee9824c1e4959bbc"
+    },
+    {
+      "bytes": 11580,
+      "path": ".github/workflows/jules-review.yml",
+      "sha256": "b3623495eadaee4c996266a7dde75c242050bb393661ca58caa3350b99f592d2"
+    },
+    {
+      "bytes": 1700,
+      "path": ".github/workflows/llm-care-map.yml",
+      "sha256": "c324e648540e09f41ff59820ff7511f6fc0ca342613ab079550f56b4d0cabd4a"
+    },
+    {
+      "bytes": 5885,
+      "path": ".github/workflows/offline-software-vulkan.yml",
+      "sha256": "6f42f581dab85d28a8b2f2450b9568392a1ae340bd296a01cc20a9de27afd7e7"
+    },
+    {
+      "bytes": 4148,
+      "path": ".github/workflows/resident-output-budget.yml",
+      "sha256": "e6186b527ecdc858a3ee688669d7cf290a4233d2f2d0bd3427bf3a248050d7b7"
+    },
+    {
+      "bytes": 2702,
+      "path": ".github/workflows/simulator-rehearsal.yml",
+      "sha256": "ede52b3e73ef0725add8f54d51f6413ef8763db23b3ed9c2b5ed2a9513385f01"
+    },
+    {
+      "bytes": 1142,
+      "path": ".github/workflows/training-retention-host.yml",
+      "sha256": "45cad082b08976e1944ae00047598b42a54d52185fc66bd59faae83bb9d0c20b"
+    },
+    {
+      "bytes": 6787,
+      "path": ".github/workflows/windows-resident-experimental.yml",
+      "sha256": "57190936e57bbecf8e3de03d325e4ea1ebd9c22086618ffeb43be3c0ddb14f2f"
+    },
+    {
+      "bytes": 15542,
+      "path": ".github/workflows/windows-training-artifact.yml",
+      "sha256": "d1ab71666c97c0257b4c1cd4e0abb26bc352dcf01960c736f663ddbcac76f891"
+    }
+  ],
+  "main_policy": "No main changes; removals are branch-local. No PR or merge from this qualification branch.",
+  "old_studies": "V1, V4 and all prior study workflows/markers are ineligible. The new v2 prepared branch is parented at accepted main and contains only its new v2 workflow.",
+  "packet_destination": "docs/experiments/m2-grip-hosted-typecheck-v2",
+  "prepared_head": "PENDING_VERIFIED_IMMUTABLE_GITHUB_COMMIT",
+  "prepared_parent": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "publication_preflight": "Before any write, parent must verify the dedicated remote branch does not exist and resolve any ambiguous prior create outcome. Never assume the name is unused or retry uncertain creation. Verify the exact prepared remote head and packet tree before activation.",
+  "remote_actions_performed": [],
+  "remote_branch_existence": "NOT_VERIFIED_LOCALLY",
+  "required_prepared_workflows": [
+    ".github/workflows/m2-grip-hosted-typecheck-v2.yml"
+  ],
+  "reuse_manifest": "REUSE-MANIFEST.json",
+  "schema": "m2-grip-source-publication-v2",
+  "source_reference_commit": "4a3a39be5f8a4a95f662ed2e7c3a67ed50b62da1",
+  "source_reference_role": "Whitelist immutable existing blob reuse only. Not the prepared branch parent and never an activation reference.",
+  "status": "prepared locally, never published or activated",
+  "workflow_destination": ".github/workflows/m2-grip-hosted-typecheck-v2.yml"
+}
