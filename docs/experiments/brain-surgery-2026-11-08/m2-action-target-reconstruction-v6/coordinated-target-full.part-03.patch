@@ -1,0 +1,2781 @@
++        return Err("source did not run exactly once".into());
++    }
++    let noops=d.patch.selected_bundle().map(|b|b.channels.iter().filter(|c|matches!(c.primitive.raw(),103|104|212)).map(|c|json!({"channel":c.channel,"primitive":c.primitive.raw(),"measured":d.patch.outcome().joint.as_ref().and_then(|j|j.channel_observations.iter().find(|o|o.channel==c.channel))})).collect::<Vec<_>>()).unwrap_or_default();
++    if let Some(r) = observer {
++        if d.patch.selected_bundle() != Some(&r.bundle)
++            || d.physical.outcome_tick != r.outcome_tick
++            || d.patch.outcome().joint.as_ref() != Some(&r.joint)
++        {
++            return Err("passive world receipt does not match sealed decision".into());
++        }
++    }
++    Ok(
++        json!({"organism_id":d.organism_id,"action":d.action,"probabilities":probability,"evaluation":evaluation,"sampling_counter":d.sampling_counter,"source_diagnostic_logits":d.source_diagnostic_logits,"biological_emissions":d.biological_emissions,"brain_work":d.brain_work,"motor":d.motor,"physical":d.physical,"applied_recovery":applied_recovery(&d.physical),"real_noop_receipts":noops,"patch":d.patch,"sleep_phase":d.sleep_phase,"sleep_trigger":d.sleep_trigger,"research_world_receipt":observer.map(world_receipt),"optional_scores":optional,"payload_present":optional.map(|s|s.source().payload_present()),"same_context_legacy_probabilities":null}),
++    )
++}
++impl Host {
++    pub fn world(&self) -> &HeadlessWorld {
++        match self {
++            Self::Legacy(h) => h.world(),
++            Self::Optional(h) => h.world(),
++        }
++    }
++    pub fn sleep_state(&self, id: OrganismId) -> Option<alife_core::sleep::SleepState> {
++        match self {
++            Self::Legacy(h) => h.sleep_state(id),
++            Self::Optional(h) => h.sleep_state(id),
++        }
++    }
++    pub fn wire(&self) -> Result<Vec<u8>> {
++        Ok(match self {
++            Self::Legacy(h) => h.checkpoint()?.encode()?,
++            Self::Optional(h) => h.checkpoint()?.encode()?,
++        })
++    }
++    pub fn advance(&mut self, t: f32, observe: bool) -> Result<Step> {
++        match self {
++            Self::Legacy(h) => {
++                let (s, receipts) = if observe {
++                    let r = h.step_research_observed(t)?;
++                    (r.step, r.world_receipts)
++                } else {
++                    (h.step(t)?, vec![])
++                };
++                if observe && receipts.len() != s.decisions.len() {
++                    return Err("observer decision count differs".into());
++                }
++                let mut decisions = Vec::new();
++                for (i, d) in s.decisions.iter().enumerate() {
++                    let eval = d.motor.native.scores.evaluate(&d.action)?;
++                    if eval.joint_log_probability.to_bits()
++                        != d.action.old_joint_log_probability.to_bits()
++                        || d.action.counter != d.sampling_counter
++                    {
++                        return Err("legacy probability/counter differs".into());
++                    }
++                    decisions.push(common(
++                        d,
++                        serde_json::to_value(
++                            d.motor.native.scores.probabilities(d.action.temperature)?,
++                        )?,
++                        serde_json::to_value(eval)?,
++                        receipts.get(i),
++                        None,
++                    )?);
++                }
++                Ok(Step {
++                    tick_before: s.tick_before,
++                    tick_after: s.tick_after,
++                    decisions,
++                    sleeping_organisms: s.sleeping_organisms,
++                    sleep_consolidations: s.sleep_consolidations,
++                })
++            }
++            Self::Optional(h) => {
++                let (s, receipts) = if observe {
++                    let r = h.step_research_observed(t)?;
++                    (r.step, r.world_receipts)
++                } else {
++                    (h.step(t)?, vec![])
++                };
++                if observe && receipts.len() != s.decisions.len() {
++                    return Err("observer decision count differs".into());
++                }
++                let mut decisions = Vec::new();
++                for (i, d) in s.decisions.iter().enumerate() {
++                    let scores = h
++                        .last_selection_scores(d.organism_id)
++                        .ok_or("optional scores absent")?;
++                    let eval = scores.evaluate(&d.action)?;
++                    if eval.joint_log_probability.to_bits()
++                        != d.action.joint_log_probability().to_bits()
++                        || d.action.counter() != d.sampling_counter
++                    {
++                        return Err("optional probability/counter differs".into());
++                    }
++                    let mut row = common(
++                        d,
++                        serde_json::to_value(scores.probabilities(d.action.temperature())?)?,
++                        serde_json::to_value(eval)?,
++                        receipts.get(i),
++                        Some(scores),
++                    )?;
++                    row["same_context_legacy_probabilities"] = serde_json::to_value(
++                        d.motor
++                            .native
++                            .scores
++                            .probabilities(d.action.temperature())?,
++                    )?;
++                    decisions.push(row);
++                }
++                Ok(Step {
++                    tick_before: s.tick_before,
++                    tick_after: s.tick_after,
++                    decisions,
++                    sleeping_organisms: s.sleeping_organisms,
++                    sleep_consolidations: s.sleep_consolidations,
++                })
++            }
++        }
++    }
++    pub fn step(&mut self, t: f32) -> Result<Step> {
++        self.advance(t, true)
++    }
++}
+--- /dev/null
++++ b/crates/alife_training/examples/support/object_rich_qualification_v1.rs
+@@ -0,0 +1,217 @@
++//! One bounded fresh fixture. Existing old public step output and state must match
++//! observed warm versus ordinary-entry-point cold continuation, at every boundary.
++use super::*;
++const INTERVALS: u64 = 4;
++fn binding(arm: usize, r: &recipe::Recipe, initial: &[u8]) -> Result<journal::Binding> {
++    Ok(journal::Binding {
++        schema: "object-rich-coordinated-target-durable-v1".into(),
++        study_id: "object-rich-coordinated-target-fixed-fixture-v1".into(),
++        arm,
++        mode: mode_name(arm)?.into(),
++        seed: FIXTURE_SEED,
++        sampling_seed: sampling_seed(FIXTURE_SEED),
++        initial_tick: 240,
++        horizon: INTERVALS,
++        temperature_bits: 1_f32.to_bits(),
++        host_source_commit: HOST_COMMIT.into(),
++        host_source_tree: HOST_TREE.into(),
++        driver_source_commit: DRIVER_COMMIT.into(),
++        driver_source_sha256: code_hash(),
++        executable_sha256: executable_hash()?,
++        protocol_sha256: hash(PROTOCOL),
++        qualification_sha256: "fixed-fixture-not-primary".into(),
++        preparation_sha256: hash(b"one 240-tick fresh pre-neural template; no primary seed"),
++        source_manifest_sha256: hash(&serde_json::to_vec(&r.metadata)?),
++        inputs_sha256: hash(&serde_json::to_vec(&r.inputs)?),
++        initial_sha256: hash(initial),
++        initial_matched_sha256: hash(&raw::matched_initial(initial, mode_name(arm)?)?),
++        closure_sha256: closure_hash(initial)?,
++        source_headers: raw::source_headers(initial)?,
++        max_packet_bytes: journal::MAX_PACKET,
++        max_arm_bytes: journal::MAX_ARM_BYTES,
++        min_free_bytes: journal::MIN_FREE_BYTES,
++    })
++}
++fn original_science(rows: &[u8]) -> Result<Vec<u8>> {
++    let mut out = Vec::new();
++    for line in rows.split(|c| *c == b'\n').filter(|l| !l.is_empty()) {
++        let mut v: Value = serde_json::from_slice(line)?;
++        if let Some(decisions) = v["decisions"].as_array_mut() {
++            for d in decisions {
++                d["research_world_receipt"] = Value::Null;
++            }
++        }
++        out.extend(serde_json::to_vec(&v)?);
++        out.push(b'\n');
++    }
++    Ok(out)
++}
++pub fn qualify(out: &Path) -> Result<()> {
++    seed_admission_preflight(FIXTURE_SEED, 1)?;
++    if out.exists() {
++        return Err("fixed qualification directory exists; no retry".into());
++    }
++    fs::create_dir(out)?;
++    write_new(
++        out,
++        "QUALIFICATION_ATTEMPT.json",
++        &json!({"seed":FIXTURE_SEED,"primary_seed_executed":false,"maximum_native_calls":16,"maximum_body_calls":240,"source_candidates":1,"automatic_retry":false,"executable_sha256":executable_hash()?,"driver_code_sha256":code_hash()}),
++    )?;
++    let mut actual = 0;
++    let mut native = 0_u64;
++    let mut max_packet = 0_u64;
++    let mut max_initial = 0_u64;
++    let mut max_science = 0_u64;
++    let mut max_positive_growth = 0_u64;
++    let mut details = Vec::new();
++    let result = (|| -> Result<()> {
++        let r = recipe::build(FIXTURE_SEED, true)?;
++        write_new(out, "SOURCE-CONTRACT.json", &source_contract(&r)?)?;
++        write_new(out, "SOURCE.json", &r.metadata)?;
++        write_new(
++            out,
++            "SOURCE_BOUND_BEFORE_PREPARATION.json",
++            &json!({"genotype":r.metadata["genotype_sha256"],"inputs":r.inputs.canonical_digest(),"native_calls":0,"body_calls":0}),
++        )?;
++        let hosts = fresh_pair(&r, 240, true, &mut actual, out)?;
++        let reference = r
++            .phenotype
++            .cognitive_architecture()
++            .sleep_trigger_threshold();
++        for (arm, mut warm) in hosts.into_iter().enumerate() {
++            let d = out.join(format!("arm-{arm}"));
++            fs::create_dir(&d)?;
++            let initial = cp(&warm)?;
++            max_initial = max_initial.max(initial.len() as u64);
++            journal::publish_artifact(&d, "initial.private.m2", &initial, journal::MAX_PACKET)?;
++            let b = binding(arm, &r, &initial)?;
++            let warm_dir = d.join("warm");
++            let cold_dir = d.join("cold");
++            journal::init_journal(&warm_dir, &b)?;
++            journal::init_journal(&cold_dir, &b)?;
++            let mut warm_previous = hash(&initial);
++            let mut cold_previous = hash(&initial);
++            let mut cold_bytes =
++                journal::bounded_read(&d.join("initial.private.m2"), journal::MAX_PACKET)?;
++            let mut arm_decisions = 0_u64;
++            let mut actual_transfers = 0_u64;
++            let mut previous_warm_size = None;
++            for offset in 0..INTERVALS {
++                let before = observe(&warm)?;
++                write_new(
++                    &warm_dir,
++                    &format!("ATTEMPT-{offset:06}.json"),
++                    &json!({"offset":offset,"observer":true,"attempt_before_call":true}),
++                )?;
++                let step = counted_call(&mut native, || warm.advance(1., true))?;
++                let after = observe(&warm)?;
++                let bytes = cp(&warm)?;
++                validate_cp(&bytes, 241 + offset, &b.closure_sha256)?;
++                let rows = science(
++                    &before,
++                    &after,
++                    &step,
++                    offset,
++                    &bytes,
++                    &b.closure_sha256,
++                    reference,
++                )?;
++                arm_decisions += step.decisions.len() as u64;
++                for row in &step.decisions {
++                    let receipt = &row["research_world_receipt"];
++                    if !receipt.is_object() {
++                        return Err("observed decision missing real receipt".into());
++                    }
++                    actual_transfers += receipt["grip_transfers"]
++                        .as_array()
++                        .ok_or("grip array missing")?
++                        .len() as u64;
++                }
++                let packet = journal::make_packet(&b, offset, &warm_previous, &bytes, &rows)?;
++                journal::publish(&warm_dir, &format!("{offset:06}.packet"), &packet)?;
++                warm_previous = hash(&packet);
++                if let Some(previous) = previous_warm_size {
++                    max_positive_growth =
++                        max_positive_growth.max((packet.len() as u64).saturating_sub(previous));
++                }
++                previous_warm_size = Some(packet.len() as u64);
++                max_packet = max_packet.max(packet.len() as u64);
++                max_science = max_science.max(rows.len() as u64);
++                // Load only this fixture's own cold published prefix. Never use warm
++                // acquired state to initialize the cold trajectory.
++                let mut cold =
++                    restore(&cold_bytes, &r.inputs, arm, 240 + offset, &b.closure_sha256)?;
++                let cold_before = observe(&cold)?;
++                write_new(
++                    &cold_dir,
++                    &format!("ATTEMPT-{offset:06}.json"),
++                    &json!({"offset":offset,"observer":false,"attempt_before_call":true}),
++                )?;
++                let cold_step = counted_call(&mut native, || cold.advance(1., false))?;
++                let cold_wire = cp(&cold)?;
++                let cold_rows = science(
++                    &cold_before,
++                    &observe(&cold)?,
++                    &cold_step,
++                    offset,
++                    &cold_wire,
++                    &b.closure_sha256,
++                    reference,
++                )?;
++                if cold_wire != bytes || original_science(&cold_rows)? != original_science(&rows)? {
++                    return Err(
++                        "observer changed old output/state or cold continuation differs".into(),
++                    );
++                }
++                let cold_packet =
++                    journal::make_packet(&b, offset, &cold_previous, &cold_wire, &cold_rows)?;
++                journal::publish(&cold_dir, &format!("{offset:06}.packet"), &cold_packet)?;
++                let loaded = journal::bounded_read(
++                    &cold_dir.join(format!("{offset:06}.packet")),
++                    journal::MAX_PACKET,
++                )?;
++                let decoded = journal::decode_packet(&loaded, &b, offset, &cold_previous)?;
++                if decoded.checkpoint != cold_wire || decoded.trace != cold_rows {
++                    return Err("cold packet roundtrip differs".into());
++                }
++                cold_previous = decoded.digest;
++                cold_bytes = decoded.checkpoint;
++                max_packet = max_packet.max(cold_packet.len() as u64);
++                max_science = max_science.max(cold_rows.len() as u64);
++            }
++            // Exercise the actual durable recovery/export path, including attempt
++            // records and their retained atomic aliases, without further native calls.
++            for dir in [&warm_dir, &cold_dir] {
++                let recovered = journal::recover_without_trace(dir, &b, &initial, |wire, tick| {
++                    validate_cp(wire, tick, &b.closure_sha256)
++                })?;
++                if recovered.next != INTERVALS || recovered.checkpoint != cold_bytes {
++                    return Err("qualified durable recovery does not match final state".into());
++                }
++            }
++            details.push(json!({"arm":arm,"policy":mode_name(arm)?,"warm_calls":4,"cold_calls":4,"decisions_per_trajectory":arm_decisions,"authoritative_grip_transfers_observed":actual_transfers,"every_original_output_and_checkpoint_exact":true,"observer_only_fields_excluded_from_original_output_comparison":["research_world_receipt"],"closed_source_optimizer_sentinels":true,"final_checkpoint_sha256":hash(&cold_bytes)}));
++        }
++        if actual != 240
++            || native != 16
++            || max_packet
++                .checked_add(262144 + (max_positive_growth * HORIZON).max(1024 * 1024))
++                .is_none_or(|v| v > journal::MAX_PACKET)
++        {
++            return Err("fixed dose or whole-packet forecast failed".into());
++        }
++        write_new(
++            out,
++            "QUALIFICATION_COMPLETE.json",
++            &json!({"schema":"object-rich-coordinated-target-driver-qualification-v1","complete":true,"driver_commit":DRIVER_COMMIT,"driver_code_sha256":code_hash(),"executable_sha256":executable_hash()?,"protocol_sha256":hash(PROTOCOL),"actual_native_calls":native,"actual_preparation_intervals":actual,"primary_seed_executed":false,"observer_inertness_and_cold_exact":true,"maximum_packet_bytes":max_packet,"maximum_positive_packet_growth_per_interval":max_positive_growth,"projected_packet_bytes":max_packet+262144+(max_positive_growth*HORIZON).max(1024*1024),"projection_is_not_a_growth_guarantee":true,"maximum_initial_checkpoint_bytes":max_initial,"maximum_science_row_pair_bytes":max_science,"projected_pair_physical_bytes":2*HORIZON*journal::MAX_PACKET,"metadata_initial_export_headroom":2*journal::MAX_PACKET+64*1024*1024,"arms":details,"no_behavioral_benefit_claim":true,"no_extra_calls_for_event_coverage":true}),
++        )?;
++        Ok(())
++    })();
++    if let Err(e) = &result {
++        let _ = write_new(
++            out,
++            "QUALIFICATION_FAILED.json",
++            &json!({"error":e.to_string(),"actual_native_calls_attempted":native,"actual_preparation_intervals_completed":actual,"no_retry":true}),
++        );
++    }
++    result
++}
+--- /dev/null
++++ b/crates/alife_training/examples/support/object_rich_scene_v1.rs
+@@ -0,0 +1,197 @@
++//! Fixed ordinary object recipes and read-only scene/candidate evidence.
++//! No actions, physiology edits, priming or object renewal occur here.
++use super::*;
++pub fn scene(seed: u64, id: OrganismId) -> Result<HeadlessWorld> {
++    let mut w = HeadlessScenarioBuilder::new(seed)
++        .agent("learner", id, Vec3f::ZERO)
++        .food("near-root", Vec3f::new(1., 0., -0.5), 0.65)
++        .food("far-fruit", Vec3f::new(2.75, 0., 1.75), 0.45)
++        .toy("activity-toy", Vec3f::new(0.8, 0., 2.1), false)
++        .obstacle("obstacle", Vec3f::new(1.8, 0., 0.65), 0.35)
++        .build()?;
++    w.set_food_variety(
++        w.entity_id("near-root").ok_or("near root missing")?,
++        FoodVariety::Root,
++    )?;
++    w.set_food_variety(
++        w.entity_id("far-fruit").ok_or("fruit missing")?,
++        FoodVariety::Fruit,
++    )?;
++    Ok(w)
++}
++fn point(v: Vec3f) -> [f64; 3] {
++    [f64::from(v.x), f64::from(v.y), f64::from(v.z)]
++}
++fn distance(a: Vec3f, b: Vec3f) -> f64 {
++    point(a)
++        .into_iter()
++        .zip(point(b))
++        .map(|(a, b)| (a - b).powi(2))
++        .sum::<f64>()
++        .sqrt()
++}
++fn segment_distance(a: Vec3f, b: Vec3f, p: Vec3f) -> f64 {
++    let a = point(a);
++    let b = point(b);
++    let p = point(p);
++    let v = std::array::from_fn::<_, 3, _>(|i| b[i] - a[i]);
++    let denom = v.iter().map(|v| v * v).sum::<f64>();
++    let t = if denom == 0. {
++        0.
++    } else {
++        ((0..3).map(|i| (p[i] - a[i]) * v[i]).sum::<f64>() / denom).clamp(0., 1.)
++    };
++    (0..3)
++        .map(|i| (a[i] + t * v[i] - p[i]).powi(2))
++        .sum::<f64>()
++        .sqrt()
++}
++pub fn snapshot(w: &HeadlessWorld) -> Result<Value> {
++    let r = w
++        .organism_registry()
++        .iter()
++        .next()
++        .ok_or("resident absent")?;
++    let actor = w.entity(r.world_entity_id()).ok_or("body entity absent")?;
++    let obstacle = w
++        .entity(w.entity_id("obstacle").ok_or("obstacle absent")?)
++        .ok_or("obstacle record absent")?;
++    let grip = Vec3f::new(
++        actor.position.x + actor.body_yaw.cos() * 0.5,
++        actor.position.y,
++        actor.position.z + actor.body_yaw.sin() * 0.5,
++    );
++    let objects=w.object_snapshots().iter().map(|o| {
++        let p=o.grounded_physical;
++        json!({"id":o.id,"label":o.label,"kind":format!("{:?}",o.kind),"position":o.position,
++          "body_yaw":o.body_yaw,"head_yaw":o.head_yaw,"radius":o.radius,"nutrition":o.nutrition,
++          "hazard_pain":o.hazard_pain,"consumed":o.consumed,"carried_by":o.carried_by,"activity_hold":o.activity_hold,
++          "tracking_key":format!("{:?}",o.tracking_key),"distance":distance(actor.position,o.position),
++          "within_center_manipulation_reach":distance(actor.position,o.position)<=1.25,
++          "actor_target_obstacle_clearance":segment_distance(actor.position,o.position,obstacle.position)-f64::from(obstacle.radius),
++          "target_grip_obstacle_clearance":segment_distance(o.position,grip,obstacle.position)-f64::from(obstacle.radius),
++          "properties":{"velocity":p.velocity,"color":p.color,"material":p.material,"shape":p.shape,"chemical":p.chemical,"surface_temperature":p.surface_temperature,"terrain":p.terrain}})
++    }).collect::<Vec<_>>();
++    if !r.lifecycle().is_alive() {
++        return Ok(
++            json!({"tick":w.tick(),"objects":objects,"candidate_count":null,"candidates":[],"grounded_slots":[],"perception_unavailable_reason":"dead lifecycle; no candidate admission attempted","utterances":w.audible_utterances()}),
++        );
++    }
++    let mut perception = w.clone();
++    let admission = SleepChoiceWorldAdmissionV1::for_organism(&perception, r.organism_id())?;
++    let (draft, _) = perception.perception_sleep_choice_draft_with_bindings(
++        &admission,
++        w.tick(),
++        r.biochemistry().homeostasis,
++    )?;
++    Ok(
++        json!({"tick":w.tick(),"objects":objects,"candidate_count":draft.candidates().len(),"candidates":draft.candidates(),
++       "grounded_slots":draft.grounded_object_slots(),"manipulation_effector_gain":r.embodiment().effector_gain(EffectorCapability::Manipulation),
++       "locomotion_body_radius":LocomotionLimits::default().body_radius,"actor_obstacle_clearance":distance(actor.position,obstacle.position)-f64::from(obstacle.radius+LocomotionLimits::default().body_radius),
++       "actor_grip_obstacle_clearance":segment_distance(actor.position,grip,obstacle.position)-f64::from(obstacle.radius),
++       "ordinary_contact_radius":0.75,"ordinary_manipulation_radius":1.25,"terrain_present":w.terrain().is_some(),
++       "read_only_perception_clone":true,"utterances":w.audible_utterances()}),
++    )
++}
++pub fn initial_audit(w: &HeadlessWorld) -> Result<Value> {
++    let evidence = snapshot(w)?;
++    if w.terrain().is_some()
++        || w.object_count() != 5
++        || evidence["candidate_count"] != 31
++        || evidence["actor_obstacle_clearance"]
++            .as_f64()
++            .is_none_or(|v| v <= 0.)
++        || evidence["actor_grip_obstacle_clearance"]
++            .as_f64()
++            .is_none_or(|v| v <= 0.)
++        || evidence["manipulation_effector_gain"]
++            .as_f64()
++            .is_none_or(|v| v <= 0.)
++    {
++        return Err("fixed scene capacity/body/effector check failed".into());
++    }
++    let actual = w.object_snapshots();
++    for o in &actual {
++        if o.consumed || o.carried_by.is_some() || o.activity_hold || o.hazard_pain != 0. {
++            return Err("fixed scene is not fresh harmless unheld objects".into());
++        }
++    }
++    let r = w
++        .organism_registry()
++        .iter()
++        .next()
++        .ok_or("resident absent")?;
++    let actor = w.entity(r.world_entity_id()).ok_or("actor absent")?;
++    let expected: [(&str, Vec3f, f32, Option<[f32; 3]>); 4] = [
++        (
++            "near-root",
++            Vec3f::new(1., 0., -0.5),
++            0.75,
++            Some([0.8, 0.25, 0.35]),
++        ),
++        (
++            "far-fruit",
++            Vec3f::new(2.75, 0., 1.75),
++            0.75,
++            Some([0.85, 0.65, 0.8]),
++        ),
++        (
++            "activity-toy",
++            Vec3f::new(0.8, 0., 2.1),
++            0.5,
++            Some([0., 0., 0.]),
++        ),
++        ("obstacle", Vec3f::new(1.8, 0., 0.65), 0.35, None),
++    ];
++    let candidates = evidence["candidates"]
++        .as_array()
++        .ok_or("candidate evidence absent")?;
++    for (label, position, radius, chemistry) in expected {
++        let id = w.entity_id(label).ok_or("fixed object absent")?;
++        let o = w.entity(id).ok_or("fixed object record absent")?;
++        if o.position != position
++            || o.radius.to_bits() != radius.to_bits()
++            || chemistry.is_some_and(|c| o.grounded_physical.chemical != c)
++        {
++            return Err("fixed object geometry/recipe changed".into());
++        }
++        let n = candidates
++            .iter()
++            .filter(|c| c["target"]["entity"] == json!(id))
++            .count();
++        if n != 6 {
++            return Err(format!(
++                "fixed target {label} lacks all six canonical candidates (got {n})"
++            )
++            .into());
++        }
++    }
++    let near = w.entity(w.entity_id("near-root").unwrap()).unwrap();
++    if distance(actor.position, near.position) > 1.25 || near.nutrition != 0.65 {
++        return Err("ordinary near food not in center reach".into());
++    }
++    let near_row = evidence["objects"]
++        .as_array()
++        .unwrap()
++        .iter()
++        .find(|o| o["label"] == "near-root")
++        .unwrap();
++    for field in [
++        "actor_target_obstacle_clearance",
++        "target_grip_obstacle_clearance",
++    ] {
++        if near_row[field].as_f64().is_none_or(|v| v <= 0.) {
++            return Err("ordinary near-food grip segment obstructed".into());
++        }
++    }
++    for i in 1..actual.len() {
++        for j in i + 1..actual.len() {
++            if distance(actual[i].position, actual[j].position)
++                <= f64::from(actual[i].radius + actual[j].radius)
++            {
++                return Err("non-agent object bounds overlap".into());
++            }
++        }
++    }
++    Ok(evidence)
++}
+--- a/crates/alife_training/src/cpu/grouped_host_envelope.rs
++++ b/crates/alife_training/src/cpu/grouped_host_envelope.rs
+@@ -6,6 +6,15 @@
+ };
+ use super::*;
+ use serde::{Deserialize, Serialize};
++#[path = "optional_vocal_host.rs"]
++mod optional_vocal;
++pub(super) use optional_vocal::{
++    CoordinatedTargetResidentV1, GroupedPolicyStrategy, LegacyGroupedPolicy,
++};
++pub use optional_vocal::{
++    CpuCoordinatedTargetM2HostCheckpointV1, CpuCoordinatedTargetM2HostDecisionV1,
++    CpuCoordinatedTargetM2HostStepV1, CpuCoordinatedTargetM2HostV1,
++};
+ 
+ const MAGIC: &[u8] =
+     b"ALIFE-GROUPED-M2-HOST\0V1\0CONFIDENCE-V2\0SYNAPTIC-CLOSED\0PROFILE5\0SAMPLER-BITS1\0";
+@@ -28,6 +37,9 @@
+     pub(super) last_physical: Option<alife_world::SleepChoicePhysicalReceiptV1>,
+     consumed_voluntary: Option<VoluntarySleepReceiptV1>,
+     pub(super) last_action: Option<RecoveryGroupJointActionV2>,
++    // Absent legacy field must serialize to no bytes, preserving old envelopes.
++    #[serde(default, skip_serializing_if = "Option::is_none")]
++    pub(super) optional_vocal: Option<CoordinatedTargetResidentV1>,
+     last_bundle: Option<MotorCommandBundle>,
+     last_joint: Option<JointActionSelectionV1>,
+     last_representative: Option<u16>,
+@@ -103,16 +115,13 @@
+                     && self.last_action.is_none()
+                     && self.last_bundle.is_none()
+                     && self.last_joint.is_none()
+-                    && self.last_representative.is_none() =>
++                    && self.last_representative.is_none()
++                    && self.optional_vocal.as_ref().is_none_or(|v| v.is_fresh()) =>
+             {
+                 Ok(())
+             }
+             (Some(physical), Some(motor)) => {
+-                let action = self
+-                    .last_action
+-                    .as_ref()
+-                    .ok_or(CpuHostError::State("missing grouped sample proof"))?;
+-                let (representative, slots) = motor.native.scores.physical_selection(action)?;
++                let (representative, slots, selected_operation) = self.physical_selection()?;
+                 let bundle = self
+                     .last_bundle
+                     .as_ref()
+@@ -132,7 +141,7 @@
+                         "grouped physical/sample provenance mismatch",
+                     ));
+                 }
+-                let operation = match action.operation {
++                let operation = match selected_operation {
+                     None => None,
+                     Some(0) => Some(RecoveryOperationV1::BodySleep),
+                     Some(1) => Some(RecoveryOperationV1::AwakeRest),
+@@ -216,11 +225,7 @@
+         if motor.frame_digest != frame.frame_digest() || motor.tick != frame.tick() {
+             return Err(CpuHostError::State("grouped physical frame mismatch"));
+         }
+-        let action = self
+-            .last_action
+-            .as_ref()
+-            .ok_or(CpuHostError::State("missing grouped sample"))?;
+-        let (representative, slots) = motor.native.scores.physical_selection(action)?;
++        let (representative, slots, _) = self.physical_selection()?;
+         self.last_joint = Some(JointActionSelectionV1::new(
+             slots.map(|i| i.map_or(0, |i| i + 1)),
+             bundle,
+@@ -393,6 +398,12 @@
+             || metadata["selector_tag"] != 12
+             || metadata["decoder_stride"] != 55
+             || metadata["recipe_digest"] != RECOVERY_GROUP_CONFIDENCE_RECIPE_SHA256
++            || metadata["canonical"]["schema_version"] != 2
++            || !metadata["canonical"]["residents"]
++                .as_array()
++                .is_some_and(|rows| {
++                    !rows.is_empty() && rows.iter().all(|r| r["neural"]["schema_version"] == 2)
++                })
+         {
+             return Err(CpuHostError::State(
+                 "grouped M2 outer lineage/profile/policy mismatch",
+@@ -400,6 +411,9 @@
+         }
+         let mut payload: GroupedPayloadV1 = serde_json::from_value(metadata.clone())?;
+         payload.restore_sampler_bits()?;
++        for state in payload.controllers.values() {
++            state.validate_policy::<LegacyGroupedPolicy>()?;
++        }
+         // Legacy nested types have intentionally permissive historical codecs.
+         // This new opaque envelope must not silently erase unknown fields or
+         // invent omitted defaults anywhere in its exact continuation payload.
+@@ -414,16 +428,22 @@
+         Ok(Self { payload })
+     }
+ }
+-pub struct CpuGroupedM2HostStepV1 {
++/// Separately named, process-local research output. Never saved or consumed by policy.
++/// The ordinary step return type and entry point remain unchanged.
++pub struct CpuGroupedM2ResearchStepV1<A = RecoveryGroupJointActionV2> {
++    pub step: CpuGroupedM2HostStepV1<A>,
++    pub world_receipts: Vec<alife_world::HeadlessMotorTransactionReceipt>,
++}
++pub struct CpuGroupedM2HostStepV1<A = RecoveryGroupJointActionV2> {
+     pub tick_before: Tick,
+     pub tick_after: Tick,
+-    pub decisions: Vec<CpuGroupedM2HostDecisionV1>,
++    pub decisions: Vec<CpuGroupedM2HostDecisionV1<A>>,
+     pub sleeping_organisms: usize,
+     pub sleep_consolidations: usize,
+ }
+-pub struct CpuGroupedM2HostDecisionV1 {
++pub struct CpuGroupedM2HostDecisionV1<A = RecoveryGroupJointActionV2> {
+     pub organism_id: OrganismId,
+-    pub action: RecoveryGroupJointActionV2,
++    pub action: A,
+     pub sampling_counter: u32,
+     /// Direct source physical-row readouts, not grouped sampling logits.
+     /// Also used by the declared source-logit regional-arousal emission policy.
+@@ -441,7 +461,14 @@
+ /// synchronous, closed-memory completion contract, never pending GPU work.
+ pub(super) fn grouped_sleep_output_digest(r: &Resident) -> Result<[u64; 4], CpuHostError> {
+     json_digest(
+-        b"ALIFE-GROUPED-M2-MEMORY-SLEEP-OUTPUT-V1",
++        if r.grouped
++            .as_ref()
++            .is_some_and(|g| g.optional_vocal.is_some())
++        {
++            b"ALIFE-COORDINATED-TARGET-M2-MEMORY-SLEEP-OUTPUT-V1".as_slice()
++        } else {
++            b"ALIFE-GROUPED-M2-MEMORY-SLEEP-OUTPUT-V1".as_slice()
++        },
+         &(
+             r.neural.checkpoint()?,
+             r.memory.export_active_bank()?,
+@@ -532,6 +559,23 @@
+         Ok(())
+     }
+     pub fn new_prepared<T, E: std::fmt::Display>(
++        game: CanonicalNewGame,
++        founder: CpuFoundationTrainer,
++        source_inputs: PhenotypeCompilerInputs,
++        sampling_seed: u32,
++        mode: MediationModeV1,
++        prepare: impl FnOnce(&mut HeadlessWorld) -> Result<T, E>,
++    ) -> Result<(Self, T), CpuHostError> {
++        Self::new_prepared_policy::<LegacyGroupedPolicy, T, E>(
++            game,
++            founder,
++            source_inputs,
++            sampling_seed,
++            mode,
++            prepare,
++        )
++    }
++    fn new_prepared_policy<P: GroupedPolicyStrategy, T, E: std::fmt::Display>(
+         game: CanonicalNewGame,
+         founder: CpuFoundationTrainer,
+         source_inputs: PhenotypeCompilerInputs,
+@@ -561,6 +605,15 @@
+                     "grouped M2 is fresh-only, cannot reset acquired resident",
+                 ));
+             }
++            if P::OPTIONAL {
++                // This is the fresh birth path above, before any decision or
++                // acquired state. Construct the new source owner directly.
++                r.neural = CpuOrganismState::new_optional_vocal(
++                    founder.phenotype(),
++                    OrganismId(id),
++                    r.neural.neural_state().clone(),
++                )?;
++            }
+             let profile = super::sleep_choice_profile_identity();
+             r.memory = MemorySidecarState::new_profiled(
+                 OrganismId(id),
+@@ -578,6 +631,7 @@
+                 last_physical: None,
+                 consumed_voluntary: None,
+                 last_action: None,
++                optional_vocal: P::OPTIONAL.then(CoordinatedTargetResidentV1::fresh),
+                 last_bundle: None,
+                 last_joint: None,
+                 last_representative: None,
+@@ -605,6 +659,13 @@
+             .map(|resident| resident.sleep.state())
+     }
+     pub fn checkpoint(&self) -> Result<CpuGroupedM2HostCheckpointV1, CpuHostError> {
++        Ok(CpuGroupedM2HostCheckpointV1 {
++            payload: self.checkpoint_payload::<LegacyGroupedPolicy>()?,
++        })
++    }
++    fn checkpoint_payload<P: GroupedPolicyStrategy>(
++        &self,
++    ) -> Result<GroupedPayloadV1, CpuHostError> {
+         self.host.validate_founder(&self.founder)?;
+         for (&id, r) in &self.host.residents {
+             validate_grouped_sleep_boundary(r)?;
+@@ -624,58 +685,58 @@
+                 .grouped
+                 .as_ref()
+                 .ok_or(CpuHostError::State("missing grouped state"))?;
++            state.validate_policy::<P>()?;
++            state.validate_optional_source(&self.founder, &r.neural)?;
+             state.motor.validate(self.founder.phenotype())?;
+             state.validate_source_boundary(&r.neural.checkpoint()?, &r.activity)?;
+             state.validate_replay(&r.replay)?;
+-            if state.last_action.as_ref().is_some_and(|a| {
+-                a.seed != self.host.sampling_seed
+-                    || a.counter.checked_add(1) != Some(self.host.sampling_counter)
++            if state.sampling_cursor().is_some_and(|(seed, counter)| {
++                seed != self.host.sampling_seed
++                    || counter.checked_add(1) != Some(self.host.sampling_counter)
+             }) {
+                 return Err(CpuHostError::State("grouped sampling cursor mismatch"));
+             }
+             state.validate_boundary(OrganismId(id), r.next_sequence, self.host.world.tick())?;
+         }
+-        Ok(CpuGroupedM2HostCheckpointV1 {
+-            payload: GroupedPayloadV1 {
+-                schema_version: 1,
+-                source_lineage: LINEAGE.into(),
+-                policy: POLICY.into(),
+-                runtime_profile_raw: 5,
+-                selector_tag: 12,
+-                decoder_stride: 55,
+-                mode: self.mode,
+-                source_inputs: self.source_inputs.clone(),
+-                recipe_digest: RECOVERY_GROUP_CONFIDENCE_RECIPE_SHA256.into(),
+-                source_asset: self.founder.source_foundation.clone(),
+-                founder: self.founder.checkpoint(),
+-                canonical: self.host.checkpoint_inner(&self.founder)?,
+-                sampler_bits: grouped_sampler_bits(
+-                    &self
+-                        .host
+-                        .residents
+-                        .iter()
+-                        .map(|(&id, r)| {
+-                            r.grouped
+-                                .clone()
+-                                .map(|g| (id, g))
+-                                .ok_or(CpuHostError::State("missing grouped state"))
+-                        })
+-                        .collect::<Result<BTreeMap<_, _>, CpuHostError>>()?,
+-                ),
+-                controllers: self
++        Ok(GroupedPayloadV1 {
++            schema_version: 1,
++            source_lineage: P::LINEAGE.into(),
++            policy: P::POLICY.into(),
++            runtime_profile_raw: 5,
++            selector_tag: 12,
++            decoder_stride: 55,
++            mode: self.mode,
++            source_inputs: self.source_inputs.clone(),
++            recipe_digest: RECOVERY_GROUP_CONFIDENCE_RECIPE_SHA256.into(),
++            source_asset: self.founder.source_foundation.clone(),
++            founder: self.founder.checkpoint(),
++            canonical: self.host.checkpoint_inner(&self.founder)?,
++            sampler_bits: grouped_sampler_bits(
++                &self
+                     .host
+                     .residents
+                     .iter()
+                     .map(|(&id, r)| {
+-                        Ok((
+-                            id,
+-                            r.grouped
+-                                .clone()
+-                                .ok_or(CpuHostError::State("missing grouped M2 controller"))?,
+-                        ))
++                        r.grouped
++                            .clone()
++                            .map(|g| (id, g))
++                            .ok_or(CpuHostError::State("missing grouped state"))
+                     })
+-                    .collect::<Result<_, CpuHostError>>()?,
+-            },
++                    .collect::<Result<BTreeMap<_, _>, CpuHostError>>()?,
++            ),
++            controllers: self
++                .host
++                .residents
++                .iter()
++                .map(|(&id, r)| {
++                    Ok((
++                        id,
++                        r.grouped
++                            .clone()
++                            .ok_or(CpuHostError::State("missing grouped M2 controller"))?,
++                    ))
++                })
++                .collect::<Result<_, CpuHostError>>()?,
+         })
+     }
+     pub fn restore(
+@@ -684,13 +745,25 @@
+         expected_mode: MediationModeV1,
+     ) -> Result<Self, CpuHostError> {
+         let wire = checkpoint.encode()?;
+-        let c = checkpoint.payload;
++        Self::restore_payload::<LegacyGroupedPolicy>(
++            checkpoint.payload,
++            expected_source,
++            expected_mode,
++            wire,
++        )
++    }
++    fn restore_payload<P: GroupedPolicyStrategy>(
++        c: GroupedPayloadV1,
++        expected_source: &PhenotypeCompilerInputs,
++        expected_mode: MediationModeV1,
++        wire: Vec<u8>,
++    ) -> Result<Self, CpuHostError> {
+         if c.sampler_bits != grouped_sampler_bits(&c.controllers) {
+             return Err(CpuHostError::State("grouped exact sampler bits differ"));
+         }
+         if c.schema_version != 1
+-            || c.source_lineage != LINEAGE
+-            || c.policy != POLICY
++            || c.source_lineage != P::LINEAGE
++            || c.policy != P::POLICY
+             || c.runtime_profile_raw != 5
+             || c.selector_tag != 12
+             || c.decoder_stride != 55
+@@ -701,6 +774,28 @@
+             return Err(CpuHostError::State(
+                 "grouped M2 source, controller, profile or policy mismatch",
+             ));
++        }
++        if c.canonical.schema_version
++            != if P::OPTIONAL {
++                COORDINATED_TARGET_CANONICAL_SCHEMA
++            } else {
++                2
++            }
++            || c.canonical.residents.iter().any(|r| {
++                r.neural.schema_version
++                    != if P::OPTIONAL {
++                        crate::cpu::organism::COORDINATED_TARGET_NEURAL_SCHEMA
++                    } else {
++                        2
++                    }
++            })
++        {
++            return Err(CpuHostError::State(
++                "inner canonical/source policy mismatch",
++            ));
++        }
++        for state in c.controllers.values() {
++            state.validate_policy::<P>()?;
+         }
+         let p = PhenotypeCompiler::compile_validated(
+             expected_source,
+@@ -734,12 +829,22 @@
+             source_inputs: c.source_inputs,
+             mode: c.mode,
+         };
+-        if result.checkpoint()?.encode()? != wire {
++        let payload = result.checkpoint_payload::<P>()?;
++        let mut restored_wire = P::MAGIC.to_vec();
++        restored_wire.extend(serde_json::to_vec(&payload)?);
++        if restored_wire != wire {
+             return Err(CpuHostError::State(
+                 "grouped M2 restore would rewrite acquired state",
+             ));
+         }
+         Ok(result)
++    }
++    pub fn step_research_observed(
++        &mut self,
++        temperature: f32,
++    ) -> Result<CpuGroupedM2ResearchStepV1, CpuHostError> {
++        self.host
++            .grouped_policy_step_observed::<LegacyGroupedPolicy>(&self.founder, temperature)
+     }
+     pub fn step(&mut self, temperature: f32) -> Result<CpuGroupedM2HostStepV1, CpuHostError> {
+         self.host.grouped_step(&self.founder, temperature)
+--- a/crates/alife_training/src/cpu/grouped_host_loop.rs
++++ b/crates/alife_training/src/cpu/grouped_host_loop.rs
+@@ -6,10 +6,46 @@
+         founder: &CpuFoundationTrainer,
+         temperature: f32,
+     ) -> Result<CpuGroupedM2HostStepV1, CpuHostError> {
++        self.grouped_policy_step::<LegacyGroupedPolicy>(founder, temperature)
++    }
++    pub(super) fn grouped_policy_step<P: GroupedPolicyStrategy>(
++        &mut self,
++        founder: &CpuFoundationTrainer,
++        temperature: f32,
++    ) -> Result<CpuGroupedM2HostStepV1<P::Action>, CpuHostError> {
++        self.grouped_policy_step_with_receipts::<P>(founder, temperature, None)
++    }
++    pub(super) fn grouped_policy_step_observed<P: GroupedPolicyStrategy>(
++        &mut self,
++        founder: &CpuFoundationTrainer,
++        temperature: f32,
++    ) -> Result<CpuGroupedM2ResearchStepV1<P::Action>, CpuHostError> {
++        let mut world_receipts = Vec::new();
++        let step = self.grouped_policy_step_with_receipts::<P>(
++            founder,
++            temperature,
++            Some(&mut world_receipts),
++        )?;
++        Ok(CpuGroupedM2ResearchStepV1 {
++            step,
++            world_receipts,
++        })
++    }
++    fn grouped_policy_step_with_receipts<P: GroupedPolicyStrategy>(
++        &mut self,
++        founder: &CpuFoundationTrainer,
++        temperature: f32,
++        receipts: Option<&mut Vec<alife_world::HeadlessMotorTransactionReceipt>>,
++    ) -> Result<CpuGroupedM2HostStepV1<P::Action>, CpuHostError> {
+         self.validate_founder(founder)?;
+         for (&id, r) in &self.residents {
+             super::grouped_host_envelope::validate_grouped_sleep_boundary(r)?;
+-            if r.grouped.is_none() || r.motor.is_some() || r.sleep_choice.is_some() {
++            if r.grouped
++                .as_ref()
++                .is_none_or(|g| g.validate_policy::<P>().is_err())
++                || r.motor.is_some()
++                || r.sleep_choice.is_some()
++            {
+                 return Err(CpuHostError::State("not a grouped M2 resident"));
+             }
+             let record = self
+@@ -23,10 +59,17 @@
+         for r in next.residents.values_mut() {
+             r.sealed_authority = None;
+         }
+-        let result = next.grouped_step_inner(founder, temperature, &mut |draft, _| Ok(draft))?;
++        let result = next.grouped_policy_step_inner_with_receipts::<P>(
++            founder,
++            temperature,
++            &mut |draft, _| Ok(draft),
++            receipts,
++        )?;
+         *self = next;
+         Ok(result)
+     }
++    // Retained internal legacy test hook; production uses the shared typed loop.
++    #[allow(dead_code)]
+     pub(super) fn grouped_step_inner(
+         &mut self,
+         founder: &CpuFoundationTrainer,
+@@ -36,6 +79,29 @@
+             ExperienceSequenceId,
+         ) -> Result<PerceptionFrameDraft, ScaffoldContractError>,
+     ) -> Result<CpuGroupedM2HostStepV1, CpuHostError> {
++        self.grouped_policy_step_inner::<LegacyGroupedPolicy>(founder, temperature, prepare)
++    }
++    pub(super) fn grouped_policy_step_inner<P: GroupedPolicyStrategy>(
++        &mut self,
++        founder: &CpuFoundationTrainer,
++        temperature: f32,
++        prepare: &mut impl FnMut(
++            PerceptionFrameDraft,
++            ExperienceSequenceId,
++        ) -> Result<PerceptionFrameDraft, ScaffoldContractError>,
++    ) -> Result<CpuGroupedM2HostStepV1<P::Action>, CpuHostError> {
++        self.grouped_policy_step_inner_with_receipts::<P>(founder, temperature, prepare, None)
++    }
++    fn grouped_policy_step_inner_with_receipts<P: GroupedPolicyStrategy>(
++        &mut self,
++        founder: &CpuFoundationTrainer,
++        temperature: f32,
++        prepare: &mut impl FnMut(
++            PerceptionFrameDraft,
++            ExperienceSequenceId,
++        ) -> Result<PerceptionFrameDraft, ScaffoldContractError>,
++        mut receipts: Option<&mut Vec<alife_world::HeadlessMotorTransactionReceipt>>,
++    ) -> Result<CpuGroupedM2HostStepV1<P::Action>, CpuHostError> {
+         let p = founder.phenotype();
+         let tick = self.world.tick();
+         let mut decisions = Vec::new();
+@@ -348,16 +414,30 @@
+                 .grouped
+                 .as_mut()
+                 .ok_or(CpuHostError::State("missing grouped controller"))?;
+-            let output = r.neural.advance_grouped(
+-                founder,
+-                context,
+-                &effects,
+-                &mut state.motor,
+-                &frame,
+-                &receptors,
+-                capabilities,
+-                attempt_mask,
+-            )?;
++            state.validate_policy::<P>()?;
++            let output = if P::OPTIONAL {
++                r.neural.advance_optional_vocal(
++                    founder,
++                    context,
++                    &effects,
++                    &mut state.motor,
++                    &frame,
++                    &receptors,
++                    capabilities,
++                    attempt_mask,
++                )?
++            } else {
++                r.neural.advance_grouped(
++                    founder,
++                    context,
++                    &effects,
++                    &mut state.motor,
++                    &frame,
++                    &receptors,
++                    capabilities,
++                    attempt_mask,
++                )?
++            };
+             let motor = state
+                 .motor
+                 .last_receipt
+@@ -369,34 +449,19 @@
+             r.activity.remaining_atp_q16 = activity.available_atp_q16 - activity.debit_atp_q16;
+             r.activity.source_frame_digest = frame.frame_digest().0;
+             let sampling_counter = self.sampling_counter;
+-            let scores = r
+-                .grouped
+-                .as_ref()
+-                .unwrap()
+-                .motor
+-                .last_receipt
+-                .as_ref()
+-                .unwrap()
+-                .native
+-                .scores
+-                .clone();
+-            let action =
+-                scores.sample(self.sampling_seed, sampling_counter, f64::from(temperature))?;
+-            let (index, motor_candidates) = scores.physical_selection(&action)?;
+-            r.grouped.as_mut().unwrap().last_action = Some(action.clone());
++            let (action, index, motor_candidates, speech) = P::select(
++                founder,
++                r,
++                &frame,
++                &output,
++                self.sampling_seed,
++                sampling_counter,
++                f64::from(temperature),
++            )?;
+             self.sampling_counter = self
+                 .sampling_counter
+                 .checked_add(1)
+                 .ok_or(CpuHostError::State("sampling counter overflow"))?;
+-            let speech = if motor_candidates[3].is_some() {
+-                decode_cpu_speech(
+-                    founder,
+-                    &r.neural.neural_state().activations,
+-                    &output.replay_tick.effective_weight_offsets,
+-                )?
+-            } else {
+-                None
+-            };
+             let candidate = &frame.candidates()[index as usize];
+             let confidence =
+                 Confidence::new((candidate.sensor_confidence.raw() * 65535.).round() / 65535.)?;
+@@ -455,10 +520,10 @@
+                 command,
+             )?
+             .with_finalized_memory_recall(&frame, &recall, index)?;
+-            r.neural.stage_grouped_closed_selection(
++            P::stage(
++                r,
+                 p,
+                 &action,
+-                &scores,
+                 CpuDecisionBinding {
+                     sequence_id: sequence,
+                     frame_digest: frame.frame_digest(),
+@@ -558,6 +623,11 @@
+                 }
+                 physical.motor
+             };
++            // The transaction already completed on staged state. Copies are output only.
++            // On any later error the observed entry point returns no receipt or step.
++            if let Some(out) = receipts.as_deref_mut() {
++                out.push(receipt.clone());
++            }
+             let successor = grounded_successor_state(
+                 &self.world,
+                 record.world_entity_id(),
+@@ -681,8 +751,7 @@
+                 pre_context,
+             )?;
+             let credit_receptors = receptors;
+-            r.neural
+-                .close_grouped_outcome(founder, &patch, &credit_receptors)?;
++            P::close(&mut r.neural, founder, &patch, &credit_receptors)?;
+             r.language_grounding.observe_sealed(&patch)?;
+             let memory_write = r.memory.observe_sealed_patch(&patch)?;
+             let topology_receipt = r.topology.observe_sealed_patch(&patch);
+--- a/crates/alife_training/src/cpu/grouped_host_tests.rs
++++ b/crates/alife_training/src/cpu/grouped_host_tests.rs
+@@ -726,3 +726,55 @@
+ 
+ #[path = "grouped_host_food_tests.rs"]
+ mod food_tests;
++
++// Qualification snippet, not wired or executed in this source-only candidate.
++// Append IDENTICALLY inside baseline and candidate grouped_host_tests.rs modules.
++// Uses their existing disposable GRPHOST fixture, not any acquired checkpoint.
++#[test]
++fn optional_vocal_legacy_complete_output_witness() {
++    use sha2::{Digest, Sha256};
++    let (mut host, _) = fixture(0);
++    let mut hash = Sha256::new();
++    let mut absorb = |bytes: Vec<u8>| {
++        hash.update((bytes.len() as u64).to_le_bytes());
++        hash.update(bytes);
++    };
++    absorb(host.checkpoint().unwrap().encode().unwrap());
++    for _ in 0..2 {
++        let step = host.step(0.73).unwrap();
++        absorb(
++            serde_json::to_vec(&(
++                step.tick_before,
++                step.tick_after,
++                step.sleeping_organisms,
++                step.sleep_consolidations,
++                step.decisions.len(),
++            ))
++            .unwrap(),
++        );
++        for d in step.decisions {
++            absorb(
++                serde_json::to_vec(&(
++                    d.organism_id,
++                    d.sampling_counter,
++                    d.action,
++                    d.source_diagnostic_logits,
++                    d.biological_emissions,
++                    d.brain_work,
++                    d.patch,
++                    d.motor,
++                    d.physical,
++                    d.sleep_phase,
++                    d.sleep_trigger,
++                ))
++                .unwrap(),
++            );
++        }
++        absorb(host.checkpoint().unwrap().encode().unwrap());
++    }
++    drop(absorb);
++    println!(
++        "OPTIONAL_VOCAL_LEGACY_COMPLETE_OUTPUT_SHA256={:x}",
++        hash.finalize()
++    );
++}
+--- a/crates/alife_training/src/cpu/host.rs
++++ b/crates/alife_training/src/cpu/host.rs
+@@ -6,8 +6,8 @@
+ #[path = "grouped_host_loop.rs"]
+ mod grouped_host_loop;
+ use super::*;
+-use grouped_host_envelope::GroupedResidentV1;
+ pub use grouped_host_envelope::*;
++use grouped_host_envelope::{GroupedPolicyStrategy, GroupedResidentV1, LegacyGroupedPolicy};
+ #[path = "motor_host_envelope.rs"]
+ mod motor_host_envelope;
+ #[path = "sleep_choice_envelope.rs"]
+@@ -116,6 +116,7 @@
+     pub language_grounding: LanguageGroundingLedger,
+     replay: Vec<CpuReplayEvent>,
+ }
++const COORDINATED_TARGET_CANONICAL_SCHEMA: u16 = 0x434f;
+ #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+ pub struct CpuCanonicalCheckpoint {
+     pub schema_version: u16,
+@@ -606,8 +607,26 @@
+                 })
+             })
+             .collect::<Result<_, CpuHostError>>()?;
++        let optional = self.residents.values().any(|r| {
++            r.grouped
++                .as_ref()
++                .is_some_and(|g| g.optional_vocal.is_some())
++        });
++        if optional
++            && self.residents.values().any(|r| {
++                r.grouped
++                    .as_ref()
++                    .is_none_or(|g| g.optional_vocal.is_none())
++            })
++        {
++            return Err(CpuHostError::State("mixed optional canonical ownership"));
++        }
+         Ok(CpuCanonicalCheckpoint {
+-            schema_version: 2,
++            schema_version: if optional {
++                COORDINATED_TARGET_CANONICAL_SCHEMA
++            } else {
++                2
++            },
+             phenotype_hash: self.phenotype_hash,
+             founder_weight_digest: self.founder_weight_digest,
+             sampling_seed: self.sampling_seed,
+@@ -667,6 +686,38 @@
+         mut sleep_choices: Option<BTreeMap<u64, SleepChoiceResidentV1>>,
+         mut grouped_states: Option<BTreeMap<u64, GroupedResidentV1>>,
+     ) -> Result<Self, CpuHostError> {
++        let optional_admission = grouped_states
++            .as_ref()
++            .is_some_and(|states| states.values().any(|s| s.optional_vocal.is_some()));
++        if optional_admission
++            && grouped_states
++                .as_ref()
++                .unwrap()
++                .values()
++                .any(|s| s.optional_vocal.is_none())
++        {
++            return Err(CpuHostError::State("mixed optional restore ownership"));
++        }
++        let expected_schema = if optional_admission {
++            COORDINATED_TARGET_CANONICAL_SCHEMA
++        } else {
++            2
++        };
++        let expected_neural_schema = if optional_admission {
++            super::organism::COORDINATED_TARGET_NEURAL_SCHEMA
++        } else {
++            2
++        };
++        if checkpoint.schema_version != expected_schema
++            || checkpoint
++                .residents
++                .iter()
++                .any(|r| r.neural.schema_version != expected_neural_schema)
++        {
++            return Err(CpuHostError::State(
++                "canonical or source policy owner mismatch",
++            ));
++        }
+         let grouped_admission = grouped_states.is_some();
+         let composite = controllers.is_some();
+         let sleep_choice_admission = sleep_choices.is_some();
+@@ -698,7 +749,7 @@
+                 "version1 CPU checkpoint lacks tracked-object identity; exact private-life restore requires version2",
+             ));
+         }
+-        if checkpoint.schema_version != 2
++        if checkpoint.schema_version != expected_schema
+             || checkpoint.world.config.brain_policy.policy != PolicyBackend::NeuralClosedLoopCpu
+         {
+             return Err(CpuHostError::State(
+@@ -848,7 +899,11 @@
+                 sleep_choice,
+                 sealed_authority: None,
+                 v11: GpuV11CausalState::restore(r.neural_topology)?,
+-                neural: CpuOrganismState::from_checkpoint(p, r.neural)?,
++                neural: if optional_admission {
++                    CpuOrganismState::from_optional_vocal_checkpoint(p, r.neural)?
++                } else {
++                    CpuOrganismState::from_checkpoint(p, r.neural)?
++                },
+                 activity: r.activity,
+                 memory: MemorySidecarState::restore_portable(
+                     profile,
+@@ -2031,7 +2086,14 @@
+         if r.motor.is_some() || r.sleep_choice.is_some() {
+             return Err(CpuHostError::State("mixed grouped M2 private identity"));
+         }
+-        json_digest(b"ALIFE-CPU-GROUPED-M2-PRIVATE-V1", &(prefix, state))
++        if state.optional_vocal.is_some() {
++            json_digest(
++                b"ALIFE-CPU-COORDINATED-TARGET-M2-PRIVATE-V1",
++                &(prefix, state),
++            )
++        } else {
++            json_digest(b"ALIFE-CPU-GROUPED-M2-PRIVATE-V1", &(prefix, state))
++        }
+     } else if let Some(state) = &r.sleep_choice {
+         if r.motor.is_some() {
+             return Err(CpuHostError::State("mixed M0/M1 private identity"));
+--- /dev/null
++++ b/crates/alife_training/src/cpu/motor_mediation/confidence/policy/optional_vocal/coordination.rs
+@@ -0,0 +1,293 @@
++//! Inherited, parametric coordination energy over the actual joint option.
++//! Never consults WorldObjectKind, food nutrition, ownership, or world positions.
++//! Sensor geometry is only a fallible prediction. World validation and failed
++//! experience remain authoritative, and every finite base option retains support.
++use super::*;
++
++pub const COORDINATION_WEIGHTS_V1: [f64; 3] = [-4.0, 1.0, -1.0];
++pub const COORDINATION_FEATURE_ID_V1: &str =
++    "observed-postmove-reach-excess,observed-progress,remote-target-conflict/v1";
++// Frozen morphology/actuator prior, not a claim of actual displacement. This is
++// the ordinary maximum 2 units/s divided by 20 ticks/s. Obstruction, terrain,
++// effector gain, carried objects and unseen motion can invalidate the estimate.
++const STEP: f64 = 0.1;
++const REACH: f64 = 1.25;
++const VISION_RADIUS: f64 = 8.0;
++
++#[derive(Debug, Clone, Serialize)]
++pub struct CoordinationPairFactorV1 {
++    pub outcomes: Vec<[CoordinatedTargetChoiceV1; 2]>,
++    pub probabilities: Vec<f64>,
++    pub log_probabilities: Vec<f64>,
++    pub features: Vec<[f64; 3]>,
++}
++impl CoordinationPairFactorV1 {
++    pub(super) fn sample(&self, u: f64) -> usize {
++        let mut sum = 0.;
++        for (i, p) in self.probabilities.iter().enumerate() {
++            sum += p;
++            if u < sum {
++                return i;
++            }
++        }
++        self.probabilities.len() - 1
++    }
++}
++#[derive(Clone, Copy)]
++struct Geometry {
++    slot: u16,
++    distance: f64,
++    bearing: [f64; 2],
++    confidence: f64,
++}
++fn observation(
++    frame: &PerceptionFrame,
++    c: &ActionCandidate,
++) -> Result<Option<Geometry>, TrainingError> {
++    let CandidateObservationRef::ObjectSlot(index) = c.observation else {
++        return Ok(None);
++    };
++    let slot = frame
++        .grounded_object_slots()
++        .iter()
++        .find(|s| s.slot_index == index)
++        .ok_or_else(invalid)?;
++    if slot.candidate_features()? != c.features {
++        return Err(invalid());
++    }
++    let norm = f64::from(slot.bearing[0]).hypot(f64::from(slot.bearing[1]));
++    // An uncertain bearing is no permission to read the transport coordinates.
++    if norm < 0.5 {
++        return Ok(None);
++    }
++    let motion = slot
++        .relative_velocity
++        .iter()
++        .map(|x| f64::from(*x).powi(2))
++        .sum::<f64>()
++        .sqrt();
++    Ok(Some(Geometry {
++        slot: index,
++        distance: f64::from(slot.distance) * VISION_RADIUS,
++        bearing: [
++            f64::from(slot.bearing[0]) / norm,
++            f64::from(slot.bearing[1]) / norm,
++        ],
++        confidence: f64::from(slot.confidence.raw().min(c.sensor_confidence.raw())) / (1. + motion),
++    }))
++}
++fn geometry_features(
++    movement: Option<(Geometry, CandidateActionFamily)>,
++    manipulation: Option<Geometry>,
++) -> [f64; 3] {
++    let Some(m) = manipulation else {
++        return [0.; 3];
++    };
++    let mut displacement = [0.; 2];
++    let mut confidence = m.confidence;
++    let mut conflict = 0.;
++    if let Some((l, family)) = movement {
++        confidence = confidence.min(l.confidence);
++        let sign = match family {
++            CandidateActionFamily::Approach => 1.,
++            CandidateActionFamily::Avoid => -1.,
++            _ => 0.,
++        };
++        let length = if sign > 0. {
++            l.distance.min(STEP)
++        } else {
++            STEP
++        };
++        displacement = l.bearing.map(|x| x * sign * length);
++        // A separate target is not inherently incompatible. Penalize only the
++        // remote case, softly; near/held contact remains entirely available.
++        if m.distance > REACH && l.slot != m.slot {
++            conflict = (0.5
++                * (1. - sign * (l.bearing[0] * m.bearing[0] + l.bearing[1] * m.bearing[1])))
++                .clamp(0., 1.);
++        }
++    }
++    let after = (m.bearing[0] * m.distance - displacement[0])
++        .hypot(m.bearing[1] * m.distance - displacement[1]);
++    let excess = (after - REACH).max(0.);
++    [
++        confidence * excess / (REACH + excess),
++        confidence * ((m.distance - after) / STEP).clamp(-1., 1.),
++        confidence * conflict * (excess / STEP).clamp(0., 1.),
++    ]
++}
++fn logsumexp(xs: &[f64]) -> Result<f64, TrainingError> {
++    if xs.is_empty() || xs.iter().any(|x| !x.is_finite()) {
++        return Err(invalid());
++    }
++    let max = xs.iter().copied().fold(f64::NEG_INFINITY, f64::max);
++    Ok(max + xs.iter().map(|x| (x - max).exp()).sum::<f64>().ln())
++}
++impl CoordinatedTargetScoresV1 {
++    fn pair_features(
++        &self,
++        pair: [CoordinatedTargetChoiceV1; 2],
++    ) -> Result<[f64; 3], TrainingError> {
++        let candidate = |choice| -> Result<Option<&ActionCandidate>, TrainingError> {
++            match choice {
++                CoordinatedTargetChoiceV1::Candidate(i) => Ok(Some(
++                    self.coordination_frame
++                        .candidates()
++                        .get(i as usize)
++                        .ok_or_else(invalid)?,
++                )),
++                _ => Ok(None),
++            }
++        };
++        let movement = candidate(pair[0])?
++            .map(|c| observation(&self.coordination_frame, c).map(|g| g.map(|g| (g, c.family))))
++            .transpose()?
++            .flatten();
++        let manipulation = candidate(pair[1])?
++            .map(|c| observation(&self.coordination_frame, c))
++            .transpose()?
++            .flatten();
++        Ok(geometry_features(movement, manipulation))
++    }
++    pub(super) fn coordinate(
++        &self,
++        representative: &mut CoordinatedTargetFactorV1,
++        channels: &[Option<CoordinatedTargetFactorV1>; 6],
++        t: f64,
++        weights: [f64; 3],
++    ) -> Result<(Vec<CoordinationPairFactorV1>, [f64; 3]), TrainingError> {
++        if weights.iter().any(|w| !w.is_finite() || w.abs() > 32.) {
++            return Err(invalid());
++        }
++        let mut pairs = Vec::new();
++        let mut representative_logs = Vec::new();
++        for (r, base_logp) in representative
++            .outcomes
++            .iter()
++            .zip(&representative.log_probabilities)
++        {
++            let choices = |channel: usize| -> Vec<(CoordinatedTargetChoiceV1, f64)> {
++                if self.forced(*r) == Some(channel) {
++                    return vec![(*r, 0.)];
++                }
++                channels[channel].as_ref().map_or_else(
++                    || vec![(CoordinatedTargetChoiceV1::NoOp, 0.)],
++                    |f| {
++                        f.outcomes
++                            .iter()
++                            .copied()
++                            .zip(f.log_probabilities.iter().copied())
++                            .collect()
++                    },
++                )
++            };
++            let mut outcomes = Vec::new();
++            let mut features = Vec::new();
++            let mut logits = Vec::new();
++            for (l, lp) in choices(0) {
++                for (m, mp) in choices(2) {
++                    let pair = [l, m];
++                    let phi = self.pair_features(pair)?;
++                    let energy: f64 = phi.iter().zip(weights).map(|(x, w)| x * w).sum();
++                    outcomes.push(pair);
++                    features.push(phi);
++                    logits.push(lp + mp + energy / t);
++                }
++            }
++            let partition = logsumexp(&logits)?;
++            let log_probabilities: Vec<_> = logits.iter().map(|x| x - partition).collect();
++            let probabilities = log_probabilities.iter().map(|x| x.exp()).collect();
++            pairs.push(CoordinationPairFactorV1 {
++                outcomes,
++                probabilities,
++                log_probabilities,
++                features,
++            });
++            representative_logs.push(base_logp + partition);
++        }
++        let partition = logsumexp(&representative_logs)?;
++        representative.log_probabilities =
++            representative_logs.iter().map(|x| x - partition).collect();
++        representative.probabilities = representative
++            .log_probabilities
++            .iter()
++            .map(|x| x.exp())
++            .collect();
++        let mut mean = [0.; 3];
++        for (r, pair) in representative.probabilities.iter().zip(&pairs) {
++            for (p, phi) in pair.probabilities.iter().zip(&pair.features) {
++                for i in 0..3 {
++                    mean[i] += r * p * phi[i];
++                }
++            }
++        }
++        Ok((pairs, mean))
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    fn g(slot: u16, d: f64) -> Geometry {
++        Geometry {
++            slot,
++            distance: d,
++            bearing: [0., 1.],
++            confidence: 1.,
++        }
++    }
++    #[test]
++    fn fixed_near_far_move_then_reach_and_noop() {
++        assert_eq!(geometry_features(None, None), [0.; 3]);
++        assert_eq!(geometry_features(None, Some(g(1, 0.5))), [0.; 3]);
++        assert!(geometry_features(None, Some(g(1, 3.)))[0] > 0.);
++        assert_eq!(
++            geometry_features(
++                Some((g(1, 1.3), CandidateActionFamily::Approach)),
++                Some(g(1, 1.3))
++            )[0],
++            0.
++        );
++        assert!(
++            geometry_features(
++                Some((g(1, 1.3), CandidateActionFamily::Avoid)),
++                Some(g(1, 1.3))
++            )[0] > 0.
++        );
++    }
++    #[test]
++    fn no_kind_or_mobility_or_held_semantic_oracle() {
++        // Geometry alone gives food, stationary toys, hazards and obstacles the
++        // same prior. Their native neural logits and real outcomes distinguish.
++        let near = geometry_features(
++            Some((g(2, 4.), CandidateActionFamily::Approach)),
++            Some(g(1, 0.5)),
++        );
++        assert_eq!(near[0], 0.);
++        assert_eq!(near[2], 0.);
++        let far = geometry_features(
++            Some((g(2, 4.), CandidateActionFamily::Approach)),
++            Some(g(1, 3.)),
++        );
++        assert_eq!(far[2], 0.);
++        let mut opposite = g(2, 4.);
++        opposite.bearing = [0., -1.];
++        assert_eq!(
++            geometry_features(
++                Some((opposite, CandidateActionFamily::Approach)),
++                Some(g(1, 3.))
++            )[2],
++            1.
++        );
++        assert_eq!(
++            geometry_features(
++                Some((g(2, 4.), CandidateActionFamily::Approach)),
++                Some(g(1, 1.3))
++            )[2],
++            0.
++        );
++        let mut uncertain = g(1, 3.);
++        uncertain.confidence = 0.;
++        assert_eq!(geometry_features(None, Some(uncertain)), [0.; 3]);
++    }
++}
+--- /dev/null
++++ b/crates/alife_training/src/cpu/motor_mediation/confidence/policy/optional_vocal/tests.rs
+@@ -0,0 +1,605 @@
++//! Fixed synthetic sampler controls. No source forward, world tick, or learning.
++//! Present payloads here are fixture data, never claims of autonomous speech.
++use super::*;
++const CONTROL_SEED: u32 = 0x434f_5431;
++fn phenotype() -> BrainPhenotype {
++    let (inputs, _) = super::super::super::tests::source();
++    PhenotypeCompiler::compile_validated(
++        &inputs,
++        &BrainCapacityClass::n2048_grounded_drive_research(),
++    )
++    .unwrap()
++}
++fn specs() -> Vec<(u32, ActionKind, CandidateActionFamily)> {
++    vec![
++        (1, ActionKind::Idle, CandidateActionFamily::Idle),
++        (3, ActionKind::Rest, CandidateActionFamily::Rest),
++        (400, ActionKind::Vocalize, CandidateActionFamily::Other),
++        (103, ActionKind::Move, CandidateActionFamily::Approach),
++        (212, ActionKind::Interact, CandidateActionFamily::Contact),
++        (104, ActionKind::Hold, CandidateActionFamily::Other),
++        (700, ActionKind::Rest, CandidateActionFamily::Rest),
++    ]
++}
++fn frame(spec: &[(u32, ActionKind, CandidateActionFamily)]) -> PerceptionFrame {
++    frame_edit(spec, |_| {})
++}
++fn frame_edit(
++    spec: &[(u32, ActionKind, CandidateActionFamily)],
++    edit: impl FnOnce(&mut Vec<ActionCandidate>),
++) -> PerceptionFrame {
++    let t = Tick::new(1);
++    let owner = OrganismId(1);
++    let profile = SensorProfile::GroundedObjectSlotsSleepChoiceV1;
++    let mut candidates = spec
++        .iter()
++        .enumerate()
++        .map(|(i, (id, kind, family))| {
++            ActionCandidate::new(
++                i as u16,
++                ActionId(*id),
++                *kind,
++                *family,
++                CandidateObservationRef::None,
++                ActionTarget::NONE,
++                CandidateFeatureVector::zero().with_intrinsic_action_basis(*kind),
++                Confidence::new(1.).unwrap(),
++                NormalizedScalar::ZERO,
++                DurationTicks::new(1),
++                DurationTicks::new(1),
++            )
++            .unwrap()
++        })
++        .collect();
++    edit(&mut candidates);
++    PerceptionFrame::new(
++        owner,
++        t,
++        profile,
++        SensorySnapshot::new(
++            owner,
++            t,
++            Vec3f::ZERO,
++            SensoryChannels::ZERO,
++            Default::default(),
++        )
++        .unwrap(),
++        BodySnapshot {
++            pose: Pose::IDENTITY,
++            velocity: Velocity::ZERO,
++        },
++        HomeostaticSnapshot::baseline(t),
++        candidates,
++        SensorProfileProvenance::new(profile, SensoryAbiVersion::CURRENT, t).unwrap(),
++        vec![],
++    )
++    .unwrap()
++}
++fn synthetic_source(
++    p: &BrainPhenotype,
++    f: &PerceptionFrame,
++    present: bool,
++) -> CoordinatedTargetSourceV1 {
++    let speech = present.then(|| {
++        SpeechMotorPayload::try_new(
++            SpeechActKind::Declare,
++            vec![LanguageTokenId::new(1).unwrap()],
++            Confidence::new(1.).unwrap(),
++        )
++        .unwrap()
++    });
++    CoordinatedTargetSourceV1::from_forward(
++        f.organism_id(),
++        f.tick(),
++        p.phenotype_hash(),
++        f.frame_digest(),
++        1,
++        0,
++        &vec![0.; p.neuron_count() as usize],
++        &vec![0.; p.synapses().len()],
++        speech,
++    )
++    .unwrap()
++}
++fn native(p: &BrainPhenotype, f: &PerceptionFrame) -> RecoveryGroupScoresV2 {
++    RecoveryGroupScoresV2 {
++        binding: RecoveryGroupBindingV2::bind(
++            p,
++            f,
++            (1u32 << f.candidates().len()) - 1,
++            [true; 6],
++            0,
++        )
++        .unwrap(),
++        ordinary: vec![0.; f.candidates().len()],
++        group: 0.,
++        operations: [0.; 2],
++    }
++}
++fn fixture(
++    present: bool,
++) -> (
++    BrainPhenotype,
++    PerceptionFrame,
++    RecoveryGroupScoresV2,
++    CoordinatedTargetScoresV1,
++) {
++    let p = phenotype();
++    let f = frame(&specs());
++    let n = native(&p, &f);
++    let s = CoordinatedTargetScoresV1::bind(&p, &f, &n, synthetic_source(&p, &f, present)).unwrap();
++    (p, f, n, s)
++}
++#[test]
++fn absent_payload_removes_only_vocal_and_legacy_keeps_its_original_choice() {
++    let (_, _, native, scores) = fixture(false);
++    let d = scores.probabilities(0.73).unwrap();
++    assert!((d.actual_quiet_probability - 1.).abs() < 1e-12);
++    assert_eq!(d.actual_vocal_probability, 0.);
++    assert!(!d
++        .representative
++        .outcomes
++        .contains(&CoordinatedTargetChoiceV1::Candidate(2)));
++    assert_eq!(
++        d.channels[3].as_ref().unwrap().outcomes,
++        vec![CoordinatedTargetChoiceV1::Quiet]
++    );
++    assert_eq!(
++        scores.eligible_mask(),
++        native.binding.eligible_mask & !(1 << 2)
++    );
++    let old = native.probabilities(0.73).unwrap();
++    assert_eq!(
++        old.channels[3]
++            .as_ref()
++            .unwrap()
++            .probability(RecoveryGroupChoiceV2::Candidate(2)),
++        1.
++    );
++    let old_wire = serde_json::to_vec(&native).unwrap();
++    for counter in 0..64 {
++        let a = scores.sample(CONTROL_SEED, counter, 0.73).unwrap();
++        assert_eq!(a.motors()[3], CoordinatedTargetChoiceV1::Quiet);
++        let (_, m) = scores.physical_selection(&a).unwrap();
++        assert_eq!(m[3], None);
++        assert!(!scores
++            .evaluate(&a)
++            .unwrap()
++            .selected_physical_candidates_once
++            .contains(&2));
++    }
++    assert_eq!(serde_json::to_vec(&native).unwrap(), old_wire);
++}
++#[test]
++fn present_payload_can_remain_quiet_and_representative_and_independent_vocal_are_distinct() {
++    let (p, f, mut native, _) = fixture(true);
++    let source = synthetic_source(&p, &f, true);
++    for (dominant, expected_vocal, forced) in [(0, false, false), (2, true, true), (4, true, false)]
++    {
++        native.ordinary.fill(-100.);
++        native.group = -100.;
++        native.ordinary[dominant] = 100.;
++        if dominant == 4 {
++            native.ordinary[2] = 0.;
++        }
++        let s = CoordinatedTargetScoresV1::bind(&p, &f, &native, source.clone()).unwrap();
++        let a = s.sample(CONTROL_SEED, 0, 1.).unwrap();
++        assert_eq!(
++            a.representative(),
++            CoordinatedTargetChoiceV1::Candidate(dominant as u16)
++        );
++        assert_eq!(
++            s.physical_selection(&a).unwrap().1[3].is_some(),
++            expected_vocal
++        );
++        assert_eq!(!a.draw_factors().contains(&5), forced);
++        if !expected_vocal {
++            assert_eq!(a.motors()[3], CoordinatedTargetChoiceV1::Quiet);
++        }
++    }
++}
++#[test]
++fn all_factors_and_complete_joint_normalize_including_representative_forcing() {
++    let (_, _, _, s) = fixture(true);
++    let d = s.probabilities(1.).unwrap();
++    fn walk(
++        s: &CoordinatedTargetScoresV1,
++        d: &CoordinatedTargetProbabilitiesV1,
++        rep: CoordinatedTargetChoiceV1,
++        slot: usize,
++        motors: &mut [CoordinatedTargetChoiceV1; 6],
++        mass: f64,
++        total: &mut [f64; 2],
++    ) {
++        if slot == 6 {
++            let rest = rep == CoordinatedTargetChoiceV1::RestGroup
++                || motors.contains(&CoordinatedTargetChoiceV1::RestGroup);
++            let conditional = if rest {
++                d.conditional_operation.iter().sum()
++            } else {
++                1.
++            };
++            total[0] += mass * conditional;
++            if matches!(motors[3], CoordinatedTargetChoiceV1::Candidate(_)) {
++                total[1] += mass * conditional;
++            }
++        } else if s.forced(rep) == Some(slot) {
++            motors[slot] = rep;
++            walk(s, d, rep, slot + 1, motors, mass, total);
++        } else if let Some(f) = &d.channels[slot] {
++            for (&c, p) in f.outcomes.iter().zip(&f.probabilities) {
++                motors[slot] = c;
++                walk(s, d, rep, slot + 1, motors, mass * p, total);
++            }
++        } else {
++            motors[slot] = CoordinatedTargetChoiceV1::NoOp;
++            walk(s, d, rep, slot + 1, motors, mass, total);
++        }
++    }
++    for f in std::iter::once(&d.representative).chain(d.channels.iter().flatten()) {
++        assert!((f.probabilities.iter().sum::<f64>() - 1.).abs() < 1e-12);
++    }
++    let mut mass = [0.; 2];
++    for (&rep, p) in d
++        .representative
++        .outcomes
++        .iter()
++        .zip(&d.representative.probabilities)
++    {
++        walk(
++            &s,
++            &d,
++            rep,
++            0,
++            &mut [CoordinatedTargetChoiceV1::NoOp; 6],
++            *p,
++            &mut mass,
++        );
++    }
++    assert!((mass[0] - 1.).abs() < 1e-12);
++    assert!((mass[1] - d.actual_vocal_probability).abs() < 1e-12);
++    assert!((d.actual_vocal_probability - 7. / 12.).abs() < 1e-12);
++    assert!((d.actual_quiet_probability - 5. / 12.).abs() < 1e-12);
++}
++#[test]
++fn canonical_idle_rejects_missing_alias_and_wrong_family_without_touching_other_rows() {
++    let p = phenotype();
++    for variant in 0..4 {
++        let mut spec = specs();
++        match variant {
++            0 => {
++                spec.remove(0);
++            }
++            1 => spec[0].0 = 99,
++            2 => {
++                // This malformed pair is rejected by the shared constructor,
++                // before a valid frame can reach the optional binder.
++                assert!(matches!(
++                    ActionCandidate::new(
++                        0,
++                        ActionId(1),
++                        ActionKind::Idle,
++                        CandidateActionFamily::Other,
++                        CandidateObservationRef::None,
++                        ActionTarget::NONE,
++                        CandidateFeatureVector::zero()
++                            .with_intrinsic_action_basis(ActionKind::Idle),
++                        Confidence::new(1.).unwrap(),
++                        NormalizedScalar::ZERO,
++                        DurationTicks::new(1),
++                        DurationTicks::new(1),
++                    ),
++                    Err(alife_core::ScaffoldContractError::InvalidActionCandidate)
++                ));
++                continue;
++            }
++            _ => spec.push((99, ActionKind::Idle, CandidateActionFamily::Idle)),
++        }
++        let f = frame(&spec);
++        let n = native(&p, &f);
++        assert!(
++            CoordinatedTargetScoresV1::bind(&p, &f, &n, synthetic_source(&p, &f, true)).is_err()
++        );
++    }
++    for variant in 0..4 {
++        let malformed = frame_edit(&specs(), |c| match variant {
++            0 => c[0].features.0[0] = 0.25,
++            1 => c[0].sensor_confidence = Confidence::new(0.5).unwrap(),
++            2 => c[0].required_effort = NormalizedScalar::new(0.25).unwrap(),
++            _ => {
++                c[0].min_duration = DurationTicks::new(2);
++                c[0].max_duration = DurationTicks::new(2);
++            }
++        });
++        let malformed_native = native(&p, &malformed);
++        assert!(CoordinatedTargetScoresV1::bind(
++            &p,
++            &malformed,
++            &malformed_native,
++            synthetic_source(&p, &malformed, true)
++        )
++        .is_err());
++    }
++    let (_, _, native, s) = fixture(false);
++    assert_eq!(
++        s.eligible_mask() & (1 << 5),
++        native.binding.eligible_mask & (1 << 5)
++    ); // NoPosture/Other survives.
++    for i in [3, 4, 5] {
++        assert!(s.eligible_mask() & (1 << i) != 0);
++    }
++}
++#[test]
++fn exact_bits_rng_temperature_output_and_masks_are_bound() {
++    let (_, _, native, s) = fixture(true);
++    let a = s.sample(CONTROL_SEED, 9, 0.73).unwrap();
++    s.validate_sampling_context(&a, CONTROL_SEED, 9, 0.73)
++        .unwrap();
++    assert!(s
++        .validate_sampling_context(&a, CONTROL_SEED ^ 1, 9, 0.73)
++        .is_err());
++    assert!(s
++        .validate_sampling_context(&a, CONTROL_SEED, 10, 0.73)
++        .is_err());
++    assert!(s
++        .validate_sampling_context(&a, CONTROL_SEED, 9, 0.74)
++        .is_err());
++    for t in [0., -1., f64::NAN, f64::INFINITY] {
++        assert!(s.sample(CONTROL_SEED, 9, t).is_err());
++    }
++    let mut changed = s.source.clone();
++    changed.output_digest[0] ^= 1;
++    assert!(s.validate_source(&changed).is_err());
++    changed = s.source.clone();
++    changed.dispatch_generation += 1;
++    assert!(s.validate_source(&changed).is_err());
++    changed = s.source.clone();
++    changed.frame.0[0] ^= 1;
++    assert!(s.validate_source(&changed).is_err());
++    let mut wrong = s.clone();
++    wrong.eligible_mask ^= 1 << 2;
++    assert!(wrong.probabilities(1.).is_err());
++    let mut changed_native = native.clone();
++    changed_native.ordinary[0] = 0.1;
++    assert!(s.validate_native(&changed_native).is_err());
++    // Ordinary capability/attempt masks can remove speech, never create it.
++    let (p, f, mut absent_effector, _) = fixture(true);
++    let mut capabilities = [true; 6];
++    capabilities[3] = false;
++    absent_effector.binding = RecoveryGroupBindingV2::bind(&p, &f, 0x7f, capabilities, 0).unwrap();
++    let disabled =
++        CoordinatedTargetScoresV1::bind(&p, &f, &absent_effector, synthetic_source(&p, &f, true))
++            .unwrap();
++    assert!(disabled.probabilities(1.).unwrap().channels[3].is_none());
++    assert_eq!(
++        disabled
++            .physical_selection(&disabled.sample(CONTROL_SEED, 9, 1.).unwrap())
++            .unwrap()
++            .1[3],
++        None
++    );
++    let mut masked = native.clone();
++    masked.binding = RecoveryGroupBindingV2::bind(&p, &f, 0x7f & !(1 << 2), [true; 6], 0).unwrap();
++    let removed =
++        CoordinatedTargetScoresV1::bind(&p, &f, &masked, synthetic_source(&p, &f, true)).unwrap();
++    assert_eq!(
++        removed.probabilities(1.).unwrap().channels[3]
++            .as_ref()
++            .unwrap()
++            .outcomes,
++        vec![CoordinatedTargetChoiceV1::Quiet]
++    );
++    let wire = serde_json::to_vec(&(s.clone(), a.clone())).unwrap();
++    let (cold, cold_action): (CoordinatedTargetScoresV1, CoordinatedTargetActionV1) =
++        serde_json::from_slice(&wire).unwrap();
++    assert_eq!(cold, s);
++    assert_eq!(cold_action, a);
++    assert_eq!(
++        cold.sample(CONTROL_SEED, 10, 0.73).unwrap(),
++        s.sample(CONTROL_SEED, 10, 0.73).unwrap()
++    );
++    assert!(
++        serde_json::from_slice::<RecoveryGroupJointActionV2>(&serde_json::to_vec(&a).unwrap())
++            .is_err()
++    );
++    let mut malformed = a.clone();
++    malformed.motors[3] = CoordinatedTargetChoiceV1::NoOp;
++    assert!(s.evaluate(&malformed).is_err());
++}
++
++// Fixed two-object scene. These are raw sensor descriptors, not food/toy labels.
++fn coordination_fixture(confidence: f32) -> CoordinatedTargetScoresV1 {
++    let p = phenotype();
++    let f = frame(&specs());
++    let mut candidates = f.candidates().to_vec();
++    let mut slots = Vec::new();
++    for (index, distance) in [0.0625_f32, 0.375].into_iter().enumerate() {
++        let slot = GroundedObjectSlotV1 {
++            slot_index: index as u16,
++            tracked_object_id: TrackedObjectId(index as u64 + 1),
++            bearing: [0., 1.],
++            distance,
++            relative_velocity: [0.; 3],
++            color: [0.5; 3],
++            material: [0.5; 3],
++            shape: [0.5; 3],
++            chemical: [0.; 3],
++            contact: 0.,
++            proprioception: [0.; 2],
++            temperature: 0.,
++            terrain: [0.; 2],
++            confidence: Confidence::new(confidence).unwrap(),
++        };
++        for (id, kind, family) in [
++            (100, ActionKind::Move, CandidateActionFamily::Approach),
++            (101, ActionKind::Move, CandidateActionFamily::Avoid),
++            (210, ActionKind::Interact, CandidateActionFamily::Ingest),
++            (211, ActionKind::Interact, CandidateActionFamily::Contact),
++            (213, ActionKind::Interact, CandidateActionFamily::Other),
++        ] {
++            candidates.push(
++                ActionCandidate::new(
++                    candidates.len() as u16,
++                    ActionId(id),
++                    kind,
++                    family,
++                    CandidateObservationRef::ObjectSlot(index as u16),
++                    ActionTarget::new(
++                        Some(WorldEntityId(index as u64 + 100)),
++                        Some(Vec3f::new(distance * 8., 0., 0.)),
++                    ),
++                    slot.candidate_features().unwrap(),
++                    slot.confidence,
++                    NormalizedScalar::ZERO,
++                    DurationTicks::new(1),
++                    DurationTicks::new(1),
++                )
++                .unwrap(),
++            );
++        }
++        slots.push(slot);
++    }
++    let f = PerceptionFrame::new(
++        f.organism_id(),
++        f.tick(),
++        f.sensor_profile(),
++        f.sensory().clone(),
++        f.body(),
++        *f.homeostasis(),
++        candidates,
++        SensorProfileProvenance::new(f.sensor_profile(), SensoryAbiVersion::CURRENT, f.tick())
++            .unwrap(),
++        slots,
++    )
++    .unwrap();
++    let n = native(&p, &f);
++    CoordinatedTargetScoresV1::bind(&p, &f, &n, synthetic_source(&p, &f, false)).unwrap()
++}
++fn weighted_distribution(
++    s: &CoordinatedTargetScoresV1,
++    t: f64,
++    weights: [f64; 3],
++) -> (
++    CoordinatedTargetFactorV1,
++    Vec<CoordinationPairFactorV1>,
++    [f64; 3],
++) {
++    let mut n = s.native();
++    n.binding.eligible_mask = s.eligible_mask;
++    let base = n.probabilities(t).unwrap();
++    let mut r = CoordinatedTargetFactorV1::from_native(base.representative);
++    let channels = base
++        .channels
++        .map(|x| x.map(CoordinatedTargetFactorV1::from_native));
++    let (pairs, mean) = s.coordinate(&mut r, &channels, t, weights).unwrap();
++    (r, pairs, mean)
++}
++#[test]
++fn coordination_joint_normalizes_and_exact_gradient_matches_finite_difference() {
++    let s = coordination_fixture(1.);
++    let t = 0.73;
++    let (r, pairs, mean) = weighted_distribution(&s, t, COORDINATION_WEIGHTS_V1);
++    let mut total = 0.;
++    for (ri, pair) in pairs.iter().enumerate() {
++        assert!((pair.probabilities.iter().sum::<f64>() - 1.).abs() < 1e-12);
++        for (pi, p) in pair.probabilities.iter().enumerate() {
++            assert!(*p > 0.);
++            total += r.probabilities[ri] * p;
++            for parameter in 0..3 {
++                let mut plus = COORDINATION_WEIGHTS_V1;
++                let mut minus = plus;
++                plus[parameter] += 1e-5;
++                minus[parameter] -= 1e-5;
++                let (pr, pp, _) = weighted_distribution(&s, t, plus);
++                let (mr, mp, _) = weighted_distribution(&s, t, minus);
++                let numeric = (pr.log_probabilities[ri] + pp[ri].log_probabilities[pi]
++                    - mr.log_probabilities[ri]
++                    - mp[ri].log_probabilities[pi])
++                    / 2e-5;
++                let exact = (pair.features[pi][parameter] - mean[parameter]) / t;
++                assert!(
++                    (numeric - exact).abs() < 1e-8,
++                    "numeric {numeric}, exact {exact}"
++                );
++            }
++        }
++    }
++    assert!((total - 1.).abs() < 1e-12);
++}
++#[test]
++fn coordination_zero_weights_recovers_base_and_uncertainty_preserves_support() {
++    for confidence in [0., 1.] {
++        let s = coordination_fixture(confidence);
++        let t = 1.;
++        let (r, pairs, _) = weighted_distribution(&s, t, [0.; 3]);
++        let mut native = s.native();
++        native.binding.eligible_mask = s.eligible_mask;
++        let base = native.probabilities(t).unwrap();
++        for (a, b) in r
++            .probabilities
++            .iter()
++            .zip(base.representative.probabilities)
++        {
++            assert!((a - b).abs() < 1e-12);
++        }
++        if confidence == 1. {
++            let marginal =
++                |rep: &CoordinatedTargetFactorV1, pairs: &[CoordinationPairFactorV1]| -> f64 {
++                    rep.probabilities
++                        .iter()
++                        .zip(pairs)
++                        .map(|(r, pair)| {
++                            r * pair
++                                .outcomes
++                                .iter()
++                                .zip(&pair.probabilities)
++                                .filter(|(o, _)| match o[1] {
++                                    CoordinatedTargetChoiceV1::Candidate(i) => {
++                                        s.coordination_frame.candidates()[i as usize].features.0[2]
++                                            > 0.2
++                                    }
++                                    _ => false,
++                                })
++                                .map(|(_, p)| p)
++                                .sum::<f64>()
++                        })
++                        .sum()
++                };
++            let before = marginal(&r, &pairs);
++            let (actual, actual_pairs, _) = weighted_distribution(&s, t, COORDINATION_WEIGHTS_V1);
++            let after = marginal(&actual, &actual_pairs);
++            assert!(after > 0. && after < before);
++            println!("COORDINATION_FIXED_REMOTE_MANIPULATION_MASS base={before:.12} candidate={after:.12}");
++        }
++        if confidence == 0. {
++            let (actual, _, _) = weighted_distribution(&s, t, COORDINATION_WEIGHTS_V1);
++            for (a, b) in r.probabilities.iter().zip(actual.probabilities) {
++                assert!((a - b).abs() < 1e-12);
++            }
++        }
++        assert!(pairs
++            .iter()
++            .all(|p| p.probabilities.iter().all(|x| *x > 0.)));
++    }
++}
++#[test]
++fn coordination_binding_rejects_frame_and_parameter_tamper_and_samples_once() {
++    let s = coordination_fixture(1.);
++    let a = s.sample(CONTROL_SEED, 17, 0.73).unwrap();
++    let e = s.evaluate(&a).unwrap();
++    assert!(
++        (e.factor_log_probabilities.iter().sum::<f64>() - a.joint_log_probability()).abs() < 1e-12
++    );
++    assert_eq!(a.draw_factors().iter().filter(|x| **x == 9).count(), 1);
++    assert!(!a.draw_factors().contains(&2));
++    assert!(!a.draw_factors().contains(&4));
++    let bytes = serde_json::to_vec(&s).unwrap();
++    let restored: CoordinatedTargetScoresV1 = serde_json::from_slice(&bytes).unwrap();
++    assert_eq!(restored.sample(CONTROL_SEED, 17, 0.73).unwrap(), a);
++    let mut changed = s.clone();
++    changed.coordination_weights[0] += 0.1;
++    assert!(changed.sample(CONTROL_SEED, 17, 0.73).is_err());
++    let mut changed = s.clone();
++    changed.coordination_frame = frame(&specs());
++    assert!(changed.sample(CONTROL_SEED, 17, 0.73).is_err());
++}
+--- /dev/null
++++ b/crates/alife_training/src/cpu/motor_mediation/confidence/policy/optional_vocal.rs
+@@ -0,0 +1,768 @@
++//! Closed optional Vocal factor. Quiet is a policy choice, never a world primitive.
++//! The native confidence-V2 circuit supplies scores, not V2 sampling ownership.
++use super::*;
++use alife_core::{LanguageTokenId, SpeechActKind, SpeechMotorPayload};
++mod coordination;
++pub use coordination::*;
++
++pub const COORDINATED_TARGET_POLICY_V1: &str = "m2-coordinated-target-v1;closed;grounded-pair-energy-v1;inherited-weights-4,1,-1;source-payload;no-online-gradient";
++const RNG_DOMAIN: u32 = 0x434f_5431;
++
++/// Exact source-output evidence. Only the resident's pending forward constructs it.
++#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++pub struct CoordinatedTargetSourceV1 {
++    policy: String,
++    owner: OrganismId,
++    tick: Tick,
++    source: PhenotypeHash,
++    frame: PerceptionFrameDigest,
++    dispatch_generation: u64,
++    activation_side: u8,
++    output_digest: [u8; 32],
++    payload: Option<PayloadBits>,
++}
++#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++struct PayloadBits {
++    act: u8,
++    tokens: Vec<u16>,
++    confidence: u32,
++}
++impl CoordinatedTargetSourceV1 {
++    #[allow(clippy::too_many_arguments)]
++    pub(in crate::cpu) fn from_forward(
++        owner: OrganismId,
++        tick: Tick,
++        source: PhenotypeHash,
++        frame: PerceptionFrameDigest,
++        dispatch_generation: u64,
++        activation_side: u8,
++        activations: &[f32],
++        offsets: &[f32],
++        speech: Option<SpeechMotorPayload>,
++    ) -> Result<Self, TrainingError> {
++        finite(activations)?;
++        finite(offsets)?;
++        let payload = speech.map(|p| PayloadBits {
++            act: p.speech_act.raw(),
++            tokens: p.tokens.iter().map(|t| t.raw()).collect(),
++            confidence: p.confidence.raw().to_bits(),
++        });
++        let mut hasher = Sha256::new();
++        hasher.update(COORDINATED_TARGET_POLICY_V1.as_bytes());
++        for bank in [activations, offsets] {
++            hasher.update((bank.len() as u64).to_le_bytes());
++            for x in bank {
++                hasher.update(x.to_bits().to_le_bytes());
++            }
++        }
++        let result = Self {
++            policy: COORDINATED_TARGET_POLICY_V1.into(),
++            owner,
++            tick,
++            source,
++            frame,
++            dispatch_generation,
++            activation_side,
++            output_digest: hasher.finalize().into(),
++            payload,
++        };
++        result.validate()?;
++        Ok(result)
++    }
++    fn validate(&self) -> Result<(), TrainingError> {
++        if self.policy != COORDINATED_TARGET_POLICY_V1
++            || self.dispatch_generation == 0
++            || self.activation_side > 1
++        {
++            return Err(invalid());
++        }
++        self.owner.validate()?;
++        self.speech()?;
++        Ok(())
++    }
++    pub fn speech(&self) -> Result<Option<SpeechMotorPayload>, TrainingError> {
++        self.payload
++            .as_ref()
++            .map(|p| {
++                Ok(SpeechMotorPayload::try_new(
++                    SpeechActKind::try_from_raw(p.act)?,
++                    p.tokens
++                        .iter()
++                        .map(|&t| LanguageTokenId::new(t))
++                        .collect::<Result<_, _>>()?,
++                    Confidence::new(f32::from_bits(p.confidence))?,
++                )?)
++            })
++            .transpose()
++    }
++    pub fn payload_present(&self) -> bool {
++        self.payload.is_some()
++    }
++    pub(in crate::cpu) fn validate_identity(
++        &self,
++        owner: OrganismId,
++        tick: Tick,
++        source: PhenotypeHash,
++        frame: PerceptionFrameDigest,
++        generation: u64,
++        side: u8,
++    ) -> Result<(), TrainingError> {
++        self.validate()?;
++        if (
++            self.owner,
++            self.tick,
++            self.source,
++            self.frame,
++            self.dispatch_generation,
++            self.activation_side,
++        ) != (owner, tick, source, frame, generation, side)
++        {
++            return Err(invalid());
++        }
++        Ok(())
++    }
++}
++
++/// Closed sampler input. All floating sampling values are persisted as IEEE bits.
++#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++pub struct CoordinatedTargetScoresV1 {
++    policy: String,
++    source: CoordinatedTargetSourceV1,
++    native_binding: RecoveryGroupBindingV2,
++    ordinary_bits: Vec<u64>,
++    group_bits: u64,
++    operation_bits: [u64; 2],
++    idle: u16,
++    idle_feature_digest: CandidateFeatureDigest,
++    vocal_mask: u32,
++    eligible_mask: u32,
++    coordination_frame: PerceptionFrame,
++    coordination_weights: [f64; 3],
++}
++#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
++pub enum CoordinatedTargetChoiceV1 {
++    NoOp,
++    Candidate(u16),
++    RestGroup,
++    Quiet,
++}
++#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++pub struct CoordinatedTargetActionV1 {
++    policy: String,
++    binding_digest: [u8; 32],
++    representative: CoordinatedTargetChoiceV1,
++    motors: [CoordinatedTargetChoiceV1; 6],
++    operation: Option<u8>,
++    temperature_bits: u64,
++    joint_log_probability_bits: u64,
++    seed: u32,
++    counter: u32,
++    draw_factors: Vec<u32>,
++}
++impl CoordinatedTargetActionV1 {
++    pub fn representative(&self) -> CoordinatedTargetChoiceV1 {
++        self.representative
++    }
++    pub fn motors(&self) -> [CoordinatedTargetChoiceV1; 6] {
++        self.motors
++    }
++    pub fn operation(&self) -> Option<u8> {
++        self.operation
++    }
++    pub fn seed(&self) -> u32 {
++        self.seed
++    }
++    pub fn counter(&self) -> u32 {
++        self.counter
++    }
++    pub fn temperature(&self) -> f64 {
++        f64::from_bits(self.temperature_bits)
++    }
++    pub fn joint_log_probability(&self) -> f64 {
++        f64::from_bits(self.joint_log_probability_bits)
++    }
++    pub fn draw_factors(&self) -> &[u32] {
++        &self.draw_factors
++    }
++}
++#[derive(Debug, Clone, Serialize)]
++pub struct CoordinatedTargetFactorV1 {
++    pub outcomes: Vec<CoordinatedTargetChoiceV1>,
++    pub probabilities: Vec<f64>,
++    pub log_probabilities: Vec<f64>,
++}
++impl CoordinatedTargetFactorV1 {
++    fn canonical_idle(index: u16) -> Result<ActionCandidate, TrainingError> {
++        Ok(ActionCandidate::new(
++            index,
++            ActionKind::Idle.canonical_id(),
++            ActionKind::Idle,
++            CandidateActionFamily::Idle,
++            CandidateObservationRef::None,
++            ActionTarget::NONE,
++            CandidateFeatureVector::zero().with_intrinsic_action_basis(ActionKind::Idle),
++            Confidence::new(1.)?,
++            NormalizedScalar::new(0.)?,
++            DurationTicks::new(1),
++            DurationTicks::new(1),
++        )?)
++    }
++    fn from_native(d: RecoveryGroupFactorV2) -> Self {
++        Self {
++            outcomes: d.outcomes.into_iter().map(from_native).collect(),
++            probabilities: d.probabilities,
++            log_probabilities: d.log_probabilities,
++        }
++    }
++    fn new(
++        outcomes: Vec<CoordinatedTargetChoiceV1>,
++        logits: Vec<f64>,
++        t: f64,
++    ) -> Result<Self, TrainingError> {
++        valid_temperature(t)?;
++        if outcomes.len() != logits.len()
++            || logits.is_empty()
++            || logits.iter().any(|x| !x.is_finite() || x.abs() > 1e30)
++        {
++            return Err(invalid());
++        }
++        let max = logits.iter().copied().fold(f64::NEG_INFINITY, f64::max);
++        let sum = logits.iter().map(|x| ((x - max) / t).exp()).sum::<f64>();
++        if !sum.is_finite() || sum <= 0. {
++            return Err(invalid());
++        }
++        let log_probabilities: Vec<_> = logits.iter().map(|x| (x - max) / t - sum.ln()).collect();
++        let probabilities = log_probabilities.iter().map(|x| x.exp()).collect();
++        Ok(Self {
++            outcomes,
++            probabilities,
++            log_probabilities,
++        })
++    }
++    fn sample(&self, u: f64) -> CoordinatedTargetChoiceV1 {
++        let mut sum = 0.;
++        for (&o, p) in self.outcomes.iter().zip(&self.probabilities) {
++            sum += p;
++            if u < sum {
++                return o;
++            }
++        }
++        *self.outcomes.last().expect("validated nonempty factor")
++    }
++    fn logp(&self, o: CoordinatedTargetChoiceV1) -> Result<f64, TrainingError> {
++        self.outcomes
++            .iter()
++            .position(|x| *x == o)
++            .map(|i| self.log_probabilities[i])
++            .ok_or_else(invalid)
++    }
++    pub fn probability(&self, o: CoordinatedTargetChoiceV1) -> f64 {
++        self.outcomes
++            .iter()
++            .position(|x| *x == o)
++            .map_or(0., |i| self.probabilities[i])
++    }
++}
++#[derive(Debug, Clone, Serialize)]
++pub struct CoordinatedTargetProbabilitiesV1 {
++    pub representative: CoordinatedTargetFactorV1,
++    pub channels: [Option<CoordinatedTargetFactorV1>; 6],
++    pub conditional_operation: [f64; 2],
++    pub conditional_log_probability: [Option<f64>; 2],
++    /// Marginal after representative forcing, not merely the independent factor.
++    pub actual_quiet_probability: f64,
++    pub actual_vocal_probability: f64,
++    /// Exact joint move/manipulation factors conditional on each representative.
++    pub coordination: Vec<CoordinationPairFactorV1>,
++    pub coordination_mean_features: [f64; 3],
++}
++#[derive(Debug, Clone, Serialize)]
++pub struct CoordinatedTargetEvaluationV1 {
++    pub joint_log_probability: f64,
++    pub joint_probability: f64,
++    pub factor_log_probabilities: Vec<f64>,
++    pub selected_physical_candidates_once: Vec<u16>,
++    /// Analytic derivative with respect to the inherited coordination parameters.
++    /// This diagnostic is not an optimizer/update authorization or online gradient path.
++    pub coordination_log_probability_gradient: [f64; 3],
++}
++fn from_native(c: RecoveryGroupChoiceV2) -> CoordinatedTargetChoiceV1 {
++    match c {
++        RecoveryGroupChoiceV2::NoOp => CoordinatedTargetChoiceV1::NoOp,
++        RecoveryGroupChoiceV2::Candidate(i) => CoordinatedTargetChoiceV1::Candidate(i),
++        RecoveryGroupChoiceV2::RestGroup => CoordinatedTargetChoiceV1::RestGroup,
++    }
++}
++impl CoordinatedTargetScoresV1 {
++    /// Host-only admission; no caller-supplied readiness Boolean or virtual ID.
++    pub(in crate::cpu) fn bind(
++        p: &BrainPhenotype,
++        frame: &PerceptionFrame,
++        native: &RecoveryGroupScoresV2,
++        source: CoordinatedTargetSourceV1,
++    ) -> Result<Self, TrainingError> {
++        native.validate_context(
++            p,
++            frame,
++            native.binding.attempt_mask,
++            native.binding.enabled,
++            native.binding.generation,
++        )?;
++        source.validate_identity(
++            frame.organism_id(),
++            frame.tick(),
++            p.phenotype_hash(),
++            frame.frame_digest(),
++            native
++                .binding
++                .generation
++                .checked_add(1)
++                .ok_or_else(invalid)?,
++            source.activation_side,
++        )?;
++        let mut idle = None;
++        let mut vocal_mask = 0;
++        for (i, c) in frame.candidates().iter().enumerate() {
++            // Any row claiming the canonical identity or either Idle semantic
++            // field must be this one exact source row. Reject ambiguous aliases.
++            if c.action_id == ActionKind::Idle.canonical_id()
++                || c.kind == ActionKind::Idle
++                || c.family == CandidateActionFamily::Idle
++            {
++                if idle.is_some()
++                    || c.action_id != ActionKind::Idle.canonical_id()
++                    || c.kind != ActionKind::Idle
++                    || c.family != CandidateActionFamily::Idle
++                    || c.target != ActionTarget::NONE
++                    || c.observation != CandidateObservationRef::None
++                    || c.features
++                        != CandidateFeatureVector::zero()
++                            .with_intrinsic_action_basis(ActionKind::Idle)
++                    || c.candidate_index as usize != i
++                    || c.sensor_confidence.raw().to_bits() != 1_f32.to_bits()
++                    || c.required_effort.raw().to_bits() != 0_f32.to_bits()
++                    || c.min_duration.raw() != 1
++                    || c.max_duration.raw() != 1
++                    || c.feature_digest()?
++                        != CoordinatedTargetFactorV1::canonical_idle(i as u16)?.feature_digest()?
++                {
++                    return Err(invalid());
++                }
++                idle = Some(i as u16);
++            }
++            if c.kind == ActionKind::Vocalize {
++                vocal_mask |= 1u32 << i;
++            }
++        }
++        let idle = idle.ok_or_else(invalid)?;
++        let eligible_mask = native.binding.eligible_mask
++            & if source.payload_present() {
++                u32::MAX
++            } else {
++                !vocal_mask
++            };
++        let result = Self {
++            policy: COORDINATED_TARGET_POLICY_V1.into(),
++            source,
++            native_binding: native.binding.clone(),
++            ordinary_bits: native.ordinary.iter().map(|x| x.to_bits()).collect(),
++            group_bits: native.group.to_bits(),
++            operation_bits: native.operations.map(f64::to_bits),
++            idle,
++            idle_feature_digest: CoordinatedTargetFactorV1::canonical_idle(idle)?
++                .feature_digest()?,
++            vocal_mask,
++            eligible_mask,
++            coordination_frame: frame.clone(),
++            coordination_weights: COORDINATION_WEIGHTS_V1,
++        };
++        result.validate()?;
++        Ok(result)
++    }
++    fn native(&self) -> RecoveryGroupScoresV2 {
++        RecoveryGroupScoresV2 {
++            binding: self.native_binding.clone(),
++            ordinary: self
++                .ordinary_bits
++                .iter()
++                .map(|&x| f64::from_bits(x))
++                .collect(),
++            group: f64::from_bits(self.group_bits),
++            operations: self.operation_bits.map(f64::from_bits),
++        }
++    }
++    fn validate(&self) -> Result<(), TrainingError> {
++        self.source.validate()?;
++        let native = self.native();
++        native.validate()?;
++        let n = native.ordinary.len();
++        self.coordination_frame.validate()?;
++        if self.coordination_frame.frame_digest() != self.native_binding.frame_digest
++            || self.coordination_frame.candidates().len() != n
++            || self.coordination_weights != COORDINATION_WEIGHTS_V1
++        {
++            return Err(invalid());
++        }
++        let mut canonical_idle = None;
++        for (i, identity) in native.binding.identities.iter().enumerate() {
++            let (id, target, kind, family): (
++                ActionId,
++                ActionTarget,
++                ActionKind,
++                CandidateActionFamily,
++            ) = serde_json::from_str(identity).map_err(|_| invalid())?;
++            if id == ActionKind::Idle.canonical_id()
++                || kind == ActionKind::Idle
++                || family == CandidateActionFamily::Idle
++            {
++                if canonical_idle.is_some()
++                    || id != ActionKind::Idle.canonical_id()
++                    || target != ActionTarget::NONE
++                    || kind != ActionKind::Idle
++                    || family != CandidateActionFamily::Idle
++                {
++                    return Err(invalid());
++                }
++                canonical_idle = Some(i as u16);
++            }
++        }
++        if canonical_idle != Some(self.idle)
++            || self.idle_feature_digest
++                != CoordinatedTargetFactorV1::canonical_idle(self.idle)?.feature_digest()?
++        {
++            return Err(invalid());
++        }
++        let expected_vocal = (0..n)
++            .filter(|&i| native.binding.forced[i] == Some(3))
++            .fold(0, |mask, i| mask | (1u32 << i));
++        if self.policy != COORDINATED_TARGET_POLICY_V1
++            || usize::from(self.idle) >= n
++            || native.binding.forced[self.idle as usize] != Some(4)
++            || native.binding.channel_members[self.idle as usize]
++            || native.binding.is_recovery(self.idle as usize)
++            || self.vocal_mask != expected_vocal
++            || self.eligible_mask
++                != (native.binding.eligible_mask
++                    & if self.source.payload_present() {
++                        u32::MAX
++                    } else {
++                        !self.vocal_mask
++                    })
++            || self.eligible_mask == 0
++            || native.binding.source_hash != self.source.source
++            || native.binding.frame_digest != self.source.frame
++            || native.binding.generation.checked_add(1) != Some(self.source.dispatch_generation)
++        {
++            return Err(invalid());
++        }
++        Ok(())
++    }
++    pub(in crate::cpu) fn validate_native(
++        &self,
++        native: &RecoveryGroupScoresV2,
++    ) -> Result<(), TrainingError> {
++        self.validate()?;
++        native.validate()?;
++        if self.native_binding != native.binding
++            || self.ordinary_bits
++                != native
++                    .ordinary
++                    .iter()
++                    .map(|x| x.to_bits())
++                    .collect::<Vec<_>>()
++            || self.group_bits != native.group.to_bits()
++            || self.operation_bits != native.operations.map(f64::to_bits)
++        {
++            return Err(invalid());
++        }
++        Ok(())
++    }
++    pub(in crate::cpu) fn validate_source(
++        &self,
++        source: &CoordinatedTargetSourceV1,
++    ) -> Result<(), TrainingError> {
++        self.validate()?;
++        if self.source != *source {
++            return Err(invalid());
++        }
++        Ok(())
++    }
++    pub fn source(&self) -> &CoordinatedTargetSourceV1 {
++        &self.source
++    }
++    pub fn eligible_mask(&self) -> u32 {
++        self.eligible_mask
++    }
++    pub fn quiet_score(&self) -> f64 {
++        f64::from_bits(self.ordinary_bits[self.idle as usize])
++    }
++    fn digest(&self) -> Result<[u8; 32], TrainingError> {
++        Ok(Sha256::digest(serde_json::to_vec(self).map_err(|_| invalid())?).into())
++    }
++    pub fn probabilities(&self, t: f64) -> Result<CoordinatedTargetProbabilitiesV1, TrainingError> {
++        self.validate()?;
++        valid_temperature(t)?;
++        let mut masked = self.native();
++        masked.binding.eligible_mask = self.eligible_mask;
++        let legacy = masked.probabilities(t)?;
++        let mut representative = CoordinatedTargetFactorV1::from_native(legacy.representative);
++        let mut channels = legacy
++            .channels
++            .map(|f| f.map(CoordinatedTargetFactorV1::from_native));
++        if self.native_binding.enabled[3] {
++            let mut outcomes = vec![CoordinatedTargetChoiceV1::Quiet];
++            let mut logits = vec![self.quiet_score()];
++            for &i in &self.native_binding.order {
++                if self.eligible_mask & self.vocal_mask & (1u32 << i) != 0 {
++                    outcomes.push(CoordinatedTargetChoiceV1::Candidate(i as u16));
++                    logits.push(f64::from_bits(self.ordinary_bits[i]));
++                }
++            }
++            channels[3] = Some(CoordinatedTargetFactorV1::new(outcomes, logits, t)?);
++        }
++        let (coordination, coordination_mean_features) =
++            self.coordinate(&mut representative, &channels, t, self.coordination_weights)?;
++        let forced_vocal = representative
++            .outcomes
++            .iter()
++            .zip(&representative.probabilities)
++            .filter(|(o, _)| self.forced(**o) == Some(3))
++            .map(|(_, p)| p)
++            .sum::<f64>();
++        let non_forced = representative
++            .outcomes
++            .iter()
++            .zip(&representative.probabilities)
++            .filter(|(o, _)| self.forced(**o) != Some(3))
++            .map(|(_, p)| p)
++            .sum::<f64>();
++        let quiet = channels[3]
++            .as_ref()
++            .map_or(1., |f| f.probability(CoordinatedTargetChoiceV1::Quiet));
++        let speech = channels[3].as_ref().map_or(0., |f| {
++            f.outcomes
++                .iter()
++                .zip(&f.probabilities)
++                .filter(|(o, _)| matches!(o, CoordinatedTargetChoiceV1::Candidate(_)))
