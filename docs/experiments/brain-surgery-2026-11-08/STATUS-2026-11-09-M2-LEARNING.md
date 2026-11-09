@@ -475,3 +475,38 @@ Grip V2 compiled nine targets and passed f001–f018, then stopped in f019. Sour
 Play V4 compiled both original60 and owned76 probes, then its test build stopped on E0284 at three legacy OptionalVocalPolicy calls. The narrow fix supplies explicit ARM=0 in those test adapters. No weights, assertions, runtime behavior or executed test dose changed; V4 ran no fixture, probe or biology.
 
 The original paper was reread again this evening. Debugging feedback remains distinct from unseen evaluation. A temporary /tmp remount removed the earlier local V2/V4 staging directories after they were fully verified and activated on GitHub. Workspace evidence survived; no active local life or compiler was present. New source staging is bounded in the separate tmpfs, with verified remote recovery identities. No data or cache deletion occurred.
+
+
+## 2026-11-09 21:00 UTC: resumed qualification and exact stop points
+
+Reconciliation found all three 20:48 UTC continuations completed at attempt 1. No run was retried, extended or duplicated. Main remains `c3aec16df33861f1316d127736f5f60eea327ede`. The earlier historical-frame V2 meal association and all retained evidence remain unchanged.
+
+### Channel-native host contracts passed; exact rollback cause still needs stronger evidence
+
+[Run 42689810199 / job 129406259745](https://github.com/BobertNeek/A-Life/actions/runs/42689810199/job/129406259745), activation `2719bd475f464b5cb0047bd779d56938467448a2`, completed all **13 exact contracts**, with zero ignored tests. These include native score-gradient composition, own-proof serialization, source-once host dispatch, Quiet physics, byte-exact warm/cold next boundary, policy ownership and transactional rejection. The runner reported 383 excluded old registrations, a four-source/world-call ceiling, zero trained-checkpoint file reads, peak sampled RSS 1,731,776,512 bytes and peak accounted workspace 2,051,651,738 bytes.
+
+The rollback assertion in that passing source accepted any error before checking preserved bytes. It therefore does not by itself prove the deliberately injected post-physical error was reached. A separately prepared one-fixture strengthening requires that exact error and preserves the original byte-equality check. Its result is pending. The 13-test result does not demonstrate useful Play, improved recovery, combined joint-memory attribution or an applied actor update. The independent product law also omits the earlier geometry and movement/recovery coupling; those earlier results cannot be inherited by this owner.
+
+### Current-opportunity meal V3 stopped at compilation
+
+[Run 42696511329 / job 129429669052](https://github.com/BobertNeek/A-Life/actions/runs/42696511329/job/129429669052), activation `c95d516e3799659e8d64334d286267967fecab62`, stopped at `graded-test-build` with E0277 at `joint_episode_host_tests.rs:337`. There were **zero fixture processes**. The planned recipe, 240 preparation ticks, two scripted producers and one ordinary current opportunity were not executed.
+
+The failing helper uses an implicitly sized generic to serialize an episode slice. A separately versioned test-helper correction is being prepared with `T: Serialize + ?Sized`; no association law, fixed dose, biological state or policy weight is being tuned. This build failure adds no evidence about actual post-consumption recall or selection.
+
+### Controlled Play V4 stopped at exact inventory
+
+[Run 42696493359 / job 129429608310](https://github.com/BobertNeek/A-Life/actions/runs/42696493359/job/129429608310), activation `b3cb05e8c7b92cdb100c2f8499264e129541bc9f`, compiled but stopped with `TEST_PROTOCOL` at `list-exact`. There were **zero fixture processes**, no phase snapshots and no physical observations. The six-interval intervention was not executed. The exact one-name list protocol is being checked against the pinned libtest harness before a minimal parser correction. No neural or biochemical conclusion follows from this transport failure.
+
+The separate 76-row Play runtime V5 had already passed new01–new04 before stopping in new05, as recorded in its retained packet. A new05-only cold-boundary correction is prepared but has no new native result. Broad legacy preservation and the two original/default-wire probes remain incomplete.
+
+### Grip V4 localized failure before host admission
+
+[Run 42696483373 / job 129429570829](https://github.com/BobertNeek/A-Life/actions/runs/42696483373/job/129429570829), activation `12f91db5d54c72d0d2e04a5b42d8ea99e6772931`, compiled its single training target, matched the exact f041 inventory and launched f041 once. It failed with no passed fixture. The safe event prefix ended at **ASSET_GENOTYPE_BIND_BEGIN**, phase count five, with no completed boolean checks. This localizes the stop before the later host-admission and registered-step phases; the runner's full attempted-dose inventory is an upper bound, not three observed source forwards or completed biological intervals.
+
+All 866 source bindings held. Sampled peak RSS was 1,732,943,872 bytes; accounted workspace peaked at 2,046,894,258 bytes. The prior 18 V2 and 22 V3 passes remain separate historical receipts. f041 and the five GPU fixtures are still unqualified. Source-identity admission remains strict while the asset/genotype binding is traced.
+
+### Method checkpoint
+
+Reread [Sparks of Weight-Space Programming](https://rikiyat.github.io/blog/weight-space-programming/) again at this revision. Its targeted temporary circuit and practice-versus-unseen evaluation split remain useful. Its failed Gemma intervention also warns against treating removal of a bottleneck as creation of missing competence. Here the current corrections address build, test protocol and source admission. They are prerequisites for measurement, not new evidence of learned care.
+
+New staging remains bounded in the separate /tmp filesystem. The local /workspace reserve is retained; no evidence, cache, old life, source snapshot or trained bank was deleted or replaced. These research owners remain separate from default/gameplay promotion.
