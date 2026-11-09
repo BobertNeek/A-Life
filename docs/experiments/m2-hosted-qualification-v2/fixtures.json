@@ -1,0 +1,689 @@
+{
+  "claim": "Authored exact selections, never executed by preparation. No broad-suite, all-targets, example or study selection.",
+  "fixtures": [
+    {
+      "ignored": false,
+      "kind": "synthetic-core",
+      "name": "memory::supplemental_meal_tests::meal_consumed_rest_and_inspect_preserve_representative_and_single_event",
+      "package": "alife_core",
+      "path": "crates/alife_core/src/memory/supplemental_meal_tests.rs",
+      "source_sha256": "17a89e0bf4072e9533b048a3898f465b00f3877232b03665c4cde82c93471c83",
+      "variant": "meal"
+    },
+    {
+      "ignored": false,
+      "kind": "synthetic-core",
+      "name": "memory::supplemental_meal_tests::meal_requires_exact_consumed_channel_evidence",
+      "package": "alife_core",
+      "path": "crates/alife_core/src/memory/supplemental_meal_tests.rs",
+      "source_sha256": "17a89e0bf4072e9533b048a3898f465b00f3877232b03665c4cde82c93471c83",
+      "variant": "meal"
+    },
+    {
+      "ignored": false,
+      "kind": "synthetic-core",
+      "name": "memory::supplemental_meal_tests::meal_duplicate_or_partial_channel_receipts_cannot_seal",
+      "package": "alife_core",
+      "path": "crates/alife_core/src/memory/supplemental_meal_tests.rs",
+      "source_sha256": "17a89e0bf4072e9533b048a3898f465b00f3877232b03665c4cde82c93471c83",
+      "variant": "meal"
+    },
+    {
+      "ignored": false,
+      "kind": "synthetic-core",
+      "name": "memory::supplemental_meal_tests::meal_competing_physical_contact_is_fail_closed_including_unknown_target",
+      "package": "alife_core",
+      "path": "crates/alife_core/src/memory/supplemental_meal_tests.rs",
+      "source_sha256": "17a89e0bf4072e9533b048a3898f465b00f3877232b03665c4cde82c93471c83",
+      "variant": "meal"
+    },
+    {
+      "ignored": false,
+      "kind": "synthetic-core",
+      "name": "memory::supplemental_meal_tests::meal_already_representative_is_not_double_counted",
+      "package": "alife_core",
+      "path": "crates/alife_core/src/memory/supplemental_meal_tests.rs",
+      "source_sha256": "17a89e0bf4072e9533b048a3898f465b00f3877232b03665c4cde82c93471c83",
+      "variant": "meal"
+    },
+    {
+      "ignored": false,
+      "kind": "synthetic-core",
+      "name": "memory::supplemental_meal_tests::meal_replay_foreign_frame_and_generation_overflow_are_atomic",
+      "package": "alife_core",
+      "path": "crates/alife_core/src/memory/supplemental_meal_tests.rs",
+      "source_sha256": "17a89e0bf4072e9533b048a3898f465b00f3877232b03665c4cde82c93471c83",
+      "variant": "meal"
+    },
+    {
+      "ignored": false,
+      "kind": "synthetic-core",
+      "name": "memory::supplemental_meal_tests::meal_capacity_never_evicts_the_just_retained_representative",
+      "package": "alife_core",
+      "path": "crates/alife_core/src/memory/supplemental_meal_tests.rs",
+      "source_sha256": "17a89e0bf4072e9533b048a3898f465b00f3877232b03665c4cde82c93471c83",
+      "variant": "meal"
+    },
+    {
+      "ignored": false,
+      "kind": "synthetic-core",
+      "name": "memory::supplemental_meal_tests::meal_merge_cold_roundtrip_preserves_source_counts_without_inflation",
+      "package": "alife_core",
+      "path": "crates/alife_core/src/memory/supplemental_meal_tests.rs",
+      "source_sha256": "17a89e0bf4072e9533b048a3898f465b00f3877232b03665c4cde82c93471c83",
+      "variant": "meal"
+    },
+    {
+      "ignored": false,
+      "kind": "synthetic-core",
+      "name": "memory::supplemental_meal_tests::meal_second_allocation_failure_rolls_back_representative_and_sequence",
+      "package": "alife_core",
+      "path": "crates/alife_core/src/memory/supplemental_meal_tests.rs",
+      "source_sha256": "17a89e0bf4072e9533b048a3898f465b00f3877232b03665c4cde82c93471c83",
+      "variant": "meal"
+    },
+    {
+      "ignored": false,
+      "kind": "synthetic-core",
+      "name": "memory::supplemental_meal_tests::meal_sidecar_replay_is_atomic_and_cold_state_can_continue_merging",
+      "package": "alife_core",
+      "path": "crates/alife_core/src/memory/supplemental_meal_tests.rs",
+      "source_sha256": "17a89e0bf4072e9533b048a3898f465b00f3877232b03665c4cde82c93471c83",
+      "variant": "meal"
+    },
+    {
+      "ignored": false,
+      "kind": "synthetic-core",
+      "name": "memory::supplemental_meal_tests::meal_harmful_consumed_outcome_is_remembered_despite_aggregate_failure",
+      "package": "alife_core",
+      "path": "crates/alife_core/src/memory/supplemental_meal_tests.rs",
+      "source_sha256": "17a89e0bf4072e9533b048a3898f465b00f3877232b03665c4cde82c93471c83",
+      "variant": "meal"
+    },
+    {
+      "ignored": false,
+      "kind": "synthetic-core",
+      "name": "memory::supplemental_meal_tests::meal_gpu_input_is_rejected_without_changing_bank",
+      "package": "alife_core",
+      "path": "crates/alife_core/src/memory/supplemental_meal_tests.rs",
+      "source_sha256": "17a89e0bf4072e9533b048a3898f465b00f3877232b03665c4cde82c93471c83",
+      "variant": "meal"
+    },
+    {
+      "ignored": false,
+      "kind": "synthetic-core",
+      "name": "memory::supplemental_meal_tests::meal_proof_is_bound_to_sealed_channel_frame_and_transaction",
+      "package": "alife_core",
+      "path": "crates/alife_core/src/memory/supplemental_meal_tests.rs",
+      "source_sha256": "17a89e0bf4072e9533b048a3898f465b00f3877232b03665c4cde82c93471c83",
+      "variant": "meal"
+    },
+    {
+      "ignored": false,
+      "kind": "synthetic-core",
+      "name": "memory::supplemental_meal_tests::meal_harmful_reversal_at_capacity_does_not_average_away_contradiction",
+      "package": "alife_core",
+      "path": "crates/alife_core/src/memory/supplemental_meal_tests.rs",
+      "source_sha256": "17a89e0bf4072e9533b048a3898f465b00f3877232b03665c4cde82c93471c83",
+      "variant": "meal"
+    },
+    {
+      "ignored": false,
+      "kind": "synthetic-core",
+      "name": "memory::supplemental_meal_tests::meal_sleep_exact_identity_falls_through_other_current_sequence_association",
+      "package": "alife_core",
+      "path": "crates/alife_core/src/memory/supplemental_meal_tests.rs",
+      "source_sha256": "17a89e0bf4072e9533b048a3898f465b00f3877232b03665c4cde82c93471c83",
+      "variant": "meal"
+    },
+    {
+      "ignored": false,
+      "kind": "synthetic-core",
+      "name": "memory::supplemental_meal_tests::meal_sleep_wrapper_cold_roundtrip_authenticates_both_ids_and_tampering",
+      "package": "alife_core",
+      "path": "crates/alife_core/src/memory/supplemental_meal_tests.rs",
+      "source_sha256": "17a89e0bf4072e9533b048a3898f465b00f3877232b03665c4cde82c93471c83",
+      "variant": "meal"
+    },
+    {
+      "ignored": false,
+      "kind": "synthetic-core",
+      "name": "memory::supplemental_meal_tests::meal_sleep_merged_interior_sources_do_not_create_extra_replay_events",
+      "package": "alife_core",
+      "path": "crates/alife_core/src/memory/supplemental_meal_tests.rs",
+      "source_sha256": "17a89e0bf4072e9533b048a3898f465b00f3877232b03665c4cde82c93471c83",
+      "variant": "meal"
+    },
+    {
+      "ignored": false,
+      "kind": "synthetic-core",
+      "name": "memory::supplemental_meal_tests::meal_same_target_inspection_is_one_target_source_before_top_k",
+      "package": "alife_core",
+      "path": "crates/alife_core/src/memory/supplemental_meal_tests.rs",
+      "source_sha256": "17a89e0bf4072e9533b048a3898f465b00f3877232b03665c4cde82c93471c83",
+      "variant": "meal"
+    },
+    {
+      "ignored": false,
+      "kind": "synthetic-core",
+      "name": "memory::supplemental_meal_tests::meal_legacy_unknown_omitted_field_and_no_supplement_are_byte_preserved",
+      "package": "alife_core",
+      "path": "crates/alife_core/src/memory/supplemental_meal_tests.rs",
+      "source_sha256": "17a89e0bf4072e9533b048a3898f465b00f3877232b03665c4cde82c93471c83",
+      "variant": "meal"
+    },
+    {
+      "ignored": false,
+      "kind": "synthetic-core",
+      "name": "memory::supplemental_meal_tests::meal_preparation_at_capacity_never_relabels_or_replaces_consumed_source",
+      "package": "alife_core",
+      "path": "crates/alife_core/src/memory/supplemental_meal_tests.rs",
+      "source_sha256": "17a89e0bf4072e9533b048a3898f465b00f3877232b03665c4cde82c93471c83",
+      "variant": "meal"
+    },
+    {
+      "ignored": false,
+      "kind": "synthetic-core",
+      "name": "memory::supplemental_meal_tests::meal_actual_consumption_supersedes_contradictory_legacy_unknown_at_capacity_only",
+      "package": "alife_core",
+      "path": "crates/alife_core/src/memory/supplemental_meal_tests.rs",
+      "source_sha256": "17a89e0bf4072e9533b048a3898f465b00f3877232b03665c4cde82c93471c83",
+      "variant": "meal"
+    },
+    {
+      "ignored": false,
+      "kind": "synthetic-core",
+      "name": "memory::supplemental_meal_tests::meal_distinct_ingest_representative_resolves_by_exact_target_and_retained_id",
+      "package": "alife_core",
+      "path": "crates/alife_core/src/memory/supplemental_meal_tests.rs",
+      "source_sha256": "17a89e0bf4072e9533b048a3898f465b00f3877232b03665c4cde82c93471c83",
+      "variant": "meal"
+    },
+    {
+      "ignored": false,
+      "kind": "synthetic-core",
+      "name": "memory::supplemental_meal_tests::meal_source_deduplication_precedes_fixed_top_k_cutoff",
+      "package": "alife_core",
+      "path": "crates/alife_core/src/memory/supplemental_meal_tests.rs",
+      "source_sha256": "17a89e0bf4072e9533b048a3898f465b00f3877232b03665c4cde82c93471c83",
+      "variant": "meal"
+    },
+    {
+      "ignored": false,
+      "kind": "synthetic-core",
+      "name": "memory::supplemental_meal_tests::meal_reader_is_opt_in_for_previously_valid_same_sequence_legacy_bank",
+      "package": "alife_core",
+      "path": "crates/alife_core/src/memory/supplemental_meal_tests.rs",
+      "source_sha256": "17a89e0bf4072e9533b048a3898f465b00f3877232b03665c4cde82c93471c83",
+      "variant": "meal"
+    },
+    {
+      "ignored": false,
+      "kind": "synthetic-core",
+      "name": "memory::supplemental_meal_tests::meal_sleep_tests::meal_bounded_sleep_two_ids_count_one_event_sample_and_predictor_update",
+      "package": "alife_core",
+      "path": "crates/alife_core/src/memory/meal_sleep_tests.rs",
+      "source_sha256": "049d3cf9d2a1d9f9967c802118facc34d7828662c8855025ff1414e1e10b6fa7",
+      "variant": "meal"
+    },
+    {
+      "ignored": false,
+      "kind": "synthetic-core",
+      "name": "memory::supplemental_meal_tests::meal_sleep_tests::meal_bounded_sleep_evicted_representative_replays_surviving_meal_once",
+      "package": "alife_core",
+      "path": "crates/alife_core/src/memory/meal_sleep_tests.rs",
+      "source_sha256": "049d3cf9d2a1d9f9967c802118facc34d7828662c8855025ff1414e1e10b6fa7",
+      "variant": "meal"
+    },
+    {
+      "ignored": false,
+      "kind": "synthetic-core",
+      "name": "memory::supplemental_meal_tests::meal_sleep_tests::meal_bounded_sleep_all_evicted_and_empty_batches_do_no_work",
+      "package": "alife_core",
+      "path": "crates/alife_core/src/memory/meal_sleep_tests.rs",
+      "source_sha256": "049d3cf9d2a1d9f9967c802118facc34d7828662c8855025ff1414e1e10b6fa7",
+      "variant": "meal"
+    },
+    {
+      "ignored": false,
+      "kind": "synthetic-core",
+      "name": "memory::supplemental_meal_tests::meal_sleep_tests::meal_bounded_sleep_merged_sources_deduplicate_ids_not_original_events",
+      "package": "alife_core",
+      "path": "crates/alife_core/src/memory/meal_sleep_tests.rs",
+      "source_sha256": "049d3cf9d2a1d9f9967c802118facc34d7828662c8855025ff1414e1e10b6fa7",
+      "variant": "meal"
+    },
+    {
+      "ignored": false,
+      "kind": "synthetic-core",
+      "name": "memory::supplemental_meal_tests::meal_sleep_tests::meal_bounded_sleep_malformed_unavailable_sibling_rejects_after_valid_source",
+      "package": "alife_core",
+      "path": "crates/alife_core/src/memory/meal_sleep_tests.rs",
+      "source_sha256": "049d3cf9d2a1d9f9967c802118facc34d7828662c8855025ff1414e1e10b6fa7",
+      "variant": "meal"
+    },
+    {
+      "ignored": false,
+      "kind": "synthetic-core",
+      "name": "memory::supplemental_meal_tests::meal_sleep_tests::meal_bounded_sleep_missing_duplicate_and_swapped_proofs_reject_atomically",
+      "package": "alife_core",
+      "path": "crates/alife_core/src/memory/meal_sleep_tests.rs",
+      "source_sha256": "049d3cf9d2a1d9f9967c802118facc34d7828662c8855025ff1414e1e10b6fa7",
+      "variant": "meal"
+    },
+    {
+      "ignored": false,
+      "kind": "synthetic-core",
+      "name": "memory::supplemental_meal_tests::meal_sleep_tests::meal_bounded_sleep_failure_after_predictor_staging_rolls_back_every_state",
+      "package": "alife_core",
+      "path": "crates/alife_core/src/memory/meal_sleep_tests.rs",
+      "source_sha256": "049d3cf9d2a1d9f9967c802118facc34d7828662c8855025ff1414e1e10b6fa7",
+      "variant": "meal"
+    },
+    {
+      "ignored": false,
+      "kind": "synthetic-core",
+      "name": "memory::supplemental_meal_tests::meal_sleep_tests::meal_bounded_sleep_cold_state_proofs_and_receipts_preserve_bytes_and_outcome",
+      "package": "alife_core",
+      "path": "crates/alife_core/src/memory/meal_sleep_tests.rs",
+      "source_sha256": "049d3cf9d2a1d9f9967c802118facc34d7828662c8855025ff1414e1e10b6fa7",
+      "variant": "meal"
+    },
+    {
+      "ignored": false,
+      "kind": "synthetic-core",
+      "name": "memory::supplemental_meal_tests::meal_sleep_tests::meal_bounded_sleep_profile_owner_and_legacy_entry_guards_remain_strict",
+      "package": "alife_core",
+      "path": "crates/alife_core/src/memory/meal_sleep_tests.rs",
+      "source_sha256": "049d3cf9d2a1d9f9967c802118facc34d7828662c8855025ff1414e1e10b6fa7",
+      "variant": "meal"
+    },
+    {
+      "ignored": false,
+      "kind": "synthetic-core",
+      "name": "memory::supplemental_meal_tests::meal_sleep_tests::meal_bounded_sleep_receipt_keeps_legacy_one_id_validation_and_bytes",
+      "package": "alife_core",
+      "path": "crates/alife_core/src/memory/meal_sleep_tests.rs",
+      "source_sha256": "049d3cf9d2a1d9f9967c802118facc34d7828662c8855025ff1414e1e10b6fa7",
+      "variant": "meal"
+    },
+    {
+      "ignored": false,
+      "kind": "synthetic-core",
+      "name": "memory::supplemental_meal_tests::meal_sleep_tests::meal_bounded_sleep_unsupplemented_path_preserves_legacy_bank_and_scoped_work",
+      "package": "alife_core",
+      "path": "crates/alife_core/src/memory/meal_sleep_tests.rs",
+      "source_sha256": "049d3cf9d2a1d9f9967c802118facc34d7828662c8855025ff1414e1e10b6fa7",
+      "variant": "meal"
+    },
+    {
+      "ignored": false,
+      "kind": "synthetic-core",
+      "name": "memory::supplemental_meal_tests::meal_sleep_tests::meal_bounded_sleep_never_reinterprets_legacy_fast_or_lifetime_memory",
+      "package": "alife_core",
+      "path": "crates/alife_core/src/memory/meal_sleep_tests.rs",
+      "source_sha256": "049d3cf9d2a1d9f9967c802118facc34d7828662c8855025ff1414e1e10b6fa7",
+      "variant": "meal"
+    },
+    {
+      "ignored": false,
+      "kind": "synthetic-core",
+      "name": "memory::supplemental_meal_tests::meal_sleep_tests::meal_object_familiarity_counts_immediate_siblings_once_but_keeps_merged_observations",
+      "package": "alife_core",
+      "path": "crates/alife_core/src/memory/meal_sleep_tests.rs",
+      "source_sha256": "049d3cf9d2a1d9f9967c802118facc34d7828662c8855025ff1414e1e10b6fa7",
+      "variant": "meal"
+    },
+    {
+      "ignored": false,
+      "kind": "synthetic-core",
+      "name": "memory::supplemental_meal_tests::meal_sleep_tests::meal_bounded_sleep_checks_actual_candidate_capacity_before_resolution",
+      "package": "alife_core",
+      "path": "crates/alife_core/src/memory/meal_sleep_tests.rs",
+      "source_sha256": "049d3cf9d2a1d9f9967c802118facc34d7828662c8855025ff1414e1e10b6fa7",
+      "variant": "meal"
+    },
+    {
+      "ignored": false,
+      "kind": "fixed-registered-world",
+      "name": "cpu::host::grouped_meal_host_envelope::tests::meal_fresh_envelope_rejects_old_identity_and_preserves_no_meal_closed_bytes",
+      "package": "alife_training",
+      "path": "crates/alife_training/src/cpu/grouped_meal_host_tests.rs",
+      "source_sha256": "58d64f57b13300c9d43e875a6b5e9b9010c4e20aed17780b8ce6cf19ca120fae",
+      "variant": "meal"
+    },
+    {
+      "ignored": false,
+      "kind": "fixed-registered-world",
+      "name": "cpu::host::grouped_meal_host_envelope::tests::meal_actual_sampled_fixed_scene_reports_physical_and_association_coverage_separately",
+      "package": "alife_training",
+      "path": "crates/alife_training/src/cpu/grouped_meal_host_tests.rs",
+      "source_sha256": "58d64f57b13300c9d43e875a6b5e9b9010c4e20aed17780b8ce6cf19ca120fae",
+      "variant": "meal"
+    },
+    {
+      "ignored": false,
+      "kind": "fixed-registered-world",
+      "name": "cpu::host::grouped_meal_host_envelope::tests::meal_registered_scripted_rest_eat_is_physical_and_cold_bound_not_autonomous_choice",
+      "package": "alife_training",
+      "path": "crates/alife_training/src/cpu/grouped_meal_host_tests.rs",
+      "source_sha256": "58d64f57b13300c9d43e875a6b5e9b9010c4e20aed17780b8ce6cf19ca120fae",
+      "variant": "meal"
+    },
+    {
+      "ignored": false,
+      "kind": "fixed-registered-world",
+      "name": "cpu::host::grouped_meal_host_envelope::tests::meal_host_rejects_missing_duplicate_sources_and_rolls_back_late_sampling_failure",
+      "package": "alife_training",
+      "path": "crates/alife_training/src/cpu/grouped_meal_host_tests.rs",
+      "source_sha256": "58d64f57b13300c9d43e875a6b5e9b9010c4e20aed17780b8ce6cf19ca120fae",
+      "variant": "meal"
+    },
+    {
+      "ignored": false,
+      "kind": "fixed-registered-world",
+      "name": "cpu::host::grouped_host_envelope::tests::decoder::sham::grouped_sham_first_step_equal_work_and_only_fast_write_difference",
+      "package": "alife_training",
+      "path": "crates/alife_training/src/cpu/grouped_decoder_sham_tests.rs",
+      "source_sha256": "52a335593f3762b8172452f00009cf3e4d62c72db7500162ff3fa84a8c6b8f90",
+      "variant": "gds"
+    },
+    {
+      "ignored": false,
+      "kind": "fixed-registered-world",
+      "name": "cpu::host::grouped_host_envelope::tests::decoder::sham::grouped_sham_exact_cold_continuation_and_cross_mode_rejection",
+      "package": "alife_training",
+      "path": "crates/alife_training/src/cpu/grouped_decoder_sham_tests.rs",
+      "source_sha256": "52a335593f3762b8172452f00009cf3e4d62c72db7500162ff3fa84a8c6b8f90",
+      "variant": "gds"
+    },
+    {
+      "ignored": false,
+      "kind": "fixed-registered-world",
+      "name": "cpu::host::grouped_host_envelope::tests::decoder::sham::grouped_sham_rejects_full_credit_wrong_provenance_and_reuse",
+      "package": "alife_training",
+      "path": "crates/alife_training/src/cpu/grouped_decoder_sham_tests.rs",
+      "source_sha256": "52a335593f3762b8172452f00009cf3e4d62c72db7500162ff3fa84a8c6b8f90",
+      "variant": "gds"
+    },
+    {
+      "ignored": false,
+      "kind": "fixed-registered-world",
+      "name": "cpu::host::grouped_host_envelope::tests::decoder::sham::grouped_sham_nonzero_trace_survives_memory_sleep_and_waking",
+      "package": "alife_training",
+      "path": "crates/alife_training/src/cpu/grouped_decoder_sham_tests.rs",
+      "source_sha256": "52a335593f3762b8172452f00009cf3e4d62c72db7500162ff3fa84a8c6b8f90",
+      "variant": "gds"
+    },
+    {
+      "ignored": false,
+      "kind": "detached-no-world",
+      "name": "cpu::motor_mediation::confidence::boredom::tests::boredom_recipe_native_counts_and_signed_zero_are_closed",
+      "package": "alife_training",
+      "path": "crates/alife_training/src/cpu/motor_mediation/confidence/boredom/tests.rs",
+      "source_sha256": "91d08ed0bf24194b2a6733e8a403f2f566142ce4ff2be5587586894adb62c202",
+      "variant": "boredom"
+    },
+    {
+      "ignored": false,
+      "kind": "detached-no-world",
+      "name": "cpu::motor_mediation::confidence::boredom::tests::boredom_low_high_and_urgency_recovery_use_real_receptor_projection",
+      "package": "alife_training",
+      "path": "crates/alife_training/src/cpu/motor_mediation/confidence/boredom/tests.rs",
+      "source_sha256": "91d08ed0bf24194b2a6733e8a403f2f566142ce4ff2be5587586894adb62c202",
+      "variant": "boredom"
+    },
+    {
+      "ignored": false,
+      "kind": "detached-no-world",
+      "name": "cpu::motor_mediation::confidence::boredom::tests::boredom_only_exact_play_changes_noop_vocal_grab_and_other_bits",
+      "package": "alife_training",
+      "path": "crates/alife_training/src/cpu/motor_mediation/confidence/boredom/tests.rs",
+      "source_sha256": "91d08ed0bf24194b2a6733e8a403f2f566142ce4ff2be5587586894adb62c202",
+      "variant": "boredom"
+    },
+    {
+      "ignored": false,
+      "kind": "detached-no-world",
+      "name": "cpu::motor_mediation::confidence::boredom::tests::boredom_exact_target_provenance_and_malformed_play_fail_before_source",
+      "package": "alife_training",
+      "path": "crates/alife_training/src/cpu/motor_mediation/confidence/boredom/tests.rs",
+      "source_sha256": "91d08ed0bf24194b2a6733e8a403f2f566142ce4ff2be5587586894adb62c202",
+      "variant": "boredom"
+    },
+    {
+      "ignored": false,
+      "kind": "detached-no-world",
+      "name": "cpu::motor_mediation::confidence::boredom::tests::boredom_source_once_legacy_bytes_equal_work_and_cold_identity",
+      "package": "alife_training",
+      "path": "crates/alife_training/src/cpu/motor_mediation/confidence/boredom/tests.rs",
+      "source_sha256": "91d08ed0bf24194b2a6733e8a403f2f566142ce4ff2be5587586894adb62c202",
+      "variant": "boredom"
+    },
+    {
+      "ignored": false,
+      "kind": "detached-no-world",
+      "name": "cpu::motor_mediation::confidence::boredom::tests::boredom_full_and_readout_sham_keep_identical_reservation_and_source",
+      "package": "alife_training",
+      "path": "crates/alife_training/src/cpu/motor_mediation/confidence/boredom/tests.rs",
+      "source_sha256": "91d08ed0bf24194b2a6733e8a403f2f566142ce4ff2be5587586894adb62c202",
+      "variant": "boredom"
+    },
+    {
+      "ignored": false,
+      "kind": "physical-world-only-no-neural-host",
+      "name": "headless::sleep_choice_research::recovery_reflex::tests::recovery_reflex_quiet_controls_preserve_old_world_receipt_and_old_guard",
+      "package": "alife_world",
+      "path": "crates/alife_world/src/headless/sleep_choice_research/recovery_reflex/tests.rs",
+      "source_sha256": "30716114dac2030f38541a885d532642cfd9ed6e56a758b03d9208c59620fd04",
+      "variant": "reflex"
+    },
+    {
+      "ignored": false,
+      "kind": "physical-world-only-no-neural-host",
+      "name": "headless::sleep_choice_research::recovery_reflex::tests::recovery_reflex_localized_left_right_behind_keeps_selection_and_heading",
+      "package": "alife_world",
+      "path": "crates/alife_world/src/headless/sleep_choice_research/recovery_reflex/tests.rs",
+      "source_sha256": "30716114dac2030f38541a885d532642cfd9ed6e56a758b03d9208c59620fd04",
+      "variant": "reflex"
+    },
+    {
+      "ignored": false,
+      "kind": "physical-world-only-no-neural-host",
+      "name": "headless::sleep_choice_research::recovery_reflex::tests::recovery_reflex_coincident_and_unknown_acute_reverse_stationary_heading",
+      "package": "alife_world",
+      "path": "crates/alife_world/src/headless/sleep_choice_research/recovery_reflex/tests.rs",
+      "source_sha256": "30716114dac2030f38541a885d532642cfd9ed6e56a758b03d9208c59620fd04",
+      "variant": "reflex"
+    },
+    {
+      "ignored": false,
+      "kind": "physical-world-only-no-neural-host",
+      "name": "headless::sleep_choice_research::recovery_reflex::tests::recovery_reflex_chronic_pain_stops_next_interval_and_cold_receipt_is_exact",
+      "package": "alife_world",
+      "path": "crates/alife_world/src/headless/sleep_choice_research/recovery_reflex/tests.rs",
+      "source_sha256": "30716114dac2030f38541a885d532642cfd9ed6e56a758b03d9208c59620fd04",
+      "variant": "reflex"
+    },
+    {
+      "ignored": false,
+      "kind": "physical-world-only-no-neural-host",
+      "name": "headless::sleep_choice_research::recovery_reflex::tests::recovery_reflex_late_harmful_ingestion_and_exhausted_time_are_distinct",
+      "package": "alife_world",
+      "path": "crates/alife_world/src/headless/sleep_choice_research/recovery_reflex/tests.rs",
+      "source_sha256": "30716114dac2030f38541a885d532642cfd9ed6e56a758b03d9208c59620fd04",
+      "variant": "reflex"
+    },
+    {
+      "ignored": false,
+      "kind": "physical-world-only-no-neural-host",
+      "name": "headless::sleep_choice_research::recovery_reflex::tests::recovery_reflex_self_held_hazard_is_not_an_external_escape_goal",
+      "package": "alife_world",
+      "path": "crates/alife_world/src/headless/sleep_choice_research/recovery_reflex/tests.rs",
+      "source_sha256": "30716114dac2030f38541a885d532642cfd9ed6e56a758b03d9208c59620fd04",
+      "variant": "reflex"
+    },
+    {
+      "ignored": false,
+      "kind": "physical-world-only-no-neural-host",
+      "name": "headless::sleep_choice_research::recovery_reflex::tests::recovery_reflex_release_recomputes_contact_and_preserves_transfer",
+      "package": "alife_world",
+      "path": "crates/alife_world/src/headless/sleep_choice_research/recovery_reflex/tests.rs",
+      "source_sha256": "30716114dac2030f38541a885d532642cfd9ed6e56a758b03d9208c59620fd04",
+      "variant": "reflex"
+    },
+    {
+      "ignored": false,
+      "kind": "physical-world-only-no-neural-host",
+      "name": "headless::sleep_choice_research::recovery_reflex::tests::recovery_reflex_initial_preemption_and_swept_contact_share_one_budget",
+      "package": "alife_world",
+      "path": "crates/alife_world/src/headless/sleep_choice_research/recovery_reflex/tests.rs",
+      "source_sha256": "30716114dac2030f38541a885d532642cfd9ed6e56a758b03d9208c59620fd04",
+      "variant": "reflex"
+    },
+    {
+      "ignored": false,
+      "kind": "physical-world-only-no-neural-host",
+      "name": "headless::sleep_choice_research::recovery_reflex::tests::recovery_reflex_nonzero_opposing_segments_cannot_earn_recovery",
+      "package": "alife_world",
+      "path": "crates/alife_world/src/headless/sleep_choice_research/recovery_reflex/tests.rs",
+      "source_sha256": "30716114dac2030f38541a885d532642cfd9ed6e56a758b03d9208c59620fd04",
+      "variant": "reflex"
+    },
+    {
+      "ignored": false,
+      "kind": "physical-world-only-no-neural-host",
+      "name": "headless::sleep_choice_research::recovery_reflex::tests::recovery_reflex_player_hold_release_and_zero_capacity_keep_constraints",
+      "package": "alife_world",
+      "path": "crates/alife_world/src/headless/sleep_choice_research/recovery_reflex/tests.rs",
+      "source_sha256": "30716114dac2030f38541a885d532642cfd9ed6e56a758b03d9208c59620fd04",
+      "variant": "reflex"
+    },
+    {
+      "ignored": false,
+      "kind": "physical-world-only-no-neural-host",
+      "name": "headless::sleep_choice_research::recovery_reflex::tests::recovery_reflex_wall_water_body_and_carried_volume_remain_authoritative",
+      "package": "alife_world",
+      "path": "crates/alife_world/src/headless/sleep_choice_research/recovery_reflex/tests.rs",
+      "source_sha256": "30716114dac2030f38541a885d532642cfd9ed6e56a758b03d9208c59620fd04",
+      "variant": "reflex"
+    },
+    {
+      "ignored": false,
+      "kind": "physical-world-only-no-neural-host",
+      "name": "headless::sleep_choice_research::recovery_reflex::tests::recovery_reflex_carried_item_tracks_unblocked_escape_without_dropping",
+      "package": "alife_world",
+      "path": "crates/alife_world/src/headless/sleep_choice_research/recovery_reflex/tests.rs",
+      "source_sha256": "30716114dac2030f38541a885d532642cfd9ed6e56a758b03d9208c59620fd04",
+      "variant": "reflex"
+    },
+    {
+      "ignored": false,
+      "kind": "physical-world-only-no-neural-host",
+      "name": "headless::sleep_choice_research::recovery_reflex::tests::recovery_reflex_coalesces_contact_dose_and_advances_only_once",
+      "package": "alife_world",
+      "path": "crates/alife_world/src/headless/sleep_choice_research/recovery_reflex/tests.rs",
+      "source_sha256": "30716114dac2030f38541a885d532642cfd9ed6e56a758b03d9208c59620fd04",
+      "variant": "reflex"
+    },
+    {
+      "ignored": false,
+      "kind": "physical-world-only-no-neural-host",
+      "name": "headless::sleep_choice_research::recovery_reflex::tests::recovery_reflex_atomic_late_failure_restores_pose_grip_biology_and_clock",
+      "package": "alife_world",
+      "path": "crates/alife_world/src/headless/sleep_choice_research/recovery_reflex/tests.rs",
+      "source_sha256": "30716114dac2030f38541a885d532642cfd9ed6e56a758b03d9208c59620fd04",
+      "variant": "reflex"
+    },
+    {
+      "ignored": false,
+      "kind": "physical-world-only-no-neural-host",
+      "name": "headless::sleep_choice_research::recovery_reflex::tests::recovery_reflex_sleeping_body_only_interrupts_without_fabricating_wake_or_credit",
+      "package": "alife_world",
+      "path": "crates/alife_world/src/headless/sleep_choice_research/recovery_reflex/tests.rs",
+      "source_sha256": "30716114dac2030f38541a885d532642cfd9ed6e56a758b03d9208c59620fd04",
+      "variant": "reflex"
+    },
+    {
+      "ignored": false,
+      "kind": "physical-world-only-no-neural-host",
+      "name": "headless::sleep_choice_research::recovery_reflex::tests::recovery_reflex_mixed_acting_nonacting_peers_and_body_only_rollback",
+      "package": "alife_world",
+      "path": "crates/alife_world/src/headless/sleep_choice_research/recovery_reflex/tests.rs",
+      "source_sha256": "30716114dac2030f38541a885d532642cfd9ed6e56a758b03d9208c59620fd04",
+      "variant": "reflex"
+    },
+    {
+      "ignored": false,
+      "kind": "physical-world-only-no-neural-host",
+      "name": "headless::sleep_choice_research::recovery_reflex::tests::recovery_reflex_body_only_unknown_damage_and_cold_next_receipt_match",
+      "package": "alife_world",
+      "path": "crates/alife_world/src/headless/sleep_choice_research/recovery_reflex/tests.rs",
+      "source_sha256": "30716114dac2030f38541a885d532642cfd9ed6e56a758b03d9208c59620fd04",
+      "variant": "reflex"
+    },
+    {
+      "ignored": false,
+      "kind": "physical-world-only-no-neural-host",
+      "name": "headless::sleep_choice_research::recovery_reflex::tests::recovery_reflex_evidence_rejects_omitted_motion_forged_sources_time_and_recovery",
+      "package": "alife_world",
+      "path": "crates/alife_world/src/headless/sleep_choice_research/recovery_reflex/tests.rs",
+      "source_sha256": "30716114dac2030f38541a885d532642cfd9ed6e56a758b03d9208c59620fd04",
+      "variant": "reflex"
+    },
+    {
+      "ignored": false,
+      "kind": "physical-world-only-no-neural-host",
+      "name": "headless::sleep_choice_research::recovery_reflex::tests::recovery_reflex_no_locomotion_is_not_forged_into_a_move_or_latched",
+      "package": "alife_world",
+      "path": "crates/alife_world/src/headless/sleep_choice_research/recovery_reflex/tests.rs",
+      "source_sha256": "30716114dac2030f38541a885d532642cfd9ed6e56a758b03d9208c59620fd04",
+      "variant": "reflex"
+    },
+    {
+      "ignored": false,
+      "kind": "physical-world-only-no-neural-host",
+      "name": "headless::sleep_choice_research::recovery_reflex::tests::recovery_reflex_does_not_steal_another_owners_item",
+      "package": "alife_world",
+      "path": "crates/alife_world/src/headless/sleep_choice_research/recovery_reflex/tests.rs",
+      "source_sha256": "30716114dac2030f38541a885d532642cfd9ed6e56a758b03d9208c59620fd04",
+      "variant": "reflex"
+    },
+    {
+      "ignored": false,
+      "kind": "physical-world-only-no-neural-host",
+      "name": "headless::sleep_choice_research::recovery_reflex::tests::recovery_reflex_admission_and_wire_identity_cannot_relabel_old_policy",
+      "package": "alife_world",
+      "path": "crates/alife_world/src/headless/sleep_choice_research/recovery_reflex/tests.rs",
+      "source_sha256": "30716114dac2030f38541a885d532642cfd9ed6e56a758b03d9208c59620fd04",
+      "variant": "reflex"
+    },
+    {
+      "ignored": false,
+      "kind": "physical-world-only-no-neural-host",
+      "name": "headless::sleep_choice_research::recovery_reflex::tests::recovery_reflex_persistent_surface_retriggers_but_no_persistent_escape_state",
+      "package": "alife_world",
+      "path": "crates/alife_world/src/headless/sleep_choice_research/recovery_reflex/tests.rs",
+      "source_sha256": "30716114dac2030f38541a885d532642cfd9ed6e56a758b03d9208c59620fd04",
+      "variant": "reflex"
+    },
+    {
+      "ignored": true,
+      "kind": "private-byte-witness",
+      "name": "cpu::host::grouped_host_envelope::tests::decoder::full_literal_witness::grouped_full_literal_witness",
+      "package": "alife_training",
+      "path": "crates/alife_training/src/cpu/grouped_full_literal_witness.rs",
+      "source_sha256": "4b9cecd40964f677f47a131d316b313b8b322ce20d204d9cf80fe67c1bb0a943",
+      "variant": "gde"
+    },
+    {
+      "ignored": true,
+      "kind": "private-byte-witness",
+      "name": "cpu::host::grouped_host_envelope::tests::decoder::full_literal_witness::grouped_full_literal_witness",
+      "package": "alife_training",
+      "path": "crates/alife_training/src/cpu/grouped_full_literal_witness.rs",
+      "source_sha256": "4b9cecd40964f677f47a131d316b313b8b322ce20d204d9cf80fe67c1bb0a943",
+      "variant": "gds"
+    }
+  ]
+}
