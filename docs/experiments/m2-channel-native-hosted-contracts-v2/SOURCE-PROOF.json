@@ -1,0 +1,9 @@
+{
+  "integration_v1_seal": "b3bb6b7e0e718b41d453cde0d493aae9fe041b3cfd4b08d82dc20014e8cbc158",
+  "new_capsule_sha256": "595d1cb8b934c763abe473bc739112f8fc82e40e12616c987b1695bb0379d4db",
+  "new_source_files": 106,
+  "revision": "only adds fixed late-physical fault/rollback coverage; production owner domains unchanged because production source is unchanged",
+  "original_frozen_v1_modified": false,
+  "old_test_registration_projection": "explicit isolated qualification transform; cfg(any()) on old #[test] attributes; no old test body runs; old production code and validator tokens unchanged",
+  "native_qualified": false
+}

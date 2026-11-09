@@ -1,0 +1,67 @@
+[
+  {
+    "source": "crates/alife_training/src/cpu/motor_mediation/confidence/policy/optional_vocal/channel_native/tests.rs",
+    "test": "normalized_support_idle_and_recovery_operations",
+    "exact_name": "cpu::motor_mediation::confidence::policy::optional_vocal::channel_native::tests::normalized_support_idle_and_recovery_operations"
+  },
+  {
+    "source": "crates/alife_training/src/cpu/motor_mediation/confidence/policy/optional_vocal/channel_native/tests.rs",
+    "test": "independent_manipulation_score_cannot_shift_rest",
+    "exact_name": "cpu::motor_mediation::confidence::policy::optional_vocal::channel_native::tests::independent_manipulation_score_cannot_shift_rest"
+  },
+  {
+    "source": "crates/alife_training/src/cpu/motor_mediation/confidence/policy/optional_vocal/channel_native/tests.rs",
+    "test": "quiet_noop_payload_and_availability",
+    "exact_name": "cpu::motor_mediation::confidence::policy::optional_vocal::channel_native::tests::quiet_noop_payload_and_availability"
+  },
+  {
+    "source": "crates/alife_training/src/cpu/motor_mediation/confidence/policy/optional_vocal/channel_native/tests.rs",
+    "test": "proof_domains_rng_and_metadata_tamper_rejected",
+    "exact_name": "cpu::motor_mediation::confidence::policy::optional_vocal::channel_native::tests::proof_domains_rng_and_metadata_tamper_rejected"
+  },
+  {
+    "source": "crates/alife_training/src/cpu/motor_mediation/confidence/policy/optional_vocal/channel_native/tests.rs",
+    "test": "exact_joint_log_probability_and_zero_expected_score",
+    "exact_name": "cpu::motor_mediation::confidence::policy::optional_vocal::channel_native::tests::exact_joint_log_probability_and_zero_expected_score"
+  },
+  {
+    "source": "crates/alife_training/src/cpu/motor_mediation/confidence/policy/optional_vocal/channel_native/tests.rs",
+    "test": "all_score_gradients_including_shared_idle_quiet",
+    "exact_name": "cpu::motor_mediation::confidence::policy::optional_vocal::channel_native::tests::all_score_gradients_including_shared_idle_quiet"
+  },
+  {
+    "source": "crates/alife_training/src/cpu/motor_mediation/confidence/policy/optional_vocal/channel_native/tests.rs",
+    "test": "invalid_ungrounded_gesture_and_single_operation_support",
+    "exact_name": "cpu::motor_mediation::confidence::policy::optional_vocal::channel_native::tests::invalid_ungrounded_gesture_and_single_operation_support"
+  },
+  {
+    "source": "crates/alife_training/src/cpu/motor_mediation/confidence/policy/optional_vocal/channel_native/tests.rs",
+    "test": "unsupported_and_extreme_numeric_inputs_fail_closed",
+    "exact_name": "cpu::motor_mediation::confidence::policy::optional_vocal::channel_native::tests::unsupported_and_extreme_numeric_inputs_fail_closed"
+  },
+  {
+    "source": "crates/alife_training/src/cpu/motor_mediation/confidence/policy/optional_vocal/channel_native/tests.rs",
+    "test": "native_gradient_bridge_sums_quiet_and_posture_without_metadata_credit",
+    "exact_name": "cpu::motor_mediation::confidence::policy::optional_vocal::channel_native::tests::native_gradient_bridge_sums_quiet_and_posture_without_metadata_credit"
+  },
+  {
+    "source": "crates/alife_training/src/cpu/motor_mediation/confidence/policy/optional_vocal/channel_native/tests.rs",
+    "test": "serialized_own_proof_roundtrip_and_tamper_rejection",
+    "exact_name": "cpu::motor_mediation::confidence::policy::optional_vocal::channel_native::tests::serialized_own_proof_roundtrip_and_tamper_rejection"
+  },
+  {
+    "source": "crates/alife_training/src/cpu/motor_mediation/confidence/policy/optional_vocal/channel_native/tests.rs",
+    "test": "counterfactual_unrelated_readout_is_not_a_physical_recovery_claim",
+    "exact_name": "cpu::motor_mediation::confidence::policy::optional_vocal::channel_native::tests::counterfactual_unrelated_readout_is_not_a_physical_recovery_claim"
+  },
+  {
+    "source": "crates/alife_training/src/cpu/channel_native_host_tests.rs",
+    "test": "channel_native_host_source_once_quiet_physics_and_exact_next_boundary",
+    "exact_name": "cpu::host::grouped_host_envelope::channel_native::tests::channel_native_host_source_once_quiet_physics_and_exact_next_boundary"
+  },
+  {
+    "source": "crates/alife_training/src/cpu/channel_native_host_tests.rs",
+    "test": "channel_native_host_rejects_opposite_policy_and_bad_temperature_transactionally",
+    "exact_name": "cpu::host::grouped_host_envelope::channel_native::tests::channel_native_host_rejects_opposite_policy_and_bad_temperature_transactionally"
+  }
+]

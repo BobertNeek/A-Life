@@ -1,0 +1,17 @@
+# Fixed channel-native native-host qualification
+
+Source-only prepared packet. No local compile or GitHub publication performed.
+
+The runner reconstructs only reachable, pinned source using the published sampler prepared commit 80332c3a4b30a8a84f5bcb6a7ee0a20a47c7b19d and reachable main c3aec16df33861f1316d127736f5f60eea327ede. It never checks out logical unreachable ancestors. Inherited 15 workflows are verified unchanged, and preparation is additions-only on main. Exactly one activation-marker addition, push event, attempt 1, unchanged frozen seal and source manifest are required. All child pipes remain private and bounded; only allowlisted summaries/error path-line-code are public. No artifacts/checkpoints are uploaded.
+
+The only native build target is alife_training --features cpu-backend --lib --no-run. This is an isolated test assembly: old #[test] attributes outside the two new-owner fixture files are syntax-aware projected to #[cfg(any())], excluding old test bodies while keeping helper/production code and validators intact. No projection writes back to the frozen source or Git tree. Runtime dep-info binds projected bytes to exact pinned preimages. The full executable inventory must equal exactly 13 names; no legacy fixture, binary main, example, doctest, GPU test or unfiltered suite runs. Each name runs once, first failure preserved, no automatic retry or adaptive changes.
+
+Eleven tests are pure arithmetic/proof/readout. Two fixed host contracts permit at most three disposable newborn hosts and four total staged world-step/source-forward calls: three warm/cold continuation calls and one deliberately failed post-physical transaction which must roll back fully. Trained checkpoint files are never read. Actor/recurrent eligibility/optimizer updates remain closed for the new owner; ordinary episodic observation still happens.
+
+The production implementation remains the integration-v1 source. This revision adds only a late-physical rollback fixture; it does not silently change policy/RNG domains or the qualified 23-bit draw algorithm. Exact source revision patch and source closure are sealed.
+
+Caveats remain explicit: the nominal normalized categorical model is not exact finite-PRNG mass and does not guarantee tiny-tail reachability. Bookkeeping follows the shared existing biological tariff exclusion; no fake neurons, attention charge or compute-parity claim. Representative-dependent ordinary memory/replay attribution remains uncomposed with the separate whole-joint candidate. These do not block the fixed contracts.
+
+Grounded Play versus quiet recovery is NOT included in this inventory. The current host fixture deliberately constructs a blank learner world, so it has no validated object-backed Play target. A separate matched pair must construct a real perception-visible playable object, use its admitted candidate, hold initial body/pose/emissions equal, and compare full physical energy/recovery receipts; inventing a target/feature or labelling Contact as Play would be invalid. Continue that separate fixture after these contracts rather than call it qualified.
+
+Publication: create a fresh branch from main, add only REMOTE-FILES entries, verify prepared commit, then create exactly ACTIVATE.json from template with that prepared head. The source-only worker performs no publication. Hosted resources retain initial 20 GiB/free floor 4 GiB/MemAvailable 2 GiB, single build job, 6 GiB RSS, 45 min compile/300 s each test/90 min aggregate. No old artifact is stripped, modified or deleted.

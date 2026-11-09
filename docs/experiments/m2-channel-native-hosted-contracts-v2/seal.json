@@ -1,0 +1,83 @@
+{
+  "files": [
+    {
+      "bytes": 5098,
+      "path": "DOSE-INVENTORY.json",
+      "sha256": "a4296763512f50a5f57f9a80ddaad29a60204c310dc74f67a7523c178a801560"
+    },
+    {
+      "bytes": 4502,
+      "path": "FIXED-INVENTORY.json",
+      "sha256": "240f33afaba0958a1321fd25c9f265b861e012bd39a9da821b9ce69179504dec"
+    },
+    {
+      "bytes": 1101,
+      "path": "FUNCTION-FREEZE.json",
+      "sha256": "1552f3b31349d0e653c3db00834fd2e32d612abbeb73a483100714524f595920"
+    },
+    {
+      "bytes": 92558,
+      "path": "INHERITED-WORKFLOW-FIXTURES.json",
+      "sha256": "e45e6ea9f0b5de64ad00a3fbc108cbefcce48f5eab8b9c32caceaa9650497fcd"
+    },
+    {
+      "bytes": 224,
+      "path": "OUTPUT-POLICY.json",
+      "sha256": "d5f19be6a5962efd7619bd22fb25cb1871ae72bea772999cb5aad2b65dc19be6"
+    },
+    {
+      "bytes": 3545,
+      "path": "README.md",
+      "sha256": "62a460b2235775254ab4fb2d65089eab16cfaf069c9ddd68c06f310aad714522"
+    },
+    {
+      "bytes": 1556,
+      "path": "REUSE-INPUTS.json",
+      "sha256": "aada70fe37b86fa42ffdfb89863a551df0c460c326dc2ff00ea762ce921b9a9e"
+    },
+    {
+      "bytes": 626,
+      "path": "SOURCE-PROOF.json",
+      "sha256": "367ab868c11047dc9427ed6faf8d3397b55d17892060068e6da65daab8f7e19d"
+    },
+    {
+      "bytes": 2048,
+      "path": "SOURCE-REVISION.patch",
+      "sha256": "79cf4345dc84d43fb5be7cb745884c3d170d9d3ef4d570293a848ff1ef9c071e"
+    },
+    {
+      "bytes": 838,
+      "path": "STATIC-RESULTS.json",
+      "sha256": "e28f70009c2c28400ac0081f1b0a3fa1c4d7be70b4aa9ecef90df6595ce23c29"
+    },
+    {
+      "bytes": 4382,
+      "path": "WORKFLOW-PRESERVATION.json",
+      "sha256": "13e5a1512ee206a474c99e3a66dd435e288d0626c748755b9fae1ff3f677e556"
+    },
+    {
+      "bytes": 468523,
+      "path": "host-source-capsule.tar.gz",
+      "sha256": "595d1cb8b934c763abe473bc739112f8fc82e40e12616c987b1695bb0379d4db"
+    },
+    {
+      "bytes": 39774,
+      "path": "run_hosted.py",
+      "sha256": "6c42794fd4c6df9051c1c1031bb306b123cb95bc0ee84501595017f5f55807c0"
+    },
+    {
+      "bytes": 503242,
+      "path": "source-manifest.json",
+      "sha256": "c33a0a1827684b9ae2b3b692dcf0ff7fa4e74ba5b9c34d39412eb410a75444ab"
+    },
+    {
+      "bytes": 5460,
+      "path": "static_checks.py",
+      "sha256": "757742b06a2bbd57a23dede785c1e34ff91a93508d22331b1f69ff02f00d45e9"
+    }
+  ],
+  "native_qualified": false,
+  "plan_id": "m2-channel-native-hosted-contracts-v2",
+  "publication_state": "not_published",
+  "source_ready": true
+}

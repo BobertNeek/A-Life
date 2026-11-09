@@ -1,0 +1,36 @@
+--- a/crates/alife_training/src/cpu/channel_native_host_tests.rs
++++ b/crates/alife_training/src/cpu/channel_native_host_tests.rs
+@@ -184,6 +184,10 @@
+         .grouped_step(&new.inner.founder, 0.73)
+         .is_err());
+     assert_eq!(new.checkpoint().unwrap().encode().unwrap(), new_wire);
++    // One staged physical transaction must roll back, including its actual
++    // source forward and biological effects. The original host remains untouched.
++    assert!(new.inner.host.grouped_policy_step::<FailAfterPhysical>(&new.inner.founder,0.73).is_err());
++    assert_eq!(new.checkpoint().unwrap().encode().unwrap(),new_wire);
+     assert!(new.step(f32::NAN).is_err());
+     assert_eq!(new.checkpoint().unwrap().encode().unwrap(), new_wire);
+     assert!(new.actor_optimization().is_err());
+@@ -198,3 +202,22 @@
+         .values()
+         .all(|r| r.get("channel_native").is_none() && r.get("optional_vocal").is_none()));
+ }
++
++// Fixed post-physical fault: generic staged host must discard source, body,
++// counter, memory and private-bank changes together. No old validator is changed.
++struct FailAfterPhysical;
++impl GroupedPolicyStrategy for FailAfterPhysical {
++    type Action=ChannelNativeActionV1;
++    const OPTIONAL:bool=false;
++    const CHANNEL_NATIVE:bool=true;
++    const MAGIC:&'static [u8]=CHANNEL_MAGIC;
++    const LINEAGE:&'static str=CHANNEL_LINEAGE;
++    const POLICY:&'static str=CHANNEL_NATIVE_POLICY_V1;
++    fn select(f:&CpuFoundationTrainer,r:&mut Resident,frame:&PerceptionFrame,o:&CpuDecisionOutput,s:u32,c:u32,t:f64)->Result<Selection<Self::Action>,CpuHostError> {
++        ChannelNativePolicy::select(f,r,frame,o,s,c,t)
++    }
++    fn stage(r:&mut Resident,p:&BrainPhenotype,a:&Self::Action,b:CpuDecisionBinding)->Result<(),CpuHostError> {ChannelNativePolicy::stage(r,p,a,b)}
++    fn close(_n:&mut CpuOrganismState,_f:&CpuFoundationTrainer,_p:&ExperiencePatch,_r:&NeuralReceptorFrame)->Result<(),CpuHostError> {
++        Err(CpuHostError::State("fixed channel-native fault after physical transaction"))
++    }
++}

@@ -1,0 +1,11 @@
+{
+  "attempt": 1,
+  "fixed_disposable_qualification_only": true,
+  "main": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "plan_id": "m2-channel-native-hosted-contracts-v2",
+  "prepared_head": "REPLACE_ONLY_AFTER_VERIFIED_PREPARED_COMMIT",
+  "research_base": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "schema": "m2-channel-native-host-contract-activation-v2",
+  "seal_sha256": "e49418abadb3a7641d54a02685f3c65b0c620d0a69ff196d4c01657312502e0f",
+  "source_manifest_sha256": "c33a0a1827684b9ae2b3b692dcf0ff7fa4e74ba5b9c34d39412eb410a75444ab"
+}
