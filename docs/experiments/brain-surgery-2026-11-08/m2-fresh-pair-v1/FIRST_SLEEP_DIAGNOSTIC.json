@@ -1,0 +1,64 @@
+{
+  "schema": "m2-saved-first-sleep-diagnostic-v1",
+  "source_offset": 140,
+  "source_trace_sha256": "cf95e70bc078d2c26b3deffd4e61793f72795a5546fbaa6ccc8725e484193646",
+  "native_calls": 0,
+  "raw_state_emitted": false,
+  "world_tick": 380,
+  "actual_temperature": 1.0,
+  "conditional_BodySleep_given_Rest": 0.00793658231430089,
+  "actual_BodySleep_marginal": 0.0036201603548535414,
+  "actual_Rest_probability": 0.45613592998719255,
+  "operation_logits": [
+    -2.414152145385742,
+    2.414152145385742
+  ],
+  "raw_M_BodySleep_AwakeRest": [
+    0.0,
+    0.0
+  ],
+  "raw_C_BodySleep_AwakeRest": [
+    0.0,
+    0.0
+  ],
+  "clipped_M_C_BodySleep_AwakeRest": [
+    [
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0
+    ]
+  ],
+  "signed_pressure_opponent": -0.32595456,
+  "pressure_afferent_base_activation_difference": -0.32595455500000003,
+  "operation_context_jacobians": [
+    [
+      3.404237,
+      1.7021185
+    ],
+    [
+      3.404237,
+      1.7021185
+    ]
+  ],
+  "operation_pressure_jacobians": [
+    7.3026123,
+    -7.3026123
+  ],
+  "modulation": {
+    "interoceptive_gain": 0.5,
+    "regional_gain": 0.8664568,
+    "offset": -0.016244367,
+    "projection_gain": 0.5,
+    "threshold": 0.25
+  },
+  "F": 0.0,
+  "P": 0.15069215,
+  "ATP": 0.63649255,
+  "F_reference": 0.35,
+  "P_reference": 0.6,
+  "ATP_reference": 0.75,
+  "interpretation": "Observed low-probability selected tail, with zero operation M/C input at this saved decision. Signed pressure afferent favors AwakeRest. No counterfactual recomputation or isolated receptor-causality inference."
+}
