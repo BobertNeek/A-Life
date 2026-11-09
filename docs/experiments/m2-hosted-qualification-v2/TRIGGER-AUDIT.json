@@ -1,201 +1,253 @@
 {
-  "baseline": "c3aec16df33861f1316d127736f5f60eea327ede",
-  "branch": "qualification/m2-fixed-fixtures-v2",
+  "baseline": "8e039f5b0a282b741cdd73cc06934c57825ac060",
+  "branch": "qualification/m2-fixed-fixtures-v3",
+  "documentation": [
+    {
+      "finding": "Push workflows can run from commits not merged into default. Ref creation is a distinct create event; do not assume a ref-creation API write is the activating commit push.",
+      "url": "https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#push"
+    },
+    {
+      "finding": "Branch and path filters both must match. Existing-branch pushes compare the before and after commits.",
+      "url": "https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#onpushpull_requestpull_request_targetpathspaths-ignore"
+    },
+    {
+      "finding": "A push made using the workflow GITHUB_TOKEN does not trigger another push workflow. Activation must use the already-authorized external publication connection, not a new secret or a workflow token.",
+      "url": "https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow"
+    }
+  ],
   "existing_matching_push_workflows": 0,
+  "limitation": "Read-only audit. Recheck the complete workflow inventory, all blobs, marker absence and run ledger on the new prepared V3 head before exactly one new V3 marker-add commit. No activation has been performed by this preparation.",
+  "new_marker": "docs/experiments/m2-hosted-qualification-v3/ACTIVATE.json",
+  "new_workflow": ".github/workflows/m2-fixed-fixtures-v3.yml",
+  "no_pr": true,
+  "no_v2_rerun_or_marker_reuse": true,
+  "no_workflow_dispatch": true,
+  "v2_activation_head": "2092ccfc919c3ddfef4ac1cd645700f70d5d5ab1",
+  "v2_terminal_run": 42575100065,
   "workflow_records": [
     {
+      "events": [
+        "pull_request",
+        "push"
+      ],
+      "git_blob": "0c487b6f9a90e03d2db806e13fd9d70c2c02c9c8",
+      "marker_branch_push_matches": false,
       "path": ".github/workflows/care-frontier-sampler.yml",
+      "push_branches": [
+        "main"
+      ],
       "sha256": "ce23d4dff5832deec885e4b086769cc46bf7c780ce990543d45e2a8383dfc938",
-      "push_branches": [
-        "main"
-      ],
-      "marker_branch_push_matches": false,
+      "source_verified_at_prepared_head": true
+    },
+    {
       "events": [
         "pull_request",
         "push"
-      ]
-    },
-    {
+      ],
+      "git_blob": "7e5738e64e3d17169ea6085d655051e70aeedbba",
+      "marker_branch_push_matches": false,
       "path": ".github/workflows/care-recipe-import.yml",
+      "push_branches": [
+        "main"
+      ],
       "sha256": "58cdcf0114c81639b041ff793bdcdc4f428cfd1f252a45b3462876bb86eb3231",
-      "push_branches": [
-        "main"
-      ],
-      "marker_branch_push_matches": false,
+      "source_verified_at_prepared_head": true
+    },
+    {
       "events": [
         "pull_request",
         "push"
-      ]
-    },
-    {
+      ],
+      "git_blob": "b7b2f1e84f1ffe0bfab1ec917b4eabd063b0297e",
+      "marker_branch_push_matches": false,
       "path": ".github/workflows/care-scenario-batches.yml",
+      "push_branches": [
+        "main"
+      ],
       "sha256": "8451c3ce325c89e394a221409f6bb8955f0554e158d325b8edeb99862839fe0a",
-      "push_branches": [
-        "main"
-      ],
-      "marker_branch_push_matches": false,
-      "events": [
-        "pull_request",
-        "push"
-      ]
+      "source_verified_at_prepared_head": true
     },
     {
+      "events": [
+        "push",
+        "pull_request"
+      ],
+      "git_blob": "f0025e9e863d7696be70816b1d4ffcb32dc37c0f",
+      "marker_branch_push_matches": false,
       "path": ".github/workflows/ci.yml",
+      "push_branches": [
+        "main"
+      ],
       "sha256": "a40abd2944cdd2a2e8f24a9fc6df71228e90e29b69a14353d0800b2fc8025b27",
-      "push_branches": [
-        "main"
-      ],
-      "marker_branch_push_matches": false,
+      "source_verified_at_prepared_head": true
+    },
+    {
       "events": [
         "push",
         "pull_request"
-      ]
-    },
-    {
+      ],
+      "git_blob": "4d27d4dd6b28b7092fab65b3e0b11689cd81f20d",
+      "marker_branch_push_matches": false,
       "path": ".github/workflows/cpu-foundation-backend.yml",
-      "sha256": "9a1d4080e0a98f7c067d6b6dbe86cb8157f158d5cc9b43e8525e8203ac0af7ac",
       "push_branches": [
         "main"
       ],
-      "marker_branch_push_matches": false,
+      "sha256": "9a1d4080e0a98f7c067d6b6dbe86cb8157f158d5cc9b43e8525e8203ac0af7ac",
+      "source_verified_at_prepared_head": true
+    },
+    {
       "events": [
         "push",
         "pull_request"
-      ]
-    },
-    {
+      ],
+      "git_blob": "c129188d45d4b41059fd871e5d39782482bb0cf9",
+      "marker_branch_push_matches": false,
       "path": ".github/workflows/group50-training.yml",
-      "sha256": "078bbfff6f62d260c7acc3455341640983e82fd9e70e7599091647bb28ea540d",
       "push_branches": [
         "main",
         "group50-ci/**"
       ],
-      "marker_branch_push_matches": false,
-      "events": [
-        "push",
-        "pull_request"
-      ]
+      "sha256": "078bbfff6f62d260c7acc3455341640983e82fd9e70e7599091647bb28ea540d",
+      "source_verified_at_prepared_head": true
     },
     {
-      "path": ".github/workflows/jules-retirement-contracts.yml",
-      "sha256": "ba9ac86fcbfd263bd361d327636c94e139e3054d23c9d088ee9824c1e4959bbc",
-      "push_branches": [
-        "main"
-      ],
-      "marker_branch_push_matches": false,
       "events": [
         "pull_request",
         "push"
-      ]
+      ],
+      "git_blob": "f966e8f194203ddc013888fbdbc656ea7498b131",
+      "marker_branch_push_matches": false,
+      "path": ".github/workflows/jules-retirement-contracts.yml",
+      "push_branches": [
+        "main"
+      ],
+      "sha256": "ba9ac86fcbfd263bd361d327636c94e139e3054d23c9d088ee9824c1e4959bbc",
+      "source_verified_at_prepared_head": true
     },
     {
+      "events": [
+        "pull_request",
+        "push",
+        "workflow_dispatch"
+      ],
+      "git_blob": "3adc641386d148d2ffcf6d28ff81788c482478ec",
+      "marker_branch_push_matches": false,
       "path": ".github/workflows/jules-review.yml",
-      "sha256": "b3623495eadaee4c996266a7dde75c242050bb393661ca58caa3350b99f592d2",
       "push_branches": [
         "codex/**"
       ],
-      "marker_branch_push_matches": false,
-      "events": [
-        "pull_request",
-        "push",
-        "workflow_dispatch"
-      ]
+      "sha256": "b3623495eadaee4c996266a7dde75c242050bb393661ca58caa3350b99f592d2",
+      "source_verified_at_prepared_head": true
     },
     {
+      "events": [
+        "pull_request",
+        "push"
+      ],
+      "git_blob": "232f6e6ec35c9c29abe653491a581d4e0228d4ad",
+      "marker_branch_push_matches": false,
       "path": ".github/workflows/llm-care-map.yml",
-      "sha256": "c324e648540e09f41ff59820ff7511f6fc0ca342613ab079550f56b4d0cabd4a",
       "push_branches": [
         "main"
       ],
-      "marker_branch_push_matches": false,
-      "events": [
-        "pull_request",
-        "push"
-      ]
+      "sha256": "c324e648540e09f41ff59820ff7511f6fc0ca342613ab079550f56b4d0cabd4a",
+      "source_verified_at_prepared_head": true
     },
     {
-      "path": ".github/workflows/offline-software-vulkan.yml",
-      "sha256": "6f42f581dab85d28a8b2f2450b9568392a1ae340bd296a01cc20a9de27afd7e7",
-      "push_branches": [
-        "main"
-      ],
-      "marker_branch_push_matches": false,
       "events": [
         "push",
         "pull_request",
         "workflow_dispatch"
-      ]
+      ],
+      "git_blob": "f89a749e35460d269dad35f54e4cf4acfd687057",
+      "marker_branch_push_matches": false,
+      "path": ".github/workflows/offline-software-vulkan.yml",
+      "push_branches": [
+        "main"
+      ],
+      "sha256": "6f42f581dab85d28a8b2f2450b9568392a1ae340bd296a01cc20a9de27afd7e7",
+      "source_verified_at_prepared_head": true
     },
     {
+      "events": [
+        "pull_request"
+      ],
+      "git_blob": "a464a8e485014566eb2471b153bf35ab7c0b8d50",
+      "marker_branch_push_matches": false,
       "path": ".github/workflows/resident-output-budget.yml",
+      "push_branches": [],
       "sha256": "e6186b527ecdc858a3ee688669d7cf290a4233d2f2d0bd3427bf3a248050d7b7",
-      "push_branches": [],
-      "marker_branch_push_matches": false,
-      "events": [
-        "pull_request"
-      ]
+      "source_verified_at_prepared_head": true
     },
     {
+      "events": [
+        "push",
+        "pull_request"
+      ],
+      "git_blob": "7a8d524fd14e412e8ede8609f13ba014981da4e6",
+      "marker_branch_push_matches": false,
       "path": ".github/workflows/simulator-rehearsal.yml",
+      "push_branches": [
+        "main"
+      ],
       "sha256": "ede52b3e73ef0725add8f54d51f6413ef8763db23b3ed9c2b5ed2a9513385f01",
-      "push_branches": [
-        "main"
-      ],
-      "marker_branch_push_matches": false,
+      "source_verified_at_prepared_head": true
+    },
+    {
       "events": [
         "push",
         "pull_request"
-      ]
-    },
-    {
+      ],
+      "git_blob": "99682eb580a563c0dff7fbf5b96220c12c323d18",
+      "marker_branch_push_matches": false,
       "path": ".github/workflows/training-retention-host.yml",
-      "sha256": "45cad082b08976e1944ae00047598b42a54d52185fc66bd59faae83bb9d0c20b",
       "push_branches": [
         "main"
       ],
-      "marker_branch_push_matches": false,
-      "events": [
-        "push",
-        "pull_request"
-      ]
+      "sha256": "45cad082b08976e1944ae00047598b42a54d52185fc66bd59faae83bb9d0c20b",
+      "source_verified_at_prepared_head": true
     },
     {
-      "path": ".github/workflows/windows-resident-experimental.yml",
-      "sha256": "57190936e57bbecf8e3de03d325e4ea1ebd9c22086618ffeb43be3c0ddb14f2f",
-      "push_branches": [],
-      "marker_branch_push_matches": false,
       "events": [
         "workflow_dispatch",
         "pull_request"
-      ]
+      ],
+      "git_blob": "4d07755369a6ed234d520fad9f79af46fd86c8f1",
+      "marker_branch_push_matches": false,
+      "path": ".github/workflows/windows-resident-experimental.yml",
+      "push_branches": [],
+      "sha256": "57190936e57bbecf8e3de03d325e4ea1ebd9c22086618ffeb43be3c0ddb14f2f",
+      "source_verified_at_prepared_head": true
     },
     {
-      "path": ".github/workflows/windows-training-artifact.yml",
-      "sha256": "d1ab71666c97c0257b4c1cd4e0abb26bc352dcf01960c736f663ddbcac76f891",
-      "push_branches": [
-        "main"
-      ],
-      "marker_branch_push_matches": false,
       "events": [
         "workflow_dispatch",
         "pull_request",
         "push"
-      ]
-    }
-  ],
-  "documentation": [
-    {
-      "url": "https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#push",
-      "finding": "Push workflows can run from commits not merged into default. Ref creation is a distinct create event; do not assume a ref-creation API write is the activating commit push."
+      ],
+      "git_blob": "b76c0f7c9b895cc110c42212f63b08b9dcd0e78e",
+      "marker_branch_push_matches": false,
+      "path": ".github/workflows/windows-training-artifact.yml",
+      "push_branches": [
+        "main"
+      ],
+      "sha256": "d1ab71666c97c0257b4c1cd4e0abb26bc352dcf01960c736f663ddbcac76f891",
+      "source_verified_at_prepared_head": true
     },
     {
-      "url": "https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#onpushpull_requestpull_request_targetpathspaths-ignore",
-      "finding": "Branch and path filters both must match. Existing-branch pushes compare the before and after commits."
-    },
-    {
-      "url": "https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow",
-      "finding": "A push made using the workflow GITHUB_TOKEN does not trigger another push workflow. Activation must use the already-authorized external publication connection, not a new secret or a workflow token."
+      "events": [
+        "push"
+      ],
+      "git_blob": "4583d59f826b1928e01497064b0c4d782b093ed7",
+      "marker_branch_push_matches": false,
+      "marker_path": "docs/experiments/m2-hosted-qualification-v2/ACTIVATE.json",
+      "path": ".github/workflows/m2-fixed-fixtures-v2.yml",
+      "push_branches": [
+        "qualification/m2-fixed-fixtures-v2"
+      ],
+      "sha256": "bf04a92c7a662ca16448ebe199c54a7eb10a1c541ff86220afe67dc381890723",
+      "source_verified_at_prepared_head": true,
+      "unchanged_on_v3": true
     }
-  ],
-  "limitation": "Read-only source/documentation verification, no publication or event observed. Before activation recheck published workflow set, exact prepared head, marker absence and run ledger; after activation verify the unique run and exact head instead of blind retries."
+  ]
 }
