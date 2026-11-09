@@ -30,8 +30,8 @@
     "sha256": "c4422c612c3ae6e2826394c34b1690a585af0e2773a669cdb059719020c0a8dd"
   },
   "reflex": {
-    "bytes": 74202,
+    "bytes": 74744,
     "path": "patches/fbf-to-reflex.patch",
-    "sha256": "3bd0e0d55eaa531caaf661b629326d9a622e26c001eb999d4b598d07f66158f5"
+    "sha256": "d83677117de9e27e696e7f8ea7a495381e14f268b1e67fe74b7779998fded6b4"
   }
 }
