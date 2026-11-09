@@ -1,0 +1,10 @@
+metric,Full,DriveSham
+World intervals,1200,1200
+Neural decisions,1163,411
+Actual AwakeRest,566,99
+Actual BodySleep,5,99
+No applied recovery,592,213
+Sleeping intervals,37,789
+Memory consolidations,5,99
+Fully observed cycles,4,98
+Partial cycles at horizon,1,1
