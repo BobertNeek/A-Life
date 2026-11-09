@@ -1,0 +1,113 @@
+{
+  "revision": "revision-v2-readable-transport",
+  "v1_preserved": true,
+  "v1_archive_sha256": "9a929e22ae998ccb32f3dcf87ab814c64194384ff91baff5b0797c8e36d91631",
+  "v1_seal_sha256": "8c2243932c3b87d05a43754be8b9e1896141da8efc5aa1d63bb35cd7f7700aba",
+  "unchanged_inputs": [
+    {
+      "path": "fixtures.json",
+      "bytes": 33302,
+      "sha256": "e1c48300d8c2d9474350171615aa2506054fc7f2648265fe3300bf0704cd9ef3"
+    },
+    {
+      "path": "fixture-bounds.json",
+      "bytes": 60755,
+      "sha256": "84c6f0b6332668aa28db03b914b7b69563fd50cd9b9080d25641cdaf149320ba"
+    },
+    {
+      "path": "source-base.json",
+      "bytes": 62067,
+      "sha256": "0684bedcd89d365d2a5f0cb557ab14a9a2d5606098dcf55119eba82f99b96255"
+    },
+    {
+      "path": "source-gde.json",
+      "bytes": 2509,
+      "sha256": "0c66c0e9bc9ff15592be047f3ee3bbaf334ccbc4ff389e12ec8388e340bb9fb4"
+    },
+    {
+      "path": "source-gde-witness.json",
+      "bytes": 2705,
+      "sha256": "c61748944de67e9d1606e7e6b3c6046618c7b27a295ba7f6040b320c09089732"
+    },
+    {
+      "path": "source-gds.json",
+      "bytes": 3097,
+      "sha256": "05f37460ec8b475e851ffeb7e971925b85acf01b3aae2dcbc43cd19e6617d7ad"
+    },
+    {
+      "path": "source-meal.json",
+      "bytes": 4190,
+      "sha256": "78a08e246ae97fcad10c9195bed0e9caeed2641e99267846a3d17248cfa25da6"
+    },
+    {
+      "path": "source-boredom.json",
+      "bytes": 1133,
+      "sha256": "c18a497dde7dd0cf5025283806c69234f783282d4b7c808e1161d51aee053718"
+    },
+    {
+      "path": "source-reflex.json",
+      "bytes": 1143,
+      "sha256": "c8b7851b862656704f0131ca4bcf7f49996448a18f45820482fd2306ece4508a"
+    },
+    {
+      "path": "dependencies.json",
+      "bytes": 1999,
+      "sha256": "502f83e8d6eecc4969c23602f25f117123ecc8f33f6a80f4e0aa7653fcb261ff"
+    },
+    {
+      "path": "patches.json",
+      "bytes": 1160,
+      "sha256": "11a78725e4a6edaba22827b6a5a8d20be726189d3f69b7927d8be98c489fd263"
+    },
+    {
+      "path": "patches/meal-core-to-host.patch",
+      "bytes": 122483,
+      "sha256": "c4422c612c3ae6e2826394c34b1690a585af0e2773a669cdb059719020c0a8dd"
+    },
+    {
+      "path": "patches/fbf-to-boredom.patch",
+      "bytes": 68449,
+      "sha256": "7e4f7e94daeb39b68df7761e8e3c7dc0b2e822e7aa882f524391702f0fe73e2f"
+    },
+    {
+      "path": "patches/fbf-to-gde.patch",
+      "bytes": 129923,
+      "sha256": "87b1ce316ef724305d2d4d4df60c263bfc182fc5991b743a0cd7372fd4892ee4"
+    },
+    {
+      "path": "patches/gde-to-gds.patch",
+      "bytes": 64012,
+      "sha256": "f8d49437d057d84297715b31eb9256c8b5fe1e9b9f1e4fe606aeeefb2fc6628c"
+    },
+    {
+      "path": "patches/gde-to-witness-only.patch",
+      "bytes": 3289,
+      "sha256": "8e46484cf67161359488f3f6a47dcaf36719929a080fb16d620348492f5c2b3c"
+    },
+    {
+      "path": "patches/fbf-to-meal-core.patch",
+      "bytes": 120043,
+      "sha256": "6de53b500c9a87313d8b52bf010809798febdd9597eefe46667fff2427b7c3ca"
+    },
+    {
+      "path": "patches/fbf-to-reflex.patch",
+      "bytes": 74202,
+      "sha256": "3bd0e0d55eaa531caaf661b629326d9a622e26c001eb999d4b598d07f66158f5"
+    }
+  ],
+  "scope": "Transport, sanitized compile failures, partial completion, pure synthetic checks, and V2 publication identities only. No Rust variant/test/recipe/call-bound changes.",
+  "eligible": [
+    "boredom",
+    "reflex"
+  ],
+  "disabled": [
+    "meal",
+    "gde",
+    "gds"
+  ],
+  "no_pr": true,
+  "no_marker": true,
+  "no_dispatch": true,
+  "native_builds": 0,
+  "native_fixtures": 0
+}
