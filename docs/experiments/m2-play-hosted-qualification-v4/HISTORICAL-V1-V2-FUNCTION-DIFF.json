@@ -1,0 +1,83 @@
+{
+  "changed_runner_functions": [
+    {
+      "name": "restore_sources",
+      "v1_sha256": "fa1f4e54715782db18ac9023cd329a8d6e46dc6e7792454bcebe230479bd5f43",
+      "v2_sha256": "de024baf52c9fe5c327ae9f1594673039b1c1ceeb3aace28f7ad0f00a6dcef71"
+    },
+    {
+      "name": "choose_role",
+      "v1_sha256": "33c164723ad5870efaf433adb1feade3ef8ecdd58ed2b2907bf81c301fe72c96",
+      "v2_sha256": "3ef3ddf49072f6d055bf7cadc96e85a3b6a86a1b71b17e95e6b9d6faa96a41f6"
+    }
+  ],
+  "changes": "Source-only reconstruction from accepted main; new V2 plan/branch/packet and isolated target identities. No build/test commands, resource limits, output protocol, runtime source or fixture dose changes.",
+  "identical_files": [
+    {
+      "path": "source-manifest.json",
+      "sha256": "6ab1742961b2b9849b558ec7a1d097d5da5a40faad638929bb3bc9e778dc228c"
+    },
+    {
+      "path": "TEST-INVENTORY.json",
+      "sha256": "4feb8f921e684b8204a63386917456f1a970ee2644056cb37d931c2162fd8b4f"
+    },
+    {
+      "path": "DOSE-INVENTORY.json",
+      "sha256": "576b32104d9130210bb2a36228df1a55b88c51a774ef44c16c98d11cfefe3905"
+    },
+    {
+      "path": "probe_play_need_default_wire_v1.rs",
+      "sha256": "cc8178c7e73a04b2fb2a8f0623ecbdc33a709212caf2fdb9744ef3f0f23a14a9"
+    },
+    {
+      "path": "OUTPUT-POLICY.json",
+      "sha256": "cfa0988cce0dcfbf4d6666eaff4464656964429557f7e711bbd5d47523bd3e6d"
+    },
+    {
+      "path": "INHERITED-WORKFLOW-FIXTURES.json",
+      "sha256": "e45e6ea9f0b5de64ad00a3fbc108cbefcce48f5eab8b9c32caceaa9650497fcd"
+    }
+  ],
+  "new_helper": "reconstruct_source.py",
+  "schema": "m2-play-v1-v2-function-diff",
+  "unchanged_runner_functions": [
+    "Stop",
+    "fail",
+    "sha",
+    "digest_file",
+    "safe_path",
+    "read_json",
+    "verify_record",
+    "size",
+    "session_rss",
+    "kill_session",
+    "child_setup",
+    "run",
+    "private_git",
+    "exact_path",
+    "setup_toolchain",
+    "diagnostic_rows",
+    "check_limits",
+    "validate_activation",
+    "validate_tree_preservation",
+    "verify_workflows",
+    "admit",
+    "overlay_members",
+    "local_dep_path",
+    "package_roots",
+    "validate_env_dep",
+    "parse_depinfo",
+    "verify_depinfo",
+    "build",
+    "test_listing",
+    "test_outcome",
+    "run_tests",
+    "probe_rows",
+    "run_probe",
+    "summary",
+    "main",
+    "public_summary"
+  ],
+  "v1_archive_sha256": "eec4466dcc106b15a75fe5a00c10d592bdf81d4ccc0d791e5b76ff0edb582826",
+  "v1_seal_sha256": "6089d0f4df5a499dcaf32c7ff24878650fdc9bb2c7ddb3edb238473e1b84cce9"
+}

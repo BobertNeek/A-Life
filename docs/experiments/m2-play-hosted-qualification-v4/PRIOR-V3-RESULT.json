@@ -1,0 +1,15 @@
+{
+  "activation_head": "6afaf9cb5f643a703ede76c07544b921af94f40b",
+  "evidence": "Parent supplied verified bounded public result; no raw compiler/assertion output included.",
+  "job": 129373339349,
+  "native_fixture_exposure": 0,
+  "original60_probe_build": "compiled_not_executed",
+  "original60_probe_executable_sha256": "abd2208b2730068579b7594761b8efbeb2610cc21439e16f1d43cfdaba44e810",
+  "owned76_probe_build": "E0425",
+  "prior_packet_unchanged": true,
+  "probe_processes": 0,
+  "run": 42680477037,
+  "schema": "m2-play-prior-hosted-result-v4",
+  "source_admission": "passed",
+  "test_processes": 0
+}
