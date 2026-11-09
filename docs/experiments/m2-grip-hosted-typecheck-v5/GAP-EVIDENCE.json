@@ -1,0 +1,17 @@
+{
+  "schema": "grip-source-closure-gap-v4",
+  "path": "crates/alife_world/tests/developmental_rest_recovery.rs",
+  "main_commit": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "bytes": 14560,
+  "sha256": "e7ea25b756def52d426fb5c281daf806049b426680b96ca1e9a9be29c6a38a7f",
+  "git_blob_sha1": "b09c6a5ac0c2683d5d76b65881c44148fd32e7ba",
+  "absent_from_v3_manifest": true,
+  "world_autotests_default_true": true,
+  "explicit_test_tables": false,
+  "selected_command": "cargo check --all-targets -p alife_world",
+  "public_main_source_bound_in_place": true,
+  "source_bytes_changed": false,
+  "transport_source_or_binary_payload": false,
+  "native_invocations": 0,
+  "network_calls": 0
+}

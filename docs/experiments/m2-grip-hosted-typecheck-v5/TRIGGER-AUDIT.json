@@ -1,0 +1,916 @@
+{
+  "branch": "qualification/m2-grip-hosted-typecheck-v5",
+  "branch_birth_diff_caveat": "No claim that GitHub new-branch path diffs are always narrow. Even a broad diff or fail-open path-filter fallback cannot defeat inherited branch exclusion; the new workflow job also rejects branch creation.",
+  "existing_workflows_eligible_on_activation": 0,
+  "existing_workflows_eligible_on_preparation": 0,
+  "files": [
+    {
+      "activation_push_eligible": false,
+      "bytes": 1360,
+      "events": {
+        "pull_request": {
+          "paths": [
+            ".github/workflows/care-frontier-sampler.yml",
+            "scripts/care_frontier_sampler.py",
+            "scripts/run_care_frontier_fixture.py",
+            "scripts/test_care_frontier_sampler.py",
+            "scripts/compare_cpu_care_rounds.py",
+            "docs/experiments/care-frontier-*"
+          ]
+        },
+        "push": {
+          "branches": [
+            "main"
+          ],
+          "paths": [
+            ".github/workflows/care-frontier-sampler.yml",
+            "scripts/care_frontier_sampler.py",
+            "scripts/run_care_frontier_fixture.py",
+            "scripts/test_care_frontier_sampler.py",
+            "scripts/compare_cpu_care_rounds.py",
+            "docs/experiments/care-frontier-*"
+          ]
+        }
+      },
+      "git_blob_sha1": "0c487b6f9a90e03d2db806e13fd9d70c2c02c9c8",
+      "immutable_source_url": "https://github.com/BobertNeek/A-Life/blob/c3aec16df33861f1316d127736f5f60eea327ede/.github/workflows/care-frontier-sampler.yml",
+      "job_gates": {
+        "contracts": null
+      },
+      "mode": "100644",
+      "new_branch_create_event_eligible": false,
+      "path": ".github/workflows/care-frontier-sampler.yml",
+      "prepared_push_eligible": false,
+      "push_branch_matches": false,
+      "push_path_filters": [
+        ".github/workflows/care-frontier-sampler.yml",
+        "scripts/care_frontier_sampler.py",
+        "scripts/run_care_frontier_fixture.py",
+        "scripts/test_care_frontier_sampler.py",
+        "scripts/compare_cpu_care_rounds.py",
+        "docs/experiments/care-frontier-*"
+      ],
+      "reason": "All explicit push branch filters exclude the exact qualification branch; path matching and diff fallback cannot override the branch filter.",
+      "sha256": "ce23d4dff5832deec885e4b086769cc46bf7c780ce990543d45e2a8383dfc938"
+    },
+    {
+      "activation_push_eligible": false,
+      "bytes": 1042,
+      "events": {
+        "pull_request": {
+          "paths": [
+            "scripts/import_care_scenario_recipe.py",
+            "scripts/test_import_care_scenario_recipe.py",
+            "scripts/llm_care_scenarios.py",
+            "scripts/care_frontier_sampler.py",
+            ".github/workflows/care-recipe-import.yml"
+          ]
+        },
+        "push": {
+          "branches": [
+            "main"
+          ],
+          "paths": [
+            "scripts/import_care_scenario_recipe.py",
+            "scripts/test_import_care_scenario_recipe.py",
+            "scripts/llm_care_scenarios.py",
+            "scripts/care_frontier_sampler.py",
+            ".github/workflows/care-recipe-import.yml"
+          ]
+        }
+      },
+      "git_blob_sha1": "7e5738e64e3d17169ea6085d655051e70aeedbba",
+      "immutable_source_url": "https://github.com/BobertNeek/A-Life/blob/c3aec16df33861f1316d127736f5f60eea327ede/.github/workflows/care-recipe-import.yml",
+      "job_gates": {
+        "contracts": null
+      },
+      "mode": "100644",
+      "new_branch_create_event_eligible": false,
+      "path": ".github/workflows/care-recipe-import.yml",
+      "prepared_push_eligible": false,
+      "push_branch_matches": false,
+      "push_path_filters": [
+        "scripts/import_care_scenario_recipe.py",
+        "scripts/test_import_care_scenario_recipe.py",
+        "scripts/llm_care_scenarios.py",
+        "scripts/care_frontier_sampler.py",
+        ".github/workflows/care-recipe-import.yml"
+      ],
+      "reason": "All explicit push branch filters exclude the exact qualification branch; path matching and diff fallback cannot override the branch filter.",
+      "sha256": "58cdcf0114c81639b041ff793bdcdc4f428cfd1f252a45b3462876bb86eb3231"
+    },
+    {
+      "activation_push_eligible": false,
+      "bytes": 1570,
+      "events": {
+        "pull_request": {
+          "paths": [
+            "scripts/care_scenario_batches.py",
+            "scripts/care_scenario_dispatch.py",
+            "scripts/test_care_scenario_batches.py",
+            "scripts/test_care_scenario_dispatch.py",
+            "scripts/care_frontier_sampler.py",
+            "scripts/import_care_scenario_recipe.py",
+            "scripts/llm_care_scenarios.py",
+            "scripts/compare_cpu_care_rounds.py",
+            ".github/workflows/care-scenario-batches.yml"
+          ]
+        },
+        "push": {
+          "branches": [
+            "main"
+          ],
+          "paths": [
+            "scripts/care_scenario_batches.py",
+            "scripts/care_scenario_dispatch.py",
+            "scripts/test_care_scenario_batches.py",
+            "scripts/test_care_scenario_dispatch.py",
+            "scripts/care_frontier_sampler.py",
+            "scripts/import_care_scenario_recipe.py",
+            "scripts/llm_care_scenarios.py",
+            "scripts/compare_cpu_care_rounds.py",
+            ".github/workflows/care-scenario-batches.yml"
+          ]
+        }
+      },
+      "git_blob_sha1": "b7b2f1e84f1ffe0bfab1ec917b4eabd063b0297e",
+      "immutable_source_url": "https://github.com/BobertNeek/A-Life/blob/c3aec16df33861f1316d127736f5f60eea327ede/.github/workflows/care-scenario-batches.yml",
+      "job_gates": {
+        "contracts": null
+      },
+      "mode": "100644",
+      "new_branch_create_event_eligible": false,
+      "path": ".github/workflows/care-scenario-batches.yml",
+      "prepared_push_eligible": false,
+      "push_branch_matches": false,
+      "push_path_filters": [
+        "scripts/care_scenario_batches.py",
+        "scripts/care_scenario_dispatch.py",
+        "scripts/test_care_scenario_batches.py",
+        "scripts/test_care_scenario_dispatch.py",
+        "scripts/care_frontier_sampler.py",
+        "scripts/import_care_scenario_recipe.py",
+        "scripts/llm_care_scenarios.py",
+        "scripts/compare_cpu_care_rounds.py",
+        ".github/workflows/care-scenario-batches.yml"
+      ],
+      "reason": "All explicit push branch filters exclude the exact qualification branch; path matching and diff fallback cannot override the branch filter.",
+      "sha256": "8451c3ce325c89e394a221409f6bb8955f0554e158d325b8edeb99862839fe0a"
+    },
+    {
+      "activation_push_eligible": false,
+      "bytes": 14654,
+      "events": {
+        "pull_request": {
+          "branches": [
+            "main"
+          ]
+        },
+        "push": {
+          "branches": [
+            "main"
+          ]
+        }
+      },
+      "git_blob_sha1": "f0025e9e863d7696be70816b1d4ffcb32dc37c0f",
+      "immutable_source_url": "https://github.com/BobertNeek/A-Life/blob/c3aec16df33861f1316d127736f5f60eea327ede/.github/workflows/ci.yml",
+      "job_gates": {
+        "gpu-diagnostic-pipes": null,
+        "island-output-changes": null,
+        "native-texture-decode": null,
+        "portable-save": null,
+        "rust": null,
+        "training-continuity": null,
+        "training-output-preservation": null
+      },
+      "mode": "100644",
+      "new_branch_create_event_eligible": false,
+      "path": ".github/workflows/ci.yml",
+      "prepared_push_eligible": false,
+      "push_branch_matches": false,
+      "push_path_filters": null,
+      "reason": "All explicit push branch filters exclude the exact qualification branch; path matching and diff fallback cannot override the branch filter.",
+      "sha256": "a40abd2944cdd2a2e8f24a9fc6df71228e90e29b69a14353d0800b2fc8025b27"
+    },
+    {
+      "activation_push_eligible": false,
+      "bytes": 12946,
+      "events": {
+        "pull_request": {
+          "branches": [
+            "main"
+          ],
+          "paths": [
+            "crates/alife_training/**",
+            "crates/alife_archive/**",
+            "crates/alife_semantic/**",
+            "crates/alife_core/**",
+            "crates/alife_runtime/**",
+            "crates/alife_gpu_backend/**",
+            "crates/alife_world/**",
+            "crates/alife_game_app/**",
+            "crates/alife_school/**",
+            "Cargo.toml",
+            "Cargo.lock",
+            ".cargo/**",
+            "rust-toolchain*",
+            "scripts/care_host.py",
+            "scripts/run_cpu_care_serial.py",
+            "scripts/test_cpu_care_serial.py",
+            "scripts/compare_cpu_care_rounds.py",
+            "scripts/test_compare_cpu_care_rounds.py",
+            "scripts/check_current_checkpoint_native.py",
+            "scripts/current_checkpoint_store.py",
+            "scripts/run_current_care.py",
+            "scripts/check_cpu_retention_native.py",
+            "scripts/cpu_retention_report.py",
+            "docs/experiments/weight-space-2026-11-07/summarize_receipts.py",
+            "docs/experiments/weight-space-2026-11-07/test_summarize_receipts.py",
+            ".github/workflows/cpu-foundation-backend.yml"
+          ]
+        },
+        "push": {
+          "branches": [
+            "main"
+          ],
+          "paths": [
+            "crates/alife_training/**",
+            "crates/alife_archive/**",
+            "crates/alife_semantic/**",
+            "crates/alife_core/**",
+            "crates/alife_runtime/**",
+            "crates/alife_gpu_backend/**",
+            "crates/alife_world/**",
+            "crates/alife_game_app/**",
+            "crates/alife_school/**",
+            "Cargo.toml",
+            "Cargo.lock",
+            ".cargo/**",
+            "rust-toolchain*",
+            "scripts/care_host.py",
+            "scripts/run_cpu_care_serial.py",
+            "scripts/test_cpu_care_serial.py",
+            "scripts/compare_cpu_care_rounds.py",
+            "scripts/test_compare_cpu_care_rounds.py",
+            "scripts/check_current_checkpoint_native.py",
+            "scripts/current_checkpoint_store.py",
+            "scripts/run_current_care.py",
+            "scripts/check_cpu_retention_native.py",
+            "scripts/cpu_retention_report.py",
+            "docs/experiments/weight-space-2026-11-07/summarize_receipts.py",
+            "docs/experiments/weight-space-2026-11-07/test_summarize_receipts.py",
+            ".github/workflows/cpu-foundation-backend.yml"
+          ]
+        }
+      },
+      "git_blob_sha1": "4d27d4dd6b28b7092fab65b3e0b11689cd81f20d",
+      "immutable_source_url": "https://github.com/BobertNeek/A-Life/blob/c3aec16df33861f1316d127736f5f60eea327ede/.github/workflows/cpu-foundation-backend.yml",
+      "job_gates": {
+        "cooperative-round": null,
+        "native-cpu": null,
+        "serial-care-round": null
+      },
+      "mode": "100644",
+      "new_branch_create_event_eligible": false,
+      "path": ".github/workflows/cpu-foundation-backend.yml",
+      "prepared_push_eligible": false,
+      "push_branch_matches": false,
+      "push_path_filters": [
+        "crates/alife_training/**",
+        "crates/alife_archive/**",
+        "crates/alife_semantic/**",
+        "crates/alife_core/**",
+        "crates/alife_runtime/**",
+        "crates/alife_gpu_backend/**",
+        "crates/alife_world/**",
+        "crates/alife_game_app/**",
+        "crates/alife_school/**",
+        "Cargo.toml",
+        "Cargo.lock",
+        ".cargo/**",
+        "rust-toolchain*",
+        "scripts/care_host.py",
+        "scripts/run_cpu_care_serial.py",
+        "scripts/test_cpu_care_serial.py",
+        "scripts/compare_cpu_care_rounds.py",
+        "scripts/test_compare_cpu_care_rounds.py",
+        "scripts/check_current_checkpoint_native.py",
+        "scripts/current_checkpoint_store.py",
+        "scripts/run_current_care.py",
+        "scripts/check_cpu_retention_native.py",
+        "scripts/cpu_retention_report.py",
+        "docs/experiments/weight-space-2026-11-07/summarize_receipts.py",
+        "docs/experiments/weight-space-2026-11-07/test_summarize_receipts.py",
+        ".github/workflows/cpu-foundation-backend.yml"
+      ],
+      "reason": "All explicit push branch filters exclude the exact qualification branch; path matching and diff fallback cannot override the branch filter.",
+      "sha256": "9a1d4080e0a98f7c067d6b6dbe86cb8157f158d5cc9b43e8525e8203ac0af7ac"
+    },
+    {
+      "activation_push_eligible": false,
+      "bytes": 3752,
+      "events": {
+        "pull_request": {
+          "branches": [
+            "main"
+          ],
+          "paths": [
+            ".github/workflows/group50-training.yml",
+            "Cargo.toml",
+            "Cargo.lock",
+            "crates/alife_game_app/**",
+            "crates/alife_gpu_backend/**",
+            "crates/alife_training/**",
+            "crates/alife_runtime/**",
+            "crates/alife_world/**",
+            "crates/alife_core/**",
+            "scripts/run_mixed_care_serial.py",
+            "scripts/care_host.py",
+            "scripts/run_eat_held_food_night.py",
+            "scripts/grab_food_seed_reservations.py",
+            "scripts/summarize_ppo_diagnostics.py"
+          ]
+        },
+        "push": {
+          "branches": [
+            "main",
+            "group50-ci/**"
+          ],
+          "paths": [
+            ".github/workflows/group50-training.yml",
+            "Cargo.toml",
+            "Cargo.lock",
+            "crates/alife_game_app/**",
+            "crates/alife_gpu_backend/**",
+            "crates/alife_training/**",
+            "crates/alife_runtime/**",
+            "crates/alife_world/**",
+            "crates/alife_core/**",
+            "scripts/run_mixed_care_serial.py",
+            "scripts/care_host.py",
+            "scripts/run_eat_held_food_night.py",
+            "scripts/grab_food_seed_reservations.py",
+            "scripts/summarize_ppo_diagnostics.py"
+          ]
+        }
+      },
+      "git_blob_sha1": "c129188d45d4b41059fd871e5d39782482bb0cf9",
+      "immutable_source_url": "https://github.com/BobertNeek/A-Life/blob/c3aec16df33861f1316d127736f5f60eea327ede/.github/workflows/group50-training.yml",
+      "job_gates": {
+        "group50-source": null
+      },
+      "mode": "100644",
+      "new_branch_create_event_eligible": false,
+      "path": ".github/workflows/group50-training.yml",
+      "prepared_push_eligible": false,
+      "push_branch_matches": false,
+      "push_path_filters": [
+        ".github/workflows/group50-training.yml",
+        "Cargo.toml",
+        "Cargo.lock",
+        "crates/alife_game_app/**",
+        "crates/alife_gpu_backend/**",
+        "crates/alife_training/**",
+        "crates/alife_runtime/**",
+        "crates/alife_world/**",
+        "crates/alife_core/**",
+        "scripts/run_mixed_care_serial.py",
+        "scripts/care_host.py",
+        "scripts/run_eat_held_food_night.py",
+        "scripts/grab_food_seed_reservations.py",
+        "scripts/summarize_ppo_diagnostics.py"
+      ],
+      "reason": "All explicit push branch filters exclude the exact qualification branch; path matching and diff fallback cannot override the branch filter.",
+      "sha256": "078bbfff6f62d260c7acc3455341640983e82fd9e70e7599091647bb28ea540d"
+    },
+    {
+      "activation_push_eligible": false,
+      "bytes": 893,
+      "events": {
+        "pull_request": {
+          "branches": [
+            "main"
+          ],
+          "paths": [
+            ".github/workflows/jules-review.yml",
+            "scripts/test_jules_retirement.py",
+            ".github/workflows/jules-retirement-contracts.yml"
+          ]
+        },
+        "push": {
+          "branches": [
+            "main"
+          ],
+          "paths": [
+            ".github/workflows/jules-review.yml",
+            "scripts/test_jules_retirement.py",
+            ".github/workflows/jules-retirement-contracts.yml"
+          ]
+        }
+      },
+      "git_blob_sha1": "f966e8f194203ddc013888fbdbc656ea7498b131",
+      "immutable_source_url": "https://github.com/BobertNeek/A-Life/blob/c3aec16df33861f1316d127736f5f60eea327ede/.github/workflows/jules-retirement-contracts.yml",
+      "job_gates": {
+        "contracts": null
+      },
+      "mode": "100644",
+      "new_branch_create_event_eligible": false,
+      "path": ".github/workflows/jules-retirement-contracts.yml",
+      "prepared_push_eligible": false,
+      "push_branch_matches": false,
+      "push_path_filters": [
+        ".github/workflows/jules-review.yml",
+        "scripts/test_jules_retirement.py",
+        ".github/workflows/jules-retirement-contracts.yml"
+      ],
+      "reason": "All explicit push branch filters exclude the exact qualification branch; path matching and diff fallback cannot override the branch filter.",
+      "sha256": "ba9ac86fcbfd263bd361d327636c94e139e3054d23c9d088ee9824c1e4959bbc"
+    },
+    {
+      "activation_push_eligible": false,
+      "bytes": 11580,
+      "events": {
+        "pull_request": {
+          "types": [
+            "opened",
+            "synchronize",
+            "reopened"
+          ]
+        },
+        "push": {
+          "branches": [
+            "codex/**"
+          ]
+        },
+        "workflow_dispatch": {
+          "inputs": {
+            "branch": {
+              "description": "Branch to review (e.g. codex/training-readiness-20261001)",
+              "required": "true",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "git_blob_sha1": "3adc641386d148d2ffcf6d28ff81788c482478ec",
+      "immutable_source_url": "https://github.com/BobertNeek/A-Life/blob/c3aec16df33861f1316d127736f5f60eea327ede/.github/workflows/jules-review.yml",
+      "job_gates": {
+        "review": "github.event_name != 'push' || github.event.created == true"
+      },
+      "mode": "100644",
+      "new_branch_create_event_eligible": false,
+      "path": ".github/workflows/jules-review.yml",
+      "prepared_push_eligible": false,
+      "push_branch_matches": false,
+      "push_path_filters": null,
+      "reason": "All explicit push branch filters exclude the exact qualification branch; path matching and diff fallback cannot override the branch filter.",
+      "sha256": "b3623495eadaee4c996266a7dde75c242050bb393661ca58caa3350b99f592d2"
+    },
+    {
+      "activation_push_eligible": false,
+      "bytes": 1700,
+      "events": {
+        "pull_request": {
+          "paths": [
+            "crates/alife_game_app/**",
+            "scripts/*care*",
+            ".github/workflows/llm-care-map.yml"
+          ]
+        },
+        "push": {
+          "branches": [
+            "main"
+          ],
+          "paths": [
+            "crates/alife_game_app/**",
+            "scripts/*care*",
+            ".github/workflows/llm-care-map.yml"
+          ]
+        }
+      },
+      "git_blob_sha1": "232f6e6ec35c9c29abe653491a581d4e0228d4ad",
+      "immutable_source_url": "https://github.com/BobertNeek/A-Life/blob/c3aec16df33861f1316d127736f5f60eea327ede/.github/workflows/llm-care-map.yml",
+      "job_gates": {
+        "native-map": null
+      },
+      "mode": "100644",
+      "new_branch_create_event_eligible": false,
+      "path": ".github/workflows/llm-care-map.yml",
+      "prepared_push_eligible": false,
+      "push_branch_matches": false,
+      "push_path_filters": [
+        "crates/alife_game_app/**",
+        "scripts/*care*",
+        ".github/workflows/llm-care-map.yml"
+      ],
+      "reason": "All explicit push branch filters exclude the exact qualification branch; path matching and diff fallback cannot override the branch filter.",
+      "sha256": "c324e648540e09f41ff59820ff7511f6fc0ca342613ab079550f56b4d0cabd4a"
+    },
+    {
+      "activation_push_eligible": false,
+      "bytes": 5885,
+      "events": {
+        "pull_request": {
+          "branches": [
+            "main"
+          ],
+          "paths": [
+            "crates/**",
+            "Cargo.toml",
+            "Cargo.lock",
+            ".cargo/**",
+            "rust-toolchain*",
+            ".github/workflows/offline-software-vulkan.yml"
+          ]
+        },
+        "push": {
+          "branches": [
+            "main"
+          ],
+          "paths": [
+            "crates/**",
+            "Cargo.toml",
+            "Cargo.lock",
+            ".cargo/**",
+            "rust-toolchain*",
+            ".github/workflows/offline-software-vulkan.yml"
+          ]
+        },
+        "workflow_dispatch": ""
+      },
+      "git_blob_sha1": "f89a749e35460d269dad35f54e4cf4acfd687057",
+      "immutable_source_url": "https://github.com/BobertNeek/A-Life/blob/c3aec16df33861f1316d127736f5f60eea327ede/.github/workflows/offline-software-vulkan.yml",
+      "job_gates": {
+        "offline-software-vulkan": null
+      },
+      "mode": "100644",
+      "new_branch_create_event_eligible": false,
+      "path": ".github/workflows/offline-software-vulkan.yml",
+      "prepared_push_eligible": false,
+      "push_branch_matches": false,
+      "push_path_filters": [
+        "crates/**",
+        "Cargo.toml",
+        "Cargo.lock",
+        ".cargo/**",
+        "rust-toolchain*",
+        ".github/workflows/offline-software-vulkan.yml"
+      ],
+      "reason": "All explicit push branch filters exclude the exact qualification branch; path matching and diff fallback cannot override the branch filter.",
+      "sha256": "6f42f581dab85d28a8b2f2450b9568392a1ae340bd296a01cc20a9de27afd7e7"
+    },
+    {
+      "activation_push_eligible": false,
+      "bytes": 4148,
+      "events": {
+        "pull_request": {
+          "paths": [
+            "crates/alife_storage/**",
+            "crates/alife_archive/**",
+            "crates/alife_runtime/src/checkpoint_assets/**",
+            "crates/alife_game_app/src/foundation_training*",
+            "crates/alife_game_app/src/foundation_training*/**",
+            ".github/workflows/resident-output-budget.yml",
+            "Cargo.*",
+            "scripts/check_resident_recovery_native.py",
+            "scripts/check_continuous_store_native.py"
+          ]
+        }
+      },
+      "git_blob_sha1": "a464a8e485014566eb2471b153bf35ab7c0b8d50",
+      "immutable_source_url": "https://github.com/BobertNeek/A-Life/blob/c3aec16df33861f1316d127736f5f60eea327ede/.github/workflows/resident-output-budget.yml",
+      "job_gates": {
+        "quota-native": null,
+        "quota-primitives": null
+      },
+      "mode": "100644",
+      "new_branch_create_event_eligible": false,
+      "path": ".github/workflows/resident-output-budget.yml",
+      "prepared_push_eligible": false,
+      "push_branch_matches": false,
+      "push_path_filters": null,
+      "reason": "No push trigger.",
+      "sha256": "e6186b527ecdc858a3ee688669d7cf290a4233d2f2d0bd3427bf3a248050d7b7"
+    },
+    {
+      "activation_push_eligible": false,
+      "bytes": 2702,
+      "events": {
+        "pull_request": {
+          "branches": [
+            "main"
+          ],
+          "paths": [
+            ".github/workflows/simulator-rehearsal.yml",
+            "Cargo.toml",
+            "Cargo.lock",
+            "crates/alife_game_app/**",
+            "crates/alife_training/**",
+            "crates/alife_runtime/**",
+            "crates/alife_gpu_backend/**",
+            "crates/alife_world/**",
+            "crates/alife_core/**"
+          ]
+        },
+        "push": {
+          "branches": [
+            "main"
+          ],
+          "paths": [
+            ".github/workflows/simulator-rehearsal.yml",
+            "Cargo.toml",
+            "Cargo.lock",
+            "crates/alife_game_app/**",
+            "crates/alife_training/**",
+            "crates/alife_runtime/**",
+            "crates/alife_gpu_backend/**",
+            "crates/alife_world/**",
+            "crates/alife_core/**"
+          ]
+        }
+      },
+      "git_blob_sha1": "7a8d524fd14e412e8ede8609f13ba014981da4e6",
+      "immutable_source_url": "https://github.com/BobertNeek/A-Life/blob/c3aec16df33861f1316d127736f5f60eea327ede/.github/workflows/simulator-rehearsal.yml",
+      "job_gates": {
+        "rehearsal-source": null
+      },
+      "mode": "100644",
+      "new_branch_create_event_eligible": false,
+      "path": ".github/workflows/simulator-rehearsal.yml",
+      "prepared_push_eligible": false,
+      "push_branch_matches": false,
+      "push_path_filters": [
+        ".github/workflows/simulator-rehearsal.yml",
+        "Cargo.toml",
+        "Cargo.lock",
+        "crates/alife_game_app/**",
+        "crates/alife_training/**",
+        "crates/alife_runtime/**",
+        "crates/alife_gpu_backend/**",
+        "crates/alife_world/**",
+        "crates/alife_core/**"
+      ],
+      "reason": "All explicit push branch filters exclude the exact qualification branch; path matching and diff fallback cannot override the branch filter.",
+      "sha256": "ede52b3e73ef0725add8f54d51f6413ef8763db23b3ed9c2b5ed2a9513385f01"
+    },
+    {
+      "activation_push_eligible": false,
+      "bytes": 1142,
+      "events": {
+        "pull_request": {
+          "paths": [
+            "scripts/*care*.py",
+            "scripts/*checkpoint*.py",
+            "scripts/foundation_probe_schema.py",
+            "scripts/compare_foundation_probes.py",
+            "scripts/grab_food_seed_reservations.py",
+            "scripts/run_*food_night.py",
+            "scripts/summarize_ppo_diagnostics.py",
+            ".github/workflows/training-retention-host.yml"
+          ]
+        },
+        "push": {
+          "branches": [
+            "main"
+          ],
+          "paths": [
+            "scripts/*care*.py",
+            "scripts/*checkpoint*.py",
+            "scripts/foundation_probe_schema.py",
+            "scripts/compare_foundation_probes.py",
+            "scripts/grab_food_seed_reservations.py",
+            "scripts/run_*food_night.py",
+            "scripts/summarize_ppo_diagnostics.py",
+            ".github/workflows/training-retention-host.yml"
+          ]
+        }
+      },
+      "git_blob_sha1": "99682eb580a563c0dff7fbf5b96220c12c323d18",
+      "immutable_source_url": "https://github.com/BobertNeek/A-Life/blob/c3aec16df33861f1316d127736f5f60eea327ede/.github/workflows/training-retention-host.yml",
+      "job_gates": {
+        "scheduler": null
+      },
+      "mode": "100644",
+      "new_branch_create_event_eligible": false,
+      "path": ".github/workflows/training-retention-host.yml",
+      "prepared_push_eligible": false,
+      "push_branch_matches": false,
+      "push_path_filters": [
+        "scripts/*care*.py",
+        "scripts/*checkpoint*.py",
+        "scripts/foundation_probe_schema.py",
+        "scripts/compare_foundation_probes.py",
+        "scripts/grab_food_seed_reservations.py",
+        "scripts/run_*food_night.py",
+        "scripts/summarize_ppo_diagnostics.py",
+        ".github/workflows/training-retention-host.yml"
+      ],
+      "reason": "All explicit push branch filters exclude the exact qualification branch; path matching and diff fallback cannot override the branch filter.",
+      "sha256": "45cad082b08976e1944ae00047598b42a54d52185fc66bd59faae83bb9d0c20b"
+    },
+    {
+      "activation_push_eligible": false,
+      "bytes": 6787,
+      "events": {
+        "pull_request": {
+          "paths": [
+            ".github/workflows/windows-resident-experimental.yml",
+            "crates/alife_game_app/src/foundation_training_cycle/resident.rs",
+            "crates/alife_game_app/src/foundation_training_cycle/resident/**",
+            "scripts/run_continuous_care.py",
+            "scripts/test_run_continuous_care.py"
+          ]
+        },
+        "workflow_dispatch": {
+          "inputs": {
+            "build_only": {
+              "default": "false",
+              "description": "Build a release artifact while the independent PR checks run",
+              "type": "boolean"
+            },
+            "profile": {
+              "default": "release",
+              "description": "Native artifact build profile (PR checks remain dev)",
+              "options": [
+                "dev",
+                "release"
+              ],
+              "type": "choice"
+            },
+            "source_revision": {
+              "default": "",
+              "description": "Exact 40-character source commit; empty uses this workflow ref",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "git_blob_sha1": "4d07755369a6ed234d520fad9f79af46fd86c8f1",
+      "immutable_source_url": "https://github.com/BobertNeek/A-Life/blob/c3aec16df33861f1316d127736f5f60eea327ede/.github/workflows/windows-resident-experimental.yml",
+      "job_gates": {
+        "focused-native": null
+      },
+      "mode": "100644",
+      "new_branch_create_event_eligible": false,
+      "path": ".github/workflows/windows-resident-experimental.yml",
+      "prepared_push_eligible": false,
+      "push_branch_matches": false,
+      "push_path_filters": null,
+      "reason": "No push trigger.",
+      "sha256": "57190936e57bbecf8e3de03d325e4ea1ebd9c22086618ffeb43be3c0ddb14f2f"
+    },
+    {
+      "activation_push_eligible": false,
+      "bytes": 15542,
+      "events": {
+        "pull_request": {
+          "branches": [
+            "main"
+          ],
+          "paths": [
+            ".gitattributes",
+            ".github/workflows/windows-training-artifact.yml",
+            "Cargo.toml",
+            "Cargo.lock",
+            "crates/alife_gpu_backend/**",
+            "crates/alife_runtime/**",
+            "crates/alife_game_app/src/foundation*.rs",
+            "crates/alife_game_app/src/foundation_training/**",
+            "crates/alife_game_app/src/foundation_training_cycle/**",
+            "crates/alife_game_app/src/bin/export_native_training_handoff.rs",
+            "crates/alife_game_app/src/foundation_cpu_care/**",
+            "crates/alife_game_app/src/gpu_live_runtime/semantic_prior.rs",
+            "crates/alife_game_app/src/bin/train_cpu_care_round.rs",
+            "crates/alife_game_app/tests/cpu_care_round.rs",
+            "scripts/compare_cpu_care_rounds.py",
+            "scripts/test_compare_cpu_care_rounds.py",
+            "scripts/check_current_checkpoint_native.py",
+            "scripts/current_checkpoint_store.py",
+            "scripts/run_current_care.py",
+            "crates/alife_game_app/Cargo.toml",
+            "crates/alife_game_app/build.rs",
+            "crates/alife_game_app/tests/native_build_info.rs",
+            "crates/alife_world/src/headless.rs",
+            "crates/alife_world/src/organism.rs",
+            "crates/alife_world/tests/*signature.rs",
+            "crates/alife_world/tests/fresh_foundation_checkpoint_comparison.rs",
+            "crates/alife_game_app/src/gpu_live_runtime/newborn_admission_tests.rs",
+            "scripts/testdata/foundation_probe_sensory_v1.json",
+            "crates/alife_game_app/src/bin/train_n2048_care.rs",
+            "crates/alife_game_app/tests/actor_advantage_centering_cli.rs",
+            "crates/alife_training/**"
+          ]
+        },
+        "push": {
+          "branches": [
+            "main"
+          ],
+          "paths": [
+            ".gitattributes",
+            ".github/workflows/windows-training-artifact.yml",
+            "Cargo.toml",
+            "Cargo.lock",
+            "crates/alife_gpu_backend/**",
+            "crates/alife_runtime/**",
+            "crates/alife_game_app/src/foundation*.rs",
+            "crates/alife_game_app/src/foundation_training/**",
+            "crates/alife_game_app/src/foundation_training_cycle/**",
+            "crates/alife_game_app/src/bin/export_native_training_handoff.rs",
+            "crates/alife_game_app/src/foundation_cpu_care/**",
+            "crates/alife_game_app/src/gpu_live_runtime/semantic_prior.rs",
+            "crates/alife_game_app/src/bin/train_cpu_care_round.rs",
+            "crates/alife_game_app/tests/cpu_care_round.rs",
+            "scripts/compare_cpu_care_rounds.py",
+            "scripts/test_compare_cpu_care_rounds.py",
+            "scripts/check_current_checkpoint_native.py",
+            "scripts/current_checkpoint_store.py",
+            "scripts/run_current_care.py",
+            "crates/alife_game_app/Cargo.toml",
+            "crates/alife_game_app/build.rs",
+            "crates/alife_game_app/tests/native_build_info.rs",
+            "crates/alife_world/src/headless.rs",
+            "crates/alife_world/src/organism.rs",
+            "crates/alife_world/tests/*signature.rs",
+            "crates/alife_world/tests/fresh_foundation_checkpoint_comparison.rs",
+            "crates/alife_game_app/src/gpu_live_runtime/newborn_admission_tests.rs",
+            "scripts/testdata/foundation_probe_sensory_v1.json",
+            "crates/alife_game_app/src/bin/train_n2048_care.rs",
+            "crates/alife_game_app/tests/actor_advantage_centering_cli.rs",
+            "crates/alife_training/**"
+          ]
+        },
+        "workflow_dispatch": ""
+      },
+      "git_blob_sha1": "b76c0f7c9b895cc110c42212f63b08b9dcd0e78e",
+      "immutable_source_url": "https://github.com/BobertNeek/A-Life/blob/c3aec16df33861f1316d127736f5f60eea327ede/.github/workflows/windows-training-artifact.yml",
+      "job_gates": {
+        "build": null,
+        "serial-care-round": null
+      },
+      "mode": "100644",
+      "new_branch_create_event_eligible": false,
+      "path": ".github/workflows/windows-training-artifact.yml",
+      "prepared_push_eligible": false,
+      "push_branch_matches": false,
+      "push_path_filters": [
+        ".gitattributes",
+        ".github/workflows/windows-training-artifact.yml",
+        "Cargo.toml",
+        "Cargo.lock",
+        "crates/alife_gpu_backend/**",
+        "crates/alife_runtime/**",
+        "crates/alife_game_app/src/foundation*.rs",
+        "crates/alife_game_app/src/foundation_training/**",
+        "crates/alife_game_app/src/foundation_training_cycle/**",
+        "crates/alife_game_app/src/bin/export_native_training_handoff.rs",
+        "crates/alife_game_app/src/foundation_cpu_care/**",
+        "crates/alife_game_app/src/gpu_live_runtime/semantic_prior.rs",
+        "crates/alife_game_app/src/bin/train_cpu_care_round.rs",
+        "crates/alife_game_app/tests/cpu_care_round.rs",
+        "scripts/compare_cpu_care_rounds.py",
+        "scripts/test_compare_cpu_care_rounds.py",
+        "scripts/check_current_checkpoint_native.py",
+        "scripts/current_checkpoint_store.py",
+        "scripts/run_current_care.py",
+        "crates/alife_game_app/Cargo.toml",
+        "crates/alife_game_app/build.rs",
+        "crates/alife_game_app/tests/native_build_info.rs",
+        "crates/alife_world/src/headless.rs",
+        "crates/alife_world/src/organism.rs",
+        "crates/alife_world/tests/*signature.rs",
+        "crates/alife_world/tests/fresh_foundation_checkpoint_comparison.rs",
+        "crates/alife_game_app/src/gpu_live_runtime/newborn_admission_tests.rs",
+        "scripts/testdata/foundation_probe_sensory_v1.json",
+        "crates/alife_game_app/src/bin/train_n2048_care.rs",
+        "crates/alife_game_app/tests/actor_advantage_centering_cli.rs",
+        "crates/alife_training/**"
+      ],
+      "reason": "All explicit push branch filters exclude the exact qualification branch; path matching and diff fallback cannot override the branch filter.",
+      "sha256": "d1ab71666c97c0257b4c1cd4e0abb26bc352dcf01960c736f663ddbcac76f891"
+    }
+  ],
+  "main_commit": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "main_only_push_workflows": 11,
+  "main_tree": "9140d525fe1af16fed6539c3178a1a45e1fb04d0",
+  "native_invocations": 0,
+  "new_workflow_activation_eligible_after_admission": true,
+  "new_workflow_preparation_guards": [
+    "ACTIVATE.json absent from prepared tree",
+    "job-level github.event.created == false",
+    "runner rejects created event and zero before SHA"
+  ],
+  "new_workflow_preparation_job_eligible": false,
+  "no_inherited_script_execution": "Every inherited job is excluded at the event/branch boundary, before checkout and script execution. No supporting script is invoked or modified.",
+  "non_push_workflows": 2,
+  "out_of_scope_risks": [
+    "Opening a PR can start CI and Jules; do not open one.",
+    "Manual dispatch can still invoke preserved workflows; none is sent.",
+    "Independent repository or organization integrations are not proven absent by this workflow-file audit."
+  ],
+  "proof": "Branch exclusion independently proves no inherited workflow runs for either exact-branch push. No workflow subscribes to create, schedule, workflow_run, repository_dispatch or other event. Paths provide additional exclusion where present; CI and Jules intentionally have no push path filter.",
+  "push_workflows": 13,
+  "remote_writes": 0,
+  "schema": "m2-grip-trigger-audit-v5",
+  "scope": "Only creating the dedicated branch at the audited main-plus-packet prepared commit, then adding ACTIVATE.json as its sole direct-child change. No PR, merge, manual dispatch, ref rename, extra push, inherited workflow alteration or external agent invocation is authorized by this proposal.",
+  "workflow": ".github/workflows/m2-grip-hosted-typecheck-v5.yml"
+}

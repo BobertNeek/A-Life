@@ -1,0 +1,39 @@
+{
+  "activation_head": "c3a528a0a9b2b7c0914250fe1448e0ea2891a019",
+  "activation_marker_sha256": "63e92b58fb6851b09055abac16f21a7e43ba1bad684667bf4ce294f2fead4b43",
+  "body_advances": 0,
+  "bound_files": 864,
+  "cargo_lock_sha256": "99b01e0353263fd5bbf0261320898e8395d45583f2045e3433d3e2a1f50070eb",
+  "code": "SOURCE_CLOSURE",
+  "completed": [
+    "core"
+  ],
+  "correction_patch_sha256": "0ce2a14320e13e31b9727d41d979798910c31e9663dcaca043c0900c5c96774a",
+  "dependency_correction_patch_sha256": "fa468c4ca23f88c2f90f561176283fb1bf0f53c24280fee6c6dcdd093f5ed712",
+  "diagnostics": [],
+  "elapsed_seconds": 46,
+  "grip_patch_sha256": "acf8cc50353ba76cb7adf5af1db5845ee6e6b2e2261d0ee823821428e2e4d054",
+  "main": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "native_test_bodies": 0,
+  "output_bytes": 176110,
+  "peak_rss_bytes": 1616175104,
+  "peak_workspace_bytes": 1148869716,
+  "plan_id": "m2-grip-hosted-typecheck-v3",
+  "prepared_head": "90d63813e20554fabe5ffe95f92ffad3229b8f9a",
+  "research_base": "fbf2a517f93098b5d936878a3d26bbb8d0391c38",
+  "schema": "m2-grip-typecheck-summary-v3",
+  "seal_sha256": "20d724c6e8fbca8dfeccbd5be1dee0b125613cef7dba60106a5356c105fafa32",
+  "source_forwards": 0,
+  "source_manifest_sha256": "224fe7dea0fa280d0eff903b4a6a827340d449c8ae198dab44f108b8cd5fe790",
+  "stage": "world",
+  "toolchain": {
+    "cargo": "cargo 1.99.1 (5f94df478 2026-08-27)",
+    "cargo_binary_sha256": "a670e02cfa39ac2e53f77a2d911ca1fc9e2c479b0603ec956625be1daf24e3af",
+    "host": "x86_64-unknown-linux-gnu",
+    "llvm": "23.1.1",
+    "rust_commit": "58cf8f9c35b355199727627d07ae34a4e2846d67",
+    "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+    "rustc_binary_sha256": "b53b780f77f952062f8ca8a3b70aef2390b1e45ad91939be94afdc9543026853"
+  },
+  "world_commands": 0
+}

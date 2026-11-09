@@ -1,0 +1,12 @@
+{
+  "activation_head": "c3a528a0a9b2b7c0914250fe1448e0ea2891a019",
+  "job_id": 129294914097,
+  "new_v4_native_invocations": 0,
+  "prepared_head": "90d63813e20554fabe5ffe95f92ffad3229b8f9a",
+  "run_id": 42656110024,
+  "safe_summary_bytes": 1783,
+  "safe_summary_path": "FIRST-RESULT-v3.json",
+  "safe_summary_sha256": "d6a51afc4f316303992e054775435e491e2aab395eca5d3f4b01b32b7d0df858",
+  "schema": "m2-grip-first-result-provenance-v4",
+  "source": "Exact parent-provided safe v3 summary, unchanged. No raw Actions logs read/copied."
+}

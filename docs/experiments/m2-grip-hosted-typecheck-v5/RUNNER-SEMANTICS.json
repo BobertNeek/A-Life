@@ -1,0 +1,57 @@
+{
+  "added_functions": [
+    "verify_workflow_preservation"
+  ],
+  "admit_unchanged_except_workflow_inventory": true,
+  "allowed_changes": [
+    "Versioned V5 plan and activation/summary identifiers.",
+    "Replace sole-workflow inventory rejection with exact preserved-main workflow mode/blob/byte inventory admission."
+  ],
+  "changed_existing_functions": [
+    "admit"
+  ],
+  "computation_logic_changes": false,
+  "native_invocations": 0,
+  "new_diagnostics": false,
+  "new_runner_sha256": "ad554c8a57288fe4ad279c91baa2da275697234eb2f912bef35a834cb63edcc0",
+  "prior_runner_sha256": "841eb0bd1360436a5835aba4c57caf77b5c5cea4aaf4349d208331681445dae2",
+  "schema": "m2-grip-runner-preservation-v5",
+  "source_manifest_byte_identical_to_v4": true,
+  "unchanged_constants": {
+    "ACTION_SHA": true,
+    "CARGO_VERSION": true,
+    "EXPECTED_FEATURES": true,
+    "HOST": true,
+    "LIMITS": true,
+    "RUST_COMMIT": true,
+    "RUST_DATE": true,
+    "RUST_VERSION": true,
+    "STAGES": true,
+    "TOOLCHAIN": true
+  },
+  "unchanged_existing_functions_after_version_normalization": [
+    "check_limits",
+    "check_stage",
+    "child_setup",
+    "diagnostic_rows",
+    "digest_file",
+    "exact_path",
+    "fail",
+    "kill_session",
+    "local_dep_path",
+    "main",
+    "private_git",
+    "read_json",
+    "restore_sources",
+    "run",
+    "safe_path",
+    "session_rss",
+    "setup_toolchain",
+    "sha",
+    "size",
+    "summary",
+    "validate_activation",
+    "verify_depinfo",
+    "verify_record"
+  ]
+}

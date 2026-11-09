@@ -1,0 +1,65 @@
+{
+  "after_count": 865,
+  "after_manifest_sha256": "137b6395d74a49aa2f2841cc9b1d306a1d5ade9b502ea84c44dfa64d6defe14a",
+  "audit": {
+    "actual_recovered_rust_files": 783,
+    "explicitly_unselected_include_pairs": [
+      {
+        "already_explicitly_excluded": true,
+        "from": "crates/alife_training/examples/probe_grouped_m2_durable_v1.rs",
+        "target": "docs/experiments/grouped-m2-durable-pair-v1/PROTOCOL.md"
+      },
+      {
+        "already_explicitly_excluded": true,
+        "from": "crates/alife_training/examples/probe_grouped_m2_durable_v1.rs",
+        "target": "crates/alife_training/examples/support/grouped_m2_qualification_v1.rs"
+      },
+      {
+        "already_explicitly_excluded": true,
+        "from": "crates/alife_training/examples/probe_motor_mediation_native_v1.rs",
+        "target": "docs/experiments/motor-mediation-native-v1/archived-arithmetic-frames.json"
+      },
+      {
+        "already_explicitly_excluded": true,
+        "from": "crates/alife_training/examples/probe_object_rich_optional_vocal_v1.rs",
+        "target": "PROTOCOL.md"
+      },
+      {
+        "already_explicitly_excluded": true,
+        "from": "crates/alife_training/examples/probe_object_rich_optional_vocal_v1.rs",
+        "target": "RUNTIME-SOURCE.json"
+      },
+      {
+        "already_explicitly_excluded": true,
+        "from": "crates/alife_training/tests/cpu_motor_host_legacy_wire.rs",
+        "target": "crates/alife_training/tests/fixtures/cpu-resident-pre-motor-v1.json.zst"
+      }
+    ],
+    "literal_include_occurrences": 145,
+    "main_owned_target_extra_includes_or_modules": 0,
+    "only_unbound_source": "crates/alife_world/tests/developmental_rest_recovery.rs",
+    "unparsed_include_sources": 0
+  },
+  "before_count": 864,
+  "before_manifest_sha256": "224fe7dea0fa280d0eff903b4a6a827340d449c8ae198dab44f108b8cd5fe790",
+  "binary_payload_transported": false,
+  "cargo_lock_sha256_unchanged": "99b01e0353263fd5bbf0261320898e8395d45583f2045e3433d3e2a1f50070eb",
+  "git_blob_sha1": "b09c6a5ac0c2683d5d76b65881c44148fd32e7ba",
+  "main_commit": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "native_invocations": 0,
+  "network_calls": 0,
+  "new_grip_source_version": false,
+  "reason": "This existing main-only tests/*.rs target survives all recovery patches and Cargo world --all-targets auto-discovers it. The previous fbf-only enumeration omitted its hash, so the unchanged guard rejects its unbound artifact root.",
+  "registered_v6_paths_unchanged": 149,
+  "registered_v6_source_closure": "3ce43eb7cfade54c62fdd259caab6133e6c1d30756fc17ae92acd86526fa9548",
+  "rust_patch_added": false,
+  "schema": "m2-grip-source-closure-correction-v4",
+  "source_bytes_changed": false,
+  "source_payload_transported": false,
+  "source_record": {
+    "bytes": 14560,
+    "path": "crates/alife_world/tests/developmental_rest_recovery.rs",
+    "sha256": "e7ea25b756def52d426fb5c281daf806049b426680b96ca1e9a9be29c6a38a7f"
+  },
+  "targets_removed": false
+}

@@ -1,0 +1,11 @@
+{
+  "actual_source_relative_path_used": true,
+  "hosted_qualification_claimed": false,
+  "new_full_verify_depinfo_invoked": false,
+  "new_manifest_normalized_root_membership": true,
+  "old_verify_depinfo_rejects_with": "SOURCE_CLOSURE",
+  "path": "crates/alife_world/tests/developmental_rest_recovery.rs",
+  "schema": "m2-grip-root-guard-static-regression-v4",
+  "scope": "Demonstrates the exact old unbound-root failure and new hash-bound membership only; no native artifact, compiler or hosted job executed.",
+  "synthetic_artifact_used": true
+}
