@@ -11,7 +11,11 @@
     "reflex_exact_overlay_bytes",
     "python_syntax",
     "three_utf8_parts_hashes_order_newlines_and_exact_concatenation",
-    "synthetic_fail_closed_list_and_result_parsers"
+    "synthetic_fail_closed_list_and_result_parsers",
+    "reflex_original_exact_restoration_and_incremental_patch",
+    "all_261_public_motor_channel_keys_exact_and_injective",
+    "runner_only_v4_identities_and_two_pretty_arguments",
+    "fixtures_call_bounds_boredom_and_proven_setup_provenance_unchanged"
   ],
   "native_builds": 0,
   "native_tests": 0,
