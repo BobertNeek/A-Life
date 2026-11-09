@@ -1,0 +1,78 @@
+{
+  "schema": "m2-lossless-future-journal-qualification-v1",
+  "status": "future-only opt-in module; not activated or published",
+  "tests": {
+    "passed": 8,
+    "failed": 0,
+    "scope": "opaque synthetic bytes only; focused standalone tests, not full workspace; process exits, not power loss",
+    "runtime_maxrss_kib": 21352,
+    "existing_fixture_refusal_log": "TESTS-existing-fixture-refused.log"
+  },
+  "compile": {
+    "initial_maxrss_kib": 162960,
+    "initial_128MiB_allowance_exceeded": true,
+    "final_allowance_mib": 192,
+    "final_maxrss_kib": 170216,
+    "dependency_rebuild": false,
+    "shared_target_writes": false,
+    "rustc": "1.99.1 (58cf8f9c3 2026-10-13)",
+    "profile": "standalone rustc opt-level=0, debuginfo=0, stripped"
+  },
+  "source_module_sha256": "caeaa54fc74641189b1f398368f3480290f01c751f9e9bf74f4672dae126c44b",
+  "patch_sha256": "8db31f1c301edf9fac35d8bfe263f0bda3f1ef7174d791ccba8e585f6ba5b00a",
+  "dependency_sha256": {
+    "recovery-sleep-durable-target-v3/debug/deps/libzstd-07e3d4e740f2fced.rlib": "76ea3435eccc201549e4532c8008be1599efeff883b98c7450b2b2374ca65d9f",
+    "recovery-sleep-durable-target-v3/debug/deps/libsha2-584eac0ed8c9c447.rlib": "b7bc5b88a1196146fcbd1023be29b59bf642b469f48f1b627bf12aa3801d3b8c",
+    "recovery-sleep-durable-target-v3/debug/build/zstd-sys-7a653b51e31244ec/out/libzstd.a": "d74d19057dc60a6e374c90281c1ddf2b27669daf5c7812e677ef9eb1f9d9eb5f"
+  },
+  "synthetic_single_sample_timings": [
+    {
+      "raw_bytes": 0,
+      "record_bytes": 117,
+      "encode_us": 133,
+      "decode_us": 43,
+      "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "raw_bytes": 1,
+      "record_bytes": 118,
+      "encode_us": 33,
+      "decode_us": 22,
+      "raw_sha256": "a8100ae6aa1940d0b663bb31cd466142ebbdbd5187131b92d93818987832eb89"
+    },
+    {
+      "raw_bytes": 256,
+      "record_bytes": 374,
+      "encode_us": 52,
+      "decode_us": 37,
+      "raw_sha256": "40aff2e9d2d8922e47afd4648e6967497158785fbd1da870e7110266bf944880"
+    },
+    {
+      "raw_bytes": 1048576,
+      "record_bytes": 161,
+      "encode_us": 27286,
+      "decode_us": 25413,
+      "raw_sha256": "074c29674e21baa420ee0eca0d85b9283b0cfb3ac912da2098f6b3a7f8d6678f"
+    },
+    {
+      "raw_bytes": 1048576,
+      "record_bytes": 1048720,
+      "encode_us": 54659,
+      "decode_us": 50384,
+      "raw_sha256": "5b64b12ad6e657f403f9e3e57e4ad6fbd1d8fb14c53a0c7e1dc5dbd2257166b1"
+    }
+  ],
+  "limitations": [
+    "Not representative checkpoint corpus",
+    "Not end-to-end runner/disk throughput",
+    "No production memory promise at maximum 64MiB raw/65MiB compressed",
+    "Unix private local filesystem only",
+    "No EIO/ENOSPC or power-cut injection",
+    "No cryptographic authenticity without independently retained raw seals",
+    "Future runner integration and scientific index/record transaction still required"
+  ],
+  "acquired_checkpoint_reads": 0,
+  "brain_body_world_forwards": 0,
+  "actual_free_bytes": 5314883584,
+  "retained_packet_bytes_before_receipt": 2865520
+}
