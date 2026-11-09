@@ -1,0 +1,11 @@
+{
+  "attempt": 1,
+  "fixed_disposable_qualification_only": true,
+  "main": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "plan_id": "m2-channel-native-hosted-pure-v1",
+  "prepared_head": "REPLACE_ONLY_AFTER_VERIFIED_PREPARED_COMMIT",
+  "research_base": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "schema": "m2-channel-native-pure-activation-v1",
+  "seal_sha256": "44285516bda3fadd090eee58c3bf4d7d7641bc575cffb427648fc40f06bdb3ec",
+  "source_manifest_sha256": "69248f8b02d5d03698ef3127182268f8c325137c77012071487900aaedf31569"
+}

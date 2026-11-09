@@ -1,0 +1,18 @@
+{
+  "base_rows": 799,
+  "capsule_fixture_helper_byte_identical": true,
+  "cargo_lock_only_added_workspace_package": true,
+  "final_rows": 822,
+  "logical_unreachable_commits_fetched": false,
+  "native_compilation": false,
+  "original101_git_blob": "002402b88cebc86c128b46e6705eb823e3b00116",
+  "original101_sha256": "28b472731e2f28002ec0a73a7947ecde48ee3fb0c39f2efa313a1f7c9ecbbe49",
+  "own_final_closure_composition": "base799 union verified original101 union exactV4source103 union exactcompanion packaging10",
+  "published_patch_commit": "ff991c39ca4a11f72eb56f015f8b3dab71baff20",
+  "reachable_main": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "reachable_reconstruction_inherited_manifest_sha256": "c0321462297d23743d4da1e32d6cce141ac9396bc73a9807fce3252e8c5b2f1e",
+  "registry_checksums_versions_unchanged": true,
+  "unchanged_companion_policy_copies": 5,
+  "v4_capsule_sha256": "a1b32521d537899ad573c3485af635ab6688bb1d3740e9a00f6658772f31a362",
+  "v4source103_verified": true
+}

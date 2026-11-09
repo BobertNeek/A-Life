@@ -1,0 +1,67 @@
+{
+  "files": [
+    {
+      "bytes": 456096,
+      "confirmed_git_blob": "002402b88cebc86c128b46e6705eb823e3b00116",
+      "destination_path": "docs/experiments/m2-channel-native-hosted-pure-v1/qualified-original-overlay.tar.gz",
+      "path": "qualified-original-overlay.tar.gz",
+      "remote_state": "confirmed blob only; no branch/ref assertion",
+      "sha256": "28b472731e2f28002ec0a73a7947ecde48ee3fb0c39f2efa313a1f7c9ecbbe49",
+      "source_artifact": "/workspace/shared/m2-play-runtime-integration-v1/hosted/qualified-original-overlay.tar.gz"
+    },
+    {
+      "bytes": 7481,
+      "confirmed_git_blob": null,
+      "destination_path": "docs/experiments/m2-channel-native-hosted-pure-v1/upstream-toolchain-action.yml",
+      "path": "upstream-toolchain-action.yml",
+      "remote_state": "local verified bytes, remote reuse not claimed",
+      "sha256": "0b52547c145ae18d8631c9ab711e4d917e9e489cea800368f338c25a56e0aee2",
+      "source_artifact": "/workspace/shared/m2-grip-options-v1/hosted-typecheck-v2/upstream-toolchain-action.yml"
+    },
+    {
+      "bytes": 563200,
+      "confirmed_git_blob": "6df92f6933b9279c86373ec0b4b7c0a66770d199",
+      "destination_path": "docs/experiments/m2-channel-native-hosted-pure-v1/patches/main-to-fbf-library-closure.part-01.patch",
+      "path": "patches/main-to-fbf-library-closure.part-01.patch",
+      "remote_state": "Published source patch in confirmed GripV5 prepared commit; no grip runtime overlay",
+      "sha256": "44c9ee9e269bec25ebb924054754a0e71ddc7b73104a132699171a9776430e07",
+      "source_artifact": "/workspace/shared/m2-grip-options-v1/hosted-typecheck-v2/patches/main-to-fbf-library-closure.part-01.patch",
+      "source_commit": "ff991c39ca4a11f72eb56f015f8b3dab71baff20",
+      "source_path": "docs/experiments/m2-grip-hosted-typecheck-v5/patches/main-to-fbf-library-closure.part-01.patch"
+    },
+    {
+      "bytes": 563195,
+      "confirmed_git_blob": "7f27884da807987fb3eb63ca442724a14ee46468",
+      "destination_path": "docs/experiments/m2-channel-native-hosted-pure-v1/patches/main-to-fbf-library-closure.part-02.patch",
+      "path": "patches/main-to-fbf-library-closure.part-02.patch",
+      "remote_state": "Published source patch in confirmed GripV5 prepared commit; no grip runtime overlay",
+      "sha256": "a2fb1711dee71d569aea8643ba5dd02d16c992bf9f378b219e4b86cb51edafae",
+      "source_artifact": "/workspace/shared/m2-grip-options-v1/hosted-typecheck-v2/patches/main-to-fbf-library-closure.part-02.patch",
+      "source_commit": "ff991c39ca4a11f72eb56f015f8b3dab71baff20",
+      "source_path": "docs/experiments/m2-grip-hosted-typecheck-v5/patches/main-to-fbf-library-closure.part-02.patch"
+    },
+    {
+      "bytes": 415718,
+      "confirmed_git_blob": "ef007c906168887cd275564f541a48714806608b",
+      "destination_path": "docs/experiments/m2-channel-native-hosted-pure-v1/patches/main-to-fbf-library-closure.part-03.patch",
+      "path": "patches/main-to-fbf-library-closure.part-03.patch",
+      "remote_state": "Published source patch in confirmed GripV5 prepared commit; no grip runtime overlay",
+      "sha256": "95d7a29b145111d4f24297c97ecd0766673f9275b5dd89400958c714a24ae72d",
+      "source_artifact": "/workspace/shared/m2-grip-options-v1/hosted-typecheck-v2/patches/main-to-fbf-library-closure.part-03.patch",
+      "source_commit": "ff991c39ca4a11f72eb56f015f8b3dab71baff20",
+      "source_path": "docs/experiments/m2-grip-hosted-typecheck-v5/patches/main-to-fbf-library-closure.part-03.patch"
+    },
+    {
+      "bytes": 136753,
+      "confirmed_git_blob": "99d4927cccaaf74172282cbb8e50ea9609e56250",
+      "destination_path": "docs/experiments/m2-channel-native-hosted-pure-v1/patches/fbf-nominal-source-supplement.patch",
+      "path": "patches/fbf-nominal-source-supplement.patch",
+      "remote_state": "Published source patch in confirmed GripV5 prepared commit; no grip runtime overlay",
+      "sha256": "ddd07c85685b27056664d9b8650fa736d8eff257f5d477485efd7d14e5e5b051",
+      "source_artifact": "/workspace/shared/m2-grip-options-v1/hosted-typecheck-v2/patches/fbf-nominal-source-supplement.patch",
+      "source_commit": "ff991c39ca4a11f72eb56f015f8b3dab71baff20",
+      "source_path": "docs/experiments/m2-grip-hosted-typecheck-v5/patches/fbf-nominal-source-supplement.patch"
+    }
+  ],
+  "repository": "BobertNeek/A-Life"
+}

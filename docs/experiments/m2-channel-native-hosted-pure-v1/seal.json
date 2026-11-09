@@ -1,0 +1,123 @@
+{
+  "files": [
+    {
+      "bytes": 1542,
+      "path": "COMPANION-IDENTITY.json",
+      "sha256": "380f34f63c697fb5daa71aed47d482aa72fce46ea276a655d7d049dff709984f"
+    },
+    {
+      "bytes": 2804,
+      "path": "DOSE-INVENTORY.json",
+      "sha256": "97ccdaf2fa4d944341e10e1d232f4d068b0f0f8b4e0d96205a96a95cf8cbc216"
+    },
+    {
+      "bytes": 4264,
+      "path": "FUNCTION-FREEZE.json",
+      "sha256": "8a0d43fbf76cf436219b797a12b781664d78375697551f47147b619efeacd9f9"
+    },
+    {
+      "bytes": 92558,
+      "path": "INHERITED-WORKFLOW-FIXTURES.json",
+      "sha256": "e45e6ea9f0b5de64ad00a3fbc108cbefcce48f5eab8b9c32caceaa9650497fcd"
+    },
+    {
+      "bytes": 224,
+      "path": "OUTPUT-POLICY.json",
+      "sha256": "d5f19be6a5962efd7619bd22fb25cb1871ae72bea772999cb5aad2b65dc19be6"
+    },
+    {
+      "bytes": 2672,
+      "path": "README.md",
+      "sha256": "72a4ad5fbf2d9cf165ed218e36d0f560c0017d13b0015903941e87d91192ed55"
+    },
+    {
+      "bytes": 1239,
+      "path": "RECONSTRUCTION-PATCHES.json",
+      "sha256": "5c1ba1800b77a7f9147b3457fa5911edfc837aa9cf40b4ade438291e2c655ab2"
+    },
+    {
+      "bytes": 4338,
+      "path": "REUSE-MANIFEST.json",
+      "sha256": "962c12b3c0ed9a1f93c06c163e5a039ba25efa73e68648eeac7ed1c6460ff65b"
+    },
+    {
+      "bytes": 988,
+      "path": "SOURCE-PROOF.json",
+      "sha256": "b9763c73d9ec0e3a1f7cdb599763e2ffdbd2b7a34700ef20a13548bb08570813"
+    },
+    {
+      "bytes": 896,
+      "path": "STATIC-RESULTS.json",
+      "sha256": "6703e735b6f2a5ba05621b1be14022a9b96667df1800662ea2fb4214d05e1c4a"
+    },
+    {
+      "bytes": 4382,
+      "path": "WORKFLOW-PRESERVATION.json",
+      "sha256": "13e5a1512ee206a474c99e3a66dd435e288d0626c748755b9fae1ff3f677e556"
+    },
+    {
+      "bytes": 35031,
+      "path": "nominal-frozen-input-residual.tar.gz",
+      "sha256": "03e8bf144fad68aa2f8c6991cce13b3e3b87dc7bcf37d232731e1b37d55b6a4b"
+    },
+    {
+      "bytes": 136753,
+      "path": "patches/fbf-nominal-source-supplement.patch",
+      "sha256": "ddd07c85685b27056664d9b8650fa736d8eff257f5d477485efd7d14e5e5b051"
+    },
+    {
+      "bytes": 563200,
+      "path": "patches/main-to-fbf-library-closure.part-01.patch",
+      "sha256": "44c9ee9e269bec25ebb924054754a0e71ddc7b73104a132699171a9776430e07"
+    },
+    {
+      "bytes": 563195,
+      "path": "patches/main-to-fbf-library-closure.part-02.patch",
+      "sha256": "a2fb1711dee71d569aea8643ba5dd02d16c992bf9f378b219e4b86cb51edafae"
+    },
+    {
+      "bytes": 415718,
+      "path": "patches/main-to-fbf-library-closure.part-03.patch",
+      "sha256": "95d7a29b145111d4f24297c97ecd0766673f9275b5dd89400958c714a24ae72d"
+    },
+    {
+      "bytes": 456096,
+      "path": "qualified-original-overlay.tar.gz",
+      "sha256": "28b472731e2f28002ec0a73a7947ecde48ee3fb0c39f2efa313a1f7c9ecbbe49"
+    },
+    {
+      "bytes": 38730,
+      "path": "run_hosted.py",
+      "sha256": "d1076caca62145fed92dc0d065e1681c433881e4b1524377caa6270188b0851f"
+    },
+    {
+      "bytes": 57669,
+      "path": "sampler-source-overlay.tar.gz",
+      "sha256": "ad66da3f1629e8e5d184bbb0d303cd8f66e3ca64432686cebeb35a531147ef76"
+    },
+    {
+      "bytes": 528501,
+      "path": "source-manifest.json",
+      "sha256": "69248f8b02d5d03698ef3127182268f8c325137c77012071487900aaedf31569"
+    },
+    {
+      "bytes": 5906,
+      "path": "static_checks.py",
+      "sha256": "1ff55d3012d6c699f71fee8b9c24d446295955985d6d1de2d1ceb93c6f748e35"
+    },
+    {
+      "bytes": 7481,
+      "path": "upstream-toolchain-action.yml",
+      "sha256": "0b52547c145ae18d8631c9ab711e4d917e9e489cea800368f338c25a56e0aee2"
+    },
+    {
+      "bytes": 479186,
+      "path": "v4-source-capsule.tar.gz",
+      "sha256": "a1b32521d537899ad573c3485af635ab6688bb1d3740e9a00f6658772f31a362"
+    }
+  ],
+  "native_qualified": false,
+  "plan_id": "m2-channel-native-hosted-pure-v1",
+  "publication_state": "not_published",
+  "source_ready": true
+}

@@ -1,0 +1,27 @@
+[
+  {
+    "companion": "crates/alife_channel_native_qualification/src/cpu/confidence/policy.rs",
+    "original": "crates/alife_training/src/cpu/motor_mediation/confidence/policy.rs",
+    "sha256": "6f86942ab7ded73dcd07f47d3be223e826bd2d8dfb35893bdfa92b754d88d56e"
+  },
+  {
+    "companion": "crates/alife_channel_native_qualification/src/cpu/confidence/policy/optional_vocal.rs",
+    "original": "crates/alife_training/src/cpu/motor_mediation/confidence/policy/optional_vocal.rs",
+    "sha256": "b971b7a5e2b917d5ed2bf88c89fa44e207e2878445eeededbb69c319cedbb939"
+  },
+  {
+    "companion": "crates/alife_channel_native_qualification/src/cpu/confidence/policy/optional_vocal/tests.rs",
+    "original": "crates/alife_training/src/cpu/motor_mediation/confidence/policy/optional_vocal/tests.rs",
+    "sha256": "6328b054f71280a067151cefddffdc97edabbd54703ced1a383f63d93f9ff97f"
+  },
+  {
+    "companion": "crates/alife_channel_native_qualification/src/cpu/confidence/policy/optional_vocal/channel_native.rs",
+    "original": "crates/alife_training/src/cpu/motor_mediation/confidence/policy/optional_vocal/channel_native.rs",
+    "sha256": "e8a580611d2b8017d3a5a7f5a20c31feb1328b0710f12fe12b25f19f85eb53bb"
+  },
+  {
+    "companion": "crates/alife_channel_native_qualification/src/cpu/confidence/policy/optional_vocal/channel_native/tests.rs",
+    "original": "crates/alife_training/src/cpu/motor_mediation/confidence/policy/optional_vocal/channel_native/tests.rs",
+    "sha256": "c725d4c44c98ea30626404cb4377669d0d225ed5b7866d22ecbebffbf693c7e9"
+  }
+]

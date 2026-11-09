@@ -1,0 +1,147 @@
+{
+  "changed_function_names": [
+    "build",
+    "choose_role",
+    "main",
+    "restore_sources",
+    "run_tests",
+    "summary",
+    "test_listing",
+    "test_report",
+    "validate_activation"
+  ],
+  "removed_biological_parsers": [
+    "nullable_bool",
+    "project_reason",
+    "strict_number"
+  ],
+  "template": "/workspace/shared/m2-graded-cue-hosted-reason-v1/run_hosted.py",
+  "template_sha256": "1cbc61949ee75cccf4f801c7b85ab2170cb08a304cf2fc5493ea36eacdc3f5da",
+  "unchanged_functions": [
+    {
+      "name": "admit",
+      "sha256": "48e4c9389d8ff88fc53e185fc1fc5864741bc1794cc911bea89a434607d9e855",
+      "unchanged": true
+    },
+    {
+      "name": "check_limits",
+      "sha256": "fa424677f23b60fb1366fd92540f4327a639a7d816d6abf610987cfdbcb652e1",
+      "unchanged": true
+    },
+    {
+      "name": "child_setup",
+      "sha256": "0ba3cfbaf4234c4ac687845ea5796f0a60fc25757bee3b88ac68cbebf18aa64a",
+      "unchanged": true
+    },
+    {
+      "name": "diagnostic_rows",
+      "sha256": "5d486b7d3bf03d8325024fcbce434229fbe061c091e15218d3442079d5f1f381",
+      "unchanged": true
+    },
+    {
+      "name": "digest_file",
+      "sha256": "fcbc148fb2d2ca1fdcde48419fe2d7914070b63fdaaeb4fc99f4d02386736f69",
+      "unchanged": true
+    },
+    {
+      "name": "exact_path",
+      "sha256": "973f99d9d56b530578eabfae35f42163709155a807d8d8974bd1cee151680a02",
+      "unchanged": true
+    },
+    {
+      "name": "fail",
+      "sha256": "f56fc613b4d4e4e876835f60583c22494c86241c8206c1db606d749f9fcfecca",
+      "unchanged": true
+    },
+    {
+      "name": "kill_session",
+      "sha256": "d27728e843e4071fcd120c383768c6634aed39c19b0db80e7302373a0f52b7ca",
+      "unchanged": true
+    },
+    {
+      "name": "local_dep_path",
+      "sha256": "c283f41b4d748679c236b153cc854cca337656efee959994b2ea8e6790b671b4",
+      "unchanged": true
+    },
+    {
+      "name": "overlay_members",
+      "sha256": "80acf835ed9bcfcbfa1cf4e7e7525b7421d369328df1eeb5295a6a0e98d2dc4b",
+      "unchanged": true
+    },
+    {
+      "name": "package_roots",
+      "sha256": "d0b2255d9f6da03ccca59239541c2d729c67273f36ac543227fe57314cfef1bf",
+      "unchanged": true
+    },
+    {
+      "name": "parse_depinfo",
+      "sha256": "5bb60254cdd303a16c88377a9663aa42c6eb78c9aeb51d2cccd582a5d42cb149",
+      "unchanged": true
+    },
+    {
+      "name": "private_git",
+      "sha256": "5373b90f9a09a5f1b8914018e17057e8de91b2aaef4ee9b4e30304800cd7b69a",
+      "unchanged": true
+    },
+    {
+      "name": "read_json",
+      "sha256": "503dbf16d55455a7c5756e49d22059fb01b242803e6e945af2500feed2f9ecf0",
+      "unchanged": true
+    },
+    {
+      "name": "run",
+      "sha256": "0d11e9f301fd0bec709de9de8c081c7713905aeb49c3e6a5c0ba7431e95fe6ac",
+      "unchanged": true
+    },
+    {
+      "name": "safe_path",
+      "sha256": "038646767e560962ddc5512249a95e6e8477c3c719a478ad856c575f4665aa7a",
+      "unchanged": true
+    },
+    {
+      "name": "session_rss",
+      "sha256": "584b9e1675d361589bdc30b05ee0aa35f49e84d49600e15a358682d9ab04a65d",
+      "unchanged": true
+    },
+    {
+      "name": "setup_toolchain",
+      "sha256": "b4db3ee797247e1e9a7eeefe09174e428cc67a26bc3f0aee8aaea387c3695e41",
+      "unchanged": true
+    },
+    {
+      "name": "sha",
+      "sha256": "4e627faf4b903521e935f7c6f3ae93545856f821d0e2565ba7ea6cf97d3d0e6c",
+      "unchanged": true
+    },
+    {
+      "name": "size",
+      "sha256": "ef34a5b58f2ba20fdbb671aa6777798373194082d88c7ae008aa806bcff15f0b",
+      "unchanged": true
+    },
+    {
+      "name": "validate_env_dep",
+      "sha256": "03ffcfae022ac87b8ed383312167023a249582e9eda6c21999446cd8fcd4353d",
+      "unchanged": true
+    },
+    {
+      "name": "validate_tree_preservation",
+      "sha256": "f5c27bbcb8c288114f47d920dcec965b7c3b05fbfc23aad5ab5704a039c9c828",
+      "unchanged": true
+    },
+    {
+      "name": "verify_depinfo",
+      "sha256": "7466e28b5fc64da88753b3c763b1f596b3c42460c898be603030574c7abee147",
+      "unchanged": true
+    },
+    {
+      "name": "verify_record",
+      "sha256": "4e4e7fd4421b55505e3ad8fffae0f859ba6acad37f9b19ad1bf23b53cc841c40",
+      "unchanged": true
+    },
+    {
+      "name": "verify_workflows",
+      "sha256": "651782cfc95ea9917e18d57a590960bb65b446f0ca63e40e89ade035a839464c",
+      "unchanged": true
+    }
+  ]
+}
