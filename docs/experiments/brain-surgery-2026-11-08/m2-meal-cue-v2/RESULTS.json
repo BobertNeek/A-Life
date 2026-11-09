@@ -1,0 +1,208 @@
+{
+  "schema": "m2-meal-cue-v2-and-play-qualification-results-v1",
+  "accepted_main": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "meal_cue_v2": {
+    "prepared_head": "675524c3c8b337d5a9aaa56931ad4bad8b05ba30",
+    "activation_head": "33ca9b185df65a965d1c5ea3d2120434142a615f",
+    "prepared_tree": "d6cc5b3d1f30dc7e898d5df97cf253c98fd7378d",
+    "source_manifest_sha256": "7d41aa405f2f7f6641cedce7eb49e52056cca1071e132f760d32df0c02cab8b1",
+    "seal_sha256": "1fb5298eb6c6e7bc0c81eb77f4b4dda9da9ec5e5cd413a4e9e335479eaed5563",
+    "run": 42684279232,
+    "job": 129386782335,
+    "url": "https://github.com/BobertNeek/A-Life/actions/runs/42684279232/job/129386782335",
+    "sanitized_summary": {
+      "code": "OK",
+      "diagnostics": [],
+      "peak_rss_bytes": 1729368064,
+      "peak_workspace_bytes": 1842316071,
+      "plan_id": "m2-graded-eat-kinematics-v2",
+      "planned_dose_not_claimed_before_success": {
+        "extra_detached_forwards": 0,
+        "preparation_ticks": 240,
+        "recipes": 1,
+        "registered_intervals": 2
+      },
+      "private_output_counted_bytes": 448672,
+      "result": {
+        "actual_acquired_then_consumed": true,
+        "actual_counter_deltas_verified_by_fixed_assertions": {
+          "body_age_ticks": 2,
+          "dispatch_generation": 2,
+          "next_sequence": 2,
+          "replay_records": 2,
+          "world_tick": 2
+        },
+        "future_consumption": "Unknown",
+        "future_grip": "Unknown",
+        "graded": {
+          "future_consumption": "Unknown",
+          "graded_joint_value": null,
+          "reason_report": {
+            "future_consumption": "Unknown",
+            "future_grip": "Unknown",
+            "query_capture_rejected": false,
+            "query_capture_success": true,
+            "records": [
+              {
+                "capture_rejected": false,
+                "frame_budget_bytes": 32768,
+                "original_self_match": true,
+                "pair_match": false,
+                "pair_rejections": [
+                  "Locomotion:physical_command_fields",
+                  "Locomotion:relative_geometry_lane:5",
+                  "Manipulation:color",
+                  "Manipulation:temperature",
+                  "Manipulation:terrain",
+                  "Manipulation:relative_geometry_lane:0",
+                  "Manipulation:relative_geometry_lane:1",
+                  "Manipulation:relative_geometry_lane:2",
+                  "Manipulation:relative_geometry_lane:5",
+                  "Manipulation:contact_difference",
+                  "Posture:relative_geometry_lane:5"
+                ],
+                "rebuild_capture_success": true,
+                "sequence": 1,
+                "signed_joint_valence": -0.000762551324442029,
+                "source_consumed": false,
+                "source_frame_bytes": 18332,
+                "stored_capture_success": true,
+                "witness_retained": true
+              },
+              {
+                "capture_rejected": false,
+                "frame_budget_bytes": 32768,
+                "original_self_match": true,
+                "pair_match": false,
+                "pair_rejections": [
+                  "Manipulation:color",
+                  "Manipulation:temperature",
+                  "Manipulation:terrain",
+                  "Manipulation:relative_geometry_lane:0",
+                  "Manipulation:relative_geometry_lane:1",
+                  "Manipulation:relative_geometry_lane:3"
+                ],
+                "rebuild_capture_success": true,
+                "sequence": 2,
+                "signed_joint_valence": 0.080368772149086,
+                "source_consumed": true,
+                "source_frame_bytes": 19233,
+                "stored_capture_success": true,
+                "witness_retained": true
+              }
+            ]
+          }
+        },
+        "historical_query": {
+          "candidate_present": true,
+          "exact_sequences": null,
+          "query_error_present": false,
+          "strict_joint_value": null,
+          "strict_meal_matched": false,
+          "strict_sequences": null
+        },
+        "meal_v2": {
+          "cold_readouts_equal": true,
+          "comparison": "matched-engineering-regression-not-held-out",
+          "future_consumption": "Unknown",
+          "future_grip": "Unknown",
+          "schema": "meal-kinematic-matched-readouts-v2",
+          "sources": [
+            {
+              "sequence": 1,
+              "signed_joint_valence": -0.000762551324442029,
+              "source_consumed": false,
+              "v1_graded_weight": null,
+              "v2_meal_weight": null
+            },
+            {
+              "sequence": 2,
+              "signed_joint_valence": 0.080368772149086,
+              "source_consumed": true,
+              "v1_graded_weight": null,
+              "v2_meal_weight": 0.6665449738502502
+            }
+          ],
+          "v1_graded_joint_value": null,
+          "v1_v2_cross_load_rejected": true,
+          "v2_meal_joint_value": 0.053569402545690536
+        }
+      },
+      "schema": "graded-cue-hosted-reason-summary-v1",
+      "stage": "complete",
+      "test_processes_attempted": 1
+    },
+    "interpretation": "A matched, known scripted experience supports a positive detached historical-frame association for another root. This is not a subsequent policy opportunity, alternate future, autonomous learning, held-out generalization or isolated Eat causality."
+  },
+  "play_v4": {
+    "prepared_head": "1784c69f96393cfbdfb65c73dc7ffaf235dcbbaf",
+    "activation_head": "84cd5c294cbef5ed04f12bf349aa0f9f22b1db57",
+    "prepared_tree": "4390c04544c2f00053f000c7fcea80a990e9797d",
+    "source_manifest_sha256": "c7523f51c70ad914be064df540b50217cfe5c1f2930067a7a47d3149e3237b07",
+    "seal_sha256": "363cd214f6f146fc3780ca3024c8eca17cf670301bbdc71f7a721fd70950cee6",
+    "run": 42683988417,
+    "job": 129385766515,
+    "url": "https://github.com/BobertNeek/A-Life/actions/runs/42683988417/job/129385766515",
+    "sanitized_summary": {
+      "activation_head": "84cd5c294cbef5ed04f12bf349aa0f9f22b1db57",
+      "code": "CHECK",
+      "completed": [
+        "original60-probe-build",
+        "owned76-probe-build"
+      ],
+      "counted_private_output_bytes": 695564,
+      "diagnostics": [
+        {
+          "code": "E0284",
+          "line": 276,
+          "path": "crates/alife_training/src/cpu/optional_vocal_host_tests.rs",
+          "stage": "owned76-test-build"
+        },
+        {
+          "code": "E0284",
+          "line": 323,
+          "path": "crates/alife_training/src/cpu/optional_vocal_host_tests.rs",
+          "stage": "owned76-test-build"
+        },
+        {
+          "code": "E0284",
+          "line": 331,
+          "path": "crates/alife_training/src/cpu/optional_vocal_host_tests.rs",
+          "stage": "owned76-test-build"
+        }
+      ],
+      "elapsed_seconds": 428,
+      "executable_sha256": {
+        "original60-probe-build": "9735a2edd58a13e0c09bbf44a93d330f122aaceeab60d654aebd3f31a1045674",
+        "owned76-probe-build": "127137dd3cea889535e93c4855ddad8389451222267943d9fa06536ea52d0cdc"
+      },
+      "peak_rss_bytes": 1657487360,
+      "peak_workspace_bytes": 3177998422,
+      "plan_id": "m2-play-hosted-qualification-v4",
+      "planned_not_observed_dose": {
+        "fresh_world_constructions": 39,
+        "host_step_attempts": 20,
+        "primitive_dendritic_activation_calls": 64,
+        "primitive_neuron_step_calls": 2048,
+        "probes": 2,
+        "recipe_preparations": 13,
+        "registered_physical_biology_transactions_upper_bound": 17,
+        "rejected_host_steps": 4,
+        "source_forwards_upper_bound": 28,
+        "standalone_speech_attempts": 3,
+        "successful_path_host_steps": 16,
+        "tests": 17
+      },
+      "prepared_head": "1784c69f96393cfbdfb65c73dc7ffaf235dcbbaf",
+      "probe_processes_attempted": 0,
+      "probe_results": [],
+      "schema": "m2-play-qualification-summary-v1",
+      "seal_sha256": "363cd214f6f146fc3780ca3024c8eca17cf670301bbdc71f7a721fd70950cee6",
+      "source_manifest_sha256": "c7523f51c70ad914be064df540b50217cfe5c1f2930067a7a47d3149e3237b07",
+      "stage": "owned76-test-build",
+      "test_processes_attempted": 0,
+      "test_results": []
+    },
+    "interpretation": "Both production probe binaries compiled; test-only const-generic inference failed before any fixture/probe/world execution."
+  }
+}
