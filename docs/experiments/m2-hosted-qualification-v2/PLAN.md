@@ -1,19 +1,28 @@
-# Bounded hosted M2 qualification, standard-toolchain V3
+# Bounded hosted M2 qualification, pretty-list and private-channel-key V4
 
-Status: V3 is source-only, not published or activated. Local native compilation
-and fixture execution remain prohibited in this preparation. V2 is terminal:
-run 42575100065, head 2092ccfc919c3ddfef4ac1cd645700f70d5d5ab1, both jobs
-TOOLCHAIN, zero builds/cases. Its branch/marker/run are untouched; no rerun or
-marker reuse. The original installation-versus-query cause is UNKNOWN because
-raw installer stderr was not retained. V3 removes fragile fresh-home/shim
-assumptions using the audited standard official setup recipe, not a proven
-causal diagnosis. Existing checkouts, targets, acquired state and active studies
-were not modified. This is a fixed disposable fixture packet, not a life study.
-Only boredom V2 and world-reflex are eligible. GDS and meal remain disabled.
-Meal has since qualified locally at b78561488f72dfbd27e69b530f391831628ce0de
-with an ownership-bound V2 outer host. The unchanged bc2cc5dc meal source retained
-here is historical only, has a supported extraction downgrade gap, and is NOT
-current qualified source or an automatically eligible fallback.
+Status: V4 is a distinct source-only correction, not published, activated,
+natively compiled or fixture-qualified. V3 is terminal: run 42578269916 at
+c3bf62432ecefd2ec22c8a586013f84dcd4ff548. Both official toolchain setup stages
+passed. Boredom compiled, then failed LIST_PROTOCOL while listing training tests.
+Reflex failed BUILD with E0624 at recovery_reflex.rs 224:32 and 230:32. Both
+completed zero fixtures. Sanitized receipts and attribution are retained in
+V3-RESULTS.json. No V3 rerun, marker reuse or branch modification is permitted.
+
+The proven V3 setup adapter is unchanged. The two libtest listing commands now
+request `--format pretty`, which emits the required footer. The unique-name,
+count/footer parser is unchanged and still rejects footerless terse output.
+Reflex now uses one local private comparison-key helper at the two previously
+inaccessible core-method calls. It exactly maps all 261 public enum values;
+no public core API, cast, channel, guard, physical policy or test-body change.
+Boredom Rust, all fixed fixture names/bytes and call bounds stay unchanged.
+Only boredom (6) and reflex (22) are eligible; meal/GDS stay disabled.
+
+Earlier V2 run 42575100065 remains terminal with zero builds/cases and unknown
+setup failure cause. Its raw stderr was not retained. V1/V2/V3 source packets,
+seals and archives remain preserved. Existing checkouts, targets, acquired state
+and active studies were not modified. Meal's old bc source in this inherited
+packet is historical, not its current qualified ownership-bound V2 host at
+b78561488f72dfbd27e69b530f391831628ce0de, and cannot be activated here.
 
 ## Reconstruction result
 
@@ -74,9 +83,15 @@ packet. No opaque binary fixture exception is needed.
   `7e4f7e94daeb39b68df7761e8e3c7dc0b2e822e7aa882f524391702f0fe73e2f`.
   No meal or GDS code is composed into it. Full/readout-sham and DriveSham remain
   different labels; the extra pair is detached Profile5 Play arithmetic.
-- Recovery/reflex world: fbf plus the 74,202-byte five-source-file patch with
-  SHA-256 `3bd0e0d55eaa531caaf661b629326d9a622e26c001eb999d4b598d07f66158f5`.
-  World API/evidence candidate only; M2 host integration remains absent.
+- Recovery/reflex world: fbf plus the corrected 74,744-byte five-source-file patch
+  with SHA-256 `d83677117de9e27e696e7f8ea7a495381e14f268b1e67fe74b7779998fded6b4`.
+  The original 74,202-byte E0624-producing patch remains preserved, SHA-256
+  `3bd0e0d55eaa531caaf661b629326d9a622e26c001eb999d4b598d07f66158f5`.
+  Only recovery_reflex.rs changes between them: one private match helper and two
+  call replacements. The other four source files, including all 22 tests, are
+  identical. `reflex-key-v2/` holds the finite source witness and incremental
+  patch. World API/evidence candidate only; no M2 host integration or native
+  qualification is claimed for this corrected revision.
 - GDS fallback only: fbf → qualified GDE1
   `2f2cd592ef7a05d199dd1bc3353afdd7f49bcee7` → GDS runtime
   `2a36370f6734f31d8637f8931dacff0e8e6efbea`. The FULL witness-only comparison
@@ -152,46 +167,47 @@ Missing expected sleep/consumption/continuation events fail the declared case.
 
 ## Minimal hosted publication shape
 
-V3 branch: `qualification/m2-fixed-fixtures-v3`, created from the already verified
-marker-free prepared head `8e039f5b0a282b741cdd73cc06934c57825ac060`. Inherit
-all 34 exact V2 files. `UPDATE.json` is the narrow publication map: changed/new
-UTF-8 files only, with expected old Git blob SHA-1 values (null means absent).
-Do not republish unchanged source patches or bindings. Stored corpus paths stay
-under `docs/experiments/m2-hosted-qualification-v2/` on the V3 branch to permit
-that inheritance. Only orchestration/report files at those paths change on V3.
-This does not modify the V2 branch or its historical marker/run.
+V4 branch: `qualification/m2-fixed-fixtures-v4`, created from the verified V3
+PREPARED head `dcace9456304e58e442a7423f934102eac1f4323`, where both prior
+marker paths are absent. Do not base it on the activated V3 head. UPDATE.json
+contains only changed/new UTF-8 paths and expected old Git blob SHA-1 values.
+Do not republish unchanged closure parts or other source variants. The inherited
+corpus remains under `docs/experiments/m2-hosted-qualification-v2/` on V4; edits
+there on the new branch do not mutate V2/V3 history.
 
-New workflow: `.github/workflows/m2-fixed-fixtures-v3.yml`.
-New activation marker: `docs/experiments/m2-hosted-qualification-v3/ACTIVATE.json`.
-New plan and concurrency identity: `m2-fixed-fixtures-v3`.
-The V3 template is published at the V3 folder; the V2 template stays historical.
-There is no actual marker in this packet. The inherited V2 workflow is left
-byte-identical, requires the V2 branch, and cannot activate on a V3 push.
-All 15 other inherited workflow blobs match the previous audit and remain
-ineligible for this branch. No PR is opened: unfiltered PR CI and Jules would
-otherwise run. No old study, workflow_dispatch, credential, secret, cache action,
-write permission or optional-review wait is introduced.
+New workflow: `.github/workflows/m2-fixed-fixtures-v4.yml`.
+New marker: `docs/experiments/m2-hosted-qualification-v4/ACTIVATE.json`.
+New plan/concurrency/work directory identity: `m2-fixed-fixtures-v4`.
+The V4 template is inert; no actual activation marker is included. Inherited
+V2 and V3 workflows retain their exact bytes and require their respective
+branches, so neither can activate on V4. All 15 other inherited workflows are
+also branch-ineligible. The prepared remote inventory and blob hashes are
+recorded in TRIGGER-AUDIT.json. No PR, old study, secret, write permission,
+workflow_dispatch, credential expansion or optional-review wait is introduced.
 
-Publish only the update while both activation marker paths remain absent.
-Verify every new expected blob, the prepared head, unchanged corpus, workflow
-inventory and run ledger. Then, if authorized by the parent, create one NEW
-marker-add commit at the V3 path on the existing V3 branch, using its verified
-prepared head and V3 seal. The parent owns publication/activation. The external
-connection must produce a normal existing-branch push; neither REST ref creation
-nor a workflow GITHUB_TOKEN push is assumed to trigger it. Do not force, merge,
-reuse the V2 marker, or retry an uncertain activation. Inspect the exact-head run
-ledger first. At most two distinct fixed jobs, fail-fast false, no retries.
+Parent publishes the minimal UPDATE, then verifies every blob, new prepared
+head, marker absence, all workflow filters and V4 run ledger. Only after review
+may the parent add one NEW V4 marker at the new path in a single normal commit
+push. It binds that prepared head, main, V4 seal, unchanged fixture list and only
+boredom/reflex. No REST-ref-creation assumption, workflow-token-trigger
+assumption, force push, merge, manual rerun or old marker reuse is allowed.
+Reconcile uncertain outcomes before another write. At most two separate jobs,
+maximum parallelism two, fail-fast false, no retries. No publication or native
+work was performed during this source preparation.
 
-Both the setup step and native runner independently verify the sealed packet,
-repo/ref/event/run_attempt, single parent and exactly one added marker. Setup is
-a separate preceding workflow step: it admits the marker and installs/validates
-the toolchain but never builds or invokes a fixture. The subsequent private
-runner reconstructs the identical source and rediscovers/revalidates the same
-official compiler, without another install command. A failed setup prevents it.
+Both setup and native entrypoints retain the existing strict seal/marker,
+repo/ref/event/run_attempt, single-parent and single-added-marker admission.
+The setup adapter's code is byte-identical to proven V3. Apart from V4 identities,
+the ONLY runner edits are the two listing format strings, terse to pretty.
+The parser remains byte-identical. Exact listing returns the selected name plus
+its count/footer; ignored listing returns the unchanged exact ignored inventory
+plus its count/footer. No empty-list, duplicate, count mismatch, unknown ignored
+test or footerless fallback has been added. Synthetic tests evaluate the actual
+two runner command expressions and bind the pretty choice.
 
 ## Standard official toolchain with private setup output
 
-The repository already uses `dtolnay/rust-toolchain@stable` in CI. We verified
+Both V3 setup jobs passed with this adapter. The repository already uses `dtolnay/rust-toolchain@stable` in CI. We verified
 its official signed commit `b725eda525362e7cf34af9a7243cac1e3f01a7ec` and
 vendored its exact 7,481-byte public action.yml as provenance, hash-bound by the
 seal. This adapter follows its audited command:
@@ -202,7 +218,7 @@ It is NOT an unmodified composite action invocation. The official action uses
 `tee` on arbitrary installer output. This small adapter captures stdout/stderr
 privately instead, omits checksum retries, default mutation and rustup bootstrap,
 and requests no additional components or targets. Missing platform rustup
-fails at the specific discovery stage. This change does not prove why V2 failed.
+fails at the specific discovery stage. V3 proved this setup path works, without establishing the hidden cause of V2 failure.
 
 Installation uses the existing normal hosted HOME and discovered rustup home,
 with official Rust download endpoints, before the private native runner. Cargo
@@ -234,8 +250,9 @@ or native invocation occurs while preparing this packet.
 Permissions remain `contents: read`; checkout is pinned and credentials are not
 persisted. Cargo uses the exact lockfile and well-known crates.io registry. No
 new persistent access, source replacement, git dependency or native output
-artifact is introduced. The selected training/world library commands and all
-Rust patches, fixture lists, ignored inventory and call bounds are unchanged.
+artifact is introduced. The selected library build commands, setup functions, fixture lists, ignored
+inventory and call bounds are unchanged. Only the two listing format arguments
+and reflex private-key source correction differ, as documented above.
 
 ## Output and failure contract
 
