@@ -1,0 +1,116 @@
+{
+  "schema": "m2-graded-cue-hosted-reason-evidence-v1",
+  "repository": "BobertNeek/A-Life",
+  "accepted_main": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "prepared_commit": "85f5a17e6ae0e375b11400a44fb5a1fae4276330",
+  "activation_commit": "f68c4f8ed01ce0d057bc9343d1bc50ddf7695ad4",
+  "prepared_tree": "6f814102d18e8a4be42ad126061e08636787f6eb",
+  "seal_sha256": "02d0e16efb70a53910758e2d1dd5495c83b1a7c1a253c4db3ac343ea3d4c2c93",
+  "source_manifest_sha256": "c0321462297d23743d4da1e32d6cce141ac9396bc73a9807fce3252e8c5b2f1e",
+  "run_id": 42679606475,
+  "job_id": 129370262901,
+  "job_url": "https://github.com/BobertNeek/A-Life/actions/runs/42679606475/job/129370262901",
+  "sanitized_hosted_summary": {
+    "code": "OK",
+    "diagnostics": [],
+    "peak_rss_bytes": 1732001792,
+    "peak_workspace_bytes": 1841900966,
+    "plan_id": "m2-graded-cue-hosted-reason-v1",
+    "planned_dose_not_claimed_before_success": {
+      "extra_detached_forwards": 0,
+      "preparation_ticks": 240,
+      "recipes": 1,
+      "registered_intervals": 2
+    },
+    "private_output_counted_bytes": 452481,
+    "result": {
+      "actual_acquired_then_consumed": true,
+      "actual_counter_deltas_verified_by_fixed_assertions": {
+        "body_age_ticks": 2,
+        "dispatch_generation": 2,
+        "next_sequence": 2,
+        "replay_records": 2,
+        "world_tick": 2
+      },
+      "future_consumption": "Unknown",
+      "future_grip": "Unknown",
+      "graded": {
+        "future_consumption": "Unknown",
+        "graded_joint_value": null,
+        "reason_report": {
+          "future_consumption": "Unknown",
+          "future_grip": "Unknown",
+          "query_capture_rejected": false,
+          "query_capture_success": true,
+          "records": [
+            {
+              "capture_rejected": false,
+              "frame_budget_bytes": 32768,
+              "original_self_match": true,
+              "pair_match": false,
+              "pair_rejections": [
+                "Locomotion:physical_command_fields",
+                "Locomotion:relative_geometry_lane:5",
+                "Manipulation:color",
+                "Manipulation:temperature",
+                "Manipulation:terrain",
+                "Manipulation:relative_geometry_lane:0",
+                "Manipulation:relative_geometry_lane:1",
+                "Manipulation:relative_geometry_lane:2",
+                "Manipulation:relative_geometry_lane:5",
+                "Manipulation:contact_difference",
+                "Posture:relative_geometry_lane:5"
+              ],
+              "rebuild_capture_success": true,
+              "sequence": 1,
+              "signed_joint_valence": -0.000762551324442029,
+              "source_consumed": false,
+              "source_frame_bytes": 18332,
+              "stored_capture_success": true,
+              "witness_retained": true
+            },
+            {
+              "capture_rejected": false,
+              "frame_budget_bytes": 32768,
+              "original_self_match": true,
+              "pair_match": false,
+              "pair_rejections": [
+                "Manipulation:color",
+                "Manipulation:temperature",
+                "Manipulation:terrain",
+                "Manipulation:relative_geometry_lane:0",
+                "Manipulation:relative_geometry_lane:1",
+                "Manipulation:relative_geometry_lane:3"
+              ],
+              "rebuild_capture_success": true,
+              "sequence": 2,
+              "signed_joint_valence": 0.080368772149086,
+              "source_consumed": true,
+              "source_frame_bytes": 19233,
+              "stored_capture_success": true,
+              "witness_retained": true
+            }
+          ]
+        }
+      },
+      "historical_query": {
+        "candidate_present": true,
+        "exact_sequences": null,
+        "query_error_present": false,
+        "strict_joint_value": null,
+        "strict_meal_matched": false,
+        "strict_sequences": null
+      }
+    },
+    "schema": "graded-cue-hosted-reason-summary-v1",
+    "stage": "complete",
+    "test_processes_attempted": 1
+  },
+  "interpretation": [
+    "Both source frames were retained below the32KiB cap, captured successfully, and matched themselves.",
+    "Actual second-root query was present and captured without error; exact, strict and graded recall were all MISS.",
+    "For the consumed source, graded hard rejection remains relative-velocity lane3; color/temperature/terrain are attenuated rather than rejected by the graded law.",
+    "This is one scripted acquisition/consumption diagnostic, not learned generalization, future policy behavior or isolated Eat causality.",
+    "The inherited baseline, previous source/evidence and all15 existing workflows remain unchanged."
+  ]
+}
