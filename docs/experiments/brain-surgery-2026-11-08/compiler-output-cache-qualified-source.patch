@@ -1,0 +1,1152 @@
+--- /dev/null
++++ b/crates/alife_training/src/cpu/grouped_host_cache_tests.rs
+@@ -0,0 +1,250 @@
++//! Candidate-only tests; no run has been authorized by adding this source.
++use super::*;
++use sha2::{Digest, Sha256};
++
++fn clear(host: &mut CpuGroupedM2HostV1) {
++    for resident in host.host.residents.values_mut() {
++        resident
++            .grouped
++            .as_mut()
++            .unwrap()
++            .motor
++            .clear_validation_cache();
++    }
++}
++fn all_warm(host: &CpuGroupedM2HostV1) -> bool {
++    host.host.residents.values().all(|resident| {
++        resident
++            .grouped
++            .as_ref()
++            .unwrap()
++            .motor
++            .validation_cache_is_warm()
++    })
++}
++fn witness(wire: &[u8], len: usize, sha: &str) {
++    assert_eq!(wire.len(), len);
++    assert_eq!(format!("{:x}", Sha256::digest(wire)), sha);
++}
++fn decision_bytes(step: &CpuGroupedM2HostStepV1) -> Vec<u8> {
++    bytes(&(
++        step.tick_before,
++        step.tick_after,
++        step.sleeping_organisms,
++        step.sleep_consolidations,
++        step.decisions
++            .iter()
++            .map(|d| {
++                (
++                    d.organism_id,
++                    &d.action,
++                    d.sampling_counter,
++                    &d.source_diagnostic_logits,
++                    &d.biological_emissions,
++                    &d.brain_work,
++                    &d.patch,
++                    &d.motor,
++                    &d.physical,
++                    d.sleep_phase,
++                    d.sleep_trigger,
++                )
++            })
++            .collect::<Vec<_>>(),
++    ))
++}
++
++#[test]
++fn grouped_cache_exact_five_file_baseline_witness_and_restore_counts() {
++    let start = GroupedMotorStateV1::validation_compile_count();
++    let (mut host, inputs) = fixture(240);
++    assert!(all_warm(&host));
++    assert_eq!(GroupedMotorStateV1::validation_compile_count(), start + 1);
++    let initial = host.checkpoint().unwrap().encode().unwrap();
++    witness(
++        &initial,
++        2_253_590,
++        "fe6385e4406ce7e99cbc992d4fbde3d44805835992ea9ad07c02a2c3dc6b8594",
++    );
++    let expected = [
++        (
++            51_263,
++            "516d1776531106ba2368242894b1816799e41a84d2e0d54cbbe2c019632e131e",
++            2_375_809,
++            "25b61a7550b424a8391c12960ce3b77a3c22b8ad5013cfe2daf8608bce6e56cf",
++        ),
++        (
++            53_031,
++            "f8f48d90074f7463c96787074b0b4ac66c814153b70f5dbcc5e16845ffa36275",
++            2_383_183,
++            "cde1d9c9a853402a9af2cf955b359c6d24c3ef34fed7926cd917b0e1f2e30d5c",
++        ),
++    ];
++    let mut total = initial.len();
++    for (index, temperature) in [0.73_f32, 1.17].into_iter().enumerate() {
++        let count = GroupedMotorStateV1::validation_compile_count();
++        let step = host.step(temperature).unwrap();
++        let decision = decision_bytes(&step);
++        let checkpoint = host.checkpoint().unwrap();
++        let wire = checkpoint.encode().unwrap();
++        let (decision_len, decision_sha, wire_len, wire_sha) = expected[index];
++        witness(&decision, decision_len, decision_sha);
++        witness(&wire, wire_len, wire_sha);
++        total += decision.len() + wire.len();
++        assert_eq!(GroupedMotorStateV1::validation_compile_count(), count);
++        let decoded = decode_exact(&checkpoint);
++        assert!(decoded
++            .payload
++            .controllers
++            .values()
++            .all(|c| !c.motor.validation_cache_is_warm()));
++        for candidate in [checkpoint, decoded] {
++            let before = GroupedMotorStateV1::validation_compile_count();
++            let restored =
++                CpuGroupedM2HostV1::restore(candidate, &inputs, MediationModeV1::Full).unwrap();
++            assert!(all_warm(&restored));
++            assert_eq!(GroupedMotorStateV1::validation_compile_count(), before + 1);
++            assert_eq!(restored.checkpoint().unwrap().encode().unwrap(), wire);
++            assert_eq!(GroupedMotorStateV1::validation_compile_count(), before + 1);
++        }
++    }
++    assert_eq!(total, 7_116_876);
++}
++
++#[test]
++fn grouped_cache_seals_nonzero_banks_body_and_rollback_are_unchanged() {
++    let (mut host, inputs) = fixture(240);
++    host.step(0.73).unwrap();
++    inject_frozen_sentinels(&mut host);
++    let acquired = frozen(&host);
++    let original = host.checkpoint().unwrap();
++    let wire = original.encode().unwrap();
++    let world = bytes(&original.payload.canonical.world);
++    let seals = host
++        .host
++        .residents
++        .values()
++        .map(|r| resident_digest(r, host.host.sampling_seed, host.host.sampling_counter).unwrap())
++        .collect::<Vec<_>>();
++    assert!(all_warm(&host));
++    clear(&mut host);
++    for (r, seal) in host.host.residents.values().zip(&seals) {
++        assert_eq!(
++            &resident_digest(r, host.host.sampling_seed, host.host.sampling_counter).unwrap(),
++            seal
++        );
++    }
++    let count = GroupedMotorStateV1::validation_compile_count();
++    let captured = host.checkpoint().unwrap();
++    assert_eq!(GroupedMotorStateV1::validation_compile_count(), count + 1);
++    assert_eq!(captured.encode().unwrap(), wire);
++    assert_eq!(bytes(&captured.payload.canonical.world), world);
++    assert_eq!(frozen(&host), acquired);
++    for empty in [false, true] {
++        if empty {
++            clear(&mut host);
++        }
++        assert!(host.step(f32::NAN).is_err());
++        assert_eq!(host.checkpoint().unwrap().encode().unwrap(), wire);
++        assert_eq!(frozen(&host), acquired);
++    }
++    let mut cold =
++        CpuGroupedM2HostV1::restore(decode_exact(&original), &inputs, MediationModeV1::Full)
++            .unwrap();
++    let a = host.step(0.73).unwrap();
++    let b = cold.step(0.73).unwrap();
++    assert_eq!(decision_bytes(&a), decision_bytes(&b));
++    assert_eq!(frozen(&host), acquired);
++    assert_eq!(frozen(&cold), acquired);
++    assert_eq!(
++        host.checkpoint().unwrap().encode().unwrap(),
++        cold.checkpoint().unwrap().encode().unwrap()
++    );
++}
++
++#[test]
++fn grouped_cache_does_not_authorize_changed_asset_receipt_or_float_mirror() {
++    let (mut host, inputs) = fixture(240);
++    host.step(0.73).unwrap();
++    let checkpoint = host.checkpoint().unwrap();
++    let mut forged: serde_json::Value =
++        serde_json::from_slice(&bytes(&checkpoint.payload)).unwrap();
++    let owner = checkpoint
++        .payload
++        .controllers
++        .keys()
++        .next()
++        .unwrap()
++        .to_string();
++    forged["controllers"][&owner]["motor"]["validation_cache"] = serde_json::json!({"warm": true});
++    let mut forged_wire = MAGIC.to_vec();
++    forged_wire.extend(bytes(&forged));
++    assert!(CpuGroupedM2HostCheckpointV1::decode(&forged_wire).is_err());
++    for empty in [false, true] {
++        for mutation in 0..3 {
++            let mut motor = checkpoint
++                .payload
++                .controllers
++                .values()
++                .next()
++                .unwrap()
++                .motor
++                .clone();
++            if empty {
++                motor.clear_validation_cache();
++            }
++            let receipt = motor.last_receipt.as_mut().unwrap();
++            match mutation {
++                0 => receipt.native.core.source_execution_count = 2,
++                1 => receipt.applied_body_energy_debit = f32::NAN,
++                _ => receipt.native.core.appended_activations[0] += 0.25,
++            }
++            assert!(motor.validate(host.founder.phenotype()).is_err());
++        }
++        let mut bad = checkpoint.clone();
++        if empty {
++            for controller in bad.payload.controllers.values_mut() {
++                controller.motor.clear_validation_cache();
++            }
++        }
++        let mut value: serde_json::Value =
++            serde_json::from_slice(&bytes(&bad.payload.source_asset)).unwrap();
++        value["weights"][0] = (value["weights"][0].as_f64().unwrap() + 0.25).into();
++        bad.payload.source_asset = serde_json::from_value(value).unwrap();
++        assert!(CpuGroupedM2HostV1::restore(bad, &inputs, MediationModeV1::Full).is_err());
++        let mut bad = checkpoint.clone();
++        if empty {
++            for controller in bad.payload.controllers.values_mut() {
++                controller.motor.clear_validation_cache();
++            }
++        }
++        *bad.payload
++            .sampler_bits
++            .values_mut()
++            .next()
++            .unwrap()
++            .group
++            .as_mut()
++            .unwrap() ^= 1;
++        assert!(CpuGroupedM2HostV1::restore(bad, &inputs, MediationModeV1::Full).is_err());
++    }
++}
++
++#[test]
++fn grouped_cache_empty_owner_cannot_export_pending_work() {
++    let (mut host, _) = fixture(240);
++    clear(&mut host);
++    assert!(host
++        .host
++        .grouped_step_inner(&host.founder, f32::NAN, &mut |draft, _| Ok(draft))
++        .is_err());
++    assert!(host
++        .host
++        .residents
++        .values()
++        .next()
++        .unwrap()
++        .neural
++        .checkpoint()
++        .is_err());
++    assert!(host.checkpoint().is_err());
++}
+--- a/crates/alife_training/src/cpu/grouped_host_envelope.rs
++++ b/crates/alife_training/src/cpu/grouped_host_envelope.rs
+@@ -684,7 +684,7 @@
+         expected_mode: MediationModeV1,
+     ) -> Result<Self, CpuHostError> {
+         let wire = checkpoint.encode()?;
+-        let c = checkpoint.payload;
++        let mut c = checkpoint.payload;
+         if c.sampler_bits != grouped_sampler_bits(&c.controllers) {
+             return Err(CpuHostError::State("grouped exact sampler bits differ"));
+         }
+@@ -701,6 +701,11 @@
+             return Err(CpuHostError::State(
+                 "grouped M2 source, controller, profile or policy mismatch",
+             ));
++        }
++        // Do not carry an in-process cache through public restore. The same
++        // full source/recipe admission applies to decoded and cloned payloads.
++        for controller in c.controllers.values_mut() {
++            controller.motor.clear_validation_cache();
+         }
+         let p = PhenotypeCompiler::compile_validated(
+             expected_source,
+--- a/crates/alife_training/src/cpu/grouped_host_tests.rs
++++ b/crates/alife_training/src/cpu/grouped_host_tests.rs
+@@ -372,7 +372,9 @@
+     let mut consolidated = 0;
+     let mut saw_waking = false;
+     for _ in 0..24 {
++        let compile_count = GroupedMotorStateV1::validation_compile_count();
+         let step = host.step(0.73).unwrap();
++        assert_eq!(GroupedMotorStateV1::validation_compile_count(), compile_count);
+         if saw_waking && !step.decisions.is_empty() {
+             resumed = true;
+         }
+@@ -443,9 +445,14 @@
+         assert!(frozen(&host) == before, "frozen source state changed");
+         let checkpoint = host.checkpoint().unwrap();
+         let wire = checkpoint.encode().unwrap();
++        let before_restore = GroupedMotorStateV1::validation_compile_count();
+         host =
+             CpuGroupedM2HostV1::restore(decode_exact(&checkpoint), &inputs, MediationModeV1::Full)
+                 .unwrap();
++        assert_eq!(
++            GroupedMotorStateV1::validation_compile_count(),
++            before_restore + 1
++        );
+         assert!(
+             host.checkpoint().unwrap().encode().unwrap() == wire,
+             "cold bytes differ"
+@@ -726,3 +733,6 @@
+ 
+ #[path = "grouped_host_food_tests.rs"]
+ mod food_tests;
++
++#[path = "grouped_host_cache_tests.rs"]
++mod validation_cache_tests;
+--- a/crates/alife_training/src/cpu/motor_mediation/confidence/host.rs
++++ b/crates/alife_training/src/cpu/motor_mediation/confidence/host.rs
+@@ -2,6 +2,10 @@
+ //! dendrites, synaptic parameters, optimizer, or detached owner live here.
+ use super::*;
+ use crate::cpu::replay::Tape;
++use std::sync::{Arc, OnceLock};
++#[path = "host_validation_cache.rs"]
++mod validation_cache;
++use validation_cache::CachedGroupedCompilation;
+ 
+ const HOST_SCHEMA: &str = "grouped-m2-host-appendage-v1-confidence-v2-learning-closed";
+ pub const GROUPED_HOST_WORK_POLICY_V1: &str =
+@@ -25,6 +29,10 @@
+     group_ema: [f32; 16],
+     group_metabolic: [f32; 16],
+     pub last_receipt: Option<GroupedMotorReceiptV1>,
++    // Process-local proof only. A decoded controller always starts empty; no
++    // cache identity, recipe object or counter enters bytes or authority seals.
++    #[serde(skip)]
++    validation_cache: OnceLock<Arc<CachedGroupedCompilation>>,
+ }
+ #[derive(Debug, Clone, Serialize, Deserialize)]
+ #[serde(deny_unknown_fields)]
+@@ -69,6 +77,7 @@
+             group_ema: [0.; 16],
+             group_metabolic: [0.; 16],
+             last_receipt: None,
++            validation_cache: OnceLock::new(),
+         };
+         state.validate(source)?;
+         Ok(state)
+@@ -76,30 +85,27 @@
+     pub(crate) fn matches(&self, inputs: &PhenotypeCompilerInputs, mode: MediationModeV1) -> bool {
+         self.source_inputs == *inputs && self.mode == mode
+     }
++    pub(crate) fn clear_validation_cache(&mut self) {
++        // Public restore is a trust boundary even for an in-process checkpoint
++        // clone. Its full validation must not inherit a prior admission proof.
++        self.validation_cache = OnceLock::new();
++    }
+     pub(crate) fn validate(&self, source: &BrainPhenotype) -> Result<(), TrainingError> {
+-        let expected = PhenotypeCompiler::compile_validated(
+-            &self.source_inputs,
+-            &BrainCapacityClass::n2048_grounded_drive_research(),
+-        )?;
+-        if self.schema != HOST_SCHEMA
+-            || self.work_policy != GROUPED_HOST_WORK_POLICY_V1
+-            || self.m2_recipe != M2_RECIPE_SHA256
+-            || self.group_recipe != RECOVERY_GROUP_CONFIDENCE_RECIPE_SHA256
+-            || self.mode == MediationModeV1::DirectSource
+-            || expected != *source
+-            || self.source_hash != source.phenotype_hash()
+-            || source.neuron_count() != 2048
+-            || source.synapses().len() != 34048
+-            || source.foundation_abi().motor_lobe_m0().is_some()
+-            || !source
+-                .candidate_decoder()
+-                .factorized_motor_channels(source)?
+-                .contains(&MotorChannel::Posture)
+-        {
+-            return Err(invalid());
+-        }
+-        Lowered::pinned(MANIFEST)?;
+-        Self::group_recipe()?;
++        self.validated(source).map(|_| ())
++    }
++    fn validated(
++        &self,
++        source: &BrainPhenotype,
++    ) -> Result<Arc<CachedGroupedCompilation>, TrainingError> {
++        let validated = match self.validation_cache.get() {
++            Some(validated) if validated.matches_inputs(&self.source_inputs) => Arc::clone(validated),
++            // A different exact identity is a cache miss, not evidence that the
++            // original validator would reject it. Keep its full accepted domain.
++            _ => Arc::new(CachedGroupedCompilation::compile(&self.source_inputs)?),
++        };
++        validated.validate_source(self, source)?;
++        // Every mutable bank and receipt check runs on every hit. Publish a
++        // completed immutable proof only after these checks also succeed.
+         for (bank, count, bounded) in [
+             (self.activations.as_slice(), ADDED, false),
+             (self.ema.as_slice(), ADDED, true),
+@@ -149,7 +155,19 @@
+             }
+             _ => return Err(invalid()),
+         }
+-        Ok(())
++        // A miss never replaces the owner's original immutable proof. A valid
++        // changed identity may keep taking the slow path until fresh admission.
++        // Concurrent empty-owner checks retain only one completed proof.
++        let _ = self.validation_cache.set(Arc::clone(&validated));
++        Ok(validated)
++    }
++    #[cfg(test)]
++    pub(crate) fn validation_compile_count() -> usize {
++        validation_cache::compile_count()
++    }
++    #[cfg(test)]
++    pub(crate) fn validation_cache_is_warm(&self) -> bool {
++        self.validation_cache.get().is_some()
+     }
+     fn group_recipe() -> Result<GroupRecipe, TrainingError> {
+         if format!("{:x}", Sha256::digest(GROUP_RECIPE.as_bytes()))
+@@ -218,7 +236,7 @@
+         effectors: [bool; 6],
+         attempt_mask: u32,
+     ) -> Result<Tape, TrainingError> {
+-        self.validate(source)?;
++        let validated = self.validated(source)?;
+         q.validate_for(source)?;
+         receptors.validate_contract()?;
+         if q.ticks.len() != 1
+@@ -307,9 +325,9 @@
+                 ]
+             })
+             .collect::<Vec<_>>();
+-        let recipe = Lowered::pinned(MANIFEST)?;
++        let recipe = &validated.core;
+         let mut core = run_partition_banks(
+-            &recipe,
++            recipe,
+             self.mode,
+             self.source_hash,
+             &mut next.activations,
+@@ -383,7 +401,7 @@
+                 * (cue(r, &virtual_candidate) * r.weight);
+         }
+         let (group, group_jac, operations, op_jac, pressure_jac) = extension_forward_banks(
+-            &Self::group_recipe()?,
++            &validated.group,
+             &mut next.group_activations,
+             &mut next.group_ema,
+             &mut next.group_metabolic,
+@@ -430,3 +448,7 @@
+ 
+ #[cfg(test)]
+ mod tests;
++
++#[cfg(test)]
++#[path = "host_validation_cache_tests.rs"]
++mod validation_cache_tests;
+--- /dev/null
++++ b/crates/alife_training/src/cpu/motor_mediation/confidence/host_validation_cache.rs
+@@ -0,0 +1,200 @@
++//! Source-only successor: cache compiler output, never source validation.
++use super::*;
++#[cfg(test)]
++use serde::ser::SerializeSeq;
++use std::io::{self, Write};
++
++// BrainGenome omits innate_priority when all genes compare equal to zero.
++// Include the raw genes so their -0 bits cannot disappear from the compiler
++// input key. Other skips reachable from admitted inputs are Options only.
++// The source phenotype is deliberately NOT a cache key or validation proof.
++pub(super) fn input_identity(inputs: &PhenotypeCompilerInputs) -> impl Serialize + '_ {
++    (inputs, &inputs.genome().innate_priority)
++}
++#[cfg(test)]
++struct DecoderGainBits<'a>(&'a [CandidateDecoderFamilyPlan]);
++#[cfg(test)]
++impl Serialize for DecoderGainBits<'_> {
++    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
++        let mut seq = serializer.serialize_seq(Some(self.0.len()))?;
++        for family in self.0 {
++            seq.serialize_element(&family.innate_gain().to_bits())?;
++        }
++        seq.end()
++    }
++}
++/// In-memory comparison encoding only, NOT the checkpoint wire format. Every
++/// finite float is emitted as a tagged exact IEEE bit string, including -0.
++/// No digest collision or PartialEq float equivalence can authorize a hit.
++/// Nonfinite values serialize as null and cannot match a validated float.
++struct FloatBits;
++impl serde_json::ser::Formatter for FloatBits {
++    fn write_f32<W: ?Sized + Write>(&mut self, out: &mut W, value: f32) -> io::Result<()> {
++        write!(out, "\"f32:{:08x}\"", value.to_bits())
++    }
++    fn write_f64<W: ?Sized + Write>(&mut self, out: &mut W, value: f64) -> io::Result<()> {
++        write!(out, "\"f64:{:016x}\"", value.to_bits())
++    }
++}
++
++pub(super) struct ExactIdentity(Vec<u8>);
++impl ExactIdentity {
++    pub(super) fn capture<T: Serialize>(value: &T) -> Result<Self, TrainingError> {
++        let mut bytes = Vec::new();
++        value
++            .serialize(&mut serde_json::Serializer::with_formatter(
++                &mut bytes, FloatBits,
++            ))
++            .map_err(|_| invalid())?;
++        Ok(Self(bytes))
++    }
++    pub(super) fn check<T: Serialize>(&self, value: &T) -> Result<(), TrainingError> {
++        let mut comparator = CompareBytes { remaining: &self.0 };
++        value
++            .serialize(&mut serde_json::Serializer::with_formatter(
++                &mut comparator,
++                FloatBits,
++            ))
++            .map_err(|_| invalid())?;
++        if !comparator.remaining.is_empty() {
++            return Err(invalid());
++        }
++        Ok(())
++    }
++}
++struct CompareBytes<'a> {
++    remaining: &'a [u8],
++}
++impl Write for CompareBytes<'_> {
++    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
++        self.remaining = self.remaining.strip_prefix(bytes).ok_or_else(|| {
++            io::Error::new(
++                io::ErrorKind::InvalidData,
++                "grouped immutable identity differs",
++            )
++        })?;
++        Ok(bytes.len())
++    }
++    fn flush(&mut self) -> io::Result<()> {
++        Ok(())
++    }
++}
++
++/// One immutable compiler output and pinned recipe set per controller. Only the
++/// compiler-input identity is memoized. Every call still compares the actual
++/// current source against the expected typed phenotype with the original guards.
++pub(super) struct CachedGroupedCompilation {
++    binding: ExactIdentity,
++    expected: BrainPhenotype,
++    pub(super) core: Lowered,
++    pub(super) group: GroupRecipe,
++}
++impl std::fmt::Debug for CachedGroupedCompilation {
++    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
++        f.debug_struct("CachedGroupedCompilation")
++            .field("binding_bytes", &self.binding.0.len())
++            .field("expected_neurons", &self.expected.neuron_count())
++            .field("expected_synapses", &self.expected.synapses().len())
++            .finish_non_exhaustive()
++    }
++}
++impl CachedGroupedCompilation {
++    pub(super) fn compile(inputs: &PhenotypeCompilerInputs) -> Result<Self, TrainingError> {
++        #[cfg(test)]
++        COMPILE_ATTEMPTS.with(|count| count.set(count.get() + 1));
++        let expected = PhenotypeCompiler::compile_validated(
++            inputs,
++            &BrainCapacityClass::n2048_grounded_drive_research(),
++        )?;
++        Ok(Self {
++            binding: ExactIdentity::capture(&input_identity(inputs))?,
++            expected,
++            core: Lowered::pinned(MANIFEST)?,
++            group: GroupedMotorStateV1::group_recipe()?,
++        })
++    }
++    pub(super) fn matches_inputs(&self, inputs: &PhenotypeCompilerInputs) -> bool {
++        self.binding.check(&input_identity(inputs)).is_ok()
++    }
++    pub(super) fn validate_source(
++        &self,
++        state: &GroupedMotorStateV1,
++        source: &BrainPhenotype,
++    ) -> Result<(), TrainingError> {
++        // This is the original direct source comparison and fixed admission,
++        // not a cached claim about the supplied phenotype. Signed-zero behavior
++        // remains the original contract. No full-source serialization is used.
++        if state.schema != HOST_SCHEMA
++            || state.work_policy != GROUPED_HOST_WORK_POLICY_V1
++            || state.m2_recipe != M2_RECIPE_SHA256
++            || state.group_recipe != RECOVERY_GROUP_CONFIDENCE_RECIPE_SHA256
++            || state.mode == MediationModeV1::DirectSource
++            || self.expected != *source
++            || state.source_hash != source.phenotype_hash()
++            || source.neuron_count() != 2048
++            || source.synapses().len() != 34048
++            || source.foundation_abi().motor_lobe_m0().is_some()
++            || !source
++                .candidate_decoder()
++                .factorized_motor_channels(source)?
++                .contains(&MotorChannel::Posture)
++        {
++            return Err(invalid());
++        }
++        Ok(())
++    }
++}
++
++#[cfg(test)]
++thread_local! {
++    // Test-thread local, counts only this cache's compiler calls, not other
++    // required admission/restore compilers. Never serialized or production.
++    static COMPILE_ATTEMPTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
++}
++#[cfg(test)]
++pub(super) fn compile_count() -> usize {
++    COMPILE_ATTEMPTS.with(std::cell::Cell::get)
++}
++
++#[cfg(test)]
++mod omitted_float_tests {
++    use super::*;
++
++    #[test]
++    fn grouped_cache_zero_omitting_genome_codec_keeps_raw_gene_bits() {
++        let mut positive = BrainGenome::scaffold(
++            0x4752_5031,
++            BrainCapacityClass::N2048_GROUNDED_DRIVE_RESEARCH_ID,
++        );
++        positive.innate_priority = Default::default();
++        let mut negative = positive.clone();
++        negative.innate_priority.reflex_strength = -0.0;
++        assert_eq!(positive, negative);
++        assert_eq!(
++            serde_json::to_vec(&positive).unwrap(),
++            serde_json::to_vec(&negative).unwrap()
++        );
++        let identity = ExactIdentity::capture(&(&positive, &positive.innate_priority)).unwrap();
++        assert!(identity
++            .check(&(&negative, &negative.innate_priority))
++            .is_err());
++    }
++
++    #[test]
++    fn grouped_cache_zero_omitting_family_codec_cannot_hide_gain_sign() {
++        let mut wire = serde_json::json!({
++            "family": CandidateActionFamily::Rest, "bias": 0.0,
++            "innate_gain": 0.0, "decoder_synapse_start": 0, "decoder_synapse_count": 0
++        });
++        let positive: CandidateDecoderFamilyPlan = serde_json::from_value(wire.clone()).unwrap();
++        wire["innate_gain"] = serde_json::json!(-0.0);
++        let negative: CandidateDecoderFamilyPlan = serde_json::from_value(wire).unwrap();
++        assert_eq!(positive, negative);
++        assert_eq!(
++            serde_json::to_vec(&positive).unwrap(),
++            serde_json::to_vec(&negative).unwrap()
++        );
++        let identity = ExactIdentity::capture(&DecoderGainBits(&[positive])).unwrap();
++        assert!(identity.check(&DecoderGainBits(&[negative])).is_err());
++    }
++}
+--- /dev/null
++++ b/crates/alife_training/src/cpu/motor_mediation/confidence/host_validation_cache_tests.rs
+@@ -0,0 +1,494 @@
++//! Source-only candidate tests. Fixed disposable fixtures, never retained life.
++use super::*;
++use validation_cache::{input_identity, ExactIdentity};
++
++#[test]
++fn grouped_cache_identity_distinguishes_exact_bits_and_complete_lengths() {
++    for bits in [0, 0x8000_0000, 1, 0x007f_ffff, 0x3f80_0000, 0x3f80_0001] {
++        let value = f32::from_bits(bits);
++        let identity = ExactIdentity::capture(&value).unwrap();
++        identity.check(&value).unwrap();
++        assert!(identity.check(&f32::from_bits(bits ^ 1)).is_err());
++        assert!(identity.check(&f32::NAN).is_err());
++        assert!(identity.check(&f32::INFINITY).is_err());
++    }
++    assert_eq!(0_f32, -0_f32); // PartialEq would accept this changed binding.
++    assert!(ExactIdentity::capture(&0_f32)
++        .unwrap()
++        .check(&-0_f32)
++        .is_err());
++    assert!(ExactIdentity::capture(&0_f64)
++        .unwrap()
++        .check(&-0_f64)
++        .is_err());
++    let identity = ExactIdentity::capture(&vec![1_u64, 2]).unwrap();
++    assert!(identity.check(&vec![1_u64]).is_err());
++    assert!(identity.check(&vec![1_u64, 2, 3]).is_err());
++    assert!(identity.check(&vec![2_u64, 1]).is_err());
++}
++
++#[test]
++fn grouped_cache_fresh_cold_clone_and_rejection_counts() {
++    let (inputs, _) = super::super::tests::source();
++    let capacity = BrainCapacityClass::n2048_grounded_drive_research();
++    let source = PhenotypeCompiler::compile_validated(&inputs, &capacity).unwrap();
++    let before = GroupedMotorStateV1::validation_compile_count();
++    let warm = GroupedMotorStateV1::fresh(&inputs, &source, MediationModeV1::Full).unwrap();
++    assert_eq!(GroupedMotorStateV1::validation_compile_count(), before + 1);
++    let wire = serde_json::to_vec(&warm).unwrap();
++    for _ in 0..3 {
++        warm.validate(&source).unwrap();
++    }
++    assert_eq!(GroupedMotorStateV1::validation_compile_count(), before + 1);
++    let clone = warm.clone();
++    assert!(Arc::ptr_eq(
++        warm.validation_cache.get().unwrap(),
++        clone.validation_cache.get().unwrap()
++    ));
++    clone.validate(&source.clone()).unwrap(); // No pointer-address shortcut.
++    assert_eq!(GroupedMotorStateV1::validation_compile_count(), before + 1);
++
++    let mut cold: GroupedMotorStateV1 = serde_json::from_slice(&wire).unwrap();
++    let empty_clone = cold.clone();
++    assert!(!cold.validation_cache_is_warm());
++    assert!(!empty_clone.validation_cache_is_warm());
++    assert_eq!(serde_json::to_vec(&cold).unwrap(), wire);
++    cold.validate(&source).unwrap();
++    cold.validate(&source).unwrap();
++    assert_eq!(GroupedMotorStateV1::validation_compile_count(), before + 2);
++    assert!(!empty_clone.validation_cache_is_warm());
++    assert!(!Arc::ptr_eq(
++        warm.validation_cache.get().unwrap(),
++        cold.validation_cache.get().unwrap()
++    ));
++    assert_eq!(serde_json::to_vec(&cold).unwrap(), wire);
++    cold.clear_validation_cache();
++    assert_eq!(serde_json::to_vec(&cold).unwrap(), wire);
++    cold.validate(&source).unwrap();
++    assert_eq!(GroupedMotorStateV1::validation_compile_count(), before + 3);
++
++    // Error results never poison or populate the cache, even if immutable
++    // reconstruction succeeded before a malformed dynamic bank was discovered.
++    let mut bad = empty_clone;
++    bad.ema[0] = f32::NAN;
++    assert!(bad.validate(&source).is_err());
++    assert!(!bad.validation_cache_is_warm());
++    bad.ema[0] = 0.;
++    bad.validate(&source).unwrap();
++    let accepted = GroupedMotorStateV1::validation_compile_count();
++    bad.validate(&source).unwrap();
++    assert_eq!(GroupedMotorStateV1::validation_compile_count(), accepted);
++
++    for mutation in 0..9 {
++        for drop_cache in [false, true] {
++            let mut bad = warm.clone();
++            if drop_cache {
++                bad.clear_validation_cache();
++            }
++            match mutation {
++                0 => bad.schema.push('!'),
++                1 => bad.work_policy.push('!'),
++                2 => bad.m2_recipe.push('!'),
++                3 => bad.group_recipe.push('!'),
++                4 => bad.source_hash.0[0] ^= 1,
++                5 => bad.mode = MediationModeV1::DirectSource,
++                6 => bad.activations.pop().map(|_| ()).unwrap(),
++                7 => bad.group_metabolic[0] = 1.01,
++                _ => bad.generation = 1, // No receipt at a nonzero generation.
++            }
++            assert!(
++                bad.validate(&source).is_err(),
++                "mutation {mutation}, cold {drop_cache}"
++            );
++            if drop_cache {
++                assert!(!bad.validation_cache_is_warm());
++            }
++        }
++    }
++
++    // A different valid compiler input is not authorized by an old hash label
++    // or an Arc copied from the original owner. No alternate seed is used.
++    let mut development = inputs.development().clone();
++    development.age_ticks = Tick::new(development.age_ticks.raw() + 1);
++    let changed = PhenotypeCompilerInputs::try_new_with_foundation_selection(
++        inputs.genome().clone(),
++        &capacity,
++        development,
++        inputs.sensor_profile(),
++        inputs.foundation_abi_selection().clone(),
++    )
++    .unwrap();
++    assert!(ExactIdentity::capture(&input_identity(&inputs))
++        .unwrap()
++        .check(&input_identity(&changed))
++        .is_err());
++    let other_source = PhenotypeCompiler::compile_validated(&changed, &capacity).unwrap();
++    // Audit witness for the legacy zero-omitting source codec. The successor
++    // does not use this codec as proof: original typed comparison runs each time.
++    let mut family = serde_json::to_value(source.candidate_decoder().families()[0]).unwrap();
++    family["innate_gain"] = serde_json::json!(0.0);
++    let positive: CandidateDecoderFamilyPlan = serde_json::from_value(family.clone()).unwrap();
++    family["innate_gain"] = serde_json::json!(-0.0);
++    let negative: CandidateDecoderFamilyPlan = serde_json::from_value(family).unwrap();
++    assert_eq!(
++        serde_json::to_vec(&positive).unwrap(),
++        serde_json::to_vec(&negative).unwrap()
++    );
++    assert_ne!(
++        positive.innate_gain().to_bits(),
++        negative.innate_gain().to_bits()
++    );
++    // input_identity includes the raw innate struct even if BrainGenome omits it.
++    let identity = ExactIdentity::capture(&input_identity(&inputs)).unwrap();
++    identity.check(&input_identity(&inputs)).unwrap();
++    for drop_cache in [false, true] {
++        let mut bad = warm.clone();
++        if drop_cache {
++            bad.clear_validation_cache();
++        }
++        assert!(bad.validate(&other_source).is_err());
++        bad.source_inputs = changed.clone();
++        assert!(bad.validate(&source).is_err());
++    }
++
++    // Malformed inputs/ABI/profile/address/weight changes must fail either at
++    // the existing checked decoder or at full motor validation, warm or cold.
++    for field in [
++        "canonical_digest",
++        "capacity_digest",
++        "sensor_profile",
++        "foundation_abi_selection",
++    ] {
++        let mut value = serde_json::to_value(&inputs).unwrap();
++        value[field] = serde_json::Value::Null;
++        assert!(
++            serde_json::from_value::<PhenotypeCompilerInputs>(value).is_err(),
++            "{field}"
++        );
++    }
++    for path in [
++        "/phenotype_hash/0",
++        "/foundation_abi_selection",
++        "/sensor_profile",
++        "/persistent_address_map",
++        "/synapses/0/genetic_weight",
++        "/synapses/0/source",
++    ] {
++        let mut value: serde_json::Value =
++            serde_json::from_slice(&serde_json::to_vec(&source).unwrap()).unwrap();
++        *value.pointer_mut(path).expect("declared source field") = serde_json::Value::Null;
++        if let Ok(forged) = serde_json::from_value::<BrainPhenotype>(value) {
++            for drop_cache in [false, true] {
++                let mut bad = warm.clone();
++                if drop_cache {
++                    bad.clear_validation_cache();
++                }
++                assert!(bad.validate(&forged).is_err(), "{path}");
++            }
++        }
++    }
++    warm.validate(&source).unwrap();
++    assert_eq!(serde_json::to_vec(&warm).unwrap(), wire);
++}
++
++// Frozen original validator from exact fbf2a517, receiver names changed only.
++fn uncached_reference(
++    state: &GroupedMotorStateV1,
++    source: &BrainPhenotype,
++) -> Result<(), TrainingError> {
++    let expected = PhenotypeCompiler::compile_validated(
++        &state.source_inputs,
++        &BrainCapacityClass::n2048_grounded_drive_research(),
++    )?;
++    if state.schema != HOST_SCHEMA
++        || state.work_policy != GROUPED_HOST_WORK_POLICY_V1
++        || state.m2_recipe != M2_RECIPE_SHA256
++        || state.group_recipe != RECOVERY_GROUP_CONFIDENCE_RECIPE_SHA256
++        || state.mode == MediationModeV1::DirectSource
++        || expected != *source
++        || state.source_hash != source.phenotype_hash()
++        || source.neuron_count() != 2048
++        || source.synapses().len() != 34048
++        || source.foundation_abi().motor_lobe_m0().is_some()
++        || !source
++            .candidate_decoder()
++            .factorized_motor_channels(source)?
++            .contains(&MotorChannel::Posture)
++    {
++        return Err(invalid());
++    }
++    Lowered::pinned(MANIFEST)?;
++    GroupedMotorStateV1::group_recipe()?;
++    for (bank, count, bounded) in [
++        (state.activations.as_slice(), ADDED, false),
++        (state.ema.as_slice(), ADDED, true),
++        (state.metabolic.as_slice(), ADDED, true),
++        (state.group_activations.as_slice(), 16, false),
++        (state.group_ema.as_slice(), 16, true),
++        (state.group_metabolic.as_slice(), 16, true),
++    ] {
++        if bank.len() != count
++            || bank
++                .iter()
++                .any(|x| !x.is_finite() || (bounded && !(0. ..=1.).contains(x)))
++        {
++            return Err(invalid());
++        }
++    }
++    match &state.last_receipt {
++        None if state.generation == 0 => (),
++        Some(r) if state.generation > 0 => {
++            let core = &r.native.core;
++            if core.source_hash != state.source_hash
++                || core.mode != state.mode
++                || core.final_generation != state.generation
++                || core.source_generation.checked_add(1) != Some(state.generation)
++                || core.source_execution_count != 1
++                || core.appended_activations != state.activations
++                || r.native.extension_activations != state.group_activations
++                || r.native.schema != HOST_SCHEMA
++                || r.native.recipe != state.group_recipe
++                || core.schema != HOST_SCHEMA
++                || core.recipe != state.m2_recipe
++                || r.raw_memory.len() != core.components.len()
++                || r.raw_cognitive.len() != core.components.len()
++                || core.work != MediationWorkV1::expected()
++                || !r.applied_body_energy_debit.is_finite()
++                || r.applied_body_energy_debit < 0.
++            {
++                return Err(invalid());
++            }
++            finite(&r.raw_memory)?;
++            finite(&r.raw_cognitive)?;
++            r.native.scores.validate_host_identity(
++                state.source_hash,
++                r.frame_digest,
++                core.source_generation,
++            )?;
++        }
++        _ => return Err(invalid()),
++    }
++    Ok(())
++}
++
++#[test]
++fn grouped_cache_miss_preserves_original_accepted_domain() {
++    let (inputs, _) = super::super::tests::source();
++    let source = PhenotypeCompiler::compile_validated(
++        &inputs,
++        &BrainCapacityClass::n2048_grounded_drive_research(),
++    )
++    .unwrap();
++    let warm = GroupedMotorStateV1::fresh(&inputs, &source, MediationModeV1::Full).unwrap();
++    let original_proof = Arc::clone(warm.validation_cache.get().unwrap());
++    let mut changed = warm.clone();
++    changed.mode = MediationModeV1::DriveSham;
++    assert!(original_proof.matches_inputs(&changed.source_inputs));
++    uncached_reference(&changed, &source).unwrap();
++    let before = GroupedMotorStateV1::validation_compile_count();
++    for _ in 0..2 {
++        changed.validate(&source).unwrap();
++    }
++    assert_eq!(GroupedMotorStateV1::validation_compile_count(), before);
++    assert!(Arc::ptr_eq(
++        changed.validation_cache.get().unwrap(),
++        &original_proof
++    ));
++    // A valid change of compiler inputs, rather than mode alone, is a miss.
++    let capacity = BrainCapacityClass::n2048_grounded_drive_research();
++    let mut development = inputs.development().clone();
++    development.age_ticks = Tick::new(development.age_ticks.raw() + 1);
++    let other_inputs = PhenotypeCompilerInputs::try_new_with_foundation_selection(
++        inputs.genome().clone(),
++        &capacity,
++        development,
++        inputs.sensor_profile(),
++        inputs.foundation_abi_selection().clone(),
++    )
++    .unwrap();
++    let other_source = PhenotypeCompiler::compile_validated(&other_inputs, &capacity).unwrap();
++    let mut other = warm.clone();
++    other.source_inputs = other_inputs;
++    other.source_hash = other_source.phenotype_hash();
++    assert!(!original_proof.matches_inputs(&other.source_inputs));
++    uncached_reference(&other, &other_source).unwrap();
++    let before = GroupedMotorStateV1::validation_compile_count();
++    for _ in 0..2 {
++        other.validate(&other_source).unwrap();
++    }
++    assert_eq!(GroupedMotorStateV1::validation_compile_count(), before + 2);
++    assert!(Arc::ptr_eq(
++        other.validation_cache.get().unwrap(),
++        &original_proof
++    ));
++    changed.clear_validation_cache();
++    uncached_reference(&changed, &source).unwrap();
++    changed.validate(&source).unwrap();
++    let before = GroupedMotorStateV1::validation_compile_count();
++    changed.validate(&source).unwrap();
++    assert_eq!(GroupedMotorStateV1::validation_compile_count(), before);
++
++    // Source signed-zero mutation may be rejected by the phenotype decoder
++    // before it reaches either validator. Record the actual boundary instead
++    // of claiming every raw JSON change is an admitted source object.
++    let source_wire = serde_json::to_vec(&source).unwrap();
++    let mut value: serde_json::Value = serde_json::from_slice(&source_wire).unwrap();
++    fn positive_zero_path(value: &serde_json::Value, path: &str) -> Option<String> {
++        match value {
++            serde_json::Value::Number(n) if n.is_f64() && n.as_f64().unwrap().to_bits() == 0 => {
++                Some(path.into())
++            }
++            serde_json::Value::Array(values) => values
++                .iter()
++                .enumerate()
++                .find_map(|(i, value)| positive_zero_path(value, &format!("{path}/{i}"))),
++            serde_json::Value::Object(values) => values.iter().find_map(|(key, value)| {
++                let key = key.replace('~', "~0").replace('/', "~1");
++                positive_zero_path(value, &format!("{path}/{key}"))
++            }),
++            _ => None,
++        }
++    }
++    let path = positive_zero_path(&value, "").expect("fixed source contains a positive zero float");
++    eprintln!("CACHE_BASELINE signed_zero_source_path={path}");
++    *value.pointer_mut(&path).unwrap() = serde_json::json!(-0.0);
++    match serde_json::from_value::<BrainPhenotype>(value) {
++        Ok(variant) => {
++            let baseline = uncached_reference(&warm, &variant).is_ok();
++            let before = GroupedMotorStateV1::validation_compile_count();
++            assert!(original_proof.matches_inputs(&warm.source_inputs));
++            assert_eq!(warm.validate(&variant).is_ok(), baseline);
++            assert_eq!(GroupedMotorStateV1::validation_compile_count(), before);
++            eprintln!(
++                "CACHE_BASELINE signed_zero_source_decode=accepted original_accepts={baseline}"
++            );
++        }
++        Err(_) => eprintln!("CACHE_BASELINE signed_zero_source_decode=rejected_before_motor"),
++    }
++}
++
++// Adversarial codec fixture, not a biological candidate or acquired-state edit.
++// This uses the same legitimate constructors that exercised the original
++// validator in the preserved administrative qualification.
++fn synthetic_zero_priorities_source() -> (
++    BrainPhenotype,
++    PhenotypeCompilerInputs,
++    FoundationWeightAsset,
++) {
++    let g = BrainGenome::scaffold(
++        0x4752_5031,
++        BrainCapacityClass::N2048_GROUNDED_DRIVE_RESEARCH_ID,
++    );
++    let a = g.cognitive_architecture();
++    let heads = alife_core::genome::CognitiveArchitectureGenomeParameters::try_new_v1(
++        a.attention_capacity(),
++        a.active_concept_limit(),
++        a.active_gap_limit(),
++        a.predictor_capacity(),
++        a.predictor_learning_rate(),
++        4,
++        a.motor_head_width(),
++        a.dendritic_branch_capacity(),
++        a.structural_candidate_budget(),
++        a.structural_edit_budget(),
++        a.sleep_trigger_threshold(),
++        a.sleep_replay_rate(),
++        a.sleep_consolidation_rate(),
++        a.attention_learning_rate(),
++        a.concept_learning_rate(),
++        a.motor_learning_rate(),
++        a.structural_learning_rate(),
++    )
++    .unwrap();
++    let mut g = g.with_cognitive_architecture(heads).unwrap();
++    g.innate_priority = Default::default();
++    let d = DevelopmentState::new(g.id, Tick::ZERO, NormalizedScalar::new(1.).unwrap());
++    let (p, i) = PhenotypeCompiler::compile_n2048_grounded_drive_basis(
++        g,
++        d,
++        SensorProfile::GroundedObjectSlotsV1,
++    )
++    .unwrap();
++    let a = FoundationWeightAsset::from_trained_weights(
++        &p,
++        p.synapses().iter().map(|s| s.genetic_weight()).collect(),
++        TrainingStageManifest::bootstrap(),
++    )
++    .unwrap();
++    let (p, i) = PhenotypeCompiler::compile_n2048_grounded_drive_basis_candidate(
++        i.genome().clone(),
++        i.development().clone(),
++        a.clone(),
++    )
++    .unwrap();
++    (p, i, a)
++}
++
++#[test]
++fn grouped_compiler_cache_valid_omitted_gain_keeps_original_acceptance() {
++    let (source, inputs, _) = synthetic_zero_priorities_source();
++    assert!(source
++        .candidate_decoder()
++        .families()
++        .iter()
++        .all(|f| f.innate_gain().to_bits() == 0));
++    let warm = GroupedMotorStateV1::fresh(&inputs, &source, MediationModeV1::Full).unwrap();
++    let wire = serde_json::to_vec(&warm).unwrap();
++    let owner = Arc::clone(warm.validation_cache.get().unwrap());
++    let mut value: serde_json::Value =
++        serde_json::from_slice(&serde_json::to_vec(&source).unwrap()).unwrap();
++    assert!(value["decoder"]["families"][0].get("innate_gain").is_none());
++    value["decoder"]["families"][0]["innate_gain"] = serde_json::json!(-0.0);
++    let variant: BrainPhenotype = serde_json::from_value(value).unwrap();
++    assert_eq!(
++        variant.candidate_decoder().families()[0]
++            .innate_gain()
++            .to_bits(),
++        (-0.0_f32).to_bits()
++    );
++    uncached_reference(&warm, &variant).unwrap();
++    let before = GroupedMotorStateV1::validation_compile_count();
++    warm.validate(&variant).unwrap();
++    assert_eq!(GroupedMotorStateV1::validation_compile_count(), before);
++    assert!(Arc::ptr_eq(warm.validation_cache.get().unwrap(), &owner));
++    assert_eq!(serde_json::to_vec(&warm).unwrap(), wire);
++    let mut cold = warm.clone();
++    cold.clear_validation_cache();
++    cold.validate(&variant).unwrap();
++    cold.validate(&variant).unwrap();
++    assert_eq!(GroupedMotorStateV1::validation_compile_count(), before + 1);
++    assert_eq!(serde_json::to_vec(&cold).unwrap(), wire);
++}
++
++#[test]
++fn grouped_compiler_cache_omitted_input_gene_bits_are_misses_not_rejections() {
++    let (source, inputs, _) = synthetic_zero_priorities_source();
++    let warm = GroupedMotorStateV1::fresh(&inputs, &source, MediationModeV1::Full).unwrap();
++    let owner = Arc::clone(warm.validation_cache.get().unwrap());
++    let mut genome = inputs.genome().clone();
++    genome.innate_priority.reflex_strength = -0.0;
++    let capacity = BrainCapacityClass::n2048_grounded_drive_research();
++    let negative_inputs = PhenotypeCompilerInputs::try_new_with_foundation_selection(
++        genome,
++        &capacity,
++        inputs.development().clone(),
++        inputs.sensor_profile(),
++        inputs.foundation_abi_selection().clone(),
++    )
++    .unwrap();
++    assert!(!owner.matches_inputs(&negative_inputs));
++    let negative_source =
++        PhenotypeCompiler::compile_validated(&negative_inputs, &capacity).unwrap();
++    let mut changed = warm.clone();
++    changed.source_inputs = negative_inputs;
++    changed.source_hash = negative_source.phenotype_hash();
++    uncached_reference(&changed, &negative_source).unwrap();
++    let wire = serde_json::to_vec(&changed).unwrap();
++    let before = GroupedMotorStateV1::validation_compile_count();
++    for _ in 0..2 {
++        changed.validate(&negative_source).unwrap();
++    }
++    assert_eq!(GroupedMotorStateV1::validation_compile_count(), before + 2);
++    assert!(Arc::ptr_eq(changed.validation_cache.get().unwrap(), &owner));
++    assert_eq!(serde_json::to_vec(&changed).unwrap(), wire);
++}
