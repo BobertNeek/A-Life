@@ -1,0 +1,4242 @@
+{
+  "schema": "grouped-m2-curated-descriptive-metrics-v1",
+  "committed_intervals": 1200,
+  "mode": "DriveSham",
+  "sampling_seed": 1330461507,
+  "first": {
+    "tick": 240,
+    "age": 240,
+    "F": 0.13101535,
+    "P": 0.06604884,
+    "ATP": 0.65918416,
+    "H": 1.0,
+    "body_energy": 0.7921858
+  },
+  "last": {
+    "tick": 1440,
+    "age": 1440,
+    "phase": "Waking",
+    "F": 0.0,
+    "P": 0.0,
+    "ATP": 0.6120067,
+    "H": 1.0,
+    "body_energy": 0.72316843
+  },
+  "net_trajectory_change_not_causal_benefit": {
+    "F": -0.13101535,
+    "P": -0.06604884,
+    "ATP": -0.047177460000000004,
+    "H": 0.0,
+    "body_energy": -0.06901737000000008
+  },
+  "counts": {
+    "closed_memory_consolidations": 99,
+    "sleeping_organism_intervals": 789,
+    "decisions": 411,
+    "applied.AwakeRest": 99,
+    "attempted.AwakeRest": 99,
+    "representative_selected.primitive_212": 71,
+    "operation_selected.AwakeRest": 99,
+    "eligible_operation_distributions": 411,
+    "decisions_with_both_operation_raw_and_clipped_MC_zero": 411,
+    "noop_attempt.103": 411,
+    "noop_measured_observation_present.103": 411,
+    "noop_measured_executed_true.103": 411,
+    "noop_attempt.212": 411,
+    "noop_measured_observation_absent.212": 411,
+    "applied.BodySleep": 99,
+    "attempted.BodySleep": 99,
+    "operation_selected.BodySleep": 99,
+    "intervals_without_decision": 789,
+    "applied.none": 213,
+    "attempted.none": 213,
+    "representative_selected.primitive_104": 49,
+    "noop_attempt.104": 142,
+    "noop_measured_observation_absent.104": 142,
+    "representative_selected.RestGroup": 85,
+    "representative_selected.primitive_103": 63,
+    "representative_selected.primitive_1": 71,
+    "representative_selected.primitive_400": 72
+  },
+  "actual_factor_draw_counts": {
+    "0": 411,
+    "2": 348,
+    "5": 339,
+    "6": 206,
+    "8": 113,
+    "4": 340,
+    "1": 85
+  },
+  "phase_intervals": {
+    "Awake": 410,
+    "EnteringSleep": 396,
+    "Consolidating": 99,
+    "Waking": 295
+  },
+  "observed_sleep_starts": [
+    {
+      "cycle": 1,
+      "tick": 241,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 2,
+      "tick": 265,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 3,
+      "tick": 275,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 4,
+      "tick": 287,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 5,
+      "tick": 299,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 6,
+      "tick": 316,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 7,
+      "tick": 327,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 8,
+      "tick": 336,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 9,
+      "tick": 353,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 10,
+      "tick": 367,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 11,
+      "tick": 376,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 12,
+      "tick": 387,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 13,
+      "tick": 398,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 14,
+      "tick": 409,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 15,
+      "tick": 418,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 16,
+      "tick": 429,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 17,
+      "tick": 442,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 18,
+      "tick": 454,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 19,
+      "tick": 463,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 20,
+      "tick": 475,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 21,
+      "tick": 485,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 22,
+      "tick": 494,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 23,
+      "tick": 518,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 24,
+      "tick": 527,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 25,
+      "tick": 539,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 26,
+      "tick": 549,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 27,
+      "tick": 560,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 28,
+      "tick": 579,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 29,
+      "tick": 588,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 30,
+      "tick": 599,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 31,
+      "tick": 611,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 32,
+      "tick": 625,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 33,
+      "tick": 634,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 34,
+      "tick": 643,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 35,
+      "tick": 652,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 36,
+      "tick": 661,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 37,
+      "tick": 671,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 38,
+      "tick": 680,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 39,
+      "tick": 692,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 40,
+      "tick": 701,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 41,
+      "tick": 712,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 42,
+      "tick": 724,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 43,
+      "tick": 734,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 44,
+      "tick": 743,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 45,
+      "tick": 752,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 46,
+      "tick": 762,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 47,
+      "tick": 779,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 48,
+      "tick": 791,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 49,
+      "tick": 804,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 50,
+      "tick": 815,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 51,
+      "tick": 833,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 52,
+      "tick": 857,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 53,
+      "tick": 868,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 54,
+      "tick": 879,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 55,
+      "tick": 901,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 56,
+      "tick": 912,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 57,
+      "tick": 921,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 58,
+      "tick": 941,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 59,
+      "tick": 951,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 60,
+      "tick": 961,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 61,
+      "tick": 977,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 62,
+      "tick": 992,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 63,
+      "tick": 1008,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 64,
+      "tick": 1020,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 65,
+      "tick": 1034,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 66,
+      "tick": 1054,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 67,
+      "tick": 1065,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 68,
+      "tick": 1076,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 69,
+      "tick": 1085,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 70,
+      "tick": 1104,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 71,
+      "tick": 1113,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 72,
+      "tick": 1125,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 73,
+      "tick": 1134,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 74,
+      "tick": 1144,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 75,
+      "tick": 1159,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 76,
+      "tick": 1168,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 77,
+      "tick": 1177,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 78,
+      "tick": 1187,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 79,
+      "tick": 1196,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 80,
+      "tick": 1207,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 81,
+      "tick": 1223,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 82,
+      "tick": 1240,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 83,
+      "tick": 1251,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 84,
+      "tick": 1263,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 85,
+      "tick": 1276,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 86,
+      "tick": 1285,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 87,
+      "tick": 1298,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 88,
+      "tick": 1307,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 89,
+      "tick": 1326,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 90,
+      "tick": 1337,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 91,
+      "tick": 1348,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 92,
+      "tick": 1357,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 93,
+      "tick": 1367,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 94,
+      "tick": 1376,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 95,
+      "tick": 1392,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 96,
+      "tick": 1406,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 97,
+      "tick": 1416,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 98,
+      "tick": 1425,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    },
+    {
+      "cycle": 99,
+      "tick": 1434,
+      "trigger": "VoluntaryBodySleepV1",
+      "entered_phase": "EnteringSleep"
+    }
+  ],
+  "fully_observed_cycles": [
+    {
+      "start_tick": 241,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 242
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 246
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 247
+        }
+      ],
+      "ordered": true,
+      "cycle": 1,
+      "returned_awake_tick": 250
+    },
+    {
+      "start_tick": 265,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 266
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 270
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 271
+        }
+      ],
+      "ordered": true,
+      "cycle": 2,
+      "returned_awake_tick": 274
+    },
+    {
+      "start_tick": 275,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 276
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 280
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 281
+        }
+      ],
+      "ordered": true,
+      "cycle": 3,
+      "returned_awake_tick": 284
+    },
+    {
+      "start_tick": 287,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 288
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 292
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 293
+        }
+      ],
+      "ordered": true,
+      "cycle": 4,
+      "returned_awake_tick": 296
+    },
+    {
+      "start_tick": 299,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 300
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 304
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 305
+        }
+      ],
+      "ordered": true,
+      "cycle": 5,
+      "returned_awake_tick": 308
+    },
+    {
+      "start_tick": 316,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 317
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 321
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 322
+        }
+      ],
+      "ordered": true,
+      "cycle": 6,
+      "returned_awake_tick": 325
+    },
+    {
+      "start_tick": 327,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 328
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 332
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 333
+        }
+      ],
+      "ordered": true,
+      "cycle": 7,
+      "returned_awake_tick": 336
+    },
+    {
+      "start_tick": 336,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 337
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 341
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 342
+        }
+      ],
+      "ordered": true,
+      "cycle": 8,
+      "returned_awake_tick": 345
+    },
+    {
+      "start_tick": 353,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 354
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 358
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 359
+        }
+      ],
+      "ordered": true,
+      "cycle": 9,
+      "returned_awake_tick": 362
+    },
+    {
+      "start_tick": 367,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 368
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 372
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 373
+        }
+      ],
+      "ordered": true,
+      "cycle": 10,
+      "returned_awake_tick": 376
+    },
+    {
+      "start_tick": 376,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 377
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 381
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 382
+        }
+      ],
+      "ordered": true,
+      "cycle": 11,
+      "returned_awake_tick": 385
+    },
+    {
+      "start_tick": 387,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 388
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 392
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 393
+        }
+      ],
+      "ordered": true,
+      "cycle": 12,
+      "returned_awake_tick": 396
+    },
+    {
+      "start_tick": 398,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 399
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 403
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 404
+        }
+      ],
+      "ordered": true,
+      "cycle": 13,
+      "returned_awake_tick": 407
+    },
+    {
+      "start_tick": 409,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 410
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 414
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 415
+        }
+      ],
+      "ordered": true,
+      "cycle": 14,
+      "returned_awake_tick": 418
+    },
+    {
+      "start_tick": 418,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 419
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 423
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 424
+        }
+      ],
+      "ordered": true,
+      "cycle": 15,
+      "returned_awake_tick": 427
+    },
+    {
+      "start_tick": 429,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 430
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 434
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 435
+        }
+      ],
+      "ordered": true,
+      "cycle": 16,
+      "returned_awake_tick": 438
+    },
+    {
+      "start_tick": 442,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 443
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 447
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 448
+        }
+      ],
+      "ordered": true,
+      "cycle": 17,
+      "returned_awake_tick": 451
+    },
+    {
+      "start_tick": 454,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 455
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 459
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 460
+        }
+      ],
+      "ordered": true,
+      "cycle": 18,
+      "returned_awake_tick": 463
+    },
+    {
+      "start_tick": 463,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 464
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 468
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 469
+        }
+      ],
+      "ordered": true,
+      "cycle": 19,
+      "returned_awake_tick": 472
+    },
+    {
+      "start_tick": 475,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 476
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 480
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 481
+        }
+      ],
+      "ordered": true,
+      "cycle": 20,
+      "returned_awake_tick": 484
+    },
+    {
+      "start_tick": 485,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 486
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 490
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 491
+        }
+      ],
+      "ordered": true,
+      "cycle": 21,
+      "returned_awake_tick": 494
+    },
+    {
+      "start_tick": 494,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 495
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 499
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 500
+        }
+      ],
+      "ordered": true,
+      "cycle": 22,
+      "returned_awake_tick": 503
+    },
+    {
+      "start_tick": 518,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 519
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 523
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 524
+        }
+      ],
+      "ordered": true,
+      "cycle": 23,
+      "returned_awake_tick": 527
+    },
+    {
+      "start_tick": 527,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 528
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 532
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 533
+        }
+      ],
+      "ordered": true,
+      "cycle": 24,
+      "returned_awake_tick": 536
+    },
+    {
+      "start_tick": 539,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 540
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 544
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 545
+        }
+      ],
+      "ordered": true,
+      "cycle": 25,
+      "returned_awake_tick": 548
+    },
+    {
+      "start_tick": 549,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 550
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 554
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 555
+        }
+      ],
+      "ordered": true,
+      "cycle": 26,
+      "returned_awake_tick": 558
+    },
+    {
+      "start_tick": 560,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 561
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 565
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 566
+        }
+      ],
+      "ordered": true,
+      "cycle": 27,
+      "returned_awake_tick": 569
+    },
+    {
+      "start_tick": 579,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 580
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 584
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 585
+        }
+      ],
+      "ordered": true,
+      "cycle": 28,
+      "returned_awake_tick": 588
+    },
+    {
+      "start_tick": 588,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 589
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 593
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 594
+        }
+      ],
+      "ordered": true,
+      "cycle": 29,
+      "returned_awake_tick": 597
+    },
+    {
+      "start_tick": 599,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 600
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 604
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 605
+        }
+      ],
+      "ordered": true,
+      "cycle": 30,
+      "returned_awake_tick": 608
+    },
+    {
+      "start_tick": 611,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 612
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 616
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 617
+        }
+      ],
+      "ordered": true,
+      "cycle": 31,
+      "returned_awake_tick": 620
+    },
+    {
+      "start_tick": 625,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 626
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 630
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 631
+        }
+      ],
+      "ordered": true,
+      "cycle": 32,
+      "returned_awake_tick": 634
+    },
+    {
+      "start_tick": 634,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 635
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 639
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 640
+        }
+      ],
+      "ordered": true,
+      "cycle": 33,
+      "returned_awake_tick": 643
+    },
+    {
+      "start_tick": 643,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 644
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 648
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 649
+        }
+      ],
+      "ordered": true,
+      "cycle": 34,
+      "returned_awake_tick": 652
+    },
+    {
+      "start_tick": 652,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 653
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 657
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 658
+        }
+      ],
+      "ordered": true,
+      "cycle": 35,
+      "returned_awake_tick": 661
+    },
+    {
+      "start_tick": 661,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 662
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 666
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 667
+        }
+      ],
+      "ordered": true,
+      "cycle": 36,
+      "returned_awake_tick": 670
+    },
+    {
+      "start_tick": 671,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 672
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 676
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 677
+        }
+      ],
+      "ordered": true,
+      "cycle": 37,
+      "returned_awake_tick": 680
+    },
+    {
+      "start_tick": 680,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 681
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 685
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 686
+        }
+      ],
+      "ordered": true,
+      "cycle": 38,
+      "returned_awake_tick": 689
+    },
+    {
+      "start_tick": 692,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 693
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 697
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 698
+        }
+      ],
+      "ordered": true,
+      "cycle": 39,
+      "returned_awake_tick": 701
+    },
+    {
+      "start_tick": 701,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 702
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 706
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 707
+        }
+      ],
+      "ordered": true,
+      "cycle": 40,
+      "returned_awake_tick": 710
+    },
+    {
+      "start_tick": 712,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 713
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 717
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 718
+        }
+      ],
+      "ordered": true,
+      "cycle": 41,
+      "returned_awake_tick": 721
+    },
+    {
+      "start_tick": 724,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 725
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 729
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 730
+        }
+      ],
+      "ordered": true,
+      "cycle": 42,
+      "returned_awake_tick": 733
+    },
+    {
+      "start_tick": 734,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 735
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 739
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 740
+        }
+      ],
+      "ordered": true,
+      "cycle": 43,
+      "returned_awake_tick": 743
+    },
+    {
+      "start_tick": 743,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 744
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 748
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 749
+        }
+      ],
+      "ordered": true,
+      "cycle": 44,
+      "returned_awake_tick": 752
+    },
+    {
+      "start_tick": 752,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 753
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 757
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 758
+        }
+      ],
+      "ordered": true,
+      "cycle": 45,
+      "returned_awake_tick": 761
+    },
+    {
+      "start_tick": 762,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 763
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 767
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 768
+        }
+      ],
+      "ordered": true,
+      "cycle": 46,
+      "returned_awake_tick": 771
+    },
+    {
+      "start_tick": 779,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 780
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 784
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 785
+        }
+      ],
+      "ordered": true,
+      "cycle": 47,
+      "returned_awake_tick": 788
+    },
+    {
+      "start_tick": 791,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 792
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 796
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 797
+        }
+      ],
+      "ordered": true,
+      "cycle": 48,
+      "returned_awake_tick": 800
+    },
+    {
+      "start_tick": 804,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 805
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 809
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 810
+        }
+      ],
+      "ordered": true,
+      "cycle": 49,
+      "returned_awake_tick": 813
+    },
+    {
+      "start_tick": 815,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 816
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 820
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 821
+        }
+      ],
+      "ordered": true,
+      "cycle": 50,
+      "returned_awake_tick": 824
+    },
+    {
+      "start_tick": 833,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 834
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 838
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 839
+        }
+      ],
+      "ordered": true,
+      "cycle": 51,
+      "returned_awake_tick": 842
+    },
+    {
+      "start_tick": 857,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 858
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 862
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 863
+        }
+      ],
+      "ordered": true,
+      "cycle": 52,
+      "returned_awake_tick": 866
+    },
+    {
+      "start_tick": 868,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 869
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 873
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 874
+        }
+      ],
+      "ordered": true,
+      "cycle": 53,
+      "returned_awake_tick": 877
+    },
+    {
+      "start_tick": 879,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 880
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 884
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 885
+        }
+      ],
+      "ordered": true,
+      "cycle": 54,
+      "returned_awake_tick": 888
+    },
+    {
+      "start_tick": 901,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 902
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 906
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 907
+        }
+      ],
+      "ordered": true,
+      "cycle": 55,
+      "returned_awake_tick": 910
+    },
+    {
+      "start_tick": 912,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 913
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 917
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 918
+        }
+      ],
+      "ordered": true,
+      "cycle": 56,
+      "returned_awake_tick": 921
+    },
+    {
+      "start_tick": 921,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 922
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 926
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 927
+        }
+      ],
+      "ordered": true,
+      "cycle": 57,
+      "returned_awake_tick": 930
+    },
+    {
+      "start_tick": 941,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 942
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 946
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 947
+        }
+      ],
+      "ordered": true,
+      "cycle": 58,
+      "returned_awake_tick": 950
+    },
+    {
+      "start_tick": 951,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 952
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 956
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 957
+        }
+      ],
+      "ordered": true,
+      "cycle": 59,
+      "returned_awake_tick": 960
+    },
+    {
+      "start_tick": 961,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 962
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 966
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 967
+        }
+      ],
+      "ordered": true,
+      "cycle": 60,
+      "returned_awake_tick": 970
+    },
+    {
+      "start_tick": 977,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 978
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 982
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 983
+        }
+      ],
+      "ordered": true,
+      "cycle": 61,
+      "returned_awake_tick": 986
+    },
+    {
+      "start_tick": 992,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 993
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 997
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 998
+        }
+      ],
+      "ordered": true,
+      "cycle": 62,
+      "returned_awake_tick": 1001
+    },
+    {
+      "start_tick": 1008,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 1009
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 1013
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 1014
+        }
+      ],
+      "ordered": true,
+      "cycle": 63,
+      "returned_awake_tick": 1017
+    },
+    {
+      "start_tick": 1020,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 1021
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 1025
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 1026
+        }
+      ],
+      "ordered": true,
+      "cycle": 64,
+      "returned_awake_tick": 1029
+    },
+    {
+      "start_tick": 1034,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 1035
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 1039
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 1040
+        }
+      ],
+      "ordered": true,
+      "cycle": 65,
+      "returned_awake_tick": 1043
+    },
+    {
+      "start_tick": 1054,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 1055
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 1059
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 1060
+        }
+      ],
+      "ordered": true,
+      "cycle": 66,
+      "returned_awake_tick": 1063
+    },
+    {
+      "start_tick": 1065,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 1066
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 1070
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 1071
+        }
+      ],
+      "ordered": true,
+      "cycle": 67,
+      "returned_awake_tick": 1074
+    },
+    {
+      "start_tick": 1076,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 1077
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 1081
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 1082
+        }
+      ],
+      "ordered": true,
+      "cycle": 68,
+      "returned_awake_tick": 1085
+    },
+    {
+      "start_tick": 1085,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 1086
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 1090
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 1091
+        }
+      ],
+      "ordered": true,
+      "cycle": 69,
+      "returned_awake_tick": 1094
+    },
+    {
+      "start_tick": 1104,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 1105
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 1109
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 1110
+        }
+      ],
+      "ordered": true,
+      "cycle": 70,
+      "returned_awake_tick": 1113
+    },
+    {
+      "start_tick": 1113,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 1114
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 1118
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 1119
+        }
+      ],
+      "ordered": true,
+      "cycle": 71,
+      "returned_awake_tick": 1122
+    },
+    {
+      "start_tick": 1125,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 1126
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 1130
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 1131
+        }
+      ],
+      "ordered": true,
+      "cycle": 72,
+      "returned_awake_tick": 1134
+    },
+    {
+      "start_tick": 1134,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 1135
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 1139
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 1140
+        }
+      ],
+      "ordered": true,
+      "cycle": 73,
+      "returned_awake_tick": 1143
+    },
+    {
+      "start_tick": 1144,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 1145
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 1149
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 1150
+        }
+      ],
+      "ordered": true,
+      "cycle": 74,
+      "returned_awake_tick": 1153
+    },
+    {
+      "start_tick": 1159,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 1160
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 1164
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 1165
+        }
+      ],
+      "ordered": true,
+      "cycle": 75,
+      "returned_awake_tick": 1168
+    },
+    {
+      "start_tick": 1168,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 1169
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 1173
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 1174
+        }
+      ],
+      "ordered": true,
+      "cycle": 76,
+      "returned_awake_tick": 1177
+    },
+    {
+      "start_tick": 1177,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 1178
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 1182
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 1183
+        }
+      ],
+      "ordered": true,
+      "cycle": 77,
+      "returned_awake_tick": 1186
+    },
+    {
+      "start_tick": 1187,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 1188
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 1192
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 1193
+        }
+      ],
+      "ordered": true,
+      "cycle": 78,
+      "returned_awake_tick": 1196
+    },
+    {
+      "start_tick": 1196,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 1197
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 1201
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 1202
+        }
+      ],
+      "ordered": true,
+      "cycle": 79,
+      "returned_awake_tick": 1205
+    },
+    {
+      "start_tick": 1207,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 1208
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 1212
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 1213
+        }
+      ],
+      "ordered": true,
+      "cycle": 80,
+      "returned_awake_tick": 1216
+    },
+    {
+      "start_tick": 1223,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 1224
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 1228
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 1229
+        }
+      ],
+      "ordered": true,
+      "cycle": 81,
+      "returned_awake_tick": 1232
+    },
+    {
+      "start_tick": 1240,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 1241
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 1245
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 1246
+        }
+      ],
+      "ordered": true,
+      "cycle": 82,
+      "returned_awake_tick": 1249
+    },
+    {
+      "start_tick": 1251,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 1252
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 1256
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 1257
+        }
+      ],
+      "ordered": true,
+      "cycle": 83,
+      "returned_awake_tick": 1260
+    },
+    {
+      "start_tick": 1263,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 1264
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 1268
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 1269
+        }
+      ],
+      "ordered": true,
+      "cycle": 84,
+      "returned_awake_tick": 1272
+    },
+    {
+      "start_tick": 1276,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 1277
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 1281
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 1282
+        }
+      ],
+      "ordered": true,
+      "cycle": 85,
+      "returned_awake_tick": 1285
+    },
+    {
+      "start_tick": 1285,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 1286
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 1290
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 1291
+        }
+      ],
+      "ordered": true,
+      "cycle": 86,
+      "returned_awake_tick": 1294
+    },
+    {
+      "start_tick": 1298,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 1299
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 1303
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 1304
+        }
+      ],
+      "ordered": true,
+      "cycle": 87,
+      "returned_awake_tick": 1307
+    },
+    {
+      "start_tick": 1307,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 1308
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 1312
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 1313
+        }
+      ],
+      "ordered": true,
+      "cycle": 88,
+      "returned_awake_tick": 1316
+    },
+    {
+      "start_tick": 1326,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 1327
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 1331
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 1332
+        }
+      ],
+      "ordered": true,
+      "cycle": 89,
+      "returned_awake_tick": 1335
+    },
+    {
+      "start_tick": 1337,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 1338
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 1342
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 1343
+        }
+      ],
+      "ordered": true,
+      "cycle": 90,
+      "returned_awake_tick": 1346
+    },
+    {
+      "start_tick": 1348,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 1349
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 1353
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 1354
+        }
+      ],
+      "ordered": true,
+      "cycle": 91,
+      "returned_awake_tick": 1357
+    },
+    {
+      "start_tick": 1357,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 1358
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 1362
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 1363
+        }
+      ],
+      "ordered": true,
+      "cycle": 92,
+      "returned_awake_tick": 1366
+    },
+    {
+      "start_tick": 1367,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 1368
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 1372
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 1373
+        }
+      ],
+      "ordered": true,
+      "cycle": 93,
+      "returned_awake_tick": 1376
+    },
+    {
+      "start_tick": 1376,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 1377
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 1381
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 1382
+        }
+      ],
+      "ordered": true,
+      "cycle": 94,
+      "returned_awake_tick": 1385
+    },
+    {
+      "start_tick": 1392,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 1393
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 1397
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 1398
+        }
+      ],
+      "ordered": true,
+      "cycle": 95,
+      "returned_awake_tick": 1401
+    },
+    {
+      "start_tick": 1406,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 1407
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 1411
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 1412
+        }
+      ],
+      "ordered": true,
+      "cycle": 96,
+      "returned_awake_tick": 1415
+    },
+    {
+      "start_tick": 1416,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 1417
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 1421
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 1422
+        }
+      ],
+      "ordered": true,
+      "cycle": 97,
+      "returned_awake_tick": 1425
+    },
+    {
+      "start_tick": 1425,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 1426
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 1430
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 1431
+        }
+      ],
+      "ordered": true,
+      "cycle": 98,
+      "returned_awake_tick": 1434
+    }
+  ],
+  "partial_observed_cycles": {
+    "99": {
+      "start_tick": 1434,
+      "stages": [
+        {
+          "phase": "EnteringSleep",
+          "observed_tick": 1435
+        },
+        {
+          "phase": "Consolidating",
+          "observed_tick": 1439
+        },
+        {
+          "phase": "Waking",
+          "observed_tick": 1440
+        }
+      ],
+      "ordered": true
+    }
+  },
+  "reference_crossings": [],
+  "first_up_crossing": {},
+  "native_references": {
+    "hunger": 0.35,
+    "fatigue": 0.35,
+    "fear": 0.25,
+    "pain": 0.1,
+    "loneliness": 0.35,
+    "curiosity": 0.35,
+    "brain_atp": 0.75,
+    "temperature_stress": 0.1,
+    "reproductive_drive": 0.5,
+    "extension_0": 0.35,
+    "extension_1": 0.0,
+    "sleep_pressure": 0.6
+  },
+  "statistics": {
+    "actual_draw_factor.0.log_probability": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": -1.7863854318303467,
+      "min": -1.8341675493293794,
+      "max": -1.6066805309057242
+    },
+    "actual_draw_factor.1.log_probability": {
+      "n": 85,
+      "nonzero_count": 85,
+      "mean": -0.6931471805599456,
+      "min": -0.6931471805599453,
+      "max": -0.6931471805599453
+    },
+    "actual_draw_factor.2.log_probability": {
+      "n": 348,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "actual_draw_factor.4.log_probability": {
+      "n": 340,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "actual_draw_factor.5.log_probability": {
+      "n": 339,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "actual_draw_factor.6.log_probability": {
+      "n": 206,
+      "nonzero_count": 206,
+      "mean": -0.6898121230771704,
+      "min": -0.8153298128931452,
+      "max": -0.585586368028194
+    },
+    "actual_draw_factor.8.log_probability": {
+      "n": 113,
+      "nonzero_count": 113,
+      "mean": -0.6931471805599461,
+      "min": -0.6931471805599453,
+      "max": -0.6931471805599453
+    },
+    "appendage_work.assignments": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 444.0,
+      "min": 444,
+      "max": 444
+    },
+    "appendage_work.branch_inputs": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 72.0,
+      "min": 72,
+      "max": 72
+    },
+    "appendage_work.branches": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 36.0,
+      "min": 36,
+      "max": 36
+    },
+    "appendage_work.drive_products": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 1920.0,
+      "min": 1920,
+      "max": 1920
+    },
+    "appendage_work.final_products": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 64.0,
+      "min": 64,
+      "max": 64
+    },
+    "appendage_work.neuron_updates": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 444.0,
+      "min": 444,
+      "max": 444
+    },
+    "appendage_work.phases": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 4.0,
+      "min": 4,
+      "max": 4
+    },
+    "appendage_work.recurrent_products": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 640.0,
+      "min": 640,
+      "max": 640
+    },
+    "brain_work.decoder_candidate_ops": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 7.0,
+      "min": 7,
+      "max": 7
+    },
+    "brain_work.memory_context_ops": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 7.0,
+      "min": 7,
+      "max": 7
+    },
+    "brain_work.microsteps": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 3.0,
+      "min": 3,
+      "max": 3
+    },
+    "brain_work.neuron_updates": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 6604.0,
+      "min": 6604,
+      "max": 6604
+    },
+    "brain_work.synapse_ops": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 54478.0,
+      "min": 54478,
+      "max": 54478
+    },
+    "brain_work.tile_visits": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 313.0,
+      "min": 313,
+      "max": 313
+    },
+    "charged_cognitive_work.concept_ops": {
+      "n": 411,
+      "nonzero_count": 410,
+      "mean": 30.715328467153284,
+      "min": 0,
+      "max": 32
+    },
+    "charged_cognitive_work.dendritic_ops": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 1327.0,
+      "min": 1327,
+      "max": 1327
+    },
+    "charged_cognitive_work.focal_target_ops": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0,
+      "max": 0
+    },
+    "charged_cognitive_work.gap_ops": {
+      "n": 411,
+      "nonzero_count": 263,
+      "mean": 17.080291970802918,
+      "min": 0,
+      "max": 32
+    },
+    "charged_cognitive_work.learning_ops": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0,
+      "max": 0
+    },
+    "charged_cognitive_work.memory_ops": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 27.878345498783457,
+      "min": 21,
+      "max": 28
+    },
+    "charged_cognitive_work.neural_updates": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 6604.0,
+      "min": 6604,
+      "max": 6604
+    },
+    "charged_cognitive_work.policy_version": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 1.0,
+      "min": 1,
+      "max": 1
+    },
+    "charged_cognitive_work.prediction_ops": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 13.0,
+      "min": 13,
+      "max": 13
+    },
+    "charged_cognitive_work.replay_ops": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0,
+      "max": 0
+    },
+    "charged_cognitive_work.schema_version": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 1.0,
+      "min": 1,
+      "max": 1
+    },
+    "charged_cognitive_work.sleep_ops": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0,
+      "max": 0
+    },
+    "charged_cognitive_work.structural_ops": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0,
+      "max": 0
+    },
+    "charged_cognitive_work.synapses_evaluated": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 54478.0,
+      "min": 54478,
+      "max": 54478
+    },
+    "charged_cognitive_work.weighted_total": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 62497.67396593674,
+      "min": 62443,
+      "max": 62514
+    },
+    "common_Rest_components.appended_drive": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "common_Rest_components.cognitive_clipped": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "common_Rest_components.innate": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "common_Rest_components.memory_clipped": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "common_Rest_components.source_action": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 1.0417282943795623,
+      "min": -0.3480876,
+      "max": 1.0868064
+    },
+    "common_Rest_score": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 0.2217809035830254,
+      "min": -0.07537120580673218,
+      "max": 0.23104894161224365
+    },
+    "factor_distribution.Locomotion.primitive_103.log_probability": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "factor_distribution.Locomotion.primitive_103.probability": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "factor_distribution.Manipulation.primitive_212.log_probability": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "factor_distribution.Manipulation.primitive_212.probability": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "factor_distribution.Posture.RestGroup.log_probability": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": -0.5884753350549657,
+      "min": -0.7315427177782607,
+      "max": -0.5842808712809016
+    },
+    "factor_distribution.Posture.RestGroup.probability": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 0.5552134608002806,
+      "min": 0.4811661136953331,
+      "max": 0.5575066367240841
+    },
+    "factor_distribution.Posture.primitive_104.log_probability": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": -0.8102562386379911,
+      "min": -0.8153298128931452,
+      "max": -0.6561715119715286
+    },
+    "factor_distribution.Posture.primitive_104.probability": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 0.4447865391997192,
+      "min": 0.442493363275916,
+      "max": 0.5188338863046669
+    },
+    "factor_distribution.Vocal.primitive_400.log_probability": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "factor_distribution.Vocal.primitive_400.probability": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "factor_distribution.representative.RestGroup.log_probability": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": -1.6105787227432489,
+      "min": -1.8549567334798591,
+      "max": -1.6031186077171358
+    },
+    "factor_distribution.representative.RestGroup.probability": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 0.1998137031391328,
+      "min": 0.1564597119957915,
+      "max": 0.20126786272966488
+    },
+    "factor_distribution.representative.primitive_1.log_probability": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": -1.8323596263262738,
+      "min": -1.8341675493293794,
+      "max": -1.779585527673127
+    },
+    "factor_distribution.representative.primitive_1.probability": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 0.1600372593721734,
+      "min": 0.15974642745406703,
+      "max": 0.1687080576008417
+    },
+    "factor_distribution.representative.primitive_103.log_probability": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": -1.8323596263262738,
+      "min": -1.8341675493293794,
+      "max": -1.779585527673127
+    },
+    "factor_distribution.representative.primitive_103.probability": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 0.1600372593721734,
+      "min": 0.15974642745406703,
+      "max": 0.1687080576008417
+    },
+    "factor_distribution.representative.primitive_104.log_probability": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": -1.8323596263262738,
+      "min": -1.8341675493293794,
+      "max": -1.779585527673127
+    },
+    "factor_distribution.representative.primitive_104.probability": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 0.1600372593721734,
+      "min": 0.15974642745406703,
+      "max": 0.1687080576008417
+    },
+    "factor_distribution.representative.primitive_212.log_probability": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": -1.8323596263262738,
+      "min": -1.8341675493293794,
+      "max": -1.779585527673127
+    },
+    "factor_distribution.representative.primitive_212.probability": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 0.1600372593721734,
+      "min": 0.15974642745406703,
+      "max": 0.1687080576008417
+    },
+    "factor_distribution.representative.primitive_400.log_probability": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": -1.8323596263262738,
+      "min": -1.8341675493293794,
+      "max": -1.779585527673127
+    },
+    "factor_distribution.representative.primitive_400.probability": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 0.1600372593721734,
+      "min": 0.15974642745406703,
+      "max": 0.1687080576008417
+    },
+    "interval_end.ATP": {
+      "n": 1200,
+      "nonzero_count": 1200,
+      "mean": 0.6295549438250014,
+      "min": 0.6120067,
+      "max": 0.6586603
+    },
+    "interval_end.F": {
+      "n": 1200,
+      "nonzero_count": 213,
+      "mean": 0.0004809436233333338,
+      "min": 0.0,
+      "max": 0.013306761
+    },
+    "interval_end.H": {
+      "n": 1200,
+      "nonzero_count": 1200,
+      "mean": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "interval_end.P": {
+      "n": 1200,
+      "nonzero_count": 312,
+      "mean": 0.0007310185695000018,
+      "min": 0.0,
+      "max": 0.066655554
+    },
+    "interval_end.body_energy": {
+      "n": 1200,
+      "nonzero_count": 1200,
+      "mean": 0.7571691189749995,
+      "min": 0.72316843,
+      "max": 0.79201955
+    },
+    "interval_net_change_not_causal_benefit.ATP": {
+      "n": 1200,
+      "nonzero_count": 1200,
+      "mean": -3.931455e-05,
+      "min": -0.0005238600000000426,
+      "max": -1.1450000000023941e-05
+    },
+    "interval_net_change_not_causal_benefit.F": {
+      "n": 1200,
+      "nonzero_count": 313,
+      "mean": -0.00010917945833333334,
+      "min": -0.13101535,
+      "max": 0.0012099987
+    },
+    "interval_net_change_not_causal_benefit.H": {
+      "n": 1200,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "interval_net_change_not_causal_benefit.P": {
+      "n": 1200,
+      "nonzero_count": 383,
+      "mean": -5.5040699999999996e-05,
+      "min": -0.066655554,
+      "max": 0.0006099987
+    },
+    "interval_net_change_not_causal_benefit.body_energy": {
+      "n": 1200,
+      "nonzero_count": 1168,
+      "mean": -5.7514475000000066e-05,
+      "min": -0.00017275999999999403,
+      "max": 0.0
+    },
+    "interval_start.ATP": {
+      "n": 1200,
+      "nonzero_count": 1200,
+      "mean": 0.6295942583750014,
+      "min": 0.6120243,
+      "max": 0.65918416
+    },
+    "interval_start.F": {
+      "n": 1200,
+      "nonzero_count": 214,
+      "mean": 0.0005901230816666692,
+      "min": 0.0,
+      "max": 0.13101535
+    },
+    "interval_start.H": {
+      "n": 1200,
+      "nonzero_count": 1200,
+      "mean": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "interval_start.P": {
+      "n": 1200,
+      "nonzero_count": 313,
+      "mean": 0.0007860592695000018,
+      "min": 0.0,
+      "max": 0.066655554
+    },
+    "interval_start.body_energy": {
+      "n": 1200,
+      "nonzero_count": 1200,
+      "mean": 0.7572266334499994,
+      "min": 0.7231688,
+      "max": 0.7921858
+    },
+    "joint.log_probability": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": -2.466055599968461,
+      "min": -3.204275426011333,
+      "max": -1.7830629836269467
+    },
+    "joint.probability": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 0.09568008177927773,
+      "min": 0.04058830021244271,
+      "max": 0.16812240164805028
+    },
+    "native_actual_raw_drive.brain_atp": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 0.630007115547445,
+      "min": 0.61212057,
+      "max": 0.65918416
+    },
+    "native_actual_raw_drive.curiosity": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 0.44832050403892976,
+      "min": 0.39335778,
+      "max": 0.44999963
+    },
+    "native_actual_raw_drive.extension_0": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 0.07934523764720199,
+      "min": 0.047999933,
+      "max": 0.11040072
+    },
+    "native_actual_raw_drive.extension_1": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "native_actual_raw_drive.fatigue": {
+      "n": 411,
+      "nonzero_count": 214,
+      "mean": 0.0017229870997566982,
+      "min": 0.0,
+      "max": 0.13101535
+    },
+    "native_actual_raw_drive.fear": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 0.0996267739172755,
+      "min": 0.08741285,
+      "max": 0.09999991
+    },
+    "native_actual_raw_drive.hunger": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 0.4290564363017033,
+      "min": 0.35475585,
+      "max": 0.45681942
+    },
+    "native_actual_raw_drive.loneliness": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 0.14944013627737132,
+      "min": 0.13111928,
+      "max": 0.14999983
+    },
+    "native_actual_raw_drive.pain": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "native_actual_raw_drive.reproductive_drive": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 0.0996267739172755,
+      "min": 0.08741285,
+      "max": 0.09999991
+    },
+    "native_actual_raw_drive.sleep_pressure": {
+      "n": 411,
+      "nonzero_count": 313,
+      "mean": 0.002295063560583947,
+      "min": 0.0,
+      "max": 0.066655554
+    },
+    "native_actual_raw_drive.temperature_stress": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "native_modulation.interoceptive_gain": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 0.5,
+      "min": 0.5,
+      "max": 0.5
+    },
+    "native_modulation.offset": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": -0.017496609849148415,
+      "min": -0.017919043,
+      "max": -0.017423782
+    },
+    "native_modulation.projection_gain": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 0.5,
+      "min": 0.5,
+      "max": 0.5
+    },
+    "native_modulation.regional_gain": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 0.6636475226034065,
+      "min": 0.5700208,
+      "max": 0.890625
+    },
+    "native_modulation.threshold": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 0.25,
+      "min": 0.25,
+      "max": 0.25
+    },
+    "native_ordinary_score.primitive_1": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "native_ordinary_score.primitive_103": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "native_ordinary_score.primitive_104": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "native_ordinary_score.primitive_212": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "native_ordinary_score.primitive_3": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 0.2217809035830254,
+      "min": -0.07537120580673218,
+      "max": 0.23104894161224365
+    },
+    "native_ordinary_score.primitive_400": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "native_ordinary_score.primitive_700": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 0.2217809035830254,
+      "min": -0.07537120580673218,
+      "max": 0.23104894161224365
+    },
+    "native_work.applied_body_energy_debit": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 0.00015624419851581519,
+      "min": 0.0001561075,
+      "max": 0.00015628501
+    },
+    "native_work.available_atp_q16": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 41287.00243309003,
+      "min": 40115,
+      "max": 43199
+    },
+    "native_work.extension_arithmetic_q24": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 3192.0,
+      "min": 3192,
+      "max": 3192
+    },
+    "native_work.extension_source_products": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 544.0,
+      "min": 544,
+      "max": 544
+    },
+    "native_work.reservation_q16": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 2044.0,
+      "min": 2044,
+      "max": 2044
+    },
+    "native_work.reservation_q24": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 523236.0,
+      "min": 523236,
+      "max": 523236
+    },
+    "operation_context.AwakeRest.cognitive_clipped": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "operation_context.AwakeRest.memory_clipped": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "operation_context.AwakeRest.raw_cognitive": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "operation_context.AwakeRest.raw_memory": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "operation_context.BodySleep.cognitive_clipped": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "operation_context.BodySleep.memory_clipped": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "operation_context.BodySleep.raw_cognitive": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "operation_context.BodySleep.raw_memory": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "operation_pressure.saved_BodySleep_vs_AwakeRest_logodds": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "operation_pressure.saved_afferent_pair_difference": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "operation_pressure.saved_local_jacobian_AwakeRest": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": -7.453803997566894,
+      "min": -7.4540877,
+      "max": -7.4521575
+    },
+    "operation_pressure.saved_local_jacobian_BodySleep": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 7.453803997566894,
+      "min": 7.4521575,
+      "max": 7.4540877
+    },
+    "operation_pressure.signed_opponent": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "operation_pressure.zero_MC_saved_conditional_BodySleep": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 0.5,
+      "min": 0.5,
+      "max": 0.5
+    },
+    "operation_pressure.zero_MC_saved_logodds": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_1.appended_drive": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_1.cognitive_clipped": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_1.innate": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": -0.0,
+      "max": -0.0
+    },
+    "physical_components.primitive_1.memory_clipped": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_1.source_action": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_103.appended_drive": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_103.cognitive_clipped": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_103.innate": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_103.memory_clipped": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_103.source_action": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_104.appended_drive": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_104.cognitive_clipped": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_104.innate": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": -0.0,
+      "max": -0.0
+    },
+    "physical_components.primitive_104.memory_clipped": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_104.source_action": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_212.appended_drive": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_212.cognitive_clipped": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_212.innate": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": -0.0,
+      "max": -0.0
+    },
+    "physical_components.primitive_212.memory_clipped": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_212.source_action": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_3.appended_drive": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_3.cognitive_clipped": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_3.innate": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_3.memory_clipped": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_3.source_action": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 1.0417282943795623,
+      "min": -0.3480876,
+      "max": 1.0868064
+    },
+    "physical_components.primitive_400.appended_drive": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_400.cognitive_clipped": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_400.innate": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": -0.0,
+      "max": -0.0
+    },
+    "physical_components.primitive_400.memory_clipped": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_400.source_action": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_700.appended_drive": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_700.cognitive_clipped": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_700.innate": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_700.memory_clipped": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_components.primitive_700.source_action": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 1.0417282943795623,
+      "min": -0.3480876,
+      "max": 1.0868064
+    },
+    "physical_net_change_not_causal_benefit.AwakeRest.ATP": {
+      "n": 99,
+      "nonzero_count": 99,
+      "mean": -4.384292929292869e-05,
+      "min": -0.0005238600000000426,
+      "max": -1.2299999999965117e-05
+    },
+    "physical_net_change_not_causal_benefit.AwakeRest.F": {
+      "n": 99,
+      "nonzero_count": 55,
+      "mean": -0.0026433069929292907,
+      "min": -0.13101535,
+      "max": 0.0
+    },
+    "physical_net_change_not_causal_benefit.AwakeRest.H": {
+      "n": 99,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_net_change_not_causal_benefit.AwakeRest.P": {
+      "n": 99,
+      "nonzero_count": 99,
+      "mean": 0.0006098710242424244,
+      "min": 0.0006067140000000082,
+      "max": 0.0006099987
+    },
+    "physical_net_change_not_causal_benefit.AwakeRest.body_energy": {
+      "n": 99,
+      "nonzero_count": 99,
+      "mean": -0.0001666665656565681,
+      "min": -0.00016824999999998091,
+      "max": -0.00016620000000000523
+    },
+    "physical_net_change_not_causal_benefit.BodySleep.ATP": {
+      "n": 99,
+      "nonzero_count": 99,
+      "mean": -3.9907070707073276e-05,
+      "min": -0.0005062000000000122,
+      "max": -1.2950000000011563e-05
+    },
+    "physical_net_change_not_causal_benefit.BodySleep.F": {
+      "n": 99,
+      "nonzero_count": 45,
+      "mean": -0.0012832581333333338,
+      "min": -0.009678358,
+      "max": 0.0
+    },
+    "physical_net_change_not_causal_benefit.BodySleep.H": {
+      "n": 99,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_net_change_not_causal_benefit.BodySleep.P": {
+      "n": 99,
+      "nonzero_count": 71,
+      "mean": -0.0025892288747474766,
+      "min": -0.066655554,
+      "max": 0.0
+    },
+    "physical_net_change_not_causal_benefit.BodySleep.body_energy": {
+      "n": 99,
+      "nonzero_count": 99,
+      "mean": -0.0001664530303030274,
+      "min": -0.00016820000000006274,
+      "max": -0.00016530000000003486
+    },
+    "physical_net_change_not_causal_benefit.none.ATP": {
+      "n": 213,
+      "nonzero_count": 213,
+      "mean": -4.854478873239643e-05,
+      "min": -0.0003530499999999659,
+      "max": -1.1450000000023941e-05
+    },
+    "physical_net_change_not_causal_benefit.none.F": {
+      "n": 213,
+      "nonzero_count": 213,
+      "mean": 0.0012099276877934274,
+      "min": 0.0012094080000000004,
+      "max": 0.0012099987
+    },
+    "physical_net_change_not_causal_benefit.none.H": {
+      "n": 213,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "physical_net_change_not_causal_benefit.none.P": {
+      "n": 213,
+      "nonzero_count": 213,
+      "mean": 0.0006098947755868549,
+      "min": 0.0006095760000000006,
+      "max": 0.0006099987
+    },
+    "physical_net_change_not_causal_benefit.none.body_energy": {
+      "n": 213,
+      "nonzero_count": 213,
+      "mean": -0.00016810511737089395,
+      "min": -0.00017275999999999403,
+      "max": -0.00016620000000000523
+    },
+    "preactual_by_applied_operation.AwakeRest.ATP": {
+      "n": 99,
+      "nonzero_count": 99,
+      "mean": 0.629152742121212,
+      "min": 0.6125933,
+      "max": 0.65918416
+    },
+    "preactual_by_applied_operation.AwakeRest.F": {
+      "n": 99,
+      "nonzero_count": 55,
+      "mean": 0.0026433069929292907,
+      "min": 0.0,
+      "max": 0.13101535
+    },
+    "preactual_by_applied_operation.AwakeRest.H": {
+      "n": 99,
+      "nonzero_count": 99,
+      "mean": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "preactual_by_applied_operation.AwakeRest.P": {
+      "n": 99,
+      "nonzero_count": 75,
+      "mean": 0.0025277005454545465,
+      "min": 0.0,
+      "max": 0.06604884
+    },
+    "preactual_by_applied_operation.AwakeRest.body_energy": {
+      "n": 99,
+      "nonzero_count": 99,
+      "mean": 0.7561238051515156,
+      "min": 0.72383904,
+      "max": 0.7921858
+    },
+    "preactual_by_applied_operation.BodySleep.ATP": {
+      "n": 99,
+      "nonzero_count": 99,
+      "mean": 0.6294872917171719,
+      "min": 0.61212057,
+      "max": 0.6586603
+    },
+    "preactual_by_applied_operation.BodySleep.F": {
+      "n": 99,
+      "nonzero_count": 45,
+      "mean": 0.0012832581333333338,
+      "min": 0.0,
+      "max": 0.009678358
+    },
+    "preactual_by_applied_operation.BodySleep.H": {
+      "n": 99,
+      "nonzero_count": 99,
+      "mean": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "preactual_by_applied_operation.BodySleep.P": {
+      "n": 99,
+      "nonzero_count": 71,
+      "mean": 0.0025892288747474766,
+      "min": 0.0,
+      "max": 0.066655554
+    },
+    "preactual_by_applied_operation.BodySleep.body_energy": {
+      "n": 99,
+      "nonzero_count": 99,
+      "mean": 0.7569890885858586,
+      "min": 0.72333544,
+      "max": 0.79201955
+    },
+    "preactual_by_applied_operation.none.ATP": {
+      "n": 213,
+      "nonzero_count": 213,
+      "mean": 0.6306458269483569,
+      "min": 0.6129225,
+      "max": 0.65474725
+    },
+    "preactual_by_applied_operation.none.F": {
+      "n": 213,
+      "nonzero_count": 114,
+      "mean": 0.0014996138521126746,
+      "min": 0.0,
+      "max": 0.012097353
+    },
+    "preactual_by_applied_operation.none.H": {
+      "n": 213,
+      "nonzero_count": 213,
+      "mean": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "preactual_by_applied_operation.none.P": {
+      "n": 213,
+      "nonzero_count": 167,
+      "mean": 0.0020502117877934274,
+      "min": 0.0,
+      "max": 0.008537208
+    },
+    "preactual_by_applied_operation.none.body_energy": {
+      "n": 213,
+      "nonzero_count": 213,
+      "mean": 0.758876244037558,
+      "min": 0.72417873,
+      "max": 0.7918517
+    },
+    "raw_cognitive.primitive_1": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "raw_cognitive.primitive_103": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "raw_cognitive.primitive_104": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "raw_cognitive.primitive_212": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "raw_cognitive.primitive_3": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "raw_cognitive.primitive_400": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "raw_cognitive.primitive_700": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "raw_memory.primitive_1": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "raw_memory.primitive_103": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "raw_memory.primitive_104": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "raw_memory.primitive_212": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "raw_memory.primitive_3": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "raw_memory.primitive_400": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "raw_memory.primitive_700": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "recovery_probabilities.actual_AwakeRest": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 0.23318176069249685,
+      "min": 0.19999475663522384,
+      "max": 0.23422347161273965
+    },
+    "recovery_probabilities.actual_BodySleep": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 0.23318176069249685,
+      "min": 0.19999475663522384,
+      "max": 0.23422347161273965
+    },
+    "recovery_probabilities.actual_posture_rest_probability": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 0.4663635213849937,
+      "min": 0.3999895132704477,
+      "max": 0.4684469432254793
+    },
+    "recovery_probabilities.conditional_AwakeRest_given_Rest": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 0.5,
+      "min": 0.5,
+      "max": 0.5
+    },
+    "recovery_probabilities.conditional_BodySleep_given_Rest": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 0.5,
+      "min": 0.5,
+      "max": 0.5
+    },
+    "recovery_probabilities.posture_rest_probability": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 0.5552134608002806,
+      "min": 0.4811661136953331,
+      "max": 0.5575066367240841
+    },
+    "recovery_probabilities.representative_rest_probability": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 0.1998137031391328,
+      "min": 0.1564597119957915,
+      "max": 0.20126786272966488
+    },
+    "recovery_scores.operation_AwakeRest": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "recovery_scores.operation_BodySleep": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "sampling.counter": {
+      "n": 411,
+      "nonzero_count": 410,
+      "mean": 205.0,
+      "min": 0,
+      "max": 410
+    },
+    "sampling.temperature": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "source_diagnostic_logits.primitive_1": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "source_diagnostic_logits.primitive_103": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "source_diagnostic_logits.primitive_104": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "source_diagnostic_logits.primitive_212": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "source_diagnostic_logits.primitive_3": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 1.0417282943795623,
+      "min": -0.3480876,
+      "max": 1.0868064
+    },
+    "source_diagnostic_logits.primitive_400": {
+      "n": 411,
+      "nonzero_count": 0,
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "source_diagnostic_logits.primitive_700": {
+      "n": 411,
+      "nonzero_count": 411,
+      "mean": 1.0417282943795623,
+      "min": -0.3480876,
+      "max": 1.0868064
+    }
+  },
+  "closed_source_hash_constant": "1e5712252b3251c41e28d724db5353cfd3c7c83adff4d78c871e584e9dce7a5e",
+  "maximum_observed_packet_bytes": null,
+  "scope": "Single recovery-only source. All12 appended-drive sham. No synaptic learning or generalization claim. Net changes are not isolated action benefits. Conditional operation probabilities are not common Rest mass. Core raw_drives are actual physiology even in DriveSham; the encoded append inputs are reference-neutralized by the frozen native mode.",
+  "raw_checkpoint_or_science_data_emitted": false,
+  "input_validation": "Frozen native full-prefix checkpoint/authority audit and genuine latest cold restore passed; exact exported trace hash independently verified.",
+  "export_receipt_sha256": "3bba45cd09fcfafc9ad5461bcd415a20d5accf2fbe9d8a0a7106a4e4b9025852",
+  "exported_trace_sha256": "77aa91a7a3a5f81173d7aaf68d336a972d7998432d07741982d3014d9452a8a1",
+  "native_final_checkpoint_sha256": "99729c785e27d662cb95590a8264744367c287732f40a0622a072693b14874bf",
+  "endpoint_classification": "Completed 1200-world-interval horizon; Waking at endpoint leaves last cycle partially observed, without extension."
+}
