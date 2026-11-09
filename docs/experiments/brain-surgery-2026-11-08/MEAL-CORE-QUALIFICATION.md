@@ -9,3 +9,6 @@ History: initial source 233 compiled but 22 cases failed during fixture sealing 
 The JSON summary records exact hashes, paths, test-fixture genesis and verification. The literal bank fixture is hand-constructed/test-owned from synthetic unit inputs, not a captured organism or learned checkpoint.
 
 This is core qualification, not an admitted host or biological efficacy result. A fresh closed-synaptic host integration is separately in progress and excluded here.
+
+[Download the exact source-only patch](m2-meal-qualified-core-fbf2a517-to-a5b12af62.patch).
+[Read the scalar validation and synthetic-fixture provenance](MEAL-CORE-QUALIFICATION.json).
