@@ -1,0 +1,1336 @@
+{
+  "schema": "object-rich-optional-vocal-curated-results-v1",
+  "status": "Complete: both terminal arms, both zero-forward full exports and frozen common-prefix revalidation passed.",
+  "study": "one source/body under two full policies; not independent animals or same-draw vocal-only intervention",
+  "seed": "0x034F42564F430901",
+  "common_intervals": 53,
+  "primary_intervals": [
+    54,
+    53
+  ],
+  "terminal_reasons": [
+    "unchanged conservative trace guard",
+    "unchanged conservative trace guard"
+  ],
+  "preparation_body_ticks_once": 240,
+  "primary_neural_source_calls": 107,
+  "qualification_native_calls_separate": 32,
+  "qualification_body_ticks_separate": 480,
+  "all_primary_closed_source_optimizer_bank_checks_passed": true,
+  "cold_checks": "two fixed qualification doses; every observed/ordinary cold checkpoint and original output pair exact, with16 cross-revision checkpoint+science pairs exact. No primary replay.",
+  "source_contract": {
+    "zero_rest_reader_genes": 512,
+    "pressure_value": 0,
+    "synaptic_learning": "closed"
+  },
+  "common_prefix": [
+    {
+      "intervals": 53,
+      "decisions": 53,
+      "intervals_without_decisions": 0,
+      "attempted_channels": {
+        "Locomotion:102": 29,
+        "Manipulation:211": 20,
+        "Vocal:400": 53,
+        "Posture:4": 34,
+        "Manipulation:210": 16,
+        "Locomotion:101": 16,
+        "Posture:104": 7,
+        "Manipulation:212": 9,
+        "Posture:700": 10,
+        "Locomotion:103": 8,
+        "Manipulation:213": 8,
+        "Posture:1": 2
+      },
+      "phase_counts": {
+        "Locomotion:102:Completed": 29,
+        "Manipulation:211:Completed": 1,
+        "Vocal:400:Attempt": 53,
+        "Posture:4:Completed": 34,
+        "Manipulation:210:Attempt": 15,
+        "Locomotion:101:Completed": 16,
+        "Manipulation:211:Attempt": 19,
+        "Posture:104:Completed": 7,
+        "Manipulation:212:Completed": 9,
+        "Manipulation:210:Completed": 1,
+        "Posture:700:Completed": 10,
+        "Locomotion:103:Completed": 8,
+        "Manipulation:213:Attempt": 8,
+        "Posture:1:Completed": 2
+      },
+      "joint_success_counts": {
+        "False": 53
+      },
+      "frustration": {
+        "count": 53,
+        "sum": 53.0,
+        "minimum": 1.0,
+        "maximum": 1.0
+      },
+      "speech": {
+        "source_payload_unknown": 53,
+        "vocal_bundle_selected": 53,
+        "vocal_command_payload_values_0": 53
+      },
+      "actual_utterance_count": 0,
+      "positive_nutrition_dose_count": 1,
+      "total_applied_nutrition": 0.6499999761581421,
+      "final_consumed_transfer_count": 1,
+      "grip_transfers": {
+        "Acquired": 1,
+        "Consumed": 1
+      },
+      "memory_generation": 53,
+      "memory_merges": 12,
+      "memory_evictions": 0,
+      "retained_exact_ingest_consumed_records": [
+        {
+          "memory_id_raw": 6,
+          "family_raw": 6,
+          "action_id_raw": 210,
+          "tracked_object_id_raw": 59075195402516,
+          "observation_count": 1,
+          "first_tick_raw": 246,
+          "last_tick_raw": 246,
+          "sealed_sequence_id_raw": 7,
+          "outcome_contact": "Consumed",
+          "valence": 0.05050346255302429,
+          "success_association": 0.0,
+          "danger_association": 0.029999999329447746,
+          "energy_association": 0.10750430822372437
+        }
+      ],
+      "exact_ingest_consumed_recall_count": 0,
+      "source_execution_count": 53,
+      "cognitive_body_energy_debit_sum": 0.009435708037926815,
+      "brain_work_totals": {
+        "decoder_candidate_ops": 1367,
+        "memory_context_ops": 1367,
+        "microsteps": 203,
+        "neuron_updates": 440124,
+        "synapse_ops": 3247782,
+        "tile_visits": 19361
+      },
+      "recovery_dose_counts": {},
+      "after_sleep_phase_counts": {
+        "Awake": 53
+      },
+      "object_distance_and_possession": {
+        "near-root": {
+          "entity_id": 2,
+          "minimum_distance": 0.1477564741642916,
+          "maximum_distance": 1.118033988749895,
+          "initial_distance": 1.118033988749895,
+          "initially_in_reach": true,
+          "intervals_after_in_reach": 53,
+          "intervals_distance_decreased": 26,
+          "intervals_distance_increased": 19,
+          "intervals_after_held": 6,
+          "consumption_transition_offsets": [
+            6
+          ],
+          "final_distance": 0.25869779709260415,
+          "finally_in_reach": true
+        },
+        "far-fruit": {
+          "entity_id": 3,
+          "minimum_distance": 3.190713170074002,
+          "maximum_distance": 4.213563067670809,
+          "initial_distance": 3.2596012026013246,
+          "initially_in_reach": false,
+          "intervals_after_in_reach": 0,
+          "intervals_distance_decreased": 17,
+          "intervals_distance_increased": 28,
+          "intervals_after_held": 0,
+          "consumption_transition_offsets": [],
+          "final_distance": 4.132914610193023,
+          "finally_in_reach": false
+        },
+        "activity-toy": {
+          "entity_id": 4,
+          "minimum_distance": 2.160726757213347,
+          "maximum_distance": 3.1103881036530305,
+          "initial_distance": 2.2472204205485236,
+          "initially_in_reach": false,
+          "intervals_after_in_reach": 0,
+          "intervals_distance_decreased": 17,
+          "intervals_distance_increased": 28,
+          "intervals_after_held": 0,
+          "consumption_transition_offsets": [],
+          "final_distance": 3.022568785665925,
+          "finally_in_reach": false
+        },
+        "obstacle": {
+          "entity_id": 5,
+          "minimum_distance": 1.8585928968609575,
+          "maximum_distance": 2.8428840772670747,
+          "initial_distance": 1.9137658679536038,
+          "initially_in_reach": false,
+          "intervals_after_in_reach": 0,
+          "intervals_distance_decreased": 17,
+          "intervals_distance_increased": 28,
+          "intervals_after_held": 0,
+          "consumption_transition_offsets": [],
+          "final_distance": 2.7630453199453036,
+          "finally_in_reach": false
+        }
+      },
+      "retained_memory_count": 41,
+      "memory_expectancy_count": 721,
+      "initial": {
+        "body_energy": 0.7921858,
+        "health": 1.0,
+        "injury": 0.0,
+        "hunger": 0.35475585,
+        "brain_atp": 0.65918416,
+        "fatigue": 0.13101535,
+        "sleep_pressure": 0.06604884
+      },
+      "final": {
+        "body_energy": 0.8884898,
+        "health": 1.0,
+        "injury": 0.0,
+        "hunger": 0.30624253,
+        "brain_atp": 0.74397475,
+        "fatigue": 0.19471562,
+        "sleep_pressure": 0.098162144
+      },
+      "nutrition_dose_events": [
+        {
+          "offset": 6,
+          "body_event": {
+            "damage": 0.0,
+            "energy": 0.26499998569488525,
+            "investigation": 1.0,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.6499999761581421,
+            "perceived_novelty": 1.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "ingest_channels": [
+            {
+              "command": {
+                "channel": "Manipulation",
+                "confidence": 0.9374990463256836,
+                "coordination_group": 0,
+                "direction": {
+                  "x": -0.6261831521987915,
+                  "y": 0.0,
+                  "z": -0.2953643798828125
+                },
+                "duration_ticks": 1,
+                "intensity": 1.0,
+                "payload": {
+                  "values": []
+                },
+                "primitive": 210,
+                "stand_off_distance": 0.0,
+                "target": {
+                  "entity": 2,
+                  "position": {
+                    "x": -0.6261831521987915,
+                    "y": 0.0,
+                    "z": -0.2953643798828125
+                  }
+                }
+              },
+              "phase": "Completed",
+              "physical": {
+                "collision_normal": null,
+                "contact": "Consumed",
+                "displacement": {
+                  "x": 0.0,
+                  "y": 0.0,
+                  "z": 0.0
+                },
+                "energy_cost": 0.029999999329447746,
+                "target_entity": 2
+              }
+            }
+          ],
+          "grip_transfers": [
+            {
+              "kind": "Consumed",
+              "new_owner": null,
+              "new_position": {
+                "x": -0.44668132066726685,
+                "y": 0.0,
+                "z": -0.5671676397323608
+              },
+              "object": 2,
+              "previous_owner": 1,
+              "previous_position": {
+                "x": -0.44668132066726685,
+                "y": 0.0,
+                "z": -0.5671676397323608
+              }
+            }
+          ],
+          "representative": {
+            "abi_version": 2,
+            "action_id": 210,
+            "arbitration_trace": null,
+            "confidence": 0.9374990463256836,
+            "duration_ticks": 1,
+            "intensity": 1.0,
+            "kind": "Interact",
+            "motor_payload": null,
+            "organism_id": 1,
+            "source_mask": 0,
+            "target_entity": 2,
+            "target_position": {
+              "x": -0.6261831521987915,
+              "y": 0.0,
+              "z": -0.2953643798828125
+            },
+            "teacher_lesson": null
+          },
+          "before": {
+            "hunger": 0.36594921350479126,
+            "body_energy": 0.7910070419311523,
+            "brain_atp": 0.656279444694519
+          },
+          "after": {
+            "hunger": 0.16935120522975922,
+            "body_energy": 0.8986676335334778,
+            "brain_atp": 0.918001651763916
+          }
+        }
+      ],
+      "grip_event_offsets": [
+        {
+          "offset": 0,
+          "kind": "Acquired",
+          "object": 2
+        },
+        {
+          "offset": 6,
+          "kind": "Consumed",
+          "object": 2
+        }
+      ],
+      "distinct_closed_source_hashes": [
+        "703879861ac69720d22e310beeed1231590159b5b4a535c106261d986197c30d"
+      ]
+    },
+    {
+      "intervals": 53,
+      "decisions": 53,
+      "intervals_without_decisions": 0,
+      "attempted_channels": {
+        "Locomotion:101": 15,
+        "Manipulation:210": 16,
+        "Posture:700": 7,
+        "Locomotion:103": 5,
+        "Manipulation:213": 17,
+        "Posture:4": 34,
+        "Locomotion:102": 33,
+        "Manipulation:211": 17,
+        "Posture:104": 10,
+        "Manipulation:212": 3,
+        "Posture:1": 2
+      },
+      "phase_counts": {
+        "Locomotion:101:Completed": 15,
+        "Manipulation:210:Preparation": 2,
+        "Posture:700:Completed": 7,
+        "Locomotion:103:Completed": 5,
+        "Manipulation:213:Attempt": 17,
+        "Posture:4:Completed": 34,
+        "Locomotion:102:Completed": 33,
+        "Manipulation:211:Attempt": 16,
+        "Manipulation:210:Attempt": 13,
+        "Posture:104:Completed": 10,
+        "Manipulation:211:Completed": 1,
+        "Manipulation:210:Completed": 1,
+        "Manipulation:212:Completed": 3,
+        "Posture:1:Completed": 2
+      },
+      "joint_success_counts": {
+        "True": 7,
+        "False": 46
+      },
+      "frustration": {
+        "count": 53,
+        "sum": 46.0,
+        "minimum": 0.0,
+        "maximum": 1.0
+      },
+      "speech": {
+        "source_payload_False": 53,
+        "no_vocal_motor_command": 53,
+        "chosen_quiet": 53
+      },
+      "actual_utterance_count": 0,
+      "positive_nutrition_dose_count": 1,
+      "total_applied_nutrition": 0.6499999761581421,
+      "final_consumed_transfer_count": 1,
+      "grip_transfers": {
+        "Acquired": 2,
+        "Released": 1,
+        "Consumed": 1
+      },
+      "memory_generation": 53,
+      "memory_merges": 7,
+      "memory_evictions": 0,
+      "retained_exact_ingest_consumed_records": [
+        {
+          "memory_id_raw": 13,
+          "family_raw": 6,
+          "action_id_raw": 210,
+          "tracked_object_id_raw": 59075195402516,
+          "observation_count": 1,
+          "first_tick_raw": 252,
+          "last_tick_raw": 252,
+          "sealed_sequence_id_raw": 13,
+          "outcome_contact": "Consumed",
+          "valence": 0.08064208924770355,
+          "success_association": 1.0,
+          "danger_association": 0.0,
+          "energy_association": 0.10784405469894409
+        }
+      ],
+      "exact_ingest_consumed_recall_count": 0,
+      "source_execution_count": 53,
+      "cognitive_body_energy_debit_sum": 0.009331303182989359,
+      "brain_work_totals": {
+        "decoder_candidate_ops": 1403,
+        "memory_context_ops": 1403,
+        "microsteps": 199,
+        "neuron_updates": 431932,
+        "synapse_ops": 3215014,
+        "tile_visits": 19109
+      },
+      "recovery_dose_counts": {},
+      "after_sleep_phase_counts": {
+        "Awake": 53
+      },
+      "object_distance_and_possession": {
+        "near-root": {
+          "entity_id": 2,
+          "minimum_distance": 0.2332353011409688,
+          "maximum_distance": 1.118033988749895,
+          "initial_distance": 1.118033988749895,
+          "initially_in_reach": true,
+          "intervals_after_in_reach": 53,
+          "intervals_distance_decreased": 23,
+          "intervals_distance_increased": 25,
+          "intervals_after_held": 11,
+          "consumption_transition_offsets": [
+            12
+          ],
+          "final_distance": 0.6997844617283246,
+          "finally_in_reach": true
+        },
+        "far-fruit": {
+          "entity_id": 3,
+          "minimum_distance": 3.1748730742474414,
+          "maximum_distance": 4.812138092319834,
+          "initial_distance": 3.2596012026013246,
+          "initially_in_reach": false,
+          "intervals_after_in_reach": 0,
+          "intervals_distance_decreased": 15,
+          "intervals_distance_increased": 33,
+          "intervals_after_held": 0,
+          "consumption_transition_offsets": [],
+          "final_distance": 4.649397036588306,
+          "finally_in_reach": false
+        },
+        "activity-toy": {
+          "entity_id": 4,
+          "minimum_distance": 2.191543137928167,
+          "maximum_distance": 3.7632623709675252,
+          "initial_distance": 2.2472204205485236,
+          "initially_in_reach": false,
+          "intervals_after_in_reach": 0,
+          "intervals_distance_decreased": 15,
+          "intervals_distance_increased": 33,
+          "intervals_after_held": 0,
+          "consumption_transition_offsets": [],
+          "final_distance": 3.610653229267337,
+          "finally_in_reach": false
+        },
+        "obstacle": {
+          "entity_id": 5,
+          "minimum_distance": 1.82688332526941,
+          "maximum_distance": 3.404007460716203,
+          "initial_distance": 1.9137658679536038,
+          "initially_in_reach": false,
+          "intervals_after_in_reach": 0,
+          "intervals_distance_decreased": 15,
+          "intervals_distance_increased": 33,
+          "intervals_after_held": 0,
+          "consumption_transition_offsets": [],
+          "final_distance": 3.242665725196012,
+          "finally_in_reach": false
+        }
+      },
+      "retained_memory_count": 46,
+      "memory_expectancy_count": 651,
+      "initial": {
+        "body_energy": 0.7921858,
+        "health": 1.0,
+        "injury": 0.0,
+        "hunger": 0.35475585,
+        "brain_atp": 0.65918416,
+        "fatigue": 0.13101535,
+        "sleep_pressure": 0.06604884
+      },
+      "final": {
+        "body_energy": 0.8892965,
+        "health": 1.0,
+        "injury": 0.0,
+        "hunger": 0.30079314,
+        "brain_atp": 0.75701046,
+        "fatigue": 0.19471562,
+        "sleep_pressure": 0.098162144
+      },
+      "nutrition_dose_events": [
+        {
+          "offset": 12,
+          "body_event": {
+            "damage": 0.0,
+            "energy": 0.2750000059604645,
+            "investigation": 0.75,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.6499999761581421,
+            "perceived_novelty": 0.25,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "ingest_channels": [
+            {
+              "command": {
+                "channel": "Manipulation",
+                "confidence": 0.9374990463256836,
+                "coordination_group": 0,
+                "direction": {
+                  "x": 0.30280423164367676,
+                  "y": 0.0,
+                  "z": 0.06542891263961792
+                },
+                "duration_ticks": 1,
+                "intensity": 1.0,
+                "payload": {
+                  "values": []
+                },
+                "primitive": 210,
+                "stand_off_distance": 0.0,
+                "target": {
+                  "entity": 2,
+                  "position": {
+                    "x": 0.30280423164367676,
+                    "y": 0.0,
+                    "z": 0.06542891263961792
+                  }
+                }
+              },
+              "phase": "Completed",
+              "physical": {
+                "collision_normal": null,
+                "contact": "Consumed",
+                "displacement": {
+                  "x": 0.0,
+                  "y": 0.0,
+                  "z": 0.0
+                },
+                "energy_cost": 0.029999999329447746,
+                "target_entity": 2
+              }
+            }
+          ],
+          "grip_transfers": [
+            {
+              "kind": "Consumed",
+              "new_owner": null,
+              "new_position": {
+                "x": -0.322685182094574,
+                "y": 0.0,
+                "z": -0.7628487348556519
+              },
+              "object": 2,
+              "previous_owner": 1,
+              "previous_position": {
+                "x": -0.322685182094574,
+                "y": 0.0,
+                "z": -0.7628487348556519
+              }
+            }
+          ],
+          "representative": {
+            "abi_version": 2,
+            "action_id": 210,
+            "arbitration_trace": null,
+            "confidence": 0.9374990463256836,
+            "duration_ticks": 1,
+            "intensity": 1.0,
+            "kind": "Interact",
+            "motor_payload": null,
+            "organism_id": 1,
+            "source_mask": 0,
+            "target_entity": 2,
+            "target_position": {
+              "x": 0.30280423164367676,
+              "y": 0.0,
+              "z": 0.06542891263961792
+            },
+            "teacher_lesson": null
+          },
+          "before": {
+            "hunger": 0.37488043308258057,
+            "body_energy": 0.7899374961853027,
+            "brain_atp": 0.6538925766944885
+          },
+          "after": {
+            "hunger": 0.1779470592737198,
+            "body_energy": 0.8979378342628479,
+            "brain_atp": 0.9156956672668457
+          }
+        }
+      ],
+      "grip_event_offsets": [
+        {
+          "offset": 0,
+          "kind": "Acquired",
+          "object": 2
+        },
+        {
+          "offset": 9,
+          "kind": "Released",
+          "object": 2
+        },
+        {
+          "offset": 10,
+          "kind": "Acquired",
+          "object": 2
+        },
+        {
+          "offset": 12,
+          "kind": "Consumed",
+          "object": 2
+        }
+      ],
+      "distinct_closed_source_hashes": [
+        "ce660594ff37a481e42b6699bd23e463a9239e3aa9c0a173b8497bf58dcace58"
+      ]
+    }
+  ],
+  "full_arms": [
+    {
+      "intervals": 54,
+      "decisions": 54,
+      "intervals_without_decisions": 0,
+      "attempted_channels": {
+        "Locomotion:102": 30,
+        "Manipulation:211": 21,
+        "Vocal:400": 54,
+        "Posture:4": 34,
+        "Manipulation:210": 16,
+        "Locomotion:101": 16,
+        "Posture:104": 7,
+        "Manipulation:212": 9,
+        "Posture:700": 11,
+        "Locomotion:103": 8,
+        "Manipulation:213": 8,
+        "Posture:1": 2
+      },
+      "phase_counts": {
+        "Locomotion:102:Completed": 30,
+        "Manipulation:211:Completed": 1,
+        "Vocal:400:Attempt": 54,
+        "Posture:4:Completed": 34,
+        "Manipulation:210:Attempt": 15,
+        "Locomotion:101:Completed": 16,
+        "Manipulation:211:Attempt": 20,
+        "Posture:104:Completed": 7,
+        "Manipulation:212:Completed": 9,
+        "Manipulation:210:Completed": 1,
+        "Posture:700:Completed": 11,
+        "Locomotion:103:Completed": 8,
+        "Manipulation:213:Attempt": 8,
+        "Posture:1:Completed": 2
+      },
+      "joint_success_counts": {
+        "False": 54
+      },
+      "frustration": {
+        "count": 54,
+        "sum": 54.0,
+        "minimum": 1.0,
+        "maximum": 1.0
+      },
+      "speech": {
+        "source_payload_unknown": 54,
+        "vocal_bundle_selected": 54,
+        "vocal_command_payload_values_0": 54
+      },
+      "actual_utterance_count": 0,
+      "positive_nutrition_dose_count": 1,
+      "total_applied_nutrition": 0.6499999761581421,
+      "final_consumed_transfer_count": 1,
+      "grip_transfers": {
+        "Acquired": 1,
+        "Consumed": 1
+      },
+      "memory_generation": 54,
+      "memory_merges": 13,
+      "memory_evictions": 0,
+      "retained_exact_ingest_consumed_records": [
+        {
+          "memory_id_raw": 6,
+          "family_raw": 6,
+          "action_id_raw": 210,
+          "tracked_object_id_raw": 59075195402516,
+          "observation_count": 1,
+          "first_tick_raw": 246,
+          "last_tick_raw": 246,
+          "sealed_sequence_id_raw": 7,
+          "outcome_contact": "Consumed",
+          "valence": 0.05050346255302429,
+          "success_association": 0.0,
+          "danger_association": 0.029999999329447746,
+          "energy_association": 0.10750430822372437
+        }
+      ],
+      "exact_ingest_consumed_recall_count": 0,
+      "source_execution_count": 54,
+      "cognitive_body_energy_debit_sum": 0.009592200542101637,
+      "brain_work_totals": {
+        "decoder_candidate_ops": 1392,
+        "memory_context_ops": 1392,
+        "microsteps": 206,
+        "neuron_updates": 446728,
+        "synapse_ops": 3302260,
+        "tile_visits": 19674
+      },
+      "recovery_dose_counts": {},
+      "after_sleep_phase_counts": {
+        "Awake": 54
+      },
+      "object_distance_and_possession": {
+        "near-root": {
+          "entity_id": 2,
+          "minimum_distance": 0.1477564741642916,
+          "maximum_distance": 1.118033988749895,
+          "initial_distance": 1.118033988749895,
+          "initially_in_reach": true,
+          "intervals_after_in_reach": 54,
+          "intervals_distance_decreased": 26,
+          "intervals_distance_increased": 20,
+          "intervals_after_held": 6,
+          "consumption_transition_offsets": [
+            6
+          ],
+          "final_distance": 0.29607269233954586,
+          "finally_in_reach": true
+        },
+        "far-fruit": {
+          "entity_id": 3,
+          "minimum_distance": 3.190713170074002,
+          "maximum_distance": 4.213563067670809,
+          "initial_distance": 3.2596012026013246,
+          "initially_in_reach": false,
+          "intervals_after_in_reach": 0,
+          "intervals_distance_decreased": 17,
+          "intervals_distance_increased": 29,
+          "intervals_after_held": 0,
+          "consumption_transition_offsets": [],
+          "final_distance": 4.204922998044752,
+          "finally_in_reach": false
+        },
+        "activity-toy": {
+          "entity_id": 4,
+          "minimum_distance": 2.160726757213347,
+          "maximum_distance": 3.1103881036530305,
+          "initial_distance": 2.2472204205485236,
+          "initially_in_reach": false,
+          "intervals_after_in_reach": 0,
+          "intervals_distance_decreased": 17,
+          "intervals_distance_increased": 29,
+          "intervals_after_held": 0,
+          "consumption_transition_offsets": [],
+          "final_distance": 3.1030972183061314,
+          "finally_in_reach": false
+        },
+        "obstacle": {
+          "entity_id": 5,
+          "minimum_distance": 1.8585928968609575,
+          "maximum_distance": 2.8428840772670747,
+          "initial_distance": 1.9137658679536038,
+          "initially_in_reach": false,
+          "intervals_after_in_reach": 0,
+          "intervals_distance_decreased": 17,
+          "intervals_distance_increased": 29,
+          "intervals_after_held": 0,
+          "consumption_transition_offsets": [],
+          "final_distance": 2.829319369597196,
+          "finally_in_reach": false
+        }
+      },
+      "retained_memory_count": 41,
+      "memory_expectancy_count": 742,
+      "initial": {
+        "body_energy": 0.7921858,
+        "health": 1.0,
+        "injury": 0.0,
+        "hunger": 0.35475585,
+        "brain_atp": 0.65918416,
+        "fatigue": 0.13101535,
+        "sleep_pressure": 0.06604884
+      },
+      "final": {
+        "body_energy": 0.8882943,
+        "health": 1.0,
+        "injury": 0.0,
+        "hunger": 0.30733928,
+        "brain_atp": 0.7419847,
+        "fatigue": 0.1959159,
+        "sleep_pressure": 0.09876724
+      },
+      "nutrition_dose_events": [
+        {
+          "offset": 6,
+          "body_event": {
+            "damage": 0.0,
+            "energy": 0.26499998569488525,
+            "investigation": 1.0,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.6499999761581421,
+            "perceived_novelty": 1.0,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "ingest_channels": [
+            {
+              "command": {
+                "channel": "Manipulation",
+                "confidence": 0.9374990463256836,
+                "coordination_group": 0,
+                "direction": {
+                  "x": -0.6261831521987915,
+                  "y": 0.0,
+                  "z": -0.2953643798828125
+                },
+                "duration_ticks": 1,
+                "intensity": 1.0,
+                "payload": {
+                  "values": []
+                },
+                "primitive": 210,
+                "stand_off_distance": 0.0,
+                "target": {
+                  "entity": 2,
+                  "position": {
+                    "x": -0.6261831521987915,
+                    "y": 0.0,
+                    "z": -0.2953643798828125
+                  }
+                }
+              },
+              "phase": "Completed",
+              "physical": {
+                "collision_normal": null,
+                "contact": "Consumed",
+                "displacement": {
+                  "x": 0.0,
+                  "y": 0.0,
+                  "z": 0.0
+                },
+                "energy_cost": 0.029999999329447746,
+                "target_entity": 2
+              }
+            }
+          ],
+          "grip_transfers": [
+            {
+              "kind": "Consumed",
+              "new_owner": null,
+              "new_position": {
+                "x": -0.44668132066726685,
+                "y": 0.0,
+                "z": -0.5671676397323608
+              },
+              "object": 2,
+              "previous_owner": 1,
+              "previous_position": {
+                "x": -0.44668132066726685,
+                "y": 0.0,
+                "z": -0.5671676397323608
+              }
+            }
+          ],
+          "representative": {
+            "abi_version": 2,
+            "action_id": 210,
+            "arbitration_trace": null,
+            "confidence": 0.9374990463256836,
+            "duration_ticks": 1,
+            "intensity": 1.0,
+            "kind": "Interact",
+            "motor_payload": null,
+            "organism_id": 1,
+            "source_mask": 0,
+            "target_entity": 2,
+            "target_position": {
+              "x": -0.6261831521987915,
+              "y": 0.0,
+              "z": -0.2953643798828125
+            },
+            "teacher_lesson": null
+          },
+          "before": {
+            "hunger": 0.36594921350479126,
+            "body_energy": 0.7910070419311523,
+            "brain_atp": 0.656279444694519
+          },
+          "after": {
+            "hunger": 0.16935120522975922,
+            "body_energy": 0.8986676335334778,
+            "brain_atp": 0.918001651763916
+          }
+        }
+      ],
+      "grip_event_offsets": [
+        {
+          "offset": 0,
+          "kind": "Acquired",
+          "object": 2
+        },
+        {
+          "offset": 6,
+          "kind": "Consumed",
+          "object": 2
+        }
+      ],
+      "distinct_closed_source_hashes": [
+        "703879861ac69720d22e310beeed1231590159b5b4a535c106261d986197c30d"
+      ]
+    },
+    {
+      "intervals": 53,
+      "decisions": 53,
+      "intervals_without_decisions": 0,
+      "attempted_channels": {
+        "Locomotion:101": 15,
+        "Manipulation:210": 16,
+        "Posture:700": 7,
+        "Locomotion:103": 5,
+        "Manipulation:213": 17,
+        "Posture:4": 34,
+        "Locomotion:102": 33,
+        "Manipulation:211": 17,
+        "Posture:104": 10,
+        "Manipulation:212": 3,
+        "Posture:1": 2
+      },
+      "phase_counts": {
+        "Locomotion:101:Completed": 15,
+        "Manipulation:210:Preparation": 2,
+        "Posture:700:Completed": 7,
+        "Locomotion:103:Completed": 5,
+        "Manipulation:213:Attempt": 17,
+        "Posture:4:Completed": 34,
+        "Locomotion:102:Completed": 33,
+        "Manipulation:211:Attempt": 16,
+        "Manipulation:210:Attempt": 13,
+        "Posture:104:Completed": 10,
+        "Manipulation:211:Completed": 1,
+        "Manipulation:210:Completed": 1,
+        "Manipulation:212:Completed": 3,
+        "Posture:1:Completed": 2
+      },
+      "joint_success_counts": {
+        "True": 7,
+        "False": 46
+      },
+      "frustration": {
+        "count": 53,
+        "sum": 46.0,
+        "minimum": 0.0,
+        "maximum": 1.0
+      },
+      "speech": {
+        "source_payload_False": 53,
+        "no_vocal_motor_command": 53,
+        "chosen_quiet": 53
+      },
+      "actual_utterance_count": 0,
+      "positive_nutrition_dose_count": 1,
+      "total_applied_nutrition": 0.6499999761581421,
+      "final_consumed_transfer_count": 1,
+      "grip_transfers": {
+        "Acquired": 2,
+        "Released": 1,
+        "Consumed": 1
+      },
+      "memory_generation": 53,
+      "memory_merges": 7,
+      "memory_evictions": 0,
+      "retained_exact_ingest_consumed_records": [
+        {
+          "memory_id_raw": 13,
+          "family_raw": 6,
+          "action_id_raw": 210,
+          "tracked_object_id_raw": 59075195402516,
+          "observation_count": 1,
+          "first_tick_raw": 252,
+          "last_tick_raw": 252,
+          "sealed_sequence_id_raw": 13,
+          "outcome_contact": "Consumed",
+          "valence": 0.08064208924770355,
+          "success_association": 1.0,
+          "danger_association": 0.0,
+          "energy_association": 0.10784405469894409
+        }
+      ],
+      "exact_ingest_consumed_recall_count": 0,
+      "source_execution_count": 53,
+      "cognitive_body_energy_debit_sum": 0.009331303182989359,
+      "brain_work_totals": {
+        "decoder_candidate_ops": 1403,
+        "memory_context_ops": 1403,
+        "microsteps": 199,
+        "neuron_updates": 431932,
+        "synapse_ops": 3215014,
+        "tile_visits": 19109
+      },
+      "recovery_dose_counts": {},
+      "after_sleep_phase_counts": {
+        "Awake": 53
+      },
+      "object_distance_and_possession": {
+        "near-root": {
+          "entity_id": 2,
+          "minimum_distance": 0.2332353011409688,
+          "maximum_distance": 1.118033988749895,
+          "initial_distance": 1.118033988749895,
+          "initially_in_reach": true,
+          "intervals_after_in_reach": 53,
+          "intervals_distance_decreased": 23,
+          "intervals_distance_increased": 25,
+          "intervals_after_held": 11,
+          "consumption_transition_offsets": [
+            12
+          ],
+          "final_distance": 0.6997844617283246,
+          "finally_in_reach": true
+        },
+        "far-fruit": {
+          "entity_id": 3,
+          "minimum_distance": 3.1748730742474414,
+          "maximum_distance": 4.812138092319834,
+          "initial_distance": 3.2596012026013246,
+          "initially_in_reach": false,
+          "intervals_after_in_reach": 0,
+          "intervals_distance_decreased": 15,
+          "intervals_distance_increased": 33,
+          "intervals_after_held": 0,
+          "consumption_transition_offsets": [],
+          "final_distance": 4.649397036588306,
+          "finally_in_reach": false
+        },
+        "activity-toy": {
+          "entity_id": 4,
+          "minimum_distance": 2.191543137928167,
+          "maximum_distance": 3.7632623709675252,
+          "initial_distance": 2.2472204205485236,
+          "initially_in_reach": false,
+          "intervals_after_in_reach": 0,
+          "intervals_distance_decreased": 15,
+          "intervals_distance_increased": 33,
+          "intervals_after_held": 0,
+          "consumption_transition_offsets": [],
+          "final_distance": 3.610653229267337,
+          "finally_in_reach": false
+        },
+        "obstacle": {
+          "entity_id": 5,
+          "minimum_distance": 1.82688332526941,
+          "maximum_distance": 3.404007460716203,
+          "initial_distance": 1.9137658679536038,
+          "initially_in_reach": false,
+          "intervals_after_in_reach": 0,
+          "intervals_distance_decreased": 15,
+          "intervals_distance_increased": 33,
+          "intervals_after_held": 0,
+          "consumption_transition_offsets": [],
+          "final_distance": 3.242665725196012,
+          "finally_in_reach": false
+        }
+      },
+      "retained_memory_count": 46,
+      "memory_expectancy_count": 651,
+      "initial": {
+        "body_energy": 0.7921858,
+        "health": 1.0,
+        "injury": 0.0,
+        "hunger": 0.35475585,
+        "brain_atp": 0.65918416,
+        "fatigue": 0.13101535,
+        "sleep_pressure": 0.06604884
+      },
+      "final": {
+        "body_energy": 0.8892965,
+        "health": 1.0,
+        "injury": 0.0,
+        "hunger": 0.30079314,
+        "brain_atp": 0.75701046,
+        "fatigue": 0.19471562,
+        "sleep_pressure": 0.098162144
+      },
+      "nutrition_dose_events": [
+        {
+          "offset": 12,
+          "body_event": {
+            "damage": 0.0,
+            "energy": 0.2750000059604645,
+            "investigation": 0.75,
+            "mating_opportunity": 0.0,
+            "nutrition": 0.6499999761581421,
+            "perceived_novelty": 0.25,
+            "sleep_recovery": 0.0,
+            "social_contact": 0.0,
+            "temperature_stress": 0.0
+          },
+          "ingest_channels": [
+            {
+              "command": {
+                "channel": "Manipulation",
+                "confidence": 0.9374990463256836,
+                "coordination_group": 0,
+                "direction": {
+                  "x": 0.30280423164367676,
+                  "y": 0.0,
+                  "z": 0.06542891263961792
+                },
+                "duration_ticks": 1,
+                "intensity": 1.0,
+                "payload": {
+                  "values": []
+                },
+                "primitive": 210,
+                "stand_off_distance": 0.0,
+                "target": {
+                  "entity": 2,
+                  "position": {
+                    "x": 0.30280423164367676,
+                    "y": 0.0,
+                    "z": 0.06542891263961792
+                  }
+                }
+              },
+              "phase": "Completed",
+              "physical": {
+                "collision_normal": null,
+                "contact": "Consumed",
+                "displacement": {
+                  "x": 0.0,
+                  "y": 0.0,
+                  "z": 0.0
+                },
+                "energy_cost": 0.029999999329447746,
+                "target_entity": 2
+              }
+            }
+          ],
+          "grip_transfers": [
+            {
+              "kind": "Consumed",
+              "new_owner": null,
+              "new_position": {
+                "x": -0.322685182094574,
+                "y": 0.0,
+                "z": -0.7628487348556519
+              },
+              "object": 2,
+              "previous_owner": 1,
+              "previous_position": {
+                "x": -0.322685182094574,
+                "y": 0.0,
+                "z": -0.7628487348556519
+              }
+            }
+          ],
+          "representative": {
+            "abi_version": 2,
+            "action_id": 210,
+            "arbitration_trace": null,
+            "confidence": 0.9374990463256836,
+            "duration_ticks": 1,
+            "intensity": 1.0,
+            "kind": "Interact",
+            "motor_payload": null,
+            "organism_id": 1,
+            "source_mask": 0,
+            "target_entity": 2,
+            "target_position": {
+              "x": 0.30280423164367676,
+              "y": 0.0,
+              "z": 0.06542891263961792
+            },
+            "teacher_lesson": null
+          },
+          "before": {
+            "hunger": 0.37488043308258057,
+            "body_energy": 0.7899374961853027,
+            "brain_atp": 0.6538925766944885
+          },
+          "after": {
+            "hunger": 0.1779470592737198,
+            "body_energy": 0.8979378342628479,
+            "brain_atp": 0.9156956672668457
+          }
+        }
+      ],
+      "grip_event_offsets": [
+        {
+          "offset": 0,
+          "kind": "Acquired",
+          "object": 2
+        },
+        {
+          "offset": 9,
+          "kind": "Released",
+          "object": 2
+        },
+        {
+          "offset": 10,
+          "kind": "Acquired",
+          "object": 2
+        },
+        {
+          "offset": 12,
+          "kind": "Consumed",
+          "object": 2
+        }
+      ],
+      "distinct_closed_source_hashes": [
+        "ce660594ff37a481e42b6699bd23e463a9239e3aa9c0a173b8497bf58dcace58"
+      ]
+    }
+  ],
+  "optional_failure_breakdown": {
+    "failed_decisions": 46,
+    "actual_failed_channel": "Manipulation",
+    "evidence": "Recorded phase Attempt, source finish_action maps succeeded=false to Attempt; aggregate false. Not inferred from null per-channel observation.",
+    "missing_observations_are_unknown": true,
+    "physical_contact_none": 46,
+    "nutrition_doses_on_failures": 0,
+    "grip_transfers_on_failures": 0,
+    "out_of_reach_before_and_after_locomotion": 45,
+    "wrong_target_kind_or_mobility": 38,
+    "overlap_wrong_kind_and_out_of_reach": 37,
+    "valid_kind_but_out_of_reach": 8,
+    "reachable_wrong_kind": 1,
+    "reachable_wrong_kind_detail": "offset11: Play213 on own held unconsumed near-root food at distance0.5",
+    "failures_while_actor_holds_own_food": 9,
+    "failed_targets_already_consumed": 0,
+    "failed_targets_owned_by_other": 0,
+    "group_counts": [
+      {
+        "channel": "Manipulation",
+        "primitive": 213,
+        "target_label": "obstacle",
+        "count": 10
+      },
+      {
+        "channel": "Manipulation",
+        "primitive": 211,
+        "target_label": "far-fruit",
+        "count": 3
+      },
+      {
+        "channel": "Manipulation",
+        "primitive": 210,
+        "target_label": "activity-toy",
+        "count": 5
+      },
+      {
+        "channel": "Manipulation",
+        "primitive": 210,
+        "target_label": "far-fruit",
+        "count": 4
+      },
+      {
+        "channel": "Manipulation",
+        "primitive": 211,
+        "target_label": "activity-toy",
+        "count": 2
+      },
+      {
+        "channel": "Manipulation",
+        "primitive": 211,
+        "target_label": "obstacle",
+        "count": 11
+      },
+      {
+        "channel": "Manipulation",
+        "primitive": 213,
+        "target_label": "near-root",
+        "count": 1
+      },
+      {
+        "channel": "Manipulation",
+        "primitive": 210,
+        "target_label": "obstacle",
+        "count": 4
+      },
+      {
+        "channel": "Manipulation",
+        "primitive": 213,
+        "target_label": "far-fruit",
+        "count": 5
+      },
+      {
+        "channel": "Manipulation",
+        "primitive": 213,
+        "target_label": "activity-toy",
+        "count": 1
+      }
+    ],
+    "source_commit": "fbf2a517f93098b5d936878a3d26bbb8d0391c38",
+    "sources": [
+      {
+        "path": "crates/alife_world/src/headless.rs",
+        "sha256": "ffcf799afd5f4aa1b37414824c189f68d858f8f1d31035cb93b0166cbc7dae78",
+        "lines": "5880-5925 Play; 5934-6013 grasp/Grab; 6130-6195 Eat; 6561-6596 finish_action; 6873-6875 reach; 5205-5234 channel/aggregate receipts"
+      },
+      {
+        "path": "crates/alife_world/src/headless/hands.rs",
+        "sha256": "a4d09624c2fc24161846f1691cd644fbad299603ed98b5c80e858f854a68eb41",
+        "lines": "52-143 selected-target preparation, valid kind/ownership/reach, acquisition and failure"
+      }
+    ],
+    "limitations": "Source yields MissingAffordance for multiple violations. Type and distance violations overlap; this does not claim a separately recorded branch reason or an isolated counterfactual. No heldness sensor is assumed."
+  },
+  "maximum_primary_whole_packet_bytes": [
+    3131118,
+    3124034
+  ],
+  "primary_science_bytes": [
+    15739958,
+    16034380
+  ],
+  "source_closure": "0a444a493f97fdcea1bcd438fa50cdb7340e7067fe9ba418c8efcfd7ea41e0d1",
+  "driver_sha256": "cb3005bcd204e0727613d7a836b71fde13c2253ef8d43b05034d1baa6c2ba925",
+  "primary_freeze_sha256": "e8ede445ae3c35d6ac93d4db05c9ba5d147123cb1cdfb8a17e9aa151d61c7383",
+  "source_only_archive_sha256": "f239c3f4838b96838d02b805e4bac2efe4a3d2247dc3fa2c452ff146980f241b",
+  "health_label_clarification": "Health initially and finally1; actual initial hunger0.35475585. No1-to0.366 premeal hunger drop.",
+  "limitations": [
+    "Legacy forced empty Vocal contaminates aggregate success/frustration even when nutrition is actually applied.",
+    "Optional removes that systematic empty-vocal failure but retains46 actual manipulation failures in53 intervals.",
+    "Both consume one food dose. Optional ingestion is later,12 versus6, so no feeding-speed improvement is shown.",
+    "All53 optional source speech payloads absent; Quiet is source-gated, not learned.",
+    "No sleep/recovery cycle or actual recovery dose observed; awake-rest choices are not dose evidence.",
+    "Exact meal records retained but no recorded expectancy recalled them afterward in this short window.",
+    "Far fruit and stationary toy never reached within1.25, so no broad navigation/play competence.",
+    "No new study, tuning, retry, weight patch or extension. Raw private state remains local."
+  ],
+  "frozen_common_prefix_revalidation_passed": true,
+  "common_prefix_audit_sha256": "4f3e12a223fc9cfef17d1f8b54a6e3392769de8e8fb8d0beb67890b7e5e19771",
+  "no_further_world_neural_calls_planned": true
+}
