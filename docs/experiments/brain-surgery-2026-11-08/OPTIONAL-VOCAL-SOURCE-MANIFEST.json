@@ -1,0 +1,79 @@
+{
+  "baseline_commit": "fbf2a517f93098b5d936878a3d26bbb8d0391c38",
+  "original_source_closure": "cb817a3d2f9be471525b4dcade416f70ed290c036553458c209dd6546e409be4",
+  "corrected_source_closure": "19be3cc2612f110b564699ad2d566219b51d411fb57c3cc8af1bc9ced194dc7e",
+  "closure_order": "original manifest Path-component order",
+  "files": [
+    {
+      "path": "crates/alife_training/src/cpu/grouped_host_envelope.rs",
+      "sha256": "cddc7cc4c4853fd6a3969c87ddef7c63ccdfd3681d5ce2dc44c2649df10772de",
+      "bytes": 34107,
+      "baseline_sha256": "57ce0d9f05a4287d738e69e153da122266637f2904b62212abd5254e58c0f2d6"
+    },
+    {
+      "path": "crates/alife_training/src/cpu/grouped_host_loop.rs",
+      "sha256": "d7668fc5a67f6c6a66c3bb017ad2328ccd72b1f480cfefd79a01d5f423d815d0",
+      "bytes": 38301,
+      "baseline_sha256": "70a58bfff469403fdfa252c4fb3ecb73d195ab2e2f4f01551e4326670a1bceb6"
+    },
+    {
+      "path": "crates/alife_training/src/cpu/host.rs",
+      "sha256": "51658f2de3b646f3fb470ce23a4776f79cb5a549e5c91242d5722d8aa46e3380",
+      "bytes": 91157,
+      "baseline_sha256": "d6317c0f7640595b5c8fcaeb185bf86d0e3393b5fbae7edb5c43863de4568bd4"
+    },
+    {
+      "path": "crates/alife_training/src/cpu/motor_mediation/confidence/policy/optional_vocal/tests.rs",
+      "sha256": "6328b054f71280a067151cefddffdc97edabbd54703ced1a383f63d93f9ff97f",
+      "bytes": 14140,
+      "baseline_sha256": null
+    },
+    {
+      "path": "crates/alife_training/src/cpu/motor_mediation/confidence/policy/optional_vocal.rs",
+      "sha256": "a8f72e4c1d01dce4f3e0f97ad01d346731125c93d40965e4a35a99d992d86d13",
+      "bytes": 25481,
+      "baseline_sha256": null
+    },
+    {
+      "path": "crates/alife_training/src/cpu/motor_mediation/confidence/policy.rs",
+      "sha256": "6f86942ab7ded73dcd07f47d3be223e826bd2d8dfb35893bdfa92b754d88d56e",
+      "bytes": 25064,
+      "baseline_sha256": "3dd43cb19b23f80e4bba00bfa952c32bb45ee2b16394ae549d1728d64ea3eb6e"
+    },
+    {
+      "path": "crates/alife_training/src/cpu/optional_vocal_host.rs",
+      "sha256": "247b6cd7a80bc5a9d64f29ae11e271468545f7d34a96badfc24005d8b5633aac",
+      "bytes": 16476,
+      "baseline_sha256": null
+    },
+    {
+      "path": "crates/alife_training/src/cpu/optional_vocal_host_tests.rs",
+      "sha256": "df00d3ec681027490fb9a390fe9dc56913cb0c50250cbd4814892d449d12b8b0",
+      "bytes": 16554,
+      "baseline_sha256": null
+    },
+    {
+      "path": "crates/alife_training/src/cpu/organism.rs",
+      "sha256": "0c8fad9ff7ec1a0260e9584ba6039b1d7887cbf693bf6128b060c1dfd4df3e55",
+      "bytes": 54848,
+      "baseline_sha256": "64d43d07df9062438203860e604f953077003ce7910026e6b273e06467a26619"
+    }
+  ],
+  "patches": {
+    "optional-vocal-qualified-source.patch": {
+      "sha256": "dc851232abeb8a655cba7fbf6089389dc51dd0e2717d199e8d15e269d123c49e",
+      "bytes": 115929
+    },
+    "review/004-final-source-revision-from-original.patch": {
+      "sha256": "a74c13a390832fc6edef0dc464b019c61d6a1e2da10197e31427cde09de24682",
+      "bytes": 4246
+    },
+    "review/005-qualified-test-instrumentation.patch": {
+      "sha256": "320b143b75bac63ab221a2946296c4945d954d3c3e85d2b987360686fd23e70c",
+      "bytes": 8477
+    }
+  },
+  "qualified_with_test_instrumentation": "review/005-qualified-test-instrumentation.patch",
+  "candidate_full_build_source_freeze": "6fcf67acec965c441b82d38446d76c21352aafccc3a56520210b24acb44611f7",
+  "publication": "not performed"
+}
