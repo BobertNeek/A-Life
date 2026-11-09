@@ -1,5 +1,15 @@
 # Brain surgery handoff: 9 November 2026
 
+## Current checkpoint: 9 November 2026
+
+- Grip fixed qualification is complete across separately attributed runs: six new V6/V7 passes plus forty historical receipts, not a fresh 46-test sweep. [Latest five CPU GPU-backend contracts](https://github.com/BobertNeek/A-Life/actions/runs/42705473214) used no hardware dispatch.
+- [Play runtime new05 cold-boundary passed](https://github.com/BobertNeek/A-Life/actions/runs/42705534641). New06, eleven legacy fixtures and two default-wire probes are still pending in a separate continuation.
+- [Controlled Play physics passed](https://github.com/BobertNeek/A-Life/actions/runs/42699800420), but the novel toy produced investigation rather than stimulation, with no boredom benefit. A source-bound target-familiarity repair is being implemented, not yet host-qualified.
+- [Meal's real later decision qualified](https://github.com/BobertNeek/A-Life/actions/runs/42700219085) without an observed sampled-action or reported Eat-probability change. A source-only full-support/rejection diagnostic is prepared for a new fixed run.
+- Main/defaults and acquired lives remain unchanged. None of these fixed CPU results establishes autonomous care or new learned competence.
+
+The dated sections below preserve the complete chronology, including failures that later corrections do not erase.
+
 ## Method and scope
 
 Keep the original [Sparks of Weight-Space Programming](https://rikiyat.github.io/blog/weight-space-programming/) reference. Experiment 4 motivates targeted repair, Experiment 5 whole 20,486-weight controllers, and Experiment 6 measured iterative feedback. Our controller is recurrent, embodied and plastic. Authored genes, changed neural activity, changed policy probability, a sampled action, a useful physical outcome and learned competence are different results.
