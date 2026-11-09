@@ -93,6 +93,28 @@ The subsequent identical-state alternating benchmark is decisive for this protot
 
 The more promising successor is to memoize pure compiler/recipe outputs from exact compiler inputs, while preserving the original full source-versus-expected comparisons. That is a source-only hypothesis, not a deployed optimization. Current live packets remain unchanged. Same-filesystem durable packets protect interrupted processes, not loss/replacement of the whole execution workspace; the independent recovery copy currently contains source, not private acquired lives.
 
+## Full horizon and optimized-profile fixture, 05:26 UTC
+
+Full has now completed exactly 1,200 intervals with exit 0 at its declared horizon, in about 2 hours 25 minutes. There are 1,163 decisions: 566 applied AwakeRest, five BodySleep starts and 592 without applied recovery. Five consolidations occurred, but only four complete sleep cycles were observed: cycle five is Waking at the fixed endpoint. Do not extend the horizon to make it complete. Hunger remains 1, energy ends near 0.59752 and ATP near 0.55046, with intact health and endpoint fatigue/pressure zero. No fatigue-0.35 or pressure-0.6 crossing occurred. Constant source/optimizer closure rows are not the complete export audit, which remains pending.
+
+DriveSham started at 05:25:58 from its untouched matched age-240/source-generation-zero initial checkpoint. No second source construction, preparation, replay or coefficient change occurred. Full is immutable. Both complete native exports follow paired execution. There is no Full-versus-Sham result yet.
+
+The separate optimized-profile probe also completed. Its first wrapper compile failed before code generation or any source/body/neural call because absolute module bindings changed nested lookup and its renamed entry collided with an existing function. That attempt remains retained. A named second wrapper preserves the original module directory layout and baseline production/include bytes; its only timing-module changes are recipe path and entry name. The second root-only compile succeeded in 139.63 seconds, without compiling dependencies.
+
+The optimized fixture used one fresh source, exactly 240 ordinary body ticks, two closed steps and two separate decoded-state restores. All five original complete outputs match byte-for-byte, as do decode/re-encode and restored states. The training root and five relevant warm dependency crates use opt level 2, with explicit root debug assertions and overflow checks on. This is a profile factor, not the rejected proof-cache implementation.
+
+- Steps: 0.716 / 0.641 seconds, versus the earlier dev0 fixture's 1.037 / 1.179.
+- Checkpoint construction: 1.338 / 0.912 seconds, versus 1.703 / 1.868.
+- Native decode: 1.031 / 0.930 seconds; encode 0.050 / 0.028; re-encode 0.071 / 0.140.
+- Complete measured checkpoint subchains: 2.502 / 2.021 seconds, versus 3.208 / 3.558.
+- Raw-wire durable publication: 10.7 / 10.5 milliseconds. Separate decoded restores: 5.764 / 5.149 seconds; startup 9.641 seconds.
+
+These are two samples in one fixed optimized fixture, not a paired performance benchmark, cold-cache/process test or measured live-run speedup. The active Full/Sham executable/profile is unchanged. The optimized binary is SHA256 `2c1867a2aa5137f33aac3a2ad5dc56ca80e4d00646b3fb5dcb1201910926a2f5`; no executable or state is uploaded. Sampled additional packet peak was 28.70 MB, with 21.96 MB retained physical allocation. Polling is not a hard disk quota.
+
+The equal-work GDS1 qualification is now allocated after Full's terminal storage measurement. Its frozen plan runs only four sham cases and an identical complete FULL witness on both old/new revisions, with at most 3,120 fixed preparation ticks and 40 step attempts including one intentional failure. It uses two serial root-only dev0 test harnesses, no new dependencies, scientific seed or primary step. Results remain pending. Additional allocation is monitored up to 320 MiB, leaving roughly 633 MB projected uncertainty reserve after remaining Sham history, exports and the 4 GiB floor. That forecast is not an unseen-growth guarantee.
+
+Two biological wiring candidates are advancing separately at source level. The boredom route adds native cells 2508/2509 before the D port, only for exactly bound observed Play proposals, with urgent-needs inhibition and equal component work. Six tests are authored, none executed; distinct sampling/world admission is still absent. The recovery/reflex candidate adds a versioned composed physical witness so selected voluntary action, involuntary displacement and once-only biology remain distinct. It has 22 authored physical controls, none executed, and has not been installed in the M2 host. Neither source proposal is a capability or learning result.
+
 ## Wiring findings that must guide the next whole-brain candidate
 
 - M2 loneliness is signed, unlike the earlier positive-only M0 probe. Its peer-gated Approach route exists; a lower reference is a separate calibration, not repair of a nonexistent route. Its Contact bonus maps to Grab, and a living peer cannot be acquired. Judge real approach, contact geometry and measured loneliness relief, not a Contact-family label.
