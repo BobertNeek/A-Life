@@ -1,0 +1,97 @@
+{
+  "schema": "m2-grip-f041-v6-passed-v1",
+  "run_id": 42702857894,
+  "job_id": 129451879077,
+  "attempt": 1,
+  "prepared": "52fa7cd7bc6b03aa7cc2295a9fe06404dc20791c",
+  "activation": "90ec935b0f6c8ff13600218fc57b0910ab1c2259",
+  "url": "https://github.com/BobertNeek/A-Life/actions/runs/42702857894/job/129451879077",
+  "summary": {
+    "activation_head": "90ec935b0f6c8ff13600218fc57b0910ab1c2259",
+    "activation_marker_sha256": "bb407197173fd38d37319e8485ecce7b4eb293219b0f017c130f554c98a71995",
+    "attempted_fixture_ids": [
+      "f041"
+    ],
+    "binary_identities": [
+      {
+        "sha256": "bf46c961fd5feab6f6bfd95d983287d4fef761a490c04d26ab3f4aee16df369b",
+        "target_id": "training_grip_options_host"
+      }
+    ],
+    "bound_files": 866,
+    "cargo_lock_sha256": "99b01e0353263fd5bbf0261320898e8395d45583f2045e3433d3e2a1f50070eb",
+    "code": "OK",
+    "compiled_target_ids": [
+      "training_grip_options_host"
+    ],
+    "completed": [],
+    "confirmed_passed_test_bodies": 1,
+    "correction_patch_sha256": "0ce2a14320e13e31b9727d41d979798910c31e9663dcaca043c0900c5c96774a",
+    "dependency_correction_patch_sha256": "fa468c4ca23f88c2f90f561176283fb1bf0f53c24280fee6c6dcdd093f5ed712",
+    "diagnostics": [],
+    "elapsed_seconds": 392,
+    "grip_patch_sha256": "acf8cc50353ba76cb7adf5af1db5845ee6e6b2e2261d0ee823821428e2e4d054",
+    "launched_fixture_processes": 1,
+    "listed_fixture_ids": [
+      "f041"
+    ],
+    "main": "c3aec16df33861f1316d127736f5f60eea327ede",
+    "output_bytes": 133117,
+    "passed_fixture_ids": [
+      "f041"
+    ],
+    "peak_rss_bytes": 1734582272,
+    "peak_workspace_bytes": 2047067658,
+    "plan_id": "m2-grip-fixed-fixtures-v6",
+    "prepared_head": "52fa7cd7bc6b03aa7cc2295a9fe06404dc20791c",
+    "research_base": "fbf2a517f93098b5d936878a3d26bbb8d0391c38",
+    "schema": "m2-grip-fixed-fixture-summary-v6",
+    "seal_sha256": "048761d6e6a44790c574ae02c6b4beae1398f1b5377e51f43b8afd9776deb3f3",
+    "source_audited_attempt_dose": {
+      "bank_forwards": 3,
+      "cold_branch_intervals": 1,
+      "cold_restored_world_branches": 1,
+      "committed_registered_biology_intervals": 3,
+      "fixtures_with_unenumerated_compiler_work": 1,
+      "fresh_fixture_recipe_builds": 1,
+      "fresh_worlds": 3,
+      "grip_neuron_updates": 768,
+      "host_bundle_attempts": 3,
+      "ordinary_identity_rejection_calls": 1,
+      "partition_forwards": 0,
+      "primitive_attempts": 0,
+      "rolled_back_registered_biology_intervals": 0,
+      "source_forwards": 3,
+      "warm_branch_intervals": 2
+    },
+    "source_audited_passed_dose": {
+      "bank_forwards": 3,
+      "cold_branch_intervals": 1,
+      "cold_restored_world_branches": 1,
+      "committed_registered_biology_intervals": 3,
+      "fixtures_with_unenumerated_compiler_work": 1,
+      "fresh_fixture_recipe_builds": 1,
+      "fresh_worlds": 3,
+      "grip_neuron_updates": 768,
+      "host_bundle_attempts": 3,
+      "ordinary_identity_rejection_calls": 1,
+      "partition_forwards": 0,
+      "primitive_attempts": 0,
+      "rolled_back_registered_biology_intervals": 0,
+      "source_forwards": 3,
+      "warm_branch_intervals": 2
+    },
+    "source_manifest_sha256": "46b38a5939a8a4cd5c28cea523a11aedd4d053da0b150079ed5be9cbb4b75338",
+    "stage": "complete",
+    "toolchain": {
+      "cargo": "cargo 1.99.1 (5f94df478 2026-08-27)",
+      "cargo_binary_sha256": "a670e02cfa39ac2e53f77a2d911ca1fc9e2c479b0603ec956625be1daf24e3af",
+      "host": "x86_64-unknown-linux-gnu",
+      "llvm": "23.1.1",
+      "rust_commit": "58cf8f9c35b355199727627d07ae34a4e2846d67",
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+      "rustc_binary_sha256": "b53b780f77f952062f8ca8a3b70aef2390b1e45ad91939be94afdc9543026853"
+    }
+  },
+  "scope": "One passing f041 host fixture, separately from forty retained historical passes. Five CPU-side GPU-backend contracts remain pending; no hardware parity or competence claim. Recursive constructor/compiler numerical count remains uncertified."
+}
