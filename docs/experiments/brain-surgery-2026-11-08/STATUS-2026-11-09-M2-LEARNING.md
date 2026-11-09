@@ -126,3 +126,52 @@ Two biological wiring candidates are advancing separately at source level. The b
 - Reproductive research peers remain nonbreeding. Signed thermal toy arithmetic is not signed body/atmosphere physiology. Neither gap is fixed by renaming neurons or turning up an Avoid weight.
 
 The next implementation sequence should preserve these distinctions: qualify actual meal provenance, compose native social/Play/reflex seams under fresh identities, then use small matched ecological and equal-work learning comparisons. Retain no-ops and normal aging. Do not require permanent refusal of unpleasant nutritious food or manufacture endless activity. All unsuccessful candidates, numerical failures, actual exposures and source identities belong in Astra 6.2's handoff.
+
+
+## 9 November, 07:10 UTC: the recovery circuit's biggest newly found problem
+
+The original weight-space programming paper remains the method reference, especially iterative feedback in Experiment 6. The current results changed what we should repair next. We must not teach a recovery reader to compensate for a broken action repertoire.
+
+### Compulsory failed speech contaminates every Full decision
+
+A read-only audit of the completed Full arm found 1,163 decisions, each compelled to select Vocal400 with an empty speech payload. The Vocal factor was a singleton at probability 1 in every decision: 103 representative-forced utterances and 1,060 independent utterances. There was no silence outcome. All 1,024 inherited SpeechPayload coefficients were zero, with closed acquired offsets, so the source could not produce a token payload.
+
+The world correctly rejects missing-payload speech before checking cooldown. Aggregate bundle success is all-channel AND, so every one of these bundles had success=false and frustration=1. Actual successful AwakeRest and BodySleep still occurred. This is an action-policy defect, not failed physical recovery, defective world speech validation, or a reason to pretend a missing utterance succeeded. Non-locomotion execution observations are absent from these saved receipts, not explicitly false; the speech rejection classification follows the exact saved commands and pinned execution source.
+
+The fresh optional-Vocal candidate is source-complete. It adds an explicit Quiet choice scored from the unique, validated mediated Idle proposal, excludes speech from both representative and independent support when the current source produces no payload, and permits Quiet even when a payload exists. Quiet omits the Vocal command. It does not create words or bypass genuine speech/cooldown failures. It has a separate sampler and inner/outer checkpoint owner, with old loaders rejecting extracted new-policy state. No gradient or learned-silence claim is made.
+
+Frozen original patch SHA256: 309ba6a5e561c5c69d1f92bbbb6d3d144fca8ee36024522643e6445d27c8bb5b. Source closure: cb817a3d2f9be471525b4dcade416f70ed290c036553458c209dd6546e409be4. Ten controls and a complete legacy-output witness are authored but not executed. Preparation caught a helper-namespace compile error before any build; the smallest namespace-only correction is being preserved as a separate revision. This candidate is not combined with meal memory, GDE1/GDS, boredom, reflex or a new Rest reader.
+
+### Nonzero recovery recall is currently multiplied by zero
+
+The bounded inherited memory reader exists globally, but all 512 Rest MemoryContext coefficients at packed [30464,30976) are zero in this source and founder. All 34,048 fast, lifetime and eligibility entries stay zero. The source has no cognitive decoder extension.
+
+Recovery recall reaches the inputs correctly: AwakeRest has nonzero encoded memory in 1,159/1,163 decisions; BodySleep in 755/1,163. Every encoded memory lane matches saved recall times confidence bit-for-bit. Clipping slopes are 1 and the downstream operation Jacobians are nonzero. Thus zero recovery M is not empty recall, saturation or a disconnected downstream port. The genetic Rest readout is deliberately zero. This corrects any earlier inference that a nonzero bounded reader necessarily included Rest.
+
+The current writer is representative-only. Of 566 actual AwakeRest doses, 280 are keyed as AwakeRest; of five BodySleep starts, four are keyed as BodySleep. This is a real coverage gap, separate from the zero reader. Inherited disappointment from compulsory speech failure makes the stored recovery summaries slightly negative. Sleep-pressure relief also has inherited value coefficient zero. The first sleep's pressure relief is already fully sealed in its original joint event; no missing delayed relief has been demonstrated.
+
+Next design order: qualify genuine optional silence, inspect clean recovery outcome/value semantics, then decide whether an explicit fresh Rest reader and qualified nonrepresentative recovery observation are warranted. Keep the completed primary's genes, records and interpretation unchanged. Recalled evidence is not synaptic learning or proof of a useful preference.
+
+### Protected supplemental-meal host V2 is locally qualified
+
+Final tested source is b78561488f72dfbd27e69b530f391831628ce0de, tree 7f3b97aa479138309afa11daf7d1cd18cb2f26b9. It passes 183 distinct cases: 96 core-library, 67 candidate-memory, nine sleep-integration, six sidecar, four host and one literal old-wire case. Two existing timing cases remain ignored. Strict affected training production/unit/integration and core/runtime lint passes; broad core all-tests lint still reports three unchanged baseline warnings.
+
+A labeled scripted registered-world control truly consumed and stored one supplemental Ingest association alongside the unchanged representative, on the same original sequence and biological credit. Actual query recall and exact cold continuation pass. This proves a mechanism, not autonomous learning: the unchanged eight-interval sampler control ate once but sampled zero supplemental branches. Physical consumption does not imply positive experienced valence, and the supplemental value remains a joint-context association.
+
+The first prototype allowed extraction of an old-compatible inner save without its proof owner. V2 repairs that boundary with distinct inner/outer schema, lineage and proof-owner binding. Old public bodies/bytes remain unchanged; extraction, disguise, proof tampering, rollback and cold continuation are tested. No old-life migration is provided.
+
+The complete source-only recovery patch from fbf2a517 is [archived at the verified commit](https://github.com/BobertNeek/A-Life/blob/37271214f9ca92edbba33b8e1707e9e431350764/docs/experiments/brain-surgery-2026-11-08/m2-meal-host-v2-fbf2a517-to-b78561488.patch), 250,589 bytes, SHA256 43f12220d2f5e01bd66f25f5f7e2741225d1a3de364e75bf41a942be4b592fa0. It contains source/tests/prose, not acquired state or executable output. All failed and repeated fixtures remain recorded: 5,040 preparation ticks, 81 host attempts and 76 committed world advances. Repeated fixed fixtures are not independent animals. Actual host sleep/cold-wake with two associations and maximum-capacity overhead remain unqualified.
+
+### Equal-work learning sham is qualified, not yet a new cohort
+
+GDS1 now passes its six exact native executions, including both complete FULL witnesses. It performs the same gradient, eligibility, receptor arithmetic and work charge as GDE1, but commits zero fast/generation writes. The first matched event has 144 hypothetical writes and zero applied writes in Sham, versus 144 real writes in Full; eligibility remains nonzero. Sleep/cold/cross-mode and all five complete FULL output files agree exactly. These are fixed controls: 3,120 preparation ticks, 26 attempts and 25 committed advances, including one intentional rollback.
+
+The [qualified source patch](https://github.com/BobertNeek/A-Life/blob/ed970c9419294794f5bdf6004e447a23599053dd/docs/experiments/brain-surgery-2026-11-08/grouped-decoder-sham-qualified-from-2f2cd592.patch) is 96,509 bytes, SHA256 0103a26f79ebd33f3db19aa72dc0d8b8dd506c9903888bad754f134c3b942507. No equal-work scientific learning cohort has started. Fix the compulsory Vocal problem before interpreting a future recovery-learning comparison.
+
+### Live study and hosted failure accounting
+
+Full remains complete at 1,200 intervals with 1,163 decisions, 566 AwakeRest doses and five BodySleep starts. Four complete sleep cycles are observed; the fifth is Waking at the endpoint. Its zero-forward export/audit began at 06:53 UTC with the unchanged frozen executable. Sham continues unchanged in the separate native lane. At its exact 600-interval comparison point, Sham had 194 decisions, 44 AwakeRest doses, 51 BodySleep starts and 406 sleeping intervals, versus Full's much lower sleep allocation. This is one prepared body/source identity under two counterfactual drive settings, not independent seeds or a welfare ranking.
+
+The first hosted fixed-fixture qualification actually ran on branch qualification/m2-fixed-fixtures-v2, exact activation head 2092ccfc919c3ddfef4ac1cd645700f70d5d5ab1. [Run 42575100065](https://github.com/BobertNeek/A-Life/actions/runs/42575100065) stopped both boredom and reflex jobs during toolchain setup. Sanitized receipts report TOOLCHAIN with completed_count=0. No native build, fixture, source forward or world interval ran. Installer diagnostics were private and not retained, so the exact install-versus-query failure is unknown. Rust 1.99.1's official release and compiler identity are independently verified; do not infer the version is nonexistent.
+
+V2 and its activation remain terminal, with no retry or marker reuse. A separate source-only V3 correction is being prepared to use the audited official setup recipe in the normal hosted rustup home, explicit rustup-run tool invocations, static setup-stage codes and validated compiler facts. Variant sources, call ceilings and privacy limits remain unchanged. V3 has not been published or activated.
