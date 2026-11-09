@@ -1,0 +1,36 @@
+{
+  "required_base": "fbf2a517f93098b5d936878a3d26bbb8d0391c38",
+  "full_patch_bytes": 407065,
+  "full_patch_sha256": "0e05101420d3559a29d4eb8ae75ae4068fe12b8766cd203710e5fef90b9dddfa",
+  "parts": [
+    {
+      "name": "coordinated-target-full.part-01.patch",
+      "bytes": 112605,
+      "sha256": "c6a87865b2e2ec21e0d4687069eea6ac1bb698627fbedd378191d3e965c464e5",
+      "git_blob": "f6e3af9da2bf42c832b56bcdb503eb7ca8f34f91"
+    },
+    {
+      "name": "coordinated-target-full.part-02.patch",
+      "bytes": 112589,
+      "sha256": "d644714e1dfc714cddf1d65b04502ae64916538db03f95a89ceb622c5afdf8df",
+      "git_blob": "d31c18a0ff61316f34a362ffaffe924d7d552245"
+    },
+    {
+      "name": "coordinated-target-full.part-03.patch",
+      "bytes": 112628,
+      "sha256": "347577ad987e3a7b9e10d8545aeb85b3cb09b62309af2ad98006a5bdc2654cf7",
+      "git_blob": "8f353b5578a27e10629d259620fed914ad1be0f8"
+    },
+    {
+      "name": "coordinated-target-full.part-04.patch",
+      "bytes": 69243,
+      "sha256": "e567d77c8161dbcc380d798582864867f3fc4775e9a505ad9e0312e0e696aa5f",
+      "git_blob": "df2987c5cb0198feeca41d0904ba7718fde33a95"
+    }
+  ],
+  "verified_final_source_files": 103,
+  "final_source_closure": "f36ad431f406599b40aec0c2f2e76324b13e2b56e84278e4241bc2960c45bb41",
+  "runtime_changes": false,
+  "executable_equivalence": "Not qualified: source patch does not reconstruct compiler/dependency binaries or exhaustive dependency build recipes."
+}
+
