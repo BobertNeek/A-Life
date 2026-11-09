@@ -1,11 +1,19 @@
-# Bounded hosted M2 qualification, readable-transport V2
+# Bounded hosted M2 qualification, standard-toolchain V3
 
-Status: prepared locally, not published, not dispatched, no native compilation or
-fixture execution. Existing checkouts, targets, acquired state and active studies
-were not modified. This is a fixed disposable fixture packet, not another life
-study. GDS has passed its six exact local selections. Meal qualification is active
-locally. Both are **ineligible** for the first hosted activation; their source
-plans are retained only as inactive reference/fallback context.
+Status: V3 is source-only, not published or activated. Local native compilation
+and fixture execution remain prohibited in this preparation. V2 is terminal:
+run 42575100065, head 2092ccfc919c3ddfef4ac1cd645700f70d5d5ab1, both jobs
+TOOLCHAIN, zero builds/cases. Its branch/marker/run are untouched; no rerun or
+marker reuse. The original installation-versus-query cause is UNKNOWN because
+raw installer stderr was not retained. V3 removes fragile fresh-home/shim
+assumptions using the audited standard official setup recipe, not a proven
+causal diagnosis. Existing checkouts, targets, acquired state and active studies
+were not modified. This is a fixed disposable fixture packet, not a life study.
+Only boredom V2 and world-reflex are eligible. GDS and meal remain disabled.
+Meal has since qualified locally at b78561488f72dfbd27e69b530f391831628ce0de
+with an ownership-bound V2 outer host. The unchanged bc2cc5dc meal source retained
+here is historical only, has a supported extraction downgrade gap, and is NOT
+current qualified source or an automatically eligible fallback.
 
 ## Reconstruction result
 
@@ -90,8 +98,8 @@ before execution, and the actual run must contain exactly one successful test.
 
 Current first hosted activation is two independent fresh jobs, 28 exact tests:
 boredom V2 (6) and world-reflex (22), at most two jobs at once. The 42-case meal
-selection below is an INACTIVE reference because that same local qualification
-is now active. The marker and runner reject meal/GDS activation.
+selection below is an INACTIVE historical reference. Current meal qualification
+has moved to the separately qualified ownership-bound V2 host. The marker and runner reject meal/GDS activation.
 
 - Meal, INACTIVE reference only: 24 existing synthetic core cases +14 new synthetic bounded-sleep/core
   cases +4 host cases. Core contracts have zero world/body/neural-source calls.
@@ -144,62 +152,90 @@ Missing expected sleep/consumption/continuation events fail the declared case.
 
 ## Minimal hosted publication shape
 
-Draft branch: `qualification/m2-fixed-fixtures-v2`, based on accepted main. Add
-only `.github/workflows/m2-fixed-fixtures-v2.yml` plus this packet under
-`docs/experiments/m2-hosted-qualification-v2/`. No production source on that
-branch changes. Reconstruct separate disposable source trees inside hosted jobs.
+V3 branch: `qualification/m2-fixed-fixtures-v3`, created from the already verified
+marker-free prepared head `8e039f5b0a282b741cdd73cc06934c57825ac060`. Inherit
+all 34 exact V2 files. `UPDATE.json` is the narrow publication map: changed/new
+UTF-8 files only, with expected old Git blob SHA-1 values (null means absent).
+Do not republish unchanged source patches or bindings. Stored corpus paths stay
+under `docs/experiments/m2-hosted-qualification-v2/` on the V3 branch to permit
+that inheritance. Only orchestration/report files at those paths change on V3.
+This does not modify the V2 branch or its historical marker/run.
 
-Publish the workflow/scripts/source bindings first with ACTIVATE.json absent.
-That preparation is inert: the workflow requires BOTH the exact qualification
-branch and a change to the single ACTIVATE.json path. A REST-created branch is
-not assumed to emit the needed push event. After checking the prepared remote
-head and existing run ledger, add one frozen marker in one normal commit push
-through the existing authorized publication connection. Do not use a workflow
-GITHUB_TOKEN, create new credentials or expand permissions. The marker contains
-the prepared head, main, seal hash, fixture-list hash and the two exact eligible variant
-names (boredom and reflex). Its generated template is inert until the publisher supplies the verified
-prepared head and commits it at the activation path.
+New workflow: `.github/workflows/m2-fixed-fixtures-v3.yml`.
+New activation marker: `docs/experiments/m2-hosted-qualification-v3/ACTIVATE.json`.
+New plan and concurrency identity: `m2-fixed-fixtures-v3`.
+The V3 template is published at the V3 folder; the V2 template stays historical.
+There is no actual marker in this packet. The inherited V2 workflow is left
+byte-identical, requires the V2 branch, and cannot activate on a V3 push.
+All 15 other inherited workflow blobs match the previous audit and remain
+ineligible for this branch. No PR is opened: unfiltered PR CI and Jules would
+otherwise run. No old study, workflow_dispatch, credential, secret, cache action,
+write permission or optional-review wait is introduced.
 
-The native runner independently requires an existing-branch push (not creation,
-deletion or force), exact repo/branch, run_attempt=1, one parent equal to the
-marker prepared head, and exactly one added file: ACTIVATE.json. It verifies the
-marker fields and sealed source before compiling. The workflow fetches two
-commits for that check. Later marker edits/deletions and manual reruns cannot
-silently repeat the tests. Do not delete/re-add the marker or create a new
-activation commit to get around a failed/uncertain run. Reconcile the run ledger
-and outcome first. No absolute server-side once-only guarantee is claimed by a
-read-only workflow.
+Publish only the update while both activation marker paths remain absent.
+Verify every new expected blob, the prepared head, unchanged corpus, workflow
+inventory and run ledger. Then, if authorized by the parent, create one NEW
+marker-add commit at the V3 path on the existing V3 branch, using its verified
+prepared head and V3 seal. The parent owns publication/activation. The external
+connection must produce a normal existing-branch push; neither REST ref creation
+nor a workflow GITHUB_TOKEN push is assumed to trigger it. Do not force, merge,
+reuse the V2 marker, or retry an uncertain activation. Inspect the exact-head run
+ledger first. At most two distinct fixed jobs, fail-fast false, no retries.
 
-The fixed eligible matrix is boredom V2 and world-reflex, maximum parallelism two,
-fail-fast false, no retries. The immutable activation head, prepared head, marker
-hash and source binding are recorded in the sanitized result. There is no
-pull_request or workflow_dispatch trigger. No activation marker or native run
-was published during preparation.
+Both the setup step and native runner independently verify the sealed packet,
+repo/ref/event/run_attempt, single parent and exactly one added marker. Setup is
+a separate preceding workflow step: it admits the marker and installs/validates
+the toolchain but never builds or invokes a fixture. The subsequent private
+runner reconstructs the identical source and rediscovers/revalidates the same
+official compiler, without another install command. A failed setup prevents it.
 
-TRIGGER-AUDIT.json records every existing workflow at accepted main and the
-source hashes checked. None of their push filters matches this non-codex branch:
-they target main or codex/**. Marker publication therefore matches only the new
-workflow at this reviewed snapshot. Recheck that inventory at the prepared head
-before the single activation push, and verify the resulting exact-head run rather
-than assuming delivery or retrying blindly. Official GitHub documentation links
-are included in the audit; they confirm push on nondefault workflow commits,
-combined branch/path filtering and workflow-token recursion suppression.
+## Standard official toolchain with private setup output
 
-Do not open a draft PR merely to start qualification: existing unfiltered CI
-would also run and Jules review uses a repository secret and write permissions.
-This non-codex branch avoids that push trigger. Any later PR is separate and
-must account for those existing automations. No waiting for an optional review
-is required for the source work or this bounded packet.
+The repository already uses `dtolnay/rust-toolchain@stable` in CI. We verified
+its official signed commit `b725eda525362e7cf34af9a7243cac1e3f01a7ec` and
+vendored its exact 7,481-byte public action.yml as provenance, hash-bound by the
+seal. This adapter follows its audited command:
 
-Permissions are `contents: read` only. Checkout action is pinned, credentials
-are not persisted, no custom secrets are supplied, no persistent access is
-created, and no action uploads native outputs. Fresh official Rust 1.99.1 is
-installed with minimal profile. Cargo uses the exact lockfile, ordinary crates.io
-checksums and registry; there are no git dependencies or source replacements.
-The six local crates are core, world, GPU backend, runtime, storage and training.
-The current activation builds only training/world `--lib` harnesses; the inactive
-meal recipe would additionally build core; cpu-backend/receipt-lineage are
-enabled as required, gpu-tests is never enabled. No cache reuse is claimed.
+`rustup toolchain install 1.99.1 --profile minimal --no-self-update --force-non-host`
+
+It is NOT an unmodified composite action invocation. The official action uses
+`tee` on arbitrary installer output. This small adapter captures stdout/stderr
+privately instead, omits checksum retries, default mutation and rustup bootstrap,
+and requests no additional components or targets. Missing platform rustup
+fails at the specific discovery stage. This change does not prove why V2 failed.
+
+Installation uses the existing normal hosted HOME and discovered rustup home,
+with official Rust download endpoints, before the private native runner. Cargo
+home, target and all temp/output paths are private even during setup. No fresh
+isolated RUSTUP_HOME is created. Discovery uses `rustup show home`, then
+`rustup run 1.99.1 rustc --print sysroot`; the canonical sysroot must be exactly
+the 1.99.1 x86_64-unknown-linux-gnu toolchain below that discovered home. Compiler,
+cargo and rustdoc must be regular executables in its bin directory. The private
+environment then uses that explicit RUSTUP_HOME, a private HOME, and exact RUSTC
+and RUSTDOC paths. Compiler/Cargo calls are `rustup run 1.99.1 rustc/cargo`, never
+rustc/cargo shims with + syntax. Rustc verbose output must match official release
+commit `58cf8f9c35b355199727627d07ae34a4e2846d67`, date 2026-10-13 and the
+pinned host/release. Only validated public version/commit/LLVM and binary hashes,
+a scalar sysroot byte count, and static setup stages/codes can leave. No raw
+installer text, exception message, discovered path or arbitrary version text is
+printed. Binary hashes are observations, not independent distribution attestation.
+
+Toolchain resource accounting is explicit: the selected sysroot is separately
+measured, reported and monitored at 3 GiB. Controlled checkouts, private Cargo
+home, target, logs and setup/native temporary storage retain the 12 GiB monitored
+threshold. Other preinstalled toolchains and rustup platform caches are a
+separate platform component, not claimed inside the controlled-work bound. The
+2 GiB free floor is checked on BOTH controlled-work and normal rustup-home
+filesystems, including during installation. Thresholds are polled, not hard
+quotas, and may overshoot between polls. Setup timeout is 600 seconds; the job's
+55-minute bound still applies across setup and fixture work. No local install
+or native invocation occurs while preparing this packet.
+
+Permissions remain `contents: read`; checkout is pinned and credentials are not
+persisted. Cargo uses the exact lockfile and well-known crates.io registry. No
+new persistent access, source replacement, git dependency or native output
+artifact is introduced. The selected training/world library commands and all
+Rust patches, fixture lists, ignored inventory and call bounds are unchanged.
 
 ## Output and failure contract
 
