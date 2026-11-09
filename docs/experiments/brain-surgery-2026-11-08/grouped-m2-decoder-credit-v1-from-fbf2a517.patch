@@ -1,0 +1,2873 @@
+diff --git a/crates/alife_training/src/cpu/grouped_closed_literal_witness.rs b/crates/alife_training/src/cpu/grouped_closed_literal_witness.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..162e4f927dfa3eb47f568d05550df7996306ca3e
+--- /dev/null
++++ b/crates/alife_training/src/cpu/grouped_closed_literal_witness.rs
+@@ -0,0 +1,52 @@
++//! Source-identical disposable closed fixture witness for base/revision comparison.
++use super::*;
++#[test]
++#[ignore = "explicit fixed-fixture byte witness export"]
++fn grouped_closed_literal_witness() {
++    let directory = std::env::var("ALIFE_GROUPED_CLOSED_WITNESS_DIR")
++        .expect("explicit witness destination required");
++    let directory = std::path::Path::new(&directory);
++    std::fs::create_dir_all(directory).unwrap();
++    let (mut host, inputs) = fixture(240);
++    let initial = host.checkpoint().unwrap().encode().unwrap();
++    std::fs::write(directory.join("initial.envelope"), &initial).unwrap();
++    for (index, temperature) in [0.73_f32, 1.17_f32].into_iter().enumerate() {
++        let step = host.step(temperature).unwrap();
++        let decision_bytes = serde_json::to_vec(&(
++            step.tick_before,
++            step.tick_after,
++            step.sleeping_organisms,
++            step.sleep_consolidations,
++            step.decisions
++                .iter()
++                .map(|d| {
++                    (
++                        d.organism_id,
++                        &d.action,
++                        d.sampling_counter,
++                        &d.source_diagnostic_logits,
++                        &d.biological_emissions,
++                        &d.brain_work,
++                        &d.patch,
++                        &d.motor,
++                        &d.physical,
++                        d.sleep_phase,
++                        d.sleep_trigger,
++                    )
++                })
++                .collect::<Vec<_>>(),
++        ))
++        .unwrap();
++        std::fs::write(directory.join(format!("step-{index}.json")), decision_bytes).unwrap();
++        let checkpoint = host.checkpoint().unwrap();
++        let wire = checkpoint.encode().unwrap();
++        std::fs::write(directory.join(format!("after-{index}.envelope")), &wire).unwrap();
++        host = CpuGroupedM2HostV1::restore(
++            CpuGroupedM2HostCheckpointV1::decode(&wire).unwrap(),
++            &inputs,
++            MediationModeV1::Full,
++        )
++        .unwrap();
++        assert_eq!(host.checkpoint().unwrap().encode().unwrap(), wire);
++    }
++}
+diff --git a/crates/alife_training/src/cpu/grouped_decoder_envelope.rs b/crates/alife_training/src/cpu/grouped_decoder_envelope.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..725e8ec1e6ac87257b18e4e765f1de02098c3e48
+--- /dev/null
++++ b/crates/alife_training/src/cpu/grouped_decoder_envelope.rs
+@@ -0,0 +1,147 @@
++//! Distinct fresh GDE1 admission. The closed and all old checkpoint prefixes
++//! are rejected before any source, world or positional enum decoding.
++use super::*;
++const DECODER_MAGIC: &[u8] =
++    b"ALIFE-GROUPED-M2-DECODER-HOST\0V1\0SCORE-TRACE-FAST1\0PROFILE5\0SAMPLER-BITS1\0";
++pub(super) const DECODER_LINEAGE: &str =
++    "fresh-grouped-m2-decoder-v1/confidence-v2/class5/no-historical-import";
++pub(super) const DECODER_POLICY: &str = "grouped-decoder-score-trace-fast-v1;action-memory-only;one-source-tape;fixed-appendage;no-lifetime-normalization-synaptic-sleep-adam-bptt;canonical-memory-predictor;one-cognitive-debit";
++
++pub struct CpuGroupedM2DecoderHostV1 {
++    pub(super) inner: CpuGroupedM2HostV1,
++}
++#[derive(Debug, Clone)]
++pub struct CpuGroupedM2DecoderCheckpointV1 {
++    payload: GroupedPayloadV1,
++}
++impl CpuGroupedM2DecoderCheckpointV1 {
++    pub fn encode(&self) -> Result<Vec<u8>, CpuHostError> {
++        let mut wire = DECODER_MAGIC.to_vec();
++        wire.extend(serde_json::to_vec(&self.payload)?);
++        Ok(wire)
++    }
++    pub fn decode(wire: &[u8]) -> Result<Self, CpuHostError> {
++        let body = wire.strip_prefix(DECODER_MAGIC).ok_or(CpuHostError::State(
++            "not a fresh grouped decoder V1 envelope",
++        ))?;
++        let metadata: serde_json::Value = serde_json::from_slice(body)?;
++        if metadata["schema_version"] != 1
++            || metadata["source_lineage"] != DECODER_LINEAGE
++            || metadata["policy"] != DECODER_POLICY
++            || metadata["runtime_profile_raw"] != 5
++            || metadata["selector_tag"] != 12
++            || metadata["decoder_stride"] != 55
++            || metadata["recipe_digest"] != RECOVERY_GROUP_CONFIDENCE_RECIPE_SHA256
++        {
++            return Err(CpuHostError::State(
++                "grouped decoder outer identity mismatch",
++            ));
++        }
++        let mut payload: GroupedPayloadV1 = serde_json::from_value(metadata.clone())?;
++        payload.restore_sampler_bits()?;
++        if payload
++            .controllers
++            .values()
++            .any(|s| s.decoder_learning.is_none() || !s.motor.decoder_learning())
++            || serde_json::from_slice::<serde_json::Value>(&serde_json::to_vec(&payload)?)?
++                != metadata
++        {
++            return Err(CpuHostError::State("grouped decoder noncanonical state"));
++        }
++        Ok(Self { payload })
++    }
++}
++impl CpuGroupedM2DecoderHostV1 {
++    pub fn new_prepared<T, E: std::fmt::Display>(
++        game: CanonicalNewGame,
++        founder: CpuFoundationTrainer,
++        source_inputs: PhenotypeCompilerInputs,
++        sampling_seed: u32,
++        mode: MediationModeV1,
++        prepare: impl FnOnce(&mut HeadlessWorld) -> Result<T, E>,
++    ) -> Result<(Self, T), CpuHostError> {
++        if founder.phenotype().synapses().iter().any(|s| matches!(s.kind(), CompiledSynapseKind::Decoder(d) if d.head() == DecoderHeadKind::CognitiveContext)) {
++            return Err(CpuHostError::State("GDE1 does not admit a CognitiveContext decoder"));
++        }
++        let (mut inner, prepared) = CpuGroupedM2HostV1::new_prepared(
++            game,
++            founder,
++            source_inputs,
++            sampling_seed,
++            mode,
++            prepare,
++        )?;
++        for r in inner.host.residents.values_mut() {
++            let state = r
++                .grouped
++                .as_mut()
++                .ok_or(CpuHostError::State("missing fresh grouped owner"))?;
++            state.motor.enable_decoder_learning_fresh()?;
++            state.decoder_learning = Some(GroupedDecoderLearningStateV1 {
++                policy: GROUPED_DECODER_CREDIT_POLICY_V1.into(),
++                last_credit: None,
++            });
++            r.sealed_authority = None;
++        }
++        inner.host.seal_all_residents()?;
++        Ok((Self { inner }, prepared))
++    }
++    pub fn world(&self) -> &HeadlessWorld {
++        self.inner.world()
++    }
++    pub fn sleep_state(&self, organism: OrganismId) -> Option<alife_core::sleep::SleepState> {
++        self.inner.sleep_state(organism)
++    }
++    pub fn step(&mut self, temperature: f32) -> Result<CpuGroupedM2HostStepV1, CpuHostError> {
++        self.inner
++            .host
++            .grouped_step(&self.inner.founder, temperature)
++    }
++    pub fn checkpoint(&self) -> Result<CpuGroupedM2DecoderCheckpointV1, CpuHostError> {
++        Ok(CpuGroupedM2DecoderCheckpointV1 {
++            payload: self.inner.checkpoint_for_policy(true)?.payload,
++        })
++    }
++    pub fn restore(
++        checkpoint: CpuGroupedM2DecoderCheckpointV1,
++        expected_source: &PhenotypeCompilerInputs,
++        expected_mode: MediationModeV1,
++    ) -> Result<Self, CpuHostError> {
++        let wire = checkpoint.encode()?;
++        let inner = CpuGroupedM2HostV1::restore_for_policy(
++            CpuGroupedM2HostCheckpointV1 {
++                payload: checkpoint.payload,
++            },
++            expected_source,
++            expected_mode,
++            true,
++        )?;
++        let result = Self { inner };
++        if result.checkpoint()?.encode()? != wire {
++            return Err(CpuHostError::State(
++                "decoder restore rewrote acquired state",
++            ));
++        }
++        Ok(result)
++    }
++    pub fn last_credit(&self, owner: OrganismId) -> Option<&GroupedDecoderCreditReceiptV1> {
++        self.inner
++            .host
++            .residents
++            .get(&owner.raw())?
++            .grouped
++            .as_ref()?
++            .decoder_learning
++            .as_ref()?
++            .last_credit
++            .as_ref()
++    }
++    pub fn actor_optimization(&mut self) -> Result<(), CpuHostError> {
++        Err(CpuHostError::State("GDE1 Adam/BPTT closed"))
++    }
++    pub fn synaptic_sleep_consolidation(&mut self) -> Result<(), CpuHostError> {
++        Err(CpuHostError::State(
++            "GDE1 synaptic sleep closed; memory sleep only",
++        ))
++    }
++}
+diff --git a/crates/alife_training/src/cpu/grouped_decoder_tests.rs b/crates/alife_training/src/cpu/grouped_decoder_tests.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..d5af11ec52bb2cb6020f90671fe10da883041beb
+--- /dev/null
++++ b/crates/alife_training/src/cpu/grouped_decoder_tests.rs
+@@ -0,0 +1,617 @@
++//! Bounded disposable host fixtures. Never a study seed or retained organism.
++use super::*;
++use crate::cpu::{
++    grouped_decoder_coordinate, CpuGroupedM2DecoderCheckpointV1, CpuGroupedM2DecoderHostV1,
++};
++
++// Test-only fresh admission, before the first decision. There is no public
++// conversion/migration path from a closed checkpoint or existing individual.
++fn learning_fixture() -> (CpuGroupedM2DecoderHostV1, PhenotypeCompilerInputs) {
++    learning_fixture_at(240)
++}
++fn learning_fixture_at(preparation: u64) -> (CpuGroupedM2DecoderHostV1, PhenotypeCompilerInputs) {
++    let (mut inner, inputs) = fixture(preparation);
++    for r in inner.host.residents.values_mut() {
++        assert_eq!(r.next_sequence, 1);
++        let state = r.grouped.as_mut().unwrap();
++        state.motor.enable_decoder_learning_fresh().unwrap();
++        state.decoder_learning = Some(GroupedDecoderLearningStateV1 {
++            policy: GROUPED_DECODER_CREDIT_POLICY_V1.into(),
++            last_credit: None,
++        });
++        r.sealed_authority = None;
++    }
++    inner.host.seal_all_residents().unwrap();
++    (CpuGroupedM2DecoderHostV1 { inner }, inputs)
++}
++#[test]
++fn grouped_decoder_real_own_cost_changes_only_declared_coordinates_and_cold_continues() {
++    let (mut learning, inputs) = learning_fixture();
++    let (mut closed, _) = fixture(240);
++    let p = learning.inner.founder.phenotype().clone();
++    let initial = learning
++        .inner
++        .host
++        .residents
++        .values()
++        .next()
++        .unwrap()
++        .neural
++        .checkpoint()
++        .unwrap();
++    let founder = bytes(&learning.inner.founder.checkpoint());
++    let structural = bytes(
++        &learning
++            .inner
++            .host
++            .residents
++            .values()
++            .next()
++            .unwrap()
++            .v11
++            .checkpoint(),
++    );
++    let result = learning.step(0.73).unwrap();
++    let control = closed.step(0.73).unwrap();
++    assert_eq!(result.decisions.len(), 1);
++    assert_eq!(control.decisions.len(), 1);
++    let d = &result.decisions[0];
++    let c = &control.decisions[0];
++    // Before any outcome update the source and genuine sample are the same.
++    assert_eq!(d.action, c.action);
++    assert_eq!(d.source_diagnostic_logits, c.source_diagnostic_logits);
++    assert_eq!(
++        d.motor.native.core.appended_activations,
++        c.motor.native.core.appended_activations
++    );
++    assert_eq!(
++        d.motor.native.extension_activations,
++        c.motor.native.extension_activations
++    );
++    let work = d.patch.decision().cognitive_work.as_ref().unwrap();
++    assert!(work.learning_ops > 0);
++    assert!(d.motor.applied_body_energy_debit > c.motor.applied_body_energy_debit);
++    assert_eq!(d.motor.native.core.source_execution_count, 1);
++    assert_eq!(
++        d.motor
++            .native
++            .scores
++            .evaluate(&d.action)
++            .unwrap()
++            .joint_log_probability
++            .to_bits(),
++        d.action.old_joint_log_probability.to_bits()
++    );
++    let physical = d.diagnostic.physical_transition.unwrap();
++    let sealed = d.patch.outcome().measured_physiology.unwrap();
++    assert_eq!(physical.before, sealed.before);
++    assert!(sealed.energy_delta.raw() <= physical.energy_delta.raw());
++    let credit_packet = OutcomeCreditPacket::from_sealed_patch(&d.patch)
++        .unwrap()
++        .with_biochemical_receptors(&d.diagnostic.receptors)
++        .unwrap();
++    let receptor = p
++        .synapses()
++        .iter()
++        .find(|s| grouped_decoder_coordinate(s.kind()))
++        .unwrap()
++        .receptor_index();
++    let projection = p.plasticity_receptors()[receptor as usize]
++        .receptor_profile()
++        .project(&credit_packet.modulator().frame())
++        .unwrap();
++    eprintln!("GDE1_COMPUTE_INCLUSIVE_COST physical_energy={} sealed_energy={} learning_debit={} closed_debit={} example_decoder_receptor_projection={projection}",physical.energy_delta.raw(),sealed.energy_delta.raw(),d.motor.applied_body_energy_debit,c.motor.applied_body_energy_debit);
++    let receipt = learning.last_credit(d.organism_id).unwrap();
++    assert!(receipt.nonzero_eligibility > 0);
++    assert!(
++        receipt.changed_fast_coordinates > 0,
++        "real sealed own cost did not update a decoder coordinate"
++    );
++    assert_eq!(receipt.learning_ops, work.learning_ops);
++    assert_eq!(receipt.source_weight_generation, initial.weight_generation);
++    assert_eq!(
++        receipt.output_weight_generation,
++        initial.weight_generation + 1
++    );
++    let acquired = learning
++        .inner
++        .host
++        .residents
++        .values()
++        .next()
++        .unwrap()
++        .neural
++        .checkpoint()
++        .unwrap();
++    for (i, s) in p.synapses().iter().enumerate() {
++        assert_eq!(
++            initial.lifetime[i].to_bits(),
++            acquired.lifetime[i].to_bits()
++        );
++        if !grouped_decoder_coordinate(s.kind()) {
++            assert_eq!(initial.fast[i].to_bits(), acquired.fast[i].to_bits());
++            assert_eq!(
++                initial.eligibility[i].to_bits(),
++                acquired.eligibility[i].to_bits()
++            );
++        }
++    }
++    assert_eq!(
++        bytes(&initial.neural.dendrites),
++        bytes(&acquired.neural.dendrites)
++    );
++    assert_eq!(founder, bytes(&learning.inner.founder.checkpoint()));
++    assert_eq!(
++        structural,
++        bytes(
++            &learning
++                .inner
++                .host
++                .residents
++                .values()
++                .next()
++                .unwrap()
++                .v11
++                .checkpoint()
++        )
++    );
++    assert_eq!(
++        closed
++            .host
++            .residents
++            .values()
++            .next()
++            .unwrap()
++            .neural
++            .checkpoint()
++            .unwrap()
++            .fast,
++        initial.fast
++    );
++    let wire = learning.checkpoint().unwrap().encode().unwrap();
++    assert!(CpuGroupedM2HostCheckpointV1::decode(&wire).is_err());
++    assert!(CpuGroupedM2DecoderCheckpointV1::decode(
++        &closed.checkpoint().unwrap().encode().unwrap()
++    )
++    .is_err());
++    let mut cold = CpuGroupedM2DecoderHostV1::restore(
++        CpuGroupedM2DecoderCheckpointV1::decode(&wire).unwrap(),
++        &inputs,
++        MediationModeV1::Full,
++    )
++    .unwrap();
++    assert_eq!(cold.checkpoint().unwrap().encode().unwrap(), wire);
++    for _ in 0..3 {
++        let a = learning.step(1.17).unwrap();
++        let b = cold.step(1.17).unwrap();
++        assert_eq!(a.decisions.len(), b.decisions.len());
++        for (a, b) in a.decisions.iter().zip(&b.decisions) {
++            assert_eq!(a.action, b.action);
++            assert_eq!(bytes(&a.patch), bytes(&b.patch));
++        }
++        assert_eq!(
++            learning.checkpoint().unwrap().encode().unwrap(),
++            cold.checkpoint().unwrap().encode().unwrap()
++        );
++    }
++}
++#[test]
++fn grouped_decoder_rejects_wrong_policy_and_failed_step_is_atomic() {
++    let (mut learning, inputs) = learning_fixture();
++    let before = learning.checkpoint().unwrap().encode().unwrap();
++    assert!(learning.step(f32::NAN).is_err());
++    assert_eq!(learning.checkpoint().unwrap().encode().unwrap(), before);
++    assert!(learning.inner.checkpoint().is_err());
++    assert!(learning.actor_optimization().is_err());
++    assert!(learning.synaptic_sleep_consolidation().is_err());
++    let mut bad = CpuGroupedM2DecoderCheckpointV1::decode(&before).unwrap();
++    // The public restore cannot relabel a source or mode.
++    assert!(
++        CpuGroupedM2DecoderHostV1::restore(bad.clone(), &inputs, MediationModeV1::DriveSham)
++            .is_err()
++    );
++    let mut wire = bad.encode().unwrap();
++    wire[0] ^= 1;
++    assert!(CpuGroupedM2DecoderCheckpointV1::decode(&wire).is_err());
++    // Keep a used clone available for continuation inspection rather than mutate
++    // the real source checkpoint or turn this into a migration test.
++    bad = CpuGroupedM2DecoderCheckpointV1::decode(&before).unwrap();
++    assert_eq!(bad.encode().unwrap(), before);
++}
++
++#[test]
++fn grouped_decoder_real_credit_changes_same_frame_policy_not_a_trajectory_claim() {
++    let (mut learning, _) = learning_fixture();
++    let initial = learning
++        .inner
++        .host
++        .residents
++        .values()
++        .next()
++        .unwrap()
++        .neural
++        .checkpoint()
++        .unwrap();
++    let mut policy_effect = false;
++    for interval in 0..24 {
++        let result = learning.step(0.73).unwrap();
++        for d in &result.decisions {
++            let before = &d.diagnostic;
++            let frame = d.patch.pre_action().perception();
++            let p = learning.inner.founder.phenotype();
++            let evaluate = |sequence: &crate::TrainingSequence| {
++                let mut motor = before.motor_before.clone();
++                motor
++                    .forward(
++                        p,
++                        learning.inner.founder.weights(),
++                        sequence,
++                        frame,
++                        &before.receptors,
++                        &before.effects,
++                        before.capabilities,
++                        before.attempt_mask,
++                    )
++                    .unwrap();
++                motor.last_receipt.unwrap()
++            };
++            let old = evaluate(&before.sequence);
++            assert_eq!(bytes(&old.native.scores), bytes(&d.motor.native.scores));
++            let mut inherited = before.sequence.clone();
++            inherited.ticks[0].effective_weight_offsets = p
++                .synapses()
++                .iter()
++                .enumerate()
++                .map(|(i, s)| initial.lifetime[i] + s.alpha() * initial.fast[i])
++                .collect();
++            let inherited = evaluate(&inherited);
++            let mut acquired = before.sequence.clone();
++            acquired.ticks[0].effective_weight_offsets = learning
++                .inner
++                .host
++                .residents
++                .get(&d.organism_id.raw())
++                .unwrap()
++                .neural
++                .effective_offsets(p)
++                .unwrap();
++            let new = evaluate(&acquired);
++            // Freeze actual captured neural state, recall/context, source lifetime,
++            // appendage state, frame, mask and sample in all three evaluations.
++            // Only fast differs: inherited initial versus cumulative acquired,
++            // and pre-final-update versus post-final-update. No lived alternative.
++            let logp = |r: &GroupedMotorReceiptV1| {
++                r.native
++                    .scores
++                    .evaluate(&d.action)
++                    .unwrap()
++                    .joint_log_probability
++            };
++            let old_logp = logp(&old);
++            let inherited_logp = logp(&inherited);
++            let new_logp = logp(&new);
++            let component_change = old
++                .native
++                .core
++                .components
++                .iter()
++                .flatten()
++                .zip(new.native.core.components.iter().flatten())
++                .chain(
++                    old.native
++                        .group_components
++                        .iter()
++                        .zip(&new.native.group_components),
++                )
++                .map(|(a, b)| (a - b).abs())
++                .fold(0_f32, f32::max);
++            let scale = if interval == 0 {
++                let acquired_checkpoint = learning
++                    .inner
++                    .host
++                    .residents
++                    .get(&d.organism_id.raw())
++                    .unwrap()
++                    .neural
++                    .checkpoint()
++                    .unwrap();
++                Some(before.staged.diagnose_grouped_decoder_scale_for_test(
++                    &learning.inner.founder,
++                    &d.patch,
++                    &before.receptors,
++                    &acquired_checkpoint,
++                    &d.motor,
++                    &d.action,
++                    frame,
++                ))
++            } else {
++                None
++            };
++            let max_delta = |a: &[f32], b: &[f32]| {
++                a.iter()
++                    .zip(b)
++                    .map(|(a, b)| (a - b).abs())
++                    .fold(0_f32, f32::max)
++            };
++            let port_old = old
++                .native
++                .core
++                .port_activations
++                .iter()
++                .flatten()
++                .flatten()
++                .copied()
++                .collect::<Vec<_>>();
++            let port_new = new
++                .native
++                .core
++                .port_activations
++                .iter()
++                .flatten()
++                .flatten()
++                .copied()
++                .collect::<Vec<_>>();
++            let propagation = serde_json::json!({"raw_component_max_delta":component_change,"m2_port_activation_max_delta":max_delta(&port_old,&port_new),"m2_core_logit_max_delta":max_delta(&old.native.core.core_logits,&new.native.core.core_logits),"group_extension_activation_max_delta":max_delta(&old.native.extension_activations,&new.native.extension_activations),"group_score_changed":old.native.scores.group.to_bits()!=new.native.scores.group.to_bits(),"ordinary_score_changed":old.native.scores.ordinary.iter().zip(&new.native.scores.ordinary).any(|(a,b)|a.to_bits()!=b.to_bits()),"operation_score_changed":old.native.scores.operations.iter().zip(&new.native.scores.operations).any(|(a,b)|a.to_bits()!=b.to_bits())});
++            if interval == 0 {
++                eprintln!(
++                    "GDE1_FIRST_UPDATE_SCALE {} propagation={}",
++                    scale.as_ref().unwrap(),
++                    propagation
++                );
++                assert!(component_change > 0.);
++                // Preserve the first observed quantization limitation explicitly.
++                assert_eq!(old_logp.to_bits(), new_logp.to_bits());
++            }
++            policy_effect |= inherited_logp.to_bits() != new_logp.to_bits();
++            eprintln!("GDE1_FROZEN_FRAME interval={interval} tick={} inherited_logp={inherited_logp:.17} pre_update_logp={old_logp:.17} acquired_logp={new_logp:.17} final_update_raw_change={component_change} cumulative_policy_changed={} final_update_policy_changed={}",result.tick_before.raw(),inherited_logp.to_bits()!=new_logp.to_bits(),old_logp.to_bits()!=new_logp.to_bits());
++            if let Ok(directory) = std::env::var("ALIFE_GDE1_EVIDENCE_DIR") {
++                if interval == 0 || policy_effect {
++                    std::fs::create_dir_all(&directory).unwrap();
++                    let evidence = serde_json::json!({"interpretation":"frozen actual frame; cumulative fast-only contrast; not a live alternative trajectory", "interval":interval,"patch":d.patch,"action":d.action,"credit":learning.last_credit(d.organism_id),"inherited_scores":inherited.native.scores,"pre_update_scores":old.native.scores,"acquired_scores":new.native.scores,"final_update_raw_component_change":component_change,"first_update_scale":scale,"native_propagation":propagation,"log_probability_bits":[inherited_logp.to_bits(),old_logp.to_bits(),new_logp.to_bits()]});
++                    std::fs::write(
++                        std::path::Path::new(&directory)
++                            .join(format!("same-frame-{interval}.json")),
++                        serde_json::to_vec_pretty(&evidence).unwrap(),
++                    )
++                    .unwrap();
++                }
++            }
++        }
++        if policy_effect {
++            break;
++        }
++    }
++    assert!(policy_effect,"No cumulative fast-only same-frame policy change in declared24-interval bound; do not retune coefficients or seed");
++}
++
++#[test]
++fn grouped_decoder_sealed_credit_binding_rejects_mismatches_and_duplicate() {
++    let (mut learning, _) = learning_fixture();
++    let result = learning.step(0.73).unwrap();
++    let d = &result.decisions[0];
++    let before = &d.diagnostic;
++    let record = learning
++        .world()
++        .organism_registry()
++        .get(d.organism_id)
++        .unwrap();
++    let development = record
++        .phenotype()
++        .development_state_at(result.tick_before)
++        .unwrap();
++    let parameters = record.phenotype().brain_genome.plasticity_parameters();
++    let apply =
++        |state: &mut CpuOrganismState, patch: &ExperiencePatch, receptors: &NeuralReceptorFrame| {
++            state.apply_grouped_decoder_credit(
++                &learning.inner.founder,
++                patch,
++                receptors,
++                &development,
++                parameters,
++            )
++        };
++    assert!(before.staged.checkpoint().is_err());
++    // Mutate only typed pending test evidence, never a production sealed patch.
++    // The implementation's tests own the private mutation helper below.
++    for kind in 0..9 {
++        let mut invalid = before.staged.clone();
++        invalid.corrupt_grouped_binding_for_test(kind);
++        assert!(
++            apply(&mut invalid, &d.patch, &before.receptors).is_err(),
++            "mismatch {kind}"
++        );
++        assert!(invalid.checkpoint().is_err());
++    }
++    let mut bad_receptors = before.receptors.clone();
++    bad_receptors.source_tick = Tick(before.receptors.source_tick.raw() + 1);
++    let mut pending = before.staged.clone();
++    assert!(apply(&mut pending, &d.patch, &bad_receptors).is_err());
++    let receipt = apply(&mut pending, &d.patch, &before.receptors).unwrap();
++    assert_eq!(&receipt, learning.last_credit(d.organism_id).unwrap());
++    let acquired = pending.checkpoint().unwrap();
++    assert!(apply(&mut pending, &d.patch, &before.receptors).is_err());
++    assert_eq!(acquired, pending.checkpoint().unwrap());
++}
++
++#[test]
++fn grouped_decoder_bounded_ordinary_awake_rest_receipt_and_update() {
++    // Fixed existing fresh fixture, 240 ordinary preparation ticks, at most 24
++    // native intervals. No action/concentration override and no seed search.
++    let (mut host, _) = learning_fixture_at(240);
++    let mut found = false;
++    for _ in 0..24 {
++        let step = host.step(0.73).unwrap();
++        for d in &step.decisions {
++            if d.physical.operation == Some(RecoveryOperationV1::AwakeRest)
++                && d.physical.awake_recovery > 0.
++            {
++                let credit = host.last_credit(d.organism_id).unwrap();
++                assert!(credit.nonzero_eligibility > 0 && credit.changed_fast_coordinates > 0);
++                assert!(!d.physical.body_sleeping);
++                let physical = d.diagnostic.physical_transition.unwrap();
++                let sealed = d.patch.outcome().measured_physiology.unwrap();
++                let sealed_credit = OutcomeCreditPacket::from_sealed_patch(&d.patch)
++                    .unwrap()
++                    .with_biochemical_receptors(&d.diagnostic.receptors)
++                    .unwrap();
++                eprintln!(
++                    "GDE1_AWAKE_REST_SEALED_MODULATOR {:?}",
++                    sealed_credit.modulator()
++                );
++                eprintln!("GDE1_REAL_PHYSICAL_AWAKE_REST tick={} recovery_dose={} physical_fatigue_delta={} physical_energy_delta={} sealed_energy_delta={} body_debit={} changed={} (joint feedback includes both physical recovery and computational cost; no isolated channel reward)",step.tick_before.raw(),d.physical.awake_recovery,physical.homeostatic_delta.drives.fatigue,physical.energy_delta.raw(),sealed.energy_delta.raw(),d.motor.applied_body_energy_debit,credit.changed_fast_coordinates);
++                assert!(
++                    physical.homeostatic_delta.drives.fatigue < 0.,
++                    "physical recovery dose did not establish measured fatigue relief"
++                );
++                if let Ok(directory) = std::env::var("ALIFE_GDE1_EVIDENCE_DIR") {
++                    std::fs::create_dir_all(&directory).unwrap();
++                    let evidence = serde_json::json!({"interpretation":"actual physical fatigue relief plus compute-inclusive joint feedback; no isolated channel reward", "physical_transition":physical,"sealed_transition":sealed,"physical_receipt":d.physical,"credit":credit,"sealed_modulator":sealed_credit.modulator(),"patch":d.patch});
++                    std::fs::write(
++                        std::path::Path::new(&directory).join("awake-rest-physical.json"),
++                        serde_json::to_vec_pretty(&evidence).unwrap(),
++                    )
++                    .unwrap();
++                }
++                found = true;
++            }
++        }
++        if found {
++            break;
++        }
++    }
++    assert!(found,"No physical AwakeRest relief+decoder update in declared 24-interval bound; this is an unmet qualification, not permission to retune seed or coefficients");
++}
++
++#[test]
++fn grouped_decoder_acquired_state_survives_memory_sleep_and_exact_cold_resume() {
++    // Same existing high-pressure fixture: genes and 1200 ordinary world ticks,
++    // not synthetic concentration, hand-requested sleep or acquired-state injection.
++    let (mut host, inputs) = learning_fixture_at(1200);
++    let mut physical_sleep = false;
++    let mut acquired = false;
++    let mut consolidations = 0;
++    let mut waking = false;
++    let mut resumed = false;
++    for _ in 0..24 {
++        let before = host
++            .inner
++            .host
++            .residents
++            .values()
++            .next()
++            .unwrap()
++            .neural
++            .checkpoint()
++            .unwrap();
++        let step = host.step(0.73).unwrap();
++        let after = host
++            .inner
++            .host
++            .residents
++            .values()
++            .next()
++            .unwrap()
++            .neural
++            .checkpoint()
++            .unwrap();
++        acquired |=
++            after.fast.iter().any(|x| *x != 0.) && after.eligibility.iter().any(|x| *x != 0.);
++        for d in &step.decisions {
++            physical_sleep |= d.physical.successful_stationary_body_sleep;
++            if waking {
++                resumed = true;
++            }
++        }
++        if step.sleep_consolidations > 0 {
++            assert!(
++                acquired,
++                "memory-sleep test lacks actually acquired decoder state"
++            );
++            assert_eq!(
++                before, after,
++                "memory consolidation must not write/decay any source synaptic bank"
++            );
++            let resident = host.inner.host.residents.values().next().unwrap();
++            validate_grouped_sleep_boundary(resident).unwrap();
++            let state = resident.sleep.state();
++            if let ConsolidationState::Committed {
++                cycle_id,
++                output_generation,
++                ..
++            } = state.consolidation
++            {
++                assert_eq!(
++                    cycle_id, output_generation,
++                    "memory output is a cycle, not a forged source weight generation"
++                );
++            } else {
++                panic!("missing memory-only committed boundary");
++            }
++        }
++        consolidations += step.sleep_consolidations;
++        waking |= host
++            .inner
++            .host
++            .residents
++            .values()
++            .any(|r| r.sleep.state().phase == SleepPhase::Waking);
++        let wire = host.checkpoint().unwrap().encode().unwrap();
++        host = CpuGroupedM2DecoderHostV1::restore(
++            CpuGroupedM2DecoderCheckpointV1::decode(&wire).unwrap(),
++            &inputs,
++            MediationModeV1::Full,
++        )
++        .unwrap();
++        assert_eq!(host.checkpoint().unwrap().encode().unwrap(), wire);
++        if consolidations > 0 && waking && resumed {
++            break;
++        }
++    }
++    assert!(physical_sleep && acquired && waking && resumed,"Declared high-pressure bound did not establish the physical-sleep/acquired-state/wake chain");
++    assert_eq!(consolidations, 1);
++}
++
++#[test]
++fn grouped_decoder_preserves_nonzero_frozen_banks_and_structural_sentinels() {
++    // Synthetic nonzero preservation sentinels, not acquired-learning evidence.
++    let (mut warm, inputs) = learning_fixture();
++    warm.step(0.73).unwrap();
++    inject_frozen_sentinels(&mut warm.inner);
++    let frozen_banks = |host: &CpuGroupedM2DecoderHostV1| {
++        let p = host.inner.founder.phenotype();
++        let r = host.inner.host.residents.values().next().unwrap();
++        let n = r.neural.checkpoint().unwrap();
++        let closed = p
++            .synapses()
++            .iter()
++            .enumerate()
++            .filter(|(_, s)| !grouped_decoder_coordinate(s.kind()))
++            .map(|(i, _)| (i, n.fast[i].to_bits(), n.eligibility[i].to_bits()))
++            .collect::<Vec<_>>();
++        bytes(&(
++            closed,
++            n.lifetime,
++            n.neural.dendrites,
++            r.v11.checkpoint(),
++            host.inner.founder.checkpoint(),
++        ))
++    };
++    let sentinel = frozen_banks(&warm);
++    let wire = warm.checkpoint().unwrap().encode().unwrap();
++    let mut cold = CpuGroupedM2DecoderHostV1::restore(
++        CpuGroupedM2DecoderCheckpointV1::decode(&wire).unwrap(),
++        &inputs,
++        MediationModeV1::Full,
++    )
++    .unwrap();
++    for _ in 0..3 {
++        warm.step(0.73).unwrap();
++        cold.step(0.73).unwrap();
++        assert_eq!(frozen_banks(&warm), sentinel);
++        assert_eq!(frozen_banks(&cold), sentinel);
++        assert_eq!(
++            warm.checkpoint().unwrap().encode().unwrap(),
++            cold.checkpoint().unwrap().encode().unwrap()
++        );
++    }
++}
+diff --git a/crates/alife_training/src/cpu/grouped_host_envelope.rs b/crates/alife_training/src/cpu/grouped_host_envelope.rs
+index f76daeaa3f893167813d28359ccf5df285675908..60ac43c4a7027fba341a17e07245f96fd72f37e8 100644
+--- a/crates/alife_training/src/cpu/grouped_host_envelope.rs
++++ b/crates/alife_training/src/cpu/grouped_host_envelope.rs
+@@ -23,6 +23,8 @@ struct VoluntarySleepReceiptV1 {
+ #[derive(Debug, Clone, Serialize, Deserialize)]
+ #[serde(deny_unknown_fields)]
+ pub(super) struct GroupedResidentV1 {
++    #[serde(default, skip_serializing_if = "Option::is_none")]
++    pub(super) decoder_learning: Option<GroupedDecoderLearningStateV1>,
+     pub(super) motor: GroupedMotorStateV1,
+     pub(super) memory_proofs: Vec<SleepMemorySourceProofV1>,
+     pub(super) last_physical: Option<alife_world::SleepChoicePhysicalReceiptV1>,
+@@ -32,12 +34,52 @@ pub(super) struct GroupedResidentV1 {
+     last_joint: Option<JointActionSelectionV1>,
+     last_representative: Option<u16>,
+ }
++#[derive(Debug, Clone, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++pub(super) struct GroupedDecoderLearningStateV1 {
++    policy: String,
++    pub(super) last_credit: Option<GroupedDecoderCreditReceiptV1>,
++}
+ impl GroupedResidentV1 {
+     pub(super) fn validate_source_boundary(
+         &self,
+         source: &CpuOrganismCheckpoint,
+         activity: &CpuActivityState,
+     ) -> Result<(), CpuHostError> {
++        if self.motor.decoder_learning() != self.decoder_learning.is_some() {
++            return Err(CpuHostError::State(
++                "grouped decoder policy/controller mismatch",
++            ));
++        }
++        if let Some(learning) = &self.decoder_learning {
++            if learning.policy != GROUPED_DECODER_CREDIT_POLICY_V1 {
++                return Err(CpuHostError::State("grouped decoder rule mismatch"));
++            }
++            match &learning.last_credit {
++                None if source.dispatch_generation == 0 && source.weight_generation == 0 => (),
++                Some(c)
++                    if c.policy == learning.policy
++                        && c.dispatch_generation == source.dispatch_generation
++                        && c.output_weight_generation == source.weight_generation
++                        && c.source_weight_generation
++                            .checked_add(u64::from(c.changed_fast_coordinates > 0))
++                            == Some(c.output_weight_generation)
++                        && self
++                            .last_physical
++                            .as_ref()
++                            .is_some_and(|p| p.sequence_id == c.sequence_id)
++                        && self
++                            .motor
++                            .last_receipt
++                            .as_ref()
++                            .is_some_and(|m| m.frame_digest == c.frame_digest) => {}
++                _ => {
++                    return Err(CpuHostError::State(
++                        "grouped decoder credit boundary mismatch",
++                    ))
++                }
++            }
++        }
+         match (&self.motor.last_receipt, &self.last_physical) {
+             (None, None)
+                 if source.dispatch_generation == 0
+@@ -421,7 +463,20 @@ pub struct CpuGroupedM2HostStepV1 {
+     pub sleeping_organisms: usize,
+     pub sleep_consolidations: usize,
+ }
++#[cfg(test)]
++pub(super) struct GroupedDecoderTestEvidence {
++    pub staged: CpuOrganismState,
++    pub physical_transition: Option<MeasuredPhysiologyTransition>,
++    pub sequence: crate::TrainingSequence,
++    pub motor_before: GroupedMotorStateV1,
++    pub receptors: NeuralReceptorFrame,
++    pub effects: NeuralReceptorEffects,
++    pub capabilities: [bool; 6],
++    pub attempt_mask: u32,
++}
+ pub struct CpuGroupedM2HostDecisionV1 {
++    #[cfg(test)]
++    pub(super) diagnostic: GroupedDecoderTestEvidence,
+     pub organism_id: OrganismId,
+     pub action: RecoveryGroupJointActionV2,
+     pub sampling_counter: u32,
+@@ -441,7 +496,14 @@ pub struct CpuGroupedM2HostDecisionV1 {
+ /// synchronous, closed-memory completion contract, never pending GPU work.
+ pub(super) fn grouped_sleep_output_digest(r: &Resident) -> Result<[u64; 4], CpuHostError> {
+     json_digest(
+-        b"ALIFE-GROUPED-M2-MEMORY-SLEEP-OUTPUT-V1",
++        if r.grouped
++            .as_ref()
++            .is_some_and(|g| g.decoder_learning.is_some())
++        {
++            b"ALIFE-GROUPED-M2-DECODER-V1-MEMORY-ONLY-SLEEP".as_slice()
++        } else {
++            b"ALIFE-GROUPED-M2-MEMORY-SLEEP-OUTPUT-V1".as_slice()
++        },
+         &(
+             r.neural.checkpoint()?,
+             r.memory.export_active_bank()?,
+@@ -573,6 +635,7 @@ impl CpuGroupedM2HostV1 {
+                 TopologicalMapConfig::default(),
+             )?;
+             r.grouped = Some(GroupedResidentV1 {
++                decoder_learning: None,
+                 motor: motor.clone(),
+                 memory_proofs: Vec::new(),
+                 last_physical: None,
+@@ -605,6 +668,12 @@ impl CpuGroupedM2HostV1 {
+             .map(|resident| resident.sleep.state())
+     }
+     pub fn checkpoint(&self) -> Result<CpuGroupedM2HostCheckpointV1, CpuHostError> {
++        self.checkpoint_for_policy(false)
++    }
++    fn checkpoint_for_policy(
++        &self,
++        learning: bool,
++    ) -> Result<CpuGroupedM2HostCheckpointV1, CpuHostError> {
+         self.host.validate_founder(&self.founder)?;
+         for (&id, r) in &self.host.residents {
+             validate_grouped_sleep_boundary(r)?;
+@@ -624,6 +693,9 @@ impl CpuGroupedM2HostV1 {
+                 .grouped
+                 .as_ref()
+                 .ok_or(CpuHostError::State("missing grouped state"))?;
++            if state.decoder_learning.is_some() != learning {
++                return Err(CpuHostError::State("wrong grouped checkpoint policy"));
++            }
+             state.motor.validate(self.founder.phenotype())?;
+             state.validate_source_boundary(&r.neural.checkpoint()?, &r.activity)?;
+             state.validate_replay(&r.replay)?;
+@@ -638,8 +710,8 @@ impl CpuGroupedM2HostV1 {
+         Ok(CpuGroupedM2HostCheckpointV1 {
+             payload: GroupedPayloadV1 {
+                 schema_version: 1,
+-                source_lineage: LINEAGE.into(),
+-                policy: POLICY.into(),
++                source_lineage: if learning { DECODER_LINEAGE } else { LINEAGE }.into(),
++                policy: if learning { DECODER_POLICY } else { POLICY }.into(),
+                 runtime_profile_raw: 5,
+                 selector_tag: 12,
+                 decoder_stride: 55,
+@@ -682,6 +754,14 @@ impl CpuGroupedM2HostV1 {
+         checkpoint: CpuGroupedM2HostCheckpointV1,
+         expected_source: &PhenotypeCompilerInputs,
+         expected_mode: MediationModeV1,
++    ) -> Result<Self, CpuHostError> {
++        Self::restore_for_policy(checkpoint, expected_source, expected_mode, false)
++    }
++    fn restore_for_policy(
++        checkpoint: CpuGroupedM2HostCheckpointV1,
++        expected_source: &PhenotypeCompilerInputs,
++        expected_mode: MediationModeV1,
++        learning: bool,
+     ) -> Result<Self, CpuHostError> {
+         let wire = checkpoint.encode()?;
+         let c = checkpoint.payload;
+@@ -689,8 +769,11 @@ impl CpuGroupedM2HostV1 {
+             return Err(CpuHostError::State("grouped exact sampler bits differ"));
+         }
+         if c.schema_version != 1
+-            || c.source_lineage != LINEAGE
+-            || c.policy != POLICY
++            || c.source_lineage != if learning { DECODER_LINEAGE } else { LINEAGE }
++            || c.policy != if learning { DECODER_POLICY } else { POLICY }
++            || c.controllers
++                .values()
++                .any(|state| state.decoder_learning.is_some() != learning)
+             || c.runtime_profile_raw != 5
+             || c.selector_tag != 12
+             || c.decoder_stride != 55
+@@ -734,7 +817,7 @@ impl CpuGroupedM2HostV1 {
+             source_inputs: c.source_inputs,
+             mode: c.mode,
+         };
+-        if result.checkpoint()?.encode()? != wire {
++        if result.checkpoint_for_policy(learning)?.encode()? != wire {
+             return Err(CpuHostError::State(
+                 "grouped M2 restore would rewrite acquired state",
+             ));
+@@ -749,3 +832,7 @@ impl CpuGroupedM2HostV1 {
+ #[cfg(test)]
+ #[path = "grouped_host_tests.rs"]
+ mod tests;
++
++#[path = "grouped_decoder_envelope.rs"]
++mod decoder_envelope;
++pub use decoder_envelope::*;
+diff --git a/crates/alife_training/src/cpu/grouped_host_loop.rs b/crates/alife_training/src/cpu/grouped_host_loop.rs
+index 0c4aef0369bc26fc42ec99a93a73f96411482bab..ca47bacbbac8c4c4ea758e727527da46fb009692 100644
+--- a/crates/alife_training/src/cpu/grouped_host_loop.rs
++++ b/crates/alife_training/src/cpu/grouped_host_loop.rs
+@@ -348,6 +348,8 @@ impl CpuCanonicalHost {
+                 .grouped
+                 .as_mut()
+                 .ok_or(CpuHostError::State("missing grouped controller"))?;
++            #[cfg(test)]
++            let motor_before = state.motor.clone();
+             let output = r.neural.advance_grouped(
+                 founder,
+                 context,
+@@ -455,20 +457,56 @@ impl CpuCanonicalHost {
+                 command,
+             )?
+             .with_finalized_memory_recall(&frame, &recall, index)?;
+-            r.neural.stage_grouped_closed_selection(
+-                p,
+-                &action,
+-                &scores,
+-                CpuDecisionBinding {
+-                    sequence_id: sequence,
+-                    frame_digest: frame.frame_digest(),
+-                    action_id: candidate.action_id,
+-                    candidate_feature_digest: candidate.feature_digest()?,
+-                    dispatch_generation: output.dispatch_generation,
+-                    active_activation_side: output.active_activation_side,
+-                    joint_selection: joint,
++            let binding = CpuDecisionBinding {
++                sequence_id: sequence,
++                frame_digest: frame.frame_digest(),
++                action_id: candidate.action_id,
++                candidate_feature_digest: candidate.feature_digest()?,
++                dispatch_generation: output.dispatch_generation,
++                active_activation_side: output.active_activation_side,
++                joint_selection: joint,
++            };
++            let learning_ops = if r.grouped.as_ref().unwrap().decoder_learning.is_some() {
++                r.neural.stage_grouped_decoder_selection(
++                    p,
++                    &action,
++                    r.grouped
++                        .as_ref()
++                        .unwrap()
++                        .motor
++                        .last_receipt
++                        .as_ref()
++                        .unwrap(),
++                    &frame,
++                    &bundle,
++                    binding,
++                )?;
++                r.neural.staged_grouped_decoder_work()?
++            } else {
++                r.neural
++                    .stage_grouped_closed_selection(p, &action, &scores, binding)?;
++                0
++            };
++            #[cfg(test)]
++            let mut diagnostic = super::grouped_host_envelope::GroupedDecoderTestEvidence {
++                staged: r.neural.clone(),
++                physical_transition: None,
++                sequence: crate::TrainingSequence {
++                    phenotype_hash: p.phenotype_hash(),
++                    initial: output.initial.clone(),
++                    ticks: vec![output.replay_tick.clone()],
++                    burn_in_ticks: 0,
++                    memory_candidate_gain: p
++                        .candidate_decoder()
++                        .memory_channel()
++                        .map_or(0., |m| m.max_candidate_gain()),
+                 },
+-            )?;
++                motor_before,
++                receptors: receptors.clone(),
++                effects,
++                capabilities,
++                attempt_mask,
++            };
+             let mut cognitive = recall
+                 .cognitive_context()
+                 .cloned()
+@@ -558,6 +596,13 @@ impl CpuCanonicalHost {
+                 }
+                 physical.motor
+             };
++            #[cfg(test)]
++            {
++                diagnostic.physical_transition = Some(MeasuredPhysiologyTransition::new(
++                    receipt.biology_before,
++                    receipt.biology_after,
++                )?);
++            }
+             let successor = grounded_successor_state(
+                 &self.world,
+                 record.world_entity_id(),
+@@ -626,7 +671,7 @@ impl CpuCanonicalHost {
+                 prediction.error.len() as u64,
+                 0,
+                 structural_work,
+-                0,
++                learning_ops,
+                 0,
+             )?
+             .into_receipt()?;
+@@ -681,8 +726,23 @@ impl CpuCanonicalHost {
+                 pre_context,
+             )?;
+             let credit_receptors = receptors;
+-            r.neural
+-                .close_grouped_outcome(founder, &patch, &credit_receptors)?;
++            if let Some(learning) = &mut r.grouped.as_mut().unwrap().decoder_learning {
++                let parameters = after.phenotype().brain_genome.plasticity_parameters();
++                let credited = r.neural.apply_grouped_decoder_credit(
++                    founder,
++                    &patch,
++                    &credit_receptors,
++                    &development,
++                    parameters,
++                )?;
++                if credited.learning_ops != learning_ops {
++                    return Err(CpuHostError::State("grouped decoder work mismatch"));
++                }
++                learning.last_credit = Some(credited);
++            } else {
++                r.neural
++                    .close_grouped_outcome(founder, &patch, &credit_receptors)?;
++            }
+             r.language_grounding.observe_sealed(&patch)?;
+             let memory_write = r.memory.observe_sealed_patch(&patch)?;
+             let topology_receipt = r.topology.observe_sealed_patch(&patch);
+@@ -757,6 +817,8 @@ impl CpuCanonicalHost {
+                 .ok_or(CpuHostError::State("sequence overflow"))?;
+             let grouped = r.grouped.as_ref().unwrap();
+             decisions.push(CpuGroupedM2HostDecisionV1 {
++                #[cfg(test)]
++                diagnostic,
+                 organism_id: id,
+                 sampling_counter,
+                 action,
+@@ -852,5 +914,18 @@ fn grouped_dynamic_work(
+                 .ok_or(CpuHostError::State("structural price overflow"))?,
+         )
+         .ok_or(CpuHostError::State("source dynamic price overflow"))?;
+-    Ok(dynamic)
++    let learning = if r
++        .grouped
++        .as_ref()
++        .is_some_and(|s| s.decoder_learning.is_some())
++    {
++        super::super::grouped_decoder_work_bound(p, activity.work.decoder_candidate_ops)?
++            .checked_mul(4)
++            .ok_or(CpuHostError::State("decoder work overflow"))?
++    } else {
++        0
++    };
++    dynamic
++        .checked_add(learning)
++        .ok_or(CpuHostError::State("decoder reservation overflow"))
+ }
+diff --git a/crates/alife_training/src/cpu/grouped_host_tests.rs b/crates/alife_training/src/cpu/grouped_host_tests.rs
+index 843b8c24882a0d0bc18c20f4e5a20a99ebe67126..5c7ce7a337b9f46c20a3b5e699fa65c49bd7b54f 100644
+--- a/crates/alife_training/src/cpu/grouped_host_tests.rs
++++ b/crates/alife_training/src/cpu/grouped_host_tests.rs
+@@ -726,3 +726,9 @@ fn grouped_host_low_pressure_executes_awake_rest_without_body_sleep() {
+ 
+ #[path = "grouped_host_food_tests.rs"]
+ mod food_tests;
++
++#[path = "grouped_decoder_tests.rs"]
++mod decoder;
++
++#[path = "grouped_closed_literal_witness.rs"]
++mod closed_literal_witness;
+diff --git a/crates/alife_training/src/cpu/motor_mediation/confidence/host.rs b/crates/alife_training/src/cpu/motor_mediation/confidence/host.rs
+index 9ace221beb56d22f6bd758f156b88265e4c55a51..07aa8146917d8bb3218c4481976555d97725c5d0 100644
+--- a/crates/alife_training/src/cpu/motor_mediation/confidence/host.rs
++++ b/crates/alife_training/src/cpu/motor_mediation/confidence/host.rs
+@@ -3,6 +3,9 @@
+ use super::*;
+ use crate::cpu::replay::Tape;
+ 
++const LEARNING_SCHEMA: &str = "grouped-m2-host-appendage-v1-confidence-v2-decoder-score-trace-v1";
++const LEARNING_WORK: &str =
++    "grouped-local-decoder-score-trace-v1;source-once;fixed-appendage;priced-pullback-and-update";
+ const HOST_SCHEMA: &str = "grouped-m2-host-appendage-v1-confidence-v2-learning-closed";
+ pub const GROUPED_HOST_WORK_POLICY_V1: &str =
+     "source-once;460-native-cells;814-fixed-rows;group-source-effective;native-semantic-work-v1;host-bookkeeping-unpriced";
+@@ -73,6 +76,17 @@ impl GroupedMotorStateV1 {
+         state.validate(source)?;
+         Ok(state)
+     }
++    pub(crate) fn enable_decoder_learning_fresh(&mut self) -> Result<(), TrainingError> {
++        if self.schema != HOST_SCHEMA || self.generation != 0 || self.last_receipt.is_some() {
++            return Err(invalid());
++        }
++        self.schema = LEARNING_SCHEMA.into();
++        self.work_policy = LEARNING_WORK.into();
++        Ok(())
++    }
++    pub(crate) fn decoder_learning(&self) -> bool {
++        self.schema == LEARNING_SCHEMA
++    }
+     pub(crate) fn matches(&self, inputs: &PhenotypeCompilerInputs, mode: MediationModeV1) -> bool {
+         self.source_inputs == *inputs && self.mode == mode
+     }
+@@ -81,8 +95,8 @@ impl GroupedMotorStateV1 {
+             &self.source_inputs,
+             &BrainCapacityClass::n2048_grounded_drive_research(),
+         )?;
+-        if self.schema != HOST_SCHEMA
+-            || self.work_policy != GROUPED_HOST_WORK_POLICY_V1
++        if !((self.schema == HOST_SCHEMA && self.work_policy == GROUPED_HOST_WORK_POLICY_V1)
++            || (self.schema == LEARNING_SCHEMA && self.work_policy == LEARNING_WORK))
+             || self.m2_recipe != M2_RECIPE_SHA256
+             || self.group_recipe != RECOVERY_GROUP_CONFIDENCE_RECIPE_SHA256
+             || self.mode == MediationModeV1::DirectSource
+@@ -127,9 +141,9 @@ impl GroupedMotorStateV1 {
+                     || core.source_execution_count != 1
+                     || core.appended_activations != self.activations
+                     || r.native.extension_activations != self.group_activations
+-                    || r.native.schema != HOST_SCHEMA
++                    || r.native.schema != self.schema
+                     || r.native.recipe != self.group_recipe
+-                    || core.schema != HOST_SCHEMA
++                    || core.schema != self.schema
+                     || core.recipe != self.m2_recipe
+                     || r.raw_memory.len() != core.components.len()
+                     || r.raw_cognitive.len() != core.components.len()
+@@ -324,7 +338,7 @@ impl GroupedMotorStateV1 {
+                 .sleep_trigger_threshold(),
+             m,
+         )?;
+-        core.schema = HOST_SCHEMA.into();
++        core.schema = self.schema.clone();
+         core.recipe = M2_RECIPE_SHA256.into();
+         core.source_generation = self.generation;
+         core.final_generation = self.generation.checked_add(1).ok_or_else(invalid)?;
+@@ -404,7 +418,7 @@ impl GroupedMotorStateV1 {
+             tick: frame.tick(),
+             frame_digest: frame.frame_digest(),
+             native: RecoveryGroupNativeReceiptV2 {
+-                schema: HOST_SCHEMA.into(),
++                schema: self.schema.clone(),
+                 recipe: RECOVERY_GROUP_CONFIDENCE_RECIPE_SHA256.into(),
+                 core,
+                 group_components: common,
+@@ -430,3 +444,165 @@ impl GroupedMotorStateV1 {
+ 
+ #[cfg(test)]
+ mod tests;
++
++impl GroupedMotorReceiptV1 {
++    /// Pull back the actual grouped categorical factors through the already-run
++    /// native soma chain. Source state is supplied by its sole resident owner.
++    /// This allocates one source-width vector, never candidates x synapses.
++    pub(crate) fn decoder_score_gradient(
++        &self,
++        source: &BrainPhenotype,
++        tick: &TrainingReplayTick,
++        activation: &[f32],
++        action: &RecoveryGroupJointActionV2,
++        frame: &PerceptionFrame,
++        binding: &crate::cpu::CpuDecisionBinding,
++    ) -> Result<(Vec<f64>, u64), TrainingError> {
++        let native = &self.native;
++        let core = &native.core;
++        let scores = &native.scores;
++        scores.validate_host_identity(
++            source.phenotype_hash(),
++            frame.frame_digest(),
++            core.source_generation,
++        )?;
++        if native.schema != LEARNING_SCHEMA
++            || core.schema != LEARNING_SCHEMA
++            || core.final_generation != binding.dispatch_generation
++            || self.frame_digest != binding.frame_digest
++            || self.tick != frame.tick()
++            || core.source_execution_count != 1
++            || core.source_hash != source.phenotype_hash()
++            || core.rows.len() != tick.candidates.len()
++            || activation.len() != source.neuron_count() as usize
++            || core.jacobians.len() != tick.candidates.len()
++            || core.upstream_context_slopes.len() != tick.candidates.len()
++            || *action != scores.sample(action.seed, action.counter, action.temperature)?
++        {
++            return Err(invalid());
++        }
++        for (i, row) in core.rows.iter().enumerate() {
++            row.validate(
++                frame,
++                i,
++                &tick.candidates[i],
++                core.source_generation,
++                source.phenotype_hash(),
++            )?;
++        }
++        let (representative, _) = scores.physical_selection(action)?;
++        let row = &core.rows[representative as usize];
++        if row.action_id != binding.action_id
++            || row.feature_digest != binding.candidate_feature_digest
++        {
++            return Err(invalid());
++        }
++        let gradient = scores.evaluate(action)?.gradient;
++        // Count semantic categorical derivative terms. Identity validation and
++        // source-table inspection are bookkeeping, never body-energy work.
++        let group_present = scores
++            .binding
++            .operations
++            .iter()
++            .flatten()
++            .any(|i| scores.binding.eligible_mask & (1 << i) != 0);
++        let factor_terms = |slot: Option<usize>| {
++            let ordinary = (0..tick.candidates.len())
++                .filter(|i| {
++                    scores.binding.eligible_mask & (1 << i) != 0
++                        && !scores.binding.operations.contains(&Some(*i))
++                        && slot.is_none_or(|s| {
++                            scores.binding.forced[*i] == Some(s)
++                                && scores.binding.channel_members[*i]
++                        })
++                })
++                .count() as u64;
++            let group = u64::from(group_present && (slot.is_none() || slot == Some(4)));
++            (ordinary + group).max(u64::from(slot.is_some()))
++        };
++        let forced = match action.representative {
++            RecoveryGroupChoiceV2::Candidate(i) => scores.binding.forced[i as usize],
++            RecoveryGroupChoiceV2::RestGroup => Some(4),
++            RecoveryGroupChoiceV2::NoOp => None,
++        };
++        let mut work = factor_terms(None);
++        for slot in 0..6 {
++            if scores.binding.enabled[slot] && forced != Some(slot) {
++                work += factor_terms(Some(slot));
++            }
++        }
++        if action.operation.is_some() {
++            work += scores
++                .binding
++                .operations
++                .iter()
++                .flatten()
++                .filter(|i| scores.binding.eligible_mask & (1 << **i) != 0)
++                .count() as u64;
++        }
++        let canonical =
++            CandidateFeatureVector::zero().with_intrinsic_action_basis(ActionKind::Rest);
++        let mut common_input = [0.; 54];
++        common_input[..24].copy_from_slice(&canonical.0);
++        let mut result = vec![0.; source.synapses().len()];
++        for (j, synapse) in source.synapses().iter().enumerate() {
++            let CompiledSynapseKind::Decoder(d) = synapse.kind() else {
++                continue;
++            };
++            if !matches!(
++                d.head(),
++                DecoderHeadKind::ActionCandidate | DecoderHeadKind::MemoryContext
++            ) {
++                continue;
++            }
++            for (i, candidate) in tick.candidates.iter().enumerate() {
++                if candidate.family != d.family() || scores.binding.operations.contains(&Some(i)) {
++                    continue;
++                }
++                let local = candidate.decoder_inputs[d.input_lane() as usize]
++                    * match d.head() {
++                        DecoderHeadKind::ActionCandidate => {
++                            core.jacobians[i][0] * activation[synapse.source() as usize]
++                        }
++                        DecoderHeadKind::MemoryContext => {
++                            core.jacobians[i][2] * core.upstream_context_slopes[i][0]
++                        }
++                        _ => unreachable!(),
++                    };
++                result[j] += gradient.ordinary[i] * f64::from(local);
++                work += 1;
++            }
++            // One staged trace and one subsequent sealed fast update per
++            // declared coordinate, even when its derivative/credit is zero.
++            work += 2;
++            if d.family() == CandidateActionFamily::Rest {
++                if d.head() == DecoderHeadKind::ActionCandidate {
++                    work += 1;
++                    result[j] += gradient.group
++                        * f64::from(
++                            native.group_jacobian[0]
++                                * activation[synapse.source() as usize]
++                                * common_input[d.input_lane() as usize],
++                        );
++                } else {
++                    for o in 0..2 {
++                        if let Some(i) = scores.binding.operations[o] {
++                            work += 1;
++                            result[j] += gradient.operations[o]
++                                * f64::from(
++                                    native.operation_context_jacobians[o][0]
++                                        * core.upstream_context_slopes[i][0]
++                                        * tick.candidates[i].decoder_inputs
++                                            [d.input_lane() as usize],
++                                );
++                        }
++                    }
++                }
++            }
++        }
++        if result.iter().any(|x| !x.is_finite()) {
++            return Err(invalid());
++        }
++        Ok((result, work))
++    }
++}
+diff --git a/crates/alife_training/src/cpu/motor_mediation/confidence/host/decoder_tests.rs b/crates/alife_training/src/cpu/motor_mediation/confidence/host/decoder_tests.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..f7ba360cc05910424e5978fc9b7ad55d46c7eac8
+--- /dev/null
++++ b/crates/alife_training/src/cpu/motor_mediation/confidence/host/decoder_tests.rs
+@@ -0,0 +1,450 @@
++//! Synthetic arithmetic controls only. These are not world-learning evidence.
++use super::*;
++use crate::cpu::CpuDecisionBinding;
++
++fn binding_for(
++    frame: &PerceptionFrame,
++    receipt: &GroupedMotorReceiptV1,
++    action: &RecoveryGroupJointActionV2,
++) -> CpuDecisionBinding {
++    let (representative, slots) = receipt.native.scores.physical_selection(action).unwrap();
++    let candidate = &frame.candidates()[representative as usize];
++    let bundle = MotorCommandBundle::new(
++        frame.organism_id(),
++        ExperienceSequenceId(1),
++        frame.tick(),
++        vec![],
++    )
++    .unwrap();
++    CpuDecisionBinding {
++        sequence_id: ExperienceSequenceId(1),
++        frame_digest: frame.frame_digest(),
++        action_id: candidate.action_id,
++        candidate_feature_digest: candidate.feature_digest().unwrap(),
++        dispatch_generation: receipt.native.core.final_generation,
++        active_activation_side: 0,
++        joint_selection: JointActionSelectionV1::new(
++            slots.map(|i| i.map_or(0, |i| i + 1)),
++            &bundle,
++        )
++        .unwrap(),
++    }
++}
++#[test]
++fn grouped_decoder_sparse_pullback_matches_dense_diagnostic_and_finite_differences() {
++    let (mut motor, founder, mut q, f, receptors, effects) = fixture();
++    motor.enable_decoder_learning_fresh().unwrap();
++    let p = founder.phenotype();
++    let memory_row = p.synapses().iter().position(|s| matches!(s.kind(), CompiledSynapseKind::Decoder(d) if d.head()==DecoderHeadKind::MemoryContext && d.family()==CandidateActionFamily::Rest)).unwrap();
++    let CompiledSynapseKind::Decoder(memory) = p.synapses()[memory_row].kind() else {
++        panic!()
++    };
++    q.ticks[0].effective_weight_offsets[memory_row] = 0.125;
++    q.ticks[0].candidates[1].decoder_inputs[memory.input_lane() as usize] = 0.25;
++    q.ticks[0].candidates[6].decoder_inputs[memory.input_lane() as usize] = 0.75;
++    for mask in [127, (1 << 1) | (1 << 6)] {
++        let mut executed = motor.clone();
++        let tape = executed
++            .forward(
++                p,
++                founder.weights(),
++                &q,
++                &f,
++                &receptors,
++                &effects,
++                [true; 6],
++                mask,
++            )
++            .unwrap();
++        let receipt = executed.last_receipt.as_ref().unwrap();
++        let action = receipt.native.scores.sample(0x47444531, 0, 0.73).unwrap();
++        let binding = binding_for(&f, receipt, &action);
++        let (gradient, _) = receipt
++            .decoder_score_gradient(
++                p,
++                &q.ticks[0],
++                &tape.evaluation.final_activations[0],
++                &action,
++                &f,
++                &binding,
++            )
++            .unwrap();
++        // Independently form the existing diagnostic's dense ordinary/common/
++        // operation Jacobian and compare before any eligibility clipping.
++        let mut ordinary = projected_credit(
++            p,
++            &q.ticks[0],
++            &tape.evaluation.final_activations[0],
++            &receipt.native.core,
++        )
++        .unwrap();
++        for i in receipt.native.scores.binding.operations.iter().flatten() {
++            ordinary[*i].fill(0.);
++        }
++        let canonical =
++            CandidateFeatureVector::zero().with_intrinsic_action_basis(ActionKind::Rest);
++        let mut input = [0.; 54];
++        input[..24].copy_from_slice(&canonical.0);
++        let mut common = vec![0.; p.synapses().len()];
++        let mut operation = [vec![0.; p.synapses().len()], vec![0.; p.synapses().len()]];
++        for (j, s) in p.synapses().iter().enumerate() {
++            let CompiledSynapseKind::Decoder(d) = s.kind() else {
++                continue;
++            };
++            if d.family() != CandidateActionFamily::Rest {
++                continue;
++            }
++            if d.head() == DecoderHeadKind::ActionCandidate {
++                common[j] = receipt.native.group_jacobian[0]
++                    * tape.evaluation.final_activations[0][s.source() as usize]
++                    * input[d.input_lane() as usize];
++            } else if d.head() == DecoderHeadKind::MemoryContext {
++                for (o, row) in operation.iter_mut().enumerate() {
++                    if let Some(i) = receipt.native.scores.binding.operations[o] {
++                        row[j] = receipt.native.operation_context_jacobians[o][0]
++                            * receipt.native.core.upstream_context_slopes[i][0]
++                            * q.ticks[0].candidates[i].decoder_inputs[d.input_lane() as usize];
++                    }
++                }
++            }
++        }
++        let probe = RecoveryGroupProbeResultV2 {
++            source_evaluation: tape.evaluation,
++            receipt: receipt.native.clone(),
++            ordinary_decoder_derivatives: ordinary,
++            group_decoder_derivatives: common,
++            operation_decoder_derivatives: operation,
++        };
++        let dense = probe
++            .decoder_log_probability_gradient(
++                &receipt.native.scores.evaluate(&action).unwrap().gradient,
++            )
++            .unwrap();
++        assert!(gradient
++            .iter()
++            .zip(&dense)
++            .all(|(a, b)| (a - b).abs() < 1e-12));
++        let mut tested = 0;
++        for head in [
++            DecoderHeadKind::ActionCandidate,
++            DecoderHeadKind::MemoryContext,
++        ] {
++            let row = p
++                .synapses()
++                .iter()
++                .enumerate()
++                .filter(
++                    |(_, s)| matches!(s.kind(),CompiledSynapseKind::Decoder(d) if d.head()==head),
++                )
++                .max_by(|(a, _), (b, _)| gradient[*a].abs().total_cmp(&gradient[*b].abs()))
++                .unwrap()
++                .0;
++            if gradient[row].abs() < 1e-8 {
++                continue;
++            }
++            let epsilon = 0.002_f32;
++            let evaluate = |sign: f32| {
++                let mut perturbed = q.clone();
++                perturbed.ticks[0].effective_weight_offsets[row] += sign * epsilon;
++                let mut m = motor.clone();
++                m.forward(
++                    p,
++                    founder.weights(),
++                    &perturbed,
++                    &f,
++                    &receptors,
++                    &effects,
++                    [true; 6],
++                    mask,
++                )
++                .unwrap();
++                m.last_receipt
++                    .unwrap()
++                    .native
++                    .scores
++                    .evaluate(&action)
++                    .unwrap()
++                    .joint_log_probability
++            };
++            let fd = (evaluate(1.) - evaluate(-1.)) / (2. * f64::from(epsilon));
++            assert!(
++                (fd - gradient[row]).abs() < 2e-3 + gradient[row].abs() * 0.02,
++                "head={head:?} row={row} analytic={} fd={fd}",
++                gradient[row]
++            );
++            tested += 1;
++        }
++        assert!(tested > 0);
++        if mask != 127 {
++            assert!(gradient[memory_row].abs() > 1e-6);
++        }
++    }
++}
++#[test]
++fn grouped_decoder_clipped_operation_memory_has_zero_local_derivative() {
++    let (mut motor, founder, mut q, f, receptors, effects) = fixture();
++    motor.enable_decoder_learning_fresh().unwrap();
++    let p = founder.phenotype();
++    let row=p.synapses().iter().position(|s|matches!(s.kind(),CompiledSynapseKind::Decoder(d) if d.head()==DecoderHeadKind::MemoryContext && d.family()==CandidateActionFamily::Rest)).unwrap();
++    let CompiledSynapseKind::Decoder(d) = p.synapses()[row].kind() else {
++        panic!()
++    };
++    q.ticks[0].effective_weight_offsets[row] = 100.;
++    for i in [1, 6] {
++        q.ticks[0].candidates[i].decoder_inputs[d.input_lane() as usize] = 0.75;
++    }
++    let mask = (1 << 1) | (1 << 6);
++    let mut executed = motor.clone();
++    let tape = executed
++        .forward(
++            p,
++            founder.weights(),
++            &q,
++            &f,
++            &receptors,
++            &effects,
++            [true; 6],
++            mask,
++        )
++        .unwrap();
++    let receipt = executed.last_receipt.as_ref().unwrap();
++    assert_eq!(receipt.native.core.upstream_context_slopes[1][0], 0.);
++    assert_eq!(receipt.native.core.upstream_context_slopes[6][0], 0.);
++    let action = receipt.native.scores.sample(0x47444531, 0, 1.37).unwrap();
++    let (gradient, _) = receipt
++        .decoder_score_gradient(
++            p,
++            &q.ticks[0],
++            &tape.evaluation.final_activations[0],
++            &action,
++            &f,
++            &binding_for(&f, receipt, &action),
++        )
++        .unwrap();
++    assert_eq!(gradient[row], 0.);
++    let base = receipt
++        .native
++        .scores
++        .evaluate(&action)
++        .unwrap()
++        .joint_log_probability;
++    q.ticks[0].effective_weight_offsets[row] += 0.01;
++    motor
++        .forward(
++            p,
++            founder.weights(),
++            &q,
++            &f,
++            &receptors,
++            &effects,
++            [true; 6],
++            mask,
++        )
++        .unwrap();
++    assert_eq!(
++        motor
++            .last_receipt
++            .unwrap()
++            .native
++            .scores
++            .evaluate(&action)
++            .unwrap()
++            .joint_log_probability
++            .to_bits(),
++        base.to_bits()
++    );
++}
++
++#[test]
++fn grouped_decoder_each_raw_chain_has_an_independent_finite_difference() {
++    let (mut motor, founder, mut q, f, receptors, effects) = fixture();
++    motor.enable_decoder_learning_fresh().unwrap();
++    let p = founder.phenotype();
++    let ordinary = 0;
++    let rest_memory=p.synapses().iter().position(|s|matches!(s.kind(),CompiledSynapseKind::Decoder(d) if d.head()==DecoderHeadKind::MemoryContext && d.family()==CandidateActionFamily::Rest)).unwrap();
++    let ordinary_memory=p.synapses().iter().position(|s|matches!(s.kind(),CompiledSynapseKind::Decoder(d) if d.head()==DecoderHeadKind::MemoryContext && d.family()==q.ticks[0].candidates[ordinary].family)).unwrap();
++    for (row, indices) in [(rest_memory, vec![1, 6]), (ordinary_memory, vec![ordinary])] {
++        let CompiledSynapseKind::Decoder(d) = p.synapses()[row].kind() else {
++            panic!()
++        };
++        q.ticks[0].effective_weight_offsets[row] = 0.125;
++        for (j, i) in indices.into_iter().enumerate() {
++            q.ticks[0].candidates[i].decoder_inputs[d.input_lane() as usize] =
++                if j == 0 { 0.25 } else { 0.75 };
++        }
++    }
++    let run = |sequence: &TrainingSequence| {
++        let mut m = motor.clone();
++        let tape = m
++            .forward(
++                p,
++                founder.weights(),
++                sequence,
++                &f,
++                &receptors,
++                &effects,
++                [true; 6],
++                127,
++            )
++            .unwrap();
++        (
++            m.last_receipt.unwrap(),
++            tape.evaluation.final_activations[0].clone(),
++        )
++    };
++    let (base, activation) = run(&q);
++    let canonical = CandidateFeatureVector::zero().with_intrinsic_action_basis(ActionKind::Rest);
++    let common_action=p.synapses().iter().position(|s|matches!(s.kind(),CompiledSynapseKind::Decoder(d) if d.head()==DecoderHeadKind::ActionCandidate && d.family()==CandidateActionFamily::Rest && (d.input_lane() as usize)<24 && canonical.0[d.input_lane() as usize]!=0. && activation[s.source() as usize].abs()>1e-5)).unwrap();
++    let ordinary_action=p.synapses().iter().position(|s|matches!(s.kind(),CompiledSynapseKind::Decoder(d) if d.head()==DecoderHeadKind::ActionCandidate && d.family()==q.ticks[0].candidates[ordinary].family && q.ticks[0].candidates[ordinary].decoder_inputs[d.input_lane() as usize]!=0. && activation[s.source() as usize].abs()>1e-5)).unwrap();
++    let CompiledSynapseKind::Decoder(om) = p.synapses()[ordinary_memory].kind() else {
++        panic!()
++    };
++    let CompiledSynapseKind::Decoder(rm) = p.synapses()[rest_memory].kind() else {
++        panic!()
++    };
++    let CompiledSynapseKind::Decoder(oa) = p.synapses()[ordinary_action].kind() else {
++        panic!()
++    };
++    let CompiledSynapseKind::Decoder(ca) = p.synapses()[common_action].kind() else {
++        panic!()
++    };
++    let cases = [
++        (
++            ordinary_action,
++            0,
++            base.native.core.jacobians[ordinary][0]
++                * activation[p.synapses()[ordinary_action].source() as usize]
++                * q.ticks[0].candidates[ordinary].decoder_inputs[oa.input_lane() as usize],
++        ),
++        (
++            ordinary_memory,
++            0,
++            base.native.core.jacobians[ordinary][2]
++                * base.native.core.upstream_context_slopes[ordinary][0]
++                * q.ticks[0].candidates[ordinary].decoder_inputs[om.input_lane() as usize],
++        ),
++        (
++            common_action,
++            1,
++            base.native.group_jacobian[0]
++                * activation[p.synapses()[common_action].source() as usize]
++                * canonical.0[ca.input_lane() as usize],
++        ),
++        (
++            rest_memory,
++            2,
++            base.native.operation_context_jacobians[0][0]
++                * base.native.core.upstream_context_slopes[1][0]
++                * q.ticks[0].candidates[1].decoder_inputs[rm.input_lane() as usize],
++        ),
++        (
++            rest_memory,
++            3,
++            base.native.operation_context_jacobians[1][0]
++                * base.native.core.upstream_context_slopes[6][0]
++                * q.ticks[0].candidates[6].decoder_inputs[rm.input_lane() as usize],
++        ),
++    ];
++    for (row, port, analytic) in cases {
++        assert!(
++            analytic.abs() > 1e-6,
++            "raw chain {port} did not exercise a nonzero derivative"
++        );
++        let get = |sign: f32| {
++            let mut q = q.clone();
++            q.ticks[0].effective_weight_offsets[row] += sign * 0.002;
++            let (r, _) = run(&q);
++            match port {
++                0 => r.native.scores.ordinary[ordinary],
++                1 => r.native.scores.group,
++                2 => r.native.scores.operations[0],
++                3 => r.native.scores.operations[1],
++                _ => unreachable!(),
++            }
++        };
++        let fd = (get(1.) - get(-1.)) / 0.004;
++        assert!(
++            (fd - f64::from(analytic)).abs() < 2e-3 + f64::from(analytic.abs()) * 0.02,
++            "port={port} analytic={analytic} fd={fd}"
++        );
++    }
++}
++
++#[test]
++fn grouped_decoder_specialized_derived_vocal_lane_finite_difference_and_mask() {
++    // Arithmetic fixture only. Lane42 must come from the real profile5 derived
++    // feature function, never a manual input override or reward/action forcing.
++    let (mut motor, founder, q, f, receptors, effects) = fixture();
++    motor.enable_decoder_learning_fresh().unwrap();
++    let p = founder.phenotype();
++    assert_eq!(q.ticks[0].candidates[2].decoder_inputs[42], 1.);
++    let derived = prepare_sleep_choice_grounded_drive_features_v1(&f).unwrap();
++    assert_eq!(derived[2][6], 1.);
++    for mask in [127, 127 & !(1 << 2)] {
++        let mut executed = motor.clone();
++        let tape = executed
++            .forward(
++                p,
++                founder.weights(),
++                &q,
++                &f,
++                &receptors,
++                &effects,
++                [true; 6],
++                mask,
++            )
++            .unwrap();
++        let receipt = executed.last_receipt.as_ref().unwrap();
++        let action = receipt.native.scores.sample(0x47444531, 0, 1.37).unwrap();
++        let (gradient, _) = receipt
++            .decoder_score_gradient(
++                p,
++                &q.ticks[0],
++                &tape.evaluation.final_activations[0],
++                &action,
++                &f,
++                &binding_for(&f, receipt, &action),
++            )
++            .unwrap();
++        let row=p.synapses().iter().enumerate().filter(|(_,s)|matches!(s.kind(),CompiledSynapseKind::Decoder(d) if d.head()==DecoderHeadKind::ActionCandidate && d.family()==CandidateActionFamily::Other && d.input_lane()==42))
++            .max_by(|(a,_),(b,_)| tape.evaluation.final_activations[0][p.synapses()[*a].source() as usize].abs().total_cmp(&tape.evaluation.final_activations[0][p.synapses()[*b].source() as usize].abs())).unwrap().0;
++        let get = |sign: f32| {
++            let mut q = q.clone();
++            q.ticks[0].effective_weight_offsets[row] += sign * 0.002;
++            let mut m = motor.clone();
++            m.forward(
++                p,
++                founder.weights(),
++                &q,
++                &f,
++                &receptors,
++                &effects,
++                [true; 6],
++                mask,
++            )
++            .unwrap();
++            m.last_receipt
++                .unwrap()
++                .native
++                .scores
++                .evaluate(&action)
++                .unwrap()
++                .joint_log_probability
++        };
++        let fd = (get(1.) - get(-1.)) / 0.004;
++        if mask == 127 {
++            assert!(
++                gradient[row].abs() > 1e-6,
++                "derived specialized lane was not meaningfully exercised"
++            );
++            assert!(
++                (fd - gradient[row]).abs() < 2e-3 + gradient[row].abs() * 0.02,
++                "analytic={} finite_difference={fd}",
++                gradient[row]
++            );
++        } else {
++            assert_eq!(gradient[row], 0.);
++            assert_eq!(fd, 0.);
++        }
++    }
++}
+diff --git a/crates/alife_training/src/cpu/motor_mediation/confidence/host/tests.rs b/crates/alife_training/src/cpu/motor_mediation/confidence/host/tests.rs
+index b31d4c682dd6dc4367b9569042b256e37155adf8..0320be1467dc9f4d5642d859092ae861532818c6 100644
+--- a/crates/alife_training/src/cpu/motor_mediation/confidence/host/tests.rs
++++ b/crates/alife_training/src/cpu/motor_mediation/confidence/host/tests.rs
+@@ -297,3 +297,6 @@ fn grouped_host_work_prices_every_common_product_without_invented_bookkeeping_de
+     );
+     assert_eq!(w.reservation_q24, 27_344 + 1016 + products * 4);
+ }
++
++#[path = "decoder_tests.rs"]
++mod decoder_tests;
+diff --git a/crates/alife_training/src/cpu/motor_mediation/confidence/policy.rs b/crates/alife_training/src/cpu/motor_mediation/confidence/policy.rs
+index ea8a2b84c355c9359a02c45063db43de8b675c64..e7430e75873b65fe2b8fb6e201b7f71026b54d4e 100644
+--- a/crates/alife_training/src/cpu/motor_mediation/confidence/policy.rs
++++ b/crates/alife_training/src/cpu/motor_mediation/confidence/policy.rs
+@@ -12,10 +12,10 @@ pub(super) struct RecoveryGroupBindingV2 {
+     identities: Vec<String>,
+     order: Vec<usize>,
+     attempt_mask: u32,
+-    eligible_mask: u32,
+-    enabled: [bool; 6],
+-    forced: Vec<Option<usize>>,
+-    channel_members: Vec<bool>,
++    pub(super) eligible_mask: u32,
++    pub(super) enabled: [bool; 6],
++    pub(super) forced: Vec<Option<usize>>,
++    pub(super) channel_members: Vec<bool>,
+     pub(super) operations: [Option<usize>; 2],
+ }
+ fn channel(kind: ActionKind) -> Option<usize> {
+diff --git a/crates/alife_training/src/cpu/organism.rs b/crates/alife_training/src/cpu/organism.rs
+index 91e0b0bb1ffcec44dbc6590aafe5239321e0f490..f113e266aafd4c3209a8c4e554f6f8be6602a16e 100644
+--- a/crates/alife_training/src/cpu/organism.rs
++++ b/crates/alife_training/src/cpu/organism.rs
+@@ -43,6 +43,10 @@ pub struct CpuDecisionBinding {
+ #[derive(Clone)]
+ struct Pending {
+     grouped_closed: bool,
++    grouped_learning: bool,
++    grouped_receptors: Option<NeuralReceptorFrame>,
++    weight_generation: u64,
++    grouped_learning_work: Option<u64>,
+     tick: u64,
+     context: TrainingReplayTick,
+     pre: Vec<f32>,
+@@ -278,6 +282,13 @@ impl CpuOrganismState {
+                 .map_or(0., |m| m.max_candidate_gain()),
+         };
+         q.validate_for(p)?;
++        let grouped_learning = matches!(&composite, Some(CompositeForward::Grouped(motor, ..)) if motor.decoder_learning());
++        let grouped_receptors = match &composite {
++            Some(CompositeForward::Grouped(_, _, receptors, ..)) if grouped_learning => {
++                Some((*receptors).clone())
++            }
++            _ => None,
++        };
+         let grouped_closed = matches!(&composite, Some(CompositeForward::Grouped(..)));
+         let tape = match composite {
+             Some(CompositeForward::M0(motor, frame, receptors)) => {
+@@ -321,6 +332,10 @@ impl CpuOrganismState {
+         self.checkpoint.active_activation_side ^= (context.microstep_count & 1) as u8;
+         self.pending = Some(Pending {
+             grouped_closed,
++            grouped_learning,
++            grouped_receptors,
++            weight_generation: self.checkpoint.weight_generation,
++            grouped_learning_work: None,
+             tick,
+             context: context.clone(),
+             pre,
+@@ -444,6 +459,7 @@ impl CpuOrganismState {
+         binding.joint_selection.validate()?;
+         let pending = self.pending.as_mut().ok_or_else(invalid)?;
+         if !pending.grouped_closed
++            || pending.grouped_learning
+             || pending.binding.is_some()
+             || pending.staged.is_some()
+             || scores.ordinary.len() != pending.context.candidates.len()
+@@ -478,6 +494,7 @@ impl CpuOrganismState {
+             .joint_selection
+             .validate_decision(patch.decision())?;
+         if !pending.grouped_closed
++            || pending.grouped_learning
+             || pending.staged.is_some()
+             || credit.policy_backend() != alife_core::PolicyBackend::NeuralClosedLoopCpu
+             || credit.organism_id() != self.checkpoint.organism_id
+@@ -1184,3 +1201,7 @@ mod tests {
+         assert_eq!(decay(0.9, 1u64 << 32), 0.);
+     }
+ }
++
++#[path = "organism_grouped_decoder.rs"]
++mod grouped_decoder;
++pub use grouped_decoder::*;
+diff --git a/crates/alife_training/src/cpu/organism_grouped_decoder.rs b/crates/alife_training/src/cpu/organism_grouped_decoder.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..d5ee1abe4359a87b2a4a1d789cfb5f4a95e3376e
+--- /dev/null
++++ b/crates/alife_training/src/cpu/organism_grouped_decoder.rs
+@@ -0,0 +1,344 @@
++//! GDE1: bounded, outcome-modulated local decoder score traces. Not old Oja,
++//! recurrent BPTT, an Adam optimizer, or isolated per-channel causal rewards.
++use super::*;
++use crate::cpu::{GroupedMotorReceiptV1, RecoveryGroupJointActionV2};
++use alife_core::{MotorCommandBundle, PerceptionFrame};
++
++pub const GROUPED_DECODER_CREDIT_POLICY_V1: &str = "grouped-decoder-score-trace-v1;action-and-memory;fast-and-eligibility-only;no-oja;no-lifetime;no-synaptic-sleep;no-adam-bptt";
++
++pub(crate) fn grouped_decoder_coordinate(kind: CompiledSynapseKind) -> bool {
++    matches!(kind, CompiledSynapseKind::Decoder(d) if matches!(d.head(), DecoderHeadKind::ActionCandidate | DecoderHeadKind::MemoryContext))
++}
++/// Conservative reservation bound, not the charged work. Actual chain terms,
++/// categorical derivative terms, staged traces and sealed updates are counted
++/// by the executed sparse pullback. Administrative scans are never charged.
++pub(crate) fn grouped_decoder_work_bound(
++    p: &BrainPhenotype,
++    candidates: u64,
++) -> Result<u64, TrainingError> {
++    if candidates == 0 || candidates > 32 {
++        return Err(invalid());
++    }
++    let coordinates = p
++        .synapses()
++        .iter()
++        .filter(|s| grouped_decoder_coordinate(s.kind()))
++        .count() as u64;
++    coordinates
++        .checked_mul(candidates + 4)
++        .and_then(|x| x.checked_add(8 * (candidates + 2)))
++        .ok_or_else(invalid)
++}
++
++#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
++#[serde(deny_unknown_fields)]
++pub struct GroupedDecoderCreditReceiptV1 {
++    pub policy: String,
++    pub sequence_id: ExperienceSequenceId,
++    pub frame_digest: PerceptionFrameDigest,
++    pub dispatch_generation: u64,
++    pub source_weight_generation: u64,
++    pub output_weight_generation: u64,
++    pub nonzero_eligibility: u32,
++    pub changed_fast_coordinates: u32,
++    pub learning_ops: u64,
++}
++impl CpuOrganismState {
++    #[allow(clippy::too_many_arguments)]
++    pub(crate) fn stage_grouped_decoder_selection(
++        &mut self,
++        p: &BrainPhenotype,
++        action: &RecoveryGroupJointActionV2,
++        motor: &GroupedMotorReceiptV1,
++        frame: &PerceptionFrame,
++        bundle: &MotorCommandBundle,
++        binding: CpuDecisionBinding,
++    ) -> Result<(), TrainingError> {
++        let pending = self.pending.as_ref().ok_or_else(invalid)?;
++        let (representative, motors) = motor.native.scores.physical_selection(action)?;
++        binding.joint_selection.validate_bundle(bundle)?;
++        if !pending.grouped_learning
++            || !pending.grouped_closed
++            || pending.binding.is_some()
++            || pending.staged.is_some()
++            || self.checkpoint.phenotype_hash != p.phenotype_hash()
++            || self.checkpoint.weight_generation != pending.weight_generation
++            || self.checkpoint.organism_id != frame.organism_id()
++            || bundle.organism_id != frame.organism_id()
++            || bundle.tick != frame.tick()
++            || bundle.sequence_id != binding.sequence_id
++            || frame.tick().raw() != pending.tick
++            || binding.dispatch_generation != self.checkpoint.dispatch_generation
++            || binding.active_activation_side != self.checkpoint.active_activation_side
++            || binding.joint_selection.candidate_slots() != motors.map(|i| i.map_or(0, |i| i + 1))
++        {
++            return Err(invalid());
++        }
++        let (gradient, learning_work) = motor.decoder_score_gradient(
++            p,
++            &pending.context,
++            &self.checkpoint.neural.activations,
++            action,
++            frame,
++            &binding,
++        )?;
++        if learning_work > grouped_decoder_work_bound(p, pending.context.candidates.len() as u64)? {
++            return Err(invalid());
++        }
++        let elapsed = self
++            .checkpoint
++            .last_decision_tick
++            .map_or(0, |old| pending.tick - old);
++        let mut staged = self.checkpoint.eligibility.clone();
++        for (i, s) in p.synapses().iter().enumerate() {
++            if !grouped_decoder_coordinate(s.kind()) {
++                continue;
++            }
++            let r = &p.plasticity_receptors()[s.receptor_index() as usize];
++            let g = gradient[i] as f32;
++            let next = decay(r.eligibility_decay(), elapsed) * staged[i] + g;
++            finite(&[g, next])?;
++            staged[i] = next.clamp(-1., 1.);
++        }
++        let pending = self.pending.as_mut().unwrap();
++        pending.staged = Some(staged);
++        pending.grouped_learning_work = Some(learning_work);
++        pending.representative = Some(representative);
++        pending.binding = Some(binding);
++        Ok(())
++    }
++    pub(crate) fn staged_grouped_decoder_work(&self) -> Result<u64, TrainingError> {
++        self.pending
++            .as_ref()
++            .and_then(|p| p.grouped_learning_work)
++            .ok_or_else(invalid)
++    }
++    pub(crate) fn apply_grouped_decoder_credit(
++        &mut self,
++        founder: &CpuFoundationTrainer,
++        patch: &ExperiencePatch,
++        receptors: &NeuralReceptorFrame,
++        development: &DevelopmentState,
++        parameters: &PlasticityGenomeParameters,
++    ) -> Result<GroupedDecoderCreditReceiptV1, TrainingError> {
++        let p = founder.phenotype();
++        if p.phenotype_hash() != self.checkpoint.phenotype_hash
++            || founder
++                .weights()
++                .iter()
++                .zip(p.synapses())
++                .any(|(w, s)| w.to_bits() != s.genetic_weight().to_bits())
++        {
++            return Err(invalid());
++        }
++        let credit = OutcomeCreditPacket::from_sealed_patch(patch)?;
++        let pending = self.pending.as_ref().ok_or_else(invalid)?;
++        let binding = pending.binding.as_ref().ok_or_else(invalid)?;
++        let staged = pending.staged.as_ref().ok_or_else(invalid)?;
++        binding
++            .joint_selection
++            .validate_decision(patch.decision())?;
++        if !pending.grouped_learning
++            || !pending.grouped_closed
++            || pending.grouped_receptors.as_ref() != Some(receptors)
++            || self.checkpoint.weight_generation != pending.weight_generation
++            || credit.policy_backend() != alife_core::PolicyBackend::NeuralClosedLoopCpu
++            || credit.organism_id() != self.checkpoint.organism_id
++            || credit.phenotype_hash() != self.checkpoint.phenotype_hash
++            || credit.originating_tick().raw() != pending.tick
++            || credit.outcome_tick().raw() < pending.tick
++            || Some(credit.selected_candidate()) != pending.representative
++            || credit.sequence_id() != binding.sequence_id
++            || credit.frame_digest() != binding.frame_digest
++            || credit.selected_action() != binding.action_id
++            || credit.candidate_feature_digest() != binding.candidate_feature_digest
++            || credit.dispatch_generation() != binding.dispatch_generation
++            || credit.active_activation_side() != binding.active_activation_side
++            || pending.context.candidates[credit.selected_candidate() as usize].family
++                != credit.selected_family()
++        {
++            return Err(invalid());
++        }
++        let credit = credit.with_biochemical_receptors(receptors)?;
++        let mut developmental = alife_gpu_backend::GpuDevelopmentalPlasticity::default();
++        developmental.update(p, development, parameters)?;
++        // Existing developmental route scales apply to recurrent synapses only;
++        // the declared decoder rates stay inherited, just as in the native law.
++        let modulator = credit.modulator().frame();
++        let mut next = self.checkpoint.clone();
++        let mut changed = 0;
++        let mut nonzero = 0;
++        for (i, s) in p.synapses().iter().enumerate() {
++            if !grouped_decoder_coordinate(s.kind()) {
++                continue;
++            }
++            let r = &p.plasticity_receptors()[s.receptor_index() as usize];
++            let factor = r.receptor_profile().project(&modulator)?;
++            let trace = staged[i]
++                * decay(
++                    r.eligibility_decay(),
++                    credit.outcome_tick().raw() - pending.tick,
++                );
++            let (min, max) = r.fast_weight_bounds();
++            let updated = grouped_decoder_fast_update(
++                next.fast[i],
++                r.learning_rate(),
++                s.alpha(),
++                factor,
++                trace,
++                min,
++                max,
++            )?;
++            changed += u32::from(updated.to_bits() != next.fast[i].to_bits());
++            nonzero += u32::from(staged[i] != 0.);
++            next.fast[i] = updated;
++            next.eligibility[i] = staged[i];
++        }
++        if changed != 0 {
++            next.weight_generation = next.weight_generation.checked_add(1).ok_or_else(invalid)?;
++        }
++        next.last_decision_tick = Some(pending.tick);
++        next.last_outcome_tick = Some(credit.outcome_tick().raw());
++        let receipt = GroupedDecoderCreditReceiptV1 {
++            policy: GROUPED_DECODER_CREDIT_POLICY_V1.into(),
++            sequence_id: credit.sequence_id(),
++            frame_digest: credit.frame_digest(),
++            dispatch_generation: binding.dispatch_generation,
++            source_weight_generation: pending.weight_generation,
++            output_weight_generation: next.weight_generation,
++            nonzero_eligibility: nonzero,
++            changed_fast_coordinates: changed,
++            learning_ops: pending.grouped_learning_work.ok_or_else(invalid)?,
++        };
++        self.checkpoint = next;
++        self.pending = None;
++        Ok(receipt)
++    }
++}
++fn grouped_decoder_fast_update(
++    fast: f32,
++    rate: f32,
++    alpha: f32,
++    factor: f32,
++    trace: f32,
++    min: f32,
++    max: f32,
++) -> Result<f32, TrainingError> {
++    let delta = rate * alpha * factor * trace;
++    let next = fast + delta;
++    finite(&[delta, next])?;
++    // A zero-credit update preserves exact signed-zero/boundary sentinels.
++    Ok(if delta == 0. {
++        fast
++    } else {
++        next.clamp(min, max)
++    })
++}
++
++#[cfg(test)]
++impl CpuOrganismState {
++    pub(crate) fn corrupt_grouped_binding_for_test(&mut self, kind: u8) {
++        let pending = self.pending.as_mut().unwrap();
++        let binding = pending.binding.as_mut().unwrap();
++        match kind {
++            0 => self.checkpoint.organism_id = OrganismId(self.checkpoint.organism_id.raw() + 1),
++            1 => binding.frame_digest.0[0] ^= 1,
++            2 => binding.action_id = ActionId(binding.action_id.raw() + 1),
++            3 => binding.sequence_id = ExperienceSequenceId(binding.sequence_id.raw() + 1),
++            4 => pending.weight_generation += 1,
++            5 => binding.dispatch_generation += 1,
++            6 => binding.active_activation_side ^= 1,
++            7 => binding.candidate_feature_digest.0[0] ^= 1,
++            8 => self.checkpoint.phenotype_hash.0[0] ^= 1,
++            _ => panic!("unknown explicit corruption"),
++        }
++    }
++}
++
++#[cfg(test)]
++impl CpuOrganismState {
++    #[allow(clippy::too_many_arguments)]
++    pub(crate) fn diagnose_grouped_decoder_scale_for_test(
++        &self,
++        founder: &CpuFoundationTrainer,
++        patch: &ExperiencePatch,
++        receptors: &NeuralReceptorFrame,
++        acquired: &CpuOrganismCheckpoint,
++        motor: &GroupedMotorReceiptV1,
++        action: &RecoveryGroupJointActionV2,
++        frame: &PerceptionFrame,
++    ) -> serde_json::Value {
++        let pending = self.pending.as_ref().unwrap();
++        let p = founder.phenotype();
++        let (gradient, _) = motor
++            .decoder_score_gradient(
++                p,
++                &pending.context,
++                &self.checkpoint.neural.activations,
++                action,
++                frame,
++                pending.binding.as_ref().unwrap(),
++            )
++            .unwrap();
++        let credit = OutcomeCreditPacket::from_sealed_patch(patch)
++            .unwrap()
++            .with_biochemical_receptors(receptors)
++            .unwrap();
++        let modulator = credit.modulator().frame();
++        let staged = pending.staged.as_ref().unwrap();
++        let mut changes = p
++            .synapses()
++            .iter()
++            .enumerate()
++            .filter(|(i, s)| {
++                grouped_decoder_coordinate(s.kind())
++                    && self.checkpoint.fast[*i].to_bits() != acquired.fast[*i].to_bits()
++            })
++            .map(|(i, s)| {
++                let old_effective = founder.weights()[i]
++                    + (self.checkpoint.lifetime[i] + s.alpha() * self.checkpoint.fast[i]);
++                let new_effective =
++                    founder.weights()[i] + (acquired.lifetime[i] + s.alpha() * acquired.fast[i]);
++                (i, old_effective, new_effective)
++            })
++            .collect::<Vec<_>>();
++        changes.sort_by(|a, b| {
++            (b.2 - b.1)
++                .abs()
++                .total_cmp(&(a.2 - a.1).abs())
++                .then_with(|| {
++                    (acquired.fast[b.0] - self.checkpoint.fast[b.0])
++                        .abs()
++                        .total_cmp(&(acquired.fast[a.0] - self.checkpoint.fast[a.0]).abs())
++                })
++        });
++        let effective_changed = changes
++            .iter()
++            .filter(|(_, old, new)| old.to_bits() != new.to_bits())
++            .count();
++        let examples=changes.iter().take(8).map(|&(i,old_effective,new_effective)| {
++            let s=&p.synapses()[i];
++            let r=&p.plasticity_receptors()[s.receptor_index() as usize];
++            let factor=r.receptor_profile().project(&modulator).unwrap();
++            let delayed_trace=staged[i]*decay(r.eligibility_decay(),credit.outcome_tick().raw()-pending.tick);
++            serde_json::json!({"coordinate":i,"kind":format!("{:?}",s.kind()),"raw_score_gradient":gradient[i],"staged_trace":staged[i],"outcome_decayed_trace":delayed_trace,"eta":r.learning_rate(),"alpha":s.alpha(),"receptor_factor":factor,"fast_before":self.checkpoint.fast[i],"fast_after":acquired.fast[i],"fast_delta":f64::from(acquired.fast[i])-f64::from(self.checkpoint.fast[i]),"ideal_alpha_times_fast_delta":f64::from(s.alpha())*(f64::from(acquired.fast[i])-f64::from(self.checkpoint.fast[i])),"effective_before":old_effective,"effective_after":new_effective,"native_effective_delta":f64::from(new_effective)-f64::from(old_effective)})
++        }).collect::<Vec<_>>();
++        serde_json::json!({"changed_fast_coordinates":changes.len(),"changed_effective_coordinates":effective_changed,"largest_effective_delta_examples":examples})
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    #[test]
++    fn grouped_decoder_synthetic_zero_and_opposite_credit_controls() {
++        // Injected scalar arithmetic, explicitly not own-world outcome evidence.
++        let zero = grouped_decoder_fast_update(-0., 0.125, 0.5, 0., 0.4, -1., 1.).unwrap();
++        assert_eq!(zero.to_bits(), (-0_f32).to_bits());
++        let positive = grouped_decoder_fast_update(0., 0.125, 0.5, 0.8, 0.4, -1., 1.).unwrap();
++        let negative = grouped_decoder_fast_update(0., 0.125, 0.5, -0.8, 0.4, -1., 1.).unwrap();
++        assert!(positive > 0.);
++        assert_eq!(positive.to_bits(), (-negative).to_bits());
++        assert_eq!(positive, (0.125 * 0.5 * 0.8) * 0.4);
++    }
++}
+diff --git a/docs/experiments/grouped-decoder-credit-v1/DESIGN.md b/docs/experiments/grouped-decoder-credit-v1/DESIGN.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..221fe52318639da1d097f8c69ee9ad5d67dc6e69
+--- /dev/null
++++ b/docs/experiments/grouped-decoder-credit-v1/DESIGN.md
+@@ -0,0 +1,209 @@
++# Grouped M2 local decoder credit V1
++
++The fresh CPU implementation now has bounded native qualification. See
++[measured qualification and limits](QUALIFICATION.md); no scientific learning
++study or trained-brain claim follows. The chronology below preserves earlier
++source-only status and failed assertions rather than rewriting their history. The base is fbf2a517f93098b5d936878a3d26bbb8d0391c38. The original
++closed host and all prior direct learning paths retain their identities and
++behavior. This is a fresh CPU research admission, not a migration or GPU feature.
++The independent six-weight taste-reference repair is deliberately excluded.
++
++## Declared law: bounded score trace, fast decoder only
++
++For source ActionCandidate and MemoryContext decoder coordinates only:
++
++    g_i = d log pi(actual sampled grouped joint action) / d w_effective_i
++    E_i = clamp(rho_i^elapsed * previous_E_i + g_i, -1, 1)
++    U_i = rho_i^outcome_delay * E_i
++    F_i' = clamp(F_i + eta_i * alpha_i * m_i * U_i, fast_min_i, fast_max_i)
++
++The single categorical pullback includes representative, all genuinely sampled
++channels and the conditional operation exactly once, with native temperature,
++masks, common Rest source readout, M2/group soma Jacobians, and operation-specific
++memory clamp slopes. Actual source activations and receipt from its one execution
++are used. No detached source is rebuilt and no common memory is invented.
++
++`m_i` is the inherited receptor projection of the canonical sealed joint outcome
++with its matching biochemical frame. Developmental parameters are validated by
++the existing developmental adapter. Its existing route scaling/caps apply only
++to recurrent coordinates, so decoder eta remains the inherited receptor rate.
++
++This new rule deliberately does not call the old waking_fast_update law. That
++law includes signed-credit-weighted Oja normalization with post^2 * effective
++weight. Here normalization is CLOSED, not reinterpreted. No extra pre/post factor
++is multiplied into a derivative already containing the decoder input/source
++activation. Bounded eligibility, receptor projections and temporal association
++mean this is not an exact policy-gradient optimizer, recurrent BPTT, or trained
++brain claim. Aggregate outcome is joint association, not isolated channel reward.
++
++Only fast and eligibility banks on those declared decoder coordinates may change.
++Lifetime, recurrent/speech/CognitiveContext eligibility and weights, optimizer
++weights/moments/integer ages, acquired dendrites and structural banks remain
++bit-identical. Synaptic sleep replay/staging is closed. Canonical memory,
++predictor, body and memory-sleep transactions are retained unchanged. Weight
++generation advances only when fast values actually change. Memory-sleep has a
++distinct identity and records its real cycle, never a fake weight generation.
++
++## Evidence and resource plan
++
++Work is isolated in grouped-m2-decoder-credit-v1. No build/native execution is
++allowed until the coordinator releases a lane and confirms disk capacity.
++No study seed is selected or consumed. The reserved closed Full/DriveSham pair
++and active runs are untouched. First source worktree is approximately 154 MiB;
++new source/docs are expected below 1 MiB and no target is allocated.
++
++Qualification must include a real own-world sealed cost/relief/harm receipt,
++closed same-source control, exact cold continuation with acquired state, declared
++write-coordinate checks, malformed/duplicate provenance rejection, finite
++differences at nonunit temperature and clipped contexts, clearly labeled
++synthetic zero/opposite controls, and a same-frame logit effect separated from
++alternative real trajectories. No sustained avoidance or fitness claim follows
++from a one-step weight change.
++
++Methodological reference: https://rikiyat.github.io/blog/weight-space-programming/
++Experiment 4 motivates targeted repair, experiment 5 whole-controller integration,
++and experiment 6 feedback/iteration. They do not validate this biological law.
++
++## Iteration record
++
++1. Source review: the direct stage_selection path is not the grouped derivative;
++   the closed host's source tape and native Jacobians provide a correct seam.
++2. Initial law above was reported to the coordinator before implementation.
++   Lifetime and synaptic sleep were narrowed to closed to avoid silently replaying
++   old direct traces or adding a second outcome event.
++3. First source implementation and regression packet are frozen before compilation.
++   Formatting and `git diff --check` passed. No Cargo command, fixture, or world
++   run has executed for this milestone. Test names describe intended assertions,
++   not established outcomes. The resource coordinator retains the build hold.
++   The materialized worktree occupies about 154 MiB (105 MiB crates, 32 MiB docs,
++   16 MiB assets, 4 KiB .git pointer); new source/tests/notes are below 100 KiB.
++   A private source review is in progress. No bytes were deleted.
++
++4. Independent source review found that the inherited biochemical adapter accepts
++   any receptor source tick in the decision-to-outcome interval. GDE1 now retains
++   the exact forward receptor frame in nonpersisted pending state and requires
++   equality before credit. The old adapter and closed/direct paths are unchanged.
++5. The first draft's work tariff charged administrative source scans and a
++   conservative candidate bound as biological work. This was rejected in source
++   review before running. The revision reserves an upper bound, but charges only
++   semantic terms counted in the executed sparse pullback: categorical derivative
++   outcomes, evaluated decoder-chain contributions, declared trace updates and
++   sealed fast updates. Table scans/identity validation remain bookkeeping.
++6. Unrun qualification was strengthened with independent ordinary ActionCandidate,
++   ordinary MemoryContext, common Rest and each physical operation memory finite
++   differences, plus acquired-state memory-sleep/cold resume and bounded physical
++   AwakeRest feedback. Both world bounds reuse the existing fresh fixture seed,
++   ordinary 240/1200-tick preparations and at most 24 native intervals. No action,
++   concentration or coefficient is forced. If absent, a desired event is an unmet
++   qualification, not permission to search seeds or change coefficients.
++
++The initial real-cost control is explicitly computational-energy feedback. Its
++sealed transition includes physical biology plus the single cognitive debit.
++Tests report the actual pre-compute transition, full sealed transition, a decoder
++receptor projection and closed versus learning debit separately. Such a weight
++change alone is not meal/relief learning or evidence of beneficial policy change.
++The separate bounded physical-recovery fixture still uses aggregate joint credit;
++it does not isolate a channel's causal reward from concurrent computational cost.
++
++Work accounting revision V1 reserves each possible semantic learning unit at
++4 Q24. The actual counted units enter the existing cognitive learning_ops receipt
++and single body-energy debit. Reservation is availability, never a second debit.
++This is an explicitly authored semantic price, not hardware instruction counting.
++Source/Jacobian reuse and no candidates-by-synapses matrix keep the live path
++bounded. Diagnostic test replay is outside the live host and creates no additional
++lived outcome. All revisions and tests are still source-only under the build hold.
++
++Pending qualification gates: compile/lint, all new and old regression tests,
++independent base-versus-revision closed byte comparison, real physical feedback,
++raw and post-credit same-frame effects, and acquired memory-sleep continuation.
++No gate has been declared passed based on source inspection alone.
++
++## Native qualification iteration 1
++
++Lane2 was released with one Cargo/test job, existing target reuse, no incremental
++or debug data, no deletion, and 1 GiB maximum extra growth. First compilation of
++3fc6b629 passed. The initial ten focused tests produced 9 passes and 1 failure.
++Actual physical AwakeRest occurred at tick242 with recovery1 and264 changed fast
++coordinates. Acquired state survived actual BodySleep, exactly one memory-only
++consolidation, exact cold restore, waking and resumed decisions. Provenance,
++zero/opposite arithmetic, dense chain agreement and independent raw-chain/clamp
++finite differences passed. These are bounded CPU fixtures, not a learning study.
++
++The first-update same-frame policy-effect assertion FAILED: raw components changed
++but joint log probability retained exact bits13833882579699357373. No law,
++coefficient or seed changed. The initial binary and failure log are retained in
++the qualification packet. The first test did not export its full patch; iteration2
++will explicitly reproduce/export that first-step receipt and inspect the already
++allowed24-interval bound. It contrasts inherited initial fast with accumulated
++fast and separately pre-final-update with post-final-update on one captured actual
++frame/state/context/sample, holding every other bank fixed. It is not a live
++alternative trajectory or a promise that a changed policy will be found.
++
++Iteration2 also adds explicit derived specialized vocal-lane42 finite differences
++at nonunit temperature, including its mask-zero control, and an ignored opt-in
++source-identical closed-envelope/next-step witness for exact base comparison.
++
++## Native qualification iteration 2
++
++With the rule, coefficients, seed and temperature unchanged, the bounded fast-only
++contrast passed on its second native interval. At tick240, maximum raw component
++change was9.0014e-8 and joint log probability remained-1.73899198861674553. At
++tick241, inherited-fast and pre-final-update log probability were both
++-1.72611119307095584, versus-1.72611475035219319 after the acquired update.
++Maximum final-update raw component change was3.5011506e-6. This is a detached
++same-frame/state/context/sample contrast, not a live changed-action, avoidance,
++causal-channel or fitness claim. The first-step failure remains in the packet.
++
++The explicit specialized derived vocal lane42 finite difference passed at
++nonunit temperature1.37; its masked control had exactly zero gradient and finite
++difference. Diagnostic rate/trace/alpha/receptor/effective-weight scale and
++native propagation-stage evidence are being added without changing the law.
++
++## Native scale and lint evidence
++
++All11 focused tests passed on6d8182085. At the retained first-step limitation,
++144 fast coordinates and142 effective weights changed. Example coordinate28720:
++raw gradient-0.029025819375, staged trace-0.02902581915, outcome-decayed trace
++-0.02757452801, eta0.01, alpha0.1341599822, receptor factor-0.00500660250,
++fast delta1.85214148e-7 and effective delta2.48483261e-8. Raw component maximum
++change9.0013998e-8 survived into M2 port activations at2.98023224e-8, but the
++M2 core logits and group/operation scores were unchanged. This identifies native
++f32 propagation loss by the bounded final readout rather than a zero derivative.
++
++Strict library-and-test Clippy passed after two nonbehavioral cleanups (an empty
++match arm and moving test-only helpers before the test module). The expanded
++all-target run is NOT a pass: unchanged example support
++`examples/support/grounded_drive_basis.rs` reports pre-existing dead-code warnings
++when built through`probe_grounded_drive_basis`. Those unrelated files are not
++modified. Failed logs are retained. The physical fixture additionally checks
++measured pre-compute fatigue reduction, rather than interpreting recovery-dose1
++as a fatigue delta of1. This stronger assertion awaits its immediate rerun.
++
++The stronger physical assertion passed: AwakeRest at tick242 produced measured
++pre-compute fatigue change-0.13342218 and energy change-0.000010192394. Sealed
++energy change was-0.00022560358 after the cognitive debit0.00021551001, with264
++changed fast coordinates. These measurements are associated joint feedback;
++recovery-dose1 is not a claim that fatigue fell by1 or that relief alone caused
++the synaptic update. The measured same-frame policy effect is tick241, separately
++from the tick242 physical-recovery receipt.
++
++The final candidate serial packet passed11 focused GDE1 tests,10 closed-host
++fixtures,2 closed Food compatibility fixtures,50 mediation cases (46 existing
++and4 added),9 M0 cases and3 M1 replay cases. An initial M1-host filter matched zero
++tests and is explicitly not counted; its actual host/literal compatibility checks
++remain scheduled. The complete closed candidate witness is exported; base
++comparison is pending. One further explicitly synthetic preservation fixture
++covers nonzero recurrent fast/lifetime/eligibility, acquired dendrites/structural
++edges and existing optimizer moments/ages across GDE1 cold continuation.
++
++
++## Final bounded native result
++
++The final packet and honest limits are recorded in [QUALIFICATION.md](QUALIFICATION.md).
++The added nonzero-bank preservation test and measured physical/modulator export
++passed. All nine actual M1 host cases and the old literal wire integration passed.
++The source-identical base and candidate witness produced exactly equal complete
++envelopes and next-step bytes across both fixed steps. Final-code strict
++library/tests lint passed; the unrelated all-target example warning remains.
++No learning study, coefficient fitting, independent meal-memory change or
++equal-work sham is included in this frozen milestone.
+diff --git a/docs/experiments/grouped-decoder-credit-v1/QUALIFICATION.md b/docs/experiments/grouped-decoder-credit-v1/QUALIFICATION.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..3afc2c55e39a1e9790d126770023891ba4f3178f
+--- /dev/null
++++ b/docs/experiments/grouped-decoder-credit-v1/QUALIFICATION.md
+@@ -0,0 +1,160 @@
++# GDE1 bounded native qualification
++
++This is an opt-in CPU research admission for local outcome-modulated decoder
++plasticity. It is not a trained brain, recurrent BPTT, a default-game/GPU feature,
++a migration, or evidence of improved survival or avoidance. The separate
++six-weight taste-reference repair and scientific recovery study are excluded.
++
++## Frozen scope and evidence
++
++The tested code is `ed5f2f5a13e9d7b3851272adeeec7c73b605f7aa`, based on closed host
++`fbf2a517f93098b5d936878a3d26bbb8d0391c38`. The law and inherited rates did not
++change during qualification. Only ActionCandidate/MemoryContext fast and
++eligibility coordinates can evolve. All lifetime, other source banks,
++dendritic/structural state, optimizer moments/ages and 814 appendage rows remain
++closed. See [the design and iteration record](DESIGN.md) for the formula,
++provenance contract and accounting semantics.
++
++Fresh fixtures use the existing fixed seed `0x03475250484F5354`, ordinary
++240- or 1,200-tick preparations, and a maximum of 24 native intervals. No action,
++concentration, coefficient or seed was adjusted to obtain a desired result.
++Finite-difference and explicit zero/opposite-credit tests are synthetic
++mathematical controls, not evidence of lived learning.
++
++The local qualification packet retains initial and final binaries, logs, exact
++wire outputs, numerical diagnostics and real sealed patches. It is separate from
++the source repository; no checkpoint is published with these notes. The initial
++source, source-review corrections, numerical failure and later test revisions
++remain separate commits.
++
++## Measured outcome association
++
++The first update changed 144 fast coordinates and 142 effective weights, but
++its actual sampled joint log probability was **bit-identical** in a detached
++same-frame replay. Raw component change reached `9.0013998e-8`, survived into M2
++port activations at `2.98023224e-8`, then rounded away by the bounded final
++readout. The original failing assertion and binary are retained, not erased.
++
++At representative coordinate 28,720: raw gradient `-0.029025819375`, staged
++trace `-0.02902581915`, delayed trace `-0.02757452801`, inherited eta `0.01`,
++alpha `0.1341599822`, receptor projection `-0.00500660250`, fast delta
++`1.85214148e-7`, and effective-weight delta `2.48483261e-8`. No rate/gain was
++changed in response to this scale finding.
++
++On the second interval, at tick 241, the same captured source state, frame,
++recall/context, appendage, mask and sample were replayed with inherited initial
++fast versus acquired fast. Joint log probability changed from
++`-1.72611119307095584` to `-1.72611475035219319` (about `-3.55728e-6`). The
++separate last-update-only contrast also changed. This is a same-frame policy
++effect, not an alternative lived trajectory, changed-action claim or benefit.
++
++The first computational-cost control separates pre-compute energy change
++`-0.000010192394` from full sealed change `-0.00022572279`. Learning cognitive
++debit was `0.00021549001`, versus closed-host debit `0.0001561075`. Thus that
++closed comparison is **not equal-work**. It establishes compute-inclusive
++outcome modulation, not physical meal or isolated relief learning.
++
++An ordinary physical AwakeRest at tick 242 additionally produced measured
++pre-compute fatigue change `-0.13342218` and energy change `-0.000010192394`.
++The sealed energy change was `-0.00022560358` after cognitive debit
++`0.00021551001`. One sealed update changed 264 fast coordinates and advanced
++weight generation 2 to 3. Its sealed modulator included prediction residual
++`0.35057765`, homeostatic improvement `0.018505063`, frustration `0.03`, and
++zero pain/novelty. The complete patch and physical-versus-sealed measurements
++are retained. Recovery dose 1 is not a fatigue delta of 1. This is aggregate
++joint association with concurrent costs, not proof that relief alone caused
++any update. The tick 241 policy contrast and tick 242 relief receipt are
++separate observations.
++
++## Preservation, derivatives and rejection
++
++- Raw pullbacks agree with the diagnostic dense chain and independent finite
++  differences before eligibility clipping, at nonunit temperatures. Cases
++  cover ordinary ActionCandidate, ordinary MemoryContext, common Rest,
++  operation-specific memory, clipped zero slopes, explicit derived vocal lane
++  42, and a masked zero control.
++- Exact owner, frame, selected action, sequence, dispatch, activation side,
++  feature, phenotype, source-weight generation and source biochemical frame
++  checks reject mismatches. Duplicate credit, cross-policy restore, pending
++  export and a late failing host step are covered. Pre-update sampled scores
++  remain intact after fast writes.
++- Acquired fast/eligibility survive actual BodySleep, one canonical memory-only
++  consolidation, exact cold restore, Waking and resumed decisions. Synaptic
++  sleep remains closed and does not create a fake source weight generation.
++- A separately labeled synthetic-sentinel test preserves nonzero recurrent
++  fast/lifetime/eligibility, dendrites, structural edges and optimizer moments
++  and integer ages across warm and exact cold continuation.
++
++## Checks and limits
++
++[Curated scalar results](VALIDATION-SCALARS.json) record exact pass, failure,
++ignore and filtered counts without captured state or raw logs. The selected
++packet covers 93 distinct candidate test cases, including the explicitly run
++normally ignored witness; repeated runs are not independent experiments.
++
++The serial packet passed 11 focused GDE1 tests, plus the added nonzero-bank
++preservation test. The strengthened physical-modulator test passed again on
++the final binary. The 11-test packet was run on `8f4cb562f`; subsequent source
++changes are only the extra test and test-only evidence export, with production
++behavior unchanged. Final-code strict library/tests Clippy passed.
++
++Affected compatibility passed 10 grouped-host tests, two closed Food tests,
++50 mediation tests (46 existing and four new derivative tests), nine M0 tests,
++nine actual M1 host tests, three M1 replay tests, and the literal pre-adapter
++JSON-wire integration test. These categories overlap the four derivative
++cases in the focused packet; do not add their counts as distinct tests. The
++initial M1 filter matched zero tests and is not counted. Existing Food tests
++are compatibility evidence, not harmful-food learning evidence.
++
++Strict `--lib --tests` Clippy passed with `-D warnings`. The expanded
++`--all-targets` attempt did not pass: unchanged example support
++`examples/support/grounded_drive_basis.rs`, through `probe_grounded_drive_basis`,
++has pre-existing dead-code warnings. No full-workspace/GPU validation or
++scientific learning study is claimed.
++
++## Closed baseline witness
++
++The source-identical ignored witness uses the existing closed fixture, exports
++its complete initial envelope, steps at temperatures 0.73 and 1.17, exports both
++full next-step decision tuples and envelopes, and requires exact cold restore
++after each step. The witness source SHA-256 is
++`93e26a73aa733b268786737e2f7bd4d75bd449f122b5716e5dfa20cb9ff65b57`.
++The baseline checkout contains only this test and its module declaration over
++`fbf2a517`; it has no production edits.
++
++Both runs passed and all five output files are byte-identical: 7,116,876 bytes
++per revision, comprising the complete initial envelope, two complete later
++envelopes, and both next-step decision tuples. This is exact byte comparison,
++not a tolerance or activation-only comparison. Binary SHA-256 values:
++
++- Candidate: `2293871f199df17b9c429786f8cd3b475189a95664e756e49ef9eaff4298cda0`.
++- Baseline: `62eb7f9628cfbd8901f9e68ed0c4be42350299c1e4a4331e8fa4388d0992b170`.
++
++Output SHA-256 values:
++
++- Initial envelope: `fe6385e4406ce7e99cbc992d4fbde3d44805835992ea9ad07c02a2c3dc6b8594`.
++- First envelope: `25b61a7550b424a8391c12960ce3b77a3c22b8ad5013cfe2daf8608bce6e56cf`.
++- Second envelope: `cde1d9c9a853402a9af2cf955b359c6d24c3ef34fed7926cd917b0e1f2e30d5c`.
++- First decision: `516d1776531106ba2368242894b1816799e41a84d2e0d54cbbe2c019632e131e`.
++- Second decision: `f8f48d90074f7463c96787074b0b4ac66c814153b70f5dbcc5e16845ffa36275`.
++
++This bounded witness does not prove every possible closed history; the separate
++closed regressions cover additional source, biology and sleep cases. No phase
++timing instrumentation was added: its request arrived after baseline compilation,
++and another build was deliberately avoided.
++
++## Resource boundary
++
++Compilation and tests are serial, using the existing lane 2 target with
++incremental/debug data disabled. No files are deleted. The initial target was
++1,758,545,813 bytes; the 1 GiB growth cap also conservatively includes the
++already-created baseline worktree and retained logs/binaries/witnesses. No
++study seeds, scientific pilot data or active recovery-pair state are touched.
++At native completion the target was 1,758,959,484 bytes, the retained packet
++245,896,162 bytes, and the baseline worktree 156,415,444 bytes. Conservative
++additional growth was 402,725,277 bytes (about 384 MiB), including the baseline
++worktree. The baseline compile, retained binary and output added 80,110,886 bytes
++within its separate 400 MiB sub-budget. Free space was 14,054,305,792 bytes at
++that measurement; concurrent independent work can change it. Small final notes
++and manifest writes add a few kilobytes. Lane 2 was released after all commands
++finished. Further native builds need a fresh coordinator resource allocation.
+diff --git a/docs/experiments/grouped-decoder-credit-v1/VALIDATION-SCALARS.json b/docs/experiments/grouped-decoder-credit-v1/VALIDATION-SCALARS.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..4b8fa51e26e13fdc52283fba6ec2a32d258adace
+--- /dev/null
++++ b/docs/experiments/grouped-decoder-credit-v1/VALIDATION-SCALARS.json
+@@ -0,0 +1,147 @@
++{
++  "schema": "gde1-curated-scalar-validation-v1",
++  "base_commit": "fbf2a517f93098b5d936878a3d26bbb8d0391c38",
++  "tested_code_commit": "ed5f2f5a13e9d7b3851272adeeec7c73b605f7aa",
++  "earlier_11_test_packet_commit": "8f4cb562f",
++  "candidate_distinct_tests_passed": 93,
++  "candidate_selected_execution_passes": 98,
++  "overlap_note": "Four derivative tests repeat in mediation; strengthened physical test is rerun. Counts are not independent experiments. One normally ignored witness was explicitly run with --ignored.",
++  "selected_test_runs": [
++    {
++      "scope": "focused-final",
++      "passed": 11,
++      "failed": 0,
++      "ignored": 0,
++      "filtered_out": 208
++    },
++    {
++      "scope": "extra-grouped_decoder_preserves_nonzero",
++      "passed": 1,
++      "failed": 0,
++      "ignored": 0,
++      "filtered_out": 219
++    },
++    {
++      "scope": "extra-grouped_decoder_bounded_ordinary",
++      "passed": 1,
++      "failed": 0,
++      "ignored": 0,
++      "filtered_out": 219
++    },
++    {
++      "scope": "closed-host-final",
++      "passed": 10,
++      "failed": 0,
++      "ignored": 0,
++      "filtered_out": 209
++    },
++    {
++      "scope": "closed-food-final",
++      "passed": 2,
++      "failed": 0,
++      "ignored": 0,
++      "filtered_out": 217
++    },
++    {
++      "scope": "mediation-final",
++      "passed": 50,
++      "failed": 0,
++      "ignored": 0,
++      "filtered_out": 169
++    },
++    {
++      "scope": "m0-final",
++      "passed": 9,
++      "failed": 0,
++      "ignored": 0,
++      "filtered_out": 210
++    },
++    {
++      "scope": "extra-cpu::host::sleep_choice_envelope::tests",
++      "passed": 9,
++      "failed": 0,
++      "ignored": 0,
++      "filtered_out": 211
++    },
++    {
++      "scope": "m1-replay-final",
++      "passed": 3,
++      "failed": 0,
++      "ignored": 0,
++      "filtered_out": 216
++    },
++    {
++      "scope": "legacy-wire-final",
++      "passed": 1,
++      "failed": 0,
++      "ignored": 0,
++      "filtered_out": 0
++    },
++    {
++      "scope": "extra-grouped_closed_literal_witness",
++      "passed": 1,
++      "failed": 0,
++      "ignored": 0,
++      "filtered_out": 219
++    }
++  ],
++  "baseline_witness": {
++    "passed": 1,
++    "failed": 0,
++    "ignored": 0,
++    "filtered_out": 207
++  },
++  "initial_focused_failure": {
++    "passed": 9,
++    "failed": 1,
++    "ignored": 0,
++    "filtered_out": 207,
++    "reason": "Nonzero fast/raw changes rounded to identical first-step joint log probability; retained, not retuned.",
++    "first_step_joint_log_probability_bits": 13833882579699357373
++  },
++  "initial_binary_sha256": "6e80acc98fe91bd8e0984a2ea30225359223ca48b24d66b34ba0ec9ec26e9e2d",
++  "candidate_binary_sha256": "2293871f199df17b9c429786f8cd3b475189a95664e756e49ef9eaff4298cda0",
++  "baseline_binary_sha256": "62eb7f9628cfbd8901f9e68ed0c4be42350299c1e4a4331e8fa4388d0992b170",
++  "byte_witness": {
++    "files": 5,
++    "bytes_per_revision": 7116876,
++    "all_complete_bytes_equal": true,
++    "source_sha256": "93e26a73aa733b268786737e2f7bd4d75bd449f122b5716e5dfa20cb9ff65b57"
++  },
++  "first_step": {
++    "changed_fast_coordinates": 144,
++    "changed_effective_coordinates": 142,
++    "max_raw_component_delta": 9.00139980331005e-08,
++    "max_m2_port_activation_delta": 2.9802322387695312e-08,
++    "max_m2_core_logit_delta": 0.0
++  },
++  "tick_241_same_frame": {
++    "initial_fast_log_probability": -1.7261111930709558,
++    "pre_final_update_log_probability": -1.7261111930709558,
++    "acquired_fast_log_probability": -1.7261147503521932,
++    "interpretation": "Detached fixed-frame/state/context/sample effect, not a live trajectory or benefit."
++  },
++  "tick_242_physical_awake_rest": {
++    "physical_fatigue_delta": -0.13342218101024628,
++    "physical_energy_delta": -1.0192394e-05,
++    "sealed_energy_delta": -0.00022560358,
++    "cognitive_debit": 0.00021551001,
++    "changed_fast_coordinates": 264,
++    "interpretation": "Aggregate joint physical relief and computation-inclusive credit; not isolated channel causality."
++  },
++  "lint": {
++    "strict_library_tests": "passed",
++    "all_targets": "failed on pre-existing unchanged example dead-code warnings",
++    "corrected_style_failures": [
++      "unneeded unit expression",
++      "test-only helper placement after test module"
++    ]
++  },
++  "limits": [
++    "Local decoder fast/eligibility only; no recurrent BPTT, lifetime or Adam updates.",
++    "Closed control is lower-work, not an equal-work sham.",
++    "No trained-brain, sustained avoidance, survival/fitness or benefit claim.",
++    "No GPU/default-game integration, existing-life migration or scientific seed study.",
++    "No throughput-phase instrumentation in this witness."
++  ]
++}
