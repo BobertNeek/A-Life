@@ -1,0 +1,560 @@
+--- a/crates/alife_training/src/cpu/motor_mediation/confidence/policy/optional_vocal/coordination.rs
++++ b/crates/alife_training/src/cpu/motor_mediation/confidence/policy/optional_vocal/coordination.rs
+@@ -20,6 +20,9 @@
+     pub probabilities: Vec<f64>,
+     pub log_probabilities: Vec<f64>,
+     pub features: Vec<[f64; 3]>,
++    /// One conditional posture factor per unique locomotion, not per Cartesian triple.
++    pub recovery: Vec<RecoveryPostureFactorV1>,
++    pub recovery_index: Vec<usize>,
+ }
+ impl CoordinationPairFactorV1 {
+     pub(super) fn sample(&self, u: f64) -> usize {
+@@ -116,7 +119,7 @@
+         confidence * conflict * (excess / STEP).clamp(0., 1.),
+     ]
+ }
+-fn logsumexp(xs: &[f64]) -> Result<f64, TrainingError> {
++pub(super) fn logsumexp(xs: &[f64]) -> Result<f64, TrainingError> {
+     if xs.is_empty() || xs.iter().any(|x| !x.is_finite()) {
+         return Err(invalid());
+     }
+@@ -202,6 +205,8 @@
+                 probabilities,
+                 log_probabilities,
+                 features,
++                recovery: Vec::new(),
++                recovery_index: Vec::new(),
+             });
+             representative_logs.push(base_logp + partition);
+         }
+--- /dev/null
++++ b/crates/alife_training/src/cpu/motor_mediation/confidence/policy/optional_vocal/recovery.rs
+@@ -0,0 +1,255 @@
++//! Explicit administrative compatibility prototype, NOT a new neural lobe.
++//! The native recovery-group score supplies demand. Fixed actuator prediction
++//! and a bounded raw-homeostatic escape gate supply a soft compatibility feature.
++//! No post-sample edits, world-truth queries, or acquired-state migration.
++use super::coordination::logsumexp;
++use super::*;
++
++pub const RECOVERY_MOTION_WEIGHT_V1: f64 = -2.;
++pub const RECOVERY_MOTION_FEATURE_V1: &str =
++    "sigmoid-native-group*predicted-motion*recovery*(1-positive-fear-pain)/v1";
++
++#[derive(Debug, Clone, Serialize)]
++pub struct RecoveryPostureFactorV1 {
++    pub locomotion: CoordinatedTargetChoiceV1,
++    pub factor: CoordinatedTargetFactorV1,
++    pub features: Vec<f64>,
++    pub log_partition: f64,
++}
++/// Selected administrative event counters for one distribution construction.
++/// Includes geometric partitions, but not all scalar arithmetic, cache lookup,
++/// allocation, validation, or repeated calls from sample/evaluate. These counters
++/// neither bill body ATP nor imply equal total compute.
++#[derive(Debug, Clone, Default, Serialize)]
++pub struct RecoveryPartitionWorkV1 {
++    pub geometry_feature_evaluations: u64,
++    pub geometry_energy_products: u64,
++    pub posture_feature_evaluations: u64,
++    pub pair_reweights: u64,
++    pub representative_reweights: u64,
++    pub logsumexp_terms: u64,
++    pub exponentials: u64,
++}
++
++fn compatibility(group: f64, fear: f64, pain: f64, motion: f64, recovery: bool) -> f64 {
++    if !recovery {
++        return 0.;
++    }
++    let need = if group >= 0. {
++        1. / (1. + (-group).exp())
++    } else {
++        let e = group.exp();
++        e / (1. + e)
++    };
++    // References match the pinned M2 raw drive references, not a claim that
++    // these are native opponent activations. At maximal fear/pain the extra
++    // recovery constraint vanishes. It never adds a hard escape mask.
++    let escape = ((fear - 0.25) / 0.75)
++        .clamp(0., 1.)
++        .max(((pain - 0.10) / 0.90).clamp(0., 1.));
++    need * motion.clamp(0., 1.) * (1. - escape)
++}
++
++impl CoordinatedTargetScoresV1 {
++    fn predicted_motion(&self, choice: CoordinatedTargetChoiceV1) -> Result<f64, TrainingError> {
++        let CoordinatedTargetChoiceV1::Candidate(i) = choice else {
++            return Ok(0.);
++        };
++        let c = self
++            .coordination_frame
++            .candidates()
++            .get(i as usize)
++            .ok_or_else(invalid)?;
++        // No-target locomotion (the ordinary stationary primitive) is not an
++        // observed-object translation. Do not infer translation from family alone.
++        let CandidateObservationRef::ObjectSlot(index) = c.observation else {
++            return Ok(0.);
++        };
++        let slot = self
++            .coordination_frame
++            .grounded_object_slots()
++            .iter()
++            .find(|s| s.slot_index == index)
++            .ok_or_else(invalid)?;
++        if slot.candidate_features()? != c.features {
++            return Err(invalid());
++        }
++        let confidence = f64::from(slot.confidence.raw().min(c.sensor_confidence.raw()));
++        if f64::from(slot.bearing[0]).hypot(f64::from(slot.bearing[1])) < 0.5 {
++            return Ok(0.);
++        }
++        let step_fraction = match c.family {
++            CandidateActionFamily::Approach => (f64::from(slot.distance) * 8. / 0.1).clamp(0., 1.),
++            CandidateActionFamily::Avoid => 1.,
++            _ => 0.,
++        };
++        Ok(confidence * step_fraction)
++    }
++
++    /// Exact star partition. First use the unchanged geometric L/M factor,
++    /// then integrate Z_posture(L,r), reweight L/M, and reweight representative.
++    /// This equals one Gibbs normalization of the original complete joint law.
++    /// Operation logits remain conditional: the feature applies equally to both
++    /// physical recovery operations, whose normalized mass therefore sums to 1.
++    pub(super) fn coordinate_recovery(
++        &self,
++        representative: &mut CoordinatedTargetFactorV1,
++        channels: &[Option<CoordinatedTargetFactorV1>; 6],
++        t: f64,
++        geometry_weights: [f64; 3],
++        recovery_weight: f64,
++    ) -> Result<
++        (
++            Vec<CoordinationPairFactorV1>,
++            [f64; 3],
++            f64,
++            RecoveryPartitionWorkV1,
++        ),
++        TrainingError,
++    > {
++        if !recovery_weight.is_finite() || recovery_weight.abs() > 32. {
++            return Err(invalid());
++        }
++        let (mut pairs, _) = self.coordinate(representative, channels, t, geometry_weights)?;
++        let geometric_pairs = pairs.iter().map(|p| p.outcomes.len() as u64).sum::<u64>();
++        let mut work = RecoveryPartitionWorkV1 {
++            geometry_feature_evaluations: geometric_pairs,
++            geometry_energy_products: 3 * geometric_pairs,
++            logsumexp_terms: geometric_pairs + pairs.len() as u64,
++            exponentials: 2 * (geometric_pairs + pairs.len() as u64),
++            ..Default::default()
++        };
++        let mut rep_logs = Vec::new();
++        let drives = self.coordination_frame.homeostasis().drives;
++        for (ri, pair) in pairs.iter_mut().enumerate() {
++            let r = representative.outcomes[ri];
++            let base_posture = if self.forced(r) == Some(4) {
++                CoordinatedTargetFactorV1 {
++                    outcomes: vec![r],
++                    probabilities: vec![1.],
++                    log_probabilities: vec![0.],
++                }
++            } else {
++                channels[4].clone().unwrap_or(CoordinatedTargetFactorV1 {
++                    outcomes: vec![CoordinatedTargetChoiceV1::NoOp],
++                    probabilities: vec![1.],
++                    log_probabilities: vec![0.],
++                })
++            };
++            let mut pair_logs = Vec::new();
++            for (pi, choices) in pair.outcomes.iter().enumerate() {
++                let l = choices[0];
++                let index = if let Some(i) = pair.recovery.iter().position(|p| p.locomotion == l) {
++                    i
++                } else {
++                    let motion = self.predicted_motion(l)?;
++                    let features: Vec<_> = base_posture
++                        .outcomes
++                        .iter()
++                        .map(|p| {
++                            compatibility(
++                                f64::from_bits(self.group_bits),
++                                f64::from(drives.fear),
++                                f64::from(drives.pain),
++                                motion,
++                                r == CoordinatedTargetChoiceV1::RestGroup
++                                    || *p == CoordinatedTargetChoiceV1::RestGroup,
++                            )
++                        })
++                        .collect();
++                    let logs: Vec<_> = base_posture
++                        .log_probabilities
++                        .iter()
++                        .zip(&features)
++                        .map(|(p, f)| p + recovery_weight * f / t)
++                        .collect();
++                    work.posture_feature_evaluations += logs.len() as u64;
++                    work.logsumexp_terms += logs.len() as u64;
++                    // One sigmoid exponential per evaluated feature, plus one
++                    // exponential per partition term and normalized probability.
++                    work.exponentials += (2 * logs.len()
++                        + base_posture
++                            .outcomes
++                            .iter()
++                            .filter(|p| {
++                                r == CoordinatedTargetChoiceV1::RestGroup
++                                    || **p == CoordinatedTargetChoiceV1::RestGroup
++                            })
++                            .count()) as u64;
++                    let z = logsumexp(&logs)?;
++                    let log_probabilities: Vec<_> = logs.iter().map(|p| p - z).collect();
++                    let probabilities = log_probabilities.iter().map(|p| p.exp()).collect();
++                    pair.recovery.push(RecoveryPostureFactorV1 {
++                        locomotion: l,
++                        factor: CoordinatedTargetFactorV1 {
++                            outcomes: base_posture.outcomes.clone(),
++                            probabilities,
++                            log_probabilities,
++                        },
++                        features,
++                        log_partition: z,
++                    });
++                    pair.recovery.len() - 1
++                };
++                pair.recovery_index.push(index);
++                pair_logs.push(pair.log_probabilities[pi] + pair.recovery[index].log_partition);
++            }
++            work.pair_reweights += pair_logs.len() as u64;
++            work.logsumexp_terms += pair_logs.len() as u64;
++            work.exponentials += (2 * pair_logs.len()) as u64;
++            let z = logsumexp(&pair_logs)?;
++            pair.log_probabilities = pair_logs.iter().map(|p| p - z).collect();
++            pair.probabilities = pair.log_probabilities.iter().map(|p| p.exp()).collect();
++            rep_logs.push(representative.log_probabilities[ri] + z);
++        }
++        work.representative_reweights = rep_logs.len() as u64;
++        work.logsumexp_terms += rep_logs.len() as u64;
++        work.exponentials += (2 * rep_logs.len()) as u64;
++        let z = logsumexp(&rep_logs)?;
++        representative.log_probabilities = rep_logs.iter().map(|p| p - z).collect();
++        representative.probabilities = representative
++            .log_probabilities
++            .iter()
++            .map(|p| p.exp())
++            .collect();
++        let mut geometric_mean = [0.; 3];
++        let mut recovery_mean = 0.;
++        for (rp, pair) in representative.probabilities.iter().zip(&pairs) {
++            for (pi, pp) in pair.probabilities.iter().enumerate() {
++                for (i, mean) in geometric_mean.iter_mut().enumerate() {
++                    *mean += rp * pp * pair.features[pi][i];
++                }
++                let posture = &pair.recovery[pair.recovery_index[pi]];
++                recovery_mean += rp
++                    * pp
++                    * posture
++                        .factor
++                        .probabilities
++                        .iter()
++                        .zip(&posture.features)
++                        .map(|(p, f)| p * f)
++                        .sum::<f64>();
++            }
++        }
++        Ok((pairs, geometric_mean, recovery_mean, work))
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    #[test]
++    fn fixed_recovery_motion_escape_truth_table() {
++        for group in [-2., 0., 2.] {
++            assert_eq!(compatibility(group, 0., 0., 1., false), 0.);
++            assert_eq!(compatibility(group, 0., 0., 0., true), 0.);
++            assert_eq!(compatibility(group, 1., 0., 1., true), 0.);
++            assert_eq!(compatibility(group, 0., 1., 1., true), 0.);
++            assert!(compatibility(group, 0., 0., 1., true) > 0.);
++            assert!(
++                compatibility(group, 0.8, 0., 1., true) < compatibility(group, 0., 0., 1., true)
++            );
++        }
++        assert!(compatibility(2., 0., 0., 1., true) > compatibility(-2., 0., 0., 1., true));
++    }
++}
+--- a/crates/alife_training/src/cpu/motor_mediation/confidence/policy/optional_vocal/tests.rs
++++ b/crates/alife_training/src/cpu/motor_mediation/confidence/policy/optional_vocal/tests.rs
+@@ -603,3 +603,124 @@
+     changed.coordination_frame = frame(&specs());
+     assert!(changed.sample(CONTROL_SEED, 17, 0.73).is_err());
+ }
++
++fn recovery_distribution(
++    s: &CoordinatedTargetScoresV1,
++    t: f64,
++    weight: f64,
++) -> (
++    CoordinatedTargetFactorV1,
++    Vec<CoordinationPairFactorV1>,
++    [f64; 3],
++    f64,
++) {
++    let mut native = s.native();
++    native.binding.eligible_mask = s.eligible_mask;
++    let base = native.probabilities(t).unwrap();
++    let mut rep = CoordinatedTargetFactorV1::from_native(base.representative);
++    let channels = base
++        .channels
++        .map(|f| f.map(CoordinatedTargetFactorV1::from_native));
++    let (pairs, gm, rm, _) = s
++        .coordinate_recovery(&mut rep, &channels, t, COORDINATION_WEIGHTS_V1, weight)
++        .unwrap();
++    (rep, pairs, gm, rm)
++}
++#[test]
++fn recovery_star_matches_cartesian_and_zero_weight_legacy() {
++    let s = coordination_fixture(1.);
++    let t = 0.73;
++    let (base_rep, base_pairs, _) = weighted_distribution(&s, t, COORDINATION_WEIGHTS_V1);
++    let (zero_rep, zero_pairs, _, _) = recovery_distribution(&s, t, 0.);
++    for (a, b) in base_rep.probabilities.iter().zip(&zero_rep.probabilities) {
++        assert!((a - b).abs() < 1e-12);
++    }
++    for (a, b) in base_pairs.iter().zip(&zero_pairs) {
++        for (x, y) in a.probabilities.iter().zip(&b.probabilities) {
++            assert!((x - y).abs() < 1e-12);
++        }
++    }
++    let (rep, pairs, _, mean) = recovery_distribution(&s, t, RECOVERY_MOTION_WEIGHT_V1);
++    let mut rows = Vec::new();
++    let mut z = 0.;
++    for (ri, pair) in pairs.iter().enumerate() {
++        for (pi, _) in pair.outcomes.iter().enumerate() {
++            let post = &pair.recovery[pair.recovery_index[pi]];
++            let zero_post = &zero_pairs[ri].recovery[zero_pairs[ri].recovery_index[pi]];
++            for qi in 0..post.factor.outcomes.len() {
++                let raw = base_rep.probabilities[ri]
++                    * base_pairs[ri].probabilities[pi]
++                    * zero_post.factor.probabilities[qi]
++                    * (RECOVERY_MOTION_WEIGHT_V1 * post.features[qi] / t).exp();
++                z += raw;
++                rows.push((ri, pi, qi, raw));
++            }
++        }
++    }
++    let mut total = 0.;
++    let h = 1e-5;
++    let (plus_r, plus_p, _, _) = recovery_distribution(&s, t, RECOVERY_MOTION_WEIGHT_V1 + h);
++    let (minus_r, minus_p, _, _) = recovery_distribution(&s, t, RECOVERY_MOTION_WEIGHT_V1 - h);
++    // Sum latent representative/manipulation paths into the same projected
++    // physical locomotion/posture/operation. Never report one path as this mass.
++    let mut physical = std::collections::BTreeMap::<String, [f64; 4]>::new();
++    for (ri, pi, qi, raw) in rows {
++        let pair = &pairs[ri];
++        let post = &pair.recovery[pair.recovery_index[pi]];
++        let p = rep.probabilities[ri] * pair.probabilities[pi] * post.factor.probabilities[qi];
++        assert!(p > 0.);
++        assert!((p - raw / z).abs() < 1e-12);
++        total += p;
++        let mass = |r: &CoordinatedTargetFactorV1, pairs: &[CoordinationPairFactorV1]| {
++            let pair = &pairs[ri];
++            r.probabilities[ri]
++                * pair.probabilities[pi]
++                * pair.recovery[pair.recovery_index[pi]].factor.probabilities[qi]
++        };
++        let plus = mass(&plus_r, &plus_p);
++        let minus = mass(&minus_r, &minus_p);
++        let derivative = (post.features[qi] - mean) / t;
++        assert!(((plus.ln() - minus.ln()) / (2. * h) - derivative).abs() < 1e-8);
++        let resting = post.factor.outcomes[qi] == CoordinatedTargetChoiceV1::RestGroup;
++        for (op, op_mass) in if resting {
++            vec![(Some(0), 0.5), (Some(1), 0.5)]
++        } else {
++            vec![(None, 1.)]
++        } {
++            let key = format!(
++                "{:?}/{:?}",
++                s.resolve(pair.outcomes[pi][0], op).unwrap(),
++                s.resolve(post.factor.outcomes[qi], op).unwrap()
++            );
++            let v = physical.entry(key).or_default();
++            v[0] += p * op_mass;
++            v[1] += p * op_mass * derivative;
++            v[2] += plus * op_mass;
++            v[3] += minus * op_mass;
++        }
++    }
++    assert!((total - 1.).abs() < 1e-12);
++    for v in physical.values() {
++        assert!(((v[2].ln() - v[3].ln()) / (2. * h) - v[1] / v[0]).abs() < 1e-8);
++    }
++}
++#[test]
++fn recovery_selected_posture_is_bound_and_old_policy_is_rejected() {
++    let s = coordination_fixture(1.);
++    for counter in 0..16 {
++        let a = s.sample(CONTROL_SEED, counter, 0.73).unwrap();
++        let e = s.evaluate(&a).unwrap();
++        assert!(
++            (e.factor_log_probabilities.iter().sum::<f64>() - a.joint_log_probability()).abs()
++                < 1e-12
++        );
++        assert_eq!(a.draw_factors().iter().filter(|x| **x == 10).count(), 1);
++        assert!(!a.draw_factors().contains(&6));
++    }
++    let mut old = s.clone();
++    old.policy="m2-coordinated-target-v1;closed;grounded-pair-energy-v1;inherited-weights-4,1,-1;source-payload;no-online-gradient".into();
++    assert!(old.probabilities(1.).is_err());
++    let mut tamper = s.clone();
++    tamper.recovery_weight = 0.;
++    assert!(tamper.probabilities(1.).is_err());
++}
+--- a/crates/alife_training/src/cpu/motor_mediation/confidence/policy/optional_vocal.rs
++++ b/crates/alife_training/src/cpu/motor_mediation/confidence/policy/optional_vocal.rs
+@@ -3,10 +3,12 @@
+ use super::*;
+ use alife_core::{LanguageTokenId, SpeechActKind, SpeechMotorPayload};
+ mod coordination;
++mod recovery;
+ pub use coordination::*;
++pub use recovery::*;
+ 
+-pub const COORDINATED_TARGET_POLICY_V1: &str = "m2-coordinated-target-v1;closed;grounded-pair-energy-v1;inherited-weights-4,1,-1;source-payload;no-online-gradient";
+-const RNG_DOMAIN: u32 = 0x434f_5431;
++pub const COORDINATED_TARGET_POLICY_V1: &str = "m2-recovery-motion-v1;closed;grounded-star-energy-v1;weights-4,1,-1,-2;source-payload;administrative-work;no-online-gradient";
++const RNG_DOMAIN: u32 = 0x524d_4331;
+ 
+ /// Exact source-output evidence. Only the resident's pending forward constructs it.
+ #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+@@ -141,6 +143,7 @@
+     eligible_mask: u32,
+     coordination_frame: PerceptionFrame,
+     coordination_weights: [f64; 3],
++    recovery_weight: f64,
+ }
+ #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+ pub enum CoordinatedTargetChoiceV1 {
+@@ -279,6 +282,9 @@
+     /// Exact joint move/manipulation factors conditional on each representative.
+     pub coordination: Vec<CoordinationPairFactorV1>,
+     pub coordination_mean_features: [f64; 3],
++    pub recovery_mean_feature: f64,
++    /// Administrative partition work, not neural ATP billing.
++    pub recovery_work: RecoveryPartitionWorkV1,
+ }
+ #[derive(Debug, Clone, Serialize)]
+ pub struct CoordinatedTargetEvaluationV1 {
+@@ -289,6 +295,7 @@
+     /// Analytic derivative with respect to the inherited coordination parameters.
+     /// This diagnostic is not an optimizer/update authorization or online gradient path.
+     pub coordination_log_probability_gradient: [f64; 3],
++    pub recovery_log_probability_gradient: f64,
+ }
+ fn from_native(c: RecoveryGroupChoiceV2) -> CoordinatedTargetChoiceV1 {
+     match c {
+@@ -379,6 +386,7 @@
+             eligible_mask,
+             coordination_frame: frame.clone(),
+             coordination_weights: COORDINATION_WEIGHTS_V1,
++            recovery_weight: RECOVERY_MOTION_WEIGHT_V1,
+         };
+         result.validate()?;
+         Ok(result)
+@@ -404,6 +412,7 @@
+         if self.coordination_frame.frame_digest() != self.native_binding.frame_digest
+             || self.coordination_frame.candidates().len() != n
+             || self.coordination_weights != COORDINATION_WEIGHTS_V1
++            || self.recovery_weight != RECOVERY_MOTION_WEIGHT_V1
+         {
+             return Err(invalid());
+         }
+@@ -524,8 +533,14 @@
+             }
+             channels[3] = Some(CoordinatedTargetFactorV1::new(outcomes, logits, t)?);
+         }
+-        let (coordination, coordination_mean_features) =
+-            self.coordinate(&mut representative, &channels, t, self.coordination_weights)?;
++        let (coordination, coordination_mean_features, recovery_mean_feature, recovery_work) = self
++            .coordinate_recovery(
++                &mut representative,
++                &channels,
++                t,
++                self.coordination_weights,
++                self.recovery_weight,
++            )?;
+         let forced_vocal = representative
+             .outcomes
+             .iter()
+@@ -560,6 +575,8 @@
+             actual_vocal_probability: forced_vocal + non_forced * speech,
+             coordination,
+             coordination_mean_features,
++            recovery_mean_feature,
++            recovery_work,
+         })
+     }
+     fn forced(&self, c: CoordinatedTargetChoiceV1) -> Option<usize> {
+@@ -601,8 +618,15 @@
+         motors[0] = pair.outcomes[pair_index][0];
+         motors[2] = pair.outcomes[pair_index][1];
+         lp += pair.log_probabilities[pair_index];
++        let posture = &pair.recovery[pair.recovery_index[pair_index]];
++        draws.push(10);
++        motors[4] = posture.factor.sample(optional_draw(seed, counter, 10));
++        lp += posture.factor.logp(motors[4])?;
++        if motors[4] == CoordinatedTargetChoiceV1::RestGroup && op_factor.is_none() {
++            op_factor = Some(8);
++        }
+         for (s, motor) in motors.iter_mut().enumerate() {
+-            if s == 0 || s == 2 {
++            if s == 0 || s == 2 || s == 4 {
+                 continue;
+             }
+             if self.forced(representative) == Some(s) {
+@@ -672,8 +696,16 @@
+             .position(|x| *x == [action.motors[0], action.motors[2]])
+             .ok_or_else(invalid)?;
+         factors.push(pair.log_probabilities[pair_index]);
++        let posture = &pair.recovery[pair.recovery_index[pair_index]];
++        factors.push(posture.factor.logp(action.motors[4])?);
++        let posture_index = posture
++            .factor
++            .outcomes
++            .iter()
++            .position(|x| *x == action.motors[4])
++            .ok_or_else(invalid)?;
+         for s in 0..6 {
+-            if s == 0 || s == 2 {
++            if s == 0 || s == 2 || s == 4 {
+                 continue;
+             }
+             if self.forced(action.representative) != Some(s) {
+@@ -698,6 +730,9 @@
+             joint_probability: action.joint_log_probability().exp(),
+             factor_log_probabilities: factors,
+             selected_physical_candidates_once: physical,
++            recovery_log_probability_gradient: (posture.features[posture_index]
++                - d.recovery_mean_feature)
++                / action.temperature(),
+             coordination_log_probability_gradient: std::array::from_fn(|i| {
+                 (pair.features[pair_index][i] - d.coordination_mean_features[i])
+                     / action.temperature()
+--- a/crates/alife_training/src/cpu/optional_vocal_host.rs
++++ b/crates/alife_training/src/cpu/optional_vocal_host.rs
+@@ -5,9 +5,9 @@
+     CoordinatedTargetActionV1, CoordinatedTargetScoresV1, CoordinatedTargetSourceV1,
+     COORDINATED_TARGET_POLICY_V1,
+ };
+-const OPTIONAL_MAGIC: &[u8] = b"ALIFE-COORDINATED-TARGET-M2-HOST\0V1\0IDLE-QUIET\0SOURCE-PAYLOAD\0SYNAPTIC-CLOSED\0PROFILE5\0BITS1\0";
+-const OPTIONAL_LINEAGE: &str = "fresh-coordinated-target-m2-host-v1/class5/no-historical-import";
+-const OPTIONAL_RESIDENT: &str = "coordinated-target-m2-resident-v1";
++const OPTIONAL_MAGIC: &[u8] = b"ALIFE-RECOVERY-MOTION-M2-HOST\0V1\0IDLE-QUIET\0SOURCE-PAYLOAD\0SYNAPTIC-CLOSED\0PROFILE5\0BITS1\0";
++const OPTIONAL_LINEAGE: &str = "fresh-recovery-motion-m2-host-v1/class5/no-historical-import";
++const OPTIONAL_RESIDENT: &str = "recovery-motion-m2-resident-v1";
+ 
+ #[derive(Debug, Clone, Serialize, Deserialize)]
+ #[serde(deny_unknown_fields)]

@@ -1,0 +1,110 @@
+{
+  "qualified_command_source": "/workspace/shared/m2-object-rich-optional-vocal-v1/compile-driver-v2.command.json",
+  "verified_dependencies": [
+    {
+      "path": "/workspace/scratch/ee5e08a3ca9b/recovery-sleep-durable-target-v3/debug/deps/libalife_world-7260bfeb331cd3a0.rlib",
+      "sha256": "200da3eb8627dafa7d4691ec89530de44af4cb01eae87f4004b72cfbec6b77fe",
+      "bytes": 57915720
+    },
+    {
+      "path": "/workspace/scratch/ee5e08a3ca9b/recovery-sleep-durable-target-v3/debug/deps/libalife_runtime-d483614a6c5351ce.rlib",
+      "sha256": "1a1656ff643b5feda90e7e60637726db579238f8b0b9442721838dd42135dadb",
+      "bytes": 40166022
+    },
+    {
+      "path": "/workspace/scratch/ee5e08a3ca9b/recovery-sleep-durable-target-v3/debug/deps/libthiserror-b53aba970f9bf1ae.rlib",
+      "sha256": "7675f6142fbb970a5dbe3ead6c00c649d27012f3a855a716a45f16a9e7ee3879",
+      "bytes": 34256
+    },
+    {
+      "path": "/workspace/scratch/ee5e08a3ca9b/recovery-sleep-durable-target-v3/debug/deps/libnaga-63fac1e9c9e76222.rlib",
+      "sha256": "01b3efd9811c0bb5cc3c46c79c8fe9662153240042848e72a0a03a5c1f57f101",
+      "bytes": 32653480
+    },
+    {
+      "path": "/workspace/scratch/ee5e08a3ca9b/recovery-sleep-durable-target-v3/debug/deps/libzstd-07e3d4e740f2fced.rlib",
+      "sha256": "76ea3435eccc201549e4532c8008be1599efeff883b98c7450b2b2374ca65d9f",
+      "bytes": 360310
+    },
+    {
+      "path": "/workspace/scratch/ee5e08a3ca9b/recovery-sleep-durable-target-v3/debug/deps/libalife_gpu_backend-1604aec0a2565beb.rlib",
+      "sha256": "c4546d4969e9b1d884f3d5c0ed82cbaaf23fc8e73c8eaa386d13573295103e0a",
+      "bytes": 22468784
+    },
+    {
+      "path": "/workspace/scratch/ee5e08a3ca9b/recovery-sleep-durable-target-v3/debug/deps/libserde_json-4909800a82ecea08.rlib",
+      "sha256": "5d0413c7add5f6d53081b3eeb73c442d450c43bca629af31e2aae4bca83d00c8",
+      "bytes": 2467956
+    },
+    {
+      "path": "/workspace/scratch/ee5e08a3ca9b/recovery-sleep-durable-target-v3/debug/deps/libsha2-584eac0ed8c9c447.rlib",
+      "sha256": "b7bc5b88a1196146fcbd1023be29b59bf642b469f48f1b627bf12aa3801d3b8c",
+      "bytes": 891072
+    },
+    {
+      "path": "/workspace/scratch/ee5e08a3ca9b/recovery-sleep-durable-target-v3/debug/deps/libalife_core-933849778b8ff010.rlib",
+      "sha256": "183354d823892d79230d96935466af35b82fa1b7b2be1ea54f50ef724b6f7669",
+      "bytes": 59181618
+    },
+    {
+      "path": "/workspace/scratch/ee5e08a3ca9b/recovery-sleep-durable-target-v3/debug/deps/libwgpu-893bd0adbca736b1.rlib",
+      "sha256": "706419c4f5382ddbbfbb6453cb059f1ed0bf0a83a08627e59aef2a712c871da9",
+      "bytes": 7022548
+    },
+    {
+      "path": "/workspace/scratch/ee5e08a3ca9b/recovery-sleep-durable-target-v3/debug/deps/libbase64-6902f67cbd01db74.rlib",
+      "sha256": "96a8ae32bf63d5721144f7b8ae5d43e5ad83eed6ca48c7593c5585ce584bc25e",
+      "bytes": 523306
+    },
+    {
+      "path": "/workspace/scratch/ee5e08a3ca9b/recovery-sleep-durable-target-v3/debug/deps/libserde-d2b92067b57ae43f.rlib",
+      "sha256": "d8ff1ebbc8a1f75b4d1163b01c961f0b621e95ff71d7c37aa91a0a1ddcc090e5",
+      "bytes": 956806
+    },
+    {
+      "path": "/workspace/scratch/ee5e08a3ca9b/recovery-sleep-durable-target-v3/debug/deps/libbytemuck-80a1e20cb3f6e09c.rlib",
+      "sha256": "69c196b0313c7f89cc4a42d9c59c39392ccd9738bab9a8d173ac4b883cdc5626",
+      "bytes": 553584
+    },
+    {
+      "path": "/workspace/scratch/ee5e08a3ca9b/recovery-sleep-durable-target-v3/debug/deps/libpollster-b322fcc4f67d03d6.rlib",
+      "sha256": "39b6850b44cdccf35e3d6ab0f9503cec411a42017fd8fb58e3d9190689e66f98",
+      "bytes": 52974
+    },
+    {
+      "path": "/workspace/shared/m2-object-rich-optional-vocal-v1/libalife_training_object_rich_v1.rlib",
+      "sha256": "18368352a3c1eaabf190857533336f39aa5419dd6e944da3bc3aff52484c873d",
+      "bytes": 66519436
+    }
+  ],
+  "helper_hashes": [
+    {
+      "source": "/workspace/scratch/ee5e08a3ca9b/m2-taste-baseline-v1/crates/alife_training/src/cpu/grouped_host_fixture.rs",
+      "staged": "/workspace/shared/m2-avoid-operating-point-v1/source/src/cpu/grouped_host_fixture.rs",
+      "sha256": "6cdaaa5a745dfea8caab6d1a30f993a2bde66de1ed5ca4a82b158ca8ca218c16"
+    },
+    {
+      "source": "/workspace/scratch/ee5e08a3ca9b/m2-taste-baseline-v1/crates/alife_training/examples/support/grounded_care_reference_v1.rs",
+      "staged": "/workspace/shared/m2-avoid-operating-point-v1/source/examples/support/grounded_care_reference_v1.rs",
+      "sha256": "a46e84082a97fda4d05b5756450feaee1c08dcb28ecbe6d027c00e43fcf51c32"
+    },
+    {
+      "source": "/workspace/scratch/ee5e08a3ca9b/m2-taste-baseline-v1/crates/alife_training/examples/support/grounded_r0_dedicated_fatigue.rs",
+      "staged": "/workspace/shared/m2-avoid-operating-point-v1/source/examples/support/grounded_r0_dedicated_fatigue.rs",
+      "sha256": "6436f26a87b9e5cda890742f3cece4212c58c9a25d3dd9c8a268d5fddd27b3fc"
+    },
+    {
+      "source": "/workspace/scratch/ee5e08a3ca9b/m2-taste-baseline-v1/crates/alife_training/examples/support/multidrive_frozen.rs",
+      "staged": "/workspace/shared/m2-avoid-operating-point-v1/source/examples/support/multidrive_frozen.rs",
+      "sha256": "bee7e25f1340e1278eee9d34395a4fd3bc201bac3a63dc47879c27a5aaa176e4"
+    },
+    {
+      "source": "/workspace/scratch/ee5e08a3ca9b/m2-taste-baseline-v1/crates/alife_training/examples/support/grounded_r0_motor_operating_point.rs",
+      "staged": "/workspace/shared/m2-avoid-operating-point-v1/source/examples/support/grounded_r0_motor_operating_point.rs",
+      "sha256": "04e5582f808aba2acf3dca97816280edbfa515c39d4de911e18db6fb43b7387a"
+    }
+  ],
+  "runtime_source_manifest_sha256": "58901dfc4b250ddf1da94ee99f1ada3e74bf485344097105cd99e6ab91f9608b",
+  "compiled_library_sha256": "18368352a3c1eaabf190857533336f39aa5419dd6e944da3bc3aff52484c873d",
+  "all_native_kernel_source_comparison": "source-comparison.json"
+}

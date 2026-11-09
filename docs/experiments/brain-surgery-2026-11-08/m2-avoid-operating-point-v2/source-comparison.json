@@ -1,0 +1,38 @@
+[
+  {
+    "path": "examples/support/multidrive_frozen.rs",
+    "care_base": "bee7e25f1340e1278eee9d34395a4fd3bc201bac3a63dc47879c27a5aaa176e4",
+    "optional_packet": "bee7e25f1340e1278eee9d34395a4fd3bc201bac3a63dc47879c27a5aaa176e4",
+    "identical": true
+  },
+  {
+    "path": "examples/support/grounded_r0_dedicated_fatigue.rs",
+    "care_base": "6436f26a87b9e5cda890742f3cece4212c58c9a25d3dd9c8a268d5fddd27b3fc",
+    "optional_packet": "6436f26a87b9e5cda890742f3cece4212c58c9a25d3dd9c8a268d5fddd27b3fc",
+    "identical": true
+  },
+  {
+    "path": "examples/support/grounded_r0_motor_operating_point.rs",
+    "care_base": "04e5582f808aba2acf3dca97816280edbfa515c39d4de911e18db6fb43b7387a",
+    "optional_packet": "04e5582f808aba2acf3dca97816280edbfa515c39d4de911e18db6fb43b7387a",
+    "identical": true
+  },
+  {
+    "path": "src/cpu/native_kernel.rs",
+    "care_base": "2e389fede80f2add63536cd40b9ec54aef9a3145061ca4032aa60c3acb9afdef",
+    "optional_packet": "2e389fede80f2add63536cd40b9ec54aef9a3145061ca4032aa60c3acb9afdef",
+    "identical": true
+  },
+  {
+    "path": "src/cpu/input.rs",
+    "care_base": "df95fd3c93f1adb4345cff079c88cff093244275fc01f7d203847f0452960a6e",
+    "optional_packet": "df95fd3c93f1adb4345cff079c88cff093244275fc01f7d203847f0452960a6e",
+    "identical": true
+  },
+  {
+    "path": "src/cpu/replay.rs",
+    "care_base": "5a9ab34d2b763f5b6924fddbe29770f10697da6866c2ca572f1e43f871d800e9",
+    "optional_packet": "5a9ab34d2b763f5b6924fddbe29770f10697da6866c2ca572f1e43f871d800e9",
+    "identical": true
+  }
+]

@@ -1,0 +1,57 @@
+[
+  {
+    "test": "cpu::motor_mediation::confidence::policy::optional_vocal::tests::absent_payload_removes_only_vocal_and_legacy_keeps_its_original_choice",
+    "exit": 0,
+    "exact_one_passed": true
+  },
+  {
+    "test": "cpu::motor_mediation::confidence::policy::optional_vocal::tests::present_payload_can_remain_quiet_and_representative_and_independent_vocal_are_distinct",
+    "exit": 0,
+    "exact_one_passed": true
+  },
+  {
+    "test": "cpu::motor_mediation::confidence::policy::optional_vocal::tests::all_factors_and_complete_joint_normalize_including_representative_forcing",
+    "exit": 0,
+    "exact_one_passed": true
+  },
+  {
+    "test": "cpu::motor_mediation::confidence::policy::optional_vocal::tests::canonical_idle_rejects_missing_alias_and_wrong_family_without_touching_other_rows",
+    "exit": 0,
+    "exact_one_passed": true
+  },
+  {
+    "test": "cpu::motor_mediation::confidence::policy::optional_vocal::tests::exact_bits_rng_temperature_output_and_masks_are_bound",
+    "exit": 0,
+    "exact_one_passed": true
+  },
+  {
+    "test": "cpu::motor_mediation::confidence::policy::optional_vocal::tests::coordination_joint_normalizes_and_exact_gradient_matches_finite_difference",
+    "exit": 0,
+    "exact_one_passed": true
+  },
+  {
+    "test": "cpu::motor_mediation::confidence::policy::optional_vocal::tests::coordination_zero_weights_recovers_base_and_uncertainty_preserves_support",
+    "exit": 0,
+    "exact_one_passed": true
+  },
+  {
+    "test": "cpu::motor_mediation::confidence::policy::optional_vocal::tests::coordination_binding_rejects_frame_and_parameter_tamper_and_samples_once",
+    "exit": 0,
+    "exact_one_passed": true
+  },
+  {
+    "test": "cpu::motor_mediation::confidence::policy::optional_vocal::tests::recovery_star_matches_cartesian_and_zero_weight_legacy",
+    "exit": 0,
+    "exact_one_passed": true
+  },
+  {
+    "test": "cpu::motor_mediation::confidence::policy::optional_vocal::tests::recovery_selected_posture_is_bound_and_old_policy_is_rejected",
+    "exit": 0,
+    "exact_one_passed": true
+  },
+  {
+    "test": "cpu::motor_mediation::confidence::policy::optional_vocal::recovery::tests::fixed_recovery_motion_escape_truth_table",
+    "exit": 0,
+    "exact_one_passed": true
+  }
+]

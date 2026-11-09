@@ -1,0 +1,22 @@
+[
+  {
+    "path": "crates/alife_training/src/cpu/motor_mediation/confidence/policy/optional_vocal/coordination.rs",
+    "sha256": "bf13375b115911aad82e996417b0171f92c13475eeecdd78b3de8b002e8eb7ac"
+  },
+  {
+    "path": "crates/alife_training/src/cpu/motor_mediation/confidence/policy/optional_vocal/recovery.rs",
+    "sha256": "9080996b5b4b4b8c12015e7150e9508cff887eb20ca22f8970631156bf9aab7c"
+  },
+  {
+    "path": "crates/alife_training/src/cpu/motor_mediation/confidence/policy/optional_vocal/tests.rs",
+    "sha256": "bfe4e8eecac780416f2aadf61764cb25699c5d2a93694b26eb0b5c528503c2fb"
+  },
+  {
+    "path": "crates/alife_training/src/cpu/motor_mediation/confidence/policy/optional_vocal.rs",
+    "sha256": "73917a2f56236b2c3838dc0be82d2c08facd0a606a93fcadadc7a57e05510cd9"
+  },
+  {
+    "path": "crates/alife_training/src/cpu/optional_vocal_host.rs",
+    "sha256": "ac67fa6287ee31cef3c36aea26955aaf134989c6e7461969900992ea3cd0ac89"
+  }
+]

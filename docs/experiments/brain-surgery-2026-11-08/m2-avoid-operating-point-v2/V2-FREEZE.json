@@ -1,0 +1,14 @@
+{
+  "v1_preserved": true,
+  "v1_exposure": "0, 384 or 768 iterations; exact arm unknown from retained log",
+  "changes": [
+    "Recompile sham phenotype using exact fresh grounded-drive candidate admission and unchanged genome/development",
+    "Durably emit arm attempt and context attempt/completion counts, sync_data per row",
+    "Same fixed 1152-iteration independent dose, not a continuation or replacement of V1 evidence"
+  ],
+  "files": {
+    "truth_table_v2.rs": "e4c26f1a63a553a1ec7d08307925eb653275ef6423c3faf508a9af73a554d259",
+    "run_bounded_v2.py": "84f4ff38ea00f65339d25e3bbc2f9f7f3688cd61d90d9a03f2d5df32c37b099e",
+    "compile-v2.command.json": "31c5ac1f157701149bc0e21a2a3e6eadeb5c9b579a8bbc945b0f6721869548de"
+  }
+}

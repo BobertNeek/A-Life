@@ -1,0 +1,78 @@
+{
+  "scope": "source-only whitelist; no executables, checkpoint/asset bytes or raw life data",
+  "files": [
+    {
+      "path": "/workspace/shared/m2-avoid-operating-point-curated-v1/LINKAGE.json",
+      "relative_path": "LINKAGE.json",
+      "bytes": 5877,
+      "sha256": "5243e9ff7eb4ff905e61a44b1f80ea51d42d84d3298bdba8be8f99812b3b8eb7"
+    },
+    {
+      "path": "/workspace/shared/m2-avoid-operating-point-curated-v1/READ-FIRST.md",
+      "relative_path": "READ-FIRST.md",
+      "bytes": 3759,
+      "sha256": "ad5283fcf4f62eeb7e4679f918a60f9cd65ca5965c88bc34479c2b48d3b02481"
+    },
+    {
+      "path": "/workspace/shared/m2-avoid-operating-point-curated-v1/RESULTS-V2.json",
+      "relative_path": "RESULTS-V2.json",
+      "bytes": 57589,
+      "sha256": "2ff7594d616d3e2492c44687aef1241a7377910842464e63f5b1826f317cd1b8"
+    },
+    {
+      "path": "/workspace/shared/m2-avoid-operating-point-curated-v1/RESULTS-V2.md",
+      "relative_path": "RESULTS-V2.md",
+      "bytes": 4167,
+      "sha256": "aef0cba61fc27807e97caff8c48c8bbadbcf139c7288c92ec3d35e9f01d2d97a"
+    },
+    {
+      "path": "/workspace/shared/m2-avoid-operating-point-curated-v1/V2-FREEZE.json",
+      "relative_path": "V2-FREEZE.json",
+      "bytes": 736,
+      "sha256": "b49f65b89739093044fb051c480cb734454b3c778646b803cdf0ae1ac0e25427"
+    },
+    {
+      "path": "/workspace/shared/m2-avoid-operating-point-curated-v1/source/examples/support/grounded_care_reference_v1.rs",
+      "relative_path": "source/examples/support/grounded_care_reference_v1.rs",
+      "bytes": 5956,
+      "sha256": "a46e84082a97fda4d05b5756450feaee1c08dcb28ecbe6d027c00e43fcf51c32"
+    },
+    {
+      "path": "/workspace/shared/m2-avoid-operating-point-curated-v1/source/examples/support/grounded_r0_dedicated_fatigue.rs",
+      "relative_path": "source/examples/support/grounded_r0_dedicated_fatigue.rs",
+      "bytes": 11382,
+      "sha256": "6436f26a87b9e5cda890742f3cece4212c58c9a25d3dd9c8a268d5fddd27b3fc"
+    },
+    {
+      "path": "/workspace/shared/m2-avoid-operating-point-curated-v1/source/examples/support/grounded_r0_motor_operating_point.rs",
+      "relative_path": "source/examples/support/grounded_r0_motor_operating_point.rs",
+      "bytes": 5642,
+      "sha256": "04e5582f808aba2acf3dca97816280edbfa515c39d4de911e18db6fb43b7387a"
+    },
+    {
+      "path": "/workspace/shared/m2-avoid-operating-point-curated-v1/source/examples/support/multidrive_frozen.rs",
+      "relative_path": "source/examples/support/multidrive_frozen.rs",
+      "bytes": 10588,
+      "sha256": "bee7e25f1340e1278eee9d34395a4fd3bc201bac3a63dc47879c27a5aaa176e4"
+    },
+    {
+      "path": "/workspace/shared/m2-avoid-operating-point-curated-v1/source/src/cpu/grouped_host_fixture.rs",
+      "relative_path": "source/src/cpu/grouped_host_fixture.rs",
+      "bytes": 9334,
+      "sha256": "6cdaaa5a745dfea8caab6d1a30f993a2bde66de1ed5ca4a82b158ca8ca218c16"
+    },
+    {
+      "path": "/workspace/shared/m2-avoid-operating-point-curated-v1/source-comparison.json",
+      "relative_path": "source-comparison.json",
+      "bytes": 1536,
+      "sha256": "d6515d7112a276f10d6b2d9fa6ffefd2ec84ce29423af7feb31001f88e7d3689"
+    },
+    {
+      "path": "/workspace/shared/m2-avoid-operating-point-curated-v1/truth_table_v2.rs",
+      "relative_path": "truth_table_v2.rs",
+      "bytes": 7223,
+      "sha256": "e4c26f1a63a553a1ec7d08307925eb653275ef6423c3faf508a9af73a554d259"
+    }
+  ],
+  "listed_payload_bytes": 123789
+}

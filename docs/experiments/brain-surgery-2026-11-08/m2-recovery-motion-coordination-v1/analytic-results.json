@@ -1,0 +1,9 @@
+{
+  "fixed_contexts": 54,
+  "normalization_cartesian_support_zero_weight_escape": "PASS",
+  "path_and_marginal_derivative_axes": 4,
+  "worst_derivative_error": 5.6987713159539766e-11,
+  "native_execution": false,
+  "world_intervals": 0,
+  "learning_updates": 0
+}
