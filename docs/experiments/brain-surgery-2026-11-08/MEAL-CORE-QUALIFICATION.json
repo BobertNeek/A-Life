@@ -1,0 +1,40 @@
+{
+  "base": "fbf2a517f93098b5d936878a3d26bbb8d0391c38",
+  "qualified_core": "a5b12af62dab4f167c003e48e4ca37fdda74d0c1",
+  "patch": "m2-meal-qualified-core-fbf2a517-to-a5b12af62.patch",
+  "patch_bytes": 120043,
+  "patch_sha256": "6de53b500c9a87313d8b52bf010809798febdd9597eefe46667fff2427b7c3ca",
+  "paths": [
+    "crates/alife_core/src/lib.rs",
+    "crates/alife_core/src/memory.rs",
+    "crates/alife_core/src/memory/candidate_recall.rs",
+    "crates/alife_core/src/memory/candidate_recall/meal_v1.rs",
+    "crates/alife_core/src/memory/meal_recall.rs",
+    "crates/alife_core/src/memory/scoped_replay.rs",
+    "crates/alife_core/src/memory/sidecar.rs",
+    "crates/alife_core/src/memory/supplemental_meal.rs",
+    "crates/alife_core/src/memory/supplemental_meal_tests.rs",
+    "crates/alife_core/src/memory/testdata/legacy_same_sequence_bank_fbf.json",
+    "crates/alife_core/src/memory_query.rs"
+  ],
+  "synthetic_fixture": {
+    "path": "crates/alife_core/src/memory/testdata/legacy_same_sequence_bank_fbf.json",
+    "bytes": 2357,
+    "sha256": "7810a4318545e0451883d5980d67e07c010a126fa9c41b305272ce18677fce1a",
+    "genesis": "Constructed entirely by meal_reader_is_opt_in_for_previously_valid_same_sequence_legacy_bank; two synthetic measured-founder unit patches plus explicit same-sequence and latent edits. Frozen from its diagnostic revision745d681b3. No real/captured/acquired-life input."
+  },
+  "apply_check": "git apply --cached --check on isolated index initialized at exact base: pass",
+  "applied_core_equality": "git diff --cached a5b12af62 -- crates/alife_core: empty",
+  "include_closure": "Referenced literal test fixture included at exact tracked path",
+  "excluded": "All docs, native logs, executables, actual/acquired checkpoints/banks, captured envelopes and evolving host changes",
+  "behavior": {
+    "new_cases": 24,
+    "distinct_passed": 164,
+    "existing_ignored": 2
+  },
+  "lint": "core lib+unit and affected memory/sleep/sidecar targets clean; three untouched broad-suite warnings remain",
+  "publication_projection": {
+    "original_summary_sha256": "8a29067fdbb061d51ad7c8c27da3240c965428cace863aedcdde24aec1c25b68",
+    "change": "Only the local patch location is made a relative filename; source, fixture and validation values are unchanged."
+  }
+}
