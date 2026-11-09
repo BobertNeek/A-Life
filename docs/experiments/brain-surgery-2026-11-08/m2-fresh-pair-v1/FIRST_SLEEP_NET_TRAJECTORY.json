@@ -1,0 +1,156 @@
+{
+  "schema": "m2-first-sleep-net-trajectory-v1",
+  "native_calls": 0,
+  "points": {
+    "interval_start_tick380": {
+      "F": 0.0,
+      "P": 0.15069215,
+      "ATP": 0.63649255,
+      "body_energy": 0.76873845,
+      "H": 1.0
+    },
+    "preactual_sleep_tick380": {
+      "F": 0.0,
+      "P": 0.15069215,
+      "ATP": 0.63649255,
+      "body_energy": 0.76873845,
+      "H": 1.0
+    },
+    "first_post_entry_tick381": {
+      "F": 0.0,
+      "P": 0.0,
+      "ATP": 0.63640743,
+      "body_energy": 0.7685719,
+      "H": 1.0
+    },
+    "returned_awake_tick389": {
+      "F": 0.0,
+      "P": 0.0,
+      "ATP": 0.63581604,
+      "body_energy": 0.76856834,
+      "H": 1.0
+    },
+    "preactual_resumed_decision_tick389": {
+      "F": 0.0,
+      "P": 0.0,
+      "ATP": 0.63581604,
+      "body_energy": 0.76856834,
+      "H": 1.0
+    },
+    "post_resumed_decision_tick390": {
+      "F": 0.0,
+      "P": 0.0006099987,
+      "ATP": 0.6357546,
+      "body_energy": 0.7684006,
+      "H": 1.0
+    }
+  },
+  "net_changes_not_isolated_causal_benefits": {
+    "interval_start_tick380__to__returned_awake_tick389": {
+      "F": 0.0,
+      "P": -0.15069215,
+      "ATP": -0.000676510000000019,
+      "body_energy": -0.0001701100000000011,
+      "H": 0.0
+    },
+    "preactual_sleep_tick380__to__returned_awake_tick389": {
+      "F": 0.0,
+      "P": -0.15069215,
+      "ATP": -0.000676510000000019,
+      "body_energy": -0.0001701100000000011,
+      "H": 0.0
+    },
+    "returned_awake_tick389__to__post_resumed_decision_tick390": {
+      "F": 0.0,
+      "P": 0.0006099987,
+      "ATP": -6.144000000007921e-05,
+      "body_energy": -0.0001677399999999718,
+      "H": 0.0
+    },
+    "interval_start_tick380__to__post_resumed_decision_tick390": {
+      "F": 0.0,
+      "P": -0.1500821513,
+      "ATP": -0.0007379500000000982,
+      "body_energy": -0.0003378499999999729,
+      "H": 0.0
+    }
+  },
+  "awake_native_work_receipts": [
+    {
+      "offset": 140,
+      "source_tick": 380,
+      "applied_recovery": "BodySleep",
+      "brain_work": {
+        "microsteps": 3,
+        "neuron_updates": 6604,
+        "tile_visits": 313,
+        "synapse_ops": 54478,
+        "decoder_candidate_ops": 7,
+        "memory_context_ops": 7
+      },
+      "native_budget": {
+        "reservation_q24": 523236,
+        "reservation_q16": 2044,
+        "available_atp_q16": 41712,
+        "applied_body_energy_debit": 0.00015628501
+      },
+      "charged_work": {
+        "schema_version": 1,
+        "neural_updates": 6604,
+        "synapses_evaluated": 54478,
+        "dendritic_ops": 1327,
+        "focal_target_ops": 0,
+        "memory_ops": 28,
+        "concept_ops": 32,
+        "gap_ops": 32,
+        "prediction_ops": 13,
+        "replay_ops": 0,
+        "structural_ops": 0,
+        "learning_ops": 0,
+        "sleep_ops": 0,
+        "weighted_total": 62514,
+        "policy_version": 1
+      }
+    },
+    {
+      "offset": 149,
+      "source_tick": 389,
+      "applied_recovery": "AwakeRest",
+      "brain_work": {
+        "microsteps": 3,
+        "neuron_updates": 6604,
+        "tile_visits": 313,
+        "synapse_ops": 54478,
+        "decoder_candidate_ops": 7,
+        "memory_context_ops": 7
+      },
+      "native_budget": {
+        "reservation_q24": 523236,
+        "reservation_q16": 2044,
+        "available_atp_q16": 41668,
+        "applied_body_energy_debit": 0.00015628501
+      },
+      "charged_work": {
+        "schema_version": 1,
+        "neural_updates": 6604,
+        "synapses_evaluated": 54478,
+        "dendritic_ops": 1327,
+        "focal_target_ops": 0,
+        "memory_ops": 28,
+        "concept_ops": 32,
+        "gap_ops": 32,
+        "prediction_ops": 13,
+        "replay_ops": 0,
+        "structural_ops": 0,
+        "learning_ops": 0,
+        "sleep_ops": 0,
+        "weighted_total": 62514,
+        "policy_version": 1
+      }
+    }
+  ],
+  "explicit_emergency_fields_found": [],
+  "sleep_trigger": "VoluntaryBodySleepV1",
+  "sleep_only_interval_work_fields": "No per-phase brain/cognitive work record in these frozen sleeping observation rows; do not infer zero biological/consolidation work.",
+  "interpretation": "ATP is below its.75 M2 reference at entry. Low fatigue/pressure do not establish universally unnecessary sleep. Net changes include normal biology and native work; no counterfactual."
+}
