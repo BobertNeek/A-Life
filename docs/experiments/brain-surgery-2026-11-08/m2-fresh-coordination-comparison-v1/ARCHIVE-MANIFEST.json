@@ -1,0 +1,55 @@
+{
+  "patch_path": "/workspace/shared/m2-fresh-coordination-comparison-v1/FRESH-COMPARISON-DRIVER-v1.patch",
+  "patch_sha256": "3a6530fcb7eacac843db77b0f010ddd925dc9f47d03b93dd4c28a50f62f57ea9",
+  "patch_bytes": 105139,
+  "application": "Apply to separate clone of m2-object-rich-optional-vocal-v1/source. Driver links original verified optional library, and coordinated_training from final-v6 coordination source as a distinct crate. Do NOT apply coordination replacement over the optional source used to build baseline library.",
+  "candidate_production_source": "/workspace/shared/m2-action-target-coordination-v1/SOURCE-ONLY-v6.tar.gz",
+  "candidate_final_patch_sha256": "8c0cf84e6a03121387b51d4a31ead5e9c6a5a5462f730e0d2e201cac7ce032e1",
+  "baseline_source": "/workspace/shared/m2-object-rich-optional-vocal-v1/OBJECT-RICH-SOURCE-ONLY-v2.tar.gz",
+  "baseline_source_sha256": "f239c3f4838b96838d02b805e4bac2efe4a3d2247dc3fa2c452ff146980f241b",
+  "codec_module_sha256": "caeaa54fc74641189b1f398368f3480290f01c751f9e9bf74f4672dae126c44b",
+  "driver_code_sha256": "22e7b75744ea59a54b602397ffdd691a4e9a5bee32689cd8256c02c9d125f524",
+  "driver_executable_sha256": "f96325dd72915712151c6e48e65611cda3aa5ca263b768fb8390d347c109f13e",
+  "files": [
+    {
+      "path": "PROTOCOL.md",
+      "sha256": "aa52274b1e2a3e7de66f7a9adaa93077fdaf966ab9dc65a0f41a3886486839b0",
+      "bytes": 3153
+    },
+    {
+      "path": "RUNTIME-SOURCE.json",
+      "sha256": "49503cdc859d17d6cde3ac034bdce21d5a25bc40799781b8613ef655732ac0d2",
+      "bytes": 15868
+    },
+    {
+      "path": "crates/alife_training/examples/probe_object_rich_optional_vocal_v1.rs",
+      "sha256": "46ecd1736825adde8b103205525a784988e5f94b2b553e5cefe6999af29be61b",
+      "bytes": 60938
+    },
+    {
+      "path": "crates/alife_training/examples/support/object_rich_host_v1.rs",
+      "sha256": "5fe4aeb4ad50d8c83c185c17bd703d14aeca44211ab614eea83922e20111a8db",
+      "bytes": 9681
+    },
+    {
+      "path": "crates/alife_training/examples/support/object_rich_qualification_v1.rs",
+      "sha256": "8b2b948c88bd32dec130029628c11dd4afd072d265e1f5cd681dda98ca8f96f7",
+      "bytes": 11349
+    },
+    {
+      "path": "crates/alife_training/examples/support/grouped_m2_raw_v1.rs",
+      "sha256": "dc848977e48ed3eb185bab4e704884a1b745c485e301449e7925cdb9d7cb82e6",
+      "bytes": 25371
+    },
+    {
+      "path": "crates/alife_training/examples/support/grouped_m2_journal_v1.rs",
+      "sha256": "570748c7296d959b9c4d58163ac524956a1e22f60be111e9023db98da23689a9",
+      "bytes": 28474
+    },
+    {
+      "path": "crates/alife_training/examples/support/lossless_journal_v1.rs",
+      "sha256": "caeaa54fc74641189b1f398368f3480290f01c751f9e9bf74f4672dae126c44b",
+      "bytes": 17900
+    }
+  ]
+}
