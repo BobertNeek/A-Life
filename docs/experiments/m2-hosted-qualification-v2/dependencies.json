@@ -1,0 +1,56 @@
+{
+  "binary_include_policy": "Hash and reuse exact public main bytes. Never upload replacement assets, binaries, CPs or journals.",
+  "build": "cargo +1.99.1 test --locked --lib -p alife_training --features cpu-backend --no-run --message-format=json; meal also alife_core --lib",
+  "cargo_lock_sha256": "2b637c0f2b2cd34fb9fe2f9a5f9a3a7b490f0b7f8d5f1f7c8764f29077d0ebdd",
+  "gpu_tests": false,
+  "local_crates": [
+    "alife_core",
+    "alife_world",
+    "alife_gpu_backend",
+    "alife_runtime",
+    "alife_storage",
+    "alife_training"
+  ],
+  "main_owned_binary_includes": [
+    {
+      "bytes": 131613,
+      "path": "assets/brain_foundations/n2048-v1-grounded.alife-foundation",
+      "sha256": "c7a44324cb903547bf1bcd6e031013397b60bfa1a4d9122cf39887ce533d5e39"
+    },
+    {
+      "bytes": 131581,
+      "path": "assets/brain_foundations/n2048-v1-privileged.alife-foundation",
+      "sha256": "677221a7fdecd3754a18fa078a50148783b8d07aa473788489a09e5d90fd3f0d"
+    },
+    {
+      "bytes": 7673,
+      "path": "assets/brain_foundations/n512-v1-grounded.alife-foundation",
+      "sha256": "66a507eb252ad341addbf8c10e65e9255589403183056760d330e95de48781f2"
+    },
+    {
+      "bytes": 7673,
+      "path": "assets/brain_foundations/n512-v1-privileged.alife-foundation",
+      "sha256": "0b2dbea947951bf0607ef81ed842911e965e0335cbb8f92dd0f94fcba9365cd8"
+    },
+    {
+      "bytes": 7673,
+      "path": "assets/founders/scaled-choice-nociceptive-v1/candidate.alife-foundation",
+      "sha256": "c58aae6d46e794eb211d1cd299981a56ab0ebfcf5e2fc13379fcb1323c1f3a7c"
+    },
+    {
+      "bytes": 535556,
+      "path": "crates/alife_world/assets/island-v1.bin",
+      "sha256": "8d0e9cf6343ffe8ea5e82bcb7ad3e4ef77eef7207042cf0274de5d91f2457c38"
+    }
+  ],
+  "no_git_dependencies": true,
+  "no_source_replacement": true,
+  "registry_package_count": 589,
+  "registry_sources": [
+    "registry+https://github.com/rust-lang/crates.io-index"
+  ],
+  "root_features": [
+    "cpu-backend",
+    "receipt-lineage"
+  ]
+}
