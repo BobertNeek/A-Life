@@ -1,0 +1,1867 @@
+--- a/PROTOCOL.md
++++ b/PROTOCOL.md
+@@ -1,67 +1,11 @@
+-# One object-rich legacy versus optional-Vocal M2 comparison
++# Fresh matched optional versus coordination CPU comparison v1
+ 
+-Status: source/protocol preparation only. New allocation and native window are not yet admitted. No source/body fixture, source construction, maturation, compilation or primary execution has occurred. The existing Full/DriveSham lives, raw checkpoints, journals and source driver remain untouched.
++Prospective only. One new genetic source, newborn admission before one 240-tick world-only preparation, then matched cloned body/environment. Two closed-weight policies: qualified optional Vocal versus qualified geometric joint coordination [-4,1,-1], temperature 1. Exactly 32 planned intervals each, no extension. Existing lives are neither imported nor replayed. No GDE/GDS, cache, reflex, meal repair, boredom, pressure-value, or Rest-reader composition. Pressure value is 0 and 512 Rest-reader weights remain zero. Source, lifetime, fast, eligibility and Adam banks are sealed; experience and biology still proceed.
+ 
+-## Question and limitations
++Qualification is one independent fixed seed 0x0341544346495801, 240 body-only ticks, two warm plus two cold intervals for each arm: maximum eight native forwards/host commits. Stop on first unexpected failure. Primary proposed seed 0x034154434F4F0901 needs authoritative reservation and parent release; no automatic retry.
+ 
+-Compare the unchanged LegacyGroupedM2 Full policy with qualified OptionalVocalM2 Full for one fresh B1 source and one shared 240-tick body-aged world. This estimates a full-policy contrast. Optional Vocal changes representative support and its RNG domain, so these are not same-draw vocal-only alternative futures or two independent animals. No inference of population benefit, ecological competence, learned silence or synaptic learning follows from one bounded pair. If neither eats, report no feeding. The former blank-world Full arm's 1,163 forced empty Vocal selections and aggregate failure/frustration 1 motivate the correction but are not this pair's baseline observations.
++Compression preserves complete original checkpoint-plus-two-scientific-row packet bytes. Raw packet SHA, original checkpoint SHA and original science SHA remain identities and hash-chain inputs. New owner schema fresh-coordination-comparison-durable-v1 and new .pairz names only. Qualified zstd codec encodes the entire opaque raw pair. Before publication a permanent exclusive PAIRCLAIM file is fsynced, then complete encoded pending inode is set readonly and fsynced, atomically hardlinked without overwrite to final name, then parent directory is fsynced. Pending and final aliases remain. A claim alone never means completion. No writer resume or claim reuse; uncertain publication is inspected read-only, not retried. Final pair contains both checkpoint and science so no independently committed index can diverge. Old loaders and files are unchanged. Local Unix fsync/hardlink assumptions apply; process failure qualification does not establish power-loss safety.
+ 
+-The source has all 512 Rest-reader genes zero, pressure value coefficient zero and synaptic learning closed. Episodic storage/recall, predictor and physiology may change. No GDE1, GDS, meal-memory repair, boredom/Play appendage, reflex integration, pressure value, runtime cache, six-row repair, or new gene change is composed. The original method reference is https://rikiyat.github.io/blog/weight-space-programming/ (experiments 4/5/6). Creatures 3 / Docking Station are functional design references, not copied labels or empirical validation.
++Raw pair ceiling 5 MiB; encoded record ceiling 5 MiB + 64 KiB, no compression-ratio assumption. Every interval snapshot and both original scientific rows are preserved. Trace ceiling 64 MiB per arm, conservative logical alias cap 400 MiB per arm. Cumulative packet allocation cap 640 MiB, actual disk free floor 4 GiB. No deletion. Fixture growth is measured but not a guarantee; resource stop precedes next call if whole next packet cannot fit. Health, energy, death and new physical-damage stops match the original scene; no artificial meal stop, forced acquisition, respawn or hidden hazards.
+ 
+-## Fixed identities and calls
+-
+-- Authoritative reservation: /workspace/shared/m2-object-rich-optional-vocal-v1-seed-reservation.json.
+-- Primary seed: 0x034F42564F430901, decimal 238482243738339585. Founder seed = seed*16+1 = 3815715899813433361, within u64. Common initial sampling seed = 1275874135, counter zero. Later policy-domain draws/counters remain their own, never resynchronized.
+-- One source recipe and one prepared template; two fresh owners. Legacy first, optional second, serially. Full mode in both. Temperature 1.0, normal world timestep 1/20 second. Exactly 240 ordinary body-only preparation ticks once; no neural forwards during preparation. Maximum 64 subsequent intervals per arm, including sleeping/no-decision intervals: 368 primary world calls, at most 128 source forwards/bundles. No extension or replacement after outcomes.
+-- Qualification uses existing fixed GRPHOST seed 0x03475250484F5354 only, with one fresh source/template, exactly 240 body-only ticks, four research-observed warm and four ordinary-entry-point genuine cold-continuation intervals per policy: maximum 16 native calls and 240 body ticks. A cold call is explicit disposable qualification, never primary replay. No synthetic speech, forced possession or direct action calls are part of this dose. Coverage that does not occur, including eating/sleep/waking, remains absent; inherited separate host qualifications are cited separately.
+-- At every interval boundary stop before the next call for death, health <0.5, body energy <0.05, new positive injury or physical damage, non-finite values, contract failure, or resource guard. A new injury stops the affected arm after its already-executed boundary is retained. Keep unequal horizons and compare only the common observed prefix as well as full separate outcomes.
+-- Attempt-before-call records are create-new and durable before each body or neural call. A known failure terminates/blocks that owner. Never rerun a consumed interval. An uncertain in-flight call is not retried: reconcile visible publication and retain uncertainty. No automatic resume, reseed, sweep, tuning, forced action, chemistry edit, adaptive respawn/reward, artificial hunger or immortality.
+-
+-## Exact ordinary scene
+-
+-Flat world, one registered learner at (0,0,0), body/head yaw zero, normal lifetime. Spawn order is learner, near-root, far-fruit, activity-toy, obstacle. Use standard HeadlessScenarioBuilder food constructors and the existing ordinary FoodVariety recipes; use standard stationary toy constructor. The obstacle is an ordinary obstacle object. No external teacher, peer, injected memories, forced initial grip, terrain or ecology renewal.
+-
+-- near-root: Food at (1.0,0,-0.5), ordinary builder radius 0.75; FoodVariety::Root, nutrition 0.65, hazard_pain 0, chemistry [0.8,0.25,0.35], normal root material/shape/color recipe. Initial center distance sqrt(1.25)=1.118034, less than EAT_RADIUS 1.25; not initially held or consumed. Actual Eat may first prepare/acquire and need a later choice to consume. Food is not a solid obstacle; the ordinary center-based carry/contact abstraction is retained, not silently replaced by non-overlapping sphere semantics.
+-- far-fruit: Food at (2.75,0,1.75), ordinary builder radius 0.75; FoodVariety::Fruit, nutrition 0.45, hazard_pain 0, chemistry [0.85,0.65,0.8], normal fruit material/shape/color recipe. Initial center distance 3.259601 >1.25, requiring approach for manipulation.
+-- activity-toy: stationary ActivityToy at (0.8,0,2.1), standard spawn_toy(false) radius 0.5, nutrition/hazard zero, ordinary toy chemistry [0,0,0], ordinary toy material/shape. Distance 2.247221 >1.25. A legal Play opportunity is not a qualified boredom-driven optional-Play circuit or guaranteed play.
+-- obstacle: Obstacle at (1.8,0,0.65), radius 0.35, nutrition/hazard zero and its ordinary deterministic physical properties. Its center is 0.417996 from the origin-to-fruit center segment (static arithmetic must verify actual value); sight and body-clearance use different bounds. It can constrain a straight body path toward the fruit while leaving the near food's actor-target and target-grip segments clear. No claim of pathfinding success is prespecified.
+-
+-Before any primary dispatch, native fixture and the actual shared prepared template must report exact object IDs, positions/radii/properties, actual world locomotion collision radius and registered manipulation effector gain, zero initial possession, solid-segment distances, source profile5 sensing and authoritative candidates. No speculative heldness sensor: possession is world state and receipt evidence only. Four non-agent objects fit all four object candidate slots: three intrinsic + four*6 object rows + three channel no-ops + AwakeRest =31 <=32; grounded slot capacity is16. Require all four distinct target IDs and near-root Eat/Grab, fruit Approach and toy Play in the actual initial candidate set, with canonical Idle and both recovery operations. Candidate existence is not execution success. Check actual count, no truncation, actual gaze/occlusion and body/obstacle clearance, and unblocked near-root/grip segments. Failure stops before primary neural dispatch; do not move objects or select another source to make the scene pass. Report the failure as preparation/fixture failure.
+-
+-## Source and admission
+-
+-Exact code baseline fbf2a517f93098b5d936878a3d26bbb8d0391c38, tree020d7a4b036d0309a4ffdd762536c36e945f7496. Apply only qualified optional-Vocal nine-file source closure19be3cc2612f110b564699ad2d566219b51d411fb57c3cc8af1bc9ced194dc7e, patchdc851232abeb8a655cba7fbf6089389dc51dd0e2717d199e8d15e269d123c49e. The separate qualification instrumentation patch is not production code. Verify source/input file hashes rather than assuming current main or a parent working tree is identical.
+-
+-Reuse the B1+bounded-reader+four-head+awake-rest+new-timer source recipe unchanged from durable driver7f905465b79291fd52d1fd65568a9d10e716576a. Before the first preparation tick, construct once and durably bind full genotype, expressed chemistry, phenotype, address map, founder asset/optimizer, source inputs, all source/gene recipe digests, actual timer/reference bits, source closure, toolchain, build closure, executable, policy IDs, scene, reservation and protocol. No existing acquired state is an input.
+-
+-Admit both policies via their real newborn-first new_prepared APIs. The legacy closure executes 240 ordinary ticks once, capturing the newly prepared world. The optional closure installs that same owned pre-neural template and does zero additional ticks. Initial states must have zero dispatch history, no pending outcomes, zero fast/lifetime/eligibility and identical legitimate body, scene, world clock/RNG, source and founder/optimizer projections. Their outer bytes intentionally differ. Validate both typed envelopes separately; compare complete raw-byte subtrees, allowing only verified exact outer policy/lineage, canonical/neural schema markers, the optional owner's fresh marker, and the policy-derived authority digest. Do not drop whole controllers, canonical state, RNG or neural banks. Persist both initial bytes and their exact projection hashes, not a fabricated shared whole-envelope hash.
+-
+-Every committed boundary repeats complete closed-source/genotype/founder optimizer/weight/moment/integer-age/fast/lifetime/eligibility/dendrite/structural checks with unchanged cadence. Dynamic activations, metabolism, ordinary memory and predictor are not immutable banks.
+-
+-## Measurements and interpretation
+-
+-Per interval preserve full native state plus original scientific rows atomically in one framed packet. No-decision intervals remain observations. Include actual before/after body energy, health, injury, hunger, fatigue, sleep pressure, ATP, all sealed outcome physiology, cognitive debit, actual recovery phase/dose/cycle and source execution count/work. Separate Q24 work from ATP chemistry and body energy debit.
+-
+-Preserve complete candidates, exact representative/channel/conditional-operation distributions and joint log probability from each correct policy. Optional rows include source-current zero/nonzero speech-payload readiness, selected Quiet/Vocal, true utterances and exact optional scores. Same-context native legacy probabilities on an optional row are a bounded local diagnostic only, not another lived future; do not execute alternative actions or invent present-payload words. Legacy rows do not infer payload absence solely from silence.
+-
+-Preserve selected/attempted action targets and channels, actual physical channel outcomes, ActionPhase and Acquired/Placed/Released/Consumed transfers where authoritative receipts expose them; supplement with world object positions, owners and consumption transitions without pretending these substitute for unavailable phase receipts. State any receipt coverage gap explicitly. An absent channel observation is unknown, not execution=false. Track target approach, reach and contact, current held objects, real nutrition and feeding-driven hunger/energy changes separately from aggregate changes and work debit. Count success and frustration across all selected channels.
+-
+-Report actual episodic memory size, write/merge/eviction coverage, record family/target, valence and retained/recalled exact Ingest-consumption provenance. The current one-representative writer can miss target-specific Ingest episodes when a different representative's bundle eats. Do not call all physical meals remembered, and do not call episodic updates neural learning. Keep initial and terminal closure hashes and terminal reason. No favorable-window selection or inferential p-value from one pair.
+-
+-## Durable transport and fixed qualification
+-
+-Version a narrow copy of the durable driver and opaque journal helper; do not edit the frozen old driver. Preserve create-new activation/root ownership, preparation source binding before biology, sync-before-publication, complete checkpoint+science packets, exact source/executable binding, raw float bytes and complete per-interval closure validation. Attempt records precede native calls. The atomic hard-link temporary aliases stay, counted twice for logical journal guards and once by inode for physical allocation. Do not delete failed artifacts or test temporary directories. A copied root cannot authorize replay. Post-run audits are zero-forward and may read only this task's own new state.
+-
+-Pure driver/journal tests cover seed arithmetic, policy/projection discrimination, create-new root ownership, attempted-call counting, source-publication order, packet tamper/truncation/duplicate/publication failures and resource bounds. They create zero organisms and execute zero world calls. Native fixed qualification compares every warm research-observed and genuine cold ordinary-entry-point boundary of four intervals per policy, every original step field and full raw checkpoint bytes. Observer-only science is retained separately and checked against the already-produced authoritative transaction receipts, never inferred from final possession. It also checks, closed-bank sentinels, policy/load isolation and actual scene/candidate conditions. No extra native call to force an event. If a check fails, retain the failure and stop; fixes need a new explicit qualification dose and resource reconciliation before any rerun.
+-
+-## Build and resource proposal
+-
+-Source/report preparation <=8MiB. Read-only verified dependencies from recovery-sleep-durable-target-v3; official Rust1.99.1 from recovered-toolchain-rust-1.99.1-reset2. Direct rustc only, dev0, one codegen unit, no debug info, incremental off, serial root library/driver/test builds. No Cargo/dependency rebuild or protected target writes. Compilation starts only in the coordinator's released native window. Native libraries and full visible link-search artifacts are hashed read-only. No use or assumption of the separately qualified compiler-output cache.
+-
+-Proposed cumulative directory-inclusive allocation is1,073,741,824B (1GiB), with all successful, failed and partial outputs retained. 5,242,880B is a whole framed checkpoint+science packet cap, not a checkpoint-only budget. Primary maximum128 packets +2 initial checkpoints uses681,574,400B (650MiB); no persistent extra template copy. Fixed qualification max16 packets +2 initial states uses94,371,840B (90MiB), with additional qualification metadata in theshared metadata allowance. Source8MiB, retained root/library/test executables160MiB, qualification90MiB, primary650MiB, logs/manifests/attempts24MiB, scientific exports52MiB and unused/failure contingency40MiB total1GiB. Compiler temporary peak144MiB exists only in the serial pre-primary build phase (maximum380MiB phase budget including retained outputs, source, metadata and contingency). It still counts toward the same1GiB physical allocation at every moment. Any leftover partial compiler output remains charged as retained build output; no deletion is assumed or permitted. Build ceilings include retained failed binaries; a failure is not permission to exceed allocation or delete prior output.
+-
+-Per arm conservatively charge retained aliases against650MiB logical journal ceiling, and cap aggregate science at20MiB (two full exports plus two5MiB final states fit52MiB). Before every stage/next interval, require the remaining admitted allocation and its full next-stage growth to fit above existing233,175,552B paired-export/control reserve +4,294,967,296B free floor +226,492,416B independent recovery-reflex fixture allocation; the completed cache qualifier's retained103MB is already charged in measured free space. Do not infer release of those reservations from idle processes. Monitor directory blocks and inode-deduplicated physical allocation, free disk, child process RSS and available memory. Compiler forecast <=1.8GiB RSS, stage timeout600s; primary per-arm timeout1800s, with interrupted unknown work retained and no extension. These are monitored bounds, not filesystem quotas. Before activation, measured complete fixed-fixture packet maxima plus262,144B margin plus max(1MiB,64 times maximum observed positive per-interval packet growth) must fit5MiB and all1GiB component budgets; otherwise stop before primary source construction. No lower measurement cadence or output stripping to make it fit.
+-
+-## Publication
+-
+-This owner performs no external publication/activation yet. Parent receives source-only plan and concrete local evidence. Private state, journals, checkpoints, learned banks, executable and input payloads are never uploaded. Later reviewed summaries and source-only patches may be published under the existing project authorization. Report source-only static checks as static, compiled checks as compiled, qualification as its own dose, and primary results only after they exist.
++Metrics distinguish actual nutrition and Consumed depletion from Acquired/Placed/Released. Report meaningful joint successes and failures, reach and approach progress, no-op dwell, memory coverage and missingness. Lower failure alone is not benefit. Compare the minimum complete shared prefix without selecting favorable windows. CPU-only, one source, no synaptic-learning or general ecological-benefit claim. Exp4 targeted repair is the motivating analogy; no Exp5 whole-model optimization or Exp6 learning result (https://rikiyat.github.io/blog/weight-space-programming/).
+--- a/RUNTIME-SOURCE.json
++++ b/RUNTIME-SOURCE.json
+@@ -1,29 +1,5 @@
+ {
+-  "base_commit": "fbf2a517f93098b5d936878a3d26bbb8d0391c38",
+-  "qualified_optional_patch_sha256": "dc851232abeb8a655cba7fbf6089389dc51dd0e2717d199e8d15e269d123c49e",
+-  "passive_wrapper_only_additional_runtime_change": true,
+-  "cache_composed": false,
+-  "files": [
+-    {
+-      "path": "crates/alife_training/shaders/critic_residual.wgsl",
+-      "sha256": "5c9dce3fb14e7599fc18c5d8ee011055a2c033936df56405be27553422eceb4c",
+-      "bytes": 2918
+-    },
+-    {
+-      "path": "crates/alife_training/shaders/foundation_ppo.wgsl",
+-      "sha256": "d3f7c6d819e42c6d42cc789b2adee8370736cc2831aa077b10124ab52b2134e5",
+-      "bytes": 16277
+-    },
+-    {
+-      "path": "crates/alife_training/shaders/foundation_train.wgsl",
+-      "sha256": "7fe3c0291d972077018e10c44a0cb6b89c0a19d8aca0de6c314f4420bcbb7ee9",
+-      "bytes": 31654
+-    },
+-    {
+-      "path": "crates/alife_training/shaders/founder_readout.wgsl",
+-      "sha256": "6015a1bba6fbb59bff7574e6b36ce12f18c05e13b960ed187f99a545a44a0068",
+-      "bytes": 1773
+-    },
++  "candidate_files": [
+     {
+       "path": "crates/alife_training/src/backend_handoff.rs",
+       "sha256": "80147760064ddcf85d8a00d0e4ee27b430f6382dd4c95e72eb8b608876dac9e4",
+@@ -91,8 +67,8 @@
+     },
+     {
+       "path": "crates/alife_training/src/cpu/grouped_host_envelope.rs",
+-      "sha256": "923bb595549d60673c865f2b3371617d3819122b36090512b3528d09be6e81e6",
+-      "bytes": 34710
++      "sha256": "f7c88460514e533afd11c59bfacf960e50720ca804e000ee7ffda13208906ce5",
++      "bytes": 34750
+     },
+     {
+       "path": "crates/alife_training/src/cpu/grouped_host_fixture.rs",
+@@ -111,8 +87,8 @@
+     },
+     {
+       "path": "crates/alife_training/src/cpu/grouped_host_tests.rs",
+-      "sha256": "310d4b6e88e3668c5cf4b04a8cc0dcd471cdd4e155e493d0ceaa9c76ada28f9f",
+-      "bytes": 26895
++      "sha256": "97ff54ae6de054792861ecd1f720c0e1b268984c4e3719b448723f34a719854b",
++      "bytes": 28594
+     },
+     {
+       "path": "crates/alife_training/src/cpu/host/bounded_founder_tests.rs",
+@@ -121,8 +97,8 @@
+     },
+     {
+       "path": "crates/alife_training/src/cpu/host.rs",
+-      "sha256": "51658f2de3b646f3fb470ce23a4776f79cb5a549e5c91242d5722d8aa46e3380",
+-      "bytes": 91157
++      "sha256": "97849720d59dc8e19e887d44778862f08a7ed7f5277e5cd25e7a42e0fc73b41a",
++      "bytes": 91224
+     },
+     {
+       "path": "crates/alife_training/src/cpu/hotpath_bench.rs",
+@@ -170,14 +146,19 @@
+       "bytes": 17373
+     },
+     {
++      "path": "crates/alife_training/src/cpu/motor_mediation/confidence/policy/optional_vocal/coordination.rs",
++      "sha256": "ff334ed9bbea1da654d86f531ca2edd056164991e60ce2b9df09613e41d7ac3a",
++      "bytes": 10470
++    },
++    {
+       "path": "crates/alife_training/src/cpu/motor_mediation/confidence/policy/optional_vocal/tests.rs",
+-      "sha256": "6328b054f71280a067151cefddffdc97edabbd54703ced1a383f63d93f9ff97f",
+-      "bytes": 14140
++      "sha256": "5714652d92723c3028259a85341e2f917567e85e6c5a1ccdbd8abb77f0cf1698",
++      "bytes": 22236
+     },
+     {
+       "path": "crates/alife_training/src/cpu/motor_mediation/confidence/policy/optional_vocal.rs",
+-      "sha256": "a8f72e4c1d01dce4f3e0f97ad01d346731125c93d40965e4a35a99d992d86d13",
+-      "bytes": 25481
++      "sha256": "b3789a16128fb492a5f3ad2fe9b32595386ff7829269ab2973e524eb2a84deac",
++      "bytes": 28194
+     },
+     {
+       "path": "crates/alife_training/src/cpu/motor_mediation/confidence/policy.rs",
+@@ -231,18 +212,18 @@
+     },
+     {
+       "path": "crates/alife_training/src/cpu/optional_vocal_host.rs",
+-      "sha256": "583b3d1c3b95ada238045f2279e39c398ca2d29f9b3ff98857a7bfa06e6b2fa3",
+-      "bytes": 16781
++      "sha256": "1c8ec7b17f08a7f2227f371eca3fcd43dcbdbff7188c7ce0f93f84dd16c8e039",
++      "bytes": 17030
+     },
+     {
+       "path": "crates/alife_training/src/cpu/optional_vocal_host_tests.rs",
+-      "sha256": "df00d3ec681027490fb9a390fe9dc56913cb0c50250cbd4814892d449d12b8b0",
+-      "bytes": 16554
++      "sha256": "0e8a8460c4b91432551d4cdedf848cac5da1fd872e28d09c6dc3d845cf0d6dd3",
++      "bytes": 23460
+     },
+     {
+       "path": "crates/alife_training/src/cpu/organism.rs",
+-      "sha256": "0c8fad9ff7ec1a0260e9584ba6039b1d7887cbf693bf6128b060c1dfd4df3e55",
+-      "bytes": 54848
++      "sha256": "dfae58b724fadd197fdde6572af56b27c0407c81928946abd4a5bed33bdc1111",
++      "bytes": 54956
+     },
+     {
+       "path": "crates/alife_training/src/cpu/private_checkpoint.rs",
+@@ -423,22 +404,15 @@
+       "path": "crates/alife_training/src/types.rs",
+       "sha256": "084740de68e72c9dab7b8bc1c0da4c11d26a403627d14a5ffd4ca7e536de85af",
+       "bytes": 28630
+-    },
+-    {
+-      "path": "docs/experiments/motor-mediation-m2-design-v1/recipe.json",
+-      "sha256": "285841b7e9a6d26c60142b6e2dd25f04a0bef0bec943c6203834155e89af0278",
+-      "bytes": 272049
+-    },
+-    {
+-      "path": "docs/experiments/recovery-group-arbitration-v1/recipe.json",
+-      "sha256": "df6ca716a24f8f8793e542cea35612771e90e463e1d21304e7812ad1c9d267ad",
+-      "bytes": 6145
+-    },
+-    {
+-      "path": "docs/experiments/recovery-group-confidence-v2/recipe.json",
+-      "sha256": "eecb44a40ac6bbb7c3e742f10ec749668245c11f089b48cf257aeb4749dd4dff",
+-      "bytes": 6546
+     }
+   ],
+-  "closure": "449c29cec8eb4e60d0927d5634f60721d5b036aa31b61ddd7da1cb732204cee9"
++  "candidate_closure": "97f70795ba31261c5d9e350b7fa7920613c3c1c1c0a048c4f58d0d1fb282120f",
++  "optional_source_manifest_sha256": "58901dfc4b250ddf1da94ee99f1ada3e74bf485344097105cd99e6ab91f9608b",
++  "optional_library": {
++    "path": "/workspace/shared/m2-object-rich-optional-vocal-v1/libalife_training_object_rich_v1.rlib",
++    "sha256": "18368352a3c1eaabf190857533336f39aa5419dd6e944da3bc3aff52484c873d",
++    "bytes": 66519436
++  },
++  "shared_dependencies_sha256": "49f335e412ec02e45c1fc91688e48db04b1a1f95d787847dd1e3e3d39f92f2db",
++  "no_runtime_changes_from_qualified_candidate": true
+ }
+--- a/crates/alife_training/examples/probe_object_rich_optional_vocal_v1.rs
++++ b/crates/alife_training/examples/probe_object_rich_optional_vocal_v1.rs
+@@ -14,6 +14,7 @@
+ mod scene;
+ use alife_core::*;
+ use alife_training::{cpu::*, AdamWConfig, StageTrainableMask};
++use coordinated_training::cpu::{CpuCoordinatedTargetM2HostV1, CpuCoordinatedTargetM2HostCheckpointV1, CoordinatedTargetScoresV1};
+ use alife_world::*;
+ use policy_host::{Host, Step};
+ use serde::{Deserialize, Serialize};
+@@ -25,9 +26,9 @@
+     path::{Path, PathBuf},
+ };
+ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+-const STUDY: &str = "m2-object-rich-optional-vocal-v1";
++const STUDY: &str = "m2-fresh-coordination-comparison-v1";
+ const RESERVATION_PATH: &str =
+-    "/workspace/shared/m2-object-rich-optional-vocal-v1-seed-reservation.json";
++    "/workspace/shared/m2-fresh-coordination-comparison-v1-seed-reservation.json";
+ // Pure source/admission preflight: no genome, host, world, body or sampler is constructed.
+ fn seed_admission_preflight(seed: u64, founder_count: u16) -> Result<u64> {
+     CanonicalNewGameConfig::phase3(seed, founder_count)
+@@ -48,7 +49,7 @@
+     Ok(())
+ }
+ const ACTIVATION_PATH: &str =
+-    "/workspace/shared/m2-object-rich-optional-vocal-v1-seed-reservation.json.activation.json";
++    "/workspace/shared/m2-fresh-coordination-comparison-v1-seed-reservation.json.activation.json";
+ #[derive(Serialize, Deserialize)]
+ #[serde(deny_unknown_fields)]
+ struct ActivationClaim {
+@@ -66,7 +67,7 @@
+     freeze_sha256: &str,
+     reservation_sha256: &str,
+ ) -> Result<()> {
+-    if claim.schema != "object-rich-optional-vocal-preparation-claim-v1"
++    if claim.schema != "fresh-coordination-comparison-preparation-claim-v1"
+         || claim.study != STUDY
+         || claim.root != root.canonicalize()?
+         || claim.freeze_sha256 != freeze_sha256
+@@ -78,10 +79,10 @@
+     }
+     Ok(())
+ }
+-const SEED: u64 = 0x034F_4256_4F43_0901;
+-const FIXTURE_SEED: u64 = 0x0347_5250_484F_5354; // existing qualified host unit fixture
++const SEED: u64 = 0x0341_5443_4F4F_0901;
++const FIXTURE_SEED: u64 = 0x0341_5443_4649_5801; // existing qualified host unit fixture
+ const PREPARATION: u64 = 240;
+-const HORIZON: u64 = 64;
++const HORIZON: u64 = 32;
+ const TEMPERATURE: f32 = 1.;
+ const HOST_COMMIT: &str = "fbf2a517f93098b5d936878a3d26bbb8d0391c38";
+ const HOST_TREE: &str = "020d7a4b036d0309a4ffdd762536c36e945f7496";
+@@ -98,6 +99,7 @@
+     for bytes in [
+         include_bytes!("probe_object_rich_optional_vocal_v1.rs").as_slice(),
+         include_bytes!("support/grouped_m2_journal_v1.rs").as_slice(),
++        include_bytes!("support/lossless_journal_v1.rs").as_slice(),
+         include_bytes!("support/grouped_m2_raw_v1.rs").as_slice(),
+         include_bytes!("support/object_rich_qualification_v1.rs").as_slice(),
+         include_bytes!("support/recovery_sleep_recipe_v1.rs").as_slice(),
+@@ -131,8 +133,8 @@
+ }
+ fn mode_name(arm: usize) -> Result<&'static str> {
+     match arm {
+-        0 => Ok("LegacyGroupedM2/Full"),
+-        1 => Ok("OptionalVocalM2/Full"),
++        0 => Ok("OptionalVocalM2/Full"),
++        1 => Ok("CoordinatedTargetM2/Full"),
+         _ => Err("only two policies exist".into()),
+     }
+ }
+@@ -151,10 +153,10 @@
+     Ok(hash(&serde_json::to_vec(&raw::closure(cp)?)?))
+ }
+ fn validate_cp(bytes: &[u8], tick: u64, expected_closure: &str) -> Result<()> {
+-    let roundtrip = if bytes.starts_with(raw::MAGIC) {
+-        CpuGroupedM2HostCheckpointV1::decode(bytes)?.encode()?
++    let roundtrip = if bytes.starts_with(raw::OPTIONAL_MAGIC) {
++        CpuOptionalVocalM2HostCheckpointV1::decode(bytes)?.encode()?
+     } else {
+-        CpuOptionalVocalM2HostCheckpointV1::decode(bytes)?.encode()?
++        CpuCoordinatedTargetM2HostCheckpointV1::decode(bytes)?.encode()?
+     };
+     if roundtrip != bytes
+         || raw::payload(bytes)?
+@@ -176,16 +178,8 @@
+ ) -> Result<Host> {
+     validate_cp(bytes, tick, closure)?;
+     let host = match arm {
+-        0 => Host::Legacy(CpuGroupedM2HostV1::restore(
+-            CpuGroupedM2HostCheckpointV1::decode(bytes)?,
+-            inputs,
+-            mode(arm)?,
+-        )?),
+-        1 => Host::Optional(CpuOptionalVocalM2HostV1::restore(
+-            CpuOptionalVocalM2HostCheckpointV1::decode(bytes)?,
+-            inputs,
+-            mode(arm)?,
+-        )?),
++        0 => Host::Optional(CpuOptionalVocalM2HostV1::restore(CpuOptionalVocalM2HostCheckpointV1::decode(bytes)?, inputs, mode(arm)?)?),
++        1 => Host::Coordinated(CpuCoordinatedTargetM2HostV1::restore(CpuCoordinatedTargetM2HostCheckpointV1::decode(bytes)?, inputs, coordinated_training::cpu::MediationModeV1::Full)?),
+         _ => return Err("invalid policy".into()),
+     };
+     if host.world().tick().raw() != tick || cp(&host)? != bytes {
+@@ -225,6 +219,23 @@
+     }
+     Ok(trainer)
+ }
++fn coordinated_trainer(r: &recipe::Recipe, sentinel: bool) -> Result<coordinated_training::cpu::CpuFoundationTrainer> {
++    let mut trainer = coordinated_training::cpu::CpuFoundationTrainer::new(
++        r.phenotype.clone(),
++        r.asset.clone(),
++        coordinated_training::StageTrainableMask::recurrent_only(&r.phenotype)?,
++        coordinated_training::AdamWConfig::default(),
++    )?;
++    if sentinel {
++        let mut c = trainer.checkpoint();
++        c.optimizer_step = 23;
++        c.update_ages[0] = 23;
++        c.first_moment[0] = 0.03125;
++        c.second_moment[0] = 0.0625;
++        trainer = coordinated_training::cpu::CpuFoundationTrainer::from_checkpoint(r.phenotype.clone(), r.asset.clone(), c)?;
++    }
++    Ok(trainer)
++}
+ fn newborn(r: &recipe::Recipe) -> Result<CanonicalNewGame> {
+     let mut game = create_grounded_drive_research_new_game(&r.config, &r.genotype)?;
+     let born = game
+@@ -251,7 +262,7 @@
+     let seed = r.config.world_seed;
+     let game = newborn(r)?;
+     let second = game.clone();
+-    let (full, template) = CpuGroupedM2HostV1::new_prepared(
++    let (full, template) = CpuOptionalVocalM2HostV1::new_prepared(
+         game,
+         trainer(r, sentinel)?,
+         r.inputs.clone(),
+@@ -284,19 +295,19 @@
+             Ok(world.clone())
+         },
+     )?;
+-    let (sham, ()) = CpuOptionalVocalM2HostV1::new_prepared(
++    let (sham, ()) = CpuCoordinatedTargetM2HostV1::new_prepared(
+         second,
+-        trainer(r, sentinel)?,
++        coordinated_trainer(r, sentinel)?,
+         r.inputs.clone(),
+         sampling_seed(seed),
+-        mode(1)?,
++        coordinated_training::cpu::MediationModeV1::Full,
+         |world| -> Result<()> {
+             *world = template;
+             Ok(())
+         },
+     )?;
+-    let full = Host::Legacy(full);
+-    let sham = Host::Optional(sham);
++    let full = Host::Optional(full);
++    let sham = Host::Coordinated(sham);
+     let a = cp(&full)?;
+     let b = cp(&sham)?;
+     raw::fresh(&a, preparation, sampling_seed(seed))?;
+@@ -400,11 +411,11 @@
+         return Err("science clock differs".into());
+     }
+     let mut out = serde_json::to_vec(
+-        &json!({"schema":"object-rich-optional-vocal-commit-v1","status":"committed","offset":offset,"tick_before":before.tick,"tick_after":after.tick,"decisions":step.decisions,"sleeping_organisms":step.sleeping_organisms,"consolidations":step.sleep_consolidations,"checkpoint_sha256":hash(bytes),"closed_source_sha256":closure}),
++        &json!({"schema":"fresh-coordination-comparison-commit-v1","status":"committed","offset":offset,"tick_before":before.tick,"tick_after":after.tick,"decisions":step.decisions,"sleeping_organisms":step.sleeping_organisms,"consolidations":step.sleep_consolidations,"checkpoint_sha256":hash(bytes),"closed_source_sha256":closure}),
+     )?;
+     out.push(b'\n');
+     out.extend(serde_json::to_vec(&ObservationRow {
+-        schema: "object-rich-optional-vocal-observation-v1",
++        schema: "fresh-coordination-comparison-observation-v1",
+         status: "observed",
+         offset,
+         before,
+@@ -443,7 +454,7 @@
+     headroom_bytes: u64,
+ }
+ fn check_freeze(f: &Freeze) -> Result<()> {
+-    if f.schema != "object-rich-optional-vocal-source-build-freeze-v1"
++    if f.schema != "fresh-coordination-comparison-source-build-freeze-v1"
+         || f.host_commit != HOST_COMMIT
+         || f.host_tree != HOST_TREE
+         || f.driver_commit != DRIVER_COMMIT
+@@ -462,11 +473,11 @@
+     let q: Value = serde_json::from_str(&f.qualification_json)?;
+     if hash(f.qualification_json.as_bytes()) != f.qualification_sha256
+         || q["complete"] != true
+-        || q["schema"] != "object-rich-optional-vocal-driver-qualification-v1"
++        || q["schema"] != "fresh-coordination-comparison-driver-qualification-v1"
+         || q["driver_code_sha256"] != code_hash()
+         || q["executable_sha256"] != f.executable_sha256
+         || q["protocol_sha256"] != hash(PROTOCOL)
+-        || q["actual_native_calls"] != 16
++        || q["actual_native_calls"] != 8
+         || q["actual_preparation_intervals"] != 240
+         || q["primary_seed_executed"] != false
+         || q["observer_inertness_and_cold_exact"] != true
+@@ -479,7 +490,7 @@
+     if max
+         .checked_add(262144)
+         .is_none_or(|n| n > journal::MAX_PACKET)
+-        || f.projected_pair_bytes != 2 * HORIZON * journal::MAX_PACKET
++        || f.projected_pair_bytes != 2 * HORIZON * journal::MAX_WIRE
+         || f.headroom_bytes != 2 * journal::MAX_PACKET + 64 * 1024 * 1024
+     {
+         return Err("fixed whole-packet or allocation budget differs".into());
+@@ -493,7 +504,7 @@
+         &qualification_root.join("QUALIFICATION_COMPLETE.json"),
+         1024 * 1024,
+     )?;
+-    if q["schema"] != "object-rich-optional-vocal-driver-qualification-v1"
++    if q["schema"] != "fresh-coordination-comparison-driver-qualification-v1"
+         || q["complete"] != true
+         || q["driver_code_sha256"] != code_hash()
+         || q["executable_sha256"] != executable_hash()?
+@@ -513,7 +524,7 @@
+         return Err("reservation is not the untouched primary seed".into());
+     }
+     let f = Freeze {
+-        schema: "object-rich-optional-vocal-source-build-freeze-v1".into(),
++        schema: "fresh-coordination-comparison-source-build-freeze-v1".into(),
+         host_commit: HOST_COMMIT.into(),
+         host_tree: HOST_TREE.into(),
+         driver_commit: DRIVER_COMMIT.into(),
+@@ -584,7 +595,7 @@
+         return Err("prepared arm identity differs".into());
+     }
+     Ok(journal::Binding {
+-        schema: "object-rich-optional-vocal-durable-v1".into(),
++        schema: "fresh-coordination-comparison-durable-v1".into(),
+         study_id: STUDY.into(),
+         arm,
+         mode: a.mode.clone(),
+@@ -668,7 +679,7 @@
+             .ok_or("reservation filename invalid")?
+     );
+     let claim = ActivationClaim {
+-        schema: "object-rich-optional-vocal-preparation-claim-v1".into(),
++        schema: "fresh-coordination-comparison-preparation-claim-v1".into(),
+         study: STUDY.into(),
+         root: absolute,
+         freeze_sha256: hash(&fbytes),
+@@ -690,7 +701,7 @@
+     write_new(
+         root,
+         "PREPARATION_ATTEMPT.json",
+-        &json!({"schema":"object-rich-optional-vocal-preparation-attempt-v1","source":DRIVER_COMMIT,"seed":SEED,"actual_steps_known_at_claim":0,"automatic_retry":false}),
++        &json!({"schema":"fresh-coordination-comparison-preparation-attempt-v1","source":DRIVER_COMMIT,"seed":SEED,"actual_steps_known_at_claim":0,"automatic_retry":false}),
+     )?;
+     let mut actual = 0;
+     let mut stage = "source_construction";
+@@ -707,7 +718,7 @@
+         let source = serde_json::to_vec(&r.metadata)?;
+         let inputs = serde_json::to_vec(&r.inputs)?;
+         let source_bound = serde_json::to_vec(&json!({
+-            "schema":"object-rich-optional-vocal-pre-preparation-source-v1",
++            "schema":"fresh-coordination-comparison-pre-preparation-source-v1",
+             "freeze_sha256":hash(&fbytes),"activation_sha256":hash(&claim_bytes),
+             "source_manifest_sha256":hash(&source),"inputs_sha256":hash(&inputs),
+             "genotype_sha256":r.metadata["genotype_sha256"],
+@@ -741,7 +752,7 @@
+             });
+         }
+         let p = Prepared {
+-            schema: "object-rich-optional-vocal-preparation-v1".into(),
++            schema: "fresh-coordination-comparison-preparation-v1".into(),
+             activation_sha256: hash(&claim_bytes),
+             pre_preparation_source_sha256: hash(&source_bound),
+             freeze_sha256: hash(&fbytes),
+@@ -803,7 +814,7 @@
+     }
+     let (p, pbytes): (Prepared, _) =
+         read_typed(&root.join("PREPARATION_COMPLETE.json"), 64 * 1024)?;
+-    if p.schema != "object-rich-optional-vocal-preparation-v1"
++    if p.schema != "fresh-coordination-comparison-preparation-v1"
+         || p.activation_sha256 != hash(&claim_bytes)
+         || p.freeze_sha256 != hash(&fbytes)
+         || p.actual_preparation_intervals != PREPARATION
+@@ -820,7 +831,7 @@
+         64 * 1024,
+     )?;
+     if hash(&source_bound_bytes) != p.pre_preparation_source_sha256
+-        || source_bound["schema"] != "object-rich-optional-vocal-pre-preparation-source-v1"
++        || source_bound["schema"] != "fresh-coordination-comparison-pre-preparation-source-v1"
+         || source_bound["freeze_sha256"] != p.freeze_sha256
+         || source_bound["activation_sha256"] != p.activation_sha256
+         || source_bound["source_manifest_sha256"] != p.source_manifest_sha256
+@@ -875,6 +886,8 @@
+ }
+ fn run(root: &Path, arm: usize) -> Result<()> {
+     let a = load(root, arm)?;
++    // Single-run permanent owner: no automatic resume or replay after process exit.
++    write_new(&root.join(format!("arm-{arm}")), "RUN-CLAIM.json", &json!({"one_run_only":true,"no_resume":true}))?;
+     let b = &a.binding;
+     let _lock = journal::lock(&a.journal)?;
+     let mut r = journal::recover_without_trace(&a.journal, b, &a.initial, |bytes, tick| {
+@@ -917,7 +930,7 @@
+                     .duration_since(std::time::UNIX_EPOCH)?
+                     .as_nanos()
+             ),
+-            &json!({"schema":"object-rich-optional-vocal-process-v1","arm":arm,"next_offset":r.next,"previous_commit_sha256":r.previous,"process_id":std::process::id(),"retained_temp_entries":r.ignored_temps,"unpublished_inflight_work_is_uncertain":true,"published_intervals_replayed":0}),
++            &json!({"schema":"fresh-coordination-comparison-process-v1","arm":arm,"next_offset":r.next,"previous_commit_sha256":r.previous,"process_id":std::process::id(),"retained_temp_entries":r.ignored_temps,"unpublished_inflight_work_is_uncertain":true,"published_intervals_replayed":0}),
+         )?;
+         r.storage_bytes = fs::read_dir(&a.journal)?.try_fold(0_u64, |sum, e| -> Result<u64> {
+             sum.checked_add(e?.metadata()?.len())
+@@ -996,7 +1009,7 @@
+                     return Err(e);
+                 }
+             };
+-            if let Err(e) = journal::publish(&a.journal, &format!("{:06}.packet", r.next), &packet)
++            if let Err(e) = journal::publish(&a.journal, &format!("{:06}.pairz", r.next), &packet)
+             {
+                 let reason = format!("known publication/storage failure: {e}");
+                 journal::record_publication_failure(
+@@ -1013,7 +1026,7 @@
+             r.checkpoint = bytes;
+             r.storage_bytes = r
+                 .storage_bytes
+-                .checked_add(2 * packet.len() as u64)
++                .checked_add(2 * fs::metadata(a.journal.join(format!("{:06}.pairz", r.next - 1)))?.len())
+                 .ok_or("storage overflow after commit")?;
+             if fresh_harm {
+                 journal::terminal(&a.journal, b, &r, "new measured physical damage")?;
+@@ -1073,7 +1086,7 @@
+     write_new(
+         out,
+         "EXPORT_COMPLETE.json",
+-        &json!({"schema":"object-rich-optional-vocal-export-v1","binding":b,"committed_intervals":r.next,"terminal":terminal.is_some(),"last_commit_sha256":r.previous,"trace_sha256":hash(&r.trace),"checkpoint_sha256":hash(&r.checkpoint),"result_sha256":hash(&result),"private_raw_data_not_for_upload":true}),
++        &json!({"schema":"fresh-coordination-comparison-export-v1","binding":b,"committed_intervals":r.next,"terminal":terminal.is_some(),"last_commit_sha256":r.previous,"trace_sha256":hash(&r.trace),"checkpoint_sha256":hash(&r.checkpoint),"result_sha256":hash(&result),"private_raw_data_not_for_upload":true}),
+     )
+ }
+ #[derive(Debug, Serialize)]
+@@ -1260,7 +1273,7 @@
+         minimum_energy = final_state.body.energy;
+     }
+     Ok(
+-        json!({"schema":"object-rich-optional-vocal-summary-v1","committed_intervals":count,"decisions":decisions,"intervals_without_decision":no_decision,"physical_awake_rest":physical[0],"physical_body_sleep":physical[1],"physical_none":physical[2],"requested_awake_rest_body_sleep_none":attempted,"executed_noop_primitives":executed_noops,"physical_count_basis":"AwakeRest actual positive recovery dose; BodySleep successful stationary physical receipt; none means no applied recovery operation, not necessarily no other action","closed_memory_consolidations":consolidations,"sleep_controller_cycles_completed":final_state.sleep.cycles_completed,"observed_sleep_starts":sleep_starts,"fully_observed_complete_cycles":completed_cycles,"partial_observed_cycle_starts":started_cycles,"phase_intervals":phase_counts,"fatigue_reference_crossings_up_down":crosses[0],"pressure_reference_crossings_up_down":crosses[1],"reference_crossing_events":crossing_events,"first_up_crossing_ticks_F_P":first_up,"initially_at_or_above_reference_F_P":initially_at_or_above_reference,"maxima_F_P":maxima,"minimum_health":minimum_health,"minimum_body_energy":minimum_energy,"final_state":final_state,"terminal":terminal,"horizon_complete":terminal.is_some_and(|t|t["stop"]=="horizon")&&count==HORIZON,"last_commit_sha256":last,"source_and_optimizer_closed":true,"scope":"one source/body, two policies with different RNG domains/support; no synaptic learning or generalized ecological competence","raw_checkpoint_and_science_bytes_preserved":true}),
++        json!({"schema":"fresh-coordination-comparison-summary-v1","committed_intervals":count,"decisions":decisions,"intervals_without_decision":no_decision,"physical_awake_rest":physical[0],"physical_body_sleep":physical[1],"physical_none":physical[2],"requested_awake_rest_body_sleep_none":attempted,"executed_noop_primitives":executed_noops,"physical_count_basis":"AwakeRest actual positive recovery dose; BodySleep successful stationary physical receipt; none means no applied recovery operation, not necessarily no other action","closed_memory_consolidations":consolidations,"sleep_controller_cycles_completed":final_state.sleep.cycles_completed,"observed_sleep_starts":sleep_starts,"fully_observed_complete_cycles":completed_cycles,"partial_observed_cycle_starts":started_cycles,"phase_intervals":phase_counts,"fatigue_reference_crossings_up_down":crosses[0],"pressure_reference_crossings_up_down":crosses[1],"reference_crossing_events":crossing_events,"first_up_crossing_ticks_F_P":first_up,"initially_at_or_above_reference_F_P":initially_at_or_above_reference,"maxima_F_P":maxima,"minimum_health":minimum_health,"minimum_body_energy":minimum_energy,"final_state":final_state,"terminal":terminal,"horizon_complete":terminal.is_some_and(|t|t["stop"]=="horizon")&&count==HORIZON,"last_commit_sha256":last,"source_and_optimizer_closed":true,"scope":"one source/body, two policies with different RNG domains/support; no synaptic learning or generalized ecological competence","raw_checkpoint_and_science_bytes_preserved":true}),
+     )
+ }
+ fn compare_prefix(root: &Path, out: &Path) -> Result<()> {
+@@ -1312,7 +1325,7 @@
+             hash(&loaded.initial)
+         } else {
+             hash(&journal::bounded_read(
+-                &loaded.journal.join(format!("{:06}.packet", common - 1)),
++                &loaded.journal.join(format!("{:06}.pairz", common - 1)),
+                 journal::MAX_PACKET,
+             )?)
+         };
+@@ -1322,7 +1335,7 @@
+     write_new(
+         out,
+         "COMMON_OBSERVED_PREFIX.json",
+-        &json!({"schema":"object-rich-optional-vocal-common-prefix-v1","common_committed_intervals":common,"full_observed_intervals":[ra.next,rb.next],"selection_rule":"minimum of both complete committed prefixes, no favorable window selection","arms":summaries,"single_seed_not_generalization":true}),
++        &json!({"schema":"fresh-coordination-comparison-common-prefix-v1","common_committed_intervals":common,"full_observed_intervals":[ra.next,rb.next],"selection_rule":"minimum of both complete committed prefixes, no favorable window selection","arms":summaries,"single_seed_not_generalization":true}),
+     )
+ }
+ fn main() -> Result<()> {
+@@ -1375,7 +1388,7 @@
+         fs::create_dir(&original)?;
+         fs::create_dir(&copied)?;
+         let claim = ActivationClaim {
+-            schema: "object-rich-optional-vocal-preparation-claim-v1".into(),
++            schema: "fresh-coordination-comparison-preparation-claim-v1".into(),
+             study: STUDY.into(),
+             root: original.canonicalize()?,
+             freeze_sha256: "freeze".into(),
+--- a/crates/alife_training/examples/support/object_rich_host_v1.rs
++++ b/crates/alife_training/examples/support/object_rich_host_v1.rs
+@@ -1,7 +1,7 @@
+ //! Typed routing and separately named passive output. No checkpoint conversion.
+ use super::*;
+ pub enum Host {
+-    Legacy(CpuGroupedM2HostV1),
++    Coordinated(CpuCoordinatedTargetM2HostV1),
+     Optional(CpuOptionalVocalM2HostV1),
+ }
+ pub struct Step {
+@@ -41,28 +41,51 @@
+         json!({"organism_id":d.organism_id,"action":d.action,"probabilities":probability,"evaluation":evaluation,"sampling_counter":d.sampling_counter,"source_diagnostic_logits":d.source_diagnostic_logits,"biological_emissions":d.biological_emissions,"brain_work":d.brain_work,"motor":d.motor,"physical":d.physical,"applied_recovery":applied_recovery(&d.physical),"real_noop_receipts":noops,"patch":d.patch,"sleep_phase":d.sleep_phase,"sleep_trigger":d.sleep_trigger,"research_world_receipt":observer.map(world_receipt),"optional_scores":optional,"payload_present":optional.map(|s|s.source().payload_present()),"same_context_legacy_probabilities":null}),
+     )
+ }
++fn coordinated_common<A: Serialize>(
++    d: &coordinated_training::cpu::CpuGroupedM2HostDecisionV1<A>,
++    probability: Value,
++    evaluation: Value,
++    observer: Option<&HeadlessMotorTransactionReceipt>,
++    optional: Option<&CoordinatedTargetScoresV1>,
++) -> Result<Value> {
++    if d.motor.native.core.source_execution_count != 1 {
++        return Err("source did not run exactly once".into());
++    }
++    let noops=d.patch.selected_bundle().map(|b|b.channels.iter().filter(|c|matches!(c.primitive.raw(),103|104|212)).map(|c|json!({"channel":c.channel,"primitive":c.primitive.raw(),"measured":d.patch.outcome().joint.as_ref().and_then(|j|j.channel_observations.iter().find(|o|o.channel==c.channel))})).collect::<Vec<_>>()).unwrap_or_default();
++    if let Some(r) = observer {
++        if d.patch.selected_bundle() != Some(&r.bundle)
++            || d.physical.outcome_tick != r.outcome_tick
++            || d.patch.outcome().joint.as_ref() != Some(&r.joint)
++        {
++            return Err("passive world receipt does not match sealed decision".into());
++        }
++    }
++    Ok(
++        json!({"organism_id":d.organism_id,"action":d.action,"probabilities":probability,"evaluation":evaluation,"sampling_counter":d.sampling_counter,"source_diagnostic_logits":d.source_diagnostic_logits,"biological_emissions":d.biological_emissions,"brain_work":d.brain_work,"motor":d.motor,"physical":d.physical,"applied_recovery":applied_recovery(&d.physical),"real_noop_receipts":noops,"patch":d.patch,"sleep_phase":d.sleep_phase,"sleep_trigger":d.sleep_trigger,"research_world_receipt":observer.map(world_receipt),"optional_scores":optional,"payload_present":optional.map(|s|s.source().payload_present()),"same_context_legacy_probabilities":null}),
++    )
++}
+ impl Host {
+     pub fn world(&self) -> &HeadlessWorld {
+         match self {
+-            Self::Legacy(h) => h.world(),
++            Self::Coordinated(h) => h.world(),
+             Self::Optional(h) => h.world(),
+         }
+     }
+     pub fn sleep_state(&self, id: OrganismId) -> Option<alife_core::sleep::SleepState> {
+         match self {
+-            Self::Legacy(h) => h.sleep_state(id),
++            Self::Coordinated(h) => h.sleep_state(id),
+             Self::Optional(h) => h.sleep_state(id),
+         }
+     }
+     pub fn wire(&self) -> Result<Vec<u8>> {
+         Ok(match self {
+-            Self::Legacy(h) => h.checkpoint()?.encode()?,
++            Self::Coordinated(h) => h.checkpoint()?.encode()?,
+             Self::Optional(h) => h.checkpoint()?.encode()?,
+         })
+     }
+     pub fn advance(&mut self, t: f32, observe: bool) -> Result<Step> {
+         match self {
+-            Self::Legacy(h) => {
++            Self::Coordinated(h) => {
+                 let (s, receipts) = if observe {
+                     let r = h.step_research_observed(t)?;
+                     (r.step, r.world_receipts)
+@@ -74,22 +97,30 @@
+                 }
+                 let mut decisions = Vec::new();
+                 for (i, d) in s.decisions.iter().enumerate() {
+-                    let eval = d.motor.native.scores.evaluate(&d.action)?;
++                    let scores = h
++                        .last_selection_scores(d.organism_id)
++                        .ok_or("optional scores absent")?;
++                    let eval = scores.evaluate(&d.action)?;
+                     if eval.joint_log_probability.to_bits()
+-                        != d.action.old_joint_log_probability.to_bits()
+-                        || d.action.counter != d.sampling_counter
++                        != d.action.joint_log_probability().to_bits()
++                        || d.action.counter() != d.sampling_counter
+                     {
+-                        return Err("legacy probability/counter differs".into());
++                        return Err("optional probability/counter differs".into());
+                     }
+-                    decisions.push(common(
++                    let mut row = coordinated_common(
+                         d,
+-                        serde_json::to_value(
+-                            d.motor.native.scores.probabilities(d.action.temperature)?,
+-                        )?,
++                        serde_json::to_value(scores.probabilities(d.action.temperature())?)?,
+                         serde_json::to_value(eval)?,
+                         receipts.get(i),
+-                        None,
+-                    )?);
++                        Some(scores),
++                    )?;
++                    row["same_context_legacy_probabilities"] = serde_json::to_value(
++                        d.motor
++                            .native
++                            .scores
++                            .probabilities(d.action.temperature())?,
++                    )?;
++                    decisions.push(row);
+                 }
+                 Ok(Step {
+                     tick_before: s.tick_before,
+--- a/crates/alife_training/examples/support/object_rich_qualification_v1.rs
++++ b/crates/alife_training/examples/support/object_rich_qualification_v1.rs
+@@ -1,11 +1,11 @@
+ //! One bounded fresh fixture. Existing old public step output and state must match
+ //! observed warm versus ordinary-entry-point cold continuation, at every boundary.
+ use super::*;
+-const INTERVALS: u64 = 4;
++const INTERVALS: u64 = 2;
+ fn binding(arm: usize, r: &recipe::Recipe, initial: &[u8]) -> Result<journal::Binding> {
+     Ok(journal::Binding {
+-        schema: "object-rich-optional-vocal-durable-v1".into(),
+-        study_id: "object-rich-optional-vocal-fixed-fixture-v1".into(),
++        schema: "fresh-coordination-comparison-durable-v1".into(),
++        study_id: "fresh-coordination-comparison-fixed-fixture-v1".into(),
+         arm,
+         mode: mode_name(arm)?.into(),
+         seed: FIXTURE_SEED,
+@@ -55,7 +55,7 @@
+     write_new(
+         out,
+         "QUALIFICATION_ATTEMPT.json",
+-        &json!({"seed":FIXTURE_SEED,"primary_seed_executed":false,"maximum_native_calls":16,"maximum_body_calls":240,"source_candidates":1,"automatic_retry":false,"executable_sha256":executable_hash()?,"driver_code_sha256":code_hash()}),
++        &json!({"seed":FIXTURE_SEED,"primary_seed_executed":false,"maximum_native_calls":8,"maximum_body_calls":240,"source_candidates":1,"automatic_retry":false,"executable_sha256":executable_hash()?,"driver_code_sha256":code_hash()}),
+     )?;
+     let mut actual = 0;
+     let mut native = 0_u64;
+@@ -128,7 +128,7 @@
+                         .len() as u64;
+                 }
+                 let packet = journal::make_packet(&b, offset, &warm_previous, &bytes, &rows)?;
+-                journal::publish(&warm_dir, &format!("{offset:06}.packet"), &packet)?;
++                journal::publish(&warm_dir, &format!("{offset:06}.pairz"), &packet)?;
+                 warm_previous = hash(&packet);
+                 if let Some(previous) = previous_warm_size {
+                     max_positive_growth =
+@@ -165,9 +165,9 @@
+                 }
+                 let cold_packet =
+                     journal::make_packet(&b, offset, &cold_previous, &cold_wire, &cold_rows)?;
+-                journal::publish(&cold_dir, &format!("{offset:06}.packet"), &cold_packet)?;
++                journal::publish(&cold_dir, &format!("{offset:06}.pairz"), &cold_packet)?;
+                 let loaded = journal::bounded_read(
+-                    &cold_dir.join(format!("{offset:06}.packet")),
++                    &cold_dir.join(format!("{offset:06}.pairz")),
+                     journal::MAX_PACKET,
+                 )?;
+                 let decoded = journal::decode_packet(&loaded, &b, offset, &cold_previous)?;
+@@ -189,10 +189,10 @@
+                     return Err("qualified durable recovery does not match final state".into());
+                 }
+             }
+-            details.push(json!({"arm":arm,"policy":mode_name(arm)?,"warm_calls":4,"cold_calls":4,"decisions_per_trajectory":arm_decisions,"authoritative_grip_transfers_observed":actual_transfers,"every_original_output_and_checkpoint_exact":true,"observer_only_fields_excluded_from_original_output_comparison":["research_world_receipt"],"closed_source_optimizer_sentinels":true,"final_checkpoint_sha256":hash(&cold_bytes)}));
++            details.push(json!({"arm":arm,"policy":mode_name(arm)?,"warm_calls":2,"cold_calls":2,"decisions_per_trajectory":arm_decisions,"authoritative_grip_transfers_observed":actual_transfers,"every_original_output_and_checkpoint_exact":true,"observer_only_fields_excluded_from_original_output_comparison":["research_world_receipt"],"closed_source_optimizer_sentinels":true,"final_checkpoint_sha256":hash(&cold_bytes)}));
+         }
+         if actual != 240
+-            || native != 16
++            || native != 8
+             || max_packet
+                 .checked_add(262144 + (max_positive_growth * HORIZON).max(1024 * 1024))
+                 .is_none_or(|v| v > journal::MAX_PACKET)
+@@ -202,7 +202,7 @@
+         write_new(
+             out,
+             "QUALIFICATION_COMPLETE.json",
+-            &json!({"schema":"object-rich-optional-vocal-driver-qualification-v1","complete":true,"driver_commit":DRIVER_COMMIT,"driver_code_sha256":code_hash(),"executable_sha256":executable_hash()?,"protocol_sha256":hash(PROTOCOL),"actual_native_calls":native,"actual_preparation_intervals":actual,"primary_seed_executed":false,"observer_inertness_and_cold_exact":true,"maximum_packet_bytes":max_packet,"maximum_positive_packet_growth_per_interval":max_positive_growth,"projected_packet_bytes":max_packet+262144+(max_positive_growth*HORIZON).max(1024*1024),"projection_is_not_a_growth_guarantee":true,"maximum_initial_checkpoint_bytes":max_initial,"maximum_science_row_pair_bytes":max_science,"projected_pair_physical_bytes":2*HORIZON*journal::MAX_PACKET,"metadata_initial_export_headroom":2*journal::MAX_PACKET+64*1024*1024,"arms":details,"no_behavioral_benefit_claim":true,"no_extra_calls_for_event_coverage":true}),
++            &json!({"schema":"fresh-coordination-comparison-driver-qualification-v1","complete":true,"driver_commit":DRIVER_COMMIT,"driver_code_sha256":code_hash(),"executable_sha256":executable_hash()?,"protocol_sha256":hash(PROTOCOL),"actual_native_calls":native,"actual_preparation_intervals":actual,"primary_seed_executed":false,"observer_inertness_and_cold_exact":true,"maximum_packet_bytes":max_packet,"maximum_positive_packet_growth_per_interval":max_positive_growth,"projected_packet_bytes":max_packet+262144+(max_positive_growth*HORIZON).max(1024*1024),"projection_is_not_a_growth_guarantee":true,"maximum_initial_checkpoint_bytes":max_initial,"maximum_science_row_pair_bytes":max_science,"projected_pair_physical_bytes":2*HORIZON*journal::MAX_WIRE,"metadata_initial_export_headroom":2*journal::MAX_PACKET+64*1024*1024,"arms":details,"no_behavioral_benefit_claim":true,"no_extra_calls_for_event_coverage":true}),
+         )?;
+         Ok(())
+     })();
+--- a/crates/alife_training/examples/support/grouped_m2_raw_v1.rs
++++ b/crates/alife_training/examples/support/grouped_m2_raw_v1.rs
+@@ -2,8 +2,7 @@
+ use super::{hash, Result};
+ use std::collections::BTreeMap;
+ 
+-pub const MAGIC: &[u8] =
+-    b"ALIFE-GROUPED-M2-HOST\0V1\0CONFIDENCE-V2\0SYNAPTIC-CLOSED\0PROFILE5\0SAMPLER-BITS1\0";
++pub const MAGIC: &[u8] = b"ALIFE-COORDINATED-TARGET-M2-HOST\0V1\0IDLE-QUIET\0SOURCE-PAYLOAD\0SYNAPTIC-CLOSED\0PROFILE5\0BITS1\0";
+ #[derive(Clone, Copy)]
+ pub struct Raw<'a>(pub &'a [u8]);
+ impl<'a> Raw<'a> {
+@@ -113,9 +112,9 @@
+     Ok((value, stream.byte_offset()))
+ }
+ pub const OPTIONAL_MAGIC: &[u8] = b"ALIFE-OPTIONAL-VOCAL-M2-HOST\0V1\0IDLE-QUIET\0SOURCE-PAYLOAD\0SYNAPTIC-CLOSED\0PROFILE5\0BITS1\0";
+-const LEGACY_LINEAGE: &str = "fresh-grouped-m2-host-v1/confidence-v2/class5/no-historical-import";
++const LEGACY_LINEAGE: &str = "fresh-coordinated-target-m2-host-v1/class5/no-historical-import";
+ const OPTIONAL_LINEAGE: &str = "fresh-optional-vocal-m2-host-v1/class5/no-historical-import";
+-const LEGACY_POLICY: &str = "synaptic-learning-closed;source-once;typed-grouped-sampling;profile5;canonical-memory-predictor-body;no-structural-sleep;one-cognitive-debit;source-logit-regional-arousal;memory-sleep-output-generation-is-cycle-id";
++const LEGACY_POLICY: &str = "m2-coordinated-target-v1;closed;grounded-pair-energy-v1;inherited-weights-4,1,-1;source-payload;no-online-gradient";
+ const OPTIONAL_POLICY: &str = "m2-optional-vocal-v1;closed;idle-mediated-quiet;source-payload-removal;cooldown-physical;no-gradient";
+ const OPTIONAL_OWNER: &str = "optional-vocal-m2-resident-v1";
+ 
+@@ -150,7 +149,7 @@
+ /// ambiguous concatenation. This is a comparison encoding, NOT a checkpoint.
+ pub fn matched_initial(cp: &[u8], policy_name: &str) -> Result<Vec<u8>> {
+     let optional = match policy_name {
+-        "LegacyGroupedM2/Full" => false,
++        "CoordinatedTargetM2/Full" => false,
+         "OptionalVocalM2/Full" => true,
+         _ => return Err("unknown initial policy name".into()),
+     };
+@@ -179,11 +178,11 @@
+         return Err("wrong outer schema".into());
+     }
+     let canonical = p.field("canonical")?;
+-    if canonical.field("schema_version")?.value::<u16>()? != if optional { 0x4f56 } else { 2 } {
++    if canonical.field("schema_version")?.value::<u16>()? != if optional { 0x4f56 } else { 0x434f } {
+         return Err("wrong canonical policy schema".into());
+     }
+     let neural = canonical.field("residents")?.one()?.field("neural")?;
+-    if neural.field("schema_version")?.value::<u32>()? != if optional { 0x4f56_0001 } else { 2 } {
++    if neural.field("schema_version")?.value::<u32>()? != if optional { 0x4f56_0001 } else { 0x434f_0001 } {
+         return Err("wrong neural policy schema".into());
+     }
+     let controllers = p.field("controllers")?.object()?;
+@@ -199,13 +198,12 @@
+     exact_string(controller.path(&["motor", "mode"])?, "Full")?;
+     let fields = controller.object()?;
+     match (optional, fields.get("optional_vocal")) {
+-        (false, None) => (),
+-        (true, Some(marker)) => {
++        (_, Some(marker)) => {
+             let marker = marker.object()?;
+             if marker.len() != 2 || !marker.contains_key("schema") || !marker.contains_key("last") {
+                 return Err("unexpected optional owner fields".into());
+             }
+-            exact_string(marker["schema"], OPTIONAL_OWNER)?;
++            exact_string(marker["schema"], if optional { OPTIONAL_OWNER } else { "coordinated-target-m2-resident-v1" })?;
+             if marker["last"].0 != b"null" {
+                 return Err("optional owner is not fresh".into());
+             }
+@@ -428,7 +426,7 @@
+         if cp.starts_with(OPTIONAL_MAGIC) {
+             "OptionalVocalM2/Full"
+         } else {
+-            "LegacyGroupedM2/Full"
++            "CoordinatedTargetM2/Full"
+         },
+     )?;
+     let p = payload(cp)?;
+@@ -523,7 +521,7 @@
+             if optional {
+                 "OptionalVocalM2/Full"
+             } else {
+-                "LegacyGroupedM2/Full"
++                "CoordinatedTargetM2/Full"
+             },
+         )
+     }
+--- a/crates/alife_training/examples/support/grouped_m2_journal_v1.rs
++++ b/crates/alife_training/examples/support/grouped_m2_journal_v1.rs
+@@ -10,11 +10,15 @@
+     path::Path,
+ };
+ pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
++#[path = "lossless_journal_v1.rs"]
++mod codec;
++pub const MAX_WIRE: u64 = 5 * 1024 * 1024 + 65536;
++fn limits() -> codec::Limits { codec::Limits { raw: MAX_PACKET, compressed: MAX_WIRE - 104 } }
+ pub const MAGIC: &[u8; 8] = b"ALOVJ001";
+ pub const MAX_PACKET: u64 = 5 * 1024 * 1024;
+-pub const MAX_TRACE_BYTES: u64 = 20 * 1024 * 1024;
+-pub const MAX_ARM_BYTES: u64 = 650 * 1024 * 1024;
+-pub const MIN_FREE_BYTES: u64 = 4 * 1024 * 1024 * 1024 + 233_175_552 + 226_492_416;
++pub const MAX_TRACE_BYTES: u64 = 64 * 1024 * 1024;
++pub const MAX_ARM_BYTES: u64 = 400 * 1024 * 1024;
++pub const MIN_FREE_BYTES: u64 = 4 * 1024 * 1024 * 1024;
+ pub const METADATA_RESERVE: u64 = 64 * 1024;
+ const MAX_METADATA: u64 = 16 * 1024;
+ fn hash(bytes: &[u8]) -> String {
+@@ -107,7 +111,17 @@
+     {
+         return Err("invalid publication name or oversized payload".into());
+     }
+-    publish_atomic(dir, name, wire, fault)
++    if packet_name(name) {
++        let sequence: u64 = name[..6].parse()?;
++        let encoded = codec::encode(sequence, wire, limits())?;
++        let claim = dir.join(format!("PAIRCLAIM-{sequence:06}"));
++        let f = OpenOptions::new().write(true).create_new(true).open(claim)?;
++        f.sync_all()?;
++        sync_dir(dir)?;
++        publish_atomic(dir, name, &encoded, fault)
++    } else {
++        publish_atomic(dir, name, wire, fault)
++    }
+ }
+ /// Publish a caller-bounded preparation or export artifact outside the journal.
+ /// This does not relax the journal's recovery allowlist.
+@@ -137,6 +151,7 @@
+     let tmp = dir.join(format!(".tmp-{}", unique()?));
+     let mut f = OpenOptions::new().create_new(true).write(true).open(&tmp)?;
+     f.write_all(wire)?;
++    let mut perms = f.metadata()?.permissions(); perms.set_readonly(true); f.set_permissions(perms)?;
+     f.sync_all()?;
+     if fault == 1 {
+         return Err("fixed test: failure before publication".into());
+@@ -149,6 +164,12 @@
+     Ok(())
+ }
+ pub fn bounded_read(path: &Path, limit: u64) -> Result<Vec<u8>> {
++    if let Some(name) = path.file_name().and_then(|n| n.to_str()).filter(|n| packet_name(n)) {
++        if !fs::symlink_metadata(path)?.file_type().is_file() || fs::metadata(path)?.len() > MAX_WIRE { return Err("invalid compressed pair file".into()); }
++        let snapshot = codec::decode(File::open(path)?, name[..6].parse()?, limits())?;
++        if snapshot.raw.len() as u64 > limit { return Err("raw pair exceeds caller bound".into()); }
++        return Ok(snapshot.raw);
++    }
+     if !fs::symlink_metadata(path)?.file_type().is_file() || fs::metadata(path)?.len() > limit {
+         return Err(format!("not a bounded regular file: {}", path.display()).into());
+     }
+@@ -268,8 +289,8 @@
+     }
+     let commit: Value = serde_json::from_slice(rows[0])?;
+     let observation: Value = serde_json::from_slice(rows[1])?;
+-    if commit["schema"] != "object-rich-optional-vocal-commit-v1"
+-        || observation["schema"] != "object-rich-optional-vocal-observation-v1"
++    if commit["schema"] != "fresh-coordination-comparison-commit-v1"
++        || observation["schema"] != "fresh-coordination-comparison-observation-v1"
+         || commit["checkpoint_sha256"] != h.checkpoint_sha256
+         || commit["status"] != "committed"
+         || observation["status"] != "observed"
+@@ -334,7 +355,7 @@
+     for entry in fs::read_dir(dir)? {
+         let entry = entry?;
+         entry_count += 1;
+-        if entry_count > binding.horizon.saturating_mul(4).saturating_add(128) {
++        if entry_count > binding.horizon.saturating_mul(6).saturating_add(128) {
+             return Err("journal entry count exceeds bounded horizon allowance".into());
+         }
+         let name = entry
+@@ -348,7 +369,7 @@
+         if !allowed_name(&name)
+             || meta.len()
+                 > if packet_name(&name) || name.starts_with(".tmp-") {
+-                    binding.max_packet_bytes
++                    MAX_WIRE
+                 } else {
+                     MAX_METADATA
+                 }
+@@ -362,13 +383,14 @@
+             ignored_temps += 1;
+             continue;
+         }
+-        if name.ends_with(".packet") {
++        if name.ends_with(".pairz") {
+             names.push(name);
+         } else if name != "CLAIM.json"
+             && name != "MANIFEST.json"
+             && name != "LOCK"
+             && name != "BLOCKED-PUBLICATION"
+             && !name.starts_with("PROCESS-")
++            && !pair_claim(&name)
+             && !attempt_name(&name)
+             && name != "TERMINAL.json"
+         {
+@@ -390,7 +412,7 @@
+         ignored_temps,
+     };
+     for name in names {
+-        if name != format!("{:06}.packet", r.next) {
++        if name != format!("{:06}.pairz", r.next) {
+             return Err("duplicate, omitted or out-of-order committed packet".into());
+         }
+         let wire = bounded_read(&dir.join(name), binding.max_packet_bytes)?;
+@@ -408,7 +430,7 @@
+     if dir.join("TERMINAL.json").exists() {
+         let t: Value =
+             serde_json::from_slice(&bounded_read(&dir.join("TERMINAL.json"), 16 * 1024)?)?;
+-        if t["schema"] != "object-rich-optional-vocal-terminal-v1"
++        if t["schema"] != "fresh-coordination-comparison-terminal-v1"
+             || t["binding"] != serde_json::to_value(binding)?
+             || t["committed_intervals"] != r.next
+             || t["last_commit_sha256"] != r.previous
+@@ -460,13 +482,13 @@
+ }
+ pub fn resource_stop(b: &Binding, used: u64, free: u64) -> bool {
+     validate_binding(b).is_err()
+-        || b.max_packet_bytes
++        || MAX_WIRE
+             .checked_mul(2)
+             .and_then(|n| n.checked_add(METADATA_RESERVE))
+             .and_then(|n| used.checked_add(n))
+             .is_none_or(|n| n > b.max_arm_bytes)
+         || b.min_free_bytes
+-            .checked_add(b.max_packet_bytes)
++            .checked_add(MAX_WIRE)
+             .is_none_or(|n| free < n)
+ }
+ pub fn terminal(dir: &Path, b: &Binding, r: &Recovery, reason: &str) -> Result<()> {
+@@ -478,7 +500,7 @@
+         dir,
+         "TERMINAL.json",
+         &serde_json::to_vec(
+-            &json!({"schema":"object-rich-optional-vocal-terminal-v1","binding":b,"stop":reason,"committed_intervals":r.next,"last_commit_sha256":r.previous,"final_checkpoint_sha256":hash(&r.checkpoint),"tick":b.initial_tick+r.next}),
++            &json!({"schema":"fresh-coordination-comparison-terminal-v1","binding":b,"stop":reason,"committed_intervals":r.next,"last_commit_sha256":r.previous,"final_checkpoint_sha256":hash(&r.checkpoint),"tick":b.initial_tick+r.next}),
+         )?,
+     )
+ }
+@@ -516,7 +538,7 @@
+         }
+     };
+     let mut trace_failure = None;
+-    let published = dir.join(format!("{:06}.packet", r.next));
++    let published = dir.join(format!("{:06}.pairz", r.next));
+     match fs::symlink_metadata(&published) {
+         Ok(_) => {
+             match bounded_read(&published, b.max_packet_bytes) {
+@@ -606,7 +628,7 @@
+     let mut storage_bytes = 0_u64;
+     let mut ignored_temps = 0;
+     for (index, entry) in fs::read_dir(dir)?.enumerate() {
+-        if index as u64 >= b.horizon.saturating_mul(4).saturating_add(128) {
++        if index as u64 >= b.horizon.saturating_mul(6).saturating_add(128) {
+             return Err("journal entry count exceeds bounded horizon allowance".into());
+         }
+         let entry = entry?;
+@@ -619,7 +641,7 @@
+             return Err("cannot account for nonregular or unknown journal entry".into());
+         }
+         let limit = if packet_name(&name) || name.starts_with(".tmp-") {
+-            b.max_packet_bytes
++            MAX_WIRE
+         } else {
+             MAX_METADATA
+         };
+@@ -643,8 +665,8 @@
+     Ok(())
+ }
+ fn packet_name(name: &str) -> bool {
+-    name.len() == 13
+-        && name.ends_with(".packet")
++    name.len() == 12
++        && name.ends_with(".pairz")
+         && name.as_bytes()[..6].iter().all(u8::is_ascii_digit)
+ }
+ fn attempt_name(name: &str) -> bool {
+@@ -653,6 +675,7 @@
+         && name.ends_with(".json")
+         && name.as_bytes()[8..14].iter().all(u8::is_ascii_digit)
+ }
++fn pair_claim(name: &str) -> bool { name.len() == 16 && name.starts_with("PAIRCLAIM-") && name.as_bytes()[10..].iter().all(u8::is_ascii_digit) }
+ fn allowed_name(name: &str) -> bool {
+     if name.contains('/') || name.contains('\\') || name.len() > 128 {
+         return false;
+@@ -660,13 +683,13 @@
+     matches!(
+         name,
+         "MANIFEST.json" | "LOCK" | "CLAIM.json" | "BLOCKED-PUBLICATION" | "TERMINAL.json"
+-    ) || packet_name(name)
++    ) || pair_claim(name) || packet_name(name)
+         || (name.starts_with("PROCESS-") && name.len() > 8)
+         || attempt_name(name)
+         || (name.starts_with(".tmp-") && name.len() > 5)
+ }
+ fn validate_binding(b: &Binding) -> Result<()> {
+-    if b.schema != "object-rich-optional-vocal-durable-v1"
++    if b.schema != "fresh-coordination-comparison-durable-v1"
+         || b.study_id.is_empty()
+         || b.horizon == 0
+         || b.horizon > 1_000_000
+@@ -705,289 +728,25 @@
+ #[cfg(test)]
+ mod tests {
+     use super::*;
+-    fn binding() -> Binding {
+-        Binding {
+-            schema: "object-rich-optional-vocal-durable-v1".into(),
+-            study_id: "transport-unit".into(),
+-            arm: 0,
+-            mode: "transport-only".into(),
+-            seed: 7,
+-            sampling_seed: 8,
+-            initial_tick: 10,
+-            horizon: 4,
+-            temperature_bits: 1.0_f32.to_bits(),
+-            host_source_commit: "host".into(),
+-            host_source_tree: "tree".into(),
+-            driver_source_commit: "driver".into(),
+-            driver_source_sha256: "source".into(),
+-            executable_sha256: "executable".into(),
+-            protocol_sha256: "protocol".into(),
+-            qualification_sha256: "qualification".into(),
+-            preparation_sha256: "preparation".into(),
+-            source_manifest_sha256: "manifest".into(),
+-            inputs_sha256: "inputs".into(),
+-            initial_sha256: hash(b"initial"),
+-            initial_matched_sha256: "matched".into(),
+-            closure_sha256: "closure".into(),
+-            source_headers: BTreeMap::new(),
+-            max_packet_bytes: MAX_PACKET,
+-            max_arm_bytes: MAX_ARM_BYTES,
+-            min_free_bytes: MIN_FREE_BYTES,
+-        }
+-    }
+-    fn science(cp: &[u8]) -> Vec<u8> {
+-        // Deliberately noncanonical whitespace and number spelling prove that
+-        // scientific payload bytes are preserved rather than re-serialized.
+-        format!("{{ \"schema\":\"object-rich-optional-vocal-commit-v1\",\"status\":\"committed\",\"offset\":0,\"tick_before\":10,\"tick_after\":11,\"decisions\":[],\"consolidations\":0,\"checkpoint_sha256\":\"{}\",\"extra\":1.00}}\n{{\"schema\":\"object-rich-optional-vocal-observation-v1\",\"status\":\"observed\",\"offset\":0,\"before\":{{\"tick\":10}},\"after\":{{\"tick\":11}}}}\n",hash(cp)).into_bytes()
+-    }
+-    struct Scratch(std::path::PathBuf);
+-    impl Scratch {
+-        fn new() -> Self {
+-            Self(std::env::temp_dir().join(format!(
+-                "object-rich-optional-vocal-journal-test-{}",
+-                unique().unwrap()
+-            )))
+-        }
+-    }
+-    impl Drop for Scratch {
+-        fn drop(&mut self) {
+-            // Retain disposable test evidence under the task allocation.
+-        }
+-    }
+     #[test]
+-    fn full_horizon_attempt_packets_and_aliases_recover_without_replay() {
+-        let d = Scratch::new();
+-        let mut b = binding();
+-        b.horizon = 64;
+-        init_journal(&d.0, &b).unwrap();
+-        let mut previous = b.initial_sha256.clone();
+-        for offset in 0..b.horizon {
+-            let cp = format!("opaque checkpoint {offset}").into_bytes();
+-            let mut rows = science(&cp)
+-                .split(|c| *c == b'\n')
+-                .filter(|l| !l.is_empty())
+-                .map(|line| serde_json::from_slice::<Value>(line).unwrap())
+-                .collect::<Vec<_>>();
+-            rows[0]["offset"] = offset.into();
+-            rows[0]["tick_before"] = (10 + offset).into();
+-            rows[0]["tick_after"] = (11 + offset).into();
+-            rows[1]["offset"] = offset.into();
+-            rows[1]["before"]["tick"] = (10 + offset).into();
+-            rows[1]["after"]["tick"] = (11 + offset).into();
+-            let mut trace = Vec::new();
+-            for row in rows {
+-                trace.extend(serde_json::to_vec(&row).unwrap());
+-                trace.push(b'\n');
+-            }
+-            publish_artifact(
+-                &d.0,
+-                &format!("ATTEMPT-{offset:06}.json"),
+-                b"{\"attempt_before_call\":true}",
+-                MAX_METADATA,
+-            )
+-            .unwrap();
+-            let packet = make_packet(&b, offset, &previous, &cp, &trace).unwrap();
+-            publish(&d.0, &format!("{offset:06}.packet"), &packet).unwrap();
+-            previous = hash(&packet);
+-        }
+-        let r = recover(&d.0, &b, b"initial", |_, _| Ok(())).unwrap();
+-        assert_eq!(r.next, 64);
+-        assert_eq!(r.checkpoint, b"opaque checkpoint 63");
+-        assert!(r.ignored_temps >= 129);
+-        terminal(&d.0, &b, &r, "horizon").unwrap();
+-        let final_recovered = recover_without_trace(&d.0, &b, b"initial", |_, _| Ok(())).unwrap();
+-        assert_eq!(final_recovered.next, 64);
+-        assert_eq!(final_recovered.previous, previous);
+-        assert!(publish(&d.0, "000063.packet", b"replacement").is_err());
+-        fs::hard_link(d.0.join("000063.packet"), d.0.join("000064.packet")).unwrap();
+-        assert!(recover_without_trace(&d.0, &b, b"initial", |_, _| Ok(())).is_err());
+-        for bad in [
+-            "ATTEMPT-.json",
+-            "ATTEMPT-00000x.json",
+-            "ATTEMPT-0000000.json",
+-        ] {
+-            assert!(!allowed_name(bad));
+-        }
+-        // A durable unresolved attempt is retained, not reinterpreted as a commit.
+-        let pending = Scratch::new();
+-        init_journal(&pending.0, &b).unwrap();
+-        publish_artifact(&pending.0, "ATTEMPT-000000.json", b"{}", MAX_METADATA).unwrap();
+-        let r = recover_without_trace(&pending.0, &b, b"initial", |_, _| Ok(())).unwrap();
+-        assert_eq!(r.next, 0);
+-        assert!(pending
+-            .0
+-            .join(format!("ATTEMPT-{:06}.json", r.next))
+-            .exists());
+-        assert!(publish_artifact(&pending.0, "ATTEMPT-000000.json", b"{}", MAX_METADATA).is_err());
+-    }
+-    #[test]
+-    fn trace_cap_is_checked_without_large_allocations() {
+-        assert_eq!(
+-            checked_trace_len(MAX_TRACE_BYTES - 1, 1).unwrap(),
+-            MAX_TRACE_BYTES
+-        );
+-        assert!(checked_trace_len(MAX_TRACE_BYTES, 1).is_err());
+-        assert!(checked_trace_len(u64::MAX, 1).is_err());
+-        let mut raw = b"raw".to_vec();
+-        append_trace(&mut raw, b" bytes").unwrap();
+-        assert_eq!(raw, b"raw bytes");
+-    }
+-    #[test]
+-    fn no_trace_recovery_validates_and_preserves_latest_checkpoint() {
+-        let d = Scratch::new();
+-        let b = binding();
+-        init_journal(&d.0, &b).unwrap();
+-        let cp = b"opaque checkpoint";
+-        let wire = make_packet(&b, 0, &b.initial_sha256, cp, &science(cp)).unwrap();
+-        publish(&d.0, "000000.packet", &wire).unwrap();
+-        let seen = std::cell::Cell::new(0);
+-        let r = recover_without_trace(&d.0, &b, b"initial", |_, _| {
+-            seen.set(seen.get() + 1);
+-            Ok(())
+-        })
+-        .unwrap();
+-        assert_eq!(seen.get(), 2);
+-        assert_eq!(r.next, 1);
+-        assert_eq!(r.checkpoint, cp);
+-        assert!(r.trace.is_empty());
+-        assert_eq!(r.trace_bytes, science(cp).len() as u64);
+-        assert!(recover_without_trace(&d.0, &b, b"initial", |_, tick| {
+-            if tick == 11 {
+-                Err("invalid checkpoint".into())
+-            } else {
+-                Ok(())
+-            }
+-        })
+-        .is_err());
+-        let mut corrupt = wire;
+-        *corrupt.last_mut().unwrap() ^= 1;
+-        fs::write(d.0.join("000000.packet"), corrupt).unwrap();
+-        assert!(recover_without_trace(&d.0, &b, b"initial", |_, _| Ok(())).is_err());
+-    }
+-    #[test]
+-    fn raw_packet_roundtrip_and_negatives() {
+-        let b = binding();
+-        let cp = b"opaque checkpoint";
+-        let trace = science(cp);
+-        let wire = make_packet(&b, 0, &b.initial_sha256, cp, &trace).unwrap();
+-        let p = decode_packet(&wire, &b, 0, &b.initial_sha256).unwrap();
+-        assert_eq!(p.checkpoint, cp);
+-        assert_eq!(p.trace, trace);
+-        assert!(decode_packet(&wire, &b, 1, &b.initial_sha256).is_err());
+-        assert!(decode_packet(&wire, &b, 0, "wrong predecessor").is_err());
+-        let mut corrupt = wire.clone();
+-        *corrupt.last_mut().unwrap() ^= 1;
+-        assert!(decode_packet(&corrupt, &b, 0, &b.initial_sha256).is_err());
+-        assert!(make_packet(&b, 0, &b.initial_sha256, cp, b"{}\n{}\n").is_err());
+-        assert!(make_packet(&b, b.horizon, &b.initial_sha256, cp, &trace).is_err());
+-    }
+-    #[test]
+-    fn lock_claim_and_recovery_do_not_initialize() {
+-        let d = Scratch::new();
+-        let b = binding();
+-        assert!(lock(&d.0).is_err());
+-        assert!(recover(&d.0, &b, b"initial", |_, _| Ok(())).is_err());
+-        assert!(!d.0.exists());
+-        init_journal(&d.0, &b).unwrap();
+-        assert!(init_journal(&d.0, &b).is_err());
+-        let guard = lock(&d.0).unwrap();
+-        assert!(lock(&d.0).is_err());
+-        drop(guard);
+-        assert_eq!(
+-            bounded_read(&d.0.join("CLAIM.json"), MAX_METADATA).unwrap(),
+-            serde_json::to_vec(&b).unwrap()
+-        );
+-        fs::write(d.0.join("CLAIM.json"), b"unknown conflicting claim").unwrap();
+-        assert!(recover(&d.0, &b, b"initial", |_, _| Ok(())).is_err());
+-    }
+-    #[test]
+-    fn prelink_and_postlink_failure_reconcile_without_replay() {
+-        for fault in [1, 2] {
+-            let d = Scratch::new();
+-            let b = binding();
+-            init_journal(&d.0, &b).unwrap();
+-            let _guard = lock(&d.0).unwrap();
+-            let mut r = recover(&d.0, &b, b"initial", |_, _| Ok(())).unwrap();
+-            let cp = b"opaque checkpoint";
+-            let trace = science(cp);
+-            let wire = make_packet(&b, 0, &r.previous, cp, &trace).unwrap();
+-            assert!(publish_with_fault(&d.0, "000000.packet", &wire, fault).is_err());
+-            record_publication_failure(&d.0, &b, &mut r, cp, &wire, "injected failure").unwrap();
+-            let replay = recover(&d.0, &b, b"initial", |_, _| Ok(())).unwrap();
+-            assert_eq!(r.trace_bytes, replay.trace_bytes);
+-            assert_eq!(r.storage_bytes, replay.storage_bytes);
+-            assert_eq!(r.ignored_temps, replay.ignored_temps);
+-            assert_eq!(replay.next, if fault == 2 { 1 } else { 0 });
+-            assert_eq!(replay.trace, if fault == 2 { trace } else { Vec::new() });
+-            assert!(d.0.join("TERMINAL.json").is_file());
+-            assert!(replay.storage_bytes >= wire.len() as u64 * u64::from(fault));
+-            assert!(publish(&d.0, "TERMINAL.json", b"replace").is_err());
+-        }
+-    }
+-    #[test]
+-    fn visible_commit_survives_trace_cap_failure() {
+-        let d = Scratch::new();
+-        let b = binding();
+-        init_journal(&d.0, &b).unwrap();
+-        let mut r = recover_without_trace(&d.0, &b, b"initial", |_, _| Ok(())).unwrap();
+-        let cp = b"opaque checkpoint";
+-        let trace = science(cp);
+-        let wire = make_packet(&b, 0, &r.previous, cp, &trace).unwrap();
+-        assert!(publish_with_fault(&d.0, "000000.packet", &wire, 2).is_err());
+-        // Inject a bad caller's accounting without allocating 512 MiB.
+-        r.trace_bytes = MAX_TRACE_BYTES;
+-        assert!(
+-            record_publication_failure(&d.0, &b, &mut r, cp, &wire, "injected failure").is_err()
+-        );
+-        assert_eq!(r.next, 1);
+-        assert_eq!(r.checkpoint, cp);
+-        assert_eq!(r.trace_bytes, MAX_TRACE_BYTES + trace.len() as u64);
+-        assert!(r.trace.is_empty());
+-        assert!(d.0.join("TERMINAL.json").is_file());
+-        let terminal: Value = serde_json::from_slice(
+-            &bounded_read(&d.0.join("TERMINAL.json"), MAX_METADATA).unwrap(),
+-        )
+-        .unwrap();
+-        assert_eq!(terminal["committed_intervals"], 1);
+-        assert_eq!(terminal["final_checkpoint_sha256"], hash(cp));
+-    }
+-    #[test]
+-    fn artifact_publication_is_bounded_create_new_and_not_journal_permission() {
+-        let d = Scratch::new();
+-        fs::create_dir(&d.0).unwrap();
+-        let bytes = vec![b'x'; MAX_METADATA as usize + 1];
+-        publish_artifact(&d.0, "initial.private.m2", &bytes, MAX_PACKET).unwrap();
+-        assert_eq!(
+-            bounded_read(&d.0.join("initial.private.m2"), MAX_PACKET).unwrap(),
+-            bytes
+-        );
+-        assert!(publish_artifact(&d.0, "initial.private.m2", b"replace", MAX_PACKET).is_err());
+-        assert!(publish(&d.0, "initial.private.m2", b"x").is_err());
+-        for name in [
+-            "",
+-            ".",
+-            "..",
+-            "../outside",
+-            "a/b",
+-            "a\\b",
+-            ".tmp-reserved",
+-            "LOCK",
+-        ] {
+-            assert!(publish_artifact(&d.0, name, b"x", MAX_PACKET).is_err());
+-        }
+-        assert!(publish_artifact(&d.0, "SOURCE.json", b"xx", 1).is_err());
+-        assert!(publish_artifact(&d.0, "SOURCE.json", b"x", MAX_ARM_BYTES + 1).is_err());
+-    }
+-    #[test]
+-    fn unknown_names_and_resource_limits_fail_closed() {
+-        let d = Scratch::new();
+-        let b = binding();
+-        init_journal(&d.0, &b).unwrap();
+-        assert!(publish(&d.0, "../escape", b"x").is_err());
+-        fs::write(d.0.join("not-allowed"), b"x").unwrap();
+-        assert!(recover(&d.0, &b, b"initial", |_, _| Ok(())).is_err());
+-        assert!(resource_stop(&b, u64::MAX, u64::MAX));
+-        assert!(resource_stop(&b, 0, MIN_FREE_BYTES));
+-        assert!(!resource_stop(&b, 0, MIN_FREE_BYTES + MAX_PACKET));
+-    }
+-}
++    fn complete_pair_atomic_lossless_and_permanent_claims() -> Result<()> {
++        let parent = std::env::var("PAIR_TEST_ROOT")?;
++        let parent = Path::new(&parent); fs::create_dir(parent)?;
++        for fault in 0..=2 {
++            let d=parent.join(format!("fault-{fault}")); fs::create_dir(&d)?;
++            let raw=b"opaque checkpoint bytes\0and exact scientific row one\nrow two\n";
++            let result=publish_with_fault(&d,"000000.pairz",raw,fault);
++            assert_eq!(result.is_ok(),fault==0);
++            assert!(publish(&d,"000000.pairz",raw).is_err());
++            assert!(d.join("PAIRCLAIM-000000").is_file());
++            if fault != 1 { assert_eq!(bounded_read(&d.join("000000.pairz"),MAX_PACKET)?,raw); }
++            else { assert!(!d.join("000000.pairz").exists()); }
++        }
++        let raw=vec![7;1024*1024]; let z=codec::encode(9,&raw,limits())?;
++        assert_eq!(codec::decode(z.as_slice(),9,limits())?.raw,raw);
++        assert!(codec::decode(z.as_slice(),10,limits()).is_err());
++        let mut trailing=z.clone();trailing.push(0); assert!(codec::decode(trailing.as_slice(),9,limits()).is_err());
++        assert!(codec::encode(0,&raw,codec::Limits{raw:2,compressed:32}).is_err());
++        Ok(())
++    }
++}
+--- /dev/null
++++ b/crates/alife_training/examples/support/lossless_journal_v1.rs
+@@ -0,0 +1,489 @@
++//! Opt-in, opaque-byte research journal. No organism/checkpoint interpretation.
++//! Unix local filesystems only; directory fsync and atomic hard links required.
++//! A private, trusted parent directory is required (not a hostile shared tree).
++use sha2::{Digest, Sha256};
++use std::{
++    fs::{self, File, OpenOptions},
++    io::{self, Read, Write},
++    path::{Path, PathBuf},
++};
++const MAGIC: &[u8; 8] = b"M2ZJNL01";
++const OWNER: &[u8] = b"alife-m2-lossless-research-journal-v1\n";
++const HEADER: usize = 104;
++pub const MAX_RAW: u64 = 64 * 1024 * 1024;
++pub const MAX_COMPRESSED: u64 = 65 * 1024 * 1024;
++const WINDOW_LOG: u32 = 23;
++fn bad(message: &str) -> io::Error {
++    io::Error::new(io::ErrorKind::InvalidData, message)
++}
++fn hash(bytes: &[u8]) -> [u8; 32] {
++    Sha256::digest(bytes).into()
++}
++#[derive(Clone, Copy, Debug)]
++pub struct Limits {
++    pub raw: u64,
++    pub compressed: u64,
++}
++impl Limits {
++    fn check(self) -> io::Result<()> {
++        if self.raw > MAX_RAW || self.compressed > MAX_COMPRESSED || self.compressed < 13 {
++            return Err(bad("unsupported limits"));
++        }
++        Ok(())
++    }
++}
++impl Default for Limits {
++    fn default() -> Self {
++        Self {
++            raw: MAX_RAW,
++            compressed: MAX_COMPRESSED,
++        }
++    }
++}
++#[derive(Debug)]
++pub struct Snapshot {
++    pub sequence: u64,
++    pub raw_sha256: [u8; 32],
++    pub raw: Vec<u8>,
++}
++struct Capped {
++    bytes: Vec<u8>,
++    max: usize,
++}
++impl Write for Capped {
++    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
++        if bytes.len() > self.max.saturating_sub(self.bytes.len()) {
++            return Err(bad("compressed limit"));
++        }
++        self.bytes.extend_from_slice(bytes);
++        Ok(bytes.len())
++    }
++    fn flush(&mut self) -> io::Result<()> {
++        Ok(())
++    }
++}
++/// Compression bytes are not scientific identity: identity is the original raw SHA.
++/// Codec upgrades may produce different frames for the same original bytes.
++pub fn encode(sequence: u64, raw: &[u8], limits: Limits) -> io::Result<Vec<u8>> {
++    limits.check()?;
++    if raw.len() as u64 > limits.raw {
++        return Err(bad("raw limit"));
++    }
++    let mut encoder = zstd::stream::write::Encoder::new(
++        Capped {
++            bytes: Vec::new(),
++            max: limits.compressed as usize,
++        },
++        1,
++    )?;
++    encoder.window_log(WINDOW_LOG)?;
++    encoder.include_checksum(true)?;
++    encoder.set_pledged_src_size(Some(raw.len() as u64))?;
++    encoder.write_all(raw)?;
++    let frame = encoder.finish()?.bytes;
++    let mut record = Vec::with_capacity(HEADER + frame.len());
++    record.extend_from_slice(MAGIC);
++    record.extend_from_slice(&1u32.to_le_bytes()); // version
++    record.extend_from_slice(&1u32.to_le_bytes()); // codec: standard single zstd frame
++    record.extend_from_slice(&sequence.to_le_bytes());
++    record.extend_from_slice(&(raw.len() as u64).to_le_bytes());
++    record.extend_from_slice(&(frame.len() as u64).to_le_bytes());
++    record.extend_from_slice(&hash(raw));
++    record.extend_from_slice(&hash(&frame));
++    record.extend_from_slice(&frame);
++    Ok(record)
++}
++/// Bounded input and streaming output; returns no raw bytes until full validation.
++/// Rejects extra frames, skippable frames and trailing bytes, even within the limit.
++pub fn decode(mut reader: impl Read, sequence: u64, limits: Limits) -> io::Result<Snapshot> {
++    limits.check()?;
++    let mut header = [0u8; HEADER];
++    reader.read_exact(&mut header)?;
++    if &header[..8] != MAGIC
++        || header[8..12] != 1u32.to_le_bytes()
++        || header[12..16] != 1u32.to_le_bytes()
++    {
++        return Err(bad("unknown journal format/version/codec"));
++    }
++    let field = |at| u64::from_le_bytes(header[at..at + 8].try_into().unwrap());
++    let raw_len = field(24);
++    let compressed_len = field(32);
++    if field(16) != sequence
++        || raw_len > limits.raw
++        || compressed_len > limits.compressed
++        || compressed_len < 13
++    {
++        return Err(bad("sequence or declared length outside contract"));
++    }
++    let mut frame = vec![0; compressed_len as usize];
++    reader.read_exact(&mut frame)?;
++    let mut extra = [0];
++    if reader.read(&mut extra)? != 0 {
++        return Err(bad("trailing record bytes"));
++    }
++    if hash(&frame) != header[72..104] {
++        return Err(bad("compressed SHA mismatch"));
++    }
++    if frame[..4] != [0x28, 0xb5, 0x2f, 0xfd]
++        || zstd::zstd_safe::find_frame_compressed_size(&frame)
++            .map_err(|_| bad("invalid zstd frame"))?
++            != frame.len()
++    {
++        return Err(bad("expected exactly one standard zstd frame"));
++    }
++    let mut decoder = zstd::stream::read::Decoder::with_buffer(frame.as_slice())?.single_frame();
++    decoder.window_log_max(WINDOW_LOG)?;
++    let mut raw = Vec::new();
++    let mut digest = Sha256::new();
++    let mut chunk = [0u8; 16 * 1024];
++    loop {
++        // Read at most remaining + 1; catches oversized output without an unbounded allocation.
++        let cap = ((raw_len - raw.len() as u64).saturating_add(1)).min(chunk.len() as u64) as usize;
++        let count = decoder.read(&mut chunk[..cap])?;
++        if count == 0 {
++            break;
++        }
++        if count as u64 > raw_len - raw.len() as u64 {
++            return Err(bad("decompressed size exceeds declaration"));
++        }
++        digest.update(&chunk[..count]);
++        raw.extend_from_slice(&chunk[..count]);
++    }
++    if !decoder.finish().is_empty()
++        || raw.len() as u64 != raw_len
++        || digest.finalize().as_slice() != &header[40..72]
++    {
++        return Err(bad("incomplete frame, raw size or SHA mismatch"));
++    }
++    Ok(Snapshot {
++        sequence,
++        raw_sha256: header[40..72].try_into().unwrap(),
++        raw,
++    })
++}
++fn sync_dir(path: &Path) -> io::Result<()> {
++    File::open(path)?.sync_all()
++}
++fn new_synced_file(path: &Path, bytes: &[u8]) -> io::Result<()> {
++    let mut file = OpenOptions::new().create_new(true).write(true).open(path)?;
++    file.write_all(bytes)?;
++    let mut permissions = file.metadata()?.permissions();
++    permissions.set_readonly(true);
++    file.set_permissions(permissions)?;
++    file.sync_all()
++}
++/// No append/resume into old journals. Creation is an exclusive, permanent claim.
++/// Errors may leave a partial directory: do not retry that directory or erase it.
++pub struct Journal {
++    root: PathBuf,
++    limits: Limits,
++}
++impl Journal {
++    pub fn create(root: &Path, limits: Limits) -> io::Result<Self> {
++        limits.check()?;
++        let parent = root
++            .parent()
++            .filter(|p| !p.as_os_str().is_empty())
++            .ok_or_else(|| bad("explicit parent required"))?;
++        fs::create_dir(root)?;
++        sync_dir(parent)?;
++        new_synced_file(&root.join("OWNER"), OWNER)?;
++        sync_dir(root)?;
++        Ok(Self {
++            root: root.to_owned(),
++            limits,
++        })
++    }
++    /// A permanent sequence claim prevents overwrite/retry even after process failure.
++    /// An error after hard_link has uncertain durability; the complete final file can
++    /// already exist. Stop this run and inspect with read_snapshot, never republish.
++    pub fn publish(&self, sequence: u64, raw: &[u8]) -> io::Result<[u8; 32]> {
++        self.publish_inner(sequence, raw, |_| {})
++    }
++    fn publish_inner(
++        &self,
++        sequence: u64,
++        raw: &[u8],
++        mut phase: impl FnMut(u8),
++    ) -> io::Result<[u8; 32]> {
++        let record = encode(sequence, raw, self.limits)?;
++        let claim = self.root.join(format!("{sequence:020}.claim"));
++        fs::create_dir(&claim)?;
++        sync_dir(&self.root)?;
++        phase(1);
++        let staged = claim.join("snapshot.pending");
++        new_synced_file(&staged, &record)?;
++        sync_dir(&claim)?;
++        phase(2);
++        fs::hard_link(&staged, self.root.join(format!("{sequence:020}.m2z")))?;
++        phase(3);
++        sync_dir(&self.root)?;
++        phase(4);
++        // Keep claim and staged hard link as immutable recovery evidence, not a copy.
++        Ok(hash(raw))
++    }
++}
++/// Reads only the explicit new format; never falls back to an old/raw loader.
++pub fn read_snapshot(root: &Path, sequence: u64, limits: Limits) -> io::Result<Snapshot> {
++    let mut owner = Vec::new();
++    File::open(root.join("OWNER"))?
++        .take((OWNER.len() + 1) as u64)
++        .read_to_end(&mut owner)?;
++    if owner != OWNER {
++        return Err(bad("journal owner mismatch"));
++    }
++    decode(
++        File::open(root.join(format!("{sequence:020}.m2z")))?,
++        sequence,
++        limits,
++    )
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use std::{process::Command, time::Instant};
++    fn limits() -> Limits {
++        Limits {
++            raw: 2 * 1024 * 1024,
++            compressed: 3 * 1024 * 1024,
++        }
++    }
++    fn root(name: &str) -> PathBuf {
++        PathBuf::from(std::env::var_os("JOURNAL_TEST_ROOT").expect("isolated fixture root"))
++            .join(format!("{}-{name}", std::process::id()))
++    }
++    fn rehash(record: &mut [u8]) {
++        let h = hash(&record[HEADER..]);
++        record[72..104].copy_from_slice(&h);
++    }
++    #[test]
++    fn opaque_roundtrip_and_timings() {
++        let mut random = Vec::new();
++        let mut x = 0x12345678u32;
++        for _ in 0..1024 * 1024 {
++            x ^= x << 13;
++            x ^= x >> 17;
++            x ^= x << 5;
++            random.push(x as u8);
++        }
++        for raw in [
++            vec![],
++            vec![0xff],
++            (0..=255).collect(),
++            vec![0xab; 1024 * 1024],
++            random,
++        ] {
++            let start = Instant::now();
++            let record = encode(7, &raw, limits()).unwrap();
++            let compression = start.elapsed();
++            let start = Instant::now();
++            let snapshot = decode(&record[..], 7, limits()).unwrap();
++            let decompression = start.elapsed();
++            assert_eq!(snapshot.raw, raw);
++            assert_eq!(snapshot.raw_sha256, hash(&raw));
++            assert_eq!(snapshot.sequence, 7);
++            println!(
++                "synthetic raw={} record={} encode_us={} decode_us={} raw_sha={:x}",
++                raw.len(),
++                record.len(),
++                compression.as_micros(),
++                decompression.as_micros(),
++                Sha256::digest(&raw)
++            );
++        }
++        assert_eq!(
++            hash(b"abc"),
++            [
++                0xba, 0x78, 0x16, 0xbf, 0x8f, 0x01, 0xcf, 0xea, 0x41, 0x41, 0x40, 0xde, 0x5d, 0xae,
++                0x22, 0x23, 0xb0, 0x03, 0x61, 0xa3, 0x96, 0x17, 0x7a, 0x9c, 0xb4, 0x10, 0xff, 0x61,
++                0xf2, 0x00, 0x15, 0xad
++            ]
++        );
++    }
++    #[test]
++    fn malformed_contracts() {
++        let good = encode(7, b"opaque synthetic fixture bytes only", limits()).unwrap();
++        for len in 0..good.len() {
++            assert!(
++                decode(&good[..len], 7, limits()).is_err(),
++                "truncation {len}"
++            );
++        }
++        for at in 0..good.len() {
++            let mut b = good.clone();
++            b[at] ^= 0x80;
++            assert!(decode(&b[..], 7, limits()).is_err(), "mutation {at}");
++        }
++        for at in [24, 32] {
++            let mut b = good.clone();
++            b[at..at + 8].copy_from_slice(&u64::MAX.to_le_bytes());
++            assert!(decode(&b[..], 7, limits()).is_err());
++        }
++        for n in [0, 1, 100] {
++            let mut b = good.clone();
++            b[24..32].copy_from_slice(&(n as u64).to_le_bytes());
++            assert!(decode(&b[..], 7, limits()).is_err());
++        }
++        assert!(decode(&good[..], 8, limits()).is_err());
++        assert!(encode(0, &[1; 100], Limits { raw: 1, ..limits() }).is_err());
++        assert!(encode(
++            0,
++            &[1; 100],
++            Limits {
++                compressed: 13,
++                ..limits()
++            }
++        )
++        .is_err());
++        assert!(decode(
++            &good[..],
++            7,
++            Limits {
++                raw: MAX_RAW + 1,
++                ..limits()
++            }
++        )
++        .is_err());
++        let mut b = good.clone();
++        b.push(0);
++        assert!(decode(&b[..], 7, limits()).is_err());
++        // Correct outer hash and length cannot authorize a second frame.
++        let mut b = good.clone();
++        b.extend_from_slice(&good[HEADER..]);
++        let len = (b.len() - HEADER) as u64;
++        b[32..40].copy_from_slice(&len.to_le_bytes());
++        rehash(&mut b);
++        assert!(decode(&b[..], 7, limits()).is_err());
++        let mut b = good.clone();
++        b[HEADER..HEADER + 4].copy_from_slice(&[0x50, 0x2a, 0x4d, 0x18]);
++        rehash(&mut b);
++        assert!(decode(&b[..], 7, limits()).is_err());
++        // Decoder must reject damaged frame even if outer compressed hash was recomputed.
++        let mut b = good.clone();
++        let last = b.len() - 1;
++        b[last] ^= 1;
++        rehash(&mut b);
++        assert!(decode(&b[..], 7, limits()).is_err());
++        // Bomb declares tiny output but expands to 1 MiB: reject after <=2 output bytes.
++        let mut b = encode(7, &vec![0; 1024 * 1024], limits()).unwrap();
++        b[24..32].copy_from_slice(&1u64.to_le_bytes());
++        assert!(decode(&b[..], 7, limits()).is_err());
++    }
++    #[test]
++    fn publication_claims() {
++        let path = root("publish");
++        let journal = Journal::create(&path, limits()).unwrap();
++        assert!(Journal::create(&path, limits()).is_err());
++        journal.publish(1, b"first opaque snapshot").unwrap();
++        assert!(journal.publish(1, b"replacement").is_err());
++        assert_eq!(
++            read_snapshot(&path, 1, limits()).unwrap().raw,
++            b"first opaque snapshot"
++        );
++        assert!(read_snapshot(&path, 2, limits()).is_err());
++        fs::create_dir(path.join(format!("{:020}.claim", 2))).unwrap();
++        assert!(journal.publish(2, b"partial cannot retry").is_err());
++        journal.publish(3, b"second complete snapshot").unwrap();
++        assert_eq!(
++            read_snapshot(&path, 3, limits()).unwrap().raw,
++            b"second complete snapshot"
++        );
++    }
++    #[test]
++    fn oversized_window_is_rejected() {
++        // Opaque zero stream only. Unknown pledged size forces a normal window header.
++        let mut encoder = zstd::stream::write::Encoder::new(Vec::new(), 1).unwrap();
++        encoder.window_log(24).unwrap();
++        for _ in 0..1024 {
++            encoder.write_all(&[0u8; 16 * 1024]).unwrap();
++        }
++        let frame = encoder.finish().unwrap();
++        let mut record = encode(7, b"", limits()).unwrap();
++        record.truncate(HEADER);
++        record[24..32].copy_from_slice(&(16u64 * 1024 * 1024).to_le_bytes());
++        record[32..40].copy_from_slice(&(frame.len() as u64).to_le_bytes());
++        record.extend_from_slice(&frame);
++        rehash(&mut record);
++        let error = decode(&record[..], 7, Limits::default()).unwrap_err();
++        assert!(error.to_string().contains("too much memory"), "{error}");
++    }
++    #[test]
++    fn concurrent_publish_has_one_winner() {
++        let path = root("race");
++        let journal = std::sync::Arc::new(Journal::create(&path, limits()).unwrap());
++        let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
++        let handles: Vec<_> = [b"opaque A".as_slice(), b"opaque B".as_slice()]
++            .into_iter()
++            .map(|raw| {
++                let journal = journal.clone();
++                let barrier = barrier.clone();
++                std::thread::spawn(move || {
++                    barrier.wait();
++                    journal.publish(9, raw).is_ok()
++                })
++            })
++            .collect();
++        assert_eq!(
++            handles
++                .into_iter()
++                .filter_map(|h| h.join().ok())
++                .filter(|ok| *ok)
++                .count(),
++            1
++        );
++        let restored = read_snapshot(&path, 9, limits()).unwrap().raw;
++        assert!(restored == b"opaque A" || restored == b"opaque B");
++    }
++    #[test]
++    fn old_or_wrong_owner_is_rejected() {
++        let path = root("owner");
++        fs::create_dir(&path).unwrap();
++        new_synced_file(&path.join("OWNER"), b"old-raw-journal\n").unwrap();
++        assert!(read_snapshot(&path, 0, limits()).is_err());
++        assert!(decode(b"old raw checkpoint bytes".as_slice(), 0, limits()).is_err());
++    }
++    #[test]
++    fn crash_child() {
++        let Ok(phase) = std::env::var("JOURNAL_CRASH_PHASE") else {
++            return;
++        };
++        let phase: u8 = phase.parse().unwrap();
++        let path = PathBuf::from(std::env::var_os("JOURNAL_CRASH_PATH").unwrap());
++        let journal = Journal::create(&path, limits()).unwrap();
++        journal
++            .publish_inner(5, b"complete crash fixture", |p| {
++                if p == phase {
++                    std::process::exit(73)
++                }
++            })
++            .unwrap();
++        panic!("crash phase not reached");
++    }
++    #[test]
++    fn process_failure_boundaries() {
++        for phase in 1..=4 {
++            let path = root(&format!("crash-{phase}"));
++            let status = Command::new(std::env::current_exe().unwrap())
++                .args(["--exact", "tests::crash_child", "--nocapture"])
++                .env("JOURNAL_CRASH_PHASE", phase.to_string())
++                .env("JOURNAL_CRASH_PATH", &path)
++                .status()
++                .unwrap();
++            assert_eq!(status.code(), Some(73));
++            let journal = Journal {
++                root: path.clone(),
++                limits: limits(),
++            };
++            assert!(journal.publish(5, b"retry forbidden").is_err());
++            if phase < 3 {
++                assert!(read_snapshot(&path, 5, limits()).is_err());
++            } else {
++                assert_eq!(
++                    read_snapshot(&path, 5, limits()).unwrap().raw,
++                    b"complete crash fixture"
++                );
++            }
++        }
++    }
++}
