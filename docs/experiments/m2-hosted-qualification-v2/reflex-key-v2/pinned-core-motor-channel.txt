@@ -1,0 +1,22 @@
+pub enum MotorChannel {
+    Locomotion,
+    Orientation,
+    Manipulation,
+    Vocal,
+    Posture,
+    SpeciesSpecific(u8),
+}
+
+impl MotorChannel {
+    pub(crate) fn canonical_key(self) -> u16 {
+        match self {
+            Self::Locomotion => 0,
+            Self::Orientation => 1,
+            Self::Manipulation => 2,
+            Self::Vocal => 3,
+            Self::Posture => 4,
+            Self::SpeciesSpecific(id) => 0x100 + u16::from(id),
+        }
+    }
+}
+
