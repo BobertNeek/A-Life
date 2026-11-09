@@ -1,0 +1,24 @@
+{
+  "actual_dose_claim": "planned bounds are never promoted to observed counts",
+  "artifact_upload_allowlist": [],
+  "captured_stdout_bytes": 2097152,
+  "line_bytes": 4194304,
+  "never_publish": [
+    "compiler rendered text",
+    "compiler children",
+    "raw stderr/stdout",
+    "Rust panic or assertion strings",
+    "binaries",
+    "checkpoints",
+    "journals",
+    "private logs",
+    "target files",
+    "cache directories"
+  ],
+  "raw_pipe_combined_bytes": 33554432,
+  "runner_stdout_allowlist": [
+    "one strict JSON summary <=32768bytes"
+  ],
+  "schema": "m2-play-public-projection-v1",
+  "unknown_native_protocol": "fixed code only, stop, no retry"
+}
