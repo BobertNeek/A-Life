@@ -1,0 +1,53 @@
+{
+  "status": "PASS final checkpoints only; historical full-prefix native compare remains timed out/incomplete",
+  "single_compile": true,
+  "single_runtime_invocation": true,
+  "restores": 2,
+  "caller_owned_checkpoint_encodes": 2,
+  "existing_internal_restore_serializations_not_bypassed": true,
+  "host_source_forwards": 0,
+  "biology_world_steps": 0,
+  "new_genomes_or_bodies": 0,
+  "policy_samples": 0,
+  "raw_exports_or_uploads": 0,
+  "arms": [
+    {
+      "arm": 0,
+      "body_steps": 0,
+      "caller_owned_checkpoint_encodes": 1,
+      "checkpoint_sha256": "b300b7745d02cc58b97b9c8eb3cd0a3ffebc42a4e11172b443f789ebe39b57b3",
+      "complete_checkpoint_bytes": 2632160,
+      "exact_original_private_state_bytes": true,
+      "final_raw_pair_sha256": "5227b48afe657592a48dcf8a84241fab375d1dfbde18e46a6323427b0a536cfa",
+      "founder_optimizer_sha256": "4000ce9a73f4528c37e6f4d704a4c63fed5b13c440dff6909e25c2de3a628375",
+      "host_forwards": 0,
+      "raw_output_written": false,
+      "restores": 1,
+      "source_closure_sha256": "d4691dac744dc5492d13e363d3c24c7e6cc87505fff168f4bc0f6c9036b11c28",
+      "tick": 272
+    },
+    {
+      "arm": 1,
+      "body_steps": 0,
+      "caller_owned_checkpoint_encodes": 1,
+      "checkpoint_sha256": "1b1e54f809be9df3c75caf8abb7a730e68e371db0f010ca80ea1ebd19eb2ff91",
+      "complete_checkpoint_bytes": 2658308,
+      "exact_original_private_state_bytes": true,
+      "final_raw_pair_sha256": "92b9e3fa16e33429d0f1227dbf6e54788746f331723f60631ec6de11d36c91ee",
+      "founder_optimizer_sha256": "4000ce9a73f4528c37e6f4d704a4c63fed5b13c440dff6909e25c2de3a628375",
+      "host_forwards": 0,
+      "raw_output_written": false,
+      "restores": 1,
+      "source_closure_sha256": "c8cf2b6d18ff960a5afab2617f5eae62cebe907a1afa9088b7f8ce891bcb4607",
+      "tick": 272
+    }
+  ],
+  "original_input_helper_library_dependency_post_hash_check": "PASS",
+  "frozen_comparison_source_and_dispatch_unchanged": true,
+  "historical_timeout_sha256": "d035bb72965cf0b5cdc96641c14763566ce1c37d1c8177b11a3a40ef8e9418b8",
+  "source_sha256": "afb06d65ad61bc28bfc1d341f9fa5e7b379a98e5b3474c9ea347742275837290",
+  "executable_sha256": "f1f5a408cae33af7912e518353cb3304453db0008e27e1a014ee3ac1edca6cff",
+  "plan_sha256": "b96eeab026e1276a63fc18e601e81968f927550f25be51334418edde06925b18",
+  "check_log_sha256": "6d1e057e207ba0f414566d6792be3e3e7ae4f4f6ad268e749d1e60dc92da6f5f",
+  "original_local_receipt_sha256": "00c382f419a57153d468b78aff591918dc61a4daaa6a73afc031263e9a4aad68"
+}
