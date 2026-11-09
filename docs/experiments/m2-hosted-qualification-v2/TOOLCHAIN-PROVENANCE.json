@@ -1,0 +1,72 @@
+{
+  "schema": "m2-hosted-toolchain-setup-provenance-v3",
+  "compiler": {
+    "toolchain": "1.99.1",
+    "rust_commit": "58cf8f9c35b355199727627d07ae34a4e2846d67",
+    "commit_date": "2026-10-13",
+    "host": "x86_64-unknown-linux-gnu",
+    "tag_object": "213cfbe66a6da4e4b41bde365643286371af6e5a",
+    "tag_url": "https://api.github.com/repos/rust-lang/rust/git/tags/213cfbe66a6da4e4b41bde365643286371af6e5a",
+    "cargo_source_commit": "5f94df4789f005f9a352888e8355ffc645b7ed0e",
+    "cargo_source_url": "https://github.com/rust-lang/cargo/blob/5f94df4789f005f9a352888e8355ffc645b7ed0e/src/version.rs",
+    "cargo_version_note": "Official Rust bootstrap sets CFG_RELEASE to match rustc; registry crate version is not the installed CLI version."
+  },
+  "official_action": {
+    "repository": "dtolnay/rust-toolchain",
+    "commit": "b725eda525362e7cf34af9a7243cac1e3f01a7ec",
+    "commit_signature_verified": true,
+    "commit_url": "https://github.com/dtolnay/rust-toolchain/commit/b725eda525362e7cf34af9a7243cac1e3f01a7ec",
+    "action_blob": "62252504fab44d94e1bf3a73df1c976b3dec35c4",
+    "action_bytes": 7481,
+    "action_sha256": "0b52547c145ae18d8631c9ab711e4d917e9e489cea800368f338c25a56e0aee2",
+    "source_url": "https://github.com/dtolnay/rust-toolchain/blob/b725eda525362e7cf34af9a7243cac1e3f01a7ec/action.yml"
+  },
+  "repository_precedent": {
+    "commit": "c3aec16df33861f1316d127736f5f60eea327ede",
+    "path": ".github/workflows/ci.yml",
+    "line": 27,
+    "uses": "dtolnay/rust-toolchain@stable"
+  },
+  "adapter": {
+    "unmodified_composite_action_used": false,
+    "reason": "Official composite tees arbitrary installer output. Adapter privately captures the audited minimal install command and validates only public compiler facts.",
+    "install_command": [
+      "rustup",
+      "toolchain",
+      "install",
+      "1.99.1",
+      "--profile",
+      "minimal",
+      "--no-self-update",
+      "--force-non-host"
+    ],
+    "normal_hosted_rustup_home": true,
+    "fresh_isolated_rustup_home": false,
+    "retry_count": 0,
+    "install_timeout_seconds": 600,
+    "bootstrap_if_missing": false,
+    "default_toolchain_mutation": false,
+    "compiler_queries": [
+      "rustup show home",
+      "rustup run 1.99.1 rustc --print sysroot",
+      "rustup run 1.99.1 rustc --version --verbose",
+      "rustup run 1.99.1 cargo --version"
+    ],
+    "cargo_build_prefix": [
+      "rustup",
+      "run",
+      "1.99.1",
+      "cargo"
+    ]
+  },
+  "previous_attempt": {
+    "run_id": 42575100065,
+    "activation_head": "2092ccfc919c3ddfef4ac1cd645700f70d5d5ab1",
+    "status": "terminal TOOLCHAIN in both jobs",
+    "native_builds": 0,
+    "fixture_cases": 0,
+    "cause": "UNKNOWN: installer stderr was intentionally not retained; install-versus-query not determined.",
+    "retry_or_marker_reuse": false
+  },
+  "claim": "Uses established repository official-toolchain setup recipe and removes fresh-home/shim assumptions. This is a source-only correction, not a proven diagnosis of the hidden V2 setup failure."
+}
