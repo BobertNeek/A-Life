@@ -1,0 +1,212 @@
+{
+  "files": [
+    {
+      "bytes": 885,
+      "path": "CORRECTION.json",
+      "sha256": "9f64978d22cc7f32da790a51079acd3072622d87644b8de4ebe62a52d3a021d8"
+    },
+    {
+      "bytes": 4739,
+      "path": "FIXTURE-INVENTORY.md",
+      "sha256": "3f6073d4a7b3476dfe80f9984a9d6818ce99c2d0911d2935c2909c686decdd72"
+    },
+    {
+      "bytes": 44085,
+      "path": "FIXTURES.json",
+      "sha256": "e9ad18789bb7e8039b9dc858288ed5c98df11aa6c662d3c45de3ea9b761ba193"
+    },
+    {
+      "bytes": 92558,
+      "path": "INHERITED-WORKFLOW-FIXTURES.json",
+      "sha256": "e45e6ea9f0b5de64ad00a3fbc108cbefcce48f5eab8b9c32caceaa9650497fcd"
+    },
+    {
+      "bytes": 884,
+      "path": "PREPARATION.json",
+      "sha256": "0d31e8879a2a5ad13fa30236ef2b2eaa3af5ceae6632bafe57d4b1f874d1c3ca"
+    },
+    {
+      "bytes": 1845,
+      "path": "PRIOR-TYPECHECK-RESULT.json",
+      "sha256": "3ef6c8feb21d59f28e4fd88af90911f86bc5da01ebbde463628388ac5f623071"
+    },
+    {
+      "bytes": 4245,
+      "path": "PRIOR-V5-PRESERVATION.json",
+      "sha256": "bba8ce529bc0971c826533e74cb1473c3c1c57eb0c6c8b4a5d26ce6c8d7059c9"
+    },
+    {
+      "bytes": 9158,
+      "path": "README.md",
+      "sha256": "2d7edf9361d9f3b575c64de21cf9d2094d108fa89d0ce5f2bf29ef7aa463a9f5"
+    },
+    {
+      "bytes": 810,
+      "path": "REGISTRATION-DELTA-v6.json",
+      "sha256": "783129e6f9eff1b875418ac402f12f4b4d5954463b6b711240b3fa0532d85ece"
+    },
+    {
+      "bytes": 9899,
+      "path": "REUSE-MANIFEST.json",
+      "sha256": "1b10cbd3c530b609cf32444023084ee1e4adc49f55ea636b643b7537ca70ef43"
+    },
+    {
+      "bytes": 1593,
+      "path": "RUNNER-SEMANTICS.json",
+      "sha256": "49686e5d8a022d98d973960824453d7767911ea00a71baa855ba2a66bef6c829"
+    },
+    {
+      "bytes": 52565,
+      "path": "SOURCE-AUDIT.json",
+      "sha256": "cdab2fbd43cb9d41dd3c1a366ba733b082cdb921c73a77cd3ce3b2e87b60de7a"
+    },
+    {
+      "bytes": 498,
+      "path": "SOURCE-FREEZE-v5.json",
+      "sha256": "b320f11d7737cb48345c775da1a47b61d78cd2399fda99f6a35f306ee7953069"
+    },
+    {
+      "bytes": 593,
+      "path": "SOURCE-FREEZE-v6.json",
+      "sha256": "3e99956ac3354a48b13c94126119f1b1f943b0efbb871408a55371d2b9973be3"
+    },
+    {
+      "bytes": 285,
+      "path": "STATIC-CHECK.json",
+      "sha256": "38eee4d89c144f434b80c1ee67f93306429864d48985140f2be666ae1c220105"
+    },
+    {
+      "bytes": 1762,
+      "path": "TEST-ONLY-DELTA.json",
+      "sha256": "5ca7d62259b6298ed72d13579474fca0ceb8ab2b7dacbb6d9360eff0b215a9d2"
+    },
+    {
+      "bytes": 1812,
+      "path": "TOOLCHAIN-PRIOR-RESULTS.json",
+      "sha256": "66d8ecd21368bbd8836081d1846cf877508454f2dfa91655da3eaf87d80f22e3"
+    },
+    {
+      "bytes": 3028,
+      "path": "TOOLCHAIN-PROVENANCE.json",
+      "sha256": "122c4b3e6538442cdd14fe81923c4ae45f5276126d6d3d8afc3001e779adb99c"
+    },
+    {
+      "bytes": 36872,
+      "path": "TRIGGER-AUDIT.json",
+      "sha256": "60b1ff097a9f5bca06f731a1b7e6c79b7704b45a84f53d9b7eb6c550fd15db25"
+    },
+    {
+      "bytes": 4383,
+      "path": "WORKFLOW-PRESERVATION.json",
+      "sha256": "5451f4376c90aa6583136942a9421497d9ad50798005d86199a243ac83728b93"
+    },
+    {
+      "bytes": 30715,
+      "path": "closure.json",
+      "sha256": "2c11006004bb24ac13ffb01bf2ebdf9d2eed5a63720f138d433f811a3fcc881d"
+    },
+    {
+      "bytes": 3625,
+      "path": "dependencies.json",
+      "sha256": "7dad3b2c35713f39fad88242fadc85c022aa1430d40c57e2ac7da40ce97a5221"
+    },
+    {
+      "bytes": 1702,
+      "path": "packet_inputs.py",
+      "sha256": "249d2e3cde1503cfba8f92fe94274de70114f88323771e32cd8903c685fd0168"
+    },
+    {
+      "bytes": 136753,
+      "path": "patches/fbf-nominal-source-supplement.patch",
+      "sha256": "ddd07c85685b27056664d9b8650fa736d8eff257f5d477485efd7d14e5e5b051"
+    },
+    {
+      "bytes": 649925,
+      "path": "patches/fbf-to-grip-v4.patch",
+      "sha256": "acf8cc50353ba76cb7adf5af1db5845ee6e6b2e2261d0ee823821428e2e4d054"
+    },
+    {
+      "bytes": 3446,
+      "path": "patches/gpu-upload-gate.patch",
+      "sha256": "e71af51d4829939b2e91b9c1a4bc2e18f2bc95d8135462412d5a03421be2885a"
+    },
+    {
+      "bytes": 2369,
+      "path": "patches/grip-v4-to-v5.patch",
+      "sha256": "0ce2a14320e13e31b9727d41d979798910c31e9663dcaca043c0900c5c96774a"
+    },
+    {
+      "bytes": 335,
+      "path": "patches/grip-v5-to-v6.patch",
+      "sha256": "fa468c4ca23f88c2f90f561176283fb1bf0f53c24280fee6c6dcdd093f5ed712"
+    },
+    {
+      "bytes": 563200,
+      "path": "patches/main-to-fbf-library-closure.part-01.patch",
+      "sha256": "44c9ee9e269bec25ebb924054754a0e71ddc7b73104a132699171a9776430e07"
+    },
+    {
+      "bytes": 563195,
+      "path": "patches/main-to-fbf-library-closure.part-02.patch",
+      "sha256": "a2fb1711dee71d569aea8643ba5dd02d16c992bf9f378b219e4b86cb51edafae"
+    },
+    {
+      "bytes": 415718,
+      "path": "patches/main-to-fbf-library-closure.part-03.patch",
+      "sha256": "95d7a29b145111d4f24297c97ecd0766673f9275b5dd89400958c714a24ae72d"
+    },
+    {
+      "bytes": 2728,
+      "path": "publication.json",
+      "sha256": "20b7fcdb3603bd3edd89581720a48db7bff996ddcc95d0981b6fb6eae523b4eb"
+    },
+    {
+      "bytes": 3774,
+      "path": "recovery.json",
+      "sha256": "d3cc1a49ed0efae03abd085e39ac7e6e9b2367a33aeb578857b73d8f60cbc9a6"
+    },
+    {
+      "bytes": 27898,
+      "path": "registered-source-v5.json",
+      "sha256": "93a96de95d9562b57d2891e41dfcd36e99cf73bb8d94971c0ad17fd87593c72e"
+    },
+    {
+      "bytes": 34471,
+      "path": "run_hosted.py",
+      "sha256": "eb62bb036e13026ab76bbbdf8a6d7b4f560e47981fc207b0277cdaa58a200b87"
+    },
+    {
+      "bytes": 3911,
+      "path": "seal_package.py",
+      "sha256": "c8a0c6afb977208b4cfcf0f0a4f8d8c7608fc0c55f6fe154ebb15c034008680f"
+    },
+    {
+      "bytes": 200537,
+      "path": "source-manifest-v5.json",
+      "sha256": "137b6395d74a49aa2f2841cc9b1d306a1d5ade9b502ea84c44dfa64d6defe14a"
+    },
+    {
+      "bytes": 201152,
+      "path": "source-manifest.json",
+      "sha256": "1638da4e07c7714440a8e200ba1dcda660370a9ce9e4120b3877ab1c980b02c9"
+    },
+    {
+      "bytes": 2476,
+      "path": "source_patch.py",
+      "sha256": "e8ef4a5a27c4ce0486f2ec752c7c6789752e10355410f8ef6b914aa386b5ad42"
+    },
+    {
+      "bytes": 20059,
+      "path": "static_checks.py",
+      "sha256": "4b2f6f1e3d25be7ca66c8aa1b69c62c8dac966d83e7353c02b98b5d4a0b01c78"
+    },
+    {
+      "bytes": 7481,
+      "path": "upstream-toolchain-action.yml",
+      "sha256": "0b52547c145ae18d8631c9ab711e4d917e9e489cea800368f338c25a56e0aee2"
+    }
+  ],
+  "plan_id": "m2-grip-fixed-fixtures-v1",
+  "schema": "m2-grip-fixed-fixture-seal-v1",
+  "source_ready": true
+}

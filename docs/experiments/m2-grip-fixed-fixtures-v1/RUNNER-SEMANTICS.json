@@ -1,0 +1,57 @@
+{
+  "added_functions": [
+    "add_dose",
+    "build_fixture_target",
+    "execute_exact_fixture",
+    "fixture_inventory",
+    "list_exact_fixture",
+    "restore_test_fixture",
+    "validate_exact_listing",
+    "validate_exact_result"
+  ],
+  "modified_existing_functions": [
+    "main",
+    "restore_sources",
+    "summary",
+    "validate_activation"
+  ],
+  "prior_runner_sha256": "ad554c8a57288fe4ad279c91baa2da275697234eb2f912bef35a834cb63edcc0",
+  "runner_sha256": "eb62bb036e13026ab76bbbdf8a6d7b4f560e47981fc207b0277cdaa58a200b87",
+  "schema": "m2-grip-fixed-runner-delta-v1",
+  "scope": "Hosting only: new identities/activation schema; additive test restoration; fixed target compilation/no-run; exact list/run once and safe audit counters. Process/resource/output/toolchain/inherited-workflow guards unchanged. Source records865 preserved plus one test file.",
+  "source_runtime_implementation_edits": 0,
+  "unchanged_constants": {
+    "ACTION_SHA": true,
+    "CARGO_VERSION": true,
+    "EXPECTED_FEATURES": true,
+    "HOST": true,
+    "LIMITS": true,
+    "RUST_COMMIT": true,
+    "RUST_DATE": true,
+    "RUST_VERSION": true,
+    "TOOLCHAIN": true
+  },
+  "unchanged_existing_functions": [
+    "admit",
+    "check_limits",
+    "check_stage",
+    "child_setup",
+    "diagnostic_rows",
+    "digest_file",
+    "exact_path",
+    "fail",
+    "kill_session",
+    "local_dep_path",
+    "private_git",
+    "read_json",
+    "run",
+    "safe_path",
+    "session_rss",
+    "setup_toolchain",
+    "sha",
+    "size",
+    "verify_depinfo",
+    "verify_record",
+    "verify_workflow_preservation"
+  ]
+}

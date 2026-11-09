@@ -1,0 +1,11 @@
+{
+  "errors": 0,
+  "failures": 0,
+  "fixture_bodies_executed": 0,
+  "github_writes": 0,
+  "native_invocations": 0,
+  "passed": true,
+  "schema": "m2-grip-fixed-static-v1",
+  "scope": "Pure Python synthetic/static checks only; no local Rust/Cargo/fixture process.",
+  "tests_run": 33
+}

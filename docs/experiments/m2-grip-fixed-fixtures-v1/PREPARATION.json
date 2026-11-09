@@ -1,0 +1,19 @@
+{
+  "activation_pending": true,
+  "compiler_reconstruction_count_complete": false,
+  "compiler_work_policy": "Three explicit fixture source forwards and three committed intervals; additional pure numerical constructor/restore validation bounded by the same time/RSS/storage/output guards, not represented as zero.",
+  "fixture_bodies_executed": 0,
+  "fixture_count": 46,
+  "github_writes": 0,
+  "inherited_workflows_preserved": 15,
+  "native_invocations": 0,
+  "publication_pending": true,
+  "schema": "m2-grip-fixed-fixture-preparation-v1",
+  "source_inputs": 866,
+  "source_ready": true,
+  "source_reference_commit": "ff991c39ca4a11f72eb56f015f8b3dab71baff20",
+  "target_count": 9,
+  "test_only_additions": 1,
+  "unchanged_v5_source_inputs": 865,
+  "v5_compile_result": "All six stages passed at activation5d9d01328725d9bf87c386ae923863f18f77fa1a; safe summary copied unchanged."
+}
