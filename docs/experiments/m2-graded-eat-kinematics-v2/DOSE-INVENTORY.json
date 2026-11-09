@@ -1,0 +1,12 @@
+{
+  "additional_historical_query_forwards": 0,
+  "additional_world_steps_for_readouts": 0,
+  "comparison": "matched engineering regression on prior fixed setup; not held-out replication",
+  "preparation_ticks": 240,
+  "pure_contracts": "Invoked before setup in the same one fixture, using validated public frames and arithmetic only. No new registered test/life.",
+  "registered_policy_intervals": 2,
+  "registered_tests": 1,
+  "test_processes": 1,
+  "training": "actor/optimizer/synaptic banks unchanged; one original credit per registered interval",
+  "world_setup_calls": 1
+}

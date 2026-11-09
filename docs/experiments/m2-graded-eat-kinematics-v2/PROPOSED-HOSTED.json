@@ -1,0 +1,34 @@
+{
+  "additional_historical_query_forwards": 0,
+  "additional_world_steps_for_readouts": 0,
+  "baseline_head": "f68c4f8ed01ce0d057bc9343d1bc50ddf7695ad4",
+  "baseline_run": "https://github.com/BobertNeek/A-Life/actions/runs/42679606475",
+  "comparison": "matched engineering regression on prior fixed setup; not held-out replication",
+  "preparation_ticks": 240,
+  "publication_requirements": [
+    "Reproduce accepted baseline reconstruction from its verified repository-relative packet inputs.",
+    "Apply existing original and graded overlays, then this source-only relative overlay.",
+    "Use source-manifest.json final graded_files and new meal_v2_overlay_files; fail closed on unbound inputs and symlinks.",
+    "Generate fresh source freeze, runner/function/workflow seal and distinct one-attempt activation. Do not reuse old activation.",
+    "List exactly the one frozen test, run once, no retry or new seed, stop on first failure.",
+    "Use strict allowlisted output projector; preserve original V1 reason/strict rows and add matched V2 rows, no raw frame/asset/life uploads.",
+    "No future executor depends on /tmp or these absolute local input paths."
+  ],
+  "pure_contracts": "Invoked before setup in the same one fixture, using validated public frames and arithmetic only. No new registered test/life.",
+  "registered_policy_intervals": 2,
+  "registered_tests": 1,
+  "resource_caps": "Same bounded hosted runner caps as baseline; local stage <=2 MiB, tmpfs free >=4 GiB and MemAvailable >=2 GiB.",
+  "runner": "run_hosted.py",
+  "schema": "meal-kinematic-hosted-proposal-v2",
+  "source_meaning": "Any matched contacted EntityEat whole-event source, including non-consumption; report original consumed flags.",
+  "source_overlay": {
+    "bytes": 21381,
+    "path": "meal-kinematic-source-overlay.tar.gz",
+    "sha256": "897b88b5a9f63e13aec92800430b2559637727b61ac1807f770898d3d693091f"
+  },
+  "status": "sealed source-ready publication packet; not published, activated, compiled, or executed",
+  "test_name": "cpu::host::grouped_host_envelope::joint_episode::tests::meal_kinematic_registered_two_root_matched_diagnostic_v2",
+  "test_processes": 1,
+  "training": "actor/optimizer/synaptic banks unchanged; one original credit per registered interval",
+  "world_setup_calls": 1
+}

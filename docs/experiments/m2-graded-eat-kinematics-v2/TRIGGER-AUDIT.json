@@ -1,0 +1,15 @@
+{
+  "branch": "qualification/m2-graded-eat-kinematics-v2",
+  "event": "push",
+  "forbidden": [
+    "branch-created run",
+    "PR/pull_request_target/workflow_dispatch/schedule",
+    "workflow or inherited tree mutation",
+    "extra path at activation",
+    "retry/run_attempt > 1"
+  ],
+  "inherited_workflows": 15,
+  "new_workflows": 1,
+  "required": "existing branch, not deleted or forced, attempt 1; one new sole marker child of prepared commit directly on accepted main",
+  "static_tests": "static_checks.py verifies accepted sole-child shape and rejects created/deleted/forced events. Runtime verifies exact commit tree, modes, blobs and all inputs."
+}

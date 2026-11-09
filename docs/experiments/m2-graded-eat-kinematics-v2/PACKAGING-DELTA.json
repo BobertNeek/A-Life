@@ -1,0 +1,52 @@
+{
+  "baseline": "f68c4f8ed01ce0d057bc9343d1bc50ddf7695ad4",
+  "new_source_files": [
+    {
+      "base_sha256": "c0d44d563af87e285d33b99a9b95dbf39c17f9689abb6debffd66d4d53f4acb2",
+      "bytes": 13398,
+      "path": "crates/alife_training/src/cpu/joint_episode_host.rs",
+      "sha256": "d0f3b58857687079eb8ee88b71125853c6bccc2b6db8d5518ae21fedf8f5a8a3"
+    },
+    {
+      "base_sha256": "b206a7dda20db011d27dbc46489b85aa15a77fca597c4ba8b3e528a9953399f9",
+      "bytes": 18659,
+      "path": "crates/alife_training/src/cpu/joint_episode_host_tests.rs",
+      "sha256": "8e2a697cc38d0504800ae4f8044ac2192386c21f5aadba9b96f82b4f001f3cff"
+    },
+    {
+      "base_sha256": null,
+      "bytes": 10814,
+      "path": "crates/alife_training/src/cpu/meal_cue_v2.rs",
+      "sha256": "7a5b5de122cd328b8e0a8fce5bf0e7486b255732fc50ab3415d23c0afe3eba43"
+    },
+    {
+      "base_sha256": null,
+      "bytes": 8449,
+      "path": "crates/alife_training/src/cpu/meal_cue_v2_contracts.rs",
+      "sha256": "7ca2288a01480df3d91d3a047efa51238027d7f1c395d67b2ecb86a450d81d22"
+    },
+    {
+      "base_sha256": "d3c13b69d03e7097ce15e303e6593fbd61043a6013f90596184f228afc72ee13",
+      "bytes": 13820,
+      "path": "crates/alife_training/src/cpu/motor_mediation/confidence/policy/optional_vocal/joint_episode.rs",
+      "sha256": "f912d2f563611aabfa555a5b71b9591dc8a60667aa8bcd917ed8e7cb9b791d1d"
+    },
+    {
+      "base_sha256": "57d8d48374a70c0b24500928069ae543884715d74efd4d098642d177ab9f5770",
+      "bytes": 14914,
+      "path": "crates/alife_training/src/cpu/visible_cue_joint.rs",
+      "sha256": "d6866512d96bd1b994d88b372a5413b8cd2b7d270caf0fd6f9fa01efc9cb891e"
+    }
+  ],
+  "scope": "One new fresh owner, contacted/reached Eat matcher, paired readouts/pure contracts. No descriptor, reward, action executor, source selector/profile, life or default mutation.",
+  "unmodified_physics_and_v1": {
+    "crates/alife_core/src/grounding.rs": "170d907ba37dea51a6cc34510a0cda8cb0c87b07d0abd67b2468f45b6c6b2daf",
+    "crates/alife_core/src/memory/joint_episode.rs": "5abc24f39d55d725f9bb1c1e40813d1efbe62eaf1515c56421bd313b26b761e1",
+    "crates/alife_training/src/cpu/cue_diagnostic.rs": "86599555e567591b7625b328aa86d5be9052ed49aaa756d6581b6921dc4d6fc0",
+    "crates/alife_training/src/cpu/cue_wire.rs": "a5506f1db546746f4d251cd361c31b14edb50d8667e80daa2da39aab562ae0fc",
+    "crates/alife_training/src/cpu/graded_lookup.rs": "4a5b6332b3ad0618f0222f8a6301eb18b482834987590518985f988e2d199cdd",
+    "crates/alife_world/src/grounded_sensing.rs": "2380393bc21ffe71a1f481a5bf812a8990dfd001f55da54715c5a455c84a3b41",
+    "crates/alife_world/src/headless.rs": "ffcf799afd5f4aa1b37414824c189f68d858f8f1d31035cb93b0166cbc7dae78",
+    "crates/alife_world/src/headless/hands.rs": "a4d09624c2fc24161846f1691cd644fbad299603ed98b5c80e858f854a68eb41"
+  }
+}

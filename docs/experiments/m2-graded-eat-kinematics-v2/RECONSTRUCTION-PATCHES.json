@@ -1,0 +1,39 @@
+{
+  "steps": [
+    {
+      "name": "main-to-fbf-library",
+      "parts": [
+        {
+          "path": "patches/main-to-fbf-library-closure.part-01.patch",
+          "bytes": 563200,
+          "sha256": "44c9ee9e269bec25ebb924054754a0e71ddc7b73104a132699171a9776430e07"
+        },
+        {
+          "path": "patches/main-to-fbf-library-closure.part-02.patch",
+          "bytes": 563195,
+          "sha256": "a2fb1711dee71d569aea8643ba5dd02d16c992bf9f378b219e4b86cb51edafae"
+        },
+        {
+          "path": "patches/main-to-fbf-library-closure.part-03.patch",
+          "bytes": 415718,
+          "sha256": "95d7a29b145111d4f24297c97ecd0766673f9275b5dd89400958c714a24ae72d"
+        }
+      ],
+      "bytes": 1542113,
+      "sha256": "be1fff0fde16f474c118f9b37ec95b526b52c6f644216b1d7d0c12eee0372a74"
+    },
+    {
+      "name": "fbf-nominal-supplement",
+      "parts": [
+        {
+          "path": "patches/fbf-nominal-source-supplement.patch",
+          "bytes": 136753,
+          "sha256": "ddd07c85685b27056664d9b8650fa736d8eff257f5d477485efd7d14e5e5b051"
+        }
+      ],
+      "bytes": 136753,
+      "sha256": "ddd07c85685b27056664d9b8650fa736d8eff257f5d477485efd7d14e5e5b051"
+    }
+  ],
+  "no_grip_runtime_overlay": true
+}

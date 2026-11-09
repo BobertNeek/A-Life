@@ -1,0 +1,17 @@
+{
+  "baseline_manifest_sha256": "c0321462297d23743d4da1e32d6cce141ac9396bc73a9807fce3252e8c5b2f1e",
+  "baseline_verified_run": "42679606475",
+  "final_bound_files": 825,
+  "grip_or_play_runtime_overlays": false,
+  "new_overlay_verified_in_memory": true,
+  "reachable_base": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "source_checks": "Inherited reconstruction inputs individually hash-verified; final V2 override hashes checked. Full baseline reconstruction was verified in the completed pinned baseline run and is reverified fail-closed by this runner.",
+  "steps": [
+    "Concatenated three frozen main-to-fbf library patch parts",
+    "Frozen nominal supplement",
+    "Frozen nominal residual",
+    "Frozen 101-file original overlay",
+    "Frozen 51-file graded overlay",
+    "New 6-file V2 source overlay"
+  ]
+}

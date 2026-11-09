@@ -1,0 +1,16 @@
+{
+  "bound_final_source_files": 825,
+  "frozen_v1_physics_hashes": true,
+  "literal_v1_module_prefix_preserved": true,
+  "malformed_output_rejections": 10,
+  "native_execution": false,
+  "new_lives": 0,
+  "note": "An initial static harness NameError for missing pathlib was repaired before this successful check; no native process was attempted.",
+  "overlay_base_hashes_match_completed_baseline": true,
+  "overlay_files": 6,
+  "rust_compilation": false,
+  "single_fixture_dose_static": true,
+  "status": "passed",
+  "trigger_rejections": 3,
+  "validation": "Python source/protocol static checks; not Rust/native/biology qualification"
+}

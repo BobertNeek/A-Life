@@ -1,0 +1,20 @@
+{
+  "allow": [
+    "inherited finite scalar reason report and strict/graded V1 results",
+    "V2 schema/comparison, per-sequence signed valence/consumed flag/V1 and V2 weights, aggregate signed values, cold equality and cross-load booleans",
+    "Unknown future grip/consumption"
+  ],
+  "forbid": [
+    "raw frames",
+    "raw episodes",
+    "checkpoints",
+    "source query features",
+    "Debug errors",
+    "native binaries",
+    "private acquired-life data"
+  ],
+  "projection": "run_hosted.py project_reason, project_meal_v2 and test_report; exact keys, bounded ranges, source identity and aggregate consistency checked",
+  "schema": "meal-kinematic-public-output-v2",
+  "summary_limit_bytes": 32768,
+  "test_pipe_limit_bytes": 65536
+}

@@ -1,0 +1,143 @@
+{
+  "files": [
+    {
+      "bytes": 579,
+      "path": "DOSE-INVENTORY.json",
+      "sha256": "f097ec0236bccc2308f343be3d6af2112bc2998c50a34213c0f055e6686acbf7"
+    },
+    {
+      "bytes": 5177,
+      "path": "FUNCTION-FREEZE.json",
+      "sha256": "681952b58d826a65dd9e86eb97098b525ea9096e17316ce424c60f36a94a7cdb"
+    },
+    {
+      "bytes": 92558,
+      "path": "INHERITED-WORKFLOW-FIXTURES.json",
+      "sha256": "e45e6ea9f0b5de64ad00a3fbc108cbefcce48f5eab8b9c32caceaa9650497fcd"
+    },
+    {
+      "bytes": 740,
+      "path": "OUTPUT-POLICY.json",
+      "sha256": "95341bc0b7b57336c9a9b0a497fa37acd471a166e8d2c7b9d069fb9912eb8da8"
+    },
+    {
+      "bytes": 2828,
+      "path": "PACKAGING-DELTA.json",
+      "sha256": "c292c89bf8fd14a51f5266d58569344940b36d77c6d899640b3d9a959efb650c"
+    },
+    {
+      "bytes": 2295,
+      "path": "PROPOSED-HOSTED.json",
+      "sha256": "95db422e54bad1fe12e63d4decc6ce9020c4d092159470edfca6f6ab55004afa"
+    },
+    {
+      "bytes": 578,
+      "path": "PUBLICATION.json",
+      "sha256": "d1233d8070b0f2adb110053c33a9d781c8e75f9b8dfa282c73b82015481e1739"
+    },
+    {
+      "bytes": 819,
+      "path": "REACHABLE-SOURCE-RECONSTRUCTION.json",
+      "sha256": "66baa737de9d94dcefcebaeeedd0a712a8ee94fa730daa107a9dfc1969c0b14b"
+    },
+    {
+      "bytes": 3764,
+      "path": "README.md",
+      "sha256": "30832f46022e044de44ac8fdba8bc72e647b840f50a4842d2a4b29c4caf83a94"
+    },
+    {
+      "bytes": 1239,
+      "path": "RECONSTRUCTION-PATCHES.json",
+      "sha256": "5c1ba1800b77a7f9147b3457fa5911edfc837aa9cf40b4ade438291e2c655ab2"
+    },
+    {
+      "bytes": 9134,
+      "path": "REUSE-MANIFEST.json",
+      "sha256": "169e864ea8d5c6d3e02a6fe3407232e94f5b99b955672a5bb011fd74d900ce82"
+    },
+    {
+      "bytes": 159233,
+      "path": "SOURCE-CLOSURE.json",
+      "sha256": "ac09fcbd783ce39d305cc80a3c826723f65a42d65c92bd88173ede47fd583a8c"
+    },
+    {
+      "bytes": 638,
+      "path": "STATIC-RESULTS.json",
+      "sha256": "9b3b869632863d6a21c07b3172ae0b5fe61688c196b13031ce31e1f968c4a71e"
+    },
+    {
+      "bytes": 658,
+      "path": "TRIGGER-AUDIT.json",
+      "sha256": "bf243d3a9a1b855668533d0c48b6f0bae4837f097d9aebb9c2eec0323b6148fd"
+    },
+    {
+      "bytes": 4382,
+      "path": "WORKFLOW-PRESERVATION.json",
+      "sha256": "13e5a1512ee206a474c99e3a66dd435e288d0626c748755b9fae1ff3f677e556"
+    },
+    {
+      "bytes": 291571,
+      "path": "graded-source-overlay.tar.gz",
+      "sha256": "08fd683a04b5dfb54868765a3a2e64f41c2355a4186c48d3ed8ad363fa7d064d"
+    },
+    {
+      "bytes": 21381,
+      "path": "meal-kinematic-source-overlay.tar.gz",
+      "sha256": "897b88b5a9f63e13aec92800430b2559637727b61ac1807f770898d3d693091f"
+    },
+    {
+      "bytes": 35031,
+      "path": "nominal-frozen-input-residual.tar.gz",
+      "sha256": "03e8bf144fad68aa2f8c6991cce13b3e3b87dc7bcf37d232731e1b37d55b6a4b"
+    },
+    {
+      "bytes": 136753,
+      "path": "patches/fbf-nominal-source-supplement.patch",
+      "sha256": "ddd07c85685b27056664d9b8650fa736d8eff257f5d477485efd7d14e5e5b051"
+    },
+    {
+      "bytes": 563200,
+      "path": "patches/main-to-fbf-library-closure.part-01.patch",
+      "sha256": "44c9ee9e269bec25ebb924054754a0e71ddc7b73104a132699171a9776430e07"
+    },
+    {
+      "bytes": 563195,
+      "path": "patches/main-to-fbf-library-closure.part-02.patch",
+      "sha256": "a2fb1711dee71d569aea8643ba5dd02d16c992bf9f378b219e4b86cb51edafae"
+    },
+    {
+      "bytes": 415718,
+      "path": "patches/main-to-fbf-library-closure.part-03.patch",
+      "sha256": "95d7a29b145111d4f24297c97ecd0766673f9275b5dd89400958c714a24ae72d"
+    },
+    {
+      "bytes": 456096,
+      "path": "qualified-original-overlay.tar.gz",
+      "sha256": "28b472731e2f28002ec0a73a7947ecde48ee3fb0c39f2efa313a1f7c9ecbbe49"
+    },
+    {
+      "bytes": 42085,
+      "path": "run_hosted.py",
+      "sha256": "f45432565911883f5b2110c6e2dccca50aecc9d15c2b34a8e79a571a9885a1b0"
+    },
+    {
+      "bytes": 495715,
+      "path": "source-manifest.json",
+      "sha256": "7d41aa405f2f7f6641cedce7eb49e52056cca1071e132f760d32df0c02cab8b1"
+    },
+    {
+      "bytes": 5664,
+      "path": "static_checks.py",
+      "sha256": "45c44c44cd833e9f65224d5a775adc9045119057ca9f041552e0d966112e769e"
+    },
+    {
+      "bytes": 7481,
+      "path": "upstream-toolchain-action.yml",
+      "sha256": "0b52547c145ae18d8631c9ab711e4d917e9e489cea800368f338c25a56e0aee2"
+    }
+  ],
+  "native_qualified": false,
+  "plan_id": "m2-graded-eat-kinematics-v2",
+  "publication_state": "not_published",
+  "source_ready": true
+}
