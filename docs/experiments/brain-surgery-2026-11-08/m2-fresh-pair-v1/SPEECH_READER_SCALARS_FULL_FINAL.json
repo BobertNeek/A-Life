@@ -1,0 +1,22 @@
+{
+  "schema": "m2-completed-full-speech-reader-scalars-v1",
+  "native_calls": 0,
+  "checkpoint_sha256": "86bb50827c808ecbde79bd96441a786479344202fade0084f6ee051473bfb534",
+  "packed_slice_half_open": [
+    28928,
+    29952
+  ],
+  "index_source": "Explicit compiler order supplied by trace_recovery_memory_inputs",
+  "source_asset_speech_payload": {
+    "count": 1024,
+    "nonzero_count": 0,
+    "min": 0.0,
+    "max": 0.0
+  },
+  "founder_speech_payload": {
+    "count": 1024,
+    "nonzero_count": 0,
+    "min": 0.0,
+    "max": 0.0
+  }
+}
