@@ -304,3 +304,10 @@ Primary preparation has begun once under permanent claims, with no earlier prima
 ### Hosted reflex confirmation remains pending
 
 All 22 local reflex controls now have passing coverage across V2/V4, with the two original failures and exact physical exposure retained. No M2 host integration or matching hosted-profile pass is claimed. The separate V5 reflex-only source package is ready, but its source-tree publication request was interrupted without a returned outcome. The expected tree and branch were absent on reconciliation, which is not treated as proof that resubmission is safe. No V5 activation followed and no fixture job was deliberately launched. The uncertain operation is retained rather than retried or bypassed; independent brain work continues.
+
+
+### 12:20 UTC accounting clarification: geometric arbitration is not fully priced neural work
+
+Source tracing confirms the added pair geometry, partition functions and derivative validation are administrative sampler overhead, currently excluded from biological work units. Existing ATP reservation is made before selection; final work/debit includes the native circuit and other original counters, not coordination pairs. Once-only existing accounting passes, but equal total compute, a fully neural motor-control lobe and energy-efficiency are not established. The current physical comparison stays frozen. A future neural or explicitly charged version must be separately qualified; no cost or policy is changed mid-run.
+
+The new baseline has genuinely consumed its near-root food at interval 8, after acquisition at 6. Health remains 1. The coordinated arm has not yet run; this is not a comparative result.
