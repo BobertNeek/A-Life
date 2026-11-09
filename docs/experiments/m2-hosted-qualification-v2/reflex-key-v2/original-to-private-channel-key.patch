@@ -1,0 +1,39 @@
+diff --git a/crates/alife_world/src/headless/sleep_choice_research/recovery_reflex.rs b/crates/alife_world/src/headless/sleep_choice_research/recovery_reflex.rs
+--- a/crates/alife_world/src/headless/sleep_choice_research/recovery_reflex.rs
++++ b/crates/alife_world/src/headless/sleep_choice_research/recovery_reflex.rs
+@@ -2,6 +2,19 @@
+ //! A reflex is an environment response, never an extra sampled motor factor.
+ use super::*;
+ use serde::{Deserialize, Serialize};
++
++// Comparison key for the public enum, matching the pinned core ordering.
++// This is local to world evidence validation; it adds no core API or channel.
++fn recovery_reflex_channel_key(channel: MotorChannel) -> u16 {
++    match channel {
++        MotorChannel::Locomotion => 0,
++        MotorChannel::Orientation => 1,
++        MotorChannel::Manipulation => 2,
++        MotorChannel::Vocal => 3,
++        MotorChannel::Posture => 4,
++        MotorChannel::SpeciesSpecific(id) => 0x100 + u16::from(id),
++    }
++}
+ 
+ /// A new physical policy identity. Receipts cannot be relabeled as the old
+ /// sleep-choice route, or used to construct an execution capability.
+@@ -221,13 +234,13 @@
+             .selected_bundle
+             .channels
+             .iter()
+-            .map(|c| c.channel.canonical_key())
++            .map(|c| recovery_reflex_channel_key(c.channel))
+             .collect::<Vec<_>>();
+         let mut actual_channels = self
+             .voluntary_joint
+             .channel_outcomes
+             .iter()
+-            .map(|c| c.channel.canonical_key())
++            .map(|c| recovery_reflex_channel_key(c.channel))
+             .collect::<Vec<_>>();
+         expected_channels.sort_unstable();
+         actual_channels.sort_unstable();
