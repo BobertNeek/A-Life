@@ -1,0 +1,153 @@
+{
+  "schema": "m2-hosted-continuation-reconcile-v1",
+  "reconciled_at": "2026-11-09T21:00:00Z",
+  "main": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "attempts": [
+    {
+      "run_id": 42696511329,
+      "job_id": 129429669052,
+      "activation": "c95d516e3799659e8d64334d286267967fecab62",
+      "url": "https://github.com/BobertNeek/A-Life/actions/runs/42696511329/job/129429669052",
+      "run_attempt": 1,
+      "summary": {
+        "code": "CHECK",
+        "diagnostics": [
+          {
+            "code": "E0277",
+            "line": 337,
+            "path": "crates/alife_training/src/cpu/joint_episode_host_tests.rs",
+            "stage": "graded-test-build"
+          }
+        ],
+        "peak_rss_bytes": 1742839808,
+        "peak_workspace_bytes": 1825288001,
+        "plan_id": "m2-targetless-cue-v3",
+        "planned_dose_not_claimed_before_success": {
+          "extra_detached_forwards": 0,
+          "preparation_ticks": 240,
+          "recipes": 1,
+          "registered_intervals": 3,
+          "scripted_producer_intervals": 2,
+          "source_forwards": 3,
+          "unforced_current_opportunities": 1
+        },
+        "private_output_counted_bytes": 437970,
+        "result": null,
+        "schema": "canonical-targetless-current-hosted-summary-v3",
+        "stage": "graded-test-build",
+        "test_processes_attempted": 0
+      }
+    },
+    {
+      "run_id": 42696493359,
+      "job_id": 129429608310,
+      "activation": "b3cb05e8c7b92cdb100c2f8499264e129541bc9f",
+      "url": "https://github.com/BobertNeek/A-Life/actions/runs/42696493359/job/129429608310",
+      "run_attempt": 1,
+      "summary": {
+        "autonomous_sampler_qualified_by_this_run": false,
+        "code": "TEST_PROTOCOL",
+        "controlled_endpoint": null,
+        "controlled_observations": [],
+        "controlled_physics_qualified": false,
+        "diagnostics": [],
+        "excluded_old_test_count": 396,
+        "peak_rss_bytes": 1738280960,
+        "peak_workspace_bytes": 2046299012,
+        "phase_snapshots": [],
+        "plan_id": "m2-channel-native-play-recovery-diag-v4",
+        "planned_tests": 1,
+        "planned_world_step_calls_max": 6,
+        "private_output_counted_bytes": 675279,
+        "results": [],
+        "schema": "channel-native-controlled-physics-summary-v4",
+        "source_forward_calls_max": 6,
+        "stage": "list-exact",
+        "test_processes_attempted": 0,
+        "test_projection_sha256": "17e1310f96fe4bdb4dc7c2fd7ade4df0aecc95f4ab59b28f50f0f5175a57f22a",
+        "trained_checkpoint_file_reads": 0
+      }
+    },
+    {
+      "run_id": 42696483373,
+      "job_id": 129429570829,
+      "activation": "12f91db5d54c72d0d2e04a5b42d8ea99e6772931",
+      "url": "https://github.com/BobertNeek/A-Life/actions/runs/42696483373/job/129429570829",
+      "run_attempt": 1,
+      "summary": {
+        "activation_head": "12f91db5d54c72d0d2e04a5b42d8ea99e6772931",
+        "activation_marker_sha256": "5ac50ecc7e1ae2a184322070e31dbfc1916189980e176053ac93457fa1aa3c1f",
+        "attempted_fixture_ids": [
+          "f041"
+        ],
+        "binary_identities": [
+          {
+            "sha256": "3b3e14f1ee46d187d1dce613276aefeb04b568d8fec928101820c0049cccba3d",
+            "target_id": "training_grip_options_host"
+          }
+        ],
+        "bound_files": 866,
+        "cargo_lock_sha256": "99b01e0353263fd5bbf0261320898e8395d45583f2045e3433d3e2a1f50070eb",
+        "code": "TEST_EXECUTION",
+        "compiled_target_ids": [
+          "training_grip_options_host"
+        ],
+        "completed": [],
+        "confirmed_passed_test_bodies": 0,
+        "correction_patch_sha256": "0ce2a14320e13e31b9727d41d979798910c31e9663dcaca043c0900c5c96774a",
+        "dependency_correction_patch_sha256": "fa468c4ca23f88c2f90f561176283fb1bf0f53c24280fee6c6dcdd093f5ed712",
+        "diagnostics": [],
+        "elapsed_seconds": 281,
+        "f041_failure": {
+          "checks": [],
+          "last_observed_phase": "ASSET_GENOTYPE_BIND_BEGIN",
+          "phase_count": 5
+        },
+        "grip_patch_sha256": "acf8cc50353ba76cb7adf5af1db5845ee6e6b2e2261d0ee823821428e2e4d054",
+        "launched_fixture_processes": 1,
+        "listed_fixture_ids": [
+          "f041"
+        ],
+        "main": "c3aec16df33861f1316d127736f5f60eea327ede",
+        "output_bytes": 136594,
+        "passed_fixture_ids": [],
+        "peak_rss_bytes": 1732943872,
+        "peak_workspace_bytes": 2046894258,
+        "plan_id": "m2-grip-fixed-fixtures-v4",
+        "prepared_head": "29ea738faa11d34828388aaa3822fb30ffa1dc6c",
+        "research_base": "fbf2a517f93098b5d936878a3d26bbb8d0391c38",
+        "schema": "m2-grip-fixed-fixture-summary-v4",
+        "seal_sha256": "34aec82dd3cf3d191d602239f489eae833df2b20dd54e6e85d9249f0783c37bb",
+        "source_audited_attempt_dose": {
+          "bank_forwards": 3,
+          "cold_branch_intervals": 1,
+          "cold_restored_world_branches": 1,
+          "committed_registered_biology_intervals": 3,
+          "fixtures_with_unenumerated_compiler_work": 1,
+          "fresh_fixture_recipe_builds": 1,
+          "fresh_worlds": 3,
+          "grip_neuron_updates": 768,
+          "host_bundle_attempts": 3,
+          "partition_forwards": 0,
+          "primitive_attempts": 0,
+          "rolled_back_registered_biology_intervals": 0,
+          "source_forwards": 3,
+          "warm_branch_intervals": 2
+        },
+        "source_audited_passed_dose": {},
+        "source_manifest_sha256": "58049e7652df5686f2356740bd8565b0052f768fb2aa2b23132bd824423a1e53",
+        "stage": "run_f041",
+        "toolchain": {
+          "cargo": "cargo 1.99.1 (5f94df478 2026-08-27)",
+          "cargo_binary_sha256": "a670e02cfa39ac2e53f77a2d911ca1fc9e2c479b0603ec956625be1daf24e3af",
+          "host": "x86_64-unknown-linux-gnu",
+          "llvm": "23.1.1",
+          "rust_commit": "58cf8f9c35b355199727627d07ae34a4e2846d67",
+          "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+          "rustc_binary_sha256": "b53b780f77f952062f8ca8a3b70aef2390b1e45ad91939be94afdc9543026853"
+        }
+      }
+    }
+  ],
+  "exposure_caution": "Planned and source-audited attempted-dose fields are upper bounds, not proof of completed source or physical intervals. Grip V4 safe phases stop inside asset/genotype binding, before trainer/world/host admission."
+}
