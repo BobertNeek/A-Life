@@ -1,0 +1,1358 @@
+{
+  "summary": {
+    "failed_decisions": 46,
+    "actual_failed_channel": "Manipulation",
+    "evidence": "Recorded phase Attempt, source finish_action maps succeeded=false to Attempt; aggregate false. Not inferred from null per-channel observation.",
+    "missing_observations_are_unknown": true,
+    "physical_contact_none": 46,
+    "nutrition_doses_on_failures": 0,
+    "grip_transfers_on_failures": 0,
+    "out_of_reach_before_and_after_locomotion": 45,
+    "wrong_target_kind_or_mobility": 38,
+    "overlap_wrong_kind_and_out_of_reach": 37,
+    "valid_kind_but_out_of_reach": 8,
+    "reachable_wrong_kind": 1,
+    "reachable_wrong_kind_detail": "offset11: Play213 on own held unconsumed near-root food at distance0.5",
+    "failures_while_actor_holds_own_food": 9,
+    "failed_targets_already_consumed": 0,
+    "failed_targets_owned_by_other": 0,
+    "group_counts": [
+      {
+        "channel": "Manipulation",
+        "primitive": 213,
+        "target_label": "obstacle",
+        "count": 10
+      },
+      {
+        "channel": "Manipulation",
+        "primitive": 211,
+        "target_label": "far-fruit",
+        "count": 3
+      },
+      {
+        "channel": "Manipulation",
+        "primitive": 210,
+        "target_label": "activity-toy",
+        "count": 5
+      },
+      {
+        "channel": "Manipulation",
+        "primitive": 210,
+        "target_label": "far-fruit",
+        "count": 4
+      },
+      {
+        "channel": "Manipulation",
+        "primitive": 211,
+        "target_label": "activity-toy",
+        "count": 2
+      },
+      {
+        "channel": "Manipulation",
+        "primitive": 211,
+        "target_label": "obstacle",
+        "count": 11
+      },
+      {
+        "channel": "Manipulation",
+        "primitive": 213,
+        "target_label": "near-root",
+        "count": 1
+      },
+      {
+        "channel": "Manipulation",
+        "primitive": 210,
+        "target_label": "obstacle",
+        "count": 4
+      },
+      {
+        "channel": "Manipulation",
+        "primitive": 213,
+        "target_label": "far-fruit",
+        "count": 5
+      },
+      {
+        "channel": "Manipulation",
+        "primitive": 213,
+        "target_label": "activity-toy",
+        "count": 1
+      }
+    ],
+    "source_commit": "fbf2a517f93098b5d936878a3d26bbb8d0391c38",
+    "sources": [
+      {
+        "path": "crates/alife_world/src/headless.rs",
+        "sha256": "ffcf799afd5f4aa1b37414824c189f68d858f8f1d31035cb93b0166cbc7dae78",
+        "lines": "5880-5925 Play; 5934-6013 grasp/Grab; 6130-6195 Eat; 6561-6596 finish_action; 6873-6875 reach; 5205-5234 channel/aggregate receipts"
+      },
+      {
+        "path": "crates/alife_world/src/headless/hands.rs",
+        "sha256": "a4d09624c2fc24161846f1691cd644fbad299603ed98b5c80e858f854a68eb41",
+        "lines": "52-143 selected-target preparation, valid kind/ownership/reach, acquisition and failure"
+      }
+    ],
+    "limitations": "Source yields MissingAffordance for multiple violations. Type and distance violations overlap; this does not claim a separately recorded branch reason or an isolated counterfactual. No heldness sensor is assumed."
+  },
+  "rows": [
+    {
+      "offset": 1,
+      "channel": "Manipulation",
+      "primitive": 213,
+      "target": 5,
+      "label": "obstacle",
+      "phase": "Attempt",
+      "physical": {
+        "collision_normal": null,
+        "contact": "None",
+        "displacement": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "energy_cost": 0.05999999865889549,
+        "target_entity": 5
+      },
+      "observation": null,
+      "target_distance_before": 1.82688332526941,
+      "target_distance_after": 1.82688332526941,
+      "target_consumed_before": false,
+      "target_owner_before": null,
+      "actor_held_before": [
+        2
+      ],
+      "target_kind_or_mobility_valid": false,
+      "definitely_out_of_reach": true
+    },
+    {
+      "offset": 2,
+      "channel": "Manipulation",
+      "primitive": 211,
+      "target": 3,
+      "label": "far-fruit",
+      "phase": "Attempt",
+      "physical": {
+        "collision_normal": null,
+        "contact": "None",
+        "displacement": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "energy_cost": 0.05999999865889549,
+        "target_entity": 3
+      },
+      "observation": null,
+      "target_distance_before": 3.1748730742474414,
+      "target_distance_after": 3.259323672111263,
+      "target_consumed_before": false,
+      "target_owner_before": null,
+      "actor_held_before": [
+        2
+      ],
+      "target_kind_or_mobility_valid": true,
+      "definitely_out_of_reach": true
+    },
+    {
+      "offset": 3,
+      "channel": "Manipulation",
+      "primitive": 210,
+      "target": 4,
+      "label": "activity-toy",
+      "phase": "Attempt",
+      "physical": {
+        "collision_normal": null,
+        "contact": "None",
+        "displacement": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "energy_cost": 0.03999999910593033,
+        "target_entity": 4
+      },
+      "observation": null,
+      "target_distance_before": 2.247034938667115,
+      "target_distance_after": 2.304349190525224,
+      "target_consumed_before": false,
+      "target_owner_before": null,
+      "actor_held_before": [
+        2
+      ],
+      "target_kind_or_mobility_valid": false,
+      "definitely_out_of_reach": true
+    },
+    {
+      "offset": 4,
+      "channel": "Manipulation",
+      "primitive": 210,
+      "target": 3,
+      "label": "far-fruit",
+      "phase": "Attempt",
+      "physical": {
+        "collision_normal": null,
+        "contact": "None",
+        "displacement": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "energy_cost": 0.03999999910593033,
+        "target_entity": 3
+      },
+      "observation": null,
+      "target_distance_before": 3.3437443592411844,
+      "target_distance_after": 3.273746314582724,
+      "target_consumed_before": false,
+      "target_owner_before": null,
+      "actor_held_before": [
+        2
+      ],
+      "target_kind_or_mobility_valid": true,
+      "definitely_out_of_reach": true
+    },
+    {
+      "offset": 5,
+      "channel": "Manipulation",
+      "primitive": 213,
+      "target": 5,
+      "label": "obstacle",
+      "phase": "Attempt",
+      "physical": {
+        "collision_normal": null,
+        "contact": "None",
+        "displacement": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "energy_cost": 0.05999999865889549,
+        "target_entity": 5
+      },
+      "observation": null,
+      "target_distance_before": 1.9428575428457155,
+      "target_distance_after": 1.9998396853651061,
+      "target_consumed_before": false,
+      "target_owner_before": null,
+      "actor_held_before": [
+        2
+      ],
+      "target_kind_or_mobility_valid": false,
+      "definitely_out_of_reach": true
+    },
+    {
+      "offset": 6,
+      "channel": "Manipulation",
+      "primitive": 210,
+      "target": 3,
+      "label": "far-fruit",
+      "phase": "Attempt",
+      "physical": {
+        "collision_normal": null,
+        "contact": "None",
+        "displacement": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "energy_cost": 0.03999999910593033,
+        "target_entity": 3
+      },
+      "observation": null,
+      "target_distance_before": 3.3436270507468535,
+      "target_distance_after": 3.4277270129439503,
+      "target_consumed_before": false,
+      "target_owner_before": null,
+      "actor_held_before": [
+        2
+      ],
+      "target_kind_or_mobility_valid": true,
+      "definitely_out_of_reach": true
+    },
+    {
+      "offset": 7,
+      "channel": "Manipulation",
+      "primitive": 211,
+      "target": 4,
+      "label": "activity-toy",
+      "phase": "Attempt",
+      "physical": {
+        "collision_normal": null,
+        "contact": "None",
+        "displacement": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "energy_cost": 0.05999999865889549,
+        "target_entity": 4
+      },
+      "observation": null,
+      "target_distance_before": 2.362990888644051,
+      "target_distance_after": 2.3043021157755947,
+      "target_consumed_before": false,
+      "target_owner_before": null,
+      "actor_held_before": [
+        2
+      ],
+      "target_kind_or_mobility_valid": false,
+      "definitely_out_of_reach": true
+    },
+    {
+      "offset": 8,
+      "channel": "Manipulation",
+      "primitive": 211,
+      "target": 5,
+      "label": "obstacle",
+      "phase": "Attempt",
+      "physical": {
+        "collision_normal": null,
+        "contact": "None",
+        "displacement": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "energy_cost": 0.05999999865889549,
+        "target_entity": 5
+      },
+      "observation": null,
+      "target_distance_before": 1.9999834165757424,
+      "target_distance_after": 2.058698306638542,
+      "target_consumed_before": false,
+      "target_owner_before": null,
+      "actor_held_before": [
+        2
+      ],
+      "target_kind_or_mobility_valid": false,
+      "definitely_out_of_reach": true
+    },
+    {
+      "offset": 11,
+      "channel": "Manipulation",
+      "primitive": 213,
+      "target": 2,
+      "label": "near-root",
+      "phase": "Attempt",
+      "physical": {
+        "collision_normal": null,
+        "contact": "None",
+        "displacement": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "energy_cost": 0.05999999865889549,
+        "target_entity": 2
+      },
+      "observation": null,
+      "target_distance_before": 0.49999998991091565,
+      "target_distance_after": 0.4999999909492039,
+      "target_consumed_before": false,
+      "target_owner_before": 1,
+      "actor_held_before": [
+        2
+      ],
+      "target_kind_or_mobility_valid": false,
+      "definitely_out_of_reach": false
+    },
+    {
+      "offset": 13,
+      "channel": "Manipulation",
+      "primitive": 211,
+      "target": 5,
+      "label": "obstacle",
+      "phase": "Attempt",
+      "physical": {
+        "collision_normal": null,
+        "contact": "None",
+        "displacement": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "energy_cost": 0.05999999865889549,
+        "target_entity": 5
+      },
+      "observation": null,
+      "target_distance_before": 2.1590840189202383,
+      "target_distance_after": 2.244418459746374,
+      "target_consumed_before": false,
+      "target_owner_before": null,
+      "actor_held_before": [],
+      "target_kind_or_mobility_valid": false,
+      "definitely_out_of_reach": true
+    },
+    {
+      "offset": 14,
+      "channel": "Manipulation",
+      "primitive": 210,
+      "target": 4,
+      "label": "activity-toy",
+      "phase": "Attempt",
+      "physical": {
+        "collision_normal": null,
+        "contact": "None",
+        "displacement": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "energy_cost": 0.03999999910593033,
+        "target_entity": 4
+      },
+      "observation": null,
+      "target_distance_before": 2.638598843816944,
+      "target_distance_after": 2.703195082523013,
+      "target_consumed_before": false,
+      "target_owner_before": null,
+      "actor_held_before": [],
+      "target_kind_or_mobility_valid": false,
+      "definitely_out_of_reach": true
+    },
+    {
+      "offset": 15,
+      "channel": "Manipulation",
+      "primitive": 211,
+      "target": 5,
+      "label": "obstacle",
+      "phase": "Attempt",
+      "physical": {
+        "collision_normal": null,
+        "contact": "None",
+        "displacement": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "energy_cost": 0.05999999865889549,
+        "target_entity": 5
+      },
+      "observation": null,
+      "target_distance_before": 2.3296326498607653,
+      "target_distance_after": 2.245592941461013,
+      "target_consumed_before": false,
+      "target_owner_before": null,
+      "actor_held_before": [],
+      "target_kind_or_mobility_valid": false,
+      "definitely_out_of_reach": true
+    },
+    {
+      "offset": 16,
+      "channel": "Manipulation",
+      "primitive": 210,
+      "target": 5,
+      "label": "obstacle",
+      "phase": "Attempt",
+      "physical": {
+        "collision_normal": null,
+        "contact": "None",
+        "displacement": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "energy_cost": 0.03999999910593033,
+        "target_entity": 5
+      },
+      "observation": null,
+      "target_distance_before": 2.245592941461013,
+      "target_distance_after": 2.329513826529529,
+      "target_consumed_before": false,
+      "target_owner_before": null,
+      "actor_held_before": [],
+      "target_kind_or_mobility_valid": false,
+      "definitely_out_of_reach": true
+    },
+    {
+      "offset": 17,
+      "channel": "Manipulation",
+      "primitive": 213,
+      "target": 3,
+      "label": "far-fruit",
+      "phase": "Attempt",
+      "physical": {
+        "collision_normal": null,
+        "contact": "None",
+        "displacement": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "energy_cost": 0.05999999865889549,
+        "target_entity": 3
+      },
+      "observation": null,
+      "target_distance_before": 3.710131762478354,
+      "target_distance_after": 3.7949851827669185,
+      "target_consumed_before": false,
+      "target_owner_before": null,
+      "actor_held_before": [],
+      "target_kind_or_mobility_valid": false,
+      "definitely_out_of_reach": true
+    },
+    {
+      "offset": 18,
+      "channel": "Manipulation",
+      "primitive": 213,
+      "target": 5,
+      "label": "obstacle",
+      "phase": "Attempt",
+      "physical": {
+        "collision_normal": null,
+        "contact": "None",
+        "displacement": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "energy_cost": 0.05999999865889549,
+        "target_entity": 5
+      },
+      "observation": null,
+      "target_distance_before": 2.4133894890980816,
+      "target_distance_after": 2.4981226569934587,
+      "target_consumed_before": false,
+      "target_owner_before": null,
+      "actor_held_before": [],
+      "target_kind_or_mobility_valid": false,
+      "definitely_out_of_reach": true
+    },
+    {
+      "offset": 19,
+      "channel": "Manipulation",
+      "primitive": 210,
+      "target": 3,
+      "label": "far-fruit",
+      "phase": "Attempt",
+      "physical": {
+        "collision_normal": null,
+        "contact": "None",
+        "displacement": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "energy_cost": 0.03999999910593033,
+        "target_entity": 3
+      },
+      "observation": null,
+      "target_distance_before": 3.878796577270838,
+      "target_distance_after": 3.8053509070423432,
+      "target_consumed_before": false,
+      "target_owner_before": null,
+      "actor_held_before": [],
+      "target_kind_or_mobility_valid": true,
+      "definitely_out_of_reach": true
+    },
+    {
+      "offset": 20,
+      "channel": "Manipulation",
+      "primitive": 213,
+      "target": 5,
+      "label": "obstacle",
+      "phase": "Attempt",
+      "physical": {
+        "collision_normal": null,
+        "contact": "None",
+        "displacement": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "energy_cost": 0.05999999865889549,
+        "target_entity": 5
+      },
+      "observation": null,
+      "target_distance_before": 2.4318419274840966,
+      "target_distance_after": 2.516334644873402,
+      "target_consumed_before": false,
+      "target_owner_before": null,
+      "actor_held_before": [],
+      "target_kind_or_mobility_valid": false,
+      "definitely_out_of_reach": true
+    },
+    {
+      "offset": 22,
+      "channel": "Manipulation",
+      "primitive": 211,
+      "target": 5,
+      "label": "obstacle",
+      "phase": "Attempt",
+      "physical": {
+        "collision_normal": null,
+        "contact": "None",
+        "displacement": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "energy_cost": 0.05999999865889549,
+        "target_entity": 5
+      },
+      "observation": null,
+      "target_distance_before": 2.431962158167661,
+      "target_distance_after": 2.431962158167661,
+      "target_consumed_before": false,
+      "target_owner_before": null,
+      "actor_held_before": [],
+      "target_kind_or_mobility_valid": false,
+      "definitely_out_of_reach": true
+    },
+    {
+      "offset": 23,
+      "channel": "Manipulation",
+      "primitive": 213,
+      "target": 5,
+      "label": "obstacle",
+      "phase": "Attempt",
+      "physical": {
+        "collision_normal": null,
+        "contact": "None",
+        "displacement": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "energy_cost": 0.05999999865889549,
+        "target_entity": 5
+      },
+      "observation": null,
+      "target_distance_before": 2.431962158167661,
+      "target_distance_after": 2.4978644133176404,
+      "target_consumed_before": false,
+      "target_owner_before": null,
+      "actor_held_before": [],
+      "target_kind_or_mobility_valid": false,
+      "definitely_out_of_reach": true
+    },
+    {
+      "offset": 24,
+      "channel": "Manipulation",
+      "primitive": 211,
+      "target": 5,
+      "label": "obstacle",
+      "phase": "Attempt",
+      "physical": {
+        "collision_normal": null,
+        "contact": "None",
+        "displacement": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "energy_cost": 0.05999999865889549,
+        "target_entity": 5
+      },
+      "observation": null,
+      "target_distance_before": 2.4978644133176404,
+      "target_distance_after": 2.5647368968576316,
+      "target_consumed_before": false,
+      "target_owner_before": null,
+      "actor_held_before": [],
+      "target_kind_or_mobility_valid": false,
+      "definitely_out_of_reach": true
+    },
+    {
+      "offset": 25,
+      "channel": "Manipulation",
+      "primitive": 213,
+      "target": 5,
+      "label": "obstacle",
+      "phase": "Attempt",
+      "physical": {
+        "collision_normal": null,
+        "contact": "None",
+        "displacement": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "energy_cost": 0.05999999865889549,
+        "target_entity": 5
+      },
+      "observation": null,
+      "target_distance_before": 2.5647368968576316,
+      "target_distance_after": 2.5647368968576316,
+      "target_consumed_before": false,
+      "target_owner_before": null,
+      "actor_held_before": [],
+      "target_kind_or_mobility_valid": false,
+      "definitely_out_of_reach": true
+    },
+    {
+      "offset": 26,
+      "channel": "Manipulation",
+      "primitive": 210,
+      "target": 4,
+      "label": "activity-toy",
+      "phase": "Attempt",
+      "physical": {
+        "collision_normal": null,
+        "contact": "None",
+        "displacement": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "energy_cost": 0.03999999910593033,
+        "target_entity": 4
+      },
+      "observation": null,
+      "target_distance_before": 2.9260477007367807,
+      "target_distance_after": 2.859301783959119,
+      "target_consumed_before": false,
+      "target_owner_before": null,
+      "actor_held_before": [],
+      "target_kind_or_mobility_valid": false,
+      "definitely_out_of_reach": true
+    },
+    {
+      "offset": 27,
+      "channel": "Manipulation",
+      "primitive": 213,
+      "target": 5,
+      "label": "obstacle",
+      "phase": "Attempt",
+      "physical": {
+        "collision_normal": null,
+        "contact": "None",
+        "displacement": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "energy_cost": 0.05999999865889549,
+        "target_entity": 5
+      },
+      "observation": null,
+      "target_distance_before": 2.480965463770092,
+      "target_distance_after": 2.564616716675972,
+      "target_consumed_before": false,
+      "target_owner_before": null,
+      "actor_held_before": [],
+      "target_kind_or_mobility_valid": false,
+      "definitely_out_of_reach": true
+    },
+    {
+      "offset": 28,
+      "channel": "Manipulation",
+      "primitive": 211,
+      "target": 3,
+      "label": "far-fruit",
+      "phase": "Attempt",
+      "physical": {
+        "collision_normal": null,
+        "contact": "None",
+        "displacement": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "energy_cost": 0.05999999865889549,
+        "target_entity": 3
+      },
+      "observation": null,
+      "target_distance_before": 3.9517426814228296,
+      "target_distance_after": 4.0345133956570045,
+      "target_consumed_before": false,
+      "target_owner_before": null,
+      "actor_held_before": [],
+      "target_kind_or_mobility_valid": true,
+      "definitely_out_of_reach": true
+    },
+    {
+      "offset": 29,
+      "channel": "Manipulation",
+      "primitive": 213,
+      "target": 3,
+      "label": "far-fruit",
+      "phase": "Attempt",
+      "physical": {
+        "collision_normal": null,
+        "contact": "None",
+        "displacement": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "energy_cost": 0.05999999865889549,
+        "target_entity": 3
+      },
+      "observation": null,
+      "target_distance_before": 4.0345133956570045,
+      "target_distance_after": 3.951861716690728,
+      "target_consumed_before": false,
+      "target_owner_before": null,
+      "actor_held_before": [],
+      "target_kind_or_mobility_valid": false,
+      "definitely_out_of_reach": true
+    },
+    {
+      "offset": 30,
+      "channel": "Manipulation",
+      "primitive": 213,
+      "target": 3,
+      "label": "far-fruit",
+      "phase": "Attempt",
+      "physical": {
+        "collision_normal": null,
+        "contact": "None",
+        "displacement": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "energy_cost": 0.05999999865889549,
+        "target_entity": 3
+      },
+      "observation": null,
+      "target_distance_before": 3.951861716690728,
+      "target_distance_after": 4.025007197746094,
+      "target_consumed_before": false,
+      "target_owner_before": null,
+      "actor_held_before": [],
+      "target_kind_or_mobility_valid": false,
+      "definitely_out_of_reach": true
+    },
+    {
+      "offset": 31,
+      "channel": "Manipulation",
+      "primitive": 211,
+      "target": 5,
+      "label": "obstacle",
+      "phase": "Attempt",
+      "physical": {
+        "collision_normal": null,
+        "contact": "None",
+        "displacement": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "energy_cost": 0.05999999865889549,
+        "target_entity": 5
+      },
+      "observation": null,
+      "target_distance_before": 2.632005451904716,
+      "target_distance_after": 2.71452126901337,
+      "target_consumed_before": false,
+      "target_owner_before": null,
+      "actor_held_before": [],
+      "target_kind_or_mobility_valid": false,
+      "definitely_out_of_reach": true
+    },
+    {
+      "offset": 32,
+      "channel": "Manipulation",
+      "primitive": 211,
+      "target": 5,
+      "label": "obstacle",
+      "phase": "Attempt",
+      "physical": {
+        "collision_normal": null,
+        "contact": "None",
+        "displacement": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "energy_cost": 0.05999999865889549,
+        "target_entity": 5
+      },
+      "observation": null,
+      "target_distance_before": 2.71452126901337,
+      "target_distance_after": 2.7832501261479745,
+      "target_consumed_before": false,
+      "target_owner_before": null,
+      "actor_held_before": [],
+      "target_kind_or_mobility_valid": false,
+      "definitely_out_of_reach": true
+    },
+    {
+      "offset": 34,
+      "channel": "Manipulation",
+      "primitive": 211,
+      "target": 4,
+      "label": "activity-toy",
+      "phase": "Attempt",
+      "physical": {
+        "collision_normal": null,
+        "contact": "None",
+        "displacement": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "energy_cost": 0.05999999865889549,
+        "target_entity": 4
+      },
+      "observation": null,
+      "target_distance_before": 3.0829474103904224,
+      "target_distance_after": 3.165757523825433,
+      "target_consumed_before": false,
+      "target_owner_before": null,
+      "actor_held_before": [],
+      "target_kind_or_mobility_valid": false,
+      "definitely_out_of_reach": true
+    },
+    {
+      "offset": 35,
+      "channel": "Manipulation",
+      "primitive": 210,
+      "target": 4,
+      "label": "activity-toy",
+      "phase": "Attempt",
+      "physical": {
+        "collision_normal": null,
+        "contact": "None",
+        "displacement": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "energy_cost": 0.03999999910593033,
+        "target_entity": 4
+      },
+      "observation": null,
+      "target_distance_before": 3.165757523825433,
+      "target_distance_after": 3.097278551375842,
+      "target_consumed_before": false,
+      "target_owner_before": null,
+      "actor_held_before": [],
+      "target_kind_or_mobility_valid": false,
+      "definitely_out_of_reach": true
+    },
+    {
+      "offset": 36,
+      "channel": "Manipulation",
+      "primitive": 210,
+      "target": 5,
+      "label": "obstacle",
+      "phase": "Attempt",
+      "physical": {
+        "collision_normal": null,
+        "contact": "None",
+        "displacement": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "energy_cost": 0.03999999910593033,
+        "target_entity": 5
+      },
+      "observation": null,
+      "target_distance_before": 2.7004601670357866,
+      "target_distance_after": 2.632842747616142,
+      "target_consumed_before": false,
+      "target_owner_before": null,
+      "actor_held_before": [],
+      "target_kind_or_mobility_valid": false,
+      "definitely_out_of_reach": true
+    },
+    {
+      "offset": 37,
+      "channel": "Manipulation",
+      "primitive": 213,
+      "target": 3,
+      "label": "far-fruit",
+      "phase": "Attempt",
+      "physical": {
+        "collision_normal": null,
+        "contact": "None",
+        "displacement": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "energy_cost": 0.05999999865889549,
+        "target_entity": 3
+      },
+      "observation": null,
+      "target_distance_before": 4.026858648709313,
+      "target_distance_after": 4.099644792530734,
+      "target_consumed_before": false,
+      "target_owner_before": null,
+      "actor_held_before": [],
+      "target_kind_or_mobility_valid": false,
+      "definitely_out_of_reach": true
+    },
+    {
+      "offset": 38,
+      "channel": "Manipulation",
+      "primitive": 213,
+      "target": 4,
+      "label": "activity-toy",
+      "phase": "Attempt",
+      "physical": {
+        "collision_normal": null,
+        "contact": "None",
+        "displacement": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "energy_cost": 0.05999999865889549,
+        "target_entity": 4
+      },
+      "observation": null,
+      "target_distance_before": 3.097158399869299,
+      "target_distance_after": 3.165336311620604,
+      "target_consumed_before": false,
+      "target_owner_before": null,
+      "actor_held_before": [],
+      "target_kind_or_mobility_valid": true,
+      "definitely_out_of_reach": true
+    },
+    {
+      "offset": 39,
+      "channel": "Manipulation",
+      "primitive": 210,
+      "target": 5,
+      "label": "obstacle",
+      "phase": "Attempt",
+      "physical": {
+        "collision_normal": null,
+        "contact": "None",
+        "displacement": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "energy_cost": 0.03999999910593033,
+        "target_entity": 5
+      },
+      "observation": null,
+      "target_distance_before": 2.7826907464364563,
+      "target_distance_after": 2.86490018806971,
+      "target_consumed_before": false,
+      "target_owner_before": null,
+      "actor_held_before": [],
+      "target_kind_or_mobility_valid": false,
+      "definitely_out_of_reach": true
+    },
+    {
+      "offset": 40,
+      "channel": "Manipulation",
+      "primitive": 210,
+      "target": 5,
+      "label": "obstacle",
+      "phase": "Attempt",
+      "physical": {
+        "collision_normal": null,
+        "contact": "None",
+        "displacement": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "energy_cost": 0.03999999910593033,
+        "target_entity": 5
+      },
+      "observation": null,
+      "target_distance_before": 2.86490018806971,
+      "target_distance_after": 2.9469895444485483,
+      "target_consumed_before": false,
+      "target_owner_before": null,
+      "actor_held_before": [],
+      "target_kind_or_mobility_valid": false,
+      "definitely_out_of_reach": true
+    },
+    {
+      "offset": 42,
+      "channel": "Manipulation",
+      "primitive": 213,
+      "target": 5,
+      "label": "obstacle",
+      "phase": "Attempt",
+      "physical": {
+        "collision_normal": null,
+        "contact": "None",
+        "displacement": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "energy_cost": 0.05999999865889549,
+        "target_entity": 5
+      },
+      "observation": null,
+      "target_distance_before": 3.016745909452641,
+      "target_distance_after": 3.016745909452641,
+      "target_consumed_before": false,
+      "target_owner_before": null,
+      "actor_held_before": [],
+      "target_kind_or_mobility_valid": false,
+      "definitely_out_of_reach": true
+    },
+    {
+      "offset": 43,
+      "channel": "Manipulation",
+      "primitive": 213,
+      "target": 5,
+      "label": "obstacle",
+      "phase": "Attempt",
+      "physical": {
+        "collision_normal": null,
+        "contact": "None",
+        "displacement": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "energy_cost": 0.05999999865889549,
+        "target_entity": 5
+      },
+      "observation": null,
+      "target_distance_before": 3.016745909452641,
+      "target_distance_after": 3.098474974583275,
+      "target_consumed_before": false,
+      "target_owner_before": null,
+      "actor_held_before": [],
+      "target_kind_or_mobility_valid": false,
+      "definitely_out_of_reach": true
+    },
+    {
+      "offset": 44,
+      "channel": "Manipulation",
+      "primitive": 211,
+      "target": 5,
+      "label": "obstacle",
+      "phase": "Attempt",
+      "physical": {
+        "collision_normal": null,
+        "contact": "None",
+        "displacement": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "energy_cost": 0.05999999865889549,
+        "target_entity": 5
+      },
+      "observation": null,
+      "target_distance_before": 3.098474974583275,
+      "target_distance_after": 3.1796607116298974,
+      "target_consumed_before": false,
+      "target_owner_before": null,
+      "actor_held_before": [],
+      "target_kind_or_mobility_valid": false,
+      "definitely_out_of_reach": true
+    },
+    {
+      "offset": 45,
+      "channel": "Manipulation",
+      "primitive": 210,
+      "target": 3,
+      "label": "far-fruit",
+      "phase": "Attempt",
+      "physical": {
+        "collision_normal": null,
+        "contact": "None",
+        "displacement": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "energy_cost": 0.03999999910593033,
+        "target_entity": 3
+      },
+      "observation": null,
+      "target_distance_before": 4.581544714420615,
+      "target_distance_after": 4.662628949935977,
+      "target_consumed_before": false,
+      "target_owner_before": null,
+      "actor_held_before": [],
+      "target_kind_or_mobility_valid": true,
+      "definitely_out_of_reach": true
+    },
+    {
+      "offset": 46,
+      "channel": "Manipulation",
+      "primitive": 211,
+      "target": 5,
+      "label": "obstacle",
+      "phase": "Attempt",
+      "physical": {
+        "collision_normal": null,
+        "contact": "None",
+        "displacement": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "energy_cost": 0.05999999865889549,
+        "target_entity": 5
+      },
+      "observation": null,
+      "target_distance_before": 3.2611495285017353,
+      "target_distance_after": 3.3324048121051226,
+      "target_consumed_before": false,
+      "target_owner_before": null,
+      "actor_held_before": [],
+      "target_kind_or_mobility_valid": false,
+      "definitely_out_of_reach": true
+    },
+    {
+      "offset": 47,
+      "channel": "Manipulation",
+      "primitive": 210,
+      "target": 4,
+      "label": "activity-toy",
+      "phase": "Attempt",
+      "physical": {
+        "collision_normal": null,
+        "contact": "None",
+        "displacement": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "energy_cost": 0.03999999910593033,
+        "target_entity": 4
+      },
+      "observation": null,
+      "target_distance_before": 3.682013627343197,
+      "target_distance_after": 3.7632623709675252,
+      "target_consumed_before": false,
+      "target_owner_before": null,
+      "actor_held_before": [],
+      "target_kind_or_mobility_valid": false,
+      "definitely_out_of_reach": true
+    },
+    {
+      "offset": 48,
+      "channel": "Manipulation",
+      "primitive": 213,
+      "target": 5,
+      "label": "obstacle",
+      "phase": "Attempt",
+      "physical": {
+        "collision_normal": null,
+        "contact": "None",
+        "displacement": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "energy_cost": 0.05999999865889549,
+        "target_entity": 5
+      },
+      "observation": null,
+      "target_distance_before": 3.404007460716203,
+      "target_distance_after": 3.3232077068167403,
+      "target_consumed_before": false,
+      "target_owner_before": null,
+      "actor_held_before": [],
+      "target_kind_or_mobility_valid": false,
+      "definitely_out_of_reach": true
+    },
+    {
+      "offset": 49,
+      "channel": "Manipulation",
+      "primitive": 211,
+      "target": 5,
+      "label": "obstacle",
+      "phase": "Attempt",
+      "physical": {
+        "collision_normal": null,
+        "contact": "None",
+        "displacement": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "energy_cost": 0.05999999865889549,
+        "target_entity": 5
+      },
+      "observation": null,
+      "target_distance_before": 3.3232077068167403,
+      "target_distance_after": 3.2425439445558255,
+      "target_consumed_before": false,
+      "target_owner_before": null,
+      "actor_held_before": [],
+      "target_kind_or_mobility_valid": false,
+      "definitely_out_of_reach": true
+    },
+    {
+      "offset": 50,
+      "channel": "Manipulation",
+      "primitive": 211,
+      "target": 5,
+      "label": "obstacle",
+      "phase": "Attempt",
+      "physical": {
+        "collision_normal": null,
+        "contact": "None",
+        "displacement": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "energy_cost": 0.05999999865889549,
+        "target_entity": 5
+      },
+      "observation": null,
+      "target_distance_before": 3.2425439445558255,
+      "target_distance_after": 3.162017288746469,
+      "target_consumed_before": false,
+      "target_owner_before": null,
+      "actor_held_before": [],
+      "target_kind_or_mobility_valid": false,
+      "definitely_out_of_reach": true
+    },
+    {
+      "offset": 51,
+      "channel": "Manipulation",
+      "primitive": 211,
+      "target": 3,
+      "label": "far-fruit",
+      "phase": "Attempt",
+      "physical": {
+        "collision_normal": null,
+        "contact": "None",
+        "displacement": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "energy_cost": 0.05999999865889549,
+        "target_entity": 3
+      },
+      "observation": null,
+      "target_distance_before": 4.569112248210043,
+      "target_distance_after": 4.569112248210043,
+      "target_consumed_before": false,
+      "target_owner_before": null,
+      "actor_held_before": [],
+      "target_kind_or_mobility_valid": true,
+      "definitely_out_of_reach": true
+    },
+    {
+      "offset": 52,
+      "channel": "Manipulation",
+      "primitive": 213,
+      "target": 3,
+      "label": "far-fruit",
+      "phase": "Attempt",
+      "physical": {
+        "collision_normal": null,
+        "contact": "None",
+        "displacement": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "energy_cost": 0.05999999865889549,
+        "target_entity": 3
+      },
+      "observation": null,
+      "target_distance_before": 4.569112248210043,
+      "target_distance_after": 4.649397036588306,
+      "target_consumed_before": false,
+      "target_owner_before": null,
+      "actor_held_before": [],
+      "target_kind_or_mobility_valid": false,
+      "definitely_out_of_reach": true
+    }
+  ]
+}
