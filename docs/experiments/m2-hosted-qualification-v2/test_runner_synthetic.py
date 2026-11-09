@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Pure synthetic runner tests. No subprocess, Cargo, Rust fixture or world runs."""
-import copy, importlib.util, json, pathlib, unittest
+import contextlib, copy, importlib.util, json, pathlib, unittest
 from unittest.mock import patch
 ROOT=pathlib.Path(__file__).resolve().parent
 spec=importlib.util.spec_from_file_location('hosted_runner',ROOT/'run_hosted.py')
@@ -81,7 +81,7 @@ class SyntheticTests(unittest.TestCase):
         self.assertNotIn(SECRET,R.serialize_summary(out))
     def test_build_failure_projection_is_wired_without_subprocess(self):
         context={'variant':'reflex','stage':'compile','package':'alife_world'}
-        with patch.object(R,'SOURCE',SOURCE,create=True),patch.object(R,'BOUND_RECORDS',{PATH:row(b'x')}),patch.object(R,'SAFE_CONTEXT',context),patch.object(R,'run',return_value=(raw(diagnostic()),101)) as fake:
+        with patch.object(R,'RUSTUP','/synthetic/rustup',create=True),patch.object(R,'SOURCE',SOURCE,create=True),patch.object(R,'BOUND_RECORDS',{PATH:row(b'x')}),patch.object(R,'SAFE_CONTEXT',context),patch.object(R,'run',return_value=(raw(diagnostic()),101)) as fake:
             self.stop('BUILD',R.build,'alife_world')
             self.assertEqual(context['compiler_errors'][0]['code'],'E0308')
             self.assertTrue(fake.call_args.kwargs['allow_nonzero'])
@@ -89,7 +89,7 @@ class SyntheticTests(unittest.TestCase):
     def test_bad_compile_protocol_drops_partial_projection_but_keeps_completion(self):
         context={'variant':'reflex','stage':'compile','package':'alife_world'}
         payload=raw(diagnostic())+b'\n'+SECRET.encode()
-        with patch.object(R,'SOURCE',SOURCE,create=True),patch.object(R,'BOUND_RECORDS',{PATH:row(b'x')}),patch.object(R,'SAFE_CONTEXT',context),patch.object(R,'run',return_value=(payload,101)):
+        with patch.object(R,'RUSTUP','/synthetic/rustup',create=True),patch.object(R,'SOURCE',SOURCE,create=True),patch.object(R,'BOUND_RECORDS',{PATH:row(b'x')}),patch.object(R,'SAFE_CONTEXT',context),patch.object(R,'run',return_value=(payload,101)):
             self.stop('BUILD_PROTOCOL',R.build,'alife_world')
             self.assertNotIn('compiler_errors',context)
             out=R.failure_summary('BUILD_PROTOCOL',context,['headless::tests::one'],NAMES,{PATH})
@@ -178,11 +178,148 @@ class SyntheticTests(unittest.TestCase):
     def test_bad_seal_digest_encoding_rejects(self):
         args=self.activation();args[6]=SECRET;self.stop('BINDING',R.validate_activation,*args)
 
+    def rustc_verbose(self):
+        return (R.RUST_VERSION+'\nbinary: rustc\ncommit-hash: '+R.RUST_COMMIT+
+                '\ncommit-date: '+R.RUST_DATE+'\nhost: '+R.RUST_HOST+'\nrelease: '+R.TOOLCHAIN+'\nLLVM version: 23.1.1\n').encode()
+    def toolchain_facts(self):
+        return {**R.parse_rustc_version(self.rustc_verbose()),'cargo_version':'cargo 1.99.1 (5f94df478 2026-08-28)',
+                'rustc_binary_sha256':'a'*64,'cargo_binary_sha256':'b'*64,'selected_sysroot_bytes':1234,
+                'platform_toolchain_storage':'separate-normal-hosted-home','action_commit':R.ACTION_COMMIT}
+    @contextlib.contextmanager
+    def fake_discovery(self,fail_command=None,bad_home=False,bad_sysroot=False,bad_version=False,bad_cargo=False,bad_provenance=False,hash_failure=False):
+        home=pathlib.Path('/platform/.rustup');sysroot=home/'toolchains'/('1.99.1-'+R.RUST_HOST)
+        context={};calls=[];action=b'synthetic official action recipe'
+        def fake_run(args,code,**kwargs):
+            calls.append((args,dict(R.ENV)))
+            if code==fail_command: R.fail(code)
+            if args[1:]==['show','home']: return (b'../private\n' if bad_home else str(home).encode()+b'\n')
+            if args[1:3]==['toolchain','install']: return SECRET.encode()
+            if args[-2:]==['--print','sysroot']: return (b'/private/unapproved\n' if bad_sysroot else str(sysroot).encode()+b'\n')
+            if args[-2:]==['--version','--verbose']: return (SECRET.encode() if bad_version else self.rustc_verbose())
+            if args[-2:]==['cargo','--version']: return (SECRET.encode() if bad_cargo else b'cargo 1.99.1 (5f94df478 2026-08-28)\n')
+            raise AssertionError('unexpected synthetic command')
+        with contextlib.ExitStack() as stack:
+            for name,value in [('WORK',pathlib.Path('/work')),('PRIVATE',pathlib.Path('/work/private')),('CHECKOUTS',pathlib.Path('/checkouts')),('RUSTUP','rustup'),('PLATFORM_HOME',None),('TOOLCHAIN_ROOT',None),('TOOLCHAIN_BYTES',0),('ENV',{}),('SAFE_CONTEXT',context),('ACTION_SHA256',R.sha(action) if not bad_provenance else '0'*64)]:
+                stack.enter_context(patch.object(R,name,value,create=True))
+            stack.enter_context(patch.object(R.shutil,'which',return_value='/platform/bin/rustup'))
+            stack.enter_context(patch.object(pathlib.Path,'resolve',lambda p,**kw:p))
+            stack.enter_context(patch.object(pathlib.Path,'is_file',return_value=True))
+            stack.enter_context(patch.object(pathlib.Path,'is_dir',return_value=True))
+            stack.enter_context(patch.object(pathlib.Path,'is_symlink',return_value=False))
+            stack.enter_context(patch.object(pathlib.Path,'read_bytes',return_value=action))
+            stack.enter_context(patch.object(R.os,'access',return_value=True))
+            stack.enter_context(patch.object(R,'bytes_used',return_value=1234))
+            stack.enter_context(patch.object(R,'limits'))
+            stack.enter_context(patch.object(R,'file_sha',side_effect=OSError(SECRET) if hash_failure else None,return_value='a'*64))
+            stack.enter_context(patch.object(R,'run',side_effect=fake_run))
+            yield context,calls
+    def test_normal_hosted_home_private_cargo_and_no_untrusted_environment(self):
+        original={'HOME':'/platform/home','PATH':'/platform/bin:/usr/bin','RUSTUP_HOME':'/platform/.rustup',
+                  'GITHUB_TOKEN':SECRET,'RUSTC_WRAPPER':SECRET,'CARGO_BUILD_RUSTC_WRAPPER':SECRET,
+                  'RUSTUP_DIST_SERVER':'https://untrusted.invalid','CARGO_HOME':'/unapproved/cache'}
+        env=R.normal_toolchain_env(original,pathlib.Path('/work'),pathlib.Path('/work/private'))
+        self.assertEqual(env['HOME'],'/platform/home');self.assertEqual(env['RUSTUP_HOME'],'/platform/.rustup')
+        for key,path in [('CARGO_HOME','/work/cargo'),('CARGO_TARGET_DIR','/work/target'),('TMPDIR','/work/private'),('TMP','/work/private'),('TEMP','/work/private')]:self.assertEqual(env[key],path)
+        self.assertEqual(env['RUSTUP_DIST_SERVER'],'https://static.rust-lang.org')
+        self.assertNotIn(SECRET,json.dumps(env));self.assertNotIn('GITHUB_TOKEN',env)
+        del original['RUSTUP_HOME'];self.assertNotIn('RUSTUP_HOME',R.normal_toolchain_env(original,pathlib.Path('/work'),pathlib.Path('/work/private')))
+    def test_private_environment_uses_discovered_home_and_real_compiler(self):
+        env=R.private_toolchain_env({'PATH':'/platform/bin','HOME':'/platform/home'},pathlib.Path('/work'),pathlib.Path('/platform/.rustup'),pathlib.Path('/platform/toolchain'))
+        self.assertEqual(env['HOME'],'/work/home');self.assertEqual(env['RUSTUP_HOME'],'/platform/.rustup')
+        self.assertEqual(env['RUSTC'],'/platform/toolchain/bin/rustc');self.assertEqual(env['RUSTDOC'],'/platform/toolchain/bin/rustdoc')
+    def test_commands_are_explicit_rustup_run_without_shim_plus_syntax(self):
+        with patch.object(R,'RUSTUP','/platform/bin/rustup',create=True):
+            self.assertEqual(R.toolchain_command('rustc','--version'),['/platform/bin/rustup','run','1.99.1','rustc','--version'])
+            self.assertEqual(R.toolchain_command('cargo','test'),['/platform/bin/rustup','run','1.99.1','cargo','test'])
+            self.assertEqual(R.install_command(),['/platform/bin/rustup','toolchain','install','1.99.1','--profile','minimal','--no-self-update','--force-non-host'])
+            self.stop('INTERNAL',R.toolchain_command,'sh','-c',SECRET)
+    def test_build_uses_discovered_explicit_rustup_command(self):
+        with patch.object(R,'RUSTUP','/platform/bin/rustup',create=True),patch.object(R,'SOURCE',SOURCE,create=True),patch.object(R,'SAFE_CONTEXT',{}),patch.object(R,'run',return_value=(raw(diagnostic()),101)) as call:
+            self.stop('BUILD',R.build,'alife_training')
+            cmd=call.call_args.args[0]
+            self.assertEqual(cmd[:4],['/platform/bin/rustup','run','1.99.1','cargo'])
+            self.assertIn('--locked',cmd);self.assertEqual(cmd[-2:],['--features','cpu-backend']);self.assertNotIn('+1.99.1',cmd)
+    def test_version_projection_exact_official_commit_and_no_raw_text(self):
+        facts=R.parse_rustc_version(self.rustc_verbose());self.assertEqual(facts['rustc_commit'],R.RUST_COMMIT)
+        for payload in [self.rustc_verbose()+SECRET.encode(),self.rustc_verbose().replace(R.RUST_COMMIT.encode(),b'0'*40),self.rustc_verbose().replace(b'1.99.1',b'1.99.0'),self.rustc_verbose().replace(b'23.1.1',SECRET.encode()),b'\xff']:
+            self.stop('TOOLCHAIN_VERSION',R.parse_rustc_version,payload)
+        for payload in [SECRET.encode(),b'cargo +1.99.1',b'cargo 1.98.0 (123456789 2026-01-01)',b'cargo 1.99.1 (123456789 2026-01-01) '+SECRET.encode(),b'\xff']:
+            self.stop('TOOLCHAIN_CARGO',R.parse_cargo_version,payload)
+    def test_sysroot_layout_and_single_path_fail_closed(self):
+        home=pathlib.Path('/platform/.rustup');good=home/'toolchains'/('1.99.1-'+R.RUST_HOST)
+        self.assertEqual(R.validate_layout(home,good),good)
+        for path in ['/private/toolchain',str(home)+'/toolchains/stable-'+R.RUST_HOST,str(home)+'/toolchains/1.99.0-'+R.RUST_HOST]:
+            self.stop('TOOLCHAIN_SYSROOT',R.validate_layout,home,pathlib.Path(path))
+        for raw_path in [b'../home',b'/home\n'+SECRET.encode(),b'/home/../private',b'/home//rustup',b'/home/./rustup',b'/home\x00',b'\xff',b'/'+b'x'*4096]:
+            self.stop('TOOLCHAIN_HOME',R.single_path,raw_path,'TOOLCHAIN_HOME')
+    def test_setup_install_in_normal_home_then_private_validation(self):
+        with self.fake_discovery() as (context,calls):
+            facts=R.discover_toolchain({'HOME':'/platform/home','PATH':'/platform/bin'},install=True)
+            self.assertTrue(R.valid_toolchain_facts(facts));self.assertEqual(context['setup_stage'],'ready')
+            install=[(a,e) for a,e in calls if a[1:3]==['toolchain','install']];self.assertEqual(len(install),1)
+            self.assertEqual(install[0][1]['HOME'],'/platform/home');self.assertEqual(install[0][1]['RUSTUP_HOME'],'/platform/.rustup')
+            self.assertEqual(install[0][1]['CARGO_HOME'],'/work/cargo')
+            self.assertTrue(all(e['HOME']=='/work/home' for a,e in calls if a[-1]=='--verbose' or a[-2:]==['cargo','--version']))
+            self.assertNotIn(SECRET,json.dumps(context));self.assertNotIn('/platform',json.dumps(facts))
+    def test_private_runner_discovery_never_installs(self):
+        with self.fake_discovery() as (_,calls):
+            R.discover_toolchain({'HOME':'/platform/home','PATH':'/platform/bin'},install=False)
+            self.assertFalse(any(a[1:3]==['toolchain','install'] for a,e in calls))
+    def test_setup_failure_stages_are_specific_and_private(self):
+        cases=[('TOOLCHAIN_HOME','rustup-home',{'fail_command':'TOOLCHAIN_HOME'}),
+               ('TOOLCHAIN_INSTALL','install',{'fail_command':'TOOLCHAIN_INSTALL'}),
+               ('TOOLCHAIN_SYSROOT','sysroot',{'fail_command':'TOOLCHAIN_SYSROOT'}),
+               ('TOOLCHAIN_VERSION','rustc-version',{'fail_command':'TOOLCHAIN_VERSION'}),
+               ('TOOLCHAIN_CARGO','cargo-version',{'fail_command':'TOOLCHAIN_CARGO'}),
+               ('TOOLCHAIN_HOME','rustup-home',{'bad_home':True}),('TOOLCHAIN_SYSROOT','sysroot',{'bad_sysroot':True}),
+               ('TOOLCHAIN_VERSION','rustc-version',{'bad_version':True}),('TOOLCHAIN_CARGO','cargo-version',{'bad_cargo':True}),
+               ('TOOLCHAIN_PROVENANCE','official-recipe',{'bad_provenance':True}),('TOOLCHAIN_HASH','binary-hashes',{'hash_failure':True})]
+        for code,stage,kwargs in cases:
+            with self.subTest(code=code,stage=stage),self.fake_discovery(**kwargs) as (context,calls):
+                self.stop(code,R.discover_toolchain,{'HOME':'/platform/home','PATH':'/platform/bin'},True)
+                out=R.failure_summary(code,context,[],set(),{});self.assertEqual(out['code'],code);self.assertEqual(out['setup_stage'],stage)
+                text=R.serialize_summary(out);self.assertNotIn(SECRET,text);self.assertNotIn('/platform',text)
+                self.assertEqual(out['completed_count'],0)
+    def test_missing_rustup_reports_discovery_not_generic_toolchain(self):
+        with patch.object(R.shutil,'which',return_value=None),patch.object(R,'SAFE_CONTEXT',{}) as context:
+            self.stop('TOOLCHAIN_RUSTUP',R.discover_toolchain,{'PATH':'/platform/bin','HOME':'/platform/home'})
+            self.assertEqual(context['setup_stage'],'rustup-discovery')
+    def test_toolchain_failure_facts_are_strict_bounded_and_preserve_completion(self):
+        good=self.toolchain_facts();self.assertTrue(R.valid_toolchain_facts(good))
+        ctx={'variant':'reflex','stage':'fixture','test':'headless::tests::two','toolchain':good}
+        out=R.failure_summary('TEST_FAILED',ctx,['headless::tests::one'],NAMES,{PATH})
+        self.assertEqual(out['completed_count'],1);self.assertEqual(out['toolchain'],good)
+        for key,value in [('private_path',SECRET),('rustc_version',SECRET),('cargo_binary_sha256',SECRET),('selected_sysroot_bytes',True),('selected_sysroot_bytes',R.TOOLCHAIN_LIMIT+1),('platform_toolchain_storage',SECRET),('llvm_version',[])]:
+            bad={**good,key:value};self.assertFalse(R.valid_toolchain_facts(bad))
+            out=R.failure_summary('TEST_FAILED',{**ctx,'toolchain':bad},[],NAMES,{PATH});self.assertEqual(out['code'],'INTERNAL');self.assertNotIn(SECRET,R.serialize_summary(out))
+    def test_setup_entry_only_admits_and_installs_without_build_or_fixture(self):
+        with patch.object(R.sys,'argv',['runner','--setup','boredom','/source']),patch.object(R,'initialize') as init,patch.object(R,'admit',return_value=('a'*40,'b'*40,'c'*64)),patch.object(R,'discover_toolchain',return_value=self.toolchain_facts()) as discovery,patch.object(R,'build') as build,patch.object(R,'run') as run:
+            out=R.setup();init.assert_called_once_with('boredom','/source');self.assertTrue(discovery.call_args.kwargs['install'])
+            build.assert_not_called();run.assert_not_called();self.assertEqual(out['native_builds'],0);self.assertEqual(out['fixture_cases'],0)
+    def test_setup_admission_failure_precedes_install(self):
+        with patch.object(R.sys,'argv',['runner','--setup','boredom','/source']),patch.object(R,'initialize'),patch.object(R,'admit',side_effect=R.Stop('ADMISSION')),patch.object(R,'discover_toolchain') as discovery:
+            self.stop('ADMISSION',R.setup);discovery.assert_not_called()
+    def test_v2_marker_branch_or_plan_cannot_activate_v3(self):
+        for index,key,value in [(0,'GITHUB_REF','refs/heads/qualification/m2-fixed-fixtures-v2'),(1,'ref','refs/heads/qualification/m2-fixed-fixtures-v2'),(5,'plan_id','m2-fixed-fixtures-v2')]:
+            args=self.activation();args[index][key]=value;self.stop('ADMISSION',R.validate_activation,*args)
+        args=self.activation();args[4]='A\tdocs/experiments/m2-hosted-qualification-v2/ACTIVATE.json\n';self.stop('ADMISSION',R.validate_activation,*args)
+    def test_resource_floor_covers_platform_home_and_selected_sysroot(self):
+        class Usage:
+            def __init__(self,free):self.free=free
+        def exercise(free_work=3*1024**3,free_platform=3*1024**3,sysroot_bytes=1234):
+            work=pathlib.Path('/work');platform=pathlib.Path('/platform');sysroot=platform/'toolchains/selected'
+            with patch.object(R,'WORK',work,create=True),patch.object(R,'CHECKOUTS',pathlib.Path('/checkouts'),create=True),patch.object(R,'PLATFORM_HOME',platform),patch.object(R,'TOOLCHAIN_ROOT',sysroot),patch.object(pathlib.Path,'exists',return_value=True),patch.object(R.shutil,'disk_usage',side_effect=lambda p:Usage(free_work if p==work else free_platform)),patch.object(R,'bytes_used',side_effect=lambda p:sysroot_bytes if p==sysroot else 1024):
+                R.limits()
+        exercise()
+        self.stop('DISK_LIMIT',exercise,1,3*1024**3,1234)
+        self.stop('DISK_LIMIT',exercise,3*1024**3,1,1234)
+        self.stop('DISK_LIMIT',exercise,3*1024**3,3*1024**3,R.TOOLCHAIN_LIMIT+1)
+
 if __name__=='__main__':
     suite=unittest.defaultTestLoader.loadTestsFromTestCase(SyntheticTests)
     result=unittest.TestResult();suite.run(result)
     # No synthetic payload or assertion text is printed, even if a self-test fails.
-    report={'schema':'m2-runner-pure-synthetic-tests-v2','cases':result.testsRun,
+    report={'schema':'m2-runner-pure-synthetic-tests-v3','cases':result.testsRun,
             'passed':result.testsRun-len(result.errors)-len(result.failures),
             'failed_cases':[getattr(getattr(t,'test_case',t),'_testMethodName','synthetic_case') for t,_ in result.errors+result.failures],
             'subprocess_invocations':0,'native_builds':0,'native_fixtures':0,'world_ticks':0}
