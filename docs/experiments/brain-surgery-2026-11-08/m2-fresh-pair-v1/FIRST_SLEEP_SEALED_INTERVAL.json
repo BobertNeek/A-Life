@@ -1,0 +1,91 @@
+{
+  "schema": "m2-first-sleep-sealed-interval-v1",
+  "native_calls": 0,
+  "physical_receipt": {
+    "organism_id": 1,
+    "sequence_id": 141,
+    "source_tick": 380,
+    "outcome_tick": 381,
+    "operation": "BodySleep",
+    "awake_recovery": 0.0,
+    "sleep_recovery": 1.0,
+    "actual_displacement": {
+      "x": 0.0,
+      "y": 0.0,
+      "z": 0.0
+    },
+    "body_sleeping": true,
+    "successful_stationary_body_sleep": true
+  },
+  "actual_measured_before": {
+    "F": 0.0,
+    "P": 0.15069215,
+    "ATP": 0.63649255,
+    "body_energy": 0.76873845,
+    "H": 1.0
+  },
+  "actual_measured_after": {
+    "F": 0.0,
+    "P": 0.0,
+    "ATP": 0.63640743,
+    "body_energy": 0.7685719,
+    "H": 1.0
+  },
+  "measured_physical_net_change": {
+    "F": 0.0,
+    "P": -0.15069215,
+    "ATP": -8.51200000000496e-05,
+    "body_energy": -0.00016654999999998754,
+    "H": 0.0
+  },
+  "initial_sealed_interval_net_380_to381": {
+    "F": 0.0,
+    "P": -0.15069215,
+    "ATP": -8.51200000000496e-05,
+    "body_energy": -0.00016654999999998754,
+    "H": 0.0
+  },
+  "remaining_sleep_cycle_net_381_to389": {
+    "F": 0.0,
+    "P": 0.0,
+    "ATP": -0.0005913899999999694,
+    "body_energy": -3.5600000000135523e-06,
+    "H": 0.0
+  },
+  "source_tick": 380,
+  "source_trace_sha256": "cf95e70bc078d2c26b3deffd4e61793f72795a5546fbaa6ccc8725e484193646",
+  "outcome_homeostatic_delta": {
+    "drives": {
+      "hunger": 0.00013187528,
+      "fatigue": 0.0,
+      "fear": 1.6614795e-06,
+      "pain": 0.0,
+      "loneliness": 2.488494e-06,
+      "curiosity": 7.480383e-06,
+      "brain_atp": -8.511543e-05,
+      "temperature_stress": 0.0,
+      "reproductive_drive": 1.6614795e-06,
+      "extension": [
+        0.0,
+        0.0
+      ]
+    },
+    "hormones": {
+      "adrenaline": -0.020253658,
+      "cortisol": 2.2351742e-07,
+      "dopamine": 5.364418e-07,
+      "oxytocin": 5.364418e-07,
+      "serotonin": 6.556511e-07,
+      "acetylcholine": 0.0,
+      "learning_modulator": -0.0035740733,
+      "developmental_hormone": 5.364418e-07,
+      "sleep_pressure": -0.15069215,
+      "extension": [
+        0.0,
+        0.0
+      ]
+    }
+  },
+  "outcome_energy_delta": -0.00016653538,
+  "interpretation": "All observed P reduction in this cycle is already present in the initial sealed interval. F was already zero. This is observed relief/time attribution, not isolated counterfactual action benefit."
+}
