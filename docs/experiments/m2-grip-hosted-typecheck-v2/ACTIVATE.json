@@ -1,0 +1,11 @@
+{
+  "attempt": 1,
+  "main": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "plan_id": "m2-grip-hosted-typecheck-v2",
+  "prepared_head": "f5ce4d6de7ddf2e04473befefc715cc48bb28f26",
+  "research_base": "fbf2a517f93098b5d936878a3d26bbb8d0391c38",
+  "schema": "m2-grip-typecheck-activation-v2",
+  "seal_sha256": "5d9766bf930f799a96fa8cf23324fadbc45b73a7130121cc976de455db2ad0c6",
+  "source_manifest_sha256": "c9d9fb1107462a855cb2237c6e3433cf78699cda37a86b5cf7f1751a43ea7d22",
+  "typecheck_only": true
+}
