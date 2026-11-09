@@ -10,7 +10,44 @@ Accepted main remains `c3aec16df33861f1316d127736f5f60eea327ede`, with opt-in in
 
 The [previous chronological handoff](https://github.com/BobertNeek/A-Life/blob/4b21a3e43a9e4ce9c4ecd591a5e7677f429ae7fc/docs/experiments/brain-surgery-2026-11-08/STATUS-2026-11-08-2058UTC.md) retains the earlier candidates, failures, original sleep pilot, physiology and source identities.
 
-## Latest tested progress, 15:50 UTC
+## Latest tested progress, 17:45 UTC
+
+The earlier 32+32 comparison remains unchanged: geometric coordination produced more successful commands but did not improve feeding and increased fatigue. No new autonomous life or learned brain has been promoted.
+
+### Biological drives and boredom
+
+The all-drive baseline completed **200 cases × 48 native iterations, 9,600 source/M2/group forwards**, with no world steps or learning. Nine actual need axes have the intended direct response signs in the two fixed receptor contexts: hunger, fatigue, fear, pain, loneliness, curiosity, ATP, unsigned thermal stress and sleep pressure. Reproductive readiness already gates real physiological reproduction, whereas reserved extension has no declared purpose. Boredom is different: it is a recoverable chemical need with a real Play reducer and negative value contribution, but the tested neural controller has no motivational response to it.
+
+There are eleven real biological inputs here plus one reserved position, not twelve live drives. The actual B1 encoder in this source assigns Homeostasis positions 0–15; concatenated sleep-pressure position 19 is absent there, while M2 directly reads the sleep-pressure hormone. No legacy ABI was silently changed. The body exposes unsigned thermal stress, not a signed core-temperature error. Directional thermoregulation needs additional grounded physiology and context, not an arbitrary weight reversal.
+
+A separate **16-row, eight-opponent-pair Play readout repair** completed 80 fixed cases × 48 frames: 3,840 public B1 forwards and 15,360 total M2/group branch forwards including controls. Its original branch matches the qualified library; its equal-work padded sham is invariant; other logits, recovery-group and operation outputs remain unchanged. Both padded arms add 2,112 Q24 work. At frame 48, high-boredom Play probability rose from 0.156 to 0.868 in the neutral context and 0.244 to 0.541 in the rounded recorded context. Competing needs suppress it, but fear/pain can still leave about 0.25–0.29 Play probability. This is not crisis exclusion or appropriate behavioral calibration.
+
+The old representative-first sampler also creates an unwanted coupling: suppressing Play can slightly reduce total Rest and sleep despite increasing recovery without simultaneous Play. A channel-native mathematical alternative passed nine exact Python tests; a separate disabled Rust prototype now has eight pure fixtures authored, not run. New action/proof/owner domains and a genuinely bundle-native host interface are required. It must not pretend to use the old sampler's likelihood or representative witness.
+
+The actual reducer was checked separately using ordinary body physiology: after 64 registered no-manipulation intervals, naturally accumulated boredom was 0.012799993. One completed Play with stimulation 1 reduced it to 0; the matched no-play branch reached 0.012999993. All 66 intervals passed once-only biology, awake/health/injury, zero nutrition/praise and stationary unconsumed-toy checks. Play spent more energy, and total measured homeostatic improvement was slightly negative, −0.0000397709. This is a real body-contract result, not the neural candidate choosing Play or the full novelty-aware host. The first interaction with a novel toy can have different investigation/stimulation semantics.
+
+An additive, separately owned full runtime candidate/sham is being assembled; old 60-row APIs remain original. Its full library build currently exceeds the local disk headroom above the retained 4 GiB floor, so bounded hosted qualification is being prepared rather than deleting evidence or lowering that floor.
+
+### Whole-event meal memory
+
+Six protected Optional-Quiet host fixtures now pass, including actual acquisition followed by consumption whose representative is Flee toward a different toy. The exact sealed physical receipts, one sequence/biology/source/replay transition per interval, closed learning, rollback and cold continuation are checked. The original representative archive remains intact; the new mode stores a signed joint-context association rather than copying meal reward into every action family.
+
+One new fixed historical-frame readout also passed. The real acquisition event had joint valence −0.00076255 and the later consumption event +0.08036877. Keeping that entire consumption episode raised the exact meal bundle probability from **0.0002898341 to 0.0003018230**, a +4.136% relative change but only about 0.0302% absolute probability. Both same-RNG views selected the same different action bundle. This shows a local memory contribution, not changed behavior, synaptic learning or improved feeding.
+
+The exact-identity query cannot naturally recur once that food is consumed and removed. A separate observed-cue matcher therefore passed **19 pure Rust contracts** for cross-instance contextual expectation. It transfers neither ownership nor a claimed future consumption fact. Source-only fresh-host integration now binds bounded cue witnesses to validated original frames and immutable episodes, rebuilds descriptors on restore, and restricts executor-semantic normalization to proven entity-target Eat/Inspect routes. The populated cold/producer and actual second-food diagnostic remain unfinished. Satiety, candidate-cap and 64-event retention limits must be measured rather than bypassed with forced hunger, renewal or a fifth object.
+
+### Grip and preservation qualifications
+
+The [cache composition source and results](https://github.com/BobertNeek/A-Life/blob/2398b75e7ff30e9cf6bee6f36f7c3f15886c3e2b/docs/experiments/brain-surgery-2026-11-08/m2-optional-cache-qualified-v2/START-HERE.md) are durably published: 26 fixed executions passed and seven complete uncached/cached frames are byte-identical. This composition still has no measured speedup.
+
+The [Avoid/recovery mechanism handoff](https://github.com/BobertNeek/A-Life/tree/a7d2f24c704b8ba336ede39e71ee391c5f791341/docs/experiments/brain-surgery-2026-11-08) preserves the 1,152-iteration Avoid calibration and eleven synthetic recovery/motion tests described below.
+
+Grip source-only hosted attempts V1–V3 all ran once, with zero test bodies or lives. V1 found an exhaustive enum fixture; V2 found a missing test-only bincode dependency; both were fixed without narrowing target coverage. V3 again passed all core targets, then stopped at the source-closure guard because an existing main world test was absent from the manifest. The V4 manifest correction passed 28 static checks and all 42 intended source blob hashes were verified. Its tree publication was explicitly denied because the disposable-branch design omitted inherited CI workflows. No new tree/ref/job was created. That deletion design is stopped; a safer replacement must preserve inherited workflows and prove that their filters cannot start unrelated studies. No approval or successful publication is implied.
+
+The earlier uncertain reflex tree write remains unresolved and is not retried or bypassed. No retained life, default birth, optimizer, checkpoint or historical study was overwritten.
+
+## Earlier tested progress, 15:50 UTC
+
 
 The fresh comparison remains 32+32 intervals with the same meal eaten later by the candidate. No new autonomous life has been added.
 
