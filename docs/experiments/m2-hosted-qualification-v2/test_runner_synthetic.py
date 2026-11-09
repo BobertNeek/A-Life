@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Pure synthetic runner tests. No subprocess, Cargo, Rust fixture or world runs."""
-import contextlib, copy, importlib.util, json, pathlib, unittest
+import ast, contextlib, copy, importlib.util, json, pathlib, unittest
 from unittest.mock import patch
 ROOT=pathlib.Path(__file__).resolve().parent
 spec=importlib.util.spec_from_file_location('hosted_runner',ROOT/'run_hosted.py')
@@ -315,11 +315,55 @@ class SyntheticTests(unittest.TestCase):
         self.stop('DISK_LIMIT',exercise,3*1024**3,1,1234)
         self.stop('DISK_LIMIT',exercise,3*1024**3,3*1024**3,R.TOOLCHAIN_LIMIT+1)
 
+    def test_both_actual_listing_command_expressions_pin_pretty(self):
+        module=ast.parse((ROOT/'run_hosted.py').read_text())
+        main=next(n for n in module.body if isinstance(n,ast.FunctionDef) and n.name=='main')
+        listings=[n for n in ast.walk(main) if isinstance(n,ast.Call) and isinstance(n.func,ast.Name) and n.func.id=='run' and n.args and isinstance(n.args[0],ast.List) and any(isinstance(x,ast.Constant) and x.value=='--list' for x in n.args[0].elts)]
+        self.assertEqual(len(listings),2)
+        calls=[];name='headless::tests::one'
+        def fake_run(args,code):
+            calls.append(args);self.assertEqual(code,'LIST_PROTOCOL')
+            self.assertEqual(args[args.index('--format')+1],'pretty');self.assertNotIn('terse',args)
+            if '--ignored' in args:
+                names=sorted(R.IGNORED['alife_training'])
+                return ('\n'.join(n+': test' for n in names)+'\n\n5 tests, 0 benchmarks\n').encode()
+            self.assertEqual(args[-2:],['--exact',name])
+            return (name+': test\n\n1 test, 0 benchmarks\n').encode()
+        results=[R.list_names(eval(compile(ast.Expression(n),'<synthetic-command>','eval'),{'run':fake_run,'str':str,'exe':'synthetic-harness','name':name})) for n in listings]
+        self.assertTrue(any('--ignored' in c for c in calls));self.assertTrue(any('--exact' in c for c in calls))
+        self.assertIn(sorted(R.IGNORED['alife_training']),results);self.assertIn([name],results)
+    def test_pretty_selection_footer_count_and_unique_names_stay_strict(self):
+        self.assertEqual(R.list_names(b'a: test\n\n1 test, 0 benchmarks\n'),['a'])
+        for payload in [b'a: test\n',b'a: test\nb: test\n',b'a: test\na: test\n\n2 tests, 0 benchmarks\n',b'a: test\n\n2 tests, 0 benchmarks\n',b'a: test\n\n0 tests, 0 benchmarks\n']:
+            self.stop('LIST_PROTOCOL',R.list_names,payload)
+        self.assertNotEqual(R.list_names(b'0 tests, 0 benchmarks\n'),['required_test'])
+    def channel_mapping_inputs(self):
+        spec=importlib.util.spec_from_file_location('mapping',ROOT/'reflex-key-v2/check_mapping.py')
+        mapping=importlib.util.module_from_spec(spec);spec.loader.exec_module(mapping)
+        core,source=mapping.load_inputs()
+        return mapping,core,source
+    def test_channel_mapping_exhausts_public_enum_and_preserves_multiset_keys(self):
+        m,core,source=self.channel_mapping_inputs();result=m.witness(core,source)
+        self.assertEqual(result['public_enum_values'],261);self.assertTrue(result['mapping_exact']);self.assertTrue(result['injective'])
+        self.assertEqual(result['rust_invocations'],0);self.assertEqual(result['world_calls'],0)
+    def test_channel_mapping_wrong_constant_cast_wildcard_or_guard_rejects(self):
+        m,core,source=self.channel_mapping_inputs()
+        for wrong in [source.replace('MotorChannel::Posture => 4,','MotorChannel::Posture => 3,'),source.replace('0x100 + u16::from(id)','0x101 + u16::from(id)'),source.replace('u16::from(id)','id as u16'),source.replace('MotorChannel::SpeciesSpecific(id) =>','_ =>'),source.replace('MotorChannel::SpeciesSpecific(id) =>','MotorChannel::SpeciesSpecific(id) if id > 0 =>')]:
+            with self.assertRaises(ValueError):m.witness(core,wrong)
+    def test_channel_mapping_future_enum_addition_or_changed_core_rejects(self):
+        m,core,source=self.channel_mapping_inputs()
+        for wrong in [core.replace('    Posture,','    Posture,\n    NewChannel,'),core.replace('SpeciesSpecific(u8)','SpeciesSpecific(u16)'),core.replace('Self::Vocal => 3,','Self::Vocal => 8,')]:
+            with self.assertRaises(ValueError):m.witness(wrong,source)
+    def test_channel_helper_remains_private_and_both_sites_are_required(self):
+        m,core,source=self.channel_mapping_inputs()
+        for wrong in [source.replace('fn recovery_reflex_channel_key','pub fn recovery_reflex_channel_key'),source.replace('recovery_reflex_channel_key(c.channel)','c.channel.canonical_key()',1)]:
+            with self.assertRaises(ValueError):m.witness(core,wrong)
+
 if __name__=='__main__':
     suite=unittest.defaultTestLoader.loadTestsFromTestCase(SyntheticTests)
     result=unittest.TestResult();suite.run(result)
     # No synthetic payload or assertion text is printed, even if a self-test fails.
-    report={'schema':'m2-runner-pure-synthetic-tests-v3','cases':result.testsRun,
+    report={'schema':'m2-runner-pure-synthetic-tests-v4','cases':result.testsRun,
             'passed':result.testsRun-len(result.errors)-len(result.failures),
             'failed_cases':[getattr(getattr(t,'test_case',t),'_testMethodName','synthetic_case') for t,_ in result.errors+result.failures],
             'subprocess_invocations':0,'native_builds':0,'native_fixtures':0,'world_ticks':0}
