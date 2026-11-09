@@ -1,0 +1,35 @@
+{
+  "schema": "m2-reflex-private-channel-key-source-v2",
+  "base": "fbf2a517f93098b5d936878a3d26bbb8d0391c38",
+  "original_patch_sha256": "3bd0e0d55eaa531caaf661b629326d9a622e26c001eb999d4b598d07f66158f5",
+  "original_source_sha256": "54a80c4d143c9b97b4b19aa04b7322985b45a8e3f1000ca44e2400ae2113bc0b",
+  "revised_patch": {
+    "path": "../patches/fbf-to-reflex.patch",
+    "bytes": 74744,
+    "sha256": "d83677117de9e27e696e7f8ea7a495381e14f268b1e67fe74b7779998fded6b4"
+  },
+  "incremental_patch": {
+    "path": "original-to-private-channel-key.patch",
+    "bytes": 1730,
+    "sha256": "5ebfa59357744a3549fa8a7154d8f5dee00bbed4464c074886176a403b0607b0"
+  },
+  "changed_source": {
+    "path": "crates/alife_world/src/headless/sleep_choice_research/recovery_reflex.rs",
+    "bytes": 30098,
+    "sha256": "a3aac6701e4c454843394e92dc77dc3381ceb6ee76240334abb06a3c5c3b67ea"
+  },
+  "core_source": {
+    "path": "crates/alife_core/src/motor.rs",
+    "sha256": "9c4a3f5b0cbbd8b8d9c129e289264281a3abcc687579f9737ac1170210506e16",
+    "public_excerpt_sha256": "809baa0ef6debd2b9b9906ea94db50f22c3e89506b759ab66834e56bc84af294"
+  },
+  "original_exact_restoration_by_removing_helper_and_reversing_two_calls": true,
+  "other_four_reflex_files_unchanged": true,
+  "fixed_tests": 22,
+  "fixed_test_bytes_and_call_bounds_unchanged": true,
+  "core_public_api_changes": 0,
+  "native_builds": 0,
+  "native_fixture_cases": 0,
+  "world_calls": 0,
+  "qualification": "source-only, not native-qualified"
+}
