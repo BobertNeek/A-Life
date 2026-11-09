@@ -1,9 +1,9 @@
 {
   "files": [
     {
-      "bytes": 18917,
+      "bytes": 20135,
       "path": "PLAN.md",
-      "sha256": "7d468ca036a1027db5699da331c5c31cbdb50043b2d824390c264f5751a868f1"
+      "sha256": "1f2eb13a6cbc84d91697464b0e4febc8397e1371ffdf595116c97c65ad45ec0e"
     },
     {
       "bytes": 2165,
@@ -11,14 +11,14 @@
       "sha256": "e37511d99426f82957833fc454cec37c388761c2ed604148dc1bd29f7b1657ca"
     },
     {
-      "bytes": 31587,
+      "bytes": 31589,
       "path": "run_hosted.py",
-      "sha256": "195d0e61ee4f75c121ad3817e01154486bd377a74b1d8452473333dd844e7728"
+      "sha256": "30b6cdc2550801232b313a671995c623e03b69da13c36acf644cdaf14323ddf4"
     },
     {
-      "bytes": 29891,
+      "bytes": 33950,
       "path": "test_runner_synthetic.py",
-      "sha256": "08ad7b1123f8d678142d5b937de788f2088c285d85b21d43e910890047060c4b"
+      "sha256": "5faf0ccf678f7f325bf48a1547c4dec22adde68faa327dced5b7e39093c42e93"
     },
     {
       "bytes": 30715,
@@ -56,9 +56,9 @@
       "sha256": "c18a497dde7dd0cf5025283806c69234f783282d4b7c808e1161d51aee053718"
     },
     {
-      "bytes": 1143,
+      "bytes": 1166,
       "path": "source-reflex.json",
-      "sha256": "c8b7851b862656704f0131ca4bcf7f49996448a18f45820482fd2306ece4508a"
+      "sha256": "19c73446ae13536cbbf590c988f06994237bd85ed0a9e6c2f860fe02f29ffb17"
     },
     {
       "bytes": 1999,
@@ -68,7 +68,7 @@
     {
       "bytes": 1160,
       "path": "patches.json",
-      "sha256": "11a78725e4a6edaba22827b6a5a8d20be726189d3f69b7927d8be98c489fd263"
+      "sha256": "3759fb8b624a4d81618a2009ad19a8b3a767be4e42a25ee8284651180a625faa"
     },
     {
       "bytes": 33302,
@@ -81,19 +81,19 @@
       "sha256": "84c6f0b6332668aa28db03b914b7b69563fd50cd9b9080d25641cdaf149320ba"
     },
     {
-      "bytes": 569,
+      "bytes": 825,
       "path": "STATIC-CHECK.json",
-      "sha256": "b4e93f8cb8fda1d327d08575414dccc4235a5fd7489ee7b64f9d4222c5c1a7fb"
+      "sha256": "48e40f9a1a2c48d6d1bf3aea9fac53e264c40ff35e31a1e2e93f1f931ec5f40a"
     },
     {
       "bytes": 202,
       "path": "SYNTHETIC-TESTS.json",
-      "sha256": "cba238ad48cc169ac8d13be5ad553cb1d229292fc127113e701a2746cc909396"
+      "sha256": "9041cb472dc8bc1fff3b0918257a5449394fcc40e4b3e169cf1311af6c25f1f6"
     },
     {
-      "bytes": 8704,
+      "bytes": 9733,
       "path": "TRIGGER-AUDIT.json",
-      "sha256": "346613d846ef1d08d1371a312f348024d7a178db8057923d1b984e9791dce95b"
+      "sha256": "49ae60ced23e45cc67aebe4a421ada25573d9e753dfde97ad4115546f21ac960"
     },
     {
       "bytes": 5176,
@@ -121,9 +121,9 @@
       "sha256": "6de53b500c9a87313d8b52bf010809798febdd9597eefe46667fff2427b7c3ca"
     },
     {
-      "bytes": 74202,
+      "bytes": 74744,
       "path": "patches/fbf-to-reflex.patch",
-      "sha256": "3bd0e0d55eaa531caaf661b629326d9a622e26c001eb999d4b598d07f66158f5"
+      "sha256": "d83677117de9e27e696e7f8ea7a495381e14f268b1e67fe74b7779998fded6b4"
     },
     {
       "bytes": 64012,
@@ -169,7 +169,42 @@
       "bytes": 7481,
       "path": "upstream-toolchain-action.yml",
       "sha256": "0b52547c145ae18d8631c9ab711e4d917e9e489cea800368f338c25a56e0aee2"
+    },
+    {
+      "bytes": 2281,
+      "path": "CORRECTION-V4.md",
+      "sha256": "dddb402c3e3e49319c77655d6a0869245794f402e518f085894e89c7645ba6bf"
+    },
+    {
+      "bytes": 1812,
+      "path": "V3-RESULTS.json",
+      "sha256": "66d8ecd21368bbd8836081d1846cf877508454f2dfa91655da3eaf87d80f22e3"
+    },
+    {
+      "bytes": 1483,
+      "path": "reflex-key-v2/MANIFEST.json",
+      "sha256": "a8b075e8120deec5b4506153ca5d930fbe84ff01487f67ad6cfb75018d544d23"
+    },
+    {
+      "bytes": 3779,
+      "path": "reflex-key-v2/check_mapping.py",
+      "sha256": "6dd7dd493c7c621041361abe4f7be22b082262e57a53953d8beab21f505064d9"
+    },
+    {
+      "bytes": 468,
+      "path": "reflex-key-v2/pinned-core-motor-channel.txt",
+      "sha256": "809baa0ef6debd2b9b9906ea94db50f22c3e89506b759ab66834e56bc84af294"
+    },
+    {
+      "bytes": 404,
+      "path": "reflex-key-v2/MAPPING-CHECK.json",
+      "sha256": "75427f5b16fd8e4c79e8f9bfdd91a88cb9c608424524a8ba664177946ae3b26b"
+    },
+    {
+      "bytes": 1730,
+      "path": "reflex-key-v2/original-to-private-channel-key.patch",
+      "sha256": "5ebfa59357744a3549fa8a7154d8f5dee00bbed4464c074886176a403b0607b0"
     }
   ],
-  "schema": "m2-hosted-fixed-fixtures-v3"
+  "schema": "m2-hosted-fixed-fixtures-v4"
 }
