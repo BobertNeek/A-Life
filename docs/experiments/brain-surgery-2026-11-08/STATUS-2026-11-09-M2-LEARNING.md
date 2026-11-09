@@ -1,0 +1,92 @@
+# Brain surgery handoff: 9 November 2026
+
+## Method and scope
+
+Keep the original [Sparks of Weight-Space Programming](https://rikiyat.github.io/blog/weight-space-programming/) reference. Experiment 4 motivates targeted repair, Experiment 5 whole 20,486-weight controllers, and Experiment 6 measured iterative feedback. Our controller is recurrent, embodied and plastic. Authored genes, changed neural activity, changed policy probability, a sampled action, a useful physical outcome and learned competence are different results.
+
+Creatures 3 / Docking Station remains a near-ideal functional reference, not a requirement to clone every chemical. The [official Genetics Kit manual](https://cdn.cloudflare.steamstatic.com/steam/apps/1838430/manuals/Genetics_Kit_Manual.pdf?t=1640163808), pages 46–48, supports distinct recovery needs, crisis chemistry and longer-term stress. Navigation chemicals are 199–203 in the original catalogue, not 163–167. Backup reactions depend on the genome. Temporary motivational suppression must not erase the underlying biological deficit.
+
+Accepted main remains `c3aec16df33861f1316d127736f5f60eea327ede`, with opt-in inherited AwakeRest and calibrated recovery timing. Existing/default births and acquired lives are unchanged. Everything below is separate CPU research, not gameplay/default/GPU promotion or migration of old brains.
+
+The [previous chronological handoff](https://github.com/BobertNeek/A-Life/blob/4b21a3e43a9e4ce9c4ecd591a5e7677f429ae7fc/docs/experiments/brain-surgery-2026-11-08/STATUS-2026-11-08-2058UTC.md) retains the earlier candidates, failures, original sleep pilot, physiology and source identities.
+
+## Qualified local synaptic learning: a small effect, not competence
+
+GDE1 is now qualified in bounded native fixtures. Tested runtime code is `ed5f2f5a13e9d7b3851272adeeec7c73b605f7aa`; final source/prose is `2f2cd592ef7a05d199dd1bc3353afdd7f49bcee7`, tree `a0cf42000ef02478822c5b9b60ee1577027ec970`, based on closed host `fbf2a517f93098b5d936878a3d26bbb8d0391c38`.
+
+The actual source runs once. A sparse pullback uses the real hierarchical representative, genuinely sampled channel and conditional recovery factors, including temperature, masks, common Rest and operation-memory clipping. Only source ActionCandidate/MemoryContext fast and eligibility coordinates may change. Recurrent/speech/cognitive writes, lifetime, dendrites, structural banks, synaptic sleep and founder Adam/BPTT remain closed. Canonical episodic memory, predictor, body and memory-only sleep still evolve.
+
+The declared new law is a bounded log-score eligibility trace with canonical sealed joint-outcome receptor modulation. Alpha appears once when converting the effective-weight derivative into a fast update. It does not reuse the old Oja normalization, invent isolated per-channel rewards, or constitute an exact policy-gradient optimizer. Exact source biochemical-frame binding and pre-update weight/dispatch/frame/action/sequence identities are checked before commit. Duplicate or malformed credit rolls back atomically.
+
+### Preserve the initial failure
+
+The first real update changed 144 fast coordinates and 142 effective weights. Raw readout change was about 9.00e-8 and M2 port change about 2.98e-8, but the final bounded policy readout was bit-identical. The original 9-pass/1-failure packet and binary remain retained. No rate, seed, coefficient or gain was changed to make this pass.
+
+At one representative coordinate: raw gradient -0.029025819375, inherited rate 0.01, alpha 0.1341599822, receptor projection -0.00500660250, fast delta 1.85214148e-7 and effective-weight delta 2.48483261e-8. This was not a zero derivative: the difference survived the source/port calculation and rounded away at the final M2 readout.
+
+On the second interval, the identical captured state, frame, recall/context, mask, appendage and sample were evaluated with inherited versus acquired fast weights. Joint log probability changed from -1.72611119307095584 to -1.72611475035219319, a delta of about -3.55728e-6. The last-update-only contrast changed too. This is a genuine local synaptic policy effect. It is not a different lived future, a demonstrated action switch, useful avoidance or better fitness.
+
+### Physical feedback is not just a recovery label
+
+The initial cost control includes actual computational energy expenditure. Its comparison with the old closed host is not equal-work, because learning has additional charged semantic arithmetic. It cannot establish action-specific relief learning.
+
+Separately, ordinary sampled AwakeRest at tick 242 produced measured pre-compute fatigue change -0.13342218 and energy change -0.000010192394. Full sealed energy change was -0.00022560358 after cognitive debit 0.00021551001. One sealed update changed 264 fast coordinates and advanced weight generation 2 to 3. Its modulator contained homeostatic improvement 0.018505063, frustration 0.03, prediction residual 0.35057765, and zero pain/novelty. This is joint associated feedback containing real relief and concurrent costs, not proof that relief alone caused the update. Dose 1 is not a fatigue change of 1. The earlier tick-241 policy contrast and tick-242 relief are separate observations.
+
+### Native qualification and baseline preservation
+
+- Twelve distinct GDE1 cases cover derivatives, clipping, a specialized derived vocal lane, masks, provenance rejection, physical feedback, exact acquired-state cold continuation and nonzero frozen-bank preservation.
+- Actual BodySleep, one memory-only consolidation, Waking and resumed decisions preserve acquired fast/eligibility exactly. No fake synaptic weight-generation update is made during memory sleep.
+- Across the selected candidate suites, 93 distinct cases passed, with 98 passing executions because some cases repeat. Counts overlap: do not add each sub-suite as independent evidence.
+- Compatibility includes 10 grouped-host cases, two closed Food cases, 50 mediation cases, nine M0 cases, nine actual M1 host cases, three M1 replay cases, literal pre-adapter wire and the candidate witness.
+- A separate source-identical old-baseline witness passed. All five complete outputs match byte-for-byte: the initial envelope, two subsequent envelopes and both full decision records, totaling 7,116,876 bytes per revision. Cold restores are exact. This is a bounded witness, not proof of every possible history.
+- Strict library/tests Clippy passes with warnings denied. All-target Clippy does not pass because unchanged example support has pre-existing dead-code warnings. No full-workspace or hardware result is claimed.
+
+The [source-only incremental GDE1 patch](https://github.com/BobertNeek/A-Life/blob/c817e2beafaa3eb780539334b744a3a4a4f2e6d0/docs/experiments/brain-surgery-2026-11-08/grouped-m2-decoder-credit-v1-from-fbf2a517.patch) is 129,923 bytes, SHA256 `87b1ce316ef724305d2d4d4df60c263bfc182fc5991b743a0cd7372fd4892ee4`. It includes source, tests, prose and curated scalar results, not captured checkpoints, decision exports, learned assets, executables or raw logs. It requires the exact named base; it is not a standalone repository.
+
+Before an autonomous learning comparison, add a distinct equal-work fast-write sham: execute the same gradient/trace/receptor/candidate-update arithmetic and costs, retain eligibility, but suppress fast writes and weight-generation changes. Keep hypothetical versus applied changes explicit and reject cross-mode restores. This design is not implemented yet. The lower-cost old closed host is not a substitute for that control.
+
+## Six-row care-reference repair remains separate
+
+Tested source `66e733f349230a63ad91a2f87072b4405eaa99b3`, cleaned prose `ef90f560858498fa66cf8ba879d448954d8201af`, adds six previously zero recurrent weights to match the care references' cold and tonic background. It cancels the unwanted zero-hunger pedestal while preserving measured hunger, fear and pain sensitivities within 2.7e-6. It does not flip taste coefficients or alter the decoder, soma, sensors, M2 weights or world.
+
+Both actual harmless chemical[0] food arms consumed at decision 10, versus old positive 2 / negative 22. That is not overall care improvement. Conditional feature probes are not held-out biological worlds. The source/label erratum is retained: logical persistent-address maps are sorted by address, not packed row. Resolve packed_index instead of indexing that array by row. Old reader label mistakes do not mean the coefficients were edited at wrong coordinates.
+
+The [source-only incremental care patch](https://github.com/BobertNeek/A-Life/blob/29e9e9b8b9dde6aff9159a5050f5b6fe11744ec0/docs/experiments/brain-surgery-2026-11-08/m2-care-reference-source-only-ef90f5608.patch) is 69,778 bytes, SHA256 `d2c2c491dcc82d2187bee3d01152e978e16528f0efe831ef9b6973ed60fb8c37`, based on exact runtime `32e109372be39a19cabf7d9fc7cbcd9ca7c91c19`. Its reconstruction note separates corrected six-row labels from inherited historical metadata.
+
+## The new recovery comparison is active, not complete
+
+This is one fresh source/body seed with matched Full and all-appended-drive Sham arms, both synaptic-learning closed. It does not use GDE1 or the six-row repair. The source, actual physiology, memory, predictor and world are retained in both arms; Sham neutralizes only the appended drive inputs. The blank scene tests recovery competition, not food/toy/social care.
+
+The first reserved high 64-bit mnemonic overflowed canonical founder_seed_base × 16 before a genome existed. Its claim and failure are retained with zero preparation, neural decisions or committed intervals. No silent retry occurred. A prospectively declared in-range replacement, `0x034D32424C000901`, passed bounded overlap and constructor-domain checks under a new reservation/root. The seed change changes genetic-prior streams, world RNG and derived sampler, not merely an ID; authored coefficients and runtime were unchanged. Future preflights must validate the entire constructor seed domain before claiming a study attempt.
+
+The original driver proof used 136 fixed calls. Four infrastructure fixes were then qualified with a prospectively separate 50-call proof: authoritative root binding, source publication before preparation, attempted-call accounting and complete ordered sleep-phase evidence. Both cold sequences are exact, with all 24 warm checkpoint/science pairs matching the original fixture. Later admission-only checks use that unchanged-runtime evidence rather than relabel it as execution of a new binary.
+
+Attempt 2's shared template completed exactly 240 world-only ticks once; both initial arms match except declared mode/authority. Initial fatigue was 0.13101535, pressure 0.06604884, ATP 0.65918416, hunger 1 and energy 0.7921858. There were no neural decisions or optimizer updates during preparation. Full is running; Sham has not started at the latest analyzed prefix below.
+
+### First analyzed 150-interval prefix
+
+There were 142 decisions: 67 real AwakeRest, one BodySleep and 74 without applied recovery; eight intervals were sleeping. The real sleep entered at world tick 380, showed Entering at 381, Consolidating at 385, Waking at 386, Awake at 389 and a resumed decision. Pre-sleep fatigue was zero and pressure 0.15069215, below the 0.6 reference. No fatigue-0.35 or pressure-0.6 crossing occurred.
+
+From this saved decision, without another forward pass, conditional BodySleep probability was 0.79366% and overall physical marginal 0.36202%; Rest mass was 0.456136. Both operations' raw/clipped memory and cognitive terms were exactly zero, and the signed pressure term favored AwakeRest. This was a low-probability stochastic tail under the actual receptor context, not hidden pro-sleep recall. Low-pressure sleep is not eliminated. Whether its accumulated frequency is sensible needs the complete trajectory and matched Sham, not this one event.
+
+These counts are a fixed analyzed prefix, not a live latest counter or completed result. No causal health benefit, broad motivation or learned sleep competence is claimed.
+
+### Persistence, growth and throughput
+
+All committed intervals retain complete state plus original scientific bytes. Replay/proofs cap at 128, then clear at actual memory sleep; the checkpoint shrank after the first sleep. Semantic topology still grows: concepts, edges, simplexes and gaps retain acquired structure rather than disposable diagnostics. Current defaults bound them, but neither replay length nor a short fixture is a universal JSON-size ceiling. The bank itself remained about seven records in the analyzed prefix. Nothing is deleted to fit a result.
+
+Measured whole intervals were about 6.8–6.9 seconds. Full, Sham and complete export validation may take hours. The frozen program has no per-phase timers. Small synthetic same-filesystem write/fsync/hardlink/directory-sync tests took a median 7.15 ms for a 2.855 MB payload; that is not native-host phase measurement and does not prove the exact bottleneck. Source inspection shows repeated immutable-phenotype reconstruction, parsing/cloning/re-encoding and hashing. A tiny separate phase fixture is being assessed without touching the running study.
+
+Do not first trade away recoverability based on an assumption that fsync is slow. Snapshots every 8/16/32 intervals would expose 7/15/31 completed neural/body transitions plus in-flight work after a crash. Scientific rows alone cannot recover acquired state, and the current protocol forbids silently replaying published intervals. Future exact-source caching, standard optimized-profile qualification or lossless per-packet compression may preserve stronger guarantees; none is installed in this run. Resource projections and the 4 GiB floor remain enforced, with honest partial/censored results if a limit is reached.
+
+## Wiring findings that must guide the next whole-brain candidate
+
+- M2 loneliness is signed, unlike the earlier positive-only M0 probe. Its peer-gated Approach route exists; a lower reference is a separate calibration, not repair of a nonexistent route. Its Contact bonus maps to Grab, and a living peer cannot be acquired. Judge real approach, contact geometry and measured loneliness relief, not a Contact-family label.
+- M2 curiosity is axis 5. Real boredom is axis 9 and currently has no behavioral readout. The old detached M0 PlayV2 uses a different pinned recipe/cell layout and is not automatically integrated. Canonical novelty also attenuates Play stimulation, so direct toy-activation relief is not an autonomous first-encounter result.
+- The grouped host currently leaves the separate directional/heading-fallback pain-reflex translation off, including its body-only path. Source, innate and M2 pain responses still exist. A fresh combined recovery/reflex admission needs distinct policy versus involuntary motion receipts and once-only biology/credit; do not call post-pain retreat learned avoidance.
+- Every living registered peer currently needs a neural resident. A passive nonbreeding guard alone does not admit a passive companion. A fresh dyad or separately qualified passive role is required.
+- Episodic writes remain representative-keyed. Rest/Inspect plus physical ManipEat does not create a corresponding Ingest-family record. GDE1 updates the actual joint sampler but does not fix that separate memory gap.
+- An isolated supplemental-meal primitive is implemented at `233c6c76154f95ebc888ee0c5d4fb6aeb7d7d722`, with 23 authored regressions, formatting/source checks and no native execution yet. It stages one representative plus at most one exact Consumed association atomically, rejects ambiguous/unknown competing contacts, and retains joint-context valuation rather than fabricated isolated Eat reward. Host activation, capacity/sleep/cold/runtime qualification are still absent.
+- Reproductive research peers remain nonbreeding. Signed thermal toy arithmetic is not signed body/atmosphere physiology. Neither gap is fixed by renaming neurons or turning up an Avoid weight.
+
+The next implementation sequence should preserve these distinctions: qualify actual meal provenance, compose native social/Play/reflex seams under fresh identities, then use small matched ecological and equal-work learning comparisons. Retain no-ops and normal aging. Do not require permanent refusal of unpleasant nutritious food or manufacture endless activity. All unsuccessful candidates, numerical failures, actual exposures and source identities belong in Astra 6.2's handoff.
