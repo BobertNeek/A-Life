@@ -1,0 +1,1786 @@
+diff --git a/crates/alife_world/src/headless/awake_translation.rs b/crates/alife_world/src/headless/awake_translation.rs
+--- a/crates/alife_world/src/headless/awake_translation.rs
++++ b/crates/alife_world/src/headless/awake_translation.rs
+@@ -4,7 +4,7 @@
+ 
+ /// Matches the existing actuator geometry without changing terrain walking.
+ /// Receipt path lengths remain spatial even when elapsed walking time is planar.
+-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
++#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+ pub enum TranslationTimeMetric {
+     #[default]
+     Spatial,
+@@ -22,7 +22,7 @@
+ 
+ /// Ephemeral provenance for actual voluntary actuator time, never inferred
+ /// from rounded final world-coordinate subtraction.
+-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
++#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+ pub enum VoluntaryTimeProvenance {
+     #[default]
+     NoTranslation,
+@@ -122,6 +122,35 @@
+ }
+ 
+ impl AwakeTranslationState {
++    /// Consume transient actuator bookkeeping into evidence, never persistent
++    /// control state. Both explicit world routes use exactly this projection.
++    pub(super) fn into_receipt(
++        self,
++        voluntary: HeadlessMotorTransactionReceipt,
++    ) -> AwakeTranslationIntervalReceipt {
++        let reflex_displacement = self
++            .withdrawal
++            .as_ref()
++            .map_or(Vec3f::ZERO, |r| r.displacement);
++        AwakeTranslationIntervalReceipt {
++            actual_displacement: add(voluntary.joint.execution.displacement, reflex_displacement),
++            voluntary,
++            reflex_budget_exhausted: self.withdrawal.is_some() && self.reflex_time == 0.0,
++            exhausted_late_no_effect: self.exhausted_late_no_effect,
++            voluntary_execution_altered: self.voluntary_execution_altered,
++            withdrawal: self.withdrawal,
++            voluntary_time_allocated: self.voluntary_time,
++            planned_voluntary_time: self.planned_time.map_or(0.0, |p| p.duration),
++            voluntary_time_provenance: self.voluntary_time_provenance,
++            reflex_time_allocated: self.reflex_time,
++            allocated_translation_time: self.budget.map_or(0.0, |b| b.spent_time),
++            translation_time_metric: self.time_metric,
++            reflex_path: distance(Vec3f::ZERO, reflex_displacement),
++            voluntary_path: self.voluntary_path,
++            voluntary_translation_energy: self.voluntary_translation_energy,
++        }
++    }
++
+     pub(super) fn begin(
+         &mut self,
+         world: &mut HeadlessWorld,
+@@ -612,32 +641,7 @@
+                 *self = before;
+                 Err(error)
+             }
+-            Ok(voluntary) => {
+-                let reflex_displacement = state
+-                    .withdrawal
+-                    .as_ref()
+-                    .map_or(Vec3f::ZERO, |r| r.displacement);
+-                Ok(AwakeTranslationIntervalReceipt {
+-                    actual_displacement: add(
+-                        voluntary.joint.execution.displacement,
+-                        reflex_displacement,
+-                    ),
+-                    voluntary,
+-                    reflex_budget_exhausted: state.withdrawal.is_some() && state.reflex_time == 0.0,
+-                    exhausted_late_no_effect: state.exhausted_late_no_effect,
+-                    voluntary_execution_altered: state.voluntary_execution_altered,
+-                    withdrawal: state.withdrawal,
+-                    voluntary_time_allocated: state.voluntary_time,
+-                    planned_voluntary_time: state.planned_time.map_or(0.0, |p| p.duration),
+-                    voluntary_time_provenance: state.voluntary_time_provenance,
+-                    reflex_time_allocated: state.reflex_time,
+-                    allocated_translation_time: state.budget.map_or(0.0, |b| b.spent_time),
+-                    translation_time_metric: state.time_metric,
+-                    reflex_path: distance(Vec3f::ZERO, reflex_displacement),
+-                    voluntary_path: state.voluntary_path,
+-                    voluntary_translation_energy: state.voluntary_translation_energy,
+-                })
+-            }
+-        }
+-    }
+-}
++            Ok(voluntary) => Ok(state.into_receipt(voluntary)),
++        }
++    }
++}
+diff --git a/crates/alife_world/src/headless/sleep_choice_research/recovery_reflex/tests.rs b/crates/alife_world/src/headless/sleep_choice_research/recovery_reflex/tests.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/alife_world/src/headless/sleep_choice_research/recovery_reflex/tests.rs
+@@ -0,0 +1,852 @@
++//! Authored physical fixtures, not learned choices or autonomous lives.
++//! Not run during source-only preparation. Native qualification is a later gate.
++use super::*;
++use crate::*;
++use alife_core::*;
++
++const OWNER: OrganismId = OrganismId(1);
++fn fresh(residents: u16, zero_capacity: bool) -> HeadlessWorld {
++    // Reuse the existing public recovery-body fixture, not an acquired source.
++    let template = create_canonical_new_game_with_awake_rest_research_v1(
++        &CanonicalNewGameConfig::phase3(961060, residents).unwrap(),
++    )
++    .unwrap()
++    .world;
++    let mut builder = HeadlessScenarioBuilder::new(961060)
++        .agent("agent", OWNER, Vec3f::ZERO)
++        .food("food", Vec3f::new(1.0, 0.0, 0.0), 0.6)
++        .hazard("hazard", Vec3f::new(8.0, 0.0, 0.0), 0.2);
++    if residents == 2 {
++        builder = builder.agent("peer", OrganismId(2), Vec3f::new(4.0, 0.0, 0.0));
++    }
++    let mut world = builder.build().unwrap();
++    for raw in 1..=residents {
++        let id = OrganismId(u64::from(raw));
++        let record = template.organism_registry.get(id).unwrap();
++        let entity = world
++            .entity_id(if raw == 1 { "agent" } else { "peer" })
++            .unwrap();
++        let mut chemistry = *record.biochemistry();
++        // Synthetic physical-capacity control only; never patch a lived body.
++        if zero_capacity {
++            chemistry.body.set_energy(0.0).unwrap();
++        }
++        world
++            .register_organism_record(
++                WorldOrganismRecord::new(
++                    id,
++                    entity,
++                    record.genome().clone(),
++                    record.phenotype().clone(),
++                    chemistry,
++                    Tick::ZERO,
++                )
++                .unwrap(),
++            )
++            .unwrap();
++    }
++    world
++}
++fn chan(channel: MotorChannel, primitive: ActionId) -> ChannelCommand {
++    ChannelCommand::new(
++        channel,
++        primitive,
++        None,
++        Vec3f::ZERO,
++        Intensity::new(1.0).unwrap(),
++        DurationTicks(1),
++        0.0,
++        Confidence::new(1.0).unwrap(),
++        0,
++    )
++    .unwrap()
++}
++fn bundle(world: &HeadlessWorld, posture: u32, moving: bool) -> MotorCommandBundle {
++    let mut channels = vec![chan(MotorChannel::Posture, ActionId(posture))];
++    if moving {
++        let mut movement = chan(MotorChannel::Locomotion, HeadlessActionIds::STEP_FORWARD);
++        movement.direction = Vec3f::new(1.0, 0.0, 0.0);
++        channels.push(movement);
++    }
++    MotorCommandBundle::new(
++        OWNER,
++        ExperienceSequenceId(world.tick.raw() + 1),
++        world.tick,
++        channels,
++    )
++    .unwrap()
++}
++fn request(world: &mut HeadlessWorld, bundle: &MotorCommandBundle) -> RecoveryReflexRequestV1 {
++    let admission =
++        RecoveryReflexWorldAdmissionV1::for_organism(world, bundle.organism_id).unwrap();
++    let (draft, binding) = world
++        .perception_recovery_reflex_draft_with_bindings(
++            &admission,
++            world.tick,
++            HomeostaticSnapshot::baseline(world.tick),
++        )
++        .unwrap();
++    assert_eq!(
++        binding.unwrap().candidates_for_focus(&draft, None).unwrap(),
++        draft.candidates()
++    );
++    RecoveryReflexRequestV1::new(
++        &admission,
++        &draft.finalize(PerceptionContextBlock::empty()).unwrap(),
++        bundle,
++    )
++    .unwrap()
++}
++fn execute(world: &mut HeadlessWorld, bundle: &MotorCommandBundle) -> RecoveryReflexWorldReceiptV1 {
++    let request = request(world, bundle);
++    let neural = NeuralEmissionFrame::new(world.tick, 1, vec![]).unwrap();
++    world
++        .apply_recovery_reflex_motor_bundle_v1(&request, &neural, 0.0, &[])
++        .unwrap()
++}
++fn hazard_at(world: &mut HeadlessWorld, position: Vec3f, radius: f32) -> WorldEntityId {
++    let id = world.entity_id("hazard").unwrap();
++    let object = world.objects.get_mut(&id.raw()).unwrap();
++    object.position = position;
++    object.radius = radius;
++    id
++}
++fn hold_food(world: &mut HeadlessWorld) -> WorldEntityId {
++    let food = world.entity_id("food").unwrap();
++    let cmd = HeadlessWorldCommand::structured(
++        OWNER,
++        HeadlessActionIds::GRAB,
++        ActionKind::Hold,
++        Some(food),
++        None,
++    )
++    .unwrap();
++    assert!(world.apply_command(&cmd).unwrap().execution.succeeded);
++    assert_eq!(world.entity(food).unwrap().carried_by, Some(OWNER));
++    food
++}
++fn assert_one_biology(
++    world: &HeadlessWorld,
++    before: &WorldOrganismRecord,
++    receipt: &RecoveryReflexWorldReceiptV1,
++) {
++    let m = receipt.motor();
++    let neural = NeuralEmissionFrame::new(m.bundle.tick, 1, vec![]).unwrap();
++    let expected = before
++        .biochemistry()
++        .advance_with_body_research_events_v1(
++            m.outcome_tick,
++            Tick(before.age_at(m.bundle.tick).unwrap().raw() + 1),
++            m.body_event,
++            Some(&neural),
++            before.phenotype(),
++            ThermalBalanceCandidate::default(),
++            AwakeRestEventV1::new(receipt.evidence().awake_recovery).unwrap(),
++        )
++        .unwrap();
++    assert_eq!(m.biology_after, expected);
++    assert_eq!(
++        *world.organism_registry.get(OWNER).unwrap().biochemistry(),
++        expected
++    );
++}
++fn rest_event(id: OrganismId) -> BTreeMap<u64, BodyEventDelta> {
++    BTreeMap::from([(
++        id.raw(),
++        BodyEventDelta {
++            sleep_recovery: 1.0,
++            ..BodyEventDelta::zero()
++        },
++    )])
++}
++fn add_obstacle(world: &mut HeadlessWorld, position: Vec3f, radius: f32) {
++    world
++        .editor_spawn_object(WorldEditorSpawnSpec {
++            label: "blocker".into(),
++            kind: WorldObjectKind::Obstacle,
++            organism_id: None,
++            position,
++            nutrition: 0.0,
++            hazard_pain: 0.0,
++            radius,
++            token_id: None,
++        })
++        .unwrap();
++}
++
++#[test]
++fn recovery_reflex_quiet_controls_preserve_old_world_receipt_and_old_guard() {
++    for posture in [3, 700, HeadlessActionIds::NO_POSTURE.raw()] {
++        let mut world = fresh(1, false);
++        let selected = bundle(&world, posture, false);
++        let new_request = request(&mut world, &selected);
++        let old_request = new_request.selection.clone();
++        let neural = NeuralEmissionFrame::new(world.tick, 1, vec![]).unwrap();
++        let mut old = world.clone();
++        let expected = old
++            .apply_sleep_choice_motor_bundle_in_staged_tick(&old_request, &neural, 0.0, &[])
++            .unwrap();
++        let actual = world
++            .apply_recovery_reflex_motor_bundle_v1(&new_request, &neural, 0.0, &[])
++            .unwrap();
++        assert_eq!(actual.motor(), &expected.motor);
++        assert_eq!(actual.evidence().awake_recovery, expected.awake_dose);
++        assert_eq!(actual.composed_joint(), &expected.motor.joint);
++        assert_eq!(world.save_state(), old.save_state());
++        let mut rejected = fresh(1, false);
++        let own = rejected.entity_id("agent").unwrap();
++        let before = rejected.save_state();
++        let mut translation = awake_translation::AwakeTranslationState::default();
++        let mut awake = AwakeRestEventV1::NONE;
++        assert!(rejected
++            .apply_registered_motor_bundle_with_sleep_choice_inner(
++                &selected,
++                own,
++                Some(&neural),
++                None,
++                Some(&mut translation),
++                Some(&mut awake),
++                true
++            )
++            .is_err());
++        assert_eq!(rejected.save_state(), before);
++    }
++}
++
++#[test]
++fn recovery_reflex_localized_left_right_behind_keeps_selection_and_heading() {
++    for pain in [
++        Vec3f::new(0.0, 0.0, 0.01),
++        Vec3f::new(0.0, 0.0, -0.01),
++        Vec3f::new(-0.01, 0.0, 0.0),
++    ] {
++        for posture in [3, 700] {
++            let mut world = fresh(1, false);
++            let source = hazard_at(&mut world, pain, 0.03);
++            let selected = bundle(&world, posture, false);
++            let before = world.organism_registry.get(OWNER).unwrap().clone();
++            let receipt = execute(&mut world, &selected);
++            let reflex = receipt.interval().withdrawal.as_ref().unwrap();
++            assert_eq!(
++                reflex.direction_basis,
++                WithdrawalDirectionBasis::LocalizedContact
++            );
++            assert_eq!(reflex.sources, vec![source]);
++            assert!(
++                !reflex.blocked
++                    && pain.x * reflex.displacement.x + pain.z * reflex.displacement.z < 0.0
++            );
++            assert_eq!(receipt.motor().bundle, selected);
++            assert_eq!(receipt.motor().joint.execution.displacement, Vec3f::ZERO);
++            assert_eq!(
++                receipt.composed_joint().execution.displacement,
++                reflex.displacement
++            );
++            assert_eq!(
++                receipt.composed_joint().channel_outcomes,
++                receipt.motor().joint.channel_outcomes
++            );
++            assert_eq!(receipt.evidence().successor_body_yaw, 0.0);
++            assert_eq!(receipt.evidence().awake_recovery, 0.0);
++            assert_eq!(receipt.motor().body_event.sleep_recovery, 0.0);
++            assert!(!receipt.evidence().successful_stationary_body_sleep);
++            assert_one_biology(&world, &before, &receipt);
++        }
++    }
++}
++
++#[test]
++fn recovery_reflex_coincident_and_unknown_acute_reverse_stationary_heading() {
++    for yaw in [0.0, std::f32::consts::FRAC_PI_2, std::f32::consts::PI] {
++        let mut world = fresh(1, false);
++        let own = world.entity_id("agent").unwrap();
++        world.objects.get_mut(&own.raw()).unwrap().body_yaw = yaw;
++        hazard_at(&mut world, Vec3f::ZERO, 0.03);
++        let selected = bundle(&world, 700, false);
++        let receipt = execute(&mut world, &selected);
++        let reflex = receipt.interval().withdrawal.as_ref().unwrap();
++        assert_eq!(
++            reflex.direction_basis,
++            WithdrawalDirectionBasis::AcuteDamageHeadingFallback
++        );
++        assert!(reflex.displacement.x * yaw.cos() + reflex.displacement.z * yaw.sin() < 0.0);
++        assert_eq!(world.entity(own).unwrap().body_yaw, yaw);
++    }
++    // Internal fresh damage is tested through actual toxic ingestion below,
++    // rather than manufacturing a distant food object as a directional source.
++}
++
++#[test]
++fn recovery_reflex_chronic_pain_stops_next_interval_and_cold_receipt_is_exact() {
++    let mut world = fresh(1, false);
++    hazard_at(&mut world, Vec3f::new(0.01, 0.0, 0.0), 0.03);
++    let selected = bundle(&world, 700, false);
++    let first = execute(&mut world, &selected);
++    assert!(first.interval().withdrawal.is_some());
++    world.try_advance_tick().unwrap();
++    let encoded = serde_json::to_vec(&world.save_state()).unwrap();
++    let decoded = serde_json::from_slice(&encoded).unwrap();
++    let mut cold = HeadlessWorld::from_save_state(&decoded).unwrap();
++    let selected = bundle(&world, 700, false);
++    let expected = execute(&mut world, &selected);
++    let actual = execute(&mut cold, &selected);
++    assert!(expected.motor().biology_before.body.injury > 0.0);
++    assert!(expected.interval().withdrawal.is_none());
++    assert_eq!(expected.interval().actual_displacement, Vec3f::ZERO);
++    assert_eq!(expected, actual);
++    assert_eq!(
++        expected.evidence().canonical_digest().unwrap(),
++        actual.evidence().canonical_digest().unwrap()
++    );
++    assert_eq!(
++        serde_json::to_vec(&world.save_state()).unwrap(),
++        serde_json::to_vec(&cold.save_state()).unwrap()
++    );
++}
++
++#[test]
++fn recovery_reflex_late_harmful_ingestion_and_exhausted_time_are_distinct() {
++    for moving in [false, true] {
++        let mut world = fresh(1, false);
++        let food = hold_food(&mut world);
++        world.objects.get_mut(&food.raw()).unwrap().hazard_pain = 0.2;
++        let mut selected = bundle(&world, 700, moving);
++        let mut eat = chan(MotorChannel::Manipulation, HeadlessActionIds::EAT);
++        eat.target = Some(ActionTarget::new(Some(food), None));
++        selected.channels.push(eat);
++        let before = world.organism_registry.get(OWNER).unwrap().clone();
++        let receipt = execute(&mut world, &selected);
++        let reflex = receipt.interval().withdrawal.as_ref().unwrap();
++        assert_eq!(
++            reflex.direction_basis,
++            WithdrawalDirectionBasis::AcuteDamageHeadingFallback
++        );
++        assert!(reflex.sources.is_empty());
++        assert!(world.entity(food).unwrap().consumed);
++        assert_eq!(receipt.interval().reflex_budget_exhausted, moving);
++        assert_eq!(reflex.blocked, moving);
++        if moving {
++            assert_eq!(reflex.displacement, Vec3f::ZERO);
++            assert_eq!(reflex.energy_cost, 0.0);
++        } else {
++            assert!(reflex.displacement.x < 0.0);
++        }
++        assert_eq!(receipt.evidence().awake_recovery, 0.0);
++        assert_one_biology(&world, &before, &receipt);
++    }
++}
++
++#[test]
++fn recovery_reflex_self_held_hazard_is_not_an_external_escape_goal() {
++    let mut world = fresh(1, false);
++    let held = hold_food(&mut world);
++    let object = world.objects.get_mut(&held.raw()).unwrap();
++    object.kind = WorldObjectKind::Hazard;
++    object.hazard_pain = 0.2;
++    object.radius = 1.0;
++    let selected = bundle(&world, 700, false);
++    let receipt = execute(&mut world, &selected);
++    assert!(receipt.interval().withdrawal.is_none());
++    assert_eq!(receipt.interval().actual_displacement, Vec3f::ZERO);
++    assert!(receipt.motor().body_event.damage > 0.0);
++    assert_eq!(receipt.evidence().awake_recovery, 0.0);
++    assert_eq!(world.entity(held).unwrap().carried_by, Some(OWNER));
++}
++
++#[test]
++fn recovery_reflex_release_recomputes_contact_and_preserves_transfer() {
++    let mut world = fresh(1, false);
++    let held = hold_food(&mut world);
++    let object = world.objects.get_mut(&held.raw()).unwrap();
++    object.kind = WorldObjectKind::Hazard;
++    object.hazard_pain = 0.2;
++    object.radius = 1.0;
++    let mut selected = bundle(&world, 700, false);
++    let mut drop = chan(MotorChannel::Manipulation, HeadlessActionIds::GRAB);
++    drop.target = Some(ActionTarget::new(Some(held), None));
++    selected.channels.push(drop);
++    let receipt = execute(&mut world, &selected);
++    assert_eq!(world.entity(held).unwrap().carried_by, None);
++    assert!(receipt
++        .motor()
++        .grip_transfers
++        .iter()
++        .any(|t| t.kind == GripTransferKind::Released));
++    let reflex = receipt.interval().withdrawal.as_ref().unwrap();
++    assert_eq!(reflex.sources, vec![held]);
++    assert_eq!(
++        reflex.direction_basis,
++        WithdrawalDirectionBasis::LocalizedContact
++    );
++}
++
++#[test]
++fn recovery_reflex_initial_preemption_and_swept_contact_share_one_budget() {
++    for fraction in [0.0, 0.2, 0.5, 0.9] {
++        let mut world = fresh(1, false);
++        let selected = bundle(&world, 700, true);
++        let mut quiet = world.clone();
++        let step = execute(&mut quiet, &selected)
++            .interval()
++            .actual_displacement
++            .x;
++        assert!(step > 0.0);
++        hazard_at(
++            &mut world,
++            Vec3f::new(0.03 + step * fraction, 0.0, 0.0),
++            0.03,
++        );
++        let receipt = execute(&mut world, &selected);
++        assert!(receipt.interval().withdrawal.is_some());
++        assert!(receipt.interval().allocated_translation_time <= 1.0);
++        assert!((receipt.interval().voluntary_time_allocated - fraction).abs() < 1e-4);
++        if fraction == 0.0 {
++            assert_eq!(receipt.interval().voluntary_path, 0.0);
++            assert!(!receipt.motor().succeeded);
++        } else {
++            assert!(receipt.interval().voluntary_path > 0.0);
++        }
++        assert_eq!(receipt.motor().body_event.damage, 0.2);
++        assert_eq!(receipt.evidence().awake_recovery, 0.0);
++    }
++}
++
++#[test]
++fn recovery_reflex_nonzero_opposing_segments_cannot_earn_recovery() {
++    // Pure, exact cancellation control. Real swept controls above separately
++    // exercise actuator geometry, capacity, contact and time.
++    let p = physical(
++        PhysicalContactKind::Moved,
++        None,
++        Vec3f::new(0.05, 0.0, 0.0),
++        0.01,
++    )
++    .unwrap();
++    let voluntary = JointPhysicalOutcome::new(p, vec![])
++        .unwrap()
++        .with_channel_outcomes(vec![ChannelPhysicalOutcome::new(
++            MotorChannel::Locomotion,
++            p,
++        )
++        .unwrap()])
++        .unwrap();
++    let reflex = ContactWithdrawalReceipt {
++        direction_basis: WithdrawalDirectionBasis::AcuteDamageHeadingFallback,
++        sources: vec![],
++        displacement: Vec3f::new(-0.05, 0.0, 0.0),
++        blocked: false,
++        energy_cost: 0.01,
++    };
++    assert_eq!(
++        compose_joint(&voluntary, Some(&reflex))
++            .unwrap()
++            .execution
++            .displacement,
++        Vec3f::ZERO
++    );
++    assert!(!all_segments_stationary(&voluntary, Some(&reflex)));
++    let event = normalize_sleep_recovery_for_motion(
++        BodyEventDelta {
++            sleep_recovery: 1.0,
++            ..BodyEventDelta::zero()
++        },
++        [p.displacement, reflex.displacement],
++    );
++    assert_eq!(event.sleep_recovery, 0.0);
++}
++
++#[test]
++fn recovery_reflex_player_hold_release_and_zero_capacity_keep_constraints() {
++    for zero in [false, true] {
++        let mut world = fresh(1, zero);
++        let own = world.entity_id("agent").unwrap();
++        hazard_at(&mut world, Vec3f::new(0.01, 0.0, 0.0), 0.03);
++        if !zero {
++            world.begin_player_hold(own).unwrap();
++        }
++        let selected = bundle(&world, 3, false);
++        let receipt = execute(&mut world, &selected);
++        let reflex = receipt.interval().withdrawal.as_ref().unwrap();
++        assert!(reflex.blocked);
++        assert_eq!(reflex.displacement, Vec3f::ZERO);
++        assert_eq!(reflex.energy_cost, 0.0);
++        assert_eq!(receipt.motor().body_event.sleep_recovery, 0.0);
++        if !zero {
++            world.try_advance_tick().unwrap();
++            world.release_player_hold().unwrap();
++            // Release placement is world-authoritative; put the fixture's source
++            // beside that placement rather than teleporting a held creature.
++            let position = world.entity(own).unwrap().position;
++            hazard_at(&mut world, add(position, Vec3f::new(0.01, 0.0, 0.0)), 0.03);
++            let selected = bundle(&world, 700, false);
++            assert!(
++                !execute(&mut world, &selected)
++                    .interval()
++                    .withdrawal
++                    .as_ref()
++                    .unwrap()
++                    .blocked
++            );
++        }
++    }
++}
++
++#[test]
++fn recovery_reflex_wall_water_body_and_carried_volume_remain_authoritative() {
++    for mode in 0..4 {
++        let mut world = fresh(if mode == 2 { 2 } else { 1 }, false);
++        let held = if mode == 3 {
++            Some(hold_food(&mut world))
++        } else {
++            None
++        };
++        // Source to the left, escape right, preserving an already held item.
++        hazard_at(&mut world, Vec3f::new(-0.01, 0.0, 0.0), 0.03);
++        match mode {
++            0 => add_obstacle(&mut world, Vec3f::new(0.26, 0.0, 0.0), 0.1),
++            1 => {
++                world.terrain = Some(
++                    WorldTerrain::new(
++                        TerrainData {
++                            width: 3,
++                            depth: 3,
++                            origin_x: -1.0,
++                            origin_z: -1.0,
++                            spacing: 1.0,
++                            heights: vec![0.0; 9],
++                            obstacles: vec![],
++                            water_level: Some(3.0),
++                        },
++                        LocomotionLimits::default(),
++                    )
++                    .unwrap(),
++                )
++            }
++            2 => {
++                let peer = world.entity_id("peer").unwrap();
++                world.objects.get_mut(&peer.raw()).unwrap().position = Vec3f::new(0.5, 0.0, 0.0);
++            }
++            _ => add_obstacle(&mut world, Vec3f::new(0.61, 0.0, 0.0), 0.1),
++        }
++        let selected = bundle(&world, 700, false);
++        let receipt = execute(&mut world, &selected);
++        assert!(
++            receipt.interval().withdrawal.as_ref().unwrap().blocked,
++            "mode={mode}"
++        );
++        assert_eq!(receipt.interval().actual_displacement, Vec3f::ZERO);
++        assert_eq!(receipt.evidence().awake_recovery, 0.0);
++        if let Some(held) = held {
++            assert_eq!(world.entity(held).unwrap().carried_by, Some(OWNER));
++        }
++    }
++}
++
++#[test]
++fn recovery_reflex_carried_item_tracks_unblocked_escape_without_dropping() {
++    let mut world = fresh(1, false);
++    let held = hold_food(&mut world);
++    let position = world.entity(held).unwrap().position;
++    hazard_at(&mut world, Vec3f::new(-0.01, 0.0, 0.0), 0.03);
++    let selected = bundle(&world, 700, false);
++    let receipt = execute(&mut world, &selected);
++    assert!(!receipt.interval().withdrawal.as_ref().unwrap().blocked);
++    assert_eq!(world.entity(held).unwrap().carried_by, Some(OWNER));
++    assert!(
++        distance(
++            world.entity(held).unwrap().position,
++            add(position, receipt.interval().actual_displacement)
++        ) < 1e-6
++    );
++}
++
++#[test]
++fn recovery_reflex_coalesces_contact_dose_and_advances_only_once() {
++    let mut world = fresh(1, false);
++    let source = hazard_at(&mut world, Vec3f::new(-0.01, 0.0, 0.0), 0.03);
++    let mut selected = bundle(&world, 700, true);
++    let mut touch = chan(MotorChannel::Manipulation, HeadlessActionIds::GRAB);
++    touch.target = Some(ActionTarget::new(Some(source), None));
++    selected.channels.push(touch);
++    let before = world.organism_registry.get(OWNER).unwrap().clone();
++    let receipt = execute(&mut world, &selected);
++    assert_eq!(receipt.motor().body_event.damage, 0.2);
++    assert_one_biology(&world, &before, &receipt);
++    let request = request(&mut world, &selected);
++    let bytes = serde_json::to_vec(&world.save_state()).unwrap();
++    assert!(world
++        .apply_recovery_reflex_motor_bundle_v1(
++            &request,
++            &NeuralEmissionFrame::new(world.tick, 1, vec![]).unwrap(),
++            0.0,
++            &[]
++        )
++        .is_err());
++    assert_eq!(serde_json::to_vec(&world.save_state()).unwrap(), bytes);
++    world.try_advance_tick().unwrap();
++    assert_eq!(
++        *world.organism_registry.get(OWNER).unwrap().biochemistry(),
++        receipt.motor().biology_after
++    );
++}
++
++#[test]
++fn recovery_reflex_atomic_late_failure_restores_pose_grip_biology_and_clock() {
++    let mut world = fresh(1, false);
++    hold_food(&mut world);
++    hazard_at(&mut world, Vec3f::new(-0.01, 0.0, 0.0), 0.03);
++    let selected = bundle(&world, 700, false);
++    let request = request(&mut world, &selected);
++    world.injected_post_action_failure = true;
++    let before = serde_json::to_vec(&world.save_state()).unwrap();
++    assert!(world
++        .apply_recovery_reflex_motor_bundle_v1(
++            &request,
++            &NeuralEmissionFrame::new(world.tick, 1, vec![]).unwrap(),
++            0.0,
++            &[]
++        )
++        .is_err());
++    assert_eq!(serde_json::to_vec(&world.save_state()).unwrap(), before);
++}
++
++#[test]
++fn recovery_reflex_sleeping_body_only_interrupts_without_fabricating_wake_or_credit() {
++    let mut world = fresh(1, false);
++    let selected = bundle(&world, 3, false);
++    let sleep = execute(&mut world, &selected);
++    assert!(sleep.evidence().successful_stationary_body_sleep);
++    world.try_advance_tick().unwrap();
++    let mut record = world.organism_registry.get(OWNER).unwrap().clone();
++    // A fixed scheduler-phase fixture, not a neural decision or a forced wake.
++    record
++        .seal_sleep_phase(SleepPhase::ForcedRecoverySleep, 1, world.tick, 0)
++        .unwrap();
++    world.replace_organism_record_exact(record).unwrap();
++    hazard_at(&mut world, Vec3f::new(0.01, 0.0, 0.0), 0.03);
++    let admission = RecoveryReflexWorldAdmissionV1::for_organism(&world, OWNER).unwrap();
++    let receipt = world
++        .advance_recovery_reflex_bodies_v1(&rest_event(OWNER), &[admission])
++        .unwrap();
++    let response = &receipt.interval.responses[0];
++    assert!(response.sleep_recovery_interrupted);
++    assert_eq!(response.applied_body_event.sleep_recovery, 0.0);
++    assert!(response.withdrawal.is_some());
++    assert_eq!(
++        world.organism_registry.get(OWNER).unwrap().sleep_phase(),
++        SleepPhase::ForcedRecoverySleep
++    );
++    assert_eq!(
++        world
++            .organism_registry
++            .get(OWNER)
++            .unwrap()
++            .biochemistry()
++            .tick,
++        receipt.interval.outcome_tick
++    );
++    receipt.validate_contract().unwrap();
++}
++
++#[test]
++fn recovery_reflex_mixed_acting_nonacting_peers_and_body_only_rollback() {
++    let mut world = fresh(2, false);
++    let peer = OrganismId(2);
++    let peer_entity = world.entity_id("peer").unwrap();
++    let peer_position = world.entity(peer_entity).unwrap().position;
++    hazard_at(
++        &mut world,
++        add(peer_position, Vec3f::new(0.01, 0.0, 0.0)),
++        0.03,
++    );
++    let selected = bundle(&world, 700, false);
++    let acted = execute(&mut world, &selected);
++    let admission = RecoveryReflexWorldAdmissionV1::for_organism(&world, peer).unwrap();
++    let mut failing = world.clone();
++    failing.injected_tick_late_failure_after_first_organism = true;
++    let before = failing.save_state();
++    assert!(failing
++        .advance_recovery_reflex_bodies_v1(&rest_event(peer), &[admission.clone()])
++        .is_err());
++    assert_eq!(failing.save_state(), before);
++    let receipt = world
++        .advance_recovery_reflex_bodies_v1(&rest_event(peer), &[admission])
++        .unwrap();
++    assert_eq!(receipt.interval.responses.len(), 1);
++    assert_eq!(receipt.interval.responses[0].organism_id, peer);
++    assert_eq!(
++        *world.organism_registry.get(OWNER).unwrap().biochemistry(),
++        acted.motor().biology_after
++    );
++    assert_eq!(
++        world
++            .organism_registry
++            .get(peer)
++            .unwrap()
++            .biochemistry()
++            .tick,
++        world.tick
++    );
++}
++
++#[test]
++fn recovery_reflex_body_only_unknown_damage_and_cold_next_receipt_match() {
++    let mut world = fresh(1, false);
++    let admission = RecoveryReflexWorldAdmissionV1::for_organism(&world, OWNER).unwrap();
++    let event = BodyEventDelta {
++        damage: 0.2,
++        sleep_recovery: 1.0,
++        ..BodyEventDelta::zero()
++    };
++    let first = world
++        .advance_recovery_reflex_bodies_v1(&BTreeMap::from([(OWNER.raw(), event)]), &[admission])
++        .unwrap();
++    let reflex = first.interval.responses[0].withdrawal.as_ref().unwrap();
++    assert!(reflex.sources.is_empty());
++    assert_eq!(
++        reflex.direction_basis,
++        WithdrawalDirectionBasis::AcuteDamageHeadingFallback
++    );
++    assert!(reflex.displacement.x < 0.0);
++    let encoded = serde_json::to_vec(&world.save_state()).unwrap();
++    let mut cold =
++        HeadlessWorld::from_save_state(&serde_json::from_slice(&encoded).unwrap()).unwrap();
++    let admission = RecoveryReflexWorldAdmissionV1::for_organism(&world, OWNER).unwrap();
++    let expected = world
++        .advance_recovery_reflex_bodies_v1(&rest_event(OWNER), &[admission.clone()])
++        .unwrap();
++    let actual = cold
++        .advance_recovery_reflex_bodies_v1(&rest_event(OWNER), &[admission])
++        .unwrap();
++    assert!(expected.interval.responses.is_empty());
++    assert_eq!(actual, expected);
++    assert_eq!(
++        actual.canonical_digest().unwrap(),
++        expected.canonical_digest().unwrap()
++    );
++    assert_eq!(world.save_state(), cold.save_state());
++}
++
++#[test]
++fn recovery_reflex_evidence_rejects_omitted_motion_forged_sources_time_and_recovery() {
++    let mut world = fresh(1, false);
++    hazard_at(&mut world, Vec3f::new(0.01, 0.0, 0.0), 0.03);
++    let selected = bundle(&world, 700, false);
++    let receipt = execute(&mut world, &selected);
++    let evidence = receipt.evidence();
++    let bytes = serde_json::to_vec(evidence).unwrap();
++    let decoded: RecoveryReflexPhysicalEvidenceV1 = serde_json::from_slice(&bytes).unwrap();
++    decoded.validate_contract().unwrap();
++    assert_eq!(decoded, *evidence);
++    for mutation in 0..7 {
++        let mut bad = evidence.clone();
++        match mutation {
++            0 => bad.composed_joint = bad.voluntary_joint.clone(),
++            1 => bad.withdrawal = None,
++            2 => bad.withdrawal.as_mut().unwrap().sources.clear(),
++            3 => bad.translation.reflex_time = 0.0,
++            4 => bad.awake_recovery = 1.0,
++            5 => bad.successor_position.x += 1.0,
++            _ => bad.selected_bundle.sequence_id = ExperienceSequenceId(0),
++        }
++        assert!(bad.validate_contract().is_err(), "mutation={mutation}");
++    }
++}
++
++#[test]
++fn recovery_reflex_no_locomotion_is_not_forged_into_a_move_or_latched() {
++    let mut world = fresh(1, false);
++    hazard_at(&mut world, Vec3f::new(0.01, 0.0, 0.0), 0.03);
++    let mut selected = bundle(&world, 700, false);
++    selected.channels.push(chan(
++        MotorChannel::Locomotion,
++        HeadlessActionIds::NO_LOCOMOTION,
++    ));
++    let first = execute(&mut world, &selected);
++    assert_eq!(first.motor().bundle, selected);
++    assert!(first
++        .motor()
++        .joint
++        .channel_outcomes
++        .iter()
++        .all(|c| c.physical.displacement == Vec3f::ZERO));
++    assert_ne!(first.composed_joint().execution.displacement, Vec3f::ZERO);
++    world.try_advance_tick().unwrap();
++    selected.tick = world.tick;
++    selected.sequence_id = ExperienceSequenceId(2);
++    let next = execute(&mut world, &selected);
++    assert!(next.interval().withdrawal.is_none());
++    assert_eq!(next.interval().actual_displacement, Vec3f::ZERO);
++}
++
++#[test]
++fn recovery_reflex_does_not_steal_another_owners_item() {
++    let mut world = fresh(2, false);
++    let peer = OrganismId(2);
++    let food = world.entity_id("food").unwrap();
++    world.objects.get_mut(&food.raw()).unwrap().position = Vec3f::new(5.0, 0.0, 0.0);
++    let grab = HeadlessWorldCommand::structured(
++        peer,
++        HeadlessActionIds::GRAB,
++        ActionKind::Hold,
++        Some(food),
++        None,
++    )
++    .unwrap();
++    assert!(world.apply_command(&grab).unwrap().execution.succeeded);
++    hazard_at(&mut world, Vec3f::new(0.01, 0.0, 0.0), 0.03);
++    let mut selected = bundle(&world, 700, false);
++    let mut eat = chan(MotorChannel::Manipulation, HeadlessActionIds::EAT);
++    eat.target = Some(ActionTarget::new(Some(food), None));
++    selected.channels.push(eat);
++    let receipt = execute(&mut world, &selected);
++    assert!(receipt.interval().withdrawal.is_some());
++    assert_eq!(world.entity(food).unwrap().carried_by, Some(peer));
++    assert!(!world.entity(food).unwrap().consumed);
++    assert!(receipt.motor().grip_transfers.is_empty());
++}
++
++#[test]
++fn recovery_reflex_admission_and_wire_identity_cannot_relabel_old_policy() {
++    let config = CanonicalNewGameConfig::phase3(961060, 1).unwrap();
++    let foundation = FoundationWeightAsset::builtin_nano512_v1(config.sensor_profile).unwrap();
++    let ordinary = create_canonical_new_game(&config, &foundation)
++        .unwrap()
++        .world;
++    assert!(RecoveryReflexWorldAdmissionV1::for_organism(&ordinary, OWNER).is_err());
++    let mut world = fresh(2, false);
++    let admission = RecoveryReflexWorldAdmissionV1::for_organism(&world, OWNER).unwrap();
++    let peer = OrganismId(2);
++    assert!(admission
++        .validate_owner(&world, peer, world.entity_id("peer").unwrap())
++        .is_err());
++    let selected = bundle(&world, 700, false);
++    let receipt = execute(&mut world, &selected);
++    let mut wire = serde_json::to_value(receipt.evidence()).unwrap();
++    wire["policy"] = serde_json::json!("SleepChoiceV1");
++    assert!(serde_json::from_value::<RecoveryReflexPhysicalEvidenceV1>(wire).is_err());
++    let wire = serde_json::to_value(receipt.evidence()).unwrap();
++    assert!(serde_json::from_value::<SleepChoicePhysicalReceiptV1>(wire).is_err());
++    // These are world admission/codec controls. Opposite HOST policy restore
++    // remains a separate unimplemented envelope gate, not a claimed pass here.
++}
++
++#[test]
++fn recovery_reflex_persistent_surface_retriggers_but_no_persistent_escape_state() {
++    let mut world = fresh(1, false);
++    let source = hazard_at(&mut world, Vec3f::new(0.01, 0.0, 0.0), 1.0);
++    for _ in 0..2 {
++        let selected = bundle(&world, 700, false);
++        let receipt = execute(&mut world, &selected);
++        assert_eq!(receipt.motor().body_event.damage, 0.2);
++        assert!(receipt.interval().withdrawal.is_some());
++        world.try_advance_tick().unwrap();
++    }
++    // Fixed removal-of-stimulus control: move the fixture's surface away, not
++    // the organism or its biochemical concentrations.
++    world.objects.get_mut(&source.raw()).unwrap().position = Vec3f::new(8.0, 0.0, 0.0);
++    let selected = bundle(&world, 700, false);
++    let next = execute(&mut world, &selected);
++    assert!(next.interval().withdrawal.is_none());
++    assert_eq!(next.interval().actual_displacement, Vec3f::ZERO);
++}
+diff --git a/crates/alife_world/src/headless/sleep_choice_research/recovery_reflex.rs b/crates/alife_world/src/headless/sleep_choice_research/recovery_reflex.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/alife_world/src/headless/sleep_choice_research/recovery_reflex.rs
+@@ -0,0 +1,718 @@
++//! Explicit combined world capability. It does not enable the grouped M2 host.
++//! A reflex is an environment response, never an extra sampled motor factor.
++use super::*;
++use serde::{Deserialize, Serialize};
++
++/// A new physical policy identity. Receipts cannot be relabeled as the old
++/// sleep-choice route, or used to construct an execution capability.
++#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
++pub enum RecoveryReflexPolicyV1 {
++    SharedTimeDirectionalWithdrawalAndRecoveryV1,
++}
++
++/// Ephemeral world admission, reconstructed against the authoritative inherited
++/// body. A future host must separately admit its source, recipe and envelope.
++#[derive(Debug, Clone)]
++pub struct RecoveryReflexWorldAdmissionV1 {
++    recovery: SleepChoiceWorldAdmissionV1,
++}
++impl RecoveryReflexWorldAdmissionV1 {
++    pub fn for_organism(
++        world: &HeadlessWorld,
++        organism: OrganismId,
++    ) -> Result<Self, ScaffoldContractError> {
++        Ok(Self {
++            recovery: SleepChoiceWorldAdmissionV1::for_organism(world, organism)?,
++        })
++    }
++    pub(in crate::headless) fn validate_owner(
++        &self,
++        world: &HeadlessWorld,
++        organism: OrganismId,
++        entity: WorldEntityId,
++    ) -> Result<(), ScaffoldContractError> {
++        self.recovery.validate(world)?;
++        if self.recovery.organism_id != organism || self.recovery.world_entity_id != entity {
++            return Err(ScaffoldContractError::InvalidDecisionEvidence);
++        }
++        Ok(())
++    }
++}
++
++/// Exact finalized frame and selected bundle. Neither a boolean nor a persisted
++/// evidence record admits a new transaction. No action channels are appended.
++#[derive(Debug, Clone)]
++pub struct RecoveryReflexRequestV1 {
++    admission: RecoveryReflexWorldAdmissionV1,
++    selection: RecoveryRequestV1,
++}
++impl RecoveryReflexRequestV1 {
++    pub fn new(
++        admission: &RecoveryReflexWorldAdmissionV1,
++        frame: &PerceptionFrame,
++        bundle: &MotorCommandBundle,
++    ) -> Result<Self, ScaffoldContractError> {
++        Ok(Self {
++            admission: admission.clone(),
++            selection: RecoveryRequestV1::new(&admission.recovery, frame, bundle)?,
++        })
++    }
++    pub fn bundle(&self) -> &MotorCommandBundle {
++        self.selection.bundle()
++    }
++}
++
++/// Bounded measured work/time, not a persistent escape plan. Spatial path and
++/// actuator time are separate because terrain walking uses ground-plane time.
++#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++pub struct RecoveryReflexTranslationWitnessV1 {
++    pub time_metric: TranslationTimeMetric,
++    pub allocated_time: f32,
++    pub voluntary_time: f32,
++    pub planned_voluntary_time: f32,
++    pub voluntary_time_provenance: VoluntaryTimeProvenance,
++    pub reflex_time: f32,
++    pub reflex_budget_exhausted: bool,
++    pub exhausted_late_no_effect: bool,
++    pub voluntary_execution_altered: bool,
++    pub voluntary_path: f32,
++    pub reflex_path: f32,
++    pub voluntary_translation_energy: f32,
++}
++
++/// New evidence owner, deliberately outside the unchanged V12 core ABI.
++/// `voluntary_joint` reports only selected-channel execution. `composed_joint`
++/// keeps those channel outcomes and binds involuntary displacement/effort into
++/// the aggregate. World successor pose and one biology transition are explicit.
++#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++pub struct RecoveryReflexPhysicalEvidenceV1 {
++    pub schema_version: u16,
++    pub policy: RecoveryReflexPolicyV1,
++    pub frame_digest: alife_core::PerceptionFrameDigest,
++    pub selected_bundle: MotorCommandBundle,
++    pub outcome_tick: Tick,
++    pub operation: Option<RecoveryOperationV1>,
++    pub voluntary_joint: JointPhysicalOutcome,
++    pub composed_joint: JointPhysicalOutcome,
++    pub withdrawal: Option<ContactWithdrawalReceipt>,
++    pub translation: RecoveryReflexTranslationWitnessV1,
++    pub initial_position: Vec3f,
++    pub successor_position: Vec3f,
++    pub successor_body_yaw: f32,
++    pub body_event: BodyEventDelta,
++    pub biology_before: BiochemistryState,
++    pub biology_after_physical: BiochemistryState,
++    pub awake_recovery: f32,
++    pub successful_stationary_body_sleep: bool,
++}
++
++fn compose_joint(
++    voluntary: &JointPhysicalOutcome,
++    withdrawal: Option<&ContactWithdrawalReceipt>,
++) -> Result<JointPhysicalOutcome, ScaffoldContractError> {
++    let mut actual = voluntary.clone();
++    if let Some(reflex) = withdrawal {
++        actual.execution.displacement = add(actual.execution.displacement, reflex.displacement);
++        actual.execution.energy_cost = NormalizedScalar::new(
++            (actual.execution.energy_cost.raw() + reflex.energy_cost).clamp(0.0, 1.0),
++        )?;
++        let contact = if reflex.blocked {
++            PhysicalContactKind::Blocked
++        } else if !reflex.sources.is_empty() {
++            PhysicalContactKind::Touch
++        } else {
++            PhysicalContactKind::Moved
++        };
++        if physical_contact_priority(contact) > physical_contact_priority(actual.execution.contact)
++        {
++            actual.execution.contact = contact;
++            actual.execution.target_entity = reflex.sources.first().copied();
++            // No fabricated collision normal for a blocked actuator or an
++            // internal pain dose. Exact contributing source IDs live above.
++            actual.execution.collision_normal = None;
++        }
++    }
++    actual.validate_contract()?;
++    Ok(actual)
++}
++
++fn all_segments_stationary(
++    joint: &JointPhysicalOutcome,
++    withdrawal: Option<&ContactWithdrawalReceipt>,
++) -> bool {
++    joint
++        .channel_outcomes
++        .iter()
++        .all(|c| c.physical.displacement == Vec3f::ZERO)
++        && withdrawal.is_none_or(|r| r.displacement == Vec3f::ZERO)
++}
++
++fn validate_withdrawal(reflex: &ContactWithdrawalReceipt) -> Result<(), ScaffoldContractError> {
++    reflex.displacement.validate()?;
++    NormalizedScalar::new(reflex.energy_cost)?;
++    if reflex.sources.len() > ContactWithdrawalReceipt::MAX_SOURCES
++        || reflex.sources.iter().any(|id| id.raw() == 0)
++        || reflex
++            .sources
++            .windows(2)
++            .any(|pair| pair[0].raw() >= pair[1].raw())
++        || (reflex.direction_basis == WithdrawalDirectionBasis::LocalizedContact
++            && reflex.sources.is_empty())
++        || (reflex.blocked && reflex.displacement != Vec3f::ZERO)
++    {
++        return Err(ScaffoldContractError::InvalidDecisionEvidence);
++    }
++    Ok(())
++}
++
++impl Validate for RecoveryReflexPhysicalEvidenceV1 {
++    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
++        let invalid = ScaffoldContractError::InvalidDecisionEvidence;
++        self.selected_bundle.validate_contract()?;
++        self.voluntary_joint.validate_contract()?;
++        self.composed_joint.validate_contract()?;
++        self.body_event.validate_contract()?;
++        self.biology_before.validate_contract()?;
++        self.biology_after_physical.validate_contract()?;
++        self.initial_position.validate()?;
++        self.successor_position.validate()?;
++        NormalizedScalar::new(self.awake_recovery)?;
++        let t = &self.translation;
++        for value in [
++            t.allocated_time,
++            t.voluntary_time,
++            t.planned_voluntary_time,
++            t.reflex_time,
++        ] {
++            NormalizedScalar::new(value)?;
++        }
++        for value in [t.voluntary_path, t.reflex_path] {
++            if !value.is_finite() || value < 0.0 {
++                return Err(invalid);
++            }
++        }
++        SignedValence::new(t.voluntary_translation_energy)?;
++        if !self.successor_body_yaw.is_finite()
++            || self.schema_version != 1
++            || self.selected_bundle.tick.raw().checked_add(1) != Some(self.outcome_tick.raw())
++            || self.biology_before.tick != self.selected_bundle.tick
++            || self.biology_after_physical.tick != self.outcome_tick
++            || self.biology_before.source_genome_id != self.biology_after_physical.source_genome_id
++            || t.allocated_time.to_bits() != (t.voluntary_time + t.reflex_time).to_bits()
++        {
++            return Err(invalid);
++        }
++        let posture = self
++            .selected_bundle
++            .channels
++            .iter()
++            .find(|c| c.channel == MotorChannel::Posture);
++        let operation = posture.and_then(|c| match c.primitive.raw() {
++            3 => Some(RecoveryOperationV1::BodySleep),
++            700 => Some(RecoveryOperationV1::AwakeRest),
++            _ => None,
++        });
++        if operation != self.operation {
++            return Err(invalid);
++        }
++        let mut expected_channels = self
++            .selected_bundle
++            .channels
++            .iter()
++            .map(|c| c.channel.canonical_key())
++            .collect::<Vec<_>>();
++        let mut actual_channels = self
++            .voluntary_joint
++            .channel_outcomes
++            .iter()
++            .map(|c| c.channel.canonical_key())
++            .collect::<Vec<_>>();
++        expected_channels.sort_unstable();
++        actual_channels.sort_unstable();
++        if expected_channels != actual_channels {
++            return Err(invalid);
++        }
++        let voluntary = self
++            .voluntary_joint
++            .channel_outcomes
++            .iter()
++            .fold(Vec3f::ZERO, |sum, c| add(sum, c.physical.displacement));
++        if voluntary != self.voluntary_joint.execution.displacement {
++            return Err(invalid);
++        }
++        let voluntary_path = self
++            .voluntary_joint
++            .channel_outcomes
++            .iter()
++            .filter(|c| c.channel == MotorChannel::Locomotion)
++            .map(|c| distance(Vec3f::ZERO, c.physical.displacement))
++            .sum::<f32>();
++        if t.voluntary_path.to_bits() != voluntary_path.to_bits() {
++            return Err(invalid);
++        }
++        match t.voluntary_time_provenance {
++            VoluntaryTimeProvenance::NoTranslation | VoluntaryTimeProvenance::ZeroSpeed => {
++                if t.voluntary_time != 0.0 || t.voluntary_path != 0.0 {
++                    return Err(invalid);
++                }
++            }
++            VoluntaryTimeProvenance::InitialPreemption => {
++                if self.withdrawal.is_none()
++                    || t.voluntary_time != 0.0
++                    || t.voluntary_path != 0.0
++                    || !t.voluntary_execution_altered
++                {
++                    return Err(invalid);
++                }
++            }
++            VoluntaryTimeProvenance::FullInterval | VoluntaryTimeProvenance::BlockedAttempt => {
++                if t.voluntary_time != 1.0 {
++                    return Err(invalid);
++                }
++            }
++            VoluntaryTimeProvenance::GoalArrival => {
++                if t.voluntary_time != t.planned_voluntary_time {
++                    return Err(invalid);
++                }
++            }
++            VoluntaryTimeProvenance::SweptContact => {
++                if self.withdrawal.is_none() || t.voluntary_time > t.planned_voluntary_time {
++                    return Err(invalid);
++                }
++            }
++        }
++        let reflex_displacement = self
++            .withdrawal
++            .as_ref()
++            .map_or(Vec3f::ZERO, |r| r.displacement);
++        if let Some(reflex) = &self.withdrawal {
++            validate_withdrawal(reflex)?;
++            if self.body_event.damage <= 0.0 {
++                return Err(invalid);
++            }
++        } else if t.reflex_time != 0.0
++            || t.reflex_path != 0.0
++            || t.reflex_budget_exhausted
++            || t.exhausted_late_no_effect
++        {
++            return Err(invalid);
++        }
++        if t.reflex_budget_exhausted != (self.withdrawal.is_some() && t.reflex_time == 0.0)
++            || t.reflex_path.to_bits() != distance(Vec3f::ZERO, reflex_displacement).to_bits()
++            || compose_joint(&self.voluntary_joint, self.withdrawal.as_ref())?
++                != self.composed_joint
++            || (t.exhausted_late_no_effect
++                && (!t.reflex_budget_exhausted
++                    || t.voluntary_execution_altered
++                    || self.withdrawal.as_ref().is_none_or(|r| {
++                        !r.blocked || r.energy_cost != 0.0 || r.displacement != Vec3f::ZERO
++                    })))
++        {
++            return Err(invalid);
++        }
++        // Different f32 additions/subtractions at translated origins can round
++        // differently. Preserve exact pose bits in the witness and its digest;
++        // this bound checks composition, not byte identity across origins.
++        let composed_endpoint = add(add(self.initial_position, voluntary), reflex_displacement);
++        for (a, b, start) in [
++            (
++                composed_endpoint.x,
++                self.successor_position.x,
++                self.initial_position.x,
++            ),
++            (
++                composed_endpoint.y,
++                self.successor_position.y,
++                self.initial_position.y,
++            ),
++            (
++                composed_endpoint.z,
++                self.successor_position.z,
++                self.initial_position.z,
++            ),
++        ] {
++            let tolerance = 8.0 * f32::EPSILON * a.abs().max(b.abs()).max(start.abs()).max(1.0);
++            if (a - b).abs() > tolerance {
++                return Err(invalid);
++            }
++        }
++        let stationary = all_segments_stationary(&self.voluntary_joint, self.withdrawal.as_ref());
++        let undamaged_stationary = stationary && self.body_event.damage == 0.0;
++        if self.awake_recovery > 0.0
++            && (self.operation != Some(RecoveryOperationV1::AwakeRest)
++                || !undamaged_stationary
++                || self.body_event.sleep_recovery != 0.0
++                || self.biology_after_physical.body.sleeping)
++        {
++            return Err(invalid);
++        }
++        if self.body_event.sleep_recovery > 0.0 && !undamaged_stationary {
++            return Err(invalid);
++        }
++        if self.successful_stationary_body_sleep
++            != (self.operation == Some(RecoveryOperationV1::BodySleep)
++                && undamaged_stationary
++                && self.body_event.sleep_recovery > 0.0
++                && self.biology_after_physical.body.sleeping)
++        {
++            return Err(invalid);
++        }
++        Ok(())
++    }
++}
++impl RecoveryReflexPhysicalEvidenceV1 {
++    /// Includes the separate witness and all successor/biology fields. JSON is
++    /// a version-specific encoding here, never the unchanged V12 causal digest.
++    pub fn canonical_digest(&self) -> Result<[u64; 4], ScaffoldContractError> {
++        self.validate_contract()?;
++        let mut digest = CanonicalDigestBuilder::new(b"ALIFE-RECOVERY-REFLEX-PHYSICAL-V1-JSON1");
++        digest.write_bytes(
++            &serde_json::to_vec(self)
++                .map_err(|_| ScaffoldContractError::InvalidDecisionEvidence)?,
++        );
++        Ok(digest.finish256())
++    }
++}
++
++/// The world owns construction. The selected action and its execution remain
++/// available without presenting involuntary movement as a voluntary channel.
++#[derive(Debug, Clone, PartialEq)]
++pub struct RecoveryReflexWorldReceiptV1 {
++    interval: AwakeTranslationIntervalReceipt,
++    evidence: RecoveryReflexPhysicalEvidenceV1,
++}
++impl RecoveryReflexWorldReceiptV1 {
++    pub fn motor(&self) -> &HeadlessMotorTransactionReceipt {
++        &self.interval.voluntary
++    }
++    pub fn interval(&self) -> &AwakeTranslationIntervalReceipt {
++        &self.interval
++    }
++    pub fn evidence(&self) -> &RecoveryReflexPhysicalEvidenceV1 {
++        &self.evidence
++    }
++    pub fn composed_joint(&self) -> &JointPhysicalOutcome {
++        &self.evidence.composed_joint
++    }
++}
++
++/// V12 can truthfully carry composed aggregate + unchanged voluntary channels,
++/// but cannot itself bind the withdrawal witness. This versioned outer owner is
++/// required, with its digest, in the future host's packet and cold envelope.
++/// There is still only ONE canonical experience and ONE selected bundle.
++#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++pub struct RecoveryReflexExperienceV1 {
++    schema_version: u16,
++    patch: ExperiencePatch,
++    physical: RecoveryReflexPhysicalEvidenceV1,
++    physical_digest: [u64; 4],
++}
++impl RecoveryReflexExperienceV1 {
++    pub fn seal(
++        patch: ExperiencePatch,
++        receipt: &RecoveryReflexWorldReceiptV1,
++    ) -> Result<Self, ScaffoldContractError> {
++        let value = Self {
++            schema_version: 1,
++            patch,
++            physical: receipt.evidence.clone(),
++            physical_digest: receipt.evidence.canonical_digest()?,
++        };
++        value.validate_contract()?;
++        Ok(value)
++    }
++    pub fn patch(&self) -> &ExperiencePatch {
++        &self.patch
++    }
++    pub fn physical(&self) -> &RecoveryReflexPhysicalEvidenceV1 {
++        &self.physical
++    }
++    pub fn canonical_digest(&self) -> Result<[u64; 4], ScaffoldContractError> {
++        self.validate_contract()?;
++        let mut digest = CanonicalDigestBuilder::new(b"ALIFE-RECOVERY-REFLEX-EXPERIENCE-V1");
++        for word in self.patch.causal_digest()? {
++            digest.write_u64(word);
++        }
++        for word in self.physical_digest {
++            digest.write_u64(word);
++        }
++        Ok(digest.finish256())
++    }
++}
++impl Validate for RecoveryReflexExperienceV1 {
++    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
++        self.patch.validate_contract()?;
++        self.physical.validate_contract()?;
++        let outcome = self.patch.outcome();
++        if self.schema_version != 1
++            || self.patch.header().abi_version != ExperiencePatch::V12_ABI_VERSION
++            || self.physical_digest != self.physical.canonical_digest()?
++            || self.patch.decision().selected_bundle.as_ref()
++                != Some(&self.physical.selected_bundle)
++            || self.patch.pre_action().frame_digest()? != self.physical.frame_digest
++            || outcome.outcome_tick != self.physical.outcome_tick
++            || outcome.joint.as_ref() != Some(&self.physical.composed_joint)
++            || outcome.measured_physiology.as_ref().is_none_or(|p| {
++                p.before != self.physical.biology_before
++                    || p.after.tick != self.physical.biology_after_physical.tick
++                    || p.after.source_genome_id
++                        != self.physical.biology_after_physical.source_genome_id
++            })
++        {
++            return Err(ScaffoldContractError::InvalidDecisionEvidence);
++        }
++        // The host owns the one subsequent cognitive debit and its exact-state
++        // validation; physical biology is deliberately retained before that debit.
++        Ok(())
++    }
++}
++
++impl HeadlessWorld {
++    pub fn perception_recovery_reflex_draft_with_bindings(
++        &mut self,
++        admission: &RecoveryReflexWorldAdmissionV1,
++        tick: Tick,
++        homeostasis: HomeostaticSnapshot,
++    ) -> Result<(PerceptionFrameDraft, Option<GroundedCandidateBinding>), ScaffoldContractError>
++    {
++        self.perception_sleep_choice_draft_with_bindings(&admission.recovery, tick, homeostasis)
++    }
++
++    /// Atomic standalone physical transaction. No source, experience sequence or
++    /// optimizer update is created here. The host still owns cognitive commit.
++    pub fn apply_recovery_reflex_motor_bundle_v1(
++        &mut self,
++        request: &RecoveryReflexRequestV1,
++        neural: &NeuralEmissionFrame,
++        novelty: f32,
++        object_novelty: &[(WorldEntityId, f32)],
++    ) -> Result<RecoveryReflexWorldReceiptV1, HeadlessMotorTransactionError> {
++        let mut staged = self.clone();
++        let receipt = staged.apply_recovery_reflex_motor_bundle_v1_in_staged_tick(
++            request,
++            neural,
++            novelty,
++            object_novelty,
++        )?;
++        *self = staged;
++        Ok(receipt)
++    }
++
++    /// Enclosing host MUST discard its entire staged world/resident state on any
++    /// error, including evidence construction failure after the biology call.
++    pub fn apply_recovery_reflex_motor_bundle_v1_in_staged_tick(
++        &mut self,
++        request: &RecoveryReflexRequestV1,
++        neural: &NeuralEmissionFrame,
++        novelty: f32,
++        object_novelty: &[(WorldEntityId, f32)],
++    ) -> Result<RecoveryReflexWorldReceiptV1, HeadlessMotorTransactionError> {
++        let bundle = request.bundle();
++        let entity = request.admission.recovery.world_entity_id;
++        request
++            .admission
++            .validate_owner(self, bundle.organism_id, entity)?;
++        if request.selection.frame.tick() != self.tick
++            || self
++                .organism_registry
++                .get(bundle.organism_id)
++                .is_none_or(|r| r.sleep_phase() != alife_core::SleepPhase::Awake)
++        {
++            return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
++        }
++        if !novelty.is_finite()
++            || !(0.0..=1.0).contains(&novelty)
++            || object_novelty.len() > bundle.channels.len()
++            || object_novelty
++                .iter()
++                .any(|(id, v)| id.raw() == 0 || !v.is_finite() || !(0.0..=1.0).contains(v))
++        {
++            return Err(ScaffoldContractError::ScalarOutOfRange.into());
++        }
++        let initial_position = self.objects[&entity.raw()].position;
++        let mut translation = awake_translation::AwakeTranslationState::default();
++        let mut recovery = AwakeRestEventV1::NONE;
++        let motor = self.apply_registered_motor_bundle_recovery_reflex_inner(
++            bundle,
++            entity,
++            Some(neural),
++            Some((novelty, object_novelty)),
++            Some(&mut translation),
++            if request.selection.operation == Some(RecoveryOperationV1::AwakeRest) {
++                Some(&mut recovery)
++            } else {
++                None
++            },
++            true,
++            Some(&request.admission),
++        )?;
++        let interval = translation.into_receipt(motor);
++        let m = &interval.voluntary;
++        let stationary = all_segments_stationary(&m.joint, interval.withdrawal.as_ref());
++        let evidence = RecoveryReflexPhysicalEvidenceV1 {
++            schema_version: 1,
++            policy: RecoveryReflexPolicyV1::SharedTimeDirectionalWithdrawalAndRecoveryV1,
++            frame_digest: request.selection.frame.frame_digest(),
++            selected_bundle: bundle.clone(),
++            outcome_tick: m.outcome_tick,
++            operation: request.selection.operation,
++            voluntary_joint: m.joint.clone(),
++            composed_joint: compose_joint(&m.joint, interval.withdrawal.as_ref())?,
++            withdrawal: interval.withdrawal.clone(),
++            translation: RecoveryReflexTranslationWitnessV1 {
++                time_metric: interval.translation_time_metric,
++                allocated_time: interval.allocated_translation_time,
++                voluntary_time: interval.voluntary_time_allocated,
++                planned_voluntary_time: interval.planned_voluntary_time,
++                voluntary_time_provenance: interval.voluntary_time_provenance,
++                reflex_time: interval.reflex_time_allocated,
++                reflex_budget_exhausted: interval.reflex_budget_exhausted,
++                exhausted_late_no_effect: interval.exhausted_late_no_effect,
++                voluntary_execution_altered: interval.voluntary_execution_altered,
++                voluntary_path: interval.voluntary_path,
++                reflex_path: interval.reflex_path,
++                voluntary_translation_energy: interval.voluntary_translation_energy,
++            },
++            initial_position,
++            successor_position: self.objects[&entity.raw()].position,
++            successor_body_yaw: self.objects[&entity.raw()].body_yaw,
++            body_event: m.body_event,
++            biology_before: m.biology_before,
++            biology_after_physical: m.biology_after,
++            awake_recovery: recovery.dose(),
++            successful_stationary_body_sleep: request.selection.operation
++                == Some(RecoveryOperationV1::BodySleep)
++                && m.channel_receipts.iter().any(|c| {
++                    c.command.channel == MotorChannel::Posture
++                        && c.command.primitive == RecoveryOperationV1::BodySleep.action_id()
++                        && c.phase == ActionPhase::Completed
++                })
++                && stationary
++                && m.body_event.damage == 0.0
++                && m.body_event.sleep_recovery > 0.0
++                && m.biology_after.body.sleeping,
++        };
++        evidence.validate_contract()?;
++        Ok(RecoveryReflexWorldReceiptV1 { interval, evidence })
++    }
++}
++
++/// Explicit body-only evidence has no sampled bundle, sequence or credit event.
++/// Quiet due residents are included in the roster even when `responses` is empty.
++#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++pub struct RecoveryReflexBodyIntervalV1 {
++    pub schema_version: u16,
++    pub policy: RecoveryReflexPolicyV1,
++    pub source_tick: Tick,
++    pub admitted_nondecision_organisms: Vec<OrganismId>,
++    pub interval: BodyOnlyContactIntervalReceipt,
++}
++impl HeadlessWorld {
++    pub fn advance_recovery_reflex_bodies_v1(
++        &mut self,
++        events: &BTreeMap<u64, BodyEventDelta>,
++        admissions: &[RecoveryReflexWorldAdmissionV1],
++    ) -> Result<RecoveryReflexBodyIntervalV1, ScaffoldContractError> {
++        let mut staged = self.clone();
++        let receipt =
++            staged.advance_recovery_reflex_bodies_v1_in_staged_tick(events, admissions)?;
++        *self = staged;
++        Ok(receipt)
++    }
++    /// Supply only scheduler-selected nondecision residents, not every awake
++    /// resident. Already-acted peers retain their completed body transaction.
++    /// No SleepController phase is changed by interrupted physical recovery.
++    pub fn advance_recovery_reflex_bodies_v1_in_staged_tick(
++        &mut self,
++        events: &BTreeMap<u64, BodyEventDelta>,
++        admissions: &[RecoveryReflexWorldAdmissionV1],
++    ) -> Result<RecoveryReflexBodyIntervalV1, ScaffoldContractError> {
++        let source_tick = self.tick;
++        let mut ids = BTreeSet::new();
++        for admission in admissions {
++            admission.validate_owner(
++                self,
++                admission.recovery.organism_id,
++                admission.recovery.world_entity_id,
++            )?;
++            if !ids.insert(admission.recovery.organism_id.raw()) {
++                return Err(ScaffoldContractError::InvalidDecisionEvidence);
++            }
++        }
++        let interval =
++            self.try_advance_tick_with_selected_body_contacts_in_staged_tick(events, &ids)?;
++        let receipt = RecoveryReflexBodyIntervalV1 {
++            schema_version: 1,
++            policy: RecoveryReflexPolicyV1::SharedTimeDirectionalWithdrawalAndRecoveryV1,
++            source_tick,
++            admitted_nondecision_organisms: ids.into_iter().map(OrganismId).collect(),
++            interval,
++        };
++        receipt.validate_contract()?;
++        Ok(receipt)
++    }
++}
++
++impl Validate for RecoveryReflexBodyIntervalV1 {
++    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
++        let invalid = ScaffoldContractError::InvalidDecisionEvidence;
++        if self.schema_version != 1
++            || self.interval.schema_version != 1
++            || self.source_tick.raw().checked_add(1) != Some(self.interval.outcome_tick.raw())
++            || self
++                .admitted_nondecision_organisms
++                .iter()
++                .any(|id| id.raw() == 0)
++            || self
++                .admitted_nondecision_organisms
++                .windows(2)
++                .any(|p| p[0].raw() >= p[1].raw())
++            || self.interval.responses.len() > self.admitted_nondecision_organisms.len()
++        {
++            return Err(invalid);
++        }
++        let mut seen = BTreeSet::new();
++        for r in &self.interval.responses {
++            r.applied_body_event.validate_contract()?;
++            NormalizedScalar::new(r.requested_sleep_recovery)?;
++            if r.schema_version != 1
++                || r.outcome_tick != self.interval.outcome_tick
++                || !self.admitted_nondecision_organisms.contains(&r.organism_id)
++                || !seen.insert(r.organism_id.raw())
++                || r.sleep_recovery_interrupted
++                    != (r.applied_body_event.damage > 0.0 && r.requested_sleep_recovery > 0.0)
++                || (r.applied_body_event.damage > 0.0 && r.applied_body_event.sleep_recovery != 0.0)
++            {
++                return Err(invalid);
++            }
++            if let Some(reflex) = &r.withdrawal {
++                validate_withdrawal(reflex)?;
++                if r.applied_body_event.damage <= 0.0
++                    || (reflex.displacement != Vec3f::ZERO
++                        && r.applied_body_event.sleep_recovery != 0.0)
++                {
++                    return Err(invalid);
++                }
++            }
++        }
++        Ok(())
++    }
++}
++impl RecoveryReflexBodyIntervalV1 {
++    pub fn canonical_digest(&self) -> Result<[u64; 4], ScaffoldContractError> {
++        self.validate_contract()?;
++        let mut digest = CanonicalDigestBuilder::new(b"ALIFE-RECOVERY-REFLEX-BODY-V1-JSON1");
++        digest.write_bytes(
++            &serde_json::to_vec(self)
++                .map_err(|_| ScaffoldContractError::InvalidDecisionEvidence)?,
++        );
++        Ok(digest.finish256())
++    }
++}
++
++#[cfg(test)]
++mod tests;
+diff --git a/crates/alife_world/src/headless/sleep_choice_research.rs b/crates/alife_world/src/headless/sleep_choice_research.rs
+--- a/crates/alife_world/src/headless/sleep_choice_research.rs
++++ b/crates/alife_world/src/headless/sleep_choice_research.rs
+@@ -1,4 +1,7 @@
+ //! Explicit M1 world capability. Never consulted by ordinary action dispatch.
++mod recovery_reflex;
++pub use recovery_reflex::*;
++
+ use super::*;
+ use alife_core::{AwakeRestEventV1, RecoveryOperationV1};
+ 
+diff --git a/crates/alife_world/src/headless.rs b/crates/alife_world/src/headless.rs
+--- a/crates/alife_world/src/headless.rs
++++ b/crates/alife_world/src/headless.rs
+@@ -1250,14 +1250,14 @@
+     pub biology_after: BiochemistryState,
+ }
+ 
+-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+ pub enum WithdrawalDirectionBasis {
+     LocalizedContact,
+     AcuteDamageHeadingFallback,
+ }
+ 
+ /// Bounded, nonpersistent physical reflex evidence for the body-only candidate.
+-#[derive(Debug, Clone, PartialEq)]
++#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+ pub struct ContactWithdrawalReceipt {
+     pub direction_basis: WithdrawalDirectionBasis,
+     pub sources: Vec<WorldEntityId>,
+@@ -1272,7 +1272,7 @@
+ }
+ 
+ /// Body-only evidence has no voluntary command or policy-credit identity.
+-#[derive(Debug, Clone, PartialEq)]
++#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+ pub struct BodyOnlyContactResponse {
+     pub schema_version: u16,
+     pub organism_id: OrganismId,
+@@ -1283,7 +1283,7 @@
+     pub applied_body_event: BodyEventDelta,
+ }
+ 
+-#[derive(Debug, Clone, PartialEq)]
++#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+ pub struct BodyOnlyContactIntervalReceipt {
+     pub schema_version: u16,
+     pub outcome_tick: Tick,
+@@ -4862,12 +4862,46 @@
+         world_entity_id: WorldEntityId,
+         neural: Option<&NeuralEmissionFrame>,
+         novelty: Option<(f32, &[(WorldEntityId, f32)])>,
+-        mut translation: Option<&mut awake_translation::AwakeTranslationState>,
++        translation: Option<&mut awake_translation::AwakeTranslationState>,
+         awake_rest: Option<&mut alife_core::AwakeRestEventV1>,
+         sleep_choice: bool,
+     ) -> Result<HeadlessMotorTransactionReceipt, HeadlessMotorTransactionError> {
+         // No unqualified composition with the separate reflex experiment.
+         if awake_rest.is_some() && translation.is_some() {
++            return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
++        }
++        self.apply_registered_motor_bundle_recovery_reflex_inner(
++            bundle,
++            world_entity_id,
++            neural,
++            novelty,
++            translation,
++            awake_rest,
++            sleep_choice,
++            None,
++        )
++    }
++
++    // Shared implementation. Only the new typed capability can compose the two
++    // previously separate candidates; the old entry point keeps its old guard.
++    #[allow(clippy::too_many_arguments)]
++    fn apply_registered_motor_bundle_recovery_reflex_inner(
++        &mut self,
++        bundle: &MotorCommandBundle,
++        world_entity_id: WorldEntityId,
++        neural: Option<&NeuralEmissionFrame>,
++        novelty: Option<(f32, &[(WorldEntityId, f32)])>,
++        mut translation: Option<&mut awake_translation::AwakeTranslationState>,
++        awake_rest: Option<&mut alife_core::AwakeRestEventV1>,
++        sleep_choice: bool,
++        combined: Option<&RecoveryReflexWorldAdmissionV1>,
++    ) -> Result<HeadlessMotorTransactionReceipt, HeadlessMotorTransactionError> {
++        if let Some(admission) = combined {
++            admission.validate_owner(self, bundle.organism_id, world_entity_id)?;
++            if translation.is_none() || !sleep_choice {
++                return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
++            }
++        } else if awake_rest.is_some() && translation.is_some() {
+             return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
+         }
+         let outcome_tick = self.validate_registered_motor_bundle(bundle, world_entity_id)?;
+@@ -5137,7 +5171,13 @@
+             // Preserve the earlier body-only experiment's existing contract.
+             let stationary = executed
+                 .iter()
+-                .all(|(_, result)| result.execution.physical.displacement == Vec3f::ZERO);
++                .all(|(_, result)| result.execution.physical.displacement == Vec3f::ZERO)
++                && translation.as_ref().is_none_or(|state| {
++                    state
++                        .withdrawal
++                        .as_ref()
++                        .is_none_or(|r| r.displacement == Vec3f::ZERO)
++                });
+             let recovery_succeeded = if sleep_choice {
+                 executed.iter().any(|(channel, result)| {
+                     channel.channel == MotorChannel::Posture
