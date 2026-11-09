@@ -1,0 +1,1 @@
+[{"exact_name":"cpu::host::grouped_host_envelope::channel_native::tests::channel_native_host_rejects_opposite_policy_and_rolls_back_exact_post_physical_error","source":"crates/alife_training/src/cpu/channel_native_host_tests.rs","test":"channel_native_host_rejects_opposite_policy_and_rolls_back_exact_post_physical_error"}]
