@@ -1,0 +1,478 @@
+#!/usr/bin/env python3
+"""Synthetic/static checks only. Never invoke Rust, Cargo, a fixture or GitHub."""
+import sys
+sys.dont_write_bytecode = True
+import ast, copy, hashlib, importlib.util, json, pathlib, re, tempfile, unittest
+from unittest.mock import patch
+from packet_inputs import ROOT, V5, read, verify_preservation
+spec=importlib.util.spec_from_file_location('runner',ROOT/'run_hosted.py')
+r=importlib.util.module_from_spec(spec);spec.loader.exec_module(r)
+exec_namespace={}
+exec(compile(read('source_patch.py'),'source_patch.py','exec'),exec_namespace)
+apply_source_patch=exec_namespace['apply']
+FIXTURES=json.loads((ROOT/'FIXTURES.json').read_bytes())
+BOUND={x['path']:x for x in json.loads((ROOT/'source-manifest.json').read_bytes())['files']}
+
+class AdmissionTests(unittest.TestCase):
+    def setUp(self):
+        self.before='a'*40;self.head='b'*40
+        env={'GITHUB_ACTIONS':'true','GITHUB_EVENT_NAME':'push','GITHUB_REPOSITORY':'BobertNeek/A-Life','GITHUB_REF':r.BRANCH,'GITHUB_RUN_ATTEMPT':'1'}
+        event={'before':self.before,'after':self.head,'ref':r.BRANCH,'created':False,'deleted':False,'forced':False}
+        marker={'schema':'m2-grip-fixed-fixture-activation-v3','plan_id':r.PLAN,'main':r.MAIN,'research_base':r.FBF,'prepared_head':self.before,'seal_sha256':'c'*64,'source_manifest_sha256':'d'*64,'attempt':1,'fixed_fixtures_only':True}
+        self.args=[env,event,self.head,[self.head,self.before],'A\t'+r.MARKER+'\n',marker,'c'*64,'d'*64]
+    def test_exact_activation(self):self.assertEqual(r.validate_activation(*self.args),self.before)
+    def test_all_wrong_environments(self):
+        for key in self.args[0]:
+            args=copy.deepcopy(self.args);args[0][key]='wrong'
+            with self.assertRaises(r.Stop):r.validate_activation(*args)
+    def test_created_deleted_forced_and_wrong_event(self):
+        for key,value in [('created',True),('deleted',True),('forced',True),('before','0'*40),('after','e'*40),('ref','refs/heads/main')]:
+            args=copy.deepcopy(self.args);args[1][key]=value
+            with self.assertRaises(r.Stop):r.validate_activation(*args)
+    def test_parent_and_marker_must_be_sole_new_child(self):
+        for parents in [[],[self.head],[self.head,'e'*40],[self.head,self.before,'f'*40]]:
+            args=copy.deepcopy(self.args);args[3]=parents
+            with self.assertRaises(r.Stop):r.validate_activation(*args)
+        for changed in ['', 'M\t'+r.MARKER+'\n','A\told/ACTIVATE.json\n','A\t'+r.MARKER+'\nM\tCargo.toml\n']:
+            args=copy.deepcopy(self.args);args[4]=changed
+            with self.assertRaises(r.Stop):r.validate_activation(*args)
+    def test_every_marker_field_exact(self):
+        for key in self.args[5]:
+            args=copy.deepcopy(self.args);args[5][key]='invalid'
+            with self.assertRaises(r.Stop):r.validate_activation(*args)
+        args=copy.deepcopy(self.args);args[5]['typecheck_only']=True
+        with self.assertRaises(r.Stop):r.validate_activation(*args)
+
+class InventoryTests(unittest.TestCase):
+    def check_inventory(self,obj):
+        with patch.object(r,'read_json',return_value=obj),patch.object(r,'BOUND',BOUND):return r.fixture_inventory()
+    def test_exact_continuation_inventory_28_and_six_targets(self):
+        targets,rows=self.check_inventory(FIXTURES)
+        self.assertEqual(len(targets),6);self.assertEqual(len(rows),28)
+        self.assertTrue(any(x['name']=='grounded_scene_pair_scores_and_cold_continuation' for x in rows))
+        self.assertFalse(any('sealed_source_descriptor' in x['name'] for x in rows))
+        self.assertEqual(len(FIXTURES['excluded_fixtures']),1)
+    def test_inventory_rejects_unready_and_duplicate(self):
+        for modify in [lambda x:x.update(ready=False),lambda x:x['fixtures'].append(x['fixtures'][0]),lambda x:x['targets'].append(x['targets'][0])]:
+            obj=copy.deepcopy(FIXTURES);modify(obj)
+            with self.assertRaises(r.Stop):self.check_inventory(obj)
+    def test_exact_name_and_source_and_dose_fail_closed(self):
+        for key,value in [('name','grip*'),('name',''),('ignored',True),('source_path','/secret'),('source_sha256','0'*64),('dose',{}),('dose',{'unknown':None}),('dose',{'x':-1})]:
+            obj=copy.deepcopy(FIXTURES);obj['fixtures'][0][key]=value
+            with self.assertRaises(r.Stop):self.check_inventory(obj)
+    def test_targets_reject_broad_or_hardware_features(self):
+        for key,value in [('kind','all-targets'),('features',['gpu-tests']),('package','alife_game_app'),('name','*')]:
+            obj=copy.deepcopy(FIXTURES);obj['targets'][0][key]=value
+            with self.assertRaises(r.Stop):self.check_inventory(obj)
+    def test_fixed_complete_dose_and_unknown_compute_disclosed(self):
+        dose=FIXTURES['source_audited_complete_dose']
+        for key,value in [('source_forwards',3),('fresh_worlds',12),('primitive_attempts',25),('primitive_successes',16),('primitive_rejected_attempts',9),('committed_registered_biology_intervals',3),('rolled_back_registered_biology_intervals',0),('cold_restored_world_branches',1),('warm_branch_intervals',2),('cold_branch_intervals',1),('enumerated_scaffold_compiler_calls',3),('fixtures_with_unenumerated_compiler_work',1)]:self.assertEqual(dose[key],value)
+        self.assertFalse(FIXTURES['compiler_reconstruction_count_complete'])
+        self.assertIn('not instrumented',FIXTURES['dose_semantics'])
+    def test_selected_source_records_are_all_bound(self):
+        for row in FIXTURES['fixtures']:
+            self.assertEqual(row['source_sha256'],BOUND[row['source_path']]['sha256'])
+            self.assertIn('::',row['name']) if row['source_path'].split('/')[2]=='src' else None
+
+class ProtocolTests(unittest.TestCase):
+    def test_listing_accepts_only_exact_single(self):
+        name='some::exact_test'
+        for raw in [b'some::exact_test: test\n',b'some::exact_test: test\n\n1 test, 0 benchmarks\n']:
+            r.validate_exact_listing(raw,name)
+    def test_listing_rejects_other_duplicate_broad_or_benchmark(self):
+        for raw in [b'',b'other: test\n',b'some::exact_test: benchmark\n',b'some::exact_test: test\nother: test\n',b'some::exact_test: test\nsome::exact_test: test\n',b'some::exact_test: test\n2 tests, 0 benchmarks\n',b'\xff']:
+            with self.assertRaises(r.Stop):r.validate_exact_listing(raw,'some::exact_test')
+    def test_result_requires_exactly_one_pass(self):
+        r.validate_exact_result(b'\nrunning 1 test\n.\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.01s\n')
+    def test_result_rejects_ignored_empty_failed_multiple(self):
+        base='running 1 test\n.\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.01s\n'
+        for raw in [base.replace('1 passed','0 passed'),base.replace('0 ignored','1 ignored'),base.replace('0 failed','1 failed'),base.replace('running 1 test','running 2 tests'),base+'private assertion\n','',base.replace('ok.','FAILED.')]:
+            with self.assertRaises(r.Stop):r.validate_exact_result(raw.encode())
+    def test_list_uses_exact_flags_without_running_fixture(self):
+        state=copy.deepcopy(r.STATE);row=FIXTURES['fixtures'][0];calls=[]
+        def run(args,*a,**kw):calls.append(args);return (row['name']+': test\n').encode(),0
+        with patch.object(r,'STATE',state),patch.object(r,'WORK',pathlib.Path('/fixture')),patch.object(r,'digest_file',return_value='a'*64),patch.object(r,'run',side_effect=run):
+            r.list_exact_fixture(row,pathlib.Path('/fixture/target/test'),'a'*64)
+        self.assertEqual(calls,[['/fixture/target/test','--exact',row['name'],'--list','--format','terse']])
+        self.assertEqual(state['launched_fixture_processes'],0)
+    def test_exact_run_once_and_no_retry_after_failure(self):
+        row=FIXTURES['fixtures'][0];state=copy.deepcopy(r.STATE);state['listed_fixture_ids']=[row['id']]
+        with tempfile.TemporaryDirectory(prefix='grip-static-') as d:
+            with patch.object(r,'STATE',state),patch.object(r,'WORK',pathlib.Path(d)),patch.object(r,'digest_file',return_value='a'*64),patch.object(r,'run',return_value=(b'private panic/assertion text',101)) as run:
+                with self.assertRaises(r.Stop):r.execute_exact_fixture(row,pathlib.Path(d)/'test','a'*64)
+                with self.assertRaises(r.Stop):r.execute_exact_fixture(row,pathlib.Path(d)/'test','a'*64)
+                self.assertEqual(run.call_count,1)
+                self.assertEqual(run.call_args[0][0],[str(pathlib.Path(d)/'test'),'--exact',row['name'],'--test-threads=1','--format','terse'])
+        self.assertEqual(state['launched_fixture_processes'],1);self.assertEqual(state['confirmed_passed_test_bodies'],0)
+        self.assertNotIn('private',json.dumps(state))
+    def test_run_success_records_only_static_identifiers(self):
+        row=FIXTURES['fixtures'][0];state=copy.deepcopy(r.STATE);state['listed_fixture_ids']=[row['id']]
+        raw=b'running 1 test\n.\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 999 filtered out; finished in 0.00s\n'
+        with tempfile.TemporaryDirectory(prefix='grip-static-') as d:
+            with patch.object(r,'STATE',state),patch.object(r,'WORK',pathlib.Path(d)),patch.object(r,'digest_file',return_value='a'*64),patch.object(r,'run',return_value=(raw,0)):
+                r.execute_exact_fixture(row,pathlib.Path(d)/'test','a'*64)
+        self.assertEqual(state['passed_fixture_ids'],[row['id']]);self.assertEqual(state['confirmed_passed_test_bodies'],1)
+    def test_modified_binary_rejected_before_list_or_run(self):
+        row=FIXTURES['fixtures'][0]
+        with patch.object(r,'digest_file',return_value='b'*64),patch.object(r,'run') as run:
+            with self.assertRaises(r.Stop):r.list_exact_fixture(row,pathlib.Path('/x'),'a'*64)
+            with self.assertRaises(r.Stop):r.execute_exact_fixture(row,pathlib.Path('/x'),'a'*64)
+            run.assert_not_called()
+
+class CompilationTests(unittest.TestCase):
+    def test_build_compiles_only_one_target_without_running(self):
+        spec=FIXTURES['targets'][0]
+        with tempfile.TemporaryDirectory(prefix='grip-static-') as d:
+            work=pathlib.Path(d);(work/'target').mkdir();exe=work/'target/test';exe.write_text('inert fixture bytes');exe.chmod(0o700)
+            source=work/'source';state=copy.deepcopy(r.STATE)
+            artifact={'reason':'compiler-artifact','target':{'name':spec['name'],'src_path':str(source/'crates'/spec['package']/'src/lib.rs'),'kind':['test' if spec['kind']=='test' else 'lib']},'features':r.EXPECTED_FEATURES[spec['package']],'profile':{'test':True},'executable':str(exe),'filenames':[str(exe)],'package_id':spec['package']}
+            def fake(args,*a,**kw):
+                self.assertEqual(args[:9],['rustup','run','1.99.1','cargo','test','--no-run','--locked','-j1','-p'])
+                self.assertNotIn('--all-targets',args);self.assertNotIn('--all-features',args)
+                kw['consumer'](json.dumps(artifact).encode());kw['consumer'](b'{"reason":"build-finished","success":true}')
+                return b'',0
+            with patch.object(r,'WORK',work),patch.object(r,'SOURCE',source),patch.object(r,'STATE',state),patch.object(r,'RUSTUP','rustup'),patch.object(r,'BOUND',{}),patch.object(r,'verify_depinfo'),patch.object(r,'run',side_effect=fake):
+                path,digest=r.build_fixture_target(spec)
+                self.assertEqual(path,exe);self.assertEqual(len(digest),64)
+            self.assertEqual(state['compiled_target_ids'],[spec['id']])
+    def test_failure_stops_before_list_and_run(self):
+        spec=FIXTURES['targets'][0]
+        with patch.object(r,'run',return_value=(b'private compiler output',1)),patch.object(r,'list_exact_fixture') as listing,patch.object(r,'execute_exact_fixture') as execution:
+            with self.assertRaises(r.Stop):r.build_fixture_target(spec)
+            listing.assert_not_called();execution.assert_not_called()
+    def test_all_builds_then_all_lists_then_each_exact_run(self):
+        tree=ast.parse((ROOT/'run_hosted.py').read_text());main=next(x for x in tree.body if isinstance(x,ast.FunctionDef) and x.name=='main');source=ast.unparse(main)
+        self.assertLess(source.index('fixture_inventory()'),source.index('setup_toolchain(original)'))
+        self.assertLess(source.index('build_fixture_target(spec)'),source.index('list_exact_fixture(row'))
+        self.assertLess(source.index('list_exact_fixture(row'),source.index('execute_exact_fixture(row'))
+        self.assertLess(source.index('execute_exact_fixture(row'),source.rindex('verify_record(SOURCE, row)'))
+        self.assertNotIn('check_stage(',source)
+
+class PreservationTests(unittest.TestCase):
+    def test_all_prior_packets_preserved(self):verify_preservation()
+    def test_863_original_records_two_test_corrections_plus_gpu(self):
+        old=json.loads(read('source-manifest-v5.json'))
+        new=json.loads((ROOT/'source-manifest.json').read_bytes())
+        gpu=json.loads((ROOT/'TEST-ONLY-DELTA.json').read_bytes())
+        changes=[json.loads((ROOT/name).read_bytes()) for name in
+                 ['F012-CORRECTION.json','F019-CORRECTION.json']]
+        records={x['path']:x for x in old['files']}
+        self.assertEqual(len(records),865)
+        for c in changes:
+            self.assertEqual(records[c['source_path']],c['before_record'])
+            records[c['source_path']]=c['source_record']
+        expected=sorted(list(records.values())+[gpu['source_record']],key=lambda x:x['path'])
+        self.assertEqual(new['files'],expected)
+        oldmap={x['path']:x for x in old['files']}
+        self.assertEqual(sum(oldmap.get(x['path'])==x for x in new['files']),863)
+        self.assertEqual(len(new['files']),866)
+    def test_additive_patch_new_test_only_and_exact_bytes(self):
+        delta=json.loads((ROOT/'TEST-ONLY-DELTA.json').read_bytes());raw=(ROOT/delta['patch_path']).read_bytes()
+        self.assertEqual(hashlib.sha256(raw).hexdigest(),delta['patch_sha256'])
+        applied=apply_source_patch(raw,lambda _:None);self.assertEqual(list(applied),[delta['source_record']['path']])
+        source=applied[delta['source_record']['path']]
+        self.assertEqual(hashlib.sha256(source).hexdigest(),delta['source_record']['sha256'])
+        self.assertEqual(len(re.findall(rb'#\[test\]',source)),1)
+        for forbidden in [b'request_adapter',b'request_device',b'step_research',b'create_new_game',b'compile_n2048',b'gpu-tests']:
+            self.assertNotIn(forbidden,source)
+        self.assertLess(source.index(b'grip.validate().unwrap()'),source.index(b'GpuPerceptionUpload::try_from_frame(&grip'))
+        self.assertIn(b'Err(GpuClosedLoopError::LayoutMismatch)',source)
+        self.assertIn(b'upload.validate_against(&legacy, &slot).unwrap()',source)
+    def test_unchanged_runtime_limits_and_guard_functions(self):
+        old=ast.parse((V5/'run_hosted.py').read_text());new=ast.parse((ROOT/'run_hosted.py').read_text())
+        funcs=lambda tree:{x.name:ast.dump(x,include_attributes=False) for x in tree.body if isinstance(x,ast.FunctionDef)}
+        of,nf=funcs(old),funcs(new)
+        for name in ['run','check_limits','session_rss','kill_session','child_setup','setup_toolchain','verify_depinfo','diagnostic_rows','verify_record','digest_file','verify_workflow_preservation']:
+            self.assertEqual(of[name],nf[name],name)
+        assign=lambda tree,name:next(ast.dump(x.value,include_attributes=False) for x in tree.body if isinstance(x,ast.Assign) and any(isinstance(t,ast.Name) and t.id==name for t in x.targets))
+        for name in ['LIMITS','EXPECTED_FEATURES','TOOLCHAIN','RUST_COMMIT','RUST_DATE','RUST_VERSION','CARGO_VERSION','HOST','ACTION_SHA']:
+            self.assertEqual(assign(old,name),assign(new,name),name)
+    def test_actual_inherited_yaml_filters_exclude_both_pushes(self):
+        import yaml,fnmatch
+        fixtures=json.loads(read('INHERITED-WORKFLOW-FIXTURES.json'))['files'];contract=json.loads((ROOT/'WORKFLOW-PRESERVATION.json').read_bytes());records={x['path']:x for x in contract['files']}
+        self.assertEqual(len(fixtures),15)
+        for fixture in fixtures:
+            data=fixture['content_utf8'].encode();row=records[fixture['path']]
+            self.assertEqual(hashlib.sha256(data).hexdigest(),row['sha256'])
+            self.assertEqual(hashlib.sha1(b'blob '+str(len(data)).encode()+b'\0'+data).hexdigest(),row['git_blob_sha1'])
+            events=yaml.load(data,Loader=yaml.BaseLoader)['on']
+            self.assertFalse(set(events)-{'push','pull_request','workflow_dispatch'})
+            if 'push' in events:self.assertFalse(any(fnmatch.fnmatchcase(r.BRANCH.removeprefix('refs/heads/'),p) for p in events['push']['branches']))
+    def test_actual_preserved_workflow_bytes_and_inventory(self):
+        fixtures=json.loads(read('INHERITED-WORKFLOW-FIXTURES.json'))['files'];lines=['100644 blob '+x['git_blob_sha1']+'\t'+x['path'] for x in fixtures]
+        lines+=['100644 blob '+'a'*40+'\t.github/workflows/'+r.PLAN+'.yml'];lines.sort(key=lambda x:x.split('\t')[1])
+        with tempfile.TemporaryDirectory(prefix='grip-static-') as d:
+            bundle=pathlib.Path(d)
+            for row in fixtures:
+                p=bundle/row['path'];p.parent.mkdir(parents=True,exist_ok=True);p.write_text(row['content_utf8'])
+            r.verify_workflow_preservation(bundle,lines)
+            with self.assertRaises(r.Stop):r.verify_workflow_preservation(bundle,lines[1:])
+            with self.assertRaises(r.Stop):r.verify_workflow_preservation(bundle,lines+[lines[0]])
+            (bundle/fixtures[0]['path']).write_text('tampered')
+            with self.assertRaises(r.Stop):r.verify_workflow_preservation(bundle,lines)
+    def test_single_marker_workflow_no_external_effects(self):
+        import yaml
+        text=(ROOT/'workflow.yml').read_text();doc=yaml.load(text,Loader=yaml.BaseLoader)
+        self.assertEqual(doc['on'],{'push':{'branches':[r.BRANCH.removeprefix('refs/heads/')],'paths':[r.MARKER]}})
+        self.assertEqual(doc['permissions'],{'contents':'read'})
+        self.assertEqual(list(doc['jobs']),['source-typecheck'])
+        gate=doc['jobs']['source-typecheck']['if']
+        for condition in ["github.event.created == false","github.event.deleted == false","github.event.forced == false","github.run_attempt == '1'",r.BRANCH]:self.assertIn(condition,gate)
+        for forbidden in ['upload-artifact','actions/cache','secrets.','workflow_dispatch:','pull_request:','contents: write']:self.assertNotIn(forbidden,text)
+        self.assertEqual(text.count('persist-credentials: false'),2)
+    def test_source_only_reuse_and_no_activation(self):
+        for row in json.loads((ROOT/'REUSE-MANIFEST.json').read_bytes())['files']:
+            b=read(row['path']);b.decode('utf-8','strict');self.assertNotIn(b'\0',b)
+            self.assertEqual(hashlib.sha256(b).hexdigest(),row['sha256'])
+            self.assertNotIn(row['path'],['run_hosted.py','workflow.yml','ACTIVATE.json'])
+        self.assertFalse((ROOT/'ACTIVATE.json').exists())
+    def test_local_staging_below_two_mib(self):
+        self.assertLessEqual(sum(p.stat().st_size for p in ROOT.rglob('*') if p.is_file()),2*1024**2)
+    def test_python_syntax(self):
+        for p in ROOT.glob('*.py'):ast.parse(p.read_text(),filename=p.name)
+    def test_summary_and_diagnostics_never_include_private_text(self):
+        obj={'message':{'level':'error','code':{'code':'E0308','explanation':'private'},'message':'private','rendered':'private','spans':[{'is_primary':True,'file_name':'crates/alife_core/src/lib.rs','line_start':5,'text':['private']}]}}
+        rows=r.diagnostic_rows(obj,'core',pathlib.Path('/source'),{'crates/alife_core/src/lib.rs':{}})
+        self.assertEqual(rows,[{'code':'E0308','path':'crates/alife_core/src/lib.rs','line':5,'stage':'core'}])
+        self.assertNotIn('private',r.summary('INTERNAL'));self.assertLessEqual(len(r.summary('INTERNAL').encode()),32768)
+
+
+class CorrectionV2Tests(unittest.TestCase):
+    def correction_sources(self):
+        c=json.loads((ROOT/'F012-CORRECTION.json').read_bytes())
+        path=c['source_path']
+        raw=read('patches/fbf-to-grip-v4.patch')
+        head=('--- /dev/null\n+++ b/'+path+'\n').encode()
+        self.assertEqual(raw.count(head),1)
+        start=raw.index(head);end=raw.find(b'\n--- ',start+len(head))
+        section=raw[start:] if end<0 else raw[start:end+1]
+        old=apply_source_patch(section,lambda _:None)[path]
+        patchdata=(ROOT/c['patch_record']['path']).read_bytes()
+        self.assertEqual(len(patchdata),c['patch_record']['bytes'])
+        self.assertEqual(hashlib.sha256(patchdata).hexdigest(),
+                         c['patch_record']['sha256'])
+        applied=apply_source_patch(patchdata,lambda p:old if p==path else None)
+        self.assertEqual(set(applied),{path})
+        return c,old,applied[path],patchdata
+
+    def test_exact_preimage_postimage_and_only_test_function_delta(self):
+        c,old,new,patchdata=self.correction_sources()
+        for data,row in [(old,c['before_record']),(new,c['source_record'])]:
+            self.assertEqual(len(data),row['bytes'])
+            self.assertEqual(hashlib.sha256(data).hexdigest(),row['sha256'])
+        self.assertEqual(c['before_record']['sha256'],
+            'c82760480220f3b32ba92b130d4e6990fef158d55f94abd8e549e3129784abda')
+        self.assertEqual(c['source_record']['sha256'],
+            'fd4c1b7764a16c79e1cfc0179d82ce7211fa7dd10560e04d23b24d313874645e')
+        marker=b'#[test]\nfn legacy_non_string_nested_metadata_and_duplicate_numeric_unknowns_are_ignored()'
+        old_prefix=old[:old.index(marker)]
+        new_prefix=new[:new.index(marker)]
+        self.assertEqual(new_prefix.replace(
+            b'#[derive(Serialize, Deserialize)]\nstruct LegacyDraft',
+            b'#[derive(Serialize)]\nstruct LegacyDraft',1),old_prefix)
+        self.assertEqual(re.findall(rb'#\[test\]\s*fn\s+(\w+)',old),
+                         re.findall(rb'#\[test\]\s*fn\s+(\w+)',new))
+        self.assertIn(b'FieldValue::Known(value) => seed.deserialize(value)',new)
+        self.assertIn(b'let legacy = LegacyDraft::deserialize(make_input()).unwrap()',new)
+        self.assertIn(b'PerceptionFrameDraft::deserialize(make_input()).unwrap()',new)
+        self.assertNotIn(b'serde_json::from_value::<D>',new[new.index(marker):])
+        self.assertEqual([x for x in patchdata.splitlines()
+                          if x.startswith((b'--- ',b'+++ '))],
+                         [('--- a/'+c['source_path']).encode(),
+                          ('+++ b/'+c['source_path']).encode()])
+
+    def test_retained_and_remaining_preserve_all_v2_identities_and_doses(self):
+        prior=pathlib.Path('/workspace/shared/m2-grip-fixed-fixtures-v2')
+        old=json.loads((prior/'FIXTURES.json').read_bytes())
+        c=json.loads((ROOT/'CONTINUATION.json').read_bytes())
+        correction=json.loads((ROOT/'F019-CORRECTION.json').read_bytes())
+        rows=c['retained_fixtures']+FIXTURES['fixtures']
+        self.assertEqual(len(rows),46)
+        for a,b in zip(old['fixtures'],rows):
+            expected=copy.deepcopy(a)
+            if expected['source_path']==correction['source_path']:
+                expected['source_sha256']=correction['source_record']['sha256']
+            self.assertEqual(b,expected)
+        self.assertEqual(FIXTURES['excluded_fixtures'],old['excluded_fixtures'])
+        self.assertEqual(c['retained_fixtures'],old['fixtures'][:18])
+        dose={key:0 for key in old['source_audited_complete_dose']}
+        for row in FIXTURES['fixtures']:
+            for key,value in row['dose'].items():dose[key]=dose.get(key,0)+value
+        self.assertEqual(FIXTURES['source_audited_complete_dose'],dose)
+
+    def test_v1_runner_changes_only_restore_and_version_literals(self):
+        prior=pathlib.Path('/workspace/shared/m2-grip-fixed-fixtures-v1')
+        old=(prior/'run_hosted.py').read_text()
+        old=old.replace('m2-grip-fixed-fixtures-v1','m2-grip-fixed-fixtures-v3')
+        old=re.sub(r'(m2-grip-fixed-[a-z-]+)-v1\b',r'\1-v3',old)
+        funcs=lambda text:{x.name:ast.dump(x,include_attributes=False)
+            for x in ast.parse(text).body if isinstance(x,ast.FunctionDef)}
+        of,nf=funcs(old),funcs((ROOT/'run_hosted.py').read_text())
+        self.assertEqual(set(of),set(nf))
+        self.assertEqual([n for n in of if of[n]!=nf[n]],['restore_test_fixture'])
+        oldtree=ast.parse(old);newtree=ast.parse((ROOT/'run_hosted.py').read_text())
+        top=lambda tree:[ast.dump(x,include_attributes=False) for x in tree.body
+                         if not isinstance(x,ast.FunctionDef)]
+        self.assertEqual(top(oldtree),top(newtree))
+        for name in ['TEST-ONLY-DELTA.json','patches/gpu-upload-gate.patch',
+                     'PRIOR-TYPECHECK-RESULT.json','PRIOR-V5-PRESERVATION.json']:
+            self.assertEqual((ROOT/name).read_bytes(),(prior/name).read_bytes())
+
+    def test_correction_restore_rejects_unbound_metadata_and_manifest(self):
+        c=json.loads((ROOT/'F012-CORRECTION.json').read_bytes())
+        gpu=json.loads((ROOT/'TEST-ONLY-DELTA.json').read_bytes())
+        old=json.loads(read('source-manifest-v5.json'))
+        new=json.loads((ROOT/'source-manifest.json').read_bytes())
+        variants=[]
+        x=copy.deepcopy(c);x['before_record']['sha256']='0'*64
+        variants.append((x,new))
+        x=copy.deepcopy(c);x['source_record']['sha256']='0'*64
+        variants.append((x,new))
+        x=copy.deepcopy(c);x['source_path']='crates/alife_core/src/perception.rs'
+        x['source_record']['path']=x['source_path']
+        variants.append((x,new))
+        x=copy.deepcopy(new);x['files'].append(x['files'][0])
+        variants.append((c,x))
+        x=copy.deepcopy(new)
+        other=next(z for z in x['files'] if z['path']=='crates/alife_core/src/perception_grip_map.rs')
+        other['sha256']='0'*64
+        variants.append((c,x))
+        real_verify=r.verify_record
+        for candidate,manifest in variants:
+            with tempfile.TemporaryDirectory(prefix='grip-v2-static-') as d:
+                work=pathlib.Path(d);source=work/'source'
+                def read_json(path):
+                    name=path.name
+                    return {'TEST-ONLY-DELTA.json':gpu,
+                            'F012-CORRECTION.json':candidate,
+                            'source-manifest-v5.json':old,
+                            'source-manifest.json':manifest}[name]
+                def verify(root,row):
+                    if root==r.ROOT:return real_verify(root,row)
+                    return None
+                with patch.object(r,'WORK',work),patch.object(r,'SOURCE',source), \
+                     patch.object(r,'read_json',side_effect=read_json), \
+                     patch.object(r,'verify_record',side_effect=verify), \
+                     patch.object(r,'run',return_value=(b'',0)) as invoke:
+                    with self.assertRaises(r.Stop):r.restore_test_fixture()
+                    self.assertEqual(invoke.call_count,2)
+
+    def test_allowed_remote_inventory_is_addition_only_and_complete(self):
+        inv=json.loads((ROOT/'REMOTE-FILES.json').read_bytes())
+        rows=inv['prepared_files']
+        paths=[x['path'] for x in rows]
+        self.assertEqual(len(paths),len(set(paths)))
+        self.assertEqual(len(paths),52)
+        for row in rows:
+            self.assertEqual(row['mode'],'100644')
+            self.assertTrue(row['path'].startswith(
+                'docs/experiments/m2-grip-fixed-fixtures-v3/')
+                or row['path']=='.github/workflows/m2-grip-fixed-fixtures-v3.yml')
+            self.assertFalse(row['path'].endswith('/ACTIVATE.json'))
+        self.assertEqual(inv['activation_only_added_path'],
+            'docs/experiments/m2-grip-fixed-fixtures-v3/ACTIVATE.json')
+        self.assertEqual(inv['modified_inherited_paths'],[])
+        self.assertEqual(inv['deleted_paths'],[])
+        reuse=json.loads((ROOT/'REUSE-MANIFEST.json').read_bytes())
+        expected={x['destination_path'] for x in reuse['files']}
+        expected|={x['path'] for x in rows if x['transport']=='archive'}
+        self.assertEqual(set(paths),expected)
+
+
+
+class ContinuationV3Tests(unittest.TestCase):
+    def corrected_source(self):
+        c=json.loads((ROOT/'F019-CORRECTION.json').read_bytes())
+        old=pathlib.Path('/workspace/shared/m2-grip-options-v1/world-slice-v3')/c['source_path']
+        before=old.read_bytes()
+        self.assertEqual(hashlib.sha256(before).hexdigest(),c['before_record']['sha256'])
+        raw=(ROOT/c['patch_record']['path']).read_bytes()
+        self.assertEqual(hashlib.sha256(raw).hexdigest(),c['patch_record']['sha256'])
+        changed=apply_source_patch(raw,lambda p:before if p==c['source_path'] else None)
+        self.assertEqual(set(changed),{c['source_path']})
+        after=changed[c['source_path']]
+        self.assertEqual(len(after),c['source_record']['bytes'])
+        self.assertEqual(hashlib.sha256(after).hexdigest(),c['source_record']['sha256'])
+        return before,after
+
+    def test_f019_only_body_delta_and_seven_attempts(self):
+        before,after=self.corrected_source()
+        marker=b'    #[test]\n    fn close_release_are_independent_idempotent_intents()'
+        a=before.index(marker);b=after.index(marker)
+        x=before.index(b'    #[test]\n',a+len(marker))
+        y=after.index(b'    #[test]\n',b+len(marker))
+        self.assertEqual(before[:a],after[:b]);self.assertEqual(before[x:],after[y:])
+        self.assertEqual(before[a:x].count(b'execute_grip_intent('),7)
+        self.assertEqual(after[b:y].count(b'execute_grip_intent('),7)
+        self.assertEqual(re.findall(rb'#\[test\]\s*fn\s+(\w+)',before),
+                         re.findall(rb'#\[test\]\s*fn\s+(\w+)',after))
+        self.assertEqual(after[b:y].count(b'assert_eq!(world.object_snapshots(), expected)'),2)
+        self.assertIn(b'expected_second.grounded_physical.velocity = Vec3f::ZERO',after[b:y])
+        self.assertIn(b'assert_ne!(expected_second.grounded_physical.velocity, Vec3f::ZERO)',after[b:y])
+        self.assertIn(b'assert!(stale.grip_transfers.is_empty())',after[b:y])
+        self.assertIn(b'assert!(stale_empty.grip_transfers.is_empty())',after[b:y])
+
+    def test_only_one_v2_source_record_changes_and_all_core_dependencies_stay(self):
+        prior=pathlib.Path('/workspace/shared/m2-grip-fixed-fixtures-v2')
+        old=json.loads((prior/'source-manifest.json').read_bytes())
+        new=json.loads((ROOT/'source-manifest.json').read_bytes())
+        c=json.loads((ROOT/'F019-CORRECTION.json').read_bytes())
+        expected=sorted([c['source_record'] if r['path']==c['source_path'] else r
+                         for r in old['files']],key=lambda x:x['path'])
+        self.assertEqual(new['files'],expected)
+        self.assertEqual(len(expected),866)
+        self.assertEqual([r for r in new['files'] if r['path'].startswith('crates/alife_core/')],
+                         [r for r in old['files'] if r['path'].startswith('crates/alife_core/')])
+
+    def test_pinned_receipt_and_disjoint_continuation(self):
+        c=json.loads((ROOT/'CONTINUATION.json').read_bytes())
+        s=c['prior_result_evidence']['grip']['sanitized_summary']
+        ids=lambda a,b:['f%03d'%i for i in range(a,b)]
+        self.assertEqual(s['passed_fixture_ids'],ids(1,19))
+        self.assertEqual(s['attempted_fixture_ids'],ids(1,20))
+        self.assertEqual(s['listed_fixture_ids'],ids(1,47))
+        self.assertEqual(s['stage'],'run_f019');self.assertEqual(s['code'],'TEST_EXECUTION')
+        self.assertEqual([r['id'] for r in FIXTURES['fixtures']],ids(19,47))
+        self.assertEqual([r['id'] for r in c['retained_fixtures']],ids(1,19))
+        self.assertEqual(len(FIXTURES['targets']),6)
+        self.assertEqual(FIXTURES['fixtures'][0]['id'],'f019')
+        self.assertTrue(all(r['source_path'].startswith('crates/alife_core/') for r in c['retained_fixtures']))
+        self.assertEqual(s['activation_head'],'a6d4e47396ea020e2d99ed2a0ddd5ea3a3d18ef4')
+        self.assertEqual(s['source_manifest_sha256'],'8f88728916761ada6a4529a31ff041313b495afe156d8bceb33e9040eb2e2e19')
+        self.assertEqual(s['seal_sha256'],'6ea1950cd5e4f9a31ff83f1846989af7c035137cdfd4f5de4d50137f8c564cbe')
+        self.assertTrue(c['previous_failed_attempt_dose_is_upper_bound'])
+
+    def test_runner_v2_only_restore_changes_after_version_normalization(self):
+        prior=pathlib.Path('/workspace/shared/m2-grip-fixed-fixtures-v2')
+        old=(prior/'run_hosted.py').read_text().replace('m2-grip-fixed-fixtures-v2','m2-grip-fixed-fixtures-v3')
+        old=re.sub(r'(m2-grip-fixed-[a-z-]+)-v2\b',r'\1-v3',old)
+        funcs=lambda s:{x.name:ast.dump(x,include_attributes=False)
+                       for x in ast.parse(s).body if isinstance(x,ast.FunctionDef)}
+        of,nf=funcs(old),funcs((ROOT/'run_hosted.py').read_text())
+        self.assertEqual(set(of),set(nf))
+        self.assertEqual([n for n in of if of[n]!=nf[n]],['restore_test_fixture'])
+        for name in ['F012-CORRECTION.json','TEST-ONLY-DELTA.json',
+                     'patches/f012-mixed-map-correction.patch','patches/gpu-upload-gate.patch']:
+            self.assertEqual((ROOT/name).read_bytes(),(prior/name).read_bytes())
+
+    def test_f019_restore_guards_exact_preimage_postimage_and_patch_target(self):
+        source=(ROOT/'run_hosted.py').read_text()
+        function=next(x for x in ast.parse(source).body if isinstance(x,ast.FunctionDef) and x.name=='restore_test_fixture')
+        text=ast.get_source_segment(source,function)
+        c=json.loads((ROOT/'F019-CORRECTION.json').read_bytes())
+        self.assertIn(c['before_record']['sha256'],text)
+        self.assertIn(c['source_record']['sha256'],text)
+        self.assertIn("correction19.get('before_record') != f019_before",text)
+        self.assertIn("correction19.get('source_record') != f019_after",text)
+        self.assertIn("verify_record(SOURCE, f019_before)",text)
+        self.assertIn("if new['files'] != final_expected",text)
+        self.assertIn("for final in final_expected:",text)
+        self.assertLess(text.index("verify_record(SOURCE, f019_before)"),
+                        text.index("patch = WORK / 'f019-correction.patch'"))
+
+
+if __name__=='__main__':
+    result=unittest.TextTestRunner(verbosity=1).run(unittest.defaultTestLoader.loadTestsFromModule(sys.modules[__name__]))
+    report={'schema':'m2-grip-fixed-static-v3','passed':result.wasSuccessful(),'tests_run':result.testsRun,'failures':len(result.failures),'errors':len(result.errors),'native_invocations':0,'github_writes':0,'fixture_bodies_executed':0,'scope':'Pure Python synthetic/static checks only; no local Rust/Cargo/fixture process.'}
+    (ROOT/'STATIC-CHECK.json').write_text(json.dumps(report,indent=2,sort_keys=True)+'\n')
+    raise SystemExit(0 if result.wasSuccessful() else 1)

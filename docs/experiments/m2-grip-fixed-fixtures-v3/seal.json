@@ -1,0 +1,252 @@
+{
+  "files": [
+    {
+      "bytes": 23589,
+      "path": "CONTINUATION.json",
+      "sha256": "53af278c5c82dd6c8edcae24e3fa764c28bf470873cf7ad1caf8849d50da71ab"
+    },
+    {
+      "bytes": 885,
+      "path": "CORRECTION.json",
+      "sha256": "9f64978d22cc7f32da790a51079acd3072622d87644b8de4ebe62a52d3a021d8"
+    },
+    {
+      "bytes": 1849,
+      "path": "F012-CORRECTION.json",
+      "sha256": "fa8abb7522f5e28167f634477429c397f5b657a16bc876ebb069fda960551702"
+    },
+    {
+      "bytes": 2409,
+      "path": "F019-CORRECTION.json",
+      "sha256": "c0dfb3e1436eee621e27bf8392e4ed6e81a0b4c942c0aebbe839c29c14fd5457"
+    },
+    {
+      "bytes": 4649,
+      "path": "FIXTURE-INVENTORY.md",
+      "sha256": "17f0e3a953cf8df17413d03c2de2e6024f616584990339ebe1a1c639f737b1e3"
+    },
+    {
+      "bytes": 30381,
+      "path": "FIXTURES.json",
+      "sha256": "e69090a8b3316262181b208cdc21d8435dba72d2fe94399d0e8cf356c4b860c8"
+    },
+    {
+      "bytes": 92558,
+      "path": "INHERITED-WORKFLOW-FIXTURES.json",
+      "sha256": "e45e6ea9f0b5de64ad00a3fbc108cbefcce48f5eab8b9c32caceaa9650497fcd"
+    },
+    {
+      "bytes": 1203,
+      "path": "PREPARATION.json",
+      "sha256": "43d8ce30613f544f823fc2c211af6a75113830aacce3dc19943a32417b2e46f8"
+    },
+    {
+      "bytes": 1845,
+      "path": "PRIOR-TYPECHECK-RESULT.json",
+      "sha256": "3ef6c8feb21d59f28e4fd88af90911f86bc5da01ebbde463628388ac5f623071"
+    },
+    {
+      "bytes": 4343,
+      "path": "PRIOR-V1-PRESERVATION.json",
+      "sha256": "381de519eb397987b003cb953491aaeb9b10aeb915749b56a340a8cd63c7edcc"
+    },
+    {
+      "bytes": 4650,
+      "path": "PRIOR-V2-PRESERVATION.json",
+      "sha256": "94fa6434320ee85f0f38287b4daec46abdb3b6e2b1c70b97f20f330dfcf89454"
+    },
+    {
+      "bytes": 4245,
+      "path": "PRIOR-V5-PRESERVATION.json",
+      "sha256": "bba8ce529bc0971c826533e74cb1473c3c1c57eb0c6c8b4a5d26ce6c8d7059c9"
+    },
+    {
+      "bytes": 13330,
+      "path": "README.md",
+      "sha256": "a4f7cb6c5bc2807740a5c00a19f410c63966fe0ca3c8e4122dd1788bc21445fc"
+    },
+    {
+      "bytes": 810,
+      "path": "REGISTRATION-DELTA-v6.json",
+      "sha256": "783129e6f9eff1b875418ac402f12f4b4d5954463b6b711240b3fa0532d85ece"
+    },
+    {
+      "bytes": 9646,
+      "path": "REMOTE-FILES.json",
+      "sha256": "f53da378e8e59f6a4a4b5c228bd29372196e6e5e87a8c44cc70eb05f10b9afdf"
+    },
+    {
+      "bytes": 9899,
+      "path": "REUSE-MANIFEST.json",
+      "sha256": "e56792f2785bef91c8e320375c8356f51caf8a3079a8805caaec3cdf34f18f76"
+    },
+    {
+      "bytes": 1217,
+      "path": "RUNNER-SEMANTICS.json",
+      "sha256": "8c4eb75cd664d42041fe4c2b7563425b505d672d7bcb9f02f865fb00d4f1efd6"
+    },
+    {
+      "bytes": 54203,
+      "path": "SOURCE-AUDIT.json",
+      "sha256": "f255c5d5f53a318b06b1b963030f772c91f0f90878c48fa483cf059090ffe060"
+    },
+    {
+      "bytes": 498,
+      "path": "SOURCE-FREEZE-v5.json",
+      "sha256": "b320f11d7737cb48345c775da1a47b61d78cd2399fda99f6a35f306ee7953069"
+    },
+    {
+      "bytes": 593,
+      "path": "SOURCE-FREEZE-v6.json",
+      "sha256": "3e99956ac3354a48b13c94126119f1b1f943b0efbb871408a55371d2b9973be3"
+    },
+    {
+      "bytes": 285,
+      "path": "STATIC-CHECK.json",
+      "sha256": "1675b18a70e265270e1175e60e24a9950f6cceaec1b48daf3fb2c23b659d585f"
+    },
+    {
+      "bytes": 1762,
+      "path": "TEST-ONLY-DELTA.json",
+      "sha256": "5ca7d62259b6298ed72d13579474fca0ceb8ab2b7dacbb6d9360eff0b215a9d2"
+    },
+    {
+      "bytes": 1812,
+      "path": "TOOLCHAIN-PRIOR-RESULTS.json",
+      "sha256": "66d8ecd21368bbd8836081d1846cf877508454f2dfa91655da3eaf87d80f22e3"
+    },
+    {
+      "bytes": 3028,
+      "path": "TOOLCHAIN-PROVENANCE.json",
+      "sha256": "122c4b3e6538442cdd14fe81923c4ae45f5276126d6d3d8afc3001e779adb99c"
+    },
+    {
+      "bytes": 36872,
+      "path": "TRIGGER-AUDIT.json",
+      "sha256": "f0914346b1ce3313fdfc1ac7aef413d4dbf1b620ac0648c7804d82ff61b97e03"
+    },
+    {
+      "bytes": 4383,
+      "path": "WORKFLOW-PRESERVATION.json",
+      "sha256": "6b844992e0ca68ff509ffc46d3ded21825b0af56dcb75e8aff417db1f722f743"
+    },
+    {
+      "bytes": 30715,
+      "path": "closure.json",
+      "sha256": "2c11006004bb24ac13ffb01bf2ebdf9d2eed5a63720f138d433f811a3fcc881d"
+    },
+    {
+      "bytes": 3625,
+      "path": "dependencies.json",
+      "sha256": "7dad3b2c35713f39fad88242fadc85c022aa1430d40c57e2ac7da40ce97a5221"
+    },
+    {
+      "bytes": 4276,
+      "path": "packet_inputs.py",
+      "sha256": "c9befb0b83d612f9ab32146a7f1a06a5c76f5508f6f8f2ff36e27c9e2545162e"
+    },
+    {
+      "bytes": 4417,
+      "path": "patches/f012-mixed-map-correction.patch",
+      "sha256": "6071ea77383d198a9b8a06a662925373b30db7b039d903bee6200ea534b22f8d"
+    },
+    {
+      "bytes": 2645,
+      "path": "patches/f019-interval-velocity-expectation.patch",
+      "sha256": "13ce534c71f5f76bfc9291a82a34469583dda3b5cb3e867d59bed46c891baa27"
+    },
+    {
+      "bytes": 136753,
+      "path": "patches/fbf-nominal-source-supplement.patch",
+      "sha256": "ddd07c85685b27056664d9b8650fa736d8eff257f5d477485efd7d14e5e5b051"
+    },
+    {
+      "bytes": 649925,
+      "path": "patches/fbf-to-grip-v4.patch",
+      "sha256": "acf8cc50353ba76cb7adf5af1db5845ee6e6b2e2261d0ee823821428e2e4d054"
+    },
+    {
+      "bytes": 3446,
+      "path": "patches/gpu-upload-gate.patch",
+      "sha256": "e71af51d4829939b2e91b9c1a4bc2e18f2bc95d8135462412d5a03421be2885a"
+    },
+    {
+      "bytes": 2369,
+      "path": "patches/grip-v4-to-v5.patch",
+      "sha256": "0ce2a14320e13e31b9727d41d979798910c31e9663dcaca043c0900c5c96774a"
+    },
+    {
+      "bytes": 335,
+      "path": "patches/grip-v5-to-v6.patch",
+      "sha256": "fa468c4ca23f88c2f90f561176283fb1bf0f53c24280fee6c6dcdd093f5ed712"
+    },
+    {
+      "bytes": 563200,
+      "path": "patches/main-to-fbf-library-closure.part-01.patch",
+      "sha256": "44c9ee9e269bec25ebb924054754a0e71ddc7b73104a132699171a9776430e07"
+    },
+    {
+      "bytes": 563195,
+      "path": "patches/main-to-fbf-library-closure.part-02.patch",
+      "sha256": "a2fb1711dee71d569aea8643ba5dd02d16c992bf9f378b219e4b86cb51edafae"
+    },
+    {
+      "bytes": 415718,
+      "path": "patches/main-to-fbf-library-closure.part-03.patch",
+      "sha256": "95d7a29b145111d4f24297c97ecd0766673f9275b5dd89400958c714a24ae72d"
+    },
+    {
+      "bytes": 2881,
+      "path": "publication.json",
+      "sha256": "2a53bfc1e5a63767d218cb0f62d5d485a4f4759bcbf859290725472a1199d344"
+    },
+    {
+      "bytes": 3774,
+      "path": "recovery.json",
+      "sha256": "d3cc1a49ed0efae03abd085e39ac7e6e9b2367a33aeb578857b73d8f60cbc9a6"
+    },
+    {
+      "bytes": 27898,
+      "path": "registered-source-v5.json",
+      "sha256": "93a96de95d9562b57d2891e41dfcd36e99cf73bb8d94971c0ad17fd87593c72e"
+    },
+    {
+      "bytes": 38161,
+      "path": "run_hosted.py",
+      "sha256": "a1dc728778ab14c67108e9455bd96fe103f57ea1a8fea4961d14180182525032"
+    },
+    {
+      "bytes": 4042,
+      "path": "seal_package.py",
+      "sha256": "2ef37f9ce7d37bd23b052caee5b50cf2bdfbf19ecbbf4037ab2d83ae4550102d"
+    },
+    {
+      "bytes": 200537,
+      "path": "source-manifest-v5.json",
+      "sha256": "137b6395d74a49aa2f2841cc9b1d306a1d5ade9b502ea84c44dfa64d6defe14a"
+    },
+    {
+      "bytes": 201540,
+      "path": "source-manifest.json",
+      "sha256": "a0da59e3c8291883fc6f499500ee5824abf241d098b211a088dfda86719bf8ec"
+    },
+    {
+      "bytes": 2476,
+      "path": "source_patch.py",
+      "sha256": "e8ef4a5a27c4ce0486f2ec752c7c6789752e10355410f8ef6b914aa386b5ad42"
+    },
+    {
+      "bytes": 34910,
+      "path": "static_checks.py",
+      "sha256": "c15ac648fb5172ba44d0a5e15f955f891dab0c00f379ae4f6d67c381e27004ce"
+    },
+    {
+      "bytes": 7481,
+      "path": "upstream-toolchain-action.yml",
+      "sha256": "0b52547c145ae18d8631c9ab711e4d917e9e489cea800368f338c25a56e0aee2"
+    }
+  ],
+  "plan_id": "m2-grip-fixed-fixtures-v3",
+  "schema": "m2-grip-fixed-fixture-seal-v3",
+  "source_ready": true
+}

@@ -1,0 +1,760 @@
+{
+  "excluded": "Historical exports, logs, captured organisms, private checkpoints, journals, standalone integration tests and their fixture data.",
+  "files": [
+    {
+      "before_sha256": "a8323d85b09d781596a62e7f383e2dc36cd57628c002f4dfcd75a8b49b4031eb",
+      "bytes": 161097,
+      "path": "Cargo.lock",
+      "sha256": "2b637c0f2b2cd34fb9fe2f9a5f9a3a7b490f0b7f8d5f1f7c8764f29077d0ebdd"
+    },
+    {
+      "before_sha256": "1cf3862ef0fe8e19cfeb42c6a99c7909dcb4ddce8f669ccf8115f5fcdb18d933",
+      "bytes": 391,
+      "path": "crates/alife_core/Cargo.toml",
+      "sha256": "0818d6dd53dff616176df41a5ef7336452ae1f308378e9abc3fa57f421f8e3c9"
+    },
+    {
+      "before_sha256": "e0523d86af0feb3fd095d56b027a23d4676255d1d85a8a3f3b510a64d9d76a44",
+      "bytes": 36683,
+      "path": "crates/alife_core/src/activity.rs",
+      "sha256": "7b0c2f66841f7fe8f6d9fe3d999da19f1a11616921bd3e4fe0c70f33a91148e9"
+    },
+    {
+      "before_sha256": "d9eb5e5098740b11a3b82c9803077197c98d3fa769134d7ad6e8ee53358d80e3",
+      "bytes": 68086,
+      "path": "crates/alife_core/src/foundation.rs",
+      "sha256": "dace4abb1db4c0d597c7b2d7550b7dcf25aa893a93c5218d35f6b43a9dc2eb6f"
+    },
+    {
+      "before_sha256": "e7b2da740017d9050d3dba34537c1baaaa1f36c4bc8b9e59cc5cdb56574f8102",
+      "bytes": 80819,
+      "path": "crates/alife_core/src/genome.rs",
+      "sha256": "b949c3e50688c26ec52db97c64c8ce51a9b991cda120e4510f6b0e7aed3864c7"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 4112,
+      "path": "crates/alife_core/src/grounded_drive_features.rs",
+      "sha256": "09023cfb4edcf3b1a1186c587185ab1f8cec48491adea726b3ad471b2bc8aee4"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 9624,
+      "path": "crates/alife_core/src/grounded_drive_genetics.rs",
+      "sha256": "ca94ac38ee3ff37feaac0650d9beb161e63aecc8735301d3e059799997e8a793"
+    },
+    {
+      "before_sha256": "42e2aa3a402d1952d49fa58861d8d7c8834bd8e18f47ea0c34ca6a09022c08c5",
+      "bytes": 49894,
+      "path": "crates/alife_core/src/legacy_nano512_compatibility.rs",
+      "sha256": "057187c32ef6488cf0e648f8d4882bf39592b33aa03e0f0c7c3078cc038018ad"
+    },
+    {
+      "before_sha256": "920c1154792216465b7967d40434affba7915d57331b4a031b3bdca6970571d4",
+      "bytes": 22360,
+      "path": "crates/alife_core/src/lib.rs",
+      "sha256": "16dcbe0b4112063111285445057d9fc325adebce3cb49d19e517d8e569f6f2ba"
+    },
+    {
+      "before_sha256": "c458e94384a96a99c86cd3dcb65076150bf7f9bdd3e7ba620851280e528f87b2",
+      "bytes": 95223,
+      "path": "crates/alife_core/src/memory.rs",
+      "sha256": "89fb7009df545b91c1f5adc6cd83ea52bdb34147df57c91a48d8bb23fde24184"
+    },
+    {
+      "before_sha256": "3e0218d97b3bca6d18cd2d53585aaaf573acf66a04250e9142e6da5287b9d614",
+      "bytes": 29881,
+      "path": "crates/alife_core/src/memory/candidate_index.rs",
+      "sha256": "2b5cb3249b554d131710ab6e2ab8302b193be58767d47aac7e3bd714f3509d6f"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 34610,
+      "path": "crates/alife_core/src/memory/recovery_scope_tests.rs",
+      "sha256": "c446c09b052828eaa8382e0ad3fe5c742c4f7d421c882d16091777d1f0140b90"
+    },
+    {
+      "before_sha256": "44122502f96e50bf1c2416d8b15f92365de4fa16dd4dd395bae02d675aecabcb",
+      "bytes": 14529,
+      "path": "crates/alife_core/src/memory/runtime.rs",
+      "sha256": "8f825969e541c802ced69678eb27e02e90f4db6b0a501b8cb1c8ff7854654b19"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 11689,
+      "path": "crates/alife_core/src/memory/scoped_replay.rs",
+      "sha256": "58945497b49671fd174d296050480f18498f78b105ef22397bfae75b39e6c72b"
+    },
+    {
+      "before_sha256": "50978d0db265bca12a7b9b2af6bc39b3aabf491fc52d39879c1aeaee9cf6fce2",
+      "bytes": 49820,
+      "path": "crates/alife_core/src/memory/sidecar.rs",
+      "sha256": "b111ab25f9483d3be4f1c21a24cff7323e9e37e4c2d23ab25bfeea02f676dc2d"
+    },
+    {
+      "before_sha256": "d73d3ffb6f76f776f16c5ca1906a0126671ac03022670adda95879d30fe8b4a9",
+      "bytes": 35688,
+      "path": "crates/alife_core/src/memory_query.rs",
+      "sha256": "3533788eb098e37b05bfebecd364a7597d72b6df1ea3edaf39835f34cf4249b2"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 10185,
+      "path": "crates/alife_core/src/motor_lobe.rs",
+      "sha256": "81aff513630ab59f047f1e937e64e4f4afa08dc04814c132d15bcf416348074d"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 13736,
+      "path": "crates/alife_core/src/motor_lobe_plan.rs",
+      "sha256": "c22d6ae1205b550772ebebc1a96e73d6a735041e034677bcd72a86a72eb9cdf8"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 4424,
+      "path": "crates/alife_core/src/n2048_grounded_drive_basis.rs",
+      "sha256": "77e9faf756a139d3de71988cf80d58de6fb96e1aaed20d27e7469a0b759917c4"
+    },
+    {
+      "before_sha256": "d9214c160c5a15405321f1cc9c380df2af4ec59f00f1aebe7de87134192124ce",
+      "bytes": 58454,
+      "path": "crates/alife_core/src/perception.rs",
+      "sha256": "5779c1f2ed967883b1f2830b1f199ed55849b581284334d94de2ecd0aeb96766"
+    },
+    {
+      "before_sha256": "189c25fa6db58b1c84c1f7adcc730fdd1cfc0bb4e93f628a8827221d9fe69ffe",
+      "bytes": 11798,
+      "path": "crates/alife_core/src/phenotype/abi_validation.rs",
+      "sha256": "ae354ad8d5b5b560fd502ccafb1cdd20ece05c37c153ca77ac501790ce53285b"
+    },
+    {
+      "before_sha256": "acb8cf793cead318b1ca35219fb36be37f5161a9b2508a07b69ac084514dda32",
+      "bytes": 23766,
+      "path": "crates/alife_core/src/phenotype/capacity.rs",
+      "sha256": "a37ab79b013a31b2a5612042d1806ecc27f06fe9aae96b206af5843ed1fa425e"
+    },
+    {
+      "before_sha256": "c2d8b01b3f0895ff5fff3a286c38528f83849e3f691bb5bc32d3da0c2fcd2895",
+      "bytes": 19628,
+      "path": "crates/alife_core/src/phenotype/compiler.rs",
+      "sha256": "d343c79b8e04206a3a7a8e4af5be02dc7a70d9a4db73058a59f70703b55f19dd"
+    },
+    {
+      "before_sha256": "fb8e5c4c9bf6773903601ffee4f69d21a6c18287222f2eff01d554002abae81d",
+      "bytes": 16046,
+      "path": "crates/alife_core/src/phenotype/construction.rs",
+      "sha256": "dc2b29902cba945e3e93acfe168f8b1999ee736d4904eea5899dc3a7ca95b7ae"
+    },
+    {
+      "before_sha256": "7c2c035a87f0f79501343f006251c78108fe5df6c3d873320e85dda18552b543",
+      "bytes": 24708,
+      "path": "crates/alife_core/src/phenotype/decoder.rs",
+      "sha256": "e4bce017137b2776149fd46abb184d63f2fe2d59f25aa9b376ad64bb0f9f7f64"
+    },
+    {
+      "before_sha256": "d4fa6adf854cbf4d76f1657f8ae4b02bf756746988757ef07764a7bb746843f3",
+      "bytes": 15438,
+      "path": "crates/alife_core/src/phenotype/encoder.rs",
+      "sha256": "1c2c415e9ecfa6e22c80b96759056c8c3f692233d5ef0240e59533d16d5906c0"
+    },
+    {
+      "before_sha256": "aaa96c5fa7458dcff2508fbc32c2924af8326f4bc915d19aa114adecd81e6534",
+      "bytes": 28180,
+      "path": "crates/alife_core/src/phenotype/inputs.rs",
+      "sha256": "09c2171779173066e38dbd1202df3a8351cfa2614becc18c5204eaedcccca583"
+    },
+    {
+      "before_sha256": "a51728c93c3419fdd798b092d4b1189c90e05a33f01e10d606c91830213e0de5",
+      "bytes": 41016,
+      "path": "crates/alife_core/src/phenotype/io_compile.rs",
+      "sha256": "6a5f0bf2ee677868691b1cc20fb532e8a9c084c1315fdd781cfaff064323657e"
+    },
+    {
+      "before_sha256": "56ae2625eb3bcd6bae59acb967f210b44b3cd5bcb7dcbf488f764bc801f09808",
+      "bytes": 33962,
+      "path": "crates/alife_core/src/phenotype/learning.rs",
+      "sha256": "65edeebecc60043c94e7c1f790443ab9a5f06ac3161e8b8ed4794c89f95076c8"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 5850,
+      "path": "crates/alife_core/src/phenotype/motor_lobe_lowering.rs",
+      "sha256": "96ac01a8f62d9acea0c90d0b5ffdb32f37bc6ed2416493013d203fcea459e1d6"
+    },
+    {
+      "before_sha256": "bb59d8d0bf2fc94eaa639e14b4782975a0f5654c30a0e711758f555d22f8a7d2",
+      "bytes": 55486,
+      "path": "crates/alife_core/src/phenotype/record.rs",
+      "sha256": "90b31b2a9967fc52a1b5604ba3b5ad855ecfbf6ffd939a32c4b6e3fa03749af0"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 3763,
+      "path": "crates/alife_core/src/phenotype/sleep_choice_lowering.rs",
+      "sha256": "64f5f02ef143997454f9643fdd57c69ef574934039c8eb48f67df34049f3ec71"
+    },
+    {
+      "before_sha256": "0dea02518a1651b302d03d89a05a415eadf58e8bd8e1c07f8e4c5e7aa65b58ff",
+      "bytes": 27017,
+      "path": "crates/alife_core/src/phenotype/topology_compile.rs",
+      "sha256": "b5d19ff8fcc30c29dc8d610897178481909d32e1149e6d2a31fe5f389a50d3fe"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 2061,
+      "path": "crates/alife_core/src/recovery_operation.rs",
+      "sha256": "7d724c41c7d75d548d6c2f20b2034b33daf7f0dee795672cdf86e5d87d156ef6"
+    },
+    {
+      "before_sha256": "dda2e85a291b6fd7cd5412e95844a6493c68e7dd3c61057d9b85959dd82a3cfa",
+      "bytes": 41436,
+      "path": "crates/alife_core/src/sleep.rs",
+      "sha256": "174ee0eeb9cda67d1e7ff1da40d125494ab2d471f7a35a17aca584291241e935"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 10106,
+      "path": "crates/alife_core/src/sleep_choice.rs",
+      "sha256": "39ed84fd5c2c7641c2b886b02185284ef752640e621ecec43ab2d81efd67d7ff"
+    },
+    {
+      "before_sha256": "2df2efb57ee6f783bfbe602ab383ba1b8fe3da6535d3dadab5e4ea2bcf550ea2",
+      "bytes": 29860,
+      "path": "crates/alife_gpu_backend/shaders/closed_loop_decode.wgsl",
+      "sha256": "b37b6b39a461fc7838f9b52a4a80d64808300543607657f40b09c91ae89e8775"
+    },
+    {
+      "before_sha256": "949abe65d5b10ed8409fcd723758d5f92a7994794ab41fcbf6c7081a078c4632",
+      "bytes": 29106,
+      "path": "crates/alife_gpu_backend/shaders/closed_loop_eligibility.wgsl",
+      "sha256": "56bf03fbb57721533cc89872cb9d40c3312367cedadb01edaf5075ef1f205006"
+    },
+    {
+      "before_sha256": "afbdb8bdd7c1fb979d153c39308c221e2781713711e304968358061749f8d14a",
+      "bytes": 10206,
+      "path": "crates/alife_gpu_backend/shaders/closed_loop_memory_context.wgsl",
+      "sha256": "e9f221c5d243c77d0f30afc8b4f9e30840106e1ca597af2b258ac6911ae90aaf"
+    },
+    {
+      "before_sha256": "3d45e7e92fa5f76bb7f6af4ade03b4b342695d69c263c8e7d0dfb8277c354b69",
+      "bytes": 203583,
+      "path": "crates/alife_gpu_backend/src/closed_loop_buffers/bucket.rs",
+      "sha256": "98f80c7d5296920d124c3747ddf2b89b51720e10b28f0f96df4d38837b611a45"
+    },
+    {
+      "before_sha256": "a116513eebfba7362174b17653f43d25ea57cf7818999076159868f265cddc2b",
+      "bytes": 10341,
+      "path": "crates/alife_gpu_backend/src/closed_loop_buffers/perception.rs",
+      "sha256": "9c3948207da75e9b12d6c3dc68386e2c5d6c0fdc7dcab9e947686526891f10d8"
+    },
+    {
+      "before_sha256": "90c1754413a7698ffc1b523022a1a5e1667cbab21dac3eeb06732cf5980fa182",
+      "bytes": 25973,
+      "path": "crates/alife_gpu_backend/src/closed_loop_buffers/upload.rs",
+      "sha256": "855935a911a08fed56aea6b0460ff67967c103972346cb4b8269554eb404d980"
+    },
+    {
+      "before_sha256": "435dd9f0a9686f1ecb5f1665427b78e44df29844e771a62b4c2760b64310860d",
+      "bytes": 118905,
+      "path": "crates/alife_gpu_backend/src/closed_loop_checkpoint.rs",
+      "sha256": "40eddd4cec8d0a726e5ce25bfc4c0faad4d7543a87d06b793266b0fc8b7198bc"
+    },
+    {
+      "before_sha256": "e010a081117ef97f97a88045ddebc2243aefcfecda76ed7a3d55f6669b92e4e8",
+      "bytes": 286447,
+      "path": "crates/alife_gpu_backend/src/closed_loop_runtime.rs",
+      "sha256": "e98469758b87efaaf458c0b533b06e87f3db4396461de8f4f9acd26728382092"
+    },
+    {
+      "before_sha256": "13e3df79e0e20fa18f88e18adc19060c9d8f2da2fe280650a91f45a81f497b3c",
+      "bytes": 27022,
+      "path": "crates/alife_gpu_backend/src/closed_loop_v11.rs",
+      "sha256": "3e745b043b79b84d05b5009c34915a48076564ba6c4e709157c0f4745c82c215"
+    },
+    {
+      "before_sha256": "e4dd16c4bd31e7ffd66e3f73d5ccfdac946b0eddc5a3685a4475293fe449862f",
+      "bytes": 34604,
+      "path": "crates/alife_runtime/src/canonical_preparation.rs",
+      "sha256": "5dac0112b5573bb32570710823e2461bebf5bf12a81ff7a605cfed90dd9eee96"
+    },
+    {
+      "before_sha256": "6563b19da19924fa316549cc3b14e2dacfa02f48426aec89cef93381c756920a",
+      "bytes": 87139,
+      "path": "crates/alife_runtime/src/checkpoint_assets/durable_manifest.rs",
+      "sha256": "9bb70d4cb73267f26ebaf19ce529033b158eb1d37dfa5cd9ae7d3f7fb0f4b0e3"
+    },
+    {
+      "before_sha256": "82514b4472dc20eacbf083ee53b1390762f4a88a67f0a92ee2d26d3d6508bb1f",
+      "bytes": 2627,
+      "path": "crates/alife_training/Cargo.toml",
+      "sha256": "fbebe69c0fd802d76826830caf671005409a9d7fe646261f23ee28c67f98db78"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 5948,
+      "path": "crates/alife_training/examples/probe_bounded_founder_admission.rs",
+      "sha256": "0cb9aaf5312e0876eb9d9b42d24035cbdcc26714dadcbd94d12f19f945e73af3"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 12936,
+      "path": "crates/alife_training/examples/probe_fresh_branch_state.rs",
+      "sha256": "ff83097bae123dc3fa7c31d266b6724d7add61496f46004187eb95edbbc600b2"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 13853,
+      "path": "crates/alife_training/examples/probe_grounded_developmental.rs",
+      "sha256": "963c0e302c6266175a4fd82642aa0cc6eab0bd481d5fa68546951771bb1b23de"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 4256,
+      "path": "crates/alife_training/examples/probe_grounded_drive_basis.rs",
+      "sha256": "09f6d3acb01b88318f38a82bec39c5a46f316907f65bd689578a372759ed46af"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 3905,
+      "path": "crates/alife_training/examples/probe_mediation_source_baseline.rs",
+      "sha256": "8657c87f3daf8ff96da0f04b62206493977217e5fa1d7ccda018ff70dfd6f4c3"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 16495,
+      "path": "crates/alife_training/examples/probe_motor_host_behavior.rs",
+      "sha256": "9f1beb6f58d4e3fc0fb83a61465b017c82f38deef0b1ca7a72ac8f5a868e0bce"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 9559,
+      "path": "crates/alife_training/examples/probe_motor_mediation_native_v1.rs",
+      "sha256": "0fc269bb10198c9620633ccdd872f74f8df5aeab6314718683b024881fd236ba"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 19449,
+      "path": "crates/alife_training/examples/probe_motor_operating_point.rs",
+      "sha256": "5927cddb67880868085d8baabf199ec4e47fca5a3135fec90ad67ec4208177df"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 12946,
+      "path": "crates/alife_training/examples/probe_motor_opponent.rs",
+      "sha256": "3c96e8be159bea346df02c0768d17fe810debba4401cc91ee7d3c20871abb894"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 15035,
+      "path": "crates/alife_training/examples/probe_multidrive_routing.rs",
+      "sha256": "83697fca2f19cd9035ada9d6733709ec3757cd0b343f74e1d6e27b29e199da40"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 13794,
+      "path": "crates/alife_training/examples/probe_recovery_group_confidence_v2.rs",
+      "sha256": "540558dea559ad95bda234183446664b7faf28822d9739ec2f27963ab6c53b90"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 7458,
+      "path": "crates/alife_training/examples/probe_recovery_group_native_v1.rs",
+      "sha256": "4d1e67948d5b640aba8119cbd329efaac25b27be8581753d348ae68d56a1bcea"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 18829,
+      "path": "crates/alife_training/examples/probe_recovery_sleep_combined.rs",
+      "sha256": "8e41e3c96fc812277730a080df6d36c03facb589ba286d6a7566b8bf38f0acca"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 8026,
+      "path": "crates/alife_training/examples/qualify_motor_host_fixture.rs",
+      "sha256": "78b8392ea4f97b2cd587de4a941d7c731a0dfc1e76d2a94f4f1bdb465f4c9032"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 19732,
+      "path": "crates/alife_training/examples/support/grounded_developmental_detached.rs",
+      "sha256": "1678bc4b13b292cb758cee1bacb93c4c005f9d00ec4c8f84d8f8c7bffae3ba95"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 19841,
+      "path": "crates/alife_training/examples/support/grounded_developmental_preparation.rs",
+      "sha256": "d21ff5453a0783df29469030b7d2e533bc17eb25fe45d2410774919d9f060c36"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 16582,
+      "path": "crates/alife_training/examples/support/grounded_developmental_recipe.rs",
+      "sha256": "3e313c507b88d2d83c97fb2c6f2d27d2e71388d16441534375da77c595cfcf0b"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 5718,
+      "path": "crates/alife_training/examples/support/grounded_drive_basis.rs",
+      "sha256": "aa3aee42dca43faa2637af7bf88e03036a8b6659d682f7364bd9c065a1d35da8"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 11382,
+      "path": "crates/alife_training/examples/support/grounded_r0_dedicated_fatigue.rs",
+      "sha256": "6436f26a87b9e5cda890742f3cece4212c58c9a25d3dd9c8a268d5fddd27b3fc"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 5642,
+      "path": "crates/alife_training/examples/support/grounded_r0_motor_operating_point.rs",
+      "sha256": "04e5582f808aba2acf3dca97816280edbfa515c39d4de911e18db6fb43b7387a"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 6567,
+      "path": "crates/alife_training/examples/support/motor_balance_assay.rs",
+      "sha256": "15b7621c7dc4f932172cfc2a69b878da88eb3d481cda3ac52c21f3c665a4df60"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 16343,
+      "path": "crates/alife_training/examples/support/motor_host_preparation_v1.rs",
+      "sha256": "a2e635c0b3b43876c45c0466931cf70b7d975585218434a32833566478851db6"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 5642,
+      "path": "crates/alife_training/examples/support/motor_operating_point.rs",
+      "sha256": "04e5582f808aba2acf3dca97816280edbfa515c39d4de911e18db6fb43b7387a"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 5123,
+      "path": "crates/alife_training/examples/support/motor_opponent.rs",
+      "sha256": "6daf1ff1a26f950fa5c511156c8c49fc7e49e211df56e92fb8d8e6f2a6b6fd34"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 2218,
+      "path": "crates/alife_training/examples/support/motor_probe_common.rs",
+      "sha256": "82f654569b92f415f3e789d613276faf5748d9b7d36034acc1b7d76c6138dfd4"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 10588,
+      "path": "crates/alife_training/examples/support/multidrive_frozen.rs",
+      "sha256": "bee7e25f1340e1278eee9d34395a4fd3bc201bac3a63dc47879c27a5aaa176e4"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 10587,
+      "path": "crates/alife_training/examples/support/recovery_sleep_recipe_v1.rs",
+      "sha256": "681bf79454d335ce661b9b1875ac74d6df216a694a4eac52d238b98adc1d83a4"
+    },
+    {
+      "before_sha256": "3a106841a58706396c8de1c1dddfdf903ce5265a63304596c699c176373a3964",
+      "bytes": 4293,
+      "path": "crates/alife_training/src/cpu/activity.rs",
+      "sha256": "6102c76bbad0659d12e7ff5f87f20060fcd59690e8d7005cba6a867baadc52f6"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 30679,
+      "path": "crates/alife_training/src/cpu/grouped_host_envelope.rs",
+      "sha256": "57ce0d9f05a4287d738e69e153da122266637f2904b62212abd5254e58c0f2d6"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 8555,
+      "path": "crates/alife_training/src/cpu/grouped_host_fixture.rs",
+      "sha256": "9852c275e33ebd10749958c9f7c515546be8514229d9602682dcfe36a5a75053"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 15335,
+      "path": "crates/alife_training/src/cpu/grouped_host_food_tests.rs",
+      "sha256": "f1ef509ab2db06c4895e8f45659ee55db4e272e3dd3080c01d2295393af9d598"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 37438,
+      "path": "crates/alife_training/src/cpu/grouped_host_loop.rs",
+      "sha256": "70a58bfff469403fdfa252c4fb3ecb73d195ab2e2f4f01551e4326670a1bceb6"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 26895,
+      "path": "crates/alife_training/src/cpu/grouped_host_tests.rs",
+      "sha256": "310d4b6e88e3668c5cf4b04a8cc0dcd471cdd4e155e493d0ceaa9c76ada28f9f"
+    },
+    {
+      "before_sha256": "2fedf748f3b75767228a36960542158b0e8b41247618fd7a20feb79ff6d33545",
+      "bytes": 89015,
+      "path": "crates/alife_training/src/cpu/host.rs",
+      "sha256": "d6317c0f7640595b5c8fcaeb185bf86d0e3393b5fbae7edb5c43863de4568bd4"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 4274,
+      "path": "crates/alife_training/src/cpu/host/bounded_founder_tests.rs",
+      "sha256": "3adba4a2e6fe329d2918a3d185e8a4489e0e312fe59c1ae9cac0b2f38703cfc3"
+    },
+    {
+      "before_sha256": "c5bb166edbe0c119aa64a201c5349d87b8b04012fb8ed778ac4ceb6049a1e37c",
+      "bytes": 16057,
+      "path": "crates/alife_training/src/cpu/input.rs",
+      "sha256": "df95fd3c93f1adb4345cff079c88cff093244275fc01f7d203847f0452960a6e"
+    },
+    {
+      "before_sha256": "1dc9cb7b64699674466bea732a2cae9daee8c579a12ac43ad268117194738e6e",
+      "bytes": 15795,
+      "path": "crates/alife_training/src/cpu/mod.rs",
+      "sha256": "48b84489a1a1fe5104bb9f5d424bdb84416177cc18ae799c905e336b340b3619"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 14395,
+      "path": "crates/alife_training/src/cpu/motor_host.rs",
+      "sha256": "c3babf3600b2e4a70ccffdb53ab1de9a0309a519926f12cc7d79cfbfd811600e"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 7113,
+      "path": "crates/alife_training/src/cpu/motor_host_envelope.rs",
+      "sha256": "4f597a4c73693b9e9faf36d78dcc144a656c7020531d27e0859ab1e2af858805"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 9936,
+      "path": "crates/alife_training/src/cpu/motor_lobe.rs",
+      "sha256": "d988d0708ac13069bd985d6b512035075ebe4265efe353157e3b078690e4efea"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 15020,
+      "path": "crates/alife_training/src/cpu/motor_lobe/tests.rs",
+      "sha256": "00eb86faebf866e3cccf97fbad480d6894ddd29bac49ba9cd98903d0f8f29711"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 32458,
+      "path": "crates/alife_training/src/cpu/motor_mediation.rs",
+      "sha256": "e0f63b89d13d4f6b9f1629b4e55b476af30951eb211bd6ad2e3193d4929dea1c"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 21089,
+      "path": "crates/alife_training/src/cpu/motor_mediation/confidence.rs",
+      "sha256": "f0466c35b37eceeebf51d15991b695490c8170371c58d3b30b27e72ecc7126e3"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 17373,
+      "path": "crates/alife_training/src/cpu/motor_mediation/confidence/host.rs",
+      "sha256": "7f5cdf9120370298da1fa71c0c5422d354d1ff79f3d6709fe6d42b92c822120e"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 11064,
+      "path": "crates/alife_training/src/cpu/motor_mediation/confidence/host/tests.rs",
+      "sha256": "e8b26ba8b310eb327250a64188becebfc152cce2fc6e9512466894439635c791"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 25017,
+      "path": "crates/alife_training/src/cpu/motor_mediation/confidence/policy.rs",
+      "sha256": "3dd43cb19b23f80e4bba00bfa952c32bb45ee2b16394ae549d1728d64ea3eb6e"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 38650,
+      "path": "crates/alife_training/src/cpu/motor_mediation/confidence/tests.rs",
+      "sha256": "004c05db9bd429e516af0a419163570efbf6a4c1d7ae5af4552416b8fb18098f"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 19784,
+      "path": "crates/alife_training/src/cpu/motor_mediation/grouped.rs",
+      "sha256": "e47a1ac6d3a7e03127b12daca120841807c49e503a102e30c92f475df93389ce"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 22940,
+      "path": "crates/alife_training/src/cpu/motor_mediation/grouped/policy.rs",
+      "sha256": "139502ce4e26e9df9537a36b48d9d53e399fba4f99b627ddbd21bcd2583900fc"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 28427,
+      "path": "crates/alife_training/src/cpu/motor_mediation/grouped/tests.rs",
+      "sha256": "7049c5fc6230135d7ed6a1e69997d5e80d960a0557e80281fcce386bf487878d"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 30706,
+      "path": "crates/alife_training/src/cpu/motor_mediation/tests.rs",
+      "sha256": "df103a03a793582369590f30f1202bb1520956ca4f0e074f25cb51491ba35934"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 1845,
+      "path": "crates/alife_training/src/cpu/native_kernel.rs",
+      "sha256": "2e389fede80f2add63536cd40b9ec54aef9a3145061ca4032aa60c3acb9afdef"
+    },
+    {
+      "before_sha256": "38fcfeaa0518a964e1573b5d94b0c2576be2c086841b38db16d420528597bc61",
+      "bytes": 48031,
+      "path": "crates/alife_training/src/cpu/organism.rs",
+      "sha256": "64d43d07df9062438203860e604f953077003ce7910026e6b273e06467a26619"
+    },
+    {
+      "before_sha256": "9e9aa4bdf4488954a8cb06df860b3332cf615990d3fce362a80a1c3e1bf5db39",
+      "bytes": 24671,
+      "path": "crates/alife_training/src/cpu/replay.rs",
+      "sha256": "5a9ab34d2b763f5b6924fddbe29770f10697da6866c2ca572f1e43f871d800e9"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 18126,
+      "path": "crates/alife_training/src/cpu/sleep_choice_envelope.rs",
+      "sha256": "d63890fa02d2475f36269e75b1cdd538967450b96b2d8bda9440bd720265e4f4"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 45721,
+      "path": "crates/alife_training/src/cpu/sleep_choice_host_tests.rs",
+      "sha256": "3f31f8d5e18e90821382d2e1ec6b3e5a08b58c3af1ec8ea5d76baafab220e50f"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 14637,
+      "path": "crates/alife_training/src/cpu/sleep_choice_motor.rs",
+      "sha256": "e1a832e7e45a947fd96e6a1c4852c34f5aa6a8ea32cb64a53fd6ad5d96beda97"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 11341,
+      "path": "crates/alife_training/src/cpu/sleep_choice_replay.rs",
+      "sha256": "9d5f4ee32bff154c617983f4127f9daba70273eb596709b7202377333f422b12"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 9046,
+      "path": "crates/alife_training/src/grounded_drive_transfer.rs",
+      "sha256": "3a7d437d8e3091d6f983bf294a4c10189c678e93262b915220f3bc01fa36d203"
+    },
+    {
+      "before_sha256": "0f08641edbbd7c939b31321a44aa93a20bdd0462a9de1410f05f7da5ce894714",
+      "bytes": 1222,
+      "path": "crates/alife_training/src/lib.rs",
+      "sha256": "7132afce321e5147e61f9e2db77c03473dd020dffc80eafdae8d4a960a07aa6d"
+    },
+    {
+      "before_sha256": "5fe0d1759d89dc4f3abf228d0d23abec4c2014911c8eaa1328fb71b9d0aaeadf",
+      "bytes": 115771,
+      "path": "crates/alife_training/src/trainer.rs",
+      "sha256": "7e7f94aba2e510992afef8284be4c5e943684850e2cef6d39faefadea985b6dc"
+    },
+    {
+      "before_sha256": "c9c721ec41857180907fecd73a777e0d2b772f7ca705bbd6a3828ff27d3baf15",
+      "bytes": 28630,
+      "path": "crates/alife_training/src/types.rs",
+      "sha256": "084740de68e72c9dab7b8bc1c0da4c11d26a403627d14a5ffd4ca7e536de85af"
+    },
+    {
+      "before_sha256": "ad7fe162936f5a8b4f1525cbccbf76647d56a1e1d31e610a38d6e40ecbe63b22",
+      "bytes": 24872,
+      "path": "crates/alife_world/src/candidate_enumerator.rs",
+      "sha256": "a5dbb5a4c9bdf21a3aac4596f925249a03a6138123d241dc4b4da281d28f8205"
+    },
+    {
+      "before_sha256": "44fb93a5752cd68509828ecaae29e2a22bb9335009ec4798b3753820b99a714a",
+      "bytes": 585020,
+      "path": "crates/alife_world/src/headless.rs",
+      "sha256": "ffcf799afd5f4aa1b37414824c189f68d858f8f1d31035cb93b0166cbc7dae78"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 10944,
+      "path": "crates/alife_world/src/headless/sleep_choice_research.rs",
+      "sha256": "dc0b72f7ab69f8374c5b92632c4608c26fb4f7aff07ab3b792c36a60dfaabc32"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 16795,
+      "path": "crates/alife_world/src/headless/sleep_choice_research/tests.rs",
+      "sha256": "b2f6ea2a1b371417cd7bc14062f19c9eecc5d11f849303b280271ea8c00cd775"
+    },
+    {
+      "before_sha256": "9997f2d40c2a863cc243d11f98e20059b37d39aaba4c024acd45dab1a6d9ed96",
+      "bytes": 27431,
+      "path": "crates/alife_world/src/new_game.rs",
+      "sha256": "a3e6174eb879d3b5a23da95c1e2f37b1d256663de4faee1113ca59c044c756dd"
+    },
+    {
+      "before_sha256": "3ac4fd0c301b0813ed2fddb3d1d3c814b2e5d6cb4bf890686275344861166dad",
+      "bytes": 86210,
+      "path": "crates/alife_world/src/organism.rs",
+      "sha256": "d4489f4b8c35d5a10f0bd1b53500f74948a17c33cd1317ec42663851f7df2266"
+    },
+    {
+      "before_sha256": "926747d09b305b3ad8e6e255b8aa391fe95720879966777f37aea8a9384c4f4d",
+      "bytes": 106751,
+      "path": "crates/alife_world/src/persistence.rs",
+      "sha256": "392f939b079431585b637f273a7cde1518f17e7c9d852fc10c50428e6cc39134"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 272049,
+      "path": "docs/experiments/motor-mediation-m2-design-v1/recipe.json",
+      "sha256": "285841b7e9a6d26c60142b6e2dd25f04a0bef0bec943c6203834155e89af0278"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 6145,
+      "path": "docs/experiments/recovery-group-arbitration-v1/recipe.json",
+      "sha256": "df6ca716a24f8f8793e542cea35612771e90e463e1d21304e7812ad1c9d267ad"
+    },
+    {
+      "before_sha256": null,
+      "bytes": 6546,
+      "path": "docs/experiments/recovery-group-confidence-v2/recipe.json",
+      "sha256": "eecb44a40ac6bbb7c3e742f10ec749668245c11f089b48cf257aeb4749dd4dff"
+    }
+  ],
+  "main": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "original_compressed_evidence": {
+    "bytes": 276792,
+    "expanded_bytes": 1542113,
+    "expanded_sha256": "be1fff0fde16f474c118f9b37ec95b526b52c6f644216b1d7d0c12eee0372a74",
+    "location": "Preserved unchanged in V1; not part of the V2 upload.",
+    "path": "patches/main-to-fbf-library-closure.patch.gz",
+    "sha256": "c0bda9c01d63dabdd3782163e381263155fa7c6394bc33ed1e2bad086ef38a7e"
+  },
+  "patch": {
+    "bytes": 1542113,
+    "parts": [
+      {
+        "bytes": 563200,
+        "path": "patches/main-to-fbf-library-closure.part-01.patch",
+        "sha256": "44c9ee9e269bec25ebb924054754a0e71ddc7b73104a132699171a9776430e07"
+      },
+      {
+        "bytes": 563195,
+        "path": "patches/main-to-fbf-library-closure.part-02.patch",
+        "sha256": "a2fb1711dee71d569aea8643ba5dd02d16c992bf9f378b219e4b86cb51edafae"
+      },
+      {
+        "bytes": 415718,
+        "path": "patches/main-to-fbf-library-closure.part-03.patch",
+        "sha256": "95d7a29b145111d4f24297c97ecd0766673f9275b5dd89400958c714a24ae72d"
+      }
+    ],
+    "sha256": "be1fff0fde16f474c118f9b37ec95b526b52c6f644216b1d7d0c12eee0372a74",
+    "transport": "utf8-line-parts-v1"
+  },
+  "research": "fbf2a517f93098b5d936878a3d26bbb8d0391c38",
+  "research_tree": "020d7a4b036d0309a4ffdd762536c36e945f7496",
+  "schema": "m2-library-source-closure-v1",
+  "scope": "Exact selected library source, in-module tests and includes, not the complete historical research tree and not all-targets."
+}

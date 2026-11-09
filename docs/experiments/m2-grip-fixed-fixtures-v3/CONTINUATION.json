@@ -1,0 +1,677 @@
+{
+  "execute_fixture_ids": [
+    "f019",
+    "f020",
+    "f021",
+    "f022",
+    "f023",
+    "f024",
+    "f025",
+    "f026",
+    "f027",
+    "f028",
+    "f029",
+    "f030",
+    "f031",
+    "f032",
+    "f033",
+    "f034",
+    "f035",
+    "f036",
+    "f037",
+    "f038",
+    "f039",
+    "f040",
+    "f041",
+    "f042",
+    "f043",
+    "f044",
+    "f045",
+    "f046"
+  ],
+  "new_source_delta": {
+    "after_sha256": "6edbbf73fdbbe4073582c963bf2fe9ebb5b942e1b0f46bc93be515b6ebc99e6b",
+    "before_sha256": "f46b949b5733daa3505748f8fbb7af081e8c504b287130a9092934ef635e414b",
+    "path": "crates/alife_world/src/headless/grip_options.rs",
+    "scope": "Only f019 cfg(test) body; all remaining865 V2 source records unchanged."
+  },
+  "previous_failed_attempt_dose_is_upper_bound": true,
+  "prior_result_evidence": {
+    "grip": {
+      "activation_head": "a6d4e47396ea020e2d99ed2a0ddd5ea3a3d18ef4",
+      "dose_note": "Source-audited attempt dose is an upper bound for the attempted fixture, not a measured completion count; f019 stopped on a test failure.",
+      "job": 129373260480,
+      "prepared_head": "4b6766082ebb0a9de18576e477e3b0aefa38aa22",
+      "prepared_tree": "1547ec6fc89c2b64c608d60aae695e70db177e03",
+      "run": 42680456763,
+      "sanitized_summary": {
+        "activation_head": "a6d4e47396ea020e2d99ed2a0ddd5ea3a3d18ef4",
+        "activation_marker_sha256": "e4e4296877b15e7f64a90ac7d1d8285ca1792d17b23b2847e8c5bf609c704cca",
+        "attempted_fixture_ids": [
+          "f001",
+          "f002",
+          "f003",
+          "f004",
+          "f005",
+          "f006",
+          "f007",
+          "f008",
+          "f009",
+          "f010",
+          "f011",
+          "f012",
+          "f013",
+          "f014",
+          "f015",
+          "f016",
+          "f017",
+          "f018",
+          "f019"
+        ],
+        "binary_identities": [
+          {
+            "sha256": "b541096274c4548f632f11010c72dc0c530aa4d7c2d813aa1c8bb2f6301b98fc",
+            "target_id": "core_grip_profile_wire"
+          },
+          {
+            "sha256": "b81dfd2b160afa1ad3659363d0e1a793b1feece76f5ad10b333f4c80774a65ce",
+            "target_id": "core_grip_perception_compatibility"
+          },
+          {
+            "sha256": "b226ef9432a56d4eca7faa59e7af1b10cb8161c44c86ecde03f8921c7ce0dfe5",
+            "target_id": "core_lib"
+          },
+          {
+            "sha256": "9f66673d169cac1be4f482d5709c6e82df81c68c1c9b8b18ae8ce77bcd1b0ba5",
+            "target_id": "world_lib"
+          },
+          {
+            "sha256": "7da6d6e1caa2f0360bbd79dfed3a55c27f6f69272065b240e98d8aba5cfd7cf3",
+            "target_id": "training_lib"
+          },
+          {
+            "sha256": "b61e671ff76482e37351d76dde3a4cf0d71bc6d00e2bf7b79fb8b7e243e60359",
+            "target_id": "training_grip_options_host"
+          },
+          {
+            "sha256": "40d63654cb755b27e598a2f7280996c3cacc7aee0c5eb9ae0ce038211b00a5da",
+            "target_id": "gpu_backend_closed_loop_wgsl"
+          },
+          {
+            "sha256": "1bd801e972c84eda778d765fd2e8bd91faa888ce04d562e538342e4bca612644",
+            "target_id": "gpu_backend_closed_loop_buffer_contracts"
+          },
+          {
+            "sha256": "64252854b58e28f04c89ae4bb8872cd866b45f7b91ecef38e82a33a11f392316",
+            "target_id": "gpu_grip_profile_upload_gate"
+          }
+        ],
+        "bound_files": 866,
+        "cargo_lock_sha256": "99b01e0353263fd5bbf0261320898e8395d45583f2045e3433d3e2a1f50070eb",
+        "code": "TEST_EXECUTION",
+        "compiled_target_ids": [
+          "core_grip_profile_wire",
+          "core_grip_perception_compatibility",
+          "core_lib",
+          "world_lib",
+          "training_lib",
+          "training_grip_options_host",
+          "gpu_backend_closed_loop_wgsl",
+          "gpu_backend_closed_loop_buffer_contracts",
+          "gpu_grip_profile_upload_gate"
+        ],
+        "completed": [],
+        "confirmed_passed_test_bodies": 18,
+        "correction_patch_sha256": "0ce2a14320e13e31b9727d41d979798910c31e9663dcaca043c0900c5c96774a",
+        "dependency_correction_patch_sha256": "fa468c4ca23f88c2f90f561176283fb1bf0f53c24280fee6c6dcdd093f5ed712",
+        "diagnostics": [],
+        "elapsed_seconds": 827,
+        "grip_patch_sha256": "acf8cc50353ba76cb7adf5af1db5845ee6e6b2e2261d0ee823821428e2e4d054",
+        "launched_fixture_processes": 19,
+        "listed_fixture_ids": [
+          "f001",
+          "f002",
+          "f003",
+          "f004",
+          "f005",
+          "f006",
+          "f007",
+          "f008",
+          "f009",
+          "f010",
+          "f011",
+          "f012",
+          "f013",
+          "f014",
+          "f015",
+          "f016",
+          "f017",
+          "f018",
+          "f019",
+          "f020",
+          "f021",
+          "f022",
+          "f023",
+          "f024",
+          "f025",
+          "f026",
+          "f027",
+          "f028",
+          "f029",
+          "f030",
+          "f031",
+          "f032",
+          "f033",
+          "f034",
+          "f035",
+          "f036",
+          "f037",
+          "f038",
+          "f039",
+          "f040",
+          "f041",
+          "f042",
+          "f043",
+          "f044",
+          "f045",
+          "f046"
+        ],
+        "main": "c3aec16df33861f1316d127736f5f60eea327ede",
+        "output_bytes": 781773,
+        "passed_fixture_ids": [
+          "f001",
+          "f002",
+          "f003",
+          "f004",
+          "f005",
+          "f006",
+          "f007",
+          "f008",
+          "f009",
+          "f010",
+          "f011",
+          "f012",
+          "f013",
+          "f014",
+          "f015",
+          "f016",
+          "f017",
+          "f018"
+        ],
+        "peak_rss_bytes": 1732739072,
+        "peak_workspace_bytes": 2454587062,
+        "plan_id": "m2-grip-fixed-fixtures-v2",
+        "prepared_head": "4b6766082ebb0a9de18576e477e3b0aefa38aa22",
+        "research_base": "fbf2a517f93098b5d936878a3d26bbb8d0391c38",
+        "schema": "m2-grip-fixed-fixture-summary-v2",
+        "seal_sha256": "6ea1950cd5e4f9a31ff83f1846989af7c035137cdfd4f5de4d50137f8c564cbe",
+        "source_audited_attempt_dose": {
+          "bank_forwards": 0,
+          "committed_registered_biology_intervals": 0,
+          "enumerated_scaffold_compiler_calls": 0,
+          "fresh_fixture_recipe_builds": 0,
+          "fresh_worlds": 1,
+          "legacy_baseline_decodes": 14,
+          "partition_forwards": 0,
+          "primitive_attempts": 7,
+          "primitive_rejected_attempts": 3,
+          "primitive_successes": 4,
+          "rolled_back_registered_biology_intervals": 0,
+          "source_forwards": 0
+        },
+        "source_audited_passed_dose": {
+          "bank_forwards": 0,
+          "committed_registered_biology_intervals": 0,
+          "enumerated_scaffold_compiler_calls": 0,
+          "fresh_fixture_recipe_builds": 0,
+          "fresh_worlds": 0,
+          "legacy_baseline_decodes": 14,
+          "partition_forwards": 0,
+          "primitive_attempts": 0,
+          "rolled_back_registered_biology_intervals": 0,
+          "source_forwards": 0
+        },
+        "source_manifest_sha256": "8f88728916761ada6a4529a31ff041313b495afe156d8bceb33e9040eb2e2e19",
+        "stage": "run_f019",
+        "toolchain": {
+          "cargo": "cargo 1.99.1 (5f94df478 2026-08-27)",
+          "cargo_binary_sha256": "a670e02cfa39ac2e53f77a2d911ca1fc9e2c479b0603ec956625be1daf24e3af",
+          "host": "x86_64-unknown-linux-gnu",
+          "llvm": "23.1.1",
+          "rust_commit": "58cf8f9c35b355199727627d07ae34a4e2846d67",
+          "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+          "rustc_binary_sha256": "b53b780f77f952062f8ca8a3b70aef2390b1e45ad91939be94afdc9543026853"
+        }
+      },
+      "url": "https://github.com/BobertNeek/A-Life/actions/runs/42680456763/job/129373260480"
+    },
+    "source_commit": "1c367915b0a74cddbda991f4487d8cca918b54d7",
+    "source_git_blob": "4e30f61f7fd4cfa0e0d9c8e8e2ffbd6f88a56c00",
+    "source_url": "https://github.com/BobertNeek/A-Life/blob/1c367915b0a74cddbda991f4487d8cca918b54d7/docs/experiments/brain-surgery-2026-11-08/m2-fixed-qualification-evening-v1/RESULTS.json"
+  },
+  "prior_seal_sha256": "6ea1950cd5e4f9a31ff83f1846989af7c035137cdfd4f5de4d50137f8c564cbe",
+  "prior_source_manifest_sha256": "8f88728916761ada6a4529a31ff041313b495afe156d8bceb33e9040eb2e2e19",
+  "result_reporting": "Report28 newly executed and18 retained passes separately. Never label V3 a single46/46 batch.",
+  "retained_fixture_ids": [
+    "f001",
+    "f002",
+    "f003",
+    "f004",
+    "f005",
+    "f006",
+    "f007",
+    "f008",
+    "f009",
+    "f010",
+    "f011",
+    "f012",
+    "f013",
+    "f014",
+    "f015",
+    "f016",
+    "f017",
+    "f018"
+  ],
+  "retained_fixtures": [
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "enumerated_scaffold_compiler_calls": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "id": "f001",
+      "ignored": false,
+      "name": "legacy_profile_tags_and_ambiguous_rejection_are_literal",
+      "notes": [],
+      "source_path": "crates/alife_core/tests/grip_profile_wire.rs",
+      "source_sha256": "1e8c4621497bde04b19c0ec3ae780a382717690aad497f893749c82627c38cb1",
+      "target_id": "core_grip_profile_wire"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "enumerated_scaffold_compiler_calls": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "id": "f002",
+      "ignored": false,
+      "name": "own_target_has_no_fabricated_visual_features",
+      "notes": [],
+      "source_path": "crates/alife_core/tests/grip_profile_wire.rs",
+      "source_sha256": "1e8c4621497bde04b19c0ec3ae780a382717690aad497f893749c82627c38cb1",
+      "target_id": "core_grip_profile_wire"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "enumerated_scaffold_compiler_calls": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "id": "f003",
+      "ignored": false,
+      "name": "exact_grip_memory_operations_do_not_alias_contact_or_other",
+      "notes": [],
+      "source_path": "crates/alife_core/tests/grip_profile_wire.rs",
+      "source_sha256": "1e8c4621497bde04b19c0ec3ae780a382717690aad497f893749c82627c38cb1",
+      "target_id": "core_grip_profile_wire"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "enumerated_scaffold_compiler_calls": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "id": "f004",
+      "ignored": false,
+      "name": "legacy_full_objects_and_sequences_keep_exact_eleven_fields",
+      "notes": [],
+      "source_path": "crates/alife_core/tests/grip_perception_compatibility.rs",
+      "source_sha256": "fd4c1b7764a16c79e1cfc0179d82ce7211fa7dd10560e04d23b24d313874645e",
+      "target_id": "core_grip_perception_compatibility"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "enumerated_scaffold_compiler_calls": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "id": "f005",
+      "ignored": false,
+      "name": "legacy_numeric_maps_decode_full_fields_without_extension",
+      "notes": [],
+      "source_path": "crates/alife_core/tests/grip_perception_compatibility.rs",
+      "source_sha256": "fd4c1b7764a16c79e1cfc0179d82ce7211fa7dd10560e04d23b24d313874645e",
+      "target_id": "core_grip_perception_compatibility"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "enumerated_scaffold_compiler_calls": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "id": "f006",
+      "ignored": false,
+      "name": "legacy_nested_bincode_does_not_consume_the_next_draft_or_tail",
+      "notes": [],
+      "source_path": "crates/alife_core/tests/grip_perception_compatibility.rs",
+      "source_sha256": "fd4c1b7764a16c79e1cfc0179d82ce7211fa7dd10560e04d23b24d313874645e",
+      "target_id": "core_grip_perception_compatibility"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "enumerated_scaffold_compiler_calls": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "id": "f007",
+      "ignored": false,
+      "name": "new_empty_and_nonempty_frames_roundtrip_all_transports",
+      "notes": [],
+      "source_path": "crates/alife_core/tests/grip_perception_compatibility.rs",
+      "source_sha256": "fd4c1b7764a16c79e1cfc0179d82ce7211fa7dd10560e04d23b24d313874645e",
+      "target_id": "core_grip_perception_compatibility"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "enumerated_scaffold_compiler_calls": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "id": "f008",
+      "ignored": false,
+      "name": "new_extension_is_required_after_digest_even_without_visual_slots",
+      "notes": [],
+      "source_path": "crates/alife_core/tests/grip_perception_compatibility.rs",
+      "source_sha256": "fd4c1b7764a16c79e1cfc0179d82ce7211fa7dd10560e04d23b24d313874645e",
+      "target_id": "core_grip_perception_compatibility"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "enumerated_scaffold_compiler_calls": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "id": "f009",
+      "ignored": false,
+      "name": "legacy_metadata_does_not_gain_authority_and_empty_grip_cannot_claim_a_held_target",
+      "notes": [],
+      "source_path": "crates/alife_core/tests/grip_perception_compatibility.rs",
+      "source_sha256": "fd4c1b7764a16c79e1cfc0179d82ce7211fa7dd10560e04d23b24d313874645e",
+      "target_id": "core_grip_perception_compatibility"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "enumerated_scaffold_compiler_calls": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "id": "f010",
+      "ignored": false,
+      "name": "legacy_named_own_grip_metadata_remains_ignored_before_and_after_profile",
+      "notes": [],
+      "source_path": "crates/alife_core/tests/grip_perception_compatibility.rs",
+      "source_sha256": "fd4c1b7764a16c79e1cfc0179d82ce7211fa7dd10560e04d23b24d313874645e",
+      "target_id": "core_grip_perception_compatibility"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "enumerated_scaffold_compiler_calls": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "id": "f011",
+      "ignored": false,
+      "name": "new_named_own_grip_metadata_is_typed_only_after_profile_and_duplicates_fail",
+      "notes": [],
+      "source_path": "crates/alife_core/tests/grip_perception_compatibility.rs",
+      "source_sha256": "fd4c1b7764a16c79e1cfc0179d82ce7211fa7dd10560e04d23b24d313874645e",
+      "target_id": "core_grip_perception_compatibility"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "enumerated_scaffold_compiler_calls": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "legacy_baseline_decodes": 14,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "id": "f012",
+      "ignored": false,
+      "name": "legacy_non_string_nested_metadata_and_duplicate_numeric_unknowns_are_ignored",
+      "notes": [
+        "Seven legacy fixtures times two metadata positions. Adds fourteen independent eleven-field baseline decodes; existing fourteen current-draft decode attempts remain. No source/world/biology work."
+      ],
+      "source_path": "crates/alife_core/tests/grip_perception_compatibility.rs",
+      "source_sha256": "fd4c1b7764a16c79e1cfc0179d82ce7211fa7dd10560e04d23b24d313874645e",
+      "target_id": "core_grip_perception_compatibility"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "enumerated_scaffold_compiler_calls": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "id": "f013",
+      "ignored": false,
+      "name": "grip_sensory::tests::occluded_own_hold_retains_proprioception_without_visual_slots",
+      "notes": [],
+      "source_path": "crates/alife_core/src/grip_sensory.rs",
+      "source_sha256": "fafeda901f9d8a589d48d5e38d837291b9bbcb5864aee1b666e09be5af9b60aa",
+      "target_id": "core_lib"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "enumerated_scaffold_compiler_calls": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "id": "f014",
+      "ignored": false,
+      "name": "grip_sensory::tests::contradictory_known_target_relation_is_rejected",
+      "notes": [],
+      "source_path": "crates/alife_core/src/grip_sensory.rs",
+      "source_sha256": "fafeda901f9d8a589d48d5e38d837291b9bbcb5864aee1b666e09be5af9b60aa",
+      "target_id": "core_lib"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "enumerated_scaffold_compiler_calls": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "id": "f015",
+      "ignored": false,
+      "name": "grip_sensory::tests::other_holder_is_never_an_exposed_relation",
+      "notes": [],
+      "source_path": "crates/alife_core/src/grip_sensory.rs",
+      "source_sha256": "fafeda901f9d8a589d48d5e38d837291b9bbcb5864aee1b666e09be5af9b60aa",
+      "target_id": "core_lib"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "enumerated_scaffold_compiler_calls": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "id": "f016",
+      "ignored": false,
+      "name": "grip_sensory::tests::sensory_extension_roundtrips_and_checks_its_version",
+      "notes": [],
+      "source_path": "crates/alife_core/src/grip_sensory.rs",
+      "source_sha256": "fafeda901f9d8a589d48d5e38d837291b9bbcb5864aee1b666e09be5af9b60aa",
+      "target_id": "core_lib"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "enumerated_scaffold_compiler_calls": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "id": "f017",
+      "ignored": false,
+      "name": "memory::candidate_recall::grip_scope_tests::grip_family_recall_requires_exact_target_and_operation",
+      "notes": [],
+      "source_path": "crates/alife_core/src/memory/grip_scope_tests.rs",
+      "source_sha256": "6392803126e15f24a4b62a7721cb1a6167642aaba7f8bc6059b80c242ddcd752",
+      "target_id": "core_lib"
+    },
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "enumerated_scaffold_compiler_calls": 0,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "id": "f018",
+      "ignored": false,
+      "name": "memory::candidate_recall::grip_scope_tests::unknown_release_target_stays_zero",
+      "notes": [],
+      "source_path": "crates/alife_core/src/memory/grip_scope_tests.rs",
+      "source_sha256": "6392803126e15f24a4b62a7721cb1a6167642aaba7f8bc6059b80c242ddcd752",
+      "target_id": "core_lib"
+    }
+  ],
+  "retained_source_audited_passed_dose": {
+    "bank_forwards": 0,
+    "committed_registered_biology_intervals": 0,
+    "enumerated_scaffold_compiler_calls": 0,
+    "fresh_fixture_recipe_builds": 0,
+    "fresh_worlds": 0,
+    "legacy_baseline_decodes": 14,
+    "partition_forwards": 0,
+    "primitive_attempts": 0,
+    "rolled_back_registered_biology_intervals": 0,
+    "source_forwards": 0
+  },
+  "retained_targets": [
+    {
+      "features": [],
+      "id": "core_grip_profile_wire",
+      "kind": "test",
+      "name": "grip_profile_wire",
+      "package": "alife_core"
+    },
+    {
+      "features": [],
+      "id": "core_grip_perception_compatibility",
+      "kind": "test",
+      "name": "grip_perception_compatibility",
+      "package": "alife_core"
+    },
+    {
+      "features": [],
+      "id": "core_lib",
+      "kind": "lib",
+      "name": "alife_core",
+      "package": "alife_core"
+    }
+  ],
+  "retention_proof": "Every retained core fixture source and all other bound inputs remain identical. Only a world-library cfg(test) body changes; production world code is byte-identical.",
+  "schema": "m2-grip-fixed-continuation-v3"
+}

@@ -1,0 +1,101 @@
+{
+  "main": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "nominal_supplement_files": [
+    "crates/alife_core/tests/grounded_drive_genetics.rs",
+    "crates/alife_core/tests/grounded_drive_genetics_wire.rs",
+    "crates/alife_core/tests/grounded_drive_pricing.rs",
+    "crates/alife_core/tests/legacy_selector_wire.rs",
+    "crates/alife_core/tests/motor_lobe_m0.rs",
+    "crates/alife_core/tests/n2048_bounded_founder.rs",
+    "crates/alife_core/tests/n2048_grounded_drive_basis.rs",
+    "crates/alife_core/tests/sleep_choice_m1.rs",
+    "crates/alife_core/tests/sleep_consolidation.rs",
+    "crates/alife_gpu_backend/tests/grounded_drive_basis.rs",
+    "crates/alife_training/tests/cpu_grounded_drive_basis.rs",
+    "crates/alife_training/tests/cpu_motor_host_legacy_wire.rs",
+    "crates/alife_training/tests/grounded_drive_research_host.rs",
+    "crates/alife_training/tests/grounded_drive_transfer.rs",
+    "crates/alife_world/tests/gpu_memory_grounding_persistence.rs",
+    "docs/experiments/bounded-founder-v1/legacy-wire-capture.json",
+    "docs/experiments/motor-lobe-native-m0-v1/mediation-m0-manifest.json"
+  ],
+  "research_source": "fbf2a517f93098b5d936878a3d26bbb8d0391c38",
+  "schema": "m2-grip-recovery-chain-v3",
+  "steps": [
+    {
+      "bytes": 1542113,
+      "name": "fbf-library",
+      "parts": [
+        {
+          "bytes": 563200,
+          "path": "patches/main-to-fbf-library-closure.part-01.patch",
+          "sha256": "44c9ee9e269bec25ebb924054754a0e71ddc7b73104a132699171a9776430e07"
+        },
+        {
+          "bytes": 563195,
+          "path": "patches/main-to-fbf-library-closure.part-02.patch",
+          "sha256": "a2fb1711dee71d569aea8643ba5dd02d16c992bf9f378b219e4b86cb51edafae"
+        },
+        {
+          "bytes": 415718,
+          "path": "patches/main-to-fbf-library-closure.part-03.patch",
+          "sha256": "95d7a29b145111d4f24297c97ecd0766673f9275b5dd89400958c714a24ae72d"
+        }
+      ],
+      "sha256": "be1fff0fde16f474c118f9b37ec95b526b52c6f644216b1d7d0c12eee0372a74"
+    },
+    {
+      "bytes": 136753,
+      "name": "fbf-nominal-supplement",
+      "parts": [
+        {
+          "bytes": 136753,
+          "path": "patches/fbf-nominal-source-supplement.patch",
+          "sha256": "ddd07c85685b27056664d9b8650fa736d8eff257f5d477485efd7d14e5e5b051"
+        }
+      ],
+      "path": "patches/fbf-nominal-source-supplement.patch",
+      "sha256": "ddd07c85685b27056664d9b8650fa736d8eff257f5d477485efd7d14e5e5b051"
+    },
+    {
+      "bytes": 649925,
+      "name": "grip-v4",
+      "parts": [
+        {
+          "bytes": 649925,
+          "path": "patches/fbf-to-grip-v4.patch",
+          "sha256": "acf8cc50353ba76cb7adf5af1db5845ee6e6b2e2261d0ee823821428e2e4d054"
+        }
+      ],
+      "path": "patches/fbf-to-grip-v4.patch",
+      "sha256": "acf8cc50353ba76cb7adf5af1db5845ee6e6b2e2261d0ee823821428e2e4d054"
+    },
+    {
+      "bytes": 2369,
+      "name": "grip-v5-correction",
+      "parts": [
+        {
+          "bytes": 2369,
+          "path": "patches/grip-v4-to-v5.patch",
+          "sha256": "0ce2a14320e13e31b9727d41d979798910c31e9663dcaca043c0900c5c96774a"
+        }
+      ],
+      "path": "patches/grip-v4-to-v5.patch",
+      "sha256": "0ce2a14320e13e31b9727d41d979798910c31e9663dcaca043c0900c5c96774a"
+    },
+    {
+      "bytes": 335,
+      "name": "grip-v6-world-devdep",
+      "parts": [
+        {
+          "bytes": 335,
+          "path": "patches/grip-v5-to-v6.patch",
+          "sha256": "fa468c4ca23f88c2f90f561176283fb1bf0f53c24280fee6c6dcdd093f5ed712"
+        }
+      ],
+      "path": "patches/grip-v5-to-v6.patch",
+      "sha256": "fa468c4ca23f88c2f90f561176283fb1bf0f53c24280fee6c6dcdd093f5ed712"
+    }
+  ],
+  "transport": "UTF-8 source patches only; no generated/binary/private state"
+}

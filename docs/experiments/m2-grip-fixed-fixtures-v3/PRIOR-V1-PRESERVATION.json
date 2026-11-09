@@ -1,0 +1,138 @@
+{
+  "directory": "m2-grip-fixed-fixtures-v1",
+  "exception_role": "Exact local preparation cache only. Retained, never imported, copied, uploaded, or accepted as source.",
+  "files": [
+    {
+      "bytes": 504,
+      "path": "ACTIVATE.template.json",
+      "sha256": "20be9a17d3e960993061a0da3f9bf50463ce126873a7a9bce3a20b086549d772"
+    },
+    {
+      "bytes": 6285,
+      "path": "ARCHIVE-MANIFEST.json",
+      "sha256": "0edc2aa59c18f7525d6f4df7109054e0995dbe0ab6823d6e6ee54131c4e9fab4"
+    },
+    {
+      "bytes": 4739,
+      "path": "FIXTURE-INVENTORY.md",
+      "sha256": "3f6073d4a7b3476dfe80f9984a9d6818ce99c2d0911d2935c2909c686decdd72"
+    },
+    {
+      "bytes": 44085,
+      "path": "FIXTURES.json",
+      "sha256": "e9ad18789bb7e8039b9dc858288ed5c98df11aa6c662d3c45de3ea9b761ba193"
+    },
+    {
+      "bytes": 884,
+      "path": "PREPARATION.json",
+      "sha256": "0d31e8879a2a5ad13fa30236ef2b2eaa3af5ceae6632bafe57d4b1f874d1c3ca"
+    },
+    {
+      "bytes": 1845,
+      "path": "PRIOR-TYPECHECK-RESULT.json",
+      "sha256": "3ef6c8feb21d59f28e4fd88af90911f86bc5da01ebbde463628388ac5f623071"
+    },
+    {
+      "bytes": 4245,
+      "path": "PRIOR-V5-PRESERVATION.json",
+      "sha256": "bba8ce529bc0971c826533e74cb1473c3c1c57eb0c6c8b4a5d26ce6c8d7059c9"
+    },
+    {
+      "bytes": 9158,
+      "path": "README.md",
+      "sha256": "2d7edf9361d9f3b575c64de21cf9d2094d108fa89d0ce5f2bf29ef7aa463a9f5"
+    },
+    {
+      "bytes": 9899,
+      "path": "REUSE-MANIFEST.json",
+      "sha256": "1b10cbd3c530b609cf32444023084ee1e4adc49f55ea636b643b7537ca70ef43"
+    },
+    {
+      "bytes": 1593,
+      "path": "RUNNER-SEMANTICS.json",
+      "sha256": "49686e5d8a022d98d973960824453d7767911ea00a71baa855ba2a66bef6c829"
+    },
+    {
+      "bytes": 52565,
+      "path": "SOURCE-AUDIT.json",
+      "sha256": "cdab2fbd43cb9d41dd3c1a366ba733b082cdb921c73a77cd3ce3b2e87b60de7a"
+    },
+    {
+      "bytes": 285,
+      "path": "STATIC-CHECK.json",
+      "sha256": "38eee4d89c144f434b80c1ee67f93306429864d48985140f2be666ae1c220105"
+    },
+    {
+      "bytes": 1762,
+      "path": "TEST-ONLY-DELTA.json",
+      "sha256": "5ca7d62259b6298ed72d13579474fca0ceb8ab2b7dacbb6d9360eff0b215a9d2"
+    },
+    {
+      "bytes": 36872,
+      "path": "TRIGGER-AUDIT.json",
+      "sha256": "60b1ff097a9f5bca06f731a1b7e6c79b7704b45a84f53d9b7eb6c550fd15db25"
+    },
+    {
+      "bytes": 4383,
+      "path": "WORKFLOW-PRESERVATION.json",
+      "sha256": "5451f4376c90aa6583136942a9421497d9ad50798005d86199a243ac83728b93"
+    },
+    {
+      "bytes": 1702,
+      "path": "packet_inputs.py",
+      "sha256": "249d2e3cde1503cfba8f92fe94274de70114f88323771e32cd8903c685fd0168"
+    },
+    {
+      "bytes": 3446,
+      "path": "patches/gpu-upload-gate.patch",
+      "sha256": "e71af51d4829939b2e91b9c1a4bc2e18f2bc95d8135462412d5a03421be2885a"
+    },
+    {
+      "bytes": 2728,
+      "path": "publication.json",
+      "sha256": "20b7fcdb3603bd3edd89581720a48db7bff996ddcc95d0981b6fb6eae523b4eb"
+    },
+    {
+      "bytes": 34471,
+      "path": "run_hosted.py",
+      "sha256": "eb62bb036e13026ab76bbbdf8a6d7b4f560e47981fc207b0277cdaa58a200b87"
+    },
+    {
+      "bytes": 6629,
+      "path": "seal.json",
+      "sha256": "788da909f77125cbb97f3a65425c45ca0b221d965462ed2f37f4589f8d1ec64c"
+    },
+    {
+      "bytes": 3911,
+      "path": "seal_package.py",
+      "sha256": "c8a0c6afb977208b4cfcf0f0a4f8d8c7608fc0c55f6fe154ebb15c034008680f"
+    },
+    {
+      "bytes": 201152,
+      "path": "source-manifest.json",
+      "sha256": "1638da4e07c7714440a8e200ba1dcda660370a9ce9e4120b3877ab1c980b02c9"
+    },
+    {
+      "bytes": 103425,
+      "path": "source-only-m2-grip-fixed-fixtures-v1-update.tar.gz",
+      "sha256": "a6f5a258ac944c06828bf837209db9fccb08a562b4705de23da904c8f1611887"
+    },
+    {
+      "bytes": 20059,
+      "path": "static_checks.py",
+      "sha256": "4b2f6f1e3d25be7ca66c8aa1b69c62c8dac966d83e7353c02b98b5d4a0b01c78"
+    },
+    {
+      "bytes": 1587,
+      "path": "workflow.yml",
+      "sha256": "7e20ce58aa142863eae36334256779000cb0fc49eef67400174b0860bdf030a8"
+    }
+  ],
+  "non_source_cache_exception": {
+    "bytes": 3763,
+    "directory": "hosted-typecheck-v2",
+    "path": "__pycache__/source_patch.cpython-312.pyc",
+    "sha256": "3560c0b9e0469dd7cc8c4c51710056044e1e7e420561dc742506cb855de1e0fd"
+  },
+  "schema": "m2-grip-fixed-v1-preservation-v2"
+}
