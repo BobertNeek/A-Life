@@ -14,9 +14,9 @@ SAFE_CONTEXT={}
 COMPLETED=[]
 FIXTURE_NAMES=set()
 BOUND_RECORDS={}
-BRANCH='refs/heads/qualification/m2-fixed-fixtures-v3'
-MARKER_PATH='docs/experiments/m2-hosted-qualification-v3/ACTIVATE.json'
-PLAN_ID='m2-fixed-fixtures-v3'
+BRANCH='refs/heads/qualification/m2-fixed-fixtures-v4'
+MARKER_PATH='docs/experiments/m2-hosted-qualification-v4/ACTIVATE.json'
+PLAN_ID='m2-fixed-fixtures-v4'
 TOOLCHAIN='1.99.1'
 RUST_COMMIT='58cf8f9c35b355199727627d07ae34a4e2846d67'
 RUST_DATE='2026-10-13'
@@ -425,7 +425,7 @@ def initialize(variant,source):
     SAFE_CONTEXT.update(variant=variant,stage='binding')
     SOURCE=pathlib.Path(source).resolve()
     CHECKOUTS=pathlib.Path(os.environ['GITHUB_WORKSPACE']).resolve()
-    WORK=pathlib.Path(os.environ['RUNNER_TEMP'])/('m2-fixed-fixtures-v3-'+variant)
+    WORK=pathlib.Path(os.environ['RUNNER_TEMP'])/('m2-fixed-fixtures-v4-'+variant)
     if WORK.is_symlink(): fail('BINDING')
     WORK.mkdir(mode=0o700,exist_ok=True)
     PRIVATE=WORK/'private'
@@ -490,13 +490,13 @@ def main():
         exe=build(package); compiled_local_inputs(exe,records)
         harnesses[package]=sha(exe.read_bytes())
         SAFE_CONTEXT['stage']='listing'
-        ignored=set(list_names(run([str(exe),'--list','--ignored','--format','terse'],'LIST_PROTOCOL')))
+        ignored=set(list_names(run([str(exe),'--list','--ignored','--format','pretty'],'LIST_PROTOCOL')))
         if ignored!=IGNORED[package]: fail('IGNORED_SET')
         reported_ignored+=sorted(ignored)
         for f in (x for x in fixtures if x['package']==package):
             name=f['name']
             SAFE_CONTEXT.update(stage='fixture',test=name)
-            if list_names(run([str(exe),'--list','--format','terse','--exact',name],'LIST_PROTOCOL'))!=[name]: fail('LIST_PROTOCOL')
+            if list_names(run([str(exe),'--list','--format','pretty','--exact',name],'LIST_PROTOCOL'))!=[name]: fail('LIST_PROTOCOL')
             raw=run([str(exe),'--exact',name,'--test-threads=1','--nocapture'],'TEST_FAILED',seconds=300)
             s=test_result(raw,name)
             if name.endswith('meal_actual_sampled_fixed_scene_reports_physical_and_association_coverage_separately'):
