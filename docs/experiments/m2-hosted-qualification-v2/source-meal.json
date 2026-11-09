@@ -1,0 +1,116 @@
+{
+  "base_manifest_sha256": "0684bedcd89d365d2a5f0cb557ab14a9a2d5606098dcf55119eba82f99b96255",
+  "overrides": [
+    {
+      "bytes": 22571,
+      "path": "crates/alife_core/src/lib.rs",
+      "sha256": "2f6e74ac378f95fcbcfae14f95f717bb2acfed8dfd0fc50b9fcd8327c93b78a5"
+    },
+    {
+      "bytes": 95574,
+      "path": "crates/alife_core/src/memory.rs",
+      "sha256": "78b8c2048e9854da3817d64e3a3007236407cd10ad38dcd54677e73d3f843fe6"
+    },
+    {
+      "bytes": 34780,
+      "path": "crates/alife_core/src/memory/candidate_recall.rs",
+      "sha256": "385d9a50e98676f25941319cbe115ed57fb29b49cc077ff8cc1c24e3dbaf2506"
+    },
+    {
+      "bytes": 10024,
+      "path": "crates/alife_core/src/memory/candidate_recall/meal_v1.rs",
+      "sha256": "49058d1aa549d66bf4492e68947a9ea3f21e137eaa3d5d243ff3083cfe5e0b80"
+    },
+    {
+      "bytes": 11399,
+      "path": "crates/alife_core/src/memory/meal_recall.rs",
+      "sha256": "328a72d00e887527cf581022f2663d1f470a961d0751520899a30c3ffac11563"
+    },
+    {
+      "bytes": 2758,
+      "path": "crates/alife_core/src/memory/meal_sleep.rs",
+      "sha256": "4a7edc80315d246269576a42c2015f1179eece66caa7e64e525b1397e0454f1a"
+    },
+    {
+      "bytes": 22627,
+      "path": "crates/alife_core/src/memory/meal_sleep_tests.rs",
+      "sha256": "049d3cf9d2a1d9f9967c802118facc34d7828662c8855025ff1414e1e10b6fa7"
+    },
+    {
+      "bytes": 23163,
+      "path": "crates/alife_core/src/memory/scoped_replay.rs",
+      "sha256": "d50da29077b12d691c5fb4adc91f7980de86e9b0d90ab93a6977b4ca8ee507e4"
+    },
+    {
+      "bytes": 53390,
+      "path": "crates/alife_core/src/memory/sidecar.rs",
+      "sha256": "acef72abd6d77d71d88438b3ac6c937649cb93e4e6b0575e9077e4f6da592f1f"
+    },
+    {
+      "bytes": 23680,
+      "path": "crates/alife_core/src/memory/supplemental_meal.rs",
+      "sha256": "4c45bd1cbb1284b0b8caf65fdcd287909a4460a3fb9a072f0ea6c8b7483696e1"
+    },
+    {
+      "bytes": 52501,
+      "path": "crates/alife_core/src/memory/supplemental_meal_tests.rs",
+      "sha256": "17a89e0bf4072e9533b048a3898f465b00f3877232b03665c4cde82c93471c83"
+    },
+    {
+      "bytes": 2357,
+      "path": "crates/alife_core/src/memory/testdata/legacy_same_sequence_bank_fbf.json",
+      "sha256": "7810a4318545e0451883d5980d67e07c010a126fa9c41b305272ce18677fce1a"
+    },
+    {
+      "bytes": 35699,
+      "path": "crates/alife_core/src/memory_query.rs",
+      "sha256": "842ce7d21ea44fd894759db3cecc4973679665d951b4ea6868c13b9849b42e9d"
+    },
+    {
+      "bytes": 41535,
+      "path": "crates/alife_core/src/sleep.rs",
+      "sha256": "609155921ceeffd1ada5a277895159b0d8feee1ddc63f40ac0ff8291fda15574"
+    },
+    {
+      "bytes": 8196,
+      "path": "crates/alife_core/src/sleep/meal_memory.rs",
+      "sha256": "d426ed9e4f9288ead923753340c1a6d75c7020991a904f4e5e424481a1274e58"
+    },
+    {
+      "bytes": 34715,
+      "path": "crates/alife_runtime/src/canonical_preparation.rs",
+      "sha256": "75ad43abe5672ca88923ca78e17f441069429481eea233b6abc7e8e540d0faa6"
+    },
+    {
+      "bytes": 7383,
+      "path": "crates/alife_runtime/src/canonical_preparation_meal.rs",
+      "sha256": "1d0bd3cacc5d7dfc26873f854c8c09a6bfae0cfc70d53a415a6baaf757409d06"
+    },
+    {
+      "bytes": 30701,
+      "path": "crates/alife_training/src/cpu/grouped_host_envelope.rs",
+      "sha256": "e3776368305460ba9f61d57f1954c3367c927d537543215353db2b28293580cd"
+    },
+    {
+      "bytes": 8768,
+      "path": "crates/alife_training/src/cpu/grouped_meal_host_envelope.rs",
+      "sha256": "4228916fbb20ddbea41c87a6cbafc6a2033234f3542d1d26b94a3833c8f3857d"
+    },
+    {
+      "bytes": 39768,
+      "path": "crates/alife_training/src/cpu/grouped_meal_host_loop.rs",
+      "sha256": "5d83a3862ef48081cf5b936e3502284cabba2fbcd295fb51cd06a3c8a54ac092"
+    },
+    {
+      "bytes": 13373,
+      "path": "crates/alife_training/src/cpu/grouped_meal_host_tests.rs",
+      "sha256": "58d64f57b13300c9d43e875a6b5e9b9010c4e20aed17780b8ce6cf19ca120fae"
+    },
+    {
+      "bytes": 89287,
+      "path": "crates/alife_training/src/cpu/host.rs",
+      "sha256": "ae91a04c7d9577fe4f0bb0750db8057b83732dd020c19e88a60e2a894d0ac10b"
+    }
+  ],
+  "source": "bc2cc5dc144cf71f1436678aa37bce493dce66f8"
+}
