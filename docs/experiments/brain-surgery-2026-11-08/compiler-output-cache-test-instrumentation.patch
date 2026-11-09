@@ -1,0 +1,178 @@
+--- successor/crates/alife_training/src/cpu/grouped_host_cache_tests.rs
++++ qualification/crates/alife_training/src/cpu/grouped_host_cache_tests.rs
+@@ -25,6 +25,7 @@
+ fn witness(wire: &[u8], len: usize, sha: &str) {
+     assert_eq!(wire.len(), len);
+     assert_eq!(format!("{:x}", Sha256::digest(wire)), sha);
++    eprintln!("CACHE_WITNESS bytes={len} sha256={sha} complete_bytes_checked=true");
+ }
+ fn decision_bytes(step: &CpuGroupedM2HostStepV1) -> Vec<u8> {
+     bytes(&(
+--- successor/crates/alife_training/src/cpu/grouped_host_loop.rs
++++ qualification/crates/alife_training/src/cpu/grouped_host_loop.rs
+@@ -36,6 +36,8 @@
+             ExperienceSequenceId,
+         ) -> Result<PerceptionFrameDraft, ScaffoldContractError>,
+     ) -> Result<CpuGroupedM2HostStepV1, CpuHostError> {
++        #[cfg(test)]
++        eprintln!("CACHE_COUNTS grouped_inner_attempt tick={} temperature_bits={}", self.world.tick().raw(), temperature.to_bits());
+         let p = founder.phenotype();
+         let tick = self.world.tick();
+         let mut decisions = Vec::new();
+@@ -793,6 +795,8 @@
+             .world
+             .try_advance_tick_with_body_events_in_staged_tick(&body_events)?;
+         self.seal_all_residents()?;
++        #[cfg(test)]
++        eprintln!("CACHE_COUNTS grouped_inner_completed tick={}", self.world.tick().raw());
+         Ok(CpuGroupedM2HostStepV1 {
+             tick_before: tick,
+             tick_after,
+--- successor/crates/alife_training/src/cpu/grouped_host_tests.rs
++++ qualification/crates/alife_training/src/cpu/grouped_host_tests.rs
+@@ -8,7 +8,9 @@
+ // Fixed distinct mnemonic "GRPHOST", declared before the first test run.
+ const SEED: u64 = 0x0347_5250_484F_5354;
+ fn fixture(preparation: u64) -> (CpuGroupedM2HostV1, PhenotypeCompilerInputs) {
++    eprintln!("CACHE_COUNTS source_recipe_attempt seed=GRPHOST preparation={preparation}");
+     let recipe = recipe::build(SEED, true).unwrap();
++    eprintln!("CACHE_COUNTS source_recipe_completed seed=GRPHOST");
+     let mut trainer = CpuFoundationTrainer::new(
+         recipe.phenotype.clone(),
+         recipe.asset.clone(),
+@@ -48,9 +50,11 @@
+         (SEED ^ (SEED >> 32)) as u32,
+         MediationModeV1::Full,
+         |world| -> Result<(), String> {
++            eprintln!("CACHE_COUNTS body_preparation_attempt ticks={preparation}");
+             for _ in 0..preparation {
+                 world.try_advance_tick().map_err(|e| e.to_string())?;
+             }
++            eprintln!("CACHE_COUNTS body_preparation_completed ticks={preparation}");
+             assert!(!world.age_death_disabled());
+             assert!(world
+                 .organism_registry()
+--- successor/crates/alife_training/src/cpu/motor_mediation/confidence/host/tests.rs
++++ qualification/crates/alife_training/src/cpu/motor_mediation/confidence/host/tests.rs
+@@ -99,9 +99,11 @@
+     let mut branches = q.initial.dendrites.branches().to_vec();
+     branches[0] = DendriticBranch::new(old.target, 0.03125, 0.875, old.inputs).unwrap();
+     q.initial.dendrites = DendriticBranchSet::new(branches).unwrap();
++    eprintln!("CACHE_COUNTS standalone_source_forward_attempt");
+     let plain = SparseGraph::new(p)
+         .forward(p, founder.weights(), &q)
+         .unwrap();
++    eprintln!("CACHE_COUNTS standalone_source_forward_completed");
+     let actual = motor
+         .forward(p, founder.weights(), &q, &f, &r, &e, [true; 6], 127)
+         .unwrap();
+--- successor/crates/alife_training/src/cpu/motor_mediation/confidence/host.rs
++++ qualification/crates/alife_training/src/cpu/motor_mediation/confidence/host.rs
+@@ -306,7 +306,11 @@
+         m.validate()?;
+         // THE ONLY source execution. Current recurrent banks, acquired dendrites,
+         // frozen structural rows and effective lifetime+alpha*fast are in q.
++        #[cfg(test)]
++        eprintln!("CACHE_COUNTS motor_source_forward_attempt");
+         let tape = SparseGraph::new(source).forward_mediation_source(source, weights, q)?;
++        #[cfg(test)]
++        eprintln!("CACHE_COUNTS motor_source_forward_completed");
+         let mut next = self.clone();
+         let mut drives = [0.; 12];
+         drives[..11].copy_from_slice(&frame.homeostasis().drives.to_array());
+--- successor/crates/alife_training/src/cpu/motor_mediation/confidence/host_validation_cache.rs
++++ qualification/crates/alife_training/src/cpu/motor_mediation/confidence/host_validation_cache.rs
+@@ -102,17 +102,25 @@
+     pub(super) fn compile(inputs: &PhenotypeCompilerInputs) -> Result<Self, TrainingError> {
+         #[cfg(test)]
+         COMPILE_ATTEMPTS.with(|count| count.set(count.get() + 1));
++        eprintln!("CACHE_COUNTS compiler_cache_attempt count={}", compile_count());
++        let heap_before = crate::qualification_alloc::live();
+         let expected = PhenotypeCompiler::compile_validated(
+             inputs,
+             &BrainCapacityClass::n2048_grounded_drive_research(),
+         )?;
+-        Ok(Self {
+-            binding: ExactIdentity::capture(&input_identity(inputs))?,
+-            expected,
+-            core: Lowered::pinned(MANIFEST)?,
+-            group: GroupedMotorStateV1::group_recipe()?,
+-        })
+-    }
++        let heap_expected = crate::qualification_alloc::live();
++        let binding = ExactIdentity::capture(&input_identity(inputs))?;
++        let heap_binding = crate::qualification_alloc::live();
++        let core = Lowered::pinned(MANIFEST)?;
++        let heap_core = crate::qualification_alloc::live();
++        let group = GroupedMotorStateV1::group_recipe()?;
++        let heap_group = crate::qualification_alloc::live();
++        let result = Self { binding, expected, core, group };
++        eprintln!("CACHE_HEAP expected_requested_live_delta={} binding_requested_live_delta={} core_requested_live_delta={} group_requested_live_delta={} aggregate_requested_live_delta={} binding_len={} binding_capacity={} cache_struct_bytes={} arc_header_estimate_bytes={} allocator_metadata_excluded=true", heap_expected-heap_before, heap_binding-heap_expected, heap_core-heap_binding, heap_group-heap_core, heap_group-heap_before, result.binding.0.len(), result.binding.0.capacity(), std::mem::size_of::<Self>(), 2*std::mem::size_of::<usize>());
++        eprintln!("CACHE_COUNTS compiler_cache_attempt_completed count={}", compile_count());
++        Ok(result)
++    }
++
+     pub(super) fn matches_inputs(&self, inputs: &PhenotypeCompilerInputs) -> bool {
+         self.binding.check(&input_identity(inputs)).is_ok()
+     }
+--- successor/crates/alife_training/src/cpu/motor_mediation/confidence/host_validation_cache_tests.rs
++++ qualification/crates/alife_training/src/cpu/motor_mediation/confidence/host_validation_cache_tests.rs
+@@ -375,6 +375,7 @@
+     PhenotypeCompilerInputs,
+     FoundationWeightAsset,
+ ) {
++    eprintln!("CACHE_COUNTS synthetic_zero_source_construction public_compile_entries=2 world_ticks=0");
+     let g = BrainGenome::scaffold(
+         0x4752_5031,
+         BrainCapacityClass::N2048_GROUNDED_DRIVE_RESEARCH_ID,
+--- successor/crates/alife_training/src/cpu/motor_mediation/confidence/tests.rs
++++ qualification/crates/alife_training/src/cpu/motor_mediation/confidence/tests.rs
+@@ -5,6 +5,7 @@
+     SOURCE.get_or_init(|| source_with_heads(4)).clone()
+ }
+ fn source_with_heads(head_count: u8) -> (PhenotypeCompilerInputs, FoundationWeightAsset) {
++    eprintln!("CACHE_COUNTS arithmetic_source_construction head_count={head_count} public_compile_entries=2 world_ticks=0");
+     let g = BrainGenome::scaffold(
+         0x4752_5031,
+         BrainCapacityClass::N2048_GROUNDED_DRIVE_RESEARCH_ID,
+--- successor/crates/alife_training/src/lib.rs
++++ qualification/crates/alife_training/src/lib.rs
+@@ -42,3 +42,6 @@
+ }
+ 
+ pub mod rehearsal;
++
++#[cfg(test)]
++mod qualification_alloc;
+--- successor/crates/alife_training/src/qualification_alloc.rs
++++ qualification/crates/alife_training/src/qualification_alloc.rs
+@@ -0,0 +1,29 @@
++//! Qualification-only requested-live-byte counter. Not in production or timed admin binary.
++use std::alloc::{GlobalAlloc, Layout, System};
++use std::sync::atomic::{AtomicIsize, Ordering};
++static LIVE: AtomicIsize = AtomicIsize::new(0);
++pub fn live() -> isize { LIVE.load(Ordering::SeqCst) }
++struct Counted;
++unsafe impl GlobalAlloc for Counted {
++    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
++        let p = unsafe { System.alloc(layout) };
++        if !p.is_null() { LIVE.fetch_add(layout.size() as isize, Ordering::SeqCst); }
++        p
++    }
++    unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
++        let p = unsafe { System.alloc_zeroed(layout) };
++        if !p.is_null() { LIVE.fetch_add(layout.size() as isize, Ordering::SeqCst); }
++        p
++    }
++    unsafe fn dealloc(&self, p: *mut u8, layout: Layout) {
++        unsafe { System.dealloc(p, layout) };
++        LIVE.fetch_sub(layout.size() as isize, Ordering::SeqCst);
++    }
++    unsafe fn realloc(&self, p: *mut u8, layout: Layout, size: usize) -> *mut u8 {
++        let next = unsafe { System.realloc(p, layout, size) };
++        if !next.is_null() { LIVE.fetch_add(size as isize - layout.size() as isize, Ordering::SeqCst); }
++        next
++    }
++}
++#[global_allocator]
++static ALLOCATOR: Counted = Counted;
