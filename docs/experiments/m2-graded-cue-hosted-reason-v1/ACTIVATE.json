@@ -1,0 +1,11 @@
+{
+  "attempt": 1,
+  "fixed_disposable_qualification_only": true,
+  "main": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "plan_id": "m2-graded-cue-hosted-reason-v1",
+  "prepared_head": "85f5a17e6ae0e375b11400a44fb5a1fae4276330",
+  "research_base": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "schema": "m2-graded-cue-reason-activation-v1",
+  "seal_sha256": "02d0e16efb70a53910758e2d1dd5495c83b1a7c1a253c4db3ac343ea3d4c2c93",
+  "source_manifest_sha256": "c0321462297d23743d4da1e32d6cce141ac9396bc73a9807fce3252e8c5b2f1e"
+}
