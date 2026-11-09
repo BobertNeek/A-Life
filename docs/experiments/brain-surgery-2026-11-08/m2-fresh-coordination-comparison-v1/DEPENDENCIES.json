@@ -1,0 +1,114 @@
+{
+  "input_metadata": "/workspace/shared/m2-validation-cache-v1/native-v1/DEPENDENCIES.json",
+  "input_metadata_sha256": "726b2450e992f307f6345b727471945c9a92432f734c93623b70e14127bf5272",
+  "read_only_dependencies": [
+    {
+      "name": "alife_world",
+      "path": "/workspace/scratch/ee5e08a3ca9b/recovery-sleep-durable-target-v3/debug/deps/libalife_world-7260bfeb331cd3a0.rlib",
+      "sha256": "200da3eb8627dafa7d4691ec89530de44af4cb01eae87f4004b72cfbec6b77fe",
+      "bytes": 57915720,
+      "source_files_verified": 38
+    },
+    {
+      "name": "alife_runtime",
+      "path": "/workspace/scratch/ee5e08a3ca9b/recovery-sleep-durable-target-v3/debug/deps/libalife_runtime-d483614a6c5351ce.rlib",
+      "sha256": "1a1656ff643b5feda90e7e60637726db579238f8b0b9442721838dd42135dadb",
+      "bytes": 40166022,
+      "source_files_verified": 9
+    },
+    {
+      "name": "thiserror",
+      "path": "/workspace/scratch/ee5e08a3ca9b/recovery-sleep-durable-target-v3/debug/deps/libthiserror-b53aba970f9bf1ae.rlib",
+      "sha256": "7675f6142fbb970a5dbe3ead6c00c649d27012f3a855a716a45f16a9e7ee3879",
+      "bytes": 34256,
+      "source_files_verified": 0
+    },
+    {
+      "name": "naga",
+      "path": "/workspace/scratch/ee5e08a3ca9b/recovery-sleep-durable-target-v3/debug/deps/libnaga-63fac1e9c9e76222.rlib",
+      "sha256": "01b3efd9811c0bb5cc3c46c79c8fe9662153240042848e72a0a03a5c1f57f101",
+      "bytes": 32653480,
+      "source_files_verified": 0
+    },
+    {
+      "name": "zstd",
+      "path": "/workspace/scratch/ee5e08a3ca9b/recovery-sleep-durable-target-v3/debug/deps/libzstd-07e3d4e740f2fced.rlib",
+      "sha256": "76ea3435eccc201549e4532c8008be1599efeff883b98c7450b2b2374ca65d9f",
+      "bytes": 360310,
+      "source_files_verified": 0
+    },
+    {
+      "name": "alife_gpu_backend",
+      "path": "/workspace/scratch/ee5e08a3ca9b/recovery-sleep-durable-target-v3/debug/deps/libalife_gpu_backend-1604aec0a2565beb.rlib",
+      "sha256": "c4546d4969e9b1d884f3d5c0ed82cbaaf23fc8e73c8eaa386d13573295103e0a",
+      "bytes": 22468784,
+      "source_files_verified": 38
+    },
+    {
+      "name": "serde_json",
+      "path": "/workspace/scratch/ee5e08a3ca9b/recovery-sleep-durable-target-v3/debug/deps/libserde_json-4909800a82ecea08.rlib",
+      "sha256": "5d0413c7add5f6d53081b3eeb73c442d450c43bca629af31e2aae4bca83d00c8",
+      "bytes": 2467956,
+      "source_files_verified": 0
+    },
+    {
+      "name": "sha2",
+      "path": "/workspace/scratch/ee5e08a3ca9b/recovery-sleep-durable-target-v3/debug/deps/libsha2-584eac0ed8c9c447.rlib",
+      "sha256": "b7bc5b88a1196146fcbd1023be29b59bf642b469f48f1b627bf12aa3801d3b8c",
+      "bytes": 891072,
+      "source_files_verified": 0
+    },
+    {
+      "name": "alife_core",
+      "path": "/workspace/scratch/ee5e08a3ca9b/recovery-sleep-durable-target-v3/debug/deps/libalife_core-933849778b8ff010.rlib",
+      "sha256": "183354d823892d79230d96935466af35b82fa1b7b2be1ea54f50ef724b6f7669",
+      "bytes": 59181618,
+      "source_files_verified": 94
+    },
+    {
+      "name": "wgpu",
+      "path": "/workspace/scratch/ee5e08a3ca9b/recovery-sleep-durable-target-v3/debug/deps/libwgpu-893bd0adbca736b1.rlib",
+      "sha256": "706419c4f5382ddbbfbb6453cb059f1ed0bf0a83a08627e59aef2a712c871da9",
+      "bytes": 7022548,
+      "source_files_verified": 0
+    },
+    {
+      "name": "base64",
+      "path": "/workspace/scratch/ee5e08a3ca9b/recovery-sleep-durable-target-v3/debug/deps/libbase64-6902f67cbd01db74.rlib",
+      "sha256": "96a8ae32bf63d5721144f7b8ae5d43e5ad83eed6ca48c7593c5585ce584bc25e",
+      "bytes": 523306,
+      "source_files_verified": 0
+    },
+    {
+      "name": "serde",
+      "path": "/workspace/scratch/ee5e08a3ca9b/recovery-sleep-durable-target-v3/debug/deps/libserde-d2b92067b57ae43f.rlib",
+      "sha256": "d8ff1ebbc8a1f75b4d1163b01c961f0b621e95ff71d7c37aa91a0a1ddcc090e5",
+      "bytes": 956806,
+      "source_files_verified": 0
+    },
+    {
+      "name": "bytemuck",
+      "path": "/workspace/scratch/ee5e08a3ca9b/recovery-sleep-durable-target-v3/debug/deps/libbytemuck-80a1e20cb3f6e09c.rlib",
+      "sha256": "69c196b0313c7f89cc4a42d9c59c39392ccd9738bab9a8d173ac4b883cdc5626",
+      "bytes": 553584,
+      "source_files_verified": 0
+    },
+    {
+      "name": "pollster",
+      "path": "/workspace/scratch/ee5e08a3ca9b/recovery-sleep-durable-target-v3/debug/deps/libpollster-b322fcc4f67d03d6.rlib",
+      "sha256": "39b6850b44cdccf35e3d6ab0f9503cec411a42017fd8fb58e3d9190689e66f98",
+      "bytes": 52974,
+      "source_files_verified": 0
+    }
+  ],
+  "no_dependency_writes": true,
+  "native_paths": [
+    "/workspace/scratch/ee5e08a3ca9b/recovery-sleep-durable-target-v3/debug/build/blake3-341d421ec6df7fff/out",
+    "/workspace/scratch/ee5e08a3ca9b/recovery-sleep-durable-target-v3/debug/build/zstd-sys-7a653b51e31244ec/out"
+  ],
+  "optional_rlib": {
+    "path": "/workspace/shared/m2-object-rich-optional-vocal-v1/libalife_training_object_rich_v1.rlib",
+    "sha256": "18368352a3c1eaabf190857533336f39aa5419dd6e944da3bc3aff52484c873d",
+    "bytes": 66519436
+  }
+}
