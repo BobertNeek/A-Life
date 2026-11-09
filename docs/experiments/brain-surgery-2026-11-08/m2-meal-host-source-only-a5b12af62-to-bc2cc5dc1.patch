@@ -1,0 +1,2775 @@
+diff --git a/crates/alife_core/src/memory.rs b/crates/alife_core/src/memory.rs
+index 50a2fe858..1125eb957 100644
+--- a/crates/alife_core/src/memory.rs
++++ b/crates/alife_core/src/memory.rs
+@@ -2380,3 +2380,5 @@ pub use supplemental_meal::{
+ mod supplemental_meal_tests;
+ 
+ mod meal_recall;
++
++mod meal_sleep;
+diff --git a/crates/alife_core/src/memory/meal_recall.rs b/crates/alife_core/src/memory/meal_recall.rs
+index 81c4b3db8..21c686d91 100644
+--- a/crates/alife_core/src/memory/meal_recall.rs
++++ b/crates/alife_core/src/memory/meal_recall.rs
+@@ -182,3 +182,57 @@ impl MemoryBank {
+         Ok(prepared)
+     }
+ }
++
++impl MemoryBank {
++    /// Immediate-sibling protection only: latest-sequence siblings contribute
++    /// their maximum within-record observation count, not a sum. This retains
++    /// repeated merged observations. Independently merged histories can overlap;
++    /// this is not an exact count of independent historical exposures.
++    pub fn object_familiarity_with_meal_v1(
++        &self,
++        organism: OrganismId,
++        object: crate::TrackedObjectId,
++        profile: crate::SensorProfileIdentity,
++    ) -> f32 {
++        let key = TargetMemoryBucketKey {
++            organism_id_raw: organism.raw(),
++            profile_id_raw: profile.profile_id.raw(),
++            profile_schema_version: profile.profile_schema_version,
++            sensory_abi_version_raw: profile.sensory_abi_version,
++            query_version_raw: crate::MemoryQueryVersion::StateActionTargetV2.raw(),
++            tracked_object_id_raw: object.raw(),
++            target_bins: [0; CANDIDATE_FEATURE_COUNT],
++        };
++        let mut source_counts = std::collections::BTreeMap::<u64, u32>::new();
++        for record in self
++            .candidate_store
++            .target_namespace_index
++            .get(&key)
++            .into_iter()
++            .flatten()
++            .take(MEMORY_TARGET_SEARCH_CAP)
++            .filter_map(|id| self.candidate_store.records.get(&id.raw()))
++            .filter(|r| {
++                r.organism_id_raw == organism.raw()
++                    && r.tracked_object_id_raw == object.raw()
++                    && matches!(
++                        ActionKind::try_from_raw(r.action_kind_raw),
++                        Ok(ActionKind::Look
++                            | ActionKind::Inspect
++                            | ActionKind::Interact
++                            | ActionKind::Hold)
++                    )
++            })
++        {
++            let count = source_counts
++                .entry(record.source_sequence_id.raw())
++                .or_default();
++            *count = (*count).max(record.observation_count);
++        }
++        let observations = source_counts
++            .values()
++            .copied()
++            .fold(0_u32, u32::saturating_add);
++        1.0 - 1.0 / (1.0 + observations as f32)
++    }
++}
+diff --git a/crates/alife_core/src/memory/meal_sleep.rs b/crates/alife_core/src/memory/meal_sleep.rs
+new file mode 100644
+index 000000000..56fd9034e
+--- /dev/null
++++ b/crates/alife_core/src/memory/meal_sleep.rs
+@@ -0,0 +1,68 @@
++//! Opt-in meal association resolution. Legacy one-ID sleep resolution stays exact.
++
++use std::collections::BTreeSet;
++
++use super::{MealMemorySleepProofV1, MemoryBank, MemoryId, ScaffoldContractError, Validate};
++
++pub(crate) struct ResolvedMealSleepSourcesV1 {
++    pub eligible_event_indices: BTreeSet<usize>,
++    pub promoted_memory_ids: Vec<MemoryId>,
++}
++
++impl MemoryBank {
++    /// Resolve every original source before deduplicating retained associations.
++    /// Candidate memory is already bounded at observation; this does not prune,
++    /// promote, compact, or change its generation, including for unavailable work.
++    pub(crate) fn memory_ids_for_sleep_with_meal_v1(
++        &self,
++        proofs: &[MealMemorySleepProofV1],
++        max_records_after: usize,
++    ) -> Result<ResolvedMealSleepSourcesV1, ScaffoldContractError> {
++        self.config.validate_contract()?;
++        self.candidate_store
++            .validate_for_capacity(self.config.capacity)?;
++        if self.len != 0 || !self.lifetime_records.is_empty() {
++            return Err(ScaffoldContractError::MemoryModeConflict);
++        }
++        let mut seen_sequences = BTreeSet::new();
++        let mut seen_memory_ids = BTreeSet::new();
++        let mut eligible_event_indices = BTreeSet::new();
++        let mut promoted_memory_ids = Vec::new();
++        for proof in proofs {
++            if proof
++                .representative_source()
++                .query()
++                .profile()
++                .profile_id
++                .raw()
++                != 5
++            {
++                return Err(ScaffoldContractError::InvalidDecisionEvidence);
++            }
++            let sequence = proof.transaction().sealed_sequence_id;
++            sequence.validate()?;
++            if !seen_sequences.insert(sequence.raw()) {
++                return Err(ScaffoldContractError::MemoryReplayRejected);
++            }
++        }
++        for (event_index, proof) in proofs.iter().enumerate() {
++            // No short-circuit on the first retained source or an unavailable
++            // source: malformed sibling scope must reject the whole batch.
++            for memory_id in proof.resolve_associations(self)?.into_iter().flatten() {
++                eligible_event_indices.insert(event_index);
++                if seen_memory_ids.insert(memory_id.raw()) {
++                    promoted_memory_ids.push(memory_id);
++                }
++            }
++        }
++        if !eligible_event_indices.is_empty()
++            && (max_records_after == 0 || max_records_after > self.config.capacity)
++        {
++            return Err(ScaffoldContractError::MemoryModeConflict);
++        }
++        Ok(ResolvedMealSleepSourcesV1 {
++            eligible_event_indices,
++            promoted_memory_ids,
++        })
++    }
++}
+diff --git a/crates/alife_core/src/memory/meal_sleep_tests.rs b/crates/alife_core/src/memory/meal_sleep_tests.rs
+new file mode 100644
+index 000000000..6a4064512
+--- /dev/null
++++ b/crates/alife_core/src/memory/meal_sleep_tests.rs
+@@ -0,0 +1,593 @@
++//! Synthetic CPU contracts, not native host, biological sleep, or world evidence.
++use super::*;
++use crate::predictive::GroundedSuccessorPredictor;
++use crate::sleep::{MealSleepWorkReceiptV1, SleepReplayEvidence, SleepWorkReceipt};
++
++#[derive(Debug, Clone, PartialEq)]
++struct Harness {
++    memory: MemorySidecarState,
++    predictor: GroundedSuccessorPredictor,
++    topology: TopologySidecar,
++}
++
++fn consolidator(limit: usize) -> SleepConsolidator {
++    SleepConsolidator::new(SleepConsolidationConfig {
++        memory_max_records_after: limit,
++        ..SleepConsolidationConfig::reference()
++    })
++    .unwrap()
++}
++
++impl Harness {
++    fn new(capacity: usize) -> Self {
++        Self {
++            memory: MemorySidecarState::new_profiled(OWNER, identity(), config(capacity)).unwrap(),
++            predictor: GroundedSuccessorPredictor::default(),
++            topology: TopologySidecar::new_profiled(
++                OWNER,
++                identity(),
++                TopologicalMapConfig {
++                    max_concepts: 16,
++                    max_edges: 32,
++                    max_simplexes: 16,
++                    max_unresolved_gaps: 8,
++                    edge_decay_per_tick: NormalizedScalar::new(0.05).unwrap(),
++                },
++            )
++            .unwrap(),
++        }
++    }
++
++    fn observe(
++        &mut self,
++        sequence: u64,
++        case: Case,
++    ) -> (
++        SleepReplayEvent,
++        PredictionTargetReceipt,
++        MealMemorySleepProofV1,
++    ) {
++        let (patch, frame) = fixture(sequence, case).unwrap();
++        let transaction = self
++            .memory
++            .observe_sealed_patch_with_meal_v1(&patch, &frame)
++            .unwrap();
++        let (event, target) = meal_sleep_source(&patch);
++        let proof = MealMemorySleepProofV1::capture(&patch, event, &target, transaction).unwrap();
++        (event, target, proof)
++    }
++
++    fn run(
++        &mut self,
++        evidence: &SleepReplayEvidence,
++        proofs: &[MealMemorySleepProofV1],
++    ) -> Result<Option<MealSleepWorkReceiptV1>, ScaffoldContractError> {
++        let consolidator = consolidator(self.memory.bank().capacity());
++        self.memory.run_bounded_sleep_transaction_with_meal_v1(
++            &consolidator,
++            &HomeostaticSnapshot::baseline(Tick::new(100)),
++            Tick::new(100),
++            evidence,
++            proofs,
++            &mut self.predictor,
++            &mut self.topology,
++        )
++    }
++}
++
++fn evidence(pairs: &[(SleepReplayEvent, PredictionTargetReceipt)]) -> SleepReplayEvidence {
++    let capacity = pairs.len().max(1) as u32;
++    let mut journal = SleepReplayJournal::new(
++        ReplayCapturePlan::try_new(vec![3], 1, capacity, capacity).unwrap(),
++    )
++    .unwrap();
++    for (event, _) in pairs {
++        journal.push(*event, &[0.75]).unwrap();
++    }
++    SleepReplayEvidence::new(
++        journal
++            .build_bounded_batch(capacity, capacity, u32::MAX)
++            .unwrap(),
++        pairs.iter().map(|(_, target)| target.clone()).collect(),
++    )
++    .unwrap()
++}
++
++fn retained_case(capacity: usize) -> (Harness, SleepReplayEvidence, MealMemorySleepProofV1) {
++    assert_positive_meal_control();
++    let mut h = Harness::new(capacity);
++    let (event, target, proof) = h.observe(1, Case::default());
++    let evidence = evidence(&[(event, target)]);
++    // Rejecting cases start with a positive sleep control, not just a valid
++    // patch, so unrelated new-path failure cannot pass a rejection test.
++    let receipt = h
++        .clone()
++        .run(&evidence, std::slice::from_ref(&proof))
++        .expect("positive meal sleep transaction")
++        .expect("retained source produces work");
++    assert_eq!(receipt.replay_event_count, 1);
++    assert_eq!(receipt.promoted_memory_ids.len(), 2);
++    receipt.validate_contract().unwrap();
++    (h, evidence, proof)
++}
++
++fn altered_sibling(proof: &MealMemorySleepProofV1) -> MealMemorySleepProofV1 {
++    let mut value = serde_json::to_value(proof).unwrap();
++    value["transaction"]["supplemental"]["proof"]["dispatch_generation"] = serde_json::json!(99);
++    serde_json::from_value(value).unwrap()
++}
++
++#[test]
++fn meal_bounded_sleep_two_ids_count_one_event_sample_and_predictor_update() {
++    let (mut h, evidence, proof) = retained_case(8);
++    let memory_before = h.memory.clone();
++    let evidence_before = evidence.clone();
++    let mut expected_predictor = h.predictor.clone();
++    expected_predictor
++        .observe(&evidence.prediction_targets[0])
++        .unwrap();
++    // The legacy lifetime limit is not a cap on candidate IDs or replay.
++    let receipt = h
++        .memory
++        .run_bounded_sleep_transaction_with_meal_v1(
++            &consolidator(1),
++            &HomeostaticSnapshot::baseline(Tick::new(100)),
++            Tick::new(100),
++            &evidence,
++            std::slice::from_ref(&proof),
++            &mut h.predictor,
++            &mut h.topology,
++        )
++        .unwrap()
++        .unwrap();
++    let ids = proof.resolve_associations(h.memory.bank()).unwrap();
++    assert_eq!(
++        receipt.promoted_memory_ids,
++        ids.into_iter().flatten().collect::<Vec<_>>()
++    );
++    assert_eq!(receipt.replay_event_count, 1);
++    assert_eq!(receipt.replay_eligibility_sample_count, 1);
++    assert_eq!(receipt.predictor_update_count, 1);
++    assert_eq!(receipt.work_units, 5);
++    assert_eq!(h.predictor, expected_predictor);
++    assert_eq!(h.memory, memory_before);
++    assert_eq!(evidence, evidence_before);
++    assert_eq!(
++        receipt.replay_digest,
++        sleep_meal_memory_replay_digest_v1(&evidence, &[proof]).unwrap()
++    );
++    assert_ne!(receipt.replay_digest, evidence.canonical_digest);
++}
++
++#[test]
++fn meal_bounded_sleep_evicted_representative_replays_surviving_meal_once() {
++    let (mut h, evidence, proof) = retained_case(2);
++    let original_ids = proof.resolve_associations(h.memory.bank()).unwrap();
++    let (_, _, replacement) = h.observe(
++        2,
++        Case {
++            meal_contact: PhysicalContactKind::Touch,
++            reward: -0.9,
++            success: false,
++            ..Case::default()
++        },
++    );
++    assert!(replacement.transaction().supplemental.is_none());
++    assert!(matches!(replacement.transaction().representative,
++        MemoryUpdateKind::Evicted { removed, .. } if Some(removed) == original_ids[0]));
++    assert_eq!(
++        proof.resolve_associations(h.memory.bank()).unwrap(),
++        [None, original_ids[1]]
++    );
++    let memory_before = h.memory.clone();
++    let mut expected = h.predictor.clone();
++    expected.observe(&evidence.prediction_targets[0]).unwrap();
++    let receipt = h.run(&evidence, &[proof]).unwrap().unwrap();
++    assert_eq!(receipt.promoted_memory_ids, vec![original_ids[1].unwrap()]);
++    assert_eq!(receipt.replay_event_count, 1);
++    assert_eq!(receipt.replay_eligibility_sample_count, 1);
++    assert_eq!(receipt.predictor_update_count, 1);
++    assert_eq!(receipt.work_units, 4);
++    assert_eq!(h.predictor, expected);
++    assert_eq!(h.memory, memory_before);
++}
++
++#[test]
++fn meal_bounded_sleep_all_evicted_and_empty_batches_do_no_work() {
++    let (mut h, evicted, proof) = retained_case(2);
++    h.observe(
++        2,
++        Case {
++            reward: -0.9,
++            success: false,
++            ..Case::default()
++        },
++    );
++    assert_eq!(
++        proof.resolve_associations(h.memory.bank()).unwrap(),
++        [None, None]
++    );
++    let before = h.clone();
++    assert_eq!(h.run(&evicted, std::slice::from_ref(&proof)).unwrap(), None);
++    assert_eq!(h, before);
++    assert_eq!(h.run(&evidence(&[]), &[]).unwrap(), None);
++    assert_eq!(h, before);
++    assert!(h.run(&evicted, &[altered_sibling(&proof)]).is_err());
++    assert_eq!(h, before);
++}
++
++#[test]
++fn meal_bounded_sleep_merged_sources_deduplicate_ids_not_original_events() {
++    let (mut h, first, first_proof) = retained_case(8);
++    let (middle_event, middle_target, middle_proof) = h.observe(2, Case::default());
++    let (last_event, last_target, last_proof) = h.observe(3, Case::default());
++    assert_eq!(
++        middle_proof.resolve_associations(h.memory.bank()).unwrap(),
++        [None, None]
++    );
++    let mixed = evidence(&[
++        (first.batch.events[0], first.prediction_targets[0].clone()),
++        (middle_event, middle_target),
++        (last_event, last_target),
++    ]);
++    let proofs = [first_proof, middle_proof, last_proof];
++    let mut expected = h.predictor.clone();
++    expected.observe(&mixed.prediction_targets[0]).unwrap();
++    expected.observe(&mixed.prediction_targets[2]).unwrap();
++    let memory_before = h.memory.clone();
++    let receipt = h.run(&mixed, &proofs).unwrap().unwrap();
++    assert_eq!(receipt.promoted_memory_ids.len(), 2);
++    assert_eq!(receipt.replay_event_count, 2);
++    assert_eq!(receipt.replay_eligibility_sample_count, 2);
++    assert_eq!(receipt.predictor_update_count, 2);
++    assert_eq!(receipt.work_units, 8);
++    assert_eq!(h.predictor, expected);
++    assert_eq!(h.memory, memory_before);
++    assert_eq!(mixed.batch.events.len(), 3);
++    assert_eq!(mixed.prediction_targets.len(), 3);
++}
++
++#[test]
++fn meal_bounded_sleep_malformed_unavailable_sibling_rejects_after_valid_source() {
++    let (mut h, first, first_proof) = retained_case(8);
++    let (middle_event, middle_target, middle_proof) = h.observe(2, Case::default());
++    h.observe(3, Case::default());
++    assert_eq!(
++        middle_proof.resolve_associations(h.memory.bank()).unwrap(),
++        [None, None]
++    );
++    assert!(first_proof.resolve_associations(h.memory.bank()).unwrap()[0].is_some());
++    let mixed = evidence(&[
++        (first.batch.events[0], first.prediction_targets[0].clone()),
++        (middle_event, middle_target),
++    ]);
++    let before = h.clone();
++    assert!(h
++        .run(&mixed, &[first_proof, altered_sibling(&middle_proof)])
++        .is_err());
++    assert_eq!(h, before);
++}
++
++#[test]
++fn meal_bounded_sleep_missing_duplicate_and_swapped_proofs_reject_atomically() {
++    let (mut h, first, first_proof) = retained_case(8);
++    let (second_event, second_target, second_proof) = h.observe(2, Case::default());
++    let mixed = evidence(&[
++        (first.batch.events[0], first.prediction_targets[0].clone()),
++        (second_event, second_target),
++    ]);
++    let before = h.clone();
++    for proofs in [
++        vec![first_proof.clone()],
++        vec![first_proof.clone(), first_proof.clone()],
++        vec![second_proof.clone(), first_proof.clone()],
++        vec![first_proof.clone(), second_proof, first_proof.clone()],
++    ] {
++        assert!(h.run(&mixed, &proofs).is_err());
++        assert_eq!(h, before);
++    }
++    assert!(matches!(
++        h.memory
++            .bank()
++            .memory_ids_for_sleep_with_meal_v1(&[first_proof.clone(), first_proof], 8,),
++        Err(ScaffoldContractError::MemoryReplayRejected)
++    ));
++    let mut duplicate_events = mixed;
++    duplicate_events.batch.events[1] = duplicate_events.batch.events[0];
++    assert!(duplicate_events.validate_contract().is_err());
++    assert!(h.run(&duplicate_events, &[]).is_err());
++    assert_eq!(h, before);
++}
++
++#[test]
++fn meal_bounded_sleep_failure_after_predictor_staging_rolls_back_every_state() {
++    let (mut h, evidence, proof) = retained_case(8);
++    let mut value = serde_json::to_value(&h.topology).unwrap();
++    value["map"]["config"]["max_concepts"] = serde_json::json!(0);
++    h.topology = serde_json::from_value(value).unwrap();
++    assert!(h.topology.validate_contract().is_err());
++    let before = h.clone();
++    assert!(h.run(&evidence, &[proof]).is_err());
++    assert_eq!(h, before);
++    assert!(!h.predictor.has_acquired_state());
++}
++
++#[test]
++fn meal_bounded_sleep_cold_state_proofs_and_receipts_preserve_bytes_and_outcome() {
++    let (mut warm, evidence, proof) = retained_case(8);
++    warm.predictor
++        .observe(&evidence.prediction_targets[0])
++        .unwrap();
++    let (patch, _) = fixture(1, Case::default()).unwrap();
++    warm.topology.observe_sealed_patch(&patch);
++    warm.topology.validate_contract().unwrap();
++    let active_before = warm.memory.export_active_bank().unwrap();
++    let checkpoint_before = *warm.memory.compaction_checkpoint();
++    let mut cold = Harness {
++        memory: MemorySidecarState::restore_portable(
++            identity(),
++            checkpoint_before,
++            active_before.clone(),
++            None,
++        )
++        .unwrap(),
++        predictor: serde_json::from_slice(&serde_json::to_vec(&warm.predictor).unwrap()).unwrap(),
++        topology: serde_json::from_slice(&serde_json::to_vec(&warm.topology).unwrap()).unwrap(),
++    };
++    let proof_bytes = serde_json::to_vec(&proof).unwrap();
++    let cold_proof: MealMemorySleepProofV1 = serde_json::from_slice(&proof_bytes).unwrap();
++    assert_eq!(serde_json::to_vec(&cold_proof).unwrap(), proof_bytes);
++    let cold_evidence = serde_json::from_slice(&serde_json::to_vec(&evidence).unwrap()).unwrap();
++    let expected = warm.run(&evidence, &[proof]).unwrap().unwrap();
++    let result = cold.run(&cold_evidence, &[cold_proof]).unwrap().unwrap();
++    assert_eq!(result, expected);
++    assert_eq!(cold, warm);
++    assert_eq!(cold.memory.export_active_bank().unwrap(), active_before);
++    assert_eq!(*cold.memory.compaction_checkpoint(), checkpoint_before);
++    let bytes = serde_json::to_vec(&result).unwrap();
++    let restored: MealSleepWorkReceiptV1 = serde_json::from_slice(&bytes).unwrap();
++    restored.validate_contract().unwrap();
++    assert_eq!(serde_json::to_vec(&restored).unwrap(), bytes);
++}
++
++#[test]
++fn meal_bounded_sleep_profile_owner_and_legacy_entry_guards_remain_strict() {
++    let (mut h, evidence, proof) = retained_case(8);
++    let before = h.clone();
++    assert!(h
++        .memory
++        .run_bounded_sleep_transaction(
++            &consolidator(8),
++            &HomeostaticSnapshot::baseline(Tick::new(100)),
++            Tick::new(100),
++            &evidence,
++            &mut h.predictor,
++            &mut h.topology,
++        )
++        .is_err());
++    assert_eq!(h, before);
++    for memory in [
++        MemorySidecarState::new(OWNER, config(8)).unwrap(),
++        MemorySidecarState::new_profiled(OrganismId(999), identity(), config(8)).unwrap(),
++    ] {
++        let mut wrong = Harness {
++            memory,
++            ..h.clone()
++        };
++        let wrong_before = wrong.clone();
++        assert!(wrong.run(&evidence, std::slice::from_ref(&proof)).is_err());
++        assert_eq!(wrong, wrong_before);
++    }
++    let mut wrong = Harness {
++        topology: TopologySidecar::new_profiled(OrganismId(999), identity(), *h.topology.config())
++            .unwrap(),
++        ..h.clone()
++    };
++    let wrong_before = wrong.clone();
++    assert!(wrong.run(&evidence, &[proof]).is_err());
++    assert_eq!(wrong, wrong_before);
++}
++
++#[test]
++fn meal_bounded_sleep_receipt_keeps_legacy_one_id_validation_and_bytes() {
++    let (mut h, evidence, proof) = retained_case(8);
++    let receipt = h.run(&evidence, &[proof]).unwrap().unwrap();
++    for change in 0..4 {
++        let mut bad = receipt.clone();
++        match change {
++            0 => bad.promoted_memory_ids[1] = bad.promoted_memory_ids[0],
++            1 => {
++                bad.promoted_memory_ids.push(MemoryId(999));
++                bad.work_units += 1;
++            }
++            2 => {
++                bad.predictor_update_count = 2;
++                bad.work_units += 1;
++            }
++            _ => bad.work_units += 1,
++        }
++        bad.canonical_digest = bad.recompute_canonical_digest().unwrap();
++        assert!(bad.validate_contract().is_err());
++    }
++    let mut old: SleepWorkReceipt =
++        serde_json::from_slice(&serde_json::to_vec(&receipt).unwrap()).unwrap();
++    old.schema_version = SLEEP_CONSOLIDATION_SCHEMA_VERSION;
++    old.canonical_digest = old.recompute_canonical_digest().unwrap();
++    assert!(
++        old.validate_contract().is_err(),
++        "legacy cannot admit two IDs for one event"
++    );
++    old.promoted_memory_ids.truncate(1);
++    old.work_units -= 1;
++    old.canonical_digest = old.recompute_canonical_digest().unwrap();
++    old.validate_contract().unwrap();
++    let bytes = serde_json::to_vec(&old).unwrap();
++    let restored: SleepWorkReceipt = serde_json::from_slice(&bytes).unwrap();
++    restored.validate_contract().unwrap();
++    assert_eq!(serde_json::to_vec(&restored).unwrap(), bytes);
++    assert_ne!(old.canonical_digest, receipt.canonical_digest);
++}
++
++#[test]
++fn meal_bounded_sleep_unsupplemented_path_preserves_legacy_bank_and_scoped_work() {
++    assert_positive_meal_control();
++    let mut old = Harness::new(8);
++    let mut meal = old.clone();
++    let (patch, frame) = fixture(
++        1,
++        Case {
++            receipts: 1,
++            ..Case::default()
++        },
++    )
++    .unwrap();
++    let old_write = old.memory.observe_sealed_patch(&patch).unwrap();
++    let meal_write = meal
++        .memory
++        .observe_sealed_patch_with_meal_v1(&patch, &frame)
++        .unwrap();
++    assert!(meal_write.supplemental.is_none());
++    let original_bytes = serde_json::to_vec(old.memory.bank()).unwrap();
++    assert_eq!(
++        serde_json::to_vec(meal.memory.bank()).unwrap(),
++        original_bytes
++    );
++    let (event, target) = meal_sleep_source(&patch);
++    let old_proof = SleepMemorySourceProofV1::capture(&patch, event, &target, old_write).unwrap();
++    let proof = MealMemorySleepProofV1::capture(&patch, event, &target, meal_write).unwrap();
++    let evidence = evidence(&[(event, target)]);
++    let old_receipt = old
++        .memory
++        .run_bounded_sleep_transaction_scoped_v1(
++            &consolidator(8),
++            &HomeostaticSnapshot::baseline(Tick::new(100)),
++            Tick::new(100),
++            &evidence,
++            &[old_proof],
++            &mut old.predictor,
++            &mut old.topology,
++        )
++        .unwrap()
++        .unwrap();
++    let meal_receipt = meal.run(&evidence, &[proof]).unwrap().unwrap();
++    assert_eq!(meal, old);
++    assert_eq!(
++        serde_json::to_vec(meal.memory.bank()).unwrap(),
++        original_bytes
++    );
++    assert_eq!(
++        meal_receipt.replay_event_count,
++        old_receipt.replay_event_count
++    );
++    assert_eq!(
++        meal_receipt.promoted_memory_ids,
++        old_receipt.promoted_memory_ids
++    );
++    assert_eq!(
++        meal_receipt.predictor_update_count,
++        old_receipt.predictor_update_count
++    );
++    assert_eq!(
++        meal_receipt.replay_eligibility_sample_count,
++        old_receipt.replay_eligibility_sample_count
++    );
++    assert_eq!(meal_receipt.concept, old_receipt.concept);
++    assert_eq!(meal_receipt.work_units, old_receipt.work_units);
++    assert_ne!(meal_receipt.replay_digest, old_receipt.replay_digest);
++}
++
++#[test]
++fn meal_bounded_sleep_never_reinterprets_legacy_fast_or_lifetime_memory() {
++    let (h, evidence, proof) = retained_case(8);
++    let (patch, _) = fixture(1, Case::default()).unwrap();
++    let mut fast = bank(8);
++    fast.insert_from_patch(&patch).unwrap();
++    let mut lifetime = fast.clone();
++    lifetime
++        .promote_fast_memory_to_lifetime(&[patch.header().sequence_id], 8)
++        .unwrap();
++    for mut memory in [fast, lifetime] {
++        let before = memory.clone();
++        let bytes_before = serde_json::to_vec(&memory).unwrap();
++        let mut predictor = h.predictor.clone();
++        let mut topology = h.topology.clone();
++        assert!(matches!(
++            consolidator(8).run_bounded_transaction_with_meal_v1(
++                &HomeostaticSnapshot::baseline(Tick::new(100)),
++                Tick::new(100),
++                &evidence,
++                std::slice::from_ref(&proof),
++                &mut memory,
++                &mut predictor,
++                &mut topology,
++            ),
++            Err(ScaffoldContractError::MemoryModeConflict)
++        ));
++        assert_eq!(memory, before);
++        assert_eq!(serde_json::to_vec(&memory).unwrap(), bytes_before);
++        assert_eq!(predictor, h.predictor);
++        assert_eq!(topology, h.topology);
++    }
++}
++
++#[test]
++fn meal_object_familiarity_counts_immediate_siblings_once_but_keeps_merged_observations() {
++    assert_positive_meal_control();
++    let mut memory = bank(8);
++    let case = Case {
++        representative: CandidateActionFamily::Inspect,
++        representative_target: Some(FOOD),
++        ..Case::default()
++    };
++    for (sequence, expected_meal, expected_legacy) in
++        [(1, 0.5_f32, 2.0_f32 / 3.0), (2, 2.0 / 3.0, 4.0 / 5.0)]
++    {
++        let (patch, frame) = fixture(sequence, case.clone()).unwrap();
++        let transaction = memory
++            .observe_sealed_patch_with_meal_v1(&patch, &frame)
++            .unwrap();
++        let supplemental = transaction.supplemental.as_ref().unwrap();
++        let representative_id = retained_id(transaction.representative).unwrap();
++        let meal_id = retained_id(supplemental.kind).unwrap();
++        assert_ne!(representative_id, meal_id);
++        assert_eq!(memory.candidate_store.records.len(), 2);
++        for record in memory.candidate_store.records.values() {
++            assert_eq!(record.tracked_object_id_raw, 61);
++            assert_eq!(record.source_sequence_id, ExperienceSequenceId(sequence));
++            assert_eq!(u64::from(record.observation_count), sequence);
++        }
++        if sequence == 2 {
++            assert!(matches!(
++                transaction.representative,
++                MemoryUpdateKind::Merged { .. }
++            ));
++            assert!(matches!(supplemental.kind, MemoryUpdateKind::Merged { .. }));
++        }
++        let bytes_before = serde_json::to_vec(&memory).unwrap();
++        let legacy_before = memory.object_familiarity(OWNER, TrackedObjectId(61), identity());
++        let meal = memory.object_familiarity_with_meal_v1(OWNER, TrackedObjectId(61), identity());
++        assert!((meal - expected_meal).abs() < 1.0e-6);
++        assert!((legacy_before - expected_legacy).abs() < 1.0e-6);
++        assert_eq!(
++            memory.object_familiarity(OWNER, TrackedObjectId(61), identity()),
++            legacy_before
++        );
++        assert_eq!(serde_json::to_vec(&memory).unwrap(), bytes_before);
++        // Only the immediate latest-sequence siblings are grouped here. The
++        // retained maximum preserves repeated observations within each record;
++        // this does not assert independent historical lineage after merges.
++    }
++}
++
++#[test]
++fn meal_bounded_sleep_checks_actual_candidate_capacity_before_resolution() {
++    let (h, _evidence, proof) = retained_case(8);
++    let mut bank = h.memory.bank().clone();
++    assert!(bank
++        .memory_ids_for_sleep_with_meal_v1(std::slice::from_ref(&proof), 8)
++        .is_ok());
++    bank.config.capacity = 1;
++    let before = bank.clone();
++    assert!(bank.memory_ids_for_sleep_with_meal_v1(&[proof], 1).is_err());
++    assert_eq!(bank, before);
++}
+diff --git a/crates/alife_core/src/memory/sidecar.rs b/crates/alife_core/src/memory/sidecar.rs
+index d051c4ec5..ccd91b571 100644
+--- a/crates/alife_core/src/memory/sidecar.rs
++++ b/crates/alife_core/src/memory/sidecar.rs
+@@ -378,6 +378,46 @@ impl MemorySidecarState {
+         )
+     }
+ 
++    /// Meal-aware sleep is an explicit fresh-host path. It preserves original
++    /// replay events while auditing up to two retained associations per source.
++    #[allow(clippy::too_many_arguments)]
++    pub fn run_bounded_sleep_transaction_with_meal_v1(
++        &mut self,
++        consolidator: &SleepConsolidator,
++        homeostasis: &HomeostaticSnapshot,
++        tick: Tick,
++        evidence: &SleepReplayEvidence,
++        proofs: &[MealMemorySleepProofV1],
++        predictor: &mut GroundedSuccessorPredictor,
++        topology: &mut TopologySidecar,
++    ) -> Result<Option<crate::sleep::MealSleepWorkReceiptV1>, ScaffoldContractError> {
++        evidence.validate_contract()?;
++        if self.profile.profile_id.raw() != 5
++            || topology.organism_id() != self.organism_id
++            || topology.profile() != self.profile
++            || evidence
++                .prediction_targets
++                .iter()
++                .any(|target| target.organism_id != self.organism_id)
++            || proofs
++                .iter()
++                .any(|proof| proof.representative_source().query().profile() != self.profile)
++            || self.bank.len != 0
++            || !self.bank.lifetime_records.is_empty()
++        {
++            return Err(ScaffoldContractError::InvalidDecisionEvidence);
++        }
++        consolidator.run_bounded_transaction_with_meal_v1(
++            homeostasis,
++            tick,
++            evidence,
++            proofs,
++            &mut self.bank,
++            predictor,
++            topology,
++        )
++    }
++
+     pub fn compaction_checkpoint(&self) -> &MemoryCompactionCheckpoint {
+         if !self.runtime_checks_deferred {
+             return &self.compaction;
+diff --git a/crates/alife_core/src/memory/supplemental_meal_tests.rs b/crates/alife_core/src/memory/supplemental_meal_tests.rs
+index 786651700..dea099625 100644
+--- a/crates/alife_core/src/memory/supplemental_meal_tests.rs
++++ b/crates/alife_core/src/memory/supplemental_meal_tests.rs
+@@ -1415,3 +1415,6 @@ fn meal_reader_is_opt_in_for_previously_valid_same_sequence_legacy_bank() {
+         String::from_utf8(literal_bank).unwrap()
+     );
+ }
++
++#[path = "meal_sleep_tests.rs"]
++mod meal_sleep_tests;
+diff --git a/crates/alife_core/src/sleep.rs b/crates/alife_core/src/sleep.rs
+index c377a2bc9..319ab77c6 100644
+--- a/crates/alife_core/src/sleep.rs
++++ b/crates/alife_core/src/sleep.rs
+@@ -9,6 +9,8 @@ mod gpu_contracts;
+ pub use gpu_contracts::*;
+ mod replay;
+ pub use replay::*;
++mod meal_memory;
++pub use meal_memory::{MealSleepWorkReceiptV1, MEAL_SLEEP_WORK_RECEIPT_SCHEMA_V1};
+ 
+ use crate::{
+     predictive::GroundedSuccessorPredictor, require_current_version, validate_finite,
+diff --git a/crates/alife_core/src/sleep/meal_memory.rs b/crates/alife_core/src/sleep/meal_memory.rs
+new file mode 100644
+index 000000000..a35b17292
+--- /dev/null
++++ b/crates/alife_core/src/sleep/meal_memory.rs
+@@ -0,0 +1,183 @@
++//! Explicit multi-association sleep work for the fresh meal-memory host.
++//! No old receipt, resolver, or pressure-triggered entry point is reinterpreted.
++
++use super::*;
++use crate::memory::{sleep_meal_memory_replay_digest_v1, MealMemorySleepProofV1};
++
++pub const MEAL_SLEEP_WORK_RECEIPT_SCHEMA_V1: u16 = 1;
++
++/// One original event may name two retained associations. These are memory
++/// identities, not extra physical events, eligibility samples, or targets.
++#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++pub struct MealSleepWorkReceiptV1 {
++    pub schema_version: u16,
++    pub tick: Tick,
++    pub status: SleepWorkStatus,
++    pub fatigue: NormalizedScalar,
++    pub sleep_pressure: NormalizedScalar,
++    pub replay_digest: [u64; 4],
++    pub replay_event_count: u32,
++    pub replay_eligibility_sample_count: u32,
++    pub promoted_memory_ids: Vec<MemoryId>,
++    pub predictor_update_count: u32,
++    pub concept: Option<ConceptConsolidationReport>,
++    pub work_units: u64,
++    pub canonical_digest: [u64; 4],
++}
++
++impl MealSleepWorkReceiptV1 {
++    fn measured_work_units(&self) -> u64 {
++        let concept_work = self.concept.map_or(0, |concept| {
++            u64::from(concept.concepts_considered)
++                + u64::from(concept.simplexes_considered)
++                + u64::from(concept.preserved_gap_count)
++                + u64::from(concept.decayed_gap_count)
++        });
++        u64::from(self.replay_event_count)
++            .saturating_add(u64::from(self.replay_eligibility_sample_count))
++            .saturating_add(u64::try_from(self.promoted_memory_ids.len()).unwrap_or(u64::MAX))
++            .saturating_add(u64::from(self.predictor_update_count))
++            .saturating_add(concept_work)
++    }
++
++    pub fn recompute_canonical_digest(&self) -> Result<[u64; 4], ScaffoldContractError> {
++        let mut digest = CanonicalDigestBuilder::new(b"ALIFE-MEAL-SLEEP-WORK-RECEIPT-V1");
++        digest.write_u16(self.schema_version);
++        digest.write_u64(self.tick.raw());
++        digest.write_u8(self.status as u8);
++        digest.write_f32(self.fatigue.raw())?;
++        digest.write_f32(self.sleep_pressure.raw())?;
++        digest.write_sequence_len(self.replay_digest.len());
++        for word in self.replay_digest {
++            digest.write_u64(word);
++        }
++        digest.write_u32(self.replay_event_count);
++        digest.write_u32(self.replay_eligibility_sample_count);
++        digest.write_sequence_len(self.promoted_memory_ids.len());
++        for memory_id in &self.promoted_memory_ids {
++            digest.write_u64(memory_id.raw());
++        }
++        digest.write_u32(self.predictor_update_count);
++        if let Some(concept) = self.concept {
++            digest.write_u8(1);
++            digest.write_u32(concept.concepts_considered);
++            digest.write_u32(concept.simplexes_considered);
++            digest.write_u32(concept.preserved_gap_count);
++            digest.write_u32(concept.decayed_gap_count);
++            digest.write_u32(concept.curiosity_bias_count);
++        } else {
++            digest.write_u8(0);
++        }
++        digest.write_u64(self.work_units);
++        Ok(digest.finish256())
++    }
++}
++
++impl Validate for MealSleepWorkReceiptV1 {
++    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
++        NormalizedScalar::new(self.fatigue.raw())?;
++        NormalizedScalar::new(self.sleep_pressure.raw())?;
++        let mut unique_ids = BTreeSet::new();
++        for memory_id in &self.promoted_memory_ids {
++            memory_id.validate()?;
++            if !unique_ids.insert(memory_id.raw()) {
++                return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
++            }
++        }
++        if self.schema_version != MEAL_SLEEP_WORK_RECEIPT_SCHEMA_V1
++            || self.status != SleepWorkStatus::Consolidated
++            || self.replay_digest == [0; 4]
++            || self.replay_event_count == 0
++            || self.replay_event_count > MAX_SLEEP_TRANSACTION_EVENTS
++            || self.replay_eligibility_sample_count == 0
++            || self.replay_eligibility_sample_count > MAX_SLEEP_TRANSACTION_SAMPLES
++            || self.promoted_memory_ids.is_empty()
++            || self.promoted_memory_ids.len() as u64 > 2 * u64::from(self.replay_event_count)
++            || self.predictor_update_count != self.replay_event_count
++            || self.concept.is_none()
++            || self.work_units != self.measured_work_units()
++            || self.canonical_digest != self.recompute_canonical_digest()?
++        {
++            return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
++        }
++        Ok(())
++    }
++}
++
++impl SleepConsolidator {
++    /// Called only after the opt-in host admits a real sleep phase. A retained
++    /// association admits its original event exactly once; unavailable events
++    /// are authenticated and skipped. Nothing mutates until all work succeeds.
++    #[allow(clippy::too_many_arguments)]
++    pub(crate) fn run_bounded_transaction_with_meal_v1(
++        &self,
++        homeostasis: &HomeostaticSnapshot,
++        tick: Tick,
++        evidence: &SleepReplayEvidence,
++        proofs: &[MealMemorySleepProofV1],
++        memory: &mut MemoryBank,
++        predictor: &mut GroundedSuccessorPredictor,
++        topology: &mut TopologySidecar,
++    ) -> Result<Option<MealSleepWorkReceiptV1>, ScaffoldContractError> {
++        // Authenticates one proof per event/target, including unavailable ones;
++        // the bounded evidence contract rejects duplicate source sequences.
++        let replay_digest = sleep_meal_memory_replay_digest_v1(evidence, proofs)?;
++        homeostasis.validate_contract()?;
++        let sources = memory
++            .memory_ids_for_sleep_with_meal_v1(proofs, self.config.memory_max_records_after)?;
++        if sources.eligible_event_indices.is_empty() {
++            return Ok(None);
++        }
++
++        let mut next_predictor = predictor.clone();
++        let mut next_topology = topology.clone();
++        let mut predictor_update_count = 0_u32;
++        for &event_index in &sources.eligible_event_indices {
++            next_predictor.observe(&evidence.prediction_targets[event_index])?;
++            predictor_update_count = predictor_update_count.saturating_add(1);
++        }
++        let concept = self.consolidate_topology_sidecar(&mut next_topology, 1)?;
++        let replay_event_count = u32::try_from(sources.eligible_event_indices.len())
++            .map_err(|_| ScaffoldContractError::ScalarOutOfRange)?;
++        let replay_eligibility_sample_count = u32::try_from(
++            evidence
++                .batch
++                .eligibility_samples
++                .iter()
++                .filter(|sample| {
++                    sources
++                        .eligible_event_indices
++                        .contains(&usize::from(sample.event_index))
++                })
++                .count(),
++        )
++        .map_err(|_| ScaffoldContractError::ScalarOutOfRange)?;
++        let mut receipt = MealSleepWorkReceiptV1 {
++            schema_version: MEAL_SLEEP_WORK_RECEIPT_SCHEMA_V1,
++            tick,
++            status: SleepWorkStatus::Consolidated,
++            fatigue: NormalizedScalar::new(homeostasis.drives.fatigue)?,
++            sleep_pressure: NormalizedScalar::new(homeostasis.hormones.sleep_pressure)?,
++            replay_digest,
++            replay_event_count,
++            replay_eligibility_sample_count,
++            promoted_memory_ids: sources.promoted_memory_ids,
++            predictor_update_count,
++            concept: Some(concept),
++            work_units: 0,
++            canonical_digest: [0; 4],
++        };
++        // Preserve the established measured-work formula. Association IDs cost
++        // their own units; cloning/hashing adds no invented biological debit.
++        receipt.work_units = receipt.measured_work_units();
++        receipt.canonical_digest = receipt.recompute_canonical_digest()?;
++        receipt.validate_contract()?;
++
++        // Candidate banks are already bounded by their waking writer. Sleep
++        // only names retained IDs, so bank and sidecar metadata stay untouched.
++        *predictor = next_predictor;
++        *topology = next_topology;
++        Ok(Some(receipt))
++    }
++}
+diff --git a/crates/alife_runtime/src/canonical_preparation.rs b/crates/alife_runtime/src/canonical_preparation.rs
+index 55f6351d3..919aefdec 100644
+--- a/crates/alife_runtime/src/canonical_preparation.rs
++++ b/crates/alife_runtime/src/canonical_preparation.rs
+@@ -878,3 +878,7 @@ pub fn foundation_construction_development(
+     construction.validate_contract()?;
+     Ok(construction)
+ }
++
++#[path = "canonical_preparation_meal.rs"]
++mod meal_v1;
++pub use meal_v1::prepare_canonical_frame_with_meal_v1;
+diff --git a/crates/alife_runtime/src/canonical_preparation_meal.rs b/crates/alife_runtime/src/canonical_preparation_meal.rs
+new file mode 100644
+index 000000000..a34636fcd
+--- /dev/null
++++ b/crates/alife_runtime/src/canonical_preparation_meal.rs
+@@ -0,0 +1,161 @@
++//! Explicit meal-memory preparation. Legacy preparation remains literal.
++//! Both recall passes and novelty familiarity use the paired opt-in semantics.
++use super::*;
++
++pub fn prepare_canonical_frame_with_meal_v1(
++    input: &CanonicalPreparationInput,
++    memory: &MemorySidecarState,
++    topology: &TopologySidecar,
++    predictor: &GroundedSuccessorPredictor,
++    measure: bool,
++) -> CanonicalPreparationOutcome {
++    let draft = &input.draft;
++    let receptor_effects = input.receptor_effects;
++    let tick_before = draft.tick();
++    let mut preparation_stage = "baseline recall";
++    let mut hysteresis = None;
++    let mut timing = CanonicalPreparationTiming::default();
++    let result = (|| {
++        input.neural_receptors.validate_contract()?;
++        receptor_effects.validate_contract()?;
++        if input.neural_receptors.source_tick != draft.tick()
++            || receptor_effects.source_tick != draft.tick()
++            || input.homeostasis.tick != draft.tick()
++            || input.neural_receptors.source_chemistry_version
++                != receptor_effects.source_chemistry_version
++        {
++            return Err(ScaffoldContractError::InvalidDecisionEvidence);
++        }
++        let episodic_retrieval_started = measure.then(std::time::Instant::now);
++        let sequence_id = input.sequence_id;
++        sequence_id.validate()?;
++        preparation_stage = "baseline recall";
++        let leaf_started = measure.then(std::time::Instant::now);
++        let prepared_recall = memory.recall_frame_with_meal_v1(draft)?;
++        let baseline_recall_ns = leaf_started.map_or(0, elapsed_ns);
++        let leaf_started = measure.then(std::time::Instant::now);
++        let baseline_context = cognitive_context_for_recall(
++            input.draft.organism_id(),
++            sequence_id,
++            &prepared_recall,
++            topology,
++        )?;
++        let baseline_context_ns = leaf_started.map_or(0, elapsed_ns);
++        preparation_stage = "baseline attention evidence";
++        let leaf_started = measure.then(std::time::Instant::now);
++        let baseline_prepared = prepared_recall.with_cognitive_context(baseline_context.clone())?;
++        let memory_evidence = baseline_prepared.attention_evidence_for_draft(draft)?;
++        if measure {
++            timing.baseline_recall_wall_ns = baseline_recall_ns;
++            timing.baseline_context_wall_ns = baseline_context_ns;
++            timing.baseline_attention_evidence_wall_ns = leaf_started.map_or(0, elapsed_ns);
++        }
++        timing.episodic_retrieval_wall_ns = timing
++            .episodic_retrieval_wall_ns
++            .saturating_add(episodic_retrieval_started.map_or(0, elapsed_ns));
++        let attention_context_started = measure.then(std::time::Instant::now);
++        let mut peripheral_summaries =
++            grounded_peripheral_summaries(draft.grounded_object_slots())?;
++        let topology_evidence = topology_evidence_for_draft(draft, topology)?;
++        let body_need = input
++            .homeostasis
++            .drives
++            .to_array()
++            .iter()
++            .copied()
++            .fold(0.0, f32::max);
++        apply_predecision_attention_evidence(
++            &mut peripheral_summaries,
++            body_need,
++            &memory_evidence,
++            &topology_evidence,
++            receptor_effects,
++        )?;
++        preparation_stage = "attention selection";
++        for summary in &mut peripheral_summaries {
++            if let alife_core::StableFocusIdentity::TrackedObject(id) = summary.identity {
++                summary.salience.novelty = NormalizedScalar::new(
++                    1.0 - memory.bank().object_familiarity_with_meal_v1(
++                        input.draft.organism_id(),
++                        id,
++                        memory.profile(),
++                    ),
++                )?;
++            }
++        }
++        let attention = select_focal_targets(
++            input.draft.organism_id(),
++            sequence_id,
++            tick_before,
++            &peripheral_summaries,
++            input.hysteresis,
++            input.policy,
++        )?;
++        hysteresis = Some(attention.hysteresis);
++        preparation_stage = "focal routing";
++        let routed_draft =
++            route_observed_focal_candidates(draft, &attention, input.candidate_binding.as_ref())?;
++        let novelty = selected_focal_novelty(&attention);
++        let routed_draft = routed_draft.with_remembered_novelty(novelty)?;
++        timing.attention_context_wall_ns = timing
++            .attention_context_wall_ns
++            .saturating_add(attention_context_started.map_or(0, elapsed_ns));
++        let topology_concept_started = measure.then(std::time::Instant::now);
++        preparation_stage = "routed recall";
++        let leaf_started = measure.then(std::time::Instant::now);
++        let routed_recall = memory.recall_frame_with_meal_v1(&routed_draft)?;
++        let routed_recall_ns = leaf_started.map_or(0, elapsed_ns);
++        let leaf_started = measure.then(std::time::Instant::now);
++        let mut cognitive_context = cognitive_memory_context_for_recall(
++            input.draft.organism_id(),
++            sequence_id,
++            &routed_recall,
++        )?;
++        // Topology is immutable during preparation. Focal routing changes
++        // candidate recall, while the sorted concepts and gaps remain identical.
++        cognitive_context.concept = baseline_context.concept;
++        cognitive_context.gap = baseline_context.gap;
++        let cognitive_context = cognitive_context_with_attention(cognitive_context, attention)?;
++        let routed_context_ns = leaf_started.map_or(0, elapsed_ns);
++        preparation_stage = "cognitive projection";
++        let leaf_started = measure.then(std::time::Instant::now);
++        let cognitive_projection = cognitive_projection_for_draft(
++            &routed_draft,
++            &routed_recall,
++            sequence_id,
++            predictor,
++            &topology_evidence,
++        )?;
++        let cognitive_context =
++            cognitive_context_with_projection(cognitive_context, cognitive_projection)?;
++        let cognitive_projection_ns = leaf_started.map_or(0, elapsed_ns);
++        preparation_stage = "routed finalization";
++        let leaf_started = measure.then(std::time::Instant::now);
++        let prepared_recall = routed_recall.with_cognitive_context(cognitive_context)?;
++        let (frame, memory_recall) = prepared_recall.finalize(routed_draft)?;
++        let routed_finalize_ns = leaf_started.map_or(0, elapsed_ns);
++        let leaf_started = measure.then(std::time::Instant::now);
++        memory_recall.validate_for_frame(&frame)?;
++        if measure {
++            timing.routed_recall_wall_ns = routed_recall_ns;
++            timing.routed_context_wall_ns = routed_context_ns;
++            timing.cognitive_projection_wall_ns = cognitive_projection_ns;
++            timing.routed_finalize_wall_ns = routed_finalize_ns;
++            timing.routed_validate_wall_ns = leaf_started.map_or(0, elapsed_ns);
++        }
++        timing.topology_concept_wall_ns = timing
++            .topology_concept_wall_ns
++            .saturating_add(topology_concept_started.map_or(0, elapsed_ns));
++
++        Ok(CanonicalPreparedFrame {
++            frame,
++            memory_recall,
++        })
++    })();
++    CanonicalPreparationOutcome {
++        result,
++        stage: preparation_stage,
++        hysteresis,
++        timing,
++    }
++}
+diff --git a/crates/alife_training/src/cpu/grouped_host_envelope.rs b/crates/alife_training/src/cpu/grouped_host_envelope.rs
+index f76daeaa3..ee677ac01 100644
+--- a/crates/alife_training/src/cpu/grouped_host_envelope.rs
++++ b/crates/alife_training/src/cpu/grouped_host_envelope.rs
+@@ -255,8 +255,8 @@ impl GroupedResidentV1 {
+ }
+ 
+ pub struct CpuGroupedM2HostV1 {
+-    host: CpuCanonicalHost,
+-    founder: CpuFoundationTrainer,
++    pub(super) host: CpuCanonicalHost,
++    pub(super) founder: CpuFoundationTrainer,
+     source_inputs: PhenotypeCompilerInputs,
+     mode: MediationModeV1,
+ }
+diff --git a/crates/alife_training/src/cpu/grouped_meal_host_envelope.rs b/crates/alife_training/src/cpu/grouped_meal_host_envelope.rs
+new file mode 100644
+index 000000000..e1723dc74
+--- /dev/null
++++ b/crates/alife_training/src/cpu/grouped_meal_host_envelope.rs
+@@ -0,0 +1,221 @@
++//! Fresh, explicitly opt-in grouped meal-memory envelope. Old envelopes remain exact.
++//! Synapses stay closed. Waking association writes are unpriced like the baseline;
++//! actual later retrieval and unique sleep-association work use existing counters.
++use super::*;
++use serde::{Deserialize, Serialize};
++
++const MAGIC: &[u8] = b"ALIFE-GROUPED-MEAL-M2-HOST\0V1\0SYNAPTIC-CLOSED\0PROFILE5\0";
++const LINEAGE: &str = "fresh-grouped-meal-m2-host-v1/closed-source/no-historical-import";
++const POLICY: &str = "m2-exact-consumed-joint-association-v1;meal-aware-recall-and-familiarity-v1;one-source-event;two-associations-max;typed-meal-sleep-v1;waking-association-writes-unpriced-as-baseline;actual-retrieval-and-sleep-work;no-clone-hash-price;one-cognitive-debit;synaptic-learning-closed";
++
++#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++pub(super) struct MealResidentV1 {
++    pub(super) proofs: Vec<MealMemorySleepProofV1>,
++}
++impl MealResidentV1 {
++    pub(super) fn validate(&self, resident: &Resident) -> Result<(), CpuHostError> {
++        let base = resident
++            .grouped
++            .as_ref()
++            .ok_or(CpuHostError::State("missing meal grouped owner"))?;
++        if self.proofs.len() != resident.replay.len()
++            || self.proofs.len() != base.memory_proofs.len()
++        {
++            return Err(CpuHostError::State("meal replay proof count mismatch"));
++        }
++        let mut sequences = std::collections::BTreeSet::new();
++        for ((proof, original), event) in self
++            .proofs
++            .iter()
++            .zip(&base.memory_proofs)
++            .zip(&resident.replay)
++        {
++            proof.validate_against(&event.event, &event.target)?;
++            if proof.representative_source() != original
++                || !sequences.insert(event.event.sequence_id.raw())
++            {
++                return Err(CpuHostError::State(
++                    "meal representative or source sequence mismatch",
++                ));
++            }
++            // Audit all retained/unavailable associations, not only a representative.
++            proof.resolve_associations(resident.memory.bank())?;
++        }
++        Ok(())
++    }
++}
++pub(super) fn validate_meal_states(
++    host: &CpuCanonicalHost,
++    states: &BTreeMap<u64, MealResidentV1>,
++) -> Result<(), CpuHostError> {
++    if states.len() != host.residents.len() {
++        return Err(CpuHostError::State("meal owner count mismatch"));
++    }
++    for (&id, resident) in &host.residents {
++        states
++            .get(&id)
++            .ok_or(CpuHostError::State("missing meal owner"))?
++            .validate(resident)?;
++    }
++    Ok(())
++}
++
++/// The inner host is private and cannot be exported as an old checkpoint by this
++/// API. Its existing exact envelope is carried as UTF-8, preserving literal IEEE
++/// sampler bits and all acquired state without a positional-format migration.
++pub struct CpuGroupedMealM2HostV1 {
++    pub(super) inner: CpuGroupedM2HostV1,
++    pub(super) meals: BTreeMap<u64, MealResidentV1>,
++}
++#[derive(Debug, Clone)]
++pub struct CpuGroupedMealM2HostCheckpointV1 {
++    payload: MealPayloadV1,
++}
++#[derive(Debug, Clone, Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++struct MealPayloadV1 {
++    schema_version: u16,
++    source_lineage: String,
++    policy: String,
++    closed_canonical_envelope_utf8: String,
++    meal_sources: BTreeMap<u64, MealResidentV1>,
++}
++impl CpuGroupedMealM2HostCheckpointV1 {
++    pub fn encode(&self) -> Result<Vec<u8>, CpuHostError> {
++        let mut bytes = MAGIC.to_vec();
++        bytes.extend(serde_json::to_vec(&self.payload)?);
++        Ok(bytes)
++    }
++    pub fn decode(bytes: &[u8]) -> Result<Self, CpuHostError> {
++        // Identity is checked before decoding any old nested source/world types.
++        let body = bytes
++            .strip_prefix(MAGIC)
++            .ok_or(CpuHostError::State("not a fresh grouped meal envelope"))?;
++        let metadata: serde_json::Value = serde_json::from_slice(body)?;
++        if metadata["schema_version"] != 1
++            || metadata["source_lineage"] != LINEAGE
++            || metadata["policy"] != POLICY
++        {
++            return Err(CpuHostError::State(
++                "meal envelope policy or lineage mismatch",
++            ));
++        }
++        let payload: MealPayloadV1 = serde_json::from_slice(body)?;
++        if serde_json::from_slice::<serde_json::Value>(&serde_json::to_vec(&payload)?)? != metadata
++        {
++            return Err(CpuHostError::State(
++                "meal envelope omitted or unknown nested field",
++            ));
++        }
++        let closed = CpuGroupedM2HostCheckpointV1::decode(
++            payload.closed_canonical_envelope_utf8.as_bytes(),
++        )?;
++        if closed.encode()? != payload.closed_canonical_envelope_utf8.as_bytes() {
++            return Err(CpuHostError::State(
++                "meal inner envelope changed acquired bytes",
++            ));
++        }
++        Ok(Self { payload })
++    }
++}
++pub struct CpuGroupedMealM2HostStepV1 {
++    pub base: CpuGroupedM2HostStepV1,
++    /// One typed transaction per real decision, including withheld/ignored meal writes.
++    pub meal_transactions: Vec<(OrganismId, MealMemoryTransactionReceiptV1)>,
++}
++impl CpuGroupedMealM2HostV1 {
++    pub fn new_prepared<T, E: std::fmt::Display>(
++        game: CanonicalNewGame,
++        founder: CpuFoundationTrainer,
++        source_inputs: PhenotypeCompilerInputs,
++        sampling_seed: u32,
++        mode: MediationModeV1,
++        prepare: impl FnOnce(&mut HeadlessWorld) -> Result<T, E>,
++    ) -> Result<(Self, T), CpuHostError> {
++        // This constructor alone admits fresh bodies. There is intentionally no
++        // conversion from an acquired old/grouped/decoder host or checkpoint.
++        let (inner, result) = CpuGroupedM2HostV1::new_prepared(
++            game,
++            founder,
++            source_inputs,
++            sampling_seed,
++            mode,
++            prepare,
++        )?;
++        let meals = inner
++            .host
++            .residents
++            .keys()
++            .map(|&id| (id, MealResidentV1::default()))
++            .collect();
++        validate_meal_states(&inner.host, &meals)?;
++        Ok((Self { inner, meals }, result))
++    }
++    pub fn world(&self) -> &HeadlessWorld {
++        self.inner.world()
++    }
++    pub fn sleep_state(&self, organism: OrganismId) -> Option<alife_core::sleep::SleepState> {
++        self.inner.sleep_state(organism)
++    }
++    pub fn checkpoint(&self) -> Result<CpuGroupedMealM2HostCheckpointV1, CpuHostError> {
++        validate_meal_states(&self.inner.host, &self.meals)?;
++        Ok(CpuGroupedMealM2HostCheckpointV1 {
++            payload: MealPayloadV1 {
++                schema_version: 1,
++                source_lineage: LINEAGE.into(),
++                policy: POLICY.into(),
++                closed_canonical_envelope_utf8: String::from_utf8(
++                    self.inner.checkpoint()?.encode()?,
++                )
++                .map_err(|_| CpuHostError::State("non-UTF8 closed envelope"))?,
++                meal_sources: self.meals.clone(),
++            },
++        })
++    }
++    pub fn restore(
++        checkpoint: CpuGroupedMealM2HostCheckpointV1,
++        expected_source: &PhenotypeCompilerInputs,
++        expected_mode: MediationModeV1,
++    ) -> Result<Self, CpuHostError> {
++        let wire = checkpoint.encode()?;
++        let checkpoint = CpuGroupedMealM2HostCheckpointV1::decode(&wire)?;
++        let payload = checkpoint.payload;
++        let inner = CpuGroupedM2HostV1::restore(
++            CpuGroupedM2HostCheckpointV1::decode(
++                payload.closed_canonical_envelope_utf8.as_bytes(),
++            )?,
++            expected_source,
++            expected_mode,
++        )?;
++        let result = Self {
++            inner,
++            meals: payload.meal_sources,
++        };
++        validate_meal_states(&result.inner.host, &result.meals)?;
++        if result.checkpoint()?.encode()? != wire {
++            return Err(CpuHostError::State(
++                "meal restore would rewrite acquired state",
++            ));
++        }
++        Ok(result)
++    }
++    pub fn step(&mut self, temperature: f32) -> Result<CpuGroupedMealM2HostStepV1, CpuHostError> {
++        self.inner
++            .host
++            .grouped_meal_step(&self.inner.founder, temperature, &mut self.meals)
++    }
++    pub fn actor_optimization(&mut self) -> Result<(), CpuHostError> {
++        self.inner.actor_optimization()
++    }
++    pub fn waking_synaptic_plasticity(&mut self) -> Result<(), CpuHostError> {
++        self.inner.waking_synaptic_plasticity()
++    }
++    pub fn synaptic_sleep_consolidation(&mut self) -> Result<(), CpuHostError> {
++        self.inner.synaptic_sleep_consolidation()
++    }
++}
++
++#[cfg(test)]
++#[path = "grouped_meal_host_tests.rs"]
++mod tests;
+diff --git a/crates/alife_training/src/cpu/grouped_meal_host_loop.rs b/crates/alife_training/src/cpu/grouped_meal_host_loop.rs
+new file mode 100644
+index 000000000..99d404dcd
+--- /dev/null
++++ b/crates/alife_training/src/cpu/grouped_meal_host_loop.rs
+@@ -0,0 +1,911 @@
++//! Separate opt-in meal-memory loop. Legacy closed grouped bodies remain literal.
++//! No new synaptic update, biological debit, or waking write price is introduced.
++use super::grouped_meal_host_envelope::{validate_meal_states, MealResidentV1};
++use super::*;
++impl CpuCanonicalHost {
++    pub(super) fn grouped_meal_step(
++        &mut self,
++        founder: &CpuFoundationTrainer,
++        temperature: f32,
++        meals: &mut BTreeMap<u64, MealResidentV1>,
++    ) -> Result<CpuGroupedMealM2HostStepV1, CpuHostError> {
++        self.validate_founder(founder)?;
++        validate_meal_states(self, meals)?;
++        for (&id, r) in &self.residents {
++            super::grouped_host_envelope::validate_grouped_sleep_boundary(r)?;
++            if r.grouped.is_none() || r.motor.is_some() || r.sleep_choice.is_some() {
++                return Err(CpuHostError::State("not a grouped M2 resident"));
++            }
++            let record = self
++                .world
++                .organism_registry()
++                .get(OrganismId(id))
++                .ok_or(CpuHostError::State("missing grouped canonical organism"))?;
++            validate_resident_authority(record, r, self.sampling_seed, self.sampling_counter)?;
++        }
++        let mut next = self.clone();
++        let mut next_meals = meals.clone();
++        for r in next.residents.values_mut() {
++            r.sealed_authority = None;
++        }
++        let result = next.grouped_meal_step_inner(
++            founder,
++            temperature,
++            &mut |draft, _| Ok(draft),
++            &mut next_meals,
++            #[cfg(test)]
++            None,
++        )?;
++        validate_meal_states(&next, &next_meals)?;
++        *self = next;
++        *meals = next_meals;
++        Ok(result)
++    }
++    pub(super) fn grouped_meal_step_inner(
++        &mut self,
++        founder: &CpuFoundationTrainer,
++        temperature: f32,
++        prepare: &mut impl FnMut(
++            PerceptionFrameDraft,
++            ExperienceSequenceId,
++        ) -> Result<PerceptionFrameDraft, ScaffoldContractError>,
++        meals: &mut BTreeMap<u64, MealResidentV1>,
++        #[cfg(test)] mut scripted: Option<
++            &mut dyn FnMut(
++                &PerceptionFrame,
++                &RecoveryGroupScoresV2,
++                RecoveryGroupJointActionV2,
++            ) -> Result<RecoveryGroupJointActionV2, CpuHostError>,
++        >,
++    ) -> Result<CpuGroupedMealM2HostStepV1, CpuHostError> {
++        let p = founder.phenotype();
++        let tick = self.world.tick();
++        let mut decisions = Vec::new();
++        let mut meal_transactions = Vec::new();
++        let mut sleeping = 0;
++        let mut consolidations = 0;
++        let mut body_events = BTreeMap::new();
++        let mut perception_world = self.world.clone();
++        let ids = self
++            .world
++            .organism_registry()
++            .iter()
++            .filter(|r| r.lifecycle().is_alive())
++            .map(|r| r.organism_id())
++            .collect::<Vec<_>>();
++        for id in ids {
++            let mut record = self
++                .world
++                .organism_registry()
++                .get(id)
++                .cloned()
++                .ok_or(CpuHostError::State("missing organism"))?;
++            let r = self
++                .residents
++                .get_mut(&id.raw())
++                .ok_or(CpuHostError::State("new organism requires brain admission"))?;
++            let phase_before = r.sleep.state().phase;
++            if r.activity
++                .last_world_tick
++                .is_some_and(|last| last.checked_add(1) != Some(tick.raw()))
++            {
++                return Err(CpuHostError::State("CPU activity world clock mismatch"));
++            }
++            r.activity.last_world_tick = Some(tick.raw());
++            r.activity.remaining_atp_q16 =
++                (f64::from(record.biochemistry().homeostasis.drives.brain_atp)
++                    * f64::from(BRAIN_ATP_Q16_MAX))
++                .floor() as u32;
++            let neural_boundary = r.neural.checkpoint()?;
++            let activity_anchor = CpuActivityAnchor {
++                organism_id: id,
++                tick,
++                sequence_cursor: r.next_sequence,
++                previous_dispatch_generation: neural_boundary.dispatch_generation,
++                source_frame_digest: r.activity.source_frame_digest,
++                frame_digest: p.phenotype_hash().0,
++            };
++            let capacity = host_capacity(p)?;
++            let lookahead = cpu_activity_budget(
++                p,
++                activity_anchor,
++                record.biochemistry().homeostasis.drives.brain_atp,
++                u32::from(capacity.execution().max_candidates()),
++                u32::from(capacity.execution().max_memory_context_records()),
++            )?;
++            // Source and appendage share one admission. A resource-limited
++            // living body takes the existing recovery fallback, not a repeated
++            // rollback stall and not a forged voluntary BodySleep receipt.
++            let (_, _, grouped_affordable) = GroupedMotorStateV1::work(
++                p,
++                &lookahead.work,
++                grouped_meal_dynamic_work(p, r, &lookahead)?,
++                lookahead.available_atp_q16,
++            )?;
++            if phase_before == SleepPhase::Awake && !grouped_affordable {
++                r.sleep
++                    .force_sleep(tick, alife_core::SleepTrigger::RecoveryProtocol)?;
++            }
++
++            let config = sleep_consolidation_config_for(p)?;
++            if phase_before == SleepPhase::Awake {
++                {
++                    r.sleep.evaluate_emergency_only(
++                        &record.biochemistry().homeostasis,
++                        HomeostaticParameters::reference(),
++                        tick,
++                    )?;
++                }
++            } else if phase_before != SleepPhase::Waking
++                || (record.biochemistry().homeostasis.drives.fatigue
++                    < config.fatigue_threshold.raw()
++                    && record.biochemistry().homeostasis.hormones.sleep_pressure
++                        < config.sleep_pressure_threshold.raw())
++            {
++                r.sleep.advance(tick)?;
++            }
++            let mut sleep_work_units = 0;
++            if r.sleep.state().phase == SleepPhase::Consolidating
++                && matches!(r.sleep.state().consolidation, ConsolidationState::None)
++            {
++                let evidence = replay_evidence(p, &r.replay)?;
++                if !evidence.batch.events.is_empty() {
++                    // Same scheduled-work pressure projection used by the native
++                    // scheduler; this is work admission, never reward/chemistry.
++                    let mut due_homeostasis = record.biochemistry().homeostasis;
++                    due_homeostasis.drives.fatigue = due_homeostasis
++                        .drives
++                        .fatigue
++                        .max(config.fatigue_threshold.raw());
++                    due_homeostasis.hormones.sleep_pressure = due_homeostasis
++                        .hormones
++                        .sleep_pressure
++                        .max(config.sleep_pressure_threshold.raw());
++                    let work = {
++                        let state = r
++                            .grouped
++                            .as_ref()
++                            .ok_or(CpuHostError::State("missing grouped replay owner"))?;
++                        state.validate_replay(&r.replay)?;
++                        let meal = meals
++                            .get(&id.raw())
++                            .ok_or(CpuHostError::State("missing meal sleep owner"))?;
++                        meal.validate(r)?;
++                        r.memory.run_bounded_sleep_transaction_with_meal_v1(
++                            &SleepConsolidator::new(config)?,
++                            &due_homeostasis,
++                            tick,
++                            &evidence,
++                            &meal.proofs,
++                            &mut r.predictor,
++                            &mut r.topology,
++                        )?
++                    };
++                    if let Some(work) = work {
++                        sleep_work_units = work.work_units;
++                        let receipt = CognitiveWorkCounters::new(
++                            0,
++                            0,
++                            0,
++                            0,
++                            0,
++                            0,
++                            0,
++                            u64::from(work.predictor_update_count),
++                            u64::from(work.replay_event_count)
++                                + u64::from(work.replay_eligibility_sample_count),
++                            0,
++                            0,
++                            work.work_units,
++                        )?
++                        .into_receipt()?;
++                        record.account_cognitive_work(
++                            receipt,
++                            CognitiveWorkCostPolicy::enabled(1.0e-6)?,
++                        )?;
++                    }
++                }
++                meals
++                    .get_mut(&id.raw())
++                    .ok_or(CpuHostError::State("missing meal owner"))?
++                    .proofs
++                    .clear();
++                r.replay.clear();
++                if let Some(state) = &mut r.grouped {
++                    state.memory_proofs.clear();
++                }
++                // Closed synapses have no new weight generation. The committed
++                // output here is the actual memory/predictor/topology cycle,
++                // with the frozen source included, under a distinct identity.
++                let digest = super::grouped_host_envelope::grouped_sleep_output_digest(r)?;
++                let mut state = r.sleep.state();
++                state.consolidation = ConsolidationState::Committed {
++                    cycle_id: state.active_cycle_id,
++                    output_generation: state.active_cycle_id,
++                    output_digest: digest,
++                };
++                r.sleep = SleepController::restore(config, state)?;
++                consolidations += 1;
++            }
++            let state = r.sleep.state();
++            record.seal_sleep_phase(
++                state.phase,
++                state.active_cycle_id.max(state.last_consolidated_cycle_id),
++                tick,
++                sleep_work_units,
++            )?;
++            self.world.replace_organism_record_exact(record.clone())?;
++            if phase_before != SleepPhase::Awake {
++                body_events.insert(
++                    id.raw(),
++                    BodyEventDelta {
++                        sleep_recovery: 1.,
++                        ..BodyEventDelta::zero()
++                    },
++                );
++            }
++            if phase_before != SleepPhase::Awake || state.phase != SleepPhase::Awake {
++                sleeping += 1;
++                continue;
++            }
++            let sequence = ExperienceSequenceId(r.next_sequence);
++            let receptors = record
++                .biochemistry()
++                .neural_receptor_frame(record.phenotype())?;
++            let effects = NeuralReceptorEffects::from_frame(
++                &receptors,
++                &NeuralReceptorPhenotype::compile(p)?,
++            )?;
++            let (draft, candidate_binding) = {
++                let admission =
++                    alife_world::SleepChoiceWorldAdmissionV1::for_organism(&perception_world, id)?;
++                perception_world.perception_sleep_choice_draft_with_bindings(
++                    &admission,
++                    tick,
++                    record.biochemistry().homeostasis,
++                )?
++            };
++            let ordinary = draft.clone().with_semantic_context(None)?;
++            let draft = prepare(draft, sequence)?;
++            if draft.clone().with_semantic_context(None)? != ordinary {
++                return Err(CpuHostError::State(
++                    "semantic preparation changed ordinary perception",
++                ));
++            }
++            let preparation = prepare_canonical_frame_with_meal_v1(
++                &CanonicalPreparationInput {
++                    draft,
++                    candidate_binding,
++                    sequence_id: sequence,
++                    homeostasis: record.biochemistry().homeostasis,
++                    hysteresis: r.hysteresis,
++                    policy: attention_selection_policy_for(p),
++                    neural_receptors: receptors.clone(),
++                    receptor_effects: effects,
++                },
++                &r.memory,
++                &r.topology,
++                &r.predictor,
++                false,
++            );
++            let prepared = preparation.result?;
++            if let Some(h) = preparation.hysteresis {
++                r.hysteresis = h;
++            }
++            let frame = prepared.frame;
++            let recall = prepared.memory_recall;
++            let mut activity = cpu_activity_budget(
++                p,
++                CpuActivityAnchor {
++                    frame_digest: frame.frame_digest().0,
++                    ..activity_anchor
++                },
++                record.biochemistry().homeostasis.drives.brain_atp,
++                frame.candidates().len() as u32,
++                recall.context().candidates.len() as u32,
++            )?;
++            let motor_reservation_q24;
++            {
++                let dynamic = grouped_meal_dynamic_work(p, r, &activity)?;
++                let (total, debit, affordable) = GroupedMotorStateV1::work(
++                    p,
++                    &activity.work,
++                    dynamic,
++                    activity.available_atp_q16,
++                )?;
++                motor_reservation_q24 = total;
++                activity.debit_atp_q16 = debit;
++                activity.affordable = affordable;
++                let extra = GroupedMotorStateV1::append_work(p)?;
++                activity.work.neuron_updates += extra.neuron_updates;
++                activity.work.synapse_ops += extra.synapse_products;
++            }
++            if !activity.affordable {
++                return Err(CpuHostError::State(
++                    "CPU neural work exceeds canonical ATP availability",
++                ));
++            }
++            let encode = super::super::input::encode_cpu_sleep_choice_frame;
++            let mut context = encode(
++                p,
++                &frame,
++                &recall,
++                &effects,
++                activity.enabled_routes.clone(),
++                r.v11
++                    .sparse_spans()
++                    .iter()
++                    .flat_map(|s| {
++                        s.edges.iter().map(|e| crate::TrainingFrozenSynapse {
++                            source: e.source,
++                            target: e.target,
++                            route: e.route,
++                            cadence: u32::from(
++                                p.projections()[e.route as usize].update_cadence().raw(),
++                            ),
++                            effective_weight: e.weight,
++                        })
++                    })
++                    .collect(),
++            )?;
++            context.microstep_count = u32::from(activity.microsteps);
++            let channels = p.candidate_decoder().factorized_motor_channels(p)?;
++            let mut capabilities = [false; 6];
++            for channel in &channels {
++                let slot = match channel {
++                    MotorChannel::Locomotion => 0,
++                    MotorChannel::Orientation => 1,
++                    MotorChannel::Manipulation => 2,
++                    MotorChannel::Vocal => 3,
++                    MotorChannel::Posture => 4,
++                    MotorChannel::SpeciesSpecific(_) => 5,
++                };
++                let effector = match channel {
++                    MotorChannel::Locomotion => Some(EffectorCapability::Translation),
++                    MotorChannel::Orientation => Some(EffectorCapability::Rotation),
++                    MotorChannel::Manipulation => Some(EffectorCapability::Manipulation),
++                    MotorChannel::Vocal => Some(EffectorCapability::Vocalization),
++                    MotorChannel::Posture => Some(EffectorCapability::Rest),
++                    MotorChannel::SpeciesSpecific(_) => None,
++                };
++                capabilities[slot] = record.lifecycle().is_alive()
++                    && effector.is_some_and(|e| record.embodiment().effector_gain(e) > 0.);
++            }
++            let n = frame.candidates().len();
++            if n == 0 || n > 32 {
++                return Err(CpuHostError::State("grouped candidate count"));
++            }
++            let attempt_mask = if n == 32 { u32::MAX } else { (1u32 << n) - 1 };
++            let state = r
++                .grouped
++                .as_mut()
++                .ok_or(CpuHostError::State("missing grouped controller"))?;
++            let output = r.neural.advance_grouped(
++                founder,
++                context,
++                &effects,
++                &mut state.motor,
++                &frame,
++                &receptors,
++                capabilities,
++                attempt_mask,
++            )?;
++            let motor = state
++                .motor
++                .last_receipt
++                .as_mut()
++                .ok_or(CpuHostError::State("missing grouped neural receipt"))?;
++            motor.reservation_q24 = motor_reservation_q24;
++            motor.reservation_q16 = activity.debit_atp_q16;
++            motor.available_atp_q16 = activity.available_atp_q16;
++            r.activity.remaining_atp_q16 = activity.available_atp_q16 - activity.debit_atp_q16;
++            r.activity.source_frame_digest = frame.frame_digest().0;
++            let sampling_counter = self.sampling_counter;
++            let scores = r
++                .grouped
++                .as_ref()
++                .unwrap()
++                .motor
++                .last_receipt
++                .as_ref()
++                .unwrap()
++                .native
++                .scores
++                .clone();
++            let action =
++                scores.sample(self.sampling_seed, sampling_counter, f64::from(temperature))?;
++            // Test-only registered-world intervention. Production always uses
++            // the actual draw above. Scripted fixtures never claim sampled choice.
++            #[cfg(test)]
++            let action = if let Some(select) = scripted.as_mut() {
++                select(&frame, &scores, action)?
++            } else {
++                action
++            };
++            let (index, motor_candidates) = scores.physical_selection(&action)?;
++            r.grouped.as_mut().unwrap().last_action = Some(action.clone());
++            self.sampling_counter = self
++                .sampling_counter
++                .checked_add(1)
++                .ok_or(CpuHostError::State("sampling counter overflow"))?;
++            let speech = if motor_candidates[3].is_some() {
++                decode_cpu_speech(
++                    founder,
++                    &r.neural.neural_state().activations,
++                    &output.replay_tick.effective_weight_offsets,
++                )?
++            } else {
++                None
++            };
++            let candidate = &frame.candidates()[index as usize];
++            let confidence =
++                Confidence::new((candidate.sensor_confidence.raw() * 65535.).round() / 65535.)?;
++            let command = candidate.to_command(id, confidence)?;
++            let channels = p.candidate_decoder().factorized_motor_channels(p)?;
++            let slots = motor_candidates.map(|i| i.map_or(0, |i| i + 1));
++            let prompted = frame
++                .sensory()
++                .language_context
++                .heard_tokens
++                .iter()
++                .flatten()
++                .any(|t| t.source_kind == UtteranceSourceKind::Player);
++            let bundle = factorized_motor_bundle_for_candidates(
++                id,
++                sequence,
++                tick,
++                &frame,
++                slots,
++                &channels,
++                &command,
++                index,
++                speech.as_ref(),
++                prompted,
++            )?;
++            let joint = JointActionSelectionV1::new(slots, &bundle)?;
++            let development = record.phenotype().development_state_at(tick)?;
++            let pre = PreActionSnapshot::from_cpu_neural_frame(
++                sequence,
++                p.brain_class_id(),
++                p.phenotype_hash(),
++                record.phenotype().brain_genome.id,
++                record.phenotype().brain_genome.schema_version,
++                development.clone(),
++                frame.clone(),
++            )?;
++            let work_neurons = activity.work.neuron_updates;
++            let work_synapses = activity.work.synapse_ops;
++            let decision = DecisionSnapshot::from_cpu_neural_selection(
++                sequence,
++                p.phenotype_hash(),
++                output.dispatch_generation,
++                output.active_activation_side,
++                &frame,
++                NeuralActionSelection {
++                    candidate_index: index,
++                    // Source physical-row signal also drives RegionalArousal.
++                    // It is not a flat grouped logit or sampling probability.
++                    logit: output.candidate_logits[index as usize],
++                    confidence,
++                    active_tiles: u32::try_from(activity.work.tile_visits)
++                        .map_err(|_| CpuHostError::State("CPU tile work overflow"))?,
++                    active_synapses: u32::try_from(work_synapses)
++                        .map_err(|_| CpuHostError::State("CPU synapse work overflow"))?,
++                },
++                command,
++            )?
++            .with_finalized_memory_recall(&frame, &recall, index)?;
++            r.neural.stage_grouped_closed_selection(
++                p,
++                &action,
++                &scores,
++                CpuDecisionBinding {
++                    sequence_id: sequence,
++                    frame_digest: frame.frame_digest(),
++                    action_id: candidate.action_id,
++                    candidate_feature_digest: candidate.feature_digest()?,
++                    dispatch_generation: output.dispatch_generation,
++                    active_activation_side: output.active_activation_side,
++                    joint_selection: joint,
++                },
++            )?;
++            let mut cognitive = recall
++                .cognitive_context()
++                .cloned()
++                .ok_or(CpuHostError::State("missing canonical cognitive context"))?;
++            let pre_context = cognitive.clone();
++            let source = grounded_semantic_state_from_frame(&frame)?;
++            let motor_condition = JointMotorCondition::from_bundle(&bundle)?;
++            let mut forecast = r.predictor.predict(&source, &motor_condition)?;
++            forecast.source_digest = frame.frame_digest().0;
++            let mut neural_emissions = vec![
++                NeuralEmission::new(
++                    NeuralEmissionClass::RegionalArousal,
++                    // Versioned source-driven biological arousal, deliberately
++                    // distinct from the hierarchical grouped sampling scores.
++                    output.candidate_logits[index as usize].abs().tanh(),
++                    confidence.raw(),
++                )?,
++                NeuralEmission::new(
++                    NeuralEmissionClass::MotorCommitment,
++                    confidence.raw(),
++                    confidence.raw(),
++                )?,
++                NeuralEmission::new(NeuralEmissionClass::ExecutiveSustain, confidence.raw(), 1.)?,
++            ];
++            neural_emissions.extend(recall.recognized_social_emission());
++            let emissions =
++                NeuralEmissionFrame::new(tick, output.dispatch_generation, neural_emissions)?;
++            let object_novelty = bundle
++                .channels
++                .iter()
++                .filter_map(|c| c.target.and_then(|t| t.entity))
++                .filter_map(|entity| {
++                    let key = perception_world
++                        .entity(entity)?
++                        .tracking_provenance
++                        .canonical_key();
++                    let tracked = perception_world
++                        .tracked_objects()
++                        .records_for(id)?
++                        .find(|r| r.tracking_key == key)?;
++                    pre_context
++                        .peripheral
++                        .summaries
++                        .iter()
++                        .find(|s| {
++                            s.identity
++                                == StableFocusIdentity::TrackedObject(tracked.tracked_object_id)
++                        })
++                        .map(|s| (entity, s.salience.novelty.raw()))
++                })
++                .collect::<Vec<_>>();
++            let receipt = {
++                let state = r
++                    .grouped
++                    .as_mut()
++                    .ok_or(CpuHostError::State("missing grouped physical owner"))?;
++                let admission =
++                    alife_world::SleepChoiceWorldAdmissionV1::for_organism(&self.world, id)?;
++                let request = alife_world::RecoveryRequestV1::new(&admission, &frame, &bundle)?;
++                let physical = self
++                    .world
++                    .apply_sleep_choice_motor_bundle_in_staged_tick(
++                        &request,
++                        &emissions,
++                        frame.sensory().channels.novelty_signal.raw(),
++                        &object_novelty,
++                    )
++                    .map_err(|_| {
++                        CpuHostError::State("grouped M2 recovery motor transaction rejected")
++                    })?;
++                state.observe_physical(&frame, &bundle, &physical, &mut r.sleep)?;
++                if physical.successful_stationary_body_sleep {
++                    let phase = r.sleep.state();
++                    let mut actual = self
++                        .world
++                        .organism_registry()
++                        .get(id)
++                        .cloned()
++                        .ok_or(CpuHostError::State("grouped M2 sleep organism missing"))?;
++                    actual.seal_sleep_phase(
++                        phase.phase,
++                        phase.active_cycle_id,
++                        physical.motor.outcome_tick,
++                        0,
++                    )?;
++                    self.world.replace_organism_record_exact(actual)?;
++                }
++                physical.motor
++            };
++            let successor = grounded_successor_state(
++                &self.world,
++                record.world_entity_id(),
++                &receipt.biology_after,
++                frame.sensor_profile(),
++            )?;
++            let target = PredictionTargetReceipt::for_successor(
++                id,
++                sequence,
++                candidate.action_id,
++                tick,
++                frame.frame_digest().0,
++                source,
++                motor_condition,
++                successor,
++            )?;
++            let prediction = r.predictor.observe_frozen(&target, &forecast)?;
++            let error = apply_prediction_evidence(
++                &mut cognitive,
++                &target,
++                &prediction.error,
++                prediction.prediction.category_coverage,
++            )?;
++            let memory = recall.receipt();
++            let mut dendritic_work = r
++                .v11
++                .dendritic_branches()
++                .branches()
++                .iter()
++                .map(|b| 1 + b.inputs.len() as u64)
++                .sum::<u64>()
++                * u64::from(activity.microsteps);
++            dendritic_work += GroupedMotorStateV1::append_work(p)?.other_work
++                + p.sensor_encoder().assignments().len() as u64;
++            let structural_work = r
++                .v11
++                .sparse_spans()
++                .iter()
++                .flat_map(|s| &s.edges)
++                .map(|e| {
++                    if !activity.enabled_routes[e.route as usize] {
++                        return 0;
++                    }
++                    (0..activity.microsteps as usize)
++                        .filter(|&step| {
++                            super::super::replay::route_fires(
++                                p.projections()[e.route as usize].update_cadence().raw(),
++                                step,
++                            )
++                        })
++                        .count() as u64
++                })
++                .sum::<u64>();
++            let work = CognitiveWorkCounters::new(
++                work_neurons,
++                work_synapses,
++                dendritic_work,
++                // Existing semantic attention work; unpriced machine bookkeeping
++                // is deliberately absent from biological work counters.
++                cognitive.attention.budget_receipt.work_units,
++                u64::from(memory.exact_bucket_reads)
++                    + u64::from(memory.neighbor_bucket_reads)
++                    + u64::from(memory.similarity_evaluations),
++                cognitive.concept.active_concepts.len() as u64,
++                cognitive.gap.active_gaps.len() as u64,
++                prediction.error.len() as u64,
++                0,
++                structural_work,
++                0,
++                0,
++            )?
++            .into_receipt()?;
++            let mut after = self
++                .world
++                .organism_registry()
++                .get(id)
++                .cloned()
++                .ok_or(CpuHostError::State("missing post-action organism"))?;
++            let body_debit =
++                after.account_cognitive_work(work, CognitiveWorkCostPolicy::enabled(1.0e-6)?)?;
++            r.grouped
++                .as_mut()
++                .unwrap()
++                .motor
++                .last_receipt
++                .as_mut()
++                .unwrap()
++                .applied_body_energy_debit = body_debit;
++            after.stage_prediction_residual_pulse(
++                sequence,
++                output.dispatch_generation,
++                error,
++                1.,
++            )?;
++            self.world.replace_organism_record_exact(after.clone())?;
++            let physiology =
++                MeasuredPhysiologyTransition::new(receipt.biology_before, *after.biochemistry())?;
++            let mut outcome = PostActionOutcome::new(
++                id,
++                sequence,
++                receipt.outcome_tick,
++                receipt.succeeded,
++                receipt.joint.execution,
++                physiology.homeostatic_delta,
++                SignedValence::ZERO,
++                NormalizedScalar::new(if receipt.succeeded { 0. } else { 1. })?,
++                NormalizedScalar::new(physiology.aversive_harm())?,
++                physiology.energy_delta,
++                NormalizedScalar::new(error)?,
++            )?
++            .with_measured_physiology(physiology)?;
++            outcome.contradiction_observed = !receipt.succeeded;
++            outcome = outcome.with_v12_joint(receipt.joint, work)?;
++            let patch = ExperiencePatch::new_v12_with_decision(
++                pre,
++                decision,
++                bundle,
++                outcome,
++                target.clone(),
++                work,
++                pre_context,
++            )?;
++            let credit_receptors = receptors;
++            r.neural
++                .close_grouped_outcome(founder, &patch, &credit_receptors)?;
++            r.language_grounding.observe_sealed(&patch)?;
++            let memory_write = r.memory.observe_sealed_patch_with_meal_v1(&patch, &frame)?;
++            let topology_receipt = r.topology.observe_sealed_patch(&patch);
++            if topology_receipt.rejected_invalid || topology_receipt.replay_rejected {
++                return Err(CpuHostError::State("sealed topology observation rejected"));
++            }
++            r.topology.advance_lifecycle(receipt.outcome_tick)?;
++            let checkpoint = r.neural.checkpoint()?;
++            let credit = OutcomeCreditPacket::from_sealed_patch(&patch)?
++                .with_biochemical_receptors(&credit_receptors)?;
++            let selected = patch.decision().neural_evidence()?;
++            r.replay.push(CpuReplayEvent {
++                event: SleepReplayEvent {
++                    sequence_id: sequence,
++                    originating_tick: tick,
++                    frame_digest: frame.frame_digest(),
++                    candidate_feature_digest: candidate.feature_digest()?,
++                    action_id: candidate.action_id,
++                    family: selected.action_family,
++                    modulator: credit.modulator(),
++                },
++                eligibility: p
++                    .replay_capture_plan()
++                    .global_synapse_ids()
++                    .iter()
++                    .map(|&id| {
++                        let synapse = &p.synapses()[id as usize];
++                        let decay = p.plasticity_receptors()[synapse.receptor_index() as usize]
++                            .eligibility_decay();
++                        let elapsed = (receipt.outcome_tick.raw() - tick.raw())
++                            .min(u64::from(u32::MAX)) as f32;
++                        (checkpoint.eligibility[id as usize] * decay.powf(elapsed))
++                            .clamp(-1., 1.)
++                            .mul_add(32767., 0.)
++                            .round() as i16
++                    })
++                    .collect(),
++                target,
++            });
++            if let Some(state) = &mut r.grouped {
++                let event = r
++                    .replay
++                    .last()
++                    .ok_or(CpuHostError::State("missing grouped replay event"))?;
++                let proof = MealMemorySleepProofV1::capture(
++                    &patch,
++                    event.event,
++                    &event.target,
++                    memory_write.clone(),
++                )?;
++                state
++                    .memory_proofs
++                    .push(proof.representative_source().clone());
++                meals
++                    .get_mut(&id.raw())
++                    .ok_or(CpuHostError::State("missing meal proof owner"))?
++                    .proofs
++                    .push(proof);
++            }
++            if r.replay.len() > p.replay_capture_plan().event_capacity() as usize {
++                r.replay.remove(0);
++                r.grouped.as_mut().unwrap().memory_proofs.remove(0);
++                meals
++                    .get_mut(&id.raw())
++                    .ok_or(CpuHostError::State("missing meal bounded owner"))?
++                    .proofs
++                    .remove(0);
++            }
++            meal_transactions.push((id, memory_write));
++            after.seal_cognitive_subsystems(
++                receipt.outcome_tick,
++                json_digest(b"ALIFE-CPU-NEURAL-STATE-V1", &checkpoint)?,
++                r.memory.export_active_bank()?.active_bank_digest,
++            )?;
++            let parameters = after.phenotype().brain_genome.plasticity_parameters();
++            let profile = parameters
++                .action_candidate_credit_profile()
++                .map_or_else(|| parameters.receptor_profile(), |p| p.receptor_profile());
++            let _biological_reward = profile.project(&credit.modulator().frame())?;
++            self.world.replace_organism_record_exact(after)?;
++            r.next_sequence = r
++                .next_sequence
++                .checked_add(1)
++                .ok_or(CpuHostError::State("sequence overflow"))?;
++            let grouped = r.grouped.as_ref().unwrap();
++            decisions.push(CpuGroupedM2HostDecisionV1 {
++                organism_id: id,
++                sampling_counter,
++                action,
++                source_diagnostic_logits: output.candidate_logits,
++                biological_emissions: emissions,
++                brain_work: activity.work,
++                patch,
++                motor: grouped
++                    .motor
++                    .last_receipt
++                    .clone()
++                    .ok_or(CpuHostError::State("missing grouped receipt"))?,
++                physical: grouped
++                    .last_physical
++                    .clone()
++                    .ok_or(CpuHostError::State("missing grouped physical receipt"))?,
++                sleep_phase: r.sleep.state().phase,
++                sleep_trigger: r.sleep.state().last_trigger,
++            });
++        }
++        // The batch uses one pre-action scene. Commit the identities actually
++        // observed there along with its decisions; priming stays read-only.
++        let tracked_objects = self
++            .residents
++            .keys()
++            .map(|&id| {
++                perception_world
++                    .tracked_objects()
++                    .save_state(OrganismId(id))
++            })
++            .collect::<Result<Vec<_>, _>>()?;
++        self.world.restore_tracked_object_states(tracked_objects)?;
++        let tick_after = self
++            .world
++            .try_advance_tick_with_body_events_in_staged_tick(&body_events)?;
++        self.seal_all_residents()?;
++        Ok(CpuGroupedMealM2HostStepV1 {
++            meal_transactions,
++            base: CpuGroupedM2HostStepV1 {
++                tick_before: tick,
++                tick_after,
++                decisions,
++                sleeping_organisms: sleeping,
++                sleep_consolidations: consolidations,
++            },
++        })
++    }
++}
++
++fn grouped_meal_dynamic_work(
++    p: &BrainPhenotype,
++    r: &Resident,
++    activity: &CpuActivityBudget,
++) -> Result<u64, CpuHostError> {
++    // The existing generic policy omits dynamic branches/spans and
++    // encoder assignments. V1 prices their actual executed work too.
++    let source_dynamic_q24 = r
++        .v11
++        .dendritic_branches()
++        .branches()
++        .iter()
++        .try_fold(0_u64, |sum, b| {
++            sum.checked_add(16 + 4 * b.inputs.len() as u64)
++        })
++        .and_then(|n| n.checked_mul(u64::from(activity.microsteps)))
++        .and_then(|n| n.checked_add(4 * p.sensor_encoder().assignments().len() as u64))
++        .ok_or(CpuHostError::State("source dynamic work overflow"))?;
++    let structural_ops = r
++        .v11
++        .sparse_spans()
++        .iter()
++        .flat_map(|s| &s.edges)
++        .try_fold(0_u64, |sum, e| {
++            if e.source >= 2048 || e.target >= 2048 || e.route as usize >= p.projections().len() {
++                return Err(CpuHostError::State("dynamic edge enters fixed controller"));
++            }
++            let visits = if activity.enabled_routes[e.route as usize] {
++                (0..activity.microsteps as usize)
++                    .filter(|&step| {
++                        super::super::replay::route_fires(
++                            p.projections()[e.route as usize].update_cadence().raw(),
++                            step,
++                        )
++                    })
++                    .count() as u64
++            } else {
++                0
++            };
++            sum.checked_add(visits)
++                .ok_or(CpuHostError::State("source structural work overflow"))
++        })?;
++    let dynamic = source_dynamic_q24
++        .checked_add(
++            structural_ops
++                .checked_mul(4)
++                .ok_or(CpuHostError::State("structural price overflow"))?,
++        )
++        .ok_or(CpuHostError::State("source dynamic price overflow"))?;
++    Ok(dynamic)
++}
+diff --git a/crates/alife_training/src/cpu/grouped_meal_host_tests.rs b/crates/alife_training/src/cpu/grouped_meal_host_tests.rs
+new file mode 100644
+index 000000000..da86da5f9
+--- /dev/null
++++ b/crates/alife_training/src/cpu/grouped_meal_host_tests.rs
+@@ -0,0 +1,357 @@
++//! Fixed-source registered-world controls. No archived life or new study seed.
++//! Scripted action intervention is separate from unchanged real sampling.
++use super::*;
++use crate::{AdamWConfig, StageTrainableMask};
++use alife_world::*;
++#[allow(dead_code)]
++#[path = "grouped_host_fixture.rs"]
++mod recipe;
++// Reuse the existing closed grouped-host test seed, not a new study seed.
++const SEED: u64 = 0x0347_5250_484F_5354;
++fn setup(
++    food: bool,
++) -> (
++    CanonicalNewGame,
++    CpuFoundationTrainer,
++    PhenotypeCompilerInputs,
++) {
++    let recipe = recipe::build(SEED, true).unwrap();
++    let mut trainer = CpuFoundationTrainer::new(
++        recipe.phenotype.clone(),
++        recipe.asset.clone(),
++        StageTrainableMask::recurrent_only(&recipe.phenotype).unwrap(),
++        AdamWConfig::default(),
++    )
++    .unwrap();
++    let mut state = trainer.checkpoint();
++    state.optimizer_step = 23;
++    state.update_ages[0] = 23;
++    state.first_moment[0] = 0.03125;
++    state.second_moment[0] = 0.0625;
++    trainer = CpuFoundationTrainer::from_checkpoint(recipe.phenotype, recipe.asset, state).unwrap();
++    let mut game =
++        create_grounded_drive_research_new_game(&recipe.config, &recipe.genotype).unwrap();
++    let newborn = game
++        .world
++        .organism_registry()
++        .iter()
++        .next()
++        .unwrap()
++        .clone();
++    let mut builder =
++        HeadlessScenarioBuilder::new(SEED).agent("learner", newborn.organism_id(), Vec3f::ZERO);
++    if food {
++        builder = builder.food("meal-control", Vec3f::new(0.1, 0.0, 0.0), 0.6);
++    }
++    let mut world = builder.build().unwrap();
++    world
++        .register_grounded_drive_research_record(newborn)
++        .unwrap();
++    game.world = world;
++    (game, trainer, recipe.inputs)
++}
++fn mature(world: &mut HeadlessWorld) -> Result<(), String> {
++    for _ in 0..240 {
++        world.try_advance_tick().map_err(|e| e.to_string())?;
++    }
++    Ok(())
++}
++fn fixture(food: bool) -> (CpuGroupedMealM2HostV1, PhenotypeCompilerInputs) {
++    let (game, trainer, inputs) = setup(food);
++    let (host, ()) = CpuGroupedMealM2HostV1::new_prepared(
++        game,
++        trainer,
++        inputs.clone(),
++        (SEED ^ (SEED >> 32)) as u32,
++        MediationModeV1::Full,
++        mature,
++    )
++    .unwrap();
++    (host, inputs)
++}
++fn bytes<T: Serialize>(value: &T) -> Vec<u8> {
++    serde_json::to_vec(value).unwrap()
++}
++fn frozen(host: &CpuGroupedMealM2HostV1) -> Vec<u8> {
++    let r = host.inner.host.residents.values().next().unwrap();
++    let n = r.neural.checkpoint().unwrap();
++    bytes(&(
++        host.inner.founder.checkpoint(),
++        n.fast,
++        n.lifetime,
++        n.eligibility,
++        n.weight_generation,
++        n.neural.dendrites,
++        r.v11.checkpoint(),
++    ))
++}
++fn retained(kind: MemoryUpdateKind) -> Option<MemoryId> {
++    match kind {
++        MemoryUpdateKind::Inserted { inserted } | MemoryUpdateKind::Evicted { inserted, .. } => {
++            Some(inserted)
++        }
++        MemoryUpdateKind::Merged { into } => Some(into),
++        _ => None,
++    }
++}
++fn consumed(decision: &CpuGroupedM2HostDecisionV1) -> usize {
++    decision
++        .patch
++        .outcome()
++        .joint
++        .as_ref()
++        .unwrap()
++        .channel_outcomes
++        .iter()
++        .filter(|r| {
++            r.channel == MotorChannel::Manipulation
++                && r.physical.contact == PhysicalContactKind::Consumed
++        })
++        .count()
++}
++#[test]
++fn meal_fresh_envelope_rejects_old_identity_and_preserves_no_meal_closed_bytes() {
++    let (mut new, inputs) = fixture(false);
++    let (game, trainer, _) = setup(false);
++    let (mut old, ()) = CpuGroupedM2HostV1::new_prepared(
++        game,
++        trainer,
++        inputs.clone(),
++        (SEED ^ (SEED >> 32)) as u32,
++        MediationModeV1::Full,
++        mature,
++    )
++    .unwrap();
++    let old_wire = old.checkpoint().unwrap().encode().unwrap();
++    assert!(CpuGroupedMealM2HostCheckpointV1::decode(&old_wire).is_err());
++    let before = frozen(&new);
++    for _ in 0..2 {
++        let a = old.step(0.73).unwrap();
++        let b = new.step(0.73).unwrap();
++        assert_eq!(a.decisions.len(), b.base.decisions.len());
++        assert!(b
++            .meal_transactions
++            .iter()
++            .all(|(_, t)| t.supplemental.is_none()));
++        assert_eq!(
++            old.checkpoint().unwrap().encode().unwrap(),
++            new.inner.checkpoint().unwrap().encode().unwrap()
++        );
++    }
++    assert_eq!(frozen(&new), before);
++    let wire = new.checkpoint().unwrap().encode().unwrap();
++    assert!(CpuGroupedM2HostCheckpointV1::decode(&wire).is_err());
++    let mut cold = CpuGroupedMealM2HostV1::restore(
++        CpuGroupedMealM2HostCheckpointV1::decode(&wire).unwrap(),
++        &inputs,
++        MediationModeV1::Full,
++    )
++    .unwrap();
++    assert_eq!(cold.checkpoint().unwrap().encode().unwrap(), wire);
++    let a = new.step(0.73).unwrap();
++    let b = cold.step(0.73).unwrap();
++    assert_eq!(bytes(&a.meal_transactions), bytes(&b.meal_transactions));
++    assert_eq!(
++        new.checkpoint().unwrap().encode().unwrap(),
++        cold.checkpoint().unwrap().encode().unwrap()
++    );
++}
++
++#[test]
++fn meal_actual_sampled_fixed_scene_reports_physical_and_association_coverage_separately() {
++    let (mut host, _) = fixture(true);
++    let before = frozen(&host);
++    let (mut decisions, mut physical_meals, mut supplements, mut retained_meals) = (0, 0, 0, 0);
++    for _ in 0..8 {
++        let step = host.step(0.73).unwrap();
++        assert_eq!(step.base.tick_after.raw(), step.base.tick_before.raw() + 1);
++        assert_eq!(step.base.decisions.len(), step.meal_transactions.len());
++        for (decision, (owner, write)) in step.base.decisions.iter().zip(&step.meal_transactions) {
++            decisions += 1;
++            physical_meals += consumed(decision);
++            assert_eq!(*owner, decision.organism_id);
++            assert_eq!(
++                write.sealed_sequence_id,
++                decision.patch.header().sequence_id
++            );
++            assert_eq!(write.output_generation, write.input_generation + 1);
++            assert_eq!(decision.motor.native.core.source_execution_count, 1);
++            assert_eq!(
++                decision
++                    .patch
++                    .decision()
++                    .cognitive_work
++                    .as_ref()
++                    .unwrap()
++                    .learning_ops,
++                0
++            );
++            if let Some(meal) = &write.supplemental {
++                supplements += 1;
++                retained_meals += usize::from(retained(meal.kind).is_some());
++                assert_eq!(consumed(decision), 1);
++                assert_eq!(meal.proof.physical_contact, PhysicalContactKind::Consumed);
++            }
++        }
++    }
++    assert_eq!(frozen(&host), before);
++    println!("actual-sampled fixed-source decisions={decisions} physical-consumed={physical_meals} supplemental-proven={supplements} supplemental-retained={retained_meals}; branch-covered={}", supplements > 0);
++    // This is honest coverage reporting, not a forced autonomous-learning pass.
++    // If no supplemental branch was sampled, the native report must say so.
++}
++
++/// Explicit intervention after one actual source execution. Keep valid frame,
++/// source, action and policy probability bindings, but do not call this a draw.
++fn scripted_rest_and_eat(
++    frame: &PerceptionFrame,
++    scores: &RecoveryGroupScoresV2,
++    mut action: RecoveryGroupJointActionV2,
++) -> Result<RecoveryGroupJointActionV2, CpuHostError> {
++    let eat = frame
++        .candidates()
++        .iter()
++        .find(|c| c.family == CandidateActionFamily::Ingest && c.kind == ActionKind::Interact)
++        .ok_or(CpuHostError::State(
++            "scripted world fixture has no observed ingest candidate",
++        ))?;
++    let distribution = scores.probabilities(action.temperature)?;
++    action.representative = RecoveryGroupChoiceV2::RestGroup;
++    action.motors = [RecoveryGroupChoiceV2::NoOp; 6];
++    action.motors[4] = RecoveryGroupChoiceV2::RestGroup;
++    action.motors[2] = RecoveryGroupChoiceV2::Candidate(eat.candidate_index);
++    action.operation = Some(1); // Inherited AwakeRest, not a chemistry override.
++    action.draw_factors = vec![0];
++    for slot in 0..6 {
++        if slot != 4
++            && distribution.channels[slot]
++                .as_ref()
++                .is_some_and(|f| f.outcomes != [RecoveryGroupChoiceV2::NoOp])
++        {
++            action.draw_factors.push(2 + slot as u32);
++        }
++    }
++    action.draw_factors.push(1);
++    action.old_joint_log_probability = scores.evaluate(&action)?.joint_log_probability;
++    scores.physical_selection(&action)?;
++    Ok(action)
++}
++#[test]
++fn meal_registered_scripted_rest_eat_is_physical_and_cold_bound_not_autonomous_choice() {
++    let (mut host, inputs) = fixture(true);
++    let before = frozen(&host);
++    let mut witnessed = false;
++    // ManipEat may first acquire/touch a real item. Never relabel that as Consumed.
++    for _ in 0..3 {
++        let mut staged = host.inner.host.clone();
++        let mut meals = host.meals.clone();
++        for r in staged.residents.values_mut() {
++            r.sealed_authority = None;
++        }
++        let step = staged
++            .grouped_meal_step_inner(
++                &host.inner.founder,
++                0.73,
++                &mut |draft, _| Ok(draft),
++                &mut meals,
++                Some(&mut scripted_rest_and_eat),
++            )
++            .unwrap();
++        validate_meal_states(&staged, &meals).unwrap();
++        host.inner.host = staged;
++        host.meals = meals;
++        assert_eq!(step.base.decisions.len(), 1);
++        let decision = &step.base.decisions[0];
++        let write = &step.meal_transactions[0].1;
++        assert_eq!(
++            decision
++                .patch
++                .decision()
++                .neural_evidence()
++                .unwrap()
++                .action_family,
++            CandidateActionFamily::Rest
++        );
++        assert_eq!(
++            write.sealed_sequence_id,
++            decision.patch.header().sequence_id
++        );
++        assert_eq!(decision.motor.native.core.source_execution_count, 1);
++        assert_eq!(write.output_generation, write.input_generation + 1);
++        if consumed(decision) == 0 {
++            assert!(write.supplemental.is_none());
++            continue;
++        }
++        let meal = write
++            .supplemental
++            .as_ref()
++            .expect("actual exact registered-world consumption should create association");
++        assert!(retained(meal.kind).is_some());
++        assert!(retained(write.representative).is_some());
++        assert_ne!(retained(meal.kind), retained(write.representative));
++        let resident = host.inner.host.residents.values().next().unwrap();
++        assert_eq!(
++            resident.replay.len(),
++            host.meals.values().next().unwrap().proofs.len()
++        );
++        assert_eq!(
++            resident.replay.last().unwrap().event.sequence_id,
++            write.sealed_sequence_id
++        );
++        println!("SCRIPTED REGISTERED-WORLD CONTROL physical-consumed=1 retained-associations=2 source-sequence={} generation={} representative={:?} supplemental={:?}", write.sealed_sequence_id.raw(), write.output_generation, retained(write.representative), retained(meal.kind));
++        witnessed = true;
++        break;
++    }
++    assert!(
++        witnessed,
++        "scripted registered fixture did not physically consume; do not claim coverage"
++    );
++    assert_eq!(frozen(&host), before);
++    let wire = host.checkpoint().unwrap().encode().unwrap();
++    let mut cold = CpuGroupedMealM2HostV1::restore(
++        CpuGroupedMealM2HostCheckpointV1::decode(&wire).unwrap(),
++        &inputs,
++        MediationModeV1::Full,
++    )
++    .unwrap();
++    assert_eq!(cold.checkpoint().unwrap().encode().unwrap(), wire);
++    host.step(0.73).unwrap();
++    cold.step(0.73).unwrap();
++    assert_eq!(
++        host.checkpoint().unwrap().encode().unwrap(),
++        cold.checkpoint().unwrap().encode().unwrap()
++    );
++}
++
++#[test]
++fn meal_host_rejects_missing_duplicate_sources_and_rolls_back_late_sampling_failure() {
++    let (mut host, inputs) = fixture(false);
++    // Real committing host positive control, before each corruption family.
++    let positive = host.step(0.73).unwrap();
++    assert_eq!(positive.base.decisions.len(), 1);
++    assert_eq!(host.meals.values().next().unwrap().proofs.len(), 1);
++    let before = host.checkpoint().unwrap().encode().unwrap();
++    assert!(host.step(f32::NAN).is_err());
++    assert_eq!(host.checkpoint().unwrap().encode().unwrap(), before);
++    for duplicate in [false, true] {
++        let mut checkpoint = host.checkpoint().unwrap();
++        let proofs = &mut checkpoint
++            .payload
++            .meal_sources
++            .values_mut()
++            .next()
++            .unwrap()
++            .proofs;
++        if duplicate {
++            proofs.push(proofs[0].clone());
++        } else {
++            proofs.clear();
++        }
++        assert!(
++            CpuGroupedMealM2HostV1::restore(checkpoint, &inputs, MediationModeV1::Full).is_err()
++        );
++    }
++    let mut wrong_policy = host.checkpoint().unwrap();
++    wrong_policy.payload.policy.push_str(";wrong");
++    assert!(CpuGroupedMealM2HostCheckpointV1::decode(&wrong_policy.encode().unwrap()).is_err());
++    assert_eq!(host.checkpoint().unwrap().encode().unwrap(), before);
++}
+diff --git a/crates/alife_training/src/cpu/host.rs b/crates/alife_training/src/cpu/host.rs
+index 1ca82458f..2df5262ab 100644
+--- a/crates/alife_training/src/cpu/host.rs
++++ b/crates/alife_training/src/cpu/host.rs
+@@ -2143,3 +2143,11 @@ fn structural_sleep_evidence(
+ #[cfg(test)]
+ #[path = "host/bounded_founder_tests.rs"]
+ mod bounded_founder_tests;
++
++#[path = "grouped_meal_host_envelope.rs"]
++mod grouped_meal_host_envelope;
++#[path = "grouped_meal_host_loop.rs"]
++mod grouped_meal_host_loop;
++pub use grouped_meal_host_envelope::{
++    CpuGroupedMealM2HostCheckpointV1, CpuGroupedMealM2HostStepV1, CpuGroupedMealM2HostV1,
++};
+diff --git a/docs/experiments/m2-meal-host-v1/README.md b/docs/experiments/m2-meal-host-v1/README.md
+new file mode 100644
+index 000000000..47c7ab5ed
+--- /dev/null
++++ b/docs/experiments/m2-meal-host-v1/README.md
+@@ -0,0 +1,43 @@
++# Closed-source grouped meal-memory host candidate
++
++## Status and boundary
++
++This is source-only, uncompiled and unexecuted host integration on top of qualified core `a5b12af62dab4f167c003e48e4ca37fdda74d0c1`. The qualified core stays frozen separately. No GDE1, decoder-gradient credit or six-row repair is combined. No acquired life or checkpoint was read, reset, migrated, or pruned. No study seed was chosen. All native commands remain held for a renewed resource allocation.
++
++The new `CpuGroupedMealM2HostV1` has a distinct prefix, lineage and policy. Old `CpuCanonicalHost`, `CpuGroupedM2HostV1`, M1 and old envelope entry points do not select it. The new wrapper's old source/body state container is private, stored as exact UTF-8 beneath the new outer identity. There is no public old-checkpoint conversion. Its only construction path delegates fresh-body/source admission, while restore requires the new outer identity, matching source/mode and typed meal proof validation. Old bytes are rejected at the new prefix and vice versa. Nested legacy state retains exact existing codecs and sampler IEEE-bit handling; the outer round-trip rejects omitted/unknown fields and any rewriting of acquired bytes.
++
++## Explicit seams
++
++- `prepare_canonical_frame_with_meal_v1` duplicates the existing preparation path but selects the named meal reader at both baseline and routed recall. The old preparation body is unchanged.
++- `object_familiarity_with_meal_v1` groups bounded matching records by latest source sequence and sums the maximum observation count within each group. This is immediate-sibling protection only. Independently merged histories lack full lineage and can still overlap; these are not exact independent exposure counts. The old familiarity method is unchanged.
++- The separate host loop calls `observe_sealed_patch_with_meal_v1` once per original sealed event. It retains the representative and at most one exact tracked Ingest/Consumed association. It does not add a physical event, body advance, experience sequence, predictor target, neural execution, synaptic/optimizer update, or second debit.
++- One `MealMemorySleepProofV1` is retained per original replay event. The old representative projection is retained in the private base controller for its unchanged authority validator. Both lists advance/evict/clear together. This intentionally duplicates bounded metadata; actual envelope size and wall-time overhead are unmeasured.
++- `run_bounded_sleep_transaction_with_meal_v1` authenticates every proof, even unavailable ones; resolves up to two retained IDs per original event; deduplicates promoted IDs globally; and updates each eligible predictor target and eligibility sample once. Bank and sidecar are unchanged by candidate sleep resolution. Predictor/topology changes stage and commit atomically.
++- `MealSleepWorkReceiptV1` is a new receipt/schema/domain. It permits unique promoted IDs up to twice the number of original events, requires predictor updates equal eligible events, and derives exact declared work units. The old one-ID-per-event receipt remains strict and byte-identical.
++
++## Pricing and physiology
++
++Waking `memory_ops` already counts recall bucket reads and similarity evaluations; it does not price ordinary association writes. This candidate explicitly keeps both ordinary and supplemental waking association writes unpriced under that inherited contract. It makes no claim that their execution is free. Added retained records may increase later actual retrieval work. Sleep charges its existing measured work formula, including each unique promoted association, while replay and predictor counts remain per original event.
++
++Administrative cloning, hashing, proof validation and checkpoint serialization do not acquire a made-up biological penalty. There is no post-seal charge that would circularly change the meal valence or double-debit the body. A future write-price policy would require an explicit pre-seal reservation and qualification. No coefficient or chemistry is changed to manufacture meal coverage.
++
++## Authored controls, not native results
++
++Fourteen new core cases cover two associations/one event, one surviving association, all-unavailable work, merged IDs, malformed unavailable siblings, duplicate/missing/reordered proofs, atomic late failures, portable cold continuation, owners/profiles/legacy rejection, actual bank capacity, old receipt bytes and immediate-sibling familiarity. They have not run on this source revision.
++
++Four host cases are authored:
++
++1. Existing fixed-source no-food scene compares old closed state bytes against the new private state container, rejects opposite envelope identities, and checks exact cold continuation with frozen optimizer/synapses.
++2. An actual sampler test runs eight intervals in the same fixed-source registered-body scene with nearby ordinary harmless food. It reports physical Consumed receipts, supplemental proofs and retained associations separately. If it misses the nonrepresentative branch, it must be reported as missing coverage, not changed into a forced success or called autonomous learning.
++3. A separately labeled registered-world scripted Rest+Eat intervention uses one real source execution and the real world action/biology boundary. Only a test-only callback replaces the selected joint action while preserving typed policy/frame bindings. It changes no logits, coefficients, source genome or chemistry and never claims to be the sampler's draw. Preparatory Touch/acquisition remains non-Consumed; the positive control requires an actual world Consumed receipt and a retained supplemental association, then exact cold continuation. The production path always uses the unmodified sampler call.
++4. A committing host positive control precedes missing/duplicate proof, wrong policy and late-sampling failure checks; failures must leave the original host unchanged.
++
++These controls reuse the pre-existing grouped-host unit fixture seed `0x0347_5250_484F_5354`. This is a test fixture, not a new study seed. No host case is described as passing until native compilation/execution is separately allocated and recorded.
++
++## Next review and native gates
++
++For Astra 6.2 or the next reviewer: check the wrapper's source authority/cold boundaries, duplicated proof storage and pruning synchronization, both recall calls, familiarity's limited historical claim, exact physical target binding, new sleep receipt capacity/work validation, and the test-only scripted versus actual-sampled distinction. Preserve the qualified-core patch and every failed source revision.
++
++After explicit renewed allocation, compile/list new core and host cases before running serially. Report compiler failures and zero-test filters exactly. Run the new core cases, prior 164-case core packet, actual registered scripted control, fixed sampled coverage report, opposite-envelope rejection, old closed literal-byte witness and exact next-packet cold continuation across admitted sleep. Measure target growth, envelope/raw resident size, clone/hash wall time and actual physical versus stored/recalled counts. Do not expand the study, combine decoder learning, or infer biological efficacy from these controls.
++
++Methodological reference: https://rikiyat.github.io/blog/weight-space-programming/ experiments 4/5/6. It motivates local, inspectable interventions and controls; it does not validate this artificial biology.
