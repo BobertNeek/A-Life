@@ -38,3 +38,10 @@ Final source patch: coordinated-target-final-v6.patch (10 files). Changed-source
 The three coordination parameters are explicitly inherited constants with tested analytic derivatives, not yet genome-encoded neurons or an online optimizer path. Native source weights remain closed as in the controls. Geometry is an optimistic planar actuator prior; actual effector attenuation, obstacles, target motion and held-target following can defeat it. Wrong-kind attempts still occur and can teach through existing outcomes; this candidate does not solve semantic food/toy preference or representative-keyed episodic credit.
 
 The next step is a separately admitted, matched fresh comparison against legacy and optional controls. Measure actual nutrition/Consumed receipts, acquisition phases, approach progress, no-op dwell and meaningful failures, not just fewer failed bundles. No benefit or promotion is warranted from the fixed checks alone.
+
+
+## Work-accounting clarification
+
+The added pair geometry, partition normalization and analytic-derivative validation are currently administrative sampler overhead. They are not added semantic brain-work units or ATP charges. The existing appendage work plan explicitly excludes sampling/validation; reservation occurs before selection, and the final ledger charges the existing source, neural, dendritic, attention, memory, prediction and structural counts.
+
+Thus the tests prove once-only EXISTING accounting, not complete pricing of the new computation. Equal-total-compute fairness, a fully neural motor lobe and energy-efficiency claims are unsupported. The already frozen behavioral comparison must remain unchanged; any neural or explicitly charged integration needs a separate qualified candidate. Physical behavior can still be measured, but body-energy differences cannot be presented as a fair compute-efficiency benefit of this arbitration implementation.
