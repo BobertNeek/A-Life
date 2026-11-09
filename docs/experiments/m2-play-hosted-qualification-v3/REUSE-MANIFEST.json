@@ -1,0 +1,134 @@
+{
+  "files": [
+    {
+      "bytes": 456096,
+      "destination_path": "docs/experiments/m2-play-hosted-qualification-v3/qualified-original-overlay.tar.gz",
+      "git_blob_sha1": "002402b88cebc86c128b46e6705eb823e3b00116",
+      "mode": "100644",
+      "path": "qualified-original-overlay.tar.gz",
+      "remote_evidence": {
+        "note": "Parent reports all 28 V1 blobs uploaded and verified; no Play tree/ref/activation exists. Publisher must revalidate exact blob before reuse.",
+        "status": "PARENT_REPORTED_UPLOADED_VERIFIED_UNREFERENCED_V1_BLOB",
+        "tree_reference": null
+      },
+      "sha256": "28b472731e2f28002ec0a73a7947ecde48ee3fb0c39f2efa313a1f7c9ecbbe49",
+      "source_artifact": "/workspace/shared/m2-play-runtime-integration-v1/hosted/qualified-original-overlay.tar.gz"
+    },
+    {
+      "bytes": 638312,
+      "destination_path": "docs/experiments/m2-play-hosted-qualification-v3/OWNED-RUNTIME.patch",
+      "git_blob_sha1": "f4b31eddc1881ef0fed27e17c2f58dbed0af7c45",
+      "mode": "100644",
+      "path": "OWNED-RUNTIME.patch",
+      "remote_evidence": {
+        "note": "Parent reports all 28 V1 blobs uploaded and verified; no Play tree/ref/activation exists. Publisher must revalidate exact blob before reuse.",
+        "status": "PARENT_REPORTED_UPLOADED_VERIFIED_UNREFERENCED_V1_BLOB",
+        "tree_reference": null
+      },
+      "sha256": "61fbd9e2f2ce4319ab223d52977e1355b74317f2dbba5c9f8edcdaea264f1636",
+      "source_artifact": "/workspace/shared/m2-play-runtime-integration-v1/OWNED-RUNTIME.patch"
+    },
+    {
+      "bytes": 56756,
+      "destination_path": "docs/experiments/m2-play-hosted-qualification-v3/qualified-CLOSURE.json",
+      "git_blob_sha1": "715f19dfed0e4a82813df0140bd400f3088bcd57",
+      "mode": "100644",
+      "path": "qualified-CLOSURE.json",
+      "remote_evidence": {
+        "note": "Parent reports all 28 V1 blobs uploaded and verified; no Play tree/ref/activation exists. Publisher must revalidate exact blob before reuse.",
+        "status": "PARENT_REPORTED_UPLOADED_VERIFIED_UNREFERENCED_V1_BLOB",
+        "tree_reference": null
+      },
+      "sha256": "79b18e8a83d2c8cb7e66ffc9bf5d8ad1636c5a3658c403897d069bbc9ce8ac1f",
+      "source_artifact": "/workspace/shared/m2-play-runtime-integration-v1/hosted/CLOSURE.json"
+    },
+    {
+      "bytes": 7481,
+      "destination_path": "docs/experiments/m2-play-hosted-qualification-v3/upstream-toolchain-action.yml",
+      "git_blob_sha1": "62252504fab44d94e1bf3a73df1c976b3dec35c4",
+      "mode": "100644",
+      "path": "upstream-toolchain-action.yml",
+      "remote_evidence": {
+        "note": "Parent reports all 28 V1 blobs uploaded and verified; no Play tree/ref/activation exists. Publisher must revalidate exact blob before reuse.",
+        "status": "PARENT_REPORTED_UPLOADED_VERIFIED_UNREFERENCED_V1_BLOB",
+        "tree_reference": null
+      },
+      "sha256": "0b52547c145ae18d8631c9ab711e4d917e9e489cea800368f338c25a56e0aee2",
+      "source_artifact": "/workspace/shared/m2-grip-options-v1/hosted-typecheck-v2/upstream-toolchain-action.yml"
+    },
+    {
+      "bytes": 563200,
+      "destination_path": "docs/experiments/m2-play-hosted-qualification-v3/patches/main-to-fbf-library-closure.part-01.patch",
+      "git_blob_sha1": "6df92f6933b9279c86373ec0b4b7c0a66770d199",
+      "mode": "100644",
+      "path": "patches/main-to-fbf-library-closure.part-01.patch",
+      "remote_evidence": {
+        "commit": "ff991c39ca4a11f72eb56f015f8b3dab71baff20",
+        "git_blob_sha1": "6df92f6933b9279c86373ec0b4b7c0a66770d199",
+        "path": "docs/experiments/m2-grip-hosted-typecheck-v5/patches/main-to-fbf-library-closure.part-01.patch",
+        "status": "PARENT_VERIFIED_IMMUTABLE_REMOTE_TREE_BLOB"
+      },
+      "sha256": "44c9ee9e269bec25ebb924054754a0e71ddc7b73104a132699171a9776430e07",
+      "source_artifact": "/workspace/shared/m2-grip-options-v1/hosted-typecheck-v2/patches/main-to-fbf-library-closure.part-01.patch",
+      "source_path": "docs/experiments/m2-grip-hosted-typecheck-v5/patches/main-to-fbf-library-closure.part-01.patch",
+      "verified_source_commit": "ff991c39ca4a11f72eb56f015f8b3dab71baff20"
+    },
+    {
+      "bytes": 563195,
+      "destination_path": "docs/experiments/m2-play-hosted-qualification-v3/patches/main-to-fbf-library-closure.part-02.patch",
+      "git_blob_sha1": "7f27884da807987fb3eb63ca442724a14ee46468",
+      "mode": "100644",
+      "path": "patches/main-to-fbf-library-closure.part-02.patch",
+      "remote_evidence": {
+        "commit": "ff991c39ca4a11f72eb56f015f8b3dab71baff20",
+        "git_blob_sha1": "7f27884da807987fb3eb63ca442724a14ee46468",
+        "path": "docs/experiments/m2-grip-hosted-typecheck-v5/patches/main-to-fbf-library-closure.part-02.patch",
+        "status": "PARENT_VERIFIED_IMMUTABLE_REMOTE_TREE_BLOB"
+      },
+      "sha256": "a2fb1711dee71d569aea8643ba5dd02d16c992bf9f378b219e4b86cb51edafae",
+      "source_artifact": "/workspace/shared/m2-grip-options-v1/hosted-typecheck-v2/patches/main-to-fbf-library-closure.part-02.patch",
+      "source_path": "docs/experiments/m2-grip-hosted-typecheck-v5/patches/main-to-fbf-library-closure.part-02.patch",
+      "verified_source_commit": "ff991c39ca4a11f72eb56f015f8b3dab71baff20"
+    },
+    {
+      "bytes": 415718,
+      "destination_path": "docs/experiments/m2-play-hosted-qualification-v3/patches/main-to-fbf-library-closure.part-03.patch",
+      "git_blob_sha1": "ef007c906168887cd275564f541a48714806608b",
+      "mode": "100644",
+      "path": "patches/main-to-fbf-library-closure.part-03.patch",
+      "remote_evidence": {
+        "commit": "ff991c39ca4a11f72eb56f015f8b3dab71baff20",
+        "git_blob_sha1": "ef007c906168887cd275564f541a48714806608b",
+        "path": "docs/experiments/m2-grip-hosted-typecheck-v5/patches/main-to-fbf-library-closure.part-03.patch",
+        "status": "PARENT_VERIFIED_IMMUTABLE_REMOTE_TREE_BLOB"
+      },
+      "sha256": "95d7a29b145111d4f24297c97ecd0766673f9275b5dd89400958c714a24ae72d",
+      "source_artifact": "/workspace/shared/m2-grip-options-v1/hosted-typecheck-v2/patches/main-to-fbf-library-closure.part-03.patch",
+      "source_path": "docs/experiments/m2-grip-hosted-typecheck-v5/patches/main-to-fbf-library-closure.part-03.patch",
+      "verified_source_commit": "ff991c39ca4a11f72eb56f015f8b3dab71baff20"
+    },
+    {
+      "bytes": 136753,
+      "destination_path": "docs/experiments/m2-play-hosted-qualification-v3/patches/fbf-nominal-source-supplement.patch",
+      "git_blob_sha1": "99d4927cccaaf74172282cbb8e50ea9609e56250",
+      "mode": "100644",
+      "path": "patches/fbf-nominal-source-supplement.patch",
+      "remote_evidence": {
+        "commit": "ff991c39ca4a11f72eb56f015f8b3dab71baff20",
+        "git_blob_sha1": "99d4927cccaaf74172282cbb8e50ea9609e56250",
+        "path": "docs/experiments/m2-grip-hosted-typecheck-v5/patches/fbf-nominal-source-supplement.patch",
+        "status": "PARENT_VERIFIED_IMMUTABLE_REMOTE_TREE_BLOB"
+      },
+      "sha256": "ddd07c85685b27056664d9b8650fa736d8eff257f5d477485efd7d14e5e5b051",
+      "source_artifact": "/workspace/shared/m2-grip-options-v1/hosted-typecheck-v2/patches/fbf-nominal-source-supplement.patch",
+      "source_path": "docs/experiments/m2-grip-hosted-typecheck-v5/patches/fbf-nominal-source-supplement.patch",
+      "verified_source_commit": "ff991c39ca4a11f72eb56f015f8b3dab71baff20"
+    }
+  ],
+  "publication_requirement": "Upload/materialize the exact verified local bytes if the blob is absent. Never claim remote reuse without a read confirming the matching blob.",
+  "remote_blob_existence": "See each entry; verified parent evidence is distinguished from unverified local bytes.",
+  "repository": "BobertNeek/A-Life",
+  "reuse_kind": "Per-file remote evidence and exact local-byte sources",
+  "rule": "Materialize exact content-addressed bytes at each destination. No old runtime/source mutation; no dependency/binary/checkpoint upload. Local references are not proof of remote publication.",
+  "schema": "m2-play-reuse-v2"
+}

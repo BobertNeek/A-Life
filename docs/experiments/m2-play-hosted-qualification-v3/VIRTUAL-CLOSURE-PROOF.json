@@ -1,0 +1,89 @@
+{
+  "checkout_commit": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "checkout_tree": "9140d525fe1af16fed6539c3178a1a45e1fb04d0",
+  "compiler_invocations": 0,
+  "github_writes": 0,
+  "inherited_workflows_unchanged": 15,
+  "local_read_method": "git object reads from existing clean research object store, no checkout or native execution",
+  "native_invocations": 0,
+  "passed": true,
+  "patch_outputs_not_materialized": [
+    "docs/experiments/bounded-founder-v1/legacy-wire-capture.json",
+    "docs/experiments/motor-lobe-native-m0-v1/mediation-m0-manifest.json",
+    "docs/experiments/motor-mediation-m2-design-v1/recipe.json",
+    "docs/experiments/recovery-group-arbitration-v1/recipe.json",
+    "docs/experiments/recovery-group-confidence-v2/recipe.json"
+  ],
+  "reconstruction_sha256": "8229313e85dda9531f187b6d9a370e5b4afd4552e5ca579b5329ac6e4d253c04",
+  "remote_checkout_evidence": "Parent verified accepted-main remote commit/tree; remote logical 7f905/fbf returned404. Grip patch reuse verified by parent at exact prepared head. This worker performed no network/GitHub action.",
+  "residual_source_only_changes": [
+    {
+      "after": {
+        "bytes": 2713,
+        "path": "crates/alife_training/Cargo.toml",
+        "sha256": "d0b46ab230c72c4a523181091508ec339651c4b5b175d8e019a8d22914391ffc"
+      },
+      "before": {
+        "bytes": 2627,
+        "path": "crates/alife_training/Cargo.toml",
+        "sha256": "fbebe69c0fd802d76826830caf671005409a9d7fe646261f23ee28c67f98db78"
+      },
+      "path": "crates/alife_training/Cargo.toml"
+    },
+    {
+      "after": {
+        "bytes": 60750,
+        "path": "crates/alife_training/examples/probe_grouped_m2_durable_v1.rs",
+        "sha256": "804924a6696ee91e348cfd97c4d37cf538777c5e49bae5bdddd22a663c0555e1"
+      },
+      "before": null,
+      "path": "crates/alife_training/examples/probe_grouped_m2_durable_v1.rs"
+    },
+    {
+      "after": {
+        "bytes": 35175,
+        "path": "crates/alife_training/examples/support/grouped_m2_journal_v1.rs",
+        "sha256": "a187ce9a2bfa86b5ba6f7ca2b7b547f86eabb61eca2b138e45f739e0d9b2c783"
+      },
+      "before": null,
+      "path": "crates/alife_training/examples/support/grouped_m2_journal_v1.rs"
+    },
+    {
+      "after": {
+        "bytes": 39900,
+        "path": "crates/alife_training/examples/support/grouped_m2_qualification_v1.rs",
+        "sha256": "dd23e3417a6f936349e40c89be9041490efe8db24c6e9a9a3b227af3ee84dd26"
+      },
+      "before": null,
+      "path": "crates/alife_training/examples/support/grouped_m2_qualification_v1.rs"
+    },
+    {
+      "after": {
+        "bytes": 9943,
+        "path": "crates/alife_training/examples/support/grouped_m2_raw_v1.rs",
+        "sha256": "1294126ef3583b17d71b2fae2d49f9e99341b1b439d0ea4ba3aa9bc4c0a2a5c0"
+      },
+      "before": null,
+      "path": "crates/alife_training/examples/support/grouped_m2_raw_v1.rs"
+    }
+  ],
+  "roles": {
+    "base": {
+      "bytes": 22397558,
+      "complete_inventory_and_every_sha256_match_v1": true,
+      "files": 799
+    },
+    "original60": {
+      "bytes": 22911334,
+      "complete_inventory_and_every_sha256_match_v1": true,
+      "files": 813
+    },
+    "owned76": {
+      "bytes": 23503334,
+      "complete_inventory_and_every_sha256_match_v1": true,
+      "files": 818
+    }
+  },
+  "schema": "m2-play-virtual-reconstruction-v2",
+  "unchanged_source_manifest_sha256": "6ab1742961b2b9849b558ec7a1d097d5da5a40faad638929bb3bc9e778dc228c"
+}

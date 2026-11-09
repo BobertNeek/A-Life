@@ -1,0 +1,11 @@
+{
+  "attempt": 1,
+  "fixed_disposable_qualification_only": true,
+  "main": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "plan_id": "m2-play-hosted-qualification-v3",
+  "prepared_head": "PENDING_VERIFIED_IMMUTABLE_GITHUB_COMMIT",
+  "research_base": "7f905465b79291fd52d1fd65568a9d10e716576a",
+  "schema": "m2-play-qualification-activation-v1",
+  "seal_sha256": "0f44f1e6352709e98fe0886ed0089b4b1c89f3e51da54e15021a052eb664e695",
+  "source_manifest_sha256": "6ab1742961b2b9849b558ec7a1d097d5da5a40faad638929bb3bc9e778dc228c"
+}

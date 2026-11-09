@@ -1,0 +1,22 @@
+{
+  "activation": "Separate authorization, sole ACTIVATE.json addition, direct child of exact verified remote prepared head. Attempt1 only; no dispatch, PR, merge, main update, branch reuse or retries.",
+  "archive_mode": "update-only, combine archive destinations and every reuse entry; preserve all old main files exactly",
+  "branch": "qualification/m2-play-hosted-qualification-v3",
+  "branch_birth": "Create new branch directly at a verified additions-only prepared child of exact accepted main, marker absent; branch existence and main freshness must be checked before any write. Resolve uncertain outcomes before retry.",
+  "inherited_workflows_deleted": 0,
+  "inherited_workflows_modified": 0,
+  "logical_ids_are_not_fetch_refs": true,
+  "packet_destination": "docs/experiments/m2-play-hosted-qualification-v3",
+  "prepared_head": "PENDING_VERIFIED_IMMUTABLE_GITHUB_COMMIT",
+  "prepared_parent": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "public_outputs": "one strict JSON runner summary; no uploaded artifacts",
+  "remote_actions_performed": [],
+  "remote_branch_existence": "UNVERIFIED",
+  "repository": "BobertNeek/A-Life",
+  "research_base": "7f905465b79291fd52d1fd65568a9d10e716576a",
+  "reuse": "REUSE-MANIFEST distinguishes parent-verified immutable Grip tree blobs, parent-reported verified unreferenced V1 blobs, and new local bytes. Verify every exact destination before preparing a tree.",
+  "schema": "m2-play-publication-v1",
+  "source_checkout": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "status": "SOURCE_ONLY_NOT_PUBLISHED",
+  "workflow_destination": ".github/workflows/m2-play-hosted-qualification-v3.yml"
+}
