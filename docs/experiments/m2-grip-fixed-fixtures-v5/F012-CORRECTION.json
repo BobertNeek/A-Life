@@ -1,0 +1,41 @@
+{
+  "additional_pure_legacy_baseline_decodes": 14,
+  "before_record": {
+    "bytes": 16081,
+    "path": "crates/alife_core/tests/grip_perception_compatibility.rs",
+    "sha256": "c82760480220f3b32ba92b130d4e6990fef158d55f94abd8e549e3129784abda"
+  },
+  "biology_intervals": 0,
+  "changed_existing_source_files": 1,
+  "changed_test_functions": [
+    "legacy_non_string_nested_metadata_and_duplicate_numeric_unknowns_are_ignored"
+  ],
+  "declaration_delta": "LegacyDraft derives Deserialize as well as Serialize.",
+  "implementation_gene_control_changes": 0,
+  "native_validation": "Pending; this generation performs Python checks only.",
+  "patch_record": {
+    "bytes": 4417,
+    "path": "patches/f012-mixed-map-correction.patch",
+    "sha256": "6071ea77383d198a9b8a06a662925373b30db7b039d903bee6200ea534b22f8d"
+  },
+  "prior_run": {
+    "compiled_targets": 9,
+    "evidence": "Parent-provided sanitized result; no raw log inspected.",
+    "failed_fixture": "f012",
+    "job_id": 129351631714,
+    "listed_fixtures": 46,
+    "passed_fixtures": 11,
+    "run_id": 42674144296,
+    "worlds_or_source_forwards_reached": false
+  },
+  "reason": "The old test passed known externally tagged enum fields through the grip-metadata-only DeferredValue adapter. MixedMap preserves ordinary serde_json value deserialization for known fields and isolates DeferredValue to unknown metadata. The independent eleven-field legacy type must accept the same seven fixtures in both positions.",
+  "schema": "m2-grip-f012-test-correction-v2",
+  "source_forwards": 0,
+  "source_path": "crates/alife_core/tests/grip_perception_compatibility.rs",
+  "source_record": {
+    "bytes": 18131,
+    "path": "crates/alife_core/tests/grip_perception_compatibility.rs",
+    "sha256": "fd4c1b7764a16c79e1cfc0179d82ce7211fa7dd10560e04d23b24d313874645e"
+  },
+  "world_constructions": 0
+}

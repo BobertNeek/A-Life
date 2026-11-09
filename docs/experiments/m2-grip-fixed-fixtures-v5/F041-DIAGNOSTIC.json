@@ -1,0 +1,465 @@
+{
+  "changes": [
+    {
+      "before_record": {
+        "bytes": 94580,
+        "path": "crates/alife_training/src/cpu/host.rs",
+        "sha256": "9780f3fd94e8668ecd622cf8111d481b957a388ee53d965257e6773132500bc8"
+      },
+      "patch_record": {
+        "bytes": 522,
+        "path": "patches/f041-genetic-source-development.patch",
+        "sha256": "f6b9042cf498dd0ecb11b3a2b0d3d9b3e5a8d48c67f904133ec2ce52e23cb863"
+      },
+      "source_record": {
+        "bytes": 94765,
+        "path": "crates/alife_training/src/cpu/host.rs",
+        "sha256": "10abab65412efce66fee5a4caa4cabd52aeeecb50c7d00415e01cabab42516ac"
+      }
+    },
+    {
+      "before_record": {
+        "bytes": 6320,
+        "path": "crates/alife_training/tests/grip_options_host.rs",
+        "sha256": "6a4c23f051953566fe797cd117c9872bae1260abffe510699db2d1be04b16bf5"
+      },
+      "patch_record": {
+        "bytes": 13282,
+        "path": "patches/f041-safe-phase-diagnostic.patch",
+        "sha256": "17169a21690edd39e38de24ca7d4a9d63e8387530d0ed5b327232abf806a04e1"
+      },
+      "source_record": {
+        "bytes": 14344,
+        "path": "crates/alife_training/tests/grip_options_host.rs",
+        "sha256": "b5a33bb81d5997018f71d52baefafca953649c4e569928811f0d876254122912"
+      }
+    },
+    {
+      "before_record": {
+        "bytes": 12344,
+        "path": "crates/alife_core/src/grounded_drive_genetics.rs",
+        "sha256": "267385ca44fef3c155257c677a98ad544d3e7a79663d34437288506090b23a33"
+      },
+      "patch_record": {
+        "bytes": 939,
+        "path": "patches/f041-research-identity-correction.patch",
+        "sha256": "c7128e3e55d8051896daf1794da34901b5472f4ea340ed78dfda0cc43987bc6f"
+      },
+      "source_record": {
+        "bytes": 12642,
+        "path": "crates/alife_core/src/grounded_drive_genetics.rs",
+        "sha256": "6a29f586c3073a39141a0c81587bbff84a6f275886ba5595dfc1631f024b8c26"
+      }
+    }
+  ],
+  "checks": [
+    "ORDINARY_IDENTITY_REJECTS_RESEARCH",
+    "FIRST_DECISIONS_ONE",
+    "FIRST_RECEIPTS_ONE",
+    "FIRST_SOURCE_COUNT_ONE",
+    "COORDINATION_POSITIVE",
+    "COORDINATION_GRADIENT_FINITE",
+    "KERNEL_NEURONS256",
+    "KERNEL_SENSORY256",
+    "KERNEL_REDUCTIONS256",
+    "KERNEL_READOUTS128",
+    "KERNEL_RECALL_ZERO",
+    "WARM_DECISIONS_ONE",
+    "COLD_DECISIONS_ONE"
+  ],
+  "committed_biology_intervals_upper_bound": 3,
+  "diagnostic_limits": "If the process aborts before libtest flushes captured output, NO_PHASE_REPORTED is possible. It is not evidence a phase completed.",
+  "event_order": [
+    [
+      "phase",
+      1
+    ],
+    [
+      "phase",
+      2
+    ],
+    [
+      "phase",
+      3
+    ],
+    [
+      "phase",
+      4
+    ],
+    [
+      "phase",
+      5
+    ],
+    [
+      "phase",
+      6
+    ],
+    [
+      "phase",
+      7
+    ],
+    [
+      "check",
+      1
+    ],
+    [
+      "phase",
+      8
+    ],
+    [
+      "phase",
+      9
+    ],
+    [
+      "phase",
+      10
+    ],
+    [
+      "phase",
+      11
+    ],
+    [
+      "phase",
+      12
+    ],
+    [
+      "phase",
+      13
+    ],
+    [
+      "phase",
+      14
+    ],
+    [
+      "phase",
+      15
+    ],
+    [
+      "phase",
+      16
+    ],
+    [
+      "phase",
+      17
+    ],
+    [
+      "phase",
+      18
+    ],
+    [
+      "phase",
+      19
+    ],
+    [
+      "phase",
+      20
+    ],
+    [
+      "phase",
+      21
+    ],
+    [
+      "phase",
+      22
+    ],
+    [
+      "phase",
+      23
+    ],
+    [
+      "phase",
+      24
+    ],
+    [
+      "phase",
+      25
+    ],
+    [
+      "phase",
+      26
+    ],
+    [
+      "phase",
+      27
+    ],
+    [
+      "phase",
+      28
+    ],
+    [
+      "phase",
+      29
+    ],
+    [
+      "check",
+      2
+    ],
+    [
+      "check",
+      3
+    ],
+    [
+      "check",
+      4
+    ],
+    [
+      "phase",
+      30
+    ],
+    [
+      "phase",
+      31
+    ],
+    [
+      "phase",
+      32
+    ],
+    [
+      "phase",
+      33
+    ],
+    [
+      "check",
+      5
+    ],
+    [
+      "phase",
+      34
+    ],
+    [
+      "phase",
+      35
+    ],
+    [
+      "check",
+      6
+    ],
+    [
+      "phase",
+      36
+    ],
+    [
+      "phase",
+      37
+    ],
+    [
+      "phase",
+      38
+    ],
+    [
+      "phase",
+      39
+    ],
+    [
+      "phase",
+      40
+    ],
+    [
+      "phase",
+      41
+    ],
+    [
+      "phase",
+      42
+    ],
+    [
+      "phase",
+      43
+    ],
+    [
+      "phase",
+      44
+    ],
+    [
+      "phase",
+      45
+    ],
+    [
+      "check",
+      7
+    ],
+    [
+      "check",
+      8
+    ],
+    [
+      "check",
+      9
+    ],
+    [
+      "check",
+      10
+    ],
+    [
+      "check",
+      11
+    ],
+    [
+      "phase",
+      46
+    ],
+    [
+      "phase",
+      47
+    ],
+    [
+      "phase",
+      48
+    ],
+    [
+      "phase",
+      49
+    ],
+    [
+      "phase",
+      50
+    ],
+    [
+      "phase",
+      51
+    ],
+    [
+      "phase",
+      52
+    ],
+    [
+      "phase",
+      53
+    ],
+    [
+      "phase",
+      54
+    ],
+    [
+      "phase",
+      55
+    ],
+    [
+      "phase",
+      56
+    ],
+    [
+      "phase",
+      57
+    ],
+    [
+      "check",
+      12
+    ],
+    [
+      "check",
+      13
+    ],
+    [
+      "phase",
+      58
+    ],
+    [
+      "phase",
+      59
+    ],
+    [
+      "phase",
+      60
+    ],
+    [
+      "phase",
+      61
+    ],
+    [
+      "phase",
+      62
+    ],
+    [
+      "phase",
+      63
+    ],
+    [
+      "phase",
+      64
+    ],
+    [
+      "phase",
+      65
+    ],
+    [
+      "phase",
+      66
+    ]
+  ],
+  "fixture_scope": "Original f041 calls/assertions preserved. Refined fixed enum asset-create/ordinary-rejection/genotype-bind boundaries and one cheap ordinary-class5 rejection assertion are added. No raw values/errors are emitted.",
+  "native_execution_performed": false,
+  "observed_failure": "V4 attempt1 compiled/listed f041, then TEST_EXECUTION; exact failure projection ASSET_GENOTYPE_BIND_BEGIN/phase_count5/checks[]. No passed fixture and no host admission. The class5 production-only constructor call in grip_research_identity is a deterministic source defect, not proof of the exact sub-call reached in V4.",
+  "ordinary_identity_rejection_calls": 1,
+  "phases": [
+    "RECIPE_BUILD_BEGIN",
+    "RECIPE_BUILD_DONE",
+    "GRIP_COMPILE_BEGIN",
+    "GRIP_COMPILE_DONE",
+    "ASSET_CREATE_BEGIN",
+    "ASSET_CREATE_DONE",
+    "ORDINARY_IDENTITY_REJECT_BEGIN",
+    "ORDINARY_IDENTITY_REJECT_DONE",
+    "GENOTYPE_BIND_BEGIN",
+    "GENOTYPE_BIND_DONE",
+    "TRAINER_NEW_BEGIN",
+    "TRAINER_NEW_DONE",
+    "TRAINER_RESTORE_BEGIN",
+    "TRAINER_RESTORE_DONE",
+    "WORLD_NEW_BEGIN",
+    "WORLD_NEW_DONE",
+    "WORLD_RECORD_BEGIN",
+    "WORLD_RECORD_DONE",
+    "SCENE_BUILD_BEGIN",
+    "SCENE_BUILD_DONE",
+    "SCENE_REGISTER_BEGIN",
+    "SCENE_REGISTER_DONE",
+    "HOST_NEW_BEGIN",
+    "HOST_NEW_DONE",
+    "INITIAL_FROZEN_SNAPSHOT_BEGIN",
+    "INITIAL_FROZEN_SNAPSHOT_DONE",
+    "FIRST_STEP_BEGIN",
+    "FIRST_STEP_DONE",
+    "FIRST_COUNTS_BEGIN",
+    "FIRST_COUNTS_DONE",
+    "SCORE_PROBABILITIES_BEGIN",
+    "SCORE_PROBABILITIES_DONE",
+    "COORDINATION_SUPPORT_BEGIN",
+    "COORDINATION_SUPPORT_DONE",
+    "SCORE_EVALUATION_BEGIN",
+    "SCORE_EVALUATION_DONE",
+    "FIRST_RECEIPT_CHECKS_BEGIN",
+    "FIRST_RECEIPT_CHECKS_DONE",
+    "FIRST_FROZEN_CHECK_BEGIN",
+    "FIRST_FROZEN_CHECK_DONE",
+    "CHECKPOINT_ENCODE_BEGIN",
+    "CHECKPOINT_ENCODE_DONE",
+    "WRONG_ENVELOPE_REJECTION_BEGIN",
+    "WRONG_ENVELOPE_REJECTION_DONE",
+    "GRIP_KERNEL_CHECKS_BEGIN",
+    "GRIP_KERNEL_CHECKS_DONE",
+    "CHECKPOINT_DECODE_BEGIN",
+    "CHECKPOINT_DECODE_DONE",
+    "COLD_RESTORE_BEGIN",
+    "COLD_RESTORE_DONE",
+    "COLD_WIRE_CHECK_BEGIN",
+    "COLD_WIRE_CHECK_DONE",
+    "WARM_SUCCESSOR_BEGIN",
+    "WARM_SUCCESSOR_DONE",
+    "COLD_SUCCESSOR_BEGIN",
+    "COLD_SUCCESSOR_DONE",
+    "SUCCESSOR_COUNTS_BEGIN",
+    "SUCCESSOR_COUNTS_DONE",
+    "SUCCESSOR_ACTION_PATCH_BEGIN",
+    "SUCCESSOR_ACTION_PATCH_DONE",
+    "FINAL_WIRE_CHECK_BEGIN",
+    "FINAL_WIRE_CHECK_DONE",
+    "FINAL_WARM_FROZEN_BEGIN",
+    "FINAL_WARM_FROZEN_DONE",
+    "FINAL_COLD_FROZEN_BEGIN",
+    "FINAL_COLD_FROZEN_DONE"
+  ],
+  "production_scope": "V4 grip founder-development correction retained. Only grip_research_identity now returns a checked research identity literal after unchanged canonical grip-asset validation and unpromoted check, exactly as the adjacent grounded-drive research helper. Ordinary constructor/Validate/production_for_id remain unchanged. Exact source-asset equality and downstream genome/phenotype/hash checks remain.",
+  "schema": "m2-grip-f041-source-fix-diagnostic-v5",
+  "source_forwards_upper_bound": 3
+}

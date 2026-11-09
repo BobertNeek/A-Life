@@ -1,0 +1,44 @@
+name: M2 grip fixed fixtures v5
+on:
+  push:
+    branches: [qualification/m2-grip-fixed-fixtures-v5]
+    paths: [docs/experiments/m2-grip-fixed-fixtures-v5/ACTIVATE.json]
+permissions:
+  contents: read
+concurrency:
+  group: m2-grip-fixed-fixtures-v5
+  cancel-in-progress: false
+jobs:
+  source-typecheck:
+    if: >-
+      github.repository == 'BobertNeek/A-Life' &&
+      github.ref == 'refs/heads/qualification/m2-grip-fixed-fixtures-v5' &&
+      github.event.created == false && github.event.deleted == false &&
+      github.event.forced == false && github.run_attempt == '1'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      EXPECTED_SEAL_SHA256: fb529c1707f7e6a465a30e8e980de4c1b0eb91b7b48b34d4ac4ed9535e10cb55
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - name: Read immutable grip source packet
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          path: bundle
+          persist-credentials: false
+          fetch-depth: 2
+          lfs: false
+          submodules: false
+      - name: Read exact accepted main
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: c3aec16df33861f1316d127736f5f60eea327ede
+          path: source
+          persist-credentials: false
+          fetch-depth: 1
+          lfs: false
+          submodules: false
+      - name: Admit, restore, compile exact targets, list names, and run fixed fixtures once
+        shell: bash
+        run: python3 bundle/docs/experiments/m2-grip-fixed-fixtures-v5/run_hosted.py

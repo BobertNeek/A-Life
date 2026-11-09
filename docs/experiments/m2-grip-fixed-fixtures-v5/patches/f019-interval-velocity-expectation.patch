@@ -1,0 +1,39 @@
+--- a/crates/alife_world/src/headless/grip_options.rs
++++ b/crates/alife_world/src/headless/grip_options.rs
+@@ -139,11 +139,32 @@
+         assert!(repeated.grip_transfers.is_empty());
+         assert_eq!(world.entity(first).unwrap().carried_by, Some(OWNER));
+         assert!(world.execute_grip_intent(command(2202, Some(first)), actor).unwrap().execution.succeeded);
++        let second_position = world.entity(second).unwrap().position;
+         assert!(world.execute_grip_intent(command(2201, Some(second)), actor).unwrap().execution.succeeded);
+-        let before = world.object_snapshots();
+-        assert!(!world.execute_grip_intent(command(2202, Some(first)), actor).unwrap().execution.succeeded);
+-        assert_eq!(world.object_snapshots(), before);
+-        assert!(!world.execute_grip_intent(command(2202, None), actor).unwrap().execution.succeeded);
++        let mut expected = world.object_snapshots();
++        assert_eq!(world.entity(actor).unwrap().grounded_physical.velocity, Vec3f::ZERO);
++        let expected_second = expected.iter_mut().find(|object| object.id == second).unwrap();
++        assert_eq!(expected_second.carried_by, Some(OWNER));
++        assert_eq!(expected_second.grounded_physical.velocity,
++            subtract(expected_second.position, second_position));
++        assert_ne!(expected_second.grounded_physical.velocity, Vec3f::ZERO);
++        // A rejected attempt starts the next action interval. It preserves
++        // ownership and pose but clears the preceding acquisition velocity.
++        expected_second.grounded_physical.velocity = Vec3f::ZERO;
++        let stale = world.execute_grip_intent(command(2202, Some(first)), actor).unwrap();
++        assert!(!stale.execution.succeeded);
++        assert!(stale.grip_transfers.is_empty());
++        assert!(stale.touched_entities.is_empty());
++        assert_eq!(stale.execution.physical.displacement, Vec3f::ZERO);
++        assert_eq!(world.entity(second).unwrap().grounded_physical.velocity, Vec3f::ZERO);
++        assert_eq!(world.entity(actor).unwrap().grounded_physical.velocity, Vec3f::ZERO);
++        assert_eq!(world.object_snapshots(), expected);
++        let stale_empty = world.execute_grip_intent(command(2202, None), actor).unwrap();
++        assert!(!stale_empty.execution.succeeded);
++        assert!(stale_empty.grip_transfers.is_empty());
++        assert!(stale_empty.touched_entities.is_empty());
++        assert_eq!(stale_empty.execution.physical.displacement, Vec3f::ZERO);
++        assert_eq!(world.object_snapshots(), expected);
+         assert_eq!(world.entity(second).unwrap().carried_by, Some(OWNER));
+     }
+     #[test]
