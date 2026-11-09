@@ -1,0 +1,1352 @@
+A-Life matched care-reference source-only patch
+
+Base commit: 32e109372be39a19cabf7d9fc7cbcd9ca7c91c19
+Final cleaned commit: ef90f560858498fa66cf8ba879d448954d8201af
+Tested Rust source commit: 66e733f349230a63ad91a2f87072b4405eaa99b3
+
+Contains seven Rust source/test files and three Markdown notes.
+Excludes raw diagnostics, JSON, compressed captures, logs, executables,
+private checkpoints and historical checksum manifests.
+Apply only to the exact base. Read SOURCE_RECONSTRUCTION.md after applying.
+This documentation/packaging follow-up performed no native build or new run.
+
+diff --git a/crates/alife_training/examples/support/grounded_care_reference_v1.rs b/crates/alife_training/examples/support/grounded_care_reference_v1.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..01daef541c69b193364dfc96fd9c46e6cd2f8457
+--- /dev/null
++++ b/crates/alife_training/examples/support/grounded_care_reference_v1.rs
+@@ -0,0 +1,149 @@
++//! Fresh authored source revision: match the baseline of three need readouts.
++//! No changes to decoder coefficients, controller, soma equations or world rules.
++use alife_core::*;
++use serde_json::{json, Value};
++type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
++
++pub const RECIPE: &str = "care-matched-reference-six-rows-v1";
++pub fn build(p: &BrainPhenotype, original: &[f32]) -> Result<(Vec<f32>, Value)> {
++    if original.len() != p.synapses().len()
++        || !p.foundation_abi().uses_bounded_fresh_branches()
++        || p.sensor_profile() != SensorProfile::GroundedObjectSlotsV1
++        || p.sensor_encoder()
++            .assignments()
++            .iter()
++            .any(|a| [382, 383].contains(&a.target_neuron()))
++        || p.synapses()
++            .iter()
++            .any(|s| s.kind() == CompiledSynapseKind::Recurrent && [382, 383].contains(&s.target()))
++    {
++        return Err("reference source requires an unsensed, undriven baseline cell".into());
++    }
++    for (route, kind, cadence) in [
++        (2, ProjectionType::Homeostatic, UpdateCadence::Hot10To30Hz),
++        (3, ProjectionType::Modulatory, UpdateCadence::Hot10To30Hz),
++        (5, ProjectionType::MotorProposal, UpdateCadence::Hot60Hz),
++    ] {
++        if p.projections()
++            .get(route)
++            .is_none_or(|r| r.projection_type() != kind || r.update_cadence() != cadence)
++        {
++            return Err("matched reference route kind or cadence changed".into());
++        }
++    }
++    for layer in [
++        &[256, 257, 260, 262, 382, 383][..],
++        &[1952, 1953, 1956, 1958, 1966][..],
++        &[896, 897, 900, 902, 911][..],
++        &[1793, 1796, 1807, 1814, 1823, 1824, 1839][..],
++    ] {
++        if layer
++            .iter()
++            .any(|&n| p.neuron_dynamics()[n] != p.neuron_dynamics()[layer[0]])
++        {
++            return Err("matched reference donor soma dynamics changed".into());
++        }
++    }
++    let edge = |route, source, target| -> Result<usize> {
++        let rows = p
++            .synapses()
++            .iter()
++            .enumerate()
++            .filter(|(_, s)| {
++                s.kind() == CompiledSynapseKind::Recurrent
++                    && s.route_index() == route
++                    && s.source() == source
++                    && s.target() == target
++            })
++            .map(|(i, _)| i)
++            .collect::<Vec<_>>();
++        if rows.len() != 1 {
++            return Err("matched reference donor edge is not unique".into());
++        }
++        Ok(rows[0])
++    };
++    if original[edge(2, 383, 1967)?].to_bits() != 8_f32.to_bits() {
++        return Err("matched reference shared tonic changed".into());
++    }
++    for (source, reserve, relay, motor) in [
++        (256, 1952, 896, 1824),
++        (257, 1953, 897, 1793),
++        (260, 1956, 900, 1796),
++        (262, 1958, 902, 1814),
++    ] {
++        for (route, from, to, value) in [
++            (2, source, reserve, 2_f32),
++            (3, reserve, relay, 2.),
++            (3, 1967, relay, -4.),
++            (5, relay, motor, 4.),
++        ] {
++            if original[edge(route, from, to)?].to_bits() != value.to_bits() {
++                return Err("matched reference donor path weights changed".into());
++            }
++        }
++    }
++    // Source382 has the same native soma and common encoded offset as need
++    // cells256/257/260/262 at zero sensed drive. This is a dynamical reference,
++    // not a positive literal constant. Match the original need path's2,2,4 and
++    // its shared8,-4 tonic path, including the same route cadence.
++    let plan = [
++        (2, 382, 1966, 2.),
++        (3, 1966, 911, 2.),
++        (3, 1967, 911, -4.),
++        (5, 911, 1807, 4.),
++        (5, 911, 1823, 4.),
++        (5, 911, 1839, 4.),
++    ];
++    let mut w = original.to_vec();
++    let mut edits = vec![];
++    for (route, source, target, value) in plan {
++        let matches = p
++            .synapses()
++            .iter()
++            .enumerate()
++            .filter(|(_, s)| {
++                s.kind() == CompiledSynapseKind::Recurrent
++                    && s.route_index() == route
++                    && s.source() == source
++                    && s.target() == target
++            })
++            .collect::<Vec<_>>();
++        if matches.len() != 1 || original[matches[0].0] != 0. {
++            return Err(
++                format!("missing or occupied reference edge ({route},{source},{target})").into(),
++            );
++        }
++        let (index, s) = matches[0];
++        let map = p.persistent_address_map();
++        let address = map
++            .synapses()
++            .iter()
++            .find(|a| a.packed_index() == index as u32)
++            .ok_or("reference packed row address missing")?
++            .address();
++        let neuron_address = |n| {
++            map.neurons()
++                .iter()
++                .find(|a| a.packed_index() == n)
++                .map(|a| a.address())
++        };
++        let projection = map
++            .projections()
++            .iter()
++            .find(|a| a.packed_index() == route)
++            .map(|a| a.address());
++        if Some(address.source) != neuron_address(source)
++            || Some(address.target) != neuron_address(target)
++            || Some(address.projection) != projection
++            || address.decoder.is_some()
++        {
++            return Err("reference packed row address disagrees with recurrent tuple".into());
++        }
++        w[index] = value;
++        edits.push(json!({"row":index,"address":address,"route":route,"source":source,"target":target,"before":original[index],"after":value,"cadence":p.projections()[s.route_index() as usize].update_cadence().raw()}));
++    }
++    Ok((
++        w,
++        json!({"recipe":RECIPE,"authored_not_learned":true,"added_nonzero_source_rows":6,"source":382,"reserve":1966,"relay":911,"reference_motors":[1807,1823,1839],"edits":edits,"decoder_coefficients_changed":false,"controller_rows_changed":false,"acquired_state_changed":false}),
++    ))
++}
+diff --git a/crates/alife_training/src/cpu/grouped_host_envelope.rs b/crates/alife_training/src/cpu/grouped_host_envelope.rs
+index f76daeaa3f893167813d28359ccf5df285675908..fd4ae62b2b002606ed8f6d890b6e4d19dde6546e 100644
+--- a/crates/alife_training/src/cpu/grouped_host_envelope.rs
++++ b/crates/alife_training/src/cpu/grouped_host_envelope.rs
+@@ -422,6 +422,15 @@ pub struct CpuGroupedM2HostStepV1 {
+     pub sleep_consolidations: usize,
+ }
+ pub struct CpuGroupedM2HostDecisionV1 {
++    /// Test-only capture of the already executed source inputs. Never persisted.
++    #[cfg(test)]
++    pub(crate) source_trace_initial: crate::TrainingInitialState,
++    #[cfg(test)]
++    pub(crate) source_trace_tick: crate::TrainingReplayTick,
++    #[cfg(test)]
++    pub(crate) source_trace_effects: NeuralReceptorEffects,
++    #[cfg(test)]
++    pub(crate) source_trace_grip: Vec<alife_world::GripTransfer>,
+     pub organism_id: OrganismId,
+     pub action: RecoveryGroupJointActionV2,
+     pub sampling_counter: u32,
+diff --git a/crates/alife_training/src/cpu/grouped_host_fixture.rs b/crates/alife_training/src/cpu/grouped_host_fixture.rs
+index 44e6773262f9f6797880f3bb6269e5dd51432e6d..b2418894de736fa7f3f45815478d12d93c0e903b 100644
+--- a/crates/alife_training/src/cpu/grouped_host_fixture.rs
++++ b/crates/alife_training/src/cpu/grouped_host_fixture.rs
+@@ -9,6 +9,9 @@ mod frozen;
+ #[allow(dead_code)]
+ #[path = "../../examples/support/grounded_r0_motor_operating_point.rs"]
+ mod readout;
++#[allow(dead_code)]
++#[path = "../../examples/support/grounded_care_reference_v1.rs"]
++pub(super) mod reference;
+ use alife_core::*;
+ use alife_runtime::canonical_preparation::foundation_construction_development;
+ use alife_world::*;
+@@ -24,6 +27,12 @@ pub struct Recipe {
+     pub metadata: Value,
+ }
+ pub fn build(seed: u64, timer: bool) -> Result<Recipe> {
++    build_revision(seed, timer, false)
++}
++pub fn build_matched_reference(seed: u64, timer: bool) -> Result<Recipe> {
++    build_revision(seed, timer, true)
++}
++fn build_revision(seed: u64, timer: bool, matched_reference: bool) -> Result<Recipe> {
+     let mut config = CanonicalNewGameConfig::phase3(seed, 1)?;
+     config.brain_class = BrainScaleTier::Standard2048;
+     let builtin = FoundationWeightAsset::builtin_n2048_v1(config.sensor_profile)?;
+@@ -109,6 +118,13 @@ pub fn build(seed: u64, timer: bool) -> Result<Recipe> {
+     {
+         return Err("qualified bounded reader coordinates changed".into());
+     }
++    let reference_revision = if matched_reference {
++        let (next, metadata) = reference::build(&bounded, &weights)?;
++        weights = next;
++        Some(metadata)
++    } else {
++        None
++    };
+     let source_asset = FoundationWeightAsset::from_trained_weights(
+         &bounded,
+         weights,
+@@ -191,12 +207,17 @@ pub fn build(seed: u64, timer: bool) -> Result<Recipe> {
+     {
+         return Err("composed birth capability or valuation mismatch".into());
+     }
+-    let metadata = json!({"recipe":"B1+bounded-reader+four-head+awake-rest-v1", "seed":seed,"timer":timer,
++    let mut metadata = json!({"recipe":"B1+bounded-reader+four-head+awake-rest-v1", "seed":seed,"timer":timer,
+         "b1_recipe":"whole-care6/counterbalance/full references/dedicated fatigue B/tonic-on",
+         "reader_is_authored_not_learned":true,"reader_rows":reader,"reader_sha256":reader_sha256,"differential":differential,"references":references,"dedicated_b":dedicated_b,
+         "source_asset":source_asset.digest(),"target_asset":transfer.asset.digest(),"inputs":transfer.inputs.canonical_digest(),
+         "phenotype":transfer.phenotype.phenotype_hash(),"added_zero_rows":transfer.added_zero_rows,
+         "reader_max_abs":reader_max,"genotype_sha256":format!("{:x}",Sha256::digest(serde_json::to_vec(&genotype)?)),"expressed_graph":genotype.express_n2048_grounded_drive_research()?.chemistry.biochemical,"pressure_value":0.,"world_steps":0,"neural_steps":0,"optimizer_steps":0});
++    if let Some(revision) = reference_revision {
++        metadata["recipe"] =
++            json!("B1+bounded-reader+four-head+awake-rest+care-matched-reference-v1");
++        metadata["source_revision"] = revision;
++    }
+     Ok(Recipe {
+         config,
+         genotype,
+diff --git a/crates/alife_training/src/cpu/grouped_host_food_tests.rs b/crates/alife_training/src/cpu/grouped_host_food_tests.rs
+index 8979d0ed0014306b0db64838ac065e147847052e..fde7fcb66810694ca3b4552c07a9a7d3db19bc34 100644
+--- a/crates/alife_training/src/cpu/grouped_host_food_tests.rs
++++ b/crates/alife_training/src/cpu/grouped_host_food_tests.rs
+@@ -337,3 +337,6 @@ fn grouped_host_reachable_negative_food_reports_actual_native_outcome() {
+     // the same harmless food was actually consumed, never a hazardous rejection.
+     eprintln!("GROUPED_FOOD_NEGATIVE consumed={} physical_ingestions={}; compare with positive arm, do not interpret a bounded non-ingestion alone as learned avoidance",trace.consumed,trace.physical_ingestions);
+ }
++
++#[path = "grouped_source_diagnosis.rs"]
++mod diagnosis;
+diff --git a/crates/alife_training/src/cpu/grouped_host_loop.rs b/crates/alife_training/src/cpu/grouped_host_loop.rs
+index 0c4aef0369bc26fc42ec99a93a73f96411482bab..f41628349be9bebbacdc8d2dba55c8ef61697243 100644
+--- a/crates/alife_training/src/cpu/grouped_host_loop.rs
++++ b/crates/alife_training/src/cpu/grouped_host_loop.rs
+@@ -757,6 +757,14 @@ impl CpuCanonicalHost {
+                 .ok_or(CpuHostError::State("sequence overflow"))?;
+             let grouped = r.grouped.as_ref().unwrap();
+             decisions.push(CpuGroupedM2HostDecisionV1 {
++                #[cfg(test)]
++                source_trace_initial: output.initial,
++                #[cfg(test)]
++                source_trace_tick: output.replay_tick,
++                #[cfg(test)]
++                source_trace_effects: effects,
++                #[cfg(test)]
++                source_trace_grip: receipt.grip_transfers,
+                 organism_id: id,
+                 sampling_counter,
+                 action,
+diff --git a/crates/alife_training/src/cpu/grouped_host_tests.rs b/crates/alife_training/src/cpu/grouped_host_tests.rs
+index 843b8c24882a0d0bc18c20f4e5a20a99ebe67126..296cfbe59c7fe004417d54d480ff3d94de79b68a 100644
+--- a/crates/alife_training/src/cpu/grouped_host_tests.rs
++++ b/crates/alife_training/src/cpu/grouped_host_tests.rs
+@@ -9,6 +9,12 @@ mod recipe;
+ const SEED: u64 = 0x0347_5250_484F_5354;
+ fn fixture(preparation: u64) -> (CpuGroupedM2HostV1, PhenotypeCompilerInputs) {
+     let recipe = recipe::build(SEED, true).unwrap();
++    fixture_from_recipe(preparation, recipe)
++}
++fn fixture_from_recipe(
++    preparation: u64,
++    recipe: recipe::Recipe,
++) -> (CpuGroupedM2HostV1, PhenotypeCompilerInputs) {
+     let mut trainer = CpuFoundationTrainer::new(
+         recipe.phenotype.clone(),
+         recipe.asset.clone(),
+diff --git a/crates/alife_training/src/cpu/grouped_source_diagnosis.rs b/crates/alife_training/src/cpu/grouped_source_diagnosis.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..83ffd4b19ca5558e22cc722ead0dff0ee5b7daf6
+--- /dev/null
++++ b/crates/alife_training/src/cpu/grouped_source_diagnosis.rs
+@@ -0,0 +1,608 @@
++//! Fresh source diagnosis, not a policy or biological hunger intervention.
++//! Exact captured native source inputs are replayed with fixed receptors and
++//! candidate context. Synthetic drive clamps are labelled and never dispatched.
++use super::*;
++use crate::cpu::replay::{route_fires, SparseGraph};
++use crate::TrainingSequence;
++use serde_json::{json, Value};
++use sha2::{Digest, Sha256};
++
++const TRACKED: [u32; 20] = [
++    256, 1952, 896, 1824, 1839, 257, 1953, 897, 1793, 260, 1956, 900, 1796, 1807, 383, 1967, 262,
++    1958, 902, 1823,
++];
++
++fn bits(v: &[f32]) -> Vec<u32> {
++    v.iter().map(|v| v.to_bits()).collect()
++}
++fn encoded_home(
++    p: &BrainPhenotype,
++    effects: &NeuralReceptorEffects,
++    lane: u16,
++    value: f32,
++) -> (usize, f32) {
++    let assignments = p
++        .sensor_encoder()
++        .assignments()
++        .iter()
++        .filter(|a| {
++            a.source_group() == SensorEncoderSourceGroup::Homeostasis && a.source_index() == lane
++        })
++        .collect::<Vec<_>>();
++    assert_eq!(assignments.len(), 1);
++    let a = assignments[0];
++    assert_eq!(
++        p.sensor_encoder()
++            .assignments()
++            .iter()
++            .filter(|other| other.target_neuron() == a.target_neuron())
++            .count(),
++        1
++    );
++    let (min, max) = a.clamp_range();
++    let gate =
++        (effects.structural_growth_gate + effects.sleep_gate + effects.consolidation_gate) / 3.;
++    let signal = (value * effects.interoceptive_gain * a.scale() + a.bias()).clamp(min, max);
++    (
++        a.target_neuron() as usize,
++        (signal * effects.regional_excitability + (gate - 0.5) * 0.05).clamp(-1., 1.),
++    )
++}
++fn trace(p: &BrainPhenotype, weights: &[f32], q: &TrainingSequence) -> Value {
++    let tape = SparseGraph::new(p).forward(p, weights, q).unwrap();
++    let steps = p.microstep_count() as usize;
++    let mut rows = vec![];
++    for (iteration, tick) in q.ticks.iter().enumerate() {
++        for microstep in 0..tick.microstep_count as usize {
++            let index = iteration * steps + microstep;
++            let previous = &tape.a[index];
++            let neurons = TRACKED.iter().map(|&neuron| {
++                let target = neuron as usize;
++                let mut products = vec![];
++                let mut recurrent = 0.;
++                for (i,s) in p.synapses().iter().enumerate().filter(|(_,s)| s.kind() == CompiledSynapseKind::Recurrent && s.target() == neuron) {
++                    let effective = weights[i] + tick.effective_weight_offsets[i];
++                    if tick.enabled_routes[s.route_index() as usize] && route_fires(p.projections()[s.route_index() as usize].update_cadence().raw(), microstep) {
++                        let product = previous[s.source() as usize] * effective;
++                        recurrent += product;
++                        if effective != 0. { products.push(json!({"row":i,"source":s.source(),"route":s.route_index(),"weight":effective,"pre":previous[s.source() as usize],"product":product})); }
++                    }
++                }
++                for s in tick.structural_synapses.iter().filter(|s| s.target == neuron) {
++                    if tick.enabled_routes[s.route as usize] && route_fires(s.cadence as u8,microstep) { recurrent += previous[s.source as usize] * s.effective_weight; }
++                }
++                let dendritic = q.initial.dendrites.branches()[q.initial.dendrites.target_span(neuron)].iter().map(|b| crate::cpu::native_kernel::dendritic_activation(previous,b)).sum::<f32>();
++                let d = p.neuron_dynamics()[target];
++                json!({"neuron":neuron,"before":previous[target],"after":tape.a[index+1][target],"encoded":tick.encoded_inputs[target],"recurrent":recurrent,"dendritic":dendritic,"bias":d.bias(),"projection_gain":tick.projection_gain,"threshold":tick.local_threshold_shift,"metabolic_before":tape.m[index][target],"homeostatic_gain":d.homeostatic_gain(),"products":products})
++            }).collect::<Vec<_>>();
++            rows.push(
++                json!({"source_iteration":iteration+1,"microstep":microstep,"neurons":neurons}),
++            );
++        }
++    }
++    json!({"microsteps_per_iteration":q.ticks[0].microstep_count,"compiled_microsteps":steps,"logits":tape.evaluation.candidate_logits,"microsteps":rows,"final_activation_bits":bits(tape.evaluation.final_activations.last().unwrap())})
++}
++
++#[test]
++fn grouped_taste_native_cold_source_diagnosis() {
++    let (mut positive, _, _) = matched_food_pair();
++    let first = positive.step(TEMPERATURE).unwrap();
++    let d = &first.decisions[0];
++    let p = positive.founder.phenotype();
++    let q = TrainingSequence {
++        phenotype_hash: p.phenotype_hash(),
++        initial: d.source_trace_initial.clone(),
++        ticks: vec![d.source_trace_tick.clone(); 12],
++        burn_in_ticks: 0,
++        memory_candidate_gain: p
++            .candidate_decoder()
++            .memory_channel()
++            .unwrap()
++            .max_candidate_gain(),
++    };
++    assert!(q.initial.activations.iter().all(|x| *x == 0.));
++    let tape = SparseGraph::new(p)
++        .forward(p, positive.founder.weights(), &q)
++        .unwrap();
++    assert_eq!(
++        bits(&tape.evaluation.candidate_logits[0]),
++        bits(&d.source_diagnostic_logits)
++    );
++    let body = d.patch.pre_action().perception().homeostasis();
++    for (lane, value) in body.drives.to_array().iter().enumerate() {
++        let (i, v) = encoded_home(p, &d.source_trace_effects, lane as u16, *value);
++        assert_eq!(v.to_bits(), q.ticks[0].encoded_inputs[i].to_bits());
++    }
++    let mut cases = vec![
++        json!({"case":"actual_first_frame_frozen_context","scope":"first iteration matches actual source exactly; iterations2-12 detached fixed-frame recurrence, not a living trajectory","trace":trace(p,positive.founder.weights(),&q)}),
++    ];
++    for (axis, lane, values) in [
++        ("hunger", 0, [0., 0.35, 0.9]),
++        ("fear", 2, [0., 0.25, 0.9]),
++        ("pain", 3, [0., 0.1, 0.9]),
++    ] {
++        for value in values {
++            let mut control = q.clone();
++            let (i, v) = encoded_home(p, &d.source_trace_effects, lane, value);
++            for t in &mut control.ticks {
++                t.encoded_inputs[i] = v;
++            }
++            cases.push(json!({"case":format!("synthetic_{axis}_{value}"),"scope":"detached encoded-drive clamp; actual receptors, other encoded inputs and candidate context held fixed; no world or physiology intervention","axis":axis,"drive":value,"neuron":i,"encoded":v,"trace":trace(p,positive.founder.weights(),&control)}));
++        }
++    }
++    let recipe = super::super::recipe::build(super::super::SEED, true).unwrap();
++    let result = json!({"schema":"grouped-m2-cold-source-diagnosis-v1","source_commit":"32e109372be39a19cabf7d9fc7cbcd9ca7c91c19","unit_seed":super::super::SEED,"source_metadata":recipe.metadata,"source_phenotype":p.phenotype_hash(),"weights_sha256":format!("{:x}",Sha256::digest(serde_json::to_vec(positive.founder.weights()).unwrap())),"source_initial":q.initial,"actual_body":body,"receptor_effects":d.source_trace_effects,"actual_tick":d.source_trace_tick,"cases":cases,"actual_world_decisions":1,"synaptic_updates":0});
++    eprintln!(
++        "TASTE_SOURCE_DIAG {}",
++        serde_json::to_string(&result).unwrap()
++    );
++}
++
++fn object_state(host: &CpuGroupedM2HostV1, food: WorldEntityId) -> Value {
++    let o = host.world().entity(food).unwrap();
++    json!({"held_by":o.carried_by,"position":o.position,"consumed":o.consumed,"chemical0_proposal":o.grounded_physical.chemical[0],"chemical2_oral":o.grounded_physical.chemical[2]})
++}
++#[test]
++fn grouped_taste_native_actual_ownership_diagnosis() {
++    let (positive, negative, food) = matched_food_pair();
++    let mut arms = vec![];
++    for (label, mut host) in [("positive", positive), ("negative", negative)] {
++        let original = frozen(&host);
++        let mut rows = vec![];
++        for _ in 0..INTERVAL_LIMIT {
++            let before = object_state(&host, food);
++            let step = host.step(TEMPERATURE).unwrap();
++            let after = object_state(&host, food);
++            for d in step.decisions {
++                let transfers=d.source_trace_grip.iter().map(|g| json!({"object":g.object,"previous_owner":g.previous_owner,"new_owner":g.new_owner,"previous_position":g.previous_position,"new_position":g.new_position,"kind":format!("{:?}",g.kind)})).collect::<Vec<_>>();
++                rows.push(json!({"tick":step.tick_before,"decision":rows.len()+1,"before":before,"after":after,"grip_transfers":transfers,"bundle":d.patch.selected_bundle(),"physical":d.patch.outcome().physical,"joint":d.patch.outcome().joint,"source_logits":d.source_diagnostic_logits,"components":d.motor.native.core.components,"ordinary_scores":d.motor.native.scores.ordinary,"probabilities":d.motor.native.scores.probabilities(d.action.temperature).unwrap(),"selected":d.action}));
++            }
++            assert_eq!(frozen(&host), original);
++            if host.world().entity(food).unwrap().consumed {
++                break;
++            }
++        }
++        arms.push(json!({"arm":label,"decisions":rows,"final":object_state(&host,food)}));
++    }
++    eprintln!(
++        "TASTE_OWNERSHIP_DIAG {}",
++        json!({"schema":"corrected-c0-ownership-diagnosis-v1","source_commit":"32e109372be39a19cabf7d9fc7cbcd9ca7c91c19","unit_seed":super::super::SEED,"scope":"bounded actual fresh physical fixtures; C0 proposal differs, C2 oral taste matched; no source retune or synaptic learning","arms":arms})
++    );
++}
++
++fn compact_source(p: &BrainPhenotype, weights: &[f32], q: &TrainingSequence) -> Value {
++    let tape = SparseGraph::new(p).forward(p, weights, q).unwrap();
++    let steps = p.microstep_count() as usize;
++    json!({"iterations":(0..q.ticks.len()).map(|i| {
++        let a=&tape.a[(i+1)*steps];
++        let tracked=[382,1966,911,1824,1839,1793,1796,1807,1814,1823].map(|n|json!({"neuron":n,"activation":a[n]}));
++        json!({"iteration":i+1,"ingest_contrast":a[1824]-a[1839],"avoid_contrast_sum":a[1793]+a[1796]-2.*a[1807],"contact_contrast":a[1814]-a[1823],"logits":tape.evaluation.candidate_logits[i],"tracked":tracked})
++    }).collect::<Vec<_>>()})
++}
++
++#[test]
++fn grouped_taste_reference_candidate_probe() {
++    let (mut host, _, _) = matched_food_pair();
++    let first = host.step(TEMPERATURE).unwrap();
++    let d = &first.decisions[0];
++    let p = host.founder.phenotype();
++    let candidate =
++        super::super::recipe::build_matched_reference(super::super::SEED, true).unwrap();
++    let cp = &candidate.phenotype;
++    assert_ne!(p.phenotype_hash(), cp.phenotype_hash());
++    assert_eq!(p.neuron_dynamics(), cp.neuron_dynamics());
++    assert_eq!(p.sensor_encoder(), cp.sensor_encoder());
++    assert_eq!(p.candidate_decoder(), cp.candidate_decoder());
++    assert_eq!(p.synapses().len(), cp.synapses().len());
++    let changed = host
++        .founder
++        .weights()
++        .iter()
++        .zip(candidate.asset.weights())
++        .enumerate()
++        .filter(|(_, (a, b))| a.to_bits() != b.to_bits())
++        .map(|(i, (a, b))| json!({"row":i,"before":a,"after":b}))
++        .collect::<Vec<_>>();
++    assert_eq!(changed.len(), 6);
++    assert!(changed.iter().all(|c| c["before"] == 0.));
++    let base = TrainingSequence {
++        phenotype_hash: p.phenotype_hash(),
++        initial: d.source_trace_initial.clone(),
++        ticks: vec![d.source_trace_tick.clone(); 48],
++        burn_in_ticks: 0,
++        memory_candidate_gain: p
++            .candidate_decoder()
++            .memory_channel()
++            .unwrap()
++            .max_candidate_gain(),
++    };
++    let mut controls = vec![("actual_fixed_context".to_string(), base.clone())];
++    for (name, lane, values) in [
++        ("hunger", 0, [0., 0.35, 0.9]),
++        ("fear", 2, [0., 0.25, 0.9]),
++        ("pain", 3, [0., 0.1, 0.9]),
++    ] {
++        for value in values {
++            let mut q = base.clone();
++            let (n, x) = encoded_home(p, &d.source_trace_effects, lane, value);
++            for t in &mut q.ticks {
++                t.encoded_inputs[n] = x;
++            }
++            controls.push((format!("synthetic_{name}_{value}"), q));
++        }
++    }
++    let mut q = base.clone();
++    for lane in [0, 2, 3, 5] {
++        let (n, x) = encoded_home(p, &d.source_trace_effects, lane, 0.);
++        for t in &mut q.ticks {
++            t.encoded_inputs[n] = x;
++        }
++    }
++    controls.push(("synthetic_all_care_inputs_zero".into(), q));
++    let mut q = base.clone();
++    for t in &mut q.ticks {
++        t.encoded_inputs.fill(0.);
++    }
++    controls.push(("synthetic_all_encoded_inputs_zero".into(), q));
++    for offset in [-0.1_f32, 0.1] {
++        let mut q = base.clone();
++        for t in &mut q.ticks {
++            for x in &mut t.encoded_inputs {
++                *x = (*x + offset).clamp(-1., 1.);
++            }
++        }
++        controls.push((format!("synthetic_common_offset_{offset}"), q));
++    }
++    for threshold in [0., 0.5] {
++        let mut q = base.clone();
++        for t in &mut q.ticks {
++            t.local_threshold_shift = threshold;
++        }
++        controls.push((format!("synthetic_common_threshold_{threshold}"), q));
++    }
++    let cases = controls
++        .into_iter()
++        .map(|(name, q)| {
++            let old = compact_source(p, host.founder.weights(), &q);
++            let mut next = q.clone();
++            next.phenotype_hash = cp.phenotype_hash();
++            let new = compact_source(cp, candidate.asset.weights(), &next);
++            json!({"case":name,"baseline":old,"candidate":new})
++        })
++        .collect::<Vec<_>>();
++    // These are causal native-circuit gates, not a permanent refusal objective.
++    let fields = ["ingest_contrast", "avoid_contrast_sum", "contact_contrast"];
++    for case in &cases {
++        let rows = case["candidate"]["iterations"].as_array().unwrap();
++        for field in fields {
++            assert_eq!(
++                rows[0][field].as_f64().unwrap(),
++                0.,
++                "cold common-mode: {} {field}",
++                case["case"]
++            );
++            assert!(
++                rows.iter().all(|r| r[field].as_f64().unwrap() >= -1e-4),
++                "negative need contrast: {} {field}",
++                case["case"]
++            );
++            if case["case"].as_str().unwrap().contains("inputs_zero") {
++                assert!(
++                    rows.iter().all(|r| r[field].as_f64().unwrap().abs() < 1e-4),
++                    "zero-drive residual: {} {field}",
++                    case["case"]
++                );
++            }
++        }
++    }
++    for (axis, field) in [
++        ("hunger", "ingest_contrast"),
++        ("fear", "avoid_contrast_sum"),
++        ("pain", "avoid_contrast_sum"),
++    ] {
++        let low = cases
++            .iter()
++            .find(|c| c["case"] == format!("synthetic_{axis}_0"))
++            .unwrap();
++        let high = cases
++            .iter()
++            .find(|c| c["case"] == format!("synthetic_{axis}_0.9"))
++            .unwrap();
++        for i in 0..48 {
++            let derivative = |arm: &str| {
++                high[arm]["iterations"][i][field].as_f64().unwrap()
++                    - low[arm]["iterations"][i][field].as_f64().unwrap()
++            };
++            assert!(
++                (derivative("candidate") - derivative("baseline")).abs() < 1e-4,
++                "need derivative changed: {axis} iteration{}",
++                i + 1
++            );
++        }
++        assert!(
++            high["candidate"]["iterations"][47][field].as_f64().unwrap()
++                > low["candidate"]["iterations"][47][field].as_f64().unwrap() + 0.05
++        );
++        if axis == "hunger" {
++            assert!(low["candidate"]["iterations"]
++                .as_array()
++                .unwrap()
++                .iter()
++                .all(|r| r[field].as_f64().unwrap() == 0.));
++        }
++    }
++    eprintln!(
++        "TASTE_REFERENCE_PROBE {}",
++        json!({"schema":"care-matched-reference-six-rows-v1-probe","scope":"authored fresh source, detached native fixed-frame diagnostic, not qualified biological care or learning; one baseline world decision captures input","candidate_metadata":candidate.metadata,"changed_grounded_rows":changed,"old_phenotype":p.phenotype_hash(),"new_phenotype":cp.phenotype_hash(),"source_controller_rows_unchanged":true,"cases":cases})
++    );
++}
++
++#[test]
++fn grouped_taste_reference_warm_transition_probe() {
++    let (mut host, _, _) = matched_food_pair();
++    let first = host.step(TEMPERATURE).unwrap();
++    let d = &first.decisions[0];
++    let candidate =
++        super::super::recipe::build_matched_reference(super::super::SEED, true).unwrap();
++    let p = &candidate.phenotype;
++    let mut arms = vec![];
++    for (before, after) in [(0., 0.9), (0.9, 0.), (0.9, 0.35), (0.35, 0.)] {
++        let mut q = TrainingSequence {
++            phenotype_hash: p.phenotype_hash(),
++            initial: d.source_trace_initial.clone(),
++            ticks: vec![d.source_trace_tick.clone(); 48],
++            burn_in_ticks: 0,
++            memory_candidate_gain: p
++                .candidate_decoder()
++                .memory_channel()
++                .unwrap()
++                .max_candidate_gain(),
++        };
++        let (n, x) = encoded_home(p, &d.source_trace_effects, 0, before);
++        for t in &mut q.ticks {
++            t.encoded_inputs[n] = x;
++        }
++        let warm = SparseGraph::new(p)
++            .forward(p, candidate.asset.weights(), &q)
++            .unwrap();
++        q.initial.activations = warm.evaluation.final_activations.last().unwrap().clone();
++        q.initial.activity_ema = warm.evaluation.final_activity_ema.last().unwrap().clone();
++        q.initial.metabolic_load = warm.evaluation.final_metabolic_load.last().unwrap().clone();
++        let (n, x) = encoded_home(p, &d.source_trace_effects, 0, after);
++        for t in &mut q.ticks {
++            t.encoded_inputs[n] = x;
++        }
++        let outcome = compact_source(p, candidate.asset.weights(), &q);
++        let rows = outcome["iterations"].as_array().unwrap();
++        assert!(rows
++            .iter()
++            .all(|r| r["ingest_contrast"].as_f64().unwrap() >= -1e-5));
++        if after == 0. {
++            assert!(
++                rows.last().unwrap()["ingest_contrast"]
++                    .as_f64()
++                    .unwrap()
++                    .abs()
++                    < 1e-5
++            );
++        } else {
++            assert!(rows.last().unwrap()["ingest_contrast"].as_f64().unwrap() > 0.02);
++        }
++        arms.push(json!({"hunger_before":before,"hunger_after":after,"scope":"detached native48-iteration warmup then48 iterations after encoded H change; same actual receptors and candidate context, not a biological meal","candidate":outcome}));
++    }
++    eprintln!(
++        "TASTE_REFERENCE_WARM {}",
++        json!({"candidate":candidate.metadata["recipe"],"arms":arms})
++    );
++}
++
++#[test]
++fn grouped_taste_reference_actual_food_and_cold_continuation() {
++    let mut arms = vec![];
++    for taste in [TASTE_MAGNITUDE, -TASTE_MAGNITUDE] {
++        let recipe =
++            super::super::recipe::build_matched_reference(super::super::SEED, true).unwrap();
++        let (mut host, inputs) = super::super::fixture_from_recipe(240, recipe);
++        let food = add_harmless_food(&mut host, taste);
++        let original = frozen(&host);
++        let mut cold: Option<CpuGroupedM2HostV1> = None;
++        let mut rows = vec![];
++        let mut ingestions = 0;
++        let mut continuations = 0;
++        for interval in 0..INTERVAL_LIMIT {
++            let before = object_state(&host, food);
++            let step = host.step(TEMPERATURE).unwrap();
++            assert_eq!(step.decisions.len(), 1);
++            if let Some(mut restored) = cold.take() {
++                continuations += 1;
++                let repeated = restored.step(TEMPERATURE).unwrap();
++                assert_eq!(repeated.decisions.len(), 1);
++                assert_eq!(
++                    bytes(&repeated.decisions[0].action),
++                    bytes(&step.decisions[0].action)
++                );
++                assert_eq!(
++                    host.checkpoint().unwrap().encode().unwrap(),
++                    restored.checkpoint().unwrap().encode().unwrap()
++                );
++            }
++            for d in step.decisions {
++                let ingest = d
++                    .patch
++                    .pre_action()
++                    .perception()
++                    .candidates()
++                    .iter()
++                    .position(|c| c.family == CandidateActionFamily::Ingest)
++                    .unwrap();
++                let source_s = d.motor.native.core.components[ingest][0];
++                if interval == 0 {
++                    assert_eq!(source_s, 0.);
++                } else if taste > 0. {
++                    assert!(
++                        source_s > 0.,
++                        "positive cue source S must stay positive in this actual context"
++                    );
++                } else {
++                    assert!(
++                        source_s < 0.,
++                        "negative cue source S must stay negative in this actual context"
++                    );
++                }
++                let consumed = d
++                    .patch
++                    .outcome()
++                    .joint
++                    .as_ref()
++                    .unwrap()
++                    .channel_outcomes
++                    .iter()
++                    .any(|c| {
++                        c.physical.contact == PhysicalContactKind::Consumed
++                            && c.physical.target_entity == Some(food)
++                    });
++                ingestions += usize::from(consumed);
++                let transfers=d.source_trace_grip.iter().map(|g|json!({"kind":format!("{:?}",g.kind),"previous_owner":g.previous_owner,"new_owner":g.new_owner,"previous_position":g.previous_position,"new_position":g.new_position})).collect::<Vec<_>>();
++                rows.push(json!({"decision":rows.len()+1,"tick":step.tick_before,"before":before,"after":object_state(&host,food),"consumed_receipt":consumed,"grip_transfers":transfers,"source_logits":d.source_diagnostic_logits,"native_components":d.motor.native.core.components,"probabilities":d.motor.native.scores.probabilities(d.action.temperature).unwrap(),"action":d.action,"bundle":d.patch.selected_bundle(),"physiology":d.patch.outcome().measured_physiology}));
++            }
++            assert_eq!(original, frozen(&host));
++            if interval == 0 {
++                let saved = decode_exact(&host.checkpoint().unwrap());
++                cold = Some(
++                    CpuGroupedM2HostV1::restore(saved, &inputs, MediationModeV1::Full).unwrap(),
++                );
++            }
++            if host.world().entity(food).unwrap().consumed {
++                break;
++            }
++        }
++        assert_eq!(
++            continuations, 1,
++            "cold continuation must execute, not only restore"
++        );
++        assert_eq!(host.world().entity(food).unwrap().consumed, ingestions == 1);
++        if taste > 0. {
++            assert_eq!(
++                ingestions, 1,
++                "matched-reference source lost positive food competence in declared bound"
++            );
++        }
++        arms.push(json!({"chemical0_proposal":taste,"chemical2_oral":host.world().entity(food).unwrap().grounded_physical.chemical[2],"actual_decisions":rows.len(),"physical_ingestions":ingestions,"decisions":rows}));
++    }
++    eprintln!(
++        "TASTE_REFERENCE_WORLD {}",
++        json!({"candidate":"care-matched-reference-six-rows-v1","scope":"fresh native fixed-seed24-interval actual food controls with synapses closed; no permanent negative-cue refusal requirement","arms":arms})
++    );
++}
++
++#[test]
++fn grouped_taste_reference_identity_and_work_contract() {
++    let (mut old, old_inputs) = super::super::fixture(240);
++    let recipe = super::super::recipe::build_matched_reference(super::super::SEED, true).unwrap();
++    let (mut new, new_inputs) = super::super::fixture_from_recipe(240, recipe);
++    assert_ne!(old_inputs, new_inputs);
++    for (checkpoint, wrong_inputs) in [
++        (old.checkpoint().unwrap(), &new_inputs),
++        (new.checkpoint().unwrap(), &old_inputs),
++    ] {
++        let error = CpuGroupedM2HostV1::restore(
++            decode_exact(&checkpoint),
++            wrong_inputs,
++            MediationModeV1::Full,
++        )
++        .err()
++        .expect("cross-source restore must reject");
++        assert!(error
++            .to_string()
++            .contains("grouped M2 source, controller, profile or policy mismatch"));
++    }
++    add_harmless_food(&mut old, TASTE_MAGNITUDE);
++    add_harmless_food(&mut new, TASTE_MAGNITUDE);
++    let before_old = frozen(&old);
++    let before_new = frozen(&new);
++    let a = old.step(TEMPERATURE).unwrap();
++    let b = new.step(TEMPERATURE).unwrap();
++    assert_eq!(a.decisions.len(), 1);
++    assert_eq!(b.decisions.len(), 1);
++    assert_eq!(
++        bytes(&a.decisions[0].brain_work),
++        bytes(&b.decisions[0].brain_work)
++    );
++    assert_eq!(a.decisions[0].motor.native.core.source_execution_count, 1);
++    assert_eq!(b.decisions[0].motor.native.core.source_execution_count, 1);
++    assert_eq!(before_old, frozen(&old));
++    assert_eq!(before_new, frozen(&new));
++    eprintln!(
++        "TASTE_REFERENCE_IDENTITY {}",
++        json!({"cross_source_rejections":2,"old_work":a.decisions[0].brain_work,"new_work":b.decisions[0].brain_work,"scope":"same first actual frame derived semantic/charged work counters; not measured CPU products or wall-clock compute equivalence"})
++    );
++}
++
++#[test]
++fn grouped_taste_reference_heldout_readout_contexts() {
++    let (mut host, _, _) = matched_food_pair();
++    let first = host.step(TEMPERATURE).unwrap();
++    let d = &first.decisions[0];
++    let candidate =
++        super::super::recipe::build_matched_reference(super::super::SEED, true).unwrap();
++    let p = &candidate.phenotype;
++    let mut q = TrainingSequence {
++        phenotype_hash: p.phenotype_hash(),
++        initial: d.source_trace_initial.clone(),
++        ticks: vec![d.source_trace_tick.clone(); 48],
++        burn_in_ticks: 0,
++        memory_candidate_gain: p
++            .candidate_decoder()
++            .memory_channel()
++            .unwrap()
++            .max_candidate_gain(),
++    };
++    let warm = SparseGraph::new(p)
++        .forward(p, candidate.asset.weights(), &q)
++        .unwrap();
++    q.initial.activations = warm.evaluation.final_activations.last().unwrap().clone();
++    q.initial.activity_ema = warm.evaluation.final_activity_ema.last().unwrap().clone();
++    q.initial.metabolic_load = warm.evaluation.final_metabolic_load.last().unwrap().clone();
++    q.ticks.truncate(1);
++    let ingest = q.ticks[0]
++        .candidates
++        .iter()
++        .position(|c| c.family == CandidateActionFamily::Ingest)
++        .unwrap();
++    let avoid = q.ticks[0]
++        .candidates
++        .iter()
++        .position(|c| c.family == CandidateActionFamily::Avoid)
++        .unwrap();
++    let mut rows = vec![];
++    for magnitude in [0.15_f32, 0.55, 0.95] {
++        for distance in [0., 0.25, 0.75] {
++            let mut outcomes = vec![];
++            for cue in [magnitude, -magnitude] {
++                let mut context = q.clone();
++                for c in &mut context.ticks[0].candidates {
++                    c.decoder_inputs[2] = distance;
++                    c.decoder_inputs[15] = cue;
++                    c.decoder_inputs[37] = cue.max(0.);
++                    c.decoder_inputs[38] = (-cue).max(0.);
++                }
++                outcomes.push(
++                    SparseGraph::new(p)
++                        .forward(p, candidate.asset.weights(), &context)
++                        .unwrap(),
++                );
++            }
++            let positive = &outcomes[0].evaluation;
++            let negative = &outcomes[1].evaluation;
++            assert_eq!(positive.final_activations, negative.final_activations);
++            assert_eq!(positive.final_metabolic_load, negative.final_metabolic_load);
++            assert!(positive.candidate_logits[0][ingest] > negative.candidate_logits[0][ingest]);
++            assert!(positive.candidate_logits[0][avoid] < negative.candidate_logits[0][avoid]);
++            rows.push(json!({"cue_magnitude":magnitude,"distance_lane2":distance,"positive_ingest":positive.candidate_logits[0][ingest],"negative_ingest":negative.candidate_logits[0][ingest],"positive_avoid":positive.candidate_logits[0][avoid],"negative_avoid":negative.candidate_logits[0][avoid]}));
++        }
++    }
++    eprintln!(
++        "TASTE_REFERENCE_HELDOUT {}",
++        json!({"scope":"detached conditional native readout controls, 9 matched contexts declared after six-row candidate; same actual receptors/encoded inputs and warm state; no world trajectories or seed generalization","rows":rows})
++    );
++}
+diff --git a/docs/experiments/m2-taste-baseline-v1/README.md b/docs/experiments/m2-taste-baseline-v1/README.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..4f7e1e7462e817f86d676c3e5d2f7b8ee44cdaa9
+--- /dev/null
++++ b/docs/experiments/m2-taste-baseline-v1/README.md
+@@ -0,0 +1,93 @@
++# Fresh M2 source operating-point investigation
++
++The unchanged host parent is `32e109372be39a19cabf7d9fc7cbcd9ca7c91c19`, tree
++`b8089fc1`. This separate worktree preserves the initial diagnosis and adds
++one named six-row authored source candidate. It does not retune that host,
++change world legality, enable synaptic learning, import an old life, or use
++the reserved actual-study seeds. The existing declared GRPHOST unit seed and
++fresh canonical body constructor are retained.
++
++## Initial evidence and limits
++
++The corrected chemical[0] pair in the parent consumed positive-cue food at
++decision 2 and negative-cue food at decision 22. Both foods were harmless and
++nutritious. This result does not prescribe permanent bitter-food refusal and
++does not establish general discrimination, benefit, or learned preference. The
++earlier chemical[2] manipulation did not vary the primary source cue and must
++not be revived as evidence of a primary-cue discrimination failure.
++
++The observed source Ingest proposal was +0.764805 for negative chemical[0] and
++-0.696315 for positive chemical[0]. Source Avoid had the opposite signs. M2
++compressed those signals without causing their reversal. Its drive proposal
++has a positive chemical cue but no negative chemical cue. NO_MANIPULATION is
++already an ordinary candidate; it must not be duplicated.
++
++The original source uses signed motor-reference contrasts multiplied by signed
++chemical cues. References lack the need motors' three-edge baseline path.
++Homeostatic and Modulatory routes update on microsteps 0/2, and motor output
++uses the previous microstep. The immediate cold response may therefore contain
++an unmatched common-mode response before need signals arrive. This was the
++initial mechanism hypothesis, subsequently tested as described in
++`RESULTS.md`. Ingest/Avoid motors are outside the first 64 inherited
++birth-dendrite targets.
++
++Representative forcing does not add marginal ManipEat probability here: both
++representative and channel factors use the same scores and temperature. The
++first-frame ManipEat marginals were 0.285655 negative and 0.215739 positive.
++Sampled trajectories may nevertheless differ through channel coupling and RNG.
++
++## Diagnostic stages
++
++1. Test-only captures retain the actual executed source initial state, replay
++   input, receptor effects and physical grip receipts. They are not persisted
++   or used by production dispatch.
++2. The first detached source iteration must match the actual source logits
++   bit-for-bit. Twelve iterations then replay that fixed frame with native
++   soma/kernel recurrence. Later iterations are not a biological life.
++3. Detached hunger/fear/pain zero, reference and high controls change only the
++   corresponding encoded homeostatic input, with actual receptors, common-mode
++   offsets and all other inputs held fixed. Each starts with the same fresh
++   neural state. They are not claims about a body made hungry or afraid.
++4. The corrected C0 food pair records each actual decision's ownership,
++   position, grip transfers, bundle and physical outcome. Do not assume food
++   stays held: same-target Grab releases it. NoManip does not release it.
++
++Chemical[0] is the current source-proposal cue at feature 15 and derived
++features 37–38. Chemical[2] is separately read for post-ingestion oral/tactile
++taste and remains matched in these controls. Profile 5 currently exposes
++object-slot chemical[0] at distance. Neither property should be silently
++relabelled as contact-only taste sensing.
++
++## Candidate decision
++
++The native diagnosis justified `care-matched-reference-six-rows-v1`: six
++previously zero recurrent rows add a zero-drive dynamical baseline to three
++existing reference motors. Decoder coefficients, source sensing, 814 fixed
++controller rows and world legality do not change. This is a new source asset
++and identity, not a trained checkpoint or edit of the frozen host.
++
++See `RESULTS.md` for measured mechanisms, actual outcomes, test gates,
++failures and limitations. The candidate repairs the diagnosed common-mode
++artifact in these native controls. It is not ecological qualification, proof
++of learned care, or a promotion over the frozen baseline. The actual
++positive/negative pair both consume at decision 10, versus baseline decisions
++2 and 22. Harmless negative-cue food remains edible; taste is not an absolute
++action gate.
++
++Large detailed diagnostics are stored as deterministic `.json.gz` files.
++`SOURCE_DIAG.json.gz` preserves the unchanged-source evidence from the first
++12 iterations. `REFERENCE_PROBE_V1.json.gz` preserves the initial candidate
++probe, including a later-discovered address-metadata mistake, not a weight
++mistake. The final gate artifact supersedes only that new six-row receipt's
++address labels. Source, phenotype and weight identities remain unchanged.
++Baseline reader address metadata has the same inherited indexing problem and
++is explicitly not used as an authoritative tuple map here; its historical hash
++is preserved.
++
++## Source-only review package
++
++`SOURCE_RECONSTRUCTION.md` identifies the exact base, included source files,
++reconstruction steps and address-label errata. It also provides readable
++labels for the compact summaries. Original JSON summaries and historical
++receipts are unchanged; this prose cleanup does not revise their measured
++values or hashes.
+diff --git a/docs/experiments/m2-taste-baseline-v1/RESULTS.md b/docs/experiments/m2-taste-baseline-v1/RESULTS.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..da94c4a8b1efbe064721eacc5ce32a0d9721c55b
+--- /dev/null
++++ b/docs/experiments/m2-taste-baseline-v1/RESULTS.md
+@@ -0,0 +1,228 @@
++# Native diagnosis and candidate history
++
++## Unchanged source diagnosis V1
++
++Command: `cargo test --offline -p alife_training --features cpu-backend --lib
++grouped_taste_native_ -- --test-threads=1 --nocapture`, with the coordinated
++single native lane, 1 build job, incremental compilation disabled, test/dev
++debug level 0, and no optimization override. Result: **2 passed, 0 failed**,
++72.25 seconds after the new worktree's 6 minute, 16 second local-crate
++rebuild. Log: `m2-taste-diagnosis-v1.log`. The first source iteration was
++required to match the actual host source logits bit-for-bit.
++
++The actual body's hunger was 0.35475585, fear 0.08741285 and pain 0. The
++runtime selected **three** source microsteps, not the compiled maximum of
++four. Common encoded offset was -0.01772759, local threshold 0.25 and
++projection gain 0.5. At the first microstep, hunger neuron 256 became
++-0.04127343; unsensed neuron 383 and relay neuron 896 became -0.06537726. At
++the second microstep, motor neuron 1824 received 4 times the negative
++activation of relay neuron 896 while reference neuron 1839 received only the
++same family's lateral input. At the third, they were -0.19496410 and
++-0.11886406, explaining the exact -0.07610004 contrast and the reversed cold
++chemical proposal.
++
++In the detached repeated actual frame, Ingest contrast was negative through
++iterations 1–3, became +0.11059 at iteration 4, and reached +0.52104 at
++iteration 12. Hunger 0 under the same receptors still reached +0.48735 at
++iteration 12; hunger 0.9 reached +0.56989. The warm positive pedestal is
++therefore mostly not hunger. Native traces show the unsensed neuron 383 is
++negative. Its reserve neuron 1967 receives gain 8 and becomes strongly
++negative, and the −4 tonic edge supplies a large positive current to the need
++relay. A reference that repairs only the first cold motor input would miss
++this warm baseline. Reversing taste coefficients would reverse the later
++response.
++
++The ownership run reproduced positive consumption at decision 2 and negative
++consumption at decision 22. Both acquired food via Eat at decision 1. In the negative-cue arm,
++Grab released the food at decision 2, then acquired and released it at decision pairs 5/7,
++8/9, 10/11 and 14/15, and acquired again at decision 20. At decision 21, Flee
++plus NoManip really moved the held food; at decision 22, Eat consumed it.
++Positive decision 2 combined Flee and consumption. This is actual receipt
++evidence for intermittent holding, not an assumption that the negative food
++remained held throughout. Chemical[2] oral taste was matched at +0.07450986.
++Neither food caused pain.
++
++`SOURCE_DIAG.json`, `OWNERSHIP_DIAG.json` and `SUMMARY.json` preserve the
++captured inputs, identities, source microsteps and actual physical evidence.
++These are fresh disposable test records, not imported pilot journals or
++learned lives.
++
++## Authored initial candidate: six-row matched reference V1
++
++After the above diagnosis, the first proposed source revision adds a baseline
++path through unsensed neuron 382 → reserve neuron 1966 → relay neuron 911,
++with weights 2 and 2. The shared tonic neuron 1967 → relay neuron 911 edge has
++weight −4. Relay neuron 911 feeds the existing Avoid, Contact and Ingest
++reference neurons 1807, 1823 and 1839, respectively, with weight 4. All six
++source rows must previously be zero, and the unsensed source must have no
++sensor assignment or recurrent input. Existing decoder coefficients, soma
++dynamics, source sensing, 814 controller rows and world rules remain
++unchanged.
++
++The named candidate is `care-matched-reference-six-rows-v1`; its recipe is
++`B1+bounded-reader+four-head+awake-rest+care-matched-reference-v1`. It is a
++fresh authored foundation asset with a new digest/phenotype identity, not
++learned state or an alteration of the qualified host's weights.
++
++The first probe compares 48 detached iterations against the original source at
++actual fixed context, single-axis zero/reference/high controls, all care
++inputs zero, all encoded inputs zero, and common offset/threshold variations.
++It checks the exact six-row edit and unchanged sensing/dynamics before
++reporting outcomes. It is a mechanism probe, not yet a successful repair
++qualification.
++
++Probe build V1 failed before executing: the JSON macro rejected an inline
++array `.map` expression in a diagnostic record. The expression was moved into
++a local variable; no weights, contexts or assertions were changed. The failed
++log remains `m2-taste-reference-probe-v1.log`.
++
++## Native candidate results
++
++Initial native probe V2 passed. There has been one weight candidate and no
++coefficient retuning. In all 16 fixed-context controls, the first-iteration
++Ingest/Avoid/Contact contrast becomes exactly zero. By iteration 48, actual
++Ingest contrast changes from +0.5071647 to +0.0302422; hunger 0 from
+++0.4769222 to exactly 0; hunger 0.9 reaches +0.09324095. The hunger 0 → 0.9
++derivative is preserved within 1.7e−6 across 48 iterations. Fear and pain
++derivatives are preserved within 2.7e−6. Avoid/Contact zero-input residuals
++are small, not mathematically exact: worst magnitudes are below 1.6e−5 in
++these controls.
++
++This cancels an unrelated baseline while retaining need response. Common
++encoded offsets of ±0.1 and common thresholds of 0 and 0.5 retain nonnegative
++ordinary-need contrasts after cold start. Detached warm transitions 0 → 0.9,
++0.9 → 0, 0.9 → 0.35 and 0.35 → 0 do not reverse the Ingest contrast. After 48
++post-change iterations, the hunger 0.9 → 0 transition reaches 4.77e−7 and the
++hunger 0.35 → 0 transition reaches 2.38e−7. These are native neural controls
++with fixed receptors, not a biological starvation, meal, fear or pain study.
++
++In the actual fresh candidate, harmless foods with C0 values of +0.8 and −0.8
++are both consumed at decision 10. This is slower for positive food and faster
++for negative food than baseline decisions 2 and 22, not successful avoidance.
++Both first acquire and then release. At decision 3, pure source S is
+++0.1038196 for positive and −0.1122601 for negative; memory adds about
++−0.01891 to both. Aggregate `source_logits` includes S + I + M + C, so it must
++not be relabelled pure S after experience changes memory. First cold source S
++is 0; M2's separate positive drive component and sampling can still select
++Eat. Every interval retains frozen source weights, optimizer moments/ages,
++acquired weight banks, eligibility and dendrites. The actual action and entire
++checkpoint after the acquisition boundary match exact cold restoration in both
++arms.
++
++The original V2 qualification passed 3/3 tests. V1 failed at compile time due
++to an incorrect test-only restore method name; it was replaced with the
++existing `restore` API. No weights changed. The later explicit-gate build V1
++failed on a u32/u16 address lookup comparison; direct packed-index comparison
++fixed it. These failures occurred before any fixture execution.
++
++## Independent review and strengthened gates
++
++Review found a real receipt metadata bug: persistent-address entries are
++sorted by logical address, not packed synapse row. The first candidate receipt
++indexed that sorted vector by packed row, reporting unrelated logical
++coordinates. Weights were selected and edited by the correct physical
++route/source/target triples throughout. The new receipt now resolves
++`packed_index`, then checks source, target and projection address consistency.
++This correction changes no weights, asset digest, phenotype, genotype, or
++native measured behavior. Initial V1 probe evidence is retained with this
++explicit warning. The baseline reader recipe has the same historical metadata
++indexing issue; its hash and constructor are deliberately preserved rather
++than silently rewritten in this candidate.
++
++Defensive construction now also checks donor weights 2, 2, −4 and 4, shared
++tonic weight 8, route kinds/cadences, and matching per-layer soma dynamics.
++Explicit test gates cover exactly six changed rows, unchanged encoder/dynamics,
++cold contrasts of 0, neutral output at hunger 0, need derivative preservation
++within 1e−4, no-input residual below 1e−4, and warm return below 1e−5. They
++also check source-S sign in the actual pair, a positive-food Consumed receipt
++within 24 intervals, executed exact continuation, frozen banks, and rejection
++of old → new and new → old source checkpoint substitution. Nine held-out pairs
++vary cue amplitudes of 0.15, 0.55 and 0.95 and decoder distances of 0, 0.25
++and 0.75 with identical encoded inputs/receptors/warm state. They check
++Ingest/Avoid relative cue ordering and identical source activations. These
++conditional decoder contexts are neither new lives nor held-out seed evidence.
++
++Equal first-frame `brain_work` receipts mean equal derived semantic/charged
++work counters. They are produced before source forward and are not measured
++CPU products or timings. SparseGraph still evaluates the existing recurrent
++rows, including zeros; six weights change, no coordinate is appended. Elapsed
++CPU compute equivalence is unmeasured.
++
++## Qualification boundary
++
++No autonomous cohort, actual-study seed, old pilot checkpoint, old journal,
++learned checkpoint, publishing, world-legality change, action override, extra
++NoManip prior, or global softmax modification is involved. Actual synaptic
++credit remains closed. A later care study would need broader body contexts,
++positive-cue harmful food, negative-cue beneficial food, learned consequences,
++held-out seeds and ecological outcomes. Permanent bitter refusal is not its
++acceptance criterion. This candidate is recommended only as a narrow authored
++operating-point repair ready for further review, not a demonstrated overall
++policy or welfare improvement.
++
++## Reproduction and identity
++
++Use `grouped_host_fixture::build_matched_reference(SEED, true)` to construct
++this new source. The ordinary `build(SEED, true)` remains the frozen baseline.
++Build with the existing recovered Rust toolchain and offline cache, 1 build
++job, incremental compilation disabled, dev/test debug level 0, no optimization
++override, and 1 test thread. The focused filter is `grouped_taste_reference_`;
++all host regressions use `cpu::host::grouped_host_envelope::tests`; shared
++controller regressions use `motor_mediation::`. These are CPU-native tests,
++not GPU gameplay results.
++
++The initial and final candidate phenotype is `[3625834621654224447,
++5500056378950681069, 5463362793338814060, 15021050523330060273]`. Its target
++foundation digest (bytes in hexadecimal) is
++`bfb9ae33314331a694fb212f068848e4d1e13ac5aada88fc99ce63c0bae9cf33`. Its
++genotype JSON SHA256 is
++`ca4ac86d8293f4971ca0f1224139702c6b01081f2c1a09a14dcf6c6009dd472b`. The full
++source/target/compiled-input identities and corrected six-row address receipt
++are retained in the final compressed gate artifact. There is no private
++learned-state asset to recover; the deterministic source recipe recreates the
++fresh authored asset.
++
++The research method is informed by the original weight-space programming
++[paper and
++experiments](https://rikiyat.github.io/blog/weight-space-programming/):
++Experiment 4 motivates targeted causal edits; Experiment 5's whole
++20,486-weight construction is a different scope; Experiment 6 motivates
++inspecting feedback and preserving failures instead of tuning to one favorable
++outcome. This work uses the existing A-Life native equations and source
++recipe, not that paper's organism, task, performance claims, or learned
++weights.
++
++Final full host-module rerun: **19 passed, 0 failed**, 506.32 seconds. This is
++12 original frozen-source fixtures plus 7 new baseline-diagnostic/candidate
++tests. The broader sleep/lifecycle regressions still use the baseline source;
++they do not demonstrate a full new-candidate life. Shared mediation rerun:
++**46 passed, 0 failed**, 64.68 seconds. It includes the four existing grouped
++confidence-host gates. Complete unchanged-source diagnosis and ownership JSON
++from this rerun exactly equal the initial pre-candidate records. All source,
++target-asset, compiler-input, phenotype and genotype identities of the
++candidate exactly equal those from the initial V1 probe after correcting only
++metadata.
++
++`REFERENCE_FINAL.json.gz` contains all five final candidate gate receipts with
++corrected address labels and charged-work wording.
++`REFERENCE_FINAL_SUMMARY.json` contains the compact native comparisons, warm
++transitions, matched-food timing, source-S versus aggregate readouts,
++identities and held-out context results.
++
++Final `cargo clippy --offline -p alife_training --features cpu-backend --lib
++--tests -- -D warnings`, `cargo fmt --all -- --check`, and `git diff --check`
++passed. `VALIDATION.json` preserves commands, exit statuses and original-log
++hashes; concise test listings and complete short failure logs accompany it.
++Unit tolerances were selected after the initial mechanism probe to distinguish
++small native residuals from a wrong sign or lost need response. This is not a
++preregistered or independent seed-generalization result.
++
++## Documentation cleanup and historical checksums
++
++The later prose-spacing cleanup changes no Rust source, coefficient, JSON
++summary, captured diagnostic, log or historical receipt. `SHA256SUMS` remains
++the original manifest from commit `66e733f349230a63ad91a2f87072b4405eaa99b3`.
++Its README and RESULTS entries describe the original prose at that commit, not
++this later wording. All other listed artifact bytes and hashes remain
++unchanged. See `SOURCE_RECONSTRUCTION.md` for the source-only patch boundary,
++readable summary labels and exact address-label errata.
+diff --git a/docs/experiments/m2-taste-baseline-v1/SOURCE_RECONSTRUCTION.md b/docs/experiments/m2-taste-baseline-v1/SOURCE_RECONSTRUCTION.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..dad16aa7ea769e93904226effde330696938e8d4
+--- /dev/null
++++ b/docs/experiments/m2-taste-baseline-v1/SOURCE_RECONSTRUCTION.md
+@@ -0,0 +1,105 @@
++# Source-only reconstruction and receipt notes
++
++## Exact base and package boundary
++
++Apply the accompanying source-only patch to A-Life commit
++`32e109372be39a19cabf7d9fc7cbcd9ca7c91c19` (tree prefix `b8089fc1`). The Rust
++source is byte-for-byte identical to the tested candidate at commit
++`66e733f349230a63ad91a2f87072b4405eaa99b3`. The follow-up changes only the prose
++and adds this note. The delivered patch header identifies the final cleaned
++commit and exact base.
++
++The patch includes seven Rust source/test files:
++
++- `crates/alife_training/examples/support/grounded_care_reference_v1.rs`
++- `crates/alife_training/src/cpu/grouped_host_envelope.rs`
++- `crates/alife_training/src/cpu/grouped_host_fixture.rs`
++- `crates/alife_training/src/cpu/grouped_host_food_tests.rs`
++- `crates/alife_training/src/cpu/grouped_host_loop.rs`
++- `crates/alife_training/src/cpu/grouped_host_tests.rs`
++- `crates/alife_training/src/cpu/grouped_source_diagnosis.rs`
++
++It also includes this note, `README.md` and `RESULTS.md` from the same experiment
++directory. It excludes JSON summaries, raw diagnostics, compressed captures,
++logs, checksum manifests, generated executables and private checkpoints. The
++diagnostic tests are source code; they do not contain an imported creature life
++or learned checkpoint. This is an incremental patch, not a standalone project
++or a copy of the full evidence archive. Historical artifact references in the
++prose are intentionally not bundled.
++
++## Reconstruction
++
++1. Create a clean checkout or worktree at the exact base commit above.
++2. Run `git apply --check /path/to/m2-care-reference-source-only.patch`.
++3. Apply it with `git apply /path/to/m2-care-reference-source-only.patch`.
++4. Read the repository's applicable `AGENTS.md` files before further work.
++5. Use `grouped_host_fixture::build_matched_reference(SEED, true)` to construct
++   the fresh candidate. The ordinary `build(SEED, true)` retains the baseline.
++
++The declared fixture seed is `0x0347_5250_484F_5354`. This is the existing
++GRPHOST unit fixture, not an actual-study seed. Source construction is
++deterministic; its target asset digest, phenotype and genotype hash are in
++`RESULTS.md`. No checkpoint is needed to reconstruct the fresh authored source.
++
++The earlier verification commands and results are documented in `RESULTS.md`.
++This packaging follow-up ran no native build, test, world fixture or new life.
++A recipient who chooses to reproduce tests should use the established
++single-job offline environment with incremental compilation disabled, dev/test
++debug level 0, no optimization override and 1 test thread. The focused test
++filter is `grouped_taste_reference_`. Such reproduction is separate work, not a
++claim that this source-only package includes new measurements.
++
++## Readable compact-summary labels
++
++The original machine-readable summary files are immutable historical artifacts.
++Their keys and labels have not been rewritten. Read them as follows:
++
++- `old1` / `new1`: baseline / candidate at source iteration 1.
++- `old48` / `new48`: baseline / candidate at source iteration 48.
++- `new_min`: the candidate's minimum over the 48 source iterations.
++- Three-value contrast arrays: Ingest, summed Avoid, then Contact contrast.
++- `synthetic_hunger_0`: synthetic encoded hunger 0, with receptors held fixed.
++- `synthetic_hunger_0.35`: synthetic encoded hunger 0.35.
++- `synthetic_hunger_0.9`: synthetic encoded hunger 0.9.
++- `synthetic_fear_*` and `synthetic_pain_*`: the analogous fixed-receptor fear
++  and pain controls. These are not interventions on a living body's physiology.
++- `source_s_ingest_by_decision`: pure source S for Ingest at each actual decision.
++- `aggregate_s_i_m_c_ingest_by_decision`: combined S + I + M + C, not pure S.
++- `identity_and_work`: source-binding checks and derived charged-work counters,
++  not measured CPU instructions or elapsed cost.
++
++## Address-label errata
++
++The initial six-row candidate receipt in `REFERENCE_PROBE_V1.json.gz` has
++incorrect logical labels at `candidate_metadata.source_revision.edits[*].address`.
++The same initial labels occur in the local uncompressed copy and the original
++probe output from which it was extracted. The six affected packed rows are
++7670, 7840, 7850, 10485, 10489 and 10493. Their physical route/source/target
++triples and weight values were correct throughout. The error came from
++indexing a logical-address-sorted map by packed row.
++
++Those six labels were corrected by looking up `packed_index`. Correct labels
++appear in `REFERENCE_FINAL.json.gz` under
++`records.TASTE_REFERENCE_PROBE.candidate_metadata.source_revision.edits`, and in
++`REFERENCE_FINAL_SUMMARY.json` under `candidate_identity.source_revision.edits`.
++The six source weights, source identity and measured behavior did not change.
++
++A separate inherited erratum remains in recipe reader metadata:
++`reader_rows[*].address` and `reader_rows[*].grounded_address` use the same
++incorrect indexed lookup. This metadata is embedded in `SOURCE_DIAG.json.gz`,
++`REFERENCE_PROBE_V1.json.gz` and the full candidate metadata in
++`REFERENCE_FINAL.json.gz`. Those reader labels were deliberately not rewritten;
++their historical recipe hashes are preserved. Do not use them as authoritative
++logical addresses. Resolve the saved packed indices through the phenotype's
++persistent address map instead. This erratum concerns labels, not the selected
++reader rows or their coefficients.
++
++## Historical checksum preservation
++
++All original JSON files, compressed captures, logs and historical receipts
++remain byte-for-byte unchanged from commit
++`66e733f349230a63ad91a2f87072b4405eaa99b3`. The original `SHA256SUMS` is also
++unchanged. Its README and RESULTS hashes identify the original prose at that
++commit, so they intentionally do not describe the later cleaned wording.
++All other entries still verify. The source-only patch omits that historical
++manifest rather than presenting it as a checksum of the cleaned package.
