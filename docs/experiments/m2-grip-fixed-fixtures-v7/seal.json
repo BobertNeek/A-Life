@@ -1,0 +1,312 @@
+{
+  "files": [
+    {
+      "bytes": 65566,
+      "path": "CONTINUATION.json",
+      "sha256": "2071b8448f011834fe18f417ad90bf6aaf00d6f1cdcdfabc7aec20c7ea9b8c41"
+    },
+    {
+      "bytes": 885,
+      "path": "CORRECTION.json",
+      "sha256": "9f64978d22cc7f32da790a51079acd3072622d87644b8de4ebe62a52d3a021d8"
+    },
+    {
+      "bytes": 1849,
+      "path": "F012-CORRECTION.json",
+      "sha256": "fa8abb7522f5e28167f634477429c397f5b657a16bc876ebb069fda960551702"
+    },
+    {
+      "bytes": 2409,
+      "path": "F019-CORRECTION.json",
+      "sha256": "c0dfb3e1436eee621e27bf8392e4ed6e81a0b4c942c0aebbe839c29c14fd5457"
+    },
+    {
+      "bytes": 36015,
+      "path": "F041-DIAGNOSTIC.json",
+      "sha256": "cce9873616085f30b38f5dba0e4943092205f0bc39184d63f9982a0aff8044d4"
+    },
+    {
+      "bytes": 505,
+      "path": "FIXTURE-INVENTORY.md",
+      "sha256": "93d32171641719d3fbe9a7305c10244f3a39aca6e5156b5d878ce5027ab999d8"
+    },
+    {
+      "bytes": 6864,
+      "path": "FIXTURES.json",
+      "sha256": "9a9c154d2f68d9490375d4d887a67e34f355027a1d7e52e6ab19f4613accb9d9"
+    },
+    {
+      "bytes": 92558,
+      "path": "INHERITED-WORKFLOW-FIXTURES.json",
+      "sha256": "e45e6ea9f0b5de64ad00a3fbc108cbefcce48f5eab8b9c32caceaa9650497fcd"
+    },
+    {
+      "bytes": 1621,
+      "path": "PREPARATION.json",
+      "sha256": "0fb88b8266ed1d2a627fdde8d63eeef5b599b96655f235260d6c77e9551f4272"
+    },
+    {
+      "bytes": 6584,
+      "path": "PRIOR-FIXTURE-V5-PRESERVATION.json",
+      "sha256": "459303bc3c658283b2094d29210393229e700c557430842f3e88c1248b0deafc"
+    },
+    {
+      "bytes": 2537,
+      "path": "PRIOR-FIXTURE-V5-SAFE-RESULT.json",
+      "sha256": "fe9bed13bb59b66a38ba081707cc04592feb242199be3295586f127eb23937cb"
+    },
+    {
+      "bytes": 7074,
+      "path": "PRIOR-FIXTURE-V6-PRESERVATION.json",
+      "sha256": "138c3a75711d8aaaf023b8636bae87f7e7cf6e9f3a4476081aad3a0cfef5914d"
+    },
+    {
+      "bytes": 2823,
+      "path": "PRIOR-FIXTURE-V6-SAFE-RESULT.json",
+      "sha256": "4d23b2a6281141c3b909b29b38fccb3f72b9f0804a1761ca3bae99d61844c9d7"
+    },
+    {
+      "bytes": 1845,
+      "path": "PRIOR-TYPECHECK-RESULT.json",
+      "sha256": "3ef6c8feb21d59f28e4fd88af90911f86bc5da01ebbde463628388ac5f623071"
+    },
+    {
+      "bytes": 4343,
+      "path": "PRIOR-V1-PRESERVATION.json",
+      "sha256": "381de519eb397987b003cb953491aaeb9b10aeb915749b56a340a8cd63c7edcc"
+    },
+    {
+      "bytes": 4650,
+      "path": "PRIOR-V2-PRESERVATION.json",
+      "sha256": "94fa6434320ee85f0f38287b4daec46abdb3b6e2b1c70b97f20f330dfcf89454"
+    },
+    {
+      "bytes": 5283,
+      "path": "PRIOR-V3-PRESERVATION.json",
+      "sha256": "9514362ed4c3694496dda7ac7f44ed9e34798a57c1f26b1c10fcb43a4027ee7a"
+    },
+    {
+      "bytes": 6055,
+      "path": "PRIOR-V4-PRESERVATION.json",
+      "sha256": "0b18c31c8861a9cf5b1ed69df9e5e301f49fbaac700050082095497e94fb138c"
+    },
+    {
+      "bytes": 2786,
+      "path": "PRIOR-V4-SAFE-RESULT.json",
+      "sha256": "3cde1131e92bc6d4e702b1e0cf45448a2ef6cbc875aa8e3800de347ba6725518"
+    },
+    {
+      "bytes": 4245,
+      "path": "PRIOR-V5-PRESERVATION.json",
+      "sha256": "bba8ce529bc0971c826533e74cb1473c3c1c57eb0c6c8b4a5d26ce6c8d7059c9"
+    },
+    {
+      "bytes": 2752,
+      "path": "README.md",
+      "sha256": "17d91410e5a252247c54f304d37a309c0ccef5933b79f8742b2266f8275c4149"
+    },
+    {
+      "bytes": 810,
+      "path": "REGISTRATION-DELTA-v6.json",
+      "sha256": "783129e6f9eff1b875418ac402f12f4b4d5954463b6b711240b3fa0532d85ece"
+    },
+    {
+      "bytes": 11482,
+      "path": "REMOTE-FILES.json",
+      "sha256": "a73fbf446b2605a1fefe58be39e95768420b6a607e148bde9c18f713057ef28a"
+    },
+    {
+      "bytes": 9899,
+      "path": "REUSE-MANIFEST.json",
+      "sha256": "7ce210ba260640f5613b7f28336a6cc6df4ecaea7807dd08ac0739890b9e7b11"
+    },
+    {
+      "bytes": 474,
+      "path": "RUNNER-SEMANTICS.json",
+      "sha256": "7a55578350a565feab8c33ff1f407cf7fa7bcf2e78b74bb22669f882e0fec7b4"
+    },
+    {
+      "bytes": 87740,
+      "path": "SOURCE-AUDIT.json",
+      "sha256": "4024356f2bad7f749ff1e1e52a68697174083b36ff79ba4015b409b3a183bbf1"
+    },
+    {
+      "bytes": 498,
+      "path": "SOURCE-FREEZE-v5.json",
+      "sha256": "b320f11d7737cb48345c775da1a47b61d78cd2399fda99f6a35f306ee7953069"
+    },
+    {
+      "bytes": 593,
+      "path": "SOURCE-FREEZE-v6.json",
+      "sha256": "3e99956ac3354a48b13c94126119f1b1f943b0efbb871408a55371d2b9973be3"
+    },
+    {
+      "bytes": 283,
+      "path": "STATIC-CHECK.json",
+      "sha256": "19dfda177ac67b688f0a2eb9b38096f4de927515897a7fa91a813fb375b279da"
+    },
+    {
+      "bytes": 1762,
+      "path": "TEST-ONLY-DELTA.json",
+      "sha256": "5ca7d62259b6298ed72d13579474fca0ceb8ab2b7dacbb6d9360eff0b215a9d2"
+    },
+    {
+      "bytes": 1812,
+      "path": "TOOLCHAIN-PRIOR-RESULTS.json",
+      "sha256": "66d8ecd21368bbd8836081d1846cf877508454f2dfa91655da3eaf87d80f22e3"
+    },
+    {
+      "bytes": 3028,
+      "path": "TOOLCHAIN-PROVENANCE.json",
+      "sha256": "122c4b3e6538442cdd14fe81923c4ae45f5276126d6d3d8afc3001e779adb99c"
+    },
+    {
+      "bytes": 36872,
+      "path": "TRIGGER-AUDIT.json",
+      "sha256": "4f3d81af000acc80d2570a714cd6bb8353c240d487527fd2044cc4742ccd5d0d"
+    },
+    {
+      "bytes": 4383,
+      "path": "WORKFLOW-PRESERVATION.json",
+      "sha256": "9780b6ae00925da661ce85971d05be5f8b12f2f36c86028e9274ce23a132ca0f"
+    },
+    {
+      "bytes": 30715,
+      "path": "closure.json",
+      "sha256": "2c11006004bb24ac13ffb01bf2ebdf9d2eed5a63720f138d433f811a3fcc881d"
+    },
+    {
+      "bytes": 3625,
+      "path": "dependencies.json",
+      "sha256": "7dad3b2c35713f39fad88242fadc85c022aa1430d40c57e2ac7da40ce97a5221"
+    },
+    {
+      "bytes": 6590,
+      "path": "packet_inputs.py",
+      "sha256": "1451b24ecd14f3502e5d8f5971e5123e3bd0c45d6151ffd27982d9aaf4870d7c"
+    },
+    {
+      "bytes": 4417,
+      "path": "patches/f012-mixed-map-correction.patch",
+      "sha256": "6071ea77383d198a9b8a06a662925373b30db7b039d903bee6200ea534b22f8d"
+    },
+    {
+      "bytes": 2645,
+      "path": "patches/f019-interval-velocity-expectation.patch",
+      "sha256": "13ce534c71f5f76bfc9291a82a34469583dda3b5cb3e867d59bed46c891baa27"
+    },
+    {
+      "bytes": 522,
+      "path": "patches/f041-genetic-source-development.patch",
+      "sha256": "f6b9042cf498dd0ecb11b3a2b0d3d9b3e5a8d48c67f904133ec2ce52e23cb863"
+    },
+    {
+      "bytes": 967,
+      "path": "patches/f041-policy-owned-physical-profile.patch",
+      "sha256": "49dbfcfb90c76ed433a0822e81a834253dd58dd030171649b9e6a7e837fee69b"
+    },
+    {
+      "bytes": 939,
+      "path": "patches/f041-research-identity-correction.patch",
+      "sha256": "c7128e3e55d8051896daf1794da34901b5472f4ea340ed78dfda0cc43987bc6f"
+    },
+    {
+      "bytes": 26748,
+      "path": "patches/f041-safe-phase-diagnostic.patch",
+      "sha256": "4d3415928f90f9083b74d9948d2ed2956a1ce93130a8dd0032a00ff08ae636fc"
+    },
+    {
+      "bytes": 136753,
+      "path": "patches/fbf-nominal-source-supplement.patch",
+      "sha256": "ddd07c85685b27056664d9b8650fa736d8eff257f5d477485efd7d14e5e5b051"
+    },
+    {
+      "bytes": 649925,
+      "path": "patches/fbf-to-grip-v4.patch",
+      "sha256": "acf8cc50353ba76cb7adf5af1db5845ee6e6b2e2261d0ee823821428e2e4d054"
+    },
+    {
+      "bytes": 3446,
+      "path": "patches/gpu-upload-gate.patch",
+      "sha256": "e71af51d4829939b2e91b9c1a4bc2e18f2bc95d8135462412d5a03421be2885a"
+    },
+    {
+      "bytes": 2369,
+      "path": "patches/grip-v4-to-v5.patch",
+      "sha256": "0ce2a14320e13e31b9727d41d979798910c31e9663dcaca043c0900c5c96774a"
+    },
+    {
+      "bytes": 335,
+      "path": "patches/grip-v5-to-v6.patch",
+      "sha256": "fa468c4ca23f88c2f90f561176283fb1bf0f53c24280fee6c6dcdd093f5ed712"
+    },
+    {
+      "bytes": 563200,
+      "path": "patches/main-to-fbf-library-closure.part-01.patch",
+      "sha256": "44c9ee9e269bec25ebb924054754a0e71ddc7b73104a132699171a9776430e07"
+    },
+    {
+      "bytes": 563195,
+      "path": "patches/main-to-fbf-library-closure.part-02.patch",
+      "sha256": "a2fb1711dee71d569aea8643ba5dd02d16c992bf9f378b219e4b86cb51edafae"
+    },
+    {
+      "bytes": 415718,
+      "path": "patches/main-to-fbf-library-closure.part-03.patch",
+      "sha256": "95d7a29b145111d4f24297c97ecd0766673f9275b5dd89400958c714a24ae72d"
+    },
+    {
+      "bytes": 3244,
+      "path": "publication.json",
+      "sha256": "a3301d541a19d933683a0e0f782a874a520f3fbc234aedb1adb7b7f98dc854d8"
+    },
+    {
+      "bytes": 3774,
+      "path": "recovery.json",
+      "sha256": "d3cc1a49ed0efae03abd085e39ac7e6e9b2367a33aeb578857b73d8f60cbc9a6"
+    },
+    {
+      "bytes": 27898,
+      "path": "registered-source-v5.json",
+      "sha256": "93a96de95d9562b57d2891e41dfcd36e99cf73bb8d94971c0ad17fd87593c72e"
+    },
+    {
+      "bytes": 51681,
+      "path": "run_hosted.py",
+      "sha256": "79c15c626d4f4f4fc7b75f0bf7d45a9753f71c8a5c7e0b935293696347200c4d"
+    },
+    {
+      "bytes": 4042,
+      "path": "seal_package.py",
+      "sha256": "0b439ac7b16f1f7ba3d55c69817c7c03ab7cfbb8094c183074455b1714793098"
+    },
+    {
+      "bytes": 200537,
+      "path": "source-manifest-v5.json",
+      "sha256": "137b6395d74a49aa2f2841cc9b1d306a1d5ade9b502ea84c44dfa64d6defe14a"
+    },
+    {
+      "bytes": 202140,
+      "path": "source-manifest.json",
+      "sha256": "46b38a5939a8a4cd5c28cea523a11aedd4d053da0b150079ed5be9cbb4b75338"
+    },
+    {
+      "bytes": 2476,
+      "path": "source_patch.py",
+      "sha256": "e8ef4a5a27c4ce0486f2ec752c7c6789752e10355410f8ef6b914aa386b5ad42"
+    },
+    {
+      "bytes": 45735,
+      "path": "static_checks.py",
+      "sha256": "6de2ac913e456d209d68f7c5d433deaceccd1dfa229e470c55afeda547b345fe"
+    },
+    {
+      "bytes": 7481,
+      "path": "upstream-toolchain-action.yml",
+      "sha256": "0b52547c145ae18d8631c9ab711e4d917e9e489cea800368f338c25a56e0aee2"
+    }
+  ],
+  "plan_id": "m2-grip-fixed-fixtures-v7",
+  "schema": "m2-grip-fixed-fixture-seal-v7",
+  "source_ready": true
+}

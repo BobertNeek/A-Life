@@ -1,0 +1,58 @@
+{
+  "schema": "m2-prior-sanitized-results-v3",
+  "source": "Parent task message reporting emitted sanitized compiler/listing results; raw logs were not read or copied.",
+  "run_id": 42578269916,
+  "activation_head": "c3bf62432ecefd2ec22c8a586013f84dcd4ff548",
+  "prepared_head": "dcace9456304e58e442a7423f934102eac1f4323",
+  "status": "terminal",
+  "setup": {
+    "boredom": "passed",
+    "reflex": "passed",
+    "compiler": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+    "compiler_commit": "58cf8f9c35b355199727627d07ae34a4e2846d67",
+    "llvm_version": "23.1.1",
+    "cargo": "cargo 1.99.1 (5f94df478 2026-08-27)"
+  },
+  "jobs": {
+    "boredom": {
+      "build": "passed",
+      "code": "LIST_PROTOCOL",
+      "stage": "listing",
+      "package": "alife_training",
+      "completed_count": 0,
+      "completed_tests": []
+    },
+    "reflex": {
+      "code": "BUILD",
+      "stage": "compile",
+      "package": "alife_world",
+      "compiler_errors": [
+        {
+          "code": "E0624",
+          "locations": [
+            {
+              "path": "crates/alife_world/src/headless/sleep_choice_research/recovery_reflex.rs",
+              "line": 224,
+              "column": 32
+            },
+            {
+              "path": "crates/alife_world/src/headless/sleep_choice_research/recovery_reflex.rs",
+              "line": 230,
+              "column": 32
+            }
+          ]
+        }
+      ],
+      "completed_count": 0,
+      "completed_tests": []
+    }
+  },
+  "listing_observation": {
+    "source": "Parent independently queried an existing protected libtest binary with listing only.",
+    "terse": "names, no count footer",
+    "pretty": "names and 5 tests, 0 benchmarks footer",
+    "native_fixture_execution": false
+  },
+  "v4_local_native_invocations": 0,
+  "v3_retry_or_marker_reuse": false
+}

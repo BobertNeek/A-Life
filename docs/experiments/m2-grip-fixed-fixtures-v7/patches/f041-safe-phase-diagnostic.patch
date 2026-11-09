@@ -1,0 +1,547 @@
+--- a/crates/alife_training/tests/grip_options_host.rs
++++ b/crates/alife_training/tests/grip_options_host.rs
+@@ -32,12 +32,355 @@
+         n["neural"]["dendrites"]
+     ])
+ }
++// BEGIN_F041_DIAGNOSTIC_HELPERS
++#[repr(u8)]
++enum F041Phase {
++    RecipeBuildBegin = 1,
++    RecipeBuildDone = 2,
++    GripCompileBegin = 3,
++    GripCompileDone = 4,
++    AssetCreateBegin = 5,
++    AssetCreateDone = 6,
++    OrdinaryIdentityRejectBegin = 7,
++    OrdinaryIdentityRejectDone = 8,
++    GenotypeBindBegin = 9,
++    GenotypeBindDone = 10,
++    TrainerNewBegin = 11,
++    TrainerNewDone = 12,
++    TrainerRestoreBegin = 13,
++    TrainerRestoreDone = 14,
++    WorldNewBegin = 15,
++    WorldNewDone = 16,
++    WorldRecordBegin = 17,
++    WorldRecordDone = 18,
++    SceneBuildBegin = 19,
++    SceneBuildDone = 20,
++    SceneRegisterBegin = 21,
++    SceneRegisterDone = 22,
++    HostNewBegin = 23,
++    HostNewDone = 24,
++    InitialFrozenSnapshotBegin = 25,
++    InitialFrozenSnapshotDone = 26,
++    FirstStepBegin = 27,
++    FirstStepDone = 28,
++    FirstCountsBegin = 29,
++    FirstCountsDone = 30,
++    ScoreProbabilitiesBegin = 31,
++    ScoreProbabilitiesDone = 32,
++    CoordinationSupportBegin = 33,
++    CoordinationSupportDone = 34,
++    ScoreEvaluationBegin = 35,
++    ScoreEvaluationDone = 36,
++    FirstReceiptChecksBegin = 37,
++    FirstReceiptChecksDone = 38,
++    FirstFrozenCheckBegin = 39,
++    FirstFrozenCheckDone = 40,
++    CheckpointEncodeBegin = 41,
++    CheckpointEncodeDone = 42,
++    WrongEnvelopeRejectionBegin = 43,
++    WrongEnvelopeRejectionDone = 44,
++    GripKernelChecksBegin = 45,
++    GripKernelChecksDone = 46,
++    CheckpointDecodeBegin = 47,
++    CheckpointDecodeDone = 48,
++    ColdRestoreBegin = 49,
++    ColdRestoreDone = 50,
++    ColdWireCheckBegin = 51,
++    ColdWireCheckDone = 52,
++    WarmSuccessorBegin = 53,
++    WarmSuccessorDone = 54,
++    ColdSuccessorBegin = 55,
++    ColdSuccessorDone = 56,
++    SuccessorCountsBegin = 57,
++    SuccessorCountsDone = 58,
++    SuccessorActionPatchBegin = 59,
++    SuccessorActionPatchDone = 60,
++    FinalWireCheckBegin = 61,
++    FinalWireCheckDone = 62,
++    FinalWarmFrozenBegin = 63,
++    FinalWarmFrozenDone = 64,
++    FinalColdFrozenBegin = 65,
++    FinalColdFrozenDone = 66,
++}
++#[repr(u8)]
++enum F041Check {
++    OrdinaryIdentityRejectsResearch = 1,
++    FirstDecisionsOne = 2,
++    FirstReceiptsOne = 3,
++    FirstSourceCountOne = 4,
++    CoordinationPositive = 5,
++    CoordinationGradientFinite = 6,
++    KernelNeurons256 = 7,
++    KernelSensory256 = 8,
++    KernelReductions256 = 9,
++    KernelReadouts128 = 10,
++    KernelRecallZero = 11,
++    WarmDecisionsOne = 12,
++    ColdDecisionsOne = 13,
++}
++fn report_f041_phase(phase: F041Phase) {
++    println!("GRIP_F041_PHASE={}", phase as u8);
++}
++fn report_f041_check(check: F041Check, passed: bool) {
++    println!("GRIP_F041_CHECK={}:{}", check as u8, u8::from(passed));
++}
++#[repr(u16)]
++enum F041Error {
++    Error1 = 1,
++    Error2 = 2,
++    Error3 = 3,
++    Error4 = 4,
++    Error5 = 5,
++    Error6 = 6,
++    Error7 = 7,
++    Error8 = 8,
++    Error9 = 9,
++    Error10 = 10,
++    Error11 = 11,
++    Error12 = 12,
++    Error13 = 13,
++    Error14 = 14,
++    Error15 = 15,
++    Error16 = 16,
++    Error17 = 17,
++    Error18 = 18,
++    Error19 = 19,
++    Error20 = 20,
++    Error21 = 21,
++    Error22 = 22,
++    Error23 = 23,
++    Error24 = 24,
++    Error25 = 25,
++    Error26 = 26,
++    Error27 = 27,
++    Error28 = 28,
++    Error29 = 29,
++    Error30 = 30,
++    Error31 = 31,
++    Error32 = 32,
++    Error33 = 33,
++    Error34 = 34,
++    Error35 = 35,
++    Error36 = 36,
++    Error37 = 37,
++    Error38 = 38,
++    Error39 = 39,
++    Error40 = 40,
++    Error41 = 41,
++    Error42 = 42,
++    Error43 = 43,
++    Error44 = 44,
++    Error45 = 45,
++    Error46 = 46,
++    Error47 = 47,
++    Error48 = 48,
++    Error49 = 49,
++    Error50 = 50,
++    Error51 = 51,
++    Error52 = 52,
++    Error53 = 53,
++    Error54 = 54,
++    Error55 = 55,
++    Error56 = 56,
++    Error57 = 57,
++    Error58 = 58,
++    Error59 = 59,
++    Error60 = 60,
++    Error61 = 61,
++    Error62 = 62,
++    Error63 = 63,
++    Error64 = 64,
++    Error65 = 65,
++    Error66 = 66,
++    Error67 = 67,
++    Error68 = 68,
++    Error69 = 69,
++    Error70 = 70,
++    Error71 = 71,
++    Error72 = 72,
++    Error73 = 73,
++    Error74 = 74,
++    Error75 = 75,
++    Error76 = 76,
++    Error77 = 77,
++    Error78 = 78,
++    Error79 = 79,
++    Error80 = 80,
++    Error81 = 81,
++    Error82 = 82,
++    Error83 = 83,
++    Error84 = 84,
++    Error85 = 85,
++    Error86 = 86,
++    Error87 = 87,
++    Error88 = 88,
++    Error89 = 89,
++    Error90 = 90,
++    Error91 = 91,
++    Error92 = 92,
++    Error93 = 93,
++    Error94 = 94,
++    Error95 = 95,
++    Error96 = 96,
++    Error97 = 97,
++    Error98 = 98,
++    Error99 = 99,
++    Error100 = 100,
++    Error101 = 101,
++    Error102 = 102,
++    Error103 = 103,
++    Error104 = 104,
++    Error105 = 105,
++    Error106 = 106,
++    Error107 = 107,
++    Error108 = 108,
++    Error109 = 109,
++    Error110 = 110,
++    Error111 = 111,
++}
++fn report_f041_error(error: &CpuHostError) {
++    let code = match error {
++        CpuHostError::Contract(ScaffoldContractError::InvalidId) => F041Error::Error1,
++        CpuHostError::Contract(ScaffoldContractError::NonFiniteFloat) => F041Error::Error2,
++        CpuHostError::Contract(ScaffoldContractError::ScalarOutOfRange) => F041Error::Error3,
++        CpuHostError::Contract(ScaffoldContractError::NonMonotonicTick) => F041Error::Error4,
++        CpuHostError::Contract(ScaffoldContractError::InvalidActionDecision) => F041Error::Error5,
++        CpuHostError::Contract(ScaffoldContractError::InvalidPerceptionFrame) => F041Error::Error6,
++        CpuHostError::Contract(ScaffoldContractError::InvalidActionCandidate) => F041Error::Error7,
++        CpuHostError::Contract(ScaffoldContractError::InvalidDecisionEvidence) => F041Error::Error8,
++        CpuHostError::Contract(ScaffoldContractError::EvidenceKindMismatch) => F041Error::Error9,
++        CpuHostError::Contract(ScaffoldContractError::PhenotypeCompile) => F041Error::Error10,
++        CpuHostError::Contract(ScaffoldContractError::UnsupportedProductionBrainClass) => F041Error::Error11,
++        CpuHostError::Contract(ScaffoldContractError::SensorProfileMismatch) => F041Error::Error12,
++        CpuHostError::Contract(ScaffoldContractError::InvalidMemoryQuery) => F041Error::Error13,
++        CpuHostError::Contract(ScaffoldContractError::BrainOwnershipMismatch) => F041Error::Error14,
++        CpuHostError::Contract(ScaffoldContractError::LearningEvidenceMismatch) => F041Error::Error15,
++        CpuHostError::Contract(ScaffoldContractError::LearningReplayRejected) => F041Error::Error16,
++        CpuHostError::Contract(ScaffoldContractError::BrainActivityPolicyMismatch) => F041Error::Error17,
++        CpuHostError::Contract(ScaffoldContractError::BrainActivitySequenceMismatch) => F041Error::Error18,
++        CpuHostError::Contract(ScaffoldContractError::BrainAtpExhausted) => F041Error::Error19,
++        CpuHostError::Training(alife_training::TrainingError::Contract(ScaffoldContractError::InvalidId)) => F041Error::Error20,
++        CpuHostError::Training(alife_training::TrainingError::Contract(ScaffoldContractError::NonFiniteFloat)) => F041Error::Error21,
++        CpuHostError::Training(alife_training::TrainingError::Contract(ScaffoldContractError::ScalarOutOfRange)) => F041Error::Error22,
++        CpuHostError::Training(alife_training::TrainingError::Contract(ScaffoldContractError::NonMonotonicTick)) => F041Error::Error23,
++        CpuHostError::Training(alife_training::TrainingError::Contract(ScaffoldContractError::InvalidActionDecision)) => F041Error::Error24,
++        CpuHostError::Training(alife_training::TrainingError::Contract(ScaffoldContractError::InvalidPerceptionFrame)) => F041Error::Error25,
++        CpuHostError::Training(alife_training::TrainingError::Contract(ScaffoldContractError::InvalidActionCandidate)) => F041Error::Error26,
++        CpuHostError::Training(alife_training::TrainingError::Contract(ScaffoldContractError::InvalidDecisionEvidence)) => F041Error::Error27,
++        CpuHostError::Training(alife_training::TrainingError::Contract(ScaffoldContractError::EvidenceKindMismatch)) => F041Error::Error28,
++        CpuHostError::Training(alife_training::TrainingError::Contract(ScaffoldContractError::PhenotypeCompile)) => F041Error::Error29,
++        CpuHostError::Training(alife_training::TrainingError::Contract(ScaffoldContractError::UnsupportedProductionBrainClass)) => F041Error::Error30,
++        CpuHostError::Training(alife_training::TrainingError::Contract(ScaffoldContractError::SensorProfileMismatch)) => F041Error::Error31,
++        CpuHostError::Training(alife_training::TrainingError::Contract(ScaffoldContractError::InvalidMemoryQuery)) => F041Error::Error32,
++        CpuHostError::Training(alife_training::TrainingError::Contract(ScaffoldContractError::BrainOwnershipMismatch)) => F041Error::Error33,
++        CpuHostError::Training(alife_training::TrainingError::Contract(ScaffoldContractError::LearningEvidenceMismatch)) => F041Error::Error34,
++        CpuHostError::Training(alife_training::TrainingError::Contract(ScaffoldContractError::LearningReplayRejected)) => F041Error::Error35,
++        CpuHostError::Training(alife_training::TrainingError::Contract(ScaffoldContractError::BrainActivityPolicyMismatch)) => F041Error::Error36,
++        CpuHostError::Training(alife_training::TrainingError::Contract(ScaffoldContractError::BrainActivitySequenceMismatch)) => F041Error::Error37,
++        CpuHostError::Training(alife_training::TrainingError::Contract(ScaffoldContractError::BrainAtpExhausted)) => F041Error::Error38,
++        CpuHostError::State("CPU activity world clock mismatch") => F041Error::Error39,
++        CpuHostError::State("CPU neural work exceeds canonical ATP availability") => F041Error::Error40,
++        CpuHostError::State("CPU synapse work overflow") => F041Error::Error41,
++        CpuHostError::State("CPU tile work overflow") => F041Error::Error42,
++        CpuHostError::State("closed grouped policy owner mismatch") => F041Error::Error43,
++        CpuHostError::State("dynamic edge enters fixed controller") => F041Error::Error44,
++        CpuHostError::State("grip policy owner mismatch") => F041Error::Error45,
++        CpuHostError::State("grouped M2 consumed sleep boundary mismatch") => F041Error::Error46,
++        CpuHostError::State("grouped M2 incomplete physical boundary") => F041Error::Error47,
++        CpuHostError::State("grouped M2 physical boundary mismatch") => F041Error::Error48,
++        CpuHostError::State("grouped M2 physical receipt selection mismatch") => F041Error::Error49,
++        CpuHostError::State("grouped M2 recovery motor transaction rejected") => F041Error::Error50,
++        CpuHostError::State("grouped M2 replay provenance omitted") => F041Error::Error51,
++        CpuHostError::State("grouped M2 sleep organism missing") => F041Error::Error52,
++        CpuHostError::State("grouped M2 successful sleep receipt not consumed") => F041Error::Error53,
++        CpuHostError::State("grouped M2 voluntary receipt already consumed") => F041Error::Error54,
++        CpuHostError::State("grouped M2 voluntary receipt outside Awake") => F041Error::Error55,
++        CpuHostError::State("grouped candidate count") => F041Error::Error56,
++        CpuHostError::State("grouped physical frame mismatch") => F041Error::Error57,
++        CpuHostError::State("grouped physical/sample provenance mismatch") => F041Error::Error58,
++        CpuHostError::State("grouped sample/physical operation mismatch") => F041Error::Error59,
++        CpuHostError::State("grouped/source frame or clock mismatch") => F041Error::Error60,
++        CpuHostError::State("grouped/source generation mismatch") => F041Error::Error61,
++        CpuHostError::State("invalid closed grouped memory-sleep boundary") => F041Error::Error62,
++        CpuHostError::State("invalid grouped M2 physical receipt") => F041Error::Error63,
++        CpuHostError::State("invalid grouped operation") => F041Error::Error64,
++        CpuHostError::State("living collector policy changed: export/recompile a fresh cohort or explicitly rebase a simulator branch") => F041Error::Error65,
++        CpuHostError::State("missing canonical cognitive context") => F041Error::Error66,
++        CpuHostError::State("missing grouped canonical organism") => F041Error::Error67,
++        CpuHostError::State("missing grouped controller") => F041Error::Error68,
++        CpuHostError::State("missing grouped neural receipt") => F041Error::Error69,
++        CpuHostError::State("missing grouped physical bundle") => F041Error::Error70,
++        CpuHostError::State("missing grouped physical owner") => F041Error::Error71,
++        CpuHostError::State("missing grouped physical receipt") => F041Error::Error72,
++        CpuHostError::State("missing grouped physical selection") => F041Error::Error73,
++        CpuHostError::State("missing grouped receipt") => F041Error::Error74,
++        CpuHostError::State("missing grouped replay event") => F041Error::Error75,
++        CpuHostError::State("missing grouped replay owner") => F041Error::Error76,
++        CpuHostError::State("missing grouped source receipt") => F041Error::Error77,
++        CpuHostError::State("missing legacy grouped sample") => F041Error::Error78,
++        CpuHostError::State("missing native proposal") => F041Error::Error79,
++        CpuHostError::State("missing optional Vocal sample") => F041Error::Error80,
++        CpuHostError::State("missing optional controller") => F041Error::Error81,
++        CpuHostError::State("missing optional native output") => F041Error::Error82,
++        CpuHostError::State("missing optional sample") => F041Error::Error83,
++        CpuHostError::State("missing optional scores") => F041Error::Error84,
++        CpuHostError::State("missing organism") => F041Error::Error85,
++        CpuHostError::State("missing post-action organism") => F041Error::Error86,
++        CpuHostError::State("mixed M0/M1 controller") => F041Error::Error87,
++        CpuHostError::State("new organism requires brain admission") => F041Error::Error88,
++        CpuHostError::State("not a grouped M2 resident") => F041Error::Error89,
++        CpuHostError::State("optional Vocal incomplete owner") => F041Error::Error90,
++        CpuHostError::State("optional sampler owner mismatch") => F041Error::Error91,
++        CpuHostError::State("optional staged sample mismatch") => F041Error::Error92,
++        CpuHostError::State("research roster differs from admitted private state") => F041Error::Error93,
++        CpuHostError::State("sampling counter overflow") => F041Error::Error94,
++        CpuHostError::State("sealed topology observation rejected") => F041Error::Error95,
++        CpuHostError::State("semantic preparation changed ordinary perception") => F041Error::Error96,
++        CpuHostError::State("sequence overflow") => F041Error::Error97,
++        CpuHostError::State("source dynamic price overflow") => F041Error::Error98,
++        CpuHostError::State("source dynamic work overflow") => F041Error::Error99,
++        CpuHostError::State("source structural work overflow") => F041Error::Error100,
++        CpuHostError::State("structural price overflow") => F041Error::Error101,
++        CpuHostError::Contract(_) => F041Error::Error102,
++        CpuHostError::Training(alife_training::TrainingError::Contract(_)) => F041Error::Error103,
++        CpuHostError::Training(alife_training::TrainingError::Organism(_)) => F041Error::Error104,
++        CpuHostError::Training(alife_training::TrainingError::GpuSubmission) => F041Error::Error105,
++        CpuHostError::Training(alife_training::TrainingError::MalformedReadback) => F041Error::Error106,
++        CpuHostError::Organism(_) => F041Error::Error107,
++        CpuHostError::Persistence(_) => F041Error::Error108,
++        CpuHostError::Json(_) => F041Error::Error109,
++        CpuHostError::State(_) => F041Error::Error110,
++        CpuHostError::Preparation(_) => F041Error::Error111,
++    };
++    println!("GRIP_F041_ERROR={}", code as u16);
++}
++// END_F041_DIAGNOSTIC_HELPERS
+ #[test]
+ fn grounded_scene_pair_scores_and_cold_continuation() {
++    report_f041_phase(F041Phase::RecipeBuildBegin);
+     let mut recipe = recipe::build(SEED, true).unwrap();
++    report_f041_phase(F041Phase::RecipeBuildDone);
++    report_f041_phase(F041Phase::GripCompileBegin);
+     let (phenotype, inputs) =
+         PhenotypeCompiler::compile_n2048_grounded_grip_sleep_choice(&recipe.inputs).unwrap();
++    report_f041_phase(F041Phase::GripCompileDone);
++    report_f041_phase(F041Phase::AssetCreateBegin);
+     let asset = FoundationWeightAsset::from_phenotype_for_genetic_birth(&phenotype).unwrap();
++    report_f041_phase(F041Phase::AssetCreateDone);
++    report_f041_phase(F041Phase::OrdinaryIdentityRejectBegin);
++    // BEGIN_F041_ORDINARY_IDENTITY_REJECTION
++    let ordinary_identity_rejected = FoundationGeneticIdentity::new(
++        asset.manifest().foundation_id().raw(),
++        asset.manifest().foundation_version().raw() as u16,
++        asset.manifest().compatibility_family_id().raw(),
++        asset.manifest().capacity_class_id(),
++    )
++    .is_err();
++    report_f041_check(F041Check::OrdinaryIdentityRejectsResearch, ordinary_identity_rejected);
++    assert!(ordinary_identity_rejected);
++    // END_F041_ORDINARY_IDENTITY_REJECTION
++    report_f041_phase(F041Phase::OrdinaryIdentityRejectDone);
++    report_f041_phase(F041Phase::GenotypeBindBegin);
+     recipe.genotype =
+         CreatureGenome::from_n2048_grip_sleep_choice_source(&recipe.genotype, asset.clone())
+             .unwrap();
+@@ -45,8 +388,10 @@
+     recipe.phenotype = phenotype;
+     recipe.asset = asset;
+     recipe.inputs = inputs;
++    report_f041_phase(F041Phase::GenotypeBindDone);
+ 
+     let inputs = recipe.inputs.clone();
++    report_f041_phase(F041Phase::TrainerNewBegin);
+     let mut trainer = CpuFoundationTrainer::new(
+         recipe.phenotype.clone(),
+         recipe.asset.clone(),
+@@ -55,6 +400,8 @@
+     )
+     .unwrap();
+     let mut checkpoint = trainer.checkpoint();
++    report_f041_phase(F041Phase::TrainerNewDone);
++    report_f041_phase(F041Phase::TrainerRestoreBegin);
+     checkpoint.optimizer_step = 23;
+     checkpoint.update_ages[0] = 23;
+     checkpoint.first_moment[0] = 0.03125;
+@@ -62,8 +409,12 @@
+     trainer =
+         CpuFoundationTrainer::from_checkpoint(recipe.phenotype.clone(), recipe.asset, checkpoint)
+             .unwrap();
++    report_f041_phase(F041Phase::TrainerRestoreDone);
++    report_f041_phase(F041Phase::WorldNewBegin);
+     let mut game =
+         create_grip_sleep_choice_research_new_game(&recipe.config, &recipe.genotype).unwrap();
++    report_f041_phase(F041Phase::WorldNewDone);
++    report_f041_phase(F041Phase::WorldRecordBegin);
+     let record = game
+         .world
+         .organism_registry()
+@@ -72,6 +423,8 @@
+         .unwrap()
+         .clone();
+     let id = record.organism_id();
++    report_f041_phase(F041Phase::WorldRecordDone);
++    report_f041_phase(F041Phase::SceneBuildBegin);
+     let mut scene = HeadlessScenarioBuilder::new(SEED)
+         .agent("learner", id, Vec3f::ZERO)
+         .food("near-food", Vec3f::new(0.5, 0., 0.), 0.65)
+@@ -80,10 +433,14 @@
+         .obstacle("solid", Vec3f::new(-2., 0., 1.), 0.2)
+         .build()
+         .unwrap();
++    report_f041_phase(F041Phase::SceneBuildDone);
++    report_f041_phase(F041Phase::SceneRegisterBegin);
+     scene
+         .register_grip_sleep_choice_research_record(record)
+         .unwrap();
+     game.world = scene;
++    report_f041_phase(F041Phase::SceneRegisterDone);
++    report_f041_phase(F041Phase::HostNewBegin);
+     let (mut warm, ()) = CpuGripOptionsM2HostV1::new_prepared(
+         game,
+         trainer,
+@@ -93,24 +450,49 @@
+         |_| Ok::<(), String>(()),
+     )
+     .unwrap();
++    report_f041_phase(F041Phase::HostNewDone);
++    report_f041_phase(F041Phase::InitialFrozenSnapshotBegin);
+     let before = frozen(&warm);
++    report_f041_phase(F041Phase::InitialFrozenSnapshotDone);
+     // Exactly three source forwards total: one before restore, warm and cold successors.
+-    let first = warm.step_research_observed(0.73).unwrap();
++    report_f041_phase(F041Phase::FirstStepBegin);
++    let first = warm
++        .step_research_observed(0.73)
++        .map_err(|error| {
++            report_f041_error(&error);
++            error
++        })
++        .unwrap();
++    report_f041_phase(F041Phase::FirstStepDone);
++    report_f041_phase(F041Phase::FirstCountsBegin);
++    report_f041_check(F041Check::FirstDecisionsOne, first.step.decisions.len() == 1);
+     assert_eq!(first.step.decisions.len(), 1);
++    report_f041_check(F041Check::FirstReceiptsOne, first.world_receipts.len() == 1);
+     assert_eq!(first.world_receipts.len(), 1);
+     let d = &first.step.decisions[0];
++    report_f041_check(F041Check::FirstSourceCountOne, d.motor.native.core.source_execution_count == 1);
+     assert_eq!(d.motor.native.core.source_execution_count, 1);
++    report_f041_phase(F041Phase::FirstCountsDone);
++    report_f041_phase(F041Phase::ScoreProbabilitiesBegin);
+     let scores = warm.last_selection_scores(id).unwrap();
+     let probabilities = scores.probabilities(f64::from(0.73_f32)).unwrap();
++    report_f041_phase(F041Phase::ScoreProbabilitiesDone);
++    report_f041_phase(F041Phase::CoordinationSupportBegin);
++    report_f041_check(F041Check::CoordinationPositive, probabilities.coordination.iter().any(|p| p.features.iter().any(|x| x[0] > 0.)));
+     assert!(probabilities
+         .coordination
+         .iter()
+         .any(|p| p.features.iter().any(|x| x[0] > 0.)));
++    report_f041_phase(F041Phase::CoordinationSupportDone);
++    report_f041_phase(F041Phase::ScoreEvaluationBegin);
+     let evaluation = scores.evaluate(&d.action).unwrap();
++    report_f041_check(F041Check::CoordinationGradientFinite, evaluation.coordination_log_probability_gradient.iter().all(|x| x.is_finite()));
+     assert!(evaluation
+         .coordination_log_probability_gradient
+         .iter()
+         .all(|x| x.is_finite()));
++    report_f041_phase(F041Phase::ScoreEvaluationDone);
++    report_f041_phase(F041Phase::FirstReceiptChecksBegin);
+     assert_eq!(
+         d.patch.selected_bundle(),
+         Some(&first.world_receipts[0].bundle)
+@@ -119,32 +501,62 @@
+         d.patch.outcome().joint.as_ref(),
+         Some(&first.world_receipts[0].joint)
+     );
++    report_f041_phase(F041Phase::FirstReceiptChecksDone);
++    report_f041_phase(F041Phase::FirstFrozenCheckBegin);
+     assert_eq!(frozen(&warm), before);
++    report_f041_phase(F041Phase::FirstFrozenCheckDone);
++    report_f041_phase(F041Phase::CheckpointEncodeBegin);
+     let saved = wire(&warm);
++    report_f041_phase(F041Phase::CheckpointEncodeDone);
++    report_f041_phase(F041Phase::WrongEnvelopeRejectionBegin);
+     assert!(CpuCoordinatedTargetM2HostCheckpointV1::decode(&saved).is_err());
+     assert!(CpuGroupedM2HostCheckpointV1::decode(&saved).is_err());
++    report_f041_phase(F041Phase::WrongEnvelopeRejectionDone);
++    report_f041_phase(F041Phase::GripKernelChecksBegin);
+     let grip = d.motor.grip.as_ref().unwrap();
++    report_f041_check(F041Check::KernelNeurons256, grip.kernel.neuron_updates == 256);
+     assert_eq!(grip.kernel.neuron_updates, 256);
++    report_f041_check(F041Check::KernelSensory256, grip.kernel.sensory_assignments == 256);
+     assert_eq!(grip.kernel.sensory_assignments, 256);
++    report_f041_check(F041Check::KernelReductions256, grip.kernel.signed_reduction_products == 256);
+     assert_eq!(grip.kernel.signed_reduction_products, 256);
++    report_f041_check(F041Check::KernelReadouts128, grip.kernel.readout_products == 128);
+     assert_eq!(grip.kernel.readout_products, 128);
++    report_f041_check(F041Check::KernelRecallZero, grip.kernel.recall_jacobians.iter().all(|x| *x == 0.0));
+     assert!(grip.kernel.recall_jacobians.iter().all(|x| *x == 0.0));
++    report_f041_phase(F041Phase::GripKernelChecksDone);
+ 
++    report_f041_phase(F041Phase::CheckpointDecodeBegin);
++    let decoded = CpuGripOptionsM2HostCheckpointV1::decode(&saved).unwrap();
++    report_f041_phase(F041Phase::CheckpointDecodeDone);
++    report_f041_phase(F041Phase::ColdRestoreBegin);
+     let mut cold = CpuGripOptionsM2HostV1::restore(
+-        CpuGripOptionsM2HostCheckpointV1::decode(&saved).unwrap(),
++        decoded,
+         &inputs,
+         MediationModeV1::Full,
+     )
+     .unwrap();
++    report_f041_phase(F041Phase::ColdRestoreDone);
++    report_f041_phase(F041Phase::ColdWireCheckBegin);
+     assert_eq!(wire(&cold), saved);
++    report_f041_phase(F041Phase::ColdWireCheckDone);
++    report_f041_phase(F041Phase::WarmSuccessorBegin);
+     let a = warm.step_research_observed(0.73).unwrap();
++    report_f041_phase(F041Phase::WarmSuccessorDone);
++    report_f041_phase(F041Phase::ColdSuccessorBegin);
+     let b = cold.step_research_observed(0.73).unwrap();
++    report_f041_phase(F041Phase::ColdSuccessorDone);
++    report_f041_phase(F041Phase::SuccessorCountsBegin);
++    report_f041_check(F041Check::WarmDecisionsOne, a.step.decisions.len() == 1);
+     assert_eq!(a.step.decisions.len(), 1);
++    report_f041_check(F041Check::ColdDecisionsOne, b.step.decisions.len() == 1);
+     assert_eq!(b.step.decisions.len(), 1);
+     for d in [&a.step.decisions[0], &b.step.decisions[0]] {
+         assert_eq!(d.motor.native.core.source_execution_count, 1);
+     }
+     assert_eq!(a.world_receipts, b.world_receipts);
++    report_f041_phase(F041Phase::SuccessorCountsDone);
++    report_f041_phase(F041Phase::SuccessorActionPatchBegin);
+     assert_eq!(
+         serde_json::to_vec(&a.step.decisions[0].action).unwrap(),
+         serde_json::to_vec(&b.step.decisions[0].action).unwrap()
+@@ -153,9 +565,16 @@
+         serde_json::to_vec(&a.step.decisions[0].patch).unwrap(),
+         serde_json::to_vec(&b.step.decisions[0].patch).unwrap()
+     );
++    report_f041_phase(F041Phase::SuccessorActionPatchDone);
++    report_f041_phase(F041Phase::FinalWireCheckBegin);
+     assert_eq!(wire(&warm), wire(&cold));
++    report_f041_phase(F041Phase::FinalWireCheckDone);
++    report_f041_phase(F041Phase::FinalWarmFrozenBegin);
+     assert_eq!(frozen(&warm), before);
++    report_f041_phase(F041Phase::FinalWarmFrozenDone);
++    report_f041_phase(F041Phase::FinalColdFrozenBegin);
+     assert_eq!(frozen(&cold), before);
++    report_f041_phase(F041Phase::FinalColdFrozenDone);
+     println!("GRIP_INTEGRATED_COUNTS source_forwards=3 bundle_attempts=3 committed_intervals=3 source_execution_count_per_decision=1");
+     println!(
+         "GRIP_INTEGRATED_CONTINUATION_SHA256={:x}",

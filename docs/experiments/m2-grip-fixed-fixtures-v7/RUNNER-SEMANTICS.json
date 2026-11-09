@@ -1,0 +1,8 @@
+{
+  "added_functions": [],
+  "modified_existing_functions": [],
+  "prior_runner_sha256": "70b85ffc76376f8fdf8632cec749d30249db8abb52c1db0176d58038a99c1f33",
+  "runner_sha256": "79c15c626d4f4f4fc7b75f0bf7d45a9753f71c8a5c7e0b935293696347200c4d",
+  "schema": "m2-grip-fixed-runner-delta-v7",
+  "scope": "Whole runner byte-identical after version-literal normalization; only sealed selected fixture/target data changes. No behavior/resource/privacy/output/toolchain changes."
+}

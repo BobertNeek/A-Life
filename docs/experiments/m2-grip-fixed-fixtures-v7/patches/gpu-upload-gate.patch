@@ -1,0 +1,78 @@
+diff --git a/crates/alife_gpu_backend/tests/grip_profile_upload_gate.rs b/crates/alife_gpu_backend/tests/grip_profile_upload_gate.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/alife_gpu_backend/tests/grip_profile_upload_gate.rs
+@@ -0,0 +1,73 @@
++//! Fixed CPU-only upload boundary fixture. No device, world, source forward or life input.
++use alife_core::*;
++use alife_gpu_backend::{GpuClassBucketPlan, GpuClosedLoopError, GpuPerceptionUpload};
++
++fn frame(profile: SensorProfile, own_grip: Option<OwnGripSenseV1>) -> PerceptionFrame {
++    let owner = OrganismId(7);
++    let tick = Tick::new(11);
++    let candidate = ActionCandidate::new(
++        0,
++        ActionKind::Idle.canonical_id(),
++        ActionKind::Idle,
++        CandidateActionFamily::Idle,
++        CandidateObservationRef::None,
++        ActionTarget::NONE,
++        CandidateFeatureVector::zero(),
++        Confidence::new(1.0).unwrap(),
++        NormalizedScalar::new(0.0).unwrap(),
++        DurationTicks::new(1),
++        DurationTicks::new(1),
++    ).unwrap();
++    PerceptionFrameDraft::new_with_own_grip(
++        owner,
++        tick,
++        profile,
++        SensorySnapshot::new(owner, tick, Vec3f::ZERO, SensoryChannels::ZERO, Default::default()).unwrap(),
++        BodySnapshot { pose: Pose::IDENTITY, velocity: Velocity::ZERO },
++        HomeostaticSnapshot::baseline(tick),
++        vec![candidate],
++        SensorProfileProvenance::new(profile, SensoryAbiVersion::CURRENT, tick).unwrap(),
++        vec![],
++        own_grip,
++    ).unwrap().finalize(PerceptionContextBlock::empty()).unwrap()
++}
++
++#[test]
++fn valid_grip_profile_is_rejected_while_matching_legacy_upload_succeeds() {
++    // The public upload API rejects research profiles before consulting slot
++    // layout. Use a genuine valid slot, and prove its own legacy profile works,
++    // so malformed frame/slot data cannot masquerade as the profile boundary.
++    let capacity = BrainCapacityClass::n512();
++    let genome = BrainGenome::scaffold(0x4752_4950, capacity.id());
++    let development = DevelopmentState::new(
++        genome.id, Tick::ZERO, NormalizedScalar::new(0.35).unwrap(),
++    );
++    let phenotype = PhenotypeCompiler::compile(
++        &genome, &capacity, &development, SensorProfile::PrivilegedAffordanceV1,
++    ).unwrap();
++    let mut bucket = GpuClassBucketPlan::new(capacity, 1).unwrap();
++    let slot = bucket.insert_phenotype(0, 7, &phenotype).unwrap();
++    slot.record().validate_slice_a().unwrap();
++    assert_eq!(slot.sensor_profile(), SensorProfile::PrivilegedAffordanceV1);
++
++    let legacy = frame(SensorProfile::PrivilegedAffordanceV1, None);
++    legacy.validate().unwrap();
++    let upload = GpuPerceptionUpload::try_from_frame(&legacy, &slot, 0).unwrap();
++    upload.validate_against(&legacy, &slot).unwrap();
++
++    let grip = frame(SensorProfile::GroundedGripSleepChoiceV1, Some(OwnGripSenseV1 {
++        schema_version: 1,
++        occupied: false,
++        confidence: Confidence::new(1.0).unwrap(),
++        recognized_held_target: None,
++        slots: vec![],
++    }));
++    grip.validate().unwrap();
++    assert_eq!(grip.sensor_profile(), SensorProfile::GroundedGripSleepChoiceV1);
++    assert_eq!(grip.candidates().len(), 1);
++    assert_eq!(grip.own_grip().unwrap().occupied, false);
++    assert!(matches!(
++        GpuPerceptionUpload::try_from_frame(&grip, &slot, 0),
++        Err(GpuClosedLoopError::LayoutMismatch)
++    ));
++}

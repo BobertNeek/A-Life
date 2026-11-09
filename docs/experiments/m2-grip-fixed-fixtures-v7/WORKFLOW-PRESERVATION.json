@@ -1,0 +1,116 @@
+{
+  "files": [
+    {
+      "bytes": 1360,
+      "git_blob_sha1": "0c487b6f9a90e03d2db806e13fd9d70c2c02c9c8",
+      "mode": "100644",
+      "path": ".github/workflows/care-frontier-sampler.yml",
+      "sha256": "ce23d4dff5832deec885e4b086769cc46bf7c780ce990543d45e2a8383dfc938"
+    },
+    {
+      "bytes": 1042,
+      "git_blob_sha1": "7e5738e64e3d17169ea6085d655051e70aeedbba",
+      "mode": "100644",
+      "path": ".github/workflows/care-recipe-import.yml",
+      "sha256": "58cdcf0114c81639b041ff793bdcdc4f428cfd1f252a45b3462876bb86eb3231"
+    },
+    {
+      "bytes": 1570,
+      "git_blob_sha1": "b7b2f1e84f1ffe0bfab1ec917b4eabd063b0297e",
+      "mode": "100644",
+      "path": ".github/workflows/care-scenario-batches.yml",
+      "sha256": "8451c3ce325c89e394a221409f6bb8955f0554e158d325b8edeb99862839fe0a"
+    },
+    {
+      "bytes": 14654,
+      "git_blob_sha1": "f0025e9e863d7696be70816b1d4ffcb32dc37c0f",
+      "mode": "100644",
+      "path": ".github/workflows/ci.yml",
+      "sha256": "a40abd2944cdd2a2e8f24a9fc6df71228e90e29b69a14353d0800b2fc8025b27"
+    },
+    {
+      "bytes": 12946,
+      "git_blob_sha1": "4d27d4dd6b28b7092fab65b3e0b11689cd81f20d",
+      "mode": "100644",
+      "path": ".github/workflows/cpu-foundation-backend.yml",
+      "sha256": "9a1d4080e0a98f7c067d6b6dbe86cb8157f158d5cc9b43e8525e8203ac0af7ac"
+    },
+    {
+      "bytes": 3752,
+      "git_blob_sha1": "c129188d45d4b41059fd871e5d39782482bb0cf9",
+      "mode": "100644",
+      "path": ".github/workflows/group50-training.yml",
+      "sha256": "078bbfff6f62d260c7acc3455341640983e82fd9e70e7599091647bb28ea540d"
+    },
+    {
+      "bytes": 893,
+      "git_blob_sha1": "f966e8f194203ddc013888fbdbc656ea7498b131",
+      "mode": "100644",
+      "path": ".github/workflows/jules-retirement-contracts.yml",
+      "sha256": "ba9ac86fcbfd263bd361d327636c94e139e3054d23c9d088ee9824c1e4959bbc"
+    },
+    {
+      "bytes": 11580,
+      "git_blob_sha1": "3adc641386d148d2ffcf6d28ff81788c482478ec",
+      "mode": "100644",
+      "path": ".github/workflows/jules-review.yml",
+      "sha256": "b3623495eadaee4c996266a7dde75c242050bb393661ca58caa3350b99f592d2"
+    },
+    {
+      "bytes": 1700,
+      "git_blob_sha1": "232f6e6ec35c9c29abe653491a581d4e0228d4ad",
+      "mode": "100644",
+      "path": ".github/workflows/llm-care-map.yml",
+      "sha256": "c324e648540e09f41ff59820ff7511f6fc0ca342613ab079550f56b4d0cabd4a"
+    },
+    {
+      "bytes": 5885,
+      "git_blob_sha1": "f89a749e35460d269dad35f54e4cf4acfd687057",
+      "mode": "100644",
+      "path": ".github/workflows/offline-software-vulkan.yml",
+      "sha256": "6f42f581dab85d28a8b2f2450b9568392a1ae340bd296a01cc20a9de27afd7e7"
+    },
+    {
+      "bytes": 4148,
+      "git_blob_sha1": "a464a8e485014566eb2471b153bf35ab7c0b8d50",
+      "mode": "100644",
+      "path": ".github/workflows/resident-output-budget.yml",
+      "sha256": "e6186b527ecdc858a3ee688669d7cf290a4233d2f2d0bd3427bf3a248050d7b7"
+    },
+    {
+      "bytes": 2702,
+      "git_blob_sha1": "7a8d524fd14e412e8ede8609f13ba014981da4e6",
+      "mode": "100644",
+      "path": ".github/workflows/simulator-rehearsal.yml",
+      "sha256": "ede52b3e73ef0725add8f54d51f6413ef8763db23b3ed9c2b5ed2a9513385f01"
+    },
+    {
+      "bytes": 1142,
+      "git_blob_sha1": "99682eb580a563c0dff7fbf5b96220c12c323d18",
+      "mode": "100644",
+      "path": ".github/workflows/training-retention-host.yml",
+      "sha256": "45cad082b08976e1944ae00047598b42a54d52185fc66bd59faae83bb9d0c20b"
+    },
+    {
+      "bytes": 6787,
+      "git_blob_sha1": "4d07755369a6ed234d520fad9f79af46fd86c8f1",
+      "mode": "100644",
+      "path": ".github/workflows/windows-resident-experimental.yml",
+      "sha256": "57190936e57bbecf8e3de03d325e4ea1ebd9c22086618ffeb43be3c0ddb14f2f"
+    },
+    {
+      "bytes": 15542,
+      "git_blob_sha1": "b76c0f7c9b895cc110c42212f63b08b9dcd0e78e",
+      "mode": "100644",
+      "path": ".github/workflows/windows-training-artifact.yml",
+      "sha256": "d1ab71666c97c0257b4c1cd4e0abb26bc352dcf01960c736f663ddbcac76f891"
+    }
+  ],
+  "inherited_workflows_deleted": 0,
+  "inherited_workflows_modified": 0,
+  "main_commit": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "main_tree": "9140d525fe1af16fed6539c3178a1a45e1fb04d0",
+  "new_workflow": ".github/workflows/m2-grip-fixed-fixtures-v7.yml",
+  "required_workflow_count": 16,
+  "schema": "m2-grip-fixed-workflow-preservation-v5"
+}

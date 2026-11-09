@@ -1,0 +1,17 @@
+--- a/crates/alife_world/Cargo.toml
++++ b/crates/alife_world/Cargo.toml
+@@ -13,3 +13,4 @@
+ thiserror.workspace = true
+ 
+ [dev-dependencies]
++bincode.workspace = true
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -254,6 +254,7 @@
+ dependencies = [
+  "alife_core",
+  "alife_storage",
++ "bincode",
+  "serde",
+  "serde_json",
+  "thiserror 2.0.18",

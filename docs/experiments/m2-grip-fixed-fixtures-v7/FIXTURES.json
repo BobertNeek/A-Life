@@ -1,0 +1,176 @@
+{
+  "compiler_reconstruction_count_complete": false,
+  "coverage_gaps": [
+    "CPU Naga/upload contract checks only; no hardware execution/parity, new-profile GPU slot, or GPU neural behavior is qualified.",
+    "Pure recursive compiler work is bounded; complete reconstruction count remains uncertified."
+  ],
+  "dose_semantics": "Unchanged original f042-f046 explicit source-audited invocation counts, not instrumented measurements. Three enumerated N512 scaffold calls; deeper pure compiler validation work is bounded and not represented as zero. Naga performs10 explicit CPU parse/validation calls across f042/f043. Launch charges each full fixture plan on attempt; only exact fixture success contributes passed-dose totals. No source-network forward, world, biology interval or hardware dispatch is requested.",
+  "excluded_fixtures": [
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "compiler_reconstructions": null,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "exact_name": "sealed_source_descriptor_asset_and_restore_preserve_every_numerical_row",
+      "features": [],
+      "ignored": true,
+      "notes": [
+        "Ignored recursive reconstruction requires separate complete compiler-dose audit; do not use --ignored."
+      ],
+      "package": "alife_core",
+      "selection": "exclude",
+      "source_path": "crates/alife_core/tests/grip_source_reconstruction.rs",
+      "source_sha256": "eaaf4e0f023f687b4a969ec8366bd624fc1f7237f5ea25be733cc4fe330079c9",
+      "target": "grip_source_reconstruction",
+      "target_kind": "test"
+    }
+  ],
+  "fixture_count": 5,
+  "fixtures": [
+    {
+      "dose": {
+        "enumerated_scaffold_compiler_calls": 0,
+        "fresh_worlds": 0,
+        "hardware_dispatches": 0,
+        "source_forwards": 0
+      },
+      "id": "f042",
+      "ignored": false,
+      "name": "closed_loop_wgsl_parses_validates_and_exposes_only_the_required_entries",
+      "notes": [
+        "Naga CPU parse/validation only. Never enable gpu-tests."
+      ],
+      "source_path": "crates/alife_gpu_backend/tests/closed_loop_wgsl.rs",
+      "source_sha256": "4d70845ded390eb866183539b6342599ea1b4d4761a3751806aa49bcfdeef493",
+      "target_id": "gpu_backend_closed_loop_wgsl"
+    },
+    {
+      "dose": {
+        "enumerated_scaffold_compiler_calls": 0,
+        "fresh_worlds": 0,
+        "hardware_dispatches": 0,
+        "source_forwards": 0
+      },
+      "id": "f043",
+      "ignored": false,
+      "name": "naga_reflection_matches_the_exact_seven_heap_bindings_and_access_modes",
+      "notes": [
+        "Naga CPU parse/validation only. Never enable gpu-tests."
+      ],
+      "source_path": "crates/alife_gpu_backend/tests/closed_loop_wgsl.rs",
+      "source_sha256": "4d70845ded390eb866183539b6342599ea1b4d4761a3751806aa49bcfdeef493",
+      "target_id": "gpu_backend_closed_loop_wgsl"
+    },
+    {
+      "dose": {
+        "enumerated_scaffold_compiler_calls": 1,
+        "fresh_worlds": 0,
+        "hardware_dispatches": 0,
+        "source_forwards": 0
+      },
+      "id": "f044",
+      "ignored": false,
+      "name": "perception::perception_upload_translates_the_validated_same_tick_frame_without_scores",
+      "notes": [
+        "CPU upload structure only; does not exercise grip-frame rejection."
+      ],
+      "source_path": "crates/alife_gpu_backend/tests/closed_loop_buffer_contracts/perception.rs",
+      "source_sha256": "c64900b78e00407ed58eeed48cb1bf35706557131149e12a674d772dfeb0ef0b",
+      "target_id": "gpu_backend_closed_loop_buffer_contracts"
+    },
+    {
+      "dose": {
+        "enumerated_scaffold_compiler_calls": 1,
+        "fresh_worlds": 0,
+        "hardware_dispatches": 0,
+        "source_forwards": 0
+      },
+      "id": "f045",
+      "ignored": false,
+      "name": "perception::dynamic_upload_validation_rejects_activation_side_offsets_counts_and_reserved_words",
+      "notes": [
+        "CPU upload structure only; does not exercise grip-frame rejection."
+      ],
+      "source_path": "crates/alife_gpu_backend/tests/closed_loop_buffer_contracts/perception.rs",
+      "source_sha256": "c64900b78e00407ed58eeed48cb1bf35706557131149e12a674d772dfeb0ef0b",
+      "target_id": "gpu_backend_closed_loop_buffer_contracts"
+    },
+    {
+      "dose": {
+        "committed_registered_biology_intervals": 0,
+        "enumerated_scaffold_compiler_calls": 1,
+        "fresh_worlds": 0,
+        "grip_upload_rejections": 1,
+        "hardware_dispatches": 0,
+        "legacy_upload_successes": 2,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0,
+        "upload_entry_calls": 3
+      },
+      "id": "f046",
+      "ignored": false,
+      "name": "valid_grip_profile_is_rejected_while_matching_legacy_upload_succeeds",
+      "notes": [
+        "Additive test only. Frame-profile gate; not new-profile slot or hardware qualification."
+      ],
+      "source_path": "crates/alife_gpu_backend/tests/grip_profile_upload_gate.rs",
+      "source_sha256": "405656f47ac6a2668bc7f5faa81a7a80dc3d11be17e097ee69ef2b53583f0794",
+      "target_id": "gpu_grip_profile_upload_gate"
+    }
+  ],
+  "native_execution_performed": false,
+  "qualification_scope": "Five previously pending CPU-side GPU-backend fixtures only, no replay of40 historical passes or f041. Source-manifest is byte-identical to qualified V6. Report5 new outcomes plus41 retained contracts separately; never a fresh46-fixture sweep or hardware claim.",
+  "ready": true,
+  "retained_v2_fixture_count": 18,
+  "retained_v3_fixture_count": 22,
+  "retained_v6_fixture_count": 1,
+  "schema": "m2-grip-fixed-fixtures-v7",
+  "source_audited_complete_dose": {
+    "committed_registered_biology_intervals": 0,
+    "enumerated_scaffold_compiler_calls": 3,
+    "fresh_worlds": 0,
+    "grip_upload_rejections": 1,
+    "hardware_dispatches": 0,
+    "legacy_upload_successes": 2,
+    "rolled_back_registered_biology_intervals": 0,
+    "source_forwards": 0,
+    "upload_entry_calls": 3
+  },
+  "target_count": 3,
+  "targets": [
+    {
+      "features": [
+        "training-rollout"
+      ],
+      "id": "gpu_backend_closed_loop_wgsl",
+      "kind": "test",
+      "name": "closed_loop_wgsl",
+      "package": "alife_gpu_backend"
+    },
+    {
+      "features": [
+        "training-rollout"
+      ],
+      "id": "gpu_backend_closed_loop_buffer_contracts",
+      "kind": "test",
+      "name": "closed_loop_buffer_contracts",
+      "package": "alife_gpu_backend"
+    },
+    {
+      "features": [
+        "training-rollout"
+      ],
+      "id": "gpu_grip_profile_upload_gate",
+      "kind": "test",
+      "name": "grip_profile_upload_gate",
+      "package": "alife_gpu_backend"
+    }
+  ]
+}
