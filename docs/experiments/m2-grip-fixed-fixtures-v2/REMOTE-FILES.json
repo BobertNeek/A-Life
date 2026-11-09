@@ -1,0 +1,273 @@
+{
+  "activation_only_added_path": "docs/experiments/m2-grip-fixed-fixtures-v2/ACTIVATE.json",
+  "content_identities": "Final ARCHIVE-MANIFEST.json supplies archive-member hashes; REUSE-MANIFEST.json supplies exact reused Git blobs.",
+  "crate_paths_changed_in_publication": [],
+  "deleted_paths": [],
+  "modified_inherited_paths": [],
+  "no_pr_merge_dispatch_or_ref_rename": true,
+  "prepared_files": [
+    {
+      "mode": "100644",
+      "path": ".github/workflows/m2-grip-fixed-fixtures-v2.yml",
+      "transport": "archive"
+    },
+    {
+      "mode": "100644",
+      "path": "docs/experiments/m2-grip-fixed-fixtures-v2/ACTIVATE.template.json",
+      "transport": "archive"
+    },
+    {
+      "git_blob_sha1": "2c05f7c6a3226bb0043f0a683bad64569cc9b974",
+      "mode": "100644",
+      "path": "docs/experiments/m2-grip-fixed-fixtures-v2/CORRECTION.json",
+      "transport": "reuse"
+    },
+    {
+      "mode": "100644",
+      "path": "docs/experiments/m2-grip-fixed-fixtures-v2/F012-CORRECTION.json",
+      "transport": "archive"
+    },
+    {
+      "mode": "100644",
+      "path": "docs/experiments/m2-grip-fixed-fixtures-v2/FIXTURE-INVENTORY.md",
+      "transport": "archive"
+    },
+    {
+      "mode": "100644",
+      "path": "docs/experiments/m2-grip-fixed-fixtures-v2/FIXTURES.json",
+      "transport": "archive"
+    },
+    {
+      "git_blob_sha1": "e72d47b58b2e4b6b5bd78246216ef66dad6a394a",
+      "mode": "100644",
+      "path": "docs/experiments/m2-grip-fixed-fixtures-v2/INHERITED-WORKFLOW-FIXTURES.json",
+      "transport": "reuse"
+    },
+    {
+      "mode": "100644",
+      "path": "docs/experiments/m2-grip-fixed-fixtures-v2/PREPARATION.json",
+      "transport": "archive"
+    },
+    {
+      "mode": "100644",
+      "path": "docs/experiments/m2-grip-fixed-fixtures-v2/PRIOR-TYPECHECK-RESULT.json",
+      "transport": "archive"
+    },
+    {
+      "mode": "100644",
+      "path": "docs/experiments/m2-grip-fixed-fixtures-v2/PRIOR-V1-PRESERVATION.json",
+      "transport": "archive"
+    },
+    {
+      "mode": "100644",
+      "path": "docs/experiments/m2-grip-fixed-fixtures-v2/PRIOR-V5-PRESERVATION.json",
+      "transport": "archive"
+    },
+    {
+      "mode": "100644",
+      "path": "docs/experiments/m2-grip-fixed-fixtures-v2/README.md",
+      "transport": "archive"
+    },
+    {
+      "git_blob_sha1": "3a852831f44dd0630cc836ffcda0d310c50a6374",
+      "mode": "100644",
+      "path": "docs/experiments/m2-grip-fixed-fixtures-v2/REGISTRATION-DELTA-v6.json",
+      "transport": "reuse"
+    },
+    {
+      "mode": "100644",
+      "path": "docs/experiments/m2-grip-fixed-fixtures-v2/REMOTE-FILES.json",
+      "transport": "archive"
+    },
+    {
+      "mode": "100644",
+      "path": "docs/experiments/m2-grip-fixed-fixtures-v2/REUSE-MANIFEST.json",
+      "transport": "archive"
+    },
+    {
+      "mode": "100644",
+      "path": "docs/experiments/m2-grip-fixed-fixtures-v2/RUNNER-SEMANTICS.json",
+      "transport": "archive"
+    },
+    {
+      "mode": "100644",
+      "path": "docs/experiments/m2-grip-fixed-fixtures-v2/SOURCE-AUDIT.json",
+      "transport": "archive"
+    },
+    {
+      "git_blob_sha1": "75a12ed2fb9cefdc77c4ba1e6bd97ac736d3236b",
+      "mode": "100644",
+      "path": "docs/experiments/m2-grip-fixed-fixtures-v2/SOURCE-FREEZE-v5.json",
+      "transport": "reuse"
+    },
+    {
+      "git_blob_sha1": "0a1db7d3c86d8eeb01b2b15c08660de1b3be9d20",
+      "mode": "100644",
+      "path": "docs/experiments/m2-grip-fixed-fixtures-v2/SOURCE-FREEZE-v6.json",
+      "transport": "reuse"
+    },
+    {
+      "mode": "100644",
+      "path": "docs/experiments/m2-grip-fixed-fixtures-v2/STATIC-CHECK.json",
+      "transport": "archive"
+    },
+    {
+      "mode": "100644",
+      "path": "docs/experiments/m2-grip-fixed-fixtures-v2/TEST-ONLY-DELTA.json",
+      "transport": "archive"
+    },
+    {
+      "git_blob_sha1": "13b053f695a6b60b627af10d26cf421e9d62a78c",
+      "mode": "100644",
+      "path": "docs/experiments/m2-grip-fixed-fixtures-v2/TOOLCHAIN-PRIOR-RESULTS.json",
+      "transport": "reuse"
+    },
+    {
+      "git_blob_sha1": "6853dc6ed955d120ea20f1d5a35785662891803c",
+      "mode": "100644",
+      "path": "docs/experiments/m2-grip-fixed-fixtures-v2/TOOLCHAIN-PROVENANCE.json",
+      "transport": "reuse"
+    },
+    {
+      "mode": "100644",
+      "path": "docs/experiments/m2-grip-fixed-fixtures-v2/TRIGGER-AUDIT.json",
+      "transport": "archive"
+    },
+    {
+      "mode": "100644",
+      "path": "docs/experiments/m2-grip-fixed-fixtures-v2/WORKFLOW-PRESERVATION.json",
+      "transport": "archive"
+    },
+    {
+      "git_blob_sha1": "fe1257e7455c8fd7e3bd8c886d000c5fe8175870",
+      "mode": "100644",
+      "path": "docs/experiments/m2-grip-fixed-fixtures-v2/closure.json",
+      "transport": "reuse"
+    },
+    {
+      "git_blob_sha1": "63bc908603e869946295f8ad98f96d13ee124266",
+      "mode": "100644",
+      "path": "docs/experiments/m2-grip-fixed-fixtures-v2/dependencies.json",
+      "transport": "reuse"
+    },
+    {
+      "mode": "100644",
+      "path": "docs/experiments/m2-grip-fixed-fixtures-v2/packet_inputs.py",
+      "transport": "archive"
+    },
+    {
+      "mode": "100644",
+      "path": "docs/experiments/m2-grip-fixed-fixtures-v2/patches/f012-mixed-map-correction.patch",
+      "transport": "archive"
+    },
+    {
+      "git_blob_sha1": "99d4927cccaaf74172282cbb8e50ea9609e56250",
+      "mode": "100644",
+      "path": "docs/experiments/m2-grip-fixed-fixtures-v2/patches/fbf-nominal-source-supplement.patch",
+      "transport": "reuse"
+    },
+    {
+      "git_blob_sha1": "6caac64b53ea977e3f7494b999c0c671244344b9",
+      "mode": "100644",
+      "path": "docs/experiments/m2-grip-fixed-fixtures-v2/patches/fbf-to-grip-v4.patch",
+      "transport": "reuse"
+    },
+    {
+      "mode": "100644",
+      "path": "docs/experiments/m2-grip-fixed-fixtures-v2/patches/gpu-upload-gate.patch",
+      "transport": "archive"
+    },
+    {
+      "git_blob_sha1": "b5fb216bbd0e969e9249aa984b68520d9d1df037",
+      "mode": "100644",
+      "path": "docs/experiments/m2-grip-fixed-fixtures-v2/patches/grip-v4-to-v5.patch",
+      "transport": "reuse"
+    },
+    {
+      "git_blob_sha1": "64bed9e545137f9036cc13d394976e70cf494603",
+      "mode": "100644",
+      "path": "docs/experiments/m2-grip-fixed-fixtures-v2/patches/grip-v5-to-v6.patch",
+      "transport": "reuse"
+    },
+    {
+      "git_blob_sha1": "6df92f6933b9279c86373ec0b4b7c0a66770d199",
+      "mode": "100644",
+      "path": "docs/experiments/m2-grip-fixed-fixtures-v2/patches/main-to-fbf-library-closure.part-01.patch",
+      "transport": "reuse"
+    },
+    {
+      "git_blob_sha1": "7f27884da807987fb3eb63ca442724a14ee46468",
+      "mode": "100644",
+      "path": "docs/experiments/m2-grip-fixed-fixtures-v2/patches/main-to-fbf-library-closure.part-02.patch",
+      "transport": "reuse"
+    },
+    {
+      "git_blob_sha1": "ef007c906168887cd275564f541a48714806608b",
+      "mode": "100644",
+      "path": "docs/experiments/m2-grip-fixed-fixtures-v2/patches/main-to-fbf-library-closure.part-03.patch",
+      "transport": "reuse"
+    },
+    {
+      "mode": "100644",
+      "path": "docs/experiments/m2-grip-fixed-fixtures-v2/publication.json",
+      "transport": "archive"
+    },
+    {
+      "git_blob_sha1": "92e9d5adaaf5f2927850027c242a88b9a1e6b104",
+      "mode": "100644",
+      "path": "docs/experiments/m2-grip-fixed-fixtures-v2/recovery.json",
+      "transport": "reuse"
+    },
+    {
+      "git_blob_sha1": "bf5b698ad30087153b03781aa9f0acfbbef92048",
+      "mode": "100644",
+      "path": "docs/experiments/m2-grip-fixed-fixtures-v2/registered-source-v5.json",
+      "transport": "reuse"
+    },
+    {
+      "mode": "100644",
+      "path": "docs/experiments/m2-grip-fixed-fixtures-v2/run_hosted.py",
+      "transport": "archive"
+    },
+    {
+      "mode": "100644",
+      "path": "docs/experiments/m2-grip-fixed-fixtures-v2/seal.json",
+      "transport": "archive"
+    },
+    {
+      "mode": "100644",
+      "path": "docs/experiments/m2-grip-fixed-fixtures-v2/seal_package.py",
+      "transport": "archive"
+    },
+    {
+      "git_blob_sha1": "b58038f69483039b8bb495e527e76313053f0df8",
+      "mode": "100644",
+      "path": "docs/experiments/m2-grip-fixed-fixtures-v2/source-manifest-v5.json",
+      "transport": "reuse"
+    },
+    {
+      "mode": "100644",
+      "path": "docs/experiments/m2-grip-fixed-fixtures-v2/source-manifest.json",
+      "transport": "archive"
+    },
+    {
+      "git_blob_sha1": "78ea389554f95f22d5f96507f853c76862c95cee",
+      "mode": "100644",
+      "path": "docs/experiments/m2-grip-fixed-fixtures-v2/source_patch.py",
+      "transport": "reuse"
+    },
+    {
+      "mode": "100644",
+      "path": "docs/experiments/m2-grip-fixed-fixtures-v2/static_checks.py",
+      "transport": "archive"
+    },
+    {
+      "git_blob_sha1": "62252504fab44d94e1bf3a73df1c976b3dec35c4",
+      "mode": "100644",
+      "path": "docs/experiments/m2-grip-fixed-fixtures-v2/upstream-toolchain-action.yml",
+      "transport": "reuse"
+    }
+  ],
+  "prepared_parent": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "schema": "m2-grip-fixed-remote-inventory-v2"
+}
