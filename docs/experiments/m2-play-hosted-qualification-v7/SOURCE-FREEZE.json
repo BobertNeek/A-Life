@@ -1,0 +1,87 @@
+{
+  "effective_owned_patch_sha256": "efe7a7731221e657aed2cefb7673fb703b8ea6376a2589769ac3a0726b8cae6b",
+  "fixture_fragments_unchanged_from_v5": [
+    {
+      "function_fragment_sha256": "d977ff4a623f22a03ae0f4c8817d57c9bc8ca4278dd51c11eb5d79f82e991ba0",
+      "id": "new-06",
+      "source": "crates/alife_training/src/cpu/play_need_host_tests.rs",
+      "source_sha256": "909f9fe5f8872b07f8dee150bce1366f438313cea2278edff70593c5cf4176d2"
+    },
+    {
+      "function_fragment_sha256": "dabc57b32dc6a3a757e3175523a4da45f129db5aab1d4f19e4e678ce80dad4c3",
+      "id": "legacy-01",
+      "source": "crates/alife_training/src/cpu/motor_mediation/confidence/host/tests.rs",
+      "source_sha256": "a2dc13d5d5a1e3ad007c274984b4245e22042d122a4e52019095ae6dd2d2e3a8"
+    },
+    {
+      "function_fragment_sha256": "2f326e639b57840f0fa7e86cd8886167dad2534bff45406a78572860602c6dbb",
+      "id": "legacy-02",
+      "source": "crates/alife_training/src/cpu/motor_mediation/confidence/host/tests.rs",
+      "source_sha256": "a2dc13d5d5a1e3ad007c274984b4245e22042d122a4e52019095ae6dd2d2e3a8"
+    },
+    {
+      "function_fragment_sha256": "aa8674613e48b21e32942329c93236609eceb9b3b631e87079c414a59aff815b",
+      "id": "legacy-03",
+      "source": "crates/alife_training/src/cpu/motor_mediation/confidence/host/tests.rs",
+      "source_sha256": "a2dc13d5d5a1e3ad007c274984b4245e22042d122a4e52019095ae6dd2d2e3a8"
+    },
+    {
+      "function_fragment_sha256": "2a5a21826ee9c24975e9930c1e379072df7d185e3022927cae49d470eefe7a2e",
+      "id": "legacy-04",
+      "source": "crates/alife_training/src/cpu/motor_mediation/confidence/host/tests.rs",
+      "source_sha256": "a2dc13d5d5a1e3ad007c274984b4245e22042d122a4e52019095ae6dd2d2e3a8"
+    },
+    {
+      "function_fragment_sha256": "899abf5c9176480791587907f835ef4e8edf2473df0bc3401cab3dc9aebba3ff",
+      "id": "legacy-05",
+      "source": "crates/alife_training/src/cpu/optional_vocal_host_tests.rs",
+      "source_sha256": "48f194a711c9b9a920ab1208ed034254b6f7b53e00669960287ab38d71cf3cac"
+    },
+    {
+      "function_fragment_sha256": "4bc6cab5383e1005a740339ff95207dd5c5805e54ff006b761db39a5627e2e83",
+      "id": "legacy-06",
+      "source": "crates/alife_training/src/cpu/optional_vocal_host_tests.rs",
+      "source_sha256": "48f194a711c9b9a920ab1208ed034254b6f7b53e00669960287ab38d71cf3cac"
+    },
+    {
+      "function_fragment_sha256": "c0b6b035d311afb5d46fc0549837fad3bc545b7e772713bbe2f82067c3c59914",
+      "id": "legacy-07",
+      "source": "crates/alife_training/src/cpu/optional_vocal_host_tests.rs",
+      "source_sha256": "48f194a711c9b9a920ab1208ed034254b6f7b53e00669960287ab38d71cf3cac"
+    },
+    {
+      "function_fragment_sha256": "e4849b4add3d750d3d227e3f67375e96d47cfd71cccfe699a2d165ac65eadc35",
+      "id": "legacy-08",
+      "source": "crates/alife_training/src/cpu/optional_vocal_host_tests.rs",
+      "source_sha256": "48f194a711c9b9a920ab1208ed034254b6f7b53e00669960287ab38d71cf3cac"
+    },
+    {
+      "function_fragment_sha256": "c807b94c003b47e5515fc901e3efeb7b1e0513d80ee7359fb64de688a9af498f",
+      "id": "legacy-09",
+      "source": "crates/alife_training/src/cpu/optional_vocal_host_tests.rs",
+      "source_sha256": "48f194a711c9b9a920ab1208ed034254b6f7b53e00669960287ab38d71cf3cac"
+    },
+    {
+      "function_fragment_sha256": "8a6d90cc6fe355ad6fe7376cf6a675807f526a6e502e712056576ca988342910",
+      "id": "legacy-10",
+      "source": "crates/alife_training/src/cpu/motor_mediation/tests.rs",
+      "source_sha256": "c86731cd8976d50d9041c1858c63ea32cefdb4c3c601fc58022c4cfd0a86a6d6"
+    },
+    {
+      "function_fragment_sha256": "712cb9b0a9a1756048d00ab632570a6d4cec24cf032b7f0711ec88ccd0a7e519",
+      "id": "legacy-11",
+      "source": "crates/alife_training/src/cpu/motor_mediation/tests.rs",
+      "source_sha256": "c86731cd8976d50d9041c1858c63ea32cefdb4c3c601fc58022c4cfd0a86a6d6"
+    }
+  ],
+  "probe_source_sha256": "cc8178c7e73a04b2fb2a8f0623ecbdc33a709212caf2fdb9744ef3f0f23a14a9",
+  "raw_source_manifest_sha256": "eac26aabc32d23c20840f345048f264a42991608aa75684ca98d67158de0a101",
+  "role_counts": {
+    "base": 799,
+    "original60": 813,
+    "owned76": 818
+  },
+  "runtime_readout_payloads_copied": 0,
+  "schema": "m2-play-v7-source-freeze-v1",
+  "scientific_source_changes_from_v6": 0
+}

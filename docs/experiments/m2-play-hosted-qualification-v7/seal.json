@@ -1,0 +1,182 @@
+{
+  "files": [
+    {
+      "bytes": 1272,
+      "path": "CONTINUATION.json",
+      "sha256": "5cc3bbc0e7ef520713b58e861e8f446ac0b937730f5a54fe06e655c5cddb0f56"
+    },
+    {
+      "bytes": 16132,
+      "path": "DOSE-INVENTORY.json",
+      "sha256": "7470bb63f13e65b93de631d6a8390ec68469c91003a5fb9d14808d02b776b254"
+    },
+    {
+      "bytes": 7921,
+      "path": "FUNCTION-DIFF.json",
+      "sha256": "f6bc59c6531421cf77109ec51bd025b238b8c69754fdde37092790c1d8455644"
+    },
+    {
+      "bytes": 6173,
+      "path": "FUNCTION-FREEZE.json",
+      "sha256": "53ba4f5d47c0e1ce4be3ba42ba22583219a2e657709ce4b137a410860677b98b"
+    },
+    {
+      "bytes": 92558,
+      "path": "INHERITED-WORKFLOW-FIXTURES.json",
+      "sha256": "e45e6ea9f0b5de64ad00a3fbc108cbefcce48f5eab8b9c32caceaa9650497fcd"
+    },
+    {
+      "bytes": 12357,
+      "path": "LITERAL-DOSE-REVIEW.md",
+      "sha256": "476e3e3d1b257dde0eae65ffce00870b1a17e0e3cb1677c98a493bc1fe59e717"
+    },
+    {
+      "bytes": 713,
+      "path": "OUTPUT-POLICY.json",
+      "sha256": "f15e7c158cffc9d41f9791f6b9c649723e19c944194b22718b6c047cd19cf3f3"
+    },
+    {
+      "bytes": 872,
+      "path": "OWNED-PATCH-TRANSPORT.json",
+      "sha256": "de49cf50d3e272939158d5a4c64aa6f39722c0dc3a9cca77eb675d6213a6e493"
+    },
+    {
+      "bytes": 1740,
+      "path": "README.md",
+      "sha256": "d8770d33b1128ce279c6317baa12e436b6eecbc49dbccbc043da3c3f80d82968"
+    },
+    {
+      "bytes": 232434,
+      "path": "RECONSTRUCTION.json",
+      "sha256": "8229313e85dda9531f187b6d9a370e5b4afd4552e5ca579b5329ac6e4d253c04"
+    },
+    {
+      "bytes": 6104,
+      "path": "REUSE-MANIFEST.json",
+      "sha256": "0394d14f0c3c427c64c8e0e362ae70097ce2a192a12aacc928401fe2b4867bc6"
+    },
+    {
+      "bytes": 4281,
+      "path": "SOURCE-FREEZE.json",
+      "sha256": "9dd3e89a6f9971019bb9b8988ed5f4312f1be11ee9f21c1208dab43a6da88c4e"
+    },
+    {
+      "bytes": 801,
+      "path": "STATIC-CHECK.json",
+      "sha256": "d4011370dc946a75e2919783f03b4acd3b8983f40bfec86591ba3f41895ca75a"
+    },
+    {
+      "bytes": 12977,
+      "path": "TEST-INVENTORY.json",
+      "sha256": "301984c6d94fc00265651383bf249e9fb234b2d2eb2b811d9b73a6e15fb9dd79"
+    },
+    {
+      "bytes": 826,
+      "path": "TRANSPORT-FUNCTION-FREEZE.json",
+      "sha256": "d07ecb19b17bf9255c92444c386f430906d043940902530216584b62472be4fc"
+    },
+    {
+      "bytes": 5114,
+      "path": "TRIGGER-AUDIT.json",
+      "sha256": "71e633fa16d02fa0524f98d13de1ceb8f023b752ef52d233c0c67137f9b4c807"
+    },
+    {
+      "bytes": 639609,
+      "path": "V5-OWNED-RUNTIME.patch",
+      "sha256": "898844fde8024acf2a5d7d9d46b44300c6e0d3f65e9b849ddef203b8737ce10d"
+    },
+    {
+      "bytes": 5051,
+      "path": "V6-OWNED-PATCH-DELTA.patch",
+      "sha256": "e45b0ac7a65ff13e8326e0a4fb31790628f37a97aeb9a8e9e1eab5775c94d7cf"
+    },
+    {
+      "bytes": 4383,
+      "path": "WORKFLOW-PRESERVATION.json",
+      "sha256": "f84bc94e0b8273e16cc56aa3174aba8942438194fac18074b32136aabe4f39be"
+    },
+    {
+      "bytes": 150659,
+      "path": "logical-base-source-delta.patch",
+      "sha256": "a5a2aba4d547a6c8811539118b2fa04fc497cc20a8cb60dd95f81fe9039778ae"
+    },
+    {
+      "bytes": 136753,
+      "path": "patches/fbf-nominal-source-supplement.patch",
+      "sha256": "ddd07c85685b27056664d9b8650fa736d8eff257f5d477485efd7d14e5e5b051"
+    },
+    {
+      "bytes": 563200,
+      "path": "patches/main-to-fbf-library-closure.part-01.patch",
+      "sha256": "44c9ee9e269bec25ebb924054754a0e71ddc7b73104a132699171a9776430e07"
+    },
+    {
+      "bytes": 563195,
+      "path": "patches/main-to-fbf-library-closure.part-02.patch",
+      "sha256": "a2fb1711dee71d569aea8643ba5dd02d16c992bf9f378b219e4b86cb51edafae"
+    },
+    {
+      "bytes": 415718,
+      "path": "patches/main-to-fbf-library-closure.part-03.patch",
+      "sha256": "95d7a29b145111d4f24297c97ecd0766673f9275b5dd89400958c714a24ae72d"
+    },
+    {
+      "bytes": 1722,
+      "path": "probe_play_need_default_wire_v1.rs",
+      "sha256": "cc8178c7e73a04b2fb2a8f0623ecbdc33a709212caf2fdb9744ef3f0f23a14a9"
+    },
+    {
+      "bytes": 775,
+      "path": "publication.json",
+      "sha256": "82176dbf915aac9e7740771a2377f1b9e5a9c9e2750e1ac49e573c086ea82815"
+    },
+    {
+      "bytes": 56756,
+      "path": "qualified-CLOSURE.json",
+      "sha256": "79b18e8a83d2c8cb7e66ffc9bf5d8ad1636c5a3658c403897d069bbc9ce8ac1f"
+    },
+    {
+      "bytes": 456096,
+      "path": "qualified-original-overlay.tar.gz",
+      "sha256": "28b472731e2f28002ec0a73a7947ecde48ee3fb0c39f2efa313a1f7c9ecbbe49"
+    },
+    {
+      "bytes": 3495,
+      "path": "reconstruct_source.py",
+      "sha256": "2e7cdf9667e590513a9985695d8a045bf3c50446da033b7cc230f459e4c40782"
+    },
+    {
+      "bytes": 40818,
+      "path": "run_hosted.py",
+      "sha256": "bdbac4defeb6f97c30443b44909d9776f1b56a95679b5a03639fc11340e7cf14"
+    },
+    {
+      "bytes": 7420,
+      "path": "seal_package.py",
+      "sha256": "329e5109c64fbee5cf4c7dec5fed50b435ff890be4e4320f9a5290c68ee4e236"
+    },
+    {
+      "bytes": 475371,
+      "path": "source-manifest.json",
+      "sha256": "eac26aabc32d23c20840f345048f264a42991608aa75684ca98d67158de0a101"
+    },
+    {
+      "bytes": 20448,
+      "path": "static_checks.py",
+      "sha256": "1d3ee8f0102d3dc7ef3038e0a666668e5e8fd87a9f10affce9a316352e18a57c"
+    },
+    {
+      "bytes": 7481,
+      "path": "upstream-toolchain-action.yml",
+      "sha256": "0b52547c145ae18d8631c9ab711e4d917e9e489cea800368f338c25a56e0aee2"
+    },
+    {
+      "bytes": 5559,
+      "path": "verify_remote_inventory.py",
+      "sha256": "9efd80ecde1d2ee40b048b1c15d6469ede519d872ed9e3ae9269ee58219c47f2"
+    }
+  ],
+  "plan_id": "m2-play-hosted-qualification-v7",
+  "schema": "m2-play-hosted-seal-v1",
+  "source_ready": true
+}

@@ -1,0 +1,127 @@
+--- a/OWNED-RUNTIME.patch
++++ b/OWNED-RUNTIME.patch
+@@ -1052,7 +1052,7 @@
+ +mod tests;
+ --- /dev/null
+ +++ b/crates/alife_training/src/cpu/play_need_host_tests.rs
+-@@ -0,0 +1,291 @@
++@@ -0,0 +1,316 @@
+ +//! Source-only authored tests. Execution requires a separately admitted new build.
+ +use super::*;
+ +use crate::{AdamWConfig, StageTrainableMask};
+@@ -1182,28 +1182,40 @@
+ +#[test]
+ +fn play_owned_cold_cross_owner_recipe_cost_and_mode_reject() {
+ +    for arm in [PlayNeedArmV1::Candidate, PlayNeedArmV1::PaddedSham] {
+++        let mark = |phase: u8| {
+++            let code = match arm { PlayNeedArmV1::Candidate => "C", PlayNeedArmV1::PaddedSham => "S" };
+++            println!("M2_PLAY_COLD_V1:{code}:{phase:02}");
+++        };
+++        mark(0);
+ +        let other = match arm {
+ +            PlayNeedArmV1::Candidate => PlayNeedArmV1::PaddedSham,
+ +            PlayNeedArmV1::PaddedSham => PlayNeedArmV1::Candidate,
+ +        };
+ +        let (mut host, inputs) = fresh(arm);
+++        mark(1);
+ +        host.step(0.73).unwrap();
+++        mark(2);
+ +        let wire = host.checkpoint().unwrap().encode().unwrap();
+++        mark(3);
+ +        assert!(CpuPlayNeedM2HostCheckpointV1::decode(other, &wire).is_err());
+++        mark(4);
+ +        assert!(CpuOptionalVocalM2HostCheckpointV1::decode(&wire).is_err());
+++        mark(5);
+ +        assert!(CpuGroupedM2HostCheckpointV1::decode(&wire).is_err());
+++        mark(6);
+ +        assert!(CpuPlayNeedM2HostV1::restore(
+ +            other,
+ +            CpuPlayNeedM2HostCheckpointV1::decode(arm, &wire).unwrap(),
+ +            &inputs
+ +        )
+ +        .is_err());
+-+        for field in [
+-+            "recipe_owner",
+-+            "schema",
+-+            "m2_recipe",
+-+            "work_policy",
+-+            "group_recipe",
+++        mark(7);
+++        for (phase, field) in [
+++            (8, "recipe_owner"),
+++            (9, "schema"),
+++            (10, "m2_recipe"),
+++            (11, "work_policy"),
+++            (12, "group_recipe"),
+ +        ] {
+ +            let bad = alter(&wire, arm, |v| {
+ +                v["controllers"]
+@@ -1217,9 +1229,11 @@
+ +                CpuPlayNeedM2HostCheckpointV1::decode(arm, &bad).is_err(),
+ +                "{field}"
+ +            );
+++            mark(phase);
+ +        }
+ +        let bad = alter(&wire, arm, |v| v["mode"] = "DriveSham".into());
+ +        assert!(CpuPlayNeedM2HostCheckpointV1::decode(arm, &bad).is_err());
+++        mark(13);
+ +        let bad = alter(&wire, arm, |v| {
+ +            v["controllers"]
+ +                .as_object_mut()
+@@ -1230,6 +1244,7 @@
+ +                1920.into();
+ +        });
+ +        assert!(CpuPlayNeedM2HostCheckpointV1::decode(arm, &bad).is_err());
+++        mark(14);
+ +        let bad = alter(&wire, arm, |v| {
+ +            v["controllers"]
+ +                .as_object_mut()
+@@ -1239,9 +1254,11 @@
+ +                .unwrap()["motor"]["last_receipt"]["reservation_q24"] = 0.into();
+ +        });
+ +        let decoded = CpuPlayNeedM2HostCheckpointV1::decode(arm, &bad).unwrap();
+++        mark(15);
+ +        assert!(CpuPlayNeedM2HostV1::restore(arm, decoded, &inputs).is_err());
+-+        // Coordinated proof + charge edits are still rejected by the existing
+-+        // canonical-world authority digest over the entire grouped resident.
+++        mark(16);
+++        // Zero proof + charge edits reject at paid-work validation; this case
+++        // does not independently establish the later authority-digest check.
+ +        let bad = alter(&wire, arm, |v| {
+ +            let r = &mut v["controllers"]
+ +                .as_object_mut()
+@@ -1254,17 +1271,24 @@
+ +            r["reservation_q16"] = 0.into();
+ +        });
+ +        let decoded = CpuPlayNeedM2HostCheckpointV1::decode(arm, &bad).unwrap();
+++        mark(17);
+ +        assert!(CpuPlayNeedM2HostV1::restore(arm, decoded, &inputs).is_err());
+++        mark(18);
+ +        let bad = alter(&wire, arm, |v| {
+-+            v["controllers"]
+++            let debit = &mut v["controllers"]
+ +                .as_object_mut()
+ +                .unwrap()
+ +                .values_mut()
+ +                .next()
+-+                .unwrap()["motor"]["last_receipt"]["applied_body_energy_debit"] = 0.into();
+++                .unwrap()["motor"]["last_receipt"]["applied_body_energy_debit"];
+++            assert!(debit.as_f64().unwrap() > 0.0);
+++            *debit = serde_json::Value::from(0.0_f32);
+ +        });
+++        mark(19);
+ +        let decoded = CpuPlayNeedM2HostCheckpointV1::decode(arm, &bad).unwrap();
+++        mark(20);
+ +        assert!(CpuPlayNeedM2HostV1::restore(arm, decoded, &inputs).is_err());
+++        mark(21);
+ +        // Even with a rewritten outer label, legacy admission checks the new
+ +        // nested motor identity before attempting historical source decoding.
+ +        let mut v: serde_json::Value =
+@@ -1280,6 +1304,7 @@
+ +                "motor owner/recipe/work identity mismatch"
+ +            ))
+ +        ));
+++        mark(22);
+ +    }
+ +}
+ +#[test]

@@ -1,0 +1,15 @@
+{
+  "activation": "After exact inventory/dose review, sole marker direct child of verified prepared head, attempt1 only; no dispatch/rerun/retry/main update.",
+  "branch": "qualification/m2-play-hosted-qualification-v7",
+  "inherited_workflows_modified_or_deleted": 0,
+  "packet_destination": "docs/experiments/m2-play-hosted-qualification-v7",
+  "prepared_head": "PENDING_VERIFIED_IMMUTABLE_GITHUB_COMMIT",
+  "prepared_parent": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "public_artifacts": [],
+  "repository": "BobertNeek/A-Life",
+  "reuses_published_v6_exact_delta_transport": true,
+  "schema": "m2-play-publication-v2",
+  "source_changes": 0,
+  "status": "SOURCE_ONLY_NOT_PUBLISHED",
+  "workflow_destination": ".github/workflows/m2-play-hosted-qualification-v7.yml"
+}

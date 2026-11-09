@@ -1,0 +1,26 @@
+{
+  "checks": [
+    "owned-patch-exact-transport",
+    "activation-rejects-creation-rerun-forge",
+    "tree-additions-only",
+    "tar-exact-inventory",
+    "remaining12-and-strict-protocols",
+    "public-diagnostic-projection",
+    "bounded-pipes-source-contract",
+    "outside-paths-fail-closed",
+    "selected-test-attributes",
+    "depinfo-env-and-make-grammar",
+    "reachable-main-exact-reconstruction",
+    "unchanged-guard-remaining-scope",
+    "exact12-fresh-process-schedule",
+    "strict-complete-private-summary",
+    "exact-remote-inventory-preseal-both-phases-and-sealed-archive"
+  ],
+  "compiler_invocations": 0,
+  "github_writes": 0,
+  "native_invocations": 0,
+  "passed": true,
+  "preseal_preview_not_remote_evidence": true,
+  "schema": "m2-play-static-v2",
+  "synthetic_only": true
+}

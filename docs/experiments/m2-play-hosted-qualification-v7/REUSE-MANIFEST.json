@@ -1,0 +1,105 @@
+{
+  "files": [
+    {
+      "bytes": 456096,
+      "destination_path": "docs/experiments/m2-play-hosted-qualification-v7/qualified-original-overlay.tar.gz",
+      "git_blob_sha1": "002402b88cebc86c128b46e6705eb823e3b00116",
+      "mode": "100644",
+      "path": "qualified-original-overlay.tar.gz",
+      "remote_evidence": {
+        "commit": "27f4f30ad7c1afe2b329d05d345fbf1fb76c9301",
+        "path": "docs/experiments/m2-play-hosted-qualification-v6/qualified-original-overlay.tar.gz",
+        "status": "EXACT_BLOB_IN_VERIFIED_V6_ACTIVATION_TREE",
+        "tree": "4d0e3fe23dd9ecc36cfdfdd1e3f92d1bc0a1700e"
+      },
+      "sha256": "28b472731e2f28002ec0a73a7947ecde48ee3fb0c39f2efa313a1f7c9ecbbe49",
+      "source_artifact": "/workspace/shared/m2-play-runtime-integration-v1/hosted/qualified-original-overlay.tar.gz"
+    },
+    {
+      "bytes": 56756,
+      "destination_path": "docs/experiments/m2-play-hosted-qualification-v7/qualified-CLOSURE.json",
+      "git_blob_sha1": "715f19dfed0e4a82813df0140bd400f3088bcd57",
+      "mode": "100644",
+      "path": "qualified-CLOSURE.json",
+      "remote_evidence": {
+        "commit": "27f4f30ad7c1afe2b329d05d345fbf1fb76c9301",
+        "path": "docs/experiments/m2-play-hosted-qualification-v6/qualified-CLOSURE.json",
+        "status": "EXACT_BLOB_IN_VERIFIED_V6_ACTIVATION_TREE",
+        "tree": "4d0e3fe23dd9ecc36cfdfdd1e3f92d1bc0a1700e"
+      },
+      "sha256": "79b18e8a83d2c8cb7e66ffc9bf5d8ad1636c5a3658c403897d069bbc9ce8ac1f",
+      "source_artifact": "/workspace/shared/m2-play-runtime-integration-v1/hosted/CLOSURE.json"
+    },
+    {
+      "bytes": 563200,
+      "destination_path": "docs/experiments/m2-play-hosted-qualification-v7/patches/main-to-fbf-library-closure.part-01.patch",
+      "git_blob_sha1": "6df92f6933b9279c86373ec0b4b7c0a66770d199",
+      "mode": "100644",
+      "path": "patches/main-to-fbf-library-closure.part-01.patch",
+      "remote_evidence": {
+        "commit": "27f4f30ad7c1afe2b329d05d345fbf1fb76c9301",
+        "path": "docs/experiments/m2-play-hosted-qualification-v6/patches/main-to-fbf-library-closure.part-01.patch",
+        "status": "EXACT_BLOB_IN_VERIFIED_V6_ACTIVATION_TREE",
+        "tree": "4d0e3fe23dd9ecc36cfdfdd1e3f92d1bc0a1700e"
+      },
+      "sha256": "44c9ee9e269bec25ebb924054754a0e71ddc7b73104a132699171a9776430e07",
+      "source_artifact": "/workspace/shared/m2-grip-options-v1/hosted-typecheck-v2/patches/main-to-fbf-library-closure.part-01.patch",
+      "source_path": "docs/experiments/m2-grip-hosted-typecheck-v5/patches/main-to-fbf-library-closure.part-01.patch",
+      "verified_source_commit": "ff991c39ca4a11f72eb56f015f8b3dab71baff20"
+    },
+    {
+      "bytes": 563195,
+      "destination_path": "docs/experiments/m2-play-hosted-qualification-v7/patches/main-to-fbf-library-closure.part-02.patch",
+      "git_blob_sha1": "7f27884da807987fb3eb63ca442724a14ee46468",
+      "mode": "100644",
+      "path": "patches/main-to-fbf-library-closure.part-02.patch",
+      "remote_evidence": {
+        "commit": "27f4f30ad7c1afe2b329d05d345fbf1fb76c9301",
+        "path": "docs/experiments/m2-play-hosted-qualification-v6/patches/main-to-fbf-library-closure.part-02.patch",
+        "status": "EXACT_BLOB_IN_VERIFIED_V6_ACTIVATION_TREE",
+        "tree": "4d0e3fe23dd9ecc36cfdfdd1e3f92d1bc0a1700e"
+      },
+      "sha256": "a2fb1711dee71d569aea8643ba5dd02d16c992bf9f378b219e4b86cb51edafae",
+      "source_artifact": "/workspace/shared/m2-grip-options-v1/hosted-typecheck-v2/patches/main-to-fbf-library-closure.part-02.patch",
+      "source_path": "docs/experiments/m2-grip-hosted-typecheck-v5/patches/main-to-fbf-library-closure.part-02.patch",
+      "verified_source_commit": "ff991c39ca4a11f72eb56f015f8b3dab71baff20"
+    },
+    {
+      "bytes": 415718,
+      "destination_path": "docs/experiments/m2-play-hosted-qualification-v7/patches/main-to-fbf-library-closure.part-03.patch",
+      "git_blob_sha1": "ef007c906168887cd275564f541a48714806608b",
+      "mode": "100644",
+      "path": "patches/main-to-fbf-library-closure.part-03.patch",
+      "remote_evidence": {
+        "commit": "27f4f30ad7c1afe2b329d05d345fbf1fb76c9301",
+        "path": "docs/experiments/m2-play-hosted-qualification-v6/patches/main-to-fbf-library-closure.part-03.patch",
+        "status": "EXACT_BLOB_IN_VERIFIED_V6_ACTIVATION_TREE",
+        "tree": "4d0e3fe23dd9ecc36cfdfdd1e3f92d1bc0a1700e"
+      },
+      "sha256": "95d7a29b145111d4f24297c97ecd0766673f9275b5dd89400958c714a24ae72d",
+      "source_artifact": "/workspace/shared/m2-grip-options-v1/hosted-typecheck-v2/patches/main-to-fbf-library-closure.part-03.patch",
+      "source_path": "docs/experiments/m2-grip-hosted-typecheck-v5/patches/main-to-fbf-library-closure.part-03.patch",
+      "verified_source_commit": "ff991c39ca4a11f72eb56f015f8b3dab71baff20"
+    },
+    {
+      "bytes": 136753,
+      "destination_path": "docs/experiments/m2-play-hosted-qualification-v7/patches/fbf-nominal-source-supplement.patch",
+      "git_blob_sha1": "99d4927cccaaf74172282cbb8e50ea9609e56250",
+      "mode": "100644",
+      "path": "patches/fbf-nominal-source-supplement.patch",
+      "remote_evidence": {
+        "commit": "27f4f30ad7c1afe2b329d05d345fbf1fb76c9301",
+        "path": "docs/experiments/m2-play-hosted-qualification-v6/patches/fbf-nominal-source-supplement.patch",
+        "status": "EXACT_BLOB_IN_VERIFIED_V6_ACTIVATION_TREE",
+        "tree": "4d0e3fe23dd9ecc36cfdfdd1e3f92d1bc0a1700e"
+      },
+      "sha256": "ddd07c85685b27056664d9b8650fa736d8eff257f5d477485efd7d14e5e5b051",
+      "source_artifact": "/workspace/shared/m2-grip-options-v1/hosted-typecheck-v2/patches/fbf-nominal-source-supplement.patch",
+      "source_path": "docs/experiments/m2-grip-hosted-typecheck-v5/patches/fbf-nominal-source-supplement.patch",
+      "verified_source_commit": "ff991c39ca4a11f72eb56f015f8b3dab71baff20"
+    }
+  ],
+  "policy": "Revalidate exact remote tree identity. Use matching source bytes. Never retry original uncertain large patch upload; V5 blob plus exact V6 delta is already qualified.",
+  "repository": "BobertNeek/A-Life",
+  "schema": "m2-play-reuse-v3"
+}

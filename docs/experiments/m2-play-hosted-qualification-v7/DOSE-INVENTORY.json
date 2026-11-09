@@ -1,0 +1,438 @@
+{
+  "count_rules": [
+    "All counts assume prior assertions complete; earlier failure truncates dose. Exact process/list/test/probe limits remain enforced.",
+    "Forward/microstep/physical upper bounds derive from the literal fixed calls and conditional recovery paths, not old aggregate summary ceilings.",
+    "A host tick may execute decision physics/biology or existing nondecision biology. The mutually exclusive alternatives are not added.",
+    "Four direct source forwards use exactly16 microsteps. Each conditional full-host source forward uses 2..4 active microsteps.",
+    "No source forward or optimizer update occurs in construction, cold restore, JSON decoding, pin validation, phenotype compilation or the weight-only genetic recipe. These are real allocation/validation/materialization work counted separately.",
+    "No acquired checkpoint, private life, cache, teacher input, seed search or trained state is imported. Authored sentinel assignments remain unchanged.",
+    "Reserve bounded pipes/raw output/privacy floors unchanged. Only the strict public summary and fixed probe boundary hashes may be projected."
+  ],
+  "exact_fixture_ids": [
+    "new-06",
+    "legacy-01",
+    "legacy-02",
+    "legacy-03",
+    "legacy-04",
+    "legacy-05",
+    "legacy-06",
+    "legacy-07",
+    "legacy-08",
+    "legacy-09",
+    "legacy-10",
+    "legacy-11"
+  ],
+  "important_corrections": [
+    "NaN optional step may execute one source forward before selection rejects.",
+    "Stage and close failures execute two transient source forwards; close additionally executes physical/biology work before rollback.",
+    "Stripped-owner test materializes a world then rejects on topology profile before source-state reconstruction.",
+    "Legacy optional fixture sentinels cause an additional trainer allocation through from_checkpoint; they are not learned optimizer updates.",
+    "Legacy kernel control executes 2048 neuron primitives and 64 dendrite primitives, separately from complete source forwards."
+  ],
+  "probes": [
+    {
+      "canonical_world_loads": 0,
+      "checkpoint_boundaries_serialized_and_hashed": [
+        0,
+        1,
+        2
+      ],
+      "checkpoint_files_written": 0,
+      "claim_limit": "Exact literal loop: boundary 0..=2, step only if boundary !=2. Each step has one resident and can execute at most one decision or the existing nondecision fallback; the two biology alternatives are not additive.",
+      "detached_constructor_calls": 0,
+      "entry": "probe_play_need_default_wire_v1::main",
+      "existing_newborn_clones_registered": 1,
+      "fresh_source_state_allocations": 2,
+      "fresh_world_constructions": 3,
+      "grouped_motor_fresh_allocations": 1,
+      "grouped_recipe_builds": 1,
+      "host_step_calls_expected_success": 2,
+      "invocations": 1,
+      "learning_entrypoint_calls": 0,
+      "newborn_records_constructed": 2,
+      "nondecision_biology_intervals_upper_bound": 2,
+      "optimizer_updates": 0,
+      "optional_host_preparations": 1,
+      "registered_physical_biology_transactions_upper_bound": 2,
+      "role": "original60",
+      "source": "crates/alife_training/examples/probe_play_need_default_wire_v1.rs:13-58",
+      "source_forwards_upper_bound": 2,
+      "source_microsteps_upper_bound": 8,
+      "source_sha256": "cc8178c7e73a04b2fb2a8f0623ecbdc33a709212caf2fdb9744ef3f0f23a14a9",
+      "successful_full_host_restores": 0,
+      "trainer_new_allocations": 1,
+      "world_tick_advances_if_complete": 2
+    },
+    {
+      "canonical_world_loads": 0,
+      "checkpoint_boundaries_serialized_and_hashed": [
+        0,
+        1,
+        2
+      ],
+      "checkpoint_files_written": 0,
+      "detached_constructor_calls": 0,
+      "entry": "probe_play_need_default_wire_v1::main",
+      "existing_newborn_clones_registered": 1,
+      "fresh_source_state_allocations": 2,
+      "fresh_world_constructions": 3,
+      "grouped_motor_fresh_allocations": 1,
+      "grouped_recipe_builds": 1,
+      "host_step_calls_expected_success": 2,
+      "invocations": 1,
+      "learning_entrypoint_calls": 0,
+      "newborn_records_constructed": 2,
+      "nondecision_biology_intervals_upper_bound": 2,
+      "optimizer_updates": 0,
+      "optional_host_preparations": 1,
+      "registered_physical_biology_transactions_upper_bound": 2,
+      "role": "owned76",
+      "same_main_bytes_and_literal_dose_as_role": "original60",
+      "source_forwards_upper_bound": 2,
+      "source_microsteps_upper_bound": 8,
+      "successful_full_host_restores": 0,
+      "trainer_new_allocations": 1,
+      "world_tick_advances_if_complete": 2
+    }
+  ],
+  "schema": "m2-play-remaining-literal-dose-v7",
+  "scientific_source_changes_from_passing_v6": 0,
+  "scope": "Only new06, legacy01..11 and one default-wire main invocation per original60/owned76 source. No new01..new05 repeat. Stop at first failure; no rerun, dispatch or retry.",
+  "shared_preparation": {
+    "evidence": [
+      "crates/alife_training/src/cpu/grouped_host_fixture.rs:26-218: recipe construction and weight-only helper calls, one canonical candidate new game.",
+      "crates/alife_training/src/cpu/play_need_host_tests.rs:12-40: one trainer/newborn world/blank world.",
+      "crates/alife_training/src/cpu/optional_vocal_host_tests.rs:11-61: new + authored sentinel from_checkpoint + grounded and blank worlds.",
+      "crates/alife_training/src/cpu/mod.rs:93-154: from_checkpoint calls new; new constructs SparseGraph but never forwards.",
+      "crates/alife_training/src/cpu/grouped_host_envelope.rs:580-654: grouped motor fresh, canonical resident new, then optional-owner resident new; no trainer/detached constructor.",
+      "crates/alife_training/src/cpu/host.rs:213-324: canonical fresh resident creation.",
+      "crates/alife_training/src/cpu/grouped_host_envelope.rs:757-842: restore founder then canonical world then source resident, with no forward.",
+      "crates/alife_training/src/cpu/host.rs:681-956 and crates/alife_world/src/persistence.rs:1794-1813: canonical research world materialization.",
+      "crates/alife_training/examples/support/multidrive_frozen.rs:60-240; grounded_r0_motor_operating_point.rs:9-138; grounded_r0_dedicated_fatigue.rs:144-289: calibration is authored weight-array work, not source execution."
+    ],
+    "existing_newborn_clones_registered_into_blank": 1,
+    "fresh_world_constructions": 3,
+    "grouped_recipe_build": 1,
+    "legacy_optional_build_trainer_new_allocations": 2,
+    "newborn_records_constructed": 2,
+    "non_sentinel_new06_or_probe_initial_trainer_new_allocations": 1,
+    "optimizer_updates": 0,
+    "optional_host_detached_constructor_calls": 0,
+    "optional_host_fresh_source_state_allocations": 2,
+    "optional_host_grouped_motor_fresh_allocations": 1,
+    "source_forwards_during_recipe_and_preparation": 0,
+    "successful_optional_restore_forwards_or_world_time": 0,
+    "successful_optional_restore_source_state_reconstructions": 1,
+    "successful_optional_restore_trainer_new_allocations": 1,
+    "successful_optional_restore_world_loads": 1,
+    "world_time_during_preparation": 0
+  },
+  "source_closure_counts": {
+    "base": 799,
+    "original60": 813,
+    "owned76": 818
+  },
+  "source_manifest_sha256": "eac26aabc32d23c20840f345048f264a42991608aa75684ca98d67158de0a101",
+  "status": "prospective_source_only_not_executed",
+  "test_inventory_sha256": "301984c6d94fc00265651383bf249e9fb234b2d2eb2b811d9b73a6e15fb9dd79",
+  "tests": [
+    {
+      "confidence_fixtures": 1,
+      "evidence": "confidence/host/tests.rs:67-146",
+      "grouped_partition_evaluations": [
+        2,
+        2
+      ],
+      "id": "legacy-01",
+      "source_forwards": [
+        3,
+        3
+      ],
+      "source_microsteps": [
+        12,
+        12
+      ]
+    },
+    {
+      "confidence_fixtures": 1,
+      "evidence": "confidence/host/tests.rs:148-236",
+      "grouped_partition_evaluations": [
+        1,
+        1
+      ],
+      "id": "legacy-02",
+      "neural_fresh": 1,
+      "neural_restored": 1,
+      "source_forwards": [
+        1,
+        1
+      ],
+      "source_microsteps": [
+        4,
+        4
+      ]
+    },
+    {
+      "confidence_fixtures": 1,
+      "evidence": "confidence/host/tests.rs:238-283; confidence/host.rs:305-376",
+      "id": "legacy-03",
+      "pre_source_motor_rejections": 2,
+      "source_forwards": [
+        0,
+        0
+      ],
+      "source_microsteps": [
+        0,
+        0
+      ]
+    },
+    {
+      "confidence_fixtures": 1,
+      "evidence": "confidence/host/tests.rs:286-299",
+      "id": "legacy-04",
+      "source_forwards": [
+        0,
+        0
+      ],
+      "source_microsteps": [
+        0,
+        0
+      ]
+    },
+    {
+      "committed_world_ticks": 3,
+      "evidence": "optional_vocal_host_tests.rs:81-166",
+      "grouped_partition_evaluations": [
+        1,
+        3
+      ],
+      "host_builds": 1,
+      "host_steps_success": 3,
+      "id": "legacy-05",
+      "physical_biology_transactions": [
+        1,
+        3
+      ],
+      "source_forwards": [
+        1,
+        3
+      ],
+      "source_microsteps": [
+        2,
+        12
+      ],
+      "successful_host_restores": 1,
+      "world_loads": 1
+    },
+    {
+      "correction": "NaN selection check follows source advance, not pre-source. On normal awake affordable path one transient forward; generic is_err permits earlier rejection.",
+      "evidence": "optional_vocal_host_tests.rs:168-195; grouped_host_loop.rs:425-467",
+      "grouped_partition_evaluations": [
+        0,
+        1
+      ],
+      "host_builds": 2,
+      "host_steps_rejected": 2,
+      "id": "legacy-06",
+      "learning_entry_rejections": 3,
+      "physical_biology_transactions": [
+        0,
+        0
+      ],
+      "source_forwards": [
+        0,
+        1
+      ],
+      "source_microsteps": [
+        0,
+        4
+      ]
+    },
+    {
+      "evidence": "optional_vocal_host_tests.rs:197-252",
+      "explicit_world_clones": 2,
+      "host_builds": 1,
+      "id": "legacy-07",
+      "source_forwards": [
+        0,
+        0
+      ],
+      "source_microsteps": [
+        0,
+        0
+      ],
+      "standalone_neural_commands": 3,
+      "standalone_neural_commands_rejected": 2,
+      "standalone_neural_commands_success": 1
+    },
+    {
+      "committed_world_ticks": 0,
+      "evidence": "optional_vocal_host_tests.rs:265-367; grouped_host_loop.rs:530,761,870",
+      "grouped_partition_evaluations": [
+        2,
+        2
+      ],
+      "host_builds": 1,
+      "host_steps_rejected": 2,
+      "id": "legacy-08",
+      "rolled_back_physical_biology_transactions": 1,
+      "source_forwards": [
+        2,
+        2
+      ],
+      "source_microsteps": [
+        4,
+        8
+      ]
+    },
+    {
+      "correction": "Stripped owner attempt loads world but then topology profile mismatch precedes neural reconstruction and authority validation.",
+      "evidence": "optional_vocal_host_tests.rs:370-449; host.rs:772-846,896-926",
+      "host_builds": 1,
+      "id": "legacy-09",
+      "source_forwards": [
+        0,
+        0
+      ],
+      "source_microsteps": [
+        0,
+        0
+      ],
+      "stripped_attempt_source_state_materializations": 0,
+      "world_loads": 1
+    },
+    {
+      "base_detached_fresh": 1,
+      "base_source_initializations": 1,
+      "evidence": "motor_mediation/tests.rs:105-139; motor_mediation.rs:730-743",
+      "id": "legacy-10",
+      "pre_primitive_partition_rejections": 2,
+      "source_forwards": [
+        0,
+        0
+      ],
+      "source_microsteps": [
+        0,
+        0
+      ]
+    },
+    {
+      "base_detached_fresh": 1,
+      "base_source_initializations": 1,
+      "evidence": "motor_mediation/tests.rs:401-462; motor_mediation.rs:375-390",
+      "id": "legacy-11",
+      "primitive_only_dendritic_calls": 64,
+      "primitive_only_neuron_calls": 2048,
+      "source_forwards": [
+        0,
+        0
+      ],
+      "source_microsteps": [
+        0,
+        0
+      ]
+    },
+    {
+      "canonical_world_loads": 1,
+      "checkpoint_decode_calls": 5,
+      "checkpoint_decode_expected_rejections": 4,
+      "checkpoint_decode_expected_successes": 1,
+      "claim_limit": "The sole last_receipt drive_products assertion requires a completed decision/source forward on the success path. These are prospective success-path counts, never measured telemetry.",
+      "detached_constructor_calls": 0,
+      "existing_newborn_clones_registered": 1,
+      "fresh_source_state_allocations": 2,
+      "fresh_world_constructions": 3,
+      "grouped_motor_fresh_allocations": 1,
+      "grouped_recipe_builds": 1,
+      "host_step_calls_expected_success": 1,
+      "id": "new-06",
+      "initial_trainer_new_allocations": 1,
+      "invocations": 1,
+      "learning_entrypoint_calls": 0,
+      "name": "cpu::host::grouped_host_envelope::optional_vocal::play_need::tests::play_owned_baseline_default_wire_and_no_import",
+      "newborn_records_constructed": 2,
+      "optimizer_updates": 0,
+      "optional_host_preparations": 1,
+      "registered_physical_biology_transactions_if_fixture_passes": 1,
+      "restore_from_checkpoint_calls": 1,
+      "restore_trainer_new_allocations": 1,
+      "restored_source_state_allocations": 1,
+      "source": "crates/alife_training/src/cpu/play_need_host_tests.rs:255-316",
+      "source_forwards_if_fixture_passes": 1,
+      "source_microsteps_upper_bound": 4,
+      "successful_full_host_restores": 1,
+      "total_trainer_new_allocations": 2,
+      "world_tick_advances_if_complete": 1
+    }
+  ],
+  "totals": {
+    "active_source_microstep_reservation_upper_bound": 60,
+    "base_detached_fresh_including_wrapped": 6,
+    "base_source_helper_initializations": 2,
+    "builds": [
+      "original60 default-wire probe",
+      "owned76 default-wire probe",
+      "owned76 libtest"
+    ],
+    "checkpoint_files_written": 0,
+    "committed_world_ticks_if_complete": 8,
+    "complete_source_forward_reservation_upper_bound": 15,
+    "confidence_source_helper_initializations": 4,
+    "decision_physical_biology_transactions_including_rollback": [
+      3,
+      9
+    ],
+    "default_wire_hashes_printed": 6,
+    "direct_source_forwards_exact": 4,
+    "direct_source_microsteps_exact": 16,
+    "exact_name_listing_processes": 12,
+    "fresh_source_state_allocations": 18,
+    "fresh_world_constructions": 27,
+    "full_host_source_forwards_upper_bound_including_transient": 11,
+    "grouped_added_dendrite_primitive_calls": [
+      252,
+      504
+    ],
+    "grouped_added_neuron_primitive_calls": [
+      3220,
+      6440
+    ],
+    "grouped_detached_fresh": 4,
+    "grouped_motor_fresh": 13,
+    "grouped_partition_evaluations": [
+      7,
+      14
+    ],
+    "grouped_recipe_builds": 9,
+    "host_step_attempts": 12,
+    "host_step_calls_expected_rejected": 4,
+    "host_step_calls_expected_success": 8,
+    "learning_entrypoint_rejections": 3,
+    "loaded_then_rejected_stripped_owner_attempts": 1,
+    "mandatory_full_assertion_path_source_forwards_min": 8,
+    "mandatory_full_assertion_path_source_microsteps_min": 24,
+    "native_scientific_processes_max": 14,
+    "newborn_clone_registrations": 9,
+    "newborn_records": 18,
+    "optimizer_updates": 0,
+    "physical_or_nondecision_committed_host_biology_intervals_if_complete": 8,
+    "primitive_only_dendritic_activation_calls": 64,
+    "primitive_only_neuron_step_calls": 2048,
+    "probe_invocations": 2,
+    "registered_physical_biology_transaction_reservation_upper_bound_including_rollback": 9,
+    "rolled_back_physical_biology_transactions_exact": 1,
+    "source_helper_initializations_including_grouped_recipe": 15,
+    "source_neuron_update_reservation_upper_bound": 122880,
+    "standalone_neural_command_attempts": 3,
+    "standalone_neural_command_rejected": 2,
+    "standalone_neural_command_success": 1,
+    "successful_full_host_restores": 2,
+    "successful_source_state_checkpoint_reconstructions": 3,
+    "test_invocations": 12,
+    "trainer_from_checkpoint_calls_included_in_new": 8,
+    "trainer_new_allocations_including_from_checkpoint": 21,
+    "transient_nan_source_forwards_upper_bound": 1,
+    "transient_stage_close_source_forwards_exact": 2,
+    "world_loads": 3
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "active_probes": [
+    "original60",
+    "owned76"
+  ],
+  "active_tests": [
+    "new-06",
+    "legacy-01",
+    "legacy-02",
+    "legacy-03",
+    "legacy-04",
+    "legacy-05",
+    "legacy-06",
+    "legacy-07",
+    "legacy-08",
+    "legacy-09",
+    "legacy-10",
+    "legacy-11"
+  ],
+  "carried_evidence": [
+    {
+      "head": "8ad5396185b1bde67b800168d91cf4ed2a1f26b0",
+      "run_id": 42689796484,
+      "tests": [
+        "new-01",
+        "new-02",
+        "new-03",
+        "new-04"
+      ],
+      "url": "https://github.com/BobertNeek/A-Life/actions/runs/42689796484"
+    },
+    {
+      "head": "27f4f30ad7c1afe2b329d05d345fbf1fb76c9301",
+      "run_id": 42705534641,
+      "seal_sha256": "e91cfd08d062e38746e60270b6258bebb9375e2d9b16fc01cc1659071d0e3e0e",
+      "tests": [
+        "new-05"
+      ],
+      "url": "https://github.com/BobertNeek/A-Life/actions/runs/42705534641"
+    }
+  ],
+  "carried_scope": "Source-bound historical passes, not new V7 executions. All final 799/813/818 source hashes unchanged from passing V6.",
+  "excluded_prior_passes": [
+    "new-01",
+    "new-02",
+    "new-03",
+    "new-04",
+    "new-05"
+  ],
+  "no_debug_retry_loop": true,
+  "no_readout_copies": true,
+  "schema": "m2-play-remaining-continuation-v7",
+  "source_changes": 0
+}

@@ -1,0 +1,23 @@
+{
+  "actual_dose_claim": "All planned bounds remain explicitly prospective, not measured counts.",
+  "artifact_upload_allowlist": [],
+  "captured_stdout_bytes": 2097152,
+  "line_bytes": 4194304,
+  "never_publish": [
+    "raw child stdout/stderr",
+    "panic/assertion text",
+    "compiler rendered text/children",
+    "binary",
+    "checkpoint",
+    "journal",
+    "private log",
+    "target",
+    "cache"
+  ],
+  "raw_pipe_combined_bytes": 33554432,
+  "runner_stdout_allowlist": [
+    "One strict JSON summary <=32768 bytes; fixed test ids and diagnostic codes, six default-wire boundary hashes only."
+  ],
+  "schema": "m2-play-public-projection-v2",
+  "unknown_protocol": "fixed code only, stop without retry"
+}

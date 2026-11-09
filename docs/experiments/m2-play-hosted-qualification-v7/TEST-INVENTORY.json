@@ -1,0 +1,323 @@
+{
+  "excluded_prior_passes": [
+    "new-01",
+    "new-02",
+    "new-03",
+    "new-04",
+    "new-05"
+  ],
+  "fragment_note": "Preserves original sealed fragment boundaries, which may include intervening helper definitions before the next test attribute.",
+  "no_ignored_tests": true,
+  "only_listing_calls": "Exactly 12 exact-name discovery processes, followed by at most one execution of each bound fixture in a separate process; probes each once.",
+  "probes": [
+    {
+      "boundaries": [
+        0,
+        1,
+        2
+      ],
+      "invocations": 1,
+      "role": "original60"
+    },
+    {
+      "boundaries": [
+        0,
+        1,
+        2
+      ],
+      "invocations": 1,
+      "role": "owned76"
+    }
+  ],
+  "schema": "m2-play-remaining-fixed-tests-v7",
+  "tests": [
+    {
+      "attribute_sha256": "d2cd4db48a350e8f0b47944c46e3ffdbba132d2290a91d7012b56eb46c8ab4f6",
+      "attribute_start_line": 255,
+      "attributes": [
+        "test"
+      ],
+      "class": "new",
+      "command": [
+        "<owned76-libtest>",
+        "--exact",
+        "cpu::host::grouped_host_envelope::optional_vocal::play_need::tests::play_owned_baseline_default_wire_and_no_import",
+        "--test-threads=1"
+      ],
+      "function_end_byte": 12218,
+      "function_fragment_sha256": "d977ff4a623f22a03ae0f4c8817d57c9bc8ca4278dd51c11eb5d79f82e991ba0",
+      "function_start_line": 256,
+      "id": "new-06",
+      "ignored": false,
+      "invocations": 1,
+      "name": "cpu::host::grouped_host_envelope::optional_vocal::play_need::tests::play_owned_baseline_default_wire_and_no_import",
+      "should_panic": false,
+      "source": "crates/alife_training/src/cpu/play_need_host_tests.rs",
+      "source_sha256": "909f9fe5f8872b07f8dee150bce1366f438313cea2278edff70593c5cf4176d2"
+    },
+    {
+      "attribute_sha256": "d2cd4db48a350e8f0b47944c46e3ffdbba132d2290a91d7012b56eb46c8ab4f6",
+      "attribute_start_line": 66,
+      "attributes": [
+        "test"
+      ],
+      "class": "legacy",
+      "command": [
+        "<owned76-libtest>",
+        "--exact",
+        "cpu::motor_mediation::confidence::host::tests::grouped_host_actual_source_once_uses_somatic_memory_dynamic_branches_and_edges",
+        "--test-threads=1"
+      ],
+      "function_end_byte": 5751,
+      "function_fragment_sha256": "dabc57b32dc6a3a757e3175523a4da45f129db5aab1d4f19e4e678ce80dad4c3",
+      "function_start_line": 67,
+      "id": "legacy-01",
+      "ignored": false,
+      "invocations": 1,
+      "name": "cpu::motor_mediation::confidence::host::tests::grouped_host_actual_source_once_uses_somatic_memory_dynamic_branches_and_edges",
+      "should_panic": false,
+      "source": "crates/alife_training/src/cpu/motor_mediation/confidence/host/tests.rs",
+      "source_sha256": "a2dc13d5d5a1e3ad007c274984b4245e22042d122a4e52019095ae6dd2d2e3a8"
+    },
+    {
+      "attribute_sha256": "d2cd4db48a350e8f0b47944c46e3ffdbba132d2290a91d7012b56eb46c8ab4f6",
+      "attribute_start_line": 147,
+      "attributes": [
+        "test"
+      ],
+      "class": "legacy",
+      "command": [
+        "<owned76-libtest>",
+        "--exact",
+        "cpu::motor_mediation::confidence::host::tests::grouped_host_pending_boundary_rejects_export_and_retains_effective_offsets",
+        "--test-threads=1"
+      ],
+      "function_end_byte": 8975,
+      "function_fragment_sha256": "2f326e639b57840f0fa7e86cd8886167dad2534bff45406a78572860602c6dbb",
+      "function_start_line": 148,
+      "id": "legacy-02",
+      "ignored": false,
+      "invocations": 1,
+      "name": "cpu::motor_mediation::confidence::host::tests::grouped_host_pending_boundary_rejects_export_and_retains_effective_offsets",
+      "should_panic": false,
+      "source": "crates/alife_training/src/cpu/motor_mediation/confidence/host/tests.rs",
+      "source_sha256": "a2dc13d5d5a1e3ad007c274984b4245e22042d122a4e52019095ae6dd2d2e3a8"
+    },
+    {
+      "attribute_sha256": "d2cd4db48a350e8f0b47944c46e3ffdbba132d2290a91d7012b56eb46c8ab4f6",
+      "attribute_start_line": 237,
+      "attributes": [
+        "test"
+      ],
+      "class": "legacy",
+      "command": [
+        "<owned76-libtest>",
+        "--exact",
+        "cpu::motor_mediation::confidence::host::tests::grouped_host_native_invalid_binding_and_partition_rollback",
+        "--test-threads=1"
+      ],
+      "function_end_byte": 10276,
+      "function_fragment_sha256": "aa8674613e48b21e32942329c93236609eceb9b3b631e87079c414a59aff815b",
+      "function_start_line": 238,
+      "id": "legacy-03",
+      "ignored": false,
+      "invocations": 1,
+      "name": "cpu::motor_mediation::confidence::host::tests::grouped_host_native_invalid_binding_and_partition_rollback",
+      "should_panic": false,
+      "source": "crates/alife_training/src/cpu/motor_mediation/confidence/host/tests.rs",
+      "source_sha256": "a2dc13d5d5a1e3ad007c274984b4245e22042d122a4e52019095ae6dd2d2e3a8"
+    },
+    {
+      "attribute_sha256": "d2cd4db48a350e8f0b47944c46e3ffdbba132d2290a91d7012b56eb46c8ab4f6",
+      "attribute_start_line": 285,
+      "attributes": [
+        "test"
+      ],
+      "class": "legacy",
+      "command": [
+        "<owned76-libtest>",
+        "--exact",
+        "cpu::motor_mediation::confidence::host::tests::grouped_host_work_prices_every_common_product_without_invented_bookkeeping_debit",
+        "--test-threads=1"
+      ],
+      "function_end_byte": 11064,
+      "function_fragment_sha256": "2a5a21826ee9c24975e9930c1e379072df7d185e3022927cae49d470eefe7a2e",
+      "function_start_line": 286,
+      "id": "legacy-04",
+      "ignored": false,
+      "invocations": 1,
+      "name": "cpu::motor_mediation::confidence::host::tests::grouped_host_work_prices_every_common_product_without_invented_bookkeeping_debit",
+      "should_panic": false,
+      "source": "crates/alife_training/src/cpu/motor_mediation/confidence/host/tests.rs",
+      "source_sha256": "a2dc13d5d5a1e3ad007c274984b4245e22042d122a4e52019095ae6dd2d2e3a8"
+    },
+    {
+      "attribute_sha256": "d2cd4db48a350e8f0b47944c46e3ffdbba132d2290a91d7012b56eb46c8ab4f6",
+      "attribute_start_line": 80,
+      "attributes": [
+        "test"
+      ],
+      "class": "legacy",
+      "command": [
+        "<owned76-libtest>",
+        "--exact",
+        "cpu::host::grouped_host_envelope::optional_vocal::tests::optional_host_source_once_quiet_physics_and_exact_next_boundary",
+        "--test-threads=1"
+      ],
+      "function_end_byte": 6187,
+      "function_fragment_sha256": "899abf5c9176480791587907f835ef4e8edf2473df0bc3401cab3dc9aebba3ff",
+      "function_start_line": 81,
+      "id": "legacy-05",
+      "ignored": false,
+      "invocations": 1,
+      "name": "cpu::host::grouped_host_envelope::optional_vocal::tests::optional_host_source_once_quiet_physics_and_exact_next_boundary",
+      "should_panic": false,
+      "source": "crates/alife_training/src/cpu/optional_vocal_host_tests.rs",
+      "source_sha256": "48f194a711c9b9a920ab1208ed034254b6f7b53e00669960287ab38d71cf3cac"
+    },
+    {
+      "attribute_sha256": "d2cd4db48a350e8f0b47944c46e3ffdbba132d2290a91d7012b56eb46c8ab4f6",
+      "attribute_start_line": 167,
+      "attributes": [
+        "test"
+      ],
+      "class": "legacy",
+      "command": [
+        "<owned76-libtest>",
+        "--exact",
+        "cpu::host::grouped_host_envelope::optional_vocal::tests::optional_host_rejects_opposite_policy_and_bad_temperature_transactionally",
+        "--test-threads=1"
+      ],
+      "function_end_byte": 7479,
+      "function_fragment_sha256": "4bc6cab5383e1005a740339ff95207dd5c5805e54ff006b761db39a5627e2e83",
+      "function_start_line": 168,
+      "id": "legacy-06",
+      "ignored": false,
+      "invocations": 1,
+      "name": "cpu::host::grouped_host_envelope::optional_vocal::tests::optional_host_rejects_opposite_policy_and_bad_temperature_transactionally",
+      "should_panic": false,
+      "source": "crates/alife_training/src/cpu/optional_vocal_host_tests.rs",
+      "source_sha256": "48f194a711c9b9a920ab1208ed034254b6f7b53e00669960287ab38d71cf3cac"
+    },
+    {
+      "attribute_sha256": "d2cd4db48a350e8f0b47944c46e3ffdbba132d2290a91d7012b56eb46c8ab4f6",
+      "attribute_start_line": 196,
+      "attributes": [
+        "test"
+      ],
+      "class": "legacy",
+      "command": [
+        "<owned76-libtest>",
+        "--exact",
+        "cpu::host::grouped_host_envelope::optional_vocal::tests::quiet_does_not_change_real_empty_payload_or_cooldown_failure",
+        "--test-threads=1"
+      ],
+      "function_end_byte": 12094,
+      "function_fragment_sha256": "c0b6b035d311afb5d46fc0549837fad3bc545b7e772713bbe2f82067c3c59914",
+      "function_start_line": 197,
+      "id": "legacy-07",
+      "ignored": false,
+      "invocations": 1,
+      "name": "cpu::host::grouped_host_envelope::optional_vocal::tests::quiet_does_not_change_real_empty_payload_or_cooldown_failure",
+      "should_panic": false,
+      "source": "crates/alife_training/src/cpu/optional_vocal_host_tests.rs",
+      "source_sha256": "48f194a711c9b9a920ab1208ed034254b6f7b53e00669960287ab38d71cf3cac"
+    },
+    {
+      "attribute_sha256": "d2cd4db48a350e8f0b47944c46e3ffdbba132d2290a91d7012b56eb46c8ab4f6",
+      "attribute_start_line": 345,
+      "attributes": [
+        "test"
+      ],
+      "class": "legacy",
+      "command": [
+        "<owned76-libtest>",
+        "--exact",
+        "cpu::host::grouped_host_envelope::optional_vocal::tests::optional_pending_owner_rejects_legacy_stage_and_close",
+        "--test-threads=1"
+      ],
+      "function_end_byte": 12933,
+      "function_fragment_sha256": "e4849b4add3d750d3d227e3f67375e96d47cfd71cccfe699a2d165ac65eadc35",
+      "function_start_line": 346,
+      "id": "legacy-08",
+      "ignored": false,
+      "invocations": 1,
+      "name": "cpu::host::grouped_host_envelope::optional_vocal::tests::optional_pending_owner_rejects_legacy_stage_and_close",
+      "should_panic": false,
+      "source": "crates/alife_training/src/cpu/optional_vocal_host_tests.rs",
+      "source_sha256": "48f194a711c9b9a920ab1208ed034254b6f7b53e00669960287ab38d71cf3cac"
+    },
+    {
+      "attribute_sha256": "d2cd4db48a350e8f0b47944c46e3ffdbba132d2290a91d7012b56eb46c8ab4f6",
+      "attribute_start_line": 369,
+      "attributes": [
+        "test"
+      ],
+      "class": "legacy",
+      "command": [
+        "<owned76-libtest>",
+        "--exact",
+        "cpu::host::grouped_host_envelope::optional_vocal::tests::optional_extracted_inner_source_and_canonical_owners_reject_old_loaders",
+        "--test-threads=1"
+      ],
+      "function_end_byte": 16569,
+      "function_fragment_sha256": "c807b94c003b47e5515fc901e3efeb7b1e0513d80ee7359fb64de688a9af498f",
+      "function_start_line": 370,
+      "id": "legacy-09",
+      "ignored": false,
+      "invocations": 1,
+      "name": "cpu::host::grouped_host_envelope::optional_vocal::tests::optional_extracted_inner_source_and_canonical_owners_reject_old_loaders",
+      "should_panic": false,
+      "source": "crates/alife_training/src/cpu/optional_vocal_host_tests.rs",
+      "source_sha256": "48f194a711c9b9a920ab1208ed034254b6f7b53e00669960287ab38d71cf3cac"
+    },
+    {
+      "attribute_sha256": "d2cd4db48a350e8f0b47944c46e3ffdbba132d2290a91d7012b56eb46c8ab4f6",
+      "attribute_start_line": 104,
+      "attributes": [
+        "test"
+      ],
+      "class": "legacy",
+      "command": [
+        "<owned76-libtest>",
+        "--exact",
+        "cpu::motor_mediation::tests::pinned_manifest_counts_and_tampered_bounds_fail_closed",
+        "--test-threads=1"
+      ],
+      "function_end_byte": 4153,
+      "function_fragment_sha256": "8a6d90cc6fe355ad6fe7376cf6a675807f526a6e502e712056576ca988342910",
+      "function_start_line": 105,
+      "id": "legacy-10",
+      "ignored": false,
+      "invocations": 1,
+      "name": "cpu::motor_mediation::tests::pinned_manifest_counts_and_tampered_bounds_fail_closed",
+      "should_panic": false,
+      "source": "crates/alife_training/src/cpu/motor_mediation/tests.rs",
+      "source_sha256": "c86731cd8976d50d9041c1858c63ea32cefdb4c3c601fc58022c4cfd0a86a6d6"
+    },
+    {
+      "attribute_sha256": "d2cd4db48a350e8f0b47944c46e3ffdbba132d2290a91d7012b56eb46c8ab4f6",
+      "attribute_start_line": 400,
+      "attributes": [
+        "test"
+      ],
+      "class": "legacy",
+      "command": [
+        "<owned76-libtest>",
+        "--exact",
+        "cpu::motor_mediation::tests::native_kernel_matches_literal_prechange_equations_bit_for_bit",
+        "--test-threads=1"
+      ],
+      "function_end_byte": 15050,
+      "function_fragment_sha256": "712cb9b0a9a1756048d00ab632570a6d4cec24cf032b7f0711ec88ccd0a7e519",
+      "function_start_line": 401,
+      "id": "legacy-11",
+      "ignored": false,
+      "invocations": 1,
+      "name": "cpu::motor_mediation::tests::native_kernel_matches_literal_prechange_equations_bit_for_bit",
+      "should_panic": false,
+      "source": "crates/alife_training/src/cpu/motor_mediation/tests.rs",
+      "source_sha256": "c86731cd8976d50d9041c1858c63ea32cefdb4c3c601fc58022c4cfd0a86a6d6"
+    }
+  ]
+}
