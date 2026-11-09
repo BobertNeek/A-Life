@@ -1,0 +1,16 @@
+{
+  "schema": "m2-reflex-channel-key-finite-witness-v2",
+  "status": "passed",
+  "public_enum_values": 261,
+  "unit_variants": 5,
+  "species_specific_ids": 256,
+  "mapping_exact": true,
+  "injective": true,
+  "u16_range_preserved": true,
+  "sort_and_multiset_equality_preserved": true,
+  "core_api_expansions": 0,
+  "casts_added": 0,
+  "rust_invocations": 0,
+  "native_fixtures": 0,
+  "world_calls": 0
+}
