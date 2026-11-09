@@ -1,0 +1,203 @@
+{
+  "files": [
+    {
+      "bytes": 229278,
+      "path": "ACCEPTED-MAIN-TREE.json",
+      "sha256": "154442196bf388ee61f6d72a1e1072dfaab477519616927799be7ecefb9f6763"
+    },
+    {
+      "bytes": 1328,
+      "path": "DOSE-INVENTORY.json",
+      "sha256": "19b37502b975762496c0318e81c8676af379c9dce346194dfaa4d3141234750f"
+    },
+    {
+      "bytes": 6908,
+      "path": "FUNCTION-FREEZE.json",
+      "sha256": "91a3c7e7768107a7cc1f326d539166aa3e5e59f8af54dea2f2857ef61b513ad5"
+    },
+    {
+      "bytes": 92558,
+      "path": "INHERITED-WORKFLOW-FIXTURES.json",
+      "sha256": "e45e6ea9f0b5de64ad00a3fbc108cbefcce48f5eab8b9c32caceaa9650497fcd"
+    },
+    {
+      "bytes": 17685,
+      "path": "MATCHER-GATE-ORDER.json",
+      "sha256": "c4583285b03a9043c3598b130b8fcc01f36f9165feb617f2d07ad4e260ed739b"
+    },
+    {
+      "bytes": 1190,
+      "path": "OUTPUT-POLICY.json",
+      "sha256": "5c2ad237e55980713bfe9032a180632f03bba306a6a11399ad6a1fc436154bd0"
+    },
+    {
+      "bytes": 776,
+      "path": "PACKAGING-DELTA.json",
+      "sha256": "96df081b1d4fa1f563d6aa862ae074d70dfe60fc00fec056e2ae50f6ede8ff38"
+    },
+    {
+      "bytes": 236,
+      "path": "PRIOR-V3-FAILURE.json",
+      "sha256": "12434388f420a70318c7ec7544ebc2d1b0b96b775f12d82781e2f1b65acea9bb"
+    },
+    {
+      "bytes": 1309,
+      "path": "PROPOSED-HOSTED.json",
+      "sha256": "ada231187d7b82238cf62f9ce0fa8e19d96d894f63902211db527a07b9013f76"
+    },
+    {
+      "bytes": 676,
+      "path": "PUBLICATION.json",
+      "sha256": "b232f9b584ff277a90005ace98474ca7f537c425e794818b9b6cb2a39ae40849"
+    },
+    {
+      "bytes": 1292,
+      "path": "REACHABLE-SOURCE-RECONSTRUCTION.json",
+      "sha256": "50391f2669b8048ed66c631b83fb231b22fa6de08bde02122adf42da76966d0c"
+    },
+    {
+      "bytes": 2108,
+      "path": "README.md",
+      "sha256": "4f1a4ddba4d951c8ec86d89820fbcc1ecab6c78eef7db7db67a661abcc4c5e75"
+    },
+    {
+      "bytes": 1239,
+      "path": "RECONSTRUCTION-PATCHES.json",
+      "sha256": "5c1ba1800b77a7f9147b3457fa5911edfc837aa9cf40b4ade438291e2c655ab2"
+    },
+    {
+      "bytes": 3937,
+      "path": "REMOTE-BASE-VERIFIED.json",
+      "sha256": "888b4da8c2a22435c8df70105d6c35626cd27194c4f99a0b7cdc6d92fa093ea6"
+    },
+    {
+      "bytes": 10354,
+      "path": "REUSE-MANIFEST.json",
+      "sha256": "75438d2dc62dc284177586cf938ccdf83915b986f359d9fc2c890c099cb8633a"
+    },
+    {
+      "bytes": 3158,
+      "path": "ROUTE-TRACE.json",
+      "sha256": "b2eea771d2d08601828f48b7b49e57f6cb2e46567af9595a346fd15c945fb127"
+    },
+    {
+      "bytes": 157259,
+      "path": "SOURCE-CLOSURE.json",
+      "sha256": "ede17007ddd61c608e3a88b75a3a39f1fd39aad672d42ee4771fe27367814db6"
+    },
+    {
+      "bytes": 2691,
+      "path": "SOURCE-FREEZE.json",
+      "sha256": "1c51d8f97cbb5ca4109d28dbfbfa83523c8ba44a2ea13e80fc790078035d6434"
+    },
+    {
+      "bytes": 8842,
+      "path": "SOURCE-ONLY-AUDIT.json",
+      "sha256": "5f1033fefdad14cbd79f0889e691d4e7f93924e759a6de4948618b504295d0a3"
+    },
+    {
+      "bytes": 1569,
+      "path": "SOURCE-REPAIR.json",
+      "sha256": "932652e708e861017cfc683e69f5373b0c62cfdcdeaf7bc931162bd6dbe018a9"
+    },
+    {
+      "bytes": 4944,
+      "path": "STATIC-RESULTS.json",
+      "sha256": "f908836f9ae5b178e61d7be53d0ff9f95357466dcdd588010de426fad156f6d3"
+    },
+    {
+      "bytes": 519,
+      "path": "TRIGGER-AUDIT.json",
+      "sha256": "15b0a6edea60ac5873afe7131ee725e051b59531290f892e117823076eb9046d"
+    },
+    {
+      "bytes": 236,
+      "path": "V4-PROVENANCE.json",
+      "sha256": "bb4ef48e12362f0549fadf72493f6c76ddc4631493c896bc7e4e1619d923e87a"
+    },
+    {
+      "bytes": 1689,
+      "path": "VALIDATION-SUMMARY.json",
+      "sha256": "5195b618f6964d2be0001fa61fe386e601a0d5a2d67d3057a7df3b58a34c732e"
+    },
+    {
+      "bytes": 898,
+      "path": "VIRTUAL-RECONSTRUCTION.json",
+      "sha256": "a80a8fdde6b2c1236d5c7c8978ed2279f1646bbc5dbd2a37748b3ed5616abec9"
+    },
+    {
+      "bytes": 4382,
+      "path": "WORKFLOW-PRESERVATION.json",
+      "sha256": "13e5a1512ee206a474c99e3a66dd435e288d0626c748755b9fae1ff3f677e556"
+    },
+    {
+      "bytes": 26623,
+      "path": "canonical-targetless-source-overlay.tar.gz",
+      "sha256": "d56c6626e2b019f213b7067b215a9f31b86d0499be7feddc18416d31109e1938"
+    },
+    {
+      "bytes": 291571,
+      "path": "graded-source-overlay.tar.gz",
+      "sha256": "08fd683a04b5dfb54868765a3a2e64f41c2355a4186c48d3ed8ad363fa7d064d"
+    },
+    {
+      "bytes": 21381,
+      "path": "meal-kinematic-source-overlay.tar.gz",
+      "sha256": "897b88b5a9f63e13aec92800430b2559637727b61ac1807f770898d3d693091f"
+    },
+    {
+      "bytes": 35031,
+      "path": "nominal-frozen-input-residual.tar.gz",
+      "sha256": "03e8bf144fad68aa2f8c6991cce13b3e3b87dc7bcf37d232731e1b37d55b6a4b"
+    },
+    {
+      "bytes": 136753,
+      "path": "patches/fbf-nominal-source-supplement.patch",
+      "sha256": "ddd07c85685b27056664d9b8650fa736d8eff257f5d477485efd7d14e5e5b051"
+    },
+    {
+      "bytes": 563200,
+      "path": "patches/main-to-fbf-library-closure.part-01.patch",
+      "sha256": "44c9ee9e269bec25ebb924054754a0e71ddc7b73104a132699171a9776430e07"
+    },
+    {
+      "bytes": 563195,
+      "path": "patches/main-to-fbf-library-closure.part-02.patch",
+      "sha256": "a2fb1711dee71d569aea8643ba5dd02d16c992bf9f378b219e4b86cb51edafae"
+    },
+    {
+      "bytes": 415718,
+      "path": "patches/main-to-fbf-library-closure.part-03.patch",
+      "sha256": "95d7a29b145111d4f24297c97ecd0766673f9275b5dd89400958c714a24ae72d"
+    },
+    {
+      "bytes": 456096,
+      "path": "qualified-original-overlay.tar.gz",
+      "sha256": "28b472731e2f28002ec0a73a7947ecde48ee3fb0c39f2efa313a1f7c9ecbbe49"
+    },
+    {
+      "bytes": 56792,
+      "path": "run_hosted.py",
+      "sha256": "430c8c968da18ab2ae691b929af69864721a5b890f88e5adbc54766a6a641be6"
+    },
+    {
+      "bytes": 500359,
+      "path": "source-manifest.json",
+      "sha256": "3acaf6d652f1b78803cf2abda6c27eb5e40bb9f93eb911b91621b83b0ea63d9f"
+    },
+    {
+      "bytes": 28989,
+      "path": "static_checks.py",
+      "sha256": "f1e443d48e7e76480ad89a076c94bda1eb74f613e4baae69e305360ad9b45f8e"
+    },
+    {
+      "bytes": 7481,
+      "path": "upstream-toolchain-action.yml",
+      "sha256": "0b52547c145ae18d8631c9ab711e4d917e9e489cea800368f338c25a56e0aee2"
+    }
+  ],
+  "native_qualified": false,
+  "plan_id": "m2-targetless-cue-first-rejection-source-v6",
+  "publication_state": "not_published",
+  "source_ready": true
+}

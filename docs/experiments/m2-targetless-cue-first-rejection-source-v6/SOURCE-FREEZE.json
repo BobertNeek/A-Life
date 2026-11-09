@@ -1,0 +1,48 @@
+{
+  "baseline_commit": "88e27025e323123ddb211b8ede19448c05d1268c",
+  "changed_existing_source_files": [
+    "crates/alife_training/src/cpu/canonical_cue_v3.rs",
+    "crates/alife_training/src/cpu/joint_episode_host_tests.rs",
+    "crates/alife_training/src/cpu/motor_mediation/confidence/policy/optional_vocal/joint_episode.rs"
+  ],
+  "fixture": {
+    "administrative_appendix": "    // Administrative reads of the frozen third predecision scores only.\n    println!(\"CURRENT_SUPPORT_FIRST_REJECTION_V5 {}\",selection.scores.diagnose_full_support_v5(&selection.action).unwrap());\n    assert_eq!(event_counters(&host),final_counters);assert_eq!(frozen(&host),before);\n    assert_eq!(final_memory.checkpoint().unwrap().0,final_bytes);\n",
+    "after": {
+      "bytes": 21989,
+      "path": "crates/alife_training/src/cpu/joint_episode_host_tests.rs",
+      "sha256": "dc3184e4ac58a26a44f31619d619a64b8c94ee161fa33579c31d2b2c8227fd9c"
+    },
+    "before": {
+      "bytes": 21631,
+      "path": "crates/alife_training/src/cpu/joint_episode_host_tests.rs",
+      "sha256": "d22041c9c7ac2978531282be3d0e64447e5e8f93e345d28959472c70d5153bf1"
+    },
+    "path": "crates/alife_training/src/cpu/joint_episode_host_tests.rs",
+    "registration_after": "canonical_targetless_three_interval_first_rejection_diagnostic_v5",
+    "registration_before": "canonical_targetless_three_interval_current_opportunity_v3"
+  },
+  "native_invocations": 0,
+  "new_source_files": [
+    "crates/alife_training/src/cpu/canonical_cue_v5_diagnostic.rs",
+    "crates/alife_training/src/cpu/motor_mediation/confidence/policy/optional_vocal/joint_episode_v5_diagnostic.rs"
+  ],
+  "production_prefixes": [
+    {
+      "appendix_sha256": "6ffcca1f47e005044040df03737294435d2a3fda201738c169d82ea6c15d9b53",
+      "final_sha256": "6c279571ae25ed73087c3cdbba55c2899e27ba9a67fde17f6ed4102c2d907ae1",
+      "path": "crates/alife_training/src/cpu/canonical_cue_v3.rs",
+      "prefix_bytes": 13782,
+      "prefix_sha256": "5aa338f2e303370f88eb360c2f116283ef0c92fb231069bb0439ae5e4fd153ad"
+    },
+    {
+      "appendix_sha256": "c8cac1b17df8381201be1dc16f38100efde9a556f4b4ccaee00906aa1deb972b",
+      "final_sha256": "6e754fda1143815609270026ec833f09b0c93984730af47272116b7154f4c4c9",
+      "path": "crates/alife_training/src/cpu/motor_mediation/confidence/policy/optional_vocal/joint_episode.rs",
+      "prefix_bytes": 19113,
+      "prefix_sha256": "a6648782a9982b628c7f87ddfefbac3fe236ddd401ba61ffc79af8a03fcde0c4"
+    }
+  ],
+  "schema": "test-only-literal-prefix-freeze-v5",
+  "unchanged_existing_source_files": 824,
+  "unchanged_existing_source_rows_sha256": "67fefdd7535abe5dd60c725dd6ddc2bfb52e41970ab648e070f4ed45c2b249b3"
+}

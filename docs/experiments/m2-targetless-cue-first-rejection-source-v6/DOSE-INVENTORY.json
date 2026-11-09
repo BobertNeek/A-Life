@@ -1,0 +1,32 @@
+{
+  "additional_administrative_support_enumerations": 2,
+  "additional_current_query_capture_calls_in_named_loops": 3990,
+  "committed_third_paths": 1,
+  "counterfactual_world_paths": 0,
+  "detached_extra_forwards": 0,
+  "diagnostic_bundle_queries": 1330,
+  "diagnostic_production_weight_evaluations": "Two per eligible mirror comparison: explicit parity check and expected-value recomputation. Additional on support enumeration also evaluates production weights.",
+  "extra_neural_or_world_operations": 0,
+  "fixed_support_rows": 1330,
+  "mirror_weight_checks": "Actual eligible comparisons, computed from outer admission outcomes; at most2660.",
+  "old_v4_reruns": 0,
+  "ordinary_unforced_current_opportunities": 1,
+  "preparation_ticks": 240,
+  "production_value_equality_checks": 1330,
+  "reader_comparisons": [
+    "v3_on",
+    "off",
+    "strict_v1",
+    "graded_v1",
+    "meal_v2"
+  ],
+  "recipes": 1,
+  "registered_source_world_intervals": 3,
+  "row_potential_equality_checks": 1330,
+  "schema": "first-rejection-dose-v5",
+  "scripted_producer_intervals": 2,
+  "source_admission_pairs": 2660,
+  "source_forwards": 3,
+  "success_does_not_require_eating_or_positive_effect": true,
+  "test_name": "cpu::host::grouped_host_envelope::joint_episode::tests::canonical_targetless_three_interval_first_rejection_diagnostic_v5"
+}

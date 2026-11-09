@@ -1,0 +1,16 @@
+{
+  "allowed_new_data": "Fixed source sequence/consumed/valence; role-code and fixed-reason count histograms; aggregate match/sign/count/probability scalars; bound sequence/RNG identifiers; administrative counters. No per-row arrays, raw logits, frames, neural state, checkpoints or source archive payloads.",
+  "first_rejection": "First encountered production gate only, not every mismatch or new causal credit.",
+  "kl": "Raw nominal KL from finite normalized log probabilities; negative floating roundoff down to-1e-9 is retained, not clamped or absolutized. Underflow row counts are reported. This is not an exact-real distribution proof.",
+  "limits": {
+    "diagnostic_json_bytes": 16384,
+    "fixture_pipe_bytes": 65536,
+    "histogram_rows_per_source": 128,
+    "summary_bytes": 32768
+  },
+  "new_schema": "canonical-targetless-full-support-first-rejection-v5",
+  "new_tag": "CURRENT_SUPPORT_FIRST_REJECTION_V5",
+  "raw_child_output": "Private bounded pipes; never artifact upload. Unknown lines, keys, reasons, counts or nonfinite scalars fail closed.",
+  "schema": "first-rejection-output-policy-v5",
+  "summary_schema": "canonical-targetless-first-rejection-hosted-summary-v5"
+}

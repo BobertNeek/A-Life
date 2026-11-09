@@ -1,0 +1,22 @@
+{
+  "activation": "sole ACTIVATE.json addition after exact published inventory review; new attempt1 only",
+  "administrative_dose": "Two extra frozen-score support enumerations;1330 diagnostic bundle queries overtwo original sources; actual eligible mirror/production checks and all counts separately reported. No extra M2/source forward or alternate world path.",
+  "fixed_native_dose": "One recipe,240 preparation ticks,two scripted producers,one ordinary third source/world opportunity,one committed third path.",
+  "native_executed_locally": false,
+  "not_held_out_replication": true,
+  "plan_id": "m2-targetless-cue-first-rejection-source-v6",
+  "prepared_parent": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "purpose": "Measure full-support null versus sampled-bundle null without changing the reader law or gain.",
+  "resource_limits": {
+    "aggregate_seconds": 5400,
+    "compile_seconds": 2700,
+    "fixture_seconds": 300,
+    "free_floor_bytes": 4294967296,
+    "initial_free_bytes": 21474836480,
+    "memavailable_floor_bytes": 2147483648,
+    "rss_bytes": 6442450944
+  },
+  "schema": "source-only-first-rejection-hosted-plan-v6",
+  "success": "Mechanism/cold/provenance/counter and diagnostic parity/closure invariants. Signed/zero/negative/no-match outcomes valid.",
+  "toolchain": "1.99.1"
+}

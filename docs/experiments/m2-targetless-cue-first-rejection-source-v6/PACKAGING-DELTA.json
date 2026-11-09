@@ -1,0 +1,21 @@
+{
+  "all829_scientific_source_rows_literal_v5": true,
+  "all8_overlay_source_bytes_literal_v5": true,
+  "baseline_plan": "m2-targetless-cue-first-rejection-v5",
+  "baseline_seal_sha256": "7500c5433871fbb618187608e440b9b53d21c12b6da2c425066812cd9a8d840b",
+  "diagnostic_projection_literal_v5": true,
+  "fixed_native_and_administrative_dose_literal_v5": true,
+  "new_law_gains_default_or_life_changes": false,
+  "omitted_inline_runtime_result": true,
+  "prior_provenance_keys_only": [
+    "run_url",
+    "activation_commit",
+    "content_sha256"
+  ],
+  "runner_changes_only": [
+    "PLAN",
+    "activation schema"
+  ],
+  "schema": "source-only-provenance-correction-v6",
+  "scientific_source_overlay_sha256": "d56c6626e2b019f213b7067b215a9f31b86d0499be7feddc18416d31109e1938"
+}

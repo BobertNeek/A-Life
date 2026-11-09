@@ -1,0 +1,318 @@
+{
+  "additional_exact_shared_fragments_verified": [
+    "let velocity_differs=(3..6).any(|i|(af[i]-bf[i]).abs()>0.02);",
+    "for range in [6..9,9..12,12..15]{distance+=range.map(|i|(f64::from(af[i])-f64::from(bf[i])).powi(2)).sum::<f64>()/3.;}",
+    "distance+=2.*((f64::from(af[21])-f64::from(bf[21]))/2.).powi(2);",
+    "distance+=2.*(22..24).map(|i|(f64::from(af[i])-f64::from(bf[i])).powi(2)).sum::<f64>()/2.;",
+    "let target=|r:&ObservedRole|r.command.target.and_then(|t|t.entity);"
+  ],
+  "arithmetic_review": [
+    "distance starts 0f64; after accepted queried role, ranges [6..9,9..12,12..15] each add sum of squared f64 differences /3 in unchanged order.",
+    "temperature then adds 2*((f64(af[21])-f64(bf[21]))/2)^2; terrain then adds 2*sum((f64(af[i])-f64(bf[i]))^2 for 22..24)/2.",
+    "Matched returns Some(exp(-distance) as f32). No weights are reclassified by magnitude or sign."
+  ],
+  "baseline_commit": "88e27025e323123ddb211b8ede19448c05d1268c",
+  "evaluation_accounting": {
+    "1330_calls_with_2_eligible_sources_each": {
+      "aggregate_production_pair_evaluations": 2660,
+      "attenuated_signed_mean_calls": 2660,
+      "diagnostic_method_calls": 1330,
+      "explicit_production_pair_evaluations": 2660,
+      "mirror_pair_evaluations": 2660,
+      "query_capture_calls": 2660,
+      "total_pair_matcher_evaluations": 7980
+    },
+    "caveats": "Counts above assume successful completion of all calls and both sources eligible. Noncanonical/missing-observation/query-capture rejection skips paired evaluations. Early contract errors reduce counts. If query capture fails, production expected_canonical_joint_value_v3 returns before attenuated_signed_mean, leaving one signed-mean call per diagnostic rather than two. None of these evaluations is a neural/native source forward or world tick. Additional fixture scoring outside this method is excluded.",
+    "per_diagnostic_call": "2 capture_canonical_v3 calls on successful diagnostic return: one explicit, one inside production expected_canonical_joint_value_v3. Capture failures remain ordinary None. Each capture calls ObservedJoint::capture once.",
+    "per_eligible_pair": "1 mirror first_rejection_v5 + 1 explicit production canonical_weight_v3 + 1 production canonical_weight_v3 inside expected_canonical_joint_value_v3. Eligibility requires successful query capture, canonical membership, and stored observation."
+  },
+  "gates": [
+    {
+      "first_reason": "Owner",
+      "mirror_fragment": "source.owner != b.owner",
+      "mirror_normalized_offset": 212,
+      "order": 1,
+      "production_fragment": "self.owner!=b.owner",
+      "production_normalized_offset": 82,
+      "role": "null",
+      "short_circuit_context": "Global OR operand 1; split into first sequential if."
+    },
+    {
+      "first_reason": "RoleCount",
+      "mirror_fragment": "source.roles.len() != b.roles.len()",
+      "mirror_normalized_offset": 259,
+      "order": 2,
+      "production_fragment": "self.roles.len()!=b.roles.len()",
+      "production_normalized_offset": 103,
+      "role": "null",
+      "short_circuit_context": "Global OR operand 2, evaluated only if Owner false."
+    },
+    {
+      "first_reason": "Coordination",
+      "mirror_fragment": "source.coordination != b.coordination",
+      "mirror_normalized_offset": 322,
+      "order": 3,
+      "production_fragment": "self.coordination!=b.coordination",
+      "production_normalized_offset": 136,
+      "role": "null",
+      "short_circuit_context": "Global OR operand 3, evaluated only if preceding operands false."
+    },
+    {
+      "first_reason": "Drives",
+      "mirror_fragment": "source.drives.iter().zip(b.drives).any(|(x, y)| (x-y).abs() > 0.15)",
+      "mirror_normalized_offset": 390,
+      "order": 4,
+      "production_fragment": "self.drives.iter().zip(b.drives).any(|(x,y)|(x-y).abs()>0.15)",
+      "production_normalized_offset": 171,
+      "role": "null",
+      "short_circuit_context": "Global OR operand 4; any preserves iterator order and short circuit."
+    },
+    {
+      "first_reason": "MissingRole",
+      "mirror_fragment": "let Some(z) = b.roles.iter().find(|z| z.command.channel == a.command.channel) else {",
+      "mirror_normalized_offset": 559,
+      "order": 5,
+      "production_fragment": "let z=b.roles.iter().find(|z|z.command.channel==a.command.channel)?;",
+      "production_normalized_offset": 283,
+      "role": "a.command.channel",
+      "short_circuit_context": "Each source role in original Vec order; find first matching query role; None rejects."
+    },
+    {
+      "first_reason": "CanonicalSourceCommand",
+      "mirror_fragment": "!canonical_command_v3(x)",
+      "mirror_normalized_offset": 738,
+      "order": 6,
+      "production_fragment": "!canonical_command_v3(x)",
+      "production_normalized_offset": 423,
+      "role": "a.command.channel",
+      "short_circuit_context": "Only match arm (None,None); OR operand 1."
+    },
+    {
+      "first_reason": "CanonicalQueryCommand",
+      "mirror_fragment": "!canonical_command_v3(y)",
+      "mirror_normalized_offset": 805,
+      "order": 7,
+      "production_fragment": "!canonical_command_v3(y)",
+      "production_normalized_offset": 449,
+      "role": "a.command.channel",
+      "short_circuit_context": "Only match arm (None,None); OR operand 2, after source command accepted."
+    },
+    {
+      "first_reason": "CanonicalCommandMismatch",
+      "mirror_fragment": "x != y",
+      "mirror_normalized_offset": 871,
+      "order": 8,
+      "production_fragment": "x!=y",
+      "production_normalized_offset": 475,
+      "role": "a.command.channel",
+      "short_circuit_context": "Only match arm (None,None); OR operand 3; accepted targetless arm continues role loop, skipping all remaining per-role guards."
+    },
+    {
+      "first_reason": "ObservationPresence",
+      "mirror_fragment": "(Some(_), Some(_)) => {},\n            _ => reject!(role, \"ObservationPresence\"),",
+      "mirror_normalized_offset": 929,
+      "order": 9,
+      "production_fragment": "(Some(_),Some(_))=>{},_=>return None,",
+      "production_normalized_offset": 503,
+      "role": "a.command.channel",
+      "short_circuit_context": "Match arm order (None,None), (Some,Some), wildcard mixed presence rejects. Both present proceeds."
+    },
+    {
+      "first_reason": "SourceRoute",
+      "mirror_fragment": "let Some(route) = graded_route(x) else { reject!(role, \"SourceRoute\"); };",
+      "mirror_normalized_offset": 991,
+      "order": 10,
+      "production_fragment": "let route=graded_route(x)?;",
+      "production_normalized_offset": 540,
+      "role": "a.command.channel",
+      "short_circuit_context": "Source route Option None rejects before query route evaluation."
+    },
+    {
+      "first_reason": "QueryRoute",
+      "mirror_fragment": "if graded_route(y).is_none() { reject!(role, \"QueryRoute\"); }",
+      "mirror_normalized_offset": 1056,
+      "order": 11,
+      "production_fragment": "graded_route(y)?;",
+      "production_normalized_offset": 566,
+      "role": "a.command.channel",
+      "short_circuit_context": "Query route Option None rejects; Some value intentionally discarded as in production."
+    },
+    {
+      "first_reason": "OperationFields",
+      "mirror_fragment": "x.primitive != y.primitive || x.payload != y.payload || x.intensity != y.intensity\n            || x.duration_ticks != y.duration_ticks || x.coordination_group != y.coordination_group",
+      "mirror_normalized_offset": 1114,
+      "order": 12,
+      "production_fragment": "x.primitive!=y.primitive||x.payload!=y.payload||x.intensity!=y.intensity||x.duration_ticks!=y.duration_ticks||x.coordination_group!=y.coordination_group",
+      "production_normalized_offset": 585,
+      "role": "a.command.channel",
+      "short_circuit_context": "Unsplit left-to-right OR: primitive, payload, intensity, duration_ticks, coordination_group."
+    },
+    {
+      "first_reason": "PhysicalCommandFields",
+      "mirror_fragment": "!entity_route_equivalent(x, y, LookupModeV1::ExecutorEntityRoutesV2)\n            && (x.direction != y.direction || x.stand_off_distance != y.stand_off_distance || x.confidence != y.confidence)",
+      "mirror_normalized_offset": 1302,
+      "order": 13,
+      "production_fragment": "!entity_route_equivalent(x,y,LookupModeV1::ExecutorEntityRoutesV2)\n                &&(x.direction!=y.direction||x.stand_off_distance!=y.stand_off_distance||x.confidence!=y.confidence)",
+      "production_normalized_offset": 752,
+      "role": "a.command.channel",
+      "short_circuit_context": "Unsplit AND: non-equivalent entity routes first; only then left-to-right OR direction, stand_off_distance, confidence."
+    },
+    {
+      "first_reason": "SourceObservation",
+      "mirror_fragment": "let Some(aq) = a.query.as_ref() else { reject!(role, \"SourceObservation\"); };",
+      "mirror_normalized_offset": 1508,
+      "order": 14,
+      "production_fragment": "a.query.as_ref()?",
+      "production_normalized_offset": 938,
+      "role": "a.command.channel",
+      "short_circuit_context": "Option check before source feature slicing. Defensive unreachable after Some/Some on immutable input."
+    },
+    {
+      "first_reason": "QueryObservation",
+      "mirror_fragment": "let Some(bq) = z.query.as_ref() else { reject!(role, \"QueryObservation\"); };",
+      "mirror_normalized_offset": 1629,
+      "order": 15,
+      "production_fragment": "z.query.as_ref()?",
+      "production_normalized_offset": 1005,
+      "role": "a.command.channel",
+      "short_circuit_context": "After source slice, before query slice. Defensive unreachable after Some/Some."
+    },
+    {
+      "first_reason": "Chemistry",
+      "mirror_fragment": "(15..18).any(|i| af[i].to_bits() != bf[i].to_bits())",
+      "mirror_normalized_offset": 1751,
+      "order": 16,
+      "production_fragment": "(15..18).any(|i|af[i].to_bits()!=bf[i].to_bits())",
+      "production_normalized_offset": 1178,
+      "role": "a.command.channel",
+      "short_circuit_context": "Indices 15,16,17 in order; bit equality, not numeric equality."
+    },
+    {
+      "first_reason": "Proprioception",
+      "mirror_fragment": "(19..21).any(|i| (af[i]-bf[i]).abs() > 0.05)",
+      "mirror_normalized_offset": 1890,
+      "order": 17,
+      "production_fragment": "(19..21).any(|i|(af[i]-bf[i]).abs()>0.05)",
+      "production_normalized_offset": 1302,
+      "role": "a.command.channel",
+      "short_circuit_context": "After computing velocity_differs using indices 3..6 and strict >0.02; velocity computation does not reject here."
+    },
+    {
+      "first_reason": "InteractionRange",
+      "mirror_fragment": "af[2] > MAX_INTERACTION_DISTANCE || bf[2] > MAX_INTERACTION_DISTANCE",
+      "mirror_normalized_offset": 2002,
+      "order": 18,
+      "production_fragment": "af[2]>MAX_INTERACTION_DISTANCE||bf[2]>MAX_INTERACTION_DISTANCE",
+      "production_normalized_offset": 1542,
+      "role": "a.command.channel",
+      "short_circuit_context": "EntityEat only: original three-operand OR first two operands preserved together, source range then query range."
+    },
+    {
+      "first_reason": "Contact",
+      "mirror_fragment": "if af[18].to_bits() != bf[18].to_bits() { reject!(role, \"Contact\"); }",
+      "mirror_normalized_offset": 2099,
+      "order": 19,
+      "production_fragment": "af[18].to_bits()!=bf[18].to_bits()",
+      "production_normalized_offset": 1606,
+      "role": "a.command.channel",
+      "short_circuit_context": "EntityEat only: original range/contact OR operand 3, split after both ranges accepted."
+    },
+    {
+      "first_reason": "ConsumedContact",
+      "mirror_fragment": "consumed == Some(x.channel) && (af[18] != 1. || bf[18] != 1.)",
+      "mirror_normalized_offset": 2163,
+      "order": 20,
+      "production_fragment": "consumed==Some(x.channel)&&(af[18]!=1.||bf[18]!=1.)",
+      "production_normalized_offset": 1655,
+      "role": "a.command.channel",
+      "short_circuit_context": "EntityEat only: AND consumed channel, then OR source/query contact; unchanged numeric !=1."
+    },
+    {
+      "first_reason": "EatVelocity",
+      "mirror_fragment": "(af[18] != 1. || bf[18] != 1.) && velocity_differs",
+      "mirror_normalized_offset": 2250,
+      "order": 21,
+      "production_fragment": "(af[18]!=1.||bf[18]!=1.)&&velocity_differs",
+      "production_normalized_offset": 1838,
+      "role": "a.command.channel",
+      "short_circuit_context": "EntityEat only: source/query noncontact OR first, then velocity_differs."
+    },
+    {
+      "first_reason": "MoveInspectVelocity",
+      "mirror_fragment": "if velocity_differs { reject!(role, \"MoveInspectVelocity\"); }",
+      "mirror_normalized_offset": 2377,
+      "order": 22,
+      "production_fragment": "if velocity_differs{return None;}",
+      "production_normalized_offset": 1948,
+      "role": "a.command.channel",
+      "short_circuit_context": "EntityMove or EntityInspect only; first route-specific guard."
+    },
+    {
+      "first_reason": "MoveInspectSpatialContact",
+      "mirror_fragment": "(0..3).any(|i| (af[i]-bf[i]).abs() > if i < 2 { 0.05 } else { 0.02 })\n                    || af[18].to_bits() != bf[18].to_bits()",
+      "mirror_normalized_offset": 2435,
+      "order": 23,
+      "production_fragment": "(0..3).any(|i|(af[i]-bf[i]).abs()>if i<2{0.05}else{0.02})||af[18].to_bits()!=bf[18].to_bits()",
+      "production_normalized_offset": 1981,
+      "role": "a.command.channel",
+      "short_circuit_context": "EntityMove or EntityInspect only: unchanged compound OR; spatial any indices 0,1,2 precedes bitwise contact check."
+    },
+    {
+      "first_reason": "TopologyRole",
+      "mirror_fragment": "let Some(z) = b.roles.iter().find(|z| z.command.channel == a.command.channel) else {",
+      "mirror_normalized_offset": 2929,
+      "order": 24,
+      "production_fragment": "let z=b.roles.iter().find(|z|z.command.channel==a.command.channel)?;",
+      "production_normalized_offset": 2567,
+      "role": "a.command.channel",
+      "short_circuit_context": "After ALL per-role guards and distance accumulation. Outer a and inner other loops use original source Vec order. Missing a query role rejects first. Fragment also occurs in role loop; this mapping refers to topology loop occurrence."
+    },
+    {
+      "first_reason": "TopologyOtherRole",
+      "mirror_fragment": "let Some(zo) = b.roles.iter().find(|z| z.command.channel == other.command.channel) else {",
+      "mirror_normalized_offset": 3036,
+      "order": 25,
+      "production_fragment": "let zo=b.roles.iter().find(|z|z.command.channel==other.command.channel)?;",
+      "production_normalized_offset": 2634,
+      "role": "a.command.channel",
+      "short_circuit_context": "Topology inner loop after z lookup; role remains a, not other."
+    },
+    {
+      "first_reason": "TargetTopology",
+      "mirror_fragment": "(target(a) == target(other)) != (target(z) == target(zo))",
+      "mirror_normalized_offset": 3221,
+      "order": 26,
+      "production_fragment": "(target(a)==target(other))!=(target(z)==target(zo))",
+      "production_normalized_offset": 2774,
+      "role": "a.command.channel",
+      "short_circuit_context": "Topology pair comparison after both lookups, same entity Option equality including None."
+    },
+    {
+      "first_reason": "Matched",
+      "mirror_fragment": "(Some((-distance).exp() as f32), None, \"Matched\")",
+      "mirror_normalized_offset": 3307,
+      "order": 27,
+      "production_fragment": "Some((-distance).exp()as f32)",
+      "production_normalized_offset": 2840,
+      "role": "null",
+      "short_circuit_context": "Only after all loops. Option Some(0) stays distinct from None."
+    }
+  ],
+  "limits": "Source-level ordered-fragment verification plus manual branch review is not a formal proof over all inputs. Runtime exact weights alone cannot validate which rejecting gate was first. SourceObservation, QueryObservation, TopologyRole, and TopologyOtherRole are defensive paths unreachable after earlier successful guards for immutable valid inputs. No registered tests or deterministic fixture calls were added.",
+  "mirror_path": "crates/alife_training/src/cpu/canonical_cue_v5_diagnostic.rs",
+  "mirror_sha256": "9cad0426123c8affd3ad0fd2eba8ef1ee57f7c431515cc1b882e3b3c3da04777",
+  "production_path": "crates/alife_training/src/cpu/canonical_cue_v3.rs",
+  "production_sha256": "5aa338f2e303370f88eb360c2f116283ef0c92fb231069bb0439ae5e4fd153ad",
+  "schema": "canonical-cue-v5-ordered-gate-source-review-1",
+  "scope": "First rejecting gate within each role in source Vec order, then topology pairs. Route arms are alternatives, not sequential unconditional gates.",
+  "validation": "Every exact fragment exists after whitespace normalization in both function bodies, with strictly increasing nonoverlapping offsets. Branch nesting and short-circuit ordering manually reviewed against both full bodies. No Rust was built or executed.",
+  "wrapper_order": [
+    "Require cues.len()==2 and sleep_joint_sources().len()==2; otherwise contract error.",
+    "Capture query with capture_canonical_v3(f,b).ok().",
+    "For each literal (c,e) in original zip order: require sequence identity; compute canonical_sequences membership.",
+    "QueryCaptureRejected if no query, else SourceNotCanonical if membership false, else MissingSourceObservation if stored observation absent.",
+    "Otherwise evaluate mirror and production canonical_weight_v3; exact Option<f32>::to_bits agreement required.",
+    "Append accepted Some weights, including zero, with original signed valence; use unchanged attenuated_signed_mean.",
+    "Compare resulting Option bits to expected_canonical_joint_value_v3(b,f); any divergence is contract error."
+  ]
+}

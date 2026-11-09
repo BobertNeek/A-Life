@@ -1,0 +1,14 @@
+{
+  "accepted_main_file_count": 1313,
+  "activation_diff": "A\tdocs/experiments/m2-targetless-cue-first-rejection-source-v6/ACTIVATE.json\n",
+  "activation_push_runs": 1,
+  "inherited_workflows_preserved": 15,
+  "own_workflow_additions": 1,
+  "prepared_push_runs": 0,
+  "pull_request_runs": 0,
+  "required_branch": "qualification/m2-targetless-cue-first-rejection-source-v6",
+  "reruns_rejected": true,
+  "schema": "source-only-first-rejection-trigger-v6",
+  "v3_v4_reruns": 0,
+  "workflow_dispatch_supported": false
+}
