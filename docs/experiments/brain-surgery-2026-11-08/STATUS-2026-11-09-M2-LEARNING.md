@@ -10,6 +10,14 @@ Accepted main remains `c3aec16df33861f1316d127736f5f60eea327ede`, with opt-in in
 
 The [previous chronological handoff](https://github.com/BobertNeek/A-Life/blob/4b21a3e43a9e4ce9c4ecd591a5e7677f429ae7fc/docs/experiments/brain-surgery-2026-11-08/STATUS-2026-11-08-2058UTC.md) retains the earlier candidates, failures, original sleep pilot, physiology and source identities.
 
+## Latest decision, 13:18 UTC
+
+The [fresh 32+32 result and final-state recovery addendum](https://github.com/BobertNeek/A-Life/blob/bb6e2bd3527c102d7e6c317e08b813a3d89681f0/docs/experiments/brain-surgery-2026-11-08/m2-fresh-coordination-comparison-v1/READ-RESULTS-FIRST.md) are complete. Geometric arbitration raised successful bundles 7 to 12, but both ate the same 0.65 meal, candidate later (16 versus 8). The apparent gain was extra grip cycling plus one no-op; actual AwakeRest was 0 versus baseline 1. This is not established better self-care or learned coordination.
+
+All 64 packets and closed-source/optimizer banks validate. Both final private states restore byte-exactly with zero forwards; the original full-prefix native-compare timeout remains incomplete and retained. Lossless storage preserved 184.76 MB of original packet bytes in 5.39 MB, with every snapshot/row and no ratio-based admission assumption.
+
+The next substantive repairs are explicit own-grip sense and idempotent Close/separate Release, plus joint-context episodic recall that cannot assign an Eat outcome to Flee alone. Six isolated grip-kernel controls and fifteen joint-memory core cases pass, but new registered host routes are still source work. Cache composition is in bounded preservation qualification, not installed in any finished comparison. No current candidate is promoted to default/gameplay or enabled for synaptic learning.
+
 ## Qualified local synaptic learning: a small effect, not competence
 
 GDE1 is now qualified in bounded native fixtures. Tested runtime code is `ed5f2f5a13e9d7b3851272adeeec7c73b605f7aa`; final source/prose is `2f2cd592ef7a05d199dd1bc3353afdd7f49bcee7`, tree `a0cf42000ef02478822c5b9b60ee1577027ec970`, based on closed host `fbf2a517f93098b5d936878a3d26bbb8d0391c38`.
@@ -311,3 +319,22 @@ All 22 local reflex controls now have passing coverage across V2/V4, with the tw
 Source tracing confirms the added pair geometry, partition functions and derivative validation are administrative sampler overhead, currently excluded from biological work units. Existing ATP reservation is made before selection; final work/debit includes the native circuit and other original counters, not coordination pairs. Once-only existing accounting passes, but equal total compute, a fully neural motor-control lobe and energy-efficiency are not established. The current physical comparison stays frozen. A future neural or explicitly charged version must be separately qualified; no cost or policy is changed mid-run.
 
 The new baseline has genuinely consumed its near-root food at interval 8, after acquisition at 6. Health remains 1. The coordinated arm has not yet run; this is not a comparative result.
+
+
+## 13:18 UTC: what the completed comparison changed
+
+The geometry hypothesis changed selection, but the 7-to-12 success increase does not establish better care. Five versus six successes were explicit manipulation no-ops. The four extra non-noop successes were acquisitions/releases of the same food, not extra intake. Both walked about 2.46 units; neither reached the far fruit or toy. Both chose AwakeRest five times. Only baseline's stationary interval 19 applied a real rest dose; its other four and all five candidate rest choices occurred while moving and gave zero recovery. Thus movement/posture compatibility remains a separate coordination gap.
+
+A real credit-scope problem is now observed: candidate Eat(210) consumed root2 while representative Flee(102) moved toward toy4. The old episode was keyed to Avoid/Flee. The existing qualified supplemental-meal V2 also rejects that exact sequence because sibling Moved target4 differs from consumed target2. Inspect's contact was None, not Touch. Do not claim the prior repair already covers this case or distribute the whole reward among every motor family.
+
+A new source prototype stores exact meal facts with the whole joint-context value, and retrieves only against the declared structural action/target context plus similar measured drives. Write admission retains exact command/receipt/source binding; retrieval deliberately ignores irrelevant clock, RNG, confidence and absolute-direction bytes. It does not expose scalar joint value to generic family recall. Fifteen isolated core tests pass. Actual host selection, owner/cold boundary and explicit suppression of the old representative FAMILY-VALUE path are being integrated under a fresh mode; they are not qualified yet. The original bank and old-life/default readers stay unchanged.
+
+The own-grip candidate also needs a fresh ABI, not an imported old profile. Current research SleepChoice uses sparse tag0x5305; the new grip+sleep profile uses its separately reserved sparse0x5306. Old public wire indices/tags are preserved. The proposed neural grip bank adds256 cells to460 existing appended cells, with explicit work rather than borrowing the old cost. It never treats hidden object kind as sensation. Offscreen own occupancy and a protected global Release are distinct from visible per-object idempotent Close.
+
+Source review caught a bad default before physical testing: raw Other-family drive is not a justified Release motive. The new route instead references actual NoManip output and Jacobian, then applies a modest authored Release effort. It does not rely on equal neuron operating points or invent positive food value. Unknown operation memory stays zero until an attributable producer is qualified. These are authored sensor/motor priors, not learned utility. Six narrow kernel tests pass; full core/world/host compatibility remains unrun.
+
+### Next learning adapter: do not reuse the old pullback blindly
+
+GDE1/GDS1 remain qualified for their original sampler, not for optional Quiet, geometric pairing or the new joint-memory policy. For a fixed captured frame, if a new sampler is P(a)=P0(a)*exp(E(a)/T)/Z, then its source-score derivative includes the selected base derivative MINUS its expectation under the NEW distribution. The old base-policy expectation cannot silently substitute. The three geometry-parameter derivatives are (selected feature minus its new-distribution expectation)/T; their current fixed tests do not constitute an applied optimizer.
+
+Any implementation must also distinguish latent representative paths from marginal physical bundles, current payload masks and clipping boundaries, cross-candidate NoManip/Release ownership, source recurrence held fixed in a one-step pullback, and alpha exactly once. A correct fixed-frame derivative is not full recurrent BPTT or an exact lifelong policy optimizer. Newly computed gradient/eligibility work needs explicit cost and an equal-work fast-write sham. Canonical sealed joint biochemical feedback is associated outcome, not an invented isolated Eat reward. First quantify same-frame policy effects and cold preservation, then test fresh matched lives. Preserve the earlier first-update rounding failure rather than increasing gains to manufacture a pass.
