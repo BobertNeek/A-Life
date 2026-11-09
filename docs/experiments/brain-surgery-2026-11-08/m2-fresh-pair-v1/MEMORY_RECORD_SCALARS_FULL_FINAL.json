@@ -1,0 +1,206 @@
+{
+  "schema": "m2-completed-full-memory-record-scalars-v1",
+  "native_calls": 0,
+  "checkpoint_sha256": "86bb50827c808ecbde79bd96441a786479344202fade0084f6ee051473bfb534",
+  "retained_record_count": 8,
+  "groups": [
+    {
+      "action_id_raw": 104,
+      "family_raw": 7,
+      "retained_record_count": 1,
+      "observation_count_sum": 183,
+      "family_value_lane_ranges": [
+        {
+          "min": -0.030253805220127106,
+          "max": -0.030253805220127106,
+          "nonzero_records": 1
+        },
+        {
+          "min": 0.0,
+          "max": 0.0,
+          "nonzero_records": 0
+        },
+        {
+          "min": 0.030253805220127106,
+          "max": 0.030253805220127106,
+          "nonzero_records": 1
+        },
+        {
+          "min": -0.00016651779878884554,
+          "max": -0.00016651779878884554,
+          "nonzero_records": 1
+        }
+      ]
+    },
+    {
+      "action_id_raw": 212,
+      "family_raw": 5,
+      "retained_record_count": 2,
+      "observation_count_sum": 200,
+      "family_value_lane_ranges": [
+        {
+          "min": -0.030043592676520348,
+          "max": -0.011677397415041924,
+          "nonzero_records": 2
+        },
+        {
+          "min": 0.0,
+          "max": 0.0,
+          "nonzero_records": 0
+        },
+        {
+          "min": 0.029999999329447746,
+          "max": 0.030136294662952423,
+          "nonzero_records": 2
+        },
+        {
+          "min": -0.00016660633264109492,
+          "max": -0.00016629695892333984,
+          "nonzero_records": 2
+        }
+      ]
+    },
+    {
+      "action_id_raw": 700,
+      "family_raw": 1,
+      "retained_record_count": 1,
+      "observation_count_sum": 280,
+      "family_value_lane_ranges": [
+        {
+          "min": -0.029912175610661507,
+          "max": -0.029912175610661507,
+          "nonzero_records": 1
+        },
+        {
+          "min": 0.0,
+          "max": 0.0,
+          "nonzero_records": 0
+        },
+        {
+          "min": 0.030041735619306564,
+          "max": 0.030041735619306564,
+          "nonzero_records": 1
+        },
+        {
+          "min": -0.0001665470190346241,
+          "max": -0.0001665470190346241,
+          "nonzero_records": 1
+        }
+      ]
+    },
+    {
+      "action_id_raw": 103,
+      "family_raw": 3,
+      "retained_record_count": 1,
+      "observation_count_sum": 191,
+      "family_value_lane_ranges": [
+        {
+          "min": -0.030051298439502716,
+          "max": -0.030051298439502716,
+          "nonzero_records": 1
+        },
+        {
+          "min": 0.0,
+          "max": 0.0,
+          "nonzero_records": 0
+        },
+        {
+          "min": 0.030126281082630157,
+          "max": 0.030126281082630157,
+          "nonzero_records": 1
+        },
+        {
+          "min": -0.00016665209841448814,
+          "max": -0.00016665209841448814,
+          "nonzero_records": 1
+        }
+      ]
+    },
+    {
+      "action_id_raw": 1,
+      "family_raw": 0,
+      "retained_record_count": 1,
+      "observation_count_sum": 202,
+      "family_value_lane_ranges": [
+        {
+          "min": -0.030254017561674118,
+          "max": -0.030254017561674118,
+          "nonzero_records": 1
+        },
+        {
+          "min": 0.0,
+          "max": 0.0,
+          "nonzero_records": 0
+        },
+        {
+          "min": 0.030254017561674118,
+          "max": 0.030254017561674118,
+          "nonzero_records": 1
+        },
+        {
+          "min": -0.0001711196091491729,
+          "max": -0.0001711196091491729,
+          "nonzero_records": 1
+        }
+      ]
+    },
+    {
+      "action_id_raw": 400,
+      "family_raw": 7,
+      "retained_record_count": 1,
+      "observation_count_sum": 103,
+      "family_value_lane_ranges": [
+        {
+          "min": -0.030015677213668823,
+          "max": -0.030015677213668823,
+          "nonzero_records": 1
+        },
+        {
+          "min": 0.0,
+          "max": 0.0,
+          "nonzero_records": 0
+        },
+        {
+          "min": 0.030121369287371635,
+          "max": 0.030121369287371635,
+          "nonzero_records": 1
+        },
+        {
+          "min": -0.0001665631280047819,
+          "max": -0.0001665631280047819,
+          "nonzero_records": 1
+        }
+      ]
+    },
+    {
+      "action_id_raw": 3,
+      "family_raw": 1,
+      "retained_record_count": 1,
+      "observation_count_sum": 4,
+      "family_value_lane_ranges": [
+        {
+          "min": -0.029880765825510025,
+          "max": -0.029880765825510025,
+          "nonzero_records": 1
+        },
+        {
+          "min": 0.0,
+          "max": 0.0,
+          "nonzero_records": 0
+        },
+        {
+          "min": 0.030013414099812508,
+          "max": 0.030013414099812508,
+          "nonzero_records": 1
+        },
+        {
+          "min": -0.0001663118600845337,
+          "max": -0.0001663118600845337,
+          "nonzero_records": 1
+        }
+      ]
+    }
+  ],
+  "distinct_BodySleep3_and_AwakeRest700_retained": true,
+  "raw_record_query_or_bank_emitted": false
+}
