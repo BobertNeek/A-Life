@@ -1,0 +1,57 @@
+{
+  "arms": [
+    {
+      "arm": 0,
+      "complete_pairs_audited": 32,
+      "closed_token_seals": {
+        "source_inputs": "73934d71bdc058d4c705efb2b2462f79d82c0dce9b9f8aae7bad410e8e3f5feb",
+        "source_asset": "fed07bd2b1e45fc5db0d78004137dab6a37f27faa426ba596f3297ecbb3588ef",
+        "founder": "4000ce9a73f4528c37e6f4d704a4c63fed5b13c440dff6909e25c2de3a628375",
+        "neural.schema_version": "ea8b792cc8d49b78330a43f18d123fe922aaeeff40f2c8323d4822c76b9a9c38",
+        "neural.organism_id": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
+        "neural.phenotype_hash": "28028c46292931e67e36df43febe0ab49e03dfc857ee3c7c2c47e93be078fbfc",
+        "neural.fast": "eefc2202ff07b5ba90d778b3fa8b2cf9e345b7fa77545a60b29f0c286d2bdfba",
+        "neural.lifetime": "eefc2202ff07b5ba90d778b3fa8b2cf9e345b7fa77545a60b29f0c286d2bdfba",
+        "neural.eligibility": "eefc2202ff07b5ba90d778b3fa8b2cf9e345b7fa77545a60b29f0c286d2bdfba",
+        "neural.weight_generation": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+        "neural.dendrites": "573cf19b525672e20a46fd5a7dcee026bcaabcf31ab96922716389a56ebf8461",
+        "resident.neural_topology": "2d7d7e06fb6041f64279c9190338ebc8c6253624d2e9fbe40b6ff3d19661fc33",
+        "record.genome": "a8be706bd0c6235e515c4fbb02fe37ef146da5018d61aa4363f00ab28eb80fd4",
+        "record.phenotype": "1ca4c0d010503e971826c3cb6e8aa91167b064a9ee5d97df7994e7dfe8e184de",
+        "record.birth_tick": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+        "record.organism_id": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
+        "record.world_entity_id": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b"
+      },
+      "final_pair_hash": "5227b48afe657592a48dcf8a84241fab375d1dfbde18e46a6323427b0a536cfa",
+      "all_original_token_banks_exact": true
+    },
+    {
+      "arm": 1,
+      "complete_pairs_audited": 32,
+      "closed_token_seals": {
+        "source_inputs": "73934d71bdc058d4c705efb2b2462f79d82c0dce9b9f8aae7bad410e8e3f5feb",
+        "source_asset": "fed07bd2b1e45fc5db0d78004137dab6a37f27faa426ba596f3297ecbb3588ef",
+        "founder": "4000ce9a73f4528c37e6f4d704a4c63fed5b13c440dff6909e25c2de3a628375",
+        "neural.schema_version": "31c02816f3b13251c92a48a8b022d194d5665ba7dd696ac4ccb17a5854cc1318",
+        "neural.organism_id": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
+        "neural.phenotype_hash": "28028c46292931e67e36df43febe0ab49e03dfc857ee3c7c2c47e93be078fbfc",
+        "neural.fast": "eefc2202ff07b5ba90d778b3fa8b2cf9e345b7fa77545a60b29f0c286d2bdfba",
+        "neural.lifetime": "eefc2202ff07b5ba90d778b3fa8b2cf9e345b7fa77545a60b29f0c286d2bdfba",
+        "neural.eligibility": "eefc2202ff07b5ba90d778b3fa8b2cf9e345b7fa77545a60b29f0c286d2bdfba",
+        "neural.weight_generation": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+        "neural.dendrites": "573cf19b525672e20a46fd5a7dcee026bcaabcf31ab96922716389a56ebf8461",
+        "resident.neural_topology": "2d7d7e06fb6041f64279c9190338ebc8c6253624d2e9fbe40b6ff3d19661fc33",
+        "record.genome": "a8be706bd0c6235e515c4fbb02fe37ef146da5018d61aa4363f00ab28eb80fd4",
+        "record.phenotype": "1ca4c0d010503e971826c3cb6e8aa91167b064a9ee5d97df7994e7dfe8e184de",
+        "record.birth_tick": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+        "record.organism_id": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
+        "record.world_entity_id": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b"
+      },
+      "final_pair_hash": "92b9e3fa16e33429d0f1227dbf6e54788746f331723f60631ec6de11d36c91ee",
+      "all_original_token_banks_exact": true
+    }
+  ],
+  "cross_arm_source_optimizer_genetic_token_equality": true,
+  "no_native_calls": true,
+  "scope": "Source inputs/assets and complete founder (including Adam), neural fast/lifetime/eligibility/weight-generation/dendrites/topology, and record genome/phenotype/identity. Exact original JSON tokens, no decoded-float rewrite. Native runner additionally verifies its wider closure every committed interval."
+}
