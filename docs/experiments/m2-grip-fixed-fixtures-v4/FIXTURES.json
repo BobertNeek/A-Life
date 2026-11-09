@@ -1,0 +1,115 @@
+{
+  "compiler_reconstruction_count_complete": false,
+  "coverage_gaps": [
+    "Additional pure numerical compiler reconstruction inside the integrated host fixture is not fully enumerated; execution is bounded by job resource guards.",
+    "Ignored source reconstruction excluded; no --ignored.",
+    "No registered grip transaction rollback or work-limit rejection qualification.",
+    "GPU frame-profile fail-closed gate only; no new-profile slot construction or hardware."
+  ],
+  "dose_semantics": "enumerated_scaffold_compiler_calls counts only explicitly enumerated N512 constructions and omits additional known but unenumerated integration reconstruction. Other source-audited fixed invocation counts, not instrumented measurements. Attempted-dose totals conservatively charge the entire fixture even if it fails early; passed-dose totals represent its audited successful path. Primitive unregistered attempts are not registered biology intervals. isolated_port_neuron_updates excludes source-network numerical work; grip_neuron_updates counts the three integrated grip-bank forwards only. The ABI fixture body initialization field is scoped to that test, not all constructor work.",
+  "excluded_fixtures": [
+    {
+      "dose": {
+        "bank_forwards": 0,
+        "committed_registered_biology_intervals": 0,
+        "compiler_reconstructions": null,
+        "fresh_fixture_recipe_builds": 0,
+        "fresh_worlds": 0,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 0
+      },
+      "exact_name": "sealed_source_descriptor_asset_and_restore_preserve_every_numerical_row",
+      "features": [],
+      "ignored": true,
+      "notes": [
+        "Ignored recursive reconstruction requires separate complete compiler-dose audit; do not use --ignored."
+      ],
+      "package": "alife_core",
+      "selection": "exclude",
+      "source_path": "crates/alife_core/tests/grip_source_reconstruction.rs",
+      "source_sha256": "eaaf4e0f023f687b4a969ec8366bd624fc1f7237f5ea25be733cc4fe330079c9",
+      "target": "grip_source_reconstruction",
+      "target_kind": "test"
+    }
+  ],
+  "fixture_count": 1,
+  "fixtures": [
+    {
+      "dose": {
+        "bank_forwards": 3,
+        "cold_branch_intervals": 1,
+        "cold_restored_world_branches": 1,
+        "committed_registered_biology_intervals": 3,
+        "fixtures_with_unenumerated_compiler_work": 1,
+        "fresh_fixture_recipe_builds": 1,
+        "fresh_worlds": 3,
+        "grip_neuron_updates": 768,
+        "host_bundle_attempts": 3,
+        "partition_forwards": 0,
+        "primitive_attempts": 0,
+        "rolled_back_registered_biology_intervals": 0,
+        "source_forwards": 3,
+        "warm_branch_intervals": 2
+      },
+      "id": "f041",
+      "ignored": false,
+      "name": "grounded_scene_pair_scores_and_cold_continuation",
+      "notes": [
+        "Recipe build creates one canonical newborn world; grip new-game creates another; explicit scene builder creates third and replaces second; cold checkpoint restore adds one continued branch. World clones/transaction scratch copies are not included in fresh-world count. Three source forwards are explicit, one per selected host step; recursive constructor/restore compiler count remains uncertified. Two other-host checkpoint decodes are rejected; these are not source-forward or biology attempts. No intended host rollback attempt is present.",
+        "Selected under bounded fixed-fixture scope. Additional pure numerical constructor/restore/validation reconstruction is not fully enumerated; wall/RSS/storage/output guards apply. No zero-hidden-work claim."
+      ],
+      "source_path": "crates/alife_training/tests/grip_options_host.rs",
+      "source_sha256": "076ecc4241e4755882bde735431bd90fc262de073162c6bc7dbb2802da747e61",
+      "target_id": "training_grip_options_host"
+    }
+  ],
+  "native_execution_performed": false,
+  "qualification_scope": "One fresh f041 integration attempt after narrow production fix;40 historical passes retained separately, five GPU fixtures still pending. No new46/46 batch claim.",
+  "ready": true,
+  "retained_v2_fixture_count": 18,
+  "retained_v3_fixture_count": 22,
+  "schema": "m2-grip-fixed-fixtures-v4",
+  "source_audited_complete_dose": {
+    "abi_fixture_body_biology_initializations": 0,
+    "bank_forwards": 3,
+    "cold_branch_intervals": 1,
+    "cold_restored_world_branches": 1,
+    "committed_registered_biology_intervals": 3,
+    "enumerated_scaffold_compiler_calls": 0,
+    "fixtures_with_unenumerated_compiler_work": 1,
+    "fresh_fixture_recipe_builds": 1,
+    "fresh_worlds": 3,
+    "grip_neuron_updates": 768,
+    "grip_upload_rejections": 0,
+    "hardware_dispatches": 0,
+    "host_bundle_attempts": 3,
+    "isolated_port_neuron_updates": 0,
+    "legacy_baseline_decodes": 0,
+    "legacy_upload_successes": 0,
+    "partition_forwards": 0,
+    "primitive_attempts": 0,
+    "primitive_rejected_attempts": 0,
+    "primitive_successes": 0,
+    "readout_products": 0,
+    "rejected_profile_requests": 0,
+    "rejected_recovery_requests": 0,
+    "rolled_back_registered_biology_intervals": 0,
+    "source_forwards": 3,
+    "upload_entry_calls": 0,
+    "warm_branch_intervals": 2
+  },
+  "target_count": 1,
+  "targets": [
+    {
+      "features": [
+        "cpu-backend"
+      ],
+      "id": "training_grip_options_host",
+      "kind": "test",
+      "name": "grip_options_host",
+      "package": "alife_training"
+    }
+  ]
+}

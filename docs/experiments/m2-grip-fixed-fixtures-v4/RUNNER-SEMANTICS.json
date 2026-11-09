@@ -1,0 +1,46 @@
+{
+  "added_functions": [
+    "project_f041_failure"
+  ],
+  "modified_existing_functions": [
+    "restore_test_fixture",
+    "execute_exact_fixture"
+  ],
+  "prior_runner_sha256": "a1dc728778ab14c67108e9455bd96fe103f57ea1a8fea4961d14180182525032",
+  "runner_sha256": "2e6ca23525e706e1c714a25fb1c9034833d6030bfca483bea3c3419da0c65fab",
+  "schema": "m2-grip-fixed-runner-delta-v4",
+  "scope": "Exact two-file restoration plus failure-only allowlisted event-prefix projection. Process/toolchain/output/resource/build/list/one-attempt controls unchanged.",
+  "unchanged_existing_functions": [
+    "add_dose",
+    "admit",
+    "build_fixture_target",
+    "check_limits",
+    "check_stage",
+    "child_setup",
+    "diagnostic_rows",
+    "digest_file",
+    "exact_path",
+    "fail",
+    "fixture_inventory",
+    "kill_session",
+    "list_exact_fixture",
+    "local_dep_path",
+    "main",
+    "private_git",
+    "read_json",
+    "restore_sources",
+    "run",
+    "safe_path",
+    "session_rss",
+    "setup_toolchain",
+    "sha",
+    "size",
+    "summary",
+    "validate_activation",
+    "validate_exact_listing",
+    "validate_exact_result",
+    "verify_depinfo",
+    "verify_record",
+    "verify_workflow_preservation"
+  ]
+}

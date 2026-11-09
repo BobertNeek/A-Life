@@ -1,0 +1,11 @@
+{
+  "attempt": 1,
+  "fixed_fixtures_only": true,
+  "main": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "plan_id": "m2-grip-fixed-fixtures-v4",
+  "prepared_head": "PENDING_VERIFIED_IMMUTABLE_GITHUB_COMMIT",
+  "research_base": "fbf2a517f93098b5d936878a3d26bbb8d0391c38",
+  "schema": "m2-grip-fixed-fixture-activation-v4",
+  "seal_sha256": "34aec82dd3cf3d191d602239f489eae833df2b20dd54e6e85d9249f0783c37bb",
+  "source_manifest_sha256": "58049e7652df5686f2356740bd8565b0052f768fb2aa2b23132bd824423a1e53"
+}

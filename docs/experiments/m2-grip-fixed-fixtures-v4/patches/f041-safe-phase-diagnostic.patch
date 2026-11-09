@@ -1,0 +1,289 @@
+--- a/crates/alife_training/tests/grip_options_host.rs
++++ b/crates/alife_training/tests/grip_options_host.rs
+@@ -32,11 +32,104 @@
+         n["neural"]["dendrites"]
+     ])
+ }
++// BEGIN_F041_DIAGNOSTIC_HELPERS
++#[repr(u8)]
++enum F041Phase {
++    RecipeBuildBegin = 1,
++    RecipeBuildDone = 2,
++    GripCompileBegin = 3,
++    GripCompileDone = 4,
++    AssetGenotypeBindBegin = 5,
++    AssetGenotypeBindDone = 6,
++    TrainerNewBegin = 7,
++    TrainerNewDone = 8,
++    TrainerRestoreBegin = 9,
++    TrainerRestoreDone = 10,
++    WorldNewBegin = 11,
++    WorldNewDone = 12,
++    WorldRecordBegin = 13,
++    WorldRecordDone = 14,
++    SceneBuildBegin = 15,
++    SceneBuildDone = 16,
++    SceneRegisterBegin = 17,
++    SceneRegisterDone = 18,
++    HostNewBegin = 19,
++    HostNewDone = 20,
++    InitialFrozenSnapshotBegin = 21,
++    InitialFrozenSnapshotDone = 22,
++    FirstStepBegin = 23,
++    FirstStepDone = 24,
++    FirstCountsBegin = 25,
++    FirstCountsDone = 26,
++    ScoreProbabilitiesBegin = 27,
++    ScoreProbabilitiesDone = 28,
++    CoordinationSupportBegin = 29,
++    CoordinationSupportDone = 30,
++    ScoreEvaluationBegin = 31,
++    ScoreEvaluationDone = 32,
++    FirstReceiptChecksBegin = 33,
++    FirstReceiptChecksDone = 34,
++    FirstFrozenCheckBegin = 35,
++    FirstFrozenCheckDone = 36,
++    CheckpointEncodeBegin = 37,
++    CheckpointEncodeDone = 38,
++    WrongEnvelopeRejectionBegin = 39,
++    WrongEnvelopeRejectionDone = 40,
++    GripKernelChecksBegin = 41,
++    GripKernelChecksDone = 42,
++    CheckpointDecodeBegin = 43,
++    CheckpointDecodeDone = 44,
++    ColdRestoreBegin = 45,
++    ColdRestoreDone = 46,
++    ColdWireCheckBegin = 47,
++    ColdWireCheckDone = 48,
++    WarmSuccessorBegin = 49,
++    WarmSuccessorDone = 50,
++    ColdSuccessorBegin = 51,
++    ColdSuccessorDone = 52,
++    SuccessorCountsBegin = 53,
++    SuccessorCountsDone = 54,
++    SuccessorActionPatchBegin = 55,
++    SuccessorActionPatchDone = 56,
++    FinalWireCheckBegin = 57,
++    FinalWireCheckDone = 58,
++    FinalWarmFrozenBegin = 59,
++    FinalWarmFrozenDone = 60,
++    FinalColdFrozenBegin = 61,
++    FinalColdFrozenDone = 62,
++}
++#[repr(u8)]
++enum F041Check {
++    FirstDecisionsOne = 1,
++    FirstReceiptsOne = 2,
++    FirstSourceCountOne = 3,
++    CoordinationPositive = 4,
++    CoordinationGradientFinite = 5,
++    KernelNeurons256 = 6,
++    KernelSensory256 = 7,
++    KernelReductions256 = 8,
++    KernelReadouts128 = 9,
++    KernelRecallZero = 10,
++    WarmDecisionsOne = 11,
++    ColdDecisionsOne = 12,
++}
++fn report_f041_phase(phase: F041Phase) {
++    println!("GRIP_F041_PHASE={}", phase as u8);
++}
++fn report_f041_check(check: F041Check, passed: bool) {
++    println!("GRIP_F041_CHECK={}:{}", check as u8, u8::from(passed));
++}
++// END_F041_DIAGNOSTIC_HELPERS
+ #[test]
+ fn grounded_scene_pair_scores_and_cold_continuation() {
++    report_f041_phase(F041Phase::RecipeBuildBegin);
+     let mut recipe = recipe::build(SEED, true).unwrap();
++    report_f041_phase(F041Phase::RecipeBuildDone);
++    report_f041_phase(F041Phase::GripCompileBegin);
+     let (phenotype, inputs) =
+         PhenotypeCompiler::compile_n2048_grounded_grip_sleep_choice(&recipe.inputs).unwrap();
++    report_f041_phase(F041Phase::GripCompileDone);
++    report_f041_phase(F041Phase::AssetGenotypeBindBegin);
+     let asset = FoundationWeightAsset::from_phenotype_for_genetic_birth(&phenotype).unwrap();
+     recipe.genotype =
+         CreatureGenome::from_n2048_grip_sleep_choice_source(&recipe.genotype, asset.clone())
+@@ -45,8 +138,10 @@
+     recipe.phenotype = phenotype;
+     recipe.asset = asset;
+     recipe.inputs = inputs;
++    report_f041_phase(F041Phase::AssetGenotypeBindDone);
+ 
+     let inputs = recipe.inputs.clone();
++    report_f041_phase(F041Phase::TrainerNewBegin);
+     let mut trainer = CpuFoundationTrainer::new(
+         recipe.phenotype.clone(),
+         recipe.asset.clone(),
+@@ -55,6 +150,8 @@
+     )
+     .unwrap();
+     let mut checkpoint = trainer.checkpoint();
++    report_f041_phase(F041Phase::TrainerNewDone);
++    report_f041_phase(F041Phase::TrainerRestoreBegin);
+     checkpoint.optimizer_step = 23;
+     checkpoint.update_ages[0] = 23;
+     checkpoint.first_moment[0] = 0.03125;
+@@ -62,8 +159,12 @@
+     trainer =
+         CpuFoundationTrainer::from_checkpoint(recipe.phenotype.clone(), recipe.asset, checkpoint)
+             .unwrap();
++    report_f041_phase(F041Phase::TrainerRestoreDone);
++    report_f041_phase(F041Phase::WorldNewBegin);
+     let mut game =
+         create_grip_sleep_choice_research_new_game(&recipe.config, &recipe.genotype).unwrap();
++    report_f041_phase(F041Phase::WorldNewDone);
++    report_f041_phase(F041Phase::WorldRecordBegin);
+     let record = game
+         .world
+         .organism_registry()
+@@ -72,6 +173,8 @@
+         .unwrap()
+         .clone();
+     let id = record.organism_id();
++    report_f041_phase(F041Phase::WorldRecordDone);
++    report_f041_phase(F041Phase::SceneBuildBegin);
+     let mut scene = HeadlessScenarioBuilder::new(SEED)
+         .agent("learner", id, Vec3f::ZERO)
+         .food("near-food", Vec3f::new(0.5, 0., 0.), 0.65)
+@@ -80,10 +183,14 @@
+         .obstacle("solid", Vec3f::new(-2., 0., 1.), 0.2)
+         .build()
+         .unwrap();
++    report_f041_phase(F041Phase::SceneBuildDone);
++    report_f041_phase(F041Phase::SceneRegisterBegin);
+     scene
+         .register_grip_sleep_choice_research_record(record)
+         .unwrap();
+     game.world = scene;
++    report_f041_phase(F041Phase::SceneRegisterDone);
++    report_f041_phase(F041Phase::HostNewBegin);
+     let (mut warm, ()) = CpuGripOptionsM2HostV1::new_prepared(
+         game,
+         trainer,
+@@ -93,24 +200,43 @@
+         |_| Ok::<(), String>(()),
+     )
+     .unwrap();
++    report_f041_phase(F041Phase::HostNewDone);
++    report_f041_phase(F041Phase::InitialFrozenSnapshotBegin);
+     let before = frozen(&warm);
++    report_f041_phase(F041Phase::InitialFrozenSnapshotDone);
+     // Exactly three source forwards total: one before restore, warm and cold successors.
++    report_f041_phase(F041Phase::FirstStepBegin);
+     let first = warm.step_research_observed(0.73).unwrap();
++    report_f041_phase(F041Phase::FirstStepDone);
++    report_f041_phase(F041Phase::FirstCountsBegin);
++    report_f041_check(F041Check::FirstDecisionsOne, first.step.decisions.len() == 1);
+     assert_eq!(first.step.decisions.len(), 1);
++    report_f041_check(F041Check::FirstReceiptsOne, first.world_receipts.len() == 1);
+     assert_eq!(first.world_receipts.len(), 1);
+     let d = &first.step.decisions[0];
++    report_f041_check(F041Check::FirstSourceCountOne, d.motor.native.core.source_execution_count == 1);
+     assert_eq!(d.motor.native.core.source_execution_count, 1);
++    report_f041_phase(F041Phase::FirstCountsDone);
++    report_f041_phase(F041Phase::ScoreProbabilitiesBegin);
+     let scores = warm.last_selection_scores(id).unwrap();
+     let probabilities = scores.probabilities(f64::from(0.73_f32)).unwrap();
++    report_f041_phase(F041Phase::ScoreProbabilitiesDone);
++    report_f041_phase(F041Phase::CoordinationSupportBegin);
++    report_f041_check(F041Check::CoordinationPositive, probabilities.coordination.iter().any(|p| p.features.iter().any(|x| x[0] > 0.)));
+     assert!(probabilities
+         .coordination
+         .iter()
+         .any(|p| p.features.iter().any(|x| x[0] > 0.)));
++    report_f041_phase(F041Phase::CoordinationSupportDone);
++    report_f041_phase(F041Phase::ScoreEvaluationBegin);
+     let evaluation = scores.evaluate(&d.action).unwrap();
++    report_f041_check(F041Check::CoordinationGradientFinite, evaluation.coordination_log_probability_gradient.iter().all(|x| x.is_finite()));
+     assert!(evaluation
+         .coordination_log_probability_gradient
+         .iter()
+         .all(|x| x.is_finite()));
++    report_f041_phase(F041Phase::ScoreEvaluationDone);
++    report_f041_phase(F041Phase::FirstReceiptChecksBegin);
+     assert_eq!(
+         d.patch.selected_bundle(),
+         Some(&first.world_receipts[0].bundle)
+@@ -119,32 +245,62 @@
+         d.patch.outcome().joint.as_ref(),
+         Some(&first.world_receipts[0].joint)
+     );
++    report_f041_phase(F041Phase::FirstReceiptChecksDone);
++    report_f041_phase(F041Phase::FirstFrozenCheckBegin);
+     assert_eq!(frozen(&warm), before);
++    report_f041_phase(F041Phase::FirstFrozenCheckDone);
++    report_f041_phase(F041Phase::CheckpointEncodeBegin);
+     let saved = wire(&warm);
++    report_f041_phase(F041Phase::CheckpointEncodeDone);
++    report_f041_phase(F041Phase::WrongEnvelopeRejectionBegin);
+     assert!(CpuCoordinatedTargetM2HostCheckpointV1::decode(&saved).is_err());
+     assert!(CpuGroupedM2HostCheckpointV1::decode(&saved).is_err());
++    report_f041_phase(F041Phase::WrongEnvelopeRejectionDone);
++    report_f041_phase(F041Phase::GripKernelChecksBegin);
+     let grip = d.motor.grip.as_ref().unwrap();
++    report_f041_check(F041Check::KernelNeurons256, grip.kernel.neuron_updates == 256);
+     assert_eq!(grip.kernel.neuron_updates, 256);
++    report_f041_check(F041Check::KernelSensory256, grip.kernel.sensory_assignments == 256);
+     assert_eq!(grip.kernel.sensory_assignments, 256);
++    report_f041_check(F041Check::KernelReductions256, grip.kernel.signed_reduction_products == 256);
+     assert_eq!(grip.kernel.signed_reduction_products, 256);
++    report_f041_check(F041Check::KernelReadouts128, grip.kernel.readout_products == 128);
+     assert_eq!(grip.kernel.readout_products, 128);
++    report_f041_check(F041Check::KernelRecallZero, grip.kernel.recall_jacobians.iter().all(|x| *x == 0.0));
+     assert!(grip.kernel.recall_jacobians.iter().all(|x| *x == 0.0));
++    report_f041_phase(F041Phase::GripKernelChecksDone);
+ 
++    report_f041_phase(F041Phase::CheckpointDecodeBegin);
++    let decoded = CpuGripOptionsM2HostCheckpointV1::decode(&saved).unwrap();
++    report_f041_phase(F041Phase::CheckpointDecodeDone);
++    report_f041_phase(F041Phase::ColdRestoreBegin);
+     let mut cold = CpuGripOptionsM2HostV1::restore(
+-        CpuGripOptionsM2HostCheckpointV1::decode(&saved).unwrap(),
++        decoded,
+         &inputs,
+         MediationModeV1::Full,
+     )
+     .unwrap();
++    report_f041_phase(F041Phase::ColdRestoreDone);
++    report_f041_phase(F041Phase::ColdWireCheckBegin);
+     assert_eq!(wire(&cold), saved);
++    report_f041_phase(F041Phase::ColdWireCheckDone);
++    report_f041_phase(F041Phase::WarmSuccessorBegin);
+     let a = warm.step_research_observed(0.73).unwrap();
++    report_f041_phase(F041Phase::WarmSuccessorDone);
++    report_f041_phase(F041Phase::ColdSuccessorBegin);
+     let b = cold.step_research_observed(0.73).unwrap();
++    report_f041_phase(F041Phase::ColdSuccessorDone);
++    report_f041_phase(F041Phase::SuccessorCountsBegin);
++    report_f041_check(F041Check::WarmDecisionsOne, a.step.decisions.len() == 1);
+     assert_eq!(a.step.decisions.len(), 1);
++    report_f041_check(F041Check::ColdDecisionsOne, b.step.decisions.len() == 1);
+     assert_eq!(b.step.decisions.len(), 1);
+     for d in [&a.step.decisions[0], &b.step.decisions[0]] {
+         assert_eq!(d.motor.native.core.source_execution_count, 1);
+     }
+     assert_eq!(a.world_receipts, b.world_receipts);
++    report_f041_phase(F041Phase::SuccessorCountsDone);
++    report_f041_phase(F041Phase::SuccessorActionPatchBegin);
+     assert_eq!(
+         serde_json::to_vec(&a.step.decisions[0].action).unwrap(),
+         serde_json::to_vec(&b.step.decisions[0].action).unwrap()
+@@ -153,9 +309,16 @@
+         serde_json::to_vec(&a.step.decisions[0].patch).unwrap(),
+         serde_json::to_vec(&b.step.decisions[0].patch).unwrap()
+     );
++    report_f041_phase(F041Phase::SuccessorActionPatchDone);
++    report_f041_phase(F041Phase::FinalWireCheckBegin);
+     assert_eq!(wire(&warm), wire(&cold));
++    report_f041_phase(F041Phase::FinalWireCheckDone);
++    report_f041_phase(F041Phase::FinalWarmFrozenBegin);
+     assert_eq!(frozen(&warm), before);
++    report_f041_phase(F041Phase::FinalWarmFrozenDone);
++    report_f041_phase(F041Phase::FinalColdFrozenBegin);
+     assert_eq!(frozen(&cold), before);
++    report_f041_phase(F041Phase::FinalColdFrozenDone);
+     println!("GRIP_INTEGRATED_COUNTS source_forwards=3 bundle_attempts=3 committed_intervals=3 source_execution_count_per_decision=1");
+     println!(
+         "GRIP_INTEGRATED_CONTINUATION_SHA256={:x}",

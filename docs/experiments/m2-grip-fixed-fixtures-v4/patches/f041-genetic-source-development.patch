@@ -1,0 +1,11 @@
+--- a/crates/alife_training/src/cpu/host.rs
++++ b/crates/alife_training/src/cpu/host.rs
+@@ -2085,6 +2085,8 @@
+         record
+             .genome()
+             .validate_n2048_grip_sleep_choice_research()?;
++        // Reconstruct the frozen genetic source, not the newborn's evolving gates.
++        let development = DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(1.0)?);
+         PhenotypeCompiler::compile_n2048_grip_sleep_choice_candidate(
+             genome.clone(),
+             development,

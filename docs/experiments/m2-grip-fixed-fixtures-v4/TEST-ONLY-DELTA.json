@@ -1,0 +1,39 @@
+{
+  "biology_step_calls": 0,
+  "empty_grip": "Typed valid empty own-grip state; held-state semantics remain covered by separate source-authored fixtures.",
+  "existing_source_files_changed": 0,
+  "feature": [
+    "training-rollout"
+  ],
+  "gpu_device_calls": 0,
+  "native_execution_performed": false,
+  "new_test_files": 1,
+  "new_tests": 1,
+  "patch_bytes": 3446,
+  "patch_path": "patches/gpu-upload-gate.patch",
+  "patch_record": {
+    "bytes": 3446,
+    "path": "patches/gpu-upload-gate.patch",
+    "sha256": "e71af51d4829939b2e91b9c1a4bc2e18f2bc95d8135462412d5a03421be2885a"
+  },
+  "patch_sha256": "e71af51d4829939b2e91b9c1a4bc2e18f2bc95d8135462412d5a03421be2885a",
+  "phenotype_class": "n512",
+  "phenotype_compile_calls": 1,
+  "positive_recheck_note": "validate_against internally calls try_from_frame again on the matching legacy control.",
+  "profile_rejection": "GpuClosedLoopError::LayoutMismatch for valid GroundedGripSleepChoiceV1; the exact public implementation rejects this profile before slot validation.",
+  "schema": "m2-grip-additive-gpu-fixture-v1",
+  "slot_policy": "Genuine N512/PrivilegedAffordanceV1 phenotype and slot; its matching legacy frame succeeds and validates. No malformed slot/profile-owner mismatch is used as the rejection cause.",
+  "source_forward_calls": 0,
+  "source_record": {
+    "bytes": 3123,
+    "path": "crates/alife_gpu_backend/tests/grip_profile_upload_gate.rs",
+    "sha256": "405656f47ac6a2668bc7f5faa81a7a80dc3d11be17e097ee69ef2b53583f0794"
+  },
+  "target": "grip_profile_upload_gate",
+  "test": "valid_grip_profile_is_rejected_while_matching_legacy_upload_succeeds",
+  "upload_entry_calls": 3,
+  "upload_positive_calls": 2,
+  "upload_rejection_calls": 1,
+  "world_constructions": 0,
+  "world_step_calls": 0
+}

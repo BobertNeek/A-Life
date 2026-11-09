@@ -1,0 +1,202 @@
+{
+  "activation_reused": false,
+  "files": [
+    {
+      "bytes": 885,
+      "destination_path": "docs/experiments/m2-grip-fixed-fixtures-v4/CORRECTION.json",
+      "git_blob_sha1": "2c05f7c6a3226bb0043f0a683bad64569cc9b974",
+      "mode": "100644",
+      "path": "CORRECTION.json",
+      "sha256": "9f64978d22cc7f32da790a51079acd3072622d87644b8de4ebe62a52d3a021d8",
+      "source_path": "docs/experiments/m2-grip-hosted-typecheck-v5/CORRECTION.json"
+    },
+    {
+      "bytes": 92558,
+      "destination_path": "docs/experiments/m2-grip-fixed-fixtures-v4/INHERITED-WORKFLOW-FIXTURES.json",
+      "git_blob_sha1": "e72d47b58b2e4b6b5bd78246216ef66dad6a394a",
+      "local_v5_path": "INHERITED-WORKFLOW-FIXTURES.json",
+      "mode": "100644",
+      "path": "INHERITED-WORKFLOW-FIXTURES.json",
+      "sha256": "e45e6ea9f0b5de64ad00a3fbc108cbefcce48f5eab8b9c32caceaa9650497fcd",
+      "source_path": "docs/experiments/m2-grip-hosted-typecheck-v5/INHERITED-WORKFLOW-FIXTURES.json"
+    },
+    {
+      "bytes": 810,
+      "destination_path": "docs/experiments/m2-grip-fixed-fixtures-v4/REGISTRATION-DELTA-v6.json",
+      "git_blob_sha1": "3a852831f44dd0630cc836ffcda0d310c50a6374",
+      "mode": "100644",
+      "path": "REGISTRATION-DELTA-v6.json",
+      "sha256": "783129e6f9eff1b875418ac402f12f4b4d5954463b6b711240b3fa0532d85ece",
+      "source_path": "docs/experiments/m2-grip-hosted-typecheck-v5/REGISTRATION-DELTA-v6.json"
+    },
+    {
+      "bytes": 498,
+      "destination_path": "docs/experiments/m2-grip-fixed-fixtures-v4/SOURCE-FREEZE-v5.json",
+      "git_blob_sha1": "75a12ed2fb9cefdc77c4ba1e6bd97ac736d3236b",
+      "mode": "100644",
+      "path": "SOURCE-FREEZE-v5.json",
+      "sha256": "b320f11d7737cb48345c775da1a47b61d78cd2399fda99f6a35f306ee7953069",
+      "source_path": "docs/experiments/m2-grip-hosted-typecheck-v5/SOURCE-FREEZE-v5.json"
+    },
+    {
+      "bytes": 593,
+      "destination_path": "docs/experiments/m2-grip-fixed-fixtures-v4/SOURCE-FREEZE-v6.json",
+      "git_blob_sha1": "0a1db7d3c86d8eeb01b2b15c08660de1b3be9d20",
+      "mode": "100644",
+      "path": "SOURCE-FREEZE-v6.json",
+      "sha256": "3e99956ac3354a48b13c94126119f1b1f943b0efbb871408a55371d2b9973be3",
+      "source_path": "docs/experiments/m2-grip-hosted-typecheck-v5/SOURCE-FREEZE-v6.json"
+    },
+    {
+      "bytes": 1812,
+      "destination_path": "docs/experiments/m2-grip-fixed-fixtures-v4/TOOLCHAIN-PRIOR-RESULTS.json",
+      "git_blob_sha1": "13b053f695a6b60b627af10d26cf421e9d62a78c",
+      "mode": "100644",
+      "path": "TOOLCHAIN-PRIOR-RESULTS.json",
+      "sha256": "66d8ecd21368bbd8836081d1846cf877508454f2dfa91655da3eaf87d80f22e3",
+      "source_path": "docs/experiments/m2-grip-hosted-typecheck-v5/TOOLCHAIN-PRIOR-RESULTS.json"
+    },
+    {
+      "bytes": 3028,
+      "destination_path": "docs/experiments/m2-grip-fixed-fixtures-v4/TOOLCHAIN-PROVENANCE.json",
+      "git_blob_sha1": "6853dc6ed955d120ea20f1d5a35785662891803c",
+      "mode": "100644",
+      "path": "TOOLCHAIN-PROVENANCE.json",
+      "sha256": "122c4b3e6538442cdd14fe81923c4ae45f5276126d6d3d8afc3001e779adb99c",
+      "source_path": "docs/experiments/m2-grip-hosted-typecheck-v5/TOOLCHAIN-PROVENANCE.json"
+    },
+    {
+      "bytes": 30715,
+      "destination_path": "docs/experiments/m2-grip-fixed-fixtures-v4/closure.json",
+      "git_blob_sha1": "fe1257e7455c8fd7e3bd8c886d000c5fe8175870",
+      "mode": "100644",
+      "path": "closure.json",
+      "sha256": "2c11006004bb24ac13ffb01bf2ebdf9d2eed5a63720f138d433f811a3fcc881d",
+      "source_path": "docs/experiments/m2-grip-hosted-typecheck-v5/closure.json"
+    },
+    {
+      "bytes": 3625,
+      "destination_path": "docs/experiments/m2-grip-fixed-fixtures-v4/dependencies.json",
+      "git_blob_sha1": "63bc908603e869946295f8ad98f96d13ee124266",
+      "mode": "100644",
+      "path": "dependencies.json",
+      "sha256": "7dad3b2c35713f39fad88242fadc85c022aa1430d40c57e2ac7da40ce97a5221",
+      "source_path": "docs/experiments/m2-grip-hosted-typecheck-v5/dependencies.json"
+    },
+    {
+      "bytes": 136753,
+      "destination_path": "docs/experiments/m2-grip-fixed-fixtures-v4/patches/fbf-nominal-source-supplement.patch",
+      "git_blob_sha1": "99d4927cccaaf74172282cbb8e50ea9609e56250",
+      "mode": "100644",
+      "path": "patches/fbf-nominal-source-supplement.patch",
+      "sha256": "ddd07c85685b27056664d9b8650fa736d8eff257f5d477485efd7d14e5e5b051",
+      "source_path": "docs/experiments/m2-grip-hosted-typecheck-v5/patches/fbf-nominal-source-supplement.patch"
+    },
+    {
+      "bytes": 649925,
+      "destination_path": "docs/experiments/m2-grip-fixed-fixtures-v4/patches/fbf-to-grip-v4.patch",
+      "git_blob_sha1": "6caac64b53ea977e3f7494b999c0c671244344b9",
+      "mode": "100644",
+      "path": "patches/fbf-to-grip-v4.patch",
+      "sha256": "acf8cc50353ba76cb7adf5af1db5845ee6e6b2e2261d0ee823821428e2e4d054",
+      "source_path": "docs/experiments/m2-grip-hosted-typecheck-v5/patches/fbf-to-grip-v4.patch"
+    },
+    {
+      "bytes": 2369,
+      "destination_path": "docs/experiments/m2-grip-fixed-fixtures-v4/patches/grip-v4-to-v5.patch",
+      "git_blob_sha1": "b5fb216bbd0e969e9249aa984b68520d9d1df037",
+      "mode": "100644",
+      "path": "patches/grip-v4-to-v5.patch",
+      "sha256": "0ce2a14320e13e31b9727d41d979798910c31e9663dcaca043c0900c5c96774a",
+      "source_path": "docs/experiments/m2-grip-hosted-typecheck-v5/patches/grip-v4-to-v5.patch"
+    },
+    {
+      "bytes": 335,
+      "destination_path": "docs/experiments/m2-grip-fixed-fixtures-v4/patches/grip-v5-to-v6.patch",
+      "git_blob_sha1": "64bed9e545137f9036cc13d394976e70cf494603",
+      "mode": "100644",
+      "path": "patches/grip-v5-to-v6.patch",
+      "sha256": "fa468c4ca23f88c2f90f561176283fb1bf0f53c24280fee6c6dcdd093f5ed712",
+      "source_path": "docs/experiments/m2-grip-hosted-typecheck-v5/patches/grip-v5-to-v6.patch"
+    },
+    {
+      "bytes": 563200,
+      "destination_path": "docs/experiments/m2-grip-fixed-fixtures-v4/patches/main-to-fbf-library-closure.part-01.patch",
+      "git_blob_sha1": "6df92f6933b9279c86373ec0b4b7c0a66770d199",
+      "mode": "100644",
+      "path": "patches/main-to-fbf-library-closure.part-01.patch",
+      "sha256": "44c9ee9e269bec25ebb924054754a0e71ddc7b73104a132699171a9776430e07",
+      "source_path": "docs/experiments/m2-grip-hosted-typecheck-v5/patches/main-to-fbf-library-closure.part-01.patch"
+    },
+    {
+      "bytes": 563195,
+      "destination_path": "docs/experiments/m2-grip-fixed-fixtures-v4/patches/main-to-fbf-library-closure.part-02.patch",
+      "git_blob_sha1": "7f27884da807987fb3eb63ca442724a14ee46468",
+      "mode": "100644",
+      "path": "patches/main-to-fbf-library-closure.part-02.patch",
+      "sha256": "a2fb1711dee71d569aea8643ba5dd02d16c992bf9f378b219e4b86cb51edafae",
+      "source_path": "docs/experiments/m2-grip-hosted-typecheck-v5/patches/main-to-fbf-library-closure.part-02.patch"
+    },
+    {
+      "bytes": 415718,
+      "destination_path": "docs/experiments/m2-grip-fixed-fixtures-v4/patches/main-to-fbf-library-closure.part-03.patch",
+      "git_blob_sha1": "ef007c906168887cd275564f541a48714806608b",
+      "mode": "100644",
+      "path": "patches/main-to-fbf-library-closure.part-03.patch",
+      "sha256": "95d7a29b145111d4f24297c97ecd0766673f9275b5dd89400958c714a24ae72d",
+      "source_path": "docs/experiments/m2-grip-hosted-typecheck-v5/patches/main-to-fbf-library-closure.part-03.patch"
+    },
+    {
+      "bytes": 3774,
+      "destination_path": "docs/experiments/m2-grip-fixed-fixtures-v4/recovery.json",
+      "git_blob_sha1": "92e9d5adaaf5f2927850027c242a88b9a1e6b104",
+      "mode": "100644",
+      "path": "recovery.json",
+      "sha256": "d3cc1a49ed0efae03abd085e39ac7e6e9b2367a33aeb578857b73d8f60cbc9a6",
+      "source_path": "docs/experiments/m2-grip-hosted-typecheck-v5/recovery.json"
+    },
+    {
+      "bytes": 27898,
+      "destination_path": "docs/experiments/m2-grip-fixed-fixtures-v4/registered-source-v5.json",
+      "git_blob_sha1": "bf5b698ad30087153b03781aa9f0acfbbef92048",
+      "mode": "100644",
+      "path": "registered-source-v5.json",
+      "sha256": "93a96de95d9562b57d2891e41dfcd36e99cf73bb8d94971c0ad17fd87593c72e",
+      "source_path": "docs/experiments/m2-grip-hosted-typecheck-v5/registered-source-v5.json"
+    },
+    {
+      "bytes": 200537,
+      "destination_path": "docs/experiments/m2-grip-fixed-fixtures-v4/source-manifest-v5.json",
+      "git_blob_sha1": "b58038f69483039b8bb495e527e76313053f0df8",
+      "local_v5_path": "source-manifest.json",
+      "mode": "100644",
+      "path": "source-manifest-v5.json",
+      "sha256": "137b6395d74a49aa2f2841cc9b1d306a1d5ade9b502ea84c44dfa64d6defe14a",
+      "source_path": "docs/experiments/m2-grip-hosted-typecheck-v5/source-manifest.json"
+    },
+    {
+      "bytes": 2476,
+      "destination_path": "docs/experiments/m2-grip-fixed-fixtures-v4/source_patch.py",
+      "git_blob_sha1": "78ea389554f95f22d5f96507f853c76862c95cee",
+      "mode": "100644",
+      "path": "source_patch.py",
+      "sha256": "e8ef4a5a27c4ce0486f2ec752c7c6789752e10355410f8ef6b914aa386b5ad42",
+      "source_path": "docs/experiments/m2-grip-hosted-typecheck-v5/source_patch.py"
+    },
+    {
+      "bytes": 7481,
+      "destination_path": "docs/experiments/m2-grip-fixed-fixtures-v4/upstream-toolchain-action.yml",
+      "git_blob_sha1": "62252504fab44d94e1bf3a73df1c976b3dec35c4",
+      "mode": "100644",
+      "path": "upstream-toolchain-action.yml",
+      "sha256": "0b52547c145ae18d8631c9ab711e4d917e9e489cea800368f338c25a56e0aee2",
+      "source_path": "docs/experiments/m2-grip-hosted-typecheck-v5/upstream-toolchain-action.yml"
+    }
+  ],
+  "runner_reused": false,
+  "schema": "m2-grip-fixed-fixture-reuse-v4",
+  "source_only": true,
+  "verified_source_commit": "ff991c39ca4a11f72eb56f015f8b3dab71baff20",
+  "verified_source_tree": "59a0625744eb64591b98050d4d9e38fd2bb5dac0",
+  "workflow_reused": false
+}

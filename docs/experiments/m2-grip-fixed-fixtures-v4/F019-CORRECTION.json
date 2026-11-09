@@ -1,0 +1,56 @@
+{
+  "before_record": {
+    "bytes": 16871,
+    "path": "crates/alife_world/src/headless/grip_options.rs",
+    "sha256": "f46b949b5733daa3505748f8fbb7af081e8c504b287130a9092934ef635e414b"
+  },
+  "changed_existing_source_files": 1,
+  "changed_test_functions": [
+    "close_release_are_independent_idempotent_intents"
+  ],
+  "extra_primitive_attempts": 0,
+  "extra_worlds": 0,
+  "fixture_source_audited_attempt_upper_bound": {
+    "biology_intervals": 0,
+    "fresh_worlds": 1,
+    "primitive_attempts": 7,
+    "primitive_rejected_attempts": 3,
+    "primitive_successes": 4,
+    "source_forwards": 0
+  },
+  "native_validation": "Pending; local generation runs Python synthetic checks only.",
+  "observed_failure_scope": "V2 safe projection identifies f019, not the failed assertion. The velocity mismatch is independently sufficient source evidence.",
+  "patch_record": {
+    "bytes": 2645,
+    "path": "patches/f019-interval-velocity-expectation.patch",
+    "sha256": "13ce534c71f5f76bfc9291a82a34469583dda3b5cb3e867d59bed46c891baa27"
+  },
+  "production_or_gene_changes": 0,
+  "schema": "m2-grip-f019-test-correction-v3",
+  "source_path": "crates/alife_world/src/headless/grip_options.rs",
+  "source_proof": [
+    "grip_options.rs:123-124 places first at x=.5 and second at x=.8.",
+    "headless.rs:74 and :3502 fix the initial carry grip at x=.5; initial body_yaw is zero.",
+    "hands.rs:204-206 stages acquisition velocity as grip minus prior position.",
+    "headless.rs:2864-2865 snapshots every WorldObject field.",
+    "Rejected stale Release calls invalid_target -> finish_action -> commit_current_interval_velocity, clearing held-object interval velocity.",
+    "The correction predicts only second.velocity=ZERO, checks agent velocity, rejection and no transfers/touches, and retains complete object equality."
+  ],
+  "source_record": {
+    "bytes": 18289,
+    "path": "crates/alife_world/src/headless/grip_options.rs",
+    "sha256": "6edbbf73fdbbe4073582c963bf2fe9ebb5b942e1b0f46bc93be515b6ebc99e6b"
+  },
+  "unchanged_supporting_source_records": [
+    {
+      "bytes": 585895,
+      "path": "crates/alife_world/src/headless.rs",
+      "sha256": "0dd37df19ac77b9c0645bce8fdf6d9dcabcda15e4d48725efece8f2e3f8cc1d1"
+    },
+    {
+      "bytes": 62573,
+      "path": "crates/alife_world/src/headless/hands.rs",
+      "sha256": "a4d09624c2fc24161846f1691cd644fbad299603ed98b5c80e858f854a68eb41"
+    }
+  ]
+}

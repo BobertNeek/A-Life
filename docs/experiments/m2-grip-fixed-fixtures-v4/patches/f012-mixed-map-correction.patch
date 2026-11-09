@@ -1,0 +1,102 @@
+--- a/crates/alife_core/tests/grip_perception_compatibility.rs
++++ b/crates/alife_core/tests/grip_perception_compatibility.rs
+@@ -19,7 +19,7 @@
+ 
+ /// Independent declaration of the exact pre-extension eleven-field wire layout.
+ /// No skip/default/extension attribute is allowed in this reference type.
+-#[derive(Serialize)]
++#[derive(Serialize, Deserialize)]
+ struct LegacyDraft {
+     schema_version: u16,
+     organism_id: OrganismId,
+@@ -397,18 +397,76 @@
+ #[test]
+ fn legacy_non_string_nested_metadata_and_duplicate_numeric_unknowns_are_ignored() {
+     use deferred_grip_map_fixture::DeferredValue as D;
++    use serde::de::{DeserializeSeed, MapAccess};
++
++    // Preserve the real JSON deserializer for known fields, including externally
++    // tagged ObjectSlot enums. Only unknown metadata uses the deferred adapter.
++    enum FieldValue {
++        Known(Value),
++        Metadata(D),
++    }
++    struct MixedMap {
++        fields: std::vec::IntoIter<(u64, FieldValue)>,
++        pending: Option<FieldValue>,
++    }
++    impl<'de> MapAccess<'de> for MixedMap {
++        type Error = serde_json::Error;
++
++        fn next_key_seed<K: DeserializeSeed<'de>>(
++            &mut self,
++            seed: K,
++        ) -> Result<Option<K::Value>, Self::Error> {
++            let Some((key, value)) = self.fields.next() else {
++                return Ok(None);
++            };
++            self.pending = Some(value);
++            seed.deserialize(serde::de::value::U64Deserializer::<Self::Error>::new(key))
++                .map(Some)
++        }
++
++        fn next_value_seed<V: DeserializeSeed<'de>>(
++            &mut self,
++            seed: V,
++        ) -> Result<V::Value, Self::Error> {
++            match self.pending.take().expect("a value follows its key") {
++                FieldValue::Known(value) => seed.deserialize(value),
++                FieldValue::Metadata(value) => seed
++                    .deserialize(value)
++                    .map_err(serde::de::Error::custom),
++            }
++        }
++    }
++
+     for draft in old_fixtures() {
+-        for first in [false,true] {
+-            let mut fields=ordered(&draft).into_iter().enumerate().map(|(i,value)|
+-                (D::U64(i as u64),serde_json::from_value::<D>(value).unwrap())).collect::<Vec<_>>();
+-            let metadata=D::Map(vec![(D::U64(7),D::Bytes(vec![0,255])),
+-                (D::U64(7),D::F64(f64::NAN)),(D::Seq(vec![D::Bool(true)]),D::Unit)]);
+-            // Old derived field identifiers use __ignore for unknown numeric
+-            // indices too (Serde1.0.228 struct_.rs + identifier.rs fallthrough).
+-            let at=if first {0}else{fields.len()};fields.insert(at,(D::U64(11),metadata));
+-            fields.push((D::U64(11),D::Bool(false)));
+-            let decoded=PerceptionFrameDraft::deserialize(D::Map(fields)).unwrap();
+-            assert_eq!(decoded,draft);
+-        }
+-    }
+-}
++        for first in [false, true] {
++            let make_input = || {
++                let mut fields = ordered(&draft)
++                    .into_iter()
++                    .enumerate()
++                    .map(|(i, value)| (i as u64, FieldValue::Known(value)))
++                    .collect::<Vec<_>>();
++                let metadata = D::Map(vec![
++                    (D::U64(7), D::Bytes(vec![0, 255])),
++                    (D::U64(7), D::F64(f64::NAN)),
++                    (D::Seq(vec![D::Bool(true)]), D::Unit),
++                ]);
++                let at = if first { 0 } else { fields.len() };
++                fields.insert(at, (11, FieldValue::Metadata(metadata)));
++                fields.push((11, FieldValue::Metadata(D::Bool(false))));
++                serde::de::value::MapAccessDeserializer::new(MixedMap {
++                    fields: fields.into_iter(),
++                    pending: None,
++                })
++            };
++            // The independent eleven-field baseline must accept the same map.
++            // Rebuild it so bytes, non-string keys and NaN never pass through JSON.
++            let legacy = LegacyDraft::deserialize(make_input()).unwrap();
++            assert_eq!(
++                serde_json::to_value(&legacy).unwrap(),
++                serde_json::to_value(LegacyDraft::from(&draft)).unwrap()
++            );
++            let decoded = PerceptionFrameDraft::deserialize(make_input()).unwrap();
++            assert_eq!(decoded, draft);
++        }
++    }
++}
