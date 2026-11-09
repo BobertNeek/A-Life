@@ -1,0 +1,59 @@
+{
+  "allowed_changes": [
+    "Versioned plan/branch/packet/marker/sole-workflow identifiers change from v2 to v3.",
+    "Activation and summary schemas change from v2 to v3.",
+    "restore_sources reports the unchanged V4 grip hash from recovery.steps[-3] and V5 correction hash from [-2] after appending V6.",
+    "restore_sources additionally reports dependency_correction_patch_sha256 from recovery.steps[-1]."
+  ],
+  "functions_differing_after_version_normalization": [
+    "restore_sources"
+  ],
+  "native_invocations": 0,
+  "new_runner_sha256": "e5a5292541216249e5a222cef59823ad89866dc690d4548f46d5dc4be5ebfba7",
+  "not_changed": [
+    "targets",
+    "features",
+    "toolchain",
+    "serial execution",
+    "limits",
+    "resource accounting",
+    "admission",
+    "diagnostic projection",
+    "output bounds",
+    "dep-info/source verification",
+    "zero test/source/world/body execution"
+  ],
+  "prior_runner_sha256": "6118bafa12d8a2cfb6216d7747b371b00815757ee8648caa4ed69cb05daddf9c",
+  "schema": "m2-grip-runner-preservation-v3",
+  "unchanged_constants": {
+    "EXPECTED_FEATURES": true,
+    "LIMITS": true,
+    "STAGES": true
+  },
+  "unchanged_functions_after_version_normalization": [
+    "admit",
+    "check_limits",
+    "check_stage",
+    "child_setup",
+    "diagnostic_rows",
+    "digest_file",
+    "exact_path",
+    "fail",
+    "kill_session",
+    "local_dep_path",
+    "main",
+    "private_git",
+    "read_json",
+    "run",
+    "safe_path",
+    "session_rss",
+    "setup_toolchain",
+    "sha",
+    "size",
+    "summary",
+    "validate_activation",
+    "verify_depinfo",
+    "verify_record"
+  ],
+  "whole_file_normalized_exact_match": true
+}

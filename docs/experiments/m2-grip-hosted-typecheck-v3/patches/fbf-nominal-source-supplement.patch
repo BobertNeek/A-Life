@@ -1,0 +1,4469 @@
+diff --git a/crates/alife_core/tests/grounded_drive_genetics.rs b/crates/alife_core/tests/grounded_drive_genetics.rs
+new file mode 100644
+index 000000000..9c9ece8b3
+--- /dev/null
++++ b/crates/alife_core/tests/grounded_drive_genetics.rs
+@@ -0,0 +1,413 @@
++use alife_core::*;
++use std::collections::BTreeMap;
++
++fn construction(id: GenomeId) -> DevelopmentState {
++    DevelopmentState::new(id, Tick::ZERO, NormalizedScalar::new(1.0).unwrap())
++}
++
++fn source(seed: u64) -> CreatureGenome {
++    let mut source = CreatureGenome::early_mammal_founder(
++        seed,
++        FoundationGeneticIdentity::new(
++            FoundationId::N2048_EXPERIMENTAL_GRAPH_V1.raw(),
++            1,
++            FoundationCompatibilityFamilyId::N2048_EXPERIMENTAL_GRAPH.raw(),
++            BrainCapacityClass::N2048_ID,
++        )
++        .unwrap(),
++    )
++    .unwrap();
++    // Exercise expressed biology, not just the default scaffold. The weight
++    // variation must be mixed into the retained class-3 genetic prior exactly.
++    source.body.sensory_acuity = ContinuousLocus::mean(0.61, 0.72).unwrap();
++    source.brain.genetic_weight_variation = ContinuousLocus::mean(0.71, 0.83).unwrap();
++    source.brain.plasticity = ContinuousLocus::mean(0.62, 0.70).unwrap();
++    source.brain.connectivity_density = ContinuousLocus::mean(0.12, 0.24).unwrap();
++    source.brain.sensory_lobe_ratio = ContinuousLocus::mean(0.31, 0.35).unwrap();
++    source.chemistry.sleep_threshold = ContinuousLocus::mean(0.69, 0.75).unwrap();
++    source.development.maturation_rate = ContinuousLocus::mean(0.55, 0.65).unwrap();
++    let expressed = source.express().unwrap();
++    let (brain, _) = PhenotypeCompiler::compile_n2048_bounded_founder(
++        expressed.brain_genome,
++        construction(source.id),
++        SensorProfile::GroundedObjectSlotsV1,
++    )
++    .unwrap();
++    let asset = FoundationWeightAsset::from_phenotype_for_genetic_birth(&brain).unwrap();
++    source.with_n2048_foundation_candidate(asset).unwrap()
++}
++
++fn transfer_inputs(source: &CreatureGenome) -> (PhenotypeCompilerInputs, FoundationWeightAsset) {
++    let expressed = source.express().unwrap();
++    let (old, _) = PhenotypeCompiler::compile_n2048_bounded_founder_candidate(
++        expressed.brain_genome.clone(),
++        construction(source.id),
++        source.n2048_foundation_candidate.clone().unwrap(),
++    )
++    .unwrap();
++    let identity = BrainGenome::scaffold(
++        source.conception_seed,
++        BrainCapacityClass::N2048_GROUNDED_DRIVE_RESEARCH_ID,
++    );
++    let mut genome = expressed.brain_genome;
++    genome.brain_class_id = identity.brain_class_id;
++    genome.id = identity.id;
++    genome.seeds.genome_id_seed = identity.seeds.genome_id_seed;
++    let development = construction(genome.id);
++    let (fresh, _) = PhenotypeCompiler::compile_n2048_grounded_drive_basis(
++        genome.clone(),
++        development.clone(),
++        SensorProfile::GroundedObjectSlotsV1,
++    )
++    .unwrap();
++    let target_addresses: BTreeMap<_, _> = fresh
++        .persistent_address_map()
++        .synapses()
++        .iter()
++        .map(|entry| (entry.address(), entry.packed_index()))
++        .collect();
++    let mut weights = vec![0.0; fresh.synapses().len()];
++    for entry in old.persistent_address_map().synapses() {
++        weights[target_addresses[&entry.address()] as usize] =
++            old.synapses()[entry.packed_index() as usize].genetic_weight();
++    }
++    let asset = FoundationWeightAsset::from_trained_weights(
++        &fresh,
++        weights,
++        TrainingStageManifest::bootstrap(),
++    )
++    .unwrap();
++    let (_, inputs) = PhenotypeCompiler::compile_n2048_grounded_drive_basis_candidate(
++        genome,
++        development,
++        asset.clone(),
++    )
++    .unwrap();
++    (inputs, asset)
++}
++
++fn changed_inputs(
++    inputs: &PhenotypeCompilerInputs,
++    change: impl FnOnce(&mut BrainGenome, &mut DevelopmentState),
++) -> PhenotypeCompilerInputs {
++    let mut genome = inputs.genome().clone();
++    let mut development = inputs.development().clone();
++    change(&mut genome, &mut development);
++    PhenotypeCompilerInputs::try_new_with_foundation_selection(
++        genome,
++        &BrainCapacityClass::n2048_grounded_drive_research(),
++        development,
++        inputs.sensor_profile(),
++        inputs.foundation_abi().clone(),
++    )
++    .unwrap()
++}
++
++#[test]
++fn exact_full_expression_survives_fresh_research_conversion_and_json_restore() {
++    let source = source(0x2048_9801);
++    let source_bytes = serde_json::to_vec(&source).unwrap();
++    let old = source.express().unwrap();
++    let (inputs, asset) = transfer_inputs(&source);
++    let target =
++        CreatureGenome::from_n2048_grounded_drive_transfer(&source, &inputs, asset).unwrap();
++    let expression = target.express_n2048_grounded_drive_research().unwrap();
++    target
++        .validate_n2048_grounded_drive_inputs(&inputs)
++        .unwrap();
++    assert_eq!(expression.brain_genome, *inputs.genome());
++    assert_eq!(expression.body, old.body);
++    assert_eq!(expression.chemistry, old.chemistry);
++    assert_eq!(expression.development, old.development);
++    assert_eq!(expression.reproduction, old.reproduction);
++    assert_eq!(expression.predisposition, old.predisposition);
++    assert_eq!(expression.genetic_provenance, old.genetic_provenance);
++    assert_eq!(expression.lineage_id, old.lineage_id);
++    assert_eq!(expression.source_genome_id, target.id);
++    assert_eq!(expression.brain_genome.id, target.id);
++    assert_eq!(
++        expression
++            .development_state_at(Tick::ZERO)
++            .unwrap()
++            .genome_id,
++        target.id
++    );
++    assert_eq!(inputs.development().genome_id, target.id);
++    let mut expected_seeds = old.brain_genome.seeds.clone();
++    expected_seeds.genome_id_seed = inputs.genome().seeds.genome_id_seed;
++    assert_eq!(inputs.genome().seeds, expected_seeds);
++    assert_eq!(
++        inputs.genome().genetic_prior_seed,
++        old.brain_genome.genetic_prior_seed
++    );
++    assert_ne!(
++        inputs.genome().genetic_prior_seed,
++        BrainGenome::scaffold(source.conception_seed, BrainCapacityClass::N2048_ID)
++            .genetic_prior_seed
++    );
++    assert_eq!(inputs.genome().lobe_ratios, LobeRatioPlan::ClassDefault);
++    assert_eq!(
++        inputs.genome().sparse_density_priors,
++        old.brain_genome.sparse_density_priors
++    );
++    assert_eq!(
++        inputs.genome().developmental_schedule,
++        old.brain_genome.developmental_schedule
++    );
++    assert_eq!(source_bytes, serde_json::to_vec(&source).unwrap());
++    assert_ne!(target.id, source.id);
++    assert!(target.parent_genome_ids.is_empty());
++    assert!(!target.provenance.ordinary_birth);
++
++    let restored: CreatureGenome =
++        serde_json::from_slice(&serde_json::to_vec(&target).unwrap()).unwrap();
++    restored.validate_n2048_grounded_drive_research().unwrap();
++    assert_eq!(target, restored);
++    assert_eq!(
++        expression,
++        restored.express_n2048_grounded_drive_research().unwrap()
++    );
++    assert!(restored.validate_contract().is_err());
++    assert!(restored.express().is_err());
++    assert!(restored.brain.validate_contract().is_err());
++    assert!(restored.foundation.validate_contract().is_err());
++    assert!(restored.expressed_brain_class().is_err());
++    assert!(CreatureGenome::early_mammal_founder(3, restored.foundation).is_err());
++    assert!(CreatureGenome::reproduce(&restored, &restored, 3).is_err());
++    assert!(FoundationGeneticIdentity::new(
++        restored.foundation.foundation_id,
++        restored.foundation.version,
++        restored.foundation.compatibility_family_id,
++        restored.foundation.brain_class_id,
++    )
++    .is_err());
++}
++
++#[test]
++fn exact_inputs_reject_partial_gene_seed_identity_and_acquired_development_changes() {
++    let source = source(0x2048_9802);
++    let (inputs, asset) = transfer_inputs(&source);
++    let target =
++        CreatureGenome::from_n2048_grounded_drive_transfer(&source, &inputs, asset.clone())
++            .unwrap();
++    let changes: Vec<fn(&mut BrainGenome, &mut DevelopmentState)> = vec![
++        |g, _| g.seeds.mutation_seed ^= 1,
++        |g, _| g.seeds.crossover_seed ^= 1,
++        |g, _| g.seeds.development_seed ^= 1,
++        |g, _| g.seeds.sensor_layout_seed ^= 1,
++        |g, _| g.seeds.species_seed ^= 1,
++        |g, _| g.seeds.genome_id_seed ^= 1,
++        |g, _| {
++            g.seeds.genetic_prior_seed ^= 1;
++            g.genetic_prior_seed = g.seeds.genetic_prior_seed;
++        },
++        |g, _| g.innate_priority.food_attraction = 0.01,
++        |g, _| g.sensor_layout.channels[0].receptor_count += 1,
++        |g, _| {
++            let original = g.mutation_rates.point.raw();
++            let changed = if original <= 0.5 {
++                original + 0.25
++            } else {
++                original - 0.25
++            };
++            g.mutation_rates.point = NormalizedScalar::new(changed).unwrap();
++        },
++        |g, d| {
++            g.id = GenomeId(g.id.0 ^ 1);
++            d.genome_id = g.id;
++        },
++        |_, d| d.age_ticks = Tick(1),
++        |_, d| d.maturation = NormalizedScalar::new(0.5).unwrap(),
++        |_, d| d.sleep_cycle_count = 1,
++        |_, d| d.consolidation_cycle_count = 1,
++        |_, d| d.last_sleep_tick = Some(Tick::ZERO),
++        |_, d| d.enabled_lobes = vec![LobeKind::ActionPlanning],
++    ];
++    for (case_index, change) in changes.into_iter().enumerate() {
++        let altered = changed_inputs(&inputs, change);
++        assert_ne!(
++            altered, inputs,
++            "mutation case {case_index} must change inputs"
++        );
++        assert!(
++            target
++                .validate_n2048_grounded_drive_inputs(&altered)
++                .is_err(),
++            "validator accepted mutation case {case_index}",
++        );
++        assert!(
++            CreatureGenome::from_n2048_grounded_drive_transfer(&source, &altered, asset.clone(),)
++                .is_err(),
++            "converter accepted mutation case {case_index}",
++        );
++    }
++    let (_, unbound) = PhenotypeCompiler::compile_n2048_grounded_drive_basis(
++        inputs.genome().clone(),
++        inputs.development().clone(),
++        inputs.sensor_profile(),
++    )
++    .unwrap();
++    assert!(target
++        .validate_n2048_grounded_drive_inputs(&unbound)
++        .is_err());
++}
++
++#[test]
++fn research_rejects_missing_wrong_assets_mixed_alleles_parents_and_biology_tampering() {
++    let source = source(0x2048_9803);
++    let (inputs, asset) = transfer_inputs(&source);
++    let target =
++        CreatureGenome::from_n2048_grounded_drive_transfer(&source, &inputs, asset.clone())
++            .unwrap();
++    let changes: Vec<Box<dyn Fn(&mut CreatureGenome)>> = vec![
++        Box::new(|g| g.brain.brain_class.paternal.value = BrainCapacityClass::N2048_ID),
++        Box::new(|g| g.brain.brain_class.maternal.value = BrainCapacityClass::N2048_ID),
++        Box::new(|g| g.foundation.brain_class_id = BrainCapacityClass::N2048_ID),
++        Box::new(|g| g.foundation.foundation_id ^= 1),
++        Box::new(|g| g.foundation.version += 1),
++        Box::new(|g| g.foundation.compatibility_family_id ^= 1),
++        Box::new(|g| g.id = GenomeId(g.id.0 ^ 1)),
++        Box::new(|g| g.conception_seed ^= 1),
++        Box::new(|g| g.parent_genome_ids = vec![GenomeId(4), GenomeId(5)]),
++        Box::new(|g| g.provenance.ordinary_birth = true),
++        Box::new(|g| g.n2048_foundation_candidate = None),
++        Box::new(|g| g.brain.plasticity = ContinuousLocus::mean(0.1, 0.2).unwrap()),
++        Box::new(|g| g.body.size.maternal = f32::NAN),
++    ];
++    for change in changes {
++        let mut bad = target.clone();
++        change(&mut bad);
++        assert!(bad.validate_n2048_grounded_drive_research().is_err());
++        assert!(bad.express_n2048_grounded_drive_research().is_err());
++    }
++    let mut wrong_asset = target.clone();
++    wrong_asset.n2048_foundation_candidate = source.n2048_foundation_candidate.clone();
++    assert!(wrong_asset
++        .validate_n2048_grounded_drive_research()
++        .is_err());
++    let mut missing = source.clone();
++    missing.n2048_foundation_candidate = None;
++    assert!(
++        CreatureGenome::from_n2048_grounded_drive_transfer(&missing, &inputs, asset.clone())
++            .is_err()
++    );
++    let mut mixed = source.clone();
++    mixed.brain.brain_class.paternal.value = BrainCapacityClass::N512_ID;
++    mixed.validate_contract().unwrap(); // A recessive production allele is ordinary-valid.
++    assert!(
++        CreatureGenome::from_n2048_grounded_drive_transfer(&mixed, &inputs, asset.clone()).is_err()
++    );
++    let child = CreatureGenome::reproduce(&source, &source, 0x2048_9804).unwrap();
++    assert!(
++        CreatureGenome::from_n2048_grounded_drive_transfer(&child, &inputs, asset.clone()).is_err()
++    );
++    let mut changed_biology = target.clone();
++    changed_biology.body.sensory_acuity = ContinuousLocus::mean(0.1, 0.2).unwrap();
++    assert!(changed_biology
++        .validate_n2048_grounded_drive_inputs(&inputs)
++        .is_err());
++
++    let expressed = source.express().unwrap();
++    let (unbounded, _) = PhenotypeCompiler::compile_n2048_experimental_graph(
++        expressed.brain_genome,
++        construction(source.id),
++        inputs.sensor_profile(),
++    )
++    .unwrap();
++    let mut wrong_branch_policy = source.clone();
++    wrong_branch_policy.n2048_foundation_candidate =
++        Some(FoundationWeightAsset::from_phenotype_for_genetic_birth(&unbounded).unwrap());
++    wrong_branch_policy.validate_contract().unwrap();
++    assert!(CreatureGenome::from_n2048_grounded_drive_transfer(
++        &wrong_branch_policy,
++        &inputs,
++        asset
++    )
++    .is_err());
++}
++
++#[test]
++fn research_requires_exact_profile_asset_binding_and_no_simultaneous_nano_candidates() {
++    let source = source(0x2048_9807);
++    let (inputs, asset) = transfer_inputs(&source);
++    let target =
++        CreatureGenome::from_n2048_grounded_drive_transfer(&source, &inputs, asset.clone())
++            .unwrap();
++    let p = PhenotypeCompiler::compile_validated(
++        &inputs,
++        &BrainCapacityClass::n2048_grounded_drive_research(),
++    )
++    .unwrap();
++    let mut weights = asset.weights().to_vec();
++    weights[0] += 0.001;
++    let different_asset = FoundationWeightAsset::from_trained_weights(
++        &p,
++        weights,
++        TrainingStageManifest::bootstrap(),
++    )
++    .unwrap();
++    assert!(
++        CreatureGenome::from_n2048_grounded_drive_transfer(&source, &inputs, different_asset)
++            .is_err()
++    );
++
++    let (terrain, _) = PhenotypeCompiler::compile_n2048_grounded_drive_basis(
++        inputs.genome().clone(),
++        inputs.development().clone(),
++        SensorProfile::GroundedTerrainVisionV1,
++    )
++    .unwrap();
++    let terrain_asset = FoundationWeightAsset::from_phenotype_for_genetic_birth(&terrain).unwrap();
++    let (_, terrain_inputs) = PhenotypeCompiler::compile_n2048_grounded_drive_basis_candidate(
++        inputs.genome().clone(),
++        inputs.development().clone(),
++        terrain_asset.clone(),
++    )
++    .unwrap();
++    assert!(CreatureGenome::from_n2048_grounded_drive_transfer(
++        &source,
++        &terrain_inputs,
++        terrain_asset
++    )
++    .is_err());
++    assert!(target
++        .validate_n2048_grounded_drive_inputs(&terrain_inputs)
++        .is_err());
++
++    let builtin = FoundationWeightAsset::builtin_nano512_v1(inputs.sensor_profile()).unwrap();
++    let (legacy, _, _) = PhenotypeCompiler::compile_fixed_legacy_nano512_compatibility_asset(
++        inputs.sensor_profile(),
++        &builtin,
++    )
++    .unwrap()
++    .into_runtime_parts();
++    let nano_asset = FoundationWeightAsset::from_nano512_readout_candidate(
++        &legacy,
++        builtin.weights().to_vec(),
++        TrainingStageManifest::bootstrap(),
++    )
++    .unwrap();
++    let mut readout = target.clone();
++    readout.nano512_readout_candidate = Some(Nano512ReadoutCandidateV1::new(&nano_asset).unwrap());
++    assert!(readout.validate_n2048_grounded_drive_research().is_err());
++    let mut credit = target;
++    credit.nano512_action_credit_candidate_v2 = Some(
++        Nano512ActionCreditCandidateV2::new(
++            &nano_asset,
++            ActionCandidateCreditProfileV1::SignedConsequences,
++        )
++        .unwrap(),
++    );
++    assert!(credit.validate_n2048_grounded_drive_research().is_err());
++
++    // Invalid serialized payloads must fail either deserialization or explicit
++    // research validation. Never trust a cached phenotype from before tampering.
++    let valid =
++        CreatureGenome::from_n2048_grounded_drive_transfer(&source, &inputs, asset).unwrap();
++    let mut wire = serde_json::to_value(&valid).unwrap();
++    wire["n2048_foundation_candidate"]["manifest"]["route_abi_digest"] =
++        serde_json::to_value([0_u8; 32]).unwrap();
++    if let Ok(corrupt) = serde_json::from_value::<CreatureGenome>(wire) {
++        assert!(corrupt.validate_n2048_grounded_drive_research().is_err());
++    }
++}
+diff --git a/crates/alife_core/tests/grounded_drive_genetics_wire.rs b/crates/alife_core/tests/grounded_drive_genetics_wire.rs
+new file mode 100644
+index 000000000..14c3e1f4f
+--- /dev/null
++++ b/crates/alife_core/tests/grounded_drive_genetics_wire.rs
+@@ -0,0 +1,172 @@
++//! Frozen field order and serde attributes from 58ffdfd4. The research API
++//! must not append optional fields to the old positional or nested wire types.
++//! Existing optional/adjacent-tag positional decode limitations are compared
++//! against the old reader, not silently claimed as supported restoration.
++use alife_core::*;
++use serde::{de::DeserializeOwned, Deserialize, Serialize};
++
++fn construction_is_default(value: &BrainConstructionChromosome) -> bool {
++    value == &BrainConstructionChromosome::default()
++}
++
++#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
++pub struct OldFoundationGeneticIdentity {
++    pub foundation_id: u64,
++    pub version: u16,
++    pub compatibility_family_id: u64,
++    pub brain_class_id: BrainClassId,
++}
++
++#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
++pub struct OldBrainChromosome {
++    /// Optional in old saves; these are construction parameters, never lifetime state.
++    #[serde(default, skip_serializing_if = "construction_is_default")]
++    pub construction: BrainConstructionChromosome,
++    pub brain_class: DiscreteLocus<BrainClassId>,
++    pub sensory_lobe_ratio: ContinuousLocus,
++    pub association_lobe_ratio: ContinuousLocus,
++    pub working_memory_ratio: ContinuousLocus,
++    pub connectivity_density: ContinuousLocus,
++    pub plasticity: ContinuousLocus,
++    pub receptor_sensitivity: ContinuousLocus,
++    /// Procedural construction diversity; inactive for exact trained foundations.
++    #[serde(rename = "genetic_weight_bias", alias = "genetic_weight_variation")]
++    pub genetic_weight_variation: ContinuousLocus,
++}
++
++#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
++pub struct OldCreatureGenome {
++    pub schema_version: u16,
++    pub id: GenomeId,
++    pub parent_genome_ids: Vec<GenomeId>,
++    pub lineage_id: LineageId,
++    pub conception_seed: u64,
++    pub foundation: OldFoundationGeneticIdentity,
++    #[serde(default, skip_serializing_if = "Option::is_none")]
++    pub nano512_readout_candidate: Option<crate::Nano512ReadoutCandidateV1>,
++    #[serde(default, skip_serializing_if = "Option::is_none")]
++    pub nano512_action_credit_candidate_v2: Option<crate::Nano512ActionCreditCandidateV2>,
++    #[serde(default, skip_serializing_if = "Option::is_none")]
++    pub n2048_foundation_candidate: Option<crate::FoundationWeightAsset>,
++    pub provenance: GeneticLineageProvenance,
++    pub body: BodyChromosome,
++    pub brain: OldBrainChromosome,
++    pub chemistry: ChemistryChromosome,
++    pub development: DevelopmentChromosome,
++    pub reproduction: ReproductionChromosome,
++    pub predisposition: PredispositionChromosome,
++}
++
++#[derive(Debug, PartialEq, Serialize, Deserialize)]
++struct Nested<G> {
++    prefix: u64,
++    genome: G,
++    suffix: Vec<u64>,
++}
++
++fn positional_reader_parity<Old, Current>(bytes: &[u8])
++where
++    Old: DeserializeOwned + Serialize,
++    Current: DeserializeOwned + Serialize,
++{
++    let config = bincode::config::standard();
++    let old = bincode::serde::decode_from_slice::<Old, _>(bytes, config);
++    let current = bincode::serde::decode_from_slice::<Current, _>(bytes, config);
++    match (old, current) {
++        (Ok((a, old_used)), Ok((b, current_used))) => {
++            assert_eq!(old_used, bytes.len());
++            assert_eq!(current_used, old_used);
++            assert_eq!(
++                serde_json::to_value(a).unwrap(),
++                serde_json::to_value(b).unwrap()
++            );
++        }
++        (Err(old), Err(current)) => {
++            // The historical skipped fields and tagged nested enums can already
++            // reject positional restoration. Preserve that result without
++            // presenting it as a new successful bincode save/load capability.
++            assert_eq!(format!("{old:?}"), format!("{current:?}"));
++        }
++        _ => panic!("research support changed an old positional reader boundary"),
++    }
++}
++
++fn compare_old_wire(genome: CreatureGenome) {
++    let old: OldCreatureGenome =
++        serde_json::from_value(serde_json::to_value(&genome).unwrap()).unwrap();
++    let old_json = serde_json::to_vec(&old).unwrap();
++    assert_eq!(old_json, serde_json::to_vec(&genome).unwrap());
++    let restored: CreatureGenome = serde_json::from_slice(&old_json).unwrap();
++    restored.validate_contract().unwrap();
++    assert_eq!(restored, genome);
++    assert_eq!(restored.express().unwrap(), genome.express().unwrap());
++    let config = bincode::config::standard();
++    let old_bytes = bincode::serde::encode_to_vec(&old, config).unwrap();
++    assert_eq!(
++        old_bytes,
++        bincode::serde::encode_to_vec(&genome, config).unwrap()
++    );
++    positional_reader_parity::<OldCreatureGenome, CreatureGenome>(&old_bytes);
++
++    let old_brain_bytes = bincode::serde::encode_to_vec(&old.brain, config).unwrap();
++    assert_eq!(
++        old_brain_bytes,
++        bincode::serde::encode_to_vec(&genome.brain, config).unwrap()
++    );
++    positional_reader_parity::<OldBrainChromosome, BrainChromosome>(&old_brain_bytes);
++    let old_identity_bytes = bincode::serde::encode_to_vec(&old.foundation, config).unwrap();
++    assert_eq!(
++        old_identity_bytes,
++        bincode::serde::encode_to_vec(&genome.foundation, config).unwrap()
++    );
++    positional_reader_parity::<OldFoundationGeneticIdentity, FoundationGeneticIdentity>(
++        &old_identity_bytes,
++    );
++
++    let old_nested = Nested {
++        prefix: 19,
++        genome: old,
++        suffix: vec![11, 23, 41],
++    };
++    let current_nested = Nested {
++        prefix: 19,
++        genome,
++        suffix: vec![11, 23, 41],
++    };
++    let old_json = serde_json::to_vec(&old_nested).unwrap();
++    assert_eq!(old_json, serde_json::to_vec(&current_nested).unwrap());
++    assert_eq!(
++        serde_json::from_slice::<Nested<CreatureGenome>>(&old_json).unwrap(),
++        current_nested,
++    );
++    let old_bytes = bincode::serde::encode_to_vec(&old_nested, config).unwrap();
++    assert_eq!(
++        old_bytes,
++        bincode::serde::encode_to_vec(&current_nested, config).unwrap()
++    );
++    positional_reader_parity::<Nested<OldCreatureGenome>, Nested<CreatureGenome>>(&old_bytes);
++}
++
++#[test]
++fn existing_named_positional_and_nested_genetics_keep_the_frozen_wire_shape() {
++    for class in [BrainCapacityClass::N512_ID, BrainCapacityClass::N2048_ID] {
++        let founder = CreatureGenome::early_mammal_founder(
++            0x2048_9805,
++            FoundationGeneticIdentity::new(10, 1, 7, class).unwrap(),
++        )
++        .unwrap();
++        compare_old_wire(founder.clone());
++        compare_old_wire(CreatureGenome::reproduce(&founder, &founder, 0x2048_9806).unwrap());
++        let mut nondefault = founder;
++        nondefault.brain.construction.maternal_learning = nondefault
++            .brain
++            .construction
++            .maternal_learning
++            .clone()
++            .with_action_candidate_credit_profile(
++                ActionCandidateCreditProfileV1::SignedConsequences,
++            )
++            .unwrap();
++        compare_old_wire(nondefault);
++    }
++}
+diff --git a/crates/alife_core/tests/grounded_drive_pricing.rs b/crates/alife_core/tests/grounded_drive_pricing.rs
+new file mode 100644
+index 000000000..8f6e02220
+--- /dev/null
++++ b/crates/alife_core/tests/grounded_drive_pricing.rs
+@@ -0,0 +1,47 @@
++use alife_core::*;
++#[test]
++fn old_cost_wire_and_rates_are_unchanged() {
++    let old = BrainAtpCostModel::production_v1();
++    assert_eq!(
++        serde_json::to_string(&old).unwrap(),
++        r#"{"schema_version":1,"q_fraction_bits":24,"rounding_mode_raw":1,"neuron_update_q24":32,"tile_visit_q24":256,"synapse_op_q24":4,"decoder_candidate_op_q24":128,"memory_context_op_q24":64}"#
++    );
++    for class in BrainCapacityClass::production_classes() {
++        BrainActivityPolicyV1::production_v1()
++            .validate_class(class.id())
++            .unwrap();
++        assert!(BrainActivityPolicyV1::grounded_drive_research_v1()
++            .validate_class(class.id())
++            .is_err());
++    }
++}
++#[test]
++fn incremental_model_keeps_candidate_count_semantics_and_rejects_cross_policy() {
++    let old = BrainActivityPolicyV1::production_v1();
++    let new = BrainActivityPolicyV1::grounded_drive_research_v1();
++    old.validate_contract().unwrap();
++    new.validate_contract().unwrap();
++    assert_ne!(old.policy_digest, new.policy_digest);
++    assert!(old
++        .validate_class(BrainCapacityClass::N2048_GROUNDED_DRIVE_RESEARCH_ID)
++        .is_err());
++    new.validate_class(BrainCapacityClass::N2048_GROUNDED_DRIVE_RESEARCH_ID)
++        .unwrap();
++    for candidates in [0, 1, 17, 32] {
++        let work = BrainWorkCounters {
++            decoder_candidate_ops: candidates,
++            ..Default::default()
++        };
++        assert_eq!(
++            new.cost.neural_cost_q24(&work).unwrap() - old.cost.neural_cost_q24(&work).unwrap(),
++            candidates * 160 * 4
++        );
++        assert_eq!(work.decoder_candidate_ops, candidates);
++    }
++    let mut bad = old;
++    bad.cost = new.cost;
++    assert!(bad.validate_contract().is_err());
++    let mut bad = new;
++    bad.cost.decoder_candidate_op_q24 += 1;
++    assert!(bad.validate_contract().is_err());
++}
+diff --git a/crates/alife_core/tests/legacy_selector_wire.rs b/crates/alife_core/tests/legacy_selector_wire.rs
+new file mode 100644
+index 000000000..6bc8dd472
+--- /dev/null
++++ b/crates/alife_core/tests/legacy_selector_wire.rs
+@@ -0,0 +1,142 @@
++//! Literal pre-change JSON and bincode-encode fixtures, generated only from the
++//! frozen parent revision. JSON restore is supported; adjacent-tag bincode
++//! decoding is probed honestly rather than assumed to be supported.
++use alife_core::*;
++use serde::Serialize;
++use sha2::{Digest, Sha256};
++use std::path::PathBuf;
++fn pair(id: BrainClassId) -> (BrainGenome, DevelopmentState) {
++    let g = BrainGenome::scaffold(0x2048_2026, id);
++    let d = DevelopmentState::new(g.id, Tick::ZERO, NormalizedScalar::new(1.).unwrap());
++    (g, d)
++}
++fn cases() -> Vec<(
++    &'static str,
++    BrainPhenotype,
++    Option<PhenotypeCompilerInputs>,
++)> {
++    let profile = SensorProfile::GroundedObjectSlotsV1;
++    let mut cases = vec![];
++    let (g, d) = pair(BrainCapacityClass::N2048_ID);
++    let (p, i) =
++        PhenotypeCompiler::compile_n2048_experimental_graph(g.clone(), d.clone(), profile).unwrap();
++    cases.push(("experimental", p, Some(i)));
++    let i = PhenotypeCompilerInputs::try_new(
++        g.clone(),
++        &BrainCapacityClass::n2048(),
++        d.clone(),
++        profile,
++    )
++    .unwrap();
++    let p = PhenotypeCompiler::compile_validated(&i, &BrainCapacityClass::n2048()).unwrap();
++    cases.push(("canonical", p, Some(i)));
++    let asset = FoundationWeightAsset::builtin_n2048_v1(profile).unwrap();
++    let p = PhenotypeCompiler::compile_from_foundation_asset(
++        &g,
++        &BrainCapacityClass::n2048(),
++        &d,
++        profile,
++        &asset,
++    )
++    .unwrap();
++    cases.push(("migrated", p, None));
++    let asset = FoundationWeightAsset::builtin_nano512_v1(profile).unwrap();
++    let (p, i, _) =
++        PhenotypeCompiler::compile_fixed_legacy_nano512_compatibility_asset(profile, &asset)
++            .unwrap()
++            .into_runtime_parts();
++    cases.push(("legacy", p.clone(), Some(i)));
++    let asset = FoundationWeightAsset::from_nano512_readout_candidate(
++        &p,
++        asset.weights().to_vec(),
++        TrainingStageManifest::new(1, 1, 1),
++    )
++    .unwrap();
++    let (p, i) = PhenotypeCompiler::compile_nano512_readout_candidate(&asset).unwrap();
++    cases.push(("readout", p, Some(i)));
++    let c = Nano512ActionCreditCandidateV2::new(
++        &asset,
++        ActionCandidateCreditProfileV1::SignedConsequences,
++    )
++    .unwrap();
++    let (p, i) = PhenotypeCompiler::compile_nano512_action_credit_candidate(&c).unwrap();
++    cases.push(("credit", p, Some(i)));
++    cases
++}
++fn literal<T: Serialize>(name: &str, value: &T) {
++    let manifest: serde_json::Value = serde_json::from_str(include_str!(
++        "../../../docs/experiments/bounded-founder-v1/legacy-wire-capture.json"
++    ))
++    .unwrap();
++    for (ext, bytes) in [
++        ("json", serde_json::to_vec(value).unwrap()),
++        (
++            "bin",
++            bincode::serde::encode_to_vec(value, bincode::config::standard()).unwrap(),
++        ),
++    ] {
++        assert!(matches_literal(&manifest, &format!("{name}.{ext}"), &bytes));
++    }
++}
++fn matches_literal(manifest: &serde_json::Value, name: &str, bytes: &[u8]) -> bool {
++    let item = &manifest["files"][name];
++    item["bytes"].as_u64() == Some(bytes.len() as u64)
++        && item["sha256"].as_str() == Some(format!("{:x}", Sha256::digest(bytes)).as_str())
++}
++#[test]
++fn missing_and_tampered_literal_receipts_fail_closed() {
++    let bytes = b"old bytes";
++    let m = serde_json::json!({"files":{"fixture":{"bytes":bytes.len(),"sha256":format!("{:x}",Sha256::digest(bytes))}}});
++    assert!(matches_literal(&m, "fixture", bytes));
++    assert!(!matches_literal(&m, "missing", bytes));
++    assert!(!matches_literal(&m, "fixture", b"bad bytes"));
++}
++#[test]
++fn preserved_old_json_restores_when_capture_is_provided() {
++    let Some(root) = std::env::var_os("ALIFE_LEGACY_WIRE_RESTORE_DIR") else {
++        return;
++    };
++    let root = PathBuf::from(root);
++    for (name, p, i) in cases() {
++        let old = std::fs::read(root.join(format!("{name}_phenotype.json"))).unwrap();
++        let restored: BrainPhenotype = serde_json::from_slice(&old).unwrap();
++        assert_eq!(restored, p);
++        let old = std::fs::read(root.join(format!("{name}_selector.json"))).unwrap();
++        let restored: FoundationAbiSelection = serde_json::from_slice(&old).unwrap();
++        assert_eq!(&restored, p.foundation_abi());
++        if let Some(i) = i {
++            let old = std::fs::read(root.join(format!("{name}_inputs.json"))).unwrap();
++            let restored: PhenotypeCompilerInputs = serde_json::from_slice(&old).unwrap();
++            assert_eq!(restored, i);
++            let capacity = BrainCapacityClass::supported_for_id(p.brain_class_id()).unwrap();
++            assert_eq!(
++                PhenotypeCompiler::compile_validated(&restored, &capacity).unwrap(),
++                p
++            );
++        }
++    }
++}
++#[test]
++fn all_existing_selectors_and_nested_records_preserve_literal_bytes() {
++    for (name, p, i) in cases() {
++        literal(&format!("{name}_selector"), p.foundation_abi());
++        literal(&format!("{name}_phenotype"), &p);
++        let restored: BrainPhenotype =
++            serde_json::from_slice(&serde_json::to_vec(&p).unwrap()).unwrap();
++        assert_eq!(restored, p);
++        let selector: FoundationAbiSelection =
++            serde_json::from_slice(&serde_json::to_vec(p.foundation_abi()).unwrap()).unwrap();
++        assert_eq!(&selector, p.foundation_abi());
++        if let Some(i) = i {
++            literal(&format!("{name}_inputs"), &i);
++            let round: PhenotypeCompilerInputs =
++                serde_json::from_slice(&serde_json::to_vec(&i).unwrap()).unwrap();
++            assert_eq!(round, i);
++            let capacity = BrainCapacityClass::supported_for_id(p.brain_class_id()).unwrap();
++            assert_eq!(
++                PhenotypeCompiler::compile_validated(&round, &capacity).unwrap(),
++                p
++            );
++        }
++    }
++}
+diff --git a/crates/alife_core/tests/motor_lobe_m0.rs b/crates/alife_core/tests/motor_lobe_m0.rs
+new file mode 100644
+index 000000000..c58fda60e
+--- /dev/null
++++ b/crates/alife_core/tests/motor_lobe_m0.rs
+@@ -0,0 +1,179 @@
++use alife_core::*;
++fn source() -> (BrainPhenotype, PhenotypeCompilerInputs) {
++    let g = BrainGenome::scaffold(
++        0x2048_2026,
++        BrainCapacityClass::N2048_GROUNDED_DRIVE_RESEARCH_ID,
++    );
++    let d = DevelopmentState::new(g.id, Tick::ZERO, NormalizedScalar::new(1.).unwrap());
++    PhenotypeCompiler::compile_n2048_grounded_drive_basis(
++        g,
++        d,
++        SensorProfile::GroundedObjectSlotsV1,
++    )
++    .unwrap()
++}
++#[test]
++fn exact_compiler_prefix_addresses_and_costs() {
++    let (base, bi) = source();
++    let before = serde_json::to_vec(&base).unwrap();
++    let (p, i) = PhenotypeCompiler::compile_motor_lobe_m0(&bi).unwrap();
++    let cap = BrainCapacityClass::n2144_motor_lobe_research();
++    p.validate_against(&cap).unwrap();
++    p.sensor_encoder().validate_against(&p).unwrap();
++    p.candidate_decoder().validate_against(&p).unwrap();
++    assert_eq!(p.neuron_count(), 2144);
++    assert_eq!(p.synapses().len(), 34098);
++    assert_eq!(cap.execution().max_total_synapses(), 34162);
++    assert_eq!(&p.synapses()[..34048], base.synapses());
++    assert_eq!(
++        serde_json::to_vec(&p.synapses()[..34048]).unwrap(),
++        serde_json::to_vec(base.synapses()).unwrap()
++    );
++    assert_eq!(&p.neuron_dynamics()[..2048], base.neuron_dynamics());
++    assert_eq!(
++        &p.projections()[..base.projections().len()],
++        base.projections()
++    );
++    assert_eq!(p.candidate_decoder(), base.candidate_decoder());
++    assert_eq!(p.sensor_encoder().schema_version(), 2);
++    assert_eq!(
++        p.sensor_encoder().assignments().len(),
++        base.sensor_encoder().assignments().len() + 22
++    );
++    assert_eq!(
++        &p.sensor_encoder().assignments()[..base.sensor_encoder().assignments().len()],
++        base.sensor_encoder().assignments()
++    );
++    for entry in base.persistent_address_map().neurons() {
++        assert!(p.persistent_address_map().neurons().contains(entry));
++    }
++    let retained = p
++        .persistent_address_map()
++        .synapses()
++        .iter()
++        .filter(|x| x.packed_index() < 34048)
++        .cloned()
++        .collect::<Vec<_>>();
++    assert_eq!(retained, base.persistent_address_map().synapses());
++    assert_eq!(
++        before,
++        serde_json::to_vec(
++            &PhenotypeCompiler::compile_validated(
++                &bi,
++                &BrainCapacityClass::n2048_grounded_drive_research()
++            )
++            .unwrap()
++        )
++        .unwrap()
++    );
++    assert_eq!(p, PhenotypeCompiler::compile_validated(&i, &cap).unwrap());
++    let w = MotorLobeWorkV1::checked(3, 1, 50).unwrap();
++    assert_eq!(
++        (
++            w.neuron_updates,
++            w.encoder_assignments,
++            w.branches,
++            w.branch_inputs
++        ),
++        (288, 22, 210, 552)
++    );
++    assert_eq!(
++        w.cost_q24().unwrap(),
++        288 * 32 + 22 * 4 + 210 * 16 + 552 * 4 + 50 * 4
++    );
++    assert!(MotorLobeWorkV1::checked(u64::MAX, 1, 1).is_err());
++    let policy = BrainActivityPolicyV1::for_phenotype(&p);
++    assert_eq!(policy.policy_version, 3);
++    policy.validate_class(cap.id()).unwrap();
++    assert!(BrainActivityPolicyV1::grounded_drive_research_v1()
++        .validate_class(cap.id())
++        .is_err());
++    assert!(policy.validate_class(base.brain_class_id()).is_err());
++}
++#[test]
++fn archive_lowering_is_exact_and_all_new_parameters_are_sealed() {
++    let (_, bi) = source();
++    let (p, _) = PhenotypeCompiler::compile_motor_lobe_m0(&bi).unwrap();
++    let recipe = p.foundation_abi().motor_lobe_m0().unwrap();
++    let archive: serde_json::Value = serde_json::from_str(include_str!(
++        "../../../docs/experiments/motor-lobe-native-m0-v1/mediation-m0-manifest.json"
++    ))
++    .unwrap();
++    let branches = recipe.fixed_branches().unwrap();
++    let expected = archive["new_branches"].as_array().unwrap();
++    assert_eq!(branches.branches().len(), expected.len());
++    for (b, r) in branches.branches().iter().zip(expected) {
++        assert_eq!(b.target, r["target"].as_u64().unwrap() as u32);
++        assert_eq!(
++            b.threshold.to_bits(),
++            (r["threshold"].as_f64().unwrap() as f32).to_bits()
++        );
++        assert_eq!(
++            b.output_gain.to_bits(),
++            (r["output_gain"].as_f64().unwrap() as f32).to_bits()
++        );
++        let inputs = r["inputs"].as_array().unwrap();
++        assert_eq!(b.inputs.len(), inputs.len());
++        for (input, row) in b.inputs.iter().zip(inputs) {
++            assert_eq!(input.source, row[0].as_u64().unwrap() as u32);
++            assert_eq!(
++                input.weight.to_bits(),
++                (row[1].as_f64().unwrap() as f32).to_bits()
++            );
++        }
++    }
++    let mut canonical = archive["new_arbitration_readout_head"]
++        .as_array()
++        .unwrap()
++        .iter();
++    for s in &p.synapses()[34048..] {
++        let r = canonical.next().unwrap();
++        let CompiledSynapseKind::Decoder(c) = s.kind() else {
++            panic!()
++        };
++        assert_eq!(format!("{:?}", c.family()), r["family"].as_str().unwrap());
++        assert_eq!(s.source(), r["source"].as_u64().unwrap() as u32);
++        assert_eq!(c.input_lane(), r["lane"].as_u64().unwrap() as u16);
++        assert_eq!(
++            s.genetic_weight().to_bits(),
++            (r["weight"].as_f64().unwrap() as f32).to_bits()
++        );
++    }
++    assert!(canonical.next().is_none());
++    for index in [0, 2048, 2050, 2143] {
++        let mut j = serde_json::to_value(&p).unwrap();
++        j["neuron_dynamics"][index]["bias"] = serde_json::json!(0.1);
++        assert!(serde_json::from_value::<BrainPhenotype>(j).is_err());
++    }
++    for index in [0, 34048, 34097] {
++        let mut j = serde_json::to_value(&p).unwrap();
++        j["synapses"][index]["genetic_weight"] = serde_json::json!(0.123);
++        assert!(serde_json::from_value::<BrainPhenotype>(j).is_err());
++    }
++}
++#[test]
++fn wire_roundtrip_and_cross_admission_fail_closed() {
++    let (base, bi) = source();
++    let (p, i) = PhenotypeCompiler::compile_motor_lobe_m0(&bi).unwrap();
++    let cap = BrainCapacityClass::n2144_motor_lobe_research();
++    assert!(p
++        .validate_against(&BrainCapacityClass::n2048_grounded_drive_research())
++        .is_err());
++    assert!(base.validate_against(&cap).is_err());
++    assert!(BrainCapacityClass::production_for_id(cap.id()).is_err());
++    assert!(FoundationWeightAsset::from_phenotype_for_genetic_birth(&p).is_err());
++    assert!(
++        PhenotypeCompiler::compile(i.genome(), &cap, i.development(), i.sensor_profile()).is_err()
++    );
++    let q: BrainPhenotype = serde_json::from_slice(&serde_json::to_vec(&p).unwrap()).unwrap();
++    let qi: PhenotypeCompilerInputs =
++        serde_json::from_slice(&serde_json::to_vec(&i).unwrap()).unwrap();
++    assert_eq!(p, q);
++    assert_eq!(p, PhenotypeCompiler::compile_validated(&qi, &cap).unwrap());
++    let mut j = serde_json::to_value(&p).unwrap();
++    j["brain_class_id"] = serde_json::json!(5);
++    assert!(serde_json::from_value::<BrainPhenotype>(j).is_err());
++    let mut j = serde_json::to_value(&i).unwrap();
++    j["foundation_abi_selection"]["contract"]["recipe_digest"][0] = serde_json::json!(0);
++    assert!(serde_json::from_value::<PhenotypeCompilerInputs>(j).is_err());
++}
+diff --git a/crates/alife_core/tests/n2048_bounded_founder.rs b/crates/alife_core/tests/n2048_bounded_founder.rs
+new file mode 100644
+index 000000000..7d5386e86
+--- /dev/null
++++ b/crates/alife_core/tests/n2048_bounded_founder.rs
+@@ -0,0 +1,115 @@
++use alife_core::*;
++fn inputs() -> (BrainGenome, DevelopmentState) {
++    let g = BrainGenome::scaffold(0x2048_2026, BrainCapacityClass::N2048_ID);
++    let d = DevelopmentState::new(g.id, Tick::ZERO, NormalizedScalar::new(1.).unwrap());
++    (g, d)
++}
++fn compile(bounded: bool) -> (BrainPhenotype, PhenotypeCompilerInputs) {
++    let (g, d) = inputs();
++    if bounded {
++        PhenotypeCompiler::compile_n2048_bounded_founder(g, d, SensorProfile::GroundedObjectSlotsV1)
++            .unwrap()
++    } else {
++        PhenotypeCompiler::compile_n2048_experimental_graph(
++            g,
++            d,
++            SensorProfile::GroundedObjectSlotsV1,
++        )
++        .unwrap()
++    }
++}
++#[test]
++fn explicit_branch_abi_preserves_coordinates_and_separates_identity() {
++    let (old, _) = compile(false);
++    let before = serde_json::to_vec(&old).unwrap();
++    let (new, _) = compile(true);
++    assert_eq!(old.synapses(), new.synapses());
++    assert_eq!(old.neuron_dynamics(), new.neuron_dynamics());
++    assert_eq!(old.sensor_encoder(), new.sensor_encoder());
++    assert_eq!(old.candidate_decoder(), new.candidate_decoder());
++    assert_eq!(old.route_abi_digest(), new.route_abi_digest());
++    assert_ne!(old.plasticity_abi_digest(), new.plasticity_abi_digest());
++    assert_ne!(old.phenotype_hash(), new.phenotype_hash());
++    assert_ne!(
++        old.foundation_abi().selector_digest(),
++        new.foundation_abi().selector_digest()
++    );
++    assert_eq!(old.foundation_abi().fresh_dendritic_parameters(), (6., -1.));
++    assert_eq!(
++        new.foundation_abi().fresh_dendritic_parameters(),
++        (0.25, 0.1)
++    );
++    assert_eq!(before, serde_json::to_vec(&compile(false).0).unwrap());
++    let (g, d) = inputs();
++    let p = PhenotypeCompiler::compile(
++        &g,
++        &BrainCapacityClass::n2048(),
++        &d,
++        SensorProfile::GroundedObjectSlotsV1,
++    )
++    .unwrap();
++    assert!(!p.foundation_abi().is_n2048_bounded_founder_v1());
++    assert_eq!(p.foundation_abi().fresh_dendritic_parameters(), (6., -1.));
++}
++#[test]
++fn exact_asset_admission_rejects_cross_branch_abi() {
++    let old = FoundationWeightAsset::from_phenotype_for_genetic_birth(&compile(false).0).unwrap();
++    let new = FoundationWeightAsset::from_phenotype_for_genetic_birth(&compile(true).0).unwrap();
++    assert_ne!(old.digest(), new.digest());
++    assert_eq!(old.weights(), new.weights());
++    let (g, d) = inputs();
++    assert!(
++        PhenotypeCompiler::compile_n2048_bounded_founder_candidate(g.clone(), d.clone(), old)
++            .is_err()
++    );
++    assert!(
++        PhenotypeCompiler::compile_n2048_experimental_foundation_candidate(
++            g.clone(),
++            d.clone(),
++            new.clone()
++        )
++        .is_err()
++    );
++    let (p, i) =
++        PhenotypeCompiler::compile_n2048_bounded_founder_candidate(g, d, new.clone()).unwrap();
++    new.validate_against(&p).unwrap();
++    let round: PhenotypeCompilerInputs =
++        serde_json::from_slice(&serde_json::to_vec(&i).unwrap()).unwrap();
++    assert_eq!(
++        p,
++        PhenotypeCompiler::compile_validated(&round, &BrainCapacityClass::n2048()).unwrap()
++    );
++    assert_eq!(
++        new,
++        FoundationWeightAsset::decode_canonical(&new.encode_canonical().unwrap()).unwrap()
++    );
++}
++#[test]
++fn selector_and_recipe_tamper_cannot_reinterpret_phenotype() {
++    let (p, _) = compile(true);
++    let bytes = serde_json::to_string(&p).unwrap();
++    let substituted = bytes.replace("N2048BoundedFounderV1", "N2048ExperimentalGraphV1");
++    let altered = serde_json::from_str::<BrainPhenotype>(&substituted);
++    assert!(
++        altered.is_err()
++            || altered
++                .unwrap()
++                .validate_against(&BrainCapacityClass::n2048())
++                .is_err()
++    );
++    let mut recipe = serde_json::to_value(
++        N2048ExperimentalGraphV1::fresh(SensorProfile::GroundedObjectSlotsV1).unwrap(),
++    )
++    .unwrap();
++    recipe["recipe_digest"][0] = serde_json::json!(0);
++    let bad: N2048ExperimentalGraphV1 = serde_json::from_value(recipe).unwrap();
++    let (g, d) = inputs();
++    assert!(PhenotypeCompilerInputs::try_new_with_foundation_selection(
++        g,
++        &BrainCapacityClass::n2048(),
++        d,
++        SensorProfile::GroundedObjectSlotsV1,
++        FoundationAbiSelection::N2048BoundedFounderV1(bad)
++    )
++    .is_err());
++}
+diff --git a/crates/alife_core/tests/n2048_grounded_drive_basis.rs b/crates/alife_core/tests/n2048_grounded_drive_basis.rs
+new file mode 100644
+index 000000000..944af6527
+--- /dev/null
++++ b/crates/alife_core/tests/n2048_grounded_drive_basis.rs
+@@ -0,0 +1,147 @@
++use alife_core::*;
++fn inputs(class: BrainClassId) -> (BrainGenome, DevelopmentState) {
++    let g = BrainGenome::scaffold(0x2048_2026, class);
++    let d = DevelopmentState::new(g.id, Tick::ZERO, NormalizedScalar::new(1.).unwrap());
++    (g, d)
++}
++fn candidate() -> (BrainPhenotype, PhenotypeCompilerInputs) {
++    let (g, d) = inputs(BrainCapacityClass::N2048_GROUNDED_DRIVE_RESEARCH_ID);
++    PhenotypeCompiler::compile_n2048_grounded_drive_basis(
++        g,
++        d,
++        SensorProfile::GroundedObjectSlotsV1,
++    )
++    .unwrap()
++}
++#[test]
++fn explicit_additive_capacity_and_exact_coordinates() {
++    let (p, _) = candidate();
++    let cap = BrainCapacityClass::n2048_grounded_drive_research();
++    p.validate_against(&cap).unwrap();
++    assert_eq!(p.synapses().len(), 34048);
++    assert_eq!(cap.execution().max_total_synapses(), 34112);
++    assert_eq!(cap.execution().max_action_decoder_synapses(), 5376);
++    assert!(BrainCapacityClass::production_for_id(cap.id()).is_err());
++    assert!(p.cognitive_decoder().is_none());
++    assert_eq!(p.candidate_decoder().schema_version(), 2);
++    assert_eq!(p.candidate_decoder().flattened_input_lane_count(), 54);
++    assert_eq!(p.foundation_abi().fresh_dendritic_parameters(), (0.25, 0.1));
++    let mut count = 0;
++    for f in 0_u32..8 {
++        for lane in 0_u32..34 {
++            for motor in 0_u32..16 {
++                let id = 24576 + 544 * f + 16 * lane + motor;
++                let s = &p.synapses()[id as usize];
++                let CompiledSynapseKind::Decoder(c) = s.kind() else {
++                    panic!("not decoder")
++                };
++                assert_eq!(c.head(), DecoderHeadKind::ActionCandidate);
++                assert_eq!(u32::from(c.family().raw()), f);
++                assert_eq!(
++                    u32::from(c.input_lane()),
++                    if lane < 24 { lane } else { lane + 12 }
++                );
++                assert_eq!(u32::from(c.motor_index()), 16 * f + motor);
++                assert_eq!(
++                    (s.source(), s.target()),
++                    (1728 + 16 * f + motor, 1728 + 16 * f + motor)
++                );
++                if lane >= 24 {
++                    assert_eq!(s.genetic_weight().to_bits(), 0_f32.to_bits());
++                    count += 1;
++                }
++            }
++        }
++    }
++    assert_eq!(count, 1280);
++}
++#[test]
++fn no_old_asset_relabeling_or_default_admission() {
++    let (g, d) = inputs(BrainCapacityClass::N2048_ID);
++    let old = PhenotypeCompiler::compile_n2048_bounded_founder(
++        g.clone(),
++        d.clone(),
++        SensorProfile::GroundedObjectSlotsV1,
++    )
++    .unwrap()
++    .0;
++    let old_json = serde_json::to_vec(&old).unwrap();
++    let old_asset = FoundationWeightAsset::from_phenotype_for_genetic_birth(&old).unwrap();
++    let (p, i) = candidate();
++    let new_asset = FoundationWeightAsset::from_phenotype_for_genetic_birth(&p).unwrap();
++    assert!(N2048GroundedDriveBasisV1::for_asset(&old_asset).is_err());
++    assert!(N2048ExperimentalGraphV1::for_asset(&new_asset).is_err());
++    assert_ne!(
++        old_asset.encode_canonical().unwrap()[..8],
++        new_asset.encode_canonical().unwrap()[..8]
++    );
++    assert_eq!(
++        new_asset,
++        FoundationWeightAsset::decode_canonical(&new_asset.encode_canonical().unwrap()).unwrap()
++    );
++    assert!(p.validate_against(&BrainCapacityClass::n2048()).is_err());
++    let (ng, nd) = inputs(BrainCapacityClass::N2048_GROUNDED_DRIVE_RESEARCH_ID);
++    assert!(PhenotypeCompiler::compile(
++        &ng,
++        &BrainCapacityClass::n2048_grounded_drive_research(),
++        &nd,
++        SensorProfile::GroundedObjectSlotsV1
++    )
++    .is_err());
++    let (q, _) =
++        PhenotypeCompiler::compile_n2048_grounded_drive_basis_candidate(ng, nd, new_asset.clone())
++            .unwrap();
++    new_asset.validate_against(&q).unwrap();
++    let round: PhenotypeCompilerInputs =
++        serde_json::from_slice(&serde_json::to_vec(&i).unwrap()).unwrap();
++    assert_eq!(
++        p,
++        PhenotypeCompiler::compile_validated(
++            &round,
++            &BrainCapacityClass::n2048_grounded_drive_research()
++        )
++        .unwrap()
++    );
++    let old_round: BrainPhenotype = serde_json::from_slice(&old_json).unwrap();
++    assert_eq!(old, old_round);
++    assert_eq!(
++        old_json,
++        serde_json::to_vec(
++            &PhenotypeCompiler::compile_n2048_bounded_founder(
++                g,
++                d,
++                SensorProfile::GroundedObjectSlotsV1
++            )
++            .unwrap()
++            .0
++        )
++        .unwrap()
++    );
++}
++#[test]
++fn cross_profile_and_selector_tamper_rejected() {
++    let (_, i) = candidate();
++    let mut value = serde_json::to_value(&i).unwrap();
++    value["sensor_profile"] = serde_json::to_value(SensorProfile::GroundedTerrainVisionV1).unwrap();
++    let altered = serde_json::from_value::<PhenotypeCompilerInputs>(value);
++    assert!(
++        altered.is_err()
++            || PhenotypeCompiler::compile_validated(
++                &altered.unwrap(),
++                &BrainCapacityClass::n2048_grounded_drive_research()
++            )
++            .is_err()
++    );
++    let (p, _) = candidate();
++    let bytes = serde_json::to_string(&p)
++        .unwrap()
++        .replace("N2048GroundedDriveBasisV1", "N2048BoundedFounderV1");
++    let altered = serde_json::from_str::<BrainPhenotype>(&bytes);
++    assert!(
++        altered.is_err()
++            || altered
++                .unwrap()
++                .validate_against(&BrainCapacityClass::n2048_grounded_drive_research())
++                .is_err()
++    );
++}
+diff --git a/crates/alife_core/tests/sleep_choice_m1.rs b/crates/alife_core/tests/sleep_choice_m1.rs
+new file mode 100644
+index 000000000..b920b6ed9
+--- /dev/null
++++ b/crates/alife_core/tests/sleep_choice_m1.rs
+@@ -0,0 +1,264 @@
++use alife_core::*;
++fn source() -> (BrainPhenotype, PhenotypeCompilerInputs) {
++    let g = BrainGenome::scaffold(
++        0x2048_2026,
++        BrainCapacityClass::N2048_GROUNDED_DRIVE_RESEARCH_ID,
++    );
++    let d = DevelopmentState::new(g.id, Tick::ZERO, NormalizedScalar::new(1.).unwrap());
++    PhenotypeCompiler::compile_n2048_grounded_drive_basis(
++        g,
++        d,
++        SensorProfile::GroundedObjectSlotsV1,
++    )
++    .unwrap()
++}
++#[test]
++fn m1_preserves_m0_prefix_and_owns_explicit_identity() {
++    let (base, inputs) = source();
++    let (m0, _) = PhenotypeCompiler::compile_motor_lobe_m0(&inputs).unwrap();
++    let old = serde_json::to_vec(&m0).unwrap();
++    let (m1, recipe) = PhenotypeCompiler::compile_sleep_choice_m1(&inputs).unwrap();
++    recipe.validate_phenotype(&m1).unwrap();
++    assert_eq!(
++        m1.brain_class_id(),
++        BrainCapacityClass::N2144_SLEEP_CHOICE_RESEARCH_ID
++    );
++    assert_eq!(m1.sensor_profile(), SensorProfile::GroundedObjectSlotsV1);
++    assert_eq!(m1.foundation_abi(), base.foundation_abi());
++    assert_eq!(recipe.foundation_id().raw(), 0x534C_4545_504D_0001);
++    assert_eq!(
++        recipe.compatibility_family_id().raw(),
++        0x534C_4545_504D_FA11
++    );
++    assert_ne!(recipe.foundation_id(), FoundationId::N2144_MOTOR_LOBE_M0_V1);
++    assert_ne!(
++        recipe.foundation_id(),
++        FoundationId::N2048_GROUNDED_DRIVE_BASIS_V1
++    );
++    assert!(FoundationWeightAsset::from_phenotype_for_genetic_birth(&m1).is_err());
++    assert_eq!(&m1.synapses()[..34098], m0.synapses());
++    assert_eq!(m1.neuron_dynamics(), m0.neuron_dynamics());
++    assert_eq!(
++        &m1.sensor_encoder().assignments()[..m0.sensor_encoder().assignments().len()],
++        m0.sensor_encoder().assignments()
++    );
++    assert_eq!(m1.synapses().len(), 34100);
++    assert_eq!(m1.budgets().global.decoder_input_lanes, 55);
++    assert_ne!(m1.phenotype_hash(), m0.phenotype_hash());
++    assert_ne!(m1.route_abi_digest(), m0.route_abi_digest());
++    assert_ne!(m1.plasticity_abi_digest(), m0.plasticity_abi_digest());
++    assert!(m1
++        .validate_against(&BrainCapacityClass::n2144_sleep_choice_research())
++        .is_err());
++    assert!(serde_json::from_slice::<BrainPhenotype>(&serde_json::to_vec(&m1).unwrap()).is_err());
++    let restored: SleepChoiceM1V1 =
++        serde_json::from_slice(&serde_json::to_vec(&recipe).unwrap()).unwrap();
++    assert_eq!(restored.compile().unwrap(), m1);
++    assert_eq!(
++        old,
++        serde_json::to_vec(&PhenotypeCompiler::compile_motor_lobe_m0(&inputs).unwrap().0).unwrap()
++    );
++}
++#[test]
++fn m1_branches_readouts_and_work_are_complete() {
++    let (_, inputs) = source();
++    let (p, recipe) = PhenotypeCompiler::compile_sleep_choice_m1(&inputs).unwrap();
++    let branches = recipe.fixed_branches().unwrap();
++    let old = MotorLobeM0V1::fresh(&inputs)
++        .unwrap()
++        .fixed_branches()
++        .unwrap();
++    for b in old.branches() {
++        assert!(branches.branches().contains(b));
++    }
++    assert_eq!(branches.branches().len(), 72);
++    assert_eq!(
++        branches
++            .branches()
++            .iter()
++            .map(|b| b.inputs.len())
++            .sum::<usize>(),
++        188
++    );
++    assert_eq!(
++        p.sensor_encoder().assignments().len() - source().0.sensor_encoder().assignments().len(),
++        24
++    );
++    for (target, a, b) in [(2142, 2140, 2141), (2143, 2141, 2140)] {
++        let branch = branches
++            .branches()
++            .iter()
++            .find(|x| x.target == target)
++            .unwrap();
++        assert_eq!(branch.threshold, 0.);
++        assert_eq!(branch.output_gain, 1.);
++        assert_eq!(
++            branch.inputs,
++            vec![
++                DendriticInputRef::new(a, 4.).unwrap(),
++                DendriticInputRef::new(b, -4.).unwrap()
++            ]
++        );
++    }
++    for (s, source, weight) in [
++        (&p.synapses()[34098], 2142, 4.),
++        (&p.synapses()[34099], 2143, -4.),
++    ] {
++        assert_eq!(s.source(), source);
++        assert_eq!(s.genetic_weight(), weight);
++        let CompiledSynapseKind::Decoder(c) = s.kind() else {
++            panic!()
++        };
++        assert_eq!(c.input_lane(), 54);
++        assert_eq!(c.family(), CandidateActionFamily::Rest);
++    }
++    let w = SleepChoiceWorkV1::checked(3, 1, 52).unwrap();
++    assert_eq!(
++        (
++            w.neuron_updates,
++            w.encoder_assignments,
++            w.branches,
++            w.branch_inputs
++        ),
++        (288, 24, 216, 564)
++    );
++    assert_eq!(
++        w.cost_q24().unwrap(),
++        288 * 32 + 24 * 4 + 216 * 16 + 564 * 4 + 52 * 4
++    );
++    assert!(SleepChoiceWorkV1::checked(u64::MAX, 1, 52).is_err());
++}
++#[test]
++fn m1_forged_identity_fails_closed() {
++    let (_, inputs) = source();
++    let recipe = SleepChoiceM1V1::fresh(&inputs).unwrap();
++    for (field, value) in [
++        ("selector_tag", serde_json::json!(11)),
++        ("runtime_profile_raw", serde_json::json!(4)),
++        ("composite_class_raw", serde_json::json!(6)),
++        ("source_lineage", serde_json::json!("held-grip")),
++        ("recipe_digest", serde_json::json!([0, 0, 0, 0])),
++        (
++            "foundation_id_raw",
++            serde_json::json!(FoundationId::N2144_MOTOR_LOBE_M0_V1.raw()),
++        ),
++        (
++            "compatibility_family_raw",
++            serde_json::json!(FoundationCompatibilityFamilyId::N2144_MOTOR_LOBE_M0.raw()),
++        ),
++    ] {
++        let mut wire = serde_json::to_value(&recipe).unwrap();
++        wire[field] = value;
++        assert!(serde_json::from_value::<SleepChoiceM1V1>(wire).is_err());
++    }
++    assert!(BrainCapacityClass::supported_for_id(
++        BrainCapacityClass::N2144_SLEEP_CHOICE_RESEARCH_ID
++    )
++    .is_err());
++    assert!(PhenotypeCompiler::compile_validated(
++        &inputs,
++        &BrainCapacityClass::n2144_sleep_choice_research()
++    )
++    .is_err());
++}
++
++#[test]
++fn sensor_profile_literal_old_binary_tags_remain_exact_and_m1_is_sparse() {
++    let config = bincode::config::standard();
++    for (profile, bytes, name) in [
++        (
++            SensorProfile::PrivilegedAffordanceV1,
++            vec![0],
++            "\"PrivilegedAffordanceV1\"",
++        ),
++        (
++            SensorProfile::GroundedObjectSlotsV1,
++            vec![1],
++            "\"GroundedObjectSlotsV1\"",
++        ),
++        (
++            SensorProfile::GroundedTerrainVisionV1,
++            vec![2],
++            "\"GroundedTerrainVisionV1\"",
++        ),
++        (
++            SensorProfile::GroundedObjectSlotsSleepChoiceV1,
++            vec![251, 5, 83],
++            "\"GroundedObjectSlotsSleepChoiceV1\"",
++        ),
++    ] {
++        assert_eq!(
++            bincode::serde::encode_to_vec(profile, config).unwrap(),
++            bytes
++        );
++        let (restored, used): (SensorProfile, usize) =
++            bincode::serde::decode_from_slice(&bytes, config).unwrap();
++        assert_eq!(restored, profile);
++        assert_eq!(used, bytes.len());
++        assert_eq!(serde_json::to_string(&profile).unwrap(), name);
++        assert_eq!(
++            serde_json::from_str::<SensorProfile>(name).unwrap(),
++            profile
++        );
++    }
++    for ambiguous in [3_u8, 4, 5, 6, 7, 8, 12] {
++        assert!(
++            bincode::serde::decode_from_slice::<SensorProfile, _>(&[ambiguous], config).is_err()
++        );
++    }
++    assert!(SensorProfile::try_from_raw(4).is_err());
++    assert_eq!(
++        SensorProfile::try_from_raw(5).unwrap(),
++        SensorProfile::GroundedObjectSlotsSleepChoiceV1
++    );
++}
++
++#[test]
++fn m1_descriptor_checks_lineage_before_decoding_opaque_source() {
++    let (_, inputs) = source();
++    let recipe = SleepChoiceM1V1::fresh(&inputs).unwrap();
++    let config = bincode::config::standard();
++    let bytes = bincode::serde::encode_to_vec(&recipe, config).unwrap();
++    let (restored, used): (SleepChoiceM1V1, usize) =
++        bincode::serde::decode_from_slice(&bytes, config).unwrap();
++    assert_eq!(restored, recipe);
++    assert_eq!(used, bytes.len());
++    let mut wire = serde_json::to_value(&recipe).unwrap();
++    assert!(wire["source_inputs_json"].is_string());
++    assert!(wire.get("source_inputs").is_none());
++    wire["source_inputs_json"] = serde_json::json!("not valid source JSON or positional selectors");
++    assert!(serde_json::from_value::<SleepChoiceM1V1>(wire.clone()).is_err());
++    wire["source_lineage"] = serde_json::json!("ambiguous-held-positional-lineage");
++    let error = serde_json::from_value::<SleepChoiceM1V1>(wire)
++        .unwrap_err()
++        .to_string();
++    assert!(error.contains("unknown M1 descriptor lineage or contract"));
++    #[derive(serde::Serialize)]
++    struct Wire<'a> {
++        schema_version: u16,
++        selector_tag: u16,
++        runtime_profile_raw: u16,
++        composite_class_raw: u16,
++        foundation_id_raw: u64,
++        compatibility_family_raw: u64,
++        source_lineage: &'a str,
++        recipe_digest: [u64; 4],
++        source_inputs_json: &'a str,
++    }
++    let invalid = Wire {
++        schema_version: 1,
++        selector_tag: 12,
++        runtime_profile_raw: 5,
++        composite_class_raw: 7,
++        foundation_id_raw: SleepChoiceM1V1::FOUNDATION_ID.raw(),
++        compatibility_family_raw: SleepChoiceM1V1::COMPATIBILITY_FAMILY.raw(),
++        source_lineage: "unknown",
++        recipe_digest: SleepChoiceM1V1::recipe_digest(),
++        source_inputs_json: "[6,7,8]",
++    };
++    let bytes = bincode::serde::encode_to_vec(invalid, config).unwrap();
++    let error = bincode::serde::decode_from_slice::<SleepChoiceM1V1, _>(&bytes, config)
++        .unwrap_err()
++        .to_string();
++    assert!(error.contains("unknown M1 descriptor lineage or contract"));
++}
+diff --git a/crates/alife_core/tests/sleep_consolidation.rs b/crates/alife_core/tests/sleep_consolidation.rs
+index dd831c131..e66801c9a 100644
+--- a/crates/alife_core/tests/sleep_consolidation.rs
++++ b/crates/alife_core/tests/sleep_consolidation.rs
+@@ -734,3 +734,75 @@ fn sleep_receipt_accepts_multiple_replay_events_merged_into_one_memory() {
+         Err(ScaffoldContractError::ConsolidationGenerationMismatch)
+     );
+ }
++
++#[test]
++fn sleep_choice_emergency_only_leaves_ordinary_pressure_and_fatigue_to_selection() {
++    let mut controller = SleepController::new(config()).unwrap();
++    let mut ordinary = high_fatigue_homeostasis(Tick::new(10));
++    ordinary.hormones.sleep_pressure = 1.0;
++    assert_eq!(
++        controller
++            .evaluate_emergency_only(&ordinary, HomeostaticParameters::reference(), Tick::new(10))
++            .unwrap(),
++        None
++    );
++    assert_eq!(controller.state().phase, SleepPhase::Awake);
++    for (homeostasis, expected) in [
++        (
++            seizure_homeostasis(Tick::new(20)),
++            SleepTrigger::SeizureHyperactivity,
++        ),
++        (
++            catatonia_homeostasis(Tick::new(20)),
++            SleepTrigger::CatatoniaEnergyHypoplasia,
++        ),
++    ] {
++        let mut controller = SleepController::new(config()).unwrap();
++        let transition = controller
++            .evaluate_emergency_only(
++                &homeostasis,
++                HomeostaticParameters::reference(),
++                Tick::new(20),
++            )
++            .unwrap()
++            .unwrap();
++        assert_eq!(transition.to, SleepPhase::ForcedRecoverySleep);
++        assert_eq!(transition.trigger, expected);
++    }
++}
++
++#[test]
++fn sleep_choice_voluntary_entry_is_once_only_and_does_not_reset_active_cycle() {
++    let mut controller = SleepController::new(config()).unwrap();
++    let transition = controller
++        .request_voluntary_sleep(Tick::new(10))
++        .unwrap()
++        .unwrap();
++    assert_eq!(transition.from, SleepPhase::Awake);
++    assert_eq!(transition.to, SleepPhase::EnteringSleep);
++    assert_eq!(transition.trigger, SleepTrigger::VoluntaryBodySleepV1);
++    let entered = controller.state();
++    assert_eq!(
++        controller.request_voluntary_sleep(Tick::new(11)).unwrap(),
++        None
++    );
++    assert_eq!(controller.state(), entered);
++    assert!(controller.request_voluntary_sleep(Tick::new(9)).is_err());
++    controller.advance(Tick::new(11)).unwrap();
++    let consolidating = controller.state();
++    assert_eq!(
++        controller.request_voluntary_sleep(Tick::new(12)).unwrap(),
++        None
++    );
++    assert_eq!(controller.state(), consolidating);
++    let mut emergency = SleepController::new(config()).unwrap();
++    emergency
++        .force_sleep(Tick::new(10), SleepTrigger::RecoveryProtocol)
++        .unwrap();
++    let forced = emergency.state();
++    assert_eq!(
++        emergency.request_voluntary_sleep(Tick::new(11)).unwrap(),
++        None
++    );
++    assert_eq!(emergency.state(), forced);
++}
+diff --git a/crates/alife_gpu_backend/tests/grounded_drive_basis.rs b/crates/alife_gpu_backend/tests/grounded_drive_basis.rs
+new file mode 100644
+index 000000000..4df97ec22
+--- /dev/null
++++ b/crates/alife_gpu_backend/tests/grounded_drive_basis.rs
+@@ -0,0 +1,112 @@
++mod support;
++use alife_core::*;
++use alife_gpu_backend::*;
++fn phenotype(profile: SensorProfile) -> BrainPhenotype {
++    let g = BrainGenome::scaffold(
++        0x2048_2026,
++        BrainCapacityClass::N2048_GROUNDED_DRIVE_RESEARCH_ID,
++    );
++    let d = DevelopmentState::new(g.id, Tick::ZERO, NormalizedScalar::new(1.).unwrap());
++    PhenotypeCompiler::compile_n2048_grounded_drive_basis(g, d, profile)
++        .unwrap()
++        .0
++}
++fn rebuild(
++    f: &PerceptionFrame,
++    c: Vec<ActionCandidate>,
++    slots: Vec<GroundedObjectSlotV1>,
++) -> PerceptionFrame {
++    PerceptionFrame::new(
++        f.organism_id(),
++        f.tick(),
++        f.sensor_profile(),
++        f.sensory().clone(),
++        f.body(),
++        *f.homeostasis(),
++        c,
++        SensorProfileProvenance::new(f.sensor_profile(), SensoryAbiVersion::CURRENT, f.tick())
++            .unwrap(),
++        slots,
++    )
++    .unwrap()
++}
++fn frame() -> PerceptionFrame {
++    let f =
++        support::perception_frame_for_profile(812, SensorProfile::GroundedObjectSlotsV1, true, 2);
++    let mut slots = f.grounded_object_slots().to_vec();
++    slots[0].chemical[0] = 0.7;
++    slots[0].temperature = 0.8;
++    slots[0].contact = 1.;
++    slots[1].chemical[0] = -0.7;
++    slots[1].temperature = -0.8;
++    let mut c = f.candidates().to_vec();
++    for (i, c) in c.iter_mut().enumerate() {
++        c.target = ActionTarget::new(Some(WorldEntityId(200 + i as u64)), Some(Vec3f::ZERO));
++        c.features = slots[i].candidate_features().unwrap();
++    }
++    rebuild(&f, c, slots)
++}
++#[test]
++fn runtime_projection_matches_gpu_packing_and_rejects_tampering() {
++    let p = phenotype(SensorProfile::GroundedObjectSlotsV1);
++    let mut bucket =
++        GpuClassBucketPlan::new(BrainCapacityClass::n2048_grounded_drive_research(), 1).unwrap();
++    let slot = bucket.insert_phenotype(0, 7, &p).unwrap();
++    let f = frame();
++    let features = prepare_grounded_drive_features(&f).unwrap();
++    assert_eq!(features[0][1], features[1][2]);
++    assert_eq!(features[0][3], features[1][4]);
++    assert_eq!(&features[0][8..], &[0., 0.]);
++    assert_eq!(features[0][5], 0.); // No social body evidence, regardless of appearance.
++    let upload = GpuPerceptionUpload::try_from_frame(&f, &slot, 0).unwrap();
++    upload.validate_against(&f, &slot).unwrap();
++    for (i, c) in upload.candidates.iter().enumerate() {
++        let at = c.feature_offset as usize;
++        assert_eq!(
++            &upload.frame_payload_words[at..at + 24],
++            &f.candidates()[i].features.0.map(f32::to_bits)
++        );
++        assert_eq!(
++            &upload.frame_payload_words[at + 36..at + 46],
++            &features[i].map(f32::to_bits)
++        );
++        assert_eq!(upload.frame_payload_words[at + 53], 0);
++    }
++    let mut bad = upload.clone();
++    bad.frame_payload_words[upload.candidates[0].feature_offset as usize + 36] = 0;
++    assert!(bad.validate_against(&f, &slot).is_err());
++    let other = phenotype(SensorProfile::GroundedTerrainVisionV1);
++    let mut bucket2 =
++        GpuClassBucketPlan::new(BrainCapacityClass::n2048_grounded_drive_research(), 1).unwrap();
++    let other_slot = bucket2.insert_phenotype(0, 7, &other).unwrap();
++    assert!(GpuPerceptionUpload::try_from_frame(&f, &other_slot, 0).is_err());
++}
++#[test]
++fn runtime_projection_rejects_cross_slot_entity_and_same_slot_target_aliases() {
++    let f = frame();
++    let mut c = f.candidates().to_vec();
++    c[1].target = c[0].target;
++    let alias = rebuild(&f, c, f.grounded_object_slots().to_vec());
++    assert!(prepare_grounded_drive_features(&alias).is_err());
++    let mut c = f.candidates().to_vec();
++    c[1].observation = c[0].observation;
++    c[1].features = c[0].features;
++    let alias = rebuild(&f, c, f.grounded_object_slots().to_vec());
++    assert!(prepare_grounded_drive_features(&alias).is_err());
++}
++#[test]
++fn modified_shaders_parse_and_validate() {
++    for source in [
++        CLOSED_LOOP_DECODE_WGSL,
++        CLOSED_LOOP_MEMORY_CONTEXT_WGSL,
++        CLOSED_LOOP_ELIGIBILITY_WGSL,
++    ] {
++        let module = naga::front::wgsl::parse_str(source).unwrap();
++        naga::valid::Validator::new(
++            naga::valid::ValidationFlags::all(),
++            naga::valid::Capabilities::empty(),
++        )
++        .validate(&module)
++        .unwrap();
++    }
++}
+diff --git a/crates/alife_training/tests/cpu_grounded_drive_basis.rs b/crates/alife_training/tests/cpu_grounded_drive_basis.rs
+new file mode 100644
+index 000000000..391917b32
+--- /dev/null
++++ b/crates/alife_training/tests/cpu_grounded_drive_basis.rs
+@@ -0,0 +1,164 @@
++#![cfg(feature = "cpu-backend")]
++use alife_core::*;
++use alife_gpu_backend::{GpuClassBucketPlan, GpuPerceptionUpload};
++use alife_runtime::canonical_preparation::*;
++use alife_training::cpu::*;
++use alife_training::*;
++use alife_world::HeadlessScenarioBuilder;
++fn prepared() -> (
++    BrainPhenotype,
++    FoundationWeightAsset,
++    PerceptionFrame,
++    FinalizedMemoryRecall,
++    NeuralReceptorEffects,
++) {
++    let cap = BrainCapacityClass::n2048_grounded_drive_research();
++    let g = BrainGenome::scaffold(0x2048_2026, cap.id());
++    let d = DevelopmentState::new(g.id, Tick::ZERO, NormalizedScalar::new(1.).unwrap());
++    let p = PhenotypeCompiler::compile_n2048_grounded_drive_basis(
++        g.clone(),
++        d.clone(),
++        SensorProfile::GroundedObjectSlotsV1,
++    )
++    .unwrap()
++    .0;
++    let asset = FoundationWeightAsset::from_phenotype_for_genetic_birth(&p).unwrap();
++    // Training requires an explicitly admitted asset-bound phenotype.
++    let p = PhenotypeCompiler::compile_n2048_grounded_drive_basis_candidate(g, d, asset.clone())
++        .unwrap()
++        .0;
++    asset.validate_against(&p).unwrap();
++    // Static observed fixture only; no world step, life, reward or optimizer step.
++    let mut world = HeadlessScenarioBuilder::new(61101)
++        .agent("observer", OrganismId(1), Vec3f::ZERO)
++        .food("object", Vec3f::new(0.4, 0., 0.), 0.6)
++        .build()
++        .unwrap();
++    let draft = world
++        .perception_frame_draft(
++            OrganismId(1),
++            Tick::ZERO,
++            p.sensor_profile(),
++            HomeostaticSnapshot::baseline(Tick::ZERO),
++        )
++        .unwrap();
++    let bank = MemoryBank::new(
++        MemoryBankConfig::new(8, 64, 4, 0.72, Confidence::new(0.).unwrap()).unwrap(),
++    )
++    .unwrap();
++    let recall = bank.recall_frame(&draft).unwrap();
++    let topology = TopologySidecar::new_profiled(
++        OrganismId(1),
++        draft.profile_provenance().identity(),
++        TopologicalMapConfig::default(),
++    )
++    .unwrap();
++    let topology_evidence = topology_evidence_for_draft(&draft, &topology).unwrap();
++    let mut projection = cognitive_projection_for_draft(
++        &draft,
++        &recall,
++        ExperienceSequenceId(1),
++        &predictor_for_phenotype(&p).unwrap(),
++        &topology_evidence,
++    )
++    .unwrap();
++    for row in &mut projection.candidates {
++        row.prediction.predicted_successor.fill(0.42);
++    }
++    let context =
++        cognitive_memory_context_for_recall(OrganismId(1), ExperienceSequenceId(1), &recall)
++            .unwrap();
++    let context = cognitive_context_with_projection(context, projection).unwrap();
++    let (frame, recall) = recall
++        .with_cognitive_context(context)
++        .unwrap()
++        .finalize(draft)
++        .unwrap();
++    let effects = NeuralReceptorEffects {
++        source_tick: Tick::ZERO,
++        source_chemistry_version: 1,
++        interoceptive_gain: 1.,
++        regional_excitability: 1.,
++        projection_gain: 1.,
++        local_threshold_shift: 0.,
++        attention_gain: 1.,
++        plasticity_appetitive: 0.,
++        plasticity_aversive: 0.,
++        structural_growth_gate: 0.,
++        sleep_gate: 0.,
++        consolidation_gate: 0.,
++    };
++    (p, asset, frame, recall, effects)
++}
++#[test]
++fn actual_cpu_encode_overwrites_only_reserved_cognitive_lanes_and_matches_gpu_upload() {
++    let (p, _, f, r, e) = prepared();
++    let tick = encode_cpu_frame(&p, &f, &r, &e, vec![true; p.projections().len()], vec![]).unwrap();
++    let rows = prepare_grounded_drive_features(&f).unwrap();
++    let mut bucket =
++        GpuClassBucketPlan::new(BrainCapacityClass::n2048_grounded_drive_research(), 1).unwrap();
++    let slot = bucket.insert_phenotype(0, 1, &p).unwrap();
++    let upload = GpuPerceptionUpload::try_from_frame(&f, &slot, 0).unwrap();
++    for (i, c) in tick.candidates.iter().enumerate() {
++        assert_eq!(&c.decoder_inputs[..24], &f.candidates()[i].features.0);
++        assert_eq!(&c.decoder_inputs[36..46], &rows[i]);
++        assert_eq!(&c.decoder_inputs[46..49], &[0.42; 3]);
++        assert_eq!(c.decoder_inputs[53], 0.);
++        let at = upload.candidates[i].feature_offset as usize;
++        assert_eq!(
++            &upload.frame_payload_words[at + 36..at + 46],
++            &rows[i].map(f32::to_bits)
++        );
++    }
++}
++#[test]
++fn derived_readout_gradient_matches_finite_difference_without_state_or_optimizer_changes() {
++    let (p, s, f, r, e) = prepared();
++    let tick = encode_cpu_frame(&p, &f, &r, &e, vec![true; p.projections().len()], vec![]).unwrap();
++    let index = tick
++        .candidates
++        .iter()
++        .position(|c| c.decoder_inputs[36] == 1.)
++        .unwrap();
++    let family = tick.candidates[index].family;
++    let id=p.synapses().iter().position(|s|matches!(s.kind(),CompiledSynapseKind::Decoder(c) if c.head()==DecoderHeadKind::ActionCandidate && c.family()==family && c.input_lane()==36 && c.motor_index()==u16::from(family.raw())*16)).unwrap();
++    let mask = StageTrainableMask::from_synapse_indices(&p, &[id as u32]).unwrap();
++    let trainer =
++        CpuFoundationTrainer::new(p.clone(), s.clone(), mask, AdamWConfig::default()).unwrap();
++    let before = trainer.checkpoint();
++    let n = p.neuron_count() as usize;
++    let sequence = TrainingSequence {
++        phenotype_hash: p.phenotype_hash(),
++        initial: TrainingInitialState {
++            activations: vec![0.1; n],
++            activity_ema: vec![0.; n],
++            metabolic_load: vec![0.; n],
++            dendrites: DendriticBranchSet::default(),
++        },
++        ticks: vec![tick],
++        burn_in_ticks: 0,
++        memory_candidate_gain: 0.5,
++    };
++    let mut adjoints = vec![vec![0.; f.candidates().len()]];
++    adjoints[0][index] = 1.;
++    let analytic = trainer
++        .probe_replay_gradients(&sequence, &adjoints)
++        .unwrap()
++        .gradients[id];
++    let eval = |delta: f32| {
++        let mut ck = before.clone();
++        ck.weights[id] += delta;
++        CpuFoundationTrainer::from_checkpoint(p.clone(), s.clone(), ck)
++            .unwrap()
++            .evaluate_replay(&sequence)
++            .unwrap()
++            .candidate_logits[0][index]
++    };
++    let numeric = (eval(0.002) - eval(-0.002)) / 0.004;
++    assert!(analytic.abs() > 1e-5);
++    assert!(
++        (analytic - numeric).abs() < 2e-4,
++        "{analytic} versus {numeric}"
++    );
++    assert_eq!(before, trainer.checkpoint());
++}
+diff --git a/crates/alife_training/tests/cpu_motor_host_legacy_wire.rs b/crates/alife_training/tests/cpu_motor_host_legacy_wire.rs
+new file mode 100644
+index 000000000..5922062ac
+--- /dev/null
++++ b/crates/alife_training/tests/cpu_motor_host_legacy_wire.rs
+@@ -0,0 +1,17 @@
++#![cfg(feature = "cpu-backend")]
++use alife_training::cpu::CpuResidentCheckpoint;
++
++#[test]
++fn literal_pre_adapter_resident_json_roundtrips_byte_exactly() {
++    // Produced by unmodified 1cae49fa4 library code from a source-authored B1
++    // newborn. Zero neural decisions, no imported life or trained checkpoint.
++    let bytes = zstd::stream::decode_all(
++        &include_bytes!("fixtures/cpu-resident-pre-motor-v1.json.zst")[..],
++    )
++    .unwrap();
++    let resident: CpuResidentCheckpoint = serde_json::from_slice(&bytes).unwrap();
++    assert_eq!(resident.next_sequence, 1);
++    assert_eq!(resident.neural.dispatch_generation, 0);
++    assert!(resident.neural.last_decision_tick.is_none());
++    assert_eq!(serde_json::to_vec(&resident).unwrap(), bytes);
++}
+diff --git a/crates/alife_training/tests/grounded_drive_research_host.rs b/crates/alife_training/tests/grounded_drive_research_host.rs
+new file mode 100644
+index 000000000..e2182d3cb
+--- /dev/null
++++ b/crates/alife_training/tests/grounded_drive_research_host.rs
+@@ -0,0 +1,410 @@
++#![cfg(feature = "cpu-backend")]
++use alife_core::*;
++use alife_training::{cpu::*, *};
++use alife_world::*;
++
++fn fixture() -> (
++    CanonicalNewGameConfig,
++    CreatureGenome,
++    CpuFoundationTrainer,
++    CpuCanonicalHost,
++    CpuCanonicalCheckpoint,
++) {
++    let mut config = CanonicalNewGameConfig::phase3(61100, 1).unwrap();
++    config.brain_class = BrainScaleTier::Standard2048;
++    let builtin = FoundationWeightAsset::builtin_n2048_v1(config.sensor_profile).unwrap();
++    let baseline = create_canonical_new_game_with_n2048_candidate(&config, &builtin).unwrap();
++    let record = baseline.world.organism_registry().iter().next().unwrap();
++    let genome = record.phenotype().brain_genome.clone();
++    let development = alife_runtime::canonical_preparation::foundation_construction_development(
++        &genome,
++        &BrainCapacityClass::n2048(),
++        &record.phenotype().development_state_at(Tick::ZERO).unwrap(),
++    )
++    .unwrap();
++    let (fresh, _) = PhenotypeCompiler::compile_n2048_bounded_founder(
++        genome,
++        development,
++        config.sensor_profile,
++    )
++    .unwrap();
++    let asset = FoundationWeightAsset::from_phenotype_for_genetic_birth(&fresh).unwrap();
++    let original =
++        create_canonical_new_game_with_n2048_experimental_candidate(&config, &asset).unwrap();
++    let source = original
++        .world
++        .organism_registry()
++        .iter()
++        .next()
++        .unwrap()
++        .genome()
++        .clone();
++    let expressed = source.express().unwrap();
++    let development = DevelopmentState::new(
++        expressed.brain_genome.id,
++        Tick::ZERO,
++        NormalizedScalar::new(1.).unwrap(),
++    );
++    let (p, inputs) = PhenotypeCompiler::compile_n2048_bounded_founder_candidate(
++        expressed.brain_genome,
++        development,
++        asset.clone(),
++    )
++    .unwrap();
++    let old_mask = StageTrainableMask::from_synapse_indices(&p, &[0]).unwrap();
++    let old_trainer =
++        CpuFoundationTrainer::new(p.clone(), asset.clone(), old_mask, AdamWConfig::default())
++            .unwrap();
++    let old_host = CpuCanonicalHost::new_cohort(original, &old_trainer, 17).unwrap();
++    let old_checkpoint = old_host.checkpoint(&old_trainer).unwrap();
++    let transfer = transfer_bounded_genetic_founder_to_grounded_drive(&p, &inputs, &asset).unwrap();
++    let research = CreatureGenome::from_n2048_grounded_drive_transfer(
++        &source,
++        &transfer.inputs,
++        transfer.asset.clone(),
++    )
++    .unwrap();
++    let mask = StageTrainableMask::from_synapse_indices(&transfer.phenotype, &[0]).unwrap();
++    let trainer = CpuFoundationTrainer::new(
++        transfer.phenotype,
++        transfer.asset,
++        mask,
++        AdamWConfig::default(),
++    )
++    .unwrap();
++    let game = create_grounded_drive_research_new_game(&config, &research).unwrap();
++    let host = CpuCanonicalHost::new_grounded_drive_research_cohort(game, &trainer, 17).unwrap();
++    (config, research, trainer, host, old_checkpoint)
++}
++
++#[test]
++fn explicit_research_roundtrip_preserves_full_next_checkpoint() {
++    let (config, genome, trainer, mut host, _) = fixture();
++    let prefix = host.step(&trainer, 1.).unwrap();
++    assert!(!prefix.decisions.is_empty());
++    let mut aged_game = create_grounded_drive_research_new_game(&config, &genome).unwrap();
++    aged_game.world = host.world().clone();
++    assert!(CpuCanonicalHost::new_grounded_drive_research_cohort(aged_game, &trainer, 17).is_err());
++    let checkpoint = host.grounded_drive_research_checkpoint(&trainer).unwrap();
++    assert!(
++        checkpoint.checkpoint.residents[0]
++            .neural
++            .dispatch_generation
++            > 0
++    );
++    assert!(
++        checkpoint.checkpoint.residents[0]
++            .neural
++            .neural
++            .activations
++            .iter()
++            .any(|x| *x != 0.)
++            || checkpoint.checkpoint.residents[0]
++                .neural
++                .fast
++                .iter()
++                .any(|x| *x != 0.)
++    );
++    let bytes = serde_json::to_vec(&checkpoint).unwrap();
++    let mut restored = CpuCanonicalHost::from_grounded_drive_research_checkpoint(
++        serde_json::from_slice(&bytes).unwrap(),
++        &trainer,
++    )
++    .unwrap();
++    assert_eq!(
++        bytes,
++        serde_json::to_vec(
++            &restored
++                .grounded_drive_research_checkpoint(&trainer)
++                .unwrap()
++        )
++        .unwrap()
++    );
++    let a = host.step(&trainer, 1.).unwrap();
++    let b = restored.step(&trainer, 1.).unwrap();
++    assert_eq!(
++        serde_json::to_vec(&a.decisions).unwrap(),
++        serde_json::to_vec(&b.decisions).unwrap()
++    );
++    assert_eq!(
++        serde_json::to_vec(&host.grounded_drive_research_checkpoint(&trainer).unwrap()).unwrap(),
++        serde_json::to_vec(
++            &restored
++                .grounded_drive_research_checkpoint(&trainer)
++                .unwrap()
++        )
++        .unwrap()
++    );
++    let record = host.world().organism_registry().iter().next().unwrap();
++    assert_eq!(record.biochemistry().tick, Tick::new(2));
++    // Neural construction maturity must not relabel newborn body development.
++    assert!(
++        record
++            .phenotype()
++            .development_state_at(Tick::new(1))
++            .unwrap()
++            .maturation
++            .raw()
++            < 1.
++    );
++}
++
++#[test]
++fn ordinary_paths_policy_tamper_and_aged_fresh_admission_reject() {
++    let (config, genome, trainer, mut host, old_checkpoint) = fixture();
++    let asset = genome.n2048_foundation_candidate.as_ref().unwrap();
++    assert!(create_canonical_new_game_with_n2048_candidate(&config, asset).is_err());
++    assert!(genome.express().is_err());
++    let game = create_grounded_drive_research_new_game(&config, &genome).unwrap();
++    assert!(CpuCanonicalHost::new_cohort(game, &trainer, 17).is_err());
++    assert!(host.checkpoint(&trainer).is_err());
++    let good = host.grounded_drive_research_checkpoint(&trainer).unwrap();
++    assert!(CpuCanonicalHost::from_checkpoint(good.checkpoint.clone(), &trainer).is_err());
++    assert!(good.checkpoint.world.restore_headless_world().is_err());
++    assert!(PortableSaveFile::from_json_str(
++        &serde_json::to_string(&good.checkpoint.world).unwrap()
++    )
++    .is_err());
++    let mut ordinary_save = old_checkpoint.world.clone();
++    let ordinary_before = serde_json::to_vec(&ordinary_save).unwrap();
++    assert!(ordinary_save
++        .replace_headless_world_snapshot(host.world())
++        .is_err());
++    assert_eq!(ordinary_before, serde_json::to_vec(&ordinary_save).unwrap());
++    let metadata = valid_gpu_metadata(&good.checkpoint.world);
++    assert!(good
++        .checkpoint
++        .world
++        .with_gpu_runtime_state(metadata.clone())
++        .is_err());
++    let mut unsupported = good.clone();
++    unsupported.checkpoint.world.gpu_runtime = Some(metadata);
++    assert!(
++        CpuCanonicalHost::from_grounded_drive_research_checkpoint(unsupported, &trainer).is_err()
++    );
++    let mut unsupported = good.clone();
++    unsupported
++        .checkpoint
++        .world
++        .save_id
++        .push_str("-unsupported");
++    assert!(
++        CpuCanonicalHost::from_grounded_drive_research_checkpoint(unsupported, &trainer).is_err()
++    );
++    let mut old_world = old_checkpoint.world.restore_headless_world().unwrap();
++    let old_record = old_world.organism_registry().iter().next().unwrap().clone();
++    let new_record = host
++        .world()
++        .organism_registry()
++        .iter()
++        .next()
++        .unwrap()
++        .clone();
++    let old_before = old_world.canonical_signature_digest().unwrap();
++    assert!(old_world
++        .replace_organism_registry_exact([new_record.clone()])
++        .is_err());
++    assert_eq!(old_before, old_world.canonical_signature_digest().unwrap());
++    let new_bulk_before = host.world().canonical_signature_digest().unwrap();
++    assert!(host
++        .world_mut()
++        .replace_organism_registry_exact([old_record.clone()])
++        .is_err());
++    assert_eq!(
++        new_bulk_before,
++        host.world().canonical_signature_digest().unwrap()
++    );
++    assert!(old_world
++        .replace_organism_record_exact(new_record.clone())
++        .is_err());
++    assert_eq!(old_before, old_world.canonical_signature_digest().unwrap());
++    let new_before = host.world().canonical_signature_digest().unwrap();
++    assert!(host
++        .world_mut()
++        .replace_organism_record_exact(old_record.clone())
++        .is_err());
++    assert_eq!(
++        new_before,
++        host.world().canonical_signature_digest().unwrap()
++    );
++    let old_asset = old_record
++        .genome()
++        .n2048_foundation_candidate
++        .clone()
++        .unwrap();
++    let old_brain = old_record.phenotype().brain_genome.clone();
++    let old_development =
++        DevelopmentState::new(old_brain.id, Tick::ZERO, NormalizedScalar::new(1.).unwrap());
++    let (old_p, _) = PhenotypeCompiler::compile_n2048_bounded_founder_candidate(
++        old_brain,
++        old_development,
++        old_asset.clone(),
++    )
++    .unwrap();
++    let old_mask = StageTrainableMask::from_synapse_indices(&old_p, &[0]).unwrap();
++    let old_trainer =
++        CpuFoundationTrainer::new(old_p, old_asset, old_mask, AdamWConfig::default()).unwrap();
++    let mut dead_research_game = create_grounded_drive_research_new_game(&config, &genome).unwrap();
++    let mut dead_new = new_record;
++    dead_new.mark_dead(Tick::ZERO).unwrap();
++    dead_research_game
++        .world
++        .replace_organism_record_exact(dead_new)
++        .unwrap();
++    assert!(CpuCanonicalHost::new_cohort(dead_research_game, &old_trainer, 17).is_err());
++    let mut dead_old = old_record;
++    dead_old.mark_dead(Tick::ZERO).unwrap();
++    old_world.replace_organism_record_exact(dead_old).unwrap();
++    let mut dead_production_game =
++        create_grounded_drive_research_new_game(&config, &genome).unwrap();
++    dead_production_game.world = old_world;
++    assert!(CpuCanonicalHost::new_grounded_drive_research_cohort(
++        dead_production_game,
++        &trainer,
++        17
++    )
++    .is_err());
++    let mut bad = good.clone();
++    bad.checkpoint = old_checkpoint;
++    assert!(CpuCanonicalHost::from_grounded_drive_research_checkpoint(bad, &trainer).is_err());
++    let mut terminal = good.clone();
++    terminal
++        .checkpoint
++        .world
++        .world
++        .organism_records
++        .as_mut()
++        .unwrap()[0]
++        .mark_dead(Tick::ZERO)
++        .unwrap();
++    let terminal_restored =
++        CpuCanonicalHost::from_grounded_drive_research_checkpoint(terminal.clone(), &trainer)
++            .unwrap();
++    assert_eq!(
++        serde_json::to_vec(&terminal.checkpoint.residents).unwrap(),
++        serde_json::to_vec(
++            &terminal_restored
++                .grounded_drive_research_checkpoint(&trainer)
++                .unwrap()
++                .checkpoint
++                .residents
++        )
++        .unwrap()
++    );
++    let mut stripped = terminal;
++    stripped.checkpoint.residents.clear();
++    stripped.checkpoint.tracked_objects.clear();
++    assert!(CpuCanonicalHost::from_grounded_drive_research_checkpoint(stripped, &trainer).is_err());
++    let mut bad = good.clone();
++    bad.policy = BrainActivityPolicyV1::production_v1();
++    assert!(CpuCanonicalHost::from_grounded_drive_research_checkpoint(bad, &trainer).is_err());
++    let mut bad = good.clone();
++    bad.recipe_digest[0] ^= 1;
++    assert!(CpuCanonicalHost::from_grounded_drive_research_checkpoint(bad, &trainer).is_err());
++}
++
++// Synthetic metadata-only negative control; no GPU device is requested.
++fn valid_gpu_metadata(save: &PortableSaveFile) -> GpuRuntimeSaveState {
++    let state = GpuRuntimeSaveState {
++        schema: FVR06_GPU_RUNTIME_STATE_SCHEMA.to_string(),
++        schema_version: FVR06_GPU_RUNTIME_STATE_SCHEMA_VERSION,
++        requested_backend_mode: "GpuAuthoritative".to_string(),
++        selected_backend_mode: "Unavailable".to_string(),
++        adapter_identity: GpuRuntimeAdapterIdentity {
++            adapter_name: None,
++            backend_api: None,
++            adapter_type: None,
++            driver: None,
++            driver_info: Some("gpu-runtime feature disabled".to_string()),
++        },
++        validation_profile: "test-unavailable".to_string(),
++        brain_residency_slots: GpuRuntimeResidencySlots {
++            hot_slots: 1,
++            warm_slots: 1,
++            cold_slots: 0,
++        },
++        class_bucket_allocations: vec![GpuRuntimeClassBucketAllocation {
++            brain_class: BrainScaleTier::Nano512,
++            hot_slots: 1,
++            warm_slots: 1,
++            cold_slots: 0,
++            max_creatures: 1,
++        }],
++        active_profile_caps: GpuRuntimeActiveProfileCaps {
++            target_fps: 30,
++            target_frame_ms: 33.333,
++            renderer_reserve_ms: 12.0,
++            gpu_neural_budget_ms: 4.0,
++            neural_heap_mb: 64,
++            staging_readback_budget_kib: 4,
++            chunk_activation_radius: 1,
++            active_chunk_cap: 9,
++            vfx_budget: "conservative".to_string(),
++            adaptive_throttling_order: vec!["vfx".to_string()],
++        },
++        shader_abi_versions: GpuRuntimeShaderAbiVersions {
++            shader_manifest: vec!["closed-loop:v1".to_string()],
++            abi_manifest: vec!["gpu-runtime:v1".to_string()],
++        },
++        authority: GpuRuntimeAuthorityState {
++            authoritative: false,
++            failure_stops_learned_actions: true,
++            finite_rejections: 0,
++        },
++        last_safe_checkpoint: GpuRuntimeSafeCheckpoint {
++            save_id: save.save_id.clone(),
++            world_tick: save.world.tick,
++            sealed_patch_boundary: true,
++            checkpoint_label: "gpu-unavailable:tick=1".to_string(),
++        },
++        unavailable_reason: Some("gpu-runtime feature disabled".to_string()),
++        selected_scale_profile: "MinimumSettings30x30".to_string(),
++        compact_action_readback_bytes_per_creature: 64,
++        no_active_bulk_readback: true,
++    };
++
++    state.validate().unwrap();
++    state
++}
++
++#[test]
++fn research_preparation_starts_fresh_and_preserves_private_state_without_ticks() {
++    let (config, genome, trainer, host, _) = fixture();
++    let initial = host.grounded_drive_research_checkpoint(&trainer).unwrap();
++    let game = create_grounded_drive_research_new_game(&config, &genome).unwrap();
++    let (prepared, ()) = CpuCanonicalHost::new_prepared_grounded_drive_research_cohort(
++        game.clone(),
++        &trainer,
++        17,
++        |_| Ok::<_, ScaffoldContractError>(()),
++    )
++    .unwrap();
++    let prepared = prepared
++        .grounded_drive_research_checkpoint(&trainer)
++        .unwrap();
++    assert!(
++        serde_json::to_vec(&initial.checkpoint.residents).unwrap()
++            == serde_json::to_vec(&prepared.checkpoint.residents).unwrap(),
++        "zero-tick preparation changed private resident state"
++    );
++    let mut expected = serde_json::to_value(initial).unwrap();
++    // Preparation reseals unchanged cognitive ownership exactly once.
++    for field in ["brain/revision", "memory/revision", "transaction_revision"] {
++        let path = format!("/checkpoint/world/world/organism_records/0/state_graph/{field}");
++        let revision = expected.pointer_mut(&path).unwrap();
++        *revision = serde_json::json!(revision.as_u64().unwrap() + 1);
++    }
++    assert!(
++        expected == serde_json::to_value(prepared).unwrap(),
++        "zero-tick preparation changed more than the three seal revisions"
++    );
++    assert!(
++        CpuCanonicalHost::new_prepared_cohort(
++            game,
++            &trainer,
++            17,
++            |_| Ok::<_, ScaffoldContractError>(())
++        )
++        .is_err()
++    );
++}
+diff --git a/crates/alife_training/tests/grounded_drive_transfer.rs b/crates/alife_training/tests/grounded_drive_transfer.rs
+new file mode 100644
+index 000000000..91b5baddf
+--- /dev/null
++++ b/crates/alife_training/tests/grounded_drive_transfer.rs
+@@ -0,0 +1,69 @@
++use alife_core::*;
++use alife_training::transfer_bounded_genetic_founder_to_grounded_drive;
++#[test]
++fn complete_address_transfer_preserves_negative_readouts_and_causal_parameters() {
++    let g = BrainGenome::scaffold(0x2048_2026, BrainCapacityClass::N2048_ID);
++    let d = DevelopmentState::new(g.id, Tick::ZERO, NormalizedScalar::new(1.).unwrap());
++    let (fresh, _) = PhenotypeCompiler::compile_n2048_bounded_founder(
++        g.clone(),
++        d.clone(),
++        SensorProfile::GroundedObjectSlotsV1,
++    )
++    .unwrap();
++    let mut weights = fresh
++        .synapses()
++        .iter()
++        .map(|s| s.genetic_weight())
++        .collect::<Vec<_>>();
++    let selected=fresh.synapses().iter().position(|s| matches!(s.kind(),CompiledSynapseKind::Decoder(c) if c.head()==DecoderHeadKind::ActionCandidate && c.family()==CandidateActionFamily::Approach && c.input_lane()==15)).unwrap();
++    weights[selected] = -0.37;
++    let source = FoundationWeightAsset::from_trained_weights(
++        &fresh,
++        weights,
++        TrainingStageManifest::bootstrap(),
++    )
++    .unwrap();
++    let (p, i) =
++        PhenotypeCompiler::compile_n2048_bounded_founder_candidate(g, d, source.clone()).unwrap();
++    let before = serde_json::to_vec(&i).unwrap();
++    let result = transfer_bounded_genetic_founder_to_grounded_drive(&p, &i, &source).unwrap();
++    assert_eq!(result.source_to_target.len(), 32768);
++    assert_eq!(result.added_zero_rows, 1280);
++    assert_eq!(result.source_asset_digest, source.digest());
++    let (_, new) = result
++        .source_to_target
++        .iter()
++        .find(|(old, _)| *old as usize == selected)
++        .unwrap();
++    assert_ne!(*new as usize, selected);
++    assert_eq!(
++        result.asset.weights()[*new as usize].to_bits(),
++        (-0.37_f32).to_bits()
++    );
++    for (old, new) in result.source_to_target {
++        assert_eq!(
++            source.weights()[old as usize].to_bits(),
++            result.asset.weights()[new as usize].to_bits()
++        );
++    }
++    assert_eq!(before, serde_json::to_vec(&i).unwrap());
++    assert_eq!(
++        i.genome().genetic_prior_seed,
++        result.inputs.genome().genetic_prior_seed
++    );
++    assert_eq!(p.neuron_dynamics(), result.phenotype.neuron_dynamics());
++}
++
++#[test]
++fn fresh_unbound_source_is_rejected_with_no_implicit_relabeling() {
++    let g = BrainGenome::scaffold(61_100, BrainCapacityClass::N2048_ID);
++    let d = DevelopmentState::new(g.id, Tick::ZERO, NormalizedScalar::new(1.).unwrap());
++    let (p, i) = PhenotypeCompiler::compile_n2048_bounded_founder(
++        g,
++        d,
++        SensorProfile::GroundedObjectSlotsV1,
++    )
++    .unwrap();
++    let asset = FoundationWeightAsset::from_phenotype_for_genetic_birth(&p).unwrap();
++    assert!(transfer_bounded_genetic_founder_to_grounded_drive(&p, &i, &asset).is_err());
++}
+diff --git a/crates/alife_world/tests/gpu_memory_grounding_persistence.rs b/crates/alife_world/tests/gpu_memory_grounding_persistence.rs
+index 8a3ca0b66..e2619e14b 100644
+--- a/crates/alife_world/tests/gpu_memory_grounding_persistence.rs
++++ b/crates/alife_world/tests/gpu_memory_grounding_persistence.rs
+@@ -173,6 +173,7 @@ fn memory_and_topology_summaries_bind_exact_owner_and_profile() {
+         SensorProfile::PrivilegedAffordanceV1,
+         SensorProfile::GroundedObjectSlotsV1,
+         SensorProfile::GroundedTerrainVisionV1,
++        SensorProfile::GroundedObjectSlotsSleepChoiceV1,
+     ] {
+         let organism = OrganismId(41);
+         let identity = profile(sensor_profile);
+@@ -201,6 +202,7 @@ fn memory_and_topology_summaries_bind_exact_owner_and_profile() {
+             SensorProfile::PrivilegedAffordanceV1 => SensorProfile::GroundedObjectSlotsV1,
+             SensorProfile::GroundedObjectSlotsV1 => SensorProfile::PrivilegedAffordanceV1,
+             SensorProfile::GroundedTerrainVisionV1 => SensorProfile::GroundedObjectSlotsV1,
++            SensorProfile::GroundedObjectSlotsSleepChoiceV1 => SensorProfile::GroundedObjectSlotsV1,
+         });
+         assert!(saved_memory.validate_for(organism, other).is_err());
+         assert!(saved_topology.validate_for(organism, other).is_err());
+diff --git a/docs/experiments/bounded-founder-v1/legacy-wire-capture.json b/docs/experiments/bounded-founder-v1/legacy-wire-capture.json
+new file mode 100644
+index 000000000..8c760cfc5
+--- /dev/null
++++ b/docs/experiments/bounded-founder-v1/legacy-wire-capture.json
+@@ -0,0 +1,143 @@
++{
++  "baseline_commit": "7599f5f4ea0fb19a6d92cfdbaefc810d50d66988",
++  "baseline_changes": "Only byte-identical new capture test added; no old library code changed.",
++  "capture_test_sha256": "b991df7a816943439e4b772dcb20412b2c8f54233e20ba850b1859919e06004d",
++  "files": {
++    "canonical_inputs.bin": {
++      "sha256": "4e87a8bb14b969a875f7da3286feeab061b80281bd2ef190afb933dc994f0b51",
++      "bytes": 753
++    },
++    "canonical_inputs.json": {
++      "sha256": "900d40cfadbac13e5fb4362dda53db3cc76801a2d60b7392abb7031366888955",
++      "bytes": 9062
++    },
++    "canonical_phenotype.bin": {
++      "sha256": "c8dd79394ca37b382f685ae7835bfa693199fe682c54cb4fb6a29ff2751c2e29",
++      "bytes": 1289334
++    },
++    "canonical_phenotype.json": {
++      "sha256": "32822a872167a4966ecb782ad2cd4e10c2be42751022d966e2148628f63af990",
++      "bytes": 19456471
++    },
++    "canonical_selector.bin": {
++      "sha256": "e98fc5ed0b90188ea89bc6c732613c42ef6cce062b11a5ca5d1a2ec64f911178",
++      "bytes": 91
++    },
++    "canonical_selector.json": {
++      "sha256": "0a12fcbfe4af0436ca28fbcf303f46d99ed38717bc5eceaa1a15463fe3b879fc",
++      "bytes": 617
++    },
++    "credit_inputs.bin": {
++      "sha256": "84cdf8b8d5b50277e8fe246b01ad981ea33b4f799ad165692b30a58eab743237",
++      "bytes": 8194
++    },
++    "credit_inputs.json": {
++      "sha256": "05e95334b4f979435e7441f5ee70666b1a471e7e64b688c626c31b347c0d60c6",
++      "bytes": 31314
++    },
++    "credit_phenotype.bin": {
++      "sha256": "96d3bfa83b0c9ead79b1821c3ff4ed81dc68591f745aa7e1690ca861c1db0ad5",
++      "bytes": 108180
++    },
++    "credit_phenotype.json": {
++      "sha256": "20f4d6f3d3ca128c423a144981b67b569768e5d75ba40d3d53ac4fa72ecf51dc",
++      "bytes": 1577201
++    },
++    "credit_selector.bin": {
++      "sha256": "04acffbfa8d7612fecb349511291635e05dab9e95387fc959467ba846ba7259a",
++      "bytes": 7678
++    },
++    "credit_selector.json": {
++      "sha256": "e9257169bf7d42dd11d1c38ed6d1b0f9ef9c5fe38b1bb4df65dadca1771a2d90",
++      "bytes": 25996
++    },
++    "experimental_inputs.bin": {
++      "sha256": "03306835ef12c3a95e7fd9c9583c6e481e416e405ee2d8c23b001ee0bd8a8230",
++      "bytes": 702
++    },
++    "experimental_inputs.json": {
++      "sha256": "504b709621278ae6a1660b4a466c15db0e9c16f0f58db4b1b100a903bdd1aa36",
++      "bytes": 8684
++    },
++    "experimental_phenotype.bin": {
++      "sha256": "d4f755fa7300d1599620468cc8aa76658fe30e853029a7fb41a7b5d19df0f096",
++      "bytes": 1282141
++    },
++    "experimental_phenotype.json": {
++      "sha256": "9a4e24365639f16cbd31e22f99778023fbbca138113fae934058e7970c9d0392",
++      "bytes": 19427269
++    },
++    "experimental_selector.bin": {
++      "sha256": "fbdda2b5aab99d0a5cbf3825c8f510d3b28a5d147e3ef1d11985564f549036b2",
++      "bytes": 40
++    },
++    "experimental_selector.json": {
++      "sha256": "b93e86e73a73b3d9c7916e434be78f1d892cdab746b24d0aa2f279382963a827",
++      "bytes": 241
++    },
++    "legacy_inputs.bin": {
++      "sha256": "3cc9e518d331c681e346b8cc073f30c2a2a8ff49d1922d4e5e58e47ae52cf85e",
++      "bytes": 748
++    },
++    "legacy_inputs.json": {
++      "sha256": "dd8c88532f0fab1f099b1463895626f78d9ee620156d01e40e21b87b8c976c97",
++      "bytes": 6478
++    },
++    "legacy_phenotype.bin": {
++      "sha256": "06765c08c202f32afcedc901179d2383e87f2c08844489c1ff0e36edb720972a",
++      "bytes": 100678
++    },
++    "legacy_phenotype.json": {
++      "sha256": "2e2f49400071208bce1db1fb73ac545466916f6c25dbfd3f51646b39af57430d",
++      "bytes": 1552161
++    },
++    "legacy_selector.bin": {
++      "sha256": "648feffa594df10ab183499b83877cafdd9655e5de461870771347c7db1a9d05",
++      "bytes": 232
++    },
++    "legacy_selector.json": {
++      "sha256": "91c39920cdc4392c642e8e296cffa728f0cd1d46de707e3d8d050d04b4646f84",
++      "bytes": 1162
++    },
++    "migrated_phenotype.bin": {
++      "sha256": "1fd4353a7a1c5f9bd4844a15c241e325c86f14e3d2b039e016675e0c0a42a153",
++      "bytes": 1289630
++    },
++    "migrated_phenotype.json": {
++      "sha256": "cafca8bcbad8f63035b054ec0fd5606c953dccdb70bcfa6f7bd6ff978e575b01",
++      "bytes": 19459274
++    },
++    "migrated_selector.bin": {
++      "sha256": "c3c22d858e06595306da520313266b9a8871388f0d7687da110b48c8fb31e058",
++      "bytes": 387
++    },
++    "migrated_selector.json": {
++      "sha256": "5d0684219a89a0067b301e64b9ec2fab332c9f6234271dcfc023f7bafdb54a3a",
++      "bytes": 1831
++    },
++    "readout_inputs.bin": {
++      "sha256": "f3de2d66758bfbce390cbfaa0b72a880a5218fa5809c0a7abe0a0d23c17cb0b7",
++      "bytes": 8193
++    },
++    "readout_inputs.json": {
++      "sha256": "6c8bf0bf890cb553cdeab3282929c4b11f99cf4b11d9a18afdc2446c646ce00a",
++      "bytes": 31259
++    },
++    "readout_phenotype.bin": {
++      "sha256": "b866e620d20856531be54d57891ac598261043bc1ec69dce056fcc0619679815",
++      "bytes": 108123
++    },
++    "readout_phenotype.json": {
++      "sha256": "c7cb64f4e9792c13cabb2465a5429dd2ba9056f96bb257f30e05a5ef1ad79602",
++      "bytes": 1576944
++    },
++    "readout_selector.bin": {
++      "sha256": "c7776a076a76c53d2ab3730e1bfa4a0645935cc3882762c956a948525b61c2cd",
++      "bytes": 7677
++    },
++    "readout_selector.json": {
++      "sha256": "f3c8b95be2705e262f29c015fc8cdf55cae4cfecf3d28b3a442b858b614936b1",
++      "bytes": 25942
++    }
++  }
++}
+diff --git a/docs/experiments/motor-lobe-native-m0-v1/mediation-m0-manifest.json b/docs/experiments/motor-lobe-native-m0-v1/mediation-m0-manifest.json
+new file mode 100644
+index 000000000..7f87df3e3
+--- /dev/null
++++ b/docs/experiments/motor-lobe-native-m0-v1/mediation-m0-manifest.json
+@@ -0,0 +1,1885 @@
++{
++  "selector": "ProspectiveMatchedMotorArbitrationV1_M0NewPathMediation",
++  "status": "source_only_not_admitted_not_executed",
++  "existing_neuron_addresses_unchanged": [
++    0,
++    2047
++  ],
++  "new_neuron_range": [
++    2048,
++    2143
++  ],
++  "active_new_neurons": 92,
++  "reserved_new_neurons": [
++    2140,
++    2141,
++    2142,
++    2143
++  ],
++  "pairs": [
++    {
++      "name": "afferent_hunger",
++      "signal": 2048,
++      "reference": 2049
++    },
++    {
++      "name": "afferent_fatigue",
++      "signal": 2050,
++      "reference": 2051
++    },
++    {
++      "name": "afferent_fear",
++      "signal": 2052,
++      "reference": 2053
++    },
++    {
++      "name": "afferent_pain",
++      "signal": 2054,
++      "reference": 2055
++    },
++    {
++      "name": "afferent_loneliness",
++      "signal": 2056,
++      "reference": 2057
++    },
++    {
++      "name": "afferent_curiosity",
++      "signal": 2058,
++      "reference": 2059
++    },
++    {
++      "name": "afferent_ATP_availability",
++      "signal": 2060,
++      "reference": 2061
++    },
++    {
++      "name": "afferent_unsigned_temperature_stress",
++      "signal": 2062,
++      "reference": 2063
++    },
++    {
++      "name": "afferent_reproductive_readiness",
++      "signal": 2064,
++      "reference": 2065
++    },
++    {
++      "name": "afferent_bound_boredom",
++      "signal": 2066,
++      "reference": 2067
++    },
++    {
++      "name": "afferent_unbound_extension1",
++      "signal": 2068,
++      "reference": 2069
++    },
++    {
++      "name": "hunger_above_setpoint",
++      "signal": 2070,
++      "reference": 2071
++    },
++    {
++      "name": "fatigue_above_setpoint",
++      "signal": 2072,
++      "reference": 2073
++    },
++    {
++      "name": "fear_above_setpoint",
++      "signal": 2074,
++      "reference": 2075
++    },
++    {
++      "name": "pain_above_setpoint",
++      "signal": 2076,
++      "reference": 2077
++    },
++    {
++      "name": "loneliness_above_setpoint",
++      "signal": 2078,
++      "reference": 2079
++    },
++    {
++      "name": "curiosity_above_setpoint",
++      "signal": 2080,
++      "reference": 2081
++    },
++    {
++      "name": "ATP_availability_above_setpoint",
++      "signal": 2082,
++      "reference": 2083
++    },
++    {
++      "name": "unsigned_temperature_stress_above_setpoint",
++      "signal": 2084,
++      "reference": 2085
++    },
++    {
++      "name": "reproductive_readiness_above_setpoint",
++      "signal": 2086,
++      "reference": 2087
++    },
++    {
++      "name": "bound_boredom_above_setpoint",
++      "signal": 2088,
++      "reference": 2089
++    },
++    {
++      "name": "unbound_extension1_above_setpoint",
++      "signal": 2090,
++      "reference": 2091
++    },
++    {
++      "name": "ATP_below_setpoint",
++      "signal": 2092,
++      "reference": 2093
++    },
++    {
++      "name": "recovery_motor_state",
++      "signal": 2094,
++      "reference": 2095
++    },
++    {
++      "name": "voluntary_search_motor_state",
++      "signal": 2096,
++      "reference": 2097
++    },
++    {
++      "name": "fear_motor_state",
++      "signal": 2098,
++      "reference": 2099
++    }
++  ],
++  "drive_setpoints": {
++    "hunger": 0.35,
++    "fatigue": 0.35,
++    "fear": 0.25,
++    "pain": 0.1,
++    "loneliness": 0.35,
++    "curiosity": 0.35,
++    "ATP_availability": 0.5,
++    "unsigned_temperature_stress": 0.1,
++    "reproductive_readiness": 0.5,
++    "bound_boredom": 0.35,
++    "unbound_extension1": 0.5
++  },
++  "new_afferent_contract": "signal=drive; reference=declared setpoint; BOTH receive the SAME interoceptive/regional transform and offset; neither reads hidden world truth",
++  "matched_dynamics": {
++    "activation": "Tanh",
++    "leak": 0.5,
++    "bias": 0.0,
++    "homeostatic_gain": 0.0,
++    "metabolic_tracking_and_cost": "retain_and_charge",
++    "initial_activation": 0.0,
++    "initial_metabolic_load": 0.0,
++    "plasticity": "REQUIRES explicit versioned fixed-parameter admission for all new paired parameters across every learning writer; alpha0/genetic0 is NOT a freeze; ordinary learning elsewhere retained"
++  },
++  "new_branch_semantics": "projection_gain * tanh(max(sum(inputs)-threshold,0))*output_gain; shared local threshold/background then applied to matched neuron pair",
++  "new_branches": [
++    {
++      "target": 2070,
++      "inputs": [
++        [
++          2048,
++          4.0
++        ],
++        [
++          2049,
++          -4.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2071,
++      "inputs": [
++        [
++          2048,
++          0.0
++        ],
++        [
++          2049,
++          -0.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2072,
++      "inputs": [
++        [
++          2050,
++          4.0
++        ],
++        [
++          2051,
++          -4.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2073,
++      "inputs": [
++        [
++          2050,
++          0.0
++        ],
++        [
++          2051,
++          -0.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2074,
++      "inputs": [
++        [
++          2052,
++          4.0
++        ],
++        [
++          2053,
++          -4.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2075,
++      "inputs": [
++        [
++          2052,
++          0.0
++        ],
++        [
++          2053,
++          -0.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2076,
++      "inputs": [
++        [
++          2054,
++          4.0
++        ],
++        [
++          2055,
++          -4.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2077,
++      "inputs": [
++        [
++          2054,
++          0.0
++        ],
++        [
++          2055,
++          -0.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2078,
++      "inputs": [
++        [
++          2056,
++          4.0
++        ],
++        [
++          2057,
++          -4.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2079,
++      "inputs": [
++        [
++          2056,
++          0.0
++        ],
++        [
++          2057,
++          -0.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2080,
++      "inputs": [
++        [
++          2058,
++          4.0
++        ],
++        [
++          2059,
++          -4.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2081,
++      "inputs": [
++        [
++          2058,
++          0.0
++        ],
++        [
++          2059,
++          -0.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2082,
++      "inputs": [
++        [
++          2060,
++          4.0
++        ],
++        [
++          2061,
++          -4.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2083,
++      "inputs": [
++        [
++          2060,
++          0.0
++        ],
++        [
++          2061,
++          -0.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2084,
++      "inputs": [
++        [
++          2062,
++          4.0
++        ],
++        [
++          2063,
++          -4.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2085,
++      "inputs": [
++        [
++          2062,
++          0.0
++        ],
++        [
++          2063,
++          -0.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2086,
++      "inputs": [
++        [
++          2064,
++          4.0
++        ],
++        [
++          2065,
++          -4.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2087,
++      "inputs": [
++        [
++          2064,
++          0.0
++        ],
++        [
++          2065,
++          -0.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2088,
++      "inputs": [
++        [
++          2066,
++          4.0
++        ],
++        [
++          2067,
++          -4.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2089,
++      "inputs": [
++        [
++          2066,
++          0.0
++        ],
++        [
++          2067,
++          -0.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2090,
++      "inputs": [
++        [
++          2068,
++          4.0
++        ],
++        [
++          2069,
++          -4.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2091,
++      "inputs": [
++        [
++          2068,
++          0.0
++        ],
++        [
++          2069,
++          -0.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2092,
++      "inputs": [
++        [
++          2060,
++          -4.0
++        ],
++        [
++          2061,
++          4.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2093,
++      "inputs": [
++        [
++          2060,
++          0.0
++        ],
++        [
++          2061,
++          -0.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2094,
++      "inputs": [
++        [
++          2072,
++          1.25
++        ],
++        [
++          2073,
++          -1.25
++        ],
++        [
++          2092,
++          1.0
++        ],
++        [
++          2093,
++          -1.0
++        ],
++        [
++          2076,
++          0.15
++        ],
++        [
++          2077,
++          -0.15
++        ],
++        [
++          2070,
++          -0.75
++        ],
++        [
++          2071,
++          0.75
++        ],
++        [
++          2098,
++          -1.5
++        ],
++        [
++          2099,
++          1.5
++        ],
++        [
++          2096,
++          -0.5
++        ],
++        [
++          2097,
++          0.5
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2095,
++      "inputs": [
++        [
++          2072,
++          0.0
++        ],
++        [
++          2073,
++          -0.0
++        ],
++        [
++          2092,
++          0.0
++        ],
++        [
++          2093,
++          -0.0
++        ],
++        [
++          2076,
++          0.0
++        ],
++        [
++          2077,
++          -0.0
++        ],
++        [
++          2070,
++          0.0
++        ],
++        [
++          2071,
++          -0.0
++        ],
++        [
++          2098,
++          0.0
++        ],
++        [
++          2099,
++          -0.0
++        ],
++        [
++          2096,
++          0.0
++        ],
++        [
++          2097,
++          -0.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2096,
++      "inputs": [
++        [
++          2070,
++          0.75
++        ],
++        [
++          2071,
++          -0.75
++        ],
++        [
++          2080,
++          0.3
++        ],
++        [
++          2081,
++          -0.3
++        ],
++        [
++          2088,
++          0.2
++        ],
++        [
++          2089,
++          -0.2
++        ],
++        [
++          2094,
++          -1.25
++        ],
++        [
++          2095,
++          1.25
++        ],
++        [
++          2092,
++          -0.5
++        ],
++        [
++          2093,
++          0.5
++        ],
++        [
++          2098,
++          -0.75
++        ],
++        [
++          2099,
++          0.75
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2097,
++      "inputs": [
++        [
++          2070,
++          0.0
++        ],
++        [
++          2071,
++          -0.0
++        ],
++        [
++          2080,
++          0.0
++        ],
++        [
++          2081,
++          -0.0
++        ],
++        [
++          2088,
++          0.0
++        ],
++        [
++          2089,
++          -0.0
++        ],
++        [
++          2094,
++          0.0
++        ],
++        [
++          2095,
++          -0.0
++        ],
++        [
++          2092,
++          0.0
++        ],
++        [
++          2093,
++          -0.0
++        ],
++        [
++          2098,
++          0.0
++        ],
++        [
++          2099,
++          -0.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2098,
++      "inputs": [
++        [
++          2074,
++          1.25
++        ],
++        [
++          2075,
++          -1.25
++        ],
++        [
++          2094,
++          -0.05
++        ],
++        [
++          2095,
++          0.05
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2099,
++      "inputs": [
++        [
++          2074,
++          0.0
++        ],
++        [
++          2075,
++          -0.0
++        ],
++        [
++          2094,
++          0.0
++        ],
++        [
++          2095,
++          -0.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2100,
++      "inputs": [
++        [
++          2084,
++          4.0
++        ],
++        [
++          2085,
++          -4.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2101,
++      "inputs": [
++        [
++          2084,
++          0.0
++        ],
++        [
++          2085,
++          -0.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2102,
++      "inputs": [
++        [
++          2094,
++          4.0
++        ],
++        [
++          2095,
++          -4.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2103,
++      "inputs": [
++        [
++          2094,
++          0.0
++        ],
++        [
++          2095,
++          -0.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2104,
++      "inputs": [
++        [
++          2096,
++          4.0
++        ],
++        [
++          2097,
++          -4.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2105,
++      "inputs": [
++        [
++          2096,
++          0.0
++        ],
++        [
++          2097,
++          -0.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2106,
++      "inputs": [
++        [
++          2098,
++          4.0
++        ],
++        [
++          2099,
++          -4.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2107,
++      "inputs": [
++        [
++          2098,
++          0.0
++        ],
++        [
++          2099,
++          -0.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2108,
++      "inputs": [
++        [
++          2080,
++          4.0
++        ],
++        [
++          2081,
++          -4.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2109,
++      "inputs": [
++        [
++          2080,
++          0.0
++        ],
++        [
++          2081,
++          -0.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2110,
++      "inputs": [
++        [
++          2088,
++          4.0
++        ],
++        [
++          2089,
++          -4.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2111,
++      "inputs": [
++        [
++          2088,
++          0.0
++        ],
++        [
++          2089,
++          -0.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2112,
++      "inputs": [
++        [
++          2094,
++          4.0
++        ],
++        [
++          2095,
++          -4.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2113,
++      "inputs": [
++        [
++          2094,
++          0.0
++        ],
++        [
++          2095,
++          -0.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2114,
++      "inputs": [
++        [
++          2098,
++          4.0
++        ],
++        [
++          2099,
++          -4.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2115,
++      "inputs": [
++        [
++          2098,
++          0.0
++        ],
++        [
++          2099,
++          -0.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2116,
++      "inputs": [
++        [
++          2070,
++          4.0
++        ],
++        [
++          2071,
++          -4.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2117,
++      "inputs": [
++        [
++          2070,
++          0.0
++        ],
++        [
++          2071,
++          -0.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2118,
++      "inputs": [
++        [
++          2078,
++          4.0
++        ],
++        [
++          2079,
++          -4.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2119,
++      "inputs": [
++        [
++          2078,
++          0.0
++        ],
++        [
++          2079,
++          -0.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2120,
++      "inputs": [
++        [
++          2084,
++          4.0
++        ],
++        [
++          2085,
++          -4.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2121,
++      "inputs": [
++        [
++          2084,
++          0.0
++        ],
++        [
++          2085,
++          -0.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2122,
++      "inputs": [
++        [
++          2086,
++          4.0
++        ],
++        [
++          2087,
++          -4.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2123,
++      "inputs": [
++        [
++          2086,
++          0.0
++        ],
++        [
++          2087,
++          -0.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2124,
++      "inputs": [
++        [
++          2094,
++          4.0
++        ],
++        [
++          2095,
++          -4.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2125,
++      "inputs": [
++        [
++          2094,
++          0.0
++        ],
++        [
++          2095,
++          -0.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2126,
++      "inputs": [
++        [
++          2096,
++          4.0
++        ],
++        [
++          2097,
++          -4.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2127,
++      "inputs": [
++        [
++          2096,
++          0.0
++        ],
++        [
++          2097,
++          -0.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2128,
++      "inputs": [
++        [
++          2098,
++          4.0
++        ],
++        [
++          2099,
++          -4.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2129,
++      "inputs": [
++        [
++          2098,
++          0.0
++        ],
++        [
++          2099,
++          -0.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2130,
++      "inputs": [
++        [
++          2084,
++          4.0
++        ],
++        [
++          2085,
++          -4.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2131,
++      "inputs": [
++        [
++          2084,
++          0.0
++        ],
++        [
++          2085,
++          -0.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2132,
++      "inputs": [
++        [
++          2094,
++          4.0
++        ],
++        [
++          2095,
++          -4.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2133,
++      "inputs": [
++        [
++          2094,
++          0.0
++        ],
++        [
++          2095,
++          -0.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2134,
++      "inputs": [
++        [
++          2098,
++          4.0
++        ],
++        [
++          2099,
++          -4.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2135,
++      "inputs": [
++        [
++          2098,
++          0.0
++        ],
++        [
++          2099,
++          -0.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2136,
++      "inputs": [
++        [
++          2070,
++          4.0
++        ],
++        [
++          2071,
++          -4.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2137,
++      "inputs": [
++        [
++          2070,
++          0.0
++        ],
++        [
++          2071,
++          -0.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2138,
++      "inputs": [
++        [
++          2078,
++          4.0
++        ],
++        [
++          2079,
++          -4.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    },
++    {
++      "target": 2139,
++      "inputs": [
++        [
++          2078,
++          0.0
++        ],
++        [
++          2079,
++          -0.0
++        ]
++      ],
++      "threshold": 0.0,
++      "output_gain": 1.0
++    }
++  ],
++  "new_arbitration_readout_head": [
++    {
++      "family": "Rest",
++      "source": 2102,
++      "lane": 23,
++      "weight": 4.0
++    },
++    {
++      "family": "Rest",
++      "source": 2103,
++      "lane": 23,
++      "weight": -4.0
++    },
++    {
++      "family": "Rest",
++      "source": 2104,
++      "lane": 23,
++      "weight": -1.5
++    },
++    {
++      "family": "Rest",
++      "source": 2105,
++      "lane": 23,
++      "weight": 1.5
++    },
++    {
++      "family": "Rest",
++      "source": 2106,
++      "lane": 23,
++      "weight": -4.0
++    },
++    {
++      "family": "Rest",
++      "source": 2107,
++      "lane": 23,
++      "weight": 4.0
++    },
++    {
++      "family": "Rest",
++      "source": 2100,
++      "lane": 43,
++      "weight": -2.0
++    },
++    {
++      "family": "Rest",
++      "source": 2101,
++      "lane": 43,
++      "weight": 2.0
++    },
++    {
++      "family": "Approach",
++      "source": 2124,
++      "lane": 36,
++      "weight": -4.0
++    },
++    {
++      "family": "Approach",
++      "source": 2125,
++      "lane": 36,
++      "weight": 4.0
++    },
++    {
++      "family": "Approach",
++      "source": 2126,
++      "lane": 36,
++      "weight": 1.25
++    },
++    {
++      "family": "Approach",
++      "source": 2127,
++      "lane": 36,
++      "weight": -1.25
++    },
++    {
++      "family": "Approach",
++      "source": 2128,
++      "lane": 36,
++      "weight": -2.0
++    },
++    {
++      "family": "Approach",
++      "source": 2129,
++      "lane": 36,
++      "weight": 2.0
++    },
++    {
++      "family": "Approach",
++      "source": 2116,
++      "lane": 37,
++      "weight": 0.5
++    },
++    {
++      "family": "Approach",
++      "source": 2117,
++      "lane": 37,
++      "weight": -0.5
++    },
++    {
++      "family": "Approach",
++      "source": 2116,
++      "lane": 38,
++      "weight": -0.5
++    },
++    {
++      "family": "Approach",
++      "source": 2117,
++      "lane": 38,
++      "weight": 0.5
++    },
++    {
++      "family": "Approach",
++      "source": 2120,
++      "lane": 39,
++      "weight": -2.0
++    },
++    {
++      "family": "Approach",
++      "source": 2121,
++      "lane": 39,
++      "weight": 2.0
++    },
++    {
++      "family": "Avoid",
++      "source": 2130,
++      "lane": 39,
++      "weight": 3.0
++    },
++    {
++      "family": "Avoid",
++      "source": 2131,
++      "lane": 39,
++      "weight": -3.0
++    },
++    {
++      "family": "Approach",
++      "source": 2120,
++      "lane": 40,
++      "weight": -2.0
++    },
++    {
++      "family": "Approach",
++      "source": 2121,
++      "lane": 40,
++      "weight": 2.0
++    },
++    {
++      "family": "Avoid",
++      "source": 2130,
++      "lane": 40,
++      "weight": 3.0
++    },
++    {
++      "family": "Avoid",
++      "source": 2131,
++      "lane": 40,
++      "weight": -3.0
++    },
++    {
++      "family": "Approach",
++      "source": 2118,
++      "lane": 41,
++      "weight": 0.5
++    },
++    {
++      "family": "Approach",
++      "source": 2119,
++      "lane": 41,
++      "weight": -0.5
++    },
++    {
++      "family": "Approach",
++      "source": 2122,
++      "lane": 41,
++      "weight": 0.25
++    },
++    {
++      "family": "Approach",
++      "source": 2123,
++      "lane": 41,
++      "weight": -0.25
++    },
++    {
++      "family": "Avoid",
++      "source": 2132,
++      "lane": 36,
++      "weight": -2.0
++    },
++    {
++      "family": "Avoid",
++      "source": 2133,
++      "lane": 36,
++      "weight": 2.0
++    },
++    {
++      "family": "Avoid",
++      "source": 2134,
++      "lane": 36,
++      "weight": 5.0
++    },
++    {
++      "family": "Avoid",
++      "source": 2135,
++      "lane": 36,
++      "weight": -5.0
++    },
++    {
++      "family": "Avoid",
++      "source": 2134,
++      "lane": 38,
++      "weight": 2.0
++    },
++    {
++      "family": "Avoid",
++      "source": 2135,
++      "lane": 38,
++      "weight": -2.0
++    },
++    {
++      "family": "Ingest",
++      "source": 2136,
++      "lane": 37,
++      "weight": 4.0
++    },
++    {
++      "family": "Ingest",
++      "source": 2137,
++      "lane": 37,
++      "weight": -4.0
++    },
++    {
++      "family": "Ingest",
++      "source": 2136,
++      "lane": 38,
++      "weight": -4.0
++    },
++    {
++      "family": "Ingest",
++      "source": 2137,
++      "lane": 38,
++      "weight": 4.0
++    },
++    {
++      "family": "Inspect",
++      "source": 2108,
++      "lane": 36,
++      "weight": 0.75
++    },
++    {
++      "family": "Inspect",
++      "source": 2109,
++      "lane": 36,
++      "weight": -0.75
++    },
++    {
++      "family": "Inspect",
++      "source": 2110,
++      "lane": 36,
++      "weight": 0.25
++    },
++    {
++      "family": "Inspect",
++      "source": 2111,
++      "lane": 36,
++      "weight": -0.25
++    },
++    {
++      "family": "Inspect",
++      "source": 2112,
++      "lane": 36,
++      "weight": -0.5
++    },
++    {
++      "family": "Inspect",
++      "source": 2113,
++      "lane": 36,
++      "weight": 0.5
++    },
++    {
++      "family": "Inspect",
++      "source": 2114,
++      "lane": 36,
++      "weight": -0.5
++    },
++    {
++      "family": "Inspect",
++      "source": 2115,
++      "lane": 36,
++      "weight": 0.5
++    },
++    {
++      "family": "Other",
++      "source": 2138,
++      "lane": 42,
++      "weight": 0.25
++    },
++    {
++      "family": "Other",
++      "source": 2139,
++      "lane": 42,
++      "weight": -0.25
++    }
++  ],
++  "extra_cost_before_tile_padding": {
++    "neurons": 96,
++    "sensor_assignments": 22,
++    "branches": 70,
++    "branch_inputs": 184,
++    "recurrent_copy_rows": 0,
++    "decoder_rows": 50
++  },
++  "no_default_promotion": true,
++  "class5_alone_admits_this": false,
++  "native_execution": false,
++  "legacy_weights_or_optimizer_changed": false,
++  "required_new_identity": [
++    "capacity",
++    "foundation",
++    "encoder",
++    "dynamics",
++    "branch_plan",
++    "decoder_head",
++    "execution_budget"
++  ],
++  "staging_dependency": "current derived object/chem/thermal/peer features only; new affine reference and readout heads still need CPU/WGSL implementation and tests",
++  "important_limits": [
++    "independent T1 motor sampling remains stochastic and can still select moving Rest",
++    "high ATP is availability, not distress",
++    "temperature is unsigned bodily stress",
++    "unbound extension1 has no behavior",
++    "peer is not mate eligibility",
++    "negative taste is not measured poison",
++    "no novelty/play inference invented"
++  ],
++  "variant": "M0",
++  "old_proposal_path": "legacy readout stays an explicitly measured parallel path",
++  "execution_pairs": [
++    {
++      "family": "Rest",
++      "controller_signal": 2084,
++      "name": "execute_Rest_2084",
++      "signal": 2100,
++      "reference": 2101
++    },
++    {
++      "family": "Rest",
++      "controller_signal": 2094,
++      "name": "execute_Rest_2094",
++      "signal": 2102,
++      "reference": 2103
++    },
++    {
++      "family": "Rest",
++      "controller_signal": 2096,
++      "name": "execute_Rest_2096",
++      "signal": 2104,
++      "reference": 2105
++    },
++    {
++      "family": "Rest",
++      "controller_signal": 2098,
++      "name": "execute_Rest_2098",
++      "signal": 2106,
++      "reference": 2107
++    },
++    {
++      "family": "Inspect",
++      "controller_signal": 2080,
++      "name": "execute_Inspect_2080",
++      "signal": 2108,
++      "reference": 2109
++    },
++    {
++      "family": "Inspect",
++      "controller_signal": 2088,
++      "name": "execute_Inspect_2088",
++      "signal": 2110,
++      "reference": 2111
++    },
++    {
++      "family": "Inspect",
++      "controller_signal": 2094,
++      "name": "execute_Inspect_2094",
++      "signal": 2112,
++      "reference": 2113
++    },
++    {
++      "family": "Inspect",
++      "controller_signal": 2098,
++      "name": "execute_Inspect_2098",
++      "signal": 2114,
++      "reference": 2115
++    },
++    {
++      "family": "Approach",
++      "controller_signal": 2070,
++      "name": "execute_Approach_2070",
++      "signal": 2116,
++      "reference": 2117
++    },
++    {
++      "family": "Approach",
++      "controller_signal": 2078,
++      "name": "execute_Approach_2078",
++      "signal": 2118,
++      "reference": 2119
++    },
++    {
++      "family": "Approach",
++      "controller_signal": 2084,
++      "name": "execute_Approach_2084",
++      "signal": 2120,
++      "reference": 2121
++    },
++    {
++      "family": "Approach",
++      "controller_signal": 2086,
++      "name": "execute_Approach_2086",
++      "signal": 2122,
++      "reference": 2123
++    },
++    {
++      "family": "Approach",
++      "controller_signal": 2094,
++      "name": "execute_Approach_2094",
++      "signal": 2124,
++      "reference": 2125
++    },
++    {
++      "family": "Approach",
++      "controller_signal": 2096,
++      "name": "execute_Approach_2096",
++      "signal": 2126,
++      "reference": 2127
++    },
++    {
++      "family": "Approach",
++      "controller_signal": 2098,
++      "name": "execute_Approach_2098",
++      "signal": 2128,
++      "reference": 2129
++    },
++    {
++      "family": "Avoid",
++      "controller_signal": 2084,
++      "name": "execute_Avoid_2084",
++      "signal": 2130,
++      "reference": 2131
++    },
++    {
++      "family": "Avoid",
++      "controller_signal": 2094,
++      "name": "execute_Avoid_2094",
++      "signal": 2132,
++      "reference": 2133
++    },
++    {
++      "family": "Avoid",
++      "controller_signal": 2098,
++      "name": "execute_Avoid_2098",
++      "signal": 2134,
++      "reference": 2135
++    },
++    {
++      "family": "Ingest",
++      "controller_signal": 2070,
++      "name": "execute_Ingest_2070",
++      "signal": 2136,
++      "reference": 2137
++    },
++    {
++      "family": "Other",
++      "controller_signal": 2078,
++      "name": "execute_Other_2078",
++      "signal": 2138,
++      "reference": 2139
++    }
++  ],
++  "direct_controller_readouts_active": false,
++  "same_tick_latency_warning": "one more microstep dependency than direct supervision; do not add an unpriced hidden settle pass",
++  "legacy_neural_outputs_exactly_preserved": false,
++  "lifetime_contract": "Every new paired dynamics/branch/readout/copy parameter must be explicitly fixed across ordinary somatic, replay, consolidation, structural and optimizer writes for initial qualification, or updated with a versioned priced symmetric-parameter rule. Zero genetic weight or alpha is not a lifetime freeze. Verify offsets and restore; learning elsewhere continues."
++}

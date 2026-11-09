@@ -1,0 +1,63 @@
+{
+  "activation_head": "bbffb5b0b0856509aed9af11a26e7aeec60f544d",
+  "activation_marker_sha256": "79d03fc3f428eeabb454745bd02bafbd8be24f583a97b539a14fefcef46ae549",
+  "body_advances": 0,
+  "bound_files": 864,
+  "cargo_lock_sha256": "2b637c0f2b2cd34fb9fe2f9a5f9a3a7b490f0b7f8d5f1f7c8764f29077d0ebdd",
+  "code": "CHECK",
+  "completed": [
+    "core"
+  ],
+  "correction_patch_sha256": "0ce2a14320e13e31b9727d41d979798910c31e9663dcaca043c0900c5c96774a",
+  "diagnostics": [
+    {
+      "code": "E0433",
+      "line": 212,
+      "path": "crates/alife_world/src/headless/grip_options.rs",
+      "stage": "world"
+    },
+    {
+      "code": "E0433",
+      "line": 213,
+      "path": "crates/alife_world/src/headless/grip_options.rs",
+      "stage": "world"
+    },
+    {
+      "code": "E0433",
+      "line": 219,
+      "path": "crates/alife_world/src/headless/grip_options.rs",
+      "stage": "world"
+    },
+    {
+      "code": "E0433",
+      "line": 220,
+      "path": "crates/alife_world/src/headless/grip_options.rs",
+      "stage": "world"
+    }
+  ],
+  "elapsed_seconds": 74,
+  "grip_patch_sha256": "acf8cc50353ba76cb7adf5af1db5845ee6e6b2e2261d0ee823821428e2e4d054",
+  "main": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "native_test_bodies": 0,
+  "output_bytes": 193305,
+  "peak_rss_bytes": 1612570624,
+  "peak_workspace_bytes": 1170502961,
+  "plan_id": "m2-grip-hosted-typecheck-v2",
+  "prepared_head": "f5ce4d6de7ddf2e04473befefc715cc48bb28f26",
+  "research_base": "fbf2a517f93098b5d936878a3d26bbb8d0391c38",
+  "schema": "m2-grip-typecheck-summary-v2",
+  "seal_sha256": "5d9766bf930f799a96fa8cf23324fadbc45b73a7130121cc976de455db2ad0c6",
+  "source_forwards": 0,
+  "source_manifest_sha256": "c9d9fb1107462a855cb2237c6e3433cf78699cda37a86b5cf7f1751a43ea7d22",
+  "stage": "world",
+  "toolchain": {
+    "cargo": "cargo 1.99.1 (5f94df478 2026-08-27)",
+    "cargo_binary_sha256": "a670e02cfa39ac2e53f77a2d911ca1fc9e2c479b0603ec956625be1daf24e3af",
+    "host": "x86_64-unknown-linux-gnu",
+    "llvm": "23.1.1",
+    "rust_commit": "58cf8f9c35b355199727627d07ae34a4e2846d67",
+    "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+    "rustc_binary_sha256": "b53b780f77f952062f8ca8a3b70aef2390b1e45ad91939be94afdc9543026853"
+  },
+  "world_commands": 0
+}

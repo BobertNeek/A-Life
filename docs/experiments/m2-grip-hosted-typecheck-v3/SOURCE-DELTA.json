@@ -1,0 +1,52 @@
+{
+  "changed_files": [
+    {
+      "after": {
+        "bytes": 161109,
+        "path": "Cargo.lock",
+        "sha256": "99b01e0353263fd5bbf0261320898e8395d45583f2045e3433d3e2a1f50070eb"
+      },
+      "before": {
+        "bytes": 161097,
+        "path": "Cargo.lock",
+        "sha256": "2b637c0f2b2cd34fb9fe2f9a5f9a3a7b490f0b7f8d5f1f7c8764f29077d0ebdd"
+      }
+    },
+    {
+      "after": {
+        "bytes": 332,
+        "path": "crates/alife_world/Cargo.toml",
+        "sha256": "4169b4fc6018cc835fe1d3635924058abb83892d284bfaedf000ac6d9c3a5bc4"
+      },
+      "before": {
+        "bytes": 307,
+        "path": "crates/alife_world/Cargo.toml",
+        "sha256": "8ea02fa0709aacf4dd97043fe9fbb3d2af0afd4a073561c7edf25780e6cdd196"
+      }
+    }
+  ],
+  "correction_patch": {
+    "bytes": 335,
+    "path": "patches/grip-v5-to-v6.patch",
+    "sha256": "fa468c4ca23f88c2f90f561176283fb1bf0f53c24280fee6c6dcdd093f5ed712"
+  },
+  "expected_prior_failure": {
+    "code": "E0433",
+    "lines": [
+      212,
+      213,
+      219,
+      220
+    ],
+    "path": "crates/alife_world/src/headless/grip_options.rs",
+    "stage": "world"
+  },
+  "schema": "m2-grip-v6-hosted-source-delta-v1",
+  "semantic_checks": {
+    "features_unchanged": true,
+    "only_existing_bincode_lock_edge_added": true,
+    "only_world_dev_dependency_added": true,
+    "package_versions_unchanged": true,
+    "source_code_unchanged": true
+  }
+}

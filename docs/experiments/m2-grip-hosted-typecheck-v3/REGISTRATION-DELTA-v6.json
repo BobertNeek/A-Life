@@ -1,0 +1,21 @@
+{
+  "base_registration": "registered-source-v5.json",
+  "base_registration_sha256": "93a96de95d9562b57d2891e41dfcd36e99cf73bb8d94971c0ad17fd87593c72e",
+  "base_source_commit": "f5ce4d6de7ddf2e04473befefc715cc48bb28f26",
+  "mapped_paths": 149,
+  "overrides": [
+    {
+      "bytes": 161109,
+      "path": "Cargo.lock",
+      "sha256": "99b01e0353263fd5bbf0261320898e8395d45583f2045e3433d3e2a1f50070eb"
+    },
+    {
+      "bytes": 332,
+      "path": "crates/alife_world/Cargo.toml",
+      "sha256": "4169b4fc6018cc835fe1d3635924058abb83892d284bfaedf000ac6d9c3a5bc4"
+    }
+  ],
+  "parent_v6_registered_map_sha256": "a2663ee340be7a1b7c0606e60927684fa3c37a1b0bcaf3e239fa1e17cfe01bc9",
+  "schema": "grip-registration-delta-v6",
+  "source_closure": "3ce43eb7cfade54c62fdd259caab6133e6c1d30756fc17ae92acd86526fa9548"
+}
