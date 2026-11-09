@@ -1,0 +1,53 @@
+name: M2 controlled Play recovery diagnostics v4
+on:
+  push:
+    branches: [qualification/m2-channel-native-play-recovery-diag-v4]
+    paths: [docs/experiments/m2-channel-native-play-recovery-diag-v4/ACTIVATE.json]
+permissions:
+  contents: read
+concurrency:
+  group: m2-channel-native-play-recovery-diag-v4
+  cancel-in-progress: false
+jobs:
+  fixed-qualification:
+    if: >-
+      github.repository == 'BobertNeek/A-Life' &&
+      github.ref == 'refs/heads/qualification/m2-channel-native-play-recovery-diag-v4' &&
+      github.event.created == false && github.event.deleted == false &&
+      github.event.forced == false && github.run_attempt == '1'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      EXPECTED_SEAL_SHA256: ff14ec3d8d81087dad0bbff8658b83d6d4e11986c47954bcd1f8d5539f2e0b59
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - name: Read exact activation and prepared parents
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          path: bundle
+          persist-credentials: false
+          fetch-depth: 3
+          lfs: false
+          submodules: false
+      - name: Read exact research source base
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: c3aec16df33861f1316d127736f5f60eea327ede
+          path: source
+          persist-credentials: false
+          fetch-depth: 1
+          lfs: false
+          submodules: false
+      - name: Read pinned published reconstruction only
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: 80332c3a4b30a8a84f5bcb6a7ee0a20a47c7b19d
+          path: reuse
+          persist-credentials: false
+          fetch-depth: 1
+          lfs: false
+          submodules: false
+      - name: Admit and run frozen disposable qualification once
+        shell: bash
+        run: python3 bundle/docs/experiments/m2-channel-native-play-recovery-diag-v4/run_hosted.py

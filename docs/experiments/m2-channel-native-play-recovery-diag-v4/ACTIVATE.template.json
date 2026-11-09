@@ -1,0 +1,11 @@
+{
+  "schema": "m2-channel-native-controlled-diagnostic-activation-v4",
+  "plan_id": "m2-channel-native-play-recovery-diag-v4",
+  "main": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "research_base": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "prepared_head": "REPLACE_ONLY_AFTER_VERIFIED_PREPARED_COMMIT",
+  "seal_sha256": "ff14ec3d8d81087dad0bbff8658b83d6d4e11986c47954bcd1f8d5539f2e0b59",
+  "source_manifest_sha256": "b486c3c6d9123ad0d58393297435b2f8c5b8a62f003d74fb452c290d5f8a57fc",
+  "attempt": 1,
+  "fixed_disposable_qualification_only": true
+}

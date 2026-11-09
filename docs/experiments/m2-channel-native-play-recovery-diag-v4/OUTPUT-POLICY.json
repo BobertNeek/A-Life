@@ -1,0 +1,7 @@
+{
+  "artifact_upload": false,
+  "public": "strict bounded finite interval/endpoint scalars, enum phases, test names and bound compiler error path-line-code only",
+  "raw_private_pipes": "64KiB per fixture, counted and never uploaded",
+  "failure": "retain valid controlled observations parsed before failure",
+  "phase_snapshots": "fixed enum phase plus bounded integer ordinal/attempted/returned/verified/restored counters; flushed before assertions; validated partial snapshots retained on runtime failure"
+}

@@ -1,0 +1,88 @@
+{
+  "files": [
+    {
+      "bytes": 16734,
+      "path": "CONTROLLED-FIXTURE.patch",
+      "sha256": "1e66aace2dd0037402831871450cf9615e78e7235c63066d459e063a35732cdc"
+    },
+    {
+      "bytes": 11431,
+      "path": "DIAGNOSTIC-ONLY.patch",
+      "sha256": "2262a694f16b640b832d7ecc93a60b819b8e5d2f0262cc49cbcf0dc00567573c"
+    },
+    {
+      "bytes": 410,
+      "path": "DOSE-INVENTORY.json",
+      "sha256": "c7b9509ee657c29bc36aa2ba24724bad7d3b72e14d01fa26dbbb5584b36bbea1"
+    },
+    {
+      "bytes": 329,
+      "path": "FIXED-INVENTORY.json",
+      "sha256": "e24a3359182f93ec3f9e8be1bce5f55b0ac6b8e054fa45e83462c355ed55629c"
+    },
+    {
+      "bytes": 1144,
+      "path": "FUNCTION-FREEZE.json",
+      "sha256": "19343c75aff84a4e636e4cb97f861294e399acd2d4e521e4616533ecdcbeea39"
+    },
+    {
+      "bytes": 92558,
+      "path": "INHERITED-WORKFLOW-FIXTURES.json",
+      "sha256": "e45e6ea9f0b5de64ad00a3fbc108cbefcce48f5eab8b9c32caceaa9650497fcd"
+    },
+    {
+      "bytes": 511,
+      "path": "OUTPUT-POLICY.json",
+      "sha256": "448d6a11dafae6fbab5c9eaf91ad888be5e549f4ddbd33dd6c0fc3ab7b5ad327"
+    },
+    {
+      "bytes": 3695,
+      "path": "README.md",
+      "sha256": "daf82c4b8e9a472ca4a26a1e6c8e03b185ef6642cf69a10eaea2dc6aed85b314"
+    },
+    {
+      "bytes": 1556,
+      "path": "REUSE-INPUTS.json",
+      "sha256": "aada70fe37b86fa42ffdfb89863a551df0c460c326dc2ff00ea762ce921b9a9e"
+    },
+    {
+      "bytes": 2210,
+      "path": "SOURCE-PROOF.json",
+      "sha256": "3c1f20d86d04ece348eff59e2b2449b6d2989a0126ff8aec64e166bdea365186"
+    },
+    {
+      "bytes": 1281,
+      "path": "STATIC-RESULTS.json",
+      "sha256": "ce0b67ed1610d7126204fa5b4c43c23b0324bc2616f45df9c75b8d319234fe57"
+    },
+    {
+      "bytes": 4382,
+      "path": "WORKFLOW-PRESERVATION.json",
+      "sha256": "13e5a1512ee206a474c99e3a66dd435e288d0626c748755b9fae1ff3f677e556"
+    },
+    {
+      "bytes": 472290,
+      "path": "host-source-capsule.tar.gz",
+      "sha256": "073edda7bf4949c6bb146a836be23d8832e5f2552afd06b1881cd86de3de99af"
+    },
+    {
+      "bytes": 44599,
+      "path": "run_hosted.py",
+      "sha256": "4dc5c4ca622243e2b60f6cb2f38103f9565bf4ae3430f1b2cab83f04a5909c93"
+    },
+    {
+      "bytes": 413282,
+      "path": "source-manifest.json",
+      "sha256": "b486c3c6d9123ad0d58393297435b2f8c5b8a62f003d74fb452c290d5f8a57fc"
+    },
+    {
+      "bytes": 8043,
+      "path": "static_checks.py",
+      "sha256": "be8d3fe253c8b7a439a950e9414c93e7f53357fee6d1a972e81c4f3134333088"
+    }
+  ],
+  "native_qualified": false,
+  "plan_id": "m2-channel-native-play-recovery-diag-v4",
+  "publication_state": "not_published",
+  "source_ready": true
+}
