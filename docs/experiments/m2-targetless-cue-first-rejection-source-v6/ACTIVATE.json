@@ -1,0 +1,11 @@
+{
+  "attempt": 1,
+  "fixed_disposable_qualification_only": true,
+  "main": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "plan_id": "m2-targetless-cue-first-rejection-source-v6",
+  "prepared_head": "7029c828be5b2f55ff8376243e21665e4589973e",
+  "research_base": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "schema": "m2-targetless-cue-first-rejection-source-activation-v6",
+  "seal_sha256": "35d725e46bf265b65b2272bc2f5f9eec6b33069a3a2a19885a18197738d0679b",
+  "source_manifest_sha256": "3acaf6d652f1b78803cf2abda6c27eb5e40bb9f93eb911b91621b83b0ea63d9f"
+}
