@@ -1,0 +1,57 @@
+{
+  "routes": [
+    {
+      "bytes": 9829,
+      "finding": "Canonical conversion: target=None only when both target fields absent; directionZero; intensity/duration/confidence from actual candidate command; coord0. Idle compatibility mapsPosture; ordinary-head Idle excluded. Bundles use actual candidate commands.",
+      "lines": "107-123,145-156,199-206,214-267",
+      "path": "crates/alife_core/src/factorized_selection.rs",
+      "sha256": "f81e20fb3ebdf55d33f51d95ac53df55f6d3b7f764434ad6e91d012e7797bb2a"
+    },
+    {
+      "bytes": 24872,
+      "finding": "Exact registry: Locomotion103, Manipulation212, Posture104; Idle1; BodySleep3 effort0.05; AwakeRest700 effort0. All intrinsicbasis and observedNone.",
+      "lines": "108-127,388-461",
+      "path": "crates/alife_world/src/candidate_enumerator.rs",
+      "sha256": "a5dbb5a4c9bdf21a3aac4596f925249a03a6138123d241dc4b4da281d28f8205"
+    },
+    {
+      "bytes": 2061,
+      "finding": "BodySleep3 and AwakeRest700 distinct; rejects aliases2201/2202; requires targetNONE and observationNone.",
+      "lines": "11-66",
+      "path": "crates/alife_core/src/recovery_operation.rs",
+      "sha256": "7d724c41c7d75d548d6c2f20b2034b33daf7f0dee795672cdf86e5d87d156ef6"
+    },
+    {
+      "bytes": 10944,
+      "finding": "Profile5 recovery checks owner/tick and correct Posture role with empty payload and zero direction. NonPosture3/700 rejected.",
+      "lines": "75-120",
+      "path": "crates/alife_world/src/headless/sleep_choice_research.rs",
+      "sha256": "dc0b72f7ab69f8374c5b92632c4608c26fb4f7aff07ab3b792c36a60dfaabc32"
+    },
+    {
+      "bytes": 585020,
+      "finding": "World no-op/idle/rest routes distinct. Actual Eat resolves entity, reach, acquisition prep and actual self-held unconsumed food; no remembered relative velocity feasibility gate.",
+      "lines": "5693-5732,6134-6170,6873-6874",
+      "path": "crates/alife_world/src/headless.rs",
+      "sha256": "ffcf799afd5f4aa1b37414824c189f68d858f8f1d31035cb93b0166cbc7dae78"
+    },
+    {
+      "bytes": 62573,
+      "finding": "Actual capability, ownership, reach and preparation control acquisition.",
+      "lines": "79-118",
+      "path": "crates/alife_world/src/headless/hands.rs",
+      "sha256": "a4d09624c2fc24161846f1691cd644fbad299603ed98b5c80e858f854a68eb41"
+    },
+    {
+      "bytes": 18145,
+      "finding": "Relative velocity normalized by4; V1 tolerance.02 corresponds.08 raw coordinate velocity units, not established physicalunits/sec.",
+      "lines": "388-402",
+      "path": "crates/alife_world/src/grounded_sensing.rs",
+      "sha256": "2380393bc21ffe71a1f481a5bf812a8990dfd001f55da54715c5a455c84a3b41"
+    }
+  ],
+  "schema": "canonical-targetless-authoritative-source-trace-v3",
+  "source_identity": "All trace hashes verified against inherited exact V2 final source manifest; no physics change.",
+  "version2_result": "Historical-frame readout only: consumed source2 admitted after reached/contacted Eat velocity exemption; not a later policy opportunity.",
+  "version3_dose": "Two scripted producers with real canonical Posture104 plus one current ordinary opportunity and one committed third path."
+}

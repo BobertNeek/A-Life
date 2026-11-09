@@ -1,0 +1,13 @@
+{
+  "all826_other_source_rows_literal_v3": true,
+  "all827_final_source_rows_verified": true,
+  "change": "fixture generic serialization helper accepts Serialize + ?Sized",
+  "changed_source_files": 1,
+  "independent_source_review": "Both operands at original line337 are unsized slices. The helper-bound correction fixes both. memory() returns owned restored memory, so it does not borrow the host across the third step. Adjacent source review found no obvious further type/borrow error.",
+  "other5_overlay_files_literal_v3": true,
+  "parent_review": "Reviewed README and extra_static.py: helper correction and strict all-tree, prefix, counter and cold assertions appropriate.",
+  "review_limits": "Read-only inspection and Python static controls, not native compilation.",
+  "schema": "compilation-fix-source-review-v4",
+  "v3_retained_stage_unchanged": true,
+  "virtual_full_reconstruction_verified": true
+}

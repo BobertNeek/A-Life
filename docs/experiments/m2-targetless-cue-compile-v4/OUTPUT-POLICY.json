@@ -1,0 +1,13 @@
+{
+  "effect_rule": "All finite zero/negative/positive outcomes are valid; selected action is not forced. Future grip/consumption Unknown.",
+  "legacy_projectors": "V1 reason and V2 signed matched readouts remain literal frozen functions.",
+  "limits": {
+    "fixture_pipe_bytes": 65536,
+    "summary_bytes": 32768
+  },
+  "raw_child_output": "Private bounded pipes only; no raw stdout/stderr or artifact upload. Fail closed on unrecognized lines/keys.",
+  "sampler_schema": "canonical-targetless-current-opportunity-v3",
+  "schema": "canonical-targetless-output-policy-v3",
+  "source_readout_schema": "canonical-targetless-source-readouts-v3",
+  "summary_schema": "canonical-targetless-current-hosted-summary-v3"
+}

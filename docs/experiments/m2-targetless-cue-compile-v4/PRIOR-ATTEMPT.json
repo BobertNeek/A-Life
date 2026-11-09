@@ -1,0 +1,258 @@
+{
+  "activation_commit": "c95d516e3799659e8d64334d286267967fecab62",
+  "actual_fixture_source_forwards": 0,
+  "actual_fixture_world_intervals": 0,
+  "attempt": 1,
+  "conclusion": "failure",
+  "failure_is_not_negative_behavioral_evidence": true,
+  "job_id": 129429669052,
+  "native_fixture_processes": 0,
+  "prepared_commit": "25f464e53ba07a6e62b8a23999561bcf8a734ca9",
+  "raw_child_output_retained_or_published": false,
+  "rerun_v3_prohibited": true,
+  "run_id": 42696511329,
+  "run_url": "https://github.com/BobertNeek/A-Life/actions/runs/42696511329",
+  "schema": "retained-v3-failure-v4",
+  "summary": {
+    "code": "CHECK",
+    "diagnostics": [
+      {
+        "code": "E0277",
+        "line": 337,
+        "path": "crates/alife_training/src/cpu/joint_episode_host_tests.rs",
+        "stage": "graded-test-build"
+      }
+    ],
+    "peak_rss_bytes": 1742839808,
+    "peak_workspace_bytes": 1825288001,
+    "private_output_counted_bytes": 437970,
+    "result": null,
+    "schema": "canonical-targetless-current-hosted-summary-v3",
+    "stage": "graded-test-build",
+    "test_processes_attempted": 0
+  },
+  "v3_retained_stage_files": [
+    {
+      "bytes": 825,
+      "path": "CLOSEOUT.json",
+      "sha256": "84360bd0ccb14949a97c4548bf58d7079dfa733bad2725fec4c691c1ded885b2"
+    },
+    {
+      "bytes": 16679,
+      "path": "REMOTEFILES.json",
+      "sha256": "a31dee51abf83aa8d571a21fb5acf5da7ae87a70e84be1ac44b54ce117210a9f"
+    },
+    {
+      "bytes": 7516,
+      "path": "finish_packet.py",
+      "sha256": "87b3b01cbec2b5c28d010c954c70358da652c27a0bc8ebb65d270b344940cf71"
+    },
+    {
+      "bytes": 9134,
+      "path": "inputs/v2/REUSE-MANIFEST.json",
+      "sha256": "169e864ea8d5c6d3e02a6fe3407232e94f5b99b955672a5bb011fd74d900ce82"
+    },
+    {
+      "bytes": 4382,
+      "path": "inputs/v2/WORKFLOW-PRESERVATION.json",
+      "sha256": "13e5a1512ee206a474c99e3a66dd435e288d0626c748755b9fae1ff3f677e556"
+    },
+    {
+      "bytes": 21381,
+      "path": "inputs/v2/meal-kinematic-source-overlay.tar.gz",
+      "sha256": "897b88b5a9f63e13aec92800430b2559637727b61ac1807f770898d3d693091f"
+    },
+    {
+      "bytes": 28984,
+      "path": "inputs/v2/meal-kinematic-source-overlay.tar.gz.base64",
+      "sha256": "03bd5497d3580521e1f34de9377a62209ad39dcc1e459e49f503ff3711794737"
+    },
+    {
+      "bytes": 42085,
+      "path": "inputs/v2/run_hosted.py",
+      "sha256": "f45432565911883f5b2110c6e2dccca50aecc9d15c2b34a8e79a571a9885a1b0"
+    },
+    {
+      "bytes": 4535,
+      "path": "inputs/v2/seal.json",
+      "sha256": "1fb5298eb6c6e7bc0c81eb77f4b4dda9da9ec5e5cd413a4e9e335479eaed5563"
+    },
+    {
+      "bytes": 13398,
+      "path": "inputs/v2/source/crates/alife_training/src/cpu/joint_episode_host.rs",
+      "sha256": "d0f3b58857687079eb8ee88b71125853c6bccc2b6db8d5518ae21fedf8f5a8a3"
+    },
+    {
+      "bytes": 18659,
+      "path": "inputs/v2/source/crates/alife_training/src/cpu/joint_episode_host_tests.rs",
+      "sha256": "8e2a697cc38d0504800ae4f8044ac2192386c21f5aadba9b96f82b4f001f3cff"
+    },
+    {
+      "bytes": 10814,
+      "path": "inputs/v2/source/crates/alife_training/src/cpu/meal_cue_v2.rs",
+      "sha256": "7a5b5de122cd328b8e0a8fce5bf0e7486b255732fc50ab3415d23c0afe3eba43"
+    },
+    {
+      "bytes": 8449,
+      "path": "inputs/v2/source/crates/alife_training/src/cpu/meal_cue_v2_contracts.rs",
+      "sha256": "7ca2288a01480df3d91d3a047efa51238027d7f1c395d67b2ecb86a450d81d22"
+    },
+    {
+      "bytes": 13820,
+      "path": "inputs/v2/source/crates/alife_training/src/cpu/motor_mediation/confidence/policy/optional_vocal/joint_episode.rs",
+      "sha256": "f912d2f563611aabfa555a5b71b9591dc8a60667aa8bcd917ed8e7cb9b791d1d"
+    },
+    {
+      "bytes": 14914,
+      "path": "inputs/v2/source/crates/alife_training/src/cpu/visible_cue_joint.rs",
+      "sha256": "d6866512d96bd1b994d88b372a5413b8cd2b7d270caf0fd6f9fa01efc9cb891e"
+    },
+    {
+      "bytes": 495715,
+      "path": "inputs/v2/source-manifest.json",
+      "sha256": "7d41aa405f2f7f6641cedce7eb49e52056cca1071e132f760d32df0c02cab8b1"
+    },
+    {
+      "bytes": 13782,
+      "path": "overlay/crates/alife_training/src/cpu/canonical_cue_v3.rs",
+      "sha256": "5aa338f2e303370f88eb360c2f116283ef0c92fb231069bb0439ae5e4fd153ad"
+    },
+    {
+      "bytes": 7140,
+      "path": "overlay/crates/alife_training/src/cpu/canonical_cue_v3_contracts.rs",
+      "sha256": "d1f60d3257880dcc1e0f06f9d889c9099081194b4bc8029adfbd7a223a165629"
+    },
+    {
+      "bytes": 13529,
+      "path": "overlay/crates/alife_training/src/cpu/joint_episode_host.rs",
+      "sha256": "ae4972f46639a972eb40243860620ca53468bf4a6faa261db3d8e67299f57ca1"
+    },
+    {
+      "bytes": 21622,
+      "path": "overlay/crates/alife_training/src/cpu/joint_episode_host_tests.rs",
+      "sha256": "4ba545e8f70f7d85b95f079180f0e9cf19a7178dccf379f2d13702df2e6e8ffe"
+    },
+    {
+      "bytes": 10878,
+      "path": "overlay/crates/alife_training/src/cpu/meal_cue_v2.rs",
+      "sha256": "6991d4ab25b0be17b4a42ba23d492d32a49708d9fd3121b45046e76c0d2fb869"
+    },
+    {
+      "bytes": 19113,
+      "path": "overlay/crates/alife_training/src/cpu/motor_mediation/confidence/policy/optional_vocal/joint_episode.rs",
+      "sha256": "a6648782a9982b628c7f87ddfefbac3fe236ddd401ba61ffc79af8a03fcde0c4"
+    },
+    {
+      "bytes": 508,
+      "path": "packet/ACTIVATE.template.json",
+      "sha256": "685c59207d0c5678eac30e644b87f5e1d4076c834f1b885ecb9cfbd109319590"
+    },
+    {
+      "bytes": 860,
+      "path": "packet/DOSE-INVENTORY.json",
+      "sha256": "721d9acf4597b15c5a95b37a312bdfc0f46fee6149af43746f0718ccc3c9418c"
+    },
+    {
+      "bytes": 6571,
+      "path": "packet/FUNCTION-FREEZE.json",
+      "sha256": "2eb0d94ce44193d0c8369d8d4acb47e915d7d73168932ca4811069c80014c427"
+    },
+    {
+      "bytes": 714,
+      "path": "packet/OUTPUT-POLICY.json",
+      "sha256": "8bedaddbab3bd9154473b9daafdd0ec836f00baf313388f7ecf39ac9bd4ffb2f"
+    },
+    {
+      "bytes": 2924,
+      "path": "packet/PACKAGING-DELTA.json",
+      "sha256": "a3f95c9b4179685441c1fd7d8bcf480edb5e5b70499a0eba8ad04533b5764742"
+    },
+    {
+      "bytes": 1253,
+      "path": "packet/PROPOSED-HOSTED.json",
+      "sha256": "d9c1a9b9438e2c9659074b5311574a6ca49b49c7d25c153ac3a10623ab6df473"
+    },
+    {
+      "bytes": 536,
+      "path": "packet/PUBLICATION.json",
+      "sha256": "8eb018466aba98012b3ccb1819cceb673910759400c3e6885ce6912e38f3ee6c"
+    },
+    {
+      "bytes": 1085,
+      "path": "packet/REACHABLE-SOURCE-RECONSTRUCTION.json",
+      "sha256": "de58a11dd883e3f4bbadd6f3e779abeccc36d8d33a231c69b0daa66e3783f9a2"
+    },
+    {
+      "bytes": 4131,
+      "path": "packet/README.md",
+      "sha256": "7aac608bd6b7778ffb7a368930f6f2fbd9d7959c801b030e84b5330f3cf63ca3"
+    },
+    {
+      "bytes": 9409,
+      "path": "packet/REUSE-MANIFEST.json",
+      "sha256": "96b38bb32690fbfd749ec0642ab4b00d6b64447eb73b7637f51078c4c0ae37ff"
+    },
+    {
+      "bytes": 3158,
+      "path": "packet/ROUTE-TRACE.json",
+      "sha256": "b2eea771d2d08601828f48b7b49e57f6cb2e46567af9595a346fd15c945fb127"
+    },
+    {
+      "bytes": 156720,
+      "path": "packet/SOURCE-CLOSURE.json",
+      "sha256": "1a2feae55cc3c8f248410c835b47fb67f99e22d53c47de5b59f7a0631e9685a8"
+    },
+    {
+      "bytes": 1435,
+      "path": "packet/STATIC-RESULTS.json",
+      "sha256": "9afbaeaa186f9d4c89c8557f1a120cf42b637c7f1a3f4c9d99d09ee5e624a817"
+    },
+    {
+      "bytes": 405,
+      "path": "packet/TRIGGER-AUDIT.json",
+      "sha256": "7ce2d7d1f478e78e871f5d702d25f42901d7569ec076b025aa28fce70b0d84a4"
+    },
+    {
+      "bytes": 22089,
+      "path": "packet/canonical-targetless-source-overlay.tar.gz",
+      "sha256": "8fed3f5448a4731475fc6bc67097adc8b3c452009caed2aebc6404514ca909d2"
+    },
+    {
+      "bytes": 48260,
+      "path": "packet/run_hosted.py",
+      "sha256": "de335bf14ce9ee7a06d290442a78db1235d19e44b2d733b210a68cf156ec9a36"
+    },
+    {
+      "bytes": 4859,
+      "path": "packet/seal.json",
+      "sha256": "11ac854b9f79ddd2b918334ad4b883dbefdc6c4c3bb8f1ce8a7e0b784e4f7f34"
+    },
+    {
+      "bytes": 497705,
+      "path": "packet/source-manifest.json",
+      "sha256": "094643adbe9d856ba51d576c4a8d746b6544fc01ed1c315f21fd0efe8a0e3bad"
+    },
+    {
+      "bytes": 9745,
+      "path": "packet/static_checks.py",
+      "sha256": "1e30c21e8ded05902d9c3297d4ccaafced7a674431a14b3cf44e55f47dfb7bc7"
+    },
+    {
+      "bytes": 1574,
+      "path": "packet/workflow.yml",
+      "sha256": "bd2378e1183a522a55f923c8140c1646735eff8af351f074c8fc002f85d03480"
+    },
+    {
+      "bytes": 17241,
+      "path": "prepare_packet.py",
+      "sha256": "7f6998aa1faca81a7268167674c03f5e7c6313b31e3e5b2dd8e877d7efb713f3"
+    },
+    {
+      "bytes": 9062,
+      "path": "protocol_v3.py",
+      "sha256": "ab19b65daa8920a0ea3b8801472486a2e51c7911f1c16e3af60c97b480cbf76e"
+    }
+  ],
+  "v3_seal_sha256": "11ac854b9f79ddd2b918334ad4b883dbefdc6c4c3bb8f1ce8a7e0b784e4f7f34",
+  "v3_stage_modified": false
+}

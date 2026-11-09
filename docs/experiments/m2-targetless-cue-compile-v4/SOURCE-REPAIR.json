@@ -1,0 +1,23 @@
+{
+  "after": {
+    "bytes": 21631,
+    "path": "crates/alife_training/src/cpu/joint_episode_host_tests.rs",
+    "sha256": "d22041c9c7ac2978531282be3d0e64447e5e8f93e345d28959472c70d5153bf1"
+  },
+  "ancestor_commit": "25f464e53ba07a6e62b8a23999561bcf8a734ca9",
+  "before": {
+    "bytes": 21622,
+    "path": "crates/alife_training/src/cpu/joint_episode_host_tests.rs",
+    "sha256": "4ba545e8f70f7d85b95f079180f0e9cf19a7178dccf379f2d13702df2e6e8ffe"
+  },
+  "native_execution": false,
+  "other_five_overlay_files_identical": true,
+  "owned_memory_no_host_borrow": "JointResidentV2::memory() returns owned restored memory at joint_episode_host.rs:34.",
+  "path": "crates/alife_training/src/cpu/joint_episode_host_tests.rs",
+  "reason": "Both source-preservation operands at line 337 infer T=[JointEpisodeV1]. The fixture helper imposed implicit Sized. Serialize + ?Sized matches serde_json::to_vec, accepts the slice references, and preserves byte serialization and the original assertion.",
+  "schema": "fixture-unsized-serialization-repair-v4",
+  "source_bytes_added": 9,
+  "source_files_changed": 1,
+  "unified_diff": "--- v3/crates/alife_training/src/cpu/joint_episode_host_tests.rs\n+++ v4/crates/alife_training/src/cpu/joint_episode_host_tests.rs\n@@ -76,7 +76,7 @@\n     .unwrap();\n     (host, inputs)\n }\n-fn bytes<T: Serialize>(value: &T) -> Vec<u8> {\n+fn bytes<T: Serialize + ?Sized>(value: &T) -> Vec<u8> {\n     serde_json::to_vec(value).unwrap()\n }\n fn frozen(host: &CpuJointOptionalM2HostV2) -> Vec<u8> {\n",
+  "unsized_slice_assertion_unchanged": true
+}

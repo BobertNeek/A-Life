@@ -1,0 +1,55 @@
+{
+  "ancestor_commit": "25f464e53ba07a6e62b8a23999561bcf8a734ca9",
+  "ancestor_source_manifest_sha256": "094643adbe9d856ba51d576c4a8d746b6544fc01ed1c315f21fd0efe8a0e3bad",
+  "retained_owner": "fresh-canonical-targetless-joint-v3/profile5/exact-role-registry/no-migration",
+  "runner_identity_changes_only": true,
+  "schema": "compile-only-targetless-source-delta-v4",
+  "six_overlay_files": [
+    {
+      "bytes": 13782,
+      "path": "crates/alife_training/src/cpu/canonical_cue_v3.rs",
+      "sha256": "5aa338f2e303370f88eb360c2f116283ef0c92fb231069bb0439ae5e4fd153ad"
+    },
+    {
+      "bytes": 7140,
+      "path": "crates/alife_training/src/cpu/canonical_cue_v3_contracts.rs",
+      "sha256": "d1f60d3257880dcc1e0f06f9d889c9099081194b4bc8029adfbd7a223a165629"
+    },
+    {
+      "bytes": 13529,
+      "path": "crates/alife_training/src/cpu/joint_episode_host.rs",
+      "sha256": "ae4972f46639a972eb40243860620ca53468bf4a6faa261db3d8e67299f57ca1"
+    },
+    {
+      "bytes": 21631,
+      "path": "crates/alife_training/src/cpu/joint_episode_host_tests.rs",
+      "sha256": "d22041c9c7ac2978531282be3d0e64447e5e8f93e345d28959472c70d5153bf1"
+    },
+    {
+      "bytes": 10878,
+      "path": "crates/alife_training/src/cpu/meal_cue_v2.rs",
+      "sha256": "6991d4ab25b0be17b4a42ba23d492d32a49708d9fd3121b45046e76c0d2fb869"
+    },
+    {
+      "bytes": 19113,
+      "path": "crates/alife_training/src/cpu/motor_mediation/confidence/policy/optional_vocal/joint_episode.rs",
+      "sha256": "a6648782a9982b628c7f87ddfefbac3fe236ddd401ba61ffc79af8a03fcde0c4"
+    }
+  ],
+  "source_change": {
+    "bytes": 21631,
+    "path": "crates/alife_training/src/cpu/joint_episode_host_tests.rs",
+    "sha256": "d22041c9c7ac2978531282be3d0e64447e5e8f93e345d28959472c70d5153bf1"
+  },
+  "unchanged": [
+    "canonical reader and contracts",
+    "strict V1, graded V1, meal V2 readers",
+    "source producer",
+    "shared production chooser",
+    "world physics",
+    "three-interval fixture and all five counters",
+    "optimizer/frozen banks",
+    "archive and cross-load assertions",
+    "default policy and trained state"
+  ]
+}

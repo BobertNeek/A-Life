@@ -1,0 +1,29 @@
+{
+  "accepted_main": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "all_final_paths_sizes_hashes_match": true,
+  "base_files_verified": 799,
+  "final_files_verified": 827,
+  "final_source_bytes": 23075545,
+  "git_writes": 0,
+  "materialized_source_bytes": 0,
+  "native_invocations": 0,
+  "patches": [
+    {
+      "bytes": 1542113,
+      "files_applied": 120,
+      "name": "main-to-fbf-library",
+      "sha256": "be1fff0fde16f474c118f9b37ec95b526b52c6f644216b1d7d0c12eee0372a74"
+    },
+    {
+      "bytes": 136753,
+      "files_applied": 17,
+      "name": "fbf-nominal-supplement",
+      "sha256": "ddd07c85685b27056664d9b8650fa736d8eff257f5d477485efd7d14e5e5b051"
+    }
+  ],
+  "reachable_main_files": 716,
+  "schema": "exact-memory-reconstruction-v4",
+  "source_forwards": 0,
+  "source_manifest_sha256": "82450b083b50e8884bc747c5b09a8a0c74c632f8fe0b2705b714a136c46424f6",
+  "world_intervals": 0
+}

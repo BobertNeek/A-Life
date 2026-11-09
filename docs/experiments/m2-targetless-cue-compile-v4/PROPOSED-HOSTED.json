@@ -1,0 +1,29 @@
+{
+  "activation": "one new ACTIVATE.json-only descendant commit, branch push, attempt1 only",
+  "comparison": "Five memory readers use exact same source/frame/base/support/RNG through one shared production chooser; only V3 path commits; no manufactured alternate action witness.",
+  "known_engineering_regression": true,
+  "native_executed_locally": false,
+  "not_held_out_replication": true,
+  "plan_id": "m2-targetless-cue-compile-v4",
+  "prepared_parent": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "prior_attempt": "V3 attempt1 compile failed before any fixture; retained, never rerun",
+  "resource_limits": {
+    "aggregate_seconds": 5400,
+    "compile_seconds": 2700,
+    "fixture_seconds": 300,
+    "free_floor_bytes": 4294967296,
+    "initial_free_bytes": 21474836480,
+    "memavailable_floor_bytes": 2147483648,
+    "rss_bytes": 6442450944
+  },
+  "schema": "canonical-targetless-compile-hosted-plan-v4",
+  "scientific_fixture_version": "V3, unchanged except serialization helper accepts unsized inputs",
+  "source_setup": {
+    "first_two": "Scripted actual acquisition then consumption of root2, Flee toy4, canonical Posture104, Quiet.",
+    "preparation_ticks": 240,
+    "recipes": 1,
+    "third": "One ordinary unforced source inference and world interval from actual post-consumption frame."
+  },
+  "success": "Mechanism/cold/provenance/counter invariants only; action or probability effect may be zero or negative.",
+  "toolchain": "1.99.1"
+}

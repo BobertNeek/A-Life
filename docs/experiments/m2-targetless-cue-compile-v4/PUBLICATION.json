@@ -1,0 +1,15 @@
+{
+  "activation_addition_only": "docs/experiments/m2-targetless-cue-compile-v4/ACTIVATE.json",
+  "automatic_trigger_count": 1,
+  "branch": "qualification/m2-targetless-cue-compile-v4",
+  "no_pr": true,
+  "plan_id": "m2-targetless-cue-compile-v4",
+  "prepared_additions_only": [
+    "docs/experiments/m2-targetless-cue-compile-v4/**",
+    ".github/workflows/m2-targetless-cue-compile-v4.yml"
+  ],
+  "prepared_parent": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "repository": "BobertNeek/A-Life",
+  "schema": "additions-only-two-commit-compile-v4",
+  "worker_github_writes": false
+}

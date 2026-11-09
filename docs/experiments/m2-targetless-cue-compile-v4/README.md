@@ -1,0 +1,13 @@
+# Canonical targetless cue: compile-only V4 correction
+
+V3 attempt 1 failed compilation with E0277 at joint_episode_host_tests.rs:337 before any fixture process, world interval or source forward. Its run, packet, sealed hashes and failure remain unchanged. Do not rerun or overwrite V3.
+
+This separately versioned packet changes one source line: the fixture serialization helper now accepts Serialize + ?Sized, matching serde_json::to_vec. Both slice operands retain the exact original byte-equality assertion. The other five overlay files, biological V3 owner and lookup law, canonical roles, strict V1/graded V1/meal V2 controls, chooser, scripted producers, third unforced opportunity, cold/archive checks, optimizer banks and five counters are unchanged. All 827 source files are bound.
+
+The fixed dose remains one setup, 240 preparation ticks, two actual scripted acquisition/consumption intervals, then one ordinary unforced source inference and third world interval. Five memory readers share one actual frame, source, support, probabilities and RNG; only one third path commits. Signed, zero and negative effects, or not eating, are valid results. Future grip/consumption remain Unknown. This known CPU engineering fixture is not held-out generalization or creature competence. The original weight-space-programming reference https://rikiyat.github.io/blog/weight-space-programming/ and Creatures intent are motivation, not validation.
+
+The runner changes only its plan identity and activation schema. Its test name and allowlisted summary schemas remain V3 because the scientific fixture is V3. All resource floors, pinned official toolchain, private bounded output, compile-first/list-exactly-one-test gate, dep-info closure, all-file tree preservation and attempt-one admission functions are retained.
+
+Publish only the exact files in REMOTEFILES.json as additions to accepted main c3aec16df33861f1316d127736f5f60eea327ede. Verify every old mode/path/blob entry across all 1313 accepted-main files and all 15 inherited workflows, plus every new file hash and the duplicated workflow, before creating the sole ACTIVATE.json addition. It may trigger one new frozen attempt 1 on qualification/m2-targetless-cue-compile-v4. No PR, replay, checkpoint, archived life, trained weights or default-policy change.
+
+Source-only preparation executes no Rust, fixture, world or source forward. Passing static checks does not claim native compilation or behavior. Hosted success, if obtained, establishes only the frozen mechanism/cold/provenance/counter invariants. Raw child output is never published.
