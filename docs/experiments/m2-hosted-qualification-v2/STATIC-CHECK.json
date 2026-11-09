@@ -1,0 +1,20 @@
+{
+  "status": "source-only static checks passed",
+  "checks": [
+    "main_to_fbf_exact_selected_bytes",
+    "gde_exact_patch_bytes",
+    "gds_exact_patch_bytes",
+    "gde-witness_exact_patch_bytes",
+    "meal-core_exact_patch_bytes",
+    "meal-host_exact_patch_bytes",
+    "boredom_exact_overlay_bytes",
+    "reflex_exact_overlay_bytes",
+    "python_syntax",
+    "three_utf8_parts_hashes_order_newlines_and_exact_concatenation",
+    "synthetic_fail_closed_list_and_result_parsers"
+  ],
+  "native_builds": 0,
+  "native_tests": 0,
+  "world_ticks": 0,
+  "dispatches": 0
+}
