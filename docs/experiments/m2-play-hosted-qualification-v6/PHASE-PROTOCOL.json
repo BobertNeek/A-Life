@@ -1,0 +1,156 @@
+{
+  "arms": [
+    "C",
+    "S"
+  ],
+  "expected_sequence": [
+    "C00",
+    "C01",
+    "C02",
+    "C03",
+    "C04",
+    "C05",
+    "C06",
+    "C07",
+    "C08",
+    "C09",
+    "C10",
+    "C11",
+    "C12",
+    "C13",
+    "C14",
+    "C15",
+    "C16",
+    "C17",
+    "C18",
+    "C19",
+    "C20",
+    "C21",
+    "C22",
+    "S00",
+    "S01",
+    "S02",
+    "S03",
+    "S04",
+    "S05",
+    "S06",
+    "S07",
+    "S08",
+    "S09",
+    "S10",
+    "S11",
+    "S12",
+    "S13",
+    "S14",
+    "S15",
+    "S16",
+    "S17",
+    "S18",
+    "S19",
+    "S20",
+    "S21",
+    "S22"
+  ],
+  "marker_prefix": "M2_PLAY_COLD_V1:",
+  "phase_is_not_a_new_neural_step": true,
+  "phases": [
+    {
+      "code": 0,
+      "meaning": "arm-entry"
+    },
+    {
+      "code": 1,
+      "meaning": "fresh-host-ready"
+    },
+    {
+      "code": 2,
+      "meaning": "host-step-completed"
+    },
+    {
+      "code": 3,
+      "meaning": "checkpoint-ready"
+    },
+    {
+      "code": 4,
+      "meaning": "opposite-arm-decode-rejected"
+    },
+    {
+      "code": 5,
+      "meaning": "optional-legacy-decode-rejected"
+    },
+    {
+      "code": 6,
+      "meaning": "grouped-legacy-decode-rejected"
+    },
+    {
+      "code": 7,
+      "meaning": "opposite-arm-restore-rejected"
+    },
+    {
+      "code": 8,
+      "meaning": "owner-field-rejected"
+    },
+    {
+      "code": 9,
+      "meaning": "schema-field-rejected"
+    },
+    {
+      "code": 10,
+      "meaning": "recipe-field-rejected"
+    },
+    {
+      "code": 11,
+      "meaning": "work-policy-field-rejected"
+    },
+    {
+      "code": 12,
+      "meaning": "group-recipe-field-rejected"
+    },
+    {
+      "code": 13,
+      "meaning": "mode-rejected"
+    },
+    {
+      "code": 14,
+      "meaning": "drive-work-rejected"
+    },
+    {
+      "code": 15,
+      "meaning": "reservation-mutation-decoded"
+    },
+    {
+      "code": 16,
+      "meaning": "reservation-restore-rejected"
+    },
+    {
+      "code": 17,
+      "meaning": "coordinated-mutation-decoded"
+    },
+    {
+      "code": 18,
+      "meaning": "coordinated-restore-rejected"
+    },
+    {
+      "code": 19,
+      "meaning": "positive-debit-float-mutation-ready"
+    },
+    {
+      "code": 20,
+      "meaning": "float-debit-mutation-decoded"
+    },
+    {
+      "code": 21,
+      "meaning": "float-debit-restore-rejected"
+    },
+    {
+      "code": 22,
+      "meaning": "forged-legacy-envelope-rejected"
+    }
+  ],
+  "public_projection": [
+    "last_completed_cold_phase",
+    "completed_cold_phase_count"
+  ],
+  "raw_stdout_stderr": "private bounded pipes only; unknown/malformed markers fail closed",
+  "schema": "m2-play-cold-fixed-phase-v1"
+}

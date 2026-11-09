@@ -1,0 +1,34 @@
+{
+  "no_ignored_tests": true,
+  "only_listing_calls": true,
+  "probes": [],
+  "schema": "m2-play-single-cold-continuation-v6",
+  "scope": "Only new-05, one exact listing and one exact invocation. Prior new01-04 not repeated; new06,11legacy and2probes remain pending.",
+  "tests": [
+    {
+      "attribute_sha256": "d2cd4db48a350e8f0b47944c46e3ffdbba132d2290a91d7012b56eb46c8ab4f6",
+      "attribute_start_line": 127,
+      "attributes": [
+        "test"
+      ],
+      "class": "new",
+      "command": [
+        "<owned76-libtest>",
+        "--exact",
+        "cpu::host::grouped_host_envelope::optional_vocal::play_need::tests::play_owned_cold_cross_owner_recipe_cost_and_mode_reject",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "function_end_byte": 9913,
+      "function_fragment_sha256": "0d8bda9a0f5a9d3b0fec84c26b4683c11478361ccfb0686648213ed2f04a4d06",
+      "function_start_line": 128,
+      "id": "new-05",
+      "ignored": false,
+      "invocations": 1,
+      "name": "cpu::host::grouped_host_envelope::optional_vocal::play_need::tests::play_owned_cold_cross_owner_recipe_cost_and_mode_reject",
+      "should_panic": false,
+      "source": "crates/alife_training/src/cpu/play_need_host_tests.rs",
+      "source_sha256": "909f9fe5f8872b07f8dee150bce1366f438313cea2278edff70593c5cf4176d2"
+    }
+  ]
+}

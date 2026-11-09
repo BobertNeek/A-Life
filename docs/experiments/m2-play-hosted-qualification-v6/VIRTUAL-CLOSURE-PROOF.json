@@ -1,0 +1,58 @@
+{
+  "active_new05_binding_verified": true,
+  "added_assertion": "positive original body debit",
+  "changed_owned_files": [
+    "crates/alife_training/src/cpu/play_need_host_tests.rs"
+  ],
+  "checkout_commit": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "native_compiler_github_writes": 0,
+  "new_assertion_count": 12,
+  "old_assertion_count": 11,
+  "original813_unchanged": true,
+  "owned817_unchanged": true,
+  "passed": true,
+  "prior_pass_fixture_bodies_unchanged": [
+    {
+      "function_fragment_sha256": "bc87827f29abe0aeeab6dc0460895769cc0146fd91a23c6cf2c9bf68fbf33888",
+      "id": "new-01",
+      "unchanged": true
+    },
+    {
+      "function_fragment_sha256": "2f70a4f183658572dc261ff09198a4d42e4dc2a4fecd747e6f418ed5999548ae",
+      "id": "new-02",
+      "unchanged": true
+    },
+    {
+      "function_fragment_sha256": "af513db86c17cbdfdc77fa4f59590e22cb1337e0662ff7c201be5c2fadfac852",
+      "id": "new-03",
+      "unchanged": true
+    },
+    {
+      "function_fragment_sha256": "80c59a4a084c9c8910d45534e49cc022e8528e754ad5b63f2c6754da2976cc31",
+      "id": "new-04",
+      "unchanged": true
+    }
+  ],
+  "prior_v5_source_manifest_sha256": "e2689a6cf2a6f68ec9dac3683e19b0e4778f5c2bc71e4e79e70e56ffe849f9df",
+  "production_runtime_inputs_unchanged": true,
+  "roles": {
+    "base": {
+      "bytes": 22397558,
+      "every_path_size_sha256_verified": true,
+      "files": 799
+    },
+    "original60": {
+      "bytes": 22911334,
+      "every_path_size_sha256_verified": true,
+      "files": 813
+    },
+    "owned76": {
+      "bytes": 23504116,
+      "every_path_size_sha256_verified": true,
+      "files": 818
+    }
+  },
+  "schema": "m2-play-virtual-reconstruction-v6",
+  "source_manifest_sha256": "eac26aabc32d23c20840f345048f264a42991608aa75684ca98d67158de0a101",
+  "source_only": true
+}

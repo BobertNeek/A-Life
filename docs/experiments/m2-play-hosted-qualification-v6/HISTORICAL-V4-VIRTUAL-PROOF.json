@@ -1,0 +1,42 @@
+{
+  "base799_and_original813_identical_to_v3": true,
+  "checkout_commit": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "checkout_tree": "9140d525fe1af16fed6539c3178a1a45e1fb04d0",
+  "compiler_invocations": 0,
+  "constant_value_and_source_bytes_unchanged": true,
+  "exact_two_edits_verified": true,
+  "github_writes": 0,
+  "native_invocations": 0,
+  "owned816_files_identical_to_v3": true,
+  "owned_source_changed_exactly": [
+    "crates/alife_training/src/cpu/motor_mediation/confidence.rs",
+    "crates/alife_training/src/cpu/motor_mediation/host_recipe.rs"
+  ],
+  "passed": true,
+  "prior_v3_source_manifest_sha256": "6ab1742961b2b9849b558ec7a1d097d5da5a40faad638929bb3bc9e778dc228c",
+  "private_host_module_unchanged": true,
+  "reconstruction_sha256": "8229313e85dda9531f187b6d9a370e5b4afd4552e5ca579b5329ac6e4d253c04",
+  "restricted_parent_only_export": true,
+  "roles": {
+    "base": {
+      "bytes": 22397558,
+      "every_path_size_sha256_verified": true,
+      "files": 799
+    },
+    "original60": {
+      "bytes": 22911334,
+      "every_path_size_sha256_verified": true,
+      "files": 813
+    },
+    "owned76": {
+      "bytes": 23503403,
+      "every_path_size_sha256_verified": true,
+      "files": 818
+    }
+  },
+  "runtime_genes_recipe_cost_controls_unchanged": true,
+  "schema": "m2-play-virtual-reconstruction-v4",
+  "scope": "Virtual source reconstruction and Python checks only, not compilation or native qualification.",
+  "source_manifest_sha256": "c7523f51c70ad914be064df540b50217cfe5c1f2930067a7a47d3149e3237b07",
+  "workspace_writes": 0
+}

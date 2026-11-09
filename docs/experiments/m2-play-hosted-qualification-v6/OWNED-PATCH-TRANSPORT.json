@@ -1,0 +1,22 @@
+{
+  "base": {
+    "bytes": 639609,
+    "path": "V5-OWNED-RUNTIME.patch",
+    "sha256": "898844fde8024acf2a5d7d9d46b44300c6e0d3f65e9b849ddef203b8737ce10d"
+  },
+  "delta": {
+    "bytes": 5051,
+    "path": "V6-OWNED-PATCH-DELTA.patch",
+    "sha256": "e45b0ac7a65ff13e8326e0a4fb31790628f37a97aeb9a8e9e1eab5775c94d7cf"
+  },
+  "effective": {
+    "bytes": 640332,
+    "path": "OWNED-RUNTIME.patch",
+    "sha256": "efe7a7731221e657aed2cefb7673fb703b8ea6376a2589769ac3a0726b8cae6b"
+  },
+  "original_large_blob_request_outcome": "uncertain; not retried; not required by this transport",
+  "prior_v6_seal_sha256": "a5c949d942d5a17bd78fe4fe584ab4c2fc6cb8fffdb12a26156352253658be78",
+  "schema": "m2-play-owned-patch-transport-v1",
+  "scientific_source_manifest_sha256": "eac26aabc32d23c20840f345048f264a42991608aa75684ca98d67158de0a101",
+  "source_byte_changes_from_original_v6": 0
+}

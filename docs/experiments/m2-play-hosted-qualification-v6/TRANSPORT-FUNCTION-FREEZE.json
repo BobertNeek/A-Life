@@ -1,0 +1,29 @@
+{
+  "functions": [
+    {
+      "name": "require",
+      "sha256": "0ab8f3a1befde4293057420a2143bcc32f571a1365d1d12b4e2471a0207c2c95"
+    },
+    {
+      "name": "blob",
+      "sha256": "7ae008845d20ac0a762403d9c3c244907e73a5dac6ca1d862ccd225d36e93f34"
+    },
+    {
+      "name": "expected",
+      "sha256": "93134801908b164f6ce02935faa0e89e2b51d34276de0ad8c2ee7b6bc2877112"
+    },
+    {
+      "name": "leaves",
+      "sha256": "bc0a37d55fa7219d3fe6e5e8d94dc81d6f544b025f1fe63d2259121eb697a4e3"
+    },
+    {
+      "name": "verify",
+      "sha256": "fb0c41b2191ae33a5e0fe8eb06ad6f4b1250ade5f0dad1a896be0c234c397c98"
+    },
+    {
+      "name": "regress",
+      "sha256": "45d2ae3bc7b27ac3b81e3a22c2ac818c1da18ce043b0f364594df6faac8b1574"
+    }
+  ],
+  "sha256": "e0f37ec126474d9179c14a3689162adbf42718d57d2bea0ec8fa3f1810a36588"
+}

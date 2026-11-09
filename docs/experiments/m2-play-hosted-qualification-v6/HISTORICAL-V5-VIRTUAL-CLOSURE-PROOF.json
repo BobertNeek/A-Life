@@ -1,0 +1,38 @@
+{
+  "all17_source_fragment_attribute_bindings_verified": true,
+  "checkout_commit": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "checkout_tree": "9140d525fe1af16fed6539c3178a1a45e1fb04d0",
+  "dose_unchanged": true,
+  "native_compiler_github_writes": 0,
+  "only_three_original_arm0_annotations": true,
+  "original813_unchanged_from_v4": true,
+  "owned817_unchanged_from_v4": true,
+  "owned_changed_exactly": [
+    "crates/alife_training/src/cpu/optional_vocal_host_tests.rs"
+  ],
+  "passed": true,
+  "prior_restricted_constant_fix_preserved": true,
+  "prior_v4_source_manifest_sha256": "c7523f51c70ad914be064df540b50217cfe5c1f2930067a7a47d3149e3237b07",
+  "roles": {
+    "base": {
+      "bytes": 22397558,
+      "every_path_size_sha256_verified": true,
+      "files": 799
+    },
+    "original60": {
+      "bytes": 22911334,
+      "every_path_size_sha256_verified": true,
+      "files": 813
+    },
+    "owned76": {
+      "bytes": 23503418,
+      "every_path_size_sha256_verified": true,
+      "files": 818
+    }
+  },
+  "schema": "m2-play-virtual-reconstruction-v5",
+  "source_manifest_sha256": "e2689a6cf2a6f68ec9dac3683e19b0e4778f5c2bc71e4e79e70e56ffe849f9df",
+  "test_ids_commands_attributes_invocations_unchanged": true,
+  "test_inventory_binding_exceptions": "SOURCE-FIX.json",
+  "workspace_writes": 0
+}

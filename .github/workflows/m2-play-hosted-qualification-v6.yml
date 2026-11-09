@@ -1,0 +1,44 @@
+name: M2 Play fixed hosted qualification v6
+on:
+  push:
+    branches: [qualification/m2-play-hosted-qualification-v6]
+    paths: [docs/experiments/m2-play-hosted-qualification-v6/ACTIVATE.json]
+permissions:
+  contents: read
+concurrency:
+  group: m2-play-hosted-qualification-v6
+  cancel-in-progress: false
+jobs:
+  fixed-qualification:
+    if: >-
+      github.repository == 'BobertNeek/A-Life' &&
+      github.ref == 'refs/heads/qualification/m2-play-hosted-qualification-v6' &&
+      github.event.created == false && github.event.deleted == false &&
+      github.event.forced == false && github.run_attempt == '1'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      EXPECTED_SEAL_SHA256: e91cfd08d062e38746e60270b6258bebb9375e2d9b16fc01cc1659071d0e3e0e
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - name: Read exact activation and prepared parents
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          path: bundle
+          persist-credentials: false
+          fetch-depth: 3
+          lfs: false
+          submodules: false
+      - name: Read remotely reachable accepted main source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: c3aec16df33861f1316d127736f5f60eea327ede
+          path: source
+          persist-credentials: false
+          fetch-depth: 1
+          lfs: false
+          submodules: false
+      - name: Admit and run frozen disposable qualification once
+        shell: bash
+        run: python3 bundle/docs/experiments/m2-play-hosted-qualification-v6/run_hosted.py

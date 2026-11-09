@@ -1,0 +1,21 @@
+{
+  "activation_head": "84cd5c294cbef5ed04f12bf349aa0f9f22b1db57",
+  "biology_intervals": 0,
+  "diagnostic_lines": [
+    276,
+    323,
+    331
+  ],
+  "evidence": "Parent supplied bounded verified hosted outcome, no raw logs.",
+  "job": 129385766515,
+  "original60_probe_build": "compiled_not_executed",
+  "owned76_probe_build": "compiled_not_executed",
+  "owned76_test_build": "E0284",
+  "prepared_head": "1784c69f96393cfbdfb65c73dc7ffaf235dcbbaf",
+  "prior_published_packet_unchanged": true,
+  "probe_processes": 0,
+  "run": 42683988417,
+  "schema": "m2-play-prior-hosted-result-v5",
+  "source_admission": "passed",
+  "test_processes": 0
+}

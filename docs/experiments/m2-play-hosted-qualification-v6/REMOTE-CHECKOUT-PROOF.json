@@ -1,0 +1,31 @@
+{
+  "evidence_source": "Parent remote-read confirmation plus independently matching local Git commit/tree and the immutable Grip V5 publication ledger. This worker made no remote reads or writes.",
+  "future_publication_check": "Publisher must re-read accepted main commit/tree, branch absence and every exact source blob before any tree/ref write. Activation remains separately authorized.",
+  "logical_local_ancestry_not_fetchable": [
+    "7f905465b79291fd52d1fd65568a9d10e716576a",
+    "fbf2a517f93098b5d936878a3d26bbb8d0391c38"
+  ],
+  "logical_remote_status": "Parent GitHub reads returned404 for both; never used as checkout refs",
+  "not_reused": [
+    "Grip candidate overlays",
+    "Grip activation marker",
+    "Grip workflow",
+    "Grip runner",
+    "old repository history",
+    "private/trained checkpoints",
+    "raw logs or journal data"
+  ],
+  "only_source_checkout_commit": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "only_source_checkout_tree": "9140d525fe1af16fed6539c3178a1a45e1fb04d0",
+  "repository": "BobertNeek/A-Life",
+  "reuse_ledger_sha256": "ea4645a1ad1b423d56248f39bf4515e94bb0a36937e826551ccddbb5192e511a",
+  "reuse_source_commit": "ff991c39ca4a11f72eb56f015f8b3dab71baff20",
+  "reuse_source_tree": "59a0625744eb64591b98050d4d9e38fd2bb5dac0",
+  "reused_source_patch_paths": [
+    "docs/experiments/m2-grip-hosted-typecheck-v5/patches/main-to-fbf-library-closure.part-01.patch",
+    "docs/experiments/m2-grip-hosted-typecheck-v5/patches/main-to-fbf-library-closure.part-02.patch",
+    "docs/experiments/m2-grip-hosted-typecheck-v5/patches/main-to-fbf-library-closure.part-03.patch",
+    "docs/experiments/m2-grip-hosted-typecheck-v5/patches/fbf-nominal-source-supplement.patch"
+  ],
+  "schema": "m2-play-remote-reachable-checkout-v2"
+}

@@ -1,0 +1,25 @@
+{
+  "activation_head": "8ad5396185b1bde67b800168d91cf4ed2a1f26b0",
+  "evidence": "Parent-verified hosted outcome; activation marker independently read at immutable commit. No raw assertions/logs included.",
+  "failure_phase": "not available from prior bounded public result",
+  "job": 129406205832,
+  "prepared_head": "b81f61e7aecc1c7386acebb98da7976d035d33d7",
+  "probe_processes_attempted": 0,
+  "reported_compiled_targets": [
+    "original60-probe-build",
+    "owned76-probe-build",
+    "owned76-test-build"
+  ],
+  "reported_failed_test": "new-05",
+  "reported_passed_tests": [
+    "new-01",
+    "new-02",
+    "new-03",
+    "new-04"
+  ],
+  "run": 42689796484,
+  "schema": "m2-play-prior-hosted-result-v6",
+  "seal_sha256": "8802ef8ec833383e5012f52ba44695ce886b073935d93f9660ca513d52c3a7d5",
+  "source_manifest_sha256": "e2689a6cf2a6f68ec9dac3683e19b0e4778f5c2bc71e4e79e70e56ffe849f9df",
+  "test_processes_attempted": 5
+}

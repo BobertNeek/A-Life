@@ -1,0 +1,35 @@
+{
+  "after": {
+    "bytes": 12218,
+    "path": "crates/alife_training/src/cpu/play_need_host_tests.rs",
+    "sha256": "909f9fe5f8872b07f8dee150bce1366f438313cea2278edff70593c5cf4176d2"
+  },
+  "assertions_removed": 0,
+  "before": {
+    "bytes": 11520,
+    "path": "crates/alife_training/src/cpu/play_need_host_tests.rs",
+    "sha256": "aaeeb3225dc6a32f4b2ba31dfa1ef1ec3dcff00e2c360ee5748b660b60d8fe38"
+  },
+  "coordinated_zero_case_claim": "Paid-work rejection, not independent authority-digest evidence.",
+  "existing_rejection_assertions_preserved": true,
+  "native_verification": "NOT_RUN; owned-lib single-test hosted continuation pending.",
+  "new_patch": {
+    "bytes": 640332,
+    "path": "OWNED-RUNTIME.patch",
+    "sha256": "efe7a7731221e657aed2cefb7673fb703b8ea6376a2589769ac3a0726b8cae6b"
+  },
+  "observed_failure_phase": "UNKNOWN; source proves fixture defect but V5 public failure did not reveal first failing assertion.",
+  "old_patch": {
+    "bytes": 639609,
+    "path": "OWNED-RUNTIME.patch",
+    "sha256": "898844fde8024acf2a5d7d9d46b44300c6e0d3f65e9b849ddef203b8737ce10d"
+  },
+  "original813_files_unchanged": true,
+  "owned817_files_unchanged": true,
+  "prior_fixes_preserved": true,
+  "reason": "Integer JSON0 in f32 field becomes float0.0 during typed decode; exact serde_json Value roundtrip rejects before intended restore assertion. Locked serde_json1.0.150 Number equality distinguishes integer and float variants.",
+  "repair": "Value::from(0.0_f32), retain decode success and restore rejection, add positive-original-debit assertion. Add fixed phase markers without extra neural or world work.",
+  "runtime_production_files_changed": 0,
+  "schema": "m2-play-new05-floating-debit-v6",
+  "source": "crates/alife_training/src/cpu/play_need_host_tests.rs"
+}

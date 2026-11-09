@@ -1,0 +1,38 @@
+{
+  "active_probes": [],
+  "active_tests": [
+    "new-05"
+  ],
+  "builds": [
+    "owned76-libtest-only"
+  ],
+  "carried_prior_passes": [
+    "new-01",
+    "new-02",
+    "new-03",
+    "new-04"
+  ],
+  "carried_scope": "Those exact fixture bodies and all production runtime inputs unchanged; historical results are not new V6 executions.",
+  "no_debug_retry_loop": true,
+  "pending_probes": [
+    "original60",
+    "owned76"
+  ],
+  "pending_tests": [
+    "new-06",
+    "legacy-01",
+    "legacy-02",
+    "legacy-03",
+    "legacy-04",
+    "legacy-05",
+    "legacy-06",
+    "legacy-07",
+    "legacy-08",
+    "legacy-09",
+    "legacy-10",
+    "legacy-11"
+  ],
+  "prior_result": "PRIOR-V5-RESULT.json",
+  "qualification_complete_if_this_passes": false,
+  "schema": "m2-play-source-bound-continuation-v6"
+}

@@ -1,0 +1,59 @@
+{
+  "base_rows_identical": true,
+  "changed_source_rows": [
+    {
+      "after": {
+        "bytes": 21139,
+        "path": "crates/alife_training/src/cpu/motor_mediation/confidence.rs",
+        "sha256": "367d7fac3c01fc6c921c4e846701dc921dccd3f682ea36bebc88d343804bd5e8"
+      },
+      "before": {
+        "bytes": 21089,
+        "path": "crates/alife_training/src/cpu/motor_mediation/confidence.rs",
+        "sha256": "f0466c35b37eceeebf51d15991b695490c8170371c58d3b30b27e72ecc7126e3"
+      },
+      "path": "crates/alife_training/src/cpu/motor_mediation/confidence.rs"
+    },
+    {
+      "after": {
+        "bytes": 4565,
+        "path": "crates/alife_training/src/cpu/motor_mediation/host_recipe.rs",
+        "sha256": "7da717087d348af1a3f1aa928531ade2d94badd06492dc7cb5d7be4d61491ca3"
+      },
+      "before": {
+        "bytes": 4546,
+        "path": "crates/alife_training/src/cpu/motor_mediation/host_recipe.rs",
+        "sha256": "8f847e26a1068336cf0ceb3ca94c11ea120527c7026df72eb936d05db4762943"
+      },
+      "path": "crates/alife_training/src/cpu/motor_mediation/host_recipe.rs"
+    }
+  ],
+  "constant_literal": "source-once;460-native-cells;814-fixed-rows;group-source-effective;native-semantic-work-v1;host-bookkeeping-unpriced",
+  "constant_source_record": {
+    "bytes": 22233,
+    "path": "crates/alife_training/src/cpu/motor_mediation/confidence/host.rs",
+    "sha256": "6090fc72d224ee67e881cd91ef452c80c96ebe1d7da058ab51c6ea39dbed0008"
+  },
+  "manifest_sha256": "c7523f51c70ad914be064df540b50217cfe5c1f2930067a7a47d3149e3237b07",
+  "native_verification": "NOT_RUN; source visibility and byte proofs only",
+  "new_patch": {
+    "bytes": 638641,
+    "path": "OWNED-RUNTIME.patch",
+    "sha256": "a0008dc28712139f426595fa2f519bc2d71b0852156d01ab5110e3bbf4ab0099"
+  },
+  "old_patch": {
+    "bytes": 638312,
+    "path": "OWNED-RUNTIME.patch",
+    "sha256": "61fbd9e2f2ce4319ab223d52977e1355b74317f2dbba5c9f8edcdaea264f1636"
+  },
+  "original60_rows_identical": true,
+  "other_owned_rows_identical": true,
+  "prior_manifest_sha256": "6ab1742961b2b9849b558ec7a1d097d5da5a40faad638929bb3bc9e778dc228c",
+  "qualified_closure_role": "The unchanged qualified-CLOSURE.json authenticates the 101-file original overlay. Its prior integration metadata is historical; V4 source-manifest and this exact patch proof are authoritative for corrected owned76.",
+  "qualified_expression": "Self::Original60 => super::confidence::GROUPED_HOST_WORK_POLICY_V1,",
+  "reason": "Hosted V3 owned76 build reported E0425 at host_recipe.rs:87; confidence::host is private, so a direct path into that child is not accessible.",
+  "repair": "Add pub(super) re-export within confidence and qualify the reference through confidence. No pub/crate module or symbol visibility expansion.",
+  "restricted_export": "pub(super) use host::GROUPED_HOST_WORK_POLICY_V1;",
+  "schema": "m2-play-source-fix-v4",
+  "scope": "Only two owned76 source files and their manifest rows change; all original60/base compiler inputs, genes, recipe literals, costs, constants, tests and dose remain byte-identical."
+}
