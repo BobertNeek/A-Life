@@ -1,0 +1,65 @@
+{
+  "schema": "m2-completed-full-rest-reader-scalars-v1",
+  "native_calls": 0,
+  "checkpoint_sha256": "86bb50827c808ecbde79bd96441a786479344202fade0084f6ee051473bfb534",
+  "packed_slice_half_open": [
+    30464,
+    30976
+  ],
+  "index_source": "Compiler ordering supplied by trace_recovery_memory_inputs; not ordinal PAM labels. Final4096 MemoryContext rows, eight512-row families; Rest raw1.",
+  "source_asset_rest": {
+    "count": 512,
+    "nonzero": 0,
+    "min": 0.0,
+    "max": 0.0
+  },
+  "founder_rest": {
+    "count": 512,
+    "nonzero": 0,
+    "min": 0.0,
+    "max": 0.0
+  },
+  "source_asset_weight_count": 34048,
+  "founder_weight_count": 34048,
+  "cognitive_extension_keys_found": [],
+  "fast_all": {
+    "count": 34048,
+    "nonzero": 0,
+    "min": 0.0,
+    "max": 0.0
+  },
+  "fast_Rest_slice": {
+    "count": 512,
+    "nonzero": 0,
+    "min": 0.0,
+    "max": 0.0
+  },
+  "lifetime_all": {
+    "count": 34048,
+    "nonzero": 0,
+    "min": 0.0,
+    "max": 0.0
+  },
+  "lifetime_Rest_slice": {
+    "count": 512,
+    "nonzero": 0,
+    "min": 0.0,
+    "max": 0.0
+  },
+  "eligibility_all": {
+    "count": 34048,
+    "nonzero": 0,
+    "min": 0.0,
+    "max": 0.0
+  },
+  "eligibility_Rest_slice": {
+    "count": 512,
+    "nonzero": 0,
+    "min": 0.0,
+    "max": 0.0
+  },
+  "source_inputs_top_level_has_cognitive_channel_extension": false,
+  "genome_has_cognitive_channel_extension": false,
+  "optimizer_step": 0,
+  "whole_arm_closed_hash_asserted_every_interval": true
+}
