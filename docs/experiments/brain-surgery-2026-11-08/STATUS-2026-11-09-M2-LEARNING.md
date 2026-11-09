@@ -415,3 +415,45 @@ Source review caught a bad default before physical testing: raw Other-family dri
 GDE1/GDS1 remain qualified for their original sampler, not for optional Quiet, geometric pairing or the new joint-memory policy. For a fixed captured frame, if a new sampler is P(a)=P0(a)*exp(E(a)/T)/Z, then its source-score derivative includes the selected base derivative MINUS its expectation under the NEW distribution. The old base-policy expectation cannot silently substitute. The three geometry-parameter derivatives are (selected feature minus its new-distribution expectation)/T; their current fixed tests do not constitute an applied optimizer.
 
 Any implementation must also distinguish latent representative paths from marginal physical bundles, current payload masks and clipping boundaries, cross-candidate NoManip/Release ownership, source recurrence held fixed in a one-step pullback, and alpha exactly once. A correct fixed-frame derivative is not full recurrent BPTT or an exact lifelong policy optimizer. Newly computed gradient/eligibility work needs explicit cost and an equal-work fast-write sham. Canonical sealed joint biochemical feedback is associated outcome, not an invented isolated Eat reward. First quantify same-frame policy effects and cold preservation, then test fresh matched lives. Preserve the earlier first-update rounding failure rather than increasing gains to manufacture a pass.
+
+## 2026-11-09 19:20 UTC: measured cue failure, corrected Play interpretation, and continued native qualification
+
+The working reference remains [Sparks of Weight-Space Programming](https://rikiyat.github.io/blog/weight-space-programming/): targeted repair (experiment 4), complete small game networks (experiment 5), and feedback-driven revision (experiment 6). This iteration follows the diagnostic loop, rather than treating a passing contract or a hand-designed weight as behavioral success. Qualia remains recurrent, embodied, plastic, and more stateful than the paper's feedforward examples.
+
+### Reusable meal memory: actual reason diagnostic completed, still MISS
+
+The fixed hosted diagnostic passed at activation f68c4f8ed01ce0d057bc9343d1bc50ddf7695ad4, prepared commit 85f5a17e6ae0e375b11400a44fb5a1fae4276330, [run 42679606475 / job 129370262901](https://github.com/BobertNeek/A-Life/actions/runs/42679606475/job/129370262901). The source manifest is c0321462297d23743d4da1e32d6cce141ac9396bc73a9807fce3252e8c5b2f1e and seal is 02d0e16efb70a53910758e2d1dd5495c83b1a7c1a253c4db3ac343ea3d4c2c93. [Sanitized result and bindings](https://github.com/BobertNeek/A-Life/blob/951e64a84f3ada8faccb540ccbf52089cd315143/docs/experiments/brain-surgery-2026-11-08/m2-graded-cue-reason-v1/RESULTS.json).
+
+One new scripted recipe, 240 preparation ticks, and two registered acquisition/consumption intervals completed. World tick, body age, sequence, dispatch generation, and replay records each advanced exactly twice. No extra detached source forward was used.
+
+Both source witnesses were retained: 18,332 and 19,233 bytes, below 32 KiB. Both captured and rebuilt successfully and matched themselves. The second-root query was present and captured without error. Exact, strict-cue, and graded-cue recall nevertheless all returned MISS. Thus the earlier witness-budget hypothesis is ruled out for this measured case.
+
+The consumed source's strict differences were Manipulation color, temperature, terrain, bearing/distance lanes 0–1, and relative-velocity lane 3. The frozen graded law already attenuates color/temperature/terrain and relaxes reached Eat geometry, but still hard-rejects relative velocity changes over 0.02. Lane 3 is normalized world-axis relative X velocity, not food identity. The exact executor source resolves current entity position, reach, and real hands-on possession; it does not consume a remembered target velocity. A separately versioned V2 association is therefore being prepared to keep all observations while exempting only reached, contacted EntityEat velocity. Move/Inspect velocity, chemistry, commands, role equality, source ownership, body context, and actual physical execution remain guarded. Future grip and consumption stay Unknown. This is an engineering regression on known sources, not held-out generalization or isolated Eat causality.
+
+### Play biology: absolute change was not the right counterfactual comparison
+
+The prior 66-interval body contract measured Play homeostatic improvement at -0.000039770915. That absolute change includes ordinary metabolism. The stored matched no-op endpoint must also be considered.
+
+The actual inherited Play circuit sets boredom's value weight to -0.08. From the existing matched endpoint snapshots, Play's boredom advantage is about +0.001040; its extra energy and tiny hunger/ATP differences cost about 0.000002. The derived net advantage over no-op is therefore about +0.001038. Play still used slightly more energy, but it was biologically better than doing nothing in this matched context. This calculation adds no physical run. It does not show that the neural candidate chooses useful Play, or that its 0.35 operating threshold was engaged by the observed 0.0128 boredom.
+
+### Independent-channel sampler: real arithmetic coverage, one invalid fixture isolated
+
+The V3 companion compiled in 2.907 seconds, peak RSS 631,730,176 bytes. Binary SHA256 4b05ad0fc0c0c48fc26276222c1a06663a0f35dd39de6cca3130225c76119eca. Exact eight-name inventory matched. The first six pure tests passed, including normalization, Rest independence from unrelated manipulation, Quiet/no-op behavior, proof binding, exact joint probability, and finite-difference score gradients including tied Idle/Quiet.
+
+The seventh fixture failed while constructing an ungrounded Gesture frame, before the sampler ran. The real profile rejects that frame; the validator is unchanged. The independent eighth extreme-input test then passed in a separately recorded once-only invocation from the same binary. This is six passes / one failed fixture in the first batch, plus the separate eighth pass, not an 8/8 batch claim.
+
+A fixture-only V4 asserts rejection of that illegal frame and tests single-operation recovery on a validated legal frame. Its new hosted qualification is [run 42682191661](https://github.com/BobertNeek/A-Life/actions/runs/42682191661), activation b39ab19ce73374308aab1cb4b02488c6f2e4d37b. Only the eight pure arithmetic contracts may execute. This does not qualify actual host dispatch, cold restore, work accounting, or care behavior.
+
+### Grip and Play runtime qualification
+
+Grip's corrected fixed-fixture packet has 38 passing static checks, 866 bound source records, 46 unchanged fixture identities, and exactly 48 prepared paths. Only the faulty mixed-map test adapter changed; production deserialization remains untouched. [Run 42680456763](https://github.com/BobertNeek/A-Life/actions/runs/42680456763), activation a6d4e47396ea020e2d99ed2a0ddd5ea3a3d18ef4, is still running at this note's publication. Its earlier six-library typecheck remains a separate compile-only result.
+
+Play V3 passed exact source admission and compiled the unchanged original 60-row probe. The owned 76-row probe then failed E0425 at host_recipe.rs:87 in [run 42680477037](https://github.com/BobertNeek/A-Life/actions/runs/42680477037/job/129373339349). No fixture, probe execution, recipe, or biology ran. The cause is a missing work-policy constant import through a private module; the minimal correction retains the same constant value via a parent-visible re-export. Scientific weights, original controller, and fixed dose are not being tuned in response.
+
+Every prepared qualification tree preserves all 1,313 accepted-main leaves and all 15 inherited workflows. Each activation adds only its exact marker, with attempt-one gating. No old workflow was deleted and no exhausted study was reactivated.
+
+### Resources and preservation
+
+Local /workspace later crossed below its retained 4 GiB reserve despite no active compiler or life. Further local materialization was paused. A separate existing /tmp tmpfs has about 4.95 GB free and is being used for bounded new source staging, with memory/capacity monitoring. Existing sources, artifacts, learned states, and evidence are untouched; no cache or data deletion was performed. Hosted jobs continue independently.
+
+The inherited baseline remains protected and unpromoted. Actual reusable meal transfer, integrated independent-channel care, general learning, and GPU behavior are not yet established.
