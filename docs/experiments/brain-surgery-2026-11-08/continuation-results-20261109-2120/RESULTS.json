@@ -1,0 +1,1554 @@
+{
+  "schema": "m2-hosted-followup-results-20261109-2120-v1",
+  "main": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "scope": "Separate fixed research fixtures. No default, learned-baseline, old-life, gameplay or GPU promotion.",
+  "results": [
+    {
+      "label": "controlled Play compatibility, not benefit",
+      "run_id": 42699800420,
+      "activation": "ab032b59d7bbe213387adae8ea9e86181a5eb85d",
+      "prepared": "849348efcd1191e2a69d96b33be15a4ecbace37d",
+      "attempt": 1,
+      "url": "https://github.com/BobertNeek/A-Life/actions/runs/42699800420",
+      "summary": {
+        "autonomous_sampler_qualified_by_this_run": false,
+        "code": "OK",
+        "controlled_endpoint": {
+          "biology_intervals": 6,
+          "cold_equal": true,
+          "intervals": 6,
+          "optimizer_updates": 0,
+          "play_awake_dose": 1,
+          "play_energy": 0.791815996170044,
+          "play_stimulation": 0,
+          "prefix_intervals": 3,
+          "quiet_awake_dose": 1,
+          "quiet_energy": 0.7918297648429871,
+          "quiet_stimulation": 0,
+          "source_executions": 6,
+          "treatment_intervals": 3
+        },
+        "controlled_observations": [
+          {
+            "awake_dose": 1,
+            "biology_intervals": 1,
+            "boredom_after": 0.00019999999494757503,
+            "boredom_before": 0,
+            "energy_after": 0.7923290133476257,
+            "energy_before": 0.7925000190734863,
+            "generation_after": 1,
+            "generation_before": 0,
+            "investigation": 1,
+            "label": "prefix",
+            "optimizer_updates": 0,
+            "ordinal": 0,
+            "perceived_novelty": 1,
+            "phase": "Completed",
+            "play_selected": true,
+            "posture_phase": "Completed",
+            "sleep_dose": 0,
+            "source_executions": 1,
+            "stimulation": 0,
+            "tick_after": 1,
+            "tick_before": 0
+          },
+          {
+            "awake_dose": 1,
+            "biology_intervals": 1,
+            "boredom_after": 0.00039999998989515007,
+            "boredom_before": 0.00019999999494757503,
+            "energy_after": 0.7921579480171204,
+            "energy_before": 0.7923290133476257,
+            "generation_after": 2,
+            "generation_before": 1,
+            "investigation": 1,
+            "label": "prefix",
+            "optimizer_updates": 0,
+            "ordinal": 1,
+            "perceived_novelty": 1,
+            "phase": "Completed",
+            "play_selected": true,
+            "posture_phase": "Completed",
+            "sleep_dose": 0,
+            "source_executions": 1,
+            "stimulation": 0,
+            "tick_after": 2,
+            "tick_before": 1
+          },
+          {
+            "awake_dose": 1,
+            "biology_intervals": 1,
+            "boredom_after": 0.0005999999702908099,
+            "boredom_before": 0.00039999998989515007,
+            "energy_after": 0.7919870018959045,
+            "energy_before": 0.7921579480171204,
+            "generation_after": 3,
+            "generation_before": 2,
+            "investigation": 1,
+            "label": "prefix",
+            "optimizer_updates": 0,
+            "ordinal": 2,
+            "perceived_novelty": 1,
+            "phase": "Completed",
+            "play_selected": true,
+            "posture_phase": "Completed",
+            "sleep_dose": 0,
+            "source_executions": 1,
+            "stimulation": 0,
+            "tick_after": 3,
+            "tick_before": 2
+          },
+          {
+            "awake_dose": 1,
+            "biology_intervals": 1,
+            "boredom_after": 0.0007999999797903001,
+            "boredom_before": 0.0005999999702908099,
+            "energy_after": 0.791815996170044,
+            "energy_before": 0.7919870018959045,
+            "generation_after": 4,
+            "generation_before": 3,
+            "investigation": 1,
+            "label": "play",
+            "optimizer_updates": 0,
+            "ordinal": 3,
+            "perceived_novelty": 1,
+            "phase": "Completed",
+            "play_selected": true,
+            "posture_phase": "Completed",
+            "sleep_dose": 0,
+            "source_executions": 1,
+            "stimulation": 0,
+            "tick_after": 4,
+            "tick_before": 3
+          },
+          {
+            "awake_dose": 1,
+            "biology_intervals": 1,
+            "boredom_after": 0.0007999999797903001,
+            "boredom_before": 0.0005999999702908099,
+            "energy_after": 0.791815996170044,
+            "energy_before": 0.7919870018959045,
+            "generation_after": 4,
+            "generation_before": 3,
+            "investigation": 1,
+            "label": "cold_play",
+            "optimizer_updates": 0,
+            "ordinal": 4,
+            "perceived_novelty": 1,
+            "phase": "Completed",
+            "play_selected": true,
+            "posture_phase": "Completed",
+            "sleep_dose": 0,
+            "source_executions": 1,
+            "stimulation": 0,
+            "tick_after": 4,
+            "tick_before": 3
+          },
+          {
+            "awake_dose": 1,
+            "biology_intervals": 1,
+            "boredom_after": 0.0007999999797903001,
+            "boredom_before": 0.0005999999702908099,
+            "energy_after": 0.7918297648429871,
+            "energy_before": 0.7919870018959045,
+            "generation_after": 4,
+            "generation_before": 3,
+            "investigation": 0,
+            "label": "no_manip",
+            "optimizer_updates": 0,
+            "ordinal": 5,
+            "perceived_novelty": 1,
+            "phase": "Completed",
+            "play_selected": false,
+            "posture_phase": "Completed",
+            "sleep_dose": 0,
+            "source_executions": 1,
+            "stimulation": 0,
+            "tick_after": 4,
+            "tick_before": 3
+          }
+        ],
+        "controlled_physics_qualified": true,
+        "diagnostics": [],
+        "excluded_old_test_count": 396,
+        "peak_rss_bytes": 1728217088,
+        "peak_workspace_bytes": 2039643382,
+        "phase_snapshots": [
+          {
+            "attempted": 0,
+            "ordinal": 0,
+            "phase": "construction_started",
+            "restored": 0,
+            "returned": 0,
+            "verified": 0
+          },
+          {
+            "attempted": 0,
+            "ordinal": 0,
+            "phase": "construction_recipe",
+            "restored": 0,
+            "returned": 0,
+            "verified": 0
+          },
+          {
+            "attempted": 0,
+            "ordinal": 0,
+            "phase": "construction_founder",
+            "restored": 0,
+            "returned": 0,
+            "verified": 0
+          },
+          {
+            "attempted": 0,
+            "ordinal": 0,
+            "phase": "construction_world",
+            "restored": 0,
+            "returned": 0,
+            "verified": 0
+          },
+          {
+            "attempted": 0,
+            "ordinal": 0,
+            "phase": "construction_host",
+            "restored": 0,
+            "returned": 0,
+            "verified": 0
+          },
+          {
+            "attempted": 0,
+            "ordinal": 0,
+            "phase": "construction_toy",
+            "restored": 0,
+            "returned": 0,
+            "verified": 0
+          },
+          {
+            "attempted": 0,
+            "ordinal": 0,
+            "phase": "construction_ready",
+            "restored": 0,
+            "returned": 0,
+            "verified": 0
+          },
+          {
+            "attempted": 0,
+            "ordinal": 0,
+            "phase": "shared_prefix_started",
+            "restored": 0,
+            "returned": 0,
+            "verified": 0
+          },
+          {
+            "attempted": 0,
+            "ordinal": 0,
+            "phase": "interval_prepare",
+            "restored": 0,
+            "returned": 0,
+            "verified": 0
+          },
+          {
+            "attempted": 1,
+            "ordinal": 0,
+            "phase": "dispatch_started",
+            "restored": 0,
+            "returned": 0,
+            "verified": 0
+          },
+          {
+            "attempted": 1,
+            "ordinal": 0,
+            "phase": "decision_preparation",
+            "restored": 0,
+            "returned": 0,
+            "verified": 0
+          },
+          {
+            "attempted": 1,
+            "ordinal": 0,
+            "phase": "novelty_context_ready",
+            "restored": 0,
+            "returned": 0,
+            "verified": 0
+          },
+          {
+            "attempted": 1,
+            "ordinal": 0,
+            "phase": "source_bound",
+            "restored": 0,
+            "returned": 0,
+            "verified": 0
+          },
+          {
+            "attempted": 1,
+            "ordinal": 0,
+            "phase": "controlled_ready",
+            "restored": 0,
+            "returned": 0,
+            "verified": 0
+          },
+          {
+            "attempted": 1,
+            "ordinal": 0,
+            "phase": "staging_started",
+            "restored": 0,
+            "returned": 0,
+            "verified": 0
+          },
+          {
+            "attempted": 1,
+            "ordinal": 0,
+            "phase": "staging_returned",
+            "restored": 0,
+            "returned": 0,
+            "verified": 0
+          },
+          {
+            "attempted": 1,
+            "ordinal": 0,
+            "phase": "physical_outcome_available",
+            "restored": 0,
+            "returned": 0,
+            "verified": 0
+          },
+          {
+            "attempted": 1,
+            "ordinal": 0,
+            "phase": "outcome_close_returned",
+            "restored": 0,
+            "returned": 0,
+            "verified": 0
+          },
+          {
+            "attempted": 1,
+            "ordinal": 0,
+            "phase": "dispatch_returned",
+            "restored": 0,
+            "returned": 1,
+            "verified": 0
+          },
+          {
+            "attempted": 1,
+            "ordinal": 0,
+            "phase": "body_checks",
+            "restored": 0,
+            "returned": 1,
+            "verified": 0
+          },
+          {
+            "attempted": 1,
+            "ordinal": 0,
+            "phase": "interval_verified",
+            "restored": 0,
+            "returned": 1,
+            "verified": 1
+          },
+          {
+            "attempted": 1,
+            "ordinal": 1,
+            "phase": "interval_prepare",
+            "restored": 0,
+            "returned": 1,
+            "verified": 1
+          },
+          {
+            "attempted": 2,
+            "ordinal": 1,
+            "phase": "dispatch_started",
+            "restored": 0,
+            "returned": 1,
+            "verified": 1
+          },
+          {
+            "attempted": 2,
+            "ordinal": 1,
+            "phase": "decision_preparation",
+            "restored": 0,
+            "returned": 1,
+            "verified": 1
+          },
+          {
+            "attempted": 2,
+            "ordinal": 1,
+            "phase": "novelty_context_ready",
+            "restored": 0,
+            "returned": 1,
+            "verified": 1
+          },
+          {
+            "attempted": 2,
+            "ordinal": 1,
+            "phase": "source_bound",
+            "restored": 0,
+            "returned": 1,
+            "verified": 1
+          },
+          {
+            "attempted": 2,
+            "ordinal": 1,
+            "phase": "controlled_ready",
+            "restored": 0,
+            "returned": 1,
+            "verified": 1
+          },
+          {
+            "attempted": 2,
+            "ordinal": 1,
+            "phase": "staging_started",
+            "restored": 0,
+            "returned": 1,
+            "verified": 1
+          },
+          {
+            "attempted": 2,
+            "ordinal": 1,
+            "phase": "staging_returned",
+            "restored": 0,
+            "returned": 1,
+            "verified": 1
+          },
+          {
+            "attempted": 2,
+            "ordinal": 1,
+            "phase": "physical_outcome_available",
+            "restored": 0,
+            "returned": 1,
+            "verified": 1
+          },
+          {
+            "attempted": 2,
+            "ordinal": 1,
+            "phase": "outcome_close_returned",
+            "restored": 0,
+            "returned": 1,
+            "verified": 1
+          },
+          {
+            "attempted": 2,
+            "ordinal": 1,
+            "phase": "dispatch_returned",
+            "restored": 0,
+            "returned": 2,
+            "verified": 1
+          },
+          {
+            "attempted": 2,
+            "ordinal": 1,
+            "phase": "body_checks",
+            "restored": 0,
+            "returned": 2,
+            "verified": 1
+          },
+          {
+            "attempted": 2,
+            "ordinal": 1,
+            "phase": "interval_verified",
+            "restored": 0,
+            "returned": 2,
+            "verified": 2
+          },
+          {
+            "attempted": 2,
+            "ordinal": 2,
+            "phase": "interval_prepare",
+            "restored": 0,
+            "returned": 2,
+            "verified": 2
+          },
+          {
+            "attempted": 3,
+            "ordinal": 2,
+            "phase": "dispatch_started",
+            "restored": 0,
+            "returned": 2,
+            "verified": 2
+          },
+          {
+            "attempted": 3,
+            "ordinal": 2,
+            "phase": "decision_preparation",
+            "restored": 0,
+            "returned": 2,
+            "verified": 2
+          },
+          {
+            "attempted": 3,
+            "ordinal": 2,
+            "phase": "novelty_context_ready",
+            "restored": 0,
+            "returned": 2,
+            "verified": 2
+          },
+          {
+            "attempted": 3,
+            "ordinal": 2,
+            "phase": "source_bound",
+            "restored": 0,
+            "returned": 2,
+            "verified": 2
+          },
+          {
+            "attempted": 3,
+            "ordinal": 2,
+            "phase": "controlled_ready",
+            "restored": 0,
+            "returned": 2,
+            "verified": 2
+          },
+          {
+            "attempted": 3,
+            "ordinal": 2,
+            "phase": "staging_started",
+            "restored": 0,
+            "returned": 2,
+            "verified": 2
+          },
+          {
+            "attempted": 3,
+            "ordinal": 2,
+            "phase": "staging_returned",
+            "restored": 0,
+            "returned": 2,
+            "verified": 2
+          },
+          {
+            "attempted": 3,
+            "ordinal": 2,
+            "phase": "physical_outcome_available",
+            "restored": 0,
+            "returned": 2,
+            "verified": 2
+          },
+          {
+            "attempted": 3,
+            "ordinal": 2,
+            "phase": "outcome_close_returned",
+            "restored": 0,
+            "returned": 2,
+            "verified": 2
+          },
+          {
+            "attempted": 3,
+            "ordinal": 2,
+            "phase": "dispatch_returned",
+            "restored": 0,
+            "returned": 3,
+            "verified": 2
+          },
+          {
+            "attempted": 3,
+            "ordinal": 2,
+            "phase": "body_checks",
+            "restored": 0,
+            "returned": 3,
+            "verified": 2
+          },
+          {
+            "attempted": 3,
+            "ordinal": 2,
+            "phase": "interval_verified",
+            "restored": 0,
+            "returned": 3,
+            "verified": 3
+          },
+          {
+            "attempted": 3,
+            "ordinal": 2,
+            "phase": "shared_prefix_complete",
+            "restored": 0,
+            "returned": 3,
+            "verified": 3
+          },
+          {
+            "attempted": 3,
+            "ordinal": 2,
+            "phase": "checkpoint_encode",
+            "restored": 0,
+            "returned": 3,
+            "verified": 3
+          },
+          {
+            "attempted": 3,
+            "ordinal": 2,
+            "phase": "checkpoint_ready",
+            "restored": 0,
+            "returned": 3,
+            "verified": 3
+          },
+          {
+            "attempted": 3,
+            "ordinal": 2,
+            "phase": "cold_restore_started",
+            "restored": 0,
+            "returned": 3,
+            "verified": 3
+          },
+          {
+            "attempted": 3,
+            "ordinal": 2,
+            "phase": "restore_decode",
+            "restored": 0,
+            "returned": 3,
+            "verified": 3
+          },
+          {
+            "attempted": 3,
+            "ordinal": 2,
+            "phase": "restore_binding",
+            "restored": 0,
+            "returned": 3,
+            "verified": 3
+          },
+          {
+            "attempted": 3,
+            "ordinal": 2,
+            "phase": "restore_resume",
+            "restored": 0,
+            "returned": 3,
+            "verified": 3
+          },
+          {
+            "attempted": 3,
+            "ordinal": 2,
+            "phase": "restore_ready",
+            "restored": 1,
+            "returned": 3,
+            "verified": 3
+          },
+          {
+            "attempted": 3,
+            "ordinal": 2,
+            "phase": "restore_decode",
+            "restored": 1,
+            "returned": 3,
+            "verified": 3
+          },
+          {
+            "attempted": 3,
+            "ordinal": 2,
+            "phase": "restore_binding",
+            "restored": 1,
+            "returned": 3,
+            "verified": 3
+          },
+          {
+            "attempted": 3,
+            "ordinal": 2,
+            "phase": "restore_resume",
+            "restored": 1,
+            "returned": 3,
+            "verified": 3
+          },
+          {
+            "attempted": 3,
+            "ordinal": 2,
+            "phase": "restore_ready",
+            "restored": 2,
+            "returned": 3,
+            "verified": 3
+          },
+          {
+            "attempted": 3,
+            "ordinal": 2,
+            "phase": "restore_comparison",
+            "restored": 2,
+            "returned": 3,
+            "verified": 3
+          },
+          {
+            "attempted": 3,
+            "ordinal": 2,
+            "phase": "checkpoint_encode",
+            "restored": 2,
+            "returned": 3,
+            "verified": 3
+          },
+          {
+            "attempted": 3,
+            "ordinal": 2,
+            "phase": "checkpoint_encode",
+            "restored": 2,
+            "returned": 3,
+            "verified": 3
+          },
+          {
+            "attempted": 3,
+            "ordinal": 2,
+            "phase": "play_treatment_started",
+            "restored": 2,
+            "returned": 3,
+            "verified": 3
+          },
+          {
+            "attempted": 3,
+            "ordinal": 3,
+            "phase": "interval_prepare",
+            "restored": 2,
+            "returned": 3,
+            "verified": 3
+          },
+          {
+            "attempted": 4,
+            "ordinal": 3,
+            "phase": "dispatch_started",
+            "restored": 2,
+            "returned": 3,
+            "verified": 3
+          },
+          {
+            "attempted": 4,
+            "ordinal": 3,
+            "phase": "decision_preparation",
+            "restored": 2,
+            "returned": 3,
+            "verified": 3
+          },
+          {
+            "attempted": 4,
+            "ordinal": 3,
+            "phase": "novelty_context_ready",
+            "restored": 2,
+            "returned": 3,
+            "verified": 3
+          },
+          {
+            "attempted": 4,
+            "ordinal": 3,
+            "phase": "source_bound",
+            "restored": 2,
+            "returned": 3,
+            "verified": 3
+          },
+          {
+            "attempted": 4,
+            "ordinal": 3,
+            "phase": "controlled_ready",
+            "restored": 2,
+            "returned": 3,
+            "verified": 3
+          },
+          {
+            "attempted": 4,
+            "ordinal": 3,
+            "phase": "staging_started",
+            "restored": 2,
+            "returned": 3,
+            "verified": 3
+          },
+          {
+            "attempted": 4,
+            "ordinal": 3,
+            "phase": "staging_returned",
+            "restored": 2,
+            "returned": 3,
+            "verified": 3
+          },
+          {
+            "attempted": 4,
+            "ordinal": 3,
+            "phase": "physical_outcome_available",
+            "restored": 2,
+            "returned": 3,
+            "verified": 3
+          },
+          {
+            "attempted": 4,
+            "ordinal": 3,
+            "phase": "outcome_close_returned",
+            "restored": 2,
+            "returned": 3,
+            "verified": 3
+          },
+          {
+            "attempted": 4,
+            "ordinal": 3,
+            "phase": "dispatch_returned",
+            "restored": 2,
+            "returned": 4,
+            "verified": 3
+          },
+          {
+            "attempted": 4,
+            "ordinal": 3,
+            "phase": "body_checks",
+            "restored": 2,
+            "returned": 4,
+            "verified": 3
+          },
+          {
+            "attempted": 4,
+            "ordinal": 3,
+            "phase": "interval_verified",
+            "restored": 2,
+            "returned": 4,
+            "verified": 4
+          },
+          {
+            "attempted": 4,
+            "ordinal": 3,
+            "phase": "cold_treatment_started",
+            "restored": 2,
+            "returned": 4,
+            "verified": 4
+          },
+          {
+            "attempted": 4,
+            "ordinal": 4,
+            "phase": "interval_prepare",
+            "restored": 2,
+            "returned": 4,
+            "verified": 4
+          },
+          {
+            "attempted": 5,
+            "ordinal": 4,
+            "phase": "dispatch_started",
+            "restored": 2,
+            "returned": 4,
+            "verified": 4
+          },
+          {
+            "attempted": 5,
+            "ordinal": 4,
+            "phase": "decision_preparation",
+            "restored": 2,
+            "returned": 4,
+            "verified": 4
+          },
+          {
+            "attempted": 5,
+            "ordinal": 4,
+            "phase": "novelty_context_ready",
+            "restored": 2,
+            "returned": 4,
+            "verified": 4
+          },
+          {
+            "attempted": 5,
+            "ordinal": 4,
+            "phase": "source_bound",
+            "restored": 2,
+            "returned": 4,
+            "verified": 4
+          },
+          {
+            "attempted": 5,
+            "ordinal": 4,
+            "phase": "controlled_ready",
+            "restored": 2,
+            "returned": 4,
+            "verified": 4
+          },
+          {
+            "attempted": 5,
+            "ordinal": 4,
+            "phase": "staging_started",
+            "restored": 2,
+            "returned": 4,
+            "verified": 4
+          },
+          {
+            "attempted": 5,
+            "ordinal": 4,
+            "phase": "staging_returned",
+            "restored": 2,
+            "returned": 4,
+            "verified": 4
+          },
+          {
+            "attempted": 5,
+            "ordinal": 4,
+            "phase": "physical_outcome_available",
+            "restored": 2,
+            "returned": 4,
+            "verified": 4
+          },
+          {
+            "attempted": 5,
+            "ordinal": 4,
+            "phase": "outcome_close_returned",
+            "restored": 2,
+            "returned": 4,
+            "verified": 4
+          },
+          {
+            "attempted": 5,
+            "ordinal": 4,
+            "phase": "dispatch_returned",
+            "restored": 2,
+            "returned": 5,
+            "verified": 4
+          },
+          {
+            "attempted": 5,
+            "ordinal": 4,
+            "phase": "body_checks",
+            "restored": 2,
+            "returned": 5,
+            "verified": 4
+          },
+          {
+            "attempted": 5,
+            "ordinal": 4,
+            "phase": "interval_verified",
+            "restored": 2,
+            "returned": 5,
+            "verified": 5
+          },
+          {
+            "attempted": 5,
+            "ordinal": 4,
+            "phase": "cold_comparison",
+            "restored": 2,
+            "returned": 5,
+            "verified": 5
+          },
+          {
+            "attempted": 5,
+            "ordinal": 4,
+            "phase": "checkpoint_encode",
+            "restored": 2,
+            "returned": 5,
+            "verified": 5
+          },
+          {
+            "attempted": 5,
+            "ordinal": 4,
+            "phase": "checkpoint_encode",
+            "restored": 2,
+            "returned": 5,
+            "verified": 5
+          },
+          {
+            "attempted": 5,
+            "ordinal": 4,
+            "phase": "quiet_treatment_started",
+            "restored": 2,
+            "returned": 5,
+            "verified": 5
+          },
+          {
+            "attempted": 5,
+            "ordinal": 5,
+            "phase": "interval_prepare",
+            "restored": 2,
+            "returned": 5,
+            "verified": 5
+          },
+          {
+            "attempted": 6,
+            "ordinal": 5,
+            "phase": "dispatch_started",
+            "restored": 2,
+            "returned": 5,
+            "verified": 5
+          },
+          {
+            "attempted": 6,
+            "ordinal": 5,
+            "phase": "decision_preparation",
+            "restored": 2,
+            "returned": 5,
+            "verified": 5
+          },
+          {
+            "attempted": 6,
+            "ordinal": 5,
+            "phase": "novelty_context_ready",
+            "restored": 2,
+            "returned": 5,
+            "verified": 5
+          },
+          {
+            "attempted": 6,
+            "ordinal": 5,
+            "phase": "source_bound",
+            "restored": 2,
+            "returned": 5,
+            "verified": 5
+          },
+          {
+            "attempted": 6,
+            "ordinal": 5,
+            "phase": "controlled_ready",
+            "restored": 2,
+            "returned": 5,
+            "verified": 5
+          },
+          {
+            "attempted": 6,
+            "ordinal": 5,
+            "phase": "staging_started",
+            "restored": 2,
+            "returned": 5,
+            "verified": 5
+          },
+          {
+            "attempted": 6,
+            "ordinal": 5,
+            "phase": "staging_returned",
+            "restored": 2,
+            "returned": 5,
+            "verified": 5
+          },
+          {
+            "attempted": 6,
+            "ordinal": 5,
+            "phase": "physical_outcome_available",
+            "restored": 2,
+            "returned": 5,
+            "verified": 5
+          },
+          {
+            "attempted": 6,
+            "ordinal": 5,
+            "phase": "outcome_close_returned",
+            "restored": 2,
+            "returned": 5,
+            "verified": 5
+          },
+          {
+            "attempted": 6,
+            "ordinal": 5,
+            "phase": "dispatch_returned",
+            "restored": 2,
+            "returned": 6,
+            "verified": 5
+          },
+          {
+            "attempted": 6,
+            "ordinal": 5,
+            "phase": "body_checks",
+            "restored": 2,
+            "returned": 6,
+            "verified": 5
+          },
+          {
+            "attempted": 6,
+            "ordinal": 5,
+            "phase": "interval_verified",
+            "restored": 2,
+            "returned": 6,
+            "verified": 6
+          },
+          {
+            "attempted": 6,
+            "ordinal": 5,
+            "phase": "body_comparison",
+            "restored": 2,
+            "returned": 6,
+            "verified": 6
+          },
+          {
+            "attempted": 6,
+            "ordinal": 5,
+            "phase": "bank_comparison",
+            "restored": 2,
+            "returned": 6,
+            "verified": 6
+          },
+          {
+            "attempted": 6,
+            "ordinal": 5,
+            "phase": "complete",
+            "restored": 2,
+            "returned": 6,
+            "verified": 6
+          }
+        ],
+        "plan_id": "m2-channel-native-play-recovery-list-v5",
+        "planned_tests": 1,
+        "planned_world_step_calls_max": 6,
+        "private_output_counted_bytes": 692380,
+        "results": [
+          {
+            "failed": 0,
+            "ignored": 0,
+            "name": "cpu::host::grouped_host_envelope::channel_native::tests::controlled::grounded_play_and_quiet_awake_rest_share_prefix_and_cold_source",
+            "passed": 1
+          }
+        ],
+        "schema": "channel-native-controlled-physics-summary-v5",
+        "source_forward_calls_max": 6,
+        "stage": "complete",
+        "test_processes_attempted": 1,
+        "test_projection_sha256": "17e1310f96fe4bdb4dc7c2fd7ade4df0aecc95f4ab59b28f50f0f5175a57f22a",
+        "trained_checkpoint_file_reads": 0
+      }
+    },
+    {
+      "label": "real meal opportunity plumbing; no observed sampled-action or reported Eat-probability effect",
+      "run_id": 42700219085,
+      "activation": "bcfeadd5ac008e9734d141b0e65b948dc507cabb",
+      "prepared": "88e27025e323123ddb211b8ede19448c05d1268c",
+      "attempt": 1,
+      "url": "https://github.com/BobertNeek/A-Life/actions/runs/42700219085",
+      "summary": {
+        "code": "OK",
+        "diagnostics": [],
+        "peak_rss_bytes": 1729003520,
+        "peak_workspace_bytes": 1844409824,
+        "plan_id": "m2-targetless-cue-compile-v4",
+        "planned_dose_not_claimed_before_success": {
+          "extra_detached_forwards": 0,
+          "preparation_ticks": 240,
+          "recipes": 1,
+          "registered_intervals": 3,
+          "scripted_producer_intervals": 2,
+          "source_forwards": 3,
+          "unforced_current_opportunities": 1
+        },
+        "private_output_counted_bytes": 453611,
+        "result": {
+          "actual_acquired_then_consumed": true,
+          "actual_counter_deltas_verified_by_fixed_assertions": {
+            "body_age_ticks": 3,
+            "dispatch_generation": 3,
+            "next_sequence": 3,
+            "replay_records": 3,
+            "world_tick": 3
+          },
+          "current_opportunity_v3": {
+            "committed_paths": 1,
+            "counter_deltas": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "final_memory_cold_equal": true,
+            "registered_intervals": 3,
+            "sampler": {
+              "actual_source_association": {
+                "cold_equal": true,
+                "cross_load_rejected": true,
+                "future_consumption": "Unknown",
+                "future_grip": "Unknown",
+                "query_capture_success": true,
+                "schema": "canonical-targetless-source-readouts-v3",
+                "sources": [
+                  {
+                    "canonical_source": true,
+                    "sequence": 1,
+                    "signed_joint_valence": -0.0007618573727086186,
+                    "source_consumed": false,
+                    "v3_weight": null
+                  },
+                  {
+                    "canonical_source": true,
+                    "sequence": 2,
+                    "signed_joint_valence": 0.08036921918392181,
+                    "source_consumed": true,
+                    "v3_weight": null
+                  }
+                ],
+                "v3_joint_value": null
+              },
+              "comparison": "same-real-source-frame-rng-readers-one-committed-path",
+              "counter": 2,
+              "decision_sequence": 3,
+              "frame_tick": 242,
+              "future_consumption": "Unknown",
+              "future_grip": "Unknown",
+              "memory_last_sequence": 2,
+              "readouts": [
+                {
+                  "bundle_probability": 0.0018974478320247154,
+                  "probability_sum": 1.0000000000000018,
+                  "reader": "v3_on",
+                  "same_bundle_as_on": true,
+                  "second_root_eat_probability": 0.03790102951679512,
+                  "selected_eat": false,
+                  "selected_index": 778,
+                  "selected_joint_log_probability": -6.267245542076531,
+                  "selected_potential": 0,
+                  "selected_primitives": [
+                    [
+                      0,
+                      101
+                    ],
+                    [
+                      2,
+                      211
+                    ],
+                    [
+                      4,
+                      4
+                    ]
+                  ],
+                  "support_count": 1330
+                },
+                {
+                  "bundle_probability": 0.0018974478320247154,
+                  "probability_sum": 1.0000000000000018,
+                  "reader": "off",
+                  "same_bundle_as_on": true,
+                  "second_root_eat_probability": 0.03790102951679512,
+                  "selected_eat": false,
+                  "selected_index": 778,
+                  "selected_joint_log_probability": -6.267245542076531,
+                  "selected_potential": 0,
+                  "selected_primitives": [
+                    [
+                      0,
+                      101
+                    ],
+                    [
+                      2,
+                      211
+                    ],
+                    [
+                      4,
+                      4
+                    ]
+                  ],
+                  "support_count": 1330
+                },
+                {
+                  "bundle_probability": 0.0018974478320247154,
+                  "probability_sum": 1.0000000000000018,
+                  "reader": "strict_v1",
+                  "same_bundle_as_on": true,
+                  "second_root_eat_probability": 0.03790102951679512,
+                  "selected_eat": false,
+                  "selected_index": 778,
+                  "selected_joint_log_probability": -6.267245542076531,
+                  "selected_potential": 0,
+                  "selected_primitives": [
+                    [
+                      0,
+                      101
+                    ],
+                    [
+                      2,
+                      211
+                    ],
+                    [
+                      4,
+                      4
+                    ]
+                  ],
+                  "support_count": 1330
+                },
+                {
+                  "bundle_probability": 0.0018974478320247154,
+                  "probability_sum": 1.0000000000000018,
+                  "reader": "graded_v1",
+                  "same_bundle_as_on": true,
+                  "second_root_eat_probability": 0.03790102951679512,
+                  "selected_eat": false,
+                  "selected_index": 778,
+                  "selected_joint_log_probability": -6.267245542076531,
+                  "selected_potential": 0,
+                  "selected_primitives": [
+                    [
+                      0,
+                      101
+                    ],
+                    [
+                      2,
+                      211
+                    ],
+                    [
+                      4,
+                      4
+                    ]
+                  ],
+                  "support_count": 1330
+                },
+                {
+                  "bundle_probability": 0.0018974478320247154,
+                  "probability_sum": 1.0000000000000018,
+                  "reader": "meal_v2",
+                  "same_bundle_as_on": true,
+                  "second_root_eat_probability": 0.03790102951679512,
+                  "selected_eat": false,
+                  "selected_index": 778,
+                  "selected_joint_log_probability": -6.267245542076531,
+                  "selected_potential": 0,
+                  "selected_primitives": [
+                    [
+                      0,
+                      101
+                    ],
+                    [
+                      2,
+                      211
+                    ],
+                    [
+                      4,
+                      4
+                    ]
+                  ],
+                  "support_count": 1330
+                }
+              ],
+              "schema": "canonical-targetless-current-opportunity-v3",
+              "scripted": false,
+              "second_root_candidate_present": true,
+              "seed": 1258815748,
+              "source_dispatch_generation": 3
+            },
+            "source_forwards": 3,
+            "third_joint_valence": 0.006696139927953482,
+            "third_source_consumed": false
+          },
+          "future_consumption": "Unknown",
+          "future_grip": "Unknown",
+          "graded": {
+            "future_consumption": "Unknown",
+            "graded_joint_value": null,
+            "reason_report": {
+              "future_consumption": "Unknown",
+              "future_grip": "Unknown",
+              "query_capture_rejected": false,
+              "query_capture_success": true,
+              "records": [
+                {
+                  "capture_rejected": false,
+                  "frame_budget_bytes": 32768,
+                  "original_self_match": true,
+                  "pair_match": false,
+                  "pair_rejections": [
+                    "Locomotion:physical_command_fields",
+                    "Locomotion:relative_geometry_lane:5",
+                    "Manipulation:color",
+                    "Manipulation:temperature",
+                    "Manipulation:terrain",
+                    "Manipulation:relative_geometry_lane:0",
+                    "Manipulation:relative_geometry_lane:1",
+                    "Manipulation:relative_geometry_lane:2",
+                    "Manipulation:relative_geometry_lane:5",
+                    "Manipulation:contact_difference"
+                  ],
+                  "rebuild_capture_success": true,
+                  "sequence": 1,
+                  "signed_joint_valence": -0.0007618573727086186,
+                  "source_consumed": false,
+                  "source_frame_bytes": 18332,
+                  "stored_capture_success": true,
+                  "witness_retained": true
+                },
+                {
+                  "capture_rejected": false,
+                  "frame_budget_bytes": 32768,
+                  "original_self_match": true,
+                  "pair_match": false,
+                  "pair_rejections": [
+                    "Manipulation:color",
+                    "Manipulation:temperature",
+                    "Manipulation:terrain",
+                    "Manipulation:relative_geometry_lane:0",
+                    "Manipulation:relative_geometry_lane:1",
+                    "Manipulation:relative_geometry_lane:3"
+                  ],
+                  "rebuild_capture_success": true,
+                  "sequence": 2,
+                  "signed_joint_valence": 0.08036921918392181,
+                  "source_consumed": true,
+                  "source_frame_bytes": 19232,
+                  "stored_capture_success": true,
+                  "witness_retained": true
+                }
+              ]
+            }
+          },
+          "historical_query": {
+            "candidate_present": true,
+            "exact_sequences": null,
+            "query_error_present": false,
+            "strict_joint_value": null,
+            "strict_meal_matched": false,
+            "strict_sequences": null
+          },
+          "meal_v2": {
+            "cold_readouts_equal": true,
+            "comparison": "matched-engineering-regression-not-held-out",
+            "future_consumption": "Unknown",
+            "future_grip": "Unknown",
+            "schema": "meal-kinematic-matched-readouts-v2",
+            "sources": [
+              {
+                "sequence": 1,
+                "signed_joint_valence": -0.0007618573727086186,
+                "source_consumed": false,
+                "v1_graded_weight": null,
+                "v2_meal_weight": null
+              },
+              {
+                "sequence": 2,
+                "signed_joint_valence": 0.08036921918392181,
+                "source_consumed": true,
+                "v1_graded_weight": null,
+                "v2_meal_weight": null
+              }
+            ],
+            "v1_graded_joint_value": null,
+            "v1_v2_cross_load_rejected": true,
+            "v2_meal_joint_value": null
+          },
+          "scope": "known engineering regression; two scripted producers plus one current unforced policy opportunity; not held-out generalization",
+          "targetless_historical_v3": {
+            "cold_equal": true,
+            "cross_load_rejected": true,
+            "future_consumption": "Unknown",
+            "future_grip": "Unknown",
+            "query_capture_success": true,
+            "schema": "canonical-targetless-source-readouts-v3",
+            "sources": [
+              {
+                "canonical_source": true,
+                "sequence": 1,
+                "signed_joint_valence": -0.0007618573727086186,
+                "source_consumed": false,
+                "v3_weight": null
+              },
+              {
+                "canonical_source": true,
+                "sequence": 2,
+                "signed_joint_valence": 0.08036921918392181,
+                "source_consumed": true,
+                "v3_weight": 0.6665449738502502
+              }
+            ],
+            "v3_joint_value": 0.05356970056891441
+          }
+        },
+        "schema": "canonical-targetless-current-hosted-summary-v3",
+        "stage": "complete",
+        "test_processes_attempted": 1
+      }
+    },
+    {
+      "label": "exact post-physical-error rollback",
+      "run_id": 42700337119,
+      "activation": "ee2b5b88bd9409a1306ae4448f7d654e2efe4e73",
+      "prepared": "aa4b684f958c4724402fc1e00bcfb5a6c672f556",
+      "attempt": 1,
+      "url": "https://github.com/BobertNeek/A-Life/actions/runs/42700337119",
+      "summary": {
+        "code": "OK",
+        "diagnostics": [],
+        "exact_rollback_fixture_qualified": true,
+        "excluded_old_test_count": 394,
+        "peak_rss_bytes": 1737191424,
+        "peak_workspace_bytes": 2043520137,
+        "plan_id": "m2-channel-native-rollback-exact-v1",
+        "planned_tests": 1,
+        "planned_world_step_calls_max": 1,
+        "private_output_counted_bytes": 665691,
+        "results": [
+          {
+            "failed": 0,
+            "ignored": 0,
+            "name": "cpu::host::grouped_host_envelope::channel_native::tests::channel_native_host_rejects_opposite_policy_and_rolls_back_exact_post_physical_error",
+            "passed": 1
+          }
+        ],
+        "schema": "channel-native-host-contract-summary-v2",
+        "source_forward_calls_max": 1,
+        "stage": "complete",
+        "test_processes_attempted": 1,
+        "test_projection_sha256": "61818da98729d2aafae79ba083aaeae4abe4d80c3754a0fb95cb8fc4708ff3d2",
+        "trained_checkpoint_file_reads": 0
+      }
+    },
+    {
+      "label": "grip admission reached; first step incomplete",
+      "run_id": 42699947283,
+      "activation": "8b8a50370ede860cb1fd791c559c59f17dd68290",
+      "prepared": "3c698ebe0bd4e9b66d4890d36044dfb541200123",
+      "attempt": 1,
+      "url": "https://github.com/BobertNeek/A-Life/actions/runs/42699947283",
+      "exposure_caution": "The safe prefix reached FIRST_STEP_BEGIN but not FIRST_STEP_DONE. It cannot establish which internal source/physical operations completed. Only the first of three planned host calls was entered: source-audited explicit-call upper bounds are one source forward, one grip-bank forward and one staged physical transaction; no committed interval is confirmed. Recursive numerical constructor/compiler work remains separately bounded, not counted as zero.",
+      "summary": {
+        "activation_head": "8b8a50370ede860cb1fd791c559c59f17dd68290",
+        "activation_marker_sha256": "7ec8df2390c4f9f5fbe61a5e060bf5015f35036ccbe4866148dfe0324eae4a86",
+        "attempted_fixture_ids": [
+          "f041"
+        ],
+        "binary_identities": [
+          {
+            "sha256": "b06c7630f6533067091dc030e94db85b47c10f39ce5ff0ee08bcff8ede091560",
+            "target_id": "training_grip_options_host"
+          }
+        ],
+        "bound_files": 866,
+        "cargo_lock_sha256": "99b01e0353263fd5bbf0261320898e8395d45583f2045e3433d3e2a1f50070eb",
+        "code": "TEST_EXECUTION",
+        "compiled_target_ids": [
+          "training_grip_options_host"
+        ],
+        "completed": [],
+        "confirmed_passed_test_bodies": 0,
+        "correction_patch_sha256": "0ce2a14320e13e31b9727d41d979798910c31e9663dcaca043c0900c5c96774a",
+        "dependency_correction_patch_sha256": "fa468c4ca23f88c2f90f561176283fb1bf0f53c24280fee6c6dcdd093f5ed712",
+        "diagnostics": [],
+        "elapsed_seconds": 245,
+        "f041_failure": {
+          "checks": [
+            {
+              "check": "ORDINARY_IDENTITY_REJECTS_RESEARCH",
+              "passed": true
+            }
+          ],
+          "last_observed_phase": "FIRST_STEP_BEGIN",
+          "phase_count": 27
+        },
+        "grip_patch_sha256": "acf8cc50353ba76cb7adf5af1db5845ee6e6b2e2261d0ee823821428e2e4d054",
+        "launched_fixture_processes": 1,
+        "listed_fixture_ids": [
+          "f041"
+        ],
+        "main": "c3aec16df33861f1316d127736f5f60eea327ede",
+        "output_bytes": 137053,
+        "passed_fixture_ids": [],
+        "peak_rss_bytes": 1731256320,
+        "peak_workspace_bytes": 2046940536,
+        "plan_id": "m2-grip-fixed-fixtures-v5",
+        "prepared_head": "3c698ebe0bd4e9b66d4890d36044dfb541200123",
+        "research_base": "fbf2a517f93098b5d936878a3d26bbb8d0391c38",
+        "schema": "m2-grip-fixed-fixture-summary-v5",
+        "seal_sha256": "fb529c1707f7e6a465a30e8e980de4c1b0eb91b7b48b34d4ac4ed9535e10cb55",
+        "source_audited_attempt_dose": {
+          "bank_forwards": 3,
+          "cold_branch_intervals": 1,
+          "cold_restored_world_branches": 1,
+          "committed_registered_biology_intervals": 3,
+          "fixtures_with_unenumerated_compiler_work": 1,
+          "fresh_fixture_recipe_builds": 1,
+          "fresh_worlds": 3,
+          "grip_neuron_updates": 768,
+          "host_bundle_attempts": 3,
+          "ordinary_identity_rejection_calls": 1,
+          "partition_forwards": 0,
+          "primitive_attempts": 0,
+          "rolled_back_registered_biology_intervals": 0,
+          "source_forwards": 3,
+          "warm_branch_intervals": 2
+        },
+        "source_audited_passed_dose": {},
+        "source_manifest_sha256": "e6bce07f7808bd55fc4c1fc47772f5333c05f35939aa16df5ba626041a490c4c",
+        "stage": "run_f041",
+        "toolchain": {
+          "cargo": "cargo 1.99.1 (5f94df478 2026-08-27)",
+          "cargo_binary_sha256": "a670e02cfa39ac2e53f77a2d911ca1fc9e2c479b0603ec956625be1daf24e3af",
+          "host": "x86_64-unknown-linux-gnu",
+          "llvm": "23.1.1",
+          "rust_commit": "58cf8f9c35b355199727627d07ae34a4e2846d67",
+          "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+          "rustc_binary_sha256": "b53b780f77f952062f8ca8a3b70aef2390b1e45ad91939be94afdc9543026853"
+        }
+      }
+    }
+  ],
+  "historical_accounting_correction": {
+    "run_id": 42689810199,
+    "source_audited_upper_bound": {
+      "source_forwards": 5,
+      "world_step_calls": 4
+    },
+    "measured_aggregate_available": false,
+    "reason": "Three warm/cold calls, up to one fault-path call, and one later NaN call whose temperature validation occurs after forward. Historical generic is_err did not prove fault-path location. The old summary's source_forward_calls_max=4 is not a reliable source ceiling."
+  }
+}
