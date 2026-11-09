@@ -1,9 +1,9 @@
 {
   "files": [
     {
-      "bytes": 16370,
+      "bytes": 18917,
       "path": "PLAN.md",
-      "sha256": "d15f269e1b3a623f5c3b04587c382943ba18356b16e11e2cc4332c3258482929"
+      "sha256": "7d468ca036a1027db5699da331c5c31cbdb50043b2d824390c264f5751a868f1"
     },
     {
       "bytes": 2165,
@@ -11,14 +11,14 @@
       "sha256": "e37511d99426f82957833fc454cec37c388761c2ed604148dc1bd29f7b1657ca"
     },
     {
-      "bytes": 22270,
+      "bytes": 31587,
       "path": "run_hosted.py",
-      "sha256": "675b8d8e78fdd22dc006d02c9ce236d625a0a6f7a2dfbd15ec8c4d2bda0abc10"
+      "sha256": "195d0e61ee4f75c121ad3817e01154486bd377a74b1d8452473333dd844e7728"
     },
     {
-      "bytes": 15759,
+      "bytes": 29891,
       "path": "test_runner_synthetic.py",
-      "sha256": "a26c4a450f2a7a330ea612bcfa8b6b130b9d8af6a6c88d2b9f0d5b8db9f2d377"
+      "sha256": "08ad7b1123f8d678142d5b937de788f2088c285d85b21d43e910890047060c4b"
     },
     {
       "bytes": 30715,
@@ -88,12 +88,12 @@
     {
       "bytes": 202,
       "path": "SYNTHETIC-TESTS.json",
-      "sha256": "d26ad24b61afc744a36229a6e4f753a90e949d4a26e4e3b5628f92e16d3161aa"
+      "sha256": "cba238ad48cc169ac8d13be5ad553cb1d229292fc127113e701a2746cc909396"
     },
     {
-      "bytes": 6215,
+      "bytes": 8704,
       "path": "TRIGGER-AUDIT.json",
-      "sha256": "455cddc64951d31848f9b5f4d7606a92445714e449d95357de524c764e0310ae"
+      "sha256": "346613d846ef1d08d1371a312f348024d7a178db8057923d1b984e9791dce95b"
     },
     {
       "bytes": 5176,
@@ -154,7 +154,22 @@
       "bytes": 122483,
       "path": "patches/meal-core-to-host.patch",
       "sha256": "c4422c612c3ae6e2826394c34b1690a585af0e2773a669cdb059719020c0a8dd"
+    },
+    {
+      "bytes": 1649,
+      "path": "SETUP-V3.md",
+      "sha256": "f81b0111a47dee474c12b55b221eb4cd8c878b40d229e718e9bdc205863a58fc"
+    },
+    {
+      "bytes": 3028,
+      "path": "TOOLCHAIN-PROVENANCE.json",
+      "sha256": "122c4b3e6538442cdd14fe81923c4ae45f5276126d6d3d8afc3001e779adb99c"
+    },
+    {
+      "bytes": 7481,
+      "path": "upstream-toolchain-action.yml",
+      "sha256": "0b52547c145ae18d8631c9ab711e4d917e9e489cea800368f338c25a56e0aee2"
     }
   ],
-  "schema": "m2-hosted-fixed-fixtures-v2"
+  "schema": "m2-hosted-fixed-fixtures-v3"
 }
