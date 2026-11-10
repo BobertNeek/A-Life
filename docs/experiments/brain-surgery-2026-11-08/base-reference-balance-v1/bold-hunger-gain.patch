@@ -1,0 +1,19 @@
+--- a/crates/alife_training/examples/support/bold_base.rs
++++ b/crates/alife_training/examples/support/bold_base.rs
+@@ -21,6 +21,16 @@
+         if original[i]!=expected || !matches!(s.kind(),CompiledSynapseKind::Decoder(c) if c.head()==DecoderHeadKind::ActionCandidate && c.family()==CandidateActionFamily::Ingest) {return Err("Ingest reference coordinate mismatch".into());}
+         change(i,expected*1.25,"ingest-reference")?;
+     }
++    // Optional fresh-founder experiment: amplify the existing hunger path.
++    // Never applies to a saved organism or to the candidate unless explicitly selected.
++    if std::env::var_os("ALIFE_RESEARCH_HUNGER_GAIN").is_some() {
++        for (i,expected,after) in [(6656usize,2f32,4f32),(7680,2.,4.),(9502,4.,8.)] {
++            if original[i]!=expected || p.synapses()[i].kind()!=CompiledSynapseKind::Recurrent {
++                return Err(format!("hunger pathway mismatch at {i}").into());
++            }
++            change(i,after,"hunger-sensitivity")?;
++        }
++    }
+     let fatigue=&p.synapses()[9697];
+     if original[9697]!=0. || fatigue.kind()!=CompiledSynapseKind::Recurrent || fatigue.route_index()!=5 || fatigue.source()!=899 || fatigue.target()!=1779 {return Err("fatigue route mismatch".into());}
+     change(9697,4.,"fatigue-approach-relay")?;
