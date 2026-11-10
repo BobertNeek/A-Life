@@ -1,0 +1,44 @@
+--- a/crates/alife_training/src/cpu/actual_contact_four_interval_tests.rs
++++ b/crates/alife_training/src/cpu/actual_contact_four_interval_tests.rs
+@@ -571,12 +571,12 @@
+ 
+ // Fresh ordinary physical scene. Unlike the controlled fixture above, every
+ // motor bundle is sampled by the host; no action or drive level is injected.
+-fn run_natural_food_toy<const ARM:u8>() {
+-    let recipe=recipe::build(FIXTURE_SEED,true).unwrap();
++fn run_natural_food_toy<const ARM:u8, const SCENE_SEED:u64>() {
++    let recipe=recipe::build(SCENE_SEED,true).unwrap();
+     let founder=CpuFoundationTrainer::new(recipe.phenotype.clone(),recipe.asset.clone(),StageTrainableMask::recurrent_only(&recipe.phenotype).unwrap(),AdamWConfig::default()).unwrap();
+     let mut game=create_grounded_drive_research_new_game(&recipe.config,&recipe.genotype).unwrap();
+     let newborn=game.world.organism_registry().iter().next().unwrap().clone();
+-    let mut world=HeadlessScenarioBuilder::new(FIXTURE_SEED)
++    let mut world=HeadlessScenarioBuilder::new(SCENE_SEED)
+         .agent("learner",newborn.organism_id(),Vec3f::ZERO)
+         .food("root",Vec3f::new(0.6,0.0,0.0),0.65)
+         .toy("toy",Vec3f::new(0.1,0.0,0.0),false)
+@@ -584,7 +584,7 @@
+     world.set_food_variety(world.entity_id("root").unwrap(),FoodVariety::Root).unwrap();
+     world.register_grounded_drive_research_record(newborn).unwrap();
+     game.world=world;
+-    let (mut host,())=CpuGroupedM2HostV1::new_prepared_policy::<Natural<ARM>,_,String>(game,founder,recipe.inputs,(FIXTURE_SEED^(FIXTURE_SEED>>32)) as u32,MediationModeV1::Full, |_| Ok(())).unwrap();
++    let (mut host,())=CpuGroupedM2HostV1::new_prepared_policy::<Natural<ARM>,_,String>(game,founder,recipe.inputs,(SCENE_SEED^(SCENE_SEED>>32)) as u32,MediationModeV1::Full, |_| Ok(())).unwrap();
+     let frozen_founder=serde_json::to_vec(&host.founder.checkpoint()).unwrap();
+     for tick in 0..32 {
+         let observed=host.host.grouped_policy_step_observed::<Natural<ARM>>(&host.founder,0.73).unwrap();
+@@ -595,6 +595,13 @@
+     }
+     assert_eq!(frozen_founder,serde_json::to_vec(&host.founder.checkpoint()).unwrap());
+ }
+-#[test] fn additive_food_toy_original() {run_natural_food_toy::<0>();}
+-#[test] fn additive_food_toy_candidate() {run_natural_food_toy::<1>();}
+-#[test] fn additive_food_toy_sham() {run_natural_food_toy::<2>();}
++#[test] fn additive_food_toy_original() {run_natural_food_toy::<0, 0x0043_484e_4c48_5331>();}
++#[test] fn additive_food_toy_candidate() {run_natural_food_toy::<1, 0x0043_484e_4c48_5331>();}
++#[test] fn additive_food_toy_sham() {run_natural_food_toy::<2, 0x0043_484e_4c48_5331>();}
++
++#[test] fn additive_food_toy_original_seed2() {run_natural_food_toy::<0, 0x0043_484e_4c48_5332>();}
++#[test] fn additive_food_toy_candidate_seed2() {run_natural_food_toy::<1, 0x0043_484e_4c48_5332>();}
++#[test] fn additive_food_toy_sham_seed2() {run_natural_food_toy::<2, 0x0043_484e_4c48_5332>();}
++#[test] fn additive_food_toy_original_seed3() {run_natural_food_toy::<0, 0x0043_484e_4c48_5333>();}
++#[test] fn additive_food_toy_candidate_seed3() {run_natural_food_toy::<1, 0x0043_484e_4c48_5333>();}
++#[test] fn additive_food_toy_sham_seed3() {run_natural_food_toy::<2, 0x0043_484e_4c48_5333>();}
