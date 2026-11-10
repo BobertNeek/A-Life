@@ -1,0 +1,335 @@
+--- a/crates/alife_training/src/cpu/grouped_host_loop.rs
++++ b/crates/alife_training/src/cpu/grouped_host_loop.rs
+@@ -174,11 +174,12 @@
+             // Source and appendage share one admission. A resource-limited
+             // living body takes the existing recovery fallback, not a repeated
+             // rollback stall and not a forged voluntary BodySleep receipt.
+-            let (_, _, grouped_affordable) = GroupedMotorStateV1::work(
++            let (_, _, grouped_affordable) = GroupedMotorStateV1::work_for(
+                 p,
+                 &lookahead.work,
+                 grouped_dynamic_work(p, r, &lookahead)?.checked_add(if P::ACTUAL_CONTACT {super::actual_contact_work::reserve_q24(p)?}else{0}).ok_or(CpuHostError::State("actual-contact lookahead overflow"))?,
+                 lookahead.available_atp_q16,
++                P::RECIPE,
+             )?;
+             if phase_before == SleepPhase::Awake && !grouped_affordable {
+                 r.sleep
+@@ -359,18 +360,23 @@
+                 recall.context().candidates.len() as u32,
+             )?;
+             let motor_reservation_q24;
++            let motor_base_work;
++            let motor_dynamic_q24;
+             {
+                 let dynamic = grouped_dynamic_work(p, r, &activity)?.checked_add(if P::ACTUAL_CONTACT {super::actual_contact_work::reserve_q24(p)?}else{0}).ok_or(CpuHostError::State("actual-contact reservation overflow"))?;
+-                let (total, debit, affordable) = GroupedMotorStateV1::work(
++                motor_base_work = activity.work;
++                motor_dynamic_q24 = dynamic;
++                let (total, debit, affordable) = GroupedMotorStateV1::work_for(
+                     p,
+                     &activity.work,
+                     dynamic,
+                     activity.available_atp_q16,
++                    P::RECIPE,
+                 )?;
+                 motor_reservation_q24 = total;
+                 activity.debit_atp_q16 = debit;
+                 activity.affordable = affordable;
+-                let extra = GroupedMotorStateV1::append_work(p)?;
++                let extra = GroupedMotorStateV1::append_work_for(p, P::RECIPE)?;
+                 activity.work.neuron_updates += extra.neuron_updates;
+                 activity.work.synapse_ops += extra.synapse_products;
+             }
+--- a/crates/alife_training/src/cpu/optional_vocal_host.rs
++++ b/crates/alife_training/src/cpu/optional_vocal_host.rs
+@@ -32,9 +32,24 @@
+     }
+ }
+ impl GroupedResidentV1 {
++    fn validate_optional_policy(&self) -> Result<(), CpuHostError> {
++        match self.motor.owner() {
++            crate::cpu::motor_mediation::HostRecipeV1::Original60 => self.validate_policy::<OptionalVocalPolicy>(),
++            crate::cpu::motor_mediation::HostRecipeV1::PlayNeedCandidate76 => self.validate_policy::<OptionalVocalPolicy<1>>(),
++            crate::cpu::motor_mediation::HostRecipeV1::PlayNeedPaddedSham76 => self.validate_policy::<OptionalVocalPolicy<2>>(),
++        }
++    }
++    fn validate_contact_policy(&self) -> Result<(), CpuHostError> {
++        match self.motor.owner() {
++            crate::cpu::motor_mediation::HostRecipeV1::Original60 => self.validate_policy::<actual_contact::ActualContactPolicy<0>>(),
++            crate::cpu::motor_mediation::HostRecipeV1::PlayNeedCandidate76 => self.validate_policy::<actual_contact::ActualContactPolicy<1>>(),
++            crate::cpu::motor_mediation::HostRecipeV1::PlayNeedPaddedSham76 => self.validate_policy::<actual_contact::ActualContactPolicy<2>>(),
++        }
++    }
+     pub(in crate::cpu::host) fn validate_policy<P: GroupedPolicyStrategy>(
+         &self,
+     ) -> Result<(), CpuHostError> {
++        self.motor.validate_owner(P::RECIPE)?;
+         if self.actual_contact.is_some() != P::ACTUAL_CONTACT
+             || self.actual_contact.as_ref().is_some_and(|v|v.schema != actual_contact::CHANNEL_RESIDENT || self.last_action.is_some() || self.optional_vocal.is_some() || self.channel_native.is_some() || v.last.is_some()!=self.motor.last_receipt.is_some())
+             || self.channel_native.is_some() != P::CHANNEL_NATIVE
+@@ -76,7 +91,7 @@
+             .native
+             .scores;
+         if let Some(v)=&self.actual_contact {
+-            self.validate_policy::<actual_contact::ActualContactPolicy>()?;
++            self.validate_contact_policy()?;
+             let last=v.last.as_ref().ok_or(CpuHostError::State("missing actual-contact sample"))?;
+             last.scores.validate_native(native)?;
+             let (i,m)=last.scores.physical_selection(&last.action)?;
+@@ -90,7 +105,7 @@
+             return Ok((i,m,last.action.operation()));
+         }
+         if let Some(v) = &self.optional_vocal {
+-            self.validate_policy::<OptionalVocalPolicy>()?;
++            self.validate_optional_policy()?;
+             let last = v
+                 .last
+                 .as_ref()
+@@ -150,7 +165,7 @@
+         let Some(v) = &self.actual_contact else {
+             return Ok(());
+         };
+-        self.validate_policy::<actual_contact::ActualContactPolicy>()?;
++        self.validate_contact_policy()?;
+         let Some(last) = &v.last else {
+             return Ok(());
+         };
+@@ -216,6 +231,7 @@
+ pub(in crate::cpu::host) trait GroupedPolicyStrategy {
+     type Action: Clone;
+     const OPTIONAL: bool;
++    const RECIPE: crate::cpu::motor_mediation::HostRecipeV1 = crate::cpu::motor_mediation::HostRecipeV1::Original60;
+     const CHANNEL_NATIVE: bool = false;
+     const ACTUAL_CONTACT: bool = false;
+     #[cfg(test)]
+--- a/crates/alife_training/src/cpu/actual_contact_host.rs
++++ b/crates/alife_training/src/cpu/actual_contact_host.rs
+@@ -39,8 +39,9 @@
+             && self.contact_work.is_none()
+     }
+ }
+-pub(super) struct ActualContactPolicy;
+-impl GroupedPolicyStrategy for ActualContactPolicy {
++pub(super) struct ActualContactPolicy<const ARM: u8 = 0>;
++impl<const ARM: u8> GroupedPolicyStrategy for ActualContactPolicy<ARM> {
++    const RECIPE: crate::cpu::motor_mediation::HostRecipeV1 = match ARM { 0 => crate::cpu::motor_mediation::HostRecipeV1::Original60, 1 => crate::cpu::motor_mediation::HostRecipeV1::PlayNeedCandidate76, 2 => crate::cpu::motor_mediation::HostRecipeV1::PlayNeedPaddedSham76, _ => panic!("unknown contact test recipe") };
+     type Action = ActualContactActionV1;
+     const OPTIONAL: bool = false;
+     const ACTUAL_CONTACT: bool = true;
+@@ -179,7 +180,7 @@
+         let mut payload: GroupedPayloadV1 = serde_json::from_value(metadata.clone())?;
+         payload.restore_sampler_bits()?;
+         for state in payload.controllers.values() {
+-            state.validate_policy::<ActualContactPolicy>()?;
++            state.validate_policy::<ActualContactPolicy<0>>()?;
+         }
+         if serde_json::from_slice::<serde_json::Value>(&serde_json::to_vec(&payload)?)? != metadata
+         {
+@@ -199,7 +200,7 @@
+         mode: MediationModeV1,
+         prepare: impl FnOnce(&mut HeadlessWorld) -> Result<T, E>,
+     ) -> Result<(Self, T), CpuHostError> {
+-        let (inner, value) = CpuGroupedM2HostV1::new_prepared_policy::<ActualContactPolicy, T, E>(
++        let (inner, value) = CpuGroupedM2HostV1::new_prepared_policy::<ActualContactPolicy<0>, T, E>(
+             game,
+             founder,
+             source_inputs,
+@@ -233,7 +234,7 @@
+     }
+     pub fn checkpoint(&self) -> Result<CpuActualContactM2HostCheckpointV1, CpuHostError> {
+         Ok(CpuActualContactM2HostCheckpointV1 {
+-            payload: self.inner.checkpoint_payload::<ActualContactPolicy>()?,
++            payload: self.inner.checkpoint_payload::<ActualContactPolicy<0>>()?,
+         })
+     }
+     pub fn restore(
+@@ -242,7 +243,7 @@
+         mode: MediationModeV1,
+     ) -> Result<Self, CpuHostError> {
+         let wire = c.encode()?;
+-        let inner = CpuGroupedM2HostV1::restore_payload::<ActualContactPolicy>(
++        let inner = CpuGroupedM2HostV1::restore_payload::<ActualContactPolicy<0>>(
+             c.payload,
+             expected_source,
+             mode,
+--- a/crates/alife_training/src/cpu/actual_contact_four_interval_tests.rs
++++ b/crates/alife_training/src/cpu/actual_contact_four_interval_tests.rs
+@@ -39,8 +39,9 @@
+     actual_microsteps: u32,
+ }
+ thread_local! { static WITNESS: RefCell<Option<Witness>> = const { RefCell::new(None) }; }
+-struct Controlled<const PLAY: bool>;
+-impl<const PLAY: bool> GroupedPolicyStrategy for Controlled<PLAY> {
++struct Controlled<const PLAY: bool, const ARM: u8 = 0>;
++impl<const PLAY: bool, const ARM: u8> GroupedPolicyStrategy for Controlled<PLAY, ARM> {
++    const RECIPE: crate::cpu::motor_mediation::HostRecipeV1 = match ARM { 0 => crate::cpu::motor_mediation::HostRecipeV1::Original60, 1 => crate::cpu::motor_mediation::HostRecipeV1::PlayNeedCandidate76, 2 => crate::cpu::motor_mediation::HostRecipeV1::PlayNeedPaddedSham76, _ => panic!("unknown test recipe") };
+     type Action = ActualContactActionV1;
+     const OPTIONAL: bool = false;
+     const ACTUAL_CONTACT: bool = true;
+@@ -153,7 +154,7 @@
+         a: &Self::Action,
+         b: CpuDecisionBinding,
+     ) -> Result<(), CpuHostError> {
+-        ActualContactPolicy::stage(r, p, a, b)
++        ActualContactPolicy::<ARM>::stage(r, p, a, b)
+     }
+     fn close(
+         n: &mut CpuOrganismState,
+@@ -161,10 +162,10 @@
+         p: &ExperiencePatch,
+         r: &NeuralReceptorFrame,
+     ) -> Result<(), CpuHostError> {
+-        ActualContactPolicy::close(n, f, p, r)
++        ActualContactPolicy::<ARM>::close(n, f, p, r)
+     }
+ }
+-fn construct_one_fresh_host_with_toy() -> (CpuGroupedM2HostV1, PhenotypeCompilerInputs) {
++fn construct_one_fresh_host_with_toy<const ARM: u8>() -> (CpuGroupedM2HostV1, PhenotypeCompilerInputs) {
+     let recipe = recipe::build(FIXTURE_SEED, true).unwrap();
+     let mut founder = CpuFoundationTrainer::new(
+         recipe.phenotype.clone(),
+@@ -202,7 +203,7 @@
+         .unwrap();
+     game.world = blank;
+     let inputs = recipe.inputs;
+-    let (host, ()) = CpuGroupedM2HostV1::new_prepared_policy::<Controlled<true>, _, String>(
++    let (host, ()) = CpuGroupedM2HostV1::new_prepared_policy::<Controlled<true, ARM>, _, String>(
+         game,
+         founder,
+         inputs.clone(),
+@@ -224,19 +225,19 @@
+     .unwrap();
+     (host, inputs)
+ }
+-fn wire(h: &CpuGroupedM2HostV1) -> Vec<u8> {
+-    let payload = h.checkpoint_payload::<Controlled<true>>().unwrap();
++fn wire<const ARM: u8>(h: &CpuGroupedM2HostV1) -> Vec<u8> {
++    let payload = h.checkpoint_payload::<Controlled<true, ARM>>().unwrap();
+     let mut bytes = CONTROL_MAGIC.to_vec();
+     bytes.extend(serde_json::to_vec(&payload).unwrap());
+     bytes
+ }
+-fn restore_prefix(bytes: &[u8], inputs: &PhenotypeCompilerInputs) -> CpuGroupedM2HostV1 {
++fn restore_prefix<const ARM: u8>(bytes: &[u8], inputs: &PhenotypeCompilerInputs) -> CpuGroupedM2HostV1 {
+     let value: Value = serde_json::from_slice(bytes.strip_prefix(CONTROL_MAGIC).unwrap()).unwrap();
+     assert!(value["policy"] == CONTROL_POLICY);
+-    assert!(value["source_lineage"] == Controlled::<true>::LINEAGE);
++    assert!(value["source_lineage"] == Controlled::<true, ARM>::LINEAGE);
+     let mut payload: GroupedPayloadV1 = serde_json::from_value(value).unwrap();
+     payload.restore_sampler_bits().unwrap();
+-    CpuGroupedM2HostV1::restore_payload::<Controlled<true>>(
++    CpuGroupedM2HostV1::restore_payload::<Controlled<true, ARM>>(
+         payload,
+         inputs,
+         MediationModeV1::Full,
+@@ -295,7 +296,7 @@
+     }
+     "Unavailable"
+ }
+-fn interval<const PLAY: bool>(
++fn interval<const PLAY: bool, const ARM: u8>(
+     h: &mut CpuGroupedM2HostV1,
+     label: &'static str,
+     ordinal: u32,
+@@ -321,7 +322,7 @@
+     // This remains blocked until the separately reviewed qualification permit.
+     let observed = h
+         .host
+-        .grouped_policy_step_observed::<Controlled<PLAY>>(&h.founder, 0.73)
++        .grouped_policy_step_observed::<Controlled<PLAY, ARM>>(&h.founder, 0.73)
+         .unwrap();
+     let witness = WITNESS.with(|s| s.borrow_mut().take()).unwrap();
+     assert!(observed.step.decisions.len() == 1 && observed.world_receipts.len() == 1);
+@@ -439,24 +440,23 @@
+         witness,
+     )
+ }
+-#[test]
+-fn actual_contact_fixed_four_intervals_one_prefix_play_warm_cold_nomani_v1() {
+-    let (mut warm, inputs) = construct_one_fresh_host_with_toy();
++fn run_contact_fixed_four<const ARM: u8>() {
++    let (mut warm, inputs) = construct_one_fresh_host_with_toy::<ARM>();
+     let frozen_initial = frozen(&warm);
+     crate::cpu::host::actual_contact_bridge::phase_b_capture_audit::arm();
+-    let (prefix_row, _, prefix_witness) = interval::<true>(&mut warm, "prefix_play", 0);
++    let (prefix_row, _, prefix_witness) = interval::<true, ARM>(&mut warm, "prefix_play", 0);
+     let negative_dose = crate::cpu::host::actual_contact_bridge::phase_b_capture_audit::take();
+     println!("ACTUAL_CONTACT_CAPTURE_NEGATIVE_DOSE_V1 {}", negative_dose);
+     assert!(frozen(&warm) == frozen_initial);
+-    let prefix = wire(&warm);
++    let prefix = wire::<ARM>(&warm);
+     assert!(CpuChannelNativeM2HostCheckpointV1::decode(&prefix).is_err());
+-    let mut cold_play = restore_prefix(&prefix, &inputs);
+-    let mut cold_no_manip = restore_prefix(&prefix, &inputs);
+-    assert!(wire(&cold_play) == prefix && wire(&cold_no_manip) == prefix);
+-    let (warm_row, warm_evidence, warm_witness) = interval::<true>(&mut warm, "warm_play", 1);
+-    let (cold_row, cold_evidence, cold_witness) = interval::<true>(&mut cold_play, "cold_play", 2);
+-    let (quiet_row, _, quiet_witness) = interval::<false>(&mut cold_no_manip, "cold_no_manip", 3);
+-    assert!(warm_evidence == cold_evidence && wire(&warm) == wire(&cold_play));
++    let mut cold_play = restore_prefix::<ARM>(&prefix, &inputs);
++    let mut cold_no_manip = restore_prefix::<ARM>(&prefix, &inputs);
++    assert!(wire::<ARM>(&cold_play) == prefix && wire::<ARM>(&cold_no_manip) == prefix);
++    let (warm_row, warm_evidence, warm_witness) = interval::<true, ARM>(&mut warm, "warm_play", 1);
++    let (cold_row, cold_evidence, cold_witness) = interval::<true, ARM>(&mut cold_play, "cold_play", 2);
++    let (quiet_row, _, quiet_witness) = interval::<false, ARM>(&mut cold_no_manip, "cold_no_manip", 3);
++    assert!(warm_evidence == cold_evidence && wire::<ARM>(&warm) == wire::<ARM>(&cold_play));
+     for key in [
+         "energy_before",
+         "energy_after",
+@@ -526,3 +526,10 @@
+         "pending_cross_owner_staging_negative":"deferred_no_extra_forward","contact_value_policy":"UnknownJointValue"})
+     );
+ }
++
++#[test]
++fn additive_original_contact() { run_contact_fixed_four::<0>(); }
++#[test]
++fn additive_play_candidate_contact() { run_contact_fixed_four::<1>(); }
++#[test]
++fn additive_play_sham_contact() { run_contact_fixed_four::<2>(); }
+--- a/crates/alife_training/src/cpu/optional_vocal_host_tests.rs
++++ b/crates/alife_training/src/cpu/optional_vocal_host_tests.rs
+@@ -273,7 +273,7 @@
+         c: u32,
+         t: f64,
+     ) -> Result<Selection<Self::Action>, CpuHostError> {
+-        OptionalVocalPolicy::select(f, r, p, o, s, c, t)
++        OptionalVocalPolicy::<0>::select(f, r, p, o, s, c, t)
+     }
+     fn stage(
+         r: &mut Resident,
+@@ -320,7 +320,7 @@
+         c: u32,
+         t: f64,
+     ) -> Result<Selection<Self::Action>, CpuHostError> {
+-        OptionalVocalPolicy::select(f, r, p, o, s, c, t)
++        OptionalVocalPolicy::<0>::select(f, r, p, o, s, c, t)
+     }
+     fn stage(
+         r: &mut Resident,
+@@ -328,7 +328,7 @@
+         a: &Self::Action,
+         b: CpuDecisionBinding,
+     ) -> Result<(), CpuHostError> {
+-        OptionalVocalPolicy::stage(r, p, a, b)
++        OptionalVocalPolicy::<0>::stage(r, p, a, b)
+     }
+     fn close(
+         n: &mut CpuOrganismState,
+--- a/crates/alife_training/src/cpu/motor_mediation/confidence.rs
++++ b/crates/alife_training/src/cpu/motor_mediation/confidence.rs
+@@ -541,4 +541,5 @@
+ mod tests;
+ 
+ mod host;
++pub(crate) use host::GROUPED_HOST_WORK_POLICY_V1;
+ pub use host::{GroupedAppendWorkV1, GroupedMotorReceiptV1, GroupedMotorStateV1};
+--- a/crates/alife_training/src/cpu/motor_mediation/host_recipe.rs
++++ b/crates/alife_training/src/cpu/motor_mediation/host_recipe.rs
+@@ -1,5 +1,6 @@
+ //! Explicit source-owned host recipes. No public arbitrary recipe loader or migration.
+ use super::*;
++use super::confidence::GROUPED_HOST_WORK_POLICY_V1;
+ 
+ /// Explicit opt-in for fresh, separately owned full-runtime experiments.
+ #[derive(Debug, Clone, Copy, PartialEq, Eq)]
