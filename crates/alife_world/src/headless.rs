@@ -569,6 +569,78 @@ mod terrain_vision_tests {
     use super::*;
 
     #[test]
+    fn object_port_profile_never_exposes_a_hidden_target() {
+        use alife_core::visible_object_neural::{
+            visible_object_neural_lanes, NEURAL_VISIBLE_OBJECT_WIDTH,
+        };
+        let mut world = HeadlessScenarioBuilder::new(91_006)
+            .agent("observer", OrganismId(1), Vec3f::ZERO)
+            .food("hidden", Vec3f::new(2.5, 0.0, 0.0), 0.6)
+            .build()
+            .unwrap();
+        let food = world.entity_id("hidden").unwrap();
+        let wall = world
+            .editor_spawn_object(WorldEditorSpawnSpec {
+                label: "barrier".into(),
+                kind: WorldObjectKind::Obstacle,
+                organism_id: None,
+                position: Vec3f::new(1.0, 0.0, 0.0),
+                nutrition: 0.0,
+                hazard_pain: 0.0,
+                radius: 0.5,
+                token_id: None,
+            })
+            .unwrap();
+        let capture = |w: &mut HeadlessWorld| {
+            w.perception_frame(
+                OrganismId(1),
+                Tick::ZERO,
+                SensorProfile::GroundedTerrainObjectPortsV2,
+                HomeostaticSnapshot::baseline(Tick::ZERO),
+            )
+            .unwrap()
+        };
+        let blocked = capture(&mut world);
+        assert!(blocked
+            .candidates()
+            .iter()
+            .all(|c| c.target.entity != Some(food)));
+        let blocked_lanes =
+            visible_object_neural_lanes(blocked.sensor_profile(), blocked.grounded_object_slots())
+                .unwrap();
+        world
+            .editor_move_object(food, Vec3f::new(-4.0, 0.0, 0.0))
+            .unwrap();
+        let absent = capture(&mut world);
+        assert_eq!(
+            blocked_lanes,
+            visible_object_neural_lanes(absent.sensor_profile(), absent.grounded_object_slots())
+                .unwrap()
+        );
+        world
+            .editor_move_object(food, Vec3f::new(2.5, 0.0, 0.0))
+            .unwrap();
+        world.editor_set_optical_opacity(wall, 0.0).unwrap();
+        let clear = capture(&mut world);
+        assert!(clear
+            .candidates()
+            .iter()
+            .any(|c| c.target.entity == Some(food)));
+        let clear_lanes =
+            visible_object_neural_lanes(clear.sensor_profile(), clear.grounded_object_slots())
+                .unwrap();
+        assert!(clear_lanes[NEURAL_VISIBLE_OBJECT_WIDTH] > 0.0);
+        assert_eq!(
+            clear
+                .body()
+                .neural_projection(clear.sensor_profile())
+                .pose
+                .translation,
+            Vec3f::ZERO
+        );
+    }
+
+    #[test]
     fn solid_reach_blocks_grab_and_eat_even_when_transparent() {
         for terrain_wall in [false, true] {
             for opacity in [0.0, 1.0] {
@@ -3896,8 +3968,10 @@ impl HeadlessWorld {
                 )
                 .map(|draft| (draft, None))
             }
-            SensorProfile::GroundedObjectSlotsV1 | SensorProfile::GroundedTerrainVisionV1 => {
-                let terrain_vision = profile == SensorProfile::GroundedTerrainVisionV1;
+            SensorProfile::GroundedObjectSlotsV1
+            | SensorProfile::GroundedTerrainVisionV1
+            | SensorProfile::GroundedTerrainObjectPortsV2 => {
+                let terrain_vision = profile.has_terrain_vision();
                 let snapshot = match (index, terrain_vision) {
                     (Some(index), true) => {
                         let observer = self.indexed_agent_for(organism_id, index)?;

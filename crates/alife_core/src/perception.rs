@@ -30,6 +30,8 @@ pub enum SensorProfile {
     PrivilegedAffordanceV1 = 1,
     GroundedObjectSlotsV1 = 2,
     GroundedTerrainVisionV1 = 3,
+    /// Terrain vision plus explicitly versioned grounded visible-object neural ports.
+    GroundedTerrainObjectPortsV2 = 4,
 }
 
 impl SensorProfile {
@@ -37,11 +39,19 @@ impl SensorProfile {
         self as u16
     }
 
+    pub const fn has_terrain_vision(self) -> bool {
+        matches!(
+            self,
+            Self::GroundedTerrainVisionV1 | Self::GroundedTerrainObjectPortsV2
+        )
+    }
+
     pub fn try_from_raw(raw: u16) -> Result<Self, ScaffoldContractError> {
         match raw {
             1 => Ok(Self::PrivilegedAffordanceV1),
             2 => Ok(Self::GroundedObjectSlotsV1),
             3 => Ok(Self::GroundedTerrainVisionV1),
+            4 => Ok(Self::GroundedTerrainObjectPortsV2),
             _ => Err(ScaffoldContractError::SensorProfileMismatch),
         }
     }
@@ -143,7 +153,7 @@ impl BodySnapshot {
     /// Neural observation only; authoritative poses and causal receipts keep
     /// their real coordinates. Terrain vision does not include an innate GPS.
     pub fn neural_projection(mut self, profile: SensorProfile) -> Self {
-        if profile == SensorProfile::GroundedTerrainVisionV1 {
+        if profile.has_terrain_vision() {
             self.pose.translation = Vec3f::ZERO;
         }
         self
@@ -906,7 +916,9 @@ fn validate_frame_base(
                 return Err(ScaffoldContractError::InvalidPerceptionFrame);
             }
         }
-        SensorProfile::GroundedObjectSlotsV1 | SensorProfile::GroundedTerrainVisionV1 => {
+        SensorProfile::GroundedObjectSlotsV1
+        | SensorProfile::GroundedTerrainVisionV1
+        | SensorProfile::GroundedTerrainObjectPortsV2 => {
             if (sensor_profile == SensorProfile::GroundedObjectSlotsV1
                 && sensory
                     .channels
@@ -951,7 +963,7 @@ fn validate_frame_base(
                             && candidate.target == ActionTarget::NONE
                             && intrinsic_grounding == CandidateFeatureVector::zero() => {}
                     (CandidateActionFamily::Approach, CandidateObservationRef::None)
-                        if sensor_profile == SensorProfile::GroundedTerrainVisionV1
+                        if sensor_profile.has_terrain_vision()
                             && candidate.kind == ActionKind::Move
                             && candidate.target == ActionTarget::NONE
                             && intrinsic_grounding.0[0] == 0.0
@@ -968,7 +980,7 @@ fn validate_frame_base(
                             && candidate.target == ActionTarget::NONE
                             && intrinsic_grounding == CandidateFeatureVector::zero() => {}
                     (CandidateActionFamily::Inspect, CandidateObservationRef::None)
-                        if sensor_profile == SensorProfile::GroundedTerrainVisionV1
+                        if sensor_profile.has_terrain_vision()
                             && candidate.kind == ActionKind::Look
                             && candidate.target == ActionTarget::NONE
                             && intrinsic_grounding.0[18] == 1.0
@@ -983,7 +995,7 @@ fn validate_frame_base(
                                 (1.0, 0.0) | (-1.0, 0.0) | (0.0, 1.0) | (0.0, 0.0)
                             ) => {}
                     (CandidateActionFamily::Inspect, CandidateObservationRef::None)
-                        if sensor_profile == SensorProfile::GroundedTerrainVisionV1
+                        if sensor_profile.has_terrain_vision()
                             && candidate.kind == ActionKind::Look
                             && candidate.target == ActionTarget::NONE
                             && intrinsic_grounding.0[2..19]

@@ -75,6 +75,13 @@ fn encode_perception(@builtin(global_invocation_id) gid:vec3<u32>) {
       source_lane = 77u + header.candidate_count * (decoder.flattened_input_lane_count + 4u)
         + (assignment.source_group_raw - 4u) * 128u + assignment.source_index;
     }
+    // New versioned object ports follow the existing language/prior banks.
+    // Old encoder plans never contain source group 6 and retain their layout.
+    if (assignment.source_group_raw == 6u && assignment.source_index < 48u) {
+      let decoder = load_decoder_plan(brain.decoder_plan_offset);
+      source_lane = 77u + header.candidate_count * (decoder.flattened_input_lane_count + 4u)
+        + 256u + assignment.source_index;
+    }
     if (source_lane == INVALID_LANE) {
       atomicOr(
         &mutable_state_words[brain.diagnostic_offset + 2u],
@@ -84,7 +91,7 @@ fn encode_perception(@builtin(global_invocation_id) gid:vec3<u32>) {
       return;
     }
     var source = bitcast<f32>(frame_payload_words[header.sensory_offset + source_lane]);
-    if (assignment.source_group_raw == 1u) {
+    if (assignment.source_group_raw == 1u || assignment.source_group_raw == 6u) {
       source *= receptors.attention_gain;
     } else if (assignment.source_group_raw == 3u) {
       source *= receptors.interoceptive_gain;

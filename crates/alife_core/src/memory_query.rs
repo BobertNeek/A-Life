@@ -28,7 +28,8 @@ pub const MEMORY_PROFILE_RANGE: Range<usize> = 81..83;
 // widening the frozen 96-value query. Old query bytes and digests stay exact.
 pub const MEMORY_LOOK_KIND_LANE: usize = 83;
 pub const MEMORY_TERRAIN_VISION_PROFILE_LANE: usize = 84;
-pub const MEMORY_RESERVED_RANGE: Range<usize> = 85..96;
+pub const MEMORY_OBJECT_PORT_PROFILE_LANE: usize = 85;
+pub const MEMORY_RESERVED_RANGE: Range<usize> = 86..96;
 pub const MEMORY_LATENT_V1_COUNT: usize = 8;
 pub const MEMORY_VALUE_V1_COUNT: usize = 4;
 pub const MEMORY_CONTEXT_V1_LANES_PER_CANDIDATE: usize = 16;
@@ -602,6 +603,7 @@ fn encode_query(
         1 => features[MEMORY_PROFILE_RANGE.start] = 1.0,
         2 => features[MEMORY_PROFILE_RANGE.start + 1] = 1.0,
         3 => features[MEMORY_TERRAIN_VISION_PROFILE_LANE] = 1.0,
+        4 => features[MEMORY_OBJECT_PORT_PROFILE_LANE] = 1.0,
         _ => return Err(ScaffoldContractError::InvalidMemoryQuery),
     };
 
@@ -686,18 +688,22 @@ fn validate_query_fields(query: &CandidateMemoryQueryV2) -> Result<(), ScaffoldC
         &query.features[MEMORY_ACTION_FAMILY_RANGE],
         usize::from(query.action_family.raw()),
     )?;
-    if query.profile.profile_id.raw() == 3 {
+    if matches!(query.profile.profile_id.raw(), 3 | 4) {
+        let is_new = query.profile.profile_id.raw() == 4;
         return if query.features[MEMORY_PROFILE_RANGE]
             .iter()
             .all(|value| *value == 0.0)
-            && query.features[MEMORY_TERRAIN_VISION_PROFILE_LANE] == 1.0
+            && query.features[MEMORY_TERRAIN_VISION_PROFILE_LANE] == f32::from(!is_new)
+            && query.features[MEMORY_OBJECT_PORT_PROFILE_LANE] == f32::from(is_new)
         {
             Ok(())
         } else {
             Err(ScaffoldContractError::InvalidMemoryQuery)
         };
     }
-    if query.features[MEMORY_TERRAIN_VISION_PROFILE_LANE] != 0.0 {
+    if query.features[MEMORY_OBJECT_PORT_PROFILE_LANE] != 0.0
+        || query.features[MEMORY_TERRAIN_VISION_PROFILE_LANE] != 0.0
+    {
         return Err(ScaffoldContractError::InvalidMemoryQuery);
     }
     let profile_index = match query.profile.profile_id.raw() {

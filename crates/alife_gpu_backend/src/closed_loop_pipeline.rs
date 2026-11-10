@@ -650,6 +650,7 @@ pub struct GpuActiveBatchUpload {
     selector_diagnostic_requests: Vec<Vec<u16>>,
     selector_diagnostic_family_synapse_counts: Vec<Vec<u32>>,
     memory_context_bindings: Vec<Option<GpuMemoryContextDispatchReceipt>>,
+    object_input_counts: Vec<u32>,
 }
 
 impl GpuActiveBatchUpload {
@@ -860,10 +861,17 @@ impl GpuActiveBatchUpload {
             }
             // Preserve candidate-feature/digest adjacency for eligibility.
             // Private input banks follow the digests, before pending metadata.
+            let object_words = if entry.frame.sensor_profile()
+                == alife_core::SensorProfile::GroundedTerrainObjectPortsV2
+            {
+                alife_core::visible_object_neural::NEURAL_VISIBLE_OBJECT_LANES
+            } else {
+                0
+            };
             let context_start = upload
                 .frame_payload_words
                 .len()
-                .checked_sub(256)
+                .checked_sub(256 + object_words)
                 .ok_or(GpuClosedLoopError::MalformedUpload)?;
             frame_payload_words.extend_from_slice(&upload.frame_payload_words[..context_start]);
             let decoder_learning_input_offset = upload
@@ -1114,6 +1122,18 @@ impl GpuActiveBatchUpload {
             selector_diagnostic_requests: vec![Vec::new(); entries.len()],
             selector_diagnostic_family_synapse_counts,
             memory_context_bindings,
+            object_input_counts: entries
+                .iter()
+                .map(|entry| {
+                    if entry.frame.sensor_profile()
+                        == alife_core::SensorProfile::GroundedTerrainObjectPortsV2
+                    {
+                        alife_core::visible_object_neural::NEURAL_VISIBLE_OBJECT_LANES as u32
+                    } else {
+                        0
+                    }
+                })
+                .collect(),
         })
     }
 
@@ -4383,6 +4403,10 @@ fn validate_dispatch(
         || batch.speech_payload_offsets.len() != batch.headers.len()
         || batch.selector_diagnostic_offsets.len() != batch.headers.len()
         || batch.memory_context_bindings.len() != batch.headers.len()
+        || batch.object_input_counts.len() != batch.headers.len()
+        || batch.object_input_counts.iter().any(|&n| {
+            n != 0 && n != alife_core::visible_object_neural::NEURAL_VISIBLE_OBJECT_LANES as u32
+        })
         || batch.headers.iter().any(|header| {
             header.neuron_count == 0
                 || header.neuron_count != max_neurons
@@ -4489,6 +4513,7 @@ fn validate_dispatch(
             )
             .and_then(|value| value.checked_add(learning.candidate_count.checked_mul(4)?))
             .and_then(|value| value.checked_add(256))
+            .and_then(|value| value.checked_add(batch.object_input_counts[row]))
             .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
         if learning.outcome_offset != expected_outcome_offset {
             return Err(GpuClosedLoopError::MalformedUpload);
@@ -4970,6 +4995,7 @@ mod lifecycle_tests {
             selector_diagnostic_requests: vec![Vec::new()],
             selector_diagnostic_family_synapse_counts: vec![vec![1]],
             memory_context_bindings: vec![None],
+            object_input_counts: vec![0],
             joint_motor_modes: vec![0],
         };
 

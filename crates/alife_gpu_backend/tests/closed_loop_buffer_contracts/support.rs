@@ -10,17 +10,19 @@ use alife_core::{
 };
 
 pub fn compile(class_id: BrainClassId, seed: u64) -> BrainPhenotype {
+    compile_profile(class_id, seed, SensorProfile::PrivilegedAffordanceV1)
+}
+
+pub fn compile_profile(
+    class_id: BrainClassId,
+    seed: u64,
+    profile: SensorProfile,
+) -> BrainPhenotype {
     let capacity = BrainCapacityClass::production_for_id(class_id).unwrap();
     let genome = BrainGenome::scaffold(seed, capacity.id());
     let development =
         DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(0.35).unwrap());
-    PhenotypeCompiler::compile(
-        &genome,
-        &capacity,
-        &development,
-        SensorProfile::PrivilegedAffordanceV1,
-    )
-    .unwrap()
+    PhenotypeCompiler::compile(&genome, &capacity, &development, profile).unwrap()
 }
 
 pub fn production_phenotypes() -> [BrainPhenotype; 3] {

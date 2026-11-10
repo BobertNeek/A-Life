@@ -201,7 +201,10 @@ pub fn perception_frame_for_profile_at_tick(
     };
     let sensory =
         SensorySnapshot::new(organism_id, tick, Vec3f::ZERO, channels, Default::default()).unwrap();
-    let grounded_object_slots = if sensor_profile == SensorProfile::GroundedObjectSlotsV1 {
+    let grounded_object_slots = if matches!(
+        sensor_profile,
+        SensorProfile::GroundedObjectSlotsV1 | SensorProfile::GroundedTerrainObjectPortsV2
+    ) {
         (0..candidate_count)
             .map(|index| GroundedObjectSlotV1 {
                 slot_index: index as u16,
@@ -229,7 +232,10 @@ pub fn perception_frame_for_profile_at_tick(
     };
     let candidates = (0..candidate_count)
         .map(|index| {
-            let features = if sensor_profile == SensorProfile::GroundedObjectSlotsV1 {
+            let features = if matches!(
+                sensor_profile,
+                SensorProfile::GroundedObjectSlotsV1 | SensorProfile::GroundedTerrainObjectPortsV2
+            ) {
                 grounded_object_slots[index].candidate_features().unwrap()
             } else {
                 let mut features = CandidateFeatureVector::zero();
@@ -243,7 +249,11 @@ pub fn perception_frame_for_profile_at_tick(
                 ActionId(4 + index as u32),
                 ActionKind::Inspect,
                 CandidateActionFamily::Inspect,
-                if sensor_profile == SensorProfile::GroundedObjectSlotsV1 {
+                if matches!(
+                    sensor_profile,
+                    SensorProfile::GroundedObjectSlotsV1
+                        | SensorProfile::GroundedTerrainObjectPortsV2
+                ) {
                     CandidateObservationRef::ObjectSlot(index as u16)
                 } else {
                     CandidateObservationRef::None

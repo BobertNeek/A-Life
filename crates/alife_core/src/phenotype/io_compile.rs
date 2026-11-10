@@ -136,7 +136,7 @@ pub(super) fn compile_encoder(
     }
     // Private language/prior ports share the ordinary learned association region.
     // Token IDs are encoded as bits, never treated as neuron addresses.
-    if profile == SensorProfile::GroundedTerrainVisionV1
+    if profile.has_terrain_vision()
         && genome.sensor_layout.channels.iter().any(|gene| {
             gene.kind == SensorChannelKind::Hearing
                 && gene.receptor_count > 0
@@ -172,6 +172,49 @@ pub(super) fn compile_encoder(
                     ));
                 }
             }
+        }
+    }
+    // Explicit new profile only: preserve all existing visual/hearing lanes,
+    // while delivering independently observed object features to stable cells.
+    // Old profiles and their exact encoder digests remain untouched.
+    if profile == SensorProfile::GroundedTerrainObjectPortsV2
+        && genome.sensor_layout.channels.iter().any(|gene| {
+            gene.kind == SensorChannelKind::Vision
+                && gene.receptor_count > 0
+                && gene.enabled_at_maturation as f32 <= development.maturation.raw() * 100.0
+                && (development.active_sensor_channels.is_empty()
+                    || development.active_sensor_channels.contains(&gene.kind))
+                && layout.region(gene.target_lobe).is_some_and(|r| r.enabled)
+        })
+    {
+        let region = layout
+            .region(LobeKind::TemporalPredictive)
+            .filter(|r| r.enabled && r.len >= 80)
+            .ok_or_else(compile_error)?;
+        for lane in 0..crate::visible_object_neural::NEURAL_VISIBLE_OBJECT_LANES as u16 {
+            let slot =
+                u32::from(lane) / crate::visible_object_neural::NEURAL_VISIBLE_OBJECT_WIDTH as u32;
+            let feature =
+                u32::from(lane) % crate::visible_object_neural::NEURAL_VISIBLE_OBJECT_WIDTH as u32;
+            // Give each observed slot independent signed-direction cells.
+            let offset = match feature {
+                1 => 12 + slot * 2,
+                2 => 13 + slot * 2,
+                _ => 32 + u32::from(lane),
+            };
+            assignments.push(SensorEncoderAssignment::new(
+                SensorEncoderSourceGroup::VisibleObject,
+                lane,
+                region.start + offset,
+                if feature == 1 || feature == 2 {
+                    8.0
+                } else {
+                    1.0
+                },
+                0.0,
+                -1.0,
+                1.0,
+            ));
         }
     }
     assignments.sort_by_key(|assignment| {

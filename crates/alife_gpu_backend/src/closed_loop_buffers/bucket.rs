@@ -166,10 +166,14 @@ pub struct GpuBrainSlot {
     counts: GpuTypedCounts,
     ranges: GpuSlotWordRanges,
     decoder_input_stride: u32,
+    sensor_profile_raw: u32,
     brain_slot_index: u32,
     bucket_ownership_token: u64,
 }
 impl GpuBrainSlot {
+    pub const fn sensor_profile_raw(&self) -> u32 {
+        self.sensor_profile_raw
+    }
     pub const fn record(&self) -> &GpuBrainSlotRecord {
         &self.record
     }
@@ -591,6 +595,7 @@ impl GpuClassBucketPlan {
             counts,
             ranges,
             decoder_input_stride: upload.decoder_plans[0].flattened_input_lane_count,
+            sensor_profile_raw: upload.encoder_plans[0].sensor_profile_raw,
             brain_slot_index: slot,
             bucket_ownership_token: self.bucket_ownership_token,
         };
@@ -2841,6 +2846,7 @@ impl GpuFixedClassArenaPlan {
             counts,
             ranges: ranges.layout.clone(),
             decoder_input_stride: upload.decoder_plans[0].flattened_input_lane_count,
+            sensor_profile_raw: upload.encoder_plans[0].sensor_profile_raw,
             brain_slot_index: slot,
             bucket_ownership_token: self.arena_ownership_token,
         };

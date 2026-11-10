@@ -6,7 +6,7 @@ use alife_gpu_backend::{
     GpuClosedLoopError, GpuOffsetDomain, GpuPerceptionUpload,
 };
 
-use super::support::{compile, perception_fixture};
+use super::support::{compile, compile_profile, perception_fixture};
 
 #[test]
 fn candidate_upload_rejects_count_above_the_same_tick_limit() {
@@ -18,9 +18,15 @@ fn candidate_upload_rejects_count_above_the_same_tick_limit() {
 #[test]
 fn perception_upload_translates_the_validated_same_tick_frame_without_scores() {
     let capacity = BrainCapacityClass::n512();
-    let phenotype = compile(capacity.id(), 41);
-    let mut bucket = GpuClassBucketPlan::new(capacity, 1).unwrap();
-    let slot = bucket.insert_phenotype(0, 7, &phenotype).unwrap();
+    let terrain_phenotype = compile_profile(
+        capacity.id(),
+        41,
+        alife_core::SensorProfile::GroundedTerrainVisionV1,
+    );
+    let mut terrain_bucket = GpuClassBucketPlan::new(capacity, 1).unwrap();
+    let terrain_slot = terrain_bucket
+        .insert_phenotype(0, 7, &terrain_phenotype)
+        .unwrap();
     let frame = perception_fixture();
     let mut body = frame.body();
     body.pose.translation = alife_core::Vec3f::new(4.0, 0.0, -3.0);
@@ -55,13 +61,17 @@ fn perception_upload_translates_the_validated_same_tick_frame_without_scores() {
         vec![],
     )
     .unwrap();
-    let terrain_upload = GpuPerceptionUpload::try_from_frame(&terrain_frame, &slot, 0).unwrap();
+    let terrain_upload =
+        GpuPerceptionUpload::try_from_frame(&terrain_frame, &terrain_slot, 0).unwrap();
     let body_offset = terrain_frame.sensory().channels.as_flat_array().len();
     assert_eq!(
         &terrain_upload.frame_payload_words[body_offset..body_offset + 3],
         &[0, 0, 0]
     );
     assert_eq!(terrain_frame.body(), body);
+    let phenotype = compile(capacity.id(), 41);
+    let mut bucket = GpuClassBucketPlan::new(capacity, 1).unwrap();
+    let slot = bucket.insert_phenotype(0, 7, &phenotype).unwrap();
     let upload = GpuPerceptionUpload::try_from_frame(&frame, &slot, 0).unwrap();
 
     assert_eq!(
@@ -348,4 +358,96 @@ fn class_bucket_buffers_expose_exactly_seven_neural_bindings() {
     assert!(auxiliary
         .iter()
         .all(|row| row.role.is_staging_or_readback()));
+}
+
+#[test]
+fn visible_object_ports_are_packed_and_profile_mismatch_is_rejected() {
+    use alife_core::{
+        ActionCandidate, ActionKind, ActionTarget, CandidateActionFamily, Confidence,
+        DurationTicks, GroundedObjectSlotV1, NormalizedScalar, PerceptionFrame, SensorProfile,
+        SensorProfileProvenance, SensoryAbiVersion, TrackedObjectId, Vec3f, WorldEntityId,
+    };
+    let capacity = BrainCapacityClass::n2048();
+    let profile = SensorProfile::GroundedTerrainObjectPortsV2;
+    let phenotype = compile_profile(capacity.id(), 61, profile);
+    use alife_core::phenotype::SensorEncoderSourceGroup;
+    for (lane, target) in [
+        (1, 908),
+        (2, 909),
+        (13, 910),
+        (14, 911),
+        (25, 912),
+        (26, 913),
+        (37, 914),
+        (38, 915),
+    ] {
+        assert!(phenotype
+            .sensor_encoder()
+            .assignments()
+            .iter()
+            .any(
+                |a| a.source_group() == SensorEncoderSourceGroup::VisibleObject
+                    && a.source_index() == lane
+                    && a.target_neuron() == target
+            ));
+    }
+    let mut bucket = GpuClassBucketPlan::new(capacity, 2).unwrap();
+    let slot = bucket.insert_phenotype(0, 7, &phenotype).unwrap();
+    let old = compile_profile(capacity.id(), 61, SensorProfile::GroundedTerrainVisionV1);
+    let old_slot = bucket.insert_phenotype(1, 7, &old).unwrap();
+    let base = perception_fixture();
+    let object = GroundedObjectSlotV1 {
+        slot_index: 0,
+        tracked_object_id: TrackedObjectId(9),
+        bearing: [0.4, 0.5],
+        distance: 0.25,
+        relative_velocity: [0.; 3],
+        color: [0.1, 0.2, 0.3],
+        material: [0.; 3],
+        shape: [0.4, 0.5, 0.6],
+        chemical: [0.; 3],
+        contact: 0.,
+        proprioception: [0.; 2],
+        temperature: 0.,
+        terrain: [0.; 2],
+        confidence: Confidence::new(0.8).unwrap(),
+    };
+    let candidate = ActionCandidate::new(
+        0,
+        ActionKind::Inspect.canonical_id(),
+        ActionKind::Inspect,
+        CandidateActionFamily::Inspect,
+        CandidateObservationRef::ObjectSlot(0),
+        ActionTarget::new(Some(WorldEntityId(55)), Some(Vec3f::new(1., 0., 2.))),
+        object.candidate_features().unwrap(),
+        Confidence::new(0.8).unwrap(),
+        NormalizedScalar::new(0.1).unwrap(),
+        DurationTicks::new(1),
+        DurationTicks::new(1),
+    )
+    .unwrap();
+    let frame = PerceptionFrame::new(
+        base.organism_id(),
+        base.tick(),
+        profile,
+        base.sensory().clone(),
+        base.body(),
+        *base.homeostasis(),
+        vec![candidate],
+        SensorProfileProvenance::new(profile, SensoryAbiVersion::CURRENT, base.tick()).unwrap(),
+        vec![object],
+    )
+    .unwrap();
+    assert!(GpuPerceptionUpload::try_from_frame(&frame, &old_slot, 0).is_err());
+    let upload = GpuPerceptionUpload::try_from_frame(&frame, &slot, 0).unwrap();
+    let expected = alife_core::visible_object_neural::visible_object_neural_lanes(
+        profile,
+        frame.grounded_object_slots(),
+    )
+    .unwrap();
+    assert_eq!(
+        &upload.frame_payload_words[upload.frame_payload_words.len() - expected.len()..],
+        &expected.map(f32::to_bits)
+    );
+    assert_ne!(phenotype.phenotype_hash(), old.phenotype_hash());
 }

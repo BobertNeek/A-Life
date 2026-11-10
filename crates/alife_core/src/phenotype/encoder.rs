@@ -21,6 +21,7 @@ pub enum SensorEncoderSourceGroup {
     Homeostasis = 3,
     HeardLanguage = 4,
     SemanticPrior = 5,
+    VisibleObject = 6,
 }
 
 impl SensorEncoderSourceGroup {
@@ -34,6 +35,7 @@ impl SensorEncoderSourceGroup {
             3 => Ok(Self::Homeostasis),
             4 => Ok(Self::HeardLanguage),
             5 => Ok(Self::SemanticPrior),
+            6 => Ok(Self::VisibleObject),
             _ => Err(ScaffoldContractError::PhenotypeCompile),
         }
     }
@@ -96,6 +98,9 @@ impl SensorEncoderAssignment {
             SensorEncoderSourceGroup::Homeostasis => widths.2,
             SensorEncoderSourceGroup::HeardLanguage | SensorEncoderSourceGroup::SemanticPrior => {
                 128
+            }
+            SensorEncoderSourceGroup::VisibleObject => {
+                crate::visible_object_neural::NEURAL_VISIBLE_OBJECT_LANES as u16
             }
         };
         if self.source_index >= width

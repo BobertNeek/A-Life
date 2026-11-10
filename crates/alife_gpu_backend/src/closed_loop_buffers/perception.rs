@@ -45,6 +45,9 @@ impl GpuPerceptionUpload {
         frame
             .validate()
             .map_err(|_| GpuClosedLoopError::MalformedUpload)?;
+        if u32::from(frame.sensor_profile().raw()) != slot.sensor_profile_raw() {
+            return Err(GpuClosedLoopError::MalformedUpload);
+        }
         let record = slot.record();
         record.validate_slice_a()?;
         let decoder_input_stride = usize::try_from(slot.decoder_input_stride())
@@ -130,6 +133,14 @@ impl GpuPerceptionUpload {
                 .language_prior_neural_lanes()
                 .map(f32::to_bits),
         );
+        if frame.sensor_profile() == alife_core::SensorProfile::GroundedTerrainObjectPortsV2 {
+            let object_lanes = alife_core::visible_object_neural::visible_object_neural_lanes(
+                frame.sensor_profile(),
+                frame.grounded_object_slots(),
+            )
+            .map_err(|_| GpuClosedLoopError::MalformedUpload)?;
+            frame_payload_words.extend(object_lanes.map(f32::to_bits));
+        }
         if frame_payload_words.len() < FIXED_FRAME_LANES as usize
             || frame_payload_words
                 .iter()

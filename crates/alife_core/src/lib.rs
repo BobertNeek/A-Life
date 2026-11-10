@@ -58,6 +58,7 @@ pub mod neural;
 pub mod neural_receptors;
 pub mod packed_log;
 pub mod perception;
+pub mod visible_object_neural;
 pub mod phenotype;
 pub mod predictive;
 pub mod reference_brain;

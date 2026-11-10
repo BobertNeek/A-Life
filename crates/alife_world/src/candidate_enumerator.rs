@@ -188,7 +188,9 @@ pub fn enumerate_grounded_candidates_with_focus(
 ) -> Result<Vec<ActionCandidate>, ScaffoldContractError> {
     if !matches!(
         profile,
-        SensorProfile::GroundedObjectSlotsV1 | SensorProfile::GroundedTerrainVisionV1
+        SensorProfile::GroundedObjectSlotsV1
+            | SensorProfile::GroundedTerrainVisionV1
+            | SensorProfile::GroundedTerrainObjectPortsV2
     ) {
         return Err(ScaffoldContractError::SensorProfileMismatch);
     }
@@ -198,7 +200,7 @@ pub fn enumerate_grounded_candidates_with_focus(
         return Err(ScaffoldContractError::InvalidPerceptionFrame);
     }
 
-    let terrain_vision = profile == SensorProfile::GroundedTerrainVisionV1;
+    let terrain_vision = profile.has_terrain_vision();
     let object_limit = if terrain_vision {
         // Leave room for locomotion, body/head orientation, and an explicit
         // hold-gaze command within the frozen 32-candidate foundation ABI.
