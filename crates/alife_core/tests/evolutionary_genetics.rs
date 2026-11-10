@@ -165,6 +165,7 @@ fn seeded_reproduction_is_byte_deterministic_bounded_and_records_both_parents() 
             ..
         } => (lower..=upper).contains(&after),
         MutationRecord::Discrete { before, after, .. } => before != after,
+        MutationRecord::GeneticWeight { before, after, .. } => before != after,
     }));
     one.validate_contract().unwrap();
 }
@@ -196,7 +197,7 @@ fn seeded_discrete_mutation_changes_only_declared_domains_and_records_provenance
         .iter()
         .filter_map(|record| match record {
             MutationRecord::Discrete { chromosome, .. } => Some(*chromosome),
-            MutationRecord::Continuous { .. } => None,
+            MutationRecord::Continuous { .. } | MutationRecord::GeneticWeight { .. } => None,
         })
         .collect::<Vec<_>>();
     for expected in [

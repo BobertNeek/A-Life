@@ -230,18 +230,43 @@ fn anchored_v2_reproduction_binds_child_weights_for_multiple_generations() {
         let child = CreatureGenome::reproduce(&mother, &father, 703 + generation).unwrap();
         let asset = child.n2048_foundation_candidate.as_ref().unwrap();
         assert!(asset.is_n2048_anchored_v2());
-        assert_eq!(
-            asset
-                .weights()
-                .iter()
-                .map(|x| x.to_bits())
-                .collect::<Vec<_>>(),
-            source
-                .weights()
-                .iter()
-                .map(|x| x.to_bits())
-                .collect::<Vec<_>>()
-        );
+        let mutations: std::collections::HashMap<usize, (f32, f32)> = child
+            .provenance
+            .mutations
+            .iter()
+            .filter_map(|r| match r {
+                MutationRecord::GeneticWeight {
+                    index,
+                    before,
+                    after,
+                } => Some((usize::from(*index), (*before, *after))),
+                _ => None,
+            })
+            .collect();
+        assert!(!mutations.is_empty());
+        let left = mother
+            .n2048_foundation_candidate
+            .as_ref()
+            .unwrap()
+            .weights();
+        let right = father
+            .n2048_foundation_candidate
+            .as_ref()
+            .unwrap()
+            .weights();
+        for (i, &actual) in asset.weights().iter().enumerate() {
+            if let Some(&(before, after)) = mutations.get(&i) {
+                assert!(
+                    before.to_bits() == left[i].to_bits() || before.to_bits() == right[i].to_bits()
+                );
+                assert_eq!(actual.to_bits(), after.to_bits());
+                assert_ne!(before.to_bits(), after.to_bits());
+            } else {
+                assert!(
+                    actual.to_bits() == left[i].to_bits() || actual.to_bits() == right[i].to_bits()
+                );
+            }
+        }
         let e = child.express().unwrap();
         let d = e
             .development_state_at(Tick::new(u64::from(
@@ -293,6 +318,10 @@ fn anchored_v2_reproduction_binds_child_weights_for_multiple_generations() {
     let mixed = CreatureGenome::reproduce(&father, &mutated, 999).unwrap();
     let repeated = CreatureGenome::reproduce(&father, &mutated, 999).unwrap();
     assert_eq!(mixed, repeated);
+    let encoded = serde_json::to_vec(&mixed).unwrap();
+    let decoded: CreatureGenome = serde_json::from_slice(&encoded).unwrap();
+    assert_eq!(mixed, decoded);
+    decoded.validate_contract().unwrap();
     let values = mixed.n2048_foundation_candidate.as_ref().unwrap().weights();
     let paternal = father
         .n2048_foundation_candidate
@@ -312,21 +341,45 @@ fn anchored_v2_reproduction_binds_child_weights_for_multiple_generations() {
         .iter()
         .zip(&maternal[..128])
         .any(|(x, y)| x.to_bits() == y.to_bits()));
-    assert!(values
+    let mutations: std::collections::HashMap<usize, (f32, f32)> = mixed
+        .provenance
+        .mutations
         .iter()
-        .zip(
-            father
-                .n2048_foundation_candidate
-                .as_ref()
-                .unwrap()
-                .weights()
-        )
-        .zip(
-            mutated
-                .n2048_foundation_candidate
-                .as_ref()
-                .unwrap()
-                .weights()
-        )
-        .all(|((c, a), b)| c.to_bits() == a.to_bits() || c.to_bits() == b.to_bits()));
+        .filter_map(|r| match r {
+            MutationRecord::GeneticWeight {
+                index,
+                before,
+                after,
+            } => Some((usize::from(*index), (*before, *after))),
+            _ => None,
+        })
+        .collect();
+    assert!(!mutations.is_empty());
+    assert!(mutations
+        .values()
+        .all(|(before, after)| (after - before).abs() <= MAX_MUTATION_DELTA + f32::EPSILON));
+    let mut no_mutation_a = father.clone();
+    let mut no_mutation_b = mutated.clone();
+    no_mutation_a.reproduction.mutation_rate = ContinuousLocus::mean(0.0, 0.0).unwrap();
+    no_mutation_b.reproduction.mutation_rate = ContinuousLocus::mean(0.0, 0.0).unwrap();
+    let unmutated = CreatureGenome::reproduce(&no_mutation_a, &no_mutation_b, 1001).unwrap();
+    assert!(!unmutated
+        .provenance
+        .mutations
+        .iter()
+        .any(|r| matches!(r, MutationRecord::GeneticWeight { .. })));
+    for (i, &actual) in values.iter().enumerate() {
+        if let Some(&(before, after)) = mutations.get(&i) {
+            assert!(
+                before.to_bits() == paternal[i].to_bits()
+                    || before.to_bits() == maternal[i].to_bits()
+            );
+            assert_eq!(actual.to_bits(), after.to_bits());
+        } else {
+            assert!(
+                actual.to_bits() == paternal[i].to_bits()
+                    || actual.to_bits() == maternal[i].to_bits()
+            );
+        }
+    }
 }

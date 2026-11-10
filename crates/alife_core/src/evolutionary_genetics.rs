@@ -223,6 +223,8 @@ pub enum MutationRecord {
         before: u16,
         after: u16,
     },
+    /// Mutation to an inherited V2 genetic synapse weight, not lifetime learning.
+    GeneticWeight { index: u16, before: f32, after: f32 },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -298,6 +300,17 @@ impl Validate for GeneticLineageProvenance {
                     return Err(ScaffoldContractError::MutationOverflow);
                 }
                 MutationRecord::Discrete { .. } => {}
+                MutationRecord::GeneticWeight {
+                    index,
+                    before,
+                    after,
+                } => {
+                    validate_finite(before)?;
+                    validate_finite(after)?;
+                    if usize::from(index) >= 32_768 || before.to_bits() == after.to_bits() {
+                        return Err(ScaffoldContractError::MutationOverflow);
+                    }
+                }
             }
         }
         Ok(())
@@ -1246,21 +1259,75 @@ impl CreatureGenome {
                 .ok_or(ScaffoldContractError::PhenotypeCompile)?;
             // Inherit one genetic value per verified matching coordinate. These
             // are founder-genome values, never learned lifetime or fast state.
-            let inherited_weights = asset
+            let mut inherited_weights = Vec::with_capacity(asset.weights().len());
+            for (index, (a, b)) in asset
                 .weights()
                 .iter()
                 .zip(paternal_asset.weights())
-                .map(|(a, b)| {
-                    if a.to_bits() == b.to_bits() || context.rng.next_u64() & 1 == 0 {
-                        *a
-                    } else {
-                        *b
+                .enumerate()
+            {
+                let before = if a.to_bits() == b.to_bits() || context.rng.next_u64() & 1 == 0 {
+                    *a
+                } else {
+                    *b
+                };
+                let mut after = before;
+                if genome.provenance.mutations.len() < MAX_MUTATION_RECORDS
+                    && context.rng.next_unit() < context.settings.mutation_rate
+                {
+                    let signed = context.rng.next_unit().mul_add(2.0, -1.0);
+                    after = before + signed * context.settings.max_mutation_delta;
+                    validate_finite(after)?;
+                    let synapse = &child.synapses()[index];
+                    let projection = child
+                        .projections()
+                        .iter()
+                        .find(|p| p.route_index() == synapse.route_index())
+                        .ok_or(ScaffoldContractError::PhenotypeCompile)?;
+                    after = match projection.projection_type() {
+                        crate::ProjectionType::LateralInhibition => {
+                            -after.abs().max(f32::MIN_POSITIVE)
+                        }
+                        crate::ProjectionType::Homeostatic
+                        | crate::ProjectionType::MotorProposal
+                            if synapse.kind() == crate::CompiledSynapseKind::Recurrent =>
+                        {
+                            after.abs()
+                        }
+                        _ => after,
+                    };
+                    if before.to_bits() != after.to_bits() {
+                        genome
+                            .provenance
+                            .mutations
+                            .push(MutationRecord::GeneticWeight {
+                                index: u16::try_from(index)
+                                    .map_err(|_| ScaffoldContractError::MutationOverflow)?,
+                                before,
+                                after,
+                            });
                     }
-                })
-                .collect();
+                }
+                inherited_weights.push(after);
+            }
+            // Mutation provenance participates in the child's compiled ABI.
+            // Recompile after recording it, and never bind weights if those
+            // records changed the structural coordinates.
+            let expressed = genome.express()?;
+            let age = Tick::new(u64::from(expressed.development.maturation_duration_ticks));
+            let development = expressed.development_state_at(age)?;
+            let (child_with_mutations, _) =
+                crate::PhenotypeCompiler::compile_n2048_anchored_v2_graph(
+                    expressed.brain_genome,
+                    development,
+                    profile,
+                )?;
+            if !same_coordinates(&child_with_mutations) {
+                return Err(ScaffoldContractError::IncompatibleGeneticClass);
+            }
             genome.n2048_foundation_candidate =
                 Some(crate::FoundationWeightAsset::from_trained_weights(
-                    &child,
+                    &child_with_mutations,
                     inherited_weights,
                     asset.manifest().training_stage(),
                 )?);
