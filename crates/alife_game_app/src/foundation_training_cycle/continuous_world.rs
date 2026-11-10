@@ -117,6 +117,7 @@ struct CareRowEvidence {
     food_grab: bool,
     bundle_missing: bool,
     teacher_food_token_heard: bool,
+    score_trace: Option<serde_json::Value>,
 }
 
 struct ContinuousFoodEvidence {
@@ -128,6 +129,7 @@ struct ContinuousFoodEvidence {
 fn care_row_evidence(
     step: &crate::FoundationTrainingStep,
     food: &BTreeMap<u64, ContinuousFoodEvidence>,
+    trace_scores: bool,
 ) -> CareRowEvidence {
     let mut evidence = CareRowEvidence {
         food_candidate: step.frame.candidates().iter().any(|candidate| {
@@ -165,6 +167,24 @@ fn care_row_evidence(
             }
         }
     }
+    if trace_scores && evidence.food_candidate {
+        evidence.score_trace = Some(serde_json::json!({
+            "tick": step.frame.tick().raw(),
+            "representative_index": step.behavior.representative_index,
+            "representative_mask": step.behavior.representative_mask,
+            "motor_masks": step.behavior.motor_masks,
+            "motor_indices": step.behavior.motor_indices,
+            "candidate_count": step.frame.candidates().len(),
+            "logit_count": step.behavior.logits.len(),
+            "candidates": step.frame.candidates().iter().zip(&step.behavior.logits)
+                .map(|(candidate, logit)| serde_json::json!({
+                    "index": candidate.candidate_index,
+                    "action": candidate.action_id.raw(),
+                    "target": candidate.target.entity.map(|id| id.raw()),
+                    "logit": logit,
+                })).collect::<Vec<_>>(),
+        }));
+    }
     evidence
 }
 
@@ -177,6 +197,12 @@ fn care_row_summary(rows: &[CareRowEvidence]) -> serde_json::Value {
         "missing_bundle_rows":rows.iter().filter(|row| row.bundle_missing).count(),
         "teacher_food_token_heard_rows":rows.iter().filter(|row| row.teacher_food_token_heard).count(),
         "scope":"candidate presence and selected commands, not visibility, reachability or execution"})
+}
+
+fn care_score_trace_rows(rows: &[CareRowEvidence]) -> Vec<&serde_json::Value> {
+    rows.iter()
+        .filter_map(|row| row.score_trace.as_ref())
+        .collect()
 }
 
 fn care_food_ready(food: &alife_world::WorldObject) -> bool {
@@ -766,6 +792,7 @@ pub(super) fn run_same_individual_world(
         let mut last_food_token_heard = None;
         let mut captured_meal_provenance = MealProvenanceSummary::default();
         let mut trained_meal_provenance = MealProvenanceSummary::default();
+        let trace_care_scores = std::env::var("ALIFE_CARE_SCORE_TRACE").is_ok_and(|v| v == "1");
         let restore_seconds = started.elapsed().as_secs_f64();
         on_update(
             serde_json::json!({"kind":"continuous-started-v1","session_nonce":session_nonce,
@@ -1098,7 +1125,7 @@ pub(super) fn run_same_individual_world(
                     if consumed(&step) {
                         generic_rows.push(captured_rows);
                     }
-                    let care_row = care_row_evidence(&step, &food);
+                    let care_row = care_row_evidence(&step, &food, trace_care_scores);
                     if care_row.teacher_food_token_heard {
                         last_food_token_heard = Some(before_tick.raw());
                     }
@@ -1413,7 +1440,7 @@ pub(super) fn run_same_individual_world(
             for (_, meal) in meal_links.iter().filter(|(row, _)| *row < rows) {
                 trained_meal_provenance.observe(*meal);
             }
-            let event = serde_json::json!({"kind":"continuous-update-v1","session_nonce":session_nonce,
+            let mut event = serde_json::json!({"kind":"continuous-update-v1","session_nonce":session_nonce,
                 "source_world_seed":world_seed,"organism_id":id.raw(),"update":completed_updates,
                 "policy_before":policy-1,"policy_after":policy,"trained_rows":rows,
                 "session_trained_rows":trained_rows,"captured_replay_rows":refs.len(),"bootstrap_replay_rows":1,
@@ -1438,6 +1465,10 @@ pub(super) fn run_same_individual_world(
                 "food_outcomes_cumulative_including_bootstrap":food.values().map(|evidence| &evidence.outcome).collect::<Vec<_>>(),
                 "replay_bundle_bytes":replay.bundle_bytes,"replay_data_sync_calls":replay.data_sync_calls,
             });
+            if trace_care_scores {
+                event["care_score_trace"] =
+                    serde_json::json!(care_score_trace_rows(&care_rows[..rows]));
+            }
             alife_storage::remove_dir_all(&window_root)?;
             on_update(event)?;
             if completed_updates.is_multiple_of(request.snapshot_every_updates as u64) {
@@ -2140,6 +2171,24 @@ mod tests {
         assert_eq!(summary["food_approach_command_rows"], 1);
         assert_eq!(summary["food_eat_command_rows"], 1);
         assert_eq!(summary["food_grab_command_rows"], 0);
+    }
+    #[test]
+    fn care_score_trace_excludes_untraced_and_bootstrap_rows() {
+        let rows = [
+            CareRowEvidence::default(),
+            CareRowEvidence {
+                score_trace: Some(serde_json::json!({"tick": 7})),
+                ..Default::default()
+            },
+            CareRowEvidence {
+                score_trace: Some(serde_json::json!({"tick": 8})),
+                ..Default::default()
+            },
+        ];
+        assert_eq!(
+            care_score_trace_rows(&rows[..2]),
+            vec![&serde_json::json!({"tick": 7})]
+        );
     }
     #[test]
     fn continuous_tick_guard_is_relative_to_restored_world() {
