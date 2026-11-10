@@ -1,0 +1,27 @@
+--- a/crates/alife_training/examples/probe_cue_learning.rs
++++ b/crates/alife_training/examples/probe_cue_learning.rs
+@@ -4,7 +4,7 @@
+ mod base;
+ use alife_core::*;
+ use alife_runtime::canonical_preparation::foundation_construction_development;
+-use alife_training::{cpu::*, AdamWConfig, StageTrainableMask};
++use alife_training::{cpu::*, AdamWConfig, StageTrainableMask, TrainingSequence};
+ use alife_world::*;
+ use serde_json::{json, Value};
+ use std::{error::Error, io::Write};
+@@ -66,7 +66,14 @@
+     let mut choice=None; let mut steps=0; let mut trace=Vec::new();
+     for i in 0..64 {
+         let step=host.step(&trainer,1.)?; steps=i+1;
+-        for d in &step.decisions { let o=d.patch.outcome(); trace.push(json!({"tick":i+1,"action":d.action,"contact":o.physical.contact,"target":o.physical.target_entity.map(|x|x.raw())})); }
++        for d in &step.decisions {
++            let o=d.patch.outcome();
++            let seq=TrainingSequence { phenotype_hash:trainer.phenotype().phenotype_hash(), initial:d.initial.clone(), ticks:vec![d.replay_tick.clone()], burn_in_ticks:0, memory_candidate_gain:trainer.phenotype().candidate_decoder().memory_channel().map_or(0.,|m|m.max_candidate_gain()) };
++            let logits=trainer.evaluate_replay(&seq)?.candidate_logits[0].clone();
++            let actor_id=host.world().organism_registry().get(own).ok_or("missing actor")?.world_entity_id();
++            let actor_position=host.world().entity(actor_id).ok_or("missing actor body")?.position;
++            trace.push(json!({"tick":i+1,"action":d.action,"contact":o.physical.contact,"target":o.physical.target_entity.map(|x|x.raw()),"outcome":o,"candidates":d.patch.pre_action().perception().candidates(),"logits":logits,"actor_position_after":actor_position}));
++        }
+         let r=host.world().entity(red_id).ok_or("red lost")?.consumed;let b=host.world().entity(blue_id).ok_or("blue lost")?.consumed;
+         if r||b {choice=Some(if r&&b {"both"} else if r {"red"} else {"blue"}); break;}
+     }
