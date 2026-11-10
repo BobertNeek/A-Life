@@ -1,0 +1,5 @@
+# Stronger Ingest-reference weight comparison
+
+After a 0.2× reference calibration broke nearby eating in four matched seeds, test a different direct weight edit: 1.25× the two original Ingest reference weights, leaving all other weights unchanged. Hypothesis: a somewhat stronger Ingest drive may improve approach-to-eating completion without removing ability to reject bitter food. There is no guarantee: over-eating or indiscriminate eating are possible, and a negative result matters. The candidate is based on fresh experimental founders, not a change to any retained life or default asset.
+
+Compare the existing whole-care candidate and the boost over four new paired seeds 2026111510–1513 in nearby food, far food and harmless bitter food, 32 steps: 24 native CPU trials. Record per-position edits, physical target outcomes, cold-next-step and optimizer checks. Bitter-food rejection is an inherited response in this setup, not evidence of learned hazard avoidance. Short bounded results are not general or GPU evidence. Source base 205f60c200dc05f4f0ae8c02d3f5b9747dbc0abd plus ingest-boost.patch.
