@@ -1,0 +1,142 @@
+--- a/crates/alife_training/examples/probe_weight_space_care.rs
++++ b/crates/alife_training/examples/probe_weight_space_care.rs
+@@ -1,4 +1,10 @@
+ //! Disposable exploratory direct-weight probe. CPU only; never reads a life.
++#[allow(dead_code)]
++#[path = "support/motor_operating_point.rs"]
++mod readout;
++#[allow(dead_code)]
++#[path = "support/dedicated_fatigue.rs"]
++mod dedicated;
+ use alife_core::*;
+ use alife_runtime::canonical_preparation::foundation_construction_development;
+ use alife_training::{cpu::*, AdamWConfig, StageTrainableMask, TrainingSequence};
+@@ -297,7 +303,50 @@
+             whole_care(&p)?
+         };
+         weights = whole;
++        if matches!(arm, "whole-care-balanced" | "whole-care-narrow" | "whole-care-ingest-only" | "whole-care-ingest-boost") {
++            let (w, _) = readout::counterbalance(&p, &weights, &circuits, 0., true)?;
++            let (w, _) = dedicated::full_reference_calibration(&p, &w, &circuits, true)?;
++            weights = w;
++            if arm == "whole-care-ingest-boost" {
++                let (baseline, _) = whole_care(&p)?;
++                for (i, synapse) in p.synapses().iter().enumerate() {
++                    let is_ingest = matches!(synapse.kind(), CompiledSynapseKind::Decoder(c) if c.head() == DecoderHeadKind::ActionCandidate && c.family() == CandidateActionFamily::Ingest);
++                    weights[i] = if is_ingest && weights[i].to_bits() != baseline[i].to_bits() { baseline[i] * 1.25 } else { baseline[i] };
++                }
++            }
++            if arm == "whole-care-ingest-only" {
++                let (baseline, _) = whole_care(&p)?;
++                for (i, synapse) in p.synapses().iter().enumerate() {
++                    if !matches!(synapse.kind(), CompiledSynapseKind::Decoder(c) if c.head() == DecoderHeadKind::ActionCandidate && c.family() == CandidateActionFamily::Ingest) {
++                        weights[i] = baseline[i];
++                    }
++                }
++            }
++            if arm == "whole-care-narrow" {
++                let (baseline, _) = whole_care(&p)?;
++                let reference = circuits.iter().find(|c| c["role"] == "reference" && c["family"] == serde_json::to_value(CandidateActionFamily::Approach).unwrap()).and_then(|c| c["reference_motor"].as_u64()).ok_or("missing Approach reference")? as u32;
++                for (i, synapse) in p.synapses().iter().enumerate() {
++                    if synapse.source() == reference && matches!(synapse.kind(), CompiledSynapseKind::Decoder(c) if c.head() == DecoderHeadKind::ActionCandidate && c.family() == CandidateActionFamily::Approach) {
++                        weights[i] = baseline[i];
++                    }
++                }
++            }
++        }
+         edits = circuits;
++        if matches!(arm, "whole-care-balanced" | "whole-care-narrow" | "whole-care-ingest-only" | "whole-care-ingest-boost") {
++            let (baseline, _) = whole_care(&p)?;
++            for (i, (before, after)) in baseline.iter().zip(&weights).enumerate() {
++                if before.to_bits() != after.to_bits() {
++                    if !matches!(p.synapses()[i].kind(), CompiledSynapseKind::Decoder(c) if c.head() == DecoderHeadKind::ActionCandidate) {
++                        return Err("reference calibration changed a non-action decoder weight".into());
++                    }
++                    edits.push(json!({"role":"reference_weight_edit","index":i,"before":before,"after":after}));
++                }
++            }
++            if !edits.iter().any(|e| e["role"] == "reference_weight_edit") {
++                return Err("reference calibration made no changes".into());
++            }
++        }
+         if arm == "whole-care-no-need" || arm == "whole-care-no-tonic" {
+             let role = if arm.ends_with("no-need") {
+                 "need"
+@@ -474,6 +523,8 @@
+         .get(own)
+         .unwrap()
+         .biochemistry();
++    let initial_checkpoint = host.checkpoint(&trainer)?;
++    let initial_neural = initial_checkpoint.residents.iter().find(|r| r.neural.organism_id == own).ok_or("missing initial neural owner")?.neural.clone();
+     let mut rows = Vec::new();
+     for tick in 0..ticks {
+         let step = host.step(&trainer, 1.)?;
+@@ -613,10 +664,48 @@
+     }
+     assert_eq!(before, serde_json::to_vec(&trainer.checkpoint())?);
+     let ck = host.checkpoint(&trainer)?;
++    let final_neural = &ck.residents.iter().find(|r| r.neural.organism_id == own).ok_or("missing final neural owner")?.neural;
++    let change_stats = |a: &[f32], b: &[f32]| -> Result<serde_json::Value> {
++        if a.len() != b.len() || a.len() != trainer.phenotype().synapses().len() { return Err("neural weight state length mismatch".into()); }
++        let mut changed = 0usize;
++        let mut recurrent = 0usize;
++        let mut decoder = 0usize;
++        let mut max_abs_delta = 0f32;
++        for (i, (x, y)) in a.iter().zip(b).enumerate() {
++            if x.to_bits() != y.to_bits() {
++                changed += 1;
++                match trainer.phenotype().synapses()[i].kind() { CompiledSynapseKind::Recurrent => recurrent += 1, CompiledSynapseKind::Decoder(_) => decoder += 1 }
++                max_abs_delta = max_abs_delta.max((y - x).abs());
++            }
++        }
++        Ok(json!({"changed":changed,"recurrent":recurrent,"decoder":decoder,"max_abs_delta":max_abs_delta}))
++    };
++    let neural_changes = json!({"fast":change_stats(&initial_neural.fast, &final_neural.fast)?,"lifetime":change_stats(&initial_neural.lifetime, &final_neural.lifetime)?,"eligibility":change_stats(&initial_neural.eligibility, &final_neural.eligibility)?,"initial_weight_generation":initial_neural.weight_generation,"final_weight_generation":final_neural.weight_generation});
+     let bytes = serde_json::to_vec(&ck)?;
+     let mut cold = CpuCanonicalHost::from_checkpoint(serde_json::from_slice(&bytes)?, &trainer)?;
+     assert_eq!(bytes, serde_json::to_vec(&cold.checkpoint(&trainer)?)?);
+     let hot = host.snapshot().step(&trainer, 1.)?;
++    // Detached replay counterfactual: never alter a live or serialized host.
++    // Bind the observed effective offsets to the sealed source state first.
++    let ablation_observation = match hot.decisions.first() {
++        Some(h) => {
++            let seq = TrainingSequence { phenotype_hash: trainer.phenotype().phenotype_hash(), initial: h.initial.clone(), ticks: vec![h.replay_tick.clone()], burn_in_ticks: 0, memory_candidate_gain: trainer.phenotype().candidate_decoder().memory_channel().map_or(0., |m| m.max_candidate_gain()) };
++            let real = trainer.evaluate_replay(&seq)?.candidate_logits[0].clone();
++            let mut counterfactual = seq.clone();
++            let offsets = &mut counterfactual.ticks[0].effective_weight_offsets;
++            if offsets.len() != final_neural.fast.len() { return Err("replay offset length mismatch".into()); }
++            for (i, synapse) in trainer.phenotype().synapses().iter().enumerate() {
++                let expected = final_neural.lifetime[i] + synapse.alpha() * final_neural.fast[i];
++                if offsets[i].to_bits() != expected.to_bits() { return Err("observed replay offsets differ from sealed state".into()); }
++                offsets[i] = final_neural.lifetime[i] + synapse.alpha() * initial_neural.fast[i];
++            }
++            let removed = trainer.evaluate_replay(&counterfactual)?.candidate_logits[0].clone();
++            if real.len() != removed.len() { return Err("replay candidate count mismatch".into()); }
++            let max_logit_delta = real.iter().zip(&removed).map(|(x,y)| (x-y).abs()).fold(0f32, f32::max);
++            json!({"same_replay_perception":true,"offsets_bound_to_sealed_state":true,"max_logit_delta":max_logit_delta,"candidate_count":real.len(),"actual_logits":real,"fast_removed_logits":removed})
++        },
++        None => json!({"no_decision":true}),
++    };
+     let fresh = cold.step(&trainer, 1.)?;
+     assert_eq!(
+         serde_json::to_vec(&hot.decisions)?,
+@@ -630,7 +719,7 @@
+     );
+     let r = host.world().organism_registry().get(own).unwrap();
+     Ok(
+-        json!({"seed":seed,"arm":arm,"scene":scene,"edits":edits,"source_digest":source.digest(),"candidate_digest":candidate_digest,"changed_weights":changed_weights,"experimental_graph":experimental,"active_tiles":trainer.phenotype().budgets().global.active_tiles,"microstep_count":trainer.phenotype().microstep_count(),"total_synapses":trainer.phenotype().synapses().len(),"preparation_ticks":preparation_ticks,"target_hazard_pain":target_hazard_pain,"initial_biology":initial_biology,"optimizer_unchanged":true,"cold_next_step_exact":true,"target_active":!host.world().entity(object).unwrap().consumed,"final_position":host.world().entity(host.world().entity_id("learner").unwrap()).unwrap().position,"final_target_carrier":host.world().entity(object).unwrap().carried_by,"final_body":r.biochemistry().body,"final_homeostasis":r.biochemistry().homeostasis,"rows":rows}),
++        json!({"fast_ablation":ablation_observation,"neural_changes":neural_changes,"seed":seed,"arm":arm,"scene":scene,"edits":edits,"source_digest":source.digest(),"candidate_digest":candidate_digest,"changed_weights":changed_weights,"experimental_graph":experimental,"active_tiles":trainer.phenotype().budgets().global.active_tiles,"microstep_count":trainer.phenotype().microstep_count(),"total_synapses":trainer.phenotype().synapses().len(),"preparation_ticks":preparation_ticks,"target_hazard_pain":target_hazard_pain,"initial_biology":initial_biology,"optimizer_unchanged":true,"cold_next_step_exact":true,"target_active":!host.world().entity(object).unwrap().consumed,"final_position":host.world().entity(host.world().entity_id("learner").unwrap()).unwrap().position,"final_target_carrier":host.world().entity(object).unwrap().carried_by,"final_body":r.biochemistry().body,"final_homeostasis":r.biochemistry().homeostasis,"rows":rows}),
+     )
+ }
+ fn graph_report(p: &BrainPhenotype) -> serde_json::Value {
+@@ -737,6 +826,10 @@
+             ("wrong-sign", -gain),
+         ],
+         "validate" => vec![("untouched", 0.), ("whole-care", 0.)],
++        "balanced" => vec![("whole-care", 0.), ("whole-care-balanced", 0.)],
++        "narrow" => vec![("whole-care", 0.), ("whole-care-balanced", 0.), ("whole-care-narrow", 0.)],
++        "ingest-factor" => vec![("whole-care", 0.), ("whole-care-ingest-only", 0.)],
++        "boost-factor" => vec![("whole-care", 0.), ("whole-care-ingest-boost", 0.)],
+         "contact" => vec![("whole-care-v5", 0.), ("whole-care", 0.)],
+         "whole" => vec![
+             ("untouched", 0.),
