@@ -818,6 +818,16 @@ fn digest_provenance(
                 digest.write_u16(*before);
                 digest.write_u16(*after);
             }
+            MutationRecord::GeneticWeight {
+                index,
+                before,
+                after,
+            } => {
+                digest.write_u8(3);
+                digest.write_u16(*index);
+                digest.write_f32(*before)?;
+                digest.write_f32(*after)?;
+            }
         }
     }
     Ok(digest.finish256())

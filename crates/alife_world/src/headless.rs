@@ -14250,7 +14250,13 @@ mod task_4_3a2_tests {
             .weights()
             .iter()
             .zip(inherited.weights())
-            .all(|(a, b)| a.to_bits() == b.to_bits()));
+            .any(|(a, b)| a.to_bits() != b.to_bits()));
+        assert!(newborn
+            .genome()
+            .provenance
+            .mutations
+            .iter()
+            .any(|r| matches!(r, alife_core::MutationRecord::GeneticWeight { .. })));
         let expressed = newborn.genome().express().unwrap();
         let maturity = expressed
             .development_state_at(Tick::new(u64::from(

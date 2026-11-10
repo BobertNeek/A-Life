@@ -1371,18 +1371,16 @@ fn anchored_v2_offspring_composite_archive_roundtrips() {
         .unwrap();
     let child = CreatureGenome::reproduce(&maternal, &paternal, 703).unwrap();
     let inherited = child.n2048_foundation_candidate.as_ref().unwrap().clone();
-    assert_eq!(
-        inherited
-            .weights()
-            .iter()
-            .map(|x| x.to_bits())
-            .collect::<Vec<_>>(),
-        foundation
-            .weights()
-            .iter()
-            .map(|x| x.to_bits())
-            .collect::<Vec<_>>()
-    );
+    assert!(inherited
+        .weights()
+        .iter()
+        .zip(foundation.weights())
+        .any(|(a, b)| a.to_bits() != b.to_bits()));
+    assert!(child
+        .provenance
+        .mutations
+        .iter()
+        .any(|r| matches!(r, alife_core::MutationRecord::GeneticWeight { .. })));
     let expressed = child.express().unwrap();
     let development = expressed
         .development_state_at(Tick::new(u64::from(
