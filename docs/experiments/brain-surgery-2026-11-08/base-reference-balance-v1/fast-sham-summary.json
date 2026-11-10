@@ -1,0 +1,187 @@
+{
+  "seed": 2026111541,
+  "normal_complete": true,
+  "sham_complete": true,
+  "comparisons": [
+    {
+      "scene": "food",
+      "arm": "whole-care",
+      "normal_fast": {
+        "changed": 26624,
+        "decoder": 2048,
+        "max_abs_delta": 0.0004950235015712678,
+        "recurrent": 24576
+      },
+      "sham_fast": {
+        "changed": 0,
+        "decoder": 0,
+        "max_abs_delta": 0.0,
+        "recurrent": 0
+      },
+      "normal_eligibility": {
+        "changed": 26624,
+        "decoder": 2048,
+        "max_abs_delta": 1.0,
+        "recurrent": 24576
+      },
+      "sham_eligibility": {
+        "changed": 26624,
+        "decoder": 2048,
+        "max_abs_delta": 1.0,
+        "recurrent": 24576
+      },
+      "initial_candidates_equal": true,
+      "initial_logits_equal": true,
+      "initial_action_equal": true,
+      "all_candidate_identities_equal": true,
+      "same_sampled_choices": 64,
+      "row_count": 64,
+      "max_logit_delta": 0.01261624600738287,
+      "normal_consumed": true,
+      "sham_consumed": true,
+      "normal_cold": true,
+      "sham_cold": true,
+      "normal_optimizer": true,
+      "sham_optimizer": true,
+      "normal_flag": false,
+      "sham_flag": true,
+      "normal_sha256": "953f7e9409b8cab0dc10f155e537839202684a1262b4b9a3676f4b81d0f91af5",
+      "sham_sha256": "84f1c8721d375f64c72392186509358c6e695616eb8ace338bbec0f544097e41"
+    },
+    {
+      "scene": "food",
+      "arm": "whole-care-ingest-boost",
+      "normal_fast": {
+        "changed": 26624,
+        "decoder": 2048,
+        "max_abs_delta": 0.00048063945723697543,
+        "recurrent": 24576
+      },
+      "sham_fast": {
+        "changed": 0,
+        "decoder": 0,
+        "max_abs_delta": 0.0,
+        "recurrent": 0
+      },
+      "normal_eligibility": {
+        "changed": 26624,
+        "decoder": 2048,
+        "max_abs_delta": 1.0,
+        "recurrent": 24576
+      },
+      "sham_eligibility": {
+        "changed": 26624,
+        "decoder": 2048,
+        "max_abs_delta": 1.0,
+        "recurrent": 24576
+      },
+      "initial_candidates_equal": true,
+      "initial_logits_equal": true,
+      "initial_action_equal": true,
+      "all_candidate_identities_equal": true,
+      "same_sampled_choices": 64,
+      "row_count": 64,
+      "max_logit_delta": 0.01288808137178421,
+      "normal_consumed": true,
+      "sham_consumed": true,
+      "normal_cold": true,
+      "sham_cold": true,
+      "normal_optimizer": true,
+      "sham_optimizer": true,
+      "normal_flag": false,
+      "sham_flag": true,
+      "normal_sha256": "861cefd413a51227e756d5f8c90e52111dd04be661761445fceb152522486d0b",
+      "sham_sha256": "fa234fb1cd87b5bc8d7ed2b8bdc149b70d44de0998d3b7e7037b0b4130661e3f"
+    },
+    {
+      "scene": "far-food",
+      "arm": "whole-care",
+      "normal_fast": {
+        "changed": 26624,
+        "decoder": 2048,
+        "max_abs_delta": 0.0006038220599293709,
+        "recurrent": 24576
+      },
+      "sham_fast": {
+        "changed": 0,
+        "decoder": 0,
+        "max_abs_delta": 0.0,
+        "recurrent": 0
+      },
+      "normal_eligibility": {
+        "changed": 26624,
+        "decoder": 2048,
+        "max_abs_delta": 1.0,
+        "recurrent": 24576
+      },
+      "sham_eligibility": {
+        "changed": 26624,
+        "decoder": 2048,
+        "max_abs_delta": 1.0,
+        "recurrent": 24576
+      },
+      "initial_candidates_equal": true,
+      "initial_logits_equal": true,
+      "initial_action_equal": true,
+      "all_candidate_identities_equal": true,
+      "same_sampled_choices": 64,
+      "row_count": 64,
+      "max_logit_delta": 0.0112762451171875,
+      "normal_consumed": true,
+      "sham_consumed": true,
+      "normal_cold": true,
+      "sham_cold": true,
+      "normal_optimizer": true,
+      "sham_optimizer": true,
+      "normal_flag": false,
+      "sham_flag": true,
+      "normal_sha256": "5df0db6b36133a425fb6285d52df0cd53c44e77b32535e2d2dc3c91d4143cfa1",
+      "sham_sha256": "50e016e8a43ae62928ed2d7f4e9f300f74798aeeae1b27d7677b47355de443f3"
+    },
+    {
+      "scene": "far-food",
+      "arm": "whole-care-ingest-boost",
+      "normal_fast": {
+        "changed": 26624,
+        "decoder": 2048,
+        "max_abs_delta": 0.0005711191915906966,
+        "recurrent": 24576
+      },
+      "sham_fast": {
+        "changed": 0,
+        "decoder": 0,
+        "max_abs_delta": 0.0,
+        "recurrent": 0
+      },
+      "normal_eligibility": {
+        "changed": 26624,
+        "decoder": 2048,
+        "max_abs_delta": 1.0,
+        "recurrent": 24576
+      },
+      "sham_eligibility": {
+        "changed": 26624,
+        "decoder": 2048,
+        "max_abs_delta": 1.0,
+        "recurrent": 24576
+      },
+      "initial_candidates_equal": true,
+      "initial_logits_equal": true,
+      "initial_action_equal": true,
+      "all_candidate_identities_equal": true,
+      "same_sampled_choices": 64,
+      "row_count": 64,
+      "max_logit_delta": 0.011245687492191792,
+      "normal_consumed": true,
+      "sham_consumed": true,
+      "normal_cold": true,
+      "sham_cold": true,
+      "normal_optimizer": true,
+      "sham_optimizer": true,
+      "normal_flag": false,
+      "sham_flag": true,
+      "normal_sha256": "b079505a75cb10ec9397acf35610a9b27b6ee2bb30363a4ae162b2c201f91fa5",
+      "sham_sha256": "88a7f73e60284f05f75f68d3d17a7c031dfea3928f9cb2b278c411074b1b3431"
+    }
+  ]
+}
