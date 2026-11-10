@@ -1,0 +1,3 @@
+# Sleep-retention fast-update sham control
+
+The same eight counterbalanced combined-candidate sleep cases were rerun with the existing research-only `ALIFE_RESEARCH_FAST_WRITE_SHAM` switch enabled. All eight still chose the safe cue after wake, matching the normal-write runs. Thirty fast entries changed in each sham receipt, so the switch must not be described as a complete zero-change neural state. The controlled result shows that the normal fast-write pathway suppressed by this switch was not necessary for these choices; it does not prove that all synaptic mechanisms were irrelevant. Episodic memory and the authored memory decoder remain plausible contributors. This is a CPU research control only and does not authorize enabling the sham switch in production.
