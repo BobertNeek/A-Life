@@ -1,0 +1,19 @@
+--- a/crates/alife_training/src/cpu/actual_contact_four_interval_tests.rs
++++ b/crates/alife_training/src/cpu/actual_contact_four_interval_tests.rs
+@@ -637,3 +637,16 @@
+ #[test] fn additive_long_original_seed2() {run_long_natural_food_toy::<0,0x0043_484e_4c48_5332>();}
+ #[test] fn additive_long_candidate_seed2() {run_long_natural_food_toy::<1,0x0043_484e_4c48_5332>();}
+ #[test] fn additive_long_sham_seed2() {run_long_natural_food_toy::<2,0x0043_484e_4c48_5332>();}
++
++#[test]
++fn additive_candidate_sham_cross_restore_rejected() {
++    let (candidate,inputs)=construct_one_fresh_host_with_toy::<1>();
++    let bytes=wire::<1>(&candidate);
++    let value:Value=serde_json::from_slice(bytes.strip_prefix(CONTROL_MAGIC).unwrap()).unwrap();
++    let mut payload:GroupedPayloadV1=serde_json::from_value(value).unwrap();
++    payload.restore_sampler_bits().unwrap();
++    assert!(CpuGroupedM2HostV1::restore_payload::<Controlled<true,2>>(payload,&inputs,MediationModeV1::Full,bytes.clone()).is_err());
++    assert_eq!(wire::<1>(&candidate),bytes);
++    let restored=restore_prefix::<1>(&bytes,&inputs);
++    assert_eq!(wire::<1>(&restored),bytes);
++}
