@@ -1,0 +1,46 @@
+--- a/crates/alife_training/src/cpu/motor_mediation/confidence/policy/optional_vocal/actual_contact_math_tests.rs
++++ b/crates/alife_training/src/cpu/motor_mediation/confidence/policy/optional_vocal/actual_contact_math_tests.rs
+@@ -300,3 +300,43 @@
+     // This fixture's manipulation row is Contact, not grounded Play. Actual Play
+     // and simultaneous physical recovery dose remain separate hosted controls.
+ }
++
++#[test]
++fn contact_joint_decoder_gradient_matches_weight_perturbations() {
++    use crate::cpu::motor_mediation::confidence::tests as baseline;
++    let (inputs,asset)=baseline::source();
++    let f=baseline::frame();
++    let mut engine=RecoveryGroupDetachedCpuV2::fresh(&inputs,&asset,MediationModeV1::Full).unwrap();
++    let mut tick=baseline::tick(&engine,&f);
++    for i in [1,6] {tick.candidates[i].decoder_inputs[24]=if i==1 {0.2}else{-0.1};}
++    let rows=engine.bind_rows(&f,&tick).unwrap();
++    let probe=engine.step(&f,tick.clone(),&rows,MediationModulationV1::default(),127,[true;6],u64::MAX).unwrap();
++    let bind=|p:&BrainPhenotype,n:&RecoveryGroupScoresV2| {
++        let source=synthetic_source(p,&f,false);
++        ChannelScores::bind(&OptionalVocalScoresV1::bind(p,&f,n,source).unwrap()).unwrap()
++    };
++    let scores=bind(engine.source(),&probe.receipt.scores);
++    let temp=1.7;
++    let action=(0..100).map(|n|scores.sample(75,n,temp).unwrap()).find(|a|a.operation.is_some()).unwrap();
++    let gradient=scores.decoder_gradient_readout(&action,&probe).unwrap();
++    let mut tested=[false;2];
++    for (j,row) in engine.source().synapses().iter().enumerate() {
++        let CompiledSynapseKind::Decoder(d)=row.kind() else {continue};
++        if d.family()!=CandidateActionFamily::Rest {continue;}
++        let k=match d.head(){DecoderHeadKind::ActionCandidate=>0,DecoderHeadKind::MemoryContext=>1,_=>continue};
++        if tested[k] || gradient[j].abs()<1e-5 {continue;}
++        let h=0.002_f32;
++        let value=|delta:f32| {
++            let mut q=RecoveryGroupDetachedCpuV2::fresh(&inputs,&asset,MediationModeV1::Full).unwrap();
++            q.core.weights[j]+=delta;
++            let rs=q.bind_rows(&f,&tick).unwrap();
++            let out=q.step(&f,tick.clone(),&rs,MediationModulationV1::default(),127,[true;6],u64::MAX).unwrap();
++            let b=bind(q.source(),&out.receipt.scores);
++            b.evaluate_selection(action.motors,action.operation,temp).unwrap().log_probability
++        };
++        let numeric=(value(h)-value(-h))/f64::from(2.0*h);
++        assert!((numeric-gradient[j]).abs()<0.0002,"head {k} coordinate {j}: analytic {} numeric {numeric}",gradient[j]);
++        tested[k]=true;
++    }
++    assert!(tested[0]&&tested[1],"both action and memory decoder heads need nonzero checks");
++}
