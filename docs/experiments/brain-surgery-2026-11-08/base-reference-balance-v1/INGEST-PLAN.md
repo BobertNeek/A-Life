@@ -1,0 +1,5 @@
+# Isolate the Ingest reference edit
+
+In seed 2026111504's far-food trial the original and narrow candidate first selected different actions at step 15: original Ingest, narrow Approach. The Approach logit was 16.727 in both; Ingest was 12.428 in original, 4.266 in narrow. The narrow candidate changes seven decoder weights across several families, so this is a hypothesis, not proof that two Ingest reference weights caused the differing choice.
+
+Test only the two Ingest-family reference edits, with the rest identical to whole-care. Fresh seeds 2026111506 through 2026111509, two scenes food and far-food, two paired arms, 32 steps: 16 short CPU trials. Report real target consumption, timings and changed weights, exact cold continuation and optimizer checks. Distinct seeds and real trajectory divergence mean no guaranteed controlled state matching after decisions differ. No gameplay or learning result is implied. Keep all old assets and learned lives unchanged. Source base 205f60c200dc05f4f0ae8c02d3f5b9747dbc0abd plus `ingest-factor.patch`.
