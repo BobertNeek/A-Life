@@ -1,0 +1,56 @@
+--- a/crates/alife_training/examples/probe_cue_learning.rs
++++ b/crates/alife_training/examples/probe_cue_learning.rs
+@@ -53,7 +53,8 @@
+     let initial=host.checkpoint(&trainer)?.residents[0].neural.clone();
+     let red=[0.9,0.1,0.1]; let blue=[0.1,0.1,0.9];
+     let mut exposures:Vec<Value>=Vec::new();
+-    let order=[true,false,true,false]; // alternating safe and harmful; color mapping reverses independently.
++    let safe_first=match std::env::var("ALIFE_RESEARCH_CUE_ORDER").as_deref() { Err(std::env::VarError::NotPresent)|Ok("safe-first")=>true, Ok("harm-first")=>false, _=>return Err("cue order must be safe-first or harm-first".into()) };
++    let order=[safe_first,!safe_first,safe_first,!safe_first];
+     for (episode,safe) in order.into_iter().enumerate() {
+         let is_red=if safe {safe_red} else {!safe_red}; let c=if is_red {red} else {blue};
+         let target=spawn(&mut host,own,&format!("exposure-{episode}"),c,0.25,0.,if safe {0.} else {0.3})?;
+@@ -66,7 +67,7 @@
+         }
+         exposures.push(json!({"episode":episode,"safe":safe,"is_red":is_red,"target":target.raw(),"consumed_at":hit,"pain_delta":pain}));
+         if hit.is_none() {
+-            let report=json!({"schema":"cue-study-pilot-v1","approach_scale":approach_scale,"approach_edits":approach_edits,"seed":seed,"safe_red":safe_red,"red_left":red_left,"sham":std::env::var_os("ALIFE_RESEARCH_FAST_WRITE_SHAM").is_some(),"censored":"exposure_not_consumed","exposures":exposures});
++            let report=json!({"schema":"cue-study-pilot-v1","approach_scale":approach_scale,"approach_edits":approach_edits,"safe_first":safe_first,"seed":seed,"safe_red":safe_red,"red_left":red_left,"sham":std::env::var_os("ALIFE_RESEARCH_FAST_WRITE_SHAM").is_some(),"censored":"exposure_not_consumed","exposures":exposures});
+             let mut f=std::fs::OpenOptions::new().write(true).create_new(true).open(path)?;f.write_all(&serde_json::to_vec_pretty(&report)?)?;return Ok(());
+         }
+     }
+@@ -107,6 +108,6 @@
+     let fast_changed=initial.fast.iter().zip(&final_neural.fast).filter(|(a,b)|a.to_bits()!=b.to_bits()).count();
+     let bytes=serde_json::to_vec(&checkpoint)?;let mut cold=CpuCanonicalHost::from_checkpoint(serde_json::from_slice(&bytes)?,&trainer)?;let mut warm=host.snapshot();warm.step(&trainer,1.)?;cold.step(&trainer,1.)?;
+     let exact=serde_json::to_vec(&warm.checkpoint(&trainer)?)? == serde_json::to_vec(&cold.checkpoint(&trainer)?)?;
+-    let report=json!({"schema":"cue-study-pilot-v1","approach_scale":approach_scale,"approach_edits":approach_edits,"seed":seed,"safe_red":safe_red,"red_left":red_left,"sham":std::env::var_os("ALIFE_RESEARCH_FAST_WRITE_SHAM").is_some(),"exposures":exposures,"probe_red_id":red_id.raw(),"probe_blue_id":blue_id.raw(),"choice":choice,"choice_was_safe_cue":choice.map(|c| (c=="red") == safe_red),"probe_steps":steps,"fast_changed":fast_changed,"cold_next_exact":exact,"founder_optimizer_unchanged":founder_before==serde_json::to_vec(&trainer.checkpoint())?,"trace":trace});
++    let report=json!({"schema":"cue-study-pilot-v1","approach_scale":approach_scale,"approach_edits":approach_edits,"safe_first":safe_first,"seed":seed,"safe_red":safe_red,"red_left":red_left,"sham":std::env::var_os("ALIFE_RESEARCH_FAST_WRITE_SHAM").is_some(),"exposures":exposures,"probe_red_id":red_id.raw(),"probe_blue_id":blue_id.raw(),"choice":choice,"choice_was_safe_cue":choice.and_then(|c| match c {"red"=>Some(safe_red),"blue"=>Some(!safe_red),_=>None}),"probe_steps":steps,"fast_changed":fast_changed,"cold_next_exact":exact,"founder_optimizer_unchanged":founder_before==serde_json::to_vec(&trainer.checkpoint())?,"trace":trace});
+     let mut f=std::fs::OpenOptions::new().write(true).create_new(true).open(path)?;f.write_all(&serde_json::to_vec_pretty(&report)?)?;Ok(())
+ }
+--- a/crates/alife_training/examples/probe_weight_space_care.rs
++++ b/crates/alife_training/examples/probe_weight_space_care.rs
+@@ -333,6 +333,16 @@
+             }
+         }
+         edits = circuits;
++        if arm == "whole-care-approach70" {
++            let mut count=0usize;
++            for (i,synapse) in p.synapses().iter().enumerate() {
++                if matches!(synapse.kind(),CompiledSynapseKind::Decoder(c) if c.head()==DecoderHeadKind::ActionCandidate && c.family()==CandidateActionFamily::Approach && c.input_lane()==15) && weights[i] != 0. {
++                    let before=weights[i]; weights[i] *= 0.70; count += 1;
++                    edits.push(json!({"role":"approach_taste_weight_edit","index":i,"before":before,"after":weights[i]}));
++                }
++            }
++            if count != 2 { return Err("unexpected Approach taste weight count".into()); }
++        }
+         if matches!(arm, "whole-care-balanced" | "whole-care-narrow" | "whole-care-ingest-only" | "whole-care-ingest-boost") {
+             let (baseline, _) = whole_care(&p)?;
+             for (i, (before, after)) in baseline.iter().zip(&weights).enumerate() {
+@@ -814,6 +824,7 @@
+         "narrow" => vec![("whole-care", 0.), ("whole-care-balanced", 0.), ("whole-care-narrow", 0.)],
+         "ingest-factor" => vec![("whole-care", 0.), ("whole-care-ingest-only", 0.)],
+         "boost-factor" => vec![("whole-care", 0.), ("whole-care-ingest-boost", 0.)],
++        "approach-factor" => vec![("whole-care", 0.), ("whole-care-approach70", 0.)],
+         "contact" => vec![("whole-care-v5", 0.), ("whole-care", 0.)],
+         "whole" => vec![
+             ("untouched", 0.),
