@@ -1,0 +1,1397 @@
+ 1396 53755 /workspace/scratch/ee5e08a3ca9b/base-weight-study-20261110/anchored-v2-development.patch
+--- a/crates/alife_core/src/phenotype.rs
++++ b/crates/alife_core/src/phenotype.rs
+@@ -10,6 +10,7 @@
+ mod construction;
+ mod decoder;
+ mod encoder;
++pub(crate) mod experimental_sensor_anchor;
+ mod inputs;
+ mod io_compile;
+ mod layout_compile;
+--- a/crates/alife_core/src/foundation.rs
++++ b/crates/alife_core/src/foundation.rs
+@@ -478,6 +478,7 @@
+     pub const N512_READOUT_CANDIDATE_V1: Self = Self(0x4E35_3132_5243_0001);
+     pub const N2048_V1: Self = Self(0x4E32_3034_385F_5631);
+     pub const N2048_EXPERIMENTAL_GRAPH_V1: Self = Self(0x4E32_3034_3845_0001);
++    pub const N2048_EXPERIMENTAL_ANCHORED_V2: Self = Self(0x4E32_3034_3845_0002);
+ 
+     pub const fn raw(self) -> u64 {
+         self.0
+@@ -502,6 +503,7 @@
+     pub const N512_FOUNDATION: Self = Self(0x4E35_3132_5F00_FA11);
+     pub const N2048_FOUNDATION: Self = Self(0x4E32_3034_385F_FA11);
+     pub const N2048_EXPERIMENTAL_GRAPH: Self = Self(0x4E32_3034_3845_FA11);
++    pub const N2048_EXPERIMENTAL_ANCHORED: Self = Self(0x4E32_3034_3845_FA12);
+ 
+     pub const fn raw(self) -> u64 {
+         self.0
+@@ -718,10 +720,20 @@
+         };
+         let training_stage = TrainingStageManifest::bootstrap();
+         let (foundation_id, compatibility_family_id) = if experimental {
+-            (
+-                FoundationId::N2048_EXPERIMENTAL_GRAPH_V1,
+-                FoundationCompatibilityFamilyId::N2048_EXPERIMENTAL_GRAPH,
+-            )
++            if selection
++                .n2048_experimental_graph()
++                .is_some_and(|r| r.is_anchored_v2())
++            {
++                (
++                    FoundationId::N2048_EXPERIMENTAL_ANCHORED_V2,
++                    FoundationCompatibilityFamilyId::N2048_EXPERIMENTAL_ANCHORED,
++                )
++            } else {
++                (
++                    FoundationId::N2048_EXPERIMENTAL_GRAPH_V1,
++                    FoundationCompatibilityFamilyId::N2048_EXPERIMENTAL_GRAPH,
++                )
++            }
+         } else {
+             foundation_identity_for_class(phenotype.brain_class_id())?
+         };
+@@ -819,10 +831,20 @@
+         self.training_stage.validate()?;
+         self.promotion_receipt.validate(self.training_stage)?;
+         let (foundation_id, compatibility_family_id) = if experimental {
+-            (
+-                FoundationId::N2048_EXPERIMENTAL_GRAPH_V1,
+-                FoundationCompatibilityFamilyId::N2048_EXPERIMENTAL_GRAPH,
+-            )
++            if selection
++                .n2048_experimental_graph()
++                .is_some_and(|r| r.is_anchored_v2())
++            {
++                (
++                    FoundationId::N2048_EXPERIMENTAL_ANCHORED_V2,
++                    FoundationCompatibilityFamilyId::N2048_EXPERIMENTAL_ANCHORED,
++                )
++            } else {
++                (
++                    FoundationId::N2048_EXPERIMENTAL_GRAPH_V1,
++                    FoundationCompatibilityFamilyId::N2048_EXPERIMENTAL_GRAPH,
++                )
++            }
+         } else {
+             foundation_identity_for_class(self.capacity_class_id)?
+         };
+@@ -866,8 +888,12 @@
+ }
+ 
+ impl FoundationWeightAsset {
++    pub const fn is_n2048_anchored_v2(&self) -> bool {
++        self.manifest.foundation_id.raw() == FoundationId::N2048_EXPERIMENTAL_ANCHORED_V2.raw()
++    }
+     pub const fn is_n2048_experimental_graph(&self) -> bool {
+         self.manifest.foundation_id.raw() == FoundationId::N2048_EXPERIMENTAL_GRAPH_V1.raw()
++            || self.is_n2048_anchored_v2()
+     }
+ 
+     pub const fn is_nano512_readout_candidate(&self) -> bool {
+@@ -1217,10 +1243,17 @@
+             {
+                 return Err(ScaffoldContractError::PhenotypeCompile);
+             }
+-            (
+-                FoundationId::N2048_EXPERIMENTAL_GRAPH_V1,
+-                FoundationCompatibilityFamilyId::N2048_EXPERIMENTAL_GRAPH,
+-            )
++            if self.is_n2048_anchored_v2() {
++                (
++                    FoundationId::N2048_EXPERIMENTAL_ANCHORED_V2,
++                    FoundationCompatibilityFamilyId::N2048_EXPERIMENTAL_ANCHORED,
++                )
++            } else {
++                (
++                    FoundationId::N2048_EXPERIMENTAL_GRAPH_V1,
++                    FoundationCompatibilityFamilyId::N2048_EXPERIMENTAL_GRAPH,
++                )
++            }
+         } else {
+             foundation_identity_for_class(self.manifest.capacity_class_id)?
+         };
+--- a/crates/alife_core/src/n2048_experimental_graph.rs
++++ b/crates/alife_core/src/n2048_experimental_graph.rs
+@@ -25,11 +25,44 @@
+             foundation_bytes: None,
+         })
+     }
++    pub fn fresh_anchored_v2(sensor_profile: SensorProfile) -> Result<Self, ScaffoldContractError> {
++        if sensor_profile != SensorProfile::GroundedObjectSlotsV1 {
++            return Err(ScaffoldContractError::PhenotypeCompile);
++        }
++        let mut v = Self::fresh(sensor_profile)?;
++        v.recipe_digest = Self::anchored_recipe_digest();
++        v.set_anchored_version();
++        Ok(v)
++    }
++    pub fn anchored_recipe_digest() -> [u64; 4] {
++        let mut d =
++            CanonicalDigestBuilder::new(b"alife.n2048.experimental-anchored-sensor-graph.v2");
++        for word in Self::recipe_digest() {
++            d.write_u64(word);
++        }
++        d.write_u64(crate::phenotype::experimental_sensor_anchor::SENSOR_SEED);
++        for &(g, l, n) in crate::phenotype::experimental_sensor_anchor::PORTS {
++            d.write_u16(g);
++            d.write_u16(l);
++            d.write_u32(n);
++        }
++        d.finish256()
++    }
++    pub const fn is_anchored_v2(&self) -> bool {
++        self.schema_version == 2
++    }
++    pub(crate) fn set_anchored_version(&mut self) {
++        self.schema_version = 2;
++    }
+     pub fn for_asset(asset: &FoundationWeightAsset) -> Result<Self, ScaffoldContractError> {
+         if !asset.is_n2048_experimental_graph() {
+             return Err(ScaffoldContractError::PhenotypeCompile);
+         }
+-        let mut value = Self::fresh(asset.manifest().sensor_profile())?;
++        let mut value = if asset.is_n2048_anchored_v2() {
++            Self::fresh_anchored_v2(asset.manifest().sensor_profile())?
++        } else {
++            Self::fresh(asset.manifest().sensor_profile())?
++        };
+         value.foundation_bytes = Some(asset.encode_canonical()?);
+         Ok(value)
+     }
+@@ -42,6 +75,9 @@
+         }
+         d.finish256()
+     }
++    pub const fn selected_recipe_digest(&self) -> [u64; 4] {
++        self.recipe_digest
++    }
+     pub const fn sensor_profile(&self) -> SensorProfile {
+         self.sensor_profile
+     }
+@@ -59,10 +95,10 @@
+         capacity: &BrainCapacityClass,
+         profile: SensorProfile,
+     ) -> Result<(), ScaffoldContractError> {
+-        if self.schema_version != 1
++        if !((self.schema_version == 1 && self.recipe_digest == Self::recipe_digest())
++            || (self.schema_version == 2 && self.recipe_digest == Self::anchored_recipe_digest()))
+             || capacity.id() != BrainCapacityClass::N2048_ID
+             || self.sensor_profile != profile
+-            || self.recipe_digest != Self::recipe_digest()
+         {
+             return Err(ScaffoldContractError::PhenotypeCompile);
+         }
+--- a/crates/alife_core/src/legacy_nano512_compatibility.rs
++++ b/crates/alife_core/src/legacy_nano512_compatibility.rs
+@@ -75,6 +75,7 @@
+ #[serde(tag = "abi_selection", content = "contract")]
+ pub enum FoundationAbiSelection {
+     N2048ExperimentalGraphV1(crate::N2048ExperimentalGraphV1),
++    N2048ExperimentalGraphV2(crate::N2048ExperimentalGraphV1),
+     CanonicalV2(FoundationAbiBinding),
+     LegacyNano512CompatibilityV1(LegacyNano512CompatibilityAbiDescriptor),
+     MigratedN2048FoundationV1(MigratedN2048FoundationV1Descriptor),
+@@ -85,7 +86,9 @@
+ impl FoundationAbiSelection {
+     pub const fn n2048_experimental_graph(&self) -> Option<&crate::N2048ExperimentalGraphV1> {
+         match self {
+-            Self::N2048ExperimentalGraphV1(recipe) => Some(recipe),
++            Self::N2048ExperimentalGraphV1(recipe) | Self::N2048ExperimentalGraphV2(recipe) => {
++                Some(recipe)
++            }
+             _ => None,
+         }
+     }
+@@ -100,7 +103,7 @@
+     pub const fn canonical_v2(&self) -> Option<&FoundationAbiBinding> {
+         match self {
+             Self::CanonicalV2(binding) => Some(binding),
+-            Self::N2048ExperimentalGraphV1(_) => None,
++            Self::N2048ExperimentalGraphV1(_) | Self::N2048ExperimentalGraphV2(_) => None,
+             Self::LegacyNano512CompatibilityV1(_)
+             | Self::MigratedN2048FoundationV1(_)
+             | Self::Nano512ReadoutCandidateV1(_)
+@@ -113,7 +116,7 @@
+     ) -> Option<&LegacyNano512CompatibilityAbiDescriptor> {
+         match self {
+             Self::CanonicalV2(_) => None,
+-            Self::N2048ExperimentalGraphV1(_) => None,
++            Self::N2048ExperimentalGraphV1(_) | Self::N2048ExperimentalGraphV2(_) => None,
+             Self::LegacyNano512CompatibilityV1(descriptor) => Some(descriptor),
+             Self::MigratedN2048FoundationV1(_)
+             | Self::Nano512ReadoutCandidateV1(_)
+@@ -126,7 +129,7 @@
+     ) -> Option<&MigratedN2048FoundationV1Descriptor> {
+         match self {
+             Self::MigratedN2048FoundationV1(descriptor) => Some(descriptor),
+-            Self::N2048ExperimentalGraphV1(_) => None,
++            Self::N2048ExperimentalGraphV1(_) | Self::N2048ExperimentalGraphV2(_) => None,
+             Self::CanonicalV2(_)
+             | Self::LegacyNano512CompatibilityV1(_)
+             | Self::Nano512ReadoutCandidateV1(_)
+@@ -161,6 +164,15 @@
+             }
+             Self::CanonicalV2(binding) => binding.validate_against(capacity),
+             Self::N2048ExperimentalGraphV1(recipe) => {
++                if recipe.is_anchored_v2() {
++                    return Err(ScaffoldContractError::PhenotypeCompile);
++                }
++                recipe.validate_against(capacity, sensor_profile)
++            }
++            Self::N2048ExperimentalGraphV2(recipe) => {
++                if !recipe.is_anchored_v2() {
++                    return Err(ScaffoldContractError::PhenotypeCompile);
++                }
+                 recipe.validate_against(capacity, sensor_profile)
+             }
+             Self::LegacyNano512CompatibilityV1(descriptor) => {
+@@ -190,7 +202,9 @@
+                 LanguageCodebookV1::canonical()
+             }
+             Self::CanonicalV2(binding) => binding.language_codebook().clone(),
+-            Self::N2048ExperimentalGraphV1(_) => LanguageCodebookV1::canonical(),
++            Self::N2048ExperimentalGraphV1(_) | Self::N2048ExperimentalGraphV2(_) => {
++                LanguageCodebookV1::canonical()
++            }
+             Self::LegacyNano512CompatibilityV1(_) => LanguageCodebookV1::canonical(),
+             Self::MigratedN2048FoundationV1(_) => LanguageCodebookV1::canonical(),
+         }
+@@ -202,7 +216,9 @@
+                 BrainCapacityClass::N512_ID
+             }
+             Self::CanonicalV2(binding) => binding.capacity_class_id(),
+-            Self::N2048ExperimentalGraphV1(_) => BrainCapacityClass::N2048_ID,
++            Self::N2048ExperimentalGraphV1(_) | Self::N2048ExperimentalGraphV2(_) => {
++                BrainCapacityClass::N2048_ID
++            }
+             Self::LegacyNano512CompatibilityV1(_) => BrainCapacityClass::N512_ID,
+             Self::MigratedN2048FoundationV1(_) => BrainCapacityClass::N2048_ID,
+         }
+@@ -215,6 +231,7 @@
+             }
+             Self::CanonicalV2(binding) => binding.foundation_id(),
+             Self::N2048ExperimentalGraphV1(_) => Some(FoundationId::N2048_EXPERIMENTAL_GRAPH_V1),
++            Self::N2048ExperimentalGraphV2(_) => Some(FoundationId::N2048_EXPERIMENTAL_ANCHORED_V2),
+             Self::LegacyNano512CompatibilityV1(descriptor) => Some(descriptor.source_foundation_id),
+             Self::MigratedN2048FoundationV1(descriptor) => Some(descriptor.source_foundation_id),
+         }
+@@ -226,7 +243,9 @@
+                 Some(FoundationVersion::V1)
+             }
+             Self::CanonicalV2(binding) => binding.foundation_version(),
+-            Self::N2048ExperimentalGraphV1(_) => Some(FoundationVersion::V1),
++            Self::N2048ExperimentalGraphV1(_) | Self::N2048ExperimentalGraphV2(_) => {
++                Some(FoundationVersion::V1)
++            }
+             Self::LegacyNano512CompatibilityV1(descriptor) => {
+                 Some(descriptor.source_foundation_version)
+             }
+@@ -245,6 +264,9 @@
+             Self::N2048ExperimentalGraphV1(_) => {
+                 Some(FoundationCompatibilityFamilyId::N2048_EXPERIMENTAL_GRAPH)
+             }
++            Self::N2048ExperimentalGraphV2(_) => {
++                Some(FoundationCompatibilityFamilyId::N2048_EXPERIMENTAL_ANCHORED)
++            }
+             Self::LegacyNano512CompatibilityV1(descriptor) => {
+                 Some(descriptor.source_compatibility_family_id)
+             }
+@@ -259,7 +281,9 @@
+             Self::Nano512ActionCreditCandidateV2(candidate) => Some(candidate.source().asset_ref()),
+             Self::Nano512ReadoutCandidateV1(candidate) => Some(candidate.asset_ref()),
+             Self::CanonicalV2(binding) => binding.foundation_weight_asset(),
+-            Self::N2048ExperimentalGraphV1(recipe) => recipe.asset_ref(),
++            Self::N2048ExperimentalGraphV1(recipe) | Self::N2048ExperimentalGraphV2(recipe) => {
++                recipe.asset_ref()
++            }
+             Self::LegacyNano512CompatibilityV1(descriptor) => Some(descriptor.source_weight_asset),
+             Self::MigratedN2048FoundationV1(descriptor) => Some(descriptor.source_weight_asset),
+         }
+@@ -281,6 +305,10 @@
+                 digest.write_u8(6);
+                 recipe.write_canonical(digest);
+             }
++            Self::N2048ExperimentalGraphV2(recipe) => {
++                digest.write_u8(7);
++                recipe.write_canonical(digest);
++            }
+             Self::Nano512ActionCreditCandidateV2(candidate) => {
+                 digest.write_u8(5);
+                 digest.write_sequence_len(candidate.source().bytes().len());
+--- a/crates/alife_core/src/phenotype/abi_validation.rs
++++ b/crates/alife_core/src/phenotype/abi_validation.rs
+@@ -174,7 +174,11 @@
+         use crate::blake3_digest::{domain_hasher, Blake3Write};
+         let mut route = domain_hasher(b"alife.n2048.experimental-route-abi.v1");
+         let mut plasticity = domain_hasher(b"alife.n2048.experimental-plasticity-abi.v1");
+-        for word in crate::N2048ExperimentalGraphV1::recipe_digest() {
++        for word in selection
++            .n2048_experimental_graph()
++            .expect("checked above")
++            .selected_recipe_digest()
++        {
+             route.write_u64(word);
+             plasticity.write_u64(word);
+         }
+--- a/crates/alife_core/src/phenotype/compiler.rs
++++ b/crates/alife_core/src/phenotype/compiler.rs
+@@ -32,6 +32,24 @@
+         Ok((Self::compile_validated(&inputs, &capacity)?, inputs))
+     }
+ 
++    pub fn compile_n2048_anchored_v2_graph(
++        genome: BrainGenome,
++        development: DevelopmentState,
++        sensor_profile: SensorProfile,
++    ) -> Result<(BrainPhenotype, PhenotypeCompilerInputs), ScaffoldContractError> {
++        let capacity = BrainCapacityClass::n2048();
++        let inputs = PhenotypeCompilerInputs::try_new_with_foundation_selection(
++            genome,
++            &capacity,
++            development,
++            sensor_profile,
++            crate::FoundationAbiSelection::N2048ExperimentalGraphV2(
++                crate::N2048ExperimentalGraphV1::fresh_anchored_v2(sensor_profile)?,
++            ),
++        )?;
++        Ok((Self::compile_validated(&inputs, &capacity)?, inputs))
++    }
++
+     pub fn compile_n2048_experimental_foundation_candidate(
+         genome: BrainGenome,
+         development: DevelopmentState,
+@@ -43,9 +61,15 @@
+             &capacity,
+             development,
+             asset.manifest().sensor_profile(),
+-            crate::FoundationAbiSelection::N2048ExperimentalGraphV1(
+-                crate::N2048ExperimentalGraphV1::for_asset(&asset)?,
+-            ),
++            if asset.is_n2048_anchored_v2() {
++                crate::FoundationAbiSelection::N2048ExperimentalGraphV2(
++                    crate::N2048ExperimentalGraphV1::for_asset(&asset)?,
++                )
++            } else {
++                crate::FoundationAbiSelection::N2048ExperimentalGraphV1(
++                    crate::N2048ExperimentalGraphV1::for_asset(&asset)?,
++                )
++            },
+         )?;
+         Ok((Self::compile_validated(&inputs, &capacity)?, inputs))
+     }
+--- a/crates/alife_core/src/phenotype/construction.rs
++++ b/crates/alife_core/src/phenotype/construction.rs
+@@ -55,8 +55,20 @@
+             capacity.execution().max_neurons(),
+         )?
+     };
+-    let encoder =
+-        super::io_compile::compile_encoder(genome, development, &layout, inputs.sensor_profile())?;
++    let encoder = if inputs
++        .foundation_abi()
++        .n2048_experimental_graph()
++        .is_some_and(|r| r.is_anchored_v2())
++    {
++        super::io_compile::compile_anchored_encoder_v2(
++            genome,
++            development,
++            &layout,
++            inputs.sensor_profile(),
++        )?
++    } else {
++        super::io_compile::compile_encoder(genome, development, &layout, inputs.sensor_profile())?
++    };
+     let (mut projections, mut synapses, mut receipts) =
+         if inputs.foundation_abi().n2048_experimental_graph().is_some() {
+             super::topology_compile::compile_n2048_experimental(genome, &layout, capacity)?
+--- a/crates/alife_core/src/phenotype/encoder.rs
++++ b/crates/alife_core/src/phenotype/encoder.rs
+@@ -188,12 +188,25 @@
+         inputs: &PhenotypeCompilerInputs,
+     ) -> Result<(), ScaffoldContractError> {
+         self.validate_against(phenotype)?;
+-        let expected = super::io_compile::compile_encoder(
+-            inputs.genome(),
+-            inputs.development(),
+-            phenotype.lobe_layout(),
+-            self.sensor_profile,
+-        )?;
++        let expected = if inputs
++            .foundation_abi()
++            .n2048_experimental_graph()
++            .is_some_and(|r| r.is_anchored_v2())
++        {
++            super::io_compile::compile_anchored_encoder_v2(
++                inputs.genome(),
++                inputs.development(),
++                phenotype.lobe_layout(),
++                self.sensor_profile,
++            )?
++        } else {
++            super::io_compile::compile_encoder(
++                inputs.genome(),
++                inputs.development(),
++                phenotype.lobe_layout(),
++                self.sensor_profile,
++            )?
++        };
+         if self == &expected {
+             Ok(())
+         } else {
+--- a/crates/alife_core/src/phenotype/io_compile.rs
++++ b/crates/alife_core/src/phenotype/io_compile.rs
+@@ -184,6 +184,56 @@
+     SensorEncoderPlan::try_new(profile, assignments)
+ }
+ 
++/// Experimental V2: keep reference source-to-neuron meanings stable while
++/// allowing a child's existing genes to remove or add receptors. New ports are
++/// placed outside all reserved reference targets in the same lobe.
++pub(super) fn compile_anchored_encoder_v2(
++    genome: &BrainGenome,
++    development: &DevelopmentState,
++    layout: &LobeLayout,
++    profile: SensorProfile,
++) -> Result<SensorEncoderPlan, ScaffoldContractError> {
++    if profile != SensorProfile::GroundedObjectSlotsV1 {
++        return Err(compile_error());
++    }
++    let mut anchored_genome = genome.clone();
++    anchored_genome.seeds.sensor_layout_seed = super::experimental_sensor_anchor::SENSOR_SEED;
++    let raw = compile_encoder(&anchored_genome, development, layout, profile)?;
++    let anchors = super::experimental_sensor_anchor::PORTS
++        .iter()
++        .copied()
++        .collect::<BTreeSet<_>>();
++    let mut used = anchors.iter().map(|(_, _, n)| *n).collect::<BTreeSet<_>>();
++    let mut result = Vec::with_capacity(raw.assignments().len());
++    for a in raw.assignments() {
++        let key = (a.source_group().raw(), a.source_index(), a.target_neuron());
++        let mut target = a.target_neuron();
++        if !anchors.contains(&key) {
++            if used.contains(&target) {
++                let region = layout
++                    .lobe_by_neuron_index(target)
++                    .ok_or_else(compile_error)?;
++                target = (region.start..region.start + region.len)
++                    .find(|n| !used.contains(n))
++                    .ok_or_else(compile_error)?;
++            }
++            used.insert(target);
++        }
++        let (lo, hi) = a.clamp_range();
++        result.push(SensorEncoderAssignment::new(
++            a.source_group(),
++            a.source_index(),
++            target,
++            a.scale(),
++            a.bias(),
++            lo,
++            hi,
++        ));
++    }
++    result.sort_by_key(|a| (a.target_neuron(), a.source_group().raw(), a.source_index()));
++    SensorEncoderPlan::try_new(profile, result)
++}
++
+ #[allow(clippy::type_complexity)]
+ pub(super) fn compile_decoders(
+     genome: &BrainGenome,
+--- a/crates/alife_core/src/evolutionary_genetics.rs
++++ b/crates/alife_core/src/evolutionary_genetics.rs
+@@ -1075,6 +1075,32 @@
+         Ok(genome)
+     }
+ 
++    /// V2 founders can mate across child-specific ABI bindings only when their
++    /// inherited weight values and structural coordinate identities are exact.
++    /// V1 and ordinary candidate assets retain the existing exact-match rule.
++    pub fn compatible_n2048_foundation_assets(&self, other: &Self) -> bool {
++        match (
++            &self.n2048_foundation_candidate,
++            &other.n2048_foundation_candidate,
++        ) {
++            (Some(a), Some(b)) if a.is_n2048_anchored_v2() && b.is_n2048_anchored_v2() => {
++                let x = a.manifest();
++                let y = b.manifest();
++                x.sensor_profile() == y.sensor_profile()
++                    && x.layout_digest() == y.layout_digest()
++                    && x.route_abi_digest() == y.route_abi_digest()
++                    && x.address_map_digest() == y.address_map_digest()
++                    && x.training_stage() == y.training_stage()
++                    && a.weights().len() == b.weights().len()
++                    && a.weights()
++                        .iter()
++                        .zip(b.weights())
++                        .all(|(x, y)| x.to_bits() == y.to_bits())
++            }
++            (a, b) => a == b,
++        }
++    }
++
+     pub fn reproduce(
+         maternal: &Self,
+         paternal: &Self,
+@@ -1083,7 +1109,7 @@
+         maternal.validate_contract()?;
+         paternal.validate_contract()?;
+         if conception_seed == 0
+-            || maternal.n2048_foundation_candidate != paternal.n2048_foundation_candidate
++            || !maternal.compatible_n2048_foundation_assets(paternal)
+             || maternal.nano512_readout_candidate != paternal.nano512_readout_candidate
+             || maternal.nano512_action_credit_candidate_v2
+                 != paternal.nano512_action_credit_candidate_v2
+@@ -1141,7 +1167,7 @@
+                 maternal.lineage_id.0 ^ paternal.lineage_id.0.rotate_left(29) ^ conception_seed,
+             ))
+         };
+-        let genome = Self {
++        let mut genome = Self {
+             schema_version: CREATURE_GENOME_SCHEMA_VERSION,
+             id,
+             parent_genome_ids: vec![maternal.id, paternal.id],
+@@ -1165,6 +1191,67 @@
+             predisposition,
+         };
+         genome.validate_contract()?;
++        if let Some(asset) = maternal
++            .n2048_foundation_candidate
++            .as_ref()
++            .filter(|a| a.is_n2048_anchored_v2())
++        {
++            let profile = asset.manifest().sensor_profile();
++            let compile_parent =
++                |parent: &Self| -> Result<crate::BrainPhenotype, ScaffoldContractError> {
++                    let expressed = parent.express()?;
++                    let age = Tick::new(u64::from(expressed.development.maturation_duration_ticks));
++                    let development = expressed.development_state_at(age)?;
++                    let inherited = parent
++                        .n2048_foundation_candidate
++                        .as_ref()
++                        .ok_or(ScaffoldContractError::PhenotypeCompile)?;
++                    Ok(
++                        crate::PhenotypeCompiler::compile_n2048_experimental_foundation_candidate(
++                            expressed.brain_genome,
++                            development,
++                            inherited.clone(),
++                        )?
++                        .0,
++                    )
++                };
++            let left = compile_parent(maternal)?;
++            let right = compile_parent(paternal)?;
++            let expressed = genome.express()?;
++            let age = Tick::new(u64::from(expressed.development.maturation_duration_ticks));
++            let development = expressed.development_state_at(age)?;
++            let (child, _) = crate::PhenotypeCompiler::compile_n2048_anchored_v2_graph(
++                expressed.brain_genome,
++                development,
++                profile,
++            )?;
++            let same_coordinates = |parent: &crate::BrainPhenotype| {
++                parent.route_abi_digest() == child.route_abi_digest()
++                    && parent.persistent_address_map().digest()
++                        == child.persistent_address_map().digest()
++                    && parent.synapses().len() == child.synapses().len()
++                    && parent
++                        .synapses()
++                        .iter()
++                        .zip(child.synapses())
++                        .all(|(a, b)| {
++                            a.source() == b.source()
++                                && a.target() == b.target()
++                                && a.route_index() == b.route_index()
++                                && a.kind() == b.kind()
++                        })
++            };
++            if !same_coordinates(&left) || !same_coordinates(&right) {
++                return Err(ScaffoldContractError::IncompatibleGeneticClass);
++            }
++            genome.n2048_foundation_candidate =
++                Some(crate::FoundationWeightAsset::from_trained_weights(
++                    &child,
++                    asset.weights().to_vec(),
++                    asset.manifest().training_stage(),
++                )?);
++            genome.validate_contract()?;
++        }
+         Ok(genome)
+     }
+ 
+--- a/crates/alife_world/src/headless.rs
++++ b/crates/alife_world/src/headless.rs
+@@ -2376,16 +2376,9 @@
+         }
+         let maternal_expressed_brain_class = maternal.genome().expressed_brain_class()?;
+         let paternal_expressed_brain_class = paternal.genome().expressed_brain_class()?;
+-        if maternal
++        if !maternal
+             .genome()
+-            .n2048_foundation_candidate
+-            .as_ref()
+-            .map(|asset| asset.digest())
+-            != paternal
+-                .genome()
+-                .n2048_foundation_candidate
+-                .as_ref()
+-                .map(|asset| asset.digest())
++            .compatible_n2048_foundation_assets(paternal.genome())
+             || maternal.genome().nano512_readout_candidate
+                 != paternal.genome().nano512_readout_candidate
+             || maternal.genome().nano512_action_credit_candidate_v2
+--- a/crates/alife_archive/tests/lineage_library.rs
++++ b/crates/alife_archive/tests/lineage_library.rs
+@@ -1345,6 +1345,92 @@
+ }
+ 
+ #[test]
++fn anchored_v2_offspring_composite_archive_roundtrips() {
++    let root = temp_root("anchored-v2-offspring-birth");
++    let mut library = LineageLibrary::open(LineageLibraryConfig::profile_default(&root)).unwrap();
++    let foundation = FoundationWeightAsset::decode_canonical(include_bytes!(concat!(
++        env!("CARGO_MANIFEST_DIR"),
++        "/../../assets/foundations/experimental-anchored-v2-research.alife-foundation"
++    )))
++    .unwrap();
++    let m = foundation.manifest();
++    let identity = FoundationGeneticIdentity::new(
++        m.foundation_id().raw(),
++        u16::try_from(m.foundation_version().raw()).unwrap(),
++        m.compatibility_family_id().raw(),
++        BrainCapacityClass::N2048_ID,
++    )
++    .unwrap();
++    let maternal = CreatureGenome::early_mammal_founder(701, identity)
++        .unwrap()
++        .with_n2048_foundation_candidate(foundation.clone())
++        .unwrap();
++    let paternal = CreatureGenome::early_mammal_founder(702, identity)
++        .unwrap()
++        .with_n2048_foundation_candidate(foundation.clone())
++        .unwrap();
++    let child = CreatureGenome::reproduce(&maternal, &paternal, 703).unwrap();
++    let inherited = child.n2048_foundation_candidate.as_ref().unwrap().clone();
++    assert_eq!(
++        inherited
++            .weights()
++            .iter()
++            .map(|x| x.to_bits())
++            .collect::<Vec<_>>(),
++        foundation
++            .weights()
++            .iter()
++            .map(|x| x.to_bits())
++            .collect::<Vec<_>>()
++    );
++    let expressed = child.express().unwrap();
++    let development = expressed
++        .development_state_at(Tick::new(u64::from(
++            expressed.development.maturation_duration_ticks,
++        )))
++        .unwrap();
++    assert!(PhenotypeCompiler::compile_from_foundation_asset(
++        &expressed.brain_genome,
++        &BrainCapacityClass::n2048(),
++        &development,
++        SensorProfile::GroundedObjectSlotsV1,
++        &foundation
++    )
++    .is_err());
++    let (phenotype, _) = PhenotypeCompiler::compile_n2048_experimental_foundation_candidate(
++        expressed.brain_genome,
++        development,
++        inherited.clone(),
++    )
++    .unwrap();
++    let bytes = inherited.encode_canonical().unwrap();
++    let digest = library
++        .archive_composite_birth(CompositeGeneticArchiveInput {
++            source_run_id: "anchored-v2-offspring",
++            organism_id: OrganismId(703),
++            birth_tick: Tick::new(9),
++            creature_genome: &child,
++            phenotype: &phenotype,
++            foundation_asset_bytes: &bytes,
++        })
++        .unwrap();
++    let manifest = library.load_manifest(digest).unwrap();
++    let restored = library.load_creature_genome(&manifest).unwrap();
++    assert_eq!(restored, child);
++    assert_eq!(
++        restored
++            .n2048_foundation_candidate
++            .as_ref()
++            .unwrap()
++            .encode_canonical()
++            .unwrap(),
++        bytes
++    );
++    drop(library);
++    fs::remove_dir_all(root).unwrap();
++}
++
++#[test]
+ fn composite_birth_round_trips_complete_creature_genome_provenance() {
+     let root = temp_root("composite-genome");
+     let mut library = LineageLibrary::open(LineageLibraryConfig::profile_default(&root)).unwrap();
+--- a/crates/alife_world/tests/save_load_roundtrip.rs
++++ b/crates/alife_world/tests/save_load_roundtrip.rs
+@@ -348,6 +348,121 @@
+     fs::remove_dir_all(root).unwrap();
+ }
+ 
++#[test]
++fn anchored_v2_composite_genome_and_lifetime_survive_portable_restore() {
++    let root = temp_root("anchored-v2-composite-genetic-restore");
++    let foundation = FoundationWeightAsset::decode_canonical(include_bytes!(concat!(
++        env!("CARGO_MANIFEST_DIR"),
++        "/../../assets/foundations/experimental-anchored-v2-research.alife-foundation"
++    )))
++    .unwrap();
++    let m = foundation.manifest();
++    let foundation_identity = FoundationGeneticIdentity::new(
++        m.foundation_id().raw(),
++        u16::try_from(m.foundation_version().raw()).unwrap(),
++        m.compatibility_family_id().raw(),
++        BrainCapacityClass::N2048_ID,
++    )
++    .unwrap();
++    let genome = CreatureGenome::early_mammal_founder(0xE10_501, foundation_identity)
++        .unwrap()
++        .with_n2048_foundation_candidate(foundation.clone())
++        .unwrap();
++    let expressed = genome.express().unwrap();
++    let development = expressed
++        .development_state_at(Tick::new(u64::from(
++            expressed.development.maturation_duration_ticks,
++        )))
++        .unwrap();
++    let (expected, _) = PhenotypeCompiler::compile_n2048_experimental_foundation_candidate(
++        expressed.brain_genome,
++        development,
++        foundation.clone(),
++    )
++    .unwrap();
++    let (composite_ref, mut entries) = persist_composite_genetic_birth_assets(
++        &root,
++        &genome,
++        &foundation,
++        expected.phenotype_hash(),
++    )
++    .unwrap();
++    let lifetime_state = CreatureLifetimeStateAsset {
++        schema_version: 1,
++        organism_id: OrganismId(1),
++        memory_records: vec![CreatureLifetimeMemoryRecord {
++            memory_id: MemoryId(41),
++            source_organism_id: OrganismId(1),
++            value_q16: 41_001,
++        }],
++        lifetime_weight_values: vec![
++            CreatureLifetimeWeightValue {
++                synapse_index: 17,
++                value: 0.125,
++            },
++            CreatureLifetimeWeightValue {
++                synapse_index: 29,
++                value: -0.25,
++            },
++        ],
++    };
++    let (lifetime_ref, lifetime_entry) =
++        persist_creature_lifetime_state_asset(&root, &lifetime_state).unwrap();
++    entries.push(lifetime_entry);
++    let mut creature = fixture_creature();
++    creature.genome_id = genome.id;
++    creature.brain_class = BrainScaleTier::Standard2048;
++    creature.composite_genetics = Some(composite_ref);
++    creature.lifetime_state_asset = Some(lifetime_ref);
++    creature.mind.memory_record_count = 1;
++    creature.mind.memory_source_ids = vec![MemoryId(41)];
++    creature.weights.lifetime_consolidated_entries = 2;
++    creature.weights.generated_weight_asset_id = None;
++    let mut world = fixture_world();
++    world.enable_island_for_new_game().unwrap();
++    let save = PortableSaveFile::from_headless_world(
++        "anchored-v2-composite-genetic-restore",
++        &world,
++        RuntimeConfig::deterministic_default(4242, BrainScaleTier::Standard2048),
++        AssetManifest {
++            schema: P34_ASSET_MANIFEST_SCHEMA.to_string(),
++            schema_version: P34_ASSET_MANIFEST_SCHEMA_VERSION,
++            entries,
++        },
++        vec![creature],
++    )
++    .unwrap();
++    let path = root.join("population.alife.json");
++    save.to_json_file(&path).unwrap();
++    let restored = PortableSaveFile::from_json_file(&path).unwrap();
++    restored.validate_with_asset_root(&root).unwrap();
++    assert_eq!(restored.world, save.world);
++    assert_eq!(restored.creatures, save.creatures);
++    let restored_world = restored.restore_headless_world().unwrap();
++    assert_eq!(restored_world.terrain_binding(), world.terrain_binding());
++    // Fixture agents normalize their allocator when saved; compare that exact snapshot.
++    let expected_world = save.restore_headless_world().unwrap();
++    assert_eq!(
++        restored_world.canonical_signature_digest().unwrap(),
++        expected_world.canonical_signature_digest().unwrap()
++    );
++    let genetic_birth = restored
++        .load_composite_genetic_birth(OrganismId(1), &root)
++        .unwrap();
++    let restored_lifetime = restored
++        .load_creature_lifetime_state(OrganismId(1), &root)
++        .unwrap();
++
++    assert_eq!(genetic_birth.creature_genome, genome);
++    assert_eq!(genetic_birth.phenotype_hash, expected.phenotype_hash());
++    assert_eq!(genetic_birth.foundation.digest(), foundation.digest());
++    assert_eq!(restored_lifetime, lifetime_state);
++    assert!(!restored_lifetime.memory_records.is_empty());
++    assert!(!restored_lifetime.lifetime_weight_values.is_empty());
++
++    fs::remove_dir_all(root).unwrap();
++}
++
+ fn habitat_id(raw: u64) -> HabitatId {
+     HabitatId::new(raw).unwrap()
+ }
+--- a/crates/alife_training/examples/probe_weight_space_care.rs
++++ b/crates/alife_training/examples/probe_weight_space_care.rs
+@@ -37,11 +37,11 @@
+         &r.phenotype().development_state_at(Tick::ZERO)?,
+     )?;
+     if experimental {
+-        let (p, _) = PhenotypeCompiler::compile_n2048_experimental_graph(
+-            genome.clone(),
+-            development.clone(),
+-            config.sensor_profile,
+-        )?;
++        let (p, _) = if std::env::var_os("ALIFE_RESEARCH_ANCHORED_V2").is_some() {
++            PhenotypeCompiler::compile_n2048_anchored_v2_graph(genome.clone(),development.clone(),config.sensor_profile)?
++        } else {
++            PhenotypeCompiler::compile_n2048_experimental_graph(genome.clone(),development.clone(),config.sensor_profile)?
++        };
+         let asset = FoundationWeightAsset::from_trained_weights(
+             &p,
+             p.synapses().iter().map(|s| s.genetic_weight()).collect(),
+--- /dev/null
++++ b/crates/alife_core/src/phenotype/experimental_sensor_anchor.rs
+@@ -0,0 +1,187 @@
++//! Research V2 sensory anchors; generated from the measured V1 reference founder.
++pub(crate) const SENSOR_SEED: u64 = 11816290028740035529;
++pub(crate) const PORTS: &[(u16, u16, u32)] = &[
++    (1, 36, 0),
++    (1, 17, 1),
++    (1, 26, 3),
++    (1, 1, 4),
++    (2, 6, 5),
++    (1, 23, 6),
++    (1, 12, 7),
++    (1, 35, 10),
++    (1, 8, 11),
++    (1, 21, 12),
++    (2, 9, 13),
++    (1, 3, 15),
++    (1, 19, 18),
++    (1, 34, 20),
++    (2, 12, 21),
++    (1, 10, 22),
++    (1, 24, 22),
++    (1, 25, 23),
++    (1, 17, 24),
++    (1, 26, 24),
++    (1, 27, 25),
++    (1, 5, 26),
++    (1, 28, 26),
++    (1, 29, 27),
++    (1, 30, 28),
++    (1, 23, 29),
++    (1, 31, 29),
++    (1, 33, 30),
++    (1, 12, 33),
++    (1, 21, 35),
++    (1, 7, 37),
++    (1, 32, 40),
++    (1, 19, 41),
++    (2, 0, 42),
++    (2, 1, 43),
++    (1, 14, 44),
++    (2, 2, 44),
++    (1, 32, 45),
++    (2, 3, 45),
++    (1, 33, 46),
++    (2, 4, 46),
++    (1, 34, 47),
++    (2, 5, 47),
++    (1, 9, 48),
++    (1, 35, 48),
++    (2, 6, 48),
++    (1, 36, 49),
++    (1, 39, 49),
++    (2, 7, 49),
++    (1, 37, 50),
++    (2, 8, 50),
++    (1, 27, 51),
++    (1, 38, 51),
++    (2, 9, 51),
++    (1, 5, 52),
++    (1, 39, 52),
++    (2, 10, 52),
++    (2, 11, 53),
++    (2, 12, 54),
++    (1, 0, 56),
++    (2, 4, 58),
++    (1, 38, 59),
++    (1, 7, 63),
++    (1, 30, 66),
++    (2, 7, 66),
++    (1, 2, 67),
++    (1, 37, 69),
++    (1, 9, 74),
++    (2, 10, 74),
++    (1, 16, 75),
++    (1, 17, 76),
++    (1, 18, 77),
++    (1, 4, 78),
++    (1, 19, 78),
++    (1, 20, 79),
++    (1, 21, 80),
++    (1, 22, 81),
++    (1, 23, 82),
++    (1, 11, 85),
++    (1, 6, 89),
++    (1, 2, 93),
++    (1, 13, 96),
++    (1, 28, 99),
++    (1, 18, 103),
++    (1, 4, 104),
++    (1, 15, 107),
++    (1, 16, 109),
++    (2, 2, 111),
++    (1, 22, 114),
++    (1, 31, 114),
++    (1, 6, 115),
++    (1, 1, 119),
++    (2, 5, 119),
++    (1, 20, 120),
++    (1, 0, 124),
++    (1, 1, 125),
++    (1, 2, 126),
++    (1, 8, 126),
++    (1, 18, 126),
++    (1, 3, 127),
++    (2, 8, 127),
++    (1, 4, 128),
++    (1, 5, 129),
++    (1, 3, 130),
++    (1, 6, 130),
++    (1, 7, 131),
++    (1, 8, 132),
++    (1, 16, 132),
++    (1, 9, 133),
++    (1, 15, 133),
++    (1, 10, 134),
++    (1, 11, 135),
++    (1, 12, 136),
++    (1, 10, 137),
++    (1, 13, 137),
++    (1, 22, 137),
++    (1, 14, 138),
++    (1, 15, 139),
++    (1, 20, 143),
++    (1, 1, 145),
++    (1, 29, 147),
++    (1, 12, 148),
++    (1, 18, 149),
++    (1, 16, 155),
++    (1, 3, 156),
++    (1, 14, 159),
++    (1, 22, 160),
++    (1, 24, 163),
++    (2, 0, 164),
++    (1, 20, 166),
++    (1, 5, 167),
++    (1, 37, 167),
++    (1, 0, 171),
++    (2, 3, 172),
++    (1, 12, 174),
++    (1, 36, 177),
++    (1, 7, 178),
++    (2, 6, 180),
++    (1, 14, 185),
++    (1, 35, 187),
++    (1, 9, 189),
++    (1, 0, 197),
++    (1, 34, 197),
++    (1, 11, 200),
++    (1, 33, 207),
++    (1, 2, 208),
++    (1, 13, 211),
++    (1, 25, 211),
++    (1, 9, 215),
++    (2, 11, 216),
++    (1, 32, 217),
++    (1, 4, 219),
++    (2, 1, 225),
++    (1, 11, 226),
++    (1, 39, 226),
++    (1, 19, 228),
++    (1, 6, 230),
++    (1, 17, 234),
++    (1, 38, 236),
++    (1, 13, 237),
++    (1, 23, 239),
++    (1, 8, 241),
++    (1, 21, 245),
++    (1, 37, 246),
++    (1, 15, 248),
++    (1, 19, 251),
++    (1, 10, 252),
++    (3, 0, 256),
++    (3, 3, 257),
++    (3, 7, 258),
++    (3, 1, 259),
++    (3, 2, 260),
++    (3, 4, 261),
++    (3, 5, 262),
++    (3, 6, 263),
++    (3, 8, 264),
++    (3, 9, 265),
++    (3, 10, 266),
++    (3, 11, 267),
++    (3, 12, 268),
++    (3, 13, 269),
++    (3, 14, 270),
++    (3, 15, 271),
++];
+--- /dev/null
++++ b/crates/alife_core/tests/n2048_anchored_v2.rs
+@@ -0,0 +1,274 @@
++use alife_core::*;
++#[test]
++fn anchored_v2_has_distinct_identity_and_exact_asset_roundtrip() {
++    let g = BrainGenome::scaffold(0x2048_2026, BrainCapacityClass::N2048_ID);
++    let d = DevelopmentState::new(g.id, Tick::ZERO, NormalizedScalar::new(1.0).unwrap());
++    let (v1, _) = PhenotypeCompiler::compile_n2048_experimental_graph(
++        g.clone(),
++        d.clone(),
++        SensorProfile::GroundedObjectSlotsV1,
++    )
++    .unwrap();
++    let (v2, _) = PhenotypeCompiler::compile_n2048_anchored_v2_graph(
++        g.clone(),
++        d.clone(),
++        SensorProfile::GroundedObjectSlotsV1,
++    )
++    .unwrap();
++    assert_ne!(v1.phenotype_hash(), v2.phenotype_hash());
++    assert_ne!(v1.route_abi_digest(), v2.route_abi_digest());
++    assert_eq!(v1.synapses().len(), v2.synapses().len());
++    assert!(v1
++        .synapses()
++        .iter()
++        .zip(v2.synapses())
++        .all(|(a, b)| a.source() == b.source()
++            && a.target() == b.target()
++            && a.route_index() == b.route_index()
++            && a.kind() == b.kind()));
++    let source = FoundationWeightAsset::decode_canonical(include_bytes!(concat!(
++        env!("CARGO_MANIFEST_DIR"),
++        "/../../assets/foundations/experimental-whole-care-bold-v1.alife-foundation"
++    )))
++    .unwrap();
++    let asset = FoundationWeightAsset::from_trained_weights(
++        &v2,
++        source.weights().to_vec(),
++        source.manifest().training_stage(),
++    )
++    .unwrap();
++    assert!(asset.is_n2048_anchored_v2());
++    assert_ne!(
++        asset.manifest().foundation_id(),
++        source.manifest().foundation_id()
++    );
++    let bytes = asset.encode_canonical().unwrap();
++    assert_eq!(
++        FoundationWeightAsset::decode_canonical(&bytes).unwrap(),
++        asset
++    );
++    let (bound, _) = PhenotypeCompiler::compile_n2048_experimental_foundation_candidate(
++        g.clone(),
++        d.clone(),
++        asset.clone(),
++    )
++    .unwrap();
++    assert!(bound
++        .synapses()
++        .iter()
++        .zip(source.weights())
++        .all(|(s, w)| s.genetic_weight().to_bits() == w.to_bits()));
++    assert!(PhenotypeCompiler::compile_n2048_foundation_candidate(g, d, asset).is_err());
++}
++
++#[test]
++fn anchored_v2_offspring_keep_port_meanings_and_bind_child_abis() {
++    let identity = FoundationGeneticIdentity::new(
++        FoundationId::N2048_EXPERIMENTAL_ANCHORED_V2.raw(),
++        1,
++        FoundationCompatibilityFamilyId::N2048_EXPERIMENTAL_ANCHORED.raw(),
++        BrainCapacityClass::N2048_ID,
++    )
++    .unwrap();
++    let raw_mother = CreatureGenome::early_mammal_founder(701, identity).unwrap();
++    let e = raw_mother.express().unwrap();
++    let d = e
++        .development_state_at(Tick::new(u64::from(
++            e.development.maturation_duration_ticks,
++        )))
++        .unwrap();
++    let (p, _) = PhenotypeCompiler::compile_n2048_anchored_v2_graph(
++        e.brain_genome,
++        d,
++        SensorProfile::GroundedObjectSlotsV1,
++    )
++    .unwrap();
++    let v1 = FoundationWeightAsset::decode_canonical(include_bytes!(concat!(
++        env!("CARGO_MANIFEST_DIR"),
++        "/../../assets/foundations/experimental-whole-care-bold-v1.alife-foundation"
++    )))
++    .unwrap();
++    let source = FoundationWeightAsset::from_trained_weights(
++        &p,
++        v1.weights().to_vec(),
++        v1.manifest().training_stage(),
++    )
++    .unwrap();
++    let mother = raw_mother
++        .with_n2048_foundation_candidate(source.clone())
++        .unwrap();
++    let father = CreatureGenome::early_mammal_founder(702, identity)
++        .unwrap()
++        .with_n2048_foundation_candidate(source.clone())
++        .unwrap();
++    let ports = |p: &BrainPhenotype| {
++        p.sensor_encoder()
++            .assignments()
++            .iter()
++            .map(|a| (a.source_group().raw(), a.source_index(), a.target_neuron()))
++            .collect::<std::collections::BTreeSet<_>>()
++    };
++    let reference = ports(&p);
++    let reserved = reference
++        .iter()
++        .map(|x| x.2)
++        .collect::<std::collections::BTreeSet<_>>();
++    for seed in 703..713 {
++        let child = CreatureGenome::reproduce(&mother, &father, seed).unwrap();
++        let e = child.express().unwrap();
++        let d = e
++            .development_state_at(Tick::new(u64::from(
++                e.development.maturation_duration_ticks,
++            )))
++            .unwrap();
++        let (fresh, _) = PhenotypeCompiler::compile_n2048_anchored_v2_graph(
++            e.brain_genome.clone(),
++            d.clone(),
++            SensorProfile::GroundedObjectSlotsV1,
++        )
++        .unwrap();
++        let child_ports = ports(&fresh);
++        for added in child_ports.difference(&reference) {
++            assert!(
++                !reserved.contains(&added.2),
++                "child extra reused a reference target: {added:?}"
++            );
++        }
++        assert!(p
++            .synapses()
++            .iter()
++            .zip(fresh.synapses())
++            .all(|(a, b)| a.source() == b.source()
++                && a.target() == b.target()
++                && a.route_index() == b.route_index()
++                && a.kind() == b.kind()));
++        let rebound = FoundationWeightAsset::from_trained_weights(
++            &fresh,
++            source.weights().to_vec(),
++            source.manifest().training_stage(),
++        )
++        .unwrap();
++        let (bound, _) = PhenotypeCompiler::compile_n2048_experimental_foundation_candidate(
++            e.brain_genome,
++            d,
++            rebound,
++        )
++        .unwrap();
++        assert!(bound
++            .synapses()
++            .iter()
++            .zip(source.weights())
++            .all(|(s, w)| s.genetic_weight().to_bits() == w.to_bits()));
++        println!(
++            "seed={seed} parent_ports={} child_ports={} lost={} added={} bits_preserved={}",
++            reference.len(),
++            child_ports.len(),
++            reference.difference(&child_ports).count(),
++            child_ports.difference(&reference).count(),
++            source.weights().len()
++        );
++    }
++}
++
++#[test]
++fn anchored_v2_reproduction_binds_child_weights_for_multiple_generations() {
++    let identity = FoundationGeneticIdentity::new(
++        FoundationId::N2048_EXPERIMENTAL_ANCHORED_V2.raw(),
++        1,
++        FoundationCompatibilityFamilyId::N2048_EXPERIMENTAL_ANCHORED.raw(),
++        BrainCapacityClass::N2048_ID,
++    )
++    .unwrap();
++    let raw = CreatureGenome::early_mammal_founder(701, identity).unwrap();
++    let e = raw.express().unwrap();
++    let d = e
++        .development_state_at(Tick::new(u64::from(
++            e.development.maturation_duration_ticks,
++        )))
++        .unwrap();
++    let (p, _) = PhenotypeCompiler::compile_n2048_anchored_v2_graph(
++        e.brain_genome,
++        d,
++        SensorProfile::GroundedObjectSlotsV1,
++    )
++    .unwrap();
++    let v1 = FoundationWeightAsset::decode_canonical(include_bytes!(concat!(
++        env!("CARGO_MANIFEST_DIR"),
++        "/../../assets/foundations/experimental-whole-care-bold-v1.alife-foundation"
++    )))
++    .unwrap();
++    let source = FoundationWeightAsset::from_trained_weights(
++        &p,
++        v1.weights().to_vec(),
++        v1.manifest().training_stage(),
++    )
++    .unwrap();
++    let mut mother = raw.with_n2048_foundation_candidate(source.clone()).unwrap();
++    let mut father = CreatureGenome::early_mammal_founder(702, identity)
++        .unwrap()
++        .with_n2048_foundation_candidate(source.clone())
++        .unwrap();
++    for generation in 0..10 {
++        let child = CreatureGenome::reproduce(&mother, &father, 703 + generation).unwrap();
++        let asset = child.n2048_foundation_candidate.as_ref().unwrap();
++        assert!(asset.is_n2048_anchored_v2());
++        assert_eq!(
++            asset
++                .weights()
++                .iter()
++                .map(|x| x.to_bits())
++                .collect::<Vec<_>>(),
++            source
++                .weights()
++                .iter()
++                .map(|x| x.to_bits())
++                .collect::<Vec<_>>()
++        );
++        let e = child.express().unwrap();
++        let d = e
++            .development_state_at(Tick::new(u64::from(
++                e.development.maturation_duration_ticks,
++            )))
++            .unwrap();
++        let (bound, _) = PhenotypeCompiler::compile_n2048_experimental_foundation_candidate(
++            e.brain_genome,
++            d,
++            asset.clone(),
++        )
++        .unwrap();
++        assert_eq!(bound.sensor_profile(), SensorProfile::GroundedObjectSlotsV1);
++        println!(
++            "generation={generation} ports={} inherited_weight_bits={}",
++            bound.sensor_encoder().assignments().len(),
++            asset.weights().len()
++        );
++        father = mother;
++        mother = child;
++    }
++    let e = mother.express().unwrap();
++    let d = e
++        .development_state_at(Tick::new(u64::from(
++            e.development.maturation_duration_ticks,
++        )))
++        .unwrap();
++    let (p, _) = PhenotypeCompiler::compile_n2048_experimental_foundation_candidate(
++        e.brain_genome,
++        d,
++        mother.n2048_foundation_candidate.clone().unwrap(),
++    )
++    .unwrap();
++    let mut changed = source.weights().to_vec();
++    changed[0] += 0.125;
++    let asset = FoundationWeightAsset::from_trained_weights(
++        &p,
++        changed,
++        source.manifest().training_stage(),
++    )
++    .unwrap();
++    let mutated = mother
++        .clone()
++        .with_n2048_foundation_candidate(asset)
++        .unwrap();
++    assert!(!father.compatible_n2048_foundation_assets(&mutated));
++    assert!(CreatureGenome::reproduce(&father, &mutated, 999).is_err());
++}
+--- /dev/null
++++ b/crates/alife_training/examples/research_dump_founder_anchor.rs
+@@ -0,0 +1,17 @@
++#[allow(dead_code)]
++#[path = "probe_weight_space_care.rs"]
++mod base;
++use alife_core::*;
++use alife_world::*;
++fn main() -> Result<(), Box<dyn std::error::Error>> {
++    let seed=2026111560u64;
++    let (mut config, phenotype, _) = base::source(seed,true)?;
++    let anchor=serde_json::to_vec_pretty(phenotype.sensor_encoder())?;
++    std::fs::write("/workspace/scratch/ee5e08a3ca9b/base-weight-study-20261110/v2-reference-anchor.json",anchor)?;
++    config.brain_class=BrainScaleTier::Standard2048;
++    let asset=FoundationWeightAsset::builtin_n2048_v1(config.sensor_profile)?;
++    let world=create_canonical_new_game_with_n2048_candidate(&config,&asset)?;
++    let record=world.world.organism_registry().iter().next().ok_or("no founder")?;
++    println!("reference_sensor_seed={} assignments={}",record.phenotype().brain_genome.seeds.sensor_layout_seed,phenotype.sensor_encoder().assignments().len());
++    Ok(())
++}
+--- /dev/null
++++ b/crates/alife_training/examples/research_generate_anchored_v2.rs
+@@ -0,0 +1,26 @@
++#[allow(dead_code)]
++#[path = "probe_weight_space_care.rs"]
++mod base;
++use alife_core::*;
++use alife_runtime::canonical_preparation::foundation_construction_development;
++use alife_world::*;
++fn main() -> Result<(), Box<dyn std::error::Error>> {
++    let seed=2026111560u64;
++    let (config,v1,_) = base::source(seed,true)?;
++    let standard=FoundationWeightAsset::builtin_n2048_v1(config.sensor_profile)?;
++    let game=create_canonical_new_game_with_n2048_candidate(&config,&standard)?;
++    let r=game.world.organism_registry().iter().next().ok_or("no founder")?;
++    let genome=r.phenotype().brain_genome.clone();
++    let d=foundation_construction_development(&genome,&BrainCapacityClass::n2048(),&r.phenotype().development_state_at(Tick::ZERO)?)?;
++    let (v2,_) = PhenotypeCompiler::compile_n2048_anchored_v2_graph(genome.clone(),d.clone(),config.sensor_profile)?;
++    assert_eq!(v1.sensor_encoder(),v2.sensor_encoder(),"reference sensor plan changed");
++    assert!(v1.synapses().iter().zip(v2.synapses()).all(|(a,b)|a.source()==b.source()&&a.target()==b.target()&&a.route_index()==b.route_index()&&a.kind()==b.kind()));
++    let v1_asset=FoundationWeightAsset::decode_canonical(include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"),"/../../assets/foundations/experimental-whole-care-bold-v1.alife-foundation")))?;
++    let asset=FoundationWeightAsset::from_trained_weights(&v2,v1_asset.weights().to_vec(),v1_asset.manifest().training_stage())?;
++    let (bound,_) = PhenotypeCompiler::compile_n2048_experimental_foundation_candidate(genome,d,asset.clone())?;
++    assert!(bound.synapses().iter().zip(v1_asset.weights()).all(|(s,w)|s.genetic_weight().to_bits()==w.to_bits()));
++    let path="/workspace/scratch/ee5e08a3ca9b/base-weight-study-20261110/experimental-anchored-v2-research.alife-foundation";
++    let mut out=std::fs::OpenOptions::new().write(true).create_new(true).open(path)?; use std::io::Write;out.write_all(&asset.encode_canonical()?)?;
++    println!("research_v2 distinct_id={:?} sensory_equal=true synapse_coordinates_equal=true weight_bits_equal=true path={path}",asset.manifest().foundation_id());
++    Ok(())
++}
