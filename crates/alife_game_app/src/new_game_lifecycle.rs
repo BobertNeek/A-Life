@@ -706,39 +706,12 @@ mod tests {
     #[test]
     fn experimental_founder_runs_an_offline_software_vulkan_tick() {
         let seed = 246_810;
-        let mut founder_config = CanonicalNewGameConfig::phase3(seed, 1).unwrap();
-        founder_config.brain_class = BrainScaleTier::Standard2048;
-        let standard =
-            FoundationWeightAsset::builtin_n2048_v1(founder_config.sensor_profile).unwrap();
-        let initial =
-            alife_world::create_canonical_new_game_with_n2048_candidate(&founder_config, &standard)
-                .unwrap();
-        let genome = initial
-            .world
-            .organism_registry()
-            .get(OrganismId(1))
-            .unwrap()
-            .phenotype()
-            .brain_genome
-            .clone();
-        let development =
-            DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(1.0).unwrap());
-        let (phenotype, _) = PhenotypeCompiler::compile_n2048_experimental_graph(
-            genome,
-            development,
-            founder_config.sensor_profile,
-        )
+        let candidate = FoundationWeightAsset::decode_canonical(include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../assets/foundations/experimental-whole-care-bold-v1.alife-foundation"
+        )))
         .unwrap();
-        let candidate = FoundationWeightAsset::from_trained_weights(
-            &phenotype,
-            phenotype
-                .synapses()
-                .iter()
-                .map(|s| s.genetic_weight())
-                .collect(),
-            TrainingStageManifest::bootstrap(),
-        )
-        .unwrap();
+        assert!(candidate.is_n2048_experimental_graph());
         let nonce = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -798,40 +771,10 @@ mod tests {
     #[test]
     fn experimental_founder_stages_and_roundtrips_without_reinterpreting_standard_assets() {
         let seed = 240_826;
-        // Build the candidate on this founder's expressed graph, so reload
-        // validates the same inherited coordinates and decoder ABI.
-        let mut founder_config = CanonicalNewGameConfig::phase3(seed, 1).unwrap();
-        founder_config.brain_class = BrainScaleTier::Standard2048;
-        let initial_founder = alife_world::create_canonical_new_game_with_n2048_candidate(
-            &founder_config,
-            &FoundationWeightAsset::builtin_n2048_v1(founder_config.sensor_profile).unwrap(),
-        )
-        .unwrap();
-        let genome = initial_founder
-            .world
-            .organism_registry()
-            .get(OrganismId(1))
-            .unwrap()
-            .phenotype()
-            .brain_genome
-            .clone();
-        let development =
-            DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(1.0).unwrap());
-        let (baseline, _) = PhenotypeCompiler::compile_n2048_experimental_graph(
-            genome,
-            development,
-            SensorProfile::GroundedObjectSlotsV1,
-        )
-        .unwrap();
-        let candidate = FoundationWeightAsset::from_trained_weights(
-            &baseline,
-            baseline
-                .synapses()
-                .iter()
-                .map(|s| s.genetic_weight())
-                .collect(),
-            TrainingStageManifest::bootstrap(),
-        )
+        let candidate = FoundationWeightAsset::decode_canonical(include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../assets/foundations/experimental-whole-care-bold-v1.alife-foundation"
+        )))
         .unwrap();
         assert!(candidate.is_n2048_experimental_graph());
         let nonce = std::time::SystemTime::now()
