@@ -57,3 +57,11 @@ Apply long-seed2.patch (SHA-256 5e6541820eb22c76214818c37b1b2908cf68df9a2be0b22c
 ## Candidate/sham checkpoint boundary
 
 A focused CPU test created a fresh Candidate76 contact host and saved it before any world step. Restoring that candidate payload as the equal-work Sham76 policy was rejected; the original candidate host remained byte-identical and restored successfully as Candidate76. This establishes the tested direction at the initial boundary, not every possible cross-owner, later-state, or corruption case. Apply cross-owner.patch (SHA-256 cd59b9d9fa52cbe822721fb34a4bf6f65f87dd520f356470ea27be643ef41e2e) after long-seed2.patch and run the exact test ending additive_candidate_sham_cross_restore_rejected. It passed; 281 other tests were filtered out.
+
+## Contact sampler gradient checks
+
+I adapted the existing channel-native synthetic sampler tests to the actual-contact owner and RNG domain. Eleven tests passed on CPU, including numerical checks of the joint score gradients, shared Idle/Quiet gradient accounting, normalized support, and proof-context validation. These checks do not update synapses and are not evidence that learning works in the combined host.
+
+The first reused suite passed 10 and failed the counter-tamper assertion. The test assumed adjacent random counters must choose different bundles; in the contact RNG domain they can coincidentally choose the same bundle. I corrected the test to validate the counter against the known expected sampling context rather than infer tampering from the sampled result. The second run passed all 11. This was a test-assumption correction, not a demonstrated production bug fix.
+
+After the previous integration and test-permit patches, contact-math.patch (SHA-256 0278f36e9c0b8e26c132c94835df0aa33195cda19dc8e516599123e4e705ac5c) registers the contact-specific tests. Run the exact filter cpu::motor_mediation::confidence::policy::optional_vocal::actual_contact::shared_math_tests::. The full test process reported 11 passed and 282 filtered out. The patch was checked for applicability; no production behavior was enabled.
