@@ -39,6 +39,9 @@ pub enum NewGameFounderSelection {
     N2048Candidate {
         asset_path: PathBuf,
     },
+    N2048ExperimentalCandidate {
+        asset_path: PathBuf,
+    },
 }
 
 impl NewGameFounderSelection {
@@ -46,6 +49,13 @@ impl NewGameFounderSelection {
         match value {
             "builtin-nano512" => Ok(Self::BuiltinNano512),
             "scaled-choice-nociceptive-v1" => Ok(Self::ScaledChoiceNociceptiveV1),
+            _ if value.starts_with("n2048-experimental:")
+                && value.len() > "n2048-experimental:".len() =>
+            {
+                Ok(Self::N2048ExperimentalCandidate {
+                    asset_path: PathBuf::from(&value["n2048-experimental:".len()..]),
+                })
+            }
             _ if value.starts_with("n2048:") && value.len() > "n2048:".len() => {
                 Ok(Self::N2048Candidate {
                     asset_path: PathBuf::from(&value["n2048:".len()..]),
@@ -115,6 +125,14 @@ pub fn stage_phase3_new_game_with_founder(
             alife_world::create_canonical_new_game_with_nociceptive_candidate(
                 &config,
                 &scaled_choice_candidate()?,
+            )?
+        }
+        NewGameFounderSelection::N2048ExperimentalCandidate { asset_path } => {
+            config.brain_class = BrainScaleTier::Standard2048;
+            let asset = FoundationWeightAsset::decode_canonical(&fs::read(asset_path)?)?;
+            config.sensor_profile = asset.manifest().sensor_profile();
+            alife_world::create_canonical_new_game_with_n2048_experimental_candidate(
+                &config, &asset,
             )?
         }
         NewGameFounderSelection::N2048Candidate { asset_path } => {
@@ -218,7 +236,10 @@ fn create_canonical_new_game_runtime_using_backend(
     create_backend: impl FnOnce() -> Result<GpuClosedLoopBackend, alife_core::ScaffoldContractError>,
 ) -> Result<CanonicalNewGameLaunchResult, GameAppShellError> {
     let brain_class = match &founder {
-        NewGameFounderSelection::N2048Candidate { .. } => BrainScaleTier::Standard2048,
+        NewGameFounderSelection::N2048Candidate { .. }
+        | NewGameFounderSelection::N2048ExperimentalCandidate { .. } => {
+            BrainScaleTier::Standard2048
+        }
         _ => BrainScaleTier::Nano512,
     };
     let staged = stage_phase3_new_game_with_founder(request, founder)?;
@@ -537,6 +558,22 @@ mod tests {
     };
 
     #[test]
+    fn experimental_founder_is_an_explicit_fresh_game_selection() {
+        assert_eq!(
+            NewGameFounderSelection::parse("n2048-experimental:/tmp/brain.alife-foundation")
+                .unwrap(),
+            NewGameFounderSelection::N2048ExperimentalCandidate {
+                asset_path: PathBuf::from("/tmp/brain.alife-foundation")
+            },
+        );
+        assert!(NewGameFounderSelection::parse("n2048-experimental:").is_err());
+        assert!(matches!(
+            NewGameFounderSelection::parse("n2048:/tmp/brain.alife-foundation").unwrap(),
+            NewGameFounderSelection::N2048Candidate { .. }
+        ));
+    }
+
+    #[test]
     fn n2048_new_game_save_reload_preserves_exact_candidate_and_class() {
         let seed = 240_826;
         let capacity = BrainCapacityClass::n2048();
@@ -643,6 +680,132 @@ mod tests {
             NormalizedScalar::new(1.0).unwrap(),
         );
         let (compiled, _) = PhenotypeCompiler::compile_n2048_foundation_candidate(
+            brain_genome,
+            development,
+            restored_asset,
+        )
+        .unwrap();
+        assert_eq!(compiled.brain_class_id(), BrainCapacityClass::N2048_ID);
+        assert_eq!(
+            compiled
+                .synapses()
+                .iter()
+                .map(|synapse| synapse.genetic_weight().to_bits())
+                .collect::<Vec<_>>(),
+            candidate
+                .weights()
+                .iter()
+                .map(|weight| weight.to_bits())
+                .collect::<Vec<_>>()
+        );
+        fs::remove_file(&staged.save_path).unwrap();
+        fs::remove_dir(&root).unwrap();
+    }
+
+    #[test]
+    fn experimental_founder_stages_and_roundtrips_without_reinterpreting_standard_assets() {
+        let seed = 240_826;
+        // Build the candidate on this founder's expressed graph, so reload
+        // validates the same inherited coordinates and decoder ABI.
+        let mut founder_config = CanonicalNewGameConfig::phase3(seed, 1).unwrap();
+        founder_config.brain_class = BrainScaleTier::Standard2048;
+        let initial_founder = alife_world::create_canonical_new_game_with_n2048_candidate(
+            &founder_config,
+            &FoundationWeightAsset::builtin_n2048_v1(founder_config.sensor_profile).unwrap(),
+        )
+        .unwrap();
+        let genome = initial_founder
+            .world
+            .organism_registry()
+            .get(OrganismId(1))
+            .unwrap()
+            .phenotype()
+            .brain_genome
+            .clone();
+        let development =
+            DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(1.0).unwrap());
+        let (baseline, _) = PhenotypeCompiler::compile_n2048_experimental_graph(
+            genome,
+            development,
+            SensorProfile::GroundedObjectSlotsV1,
+        )
+        .unwrap();
+        let candidate = FoundationWeightAsset::from_trained_weights(
+            &baseline,
+            baseline
+                .synapses()
+                .iter()
+                .map(|s| s.genetic_weight())
+                .collect(),
+            TrainingStageManifest::bootstrap(),
+        )
+        .unwrap();
+        assert!(candidate.is_n2048_experimental_graph());
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "alife-n2048-experimental-new-game-{}-{nonce}",
+            std::process::id()
+        ));
+        fs::create_dir(&root).unwrap();
+        let candidate_path = root.join("candidate.alife-foundation");
+        fs::write(&candidate_path, candidate.encode_canonical().unwrap()).unwrap();
+        let mut config = RuntimeConfig::deterministic_default(seed, BrainScaleTier::Nano512);
+        config.features.gpu_backend_enabled = true;
+        let staged = stage_phase3_new_game_with_founder(
+            CanonicalNewGameLaunchRequest {
+                world_seed: seed,
+                population: 1,
+                disable_age_death: true,
+                save_path: root.join("world.json"),
+                asset_root: root.clone(),
+                config,
+                assets: AssetManifest::empty(),
+            },
+            NewGameFounderSelection::parse(&format!(
+                "n2048-experimental:{}",
+                candidate_path.display()
+            ))
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(staged.save.config.brain_class, BrainScaleTier::Standard2048);
+        assert_eq!(
+            staged.save.creatures[0].brain_class,
+            BrainScaleTier::Standard2048
+        );
+        staged.save.to_json_file(&staged.save_path).unwrap();
+        // Loading must depend on the saved genome, not the original CLI asset path.
+        fs::remove_file(&candidate_path).unwrap();
+        let loaded = PortableSaveFile::from_json_file(&staged.save_path).unwrap();
+        loaded.validate_with_asset_root(&root).unwrap();
+        assert_eq!(loaded.config.brain_class, BrainScaleTier::Standard2048);
+        let world = loaded.restore_headless_world().unwrap();
+        assert!(world.age_death_disabled());
+        assert_eq!(
+            world.canonical_signature_digest().unwrap(),
+            staged.world.canonical_signature_digest().unwrap()
+        );
+        let admission = world
+            .organism_registry()
+            .get(OrganismId(1))
+            .unwrap()
+            .authoritative_admission_at(world.tick())
+            .unwrap();
+        let restored_asset = admission.genome.n2048_foundation_candidate.unwrap();
+        assert_eq!(
+            restored_asset.encode_canonical().unwrap(),
+            candidate.encode_canonical().unwrap()
+        );
+        let brain_genome = admission.phenotype.brain_genome;
+        let development = DevelopmentState::new(
+            brain_genome.id,
+            Tick::ZERO,
+            NormalizedScalar::new(1.0).unwrap(),
+        );
+        let (compiled, _) = PhenotypeCompiler::compile_n2048_experimental_foundation_candidate(
             brain_genome,
             development,
             restored_asset,
