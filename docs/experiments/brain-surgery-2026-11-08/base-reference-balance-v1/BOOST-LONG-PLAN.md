@@ -1,0 +1,3 @@
+# Longer-horizon boost candidate comparison
+
+The 1.25× two-weight boost showed more food consumed by 32 steps in small CPU seed sets. Determine whether it changes eventual success or primarily timing, and whether bitter outcomes change over longer exposure. Freeze the exact prior binary and source candidate. Four fresh paired seeds 2026111522–1525, far positive food and harmless bitter food, two arms, 120 neural steps per trial: 16 CPU trials. The examples use newborn physiology with initial body energy 0.4; no claims about high fatigue, lifetime learning, live saves or GPU gameplay. Record physical outcomes and first consumption step, plus full receipt hashes, exact weight edits and cold/optimizer checks. No candidate is promoted on this bounded result alone.
