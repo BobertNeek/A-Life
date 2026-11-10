@@ -1,0 +1,1166 @@
+{
+  "complete": true,
+  "main": "c3aec16df33861f1316d127736f5f60eea327ede",
+  "trials": [
+    {
+      "seed": 2026111534,
+      "scene": "far-food",
+      "arm": "whole-care-ingest-boost",
+      "target_active": false,
+      "cold_next_step_exact": true,
+      "optimizer_unchanged": true,
+      "candidate_digest": [
+        76,
+        12,
+        46,
+        215,
+        189,
+        144,
+        7,
+        26,
+        132,
+        194,
+        254,
+        152,
+        23,
+        237,
+        210,
+        245,
+        97,
+        167,
+        135,
+        132,
+        241,
+        141,
+        129,
+        107,
+        116,
+        54,
+        86,
+        237,
+        187,
+        91,
+        176,
+        212
+      ],
+      "neural_changes": {
+        "eligibility": {
+          "changed": 26624,
+          "decoder": 2048,
+          "max_abs_delta": 1.0,
+          "recurrent": 24576
+        },
+        "fast": {
+          "changed": 26624,
+          "decoder": 2048,
+          "max_abs_delta": 0.0005849650478921831,
+          "recurrent": 24576
+        },
+        "final_weight_generation": 64,
+        "initial_weight_generation": 0,
+        "lifetime": {
+          "changed": 0,
+          "decoder": 0,
+          "max_abs_delta": 0.0,
+          "recurrent": 0
+        }
+      },
+      "reference_edits": [
+        {
+          "after": 37.5,
+          "before": 30.0,
+          "index": 26927,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -75.0,
+          "before": -60.0,
+          "index": 27135,
+          "role": "reference_weight_edit"
+        }
+      ],
+      "sha256": "d2130830b7f46cf0637e6414a7351ba5f51eccd6cd223fd9ef99c8fbc17b066c"
+    },
+    {
+      "seed": 2026111534,
+      "scene": "far-food",
+      "arm": "whole-care",
+      "target_active": false,
+      "cold_next_step_exact": true,
+      "optimizer_unchanged": true,
+      "candidate_digest": [
+        104,
+        161,
+        34,
+        251,
+        133,
+        56,
+        73,
+        148,
+        210,
+        207,
+        177,
+        83,
+        111,
+        71,
+        252,
+        1,
+        103,
+        168,
+        99,
+        157,
+        64,
+        254,
+        22,
+        104,
+        191,
+        38,
+        102,
+        160,
+        149,
+        161,
+        215,
+        34
+      ],
+      "neural_changes": {
+        "eligibility": {
+          "changed": 26624,
+          "decoder": 2048,
+          "max_abs_delta": 1.0,
+          "recurrent": 24576
+        },
+        "fast": {
+          "changed": 26624,
+          "decoder": 2048,
+          "max_abs_delta": 0.0006009608041495085,
+          "recurrent": 24576
+        },
+        "final_weight_generation": 64,
+        "initial_weight_generation": 0,
+        "lifetime": {
+          "changed": 0,
+          "decoder": 0,
+          "max_abs_delta": 0.0,
+          "recurrent": 0
+        }
+      },
+      "reference_edits": [],
+      "sha256": "73f081a5e18db0c60acf64ac7e838d1fb22bef6f30405177e8c2e686e4a6ced2"
+    },
+    {
+      "seed": 2026111534,
+      "scene": "food",
+      "arm": "whole-care-ingest-boost",
+      "target_active": false,
+      "cold_next_step_exact": true,
+      "optimizer_unchanged": true,
+      "candidate_digest": [
+        76,
+        12,
+        46,
+        215,
+        189,
+        144,
+        7,
+        26,
+        132,
+        194,
+        254,
+        152,
+        23,
+        237,
+        210,
+        245,
+        97,
+        167,
+        135,
+        132,
+        241,
+        141,
+        129,
+        107,
+        116,
+        54,
+        86,
+        237,
+        187,
+        91,
+        176,
+        212
+      ],
+      "neural_changes": {
+        "eligibility": {
+          "changed": 26624,
+          "decoder": 2048,
+          "max_abs_delta": 1.0,
+          "recurrent": 24576
+        },
+        "fast": {
+          "changed": 26624,
+          "decoder": 2048,
+          "max_abs_delta": 0.00048747824621386826,
+          "recurrent": 24576
+        },
+        "final_weight_generation": 64,
+        "initial_weight_generation": 0,
+        "lifetime": {
+          "changed": 0,
+          "decoder": 0,
+          "max_abs_delta": 0.0,
+          "recurrent": 0
+        }
+      },
+      "reference_edits": [
+        {
+          "after": 37.5,
+          "before": 30.0,
+          "index": 26927,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -75.0,
+          "before": -60.0,
+          "index": 27135,
+          "role": "reference_weight_edit"
+        }
+      ],
+      "sha256": "fd8a716d82961cdc80e635bc411dd10666c71f539970f4ff4193abe0723ce0c2"
+    },
+    {
+      "seed": 2026111534,
+      "scene": "food",
+      "arm": "whole-care",
+      "target_active": false,
+      "cold_next_step_exact": true,
+      "optimizer_unchanged": true,
+      "candidate_digest": [
+        104,
+        161,
+        34,
+        251,
+        133,
+        56,
+        73,
+        148,
+        210,
+        207,
+        177,
+        83,
+        111,
+        71,
+        252,
+        1,
+        103,
+        168,
+        99,
+        157,
+        64,
+        254,
+        22,
+        104,
+        191,
+        38,
+        102,
+        160,
+        149,
+        161,
+        215,
+        34
+      ],
+      "neural_changes": {
+        "eligibility": {
+          "changed": 26624,
+          "decoder": 2048,
+          "max_abs_delta": 1.0,
+          "recurrent": 24576
+        },
+        "fast": {
+          "changed": 26624,
+          "decoder": 2048,
+          "max_abs_delta": 0.0005065500736236572,
+          "recurrent": 24576
+        },
+        "final_weight_generation": 64,
+        "initial_weight_generation": 0,
+        "lifetime": {
+          "changed": 0,
+          "decoder": 0,
+          "max_abs_delta": 0.0,
+          "recurrent": 0
+        }
+      },
+      "reference_edits": [],
+      "sha256": "419f415c68f1728a9d74f742ea0c41033f02481e0ff2b3485537421f4968ad3f"
+    },
+    {
+      "seed": 2026111535,
+      "scene": "far-food",
+      "arm": "whole-care-ingest-boost",
+      "target_active": false,
+      "cold_next_step_exact": true,
+      "optimizer_unchanged": true,
+      "candidate_digest": [
+        76,
+        12,
+        46,
+        215,
+        189,
+        144,
+        7,
+        26,
+        132,
+        194,
+        254,
+        152,
+        23,
+        237,
+        210,
+        245,
+        97,
+        167,
+        135,
+        132,
+        241,
+        141,
+        129,
+        107,
+        116,
+        54,
+        86,
+        237,
+        187,
+        91,
+        176,
+        212
+      ],
+      "neural_changes": {
+        "eligibility": {
+          "changed": 26624,
+          "decoder": 2048,
+          "max_abs_delta": 1.0,
+          "recurrent": 24576
+        },
+        "fast": {
+          "changed": 26624,
+          "decoder": 2048,
+          "max_abs_delta": 0.0005775985773652792,
+          "recurrent": 24576
+        },
+        "final_weight_generation": 64,
+        "initial_weight_generation": 0,
+        "lifetime": {
+          "changed": 0,
+          "decoder": 0,
+          "max_abs_delta": 0.0,
+          "recurrent": 0
+        }
+      },
+      "reference_edits": [
+        {
+          "after": 37.5,
+          "before": 30.0,
+          "index": 26927,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -75.0,
+          "before": -60.0,
+          "index": 27135,
+          "role": "reference_weight_edit"
+        }
+      ],
+      "sha256": "87c8f106ef9c39783959b369c4e1676d081ab7badd6a9bd8c004d5a872bd317b"
+    },
+    {
+      "seed": 2026111535,
+      "scene": "far-food",
+      "arm": "whole-care",
+      "target_active": false,
+      "cold_next_step_exact": true,
+      "optimizer_unchanged": true,
+      "candidate_digest": [
+        104,
+        161,
+        34,
+        251,
+        133,
+        56,
+        73,
+        148,
+        210,
+        207,
+        177,
+        83,
+        111,
+        71,
+        252,
+        1,
+        103,
+        168,
+        99,
+        157,
+        64,
+        254,
+        22,
+        104,
+        191,
+        38,
+        102,
+        160,
+        149,
+        161,
+        215,
+        34
+      ],
+      "neural_changes": {
+        "eligibility": {
+          "changed": 26624,
+          "decoder": 2048,
+          "max_abs_delta": 1.0,
+          "recurrent": 24576
+        },
+        "fast": {
+          "changed": 26624,
+          "decoder": 2048,
+          "max_abs_delta": 0.0006180912023410201,
+          "recurrent": 24576
+        },
+        "final_weight_generation": 64,
+        "initial_weight_generation": 0,
+        "lifetime": {
+          "changed": 0,
+          "decoder": 0,
+          "max_abs_delta": 0.0,
+          "recurrent": 0
+        }
+      },
+      "reference_edits": [],
+      "sha256": "24bfd7e058bfa08ce6476343630e6b562d8b9d9c580cede66ec2533449d1ff55"
+    },
+    {
+      "seed": 2026111535,
+      "scene": "food",
+      "arm": "whole-care-ingest-boost",
+      "target_active": false,
+      "cold_next_step_exact": true,
+      "optimizer_unchanged": true,
+      "candidate_digest": [
+        76,
+        12,
+        46,
+        215,
+        189,
+        144,
+        7,
+        26,
+        132,
+        194,
+        254,
+        152,
+        23,
+        237,
+        210,
+        245,
+        97,
+        167,
+        135,
+        132,
+        241,
+        141,
+        129,
+        107,
+        116,
+        54,
+        86,
+        237,
+        187,
+        91,
+        176,
+        212
+      ],
+      "neural_changes": {
+        "eligibility": {
+          "changed": 26624,
+          "decoder": 2048,
+          "max_abs_delta": 1.0,
+          "recurrent": 24576
+        },
+        "fast": {
+          "changed": 26624,
+          "decoder": 2048,
+          "max_abs_delta": 0.00047534384066239,
+          "recurrent": 24576
+        },
+        "final_weight_generation": 64,
+        "initial_weight_generation": 0,
+        "lifetime": {
+          "changed": 0,
+          "decoder": 0,
+          "max_abs_delta": 0.0,
+          "recurrent": 0
+        }
+      },
+      "reference_edits": [
+        {
+          "after": 37.5,
+          "before": 30.0,
+          "index": 26927,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -75.0,
+          "before": -60.0,
+          "index": 27135,
+          "role": "reference_weight_edit"
+        }
+      ],
+      "sha256": "624a83ee7e3bb71b2b42cde14ec7f018207133d518ed08f68c8601550b6fa3ec"
+    },
+    {
+      "seed": 2026111535,
+      "scene": "food",
+      "arm": "whole-care",
+      "target_active": false,
+      "cold_next_step_exact": true,
+      "optimizer_unchanged": true,
+      "candidate_digest": [
+        104,
+        161,
+        34,
+        251,
+        133,
+        56,
+        73,
+        148,
+        210,
+        207,
+        177,
+        83,
+        111,
+        71,
+        252,
+        1,
+        103,
+        168,
+        99,
+        157,
+        64,
+        254,
+        22,
+        104,
+        191,
+        38,
+        102,
+        160,
+        149,
+        161,
+        215,
+        34
+      ],
+      "neural_changes": {
+        "eligibility": {
+          "changed": 26624,
+          "decoder": 2048,
+          "max_abs_delta": 1.0,
+          "recurrent": 24576
+        },
+        "fast": {
+          "changed": 26624,
+          "decoder": 2048,
+          "max_abs_delta": 0.0004966178094036877,
+          "recurrent": 24576
+        },
+        "final_weight_generation": 64,
+        "initial_weight_generation": 0,
+        "lifetime": {
+          "changed": 0,
+          "decoder": 0,
+          "max_abs_delta": 0.0,
+          "recurrent": 0
+        }
+      },
+      "reference_edits": [],
+      "sha256": "4582e8de74df7c74e9a5addb8d6b471d395159638920c1a76396a7ed30975ac5"
+    },
+    {
+      "seed": 2026111536,
+      "scene": "far-food",
+      "arm": "whole-care-ingest-boost",
+      "target_active": false,
+      "cold_next_step_exact": true,
+      "optimizer_unchanged": true,
+      "candidate_digest": [
+        76,
+        12,
+        46,
+        215,
+        189,
+        144,
+        7,
+        26,
+        132,
+        194,
+        254,
+        152,
+        23,
+        237,
+        210,
+        245,
+        97,
+        167,
+        135,
+        132,
+        241,
+        141,
+        129,
+        107,
+        116,
+        54,
+        86,
+        237,
+        187,
+        91,
+        176,
+        212
+      ],
+      "neural_changes": {
+        "eligibility": {
+          "changed": 26624,
+          "decoder": 2048,
+          "max_abs_delta": 1.0,
+          "recurrent": 24576
+        },
+        "fast": {
+          "changed": 26624,
+          "decoder": 2048,
+          "max_abs_delta": 0.0005691821570508182,
+          "recurrent": 24576
+        },
+        "final_weight_generation": 64,
+        "initial_weight_generation": 0,
+        "lifetime": {
+          "changed": 0,
+          "decoder": 0,
+          "max_abs_delta": 0.0,
+          "recurrent": 0
+        }
+      },
+      "reference_edits": [
+        {
+          "after": 37.5,
+          "before": 30.0,
+          "index": 26927,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -75.0,
+          "before": -60.0,
+          "index": 27135,
+          "role": "reference_weight_edit"
+        }
+      ],
+      "sha256": "aa2f5ba59901906e13e4a3f55d1e3d655a93b0a1cf1dec461ef0ded1ba145bbc"
+    },
+    {
+      "seed": 2026111536,
+      "scene": "far-food",
+      "arm": "whole-care",
+      "target_active": false,
+      "cold_next_step_exact": true,
+      "optimizer_unchanged": true,
+      "candidate_digest": [
+        104,
+        161,
+        34,
+        251,
+        133,
+        56,
+        73,
+        148,
+        210,
+        207,
+        177,
+        83,
+        111,
+        71,
+        252,
+        1,
+        103,
+        168,
+        99,
+        157,
+        64,
+        254,
+        22,
+        104,
+        191,
+        38,
+        102,
+        160,
+        149,
+        161,
+        215,
+        34
+      ],
+      "neural_changes": {
+        "eligibility": {
+          "changed": 26624,
+          "decoder": 2048,
+          "max_abs_delta": 1.0,
+          "recurrent": 24576
+        },
+        "fast": {
+          "changed": 26624,
+          "decoder": 2048,
+          "max_abs_delta": 0.0006102620391175151,
+          "recurrent": 24576
+        },
+        "final_weight_generation": 64,
+        "initial_weight_generation": 0,
+        "lifetime": {
+          "changed": 0,
+          "decoder": 0,
+          "max_abs_delta": 0.0,
+          "recurrent": 0
+        }
+      },
+      "reference_edits": [],
+      "sha256": "8254118fb7cd6bfc3c02850c06e5dc11853b81676a5af30e7a52473b22d6e871"
+    },
+    {
+      "seed": 2026111536,
+      "scene": "food",
+      "arm": "whole-care-ingest-boost",
+      "target_active": false,
+      "cold_next_step_exact": true,
+      "optimizer_unchanged": true,
+      "candidate_digest": [
+        76,
+        12,
+        46,
+        215,
+        189,
+        144,
+        7,
+        26,
+        132,
+        194,
+        254,
+        152,
+        23,
+        237,
+        210,
+        245,
+        97,
+        167,
+        135,
+        132,
+        241,
+        141,
+        129,
+        107,
+        116,
+        54,
+        86,
+        237,
+        187,
+        91,
+        176,
+        212
+      ],
+      "neural_changes": {
+        "eligibility": {
+          "changed": 26624,
+          "decoder": 2048,
+          "max_abs_delta": 1.0,
+          "recurrent": 24576
+        },
+        "fast": {
+          "changed": 26624,
+          "decoder": 2048,
+          "max_abs_delta": 0.0004764654440805316,
+          "recurrent": 24576
+        },
+        "final_weight_generation": 64,
+        "initial_weight_generation": 0,
+        "lifetime": {
+          "changed": 0,
+          "decoder": 0,
+          "max_abs_delta": 0.0,
+          "recurrent": 0
+        }
+      },
+      "reference_edits": [
+        {
+          "after": 37.5,
+          "before": 30.0,
+          "index": 26927,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -75.0,
+          "before": -60.0,
+          "index": 27135,
+          "role": "reference_weight_edit"
+        }
+      ],
+      "sha256": "bf2e1bc7aca1d571b55f722dd5489c8e794733ec587f1d73faf8036cc92bccf8"
+    },
+    {
+      "seed": 2026111536,
+      "scene": "food",
+      "arm": "whole-care",
+      "target_active": false,
+      "cold_next_step_exact": true,
+      "optimizer_unchanged": true,
+      "candidate_digest": [
+        104,
+        161,
+        34,
+        251,
+        133,
+        56,
+        73,
+        148,
+        210,
+        207,
+        177,
+        83,
+        111,
+        71,
+        252,
+        1,
+        103,
+        168,
+        99,
+        157,
+        64,
+        254,
+        22,
+        104,
+        191,
+        38,
+        102,
+        160,
+        149,
+        161,
+        215,
+        34
+      ],
+      "neural_changes": {
+        "eligibility": {
+          "changed": 26624,
+          "decoder": 2048,
+          "max_abs_delta": 1.0,
+          "recurrent": 24576
+        },
+        "fast": {
+          "changed": 26624,
+          "decoder": 2048,
+          "max_abs_delta": 0.0004764654440805316,
+          "recurrent": 24576
+        },
+        "final_weight_generation": 64,
+        "initial_weight_generation": 0,
+        "lifetime": {
+          "changed": 0,
+          "decoder": 0,
+          "max_abs_delta": 0.0,
+          "recurrent": 0
+        }
+      },
+      "reference_edits": [],
+      "sha256": "39fb9fdc141aca065b73ef9ec2fe8b602bee723bcccec848b3f7a87641c34b47"
+    },
+    {
+      "seed": 2026111537,
+      "scene": "far-food",
+      "arm": "whole-care-ingest-boost",
+      "target_active": false,
+      "cold_next_step_exact": true,
+      "optimizer_unchanged": true,
+      "candidate_digest": [
+        76,
+        12,
+        46,
+        215,
+        189,
+        144,
+        7,
+        26,
+        132,
+        194,
+        254,
+        152,
+        23,
+        237,
+        210,
+        245,
+        97,
+        167,
+        135,
+        132,
+        241,
+        141,
+        129,
+        107,
+        116,
+        54,
+        86,
+        237,
+        187,
+        91,
+        176,
+        212
+      ],
+      "neural_changes": {
+        "eligibility": {
+          "changed": 26624,
+          "decoder": 2048,
+          "max_abs_delta": 1.0,
+          "recurrent": 24576
+        },
+        "fast": {
+          "changed": 26624,
+          "decoder": 2048,
+          "max_abs_delta": 0.000564324262086302,
+          "recurrent": 24576
+        },
+        "final_weight_generation": 64,
+        "initial_weight_generation": 0,
+        "lifetime": {
+          "changed": 0,
+          "decoder": 0,
+          "max_abs_delta": 0.0,
+          "recurrent": 0
+        }
+      },
+      "reference_edits": [
+        {
+          "after": 37.5,
+          "before": 30.0,
+          "index": 26927,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -75.0,
+          "before": -60.0,
+          "index": 27135,
+          "role": "reference_weight_edit"
+        }
+      ],
+      "sha256": "e8c91591cf4f3d96eaa92ce529d5a13752236bc9ba5c63f6367659cf3ec043dd"
+    },
+    {
+      "seed": 2026111537,
+      "scene": "far-food",
+      "arm": "whole-care",
+      "target_active": false,
+      "cold_next_step_exact": true,
+      "optimizer_unchanged": true,
+      "candidate_digest": [
+        104,
+        161,
+        34,
+        251,
+        133,
+        56,
+        73,
+        148,
+        210,
+        207,
+        177,
+        83,
+        111,
+        71,
+        252,
+        1,
+        103,
+        168,
+        99,
+        157,
+        64,
+        254,
+        22,
+        104,
+        191,
+        38,
+        102,
+        160,
+        149,
+        161,
+        215,
+        34
+      ],
+      "neural_changes": {
+        "eligibility": {
+          "changed": 26624,
+          "decoder": 2048,
+          "max_abs_delta": 1.0,
+          "recurrent": 24576
+        },
+        "fast": {
+          "changed": 26624,
+          "decoder": 2048,
+          "max_abs_delta": 0.0006135139265097678,
+          "recurrent": 24576
+        },
+        "final_weight_generation": 64,
+        "initial_weight_generation": 0,
+        "lifetime": {
+          "changed": 0,
+          "decoder": 0,
+          "max_abs_delta": 0.0,
+          "recurrent": 0
+        }
+      },
+      "reference_edits": [],
+      "sha256": "e92921d04b99b4bf81122e0c40b0643dc6be7d68c7ea4b5c1554e8d98171cb96"
+    },
+    {
+      "seed": 2026111537,
+      "scene": "food",
+      "arm": "whole-care-ingest-boost",
+      "target_active": false,
+      "cold_next_step_exact": true,
+      "optimizer_unchanged": true,
+      "candidate_digest": [
+        76,
+        12,
+        46,
+        215,
+        189,
+        144,
+        7,
+        26,
+        132,
+        194,
+        254,
+        152,
+        23,
+        237,
+        210,
+        245,
+        97,
+        167,
+        135,
+        132,
+        241,
+        141,
+        129,
+        107,
+        116,
+        54,
+        86,
+        237,
+        187,
+        91,
+        176,
+        212
+      ],
+      "neural_changes": {
+        "eligibility": {
+          "changed": 26624,
+          "decoder": 2048,
+          "max_abs_delta": 1.0,
+          "recurrent": 24576
+        },
+        "fast": {
+          "changed": 26624,
+          "decoder": 2048,
+          "max_abs_delta": 0.0004886543611064553,
+          "recurrent": 24576
+        },
+        "final_weight_generation": 64,
+        "initial_weight_generation": 0,
+        "lifetime": {
+          "changed": 0,
+          "decoder": 0,
+          "max_abs_delta": 0.0,
+          "recurrent": 0
+        }
+      },
+      "reference_edits": [
+        {
+          "after": 37.5,
+          "before": 30.0,
+          "index": 26927,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -75.0,
+          "before": -60.0,
+          "index": 27135,
+          "role": "reference_weight_edit"
+        }
+      ],
+      "sha256": "72cfb3da04fa1ee735b420c0aa0b8aed61badccb0642919e74dd11851dc3e834"
+    },
+    {
+      "seed": 2026111537,
+      "scene": "food",
+      "arm": "whole-care",
+      "target_active": false,
+      "cold_next_step_exact": true,
+      "optimizer_unchanged": true,
+      "candidate_digest": [
+        104,
+        161,
+        34,
+        251,
+        133,
+        56,
+        73,
+        148,
+        210,
+        207,
+        177,
+        83,
+        111,
+        71,
+        252,
+        1,
+        103,
+        168,
+        99,
+        157,
+        64,
+        254,
+        22,
+        104,
+        191,
+        38,
+        102,
+        160,
+        149,
+        161,
+        215,
+        34
+      ],
+      "neural_changes": {
+        "eligibility": {
+          "changed": 26624,
+          "decoder": 2048,
+          "max_abs_delta": 1.0,
+          "recurrent": 24576
+        },
+        "fast": {
+          "changed": 26624,
+          "decoder": 2048,
+          "max_abs_delta": 0.0004951423616148531,
+          "recurrent": 24576
+        },
+        "final_weight_generation": 64,
+        "initial_weight_generation": 0,
+        "lifetime": {
+          "changed": 0,
+          "decoder": 0,
+          "max_abs_delta": 0.0,
+          "recurrent": 0
+        }
+      },
+      "reference_edits": [],
+      "sha256": "577952a10b74ab013cf919a917fc0bd708c0d5f9d8de8d7eb3284682600eb891"
+    }
+  ]
+}
