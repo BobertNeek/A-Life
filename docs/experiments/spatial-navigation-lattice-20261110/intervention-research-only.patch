@@ -1,0 +1,73 @@
+--- a/crates/alife_training/src/cpu/host.rs
++++ b/crates/alife_training/src/cpu/host.rs
+@@ -347,6 +347,27 @@
+     pub fn world_mut(&mut self) -> &mut HeadlessWorld {
+         &mut self.world
+     }
++    /// LOCAL DISPOSABLE RESEARCH ONLY: a controlled causal intervention on
++    /// selected recurrent cells at a completed tick. Reseal all authoritative
++    /// state through the normal path; never use this on an accepted life.
++    pub fn research_intervene_lattice(
++        &mut self, founder: &CpuFoundationTrainer, id: OrganismId, ablate: bool,
++    ) -> Result<(), CpuHostError> {
++        self.validate_founder(founder)?;
++        let resident = self.residents.get_mut(&id.raw())
++            .ok_or(CpuHostError::State("research resident missing"))?;
++        let mut neural = resident.neural.checkpoint()?;
++        if ablate {
++            for i in (896..912).chain(1600..1616) {
++                neural.neural.activations[i] = 0.;
++                neural.inactive_activations[i] = 0.;
++            }
++        }
++        resident.neural = CpuOrganismState::from_checkpoint(founder.phenotype(), neural)?;
++        resident.sealed_authority = None;
++        self.seal_all_residents()?;
++        Ok(())
++    }
+     pub fn snapshot(&self) -> Self {
+         self.clone()
+     }
+--- a/crates/alife_training/src/cpu/input.rs
++++ b/crates/alife_training/src/cpu/input.rs
+@@ -57,6 +57,24 @@
+         encoded[assignment.target_neuron() as usize] +=
+             (source * assignment.scale() + assignment.bias()).clamp(min, max);
+     }
++    // LOCAL RESEARCH ONLY: this temporary port is not a versioned sensor ABI.
++    // It may only be used with fresh, disposable terrain-vision experiments.
++    // The inputs are the nearest currently visible blue-biased object candidate,
++    // never a hidden target, global map, or special food label.
++    if std::env::var_os("ALIFE_RESEARCH_VISIBLE_OBJECT_CUE").is_some() {
++        if let Some(object) = frame.candidates().iter()
++            .filter(|c| c.target.entity.is_some() && c.features.0[8] > c.features.0[6])
++            .min_by(|a, b| a.features.0[2].total_cmp(&b.features.0[2]))
++        {
++            // Temporary split direction port onto the two previously tested
++            // visual-to-turn cells; reverse orientation is a separate trial.
++            let bearing = object.features.0[0];
++            let sign = if std::env::var_os("ALIFE_RESEARCH_REVERSE_OBJECT_CUE").is_some() { -1. } else { 1. };
++            encoded[904] += 8.0 * (bearing * sign).max(0.0);
++            encoded[907] += 8.0 * (-bearing * sign).max(0.0);
++            encoded[910] += 1.0 - object.features.0[2].clamp(0.0, 1.0);
++        }
++    }
+     let gate =
+         (effects.structural_growth_gate + effects.sleep_gate + effects.consolidation_gate) / 3.;
+     for value in &mut encoded {
+--- a/crates/alife_training/examples/probe_spatial_navigation.rs
++++ b/crates/alife_training/examples/probe_spatial_navigation.rs
+@@ -1155,6 +1155,13 @@
+         if tick == 4 {
+             if let Some(id) = cue_occluder {
+                 host.world_mut().editor_set_optical_opacity(id, 1.)?;
++                if std::env::var_os("ALIFE_RESEARCH_INTERVENTION").is_some() {
++                    host.research_intervene_lattice(&trainer, own,
++                        std::env::var_os("ALIFE_RESEARCH_ABLATE_CONTEXT").is_some())?;
++                    // Exercise normal save/restart validation after resealing.
++                    let snapshot = host.checkpoint(&trainer)?;
++                    host = CpuCanonicalHost::from_checkpoint(snapshot, &trainer)?;
++                }
+             }
+         }
+         let step = host.step(&trainer, 1.)?;

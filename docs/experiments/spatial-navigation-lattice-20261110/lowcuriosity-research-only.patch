@@ -1,0 +1,57 @@
+--- a/crates/alife_training/examples/probe_spatial_navigation.rs
++++ b/crates/alife_training/examples/probe_spatial_navigation.rs
+@@ -776,7 +776,7 @@
+             }
+         }
+     }
+-    let edit_arm = if arm == "nav-turn10" || arm == "nav-boost" {
++    let edit_arm = if arm == "nav-turn10" || arm == "nav-boost" || arm == "nav-lowcuriosity" {
+         "nav-map"
+     } else {
+         arm
+@@ -796,7 +796,7 @@
+         edits.extend(wire_spatial_trace(
+             &p,
+             &mut weights,
+-            if arm == "nav-turn10" || arm == "nav-boost" {
++            if arm == "nav-turn10" || arm == "nav-boost" || arm == "nav-lowcuriosity" {
+                 60.0
+             } else {
+                 6.0
+@@ -809,7 +809,7 @@
+             || edit_arm == "nav-map"
+             || edit_arm == "nav-stable"
+         {
+-            let boosted_relays = if arm == "nav-boost" {
++            let boosted_relays = if arm == "nav-boost" || arm == "nav-lowcuriosity" {
+                 edits
+                     .iter()
+                     .filter(|e| e["role"] == "spatial_visual_context_relay")
+@@ -865,7 +865,9 @@
+                 {
+                     let before = weights[i];
+                     weights[i] = before
+-                        + if edit_arm == "nav-strong"
++                        + if arm == "nav-lowcuriosity" {
++                            8.0
++                        } else if edit_arm == "nav-strong"
+                             || edit_arm == "nav-care"
+                             || edit_arm == "nav-care2"
+                             || edit_arm == "nav-map"
+@@ -1311,7 +1313,7 @@
+             // Probe whether each side-ray actually affects the neural turn
+             // logits in opposite directions; never modifies the live host.
+             let side_pulse = if tick == 0
+-                && (arm == "nav-map" || arm == "nav-turn10" || arm == "nav-boost")
++                && (arm == "nav-map" || arm == "nav-turn10" || arm == "nav-boost" || arm == "nav-lowcuriosity")
+                 && std::env::var_os("ALIFE_RESEARCH_SIDE_PULSE").is_some()
+             {
+                 let left = frame
+@@ -1704,6 +1706,7 @@
+         "nav-stable-factor" => vec![("nav-map", 0.), ("nav-stable", 0.)],
+         "nav-turn10-factor" => vec![("nav-map", 0.), ("nav-turn10", 0.)],
+         "nav-boost-factor" => vec![("nav-turn10", 0.), ("nav-boost", 0.)],
++        "nav-curiosity-factor" => vec![("nav-boost", 0.), ("nav-lowcuriosity", 0.)],
+         "bold-factor" => vec![("whole-care", 0.), ("whole-care-bold", 0.)],
+         "contact" => vec![("whole-care-v5", 0.), ("whole-care", 0.)],
+         "whole" => vec![
