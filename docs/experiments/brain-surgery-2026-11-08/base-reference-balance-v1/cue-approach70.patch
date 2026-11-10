@@ -1,0 +1,38 @@
+--- a/crates/alife_training/examples/probe_cue_learning.rs
++++ b/crates/alife_training/examples/probe_cue_learning.rs
+@@ -25,7 +25,17 @@
+     let safe_red:bool=match args.get(3).map(String::as_str) {Some("red")=>true,Some("blue")=>false,_=>return Err("safe color red or blue required".into())};
+     let red_left:bool=match args.get(4).map(String::as_str) {Some("left")=>true,Some("right")=>false,_=>return Err("red side left or right required".into())};
+     let (config,p,source)=base::source(seed,true)?;
+-    let (weights,_) = base::whole_care(&p)?;
++    let (mut weights,_) = base::whole_care(&p)?;
++    let approach_scale = match std::env::var("ALIFE_RESEARCH_APPROACH_SCALE").as_deref() { Err(std::env::VarError::NotPresent) => 1.0f32, Ok("0.70") => 0.70f32, _ => return Err("research approach scale must be absent or 0.70".into()) };
++    let mut approach_edits=Vec::new();
++    if approach_scale != 1.0 {
++        for (i,synapse) in p.synapses().iter().enumerate() {
++            if matches!(synapse.kind(),CompiledSynapseKind::Decoder(c) if c.head()==DecoderHeadKind::ActionCandidate && c.family()==CandidateActionFamily::Approach && c.input_lane()==15) && weights[i] != 0. {
++                let before=weights[i];weights[i]*=approach_scale;approach_edits.push(json!({"index":i,"before":before,"after":weights[i]}));
++            }
++        }
++        if approach_edits.len()!=2 { return Err("unexpected Approach taste weight count".into()); }
++    }
+     let asset=FoundationWeightAsset::from_trained_weights(&p,weights,source.manifest().training_stage())?;
+     let mut game=create_canonical_new_game_with_n2048_experimental_candidate(&config,&asset)?;
+     let old=game.world.organism_registry().iter().next().ok_or("missing founder")?.clone();
+@@ -56,7 +66,7 @@
+         }
+         exposures.push(json!({"episode":episode,"safe":safe,"is_red":is_red,"target":target.raw(),"consumed_at":hit,"pain_delta":pain}));
+         if hit.is_none() {
+-            let report=json!({"schema":"cue-study-pilot-v1","seed":seed,"safe_red":safe_red,"red_left":red_left,"sham":std::env::var_os("ALIFE_RESEARCH_FAST_WRITE_SHAM").is_some(),"censored":"exposure_not_consumed","exposures":exposures});
++            let report=json!({"schema":"cue-study-pilot-v1","approach_scale":approach_scale,"approach_edits":approach_edits,"seed":seed,"safe_red":safe_red,"red_left":red_left,"sham":std::env::var_os("ALIFE_RESEARCH_FAST_WRITE_SHAM").is_some(),"censored":"exposure_not_consumed","exposures":exposures});
+             let mut f=std::fs::OpenOptions::new().write(true).create_new(true).open(path)?;f.write_all(&serde_json::to_vec_pretty(&report)?)?;return Ok(());
+         }
+     }
+@@ -97,6 +107,6 @@
+     let fast_changed=initial.fast.iter().zip(&final_neural.fast).filter(|(a,b)|a.to_bits()!=b.to_bits()).count();
+     let bytes=serde_json::to_vec(&checkpoint)?;let mut cold=CpuCanonicalHost::from_checkpoint(serde_json::from_slice(&bytes)?,&trainer)?;let mut warm=host.snapshot();warm.step(&trainer,1.)?;cold.step(&trainer,1.)?;
+     let exact=serde_json::to_vec(&warm.checkpoint(&trainer)?)? == serde_json::to_vec(&cold.checkpoint(&trainer)?)?;
+-    let report=json!({"schema":"cue-study-pilot-v1","seed":seed,"safe_red":safe_red,"red_left":red_left,"sham":std::env::var_os("ALIFE_RESEARCH_FAST_WRITE_SHAM").is_some(),"exposures":exposures,"probe_red_id":red_id.raw(),"probe_blue_id":blue_id.raw(),"choice":choice,"choice_was_safe_cue":choice.map(|c| (c=="red") == safe_red),"probe_steps":steps,"fast_changed":fast_changed,"cold_next_exact":exact,"founder_optimizer_unchanged":founder_before==serde_json::to_vec(&trainer.checkpoint())?,"trace":trace});
++    let report=json!({"schema":"cue-study-pilot-v1","approach_scale":approach_scale,"approach_edits":approach_edits,"seed":seed,"safe_red":safe_red,"red_left":red_left,"sham":std::env::var_os("ALIFE_RESEARCH_FAST_WRITE_SHAM").is_some(),"exposures":exposures,"probe_red_id":red_id.raw(),"probe_blue_id":blue_id.raw(),"choice":choice,"choice_was_safe_cue":choice.map(|c| (c=="red") == safe_red),"probe_steps":steps,"fast_changed":fast_changed,"cold_next_exact":exact,"founder_optimizer_unchanged":founder_before==serde_json::to_vec(&trainer.checkpoint())?,"trace":trace});
+     let mut f=std::fs::OpenOptions::new().write(true).create_new(true).open(path)?;f.write_all(&serde_json::to_vec_pretty(&report)?)?;Ok(())
+ }
