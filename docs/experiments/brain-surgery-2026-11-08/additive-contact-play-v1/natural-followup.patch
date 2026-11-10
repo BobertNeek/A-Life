@@ -1,0 +1,41 @@
+--- a/crates/alife_training/src/cpu/actual_contact_four_interval_tests.rs
++++ b/crates/alife_training/src/cpu/actual_contact_four_interval_tests.rs
+@@ -533,3 +533,38 @@
+ fn additive_play_candidate_contact() { run_contact_fixed_four::<1>(); }
+ #[test]
+ fn additive_play_sham_contact() { run_contact_fixed_four::<2>(); }
++
++// Unforced third decision after two real, controlled toy interactions.
++struct Natural<const ARM: u8>;
++impl<const ARM: u8> GroupedPolicyStrategy for Natural<ARM> {
++    type Action = ActualContactActionV1;
++    const OPTIONAL: bool = false;
++    const ACTUAL_CONTACT: bool = true;
++    const TEST_CONTACT_DISPATCH: bool = true;
++    const RECIPE: crate::cpu::motor_mediation::HostRecipeV1 = match ARM { 0 => crate::cpu::motor_mediation::HostRecipeV1::Original60, 1 => crate::cpu::motor_mediation::HostRecipeV1::PlayNeedCandidate76, 2 => crate::cpu::motor_mediation::HostRecipeV1::PlayNeedPaddedSham76, _ => panic!("unknown test recipe") };
++    const MAGIC: &'static [u8] = CONTROL_MAGIC;
++    const LINEAGE: &'static str = "fresh-actual-contact-controlled-physics-v1/no-import";
++    const POLICY: &'static str = CONTROL_POLICY;
++    fn select(f:&CpuFoundationTrainer, r:&mut Resident, frame:&PerceptionFrame, output:&CpuDecisionOutput, seed:u32, counter:u32, t:f64) -> Result<Selection<Self::Action>,CpuHostError> {
++        ActualContactPolicy::<ARM>::select(f,r,frame,output,seed,counter,t)
++    }
++    fn stage(r:&mut Resident,p:&BrainPhenotype,a:&Self::Action,b:CpuDecisionBinding)->Result<(),CpuHostError> { ActualContactPolicy::<ARM>::stage(r,p,a,b) }
++    fn close(n:&mut CpuOrganismState,f:&CpuFoundationTrainer,p:&ExperiencePatch,r:&NeuralReceptorFrame)->Result<(),CpuHostError> { ActualContactPolicy::<ARM>::close(n,f,p,r) }
++}
++fn run_natural_after_contact<const ARM:u8>() {
++    let (mut host, _) = construct_one_fresh_host_with_toy::<ARM>();
++    let (_,_,first) = interval::<true,ARM>(&mut host,"scripted_first",0);
++    let (_,_,second) = interval::<true,ARM>(&mut host,"scripted_second",1);
++    assert!(second.count_before > first.count_before);
++    let founder_before = serde_json::to_vec(&host.founder.checkpoint()).unwrap();
++    let step=host.host.grouped_policy_step_observed::<Natural<ARM>>(&host.founder,0.73).unwrap();
++    assert_eq!(step.step.decisions.len(),1);
++    assert_eq!(step.world_receipts.len(),1);
++    assert_eq!(founder_before,serde_json::to_vec(&host.founder.checkpoint()).unwrap());
++    let d=&step.step.decisions[0];
++    let channels:Vec<_>=step.world_receipts[0].channel_receipts.iter().map(|r|json!({"primitive":r.command.primitive.raw(),"phase":format!("{:?}",r.phase),"stimulation":r.play_stimulation,"investigation":r.investigation})).collect();
++    println!("ADDITIVE_NATURAL_V1 {}",json!({"arm":ARM,"action":d.action,"channels":channels,"source_generation":d.motor.native.core.final_generation}));
++}
++#[test] fn additive_natural_original() {run_natural_after_contact::<0>();}
++#[test] fn additive_natural_candidate() {run_natural_after_contact::<1>();}
++#[test] fn additive_natural_sham() {run_natural_after_contact::<2>();}
