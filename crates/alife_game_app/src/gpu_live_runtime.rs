@@ -654,6 +654,46 @@ pub(crate) fn experimental_resident_plan_smoke(
     Ok(())
 }
 
+#[cfg(all(test, feature = "gpu-tests"))]
+pub(crate) fn experimental_software_roundtrip_smoke(
+    runtime: &mut GpuLiveBrainRuntime,
+    root: &std::path::Path,
+    seed: u64,
+) -> Result<(), GameAppShellError> {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(90);
+    while !runtime.persistence_idle_for_shutdown() {
+        if std::time::Instant::now() >= deadline {
+            return Err(GameAppShellError::InvalidProductionFrontend {
+                message: "experimental fixture persistence timeout".into(),
+            });
+        }
+        runtime.poll_persistence_for_shutdown()?;
+        if runtime.persistence_failed_for_shutdown() {
+            return Err(GameAppShellError::InvalidProductionFrontend {
+                message: "experimental fixture persistence failed".into(),
+            });
+        }
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+    let expected = runtime.world.canonical_signature_digest()?;
+    let save = runtime.capture_portable_checkpoint()?;
+    let path = root.join("experimental-roundtrip.json");
+    GpuDurableSaveManifest::publish_snapshot(&path, root, &save)?;
+    let (manifest, loaded) = GpuDurableSaveManifest::open_loaded(path, root.to_path_buf())?;
+    let mut restored = GpuLiveBrainRuntime::restore_loaded_save(
+        runtime.new_staging_like_live()?,
+        manifest,
+        loaded,
+        seed,
+        BrainScaleTier::Standard2048,
+    )?;
+    assert_eq!(restored.world.canonical_signature_digest()?, expected);
+    assert_eq!(restored.world.tick(), Tick(1));
+    restored.tick()?;
+    assert_eq!(restored.world.tick(), Tick(2));
+    Ok(())
+}
+
 fn resident_authority_plan_from_record(
     record: &WorldOrganismRecord,
     organism_id: OrganismId,
