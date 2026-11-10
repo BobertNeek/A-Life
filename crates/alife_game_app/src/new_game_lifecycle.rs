@@ -867,6 +867,13 @@ mod tests {
             staged.save.creatures[0].brain_class,
             BrainScaleTier::Standard2048
         );
+        #[cfg(feature = "gpu-runtime")]
+        crate::gpu_live_runtime::experimental_resident_plan_smoke(
+            staged.world.organism_registry().get(OrganismId(1)).unwrap(),
+            staged.world.tick(),
+            SensorProfile::GroundedObjectSlotsV1,
+        )
+        .expect("experimental fresh founder must produce a GPU resident authority plan");
         staged.save.to_json_file(&staged.save_path).unwrap();
         // Loading must depend on the saved genome, not the original CLI asset path.
         fs::remove_file(&candidate_path).unwrap();
