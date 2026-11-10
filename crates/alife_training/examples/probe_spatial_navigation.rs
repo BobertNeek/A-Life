@@ -1621,7 +1621,7 @@ fn main() -> Result<()> {
     {
         return Err("invalid bounded seed, scene or energy".into());
     }
-    if !(1..=120).contains(&ticks)
+    if !(1..=512).contains(&ticks)
         || !(1..=32).contains(&seeds)
         || !gain.is_finite()
         || gain.abs() > 32.

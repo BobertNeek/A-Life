@@ -1,0 +1,364 @@
+{
+  "schema": "terrain-detour-expanded-summary-v1",
+  "note": "Fresh CPU research; no trained life. Tests use independent fresh starts, 120 decisions, one seed per comparison. Not proof of learning or generalization.",
+  "comparisons": [
+    {
+      "mode": "nav-turn10-factor",
+      "seed_start": 2026111841,
+      "ticks": 120,
+      "runs": [
+        {
+          "file": "2026111841.maze-bitter.nav-map.json",
+          "sha256": "ed81738d40d05cf9c949841469d14a088dc94a0a7b9432000e9dc33b019089d8",
+          "scene": "maze-bitter",
+          "arm": "nav-map",
+          "ate": false,
+          "hazard_pain": 0.30000001192092896,
+          "first_visible_decision": 0,
+          "first_crossing_x_1_3": null,
+          "final_position": {
+            "x": -2.6824567317962646,
+            "y": 0.0,
+            "z": -0.2800251841545105
+          },
+          "cold_next_exact": true
+        },
+        {
+          "file": "2026111841.maze-bitter.nav-turn10.json",
+          "sha256": "0dc0986adb410223c56e17999e1323606da3f3f275b58b18284576b1af48fff0",
+          "scene": "maze-bitter",
+          "arm": "nav-turn10",
+          "ate": false,
+          "hazard_pain": 0.30000001192092896,
+          "first_visible_decision": 0,
+          "first_crossing_x_1_3": null,
+          "final_position": {
+            "x": -2.6824567317962646,
+            "y": 0.0,
+            "z": -0.2800251841545105
+          },
+          "cold_next_exact": true
+        },
+        {
+          "file": "2026111841.maze-clear.nav-map.json",
+          "sha256": "56c8fc1b336948c3e57e59cf651db4652f8b0b13ab998120fa34493890d0ea08",
+          "scene": "maze-clear",
+          "arm": "nav-map",
+          "ate": true,
+          "hazard_pain": 0.0,
+          "first_visible_decision": 0,
+          "first_crossing_x_1_3": {
+            "decision": 25,
+            "x": 1.3049026727676392,
+            "z": 0.0
+          },
+          "final_position": {
+            "x": 3.5926787853240967,
+            "y": 0.0,
+            "z": 0.7419213652610779
+          },
+          "cold_next_exact": true
+        },
+        {
+          "file": "2026111841.maze-clear.nav-turn10.json",
+          "sha256": "fbe982fb4f53098bc2b477b13d1f23d4096fb3a40dbfe45d824867dc155d192a",
+          "scene": "maze-clear",
+          "arm": "nav-turn10",
+          "ate": true,
+          "hazard_pain": 0.0,
+          "first_visible_decision": 0,
+          "first_crossing_x_1_3": {
+            "decision": 25,
+            "x": 1.3049026727676392,
+            "z": 0.0
+          },
+          "final_position": {
+            "x": 3.733549118041992,
+            "y": 0.0,
+            "z": -0.23979417979717255
+          },
+          "cold_next_exact": true
+        },
+        {
+          "file": "2026111841.maze-left.nav-map.json",
+          "sha256": "6882679069035eecb3699bd1c6b0fd9bbf5fe1a65e70a5a032d7b04d7e51b568",
+          "scene": "maze-left",
+          "arm": "nav-map",
+          "ate": true,
+          "hazard_pain": 0.0,
+          "first_visible_decision": 73,
+          "first_crossing_x_1_3": {
+            "decision": 92,
+            "x": 1.334802508354187,
+            "z": 1.0178881883621216
+          },
+          "final_position": {
+            "x": 2.1953516006469727,
+            "y": 0.0,
+            "z": 0.3115113079547882
+          },
+          "cold_next_exact": true
+        },
+        {
+          "file": "2026111841.maze-left.nav-turn10.json",
+          "sha256": "9edc001807dcbeaf27b83b6e491896b7492192c2882e7444c218d36b0ea4affd",
+          "scene": "maze-left",
+          "arm": "nav-turn10",
+          "ate": false,
+          "hazard_pain": 0.0,
+          "first_visible_decision": null,
+          "first_crossing_x_1_3": null,
+          "final_position": {
+            "x": -0.9136239290237427,
+            "y": 0.0,
+            "z": 2.124965190887451
+          },
+          "cold_next_exact": true
+        },
+        {
+          "file": "2026111841.maze-neutral.nav-map.json",
+          "sha256": "f978d9fc4fbd56079a9669aca47ffbec86342d3c85365d08c84c55d69d9b78ea",
+          "scene": "maze-neutral",
+          "arm": "nav-map",
+          "ate": true,
+          "hazard_pain": 0.0,
+          "first_visible_decision": 0,
+          "first_crossing_x_1_3": null,
+          "final_position": {
+            "x": -2.9924657344818115,
+            "y": 0.0,
+            "z": -0.32344719767570496
+          },
+          "cold_next_exact": true
+        },
+        {
+          "file": "2026111841.maze-neutral.nav-turn10.json",
+          "sha256": "a2df005d34c8ffd03e9108c3e8f1665ca03eb03e6a5dfec3e121ecf3d46b0067",
+          "scene": "maze-neutral",
+          "arm": "nav-turn10",
+          "ate": true,
+          "hazard_pain": 0.0,
+          "first_visible_decision": 0,
+          "first_crossing_x_1_3": null,
+          "final_position": {
+            "x": -2.9924657344818115,
+            "y": 0.0,
+            "z": -0.32344719767570496
+          },
+          "cold_next_exact": true
+        },
+        {
+          "file": "2026111841.maze-right.nav-map.json",
+          "sha256": "94565dda20f6808eacd01e3a0f2b85c8a220f0f5f50c81538a2ae5a95c3cf39d",
+          "scene": "maze-right",
+          "arm": "nav-map",
+          "ate": false,
+          "hazard_pain": 0.0,
+          "first_visible_decision": null,
+          "first_crossing_x_1_3": null,
+          "final_position": {
+            "x": -0.2575681209564209,
+            "y": 0.0,
+            "z": 1.1941461563110352
+          },
+          "cold_next_exact": true
+        },
+        {
+          "file": "2026111841.maze-right.nav-turn10.json",
+          "sha256": "d29c7e5e0177b0423d627b7041c9c851b5a274ca9fba7e9a7282692f5add65fc",
+          "scene": "maze-right",
+          "arm": "nav-turn10",
+          "ate": false,
+          "hazard_pain": 0.0,
+          "first_visible_decision": null,
+          "first_crossing_x_1_3": null,
+          "final_position": {
+            "x": -0.845801055431366,
+            "y": 0.0,
+            "z": 1.4621338844299316
+          },
+          "cold_next_exact": true
+        }
+      ]
+    },
+    {
+      "mode": "nav-boost-factor",
+      "seed_start": 2026111842,
+      "ticks": 120,
+      "runs": [
+        {
+          "file": "2026111842.maze-bitter.nav-boost.json",
+          "sha256": "06e6c71215971072072e255824f1db7522bdcb37bb0e15822b3a2f3052d4589e",
+          "scene": "maze-bitter",
+          "arm": "nav-boost",
+          "ate": false,
+          "hazard_pain": 0.30000001192092896,
+          "first_visible_decision": 0,
+          "first_crossing_x_1_3": null,
+          "final_position": {
+            "x": -0.5404939651489258,
+            "y": 0.0,
+            "z": 0.012067321687936783
+          },
+          "cold_next_exact": true
+        },
+        {
+          "file": "2026111842.maze-bitter.nav-turn10.json",
+          "sha256": "d73d3890ae43b0da84d77df04e3e812582ceb4434b82705c8d8368975ade883b",
+          "scene": "maze-bitter",
+          "arm": "nav-turn10",
+          "ate": false,
+          "hazard_pain": 0.30000001192092896,
+          "first_visible_decision": 0,
+          "first_crossing_x_1_3": null,
+          "final_position": {
+            "x": -1.3937863111495972,
+            "y": 0.0,
+            "z": -0.8423269391059875
+          },
+          "cold_next_exact": true
+        },
+        {
+          "file": "2026111842.maze-clear.nav-boost.json",
+          "sha256": "cc8e71ff02e4695f678f6c428ce268130661e8ce1cd0101f15249c1ae7939f57",
+          "scene": "maze-clear",
+          "arm": "nav-boost",
+          "ate": true,
+          "hazard_pain": 0.0,
+          "first_visible_decision": 0,
+          "first_crossing_x_1_3": {
+            "decision": 25,
+            "x": 1.3049026727676392,
+            "z": 0.0
+          },
+          "final_position": {
+            "x": 3.069262742996216,
+            "y": 0.0,
+            "z": -0.33453163504600525
+          },
+          "cold_next_exact": true
+        },
+        {
+          "file": "2026111842.maze-clear.nav-turn10.json",
+          "sha256": "043f63c18fa469f465017f6fef4bac547eea19ed2c6cbd3454befe0023b6291c",
+          "scene": "maze-clear",
+          "arm": "nav-turn10",
+          "ate": true,
+          "hazard_pain": 0.0,
+          "first_visible_decision": 0,
+          "first_crossing_x_1_3": {
+            "decision": 25,
+            "x": 1.3049026727676392,
+            "z": 0.0
+          },
+          "final_position": {
+            "x": 3.992969274520874,
+            "y": 0.0,
+            "z": -0.13299021124839783
+          },
+          "cold_next_exact": true
+        },
+        {
+          "file": "2026111842.maze-left.nav-boost.json",
+          "sha256": "d23d6589e9602e6327367ce94d361c35f2044b81add70263a2bddea686eb81fa",
+          "scene": "maze-left",
+          "arm": "nav-boost",
+          "ate": false,
+          "hazard_pain": 0.0,
+          "first_visible_decision": null,
+          "first_crossing_x_1_3": null,
+          "final_position": {
+            "x": -0.30688604712486267,
+            "y": 0.0,
+            "z": 2.26798415184021
+          },
+          "cold_next_exact": true
+        },
+        {
+          "file": "2026111842.maze-left.nav-turn10.json",
+          "sha256": "652729dfc33b5dbb7785f5c4d4ba31cdc3ff5bdae5ac8f06eb53db9bb08a9a69",
+          "scene": "maze-left",
+          "arm": "nav-turn10",
+          "ate": false,
+          "hazard_pain": 0.0,
+          "first_visible_decision": null,
+          "first_crossing_x_1_3": null,
+          "final_position": {
+            "x": -1.2294460535049438,
+            "y": 0.0,
+            "z": 1.6004555225372314
+          },
+          "cold_next_exact": true
+        },
+        {
+          "file": "2026111842.maze-neutral.nav-boost.json",
+          "sha256": "650d7469e273ea1e6e5f8056b510c907471fec2ad3903709ff20a60cc2b6acef",
+          "scene": "maze-neutral",
+          "arm": "nav-boost",
+          "ate": true,
+          "hazard_pain": 0.0,
+          "first_visible_decision": 0,
+          "first_crossing_x_1_3": null,
+          "final_position": {
+            "x": 0.27144601941108704,
+            "y": 0.0,
+            "z": -1.5441428422927856
+          },
+          "cold_next_exact": true
+        },
+        {
+          "file": "2026111842.maze-neutral.nav-turn10.json",
+          "sha256": "066c10020479253e6035a472335d83d534e59bdec66490c18c47e75e7411e17a",
+          "scene": "maze-neutral",
+          "arm": "nav-turn10",
+          "ate": true,
+          "hazard_pain": 0.0,
+          "first_visible_decision": 0,
+          "first_crossing_x_1_3": {
+            "decision": 108,
+            "x": 1.302577018737793,
+            "z": 0.1539103388786316
+          },
+          "final_position": {
+            "x": 1.5073720216751099,
+            "y": 0.0,
+            "z": 0.22598972916603088
+          },
+          "cold_next_exact": true
+        },
+        {
+          "file": "2026111842.maze-right.nav-boost.json",
+          "sha256": "71caa9d45ce48fe11dff6e27be40985cfe1de41fe4bf6efab93700a25bedcb7e",
+          "scene": "maze-right",
+          "arm": "nav-boost",
+          "ate": false,
+          "hazard_pain": 0.0,
+          "first_visible_decision": 113,
+          "first_crossing_x_1_3": null,
+          "final_position": {
+            "x": -0.45547980070114136,
+            "y": 0.0,
+            "z": -1.9788591861724854
+          },
+          "cold_next_exact": true
+        },
+        {
+          "file": "2026111842.maze-right.nav-turn10.json",
+          "sha256": "63f9aa3998b0212f7ef8a37d00caffddb627c4b37b4883eb2763c9309569ad01",
+          "scene": "maze-right",
+          "arm": "nav-turn10",
+          "ate": false,
+          "hazard_pain": 0.0,
+          "first_visible_decision": null,
+          "first_crossing_x_1_3": null,
+          "final_position": {
+            "x": -0.9470179080963135,
+            "y": 0.0,
+            "z": 1.7725327014923096
+          },
+          "cold_next_exact": true
+        }
+      ]
+    }
+  ]
+}
