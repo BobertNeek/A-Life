@@ -472,6 +472,7 @@ fn wire_spatial_trace(p: &BrainPhenotype, weights: &mut [f32]) -> Result<Vec<ser
 fn wire_local_spatial_lattice(
     p: &BrainPhenotype,
     weights: &mut [f32],
+    persistent: bool,
 ) -> Result<Vec<serde_json::Value>> {
     let mut counts = [0usize; 2];
     let mut edits = Vec::new();
@@ -492,9 +493,17 @@ fn wire_local_spatial_lattice(
             let bc = b % 4;
             let adjacent = ar.abs_diff(br) + ac.abs_diff(bc) == 1;
             let after = if a == b {
-                0.4
+                if persistent {
+                    0.85
+                } else {
+                    0.4
+                }
             } else if adjacent {
-                0.1
+                if persistent {
+                    0.06
+                } else {
+                    0.1
+                }
             } else {
                 0.0
             };
@@ -507,6 +516,55 @@ fn wire_local_spatial_lattice(
     }
     if counts != [256, 256] {
         return Err(format!("unexpected lattice block geometry {counts:?}").into());
+    }
+    Ok(edits)
+}
+/// Map the eight real lateral range rays into four adjacent input cells.
+/// This is an egocentric sensory trace, not a privileged world map.
+fn wire_visual_lattice_inputs(
+    p: &BrainPhenotype,
+    weights: &mut [f32],
+) -> Result<Vec<serde_json::Value>> {
+    use std::collections::BTreeSet;
+    let mut used_sources = BTreeSet::new();
+    let mut edits = Vec::new();
+    for ray in 0..8u16 {
+        let target = 896 + u32::from(ray / 2);
+        let edge = p
+            .sensor_encoder()
+            .assignments()
+            .iter()
+            .filter(|a| {
+                a.source_group() == SensorEncoderSourceGroup::SensoryChannel
+                    && a.source_index() == ray
+            })
+            .filter(|a| !used_sources.contains(&a.target_neuron()))
+            // A shared encoder neuron is not a clean ray channel.
+            .filter(|a| {
+                p.sensor_encoder()
+                    .assignments()
+                    .iter()
+                    .filter(|b| b.target_neuron() == a.target_neuron())
+                    .count()
+                    == 1
+            })
+            .find_map(|a| {
+                p.synapses()
+                    .iter()
+                    .enumerate()
+                    .find(|(_, e)| {
+                        e.kind() == CompiledSynapseKind::Recurrent
+                            && e.route_index() == 0
+                            && e.source() == a.target_neuron()
+                            && e.target() == target
+                    })
+                    .map(|(i, _)| (i, a.target_neuron()))
+            })
+            .ok_or_else(|| format!("no disjoint ray {ray} input to grid cell {target}"))?;
+        used_sources.insert(edge.1);
+        let before = weights[edge.0];
+        weights[edge.0] = before + 2.0;
+        edits.push(json!({"role":"egocentric_visual_grid_input","ray":ray,"index":edge.0,"source":edge.1,"target":target,"before":before,"after":weights[edge.0]}));
     }
     Ok(edits)
 }
@@ -693,15 +751,40 @@ fn trial(spec: TrialSpec<'_>) -> Result<serde_json::Value> {
             }
         }
     }
-    if arm == "nav-edit" || arm == "nav-combined" || arm == "nav-lattice" {
+    if arm == "nav-edit"
+        || arm == "nav-combined"
+        || arm == "nav-lattice"
+        || arm == "nav-strong"
+        || arm == "nav-care"
+        || arm == "nav-care2"
+        || arm == "nav-map"
+    {
         if config.sensor_profile != SensorProfile::GroundedTerrainVisionV1 {
             return Err("navigation circuit requires terrain vision".into());
         }
         edits.extend(wire_spatial_trace(&p, &mut weights)?);
-        if arm == "nav-lattice" {
-            edits.extend(wire_local_spatial_lattice(&p, &mut weights)?);
+        if arm == "nav-lattice"
+            || arm == "nav-strong"
+            || arm == "nav-care"
+            || arm == "nav-care2"
+            || arm == "nav-map"
+        {
+            edits.extend(wire_local_spatial_lattice(
+                &p,
+                &mut weights,
+                arm == "nav-map",
+            )?);
+            if arm == "nav-map" {
+                edits.extend(wire_visual_lattice_inputs(&p, &mut weights)?);
+            }
         }
-        if arm == "nav-combined" || arm == "nav-lattice" {
+        if arm == "nav-combined"
+            || arm == "nav-lattice"
+            || arm == "nav-strong"
+            || arm == "nav-care"
+            || arm == "nav-care2"
+            || arm == "nav-map"
+        {
             // Grounded target distance is available only for a seen object.
             // Bias exploratory approach without inventing a food label or taste.
             let reference = p
@@ -724,7 +807,16 @@ fn trial(spec: TrialSpec<'_>) -> Result<serde_json::Value> {
                     && matches!(edge.kind(), CompiledSynapseKind::Decoder(c) if c.head()==DecoderHeadKind::ActionCandidate && c.family()==CandidateActionFamily::Approach && c.input_lane()==2)
                 {
                     let before = weights[i];
-                    weights[i] = before + 24.0;
+                    weights[i] = before
+                        + if arm == "nav-strong"
+                            || arm == "nav-care"
+                            || arm == "nav-care2"
+                            || arm == "nav-map"
+                        {
+                            80.0
+                        } else {
+                            24.0
+                        };
                     count += 1;
                     edits.push(json!({"role":"seen_object_exploration","index":i,"before":before,"after":weights[i]}));
                 }
@@ -732,6 +824,43 @@ fn trial(spec: TrialSpec<'_>) -> Result<serde_json::Value> {
             if count == 0 {
                 return Err("no approach distance decoder for reference motor".into());
             }
+        }
+    }
+    if arm == "nav-care" || arm == "nav-care2" || arm == "nav-map" {
+        // Curiosity about an actually contacted object, not a food or safety oracle.
+        // Strong bitter/pain avoidance remains a separate signal and is tested.
+        let reference = p
+            .synapses()
+            .iter()
+            .filter_map(|edge| match edge.kind() {
+                CompiledSynapseKind::Decoder(c)
+                    if c.head() == DecoderHeadKind::ActionCandidate
+                        && c.family() == CandidateActionFamily::Ingest =>
+                {
+                    Some(edge.source())
+                }
+                _ => None,
+            })
+            .max()
+            .ok_or("no ingest reference")?;
+        let mut count = 0;
+        for (i, edge) in p.synapses().iter().enumerate() {
+            if edge.source() == reference
+                && matches!(edge.kind(), CompiledSynapseKind::Decoder(c) if c.head()==DecoderHeadKind::ActionCandidate && c.family()==CandidateActionFamily::Ingest && c.input_lane()==18)
+            {
+                let before = weights[i];
+                weights[i] = before
+                    + if arm == "nav-care2" || arm == "nav-map" {
+                        -20.0
+                    } else {
+                        4.0
+                    };
+                count += 1;
+                edits.push(json!({"role":"contacted_object_sampling","index":i,"before":before,"after":weights[i]}));
+            }
+        }
+        if count == 0 {
+            return Err("no ingest contact decoder for reference motor".into());
         }
     }
     let asset = if arm == "untouched" {
@@ -794,12 +923,15 @@ fn trial(spec: TrialSpec<'_>) -> Result<serde_json::Value> {
     let trainer = CpuFoundationTrainer::new(p, asset, mask, AdamWConfig::default())?;
     let before = serde_json::to_vec(&trainer.checkpoint())?;
     let own = old.organism_id();
-    let distance =
-        if scene.starts_with("far-") || scene == "obstacle-food" || scene.starts_with("maze-") {
-            2.5
-        } else {
-            0.25
-        };
+    let distance = if scene.starts_with("far-")
+        || scene == "obstacle-food"
+        || (scene.starts_with("maze-")
+            && !["maze-near", "maze-neutral", "maze-bitter"].contains(&scene))
+    {
+        2.5
+    } else {
+        0.25
+    };
     let target_position = if scene.starts_with("maze-") {
         Vec3f::new(distance, 0., 0.)
     } else if scene.ends_with("-left") {
@@ -816,7 +948,7 @@ fn trial(spec: TrialSpec<'_>) -> Result<serde_json::Value> {
         let wall = match scene {
             "maze-left" => vec![[1.0, -4.0, 1.3, 0.8, 0.0, 2.0]],
             "maze-right" => vec![[1.0, -0.8, 1.3, 4.0, 0.0, 2.0]],
-            "maze-clear" => vec![],
+            "maze-clear" | "maze-near" | "maze-neutral" | "maze-bitter" => vec![],
             _ => return Err("unknown maze scene".into()),
         };
         let terrain = WorldTerrain::new(
@@ -846,6 +978,11 @@ fn trial(spec: TrialSpec<'_>) -> Result<serde_json::Value> {
             token_id: None,
         })?;
     }
+    let scene_hazard = if scene == "maze-bitter" {
+        0.3
+    } else {
+        target_hazard_pain
+    };
     let object = if scene == "toy" {
         world.spawn_toy("target", target_position, true)?
     } else {
@@ -855,15 +992,15 @@ fn trial(spec: TrialSpec<'_>) -> Result<serde_json::Value> {
             organism_id: None,
             position: target_position,
             nutrition: 0.6,
-            hazard_pain: target_hazard_pain,
+            hazard_pain: scene_hazard,
             radius: 0.5,
             token_id: None,
         })?
     };
     let mut physical = world.entity(object).unwrap().grounded_physical;
-    physical.chemical[0] = if scene.starts_with("bitter-food") {
+    physical.chemical[0] = if scene.starts_with("bitter-food") || scene == "maze-bitter" {
         -0.85
-    } else if scene == "neutral-food" {
+    } else if scene == "neutral-food" || scene == "maze-neutral" {
         0.
     } else if scene == "toy" {
         0.
@@ -990,7 +1127,7 @@ fn trial(spec: TrialSpec<'_>) -> Result<serde_json::Value> {
             // Detached impulse/ablation experiment: inputs are edited only in a
             // copied replay, never in the live world or policy state.
             let lattice_pulse = if tick == 0
-                && arm == "nav-lattice"
+                && (arm == "nav-lattice" || arm == "nav-map")
                 && std::env::var_os("ALIFE_RESEARCH_GRID_PULSE").is_some()
             {
                 let grid_edges = trainer
@@ -1231,7 +1368,7 @@ fn trial(spec: TrialSpec<'_>) -> Result<serde_json::Value> {
     };
     let r = host.world().organism_registry().get(own).unwrap();
     Ok(
-        json!({"sleep_probe":sleep_probe,"research_fast_write_sham":std::env::var_os("ALIFE_RESEARCH_FAST_WRITE_SHAM").is_some(),"neural_changes":neural_changes,"seed":seed,"arm":arm,"scene":scene,"edits":edits,"source_digest":source.digest(),"candidate_digest":candidate_digest,"changed_weights":changed_weights,"experimental_graph":experimental,"active_tiles":trainer.phenotype().budgets().global.active_tiles,"microstep_count":trainer.phenotype().microstep_count(),"total_synapses":trainer.phenotype().synapses().len(),"preparation_ticks":preparation_ticks,"target_hazard_pain":target_hazard_pain,"initial_biology":initial_biology,"optimizer_unchanged":true,"cold_next_step_exact":true,"target_active":!host.world().entity(object).unwrap().consumed,"final_position":host.world().entity(host.world().entity_id("learner").unwrap()).unwrap().position,"final_target_carrier":host.world().entity(object).unwrap().carried_by,"final_body":r.biochemistry().body,"final_homeostasis":r.biochemistry().homeostasis,"rows":rows}),
+        json!({"sleep_probe":sleep_probe,"research_fast_write_sham":std::env::var_os("ALIFE_RESEARCH_FAST_WRITE_SHAM").is_some(),"neural_changes":neural_changes,"seed":seed,"arm":arm,"scene":scene,"edits":edits,"source_digest":source.digest(),"candidate_digest":candidate_digest,"changed_weights":changed_weights,"experimental_graph":experimental,"active_tiles":trainer.phenotype().budgets().global.active_tiles,"microstep_count":trainer.phenotype().microstep_count(),"total_synapses":trainer.phenotype().synapses().len(),"preparation_ticks":preparation_ticks,"target_hazard_pain":scene_hazard,"initial_biology":initial_biology,"optimizer_unchanged":true,"cold_next_step_exact":true,"target_active":!host.world().entity(object).unwrap().consumed,"final_position":host.world().entity(host.world().entity_id("learner").unwrap()).unwrap().position,"final_target_carrier":host.world().entity(object).unwrap().carried_by,"final_body":r.biochemistry().body,"final_homeostasis":r.biochemistry().homeostasis,"rows":rows}),
     )
 }
 fn graph_report(p: &BrainPhenotype) -> serde_json::Value {
@@ -1322,6 +1459,9 @@ fn main() -> Result<()> {
                 "maze-clear",
                 "maze-left",
                 "maze-right",
+                "maze-near",
+                "maze-neutral",
+                "maze-bitter",
             ]
             .contains(s)
         })
@@ -1357,6 +1497,10 @@ fn main() -> Result<()> {
         "nav-factor" => vec![("nav-base", 0.), ("nav-edit", 0.)],
         "nav-combined-factor" => vec![("nav-base", 0.), ("nav-combined", 0.)],
         "nav-lattice-factor" => vec![("nav-base", 0.), ("nav-lattice", 0.)],
+        "nav-strong-factor" => vec![("nav-base", 0.), ("nav-strong", 0.)],
+        "nav-care-factor" => vec![("nav-base", 0.), ("nav-care", 0.)],
+        "nav-care2-factor" => vec![("nav-base", 0.), ("nav-care2", 0.)],
+        "nav-map-factor" => vec![("nav-base", 0.), ("nav-map", 0.)],
         "bold-factor" => vec![("whole-care", 0.), ("whole-care-bold", 0.)],
         "contact" => vec![("whole-care-v5", 0.), ("whole-care", 0.)],
         "whole" => vec![

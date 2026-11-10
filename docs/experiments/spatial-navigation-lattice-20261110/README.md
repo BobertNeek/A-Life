@@ -13,3 +13,7 @@ ALIFE_RESEARCH_NAV_TERRAIN=1 ALIFE_RESEARCH_GRID_PULSE=1 cargo run -p alife_trai
 ```
 
 Inspiration: https://arxiv.org/abs/2301.06820 and https://arxiv.org/html/2410.18832v2. Both papers use supplied spatial representations; this probe must derive sensory data from the simulated creature’s view and cannot assume a hidden complete map. CPU probes are not RTX or gameplay qualification.
+
+## Egocentric input and care probes
+
+A later candidate connects eight distinct observed range-ray encoder channels into four adjacent lattice input cells and increases local self-recurrence. A detached pulse/ablation smoke test showed a small, decaying local response. This is an egocentric sensory trace, not an allocated global map, occupancy mask, goal gradient, or validated maze solution. Normal mirrored-wall tests still hide the target from initial visual candidates. A stronger visible-object exploration edit ate far food in one 120-decision paired open trial where the baseline did not, while neither ate the neutral target or solved either wall in that small trial; this is not a reliability or safety claim. Contact-bias alternatives and actual hazardous food are under test. Never promote these results into a trained life or infer learning without controlled retention tests.
