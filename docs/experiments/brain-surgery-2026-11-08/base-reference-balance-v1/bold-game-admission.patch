@@ -1,0 +1,112 @@
+--- a/crates/alife_game_app/src/new_game_lifecycle.rs
++++ b/crates/alife_game_app/src/new_game_lifecycle.rs
+@@ -39,6 +39,9 @@
+     N2048Candidate {
+         asset_path: PathBuf,
+     },
++    N2048ExperimentalCandidate {
++        asset_path: PathBuf,
++    },
+ }
+ 
+ impl NewGameFounderSelection {
+@@ -46,6 +49,13 @@
+         match value {
+             "builtin-nano512" => Ok(Self::BuiltinNano512),
+             "scaled-choice-nociceptive-v1" => Ok(Self::ScaledChoiceNociceptiveV1),
++            _ if value.starts_with("n2048-experimental:")
++                && value.len() > "n2048-experimental:".len() =>
++            {
++                Ok(Self::N2048ExperimentalCandidate {
++                    asset_path: PathBuf::from(&value["n2048-experimental:".len()..]),
++                })
++            }
+             _ if value.starts_with("n2048:") && value.len() > "n2048:".len() => {
+                 Ok(Self::N2048Candidate {
+                     asset_path: PathBuf::from(&value["n2048:".len()..]),
+@@ -117,6 +127,14 @@
+                 &scaled_choice_candidate()?,
+             )?
+         }
++        NewGameFounderSelection::N2048ExperimentalCandidate { asset_path } => {
++            config.brain_class = BrainScaleTier::Standard2048;
++            let asset = FoundationWeightAsset::decode_canonical(&fs::read(asset_path)?)?;
++            config.sensor_profile = asset.manifest().sensor_profile();
++            alife_world::create_canonical_new_game_with_n2048_experimental_candidate(
++                &config, &asset,
++            )?
++        }
+         NewGameFounderSelection::N2048Candidate { asset_path } => {
+             config.brain_class = BrainScaleTier::Standard2048;
+             let asset = FoundationWeightAsset::decode_canonical(&fs::read(asset_path)?)?;
+@@ -218,7 +236,10 @@
+     create_backend: impl FnOnce() -> Result<GpuClosedLoopBackend, alife_core::ScaffoldContractError>,
+ ) -> Result<CanonicalNewGameLaunchResult, GameAppShellError> {
+     let brain_class = match &founder {
+-        NewGameFounderSelection::N2048Candidate { .. } => BrainScaleTier::Standard2048,
++        NewGameFounderSelection::N2048Candidate { .. }
++        | NewGameFounderSelection::N2048ExperimentalCandidate { .. } => {
++            BrainScaleTier::Standard2048
++        }
+         _ => BrainScaleTier::Nano512,
+     };
+     let staged = stage_phase3_new_game_with_founder(request, founder)?;
+@@ -537,6 +558,22 @@
+     };
+ 
+     #[test]
++    fn experimental_founder_is_an_explicit_fresh_game_selection() {
++        assert_eq!(
++            NewGameFounderSelection::parse("n2048-experimental:/tmp/brain.alife-foundation")
++                .unwrap(),
++            NewGameFounderSelection::N2048ExperimentalCandidate {
++                asset_path: PathBuf::from("/tmp/brain.alife-foundation")
++            },
++        );
++        assert!(NewGameFounderSelection::parse("n2048-experimental:").is_err());
++        assert!(matches!(
++            NewGameFounderSelection::parse("n2048:/tmp/brain.alife-foundation").unwrap(),
++            NewGameFounderSelection::N2048Candidate { .. }
++        ));
++    }
++
++    #[test]
+     fn n2048_new_game_save_reload_preserves_exact_candidate_and_class() {
+         let seed = 240_826;
+         let capacity = BrainCapacityClass::n2048();
+--- a/crates/alife_game_app/src/gpu_live_runtime.rs
++++ b/crates/alife_game_app/src/gpu_live_runtime.rs
+@@ -678,12 +678,19 @@
+             let capacity = BrainCapacityClass::n2048();
+             let construction =
+                 foundation_construction_development(&genome, &capacity, &development)?;
+-            let (phenotype, compiler_inputs) =
++            let (phenotype, compiler_inputs) = if asset.is_n2048_experimental_graph() {
++                PhenotypeCompiler::compile_n2048_experimental_foundation_candidate(
++                    genome.clone(),
++                    construction,
++                    asset.clone(),
++                )?
++            } else {
+                 PhenotypeCompiler::compile_n2048_foundation_candidate(
+                     genome.clone(),
+                     construction,
+                     asset.clone(),
+-                )?;
++                )?
++            };
+             (phenotype, compiler_inputs, None)
+         } else if selects_legacy_nano512_compatibility_from_record(&admission)? {
+             let foundation = FoundationWeightAsset::builtin_nano512_v1(sensor_profile)?;
+--- a/crates/alife_game_app/src/production_voxel_frontend.rs
++++ b/crates/alife_game_app/src/production_voxel_frontend.rs
+@@ -1003,7 +1003,8 @@
+         }
+         ProductionWorldSource::NewGame { seed } => {
+             let founder_class = match launch.new_game_founder {
+-                crate::NewGameFounderSelection::N2048Candidate { .. } => {
++                crate::NewGameFounderSelection::N2048Candidate { .. }
++                | crate::NewGameFounderSelection::N2048ExperimentalCandidate { .. } => {
+                     alife_core::BrainScaleTier::Standard2048
+                 }
+                 _ => alife_core::BrainScaleTier::Nano512,
