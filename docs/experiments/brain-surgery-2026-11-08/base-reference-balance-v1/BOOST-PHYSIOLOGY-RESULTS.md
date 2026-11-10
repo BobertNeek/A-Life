@@ -1,0 +1,7 @@
+# Prepared-physiology CPU comparison
+
+The frozen 1.25× two-weight candidate was compared with whole-care in the prospective 24-trial matrix: four new paired seeds 2026111518–1521, nearby positive food, far positive food and harmless bitter food, 32 neural steps, 600 world-only preparation ticks. Preparation advanced body and world physiology without any neural decisions, so these are not experienced or trained lives. The original newborn body energy was 0.4; one initial sample after preparation had energy 0.39935, hunger 0.70047, fatigue 0.03705 and brain ATP 0.44969. Fatigue is low: this does not test a meaningful hunger-versus-fatigue conflict.
+
+Both arms consumed nearby food 4/4. Boost consumed far food 2/4 vs original 0/4. Both left harmless bitter food active 4/4. This is another bounded observation under a prepared body, not an independent lifetime-learning or GPU result. All 24 exact cold-next-step and unchanged founder-optimizer checks were true. No accepted brain, current saved life or training checkpoint was replaced. Full raw receipts remain local, with hashes and initial-physiology data in `boost-physiology-summary.json`.
+
+These bodies remain hungry with mild fatigue, so further testing must include competing needs and alternatives, longer bounded episodes, and modern runtime/GPU compatibility before promotion. A short failure to consume is not proof of inability, and bitter rejection is not evidence of learned aversion.
