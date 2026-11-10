@@ -1,0 +1,80 @@
+{
+  "approach_edits": [
+    {
+      "after": 2.799999952316284,
+      "before": 4.0,
+      "index": 25968
+    },
+    {
+      "after": 14.0,
+      "before": 20.0,
+      "index": 25983
+    }
+  ],
+  "approach_scale": 0.699999988079071,
+  "choice": "red",
+  "choice_was_safe_cue": true,
+  "cold_next_exact": true,
+  "exposures": [
+    {
+      "consumed_at": 3,
+      "episode": 0,
+      "is_red": true,
+      "pain_delta": 0.0,
+      "safe": true,
+      "target": 2
+    },
+    {
+      "consumed_at": 2,
+      "episode": 1,
+      "is_red": false,
+      "pain_delta": 0.24000000953674316,
+      "safe": false,
+      "target": 3
+    },
+    {
+      "consumed_at": 2,
+      "episode": 2,
+      "is_red": true,
+      "pain_delta": 0.0,
+      "safe": true,
+      "target": 4
+    },
+    {
+      "consumed_at": 2,
+      "episode": 3,
+      "is_red": false,
+      "pain_delta": 0.2315065562725067,
+      "safe": false,
+      "target": 5
+    }
+  ],
+  "fast_changed": 25792,
+  "founder_optimizer_unchanged": true,
+  "probe_blue_id": 7,
+  "probe_red_id": 6,
+  "probe_steps": 3,
+  "red_left": true,
+  "safe_red": true,
+  "schema": "cue-study-pilot-v1",
+  "seed": 2026111546,
+  "sham": false,
+  "probe_contacts": [
+    {
+      "tick": 1,
+      "target": 7,
+      "contact": "Touch"
+    },
+    {
+      "tick": 2,
+      "target": 6,
+      "contact": "Touch"
+    },
+    {
+      "tick": 3,
+      "target": 6,
+      "contact": "Consumed"
+    }
+  ],
+  "full_receipt_sha256": "4965c7e575800f9599c320f4da829fbc43ecb30f85acc4151e520a1dd5832e89"
+}
