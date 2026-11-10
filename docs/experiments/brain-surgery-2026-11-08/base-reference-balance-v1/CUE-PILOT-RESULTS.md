@@ -1,0 +1,9 @@
+# Real cue-outcome learning task: feasibility pilot
+
+One fresh current-main CPU experimental founder, seed 2026111546, normal fast writes, red safe and red placed left at test. This is the predeclared feasibility pilot, not the counterbalanced sham-controlled study. Source `cue-study.patch`, base main c3aec16, pinned research support files; no user creature, default asset or GPU run was touched.
+
+The creature actually consumed all four single-object exposures, at decisions [4,2,2,2] within their respective windows. The safe red exposures reported pain delta 0; harmful blue exposures reported pain deltas 0.2400 and 0.2315. Objects used matching physical cues except color and hidden injury potential, while timestamps and object identities necessarily differed. Training involved no forced action or fabricated reward.
+
+In the two-food probe, both red and blue were harmless, equally nutritious and physically matched except color and side. Neither was consumed within 64 decisions; all 64 recorded physical outcomes were movement, targeting red 31 times and blue 33 times. The task is therefore censored for its primary first-consumption measure; the movement counts do not establish a preference, learning or failure to learn. Both colors remain present. The experiment confirmed a usable exposure path and a test-stage choice/consumption problem, which must be diagnosed without forcing the answer. Fast state changed in 26,040 positions, and exact cold-next-step continuation and unchanged founder optimizer checks passed.
+
+`cue-pilot-summary.json` contains the exposures, pain and outcome counts plus SHA-256 of the complete local trace. No learned user state or neural arrays are published. Before expanding to the promised counterbalanced normal/sham matrix, inspect candidate features, targets, action scores and legality at the two-food probe; do not treat a no-choice pilot as a learning result.
