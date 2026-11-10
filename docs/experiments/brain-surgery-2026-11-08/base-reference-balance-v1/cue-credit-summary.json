@@ -1,0 +1,723 @@
+{
+  "seed": 2026111551,
+  "reports": [
+    {
+      "order": "safe-first",
+      "same_exposures": true,
+      "same_probe_actions_targets_contacts": true,
+      "choice": "blue",
+      "original_choice": "blue",
+      "cold_next_exact": true,
+      "credit_events": [
+        {
+          "episode": 0,
+          "safe": true,
+          "is_red": true,
+          "action": {
+            "candidate_count": 12,
+            "forced_slots": [
+              4,
+              0,
+              0,
+              2,
+              2,
+              2,
+              4,
+              4,
+              3,
+              0,
+              2,
+              4
+            ],
+            "motor_candidates": [
+              1,
+              null,
+              3,
+              null,
+              null,
+              null
+            ],
+            "motor_masks": [
+              518,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "old_joint_log_probability": -0.4306674003601074,
+            "representative": 3,
+            "representative_mask": 4095,
+            "temperature": 1.0
+          },
+          "pain_delta": 0.0,
+          "modulator_frame": [
+            0.2922930121421814,
+            0.0,
+            0.019619451835751534,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "groups": [
+            {
+              "family": "Approach",
+              "lane": 6,
+              "count": 16,
+              "mean_eligibility": 1.0,
+              "sum_fast_delta": 0.00010813135904585991,
+              "mean_receptor_factor": 0.005302554462105036
+            },
+            {
+              "family": "Approach",
+              "lane": 8,
+              "count": 16,
+              "mean_eligibility": 0.1341755148023367,
+              "sum_fast_delta": 1.4508580284511297e-05,
+              "mean_receptor_factor": 0.005302554462105036
+            },
+            {
+              "family": "Ingest",
+              "lane": 6,
+              "count": 16,
+              "mean_eligibility": -0.27451114915311337,
+              "sum_fast_delta": -2.968326556151979e-05,
+              "mean_receptor_factor": 0.005302554462105036
+            },
+            {
+              "family": "Ingest",
+              "lane": 8,
+              "count": 16,
+              "mean_eligibility": -0.030501239467412233,
+              "sum_fast_delta": -3.298140747315381e-06,
+              "mean_receptor_factor": 0.005302554462105036
+            }
+          ]
+        },
+        {
+          "episode": 1,
+          "safe": false,
+          "is_red": false,
+          "action": {
+            "candidate_count": 12,
+            "forced_slots": [
+              4,
+              0,
+              0,
+              2,
+              2,
+              2,
+              4,
+              4,
+              3,
+              0,
+              2,
+              4
+            ],
+            "motor_candidates": [
+              9,
+              null,
+              3,
+              null,
+              null,
+              null
+            ],
+            "motor_masks": [
+              518,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "old_joint_log_probability": -1.6370271444320679,
+            "representative": 3,
+            "representative_mask": 4095,
+            "temperature": 1.0
+          },
+          "pain_delta": 0.24000000953674316,
+          "modulator_frame": [
+            0.30956873297691345,
+            0.24000000953674316,
+            0.017198238521814346,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "groups": [
+            {
+              "family": "Approach",
+              "lane": 6,
+              "count": 16,
+              "mean_eligibility": 0.949999988079071,
+              "sum_fast_delta": -0.0011665606903079606,
+              "mean_receptor_factor": -0.060216695070266724
+            },
+            {
+              "family": "Approach",
+              "lane": 8,
+              "count": 16,
+              "mean_eligibility": 0.887812614440918,
+              "sum_fast_delta": -0.0010901965590619511,
+              "mean_receptor_factor": -0.060216695070266724
+            },
+            {
+              "family": "Ingest",
+              "lane": 6,
+              "count": 16,
+              "mean_eligibility": -0.2873296160250902,
+              "sum_fast_delta": 0.0003528286938490055,
+              "mean_receptor_factor": -0.060216695070266724
+            },
+            {
+              "family": "Ingest",
+              "lane": 8,
+              "count": 16,
+              "mean_eligibility": -0.3837770149111748,
+              "sum_fast_delta": 0.00047126197202373987,
+              "mean_receptor_factor": -0.060216695070266724
+            }
+          ]
+        },
+        {
+          "episode": 2,
+          "safe": true,
+          "is_red": true,
+          "action": {
+            "candidate_count": 12,
+            "forced_slots": [
+              4,
+              0,
+              0,
+              2,
+              2,
+              2,
+              4,
+              4,
+              3,
+              0,
+              2,
+              4
+            ],
+            "motor_candidates": [
+              1,
+              null,
+              3,
+              null,
+              null,
+              null
+            ],
+            "motor_masks": [
+              518,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "old_joint_log_probability": -0.22039319574832916,
+            "representative": 3,
+            "representative_mask": 4095,
+            "temperature": 1.0
+          },
+          "pain_delta": 0.0,
+          "modulator_frame": [
+            0.3080323338508606,
+            0.0,
+            0.008085302077233791,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "groups": [
+            {
+              "family": "Approach",
+              "lane": 6,
+              "count": 16,
+              "mean_eligibility": 1.0,
+              "sum_fast_delta": 4.4561922550201416e-05,
+              "mean_receptor_factor": 0.0021852166391909122
+            },
+            {
+              "family": "Approach",
+              "lane": 8,
+              "count": 16,
+              "mean_eligibility": 0.9860069155693054,
+              "sum_fast_delta": 4.3938336602877825e-05,
+              "mean_receptor_factor": 0.0021852166391909122
+            },
+            {
+              "family": "Ingest",
+              "lane": 6,
+              "count": 16,
+              "mean_eligibility": -0.5986613007262349,
+              "sum_fast_delta": -2.667731860128697e-05,
+              "mean_receptor_factor": 0.0021852166391909122
+            },
+            {
+              "family": "Ingest",
+              "lane": 8,
+              "count": 16,
+              "mean_eligibility": -0.38406388089060783,
+              "sum_fast_delta": -1.7114512957050465e-05,
+              "mean_receptor_factor": 0.0021852166391909122
+            }
+          ]
+        },
+        {
+          "episode": 3,
+          "safe": false,
+          "is_red": false,
+          "action": {
+            "candidate_count": 12,
+            "forced_slots": [
+              4,
+              0,
+              0,
+              2,
+              2,
+              2,
+              4,
+              4,
+              3,
+              0,
+              2,
+              4
+            ],
+            "motor_candidates": [
+              1,
+              null,
+              3,
+              null,
+              null,
+              null
+            ],
+            "motor_masks": [
+              518,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "old_joint_log_probability": -0.21895037591457367,
+            "representative": 3,
+            "representative_mask": 4095,
+            "temperature": 1.0
+          },
+          "pain_delta": 0.2315065562725067,
+          "modulator_frame": [
+            0.32453659176826477,
+            0.2315065562725067,
+            0.005006083287298679,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "groups": [
+            {
+              "family": "Approach",
+              "lane": 6,
+              "count": 16,
+              "mean_eligibility": 1.0,
+              "sum_fast_delta": -0.001248335924174171,
+              "mean_receptor_factor": -0.06121634319424629
+            },
+            {
+              "family": "Approach",
+              "lane": 8,
+              "count": 16,
+              "mean_eligibility": 1.0,
+              "sum_fast_delta": -0.0012483359096222557,
+              "mean_receptor_factor": -0.06121634319424629
+            },
+            {
+              "family": "Ingest",
+              "lane": 6,
+              "count": 16,
+              "mean_eligibility": -0.5776752112433314,
+              "sum_fast_delta": 0.0007211367301351856,
+              "mean_receptor_factor": -0.06121634319424629
+            },
+            {
+              "family": "Ingest",
+              "lane": 8,
+              "count": 16,
+              "mean_eligibility": -0.6830686102621257,
+              "sum_fast_delta": 0.0008527038589818403,
+              "mean_receptor_factor": -0.06121634319424629
+            }
+          ]
+        }
+      ],
+      "full_receipt_sha256": "e7f7f8794c724d43a6cc8cd97da4eaa6e75d7b0f10bec317a23f943b404dc40d"
+    },
+    {
+      "order": "harm-first",
+      "same_exposures": true,
+      "same_probe_actions_targets_contacts": true,
+      "choice": "red",
+      "original_choice": "red",
+      "cold_next_exact": true,
+      "credit_events": [
+        {
+          "episode": 0,
+          "safe": false,
+          "is_red": false,
+          "action": {
+            "candidate_count": 12,
+            "forced_slots": [
+              4,
+              0,
+              0,
+              2,
+              2,
+              2,
+              4,
+              4,
+              3,
+              0,
+              2,
+              4
+            ],
+            "motor_candidates": [
+              1,
+              null,
+              3,
+              null,
+              null,
+              null
+            ],
+            "motor_masks": [
+              518,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "old_joint_log_probability": -0.4306674003601074,
+            "representative": 3,
+            "representative_mask": 4095,
+            "temperature": 1.0
+          },
+          "pain_delta": 0.24000000953674316,
+          "modulator_frame": [
+            0.31075456738471985,
+            0.24000000953674316,
+            0.01961315982043743,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "groups": [
+            {
+              "family": "Approach",
+              "lane": 6,
+              "count": 16,
+              "mean_eligibility": 0.1341755148023367,
+              "sum_fast_delta": -0.00016297603289072704,
+              "mean_receptor_factor": -0.0595640130341053
+            },
+            {
+              "family": "Approach",
+              "lane": 8,
+              "count": 16,
+              "mean_eligibility": 1.0,
+              "sum_fast_delta": -0.0012146481066355186,
+              "mean_receptor_factor": -0.0595640130341053
+            },
+            {
+              "family": "Ingest",
+              "lane": 6,
+              "count": 16,
+              "mean_eligibility": -0.030501239467412233,
+              "sum_fast_delta": 3.704827536651911e-05,
+              "mean_receptor_factor": -0.0595640130341053
+            },
+            {
+              "family": "Ingest",
+              "lane": 8,
+              "count": 16,
+              "mean_eligibility": -0.27451114915311337,
+              "sum_fast_delta": 0.00033343444055367044,
+              "mean_receptor_factor": -0.0595640130341053
+            }
+          ]
+        },
+        {
+          "episode": 1,
+          "safe": true,
+          "is_red": true,
+          "action": {
+            "candidate_count": 12,
+            "forced_slots": [
+              4,
+              0,
+              0,
+              2,
+              2,
+              2,
+              4,
+              4,
+              3,
+              0,
+              2,
+              4
+            ],
+            "motor_candidates": [
+              9,
+              null,
+              3,
+              null,
+              null,
+              null
+            ],
+            "motor_masks": [
+              518,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "old_joint_log_probability": -1.599564790725708,
+            "representative": 3,
+            "representative_mask": 4095,
+            "temperature": 1.0
+          },
+          "pain_delta": 0.0,
+          "modulator_frame": [
+            0.30761346220970154,
+            0.0,
+            0.018519410863518715,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "groups": [
+            {
+              "family": "Approach",
+              "lane": 6,
+              "count": 16,
+              "mean_eligibility": 0.8878126107156277,
+              "sum_fast_delta": 9.06178370314592e-05,
+              "mean_receptor_factor": 0.0050052460283041
+            },
+            {
+              "family": "Approach",
+              "lane": 8,
+              "count": 16,
+              "mean_eligibility": 0.949999988079071,
+              "sum_fast_delta": 9.69658067333512e-05,
+              "mean_receptor_factor": 0.0050052460283041
+            },
+            {
+              "family": "Ingest",
+              "lane": 6,
+              "count": 16,
+              "mean_eligibility": -0.3837767466902733,
+              "sum_fast_delta": -3.91715407204174e-05,
+              "mean_receptor_factor": 0.0050052460283041
+            },
+            {
+              "family": "Ingest",
+              "lane": 8,
+              "count": 16,
+              "mean_eligibility": -0.2873295657336712,
+              "sum_fast_delta": -2.9327324227779172e-05,
+              "mean_receptor_factor": 0.0050052460283041
+            }
+          ]
+        },
+        {
+          "episode": 2,
+          "safe": false,
+          "is_red": false,
+          "action": {
+            "candidate_count": 12,
+            "forced_slots": [
+              4,
+              0,
+              0,
+              2,
+              2,
+              2,
+              4,
+              4,
+              3,
+              0,
+              2,
+              4
+            ],
+            "motor_candidates": [
+              1,
+              null,
+              3,
+              null,
+              null,
+              null
+            ],
+            "motor_masks": [
+              518,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "old_joint_log_probability": -0.22119562327861786,
+            "representative": 3,
+            "representative_mask": 4095,
+            "temperature": 1.0
+          },
+          "pain_delta": 0.2315065562725067,
+          "modulator_frame": [
+            0.3246918022632599,
+            0.2315065562725067,
+            0.006764777936041355,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "groups": [
+            {
+              "family": "Approach",
+              "lane": 6,
+              "count": 16,
+              "mean_eligibility": 0.9860069490969181,
+              "sum_fast_delta": -0.001221317083491158,
+              "mean_receptor_factor": -0.06074101850390434
+            },
+            {
+              "family": "Approach",
+              "lane": 8,
+              "count": 16,
+              "mean_eligibility": 1.0,
+              "sum_fast_delta": -0.0012386422531562857,
+              "mean_receptor_factor": -0.06074101850390434
+            },
+            {
+              "family": "Ingest",
+              "lane": 6,
+              "count": 16,
+              "mean_eligibility": -0.38406363129615784,
+              "sum_fast_delta": 0.0004757203898293483,
+              "mean_receptor_factor": -0.06074101850390434
+            },
+            {
+              "family": "Ingest",
+              "lane": 8,
+              "count": 16,
+              "mean_eligibility": -0.5986610036343336,
+              "sum_fast_delta": 0.0007415313957608305,
+              "mean_receptor_factor": -0.06074101850390434
+            }
+          ]
+        },
+        {
+          "episode": 3,
+          "safe": true,
+          "is_red": true,
+          "action": {
+            "candidate_count": 12,
+            "forced_slots": [
+              4,
+              0,
+              0,
+              2,
+              2,
+              2,
+              4,
+              4,
+              3,
+              0,
+              2,
+              4
+            ],
+            "motor_candidates": [
+              1,
+              null,
+              3,
+              null,
+              null,
+              null
+            ],
+            "motor_masks": [
+              518,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "old_joint_log_probability": -0.23050908744335175,
+            "representative": 3,
+            "representative_mask": 4095,
+            "temperature": 1.0
+          },
+          "pain_delta": 0.0,
+          "modulator_frame": [
+            0.3202120363712311,
+            0.0,
+            0.007444602902978659,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "groups": [
+            {
+              "family": "Approach",
+              "lane": 6,
+              "count": 16,
+              "mean_eligibility": 1.0,
+              "sum_fast_delta": 4.10307984566316e-05,
+              "mean_receptor_factor": 0.0020120549015700817
+            },
+            {
+              "family": "Approach",
+              "lane": 8,
+              "count": 16,
+              "mean_eligibility": 1.0,
+              "sum_fast_delta": 4.103104583919048e-05,
+              "mean_receptor_factor": 0.0020120549015700817
+            },
+            {
+              "family": "Ingest",
+              "lane": 6,
+              "count": 16,
+              "mean_eligibility": -0.6830684165470302,
+              "sum_fast_delta": -2.8026623112964444e-05,
+              "mean_receptor_factor": 0.0020120549015700817
+            },
+            {
+              "family": "Ingest",
+              "lane": 8,
+              "count": 16,
+              "mean_eligibility": -0.5776749630458653,
+              "sum_fast_delta": -2.37022468354553e-05,
+              "mean_receptor_factor": 0.0020120549015700817
+            }
+          ]
+        }
+      ],
+      "full_receipt_sha256": "5d65056669c119bf4d622945d545eaa977332473cc839a6bee4d372f115a2e22"
+    }
+  ]
+}
