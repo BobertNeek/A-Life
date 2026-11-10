@@ -58,7 +58,6 @@ pub mod neural;
 pub mod neural_receptors;
 pub mod packed_log;
 pub mod perception;
-pub mod visible_object_neural;
 pub mod phenotype;
 pub mod predictive;
 pub mod reference_brain;
@@ -71,6 +70,7 @@ pub mod traits;
 pub mod units;
 pub mod validation;
 pub mod version;
+pub mod visible_object_neural;
 
 pub use action::{
     heuristic_baseline_arbitrate, ActionArbitrationConfig, ActionArbitrationTrace,

@@ -155,6 +155,7 @@ pub fn sensor_profile_slug(profile: SensorProfile) -> &'static str {
         SensorProfile::PrivilegedAffordanceV1 => "privileged-affordance-v1",
         SensorProfile::GroundedObjectSlotsV1 => "grounded-object-slots-v1",
         SensorProfile::GroundedTerrainVisionV1 => "grounded-terrain-vision-v1",
+        SensorProfile::GroundedTerrainObjectPortsV2 => "grounded-terrain-object-ports-v2",
     }
 }
 
