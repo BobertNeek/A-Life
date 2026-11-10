@@ -1,0 +1,58 @@
+--- a/crates/alife_training/src/cpu/optional_vocal_host.rs
++++ b/crates/alife_training/src/cpu/optional_vocal_host.rs
+@@ -218,6 +218,8 @@
+     const OPTIONAL: bool;
+     const CHANNEL_NATIVE: bool = false;
+     const ACTUAL_CONTACT: bool = false;
++    #[cfg(test)]
++    const TEST_CONTACT_DISPATCH: bool = false;
+     fn administrative_receipt(_r:&Resident)->Result<Option<crate::cpu::ChannelNativeAdministrativeReceiptV1>,CpuHostError> {Ok(None)}
+     const MAGIC: &'static [u8];
+     const LINEAGE: &'static str;
+--- a/crates/alife_training/src/cpu/grouped_host_loop.rs
++++ b/crates/alife_training/src/cpu/grouped_host_loop.rs
+@@ -41,7 +41,10 @@
+         // action and semantic-memory qualification. Administration is reported
+         // separately; no total compute or body-price qualification is claimed.
+         if P::ACTUAL_CONTACT {
++            #[cfg(not(test))]
+             return Err(CpuHostError::State("actual-contact native authority/work qualification pending; activation blocked"));
++            #[cfg(test)]
++            if !P::TEST_CONTACT_DISPATCH { return Err(CpuHostError::State("actual-contact native authority/work qualification pending; activation blocked")); }
+         }
+         self.validate_founder(founder)?;
+         for (&id, r) in &self.residents {
+@@ -108,7 +111,12 @@
+         ) -> Result<PerceptionFrameDraft, ScaffoldContractError>,
+         mut receipts: Option<&mut Vec<alife_world::HeadlessMotorTransactionReceipt>>,
+     ) -> Result<CpuGroupedM2HostStepV1<P::Action>, CpuHostError> {
+-        if P::ACTUAL_CONTACT {return Err(CpuHostError::State("actual-contact host qualification pending; private dispatch blocked"));}
++        if P::ACTUAL_CONTACT {
++            #[cfg(not(test))]
++            return Err(CpuHostError::State("actual-contact host qualification pending; private dispatch blocked"));
++            #[cfg(test)]
++            if !P::TEST_CONTACT_DISPATCH { return Err(CpuHostError::State("actual-contact host qualification pending; private dispatch blocked")); }
++        }
+         let p = founder.phenotype();
+         let tick = self.world.tick();
+         let mut decisions = Vec::new();
+--- a/crates/alife_training/src/cpu/actual_contact_host.rs
++++ b/crates/alife_training/src/cpu/actual_contact_host.rs
+@@ -285,3 +285,7 @@
+ #[cfg(test)]
+ #[path = "actual_contact_owner_negative_tests.rs"]
+ mod owner_negative_tests;
++
++#[cfg(test)]
++#[path = "actual_contact_four_interval_tests.rs"]
++mod actual_contact_four_interval_tests;
+--- a/crates/alife_training/src/cpu/actual_contact_four_interval_tests.rs
++++ b/crates/alife_training/src/cpu/actual_contact_four_interval_tests.rs
+@@ -44,6 +44,7 @@
+     type Action = ActualContactActionV1;
+     const OPTIONAL: bool = false;
+     const ACTUAL_CONTACT: bool = true;
++    const TEST_CONTACT_DISPATCH: bool = true;
+     const MAGIC: &'static [u8] = CONTROL_MAGIC;
+     const LINEAGE: &'static str = "fresh-actual-contact-controlled-physics-v1/no-import";
+     const POLICY: &'static str = CONTROL_POLICY;
