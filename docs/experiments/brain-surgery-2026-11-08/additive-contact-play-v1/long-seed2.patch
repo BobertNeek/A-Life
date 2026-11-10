@@ -1,0 +1,9 @@
+--- a/crates/alife_training/src/cpu/actual_contact_four_interval_tests.rs
++++ b/crates/alife_training/src/cpu/actual_contact_four_interval_tests.rs
+@@ -634,3 +634,6 @@
+ #[test] fn additive_long_original() {run_long_natural_food_toy::<0,0x0043_484e_4c48_5331>();}
+ #[test] fn additive_long_candidate() {run_long_natural_food_toy::<1,0x0043_484e_4c48_5331>();}
+ #[test] fn additive_long_sham() {run_long_natural_food_toy::<2,0x0043_484e_4c48_5331>();}
++#[test] fn additive_long_original_seed2() {run_long_natural_food_toy::<0,0x0043_484e_4c48_5332>();}
++#[test] fn additive_long_candidate_seed2() {run_long_natural_food_toy::<1,0x0043_484e_4c48_5332>();}
++#[test] fn additive_long_sham_seed2() {run_long_natural_food_toy::<2,0x0043_484e_4c48_5332>();}
