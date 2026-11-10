@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -u
-root=/workspace/scratch/ee5e08a3ca9b/base-weight-study-20261110
+root="${ALIFE_CUE_ROOT:?Set ALIFE_CUE_ROOT to the study directory}"
 binary="$root/cue-palette-executable"
 test "$(sha256sum "$binary" | cut -d' ' -f1)" = "$(cut -d' ' -f1 "$root/cue-palette-matrix-binary.sha256")" || exit 1
 for seed in 2026111554 2026111555; do
