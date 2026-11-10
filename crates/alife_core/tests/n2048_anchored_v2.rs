@@ -368,6 +368,45 @@ fn anchored_v2_reproduction_binds_child_weights_for_multiple_generations() {
         .mutations
         .iter()
         .any(|r| matches!(r, MutationRecord::GeneticWeight { .. })));
+    let mut high_a = father.clone();
+    let mut high_b = mutated.clone();
+    high_a.reproduction.mutation_rate = ContinuousLocus::mean(1.0, 1.0).unwrap();
+    high_b.reproduction.mutation_rate = ContinuousLocus::mean(1.0, 1.0).unwrap();
+    let high = CreatureGenome::reproduce(&high_a, &high_b, 1002).unwrap();
+    assert_eq!(
+        high,
+        CreatureGenome::reproduce(&high_a, &high_b, 1002).unwrap()
+    );
+    assert_eq!(high.provenance.mutations.len(), MAX_MUTATION_RECORDS);
+    let indices: Vec<usize> = high
+        .provenance
+        .mutations
+        .iter()
+        .filter_map(|r| match r {
+            MutationRecord::GeneticWeight { index, .. } => Some(usize::from(*index)),
+            _ => None,
+        })
+        .collect();
+    assert!(indices.iter().filter(|&&i| i < 8192).count() > 300);
+    assert!(indices.iter().filter(|&&i| i >= 24_576).count() > 300);
+    let high_expressed = high.express().unwrap();
+    let high_development = high_expressed
+        .development_state_at(Tick::new(u64::from(
+            high_expressed.development.maturation_duration_ticks,
+        )))
+        .unwrap();
+    let (high_phenotype, _) = PhenotypeCompiler::compile_n2048_experimental_foundation_candidate(
+        high_expressed.brain_genome,
+        high_development,
+        high.n2048_foundation_candidate.clone().unwrap(),
+    )
+    .unwrap();
+    for head in [
+        DecoderHeadKind::ActionCandidate,
+        DecoderHeadKind::MemoryContext,
+    ] {
+        assert!(indices.iter().any(|&i| matches!(high_phenotype.synapses()[i].kind(), CompiledSynapseKind::Decoder(coord) if coord.head() == head)), "{head:?} was starved at the mutation-record cap");
+    }
     for (i, &actual) in values.iter().enumerate() {
         if let Some(&(before, after)) = mutations.get(&i) {
             assert!(

@@ -1259,18 +1259,38 @@ impl CreatureGenome {
                 .ok_or(ScaffoldContractError::PhenotypeCompile)?;
             // Inherit one genetic value per verified matching coordinate. These
             // are founder-genome values, never learned lifetime or fast state.
-            let mut inherited_weights = Vec::with_capacity(asset.weights().len());
-            for (index, (a, b)) in asset
+            let mut inherited_weights: Vec<f32> = asset
                 .weights()
                 .iter()
                 .zip(paternal_asset.weights())
-                .enumerate()
+                .map(|(a, b)| {
+                    if a.to_bits() == b.to_bits() || context.rng.next_u64() & 1 == 0 {
+                        *a
+                    } else {
+                        *b
+                    }
+                })
+                .collect();
+            // Randomize the examination order: when the bounded provenance
+            // budget is exhausted, every coordinate still has a fair chance.
+            let mut mutation_order: Vec<usize> = (0..inherited_weights.len()).collect();
+            if context.settings.mutation_rate > 0.0
+                && genome.provenance.mutations.len() < MAX_MUTATION_RECORDS
             {
-                let before = if a.to_bits() == b.to_bits() || context.rng.next_u64() & 1 == 0 {
-                    *a
-                } else {
-                    *b
-                };
+                for i in (1..mutation_order.len()).rev() {
+                    let bound = (i as u64) + 1;
+                    let threshold = bound.wrapping_neg() % bound;
+                    let pick = loop {
+                        let r = context.rng.next_u64();
+                        if r >= threshold {
+                            break (r % bound) as usize;
+                        }
+                    };
+                    mutation_order.swap(i, pick);
+                }
+            }
+            for index in mutation_order {
+                let before = inherited_weights[index];
                 let mut after = before;
                 if genome.provenance.mutations.len() < MAX_MUTATION_RECORDS
                     && context.rng.next_unit() < context.settings.mutation_rate
@@ -1308,7 +1328,7 @@ impl CreatureGenome {
                             });
                     }
                 }
-                inherited_weights.push(after);
+                inherited_weights[index] = after;
             }
             // Mutation provenance participates in the child's compiled ABI.
             // Recompile after recording it, and never bind weights if those
