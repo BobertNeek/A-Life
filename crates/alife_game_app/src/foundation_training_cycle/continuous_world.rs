@@ -6,6 +6,7 @@ mod runtime_profile;
 use alife_core::{N2048LivePolicyTransition, OrganismId};
 use alife_training::{
     CurrentTrainingCheckpointV1, FoundationTrainingBackendV1, FoundationTrainingHandoffV1,
+    ImitationExample, ImitationTarget,
 };
 use food_provenance::{FoodMealProvenance, MealProvenanceSummary};
 pub(super) use runtime_profile::{RuntimeProfile, MAX_PROFILE_BYTES};
@@ -117,6 +118,7 @@ struct CareRowEvidence {
     food_grab: bool,
     bundle_missing: bool,
     teacher_food_token_heard: bool,
+    score_trace: Option<serde_json::Value>,
 }
 
 struct ContinuousFoodEvidence {
@@ -128,6 +130,7 @@ struct ContinuousFoodEvidence {
 fn care_row_evidence(
     step: &crate::FoundationTrainingStep,
     food: &BTreeMap<u64, ContinuousFoodEvidence>,
+    trace_scores: bool,
 ) -> CareRowEvidence {
     let mut evidence = CareRowEvidence {
         food_candidate: step.frame.candidates().iter().any(|candidate| {
@@ -165,6 +168,24 @@ fn care_row_evidence(
             }
         }
     }
+    if trace_scores && evidence.food_candidate {
+        evidence.score_trace = Some(serde_json::json!({
+            "tick": step.frame.tick().raw(),
+            "representative_index": step.behavior.representative_index,
+            "representative_mask": step.behavior.representative_mask,
+            "motor_masks": step.behavior.motor_masks,
+            "motor_indices": step.behavior.motor_indices,
+            "candidate_count": step.frame.candidates().len(),
+            "logit_count": step.behavior.logits.len(),
+            "candidates": step.frame.candidates().iter().zip(&step.behavior.logits)
+                .map(|(candidate, logit)| serde_json::json!({
+                    "index": candidate.candidate_index,
+                    "action": candidate.action_id.raw(),
+                    "target": candidate.target.entity.map(|id| id.raw()),
+                    "logit": logit,
+                })).collect::<Vec<_>>(),
+        }));
+    }
     evidence
 }
 
@@ -177,6 +198,59 @@ fn care_row_summary(rows: &[CareRowEvidence]) -> serde_json::Value {
         "missing_bundle_rows":rows.iter().filter(|row| row.bundle_missing).count(),
         "teacher_food_token_heard_rows":rows.iter().filter(|row| row.teacher_food_token_heard).count(),
         "scope":"candidate presence and selected commands, not visibility, reachability or execution"})
+}
+
+fn care_score_trace_rows(rows: &[CareRowEvidence]) -> Vec<&serde_json::Value> {
+    rows.iter()
+        .filter_map(|row| row.score_trace.as_ref())
+        .collect()
+}
+
+/// Sparse labels are derived from the exact decision frame and its production
+/// factor masks. Only the manipulation factor is constrained; simultaneous
+/// locomotion, gaze, speech and posture remain ordinary policy decisions.
+fn safe_food_imitation_target(
+    frame: &alife_core::PerceptionFrame,
+    action: &PpoJointAction,
+    available: &[alife_core::WorldEntityId],
+) -> Result<ImitationTarget> {
+    let mask = frame
+        .candidates()
+        .iter()
+        .enumerate()
+        .fold(0u32, |mask, (index, candidate)| {
+            if index < 32
+                && candidate.action_id == alife_world::HeadlessActionIds::EAT
+                && matches!(
+                    candidate.observation,
+                    alife_core::CandidateObservationRef::ObjectSlot(_)
+                )
+                && candidate
+                    .target
+                    .entity
+                    .is_some_and(|id| available.contains(&id))
+                && action.representative_mask & (1u32 << index) != 0
+                && action.forced_slots.get(index) == Some(&Some(2))
+            {
+                mask | (1u32 << index)
+            } else {
+                mask
+            }
+        });
+    if mask == 0 {
+        return Ok(ImitationTarget::unlabeled());
+    }
+    let mut target = ImitationTarget::unlabeled();
+    target.motors[2] = Some(mask);
+    ImitationExample {
+        candidate_count: action.candidate_count,
+        representative_mask: action.representative_mask,
+        motor_masks: action.motor_masks,
+        forced_slots: action.forced_slots.clone(),
+        target: target.clone(),
+    }
+    .validate()?;
+    Ok(target)
 }
 
 fn care_food_ready(food: &alife_world::WorldObject) -> bool {
@@ -766,12 +840,14 @@ pub(super) fn run_same_individual_world(
         let mut last_food_token_heard = None;
         let mut captured_meal_provenance = MealProvenanceSummary::default();
         let mut trained_meal_provenance = MealProvenanceSummary::default();
+        let trace_care_scores = std::env::var("ALIFE_CARE_SCORE_TRACE").is_ok_and(|v| v == "1");
         let restore_seconds = started.elapsed().as_secs_f64();
         on_update(
             serde_json::json!({"kind":"continuous-started-v1","session_nonce":session_nonce,
                 "source_world_seed":world_seed,"organism_id":id.raw(),"policy_version":policy,
                 "session_start_world_tick":start_tick,"world_tick":collection_start_tick,"world_ticks_per_second":alife_world::WORLD_TICKS_PER_SECOND,
                 "legacy_sleep_progress":legacy_sleep_progress,
+                "safe_food_imitation_coefficient":request.safe_food_imitation_coefficient,
                 "care_assistance_requested":request.care_assistance,
                 "food_meal_provenance_scope":food_provenance::SCOPE,
                 "hardware":hardware,"sampling_stream":if sampler_restored {"restored_exact_private_stream"} else {"declared_new_legacy_stream"},
@@ -799,6 +875,7 @@ pub(super) fn run_same_individual_world(
                 runtime.live_foundation_compiler_inputs(id)?,
                 &alife_core::BrainCapacityClass::n2048(),
             )?;
+            let mut safe_food_targets = Vec::new();
             let actor_before = trainer.optimizer_step();
             let value_checkpoint = value.checkpoint(trainer.session())?;
             let value_before = value_checkpoint.optimizer_step;
@@ -1016,6 +1093,19 @@ pub(super) fn run_same_individual_world(
                     }
                 }
                 let before_tick = runtime.world().tick();
+                // Capture before the real sampled action. Post-action ownership or
+                // regrowth must never retroactively authorize a decision label.
+                let available_safe_food = if request.safe_food_imitation_coefficient > 0.0 {
+                    runtime
+                        .world()
+                        .object_snapshots()
+                        .into_iter()
+                        .filter(|object| runtime.world().safe_food_eat_is_available(id, object.id))
+                        .map(|object| object.id)
+                        .collect::<Vec<_>>()
+                } else {
+                    Vec::new()
+                };
                 let before_food = food
                     .iter()
                     .map(|(raw, evidence)| {
@@ -1098,7 +1188,14 @@ pub(super) fn run_same_individual_world(
                     if consumed(&step) {
                         generic_rows.push(captured_rows);
                     }
-                    let care_row = care_row_evidence(&step, &food);
+                    if request.safe_food_imitation_coefficient > 0.0 {
+                        safe_food_targets.push(safe_food_imitation_target(
+                            &step.frame,
+                            &joint_action(&step.behavior)?,
+                            &available_safe_food,
+                        )?);
+                    }
+                    let care_row = care_row_evidence(&step, &food, trace_care_scores);
                     if care_row.teacher_food_token_heard {
                         last_food_token_heard = Some(before_tick.raw());
                     }
@@ -1278,6 +1375,11 @@ pub(super) fn run_same_individual_world(
                 }
                 segment_start = end;
             }
+            if request.safe_food_imitation_coefficient > 0.0
+                && safe_food_targets.len() != refs.len()
+            {
+                return Err("continuous sparse label/capture length mismatch".into());
+            }
             if values.len() != refs.len() || rewards.len() != rows {
                 return Err("continuous target/capture length mismatch".into());
             }
@@ -1352,7 +1454,9 @@ pub(super) fn run_same_individual_world(
                     speech_targets: vec![None; replay.sequence.ticks.len()],
                     sequence: replay.sequence,
                     batch: batch.window(start..end)?,
-                    auxiliary: None,
+                    auxiliary: if request.safe_food_imitation_coefficient > 0.0 {
+                        Some((safe_food_targets[start..end].to_vec(), request.safe_food_imitation_coefficient))
+                    } else { None },
                 };
                 cached_windows.retain(index, &window, budget);
                 Ok(PpoWindowHandle::Owned(window))
@@ -1413,7 +1517,7 @@ pub(super) fn run_same_individual_world(
             for (_, meal) in meal_links.iter().filter(|(row, _)| *row < rows) {
                 trained_meal_provenance.observe(*meal);
             }
-            let event = serde_json::json!({"kind":"continuous-update-v1","session_nonce":session_nonce,
+            let mut event = serde_json::json!({"kind":"continuous-update-v1","session_nonce":session_nonce,
                 "source_world_seed":world_seed,"organism_id":id.raw(),"update":completed_updates,
                 "policy_before":policy-1,"policy_after":policy,"trained_rows":rows,
                 "session_trained_rows":trained_rows,"captured_replay_rows":refs.len(),"bootstrap_replay_rows":1,
@@ -1428,7 +1532,9 @@ pub(super) fn run_same_individual_world(
                 "food_meal_provenance_trained":MealProvenanceSummary::rows(&meal_links, rows),
                 "food_meal_provenance_scope":food_provenance::SCOPE,
                 "food_evidence_scope":"exact existing food entities observed at this window start; regrowth of same entity is ordinary ecology",
+                "safe_food_labeled_training_rows":safe_food_targets.iter().take(rows).filter(|target| target.is_labeled()).count(),
                 "observed_food_entity_count":food.len(),"semantic_prior":compact_prior(&runtime, care_cue_emissions),
+                "safe_food_imitation_coefficient":request.safe_food_imitation_coefficient,
                 "care_assistance_requested":request.care_assistance,
                 "care_assistance_active":care_scenario.is_some(),"care_cue_emissions":care_cue_emissions,"care_cue_deferrals":care_cue_deferrals,
                 "care_food_repositions":care_food_repositions,
@@ -1438,6 +1544,10 @@ pub(super) fn run_same_individual_world(
                 "food_outcomes_cumulative_including_bootstrap":food.values().map(|evidence| &evidence.outcome).collect::<Vec<_>>(),
                 "replay_bundle_bytes":replay.bundle_bytes,"replay_data_sync_calls":replay.data_sync_calls,
             });
+            if trace_care_scores {
+                event["care_score_trace"] =
+                    serde_json::json!(care_score_trace_rows(&care_rows[..rows]));
+            }
             alife_storage::remove_dir_all(&window_root)?;
             on_update(event)?;
             if completed_updates.is_multiple_of(request.snapshot_every_updates as u64) {
@@ -1529,6 +1639,7 @@ pub(super) fn run_same_individual_world(
                 "food_meal_provenance_trained":trained_meal_provenance,
                 "food_meal_provenance_scope":food_provenance::SCOPE,
                 "semantic_prior":compact_prior(&runtime, care_cue_emissions),
+                "safe_food_imitation_coefficient":request.safe_food_imitation_coefficient,
                 "care_assistance_requested":request.care_assistance,
                 "care_assistance_active":care_scenario.is_some(),"care_cue_emissions":care_cue_emissions,"care_cue_deferrals":care_cue_deferrals,
                 "care_food_repositions":care_food_repositions,
@@ -1632,6 +1743,95 @@ mod tests {
         assert!(continuous_update_version(10977, None).is_err());
         assert!(continuous_update_version(u64::MAX, Some(u64::MAX)).is_err());
     }
+    #[test]
+    fn safe_food_imitation_labels_only_grounded_legal_manipulation_candidates() {
+        let seed = 42;
+        let asset = crate::foundation_training::initial_n2048_care_asset(seed).unwrap();
+        let mut config = alife_world::CanonicalNewGameConfig::phase3(seed, 1).unwrap();
+        config.brain_class = BrainScaleTier::Standard2048;
+        config.sensor_profile = asset.manifest().sensor_profile();
+        let mut world =
+            alife_world::create_canonical_new_game_with_n2048_candidate(&config, &asset)
+                .unwrap()
+                .world;
+        crate::foundation_training::ground_foundation_training_world(&mut world).unwrap();
+        for label in ["hazard-01", "obstacle-02"] {
+            let entity = world.entity_id(label).unwrap();
+            world.editor_remove_object(entity).unwrap();
+        }
+        let id = world.organism_entity_ids()[0].0;
+        let food = prepare_care_assistance(&mut world, id).unwrap().food;
+        let record = world.organism_registry().get(id).unwrap();
+        let frame = world
+            .perception_frame(
+                id,
+                world.tick(),
+                config.sensor_profile,
+                record.biochemistry().homeostasis,
+            )
+            .unwrap();
+        let count = frame.candidates().len();
+        let bits = u32::MAX >> (32 - count);
+        let eat = frame
+            .candidates()
+            .iter()
+            .position(|c| {
+                c.action_id == alife_world::HeadlessActionIds::EAT && c.target.entity == Some(food)
+            })
+            .unwrap();
+        // Other representatives stand for unconstrained simultaneous channels.
+        let mut action = PpoJointAction {
+            candidate_count: count as u16,
+            representative_mask: bits,
+            motor_masks: [0; 6],
+            representative: 0,
+            forced_slots: vec![None; count],
+            motor_candidates: [None; 6],
+            old_joint_log_probability: -1.0,
+            temperature: 1.0,
+        };
+        let movement = frame
+            .candidates()
+            .iter()
+            .position(|c| c.action_id == alife_world::HeadlessActionIds::STEP_FORWARD)
+            .unwrap();
+        action.representative = movement as u16;
+        action.forced_slots[movement] = Some(0);
+        action.motor_candidates[0] = Some(movement as u16);
+        action.forced_slots[eat] = Some(2);
+        action.validate(1.0).unwrap();
+        // Production can admit Eat only through representative arbitration.
+        assert_eq!(action.motor_masks[2], 0);
+        let before = world.canonical_signature_digest().unwrap();
+        assert!(world.safe_food_eat_is_available(id, food));
+        let target = safe_food_imitation_target(&frame, &action, &[food]).unwrap();
+        assert_eq!(target.representative, None);
+        assert_eq!(target.motors[2], Some(1 << eat));
+        assert!(target
+            .motors
+            .iter()
+            .enumerate()
+            .all(|(slot, m)| slot == 2 || m.is_none()));
+        assert!(!safe_food_imitation_target(&frame, &action, &[])
+            .unwrap()
+            .is_labeled());
+        assert!(
+            !safe_food_imitation_target(&frame, &action, &[alife_core::WorldEntityId(999999)])
+                .unwrap()
+                .is_labeled()
+        );
+        action.representative_mask &= !(1 << eat);
+        assert!(!safe_food_imitation_target(&frame, &action, &[food])
+            .unwrap()
+            .is_labeled());
+        action.representative_mask = bits;
+        action.forced_slots[eat] = Some(0);
+        assert!(!safe_food_imitation_target(&frame, &action, &[food])
+            .unwrap()
+            .is_labeled());
+        assert_eq!(world.canonical_signature_digest().unwrap(), before);
+    }
+
     #[test]
     fn assisted_feeding_uses_real_scene_and_cue_without_changing_biology() {
         let seed = 42;
@@ -2140,6 +2340,24 @@ mod tests {
         assert_eq!(summary["food_approach_command_rows"], 1);
         assert_eq!(summary["food_eat_command_rows"], 1);
         assert_eq!(summary["food_grab_command_rows"], 0);
+    }
+    #[test]
+    fn care_score_trace_excludes_untraced_and_bootstrap_rows() {
+        let rows = [
+            CareRowEvidence::default(),
+            CareRowEvidence {
+                score_trace: Some(serde_json::json!({"tick": 7})),
+                ..Default::default()
+            },
+            CareRowEvidence {
+                score_trace: Some(serde_json::json!({"tick": 8})),
+                ..Default::default()
+            },
+        ];
+        assert_eq!(
+            care_score_trace_rows(&rows[..2]),
+            vec![&serde_json::json!({"tick": 7})]
+        );
     }
     #[test]
     fn continuous_tick_guard_is_relative_to_restored_world() {

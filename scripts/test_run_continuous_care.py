@@ -920,6 +920,55 @@ finally:
         self.assertFalse(result['native_execution'])
         self.assertEqual(self.calls, [])
 
+    def test_safe_food_imitation_default_and_explicit_plan(self):
+        args = self.live_args()
+        old = session.request_for(args, dt.datetime.now(session.host.UTC))
+        self.assertNotIn('safe_food_imitation_coefficient', old)
+        args.safe_food_imitation_coefficient = 0.0
+        self.assertEqual(session.request_for(args, dt.datetime.now(session.host.UTC)), old)
+        result = session.main(['--store', 'absent-store', '--lane', 'absent-owner',
+            '--binary', 'absent-native', '--checkpoint-tool', 'absent-tool', '--auto-seed',
+            '--safe-food-imitation-coefficient', '0.1', '--hard-end',
+            (dt.datetime.now(session.host.UTC) + dt.timedelta(hours=1)).isoformat()])
+        self.assertEqual(result['request']['safe_food_imitation_coefficient'], 0.1)
+        self.assertFalse(result['native_execution'])
+        self.assertEqual(self.calls, [])
+
+    def test_safe_food_imitation_rejects_invalid_or_fresh_world_before_access(self):
+        args = self.live_args()
+        for coefficient in (float('nan'), float('inf'), -0.1, 1.01, True):
+            args.safe_food_imitation_coefficient = coefficient
+            with self.assertRaisesRegex(ValueError, 'coefficient must be finite'):
+                session.request_for(args, dt.datetime.now(session.host.UTC))
+        args = self.args()
+        args.safe_food_imitation_coefficient = 0.1
+        with self.assertRaisesRegex(ValueError, 'requires same-individual mode'):
+            session.request_for(args, dt.datetime.now(session.host.UTC))
+        self.assertEqual(self.calls, [])
+
+    def test_safe_food_imitation_requires_capability(self):
+        report = self.live_native(self.binary, '--resident-contract')
+        with self.assertRaisesRegex(ValueError, 'sparse safe food imitation capability'):
+            session.capabilities(report, 512, mode='same_individual', total_decisions=1024,
+                safe_food_imitation_coefficient=0.1)
+        report['continuous_sparse_safe_food_imitation'] = True
+        session.capabilities(report, 512, mode='same_individual', total_decisions=1024,
+            safe_food_imitation_coefficient=0.1)
+
+    def test_safe_food_imitation_request_is_bound_into_receipt(self):
+        args = self.live_args()
+        args.safe_food_imitation_coefficient = 0.1
+        def native(binary, *argv):
+            report = self.live_native(binary, *argv)
+            if argv[0] == '--resident-contract':
+                report['continuous_sparse_safe_food_imitation'] = True
+            return report
+        self.mock(session.current, 'tool', side_effect=native)
+        self.child.side_effect = self.continuous_producer
+        receipt = session.run(args)
+        self.assertEqual(receipt['request']['safe_food_imitation_coefficient'], 0.1)
+        self.assertEqual(cp.read_json(self.lane / session.RECEIPT)['request'], receipt['request'])
+
     def test_care_assistance_is_explicit_in_same_individual_plan(self):
         result = session.main(['--store', 'absent-store', '--lane', 'absent-owner',
             '--binary', 'absent-native', '--checkpoint-tool', 'absent-tool', '--auto-seed',

@@ -404,6 +404,16 @@ pub(super) fn evaluate_window(
     config: PpoConfig,
     version: u64,
 ) -> Result<WindowEvaluation, TrainingError> {
+    evaluate_window_scaled(trainer, window, config, version, 1.0)
+}
+
+pub(super) fn evaluate_window_scaled(
+    trainer: &CpuFoundationTrainer,
+    window: &PpoTrainingWindow,
+    config: PpoConfig,
+    version: u64,
+    auxiliary_scale: f32,
+) -> Result<WindowEvaluation, TrainingError> {
     window.batch.validate_policy_version(version)?;
     window.sequence.validate_for(trainer.phenotype())?;
     if window.sequence.ticks.len() - window.sequence.burn_in_ticks != window.batch.len()
@@ -431,6 +441,7 @@ pub(super) fn evaluate_window(
         .collect::<Vec<_>>();
     let mut objectives = Vec::new();
     let mut features = Vec::new();
+    let labeled = crate::ppo::auxiliary_label_count(window);
     for (i, t) in window.batch.transitions().iter().enumerate() {
         let tick = i + window.sequence.burn_in_ticks;
         let objective = cpu_ppo_objective(
@@ -445,21 +456,23 @@ pub(super) fn evaluate_window(
             .map(|g| g / window.batch.len() as f32)
             .collect();
         if let Some((targets, coefficient)) = &window.auxiliary {
-            let example = ImitationExample {
-                candidate_count: t.action.candidate_count,
-                representative_mask: t.action.representative_mask,
-                motor_masks: t.action.motor_masks,
-                forced_slots: t.action.forced_slots.clone(),
-                target: targets[i].clone(),
-            };
-            let imitation = cpu_imitation_objective(
-                &replay.candidate_logits[tick],
-                &example,
-                config.temperature,
-                *coefficient,
-            )?;
-            for (g, extra) in adjoints[i].iter_mut().zip(imitation.logit_gradients) {
-                *g += extra / window.batch.len() as f32;
+            if targets[i].is_labeled() {
+                let example = ImitationExample {
+                    candidate_count: t.action.candidate_count,
+                    representative_mask: t.action.representative_mask,
+                    motor_masks: t.action.motor_masks,
+                    forced_slots: t.action.forced_slots.clone(),
+                    target: targets[i].clone(),
+                };
+                let imitation = cpu_imitation_objective(
+                    &replay.candidate_logits[tick],
+                    &example,
+                    config.temperature,
+                    *coefficient * auxiliary_scale,
+                )?;
+                for (g, extra) in adjoints[i].iter_mut().zip(imitation.logit_gradients) {
+                    *g += extra / labeled as f32;
+                }
             }
         }
         objectives.push(objective);
@@ -497,6 +510,7 @@ where
         return Err(invalid());
     }
     let mut counts = Vec::new();
+    let mut label_counts = Vec::new();
     for i in 0..window_count {
         let w = load_window(i)?;
         let (_, objectives, features, _) = evaluate_window(trainer, &w, config, version)?;
@@ -510,6 +524,7 @@ where
             return Err(invalid());
         }
         counts.push(w.batch.len());
+        label_counts.push(crate::ppo::auxiliary_label_count(&w));
     }
     let mut receipt = PpoUpdateReceipt {
         collection_policy_version: version,
@@ -523,16 +538,24 @@ where
         for start in (0..window_count).step_by(effective_batch_size) {
             let end = (start + effective_batch_size).min(window_count);
             let total = counts[start..end].iter().sum::<usize>();
+            let labels = label_counts[start..end].iter().sum::<usize>();
             let mut gradients = vec![0.; trainer.weights().len()];
             let mut vg = vec![0.; value.checkpoint.feature_count as usize + 1];
             let mut kl = 0.;
             for (i, &count) in counts.iter().enumerate().take(end).skip(start) {
                 let w = load_window(i)?;
-                if w.batch.len() != count {
+                if w.batch.len() != count
+                    || crate::ppo::auxiliary_label_count(&w) != label_counts[i]
+                {
                     return Err(invalid());
                 }
-                let (adjoints, objectives, features, tape) =
-                    evaluate_window(trainer, &w, config, version)?;
+                let (adjoints, objectives, features, tape) = evaluate_window_scaled(
+                    trainer,
+                    &w,
+                    config,
+                    version,
+                    crate::ppo::auxiliary_batch_scale(count, total, label_counts[i], labels),
+                )?;
                 let probe = trainer.replay_gradients_from_tape(
                     &w.sequence,
                     &adjoints,

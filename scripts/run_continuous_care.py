@@ -92,6 +92,9 @@ def request_for(args, now):
     nightly_window(args)  # Refuse a stale DST-derived 16:00 UTC hard end, even in a plan.
     require(type(args.decisions) is int and 1 <= args.decisions <= 36000,
             'finite Feeding decisions must be in 1..36000')
+    imitation = getattr(args, 'safe_food_imitation_coefficient', 0.0)
+    require(type(imitation) in (int, float) and math.isfinite(imitation) and 0.0 <= imitation <= 1.0,
+            'safe food imitation coefficient must be finite in 0..1')
     automatic_seed = getattr(args, 'auto_seed', False)
     if automatic_seed:
         require(args.seed is None and args.last_seed is None, '--auto-seed cannot replace an explicit allocation')
@@ -120,9 +123,12 @@ def request_for(args, now):
         require(type(cadence) is int and 1 <= cadence <= 10000, 'invalid resident snapshot cadence')
         require(args.food_need_condition is None, 'restored life does not accept food/need preparation')
         assistance = {'care_assistance': True} if getattr(args, 'care_assistance', False) else {}
+        if imitation != 0.0:
+            assistance['safe_food_imitation_coefficient'] = imitation
         return {**common, **assistance, 'total_trained_decisions': total, 'decisions_per_update': args.decisions,
             'snapshot_every_updates': cadence,
             'finalization_deadline_unix_seconds': int(producer_deadline(args).timestamp())}
+    require(imitation == 0.0, 'safe food imitation requires same-individual mode')
     require(not getattr(args, 'care_assistance', False), 'care assistance requires same-individual mode')
     require(args.food_need_condition in ('newborn_v1', 'ordinary_healthy_aging_v1'),
             'unsupported food need initialization')
@@ -132,7 +138,8 @@ def request_for(args, now):
             'checkpoint_every_episodes': 1}
 
 
-def capabilities(report, decisions, *, mode='fresh_world', total_decisions=0, care_assistance=False):
+def capabilities(report, decisions, *, mode='fresh_world', total_decisions=0, care_assistance=False,
+                 safe_food_imitation_coefficient=0.0):
     require(report.get('schema') == 1 and report.get('kind') == 'native-resident-serial-v1' and
             report.get('finite_continuous_feeding') is True and
             report.get('max_continuous_feeding_decisions', 0) >= decisions and
@@ -149,6 +156,9 @@ def capabilities(report, decisions, *, mode='fresh_world', total_decisions=0, ca
                 report.get('max_decisions_per_update', 0) >= decisions and
                 report.get('world_ticks_per_second') == WORLD_TICKS_PER_SECOND,
                 'native same-individual restore/PPO/sampling/cutoff capabilities required; no fresh-world fallback')
+        if safe_food_imitation_coefficient > 0.0:
+            require(report.get('continuous_sparse_safe_food_imitation') is True,
+                    'native sparse safe food imitation capability required')
         if care_assistance:
             require(report.get('continuous_care_assistance') is True,
                     'native continuous care assistance capability required')
@@ -761,7 +771,8 @@ def run(args):
         mode = producer_mode(args)
         capabilities(current.tool(native, '--resident-contract'), args.decisions,
                      mode=mode, total_decisions=request.get('total_trained_decisions', 0),
-                     care_assistance=request.get('care_assistance', False))
+                     care_assistance=request.get('care_assistance', False),
+                     safe_food_imitation_coefficient=request.get('safe_food_imitation_coefficient', 0.0))
         checkout = current.checkout_context()
         require(current.prior_environment().get('ALIFE_SLM_PRIOR_BACKEND') == 'deterministic' and
                 current.prior_environment().get('ALIFE_SLM_PRIOR') == 'on',
@@ -854,6 +865,8 @@ def main(argv=None):
     parser.add_argument('--snapshot-every-updates', type=int, default=32)
     parser.add_argument('--care-assistance', action='store_true',
         help='opt in to ordinary Feeding placement and spatial eat-food cues; never changes rewards or biology')
+    parser.add_argument('--safe-food-imitation-coefficient', type=float, default=0.0,
+        help='opt in to sparse safe reachable food Eat supervision (0..1); default zero leaves PPO unchanged')
     parser.add_argument('--food-need-condition', choices=('newborn_v1', 'ordinary_healthy_aging_v1'))
     parser.add_argument('--hard-end', type=host.cutoff_time)
     parser.add_argument('--night-date', type=dt.date.fromisoformat,

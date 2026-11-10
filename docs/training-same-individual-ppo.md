@@ -14,6 +14,23 @@ ownership, resources, the actual executable/source and fresh dated deadlines.
 The Native producer owns the store lease and durable session seed WAL. Recovery
 and exact Current publication remain separate owner operations.
 
+The host flag `--safe-food-imitation-coefficient` sets optional
+`safe_food_imitation_coefficient` (finite 0..=1, default 0). The host requires
+the matching native capability and binds a nonzero coefficient into the exact
+request and final receipt. Zero is omitted to preserve historical identity.
+This option adds supervision only for real Eat candidates whose exact pre-action target is
+unconsumed nutritious food with zero hazard pain, in physical/grasp reach with
+available hands and ingestion/manipulation effectors. Player-held food and
+another organism's possessions are excluded. The label constrains only the
+manipulation factor, allowing other simultaneous actions. A loose-food Eat
+preparation is an opportunity to acquire it; only the ordinary later world
+transaction can consume it. No label is added when these checks fail. Unlabeled
+rows contribute neither auxiliary gradients nor its labeled-row denominator,
+including across recurrent windows in one effective batch. Burn-in and the
+actual bootstrap action remain excluded from loss. This option does not move
+food, force actions, change biological rewards, or change PPO's recorded
+likelihoods. `care_assistance` remains a separate option. Both default off.
+
 The live runtime and both optimizer states remain resident. A frozen-policy
 window collects ordinary body, cognition, recurrent/lifetime learning and
 biology. Its last real waking action supplies the bootstrap; it advances the

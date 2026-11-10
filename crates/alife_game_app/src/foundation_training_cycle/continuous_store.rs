@@ -54,10 +54,18 @@ pub struct ResidentContinuousRequest {
     /// Opt-in training-only ordinary food placement and spatial language cues.
     #[serde(default, skip_serializing_if = "is_false")]
     pub care_assistance: bool,
+    /// Opt-in sparse supervised Eat loss on grounded, reachable safe food.
+    /// Zero keeps the production PPO objective and request identity unchanged.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub safe_food_imitation_coefficient: f32,
     pub sampling_temperature: f32,
     pub collection_cutoff_unix_seconds: u64,
     pub finalization_deadline_unix_seconds: u64,
     pub max_temporary_bytes: u64,
+}
+
+fn is_zero(value: &f32) -> bool {
+    *value == 0.0
 }
 
 fn is_false(value: &bool) -> bool {
@@ -72,6 +80,8 @@ pub fn validate_resident_continuous_request(r: &ResidentContinuousRequest, now: 
         || !(1..=36_000).contains(&r.decisions_per_update)
         || r.decisions_per_update > r.total_trained_decisions
         || r.snapshot_every_updates == 0
+        || !r.safe_food_imitation_coefficient.is_finite()
+        || !(0.0..=1.0).contains(&r.safe_food_imitation_coefficient)
         || !r.sampling_temperature.is_finite()
         || !(0.0001..=128.).contains(&r.sampling_temperature)
         || r.collection_cutoff_unix_seconds <= now
@@ -1092,12 +1102,31 @@ mod tests {
             decisions_per_update: 10,
             snapshot_every_updates: 2,
             care_assistance: false,
+            safe_food_imitation_coefficient: 0.0,
             sampling_temperature: 1.,
             collection_cutoff_unix_seconds: 200,
             finalization_deadline_unix_seconds: 300,
             max_temporary_bytes: RECOVERY_HEADROOM + STARTUP_METADATA_HEADROOM + 10_000_000,
         }
     }
+    #[test]
+    fn safe_food_imitation_is_explicit_and_coefficient_is_bounded() {
+        let mut original = request();
+        let old = serde_json::to_value(&original).unwrap();
+        assert!(old.get("safe_food_imitation_coefficient").is_none());
+        let roundtrip: ResidentContinuousRequest = serde_json::from_value(old).unwrap();
+        assert_eq!(roundtrip.safe_food_imitation_coefficient, 0.0);
+        for coefficient in [f32::NAN, f32::INFINITY, -0.1, 1.01] {
+            original.safe_food_imitation_coefficient = coefficient;
+            assert!(validate_resident_continuous_request(&original, 100).is_err());
+        }
+        original.safe_food_imitation_coefficient = 0.1;
+        validate_resident_continuous_request(&original, 100).unwrap();
+        let enabled = serde_json::to_value(&original).unwrap();
+        let restored: ResidentContinuousRequest = serde_json::from_value(enabled).unwrap();
+        assert_eq!(restored.safe_food_imitation_coefficient, 0.1);
+    }
+
     #[test]
     fn care_assistance_is_explicit_and_legacy_request_identity_is_unchanged() {
         let mut original = request();

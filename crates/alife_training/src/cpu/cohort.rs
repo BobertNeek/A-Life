@@ -228,10 +228,12 @@ where
         return Err(super::invalid());
     }
     let mut counts = Vec::new();
+    let mut label_counts = Vec::new();
     for i in 0..window_count {
         let w = load(i)?;
         validate_frozen_residual_window(trainer, value, &w, config, version)?;
         counts.push(w.actor.batch.len());
+        label_counts.push(crate::ppo::auxiliary_label_count(&w.actor));
     }
     let mut receipt = PpoUpdateReceipt {
         collection_policy_version: version,
@@ -245,16 +247,25 @@ where
         for start in (0..window_count).step_by(effective_batch_size) {
             let end = (start + effective_batch_size).min(window_count);
             let total = counts[start..end].iter().sum::<usize>();
+            let labels = label_counts[start..end].iter().sum::<usize>();
             let mut gradient = vec![0.; trainer.weights().len()];
             let mut vg = vec![0.; value.checkpoint().feature_count as usize + 1];
             let mut kl = 0.;
             for (i, &count) in counts.iter().enumerate().take(end).skip(start) {
                 let w = load(i)?;
-                if w.actor.batch.len() != count {
+                if w.actor.batch.len() != count
+                    || crate::ppo::auxiliary_label_count(&w.actor) != label_counts[i]
+                {
                     return Err(super::invalid());
                 }
                 let (adjoints, objectives, _replayed, tape) =
-                    super::objective::evaluate_window(trainer, &w.actor, config, version)?;
+                    super::objective::evaluate_window_scaled(
+                        trainer,
+                        &w.actor,
+                        config,
+                        version,
+                        crate::ppo::auxiliary_batch_scale(count, total, label_counts[i], labels),
+                    )?;
                 validate_residual_window(&w, None, config)?;
                 let probe = trainer.replay_gradients_from_tape(
                     &w.actor.sequence,
