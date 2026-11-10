@@ -1,0 +1,7 @@
+# Cue-context and fast-write controls
+
+`bold-recall-ablation.patch` follows `bold-cue-sleep.patch` and is confined to a disposable CPU research checkout. After the four training exposures and optional forced sleep, it can zero the direct memory-decoder lanes 24–35 or all candidate memory/prediction/cognitive lanes 24–52 at the choice probe. It leaves the memory store, physical state, recurrent state and other pathways intact. Never enable the environment switch in production.
+
+With harmful exposure first, two seeds, both safe colors, both creation orders and one side arrangement, the combined founder still chose safely 8/8 with the direct memory lanes zeroed, 8/8 with all those candidate cognitive lanes zeroed, and 8/8 with the latter ablation plus the existing fast-write sham. The sham is not a total neural-state freeze: 30 fast entries still changed during sleep.
+
+With safe exposure first, the combined ablation plus sham yielded 4/8 safe choices: seed 2026111560 chose the harmful, last-exposed color in all four cases, while seed 2026111561 chose safely in all four. Normal-write, unablated matching cases were safe 8/8. This interaction means the earlier perfect results cannot be attributed confidently to episodic recall or synaptic changes individually; order-dependent state or other contextual pathways remain. It is not proof of a general learned preference. Do not equate one control with a clean removal of all memory or claim full independence from synaptic effects.
