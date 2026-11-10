@@ -38,6 +38,9 @@ fn default_sampling_temperature() -> f32 {
     1.0
 }
 
+mod saved_life_retention;
+pub use saved_life_retention::{evaluate_saved_life_retention, SavedLifeRetentionRequest};
+
 mod critic_residual;
 mod group;
 pub use group::*;

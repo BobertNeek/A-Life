@@ -209,3 +209,72 @@ steps after matching-binary admission, while training and old launchers are stop
 The inventory's 121,440,628,888 logical bytes/284,837 files describe old known roots,
 not measured reclaimable allocation. Hardlink allocation, PC migration output size,
 private GPU restore and native throughput remain unmeasured by this cloud work.
+
+
+## Frozen saved-life retention observation
+
+Build the opt-in evaluator with:
+
+```text
+cargo build -p alife_game_app --features foundation-training --bin evaluate_saved_life_retention
+```
+
+Run `evaluate_saved_life_retention --capabilities` to verify the built executable
+implements this entrypoint before making the deadline-bound request.
+
+On the machine that owns the accepted Current, resolve its exact path from the
+current training handoff. Do not copy a trained checkpoint elsewhere or run
+against an active writer. Set both `ALIFE_SLM_PRIOR` and
+`ALIFE_SLM_PRIOR_BACKEND` to `off`. Create a small JSON request immediately before
+running, with an absolute Unix deadline at most 600 seconds in the future:
+
+```json
+{"schema":1,"max_decisions":128,"max_world_ticks":2048,"deadline_unix_seconds":REPLACE_WITH_NOW_PLUS_600,"max_output_bytes":2147483648}
+```
+
+Replace the placeholder with an integer. Invoke:
+
+```text
+evaluate_saved_life_retention CURRENT_PATH NEW_ISOLATED_OUTPUT REQUEST.json
+```
+
+For Windows PowerShell, after building and verifying the accepted path and idle
+GPU, the bounded request can be written without a UTF-8 BOM as follows:
+
+```powershell
+$env:ALIFE_GPU_BACKEND = 'vulkan'
+Remove-Item Env:ALIFE_GPU_DX12_COMPILER -ErrorAction SilentlyContinue
+$env:ALIFE_SLM_PRIOR = 'off'
+$env:ALIFE_SLM_PRIOR_BACKEND = 'off'
+$request = @{ schema=1; max_decisions=128; max_world_ticks=2048;
+  deadline_unix_seconds=[DateTimeOffset]::UtcNow.ToUnixTimeSeconds()+600;
+  max_output_bytes=2147483648 } | ConvertTo-Json -Compress
+[IO.File]::WriteAllText($requestPath, $request, [Text.UTF8Encoding]::new($false))
+& .\target\debug\evaluate_saved_life_retention.exe $currentPath $newOutputPath $requestPath
+if ($LASTEXITCODE -ne 0) { throw 'Retention failed; inspect partial evidence, not qualification.' }
+```
+
+Set `$currentPath`, `$newOutputPath` and `$requestPath` to verified local paths
+first. The evaluator intentionally refuses a source with residual teacher cues;
+do not strip those cues or create a replacement life to obtain a passing result.
+
+The output must not exist. The request is capped at 4096 bytes and rejects unknown
+fields. The evaluator admits and materializes the exact saved life, requires its
+saved sampling stream, and constructs no offline optimizer. Actor/value weights,
+Adam moments and ages in Current are not updated. Ordinary private learning,
+sleep and physiology remain active in the disposable materialization. No
+continuation checkpoint is promoted back to Current.
+
+Existing teacher objects or utterances are refused before GPU creation rather
+than removed. `retention.json` records this refusal. A neural run records sealed
+physiology and exact-target acquisition/consumption evidence in `rows.jsonl`.
+A natural death, deadline, tick cap, runtime/private-learning error, teacher cue,
+changed source/base policy, or absent nourished meal cannot qualify. The
+`qualified` field means only that this bounded observation completed the requested
+decisions with at least one measured nourished meal; it is not general gameplay
+acceptance or a repeated-trial retention estimate. Exceptions exit nonzero and
+may leave partial evidence; never interpret missing final receipt as success.
+
+Device-free fixture tests cover storage continuity and refusal/gating logic,
+not neural behavior. Run an actual saved-life trial only on an available,
+exclusively admitted hardware GPU and report its source identity and limits.

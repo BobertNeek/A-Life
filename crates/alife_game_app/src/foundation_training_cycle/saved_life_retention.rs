@@ -438,6 +438,133 @@ pub fn evaluate_saved_life_retention(
 mod tests {
     use super::*;
     #[test]
+    fn saved_retention_preserves_fixture_heads_private_bytes_and_rejects_teacher_before_gpu() {
+        // Synthetic storage/admission fixture only. No GPU or biological claim.
+        fn with_teacher(source: &Path) {
+            portable_handoff::tests::private_fixture(source);
+            let assets = source.join("world-assets");
+            let (_, loaded) =
+                crate::GpuDurableSaveManifest::open_loaded(source.join("world.json"), &assets)
+                    .unwrap();
+            let mut world = loaded.save.restore_headless_world().unwrap();
+            alife_school::LanguageNursery::speak_in_world(
+                &mut world,
+                alife_core::OrganismId(1),
+                alife_core::Vec3f::new(1.0, 0.0, 0.0),
+                vec![alife_core::LanguageTokenId::new(8).unwrap()],
+            )
+            .unwrap();
+            let save = alife_world::PortableSaveFile::from_headless_world(
+                "retention-synthetic-cued",
+                &world,
+                loaded.save.config.clone(),
+                loaded.save.assets.clone(),
+                vec![],
+            )
+            .unwrap();
+            crate::GpuDurableSaveManifest::publish_snapshot(
+                source.join("world.json"),
+                &assets,
+                &save,
+            )
+            .unwrap();
+            let path = source.join("cycle.json");
+            let mut receipt: FoundationCycleReceipt =
+                serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+            receipt.world_ticks_elapsed = 0;
+            fs::write(path, serde_json::to_vec(&receipt).unwrap()).unwrap();
+        }
+        let f = crate::foundation_critic_correction::tests::full_residual_correction_fixture_with_source(with_teacher);
+        let checkpoint = migrate_current_training_checkpoint(
+            &f.target,
+            alife_training::CheckpointSeedsV1 {
+                historical_freshness: "unknown".into(),
+                excluded_ranges: vec![[1, u64::MAX]],
+                pending_range: None,
+            },
+        )
+        .unwrap();
+        let current = f.root.join("retention-current.alife-checkpoint");
+        let original = checkpoint.encode().unwrap();
+        fs::write(&current, &original).unwrap();
+        assert_eq!(
+            read_current_training_checkpoint(&current).unwrap(),
+            checkpoint
+        );
+        // Explicitly off for this serial, device-free refusal test; restore caller settings.
+        let prior = std::env::var_os("ALIFE_SLM_PRIOR");
+        let backend = std::env::var_os("ALIFE_SLM_PRIOR_BACKEND");
+        std::env::set_var("ALIFE_SLM_PRIOR", "off");
+        std::env::set_var("ALIFE_SLM_PRIOR_BACKEND", "off");
+        let output = f.root.join("retention-evidence");
+        let result = evaluate_saved_life_retention(
+            &current,
+            &output,
+            SavedLifeRetentionRequest {
+                schema: 1,
+                max_decisions: 2,
+                max_world_ticks: 8,
+                deadline_unix_seconds: now().unwrap() + 600,
+                max_output_bytes: 512 * 1024 * 1024,
+            },
+        );
+        let evidence_before = fs::read(output.join("retention.json")).unwrap();
+        let request = SavedLifeRetentionRequest {
+            schema: 1,
+            max_decisions: 2,
+            max_world_ticks: 8,
+            deadline_unix_seconds: now().unwrap() + 600,
+            max_output_bytes: 512 * 1024 * 1024,
+        };
+        assert!(evaluate_saved_life_retention(&current, &output, request.clone()).is_err());
+        assert_eq!(
+            fs::read(output.join("retention.json")).unwrap(),
+            evidence_before
+        );
+        let corrupt = f.root.join("corrupt.alife-checkpoint");
+        fs::write(&corrupt, b"not a Current checkpoint").unwrap();
+        let corrupt_output = f.root.join("corrupt-evidence");
+        assert!(evaluate_saved_life_retention(&corrupt, &corrupt_output, request).is_err());
+        assert!(!corrupt_output.join("retention.json").exists());
+        assert!(!corrupt_output.join("rows.jsonl").exists());
+        assert_eq!(fs::read(&corrupt).unwrap(), b"not a Current checkpoint");
+        for (key, value) in [
+            ("ALIFE_SLM_PRIOR", prior),
+            ("ALIFE_SLM_PRIOR_BACKEND", backend),
+        ] {
+            match value {
+                Some(v) => std::env::set_var(key, v),
+                None => std::env::remove_var(key),
+            }
+        }
+        let receipt = result.unwrap();
+        assert_eq!(
+            receipt["status"],
+            "rejected_existing_teacher_cues_before_gpu"
+        );
+        assert_eq!(receipt["neural_execution"], false);
+        assert_eq!(receipt["qualified"], false);
+        assert_eq!(receipt["source_unchanged"], true);
+        assert!(!output.join("rows.jsonl").exists());
+        assert_eq!(fs::read(&current).unwrap(), original);
+        let restored = read_current_training_checkpoint(&current).unwrap();
+        assert_eq!(restored.handoff.actor, checkpoint.handoff.actor);
+        assert_eq!(restored.handoff.value, checkpoint.handoff.value);
+        assert_eq!(restored.life, checkpoint.life);
+        assert!(evaluate_saved_life_retention(
+            &current,
+            &output,
+            SavedLifeRetentionRequest {
+                schema: 1,
+                max_decisions: 0,
+                max_world_ticks: 8,
+                deadline_unix_seconds: now().unwrap() + 600,
+                max_output_bytes: 512 * 1024 * 1024,
+            }
+        )
+        .is_err());
+    }
+    #[test]
     fn saved_retention_request_is_finite_and_bounded() {
         let r = SavedLifeRetentionRequest {
             schema: 1,
@@ -447,7 +574,10 @@ mod tests {
             max_output_bytes: 2 * 1024 * 1024 * 1024,
         };
         r.validate(100).unwrap();
-        for variant in 0..7 {
+        let mut unknown = serde_json::to_value(&r).unwrap();
+        unknown["train"] = serde_json::json!(true);
+        assert!(serde_json::from_value::<SavedLifeRetentionRequest>(unknown).is_err());
+        for variant in 0..10 {
             let mut bad = r.clone();
             match variant {
                 0 => bad.schema = 0,
@@ -456,7 +586,10 @@ mod tests {
                 3 => bad.max_world_ticks = 8193,
                 4 => bad.deadline_unix_seconds = 100,
                 5 => bad.deadline_unix_seconds = 701,
-                _ => bad.max_output_bytes = 1024,
+                6 => bad.max_output_bytes = 1024,
+                7 => bad.max_world_ticks = 0,
+                8 => bad.max_output_bytes = 8 * 1024 * 1024 * 1024 + 1,
+                _ => bad.deadline_unix_seconds = 0,
             }
             assert!(bad.validate(100).is_err());
         }

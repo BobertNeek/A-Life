@@ -45,6 +45,11 @@ name = "qualify_critic_residual"
 path = "src/bin/qualify_critic_residual.rs"
 required-features = ["foundation-training"]
 
+[[bin]]
+name = "evaluate_saved_life_retention"
+path = "src/bin/evaluate_saved_life_retention.rs"
+required-features = ["foundation-training"]
+
 [[example]]
 name = "inspect_saved_policy"
 required-features = ["foundation-training"]
