@@ -1,0 +1,317 @@
+--- a/crates/alife_training/src/cpu/motor_mediation/confidence/policy/optional_vocal/actual_contact.rs
++++ b/crates/alife_training/src/cpu/motor_mediation/confidence/policy/optional_vocal/actual_contact.rs
+@@ -358,3 +358,9 @@
+         Ok(action)
+     }
+ }
++
++// Exercise the same sampler mathematics under the actual-contact owner and RNG
++// domain; these are synthetic score tests, not host or learning tests.
++#[cfg(test)]
++#[path = "actual_contact_math_tests.rs"]
++mod shared_math_tests;
+--- /dev/null
++++ b/crates/alife_training/src/cpu/motor_mediation/confidence/policy/optional_vocal/actual_contact_math_tests.rs
+@@ -0,0 +1,302 @@
++//! Fixed synthetic sampler controls. No source forward, world tick, or learning.
++//! Present payloads here are fixture data, never claims of autonomous speech.
++use super::*;
++const CONTROL_SEED: u32 = 0x4f56_4331;
++fn phenotype() -> BrainPhenotype {
++    let (inputs, _) = super::super::super::super::tests::source();
++    PhenotypeCompiler::compile_validated(
++        &inputs,
++        &BrainCapacityClass::n2048_grounded_drive_research(),
++    )
++    .unwrap()
++}
++fn specs() -> Vec<(u32, ActionKind, CandidateActionFamily)> {
++    vec![
++        (1, ActionKind::Idle, CandidateActionFamily::Idle),
++        (3, ActionKind::Rest, CandidateActionFamily::Rest),
++        (400, ActionKind::Vocalize, CandidateActionFamily::Other),
++        (103, ActionKind::Move, CandidateActionFamily::Approach),
++        (212, ActionKind::Interact, CandidateActionFamily::Contact),
++        (104, ActionKind::Hold, CandidateActionFamily::Other),
++        (700, ActionKind::Rest, CandidateActionFamily::Rest),
++    ]
++}
++fn frame(spec: &[(u32, ActionKind, CandidateActionFamily)]) -> PerceptionFrame {
++    frame_edit(spec, |_| {})
++}
++fn frame_edit(
++    spec: &[(u32, ActionKind, CandidateActionFamily)],
++    edit: impl FnOnce(&mut Vec<ActionCandidate>),
++) -> PerceptionFrame {
++    try_frame_edit(spec, edit).unwrap()
++}
++fn try_frame_edit(
++    spec: &[(u32, ActionKind, CandidateActionFamily)],
++    edit: impl FnOnce(&mut Vec<ActionCandidate>),
++) -> Result<PerceptionFrame, ScaffoldContractError> {
++    let t = Tick::new(1);
++    let owner = OrganismId(1);
++    let profile = SensorProfile::GroundedObjectSlotsSleepChoiceV1;
++    let mut candidates = spec
++        .iter()
++        .enumerate()
++        .map(|(i, (id, kind, family))| {
++            ActionCandidate::new(
++                i as u16,
++                ActionId(*id),
++                *kind,
++                *family,
++                CandidateObservationRef::None,
++                ActionTarget::NONE,
++                CandidateFeatureVector::zero().with_intrinsic_action_basis(*kind),
++                Confidence::new(1.).unwrap(),
++                NormalizedScalar::ZERO,
++                DurationTicks::new(1),
++                DurationTicks::new(1),
++            )
++            .unwrap()
++        })
++        .collect();
++    edit(&mut candidates);
++    PerceptionFrame::new(
++        owner,
++        t,
++        profile,
++        SensorySnapshot::new(
++            owner,
++            t,
++            Vec3f::ZERO,
++            SensoryChannels::ZERO,
++            Default::default(),
++        )
++        .unwrap(),
++        BodySnapshot {
++            pose: Pose::IDENTITY,
++            velocity: Velocity::ZERO,
++        },
++        HomeostaticSnapshot::baseline(t),
++        candidates,
++        SensorProfileProvenance::new(profile, SensoryAbiVersion::CURRENT, t).unwrap(),
++        vec![],
++    )
++}
++fn synthetic_source(
++    p: &BrainPhenotype,
++    f: &PerceptionFrame,
++    present: bool,
++) -> OptionalVocalSourceV1 {
++    let speech = present.then(|| {
++        SpeechMotorPayload::try_new(
++            SpeechActKind::Declare,
++            vec![LanguageTokenId::new(1).unwrap()],
++            Confidence::new(1.).unwrap(),
++        )
++        .unwrap()
++    });
++    OptionalVocalSourceV1::from_forward(
++        f.organism_id(),
++        f.tick(),
++        p.phenotype_hash(),
++        f.frame_digest(),
++        1,
++        0,
++        &vec![0.; p.neuron_count() as usize],
++        &vec![0.; p.synapses().len()],
++        speech,
++    )
++    .unwrap()
++}
++fn native(p: &BrainPhenotype, f: &PerceptionFrame) -> RecoveryGroupScoresV2 {
++    RecoveryGroupScoresV2 {
++        binding: RecoveryGroupBindingV2::bind(
++            p,
++            f,
++            (1u32 << f.candidates().len()) - 1,
++            [true; 6],
++            0,
++        )
++        .unwrap(),
++        ordinary: vec![0.; f.candidates().len()],
++        group: 0.,
++        operations: [0.; 2],
++    }
++}
++fn fixture(
++    present: bool,
++) -> (
++    BrainPhenotype,
++    PerceptionFrame,
++    RecoveryGroupScoresV2,
++    OptionalVocalScoresV1,
++) {
++    let p = phenotype();
++    let f = frame(&specs());
++    let n = native(&p, &f);
++    let s = OptionalVocalScoresV1::bind(&p, &f, &n, synthetic_source(&p, &f, present)).unwrap();
++    (p, f, n, s)
++}
++
++fn each_bundle(scores:&ChannelScores,t:f64,mut visit:impl FnMut([Choice;6],Option<u8>,Evaluation)) {
++    let d=scores.distribution(t).unwrap();
++    fn recurse(s:usize,m:&mut [Choice;6],d:&Distribution,scores:&ChannelScores,t:f64,
++        visit:&mut impl FnMut([Choice;6],Option<u8>,Evaluation)) {
++        if s==6 {
++            if m[4]==Choice::Rest {
++                for o in 0..2 {if d.operation_lp[o].is_some() {
++                    visit(*m,Some(o as u8),scores.evaluate_selection(*m,Some(o as u8),t).unwrap());
++                }}
++            } else {visit(*m,None,scores.evaluate_selection(*m,None,t).unwrap());}
++        } else {for c in &d.channels[s].choices {m[s]=*c;recurse(s+1,m,d,scores,t,visit);}}
++    }
++    let size=d.channels.iter().map(|f|f.choices.len()).product::<usize>()*2;
++    assert!(size<=10000);
++    recurse(0,&mut [Choice::NoOp;6],&d,scores,t,&mut visit);
++}
++#[test]
++fn normalized_support_idle_and_recovery_operations() {
++    let (_,_,_,input)=fixture(true); let s=ChannelScores::bind(&input).unwrap();
++    let d=s.distribution(1.).unwrap();
++    assert!(d.channels[4].choices.contains(&Choice::Candidate(input.idle)));
++    let mut mass=0.;let mut rest=0.;let mut awake=0.;let mut n=0;
++    each_bundle(&s,1.,|m,o,e|{n+=1;let p=e.log_probability.exp();assert!(p>0.);mass+=p;
++        if m[4]==Choice::Rest {rest+=p;} if o==Some(1) {awake+=p;}});
++    assert_eq!(n,8); // two Vocal outcomes times Idle/Hold/BodySleep/AwakeRest
++    assert!((mass-1.).abs()<1e-12);assert!((rest-1./3.).abs()<1e-12);
++    assert!((awake-1./6.).abs()<1e-12);
++}
++#[test]
++fn independent_manipulation_score_cannot_shift_rest() {
++    let (_,_,_,input)=fixture(false);let mut s=ChannelScores::bind(&input).unwrap();
++    for score in [-8.,0.,8.] {
++        s.input.ordinary_bits[4]=f64::to_bits(score);
++        let mut rest=0.;each_bundle(&s,1.,|m,_,e|{if m[4]==Choice::Rest {rest+=e.log_probability.exp();}});
++        assert!((rest-1./3.).abs()<1e-12);
++    }
++}
++#[test]
++fn quiet_noop_payload_and_availability() {
++    let (_,_,_,input)=fixture(false);let mut s=ChannelScores::bind(&input).unwrap();
++    assert_eq!(s.distribution(1.).unwrap().channels[3].choices,vec![Choice::Quiet]);
++    let a=s.sample(CONTROL_SEED,7,1.).unwrap();let e=s.evaluate(&a).unwrap();
++    assert_eq!(e.physical[3],None);assert_eq!(e.physical[0],Some(3));assert_eq!(e.physical[2],Some(4));
++    // Canonical source no-ops remain actual source candidates, not invented actions.
++    s.input.native_binding.enabled[0]=false;
++    s.input.native_binding.eligible_mask &= !(1<<3);s.input.eligible_mask &= !(1<<3);
++    assert_eq!(s.distribution(1.).unwrap().channels[0].choices,vec![Choice::NoOp]);
++}
++#[test]
++fn proof_domains_rng_and_metadata_tamper_rejected() {
++    let (_,_,_,input)=fixture(true);let s=ChannelScores::bind(&input).unwrap();let a=s.sample(7,19,0.8).unwrap();
++    assert_eq!(a,s.sample(7,19,0.8).unwrap());s.evaluate(&a).unwrap();
++    assert!(a.proof.factors.iter().all(|i|*i>=16));
++    let mut bad=a.clone();bad.policy=OPTIONAL_VOCAL_POLICY_V1.into();assert!(s.evaluate(&bad).is_err());
++    let mut bad=a.clone();bad.proof.domain="old-source-draw".into();assert!(s.evaluate(&bad).is_err());
++    let mut bad=a.clone();bad.metadata_candidate=Some(u16::MAX);assert!(s.evaluate(&bad).is_err());
++    let mut bad=a.clone();bad.log_probability_bits=0f64.to_bits();assert!(s.evaluate(&bad).is_err());
++    let mut bad=a;bad.proof.scores_digest[0]^=1;assert!(s.evaluate(&bad).is_err());
++}
++#[test]
++fn exact_joint_log_probability_and_zero_expected_score() {
++    let (_,_,_,input)=fixture(true);let s=ChannelScores::bind(&input).unwrap();
++    let mut means=vec![0.;s.input.ordinary_bits.len()];let mut group=0.;let mut ops=[0.;2];
++    each_bundle(&s,0.9,|_,_,e|{let p=e.log_probability.exp();
++        for (v,g) in means.iter_mut().zip(e.derivative.ordinary) {*v+=p*g;}
++        group+=p*e.derivative.group;for i in 0..2 {ops[i]+=p*e.derivative.operations[i];}});
++    assert!(means.iter().chain([&group]).chain(ops.iter()).all(|x|x.abs()<1e-12));
++}
++#[test]
++fn all_score_gradients_including_shared_idle_quiet() {
++    let (_,_,_,input)=fixture(true);let s=ChannelScores::bind(&input).unwrap();let t=0.7;let h=1e-5;
++    // All supported bundles, not merely the sampled action; includes Rest/non-Rest.
++    each_bundle(&s,t,|m,o,e|{
++        for index in 0..s.input.ordinary_bits.len()+3 {
++            let mut lo=s.clone();let mut hi=s.clone();
++            let expected=if index<s.input.ordinary_bits.len() {
++                let z=f64::from_bits(s.input.ordinary_bits[index]);
++                lo.input.ordinary_bits[index]=(z-h).to_bits();hi.input.ordinary_bits[index]=(z+h).to_bits();
++                e.derivative.ordinary[index]
++            } else if index==s.input.ordinary_bits.len() {
++                let z=f64::from_bits(s.input.group_bits);lo.input.group_bits=(z-h).to_bits();hi.input.group_bits=(z+h).to_bits();e.derivative.group
++            } else {
++                let i=index-s.input.ordinary_bits.len()-1;let z=f64::from_bits(s.input.operation_bits[i]);
++                lo.input.operation_bits[i]=(z-h).to_bits();hi.input.operation_bits[i]=(z+h).to_bits();e.derivative.operations[i]
++            };
++            let actual=(hi.evaluate_selection(m,o,t).unwrap().log_probability-lo.evaluate_selection(m,o,t).unwrap().log_probability)/(2.*h);
++            assert!((expected-actual).abs()<1e-7,"gradient {index}: {expected} != {actual}");
++        }
++    });
++}
++#[test]
++fn invalid_ungrounded_gesture_and_single_operation_support() {
++    // This exact unsupported fixture failed in V3 before sampling. Preserve
++    // the real profile5 rejection rather than weakening the frame validator.
++    let mut spec=specs();
++    spec.push((401,ActionKind::Gesture,CandidateActionFamily::Other));
++    assert!(matches!(try_frame_edit(&spec, |_| {}),
++        Err(ScaffoldContractError::InvalidPerceptionFrame)));
++
++    // Operation availability is an independent check on the existing legal
++    // native frame. Do not infer that an invented Gesture was admitted.
++    let p=phenotype();
++    let f=try_frame_edit(&specs(), |_| {}).unwrap();
++    f.validate_contract().unwrap();
++    let n=native(&p,&f);
++    let input=OptionalVocalScoresV1::bind(&p,&f,&n,synthetic_source(&p,&f,false)).unwrap();
++    let mut s=ChannelScores::bind(&input).unwrap();
++    s.input.native_binding.eligible_mask &= !(1<<1);
++    s.input.eligible_mask &= !(1<<1);
++    let mut mass=0.;
++    let mut rest_mass=0.;
++    each_bundle(&s,1.,|m,o,e|{
++        let probability=e.log_probability.exp();
++        mass+=probability;
++        if m[4]==Choice::Rest {
++            assert_eq!(o,Some(1));
++            rest_mass+=probability;
++        } else {assert_eq!(o,None);}
++    });
++    assert!((mass-1.).abs()<1e-12);
++    assert!((rest_mass-1./3.).abs()<1e-12);
++}
++#[test]
++fn unsupported_and_extreme_numeric_inputs_fail_closed() {
++    let (_,_,_,input)=fixture(false);let s=ChannelScores::bind(&input).unwrap();let a=s.sample(1,2,1.).unwrap();
++    let mut m=a.motors;m[3]=Choice::Candidate(2);assert!(s.evaluate_selection(m,a.operation,1.).is_err());
++    assert!(s.distribution(0.).is_err());assert!(s.distribution(f64::NAN).is_err());
++    assert!(Factor::new(vec![Choice::Quiet,Choice::NoOp],vec![0.,-1000.],1.).is_err());
++    let mut bad=s.clone();bad.source.domain="old-source".into();assert!(bad.distribution(1.).is_err());
++}
++
++#[test]
++fn native_gradient_bridge_sums_quiet_and_posture_without_metadata_credit() {
++    let (_,_,native,input)=fixture(true);let s=ChannelScores::bind(&input).unwrap();
++    let a=s.sample(CONTROL_SEED,11,0.73).unwrap();
++    let e=s.evaluate(&a).unwrap();let g=s.native_score_gradient(&a).unwrap();
++    assert_eq!(g.binding,native.binding);assert_eq!(g.ordinary,e.derivative.ordinary);
++    assert_eq!(g.group,e.derivative.group);assert_eq!(g.operations,e.derivative.operations);
++    // No representative scalar, family advantage or old-policy draw is minted.
++    let receipt=s.administrative_receipt(&a).unwrap();
++    assert!(!receipt.body_price_qualified);assert_eq!(receipt.channel_factors,6);
++}
++#[test]
++fn serialized_own_proof_roundtrip_and_tamper_rejection() {
++    let (_,_,_,input)=fixture(false);let s=ChannelScores::bind(&input).unwrap();
++    let a=s.sample(CONTROL_SEED,17,0.73).unwrap();
++    let restored:ChannelScores=serde_json::from_slice(&serde_json::to_vec(&s).unwrap()).unwrap();
++    let action:BundleAction=serde_json::from_slice(&serde_json::to_vec(&a).unwrap()).unwrap();
++    restored.evaluate(&action).unwrap();assert_eq!(restored.sample(CONTROL_SEED,17,0.73).unwrap(),a);
++    let mut bad=action;bad.proof.counter+=1;
++    // Adjacent counters can legitimately sample the same bundle.  The trusted
++    // host cursor, not resampling alone, authenticates the expected counter.
++    assert!(restored.validate_sampling_context(&bad,CONTROL_SEED,17,0.73).is_err());
++}
++#[test]
++fn counterfactual_unrelated_readout_is_not_a_physical_recovery_claim() {
++    let (_,_,_,input)=fixture(false);let s=ChannelScores::bind(&input).unwrap();
++    for delta in [-8.,0.,8.] {
++        let (a,b)=s.unrelated_score_rest_readout(4,delta,0.73).unwrap();assert_eq!(a.to_bits(),b.to_bits());
++    }
++    assert!(s.unrelated_score_rest_readout(input.idle,-8.,0.73).is_err());
++    // This fixture's manipulation row is Contact, not grounded Play. Actual Play
++    // and simultaneous physical recovery dose remain separate hosted controls.
++}
