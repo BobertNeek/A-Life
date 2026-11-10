@@ -1,0 +1,473 @@
+{
+  "complete": true,
+  "trials": [
+    {
+      "seed": 2026111547,
+      "scene": "bitter-food",
+      "arm": "whole-care-approach70",
+      "target_active": true,
+      "first_consumption_decision": null,
+      "initial_hunger": 0.0,
+      "approach_edits": [
+        {
+          "after": 2.799999952316284,
+          "before": 4.0,
+          "index": 25968,
+          "role": "approach_taste_weight_edit"
+        },
+        {
+          "after": 14.0,
+          "before": 20.0,
+          "index": 25983,
+          "role": "approach_taste_weight_edit"
+        }
+      ],
+      "sham": false,
+      "cold_next_exact": true,
+      "optimizer_unchanged": true,
+      "sha256": "133590a32cc20e835e1c3f26506036a0ab6580ef7fab0c767837cf8ae3344551"
+    },
+    {
+      "seed": 2026111547,
+      "scene": "bitter-food",
+      "arm": "whole-care",
+      "target_active": true,
+      "first_consumption_decision": null,
+      "initial_hunger": 0.0,
+      "approach_edits": [],
+      "sham": false,
+      "cold_next_exact": true,
+      "optimizer_unchanged": true,
+      "sha256": "6fc3633be0c2ed2b431e8c340f5a4cd0f3141f683b2936791b4925312accbdc7"
+    },
+    {
+      "seed": 2026111547,
+      "scene": "far-food",
+      "arm": "whole-care-approach70",
+      "target_active": false,
+      "first_consumption_decision": 26,
+      "initial_hunger": 0.0,
+      "approach_edits": [
+        {
+          "after": 2.799999952316284,
+          "before": 4.0,
+          "index": 25968,
+          "role": "approach_taste_weight_edit"
+        },
+        {
+          "after": 14.0,
+          "before": 20.0,
+          "index": 25983,
+          "role": "approach_taste_weight_edit"
+        }
+      ],
+      "sham": false,
+      "cold_next_exact": true,
+      "optimizer_unchanged": true,
+      "sha256": "23c7e073cc2ef5793d991e686d112ae400d0e78b0cda0f668591a13f5379c81a"
+    },
+    {
+      "seed": 2026111547,
+      "scene": "far-food",
+      "arm": "whole-care",
+      "target_active": false,
+      "first_consumption_decision": 42,
+      "initial_hunger": 0.0,
+      "approach_edits": [],
+      "sham": false,
+      "cold_next_exact": true,
+      "optimizer_unchanged": true,
+      "sha256": "4897cc4940c6ff57689631d32601162c5857ad7d500397b9302f94d737745a2c"
+    },
+    {
+      "seed": 2026111547,
+      "scene": "food",
+      "arm": "whole-care-approach70",
+      "target_active": false,
+      "first_consumption_decision": 2,
+      "initial_hunger": 0.0,
+      "approach_edits": [
+        {
+          "after": 2.799999952316284,
+          "before": 4.0,
+          "index": 25968,
+          "role": "approach_taste_weight_edit"
+        },
+        {
+          "after": 14.0,
+          "before": 20.0,
+          "index": 25983,
+          "role": "approach_taste_weight_edit"
+        }
+      ],
+      "sham": false,
+      "cold_next_exact": true,
+      "optimizer_unchanged": true,
+      "sha256": "a78f61676d531a4a4e936c7ccfbbe3e50d5e4d58fed49224c2729f1fe66ccc58"
+    },
+    {
+      "seed": 2026111547,
+      "scene": "food",
+      "arm": "whole-care",
+      "target_active": false,
+      "first_consumption_decision": 3,
+      "initial_hunger": 0.0,
+      "approach_edits": [],
+      "sham": false,
+      "cold_next_exact": true,
+      "optimizer_unchanged": true,
+      "sha256": "5b99fafb2b2879773843240a9cb5a75b5d156b3e978385b3f74b14d49d0c034c"
+    },
+    {
+      "seed": 2026111548,
+      "scene": "bitter-food",
+      "arm": "whole-care-approach70",
+      "target_active": true,
+      "first_consumption_decision": null,
+      "initial_hunger": 0.0,
+      "approach_edits": [
+        {
+          "after": 2.799999952316284,
+          "before": 4.0,
+          "index": 25968,
+          "role": "approach_taste_weight_edit"
+        },
+        {
+          "after": 14.0,
+          "before": 20.0,
+          "index": 25983,
+          "role": "approach_taste_weight_edit"
+        }
+      ],
+      "sham": false,
+      "cold_next_exact": true,
+      "optimizer_unchanged": true,
+      "sha256": "d6fef0999a6e81cdc6b1a945f4f5de758071f33684d08da6f4133be1db51cec2"
+    },
+    {
+      "seed": 2026111548,
+      "scene": "bitter-food",
+      "arm": "whole-care",
+      "target_active": true,
+      "first_consumption_decision": null,
+      "initial_hunger": 0.0,
+      "approach_edits": [],
+      "sham": false,
+      "cold_next_exact": true,
+      "optimizer_unchanged": true,
+      "sha256": "c44f23c1a7afb912407a674d61bdde71fb9e2467cdc014789224c8197dcaa039"
+    },
+    {
+      "seed": 2026111548,
+      "scene": "far-food",
+      "arm": "whole-care-approach70",
+      "target_active": false,
+      "first_consumption_decision": 26,
+      "initial_hunger": 0.0,
+      "approach_edits": [
+        {
+          "after": 2.799999952316284,
+          "before": 4.0,
+          "index": 25968,
+          "role": "approach_taste_weight_edit"
+        },
+        {
+          "after": 14.0,
+          "before": 20.0,
+          "index": 25983,
+          "role": "approach_taste_weight_edit"
+        }
+      ],
+      "sham": false,
+      "cold_next_exact": true,
+      "optimizer_unchanged": true,
+      "sha256": "da15ddacf2a0c6002bf61140efe0379838983184057b9d08d84cce3b04e899c1"
+    },
+    {
+      "seed": 2026111548,
+      "scene": "far-food",
+      "arm": "whole-care",
+      "target_active": false,
+      "first_consumption_decision": 42,
+      "initial_hunger": 0.0,
+      "approach_edits": [],
+      "sham": false,
+      "cold_next_exact": true,
+      "optimizer_unchanged": true,
+      "sha256": "bbe5948bdd0db65f2bca5ec4b8284f82fc318e4dfb386ed97f497ace2591dbcf"
+    },
+    {
+      "seed": 2026111548,
+      "scene": "food",
+      "arm": "whole-care-approach70",
+      "target_active": false,
+      "first_consumption_decision": 2,
+      "initial_hunger": 0.0,
+      "approach_edits": [
+        {
+          "after": 2.799999952316284,
+          "before": 4.0,
+          "index": 25968,
+          "role": "approach_taste_weight_edit"
+        },
+        {
+          "after": 14.0,
+          "before": 20.0,
+          "index": 25983,
+          "role": "approach_taste_weight_edit"
+        }
+      ],
+      "sham": false,
+      "cold_next_exact": true,
+      "optimizer_unchanged": true,
+      "sha256": "e93570ed66aac1ed1182923c03ed79a1d3c9418b985afb07a3807f91281d6269"
+    },
+    {
+      "seed": 2026111548,
+      "scene": "food",
+      "arm": "whole-care",
+      "target_active": false,
+      "first_consumption_decision": 4,
+      "initial_hunger": 0.0,
+      "approach_edits": [],
+      "sham": false,
+      "cold_next_exact": true,
+      "optimizer_unchanged": true,
+      "sha256": "43cdc548b2f0f372db7cd1223361146a7eaa59e0010122c2fdba62c4ba527880"
+    },
+    {
+      "seed": 2026111549,
+      "scene": "bitter-food",
+      "arm": "whole-care-approach70",
+      "target_active": true,
+      "first_consumption_decision": null,
+      "initial_hunger": 0.0,
+      "approach_edits": [
+        {
+          "after": 2.799999952316284,
+          "before": 4.0,
+          "index": 25968,
+          "role": "approach_taste_weight_edit"
+        },
+        {
+          "after": 14.0,
+          "before": 20.0,
+          "index": 25983,
+          "role": "approach_taste_weight_edit"
+        }
+      ],
+      "sham": false,
+      "cold_next_exact": true,
+      "optimizer_unchanged": true,
+      "sha256": "abad26016846d060e8d7c4c0f9a3e20d57fbd31a944fc84bfc7b600482ee5e7c"
+    },
+    {
+      "seed": 2026111549,
+      "scene": "bitter-food",
+      "arm": "whole-care",
+      "target_active": true,
+      "first_consumption_decision": null,
+      "initial_hunger": 0.0,
+      "approach_edits": [],
+      "sham": false,
+      "cold_next_exact": true,
+      "optimizer_unchanged": true,
+      "sha256": "a5c2bada139a20e5afb7ab1207c7c0a2ab34f30eda52227488a6359d76bd099b"
+    },
+    {
+      "seed": 2026111549,
+      "scene": "far-food",
+      "arm": "whole-care-approach70",
+      "target_active": false,
+      "first_consumption_decision": 28,
+      "initial_hunger": 0.0,
+      "approach_edits": [
+        {
+          "after": 2.799999952316284,
+          "before": 4.0,
+          "index": 25968,
+          "role": "approach_taste_weight_edit"
+        },
+        {
+          "after": 14.0,
+          "before": 20.0,
+          "index": 25983,
+          "role": "approach_taste_weight_edit"
+        }
+      ],
+      "sham": false,
+      "cold_next_exact": true,
+      "optimizer_unchanged": true,
+      "sha256": "d46e2b5f4efb3d44431a7850f2ece6ce9a4e20746f452f96c29d0dea194badf8"
+    },
+    {
+      "seed": 2026111549,
+      "scene": "far-food",
+      "arm": "whole-care",
+      "target_active": false,
+      "first_consumption_decision": 42,
+      "initial_hunger": 0.0,
+      "approach_edits": [],
+      "sham": false,
+      "cold_next_exact": true,
+      "optimizer_unchanged": true,
+      "sha256": "6bc9bc7527e0d3f7fdad462bcfc5559c3072f692d37770a849c36ef77d62ed8d"
+    },
+    {
+      "seed": 2026111549,
+      "scene": "food",
+      "arm": "whole-care-approach70",
+      "target_active": false,
+      "first_consumption_decision": 2,
+      "initial_hunger": 0.0,
+      "approach_edits": [
+        {
+          "after": 2.799999952316284,
+          "before": 4.0,
+          "index": 25968,
+          "role": "approach_taste_weight_edit"
+        },
+        {
+          "after": 14.0,
+          "before": 20.0,
+          "index": 25983,
+          "role": "approach_taste_weight_edit"
+        }
+      ],
+      "sham": false,
+      "cold_next_exact": true,
+      "optimizer_unchanged": true,
+      "sha256": "6bd7ce849702d36e2498a90db3589c93d6fe01ee1c3ba5862a0586bcc6accf93"
+    },
+    {
+      "seed": 2026111549,
+      "scene": "food",
+      "arm": "whole-care",
+      "target_active": false,
+      "first_consumption_decision": 4,
+      "initial_hunger": 0.0,
+      "approach_edits": [],
+      "sham": false,
+      "cold_next_exact": true,
+      "optimizer_unchanged": true,
+      "sha256": "99211246d9dfff1ce438050f9905d17866b286ef66a61216bf5d8fe41a5aad19"
+    },
+    {
+      "seed": 2026111550,
+      "scene": "bitter-food",
+      "arm": "whole-care-approach70",
+      "target_active": true,
+      "first_consumption_decision": null,
+      "initial_hunger": 0.0,
+      "approach_edits": [
+        {
+          "after": 2.799999952316284,
+          "before": 4.0,
+          "index": 25968,
+          "role": "approach_taste_weight_edit"
+        },
+        {
+          "after": 14.0,
+          "before": 20.0,
+          "index": 25983,
+          "role": "approach_taste_weight_edit"
+        }
+      ],
+      "sham": false,
+      "cold_next_exact": true,
+      "optimizer_unchanged": true,
+      "sha256": "8af7ead5008d57fd0a420d6b1ce735d4c4a033c1afb2420678a0e7cf99092714"
+    },
+    {
+      "seed": 2026111550,
+      "scene": "bitter-food",
+      "arm": "whole-care",
+      "target_active": true,
+      "first_consumption_decision": null,
+      "initial_hunger": 0.0,
+      "approach_edits": [],
+      "sham": false,
+      "cold_next_exact": true,
+      "optimizer_unchanged": true,
+      "sha256": "fa909e8a441af8e03dc02109de3ab0aa7afdc63b670ba5acc328b2c0f69f1b92"
+    },
+    {
+      "seed": 2026111550,
+      "scene": "far-food",
+      "arm": "whole-care-approach70",
+      "target_active": false,
+      "first_consumption_decision": 26,
+      "initial_hunger": 0.0,
+      "approach_edits": [
+        {
+          "after": 2.799999952316284,
+          "before": 4.0,
+          "index": 25968,
+          "role": "approach_taste_weight_edit"
+        },
+        {
+          "after": 14.0,
+          "before": 20.0,
+          "index": 25983,
+          "role": "approach_taste_weight_edit"
+        }
+      ],
+      "sham": false,
+      "cold_next_exact": true,
+      "optimizer_unchanged": true,
+      "sha256": "cee5b3cdac0284e207b3a022d10a0d393d7bc682887d2a4b6b19124e874cd858"
+    },
+    {
+      "seed": 2026111550,
+      "scene": "far-food",
+      "arm": "whole-care",
+      "target_active": false,
+      "first_consumption_decision": 42,
+      "initial_hunger": 0.0,
+      "approach_edits": [],
+      "sham": false,
+      "cold_next_exact": true,
+      "optimizer_unchanged": true,
+      "sha256": "71f7698d1a9ba0467654185ef2b7f605450bbe38f6f9e5ee494e9a832c6508a9"
+    },
+    {
+      "seed": 2026111550,
+      "scene": "food",
+      "arm": "whole-care-approach70",
+      "target_active": false,
+      "first_consumption_decision": 3,
+      "initial_hunger": 0.0,
+      "approach_edits": [
+        {
+          "after": 2.799999952316284,
+          "before": 4.0,
+          "index": 25968,
+          "role": "approach_taste_weight_edit"
+        },
+        {
+          "after": 14.0,
+          "before": 20.0,
+          "index": 25983,
+          "role": "approach_taste_weight_edit"
+        }
+      ],
+      "sham": false,
+      "cold_next_exact": true,
+      "optimizer_unchanged": true,
+      "sha256": "23eb16166364fa38ff2bc39445836c50cbe1f17468208d444e791d650c548930"
+    },
+    {
+      "seed": 2026111550,
+      "scene": "food",
+      "arm": "whole-care",
+      "target_active": false,
+      "first_consumption_decision": 5,
+      "initial_hunger": 0.0,
+      "approach_edits": [],
+      "sham": false,
+      "cold_next_exact": true,
+      "optimizer_unchanged": true,
+      "sha256": "af0e00d51c9d42bf8ecac93011d9a681f81854221333b83b6ca84ba0a7f6f9a6"
+    }
+  ]
+}
