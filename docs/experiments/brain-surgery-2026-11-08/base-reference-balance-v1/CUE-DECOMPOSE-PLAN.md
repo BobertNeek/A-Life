@@ -1,0 +1,5 @@
+# Decompose the two-food action scores
+
+In the reproduced seed-1546 pilot, each approach score was about 18.6 while each available ingestion score was about 13.8, and moving toward one object suppressed its contact-approach score while the other remained strongly attractive. Hypothesis: positive-taste Approach readout terms bias the creature to oscillate between two targets, preventing an unforced ingestion. This is a hypothesis based on a single trajectory, not a gameplay-wide diagnosis.
+
+Repeat the identical pilot with a detached replay-only diagnostic that groups action-decoder synaptic contributions by input lane for each Approach/Ingest candidate. Check the same exposure history, sampled actions and physical outcomes as the prior pilot; do not apply changes to the world, policy, or founder. Compute and record whether summed lane terms reconstruct the native action logits before interpreting any individual contribution. This is a diagnostic repeat, not a new seed or learning trial. Source is main c3aec16 + cue-study.patch + cue-trace.patch + cue-decompose.patch and pinned support files. Keep all output/source; no user life or GPU/default state is modified.
