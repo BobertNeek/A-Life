@@ -23,3 +23,7 @@ A later candidate connects eight distinct observed range-ray encoder channels in
 ## Connected steering probe
 
 A later check found the first side-steering paths were zeroed by the lattice rewrite. The probe now restricts those paths to edges the lattice preserves and assigns separate side cells. A detached pulse changed left-minus-right turn logits in opposite directions for the two side rays. In one 16-decision mirrored-wall pair, a stronger turn-readout edit displaced the creature toward each open side; neither run reached the target. Longer paired trials and food/hazard controls are running. This is not proof of learned spatial mapping, stable memory, robust maze solving, or hardware/gameplay readiness. The selection only edits fresh genetic weights; it does not load or overwrite a trained life.
+
+## Stronger preserved relays
+
+A fresh research variant raises two selected, lattice-compatible side-relay weights from 0.06 to 0.75 while retaining local connectivity. In a detached replay with a 0.25 sensory pulse, the turn-logit response was more than 100 times larger than the comparison in that one case, with opposite signs for opposite rays. In one 16-decision mirrored-wall pair, the stronger variant moved toward the opening in both scenes whereas its paired comparison moved toward the same side in both; neither reached the food. This is a small pilot, not evidence of a map or reliable maze competence. A 120-decision paired comparison with food and actual harmful-item controls is running separately; no outcome is assumed.

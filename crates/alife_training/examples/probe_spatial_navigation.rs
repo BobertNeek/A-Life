@@ -499,6 +499,7 @@ fn wire_local_spatial_lattice(
     p: &BrainPhenotype,
     weights: &mut [f32],
     self_gain: f32,
+    boosted_relays: &std::collections::BTreeSet<usize>,
 ) -> Result<Vec<serde_json::Value>> {
     let mut counts = [0usize; 2];
     let mut edits = Vec::new();
@@ -518,7 +519,9 @@ fn wire_local_spatial_lattice(
             let br = b / 4;
             let bc = b % 4;
             let adjacent = ar.abs_diff(br) + ac.abs_diff(bc) == 1;
-            let after = if a == b {
+            let after = if (a == b || adjacent) && boosted_relays.contains(&i) {
+                0.75
+            } else if a == b {
                 self_gain
             } else if adjacent {
                 if self_gain > 0.4 {
@@ -773,7 +776,11 @@ fn trial(spec: TrialSpec<'_>) -> Result<serde_json::Value> {
             }
         }
     }
-    let edit_arm = if arm == "nav-turn10" { "nav-map" } else { arm };
+    let edit_arm = if arm == "nav-turn10" || arm == "nav-boost" {
+        "nav-map"
+    } else {
+        arm
+    };
     if edit_arm == "nav-edit"
         || edit_arm == "nav-combined"
         || edit_arm == "nav-lattice"
@@ -789,7 +796,11 @@ fn trial(spec: TrialSpec<'_>) -> Result<serde_json::Value> {
         edits.extend(wire_spatial_trace(
             &p,
             &mut weights,
-            if arm == "nav-turn10" { 60.0 } else { 6.0 },
+            if arm == "nav-turn10" || arm == "nav-boost" {
+                60.0
+            } else {
+                6.0
+            },
         )?);
         if edit_arm == "nav-lattice"
             || edit_arm == "nav-strong"
@@ -798,6 +809,15 @@ fn trial(spec: TrialSpec<'_>) -> Result<serde_json::Value> {
             || edit_arm == "nav-map"
             || edit_arm == "nav-stable"
         {
+            let boosted_relays = if arm == "nav-boost" {
+                edits
+                    .iter()
+                    .filter(|e| e["role"] == "spatial_visual_context_relay")
+                    .filter_map(|e| e["index"].as_u64().map(|v| v as usize))
+                    .collect()
+            } else {
+                std::collections::BTreeSet::new()
+            };
             edits.extend(wire_local_spatial_lattice(
                 &p,
                 &mut weights,
@@ -808,6 +828,7 @@ fn trial(spec: TrialSpec<'_>) -> Result<serde_json::Value> {
                 } else {
                     0.4
                 },
+                &boosted_relays,
             )?);
             if edit_arm == "nav-map" || edit_arm == "nav-stable" {
                 edits.extend(wire_visual_lattice_inputs(&p, &mut weights)?);
@@ -1245,7 +1266,7 @@ fn trial(spec: TrialSpec<'_>) -> Result<serde_json::Value> {
             // Probe whether each side-ray actually affects the neural turn
             // logits in opposite directions; never modifies the live host.
             let side_pulse = if tick == 0
-                && (arm == "nav-map" || arm == "nav-turn10")
+                && (arm == "nav-map" || arm == "nav-turn10" || arm == "nav-boost")
                 && std::env::var_os("ALIFE_RESEARCH_SIDE_PULSE").is_some()
             {
                 let left = frame
@@ -1633,6 +1654,7 @@ fn main() -> Result<()> {
         "nav-map-factor" => vec![("nav-base", 0.), ("nav-map", 0.)],
         "nav-stable-factor" => vec![("nav-map", 0.), ("nav-stable", 0.)],
         "nav-turn10-factor" => vec![("nav-map", 0.), ("nav-turn10", 0.)],
+        "nav-boost-factor" => vec![("nav-turn10", 0.), ("nav-boost", 0.)],
         "bold-factor" => vec![("whole-care", 0.), ("whole-care-bold", 0.)],
         "contact" => vec![("whole-care-v5", 0.), ("whole-care", 0.)],
         "whole" => vec![
