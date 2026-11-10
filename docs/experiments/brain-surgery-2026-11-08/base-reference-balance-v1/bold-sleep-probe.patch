@@ -1,0 +1,38 @@
+--- a/crates/alife_training/examples/probe_weight_space_care.rs
++++ b/crates/alife_training/examples/probe_weight_space_care.rs
+@@ -717,9 +717,34 @@
+         serde_json::to_vec(&hot_host.checkpoint(&trainer)?)?,
+         serde_json::to_vec(&cold.checkpoint(&trainer)?)?
+     );
++    let sleep_probe = if std::env::var_os("ALIFE_RESEARCH_SLEEP").is_some() {
++        let mut sleeper = host.snapshot();
++        sleeper.request_recovery_sleep(own)?;
++        let mut phases = Vec::new();
++        let mut consolidated = None;
++        let mut resumed_at = None;
++        for i in 0..80 {
++            let step = sleeper.step(&trainer, 1.)?;
++            let snap = sleeper.checkpoint(&trainer)?;
++            let resident = snap.residents.iter().find(|r| r.neural.organism_id == own).ok_or("missing sleeping owner")?;
++            phases.push(format!("{:?}", resident.sleep.state().phase));
++            if step.sleep_consolidations > 0 { consolidated = Some(resident.neural.clone()); }
++            if consolidated.is_some() && !step.decisions.is_empty() { resumed_at = Some(i + 1); break; }
++        }
++        let consolidated = consolidated.ok_or("no sleep consolidation within 80 intervals")?;
++        let resumed_at = resumed_at.ok_or("no decision resumed within 80 intervals")?;
++        let wake = sleeper.checkpoint(&trainer)?;
++        let wake_neural = &wake.residents.iter().find(|r| r.neural.organism_id == own).ok_or("missing waking owner")?.neural;
++        let bytes = serde_json::to_vec(&wake)?;
++        let mut restored = CpuCanonicalHost::from_checkpoint(serde_json::from_slice(&bytes)?, &trainer)?;
++        let mut continued = sleeper.snapshot();
++        continued.step(&trainer, 1.)?; restored.step(&trainer, 1.)?;
++        if serde_json::to_vec(&continued.checkpoint(&trainer)?)? != serde_json::to_vec(&restored.checkpoint(&trainer)?)? { return Err("sleep wake cold continuation mismatch".into()); }
++        json!({"forced_recovery":true,"phases":phases,"resumed_at":resumed_at,"pre_sleep_fast_to_consolidated":change_stats(&final_neural.fast,&consolidated.fast)?,"pre_sleep_lifetime_to_consolidated":change_stats(&final_neural.lifetime,&consolidated.lifetime)?,"pre_sleep_eligibility_to_consolidated":change_stats(&final_neural.eligibility,&consolidated.eligibility)?,"pre_sleep_generation":final_neural.weight_generation,"consolidated_generation":consolidated.weight_generation,"resumed_generation":wake_neural.weight_generation,"exact_cold_next":true})
++    } else { serde_json::Value::Null };
+     let r = host.world().organism_registry().get(own).unwrap();
+     Ok(
+-        json!({"research_fast_write_sham":std::env::var_os("ALIFE_RESEARCH_FAST_WRITE_SHAM").is_some(),"neural_changes":neural_changes,"seed":seed,"arm":arm,"scene":scene,"edits":edits,"source_digest":source.digest(),"candidate_digest":candidate_digest,"changed_weights":changed_weights,"experimental_graph":experimental,"active_tiles":trainer.phenotype().budgets().global.active_tiles,"microstep_count":trainer.phenotype().microstep_count(),"total_synapses":trainer.phenotype().synapses().len(),"preparation_ticks":preparation_ticks,"target_hazard_pain":target_hazard_pain,"initial_biology":initial_biology,"optimizer_unchanged":true,"cold_next_step_exact":true,"target_active":!host.world().entity(object).unwrap().consumed,"final_position":host.world().entity(host.world().entity_id("learner").unwrap()).unwrap().position,"final_target_carrier":host.world().entity(object).unwrap().carried_by,"final_body":r.biochemistry().body,"final_homeostasis":r.biochemistry().homeostasis,"rows":rows}),
++        json!({"sleep_probe":sleep_probe,"research_fast_write_sham":std::env::var_os("ALIFE_RESEARCH_FAST_WRITE_SHAM").is_some(),"neural_changes":neural_changes,"seed":seed,"arm":arm,"scene":scene,"edits":edits,"source_digest":source.digest(),"candidate_digest":candidate_digest,"changed_weights":changed_weights,"experimental_graph":experimental,"active_tiles":trainer.phenotype().budgets().global.active_tiles,"microstep_count":trainer.phenotype().microstep_count(),"total_synapses":trainer.phenotype().synapses().len(),"preparation_ticks":preparation_ticks,"target_hazard_pain":target_hazard_pain,"initial_biology":initial_biology,"optimizer_unchanged":true,"cold_next_step_exact":true,"target_active":!host.world().entity(object).unwrap().consumed,"final_position":host.world().entity(host.world().entity_id("learner").unwrap()).unwrap().position,"final_target_carrier":host.world().entity(object).unwrap().carried_by,"final_body":r.biochemistry().body,"final_homeostasis":r.biochemistry().homeostasis,"rows":rows}),
+     )
+ }
+ fn graph_report(p: &BrainPhenotype) -> serde_json::Value {
