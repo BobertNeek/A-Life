@@ -1,0 +1,74 @@
+{
+  "schema": "terrain-detour-pilot-summary-v1",
+  "method": "fresh CPU brain, 120 decisions; no hidden visual candidate at first step; not proof of learned map",
+  "runs": [
+    {
+      "file": "2026111840.maze-left.nav-map.json",
+      "sha256": "4e9a1bdb504487586f56b0475613f3e1c3aff9b6fc1b70efbe141ab1cff817ce",
+      "seed": 2026111840,
+      "scene": "maze-left",
+      "arm": "nav-map",
+      "ate": false,
+      "first_visible_decision": null,
+      "first_crossing_x_1_3": null,
+      "final_position": {
+        "x": 0.10045594722032547,
+        "y": 0.0,
+        "z": 0.7263892889022827
+      },
+      "cold_next_exact": true
+    },
+    {
+      "file": "2026111840.maze-left.nav-turn10.json",
+      "sha256": "a0c0bd207f82be37313abf35ff6718d9c67d2d553d99fd719a894a1478883a6e",
+      "seed": 2026111840,
+      "scene": "maze-left",
+      "arm": "nav-turn10",
+      "ate": true,
+      "first_visible_decision": 72,
+      "first_crossing_x_1_3": {
+        "decision": 87,
+        "x": 1.328058123588562,
+        "z": 1.0052309036254883
+      },
+      "final_position": {
+        "x": 2.291069746017456,
+        "y": 0.0,
+        "z": 0.29179805517196655
+      },
+      "cold_next_exact": true
+    },
+    {
+      "file": "2026111840.maze-right.nav-map.json",
+      "sha256": "12e977102ca1e192075ed06df6838d29681fa83dbb906bdcdf1c3a1b85f99440",
+      "seed": 2026111840,
+      "scene": "maze-right",
+      "arm": "nav-map",
+      "ate": false,
+      "first_visible_decision": null,
+      "first_crossing_x_1_3": null,
+      "final_position": {
+        "x": -0.042797964066267014,
+        "y": 0.0,
+        "z": 0.9800220131874084
+      },
+      "cold_next_exact": true
+    },
+    {
+      "file": "2026111840.maze-right.nav-turn10.json",
+      "sha256": "79f2d7e78713f687a594b6da64bb8eca24fde322fab3f0834311442be3928490",
+      "seed": 2026111840,
+      "scene": "maze-right",
+      "arm": "nav-turn10",
+      "ate": false,
+      "first_visible_decision": null,
+      "first_crossing_x_1_3": null,
+      "final_position": {
+        "x": -1.237719178199768,
+        "y": 0.0,
+        "z": -1.7973891496658325
+      },
+      "cold_next_exact": true
+    }
+  ]
+}
