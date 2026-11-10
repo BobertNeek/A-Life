@@ -1,0 +1,34 @@
+--- a/crates/alife_training/examples/probe_cue_learning.rs
++++ b/crates/alife_training/examples/probe_cue_learning.rs
+@@ -36,6 +36,14 @@
+         }
+         if approach_edits.len()!=2 { return Err("unexpected Approach taste weight count".into()); }
+     }
++    let memory_pain_gain = match std::env::var("ALIFE_RESEARCH_MEMORY_PAIN_GAIN").as_deref() { Err(std::env::VarError::NotPresent) => 0.0f32, Ok("4.0") => 4.0f32, _ => return Err("research memory pain gain must be absent or 4.0".into()) };
++    let mut memory_pain_edits=Vec::new();
++    if memory_pain_gain != 0.0 {
++        let coordinates=p.synapses().iter().enumerate().filter_map(|(i,syn)| matches!(syn.kind(),CompiledSynapseKind::Decoder(c) if c.head()==DecoderHeadKind::MemoryContext && c.family()==CandidateActionFamily::Ingest && c.input_lane()==26).then_some(i)).collect::<Vec<_>>();
++        if coordinates.is_empty() || coordinates.iter().any(|&i| weights[i] != 0.) { return Err("unexpected preexisting Ingest memory pain weights".into()); }
++        let each = -memory_pain_gain / coordinates.len() as f32;
++        for i in coordinates { let before=weights[i];weights[i]=each;memory_pain_edits.push(json!({"index":i,"before":before,"after":each})); }
++    }
+     let asset=FoundationWeightAsset::from_trained_weights(&p,weights,source.manifest().training_stage())?;
+     let mut game=create_canonical_new_game_with_n2048_experimental_candidate(&config,&asset)?;
+     let old=game.world.organism_registry().iter().next().ok_or("missing founder")?.clone();
+@@ -88,7 +96,7 @@
+         }
+         exposures.push(json!({"episode":episode,"safe":safe,"is_red":is_red,"target":target.raw(),"consumed_at":hit,"pain_delta":pain}));
+         if hit.is_none() {
+-            let report=json!({"schema":"cue-study-pilot-v1","approach_scale":approach_scale,"approach_edits":approach_edits,"credit_trace":credit_trace,"decoder_trace_reset":std::env::var_os("ALIFE_RESEARCH_DECODER_TRACE_RESET").is_some(),"safe_first":safe_first,"seed":seed,"safe_red":safe_red,"red_left":red_left,"sham":std::env::var_os("ALIFE_RESEARCH_FAST_WRITE_SHAM").is_some(),"censored":"exposure_not_consumed","exposures":exposures});
++            let report=json!({"schema":"cue-study-pilot-v1","approach_scale":approach_scale,"approach_edits":approach_edits,"memory_pain_gain":memory_pain_gain,"memory_pain_edits":memory_pain_edits,"credit_trace":credit_trace,"decoder_trace_reset":std::env::var_os("ALIFE_RESEARCH_DECODER_TRACE_RESET").is_some(),"safe_first":safe_first,"seed":seed,"safe_red":safe_red,"red_left":red_left,"sham":std::env::var_os("ALIFE_RESEARCH_FAST_WRITE_SHAM").is_some(),"censored":"exposure_not_consumed","exposures":exposures});
+             let mut f=std::fs::OpenOptions::new().write(true).create_new(true).open(path)?;f.write_all(&serde_json::to_vec_pretty(&report)?)?;return Ok(());
+         }
+     }
+@@ -150,6 +158,6 @@
+     let fast_changed=initial.fast.iter().zip(&final_neural.fast).filter(|(a,b)|a.to_bits()!=b.to_bits()).count();
+     let bytes=serde_json::to_vec(&checkpoint)?;let mut cold=CpuCanonicalHost::from_checkpoint(serde_json::from_slice(&bytes)?,&trainer)?;let mut warm=host.snapshot();warm.step(&trainer,1.)?;cold.step(&trainer,1.)?;
+     let exact=serde_json::to_vec(&warm.checkpoint(&trainer)?)? == serde_json::to_vec(&cold.checkpoint(&trainer)?)?;
+-    let report=json!({"schema":"cue-study-pilot-v1","approach_scale":approach_scale,"approach_edits":approach_edits,"credit_trace":credit_trace,"decoder_trace_reset":std::env::var_os("ALIFE_RESEARCH_DECODER_TRACE_RESET").is_some(),"safe_first":safe_first,"seed":seed,"safe_red":safe_red,"red_left":red_left,"sham":std::env::var_os("ALIFE_RESEARCH_FAST_WRITE_SHAM").is_some(),"exposures":exposures,"probe_red_id":red_id.raw(),"probe_blue_id":blue_id.raw(),"choice":choice,"choice_was_safe_cue":choice.and_then(|c| match c {"red"=>Some(safe_red),"blue"=>Some(!safe_red),_=>None}),"probe_steps":steps,"fast_changed":fast_changed,"cold_next_exact":exact,"founder_optimizer_unchanged":founder_before==serde_json::to_vec(&trainer.checkpoint())?,"trace":trace});
++    let report=json!({"schema":"cue-study-pilot-v1","approach_scale":approach_scale,"approach_edits":approach_edits,"memory_pain_gain":memory_pain_gain,"memory_pain_edits":memory_pain_edits,"credit_trace":credit_trace,"decoder_trace_reset":std::env::var_os("ALIFE_RESEARCH_DECODER_TRACE_RESET").is_some(),"safe_first":safe_first,"seed":seed,"safe_red":safe_red,"red_left":red_left,"sham":std::env::var_os("ALIFE_RESEARCH_FAST_WRITE_SHAM").is_some(),"exposures":exposures,"probe_red_id":red_id.raw(),"probe_blue_id":blue_id.raw(),"choice":choice,"choice_was_safe_cue":choice.and_then(|c| match c {"red"=>Some(safe_red),"blue"=>Some(!safe_red),_=>None}),"probe_steps":steps,"fast_changed":fast_changed,"cold_next_exact":exact,"founder_optimizer_unchanged":founder_before==serde_json::to_vec(&trainer.checkpoint())?,"trace":trace});
+     let mut f=std::fs::OpenOptions::new().write(true).create_new(true).open(path)?;f.write_all(&serde_json::to_vec_pretty(&report)?)?;Ok(())
+ }
