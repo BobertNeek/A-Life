@@ -750,7 +750,7 @@ mod tests {
         fs::create_dir(&root).unwrap();
         let candidate_path = root.join("candidate.alife-foundation");
         fs::write(&candidate_path, candidate.encode_canonical().unwrap()).unwrap();
-        let mut config = RuntimeConfig::deterministic_default(seed, BrainScaleTier::Standard2048);
+        let mut config = RuntimeConfig::deterministic_default(seed, BrainScaleTier::Nano512);
         config.features.gpu_backend_enabled = true;
         let launch = CanonicalNewGameLaunchRequest {
             world_seed: seed,
