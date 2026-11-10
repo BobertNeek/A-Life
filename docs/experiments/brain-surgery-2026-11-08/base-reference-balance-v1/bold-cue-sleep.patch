@@ -1,0 +1,28 @@
+--- a/crates/alife_training/examples/probe_cue_learning.rs
++++ b/crates/alife_training/examples/probe_cue_learning.rs
+@@ -116,6 +116,17 @@
+             let mut f=std::fs::OpenOptions::new().write(true).create_new(true).open(path)?;f.write_all(&serde_json::to_vec_pretty(&report)?)?;return Ok(());
+         }
+     }
++    let mut slept=false;
++    if std::env::var_os("ALIFE_RESEARCH_CUE_SLEEP").is_some() {
++        host.request_recovery_sleep(own)?;
++        let mut consolidated=false;
++        for _ in 0..80 {
++            let step=host.step(&trainer,1.)?;
++            consolidated |= step.sleep_consolidations > 0;
++            if consolidated && !step.decisions.is_empty() { slept=true; break; }
++        }
++        if !slept { return Err("cue sleep did not consolidate and wake".into()); }
++    }
+     let (rz,bz)=if red_left {(-0.3,0.3)} else {(0.3,-0.3)};
+     let (red_id,blue_id)=if red_first {
+         let r=spawn(&mut host,own,"probe-red",red,0.25,rz,0.)?;
+@@ -181,6 +192,6 @@
+     let fast_changed=initial.fast.iter().zip(&final_neural.fast).filter(|(a,b)|a.to_bits()!=b.to_bits()).count();
+     let bytes=serde_json::to_vec(&checkpoint)?;let mut cold=CpuCanonicalHost::from_checkpoint(serde_json::from_slice(&bytes)?,&trainer)?;let mut warm=host.snapshot();warm.step(&trainer,1.)?;cold.step(&trainer,1.)?;
+     let exact=serde_json::to_vec(&warm.checkpoint(&trainer)?)? == serde_json::to_vec(&cold.checkpoint(&trainer)?)?;
+-    let report=json!({"schema":"cue-study-pilot-v1","bold":use_bold,"bold_edits":bold_edits,"candidate_digest":candidate_digest,"phenotype_hash":phenotype_hash,"initial_biology":initial_biology,"red_first":red_first,"approach_scale":approach_scale,"approach_edits":approach_edits,"memory_pain_gain":memory_pain_gain,"memory_pain_edits":memory_pain_edits,"matched_palette":matched_palette,"credit_trace":credit_trace,"decoder_trace_reset":std::env::var_os("ALIFE_RESEARCH_DECODER_TRACE_RESET").is_some(),"safe_first":safe_first,"seed":seed,"safe_red":safe_red,"red_left":red_left,"sham":std::env::var_os("ALIFE_RESEARCH_FAST_WRITE_SHAM").is_some(),"exposures":exposures,"probe_red_id":red_id.raw(),"probe_blue_id":blue_id.raw(),"choice":choice,"choice_was_safe_cue":if matched_palette {choice.and_then(|c| match c {"red"=>Some(safe_red),"blue"=>Some(!safe_red),_=>None})} else {None},"probe_steps":steps,"fast_changed":fast_changed,"cold_next_exact":exact,"founder_optimizer_unchanged":founder_before==serde_json::to_vec(&trainer.checkpoint())?,"trace":trace});
++    let report=json!({"schema":"cue-study-pilot-v1","slept":slept,"bold":use_bold,"bold_edits":bold_edits,"candidate_digest":candidate_digest,"phenotype_hash":phenotype_hash,"initial_biology":initial_biology,"red_first":red_first,"approach_scale":approach_scale,"approach_edits":approach_edits,"memory_pain_gain":memory_pain_gain,"memory_pain_edits":memory_pain_edits,"matched_palette":matched_palette,"credit_trace":credit_trace,"decoder_trace_reset":std::env::var_os("ALIFE_RESEARCH_DECODER_TRACE_RESET").is_some(),"safe_first":safe_first,"seed":seed,"safe_red":safe_red,"red_left":red_left,"sham":std::env::var_os("ALIFE_RESEARCH_FAST_WRITE_SHAM").is_some(),"exposures":exposures,"probe_red_id":red_id.raw(),"probe_blue_id":blue_id.raw(),"choice":choice,"choice_was_safe_cue":if matched_palette {choice.and_then(|c| match c {"red"=>Some(safe_red),"blue"=>Some(!safe_red),_=>None})} else {None},"probe_steps":steps,"fast_changed":fast_changed,"cold_next_exact":exact,"founder_optimizer_unchanged":founder_before==serde_json::to_vec(&trainer.checkpoint())?,"trace":trace});
+     let mut f=std::fs::OpenOptions::new().write(true).create_new(true).open(path)?;f.write_all(&serde_json::to_vec_pretty(&report)?)?;Ok(())
+ }
