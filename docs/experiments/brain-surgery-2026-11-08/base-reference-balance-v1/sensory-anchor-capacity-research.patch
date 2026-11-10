@@ -1,0 +1,16 @@
+--- a/crates/alife_archive/tests/lineage_library.rs
++++ b/crates/alife_archive/tests/lineage_library.rs
+@@ -2683,3 +2683,13 @@
+     fs::remove_dir_all(root).unwrap();
+ }
+ 
++#[test]
++fn research_anchor_and_reserve_capacity_ten_children() {
++    let source=FoundationWeightAsset::decode_canonical(include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"),"/../../assets/foundations/experimental-whole-care-bold-v1.alife-foundation"))).unwrap();let m=source.manifest();
++    let identity=FoundationGeneticIdentity::new(m.foundation_id().raw(),u16::try_from(m.foundation_version().raw()).unwrap(),m.compatibility_family_id().raw(),BrainCapacityClass::N2048_ID).unwrap();
++    let mother=CreatureGenome::early_mammal_founder(701,identity).unwrap().with_n2048_foundation_candidate(source.clone()).unwrap();let father=CreatureGenome::early_mammal_founder(702,identity).unwrap().with_n2048_foundation_candidate(source.clone()).unwrap();
++    let anchor=mother.express().unwrap().brain_genome.seeds.sensor_layout_seed;
++    let phenotype=|g:CreatureGenome| {let e=g.express().unwrap();let d=e.development_state_at(Tick::new(u64::from(e.development.maturation_duration_ticks))).unwrap();let mut b=e.brain_genome;b.seeds.sensor_layout_seed=anchor;PhenotypeCompiler::compile_n2048_experimental_graph(b,d,SensorProfile::GroundedObjectSlotsV1).unwrap().0};
++    let base=phenotype(mother.clone());let ports=|p:&BrainPhenotype|p.sensor_encoder().assignments().iter().map(|a|(a.source_group().raw(),a.source_index(),a.target_neuron())).collect::<std::collections::BTreeSet<_>>();let baseline=ports(&base);
++    for seed in 703..713 {let child=phenotype(CreatureGenome::reproduce(&mother,&father,seed).unwrap());let child_ports=ports(&child);let extras=child_ports.difference(&baseline);let mut used=baseline.iter().map(|p|p.2).collect::<std::collections::BTreeSet<_>>();let mut relocated=0;let mut no_space=0;for port in extras {let target=port.2;if used.insert(target) {continue};let region=child.lobe_layout().lobe_by_neuron_index(target).unwrap();if let Some(free)=(region.start..region.start+region.len).find(|n|!used.contains(n)){used.insert(free);relocated+=1}else{no_space+=1}} println!("seed={seed} restored_anchors={} relocated_extras={relocated} no_space={no_space}",baseline.difference(&child_ports).count());}
++}
