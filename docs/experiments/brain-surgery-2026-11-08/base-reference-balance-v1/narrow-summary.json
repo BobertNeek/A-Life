@@ -1,0 +1,1918 @@
+{
+  "complete": true,
+  "source": "205f60c200dc05f4f0ae8c02d3f5b9747dbc0abd",
+  "trials": [
+    {
+      "seed": 2026111504,
+      "scene": "bitter-food",
+      "arm": "whole-care-balanced",
+      "target_active": true,
+      "x": -1.2507988214492798,
+      "cold_next_step_exact": true,
+      "optimizer_unchanged": true,
+      "candidate_digest": [
+        101,
+        168,
+        185,
+        69,
+        120,
+        164,
+        40,
+        249,
+        248,
+        247,
+        7,
+        132,
+        51,
+        13,
+        218,
+        129,
+        57,
+        119,
+        116,
+        200,
+        140,
+        250,
+        149,
+        112,
+        130,
+        61,
+        45,
+        25,
+        17,
+        213,
+        97,
+        213
+      ],
+      "reference_edits": [
+        {
+          "after": -0.5,
+          "before": 2.5,
+          "index": 25455,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -0.5,
+          "before": 2.5,
+          "index": 25471,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -0.5,
+          "before": 2.5,
+          "index": 25487,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": 2.0,
+          "before": -10.0,
+          "index": 25775,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -4.0,
+          "before": 20.0,
+          "index": 25983,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": 2.0,
+          "before": -10.0,
+          "index": 26031,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": 20.0,
+          "before": 100.0,
+          "index": 26367,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -2.0,
+          "before": -10.0,
+          "index": 26751,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": 6.0,
+          "before": 30.0,
+          "index": 26927,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -12.0,
+          "before": -60.0,
+          "index": 27135,
+          "role": "reference_weight_edit"
+        }
+      ],
+      "sha256": "642bee7319edba5207ba1f9a00a1161e312c2b231a68cfce8d5420de3eda2d51"
+    },
+    {
+      "seed": 2026111504,
+      "scene": "bitter-food",
+      "arm": "whole-care-narrow",
+      "target_active": true,
+      "x": -1.4527578353881836,
+      "cold_next_step_exact": true,
+      "optimizer_unchanged": true,
+      "candidate_digest": [
+        208,
+        103,
+        9,
+        188,
+        109,
+        166,
+        37,
+        104,
+        152,
+        136,
+        117,
+        241,
+        92,
+        87,
+        135,
+        5,
+        35,
+        77,
+        40,
+        125,
+        11,
+        99,
+        35,
+        140,
+        227,
+        224,
+        99,
+        70,
+        129,
+        111,
+        180,
+        191
+      ],
+      "reference_edits": [
+        {
+          "after": -0.5,
+          "before": 2.5,
+          "index": 25455,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -0.5,
+          "before": 2.5,
+          "index": 25471,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -0.5,
+          "before": 2.5,
+          "index": 25487,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": 20.0,
+          "before": 100.0,
+          "index": 26367,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -2.0,
+          "before": -10.0,
+          "index": 26751,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": 6.0,
+          "before": 30.0,
+          "index": 26927,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -12.0,
+          "before": -60.0,
+          "index": 27135,
+          "role": "reference_weight_edit"
+        }
+      ],
+      "sha256": "b85b6d85f1487398e07e166f3358e0f4756bbbcdd23cae2a45f00fdb12fc1694"
+    },
+    {
+      "seed": 2026111504,
+      "scene": "bitter-food",
+      "arm": "whole-care",
+      "target_active": true,
+      "x": -1.6038514375686646,
+      "cold_next_step_exact": true,
+      "optimizer_unchanged": true,
+      "candidate_digest": [
+        104,
+        161,
+        34,
+        251,
+        133,
+        56,
+        73,
+        148,
+        210,
+        207,
+        177,
+        83,
+        111,
+        71,
+        252,
+        1,
+        103,
+        168,
+        99,
+        157,
+        64,
+        254,
+        22,
+        104,
+        191,
+        38,
+        102,
+        160,
+        149,
+        161,
+        215,
+        34
+      ],
+      "reference_edits": [],
+      "sha256": "04ecc9b27defc7bb1e0aa7cd3dc0c379739df257d04ab72cbb2e25a0118c5301"
+    },
+    {
+      "seed": 2026111504,
+      "scene": "far-food",
+      "arm": "whole-care-balanced",
+      "target_active": true,
+      "x": 0.6508603692054749,
+      "cold_next_step_exact": true,
+      "optimizer_unchanged": true,
+      "candidate_digest": [
+        101,
+        168,
+        185,
+        69,
+        120,
+        164,
+        40,
+        249,
+        248,
+        247,
+        7,
+        132,
+        51,
+        13,
+        218,
+        129,
+        57,
+        119,
+        116,
+        200,
+        140,
+        250,
+        149,
+        112,
+        130,
+        61,
+        45,
+        25,
+        17,
+        213,
+        97,
+        213
+      ],
+      "reference_edits": [
+        {
+          "after": -0.5,
+          "before": 2.5,
+          "index": 25455,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -0.5,
+          "before": 2.5,
+          "index": 25471,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -0.5,
+          "before": 2.5,
+          "index": 25487,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": 2.0,
+          "before": -10.0,
+          "index": 25775,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -4.0,
+          "before": 20.0,
+          "index": 25983,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": 2.0,
+          "before": -10.0,
+          "index": 26031,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": 20.0,
+          "before": 100.0,
+          "index": 26367,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -2.0,
+          "before": -10.0,
+          "index": 26751,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": 6.0,
+          "before": 30.0,
+          "index": 26927,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -12.0,
+          "before": -60.0,
+          "index": 27135,
+          "role": "reference_weight_edit"
+        }
+      ],
+      "sha256": "74a8969060c129e09a58925c9d362273fb7e04dd90ecb2a8de74a13e6e462b72"
+    },
+    {
+      "seed": 2026111504,
+      "scene": "far-food",
+      "arm": "whole-care-narrow",
+      "target_active": true,
+      "x": 1.6038516759872437,
+      "cold_next_step_exact": true,
+      "optimizer_unchanged": true,
+      "candidate_digest": [
+        208,
+        103,
+        9,
+        188,
+        109,
+        166,
+        37,
+        104,
+        152,
+        136,
+        117,
+        241,
+        92,
+        87,
+        135,
+        5,
+        35,
+        77,
+        40,
+        125,
+        11,
+        99,
+        35,
+        140,
+        227,
+        224,
+        99,
+        70,
+        129,
+        111,
+        180,
+        191
+      ],
+      "reference_edits": [
+        {
+          "after": -0.5,
+          "before": 2.5,
+          "index": 25455,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -0.5,
+          "before": 2.5,
+          "index": 25471,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -0.5,
+          "before": 2.5,
+          "index": 25487,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": 20.0,
+          "before": 100.0,
+          "index": 26367,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -2.0,
+          "before": -10.0,
+          "index": 26751,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": 6.0,
+          "before": 30.0,
+          "index": 26927,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -12.0,
+          "before": -60.0,
+          "index": 27135,
+          "role": "reference_weight_edit"
+        }
+      ],
+      "sha256": "70576e0780a95b739c6f01c790737539cf8c322376150492f6264f1de980bb92"
+    },
+    {
+      "seed": 2026111504,
+      "scene": "far-food",
+      "arm": "whole-care",
+      "target_active": false,
+      "x": 1.5042600631713867,
+      "cold_next_step_exact": true,
+      "optimizer_unchanged": true,
+      "candidate_digest": [
+        104,
+        161,
+        34,
+        251,
+        133,
+        56,
+        73,
+        148,
+        210,
+        207,
+        177,
+        83,
+        111,
+        71,
+        252,
+        1,
+        103,
+        168,
+        99,
+        157,
+        64,
+        254,
+        22,
+        104,
+        191,
+        38,
+        102,
+        160,
+        149,
+        161,
+        215,
+        34
+      ],
+      "reference_edits": [],
+      "sha256": "14dcccd0911b52e11c52e726d85909ba562cb7c6a2529518ff554e928379a97d"
+    },
+    {
+      "seed": 2026111504,
+      "scene": "food",
+      "arm": "whole-care-balanced",
+      "target_active": false,
+      "x": -0.20165514945983887,
+      "cold_next_step_exact": true,
+      "optimizer_unchanged": true,
+      "candidate_digest": [
+        101,
+        168,
+        185,
+        69,
+        120,
+        164,
+        40,
+        249,
+        248,
+        247,
+        7,
+        132,
+        51,
+        13,
+        218,
+        129,
+        57,
+        119,
+        116,
+        200,
+        140,
+        250,
+        149,
+        112,
+        130,
+        61,
+        45,
+        25,
+        17,
+        213,
+        97,
+        213
+      ],
+      "reference_edits": [
+        {
+          "after": -0.5,
+          "before": 2.5,
+          "index": 25455,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -0.5,
+          "before": 2.5,
+          "index": 25471,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -0.5,
+          "before": 2.5,
+          "index": 25487,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": 2.0,
+          "before": -10.0,
+          "index": 25775,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -4.0,
+          "before": 20.0,
+          "index": 25983,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": 2.0,
+          "before": -10.0,
+          "index": 26031,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": 20.0,
+          "before": 100.0,
+          "index": 26367,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -2.0,
+          "before": -10.0,
+          "index": 26751,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": 6.0,
+          "before": 30.0,
+          "index": 26927,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -12.0,
+          "before": -60.0,
+          "index": 27135,
+          "role": "reference_weight_edit"
+        }
+      ],
+      "sha256": "e7e4d21db06d15e7c2cc9d4a0abef79be727073af8de7ea66622df776eac20cd"
+    },
+    {
+      "seed": 2026111504,
+      "scene": "food",
+      "arm": "whole-care-narrow",
+      "target_active": false,
+      "x": 0.8013880252838135,
+      "cold_next_step_exact": true,
+      "optimizer_unchanged": true,
+      "candidate_digest": [
+        208,
+        103,
+        9,
+        188,
+        109,
+        166,
+        37,
+        104,
+        152,
+        136,
+        117,
+        241,
+        92,
+        87,
+        135,
+        5,
+        35,
+        77,
+        40,
+        125,
+        11,
+        99,
+        35,
+        140,
+        227,
+        224,
+        99,
+        70,
+        129,
+        111,
+        180,
+        191
+      ],
+      "reference_edits": [
+        {
+          "after": -0.5,
+          "before": 2.5,
+          "index": 25455,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -0.5,
+          "before": 2.5,
+          "index": 25471,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -0.5,
+          "before": 2.5,
+          "index": 25487,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": 20.0,
+          "before": 100.0,
+          "index": 26367,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -2.0,
+          "before": -10.0,
+          "index": 26751,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": 6.0,
+          "before": 30.0,
+          "index": 26927,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -12.0,
+          "before": -60.0,
+          "index": 27135,
+          "role": "reference_weight_edit"
+        }
+      ],
+      "sha256": "2bdbe620cf12ca8f0175808038c000b25bf6d2c3649c33a160d78154b6ac5ac6"
+    },
+    {
+      "seed": 2026111504,
+      "scene": "food",
+      "arm": "whole-care",
+      "target_active": false,
+      "x": 0.15134261548519135,
+      "cold_next_step_exact": true,
+      "optimizer_unchanged": true,
+      "candidate_digest": [
+        104,
+        161,
+        34,
+        251,
+        133,
+        56,
+        73,
+        148,
+        210,
+        207,
+        177,
+        83,
+        111,
+        71,
+        252,
+        1,
+        103,
+        168,
+        99,
+        157,
+        64,
+        254,
+        22,
+        104,
+        191,
+        38,
+        102,
+        160,
+        149,
+        161,
+        215,
+        34
+      ],
+      "reference_edits": [],
+      "sha256": "3066438c81a5f74b7126243a127872f884e69faed23a3020f41dc0b13c2e494c"
+    },
+    {
+      "seed": 2026111504,
+      "scene": "toy",
+      "arm": "whole-care-balanced",
+      "target_active": true,
+      "x": 0.2994648814201355,
+      "cold_next_step_exact": true,
+      "optimizer_unchanged": true,
+      "candidate_digest": [
+        101,
+        168,
+        185,
+        69,
+        120,
+        164,
+        40,
+        249,
+        248,
+        247,
+        7,
+        132,
+        51,
+        13,
+        218,
+        129,
+        57,
+        119,
+        116,
+        200,
+        140,
+        250,
+        149,
+        112,
+        130,
+        61,
+        45,
+        25,
+        17,
+        213,
+        97,
+        213
+      ],
+      "reference_edits": [
+        {
+          "after": -0.5,
+          "before": 2.5,
+          "index": 25455,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -0.5,
+          "before": 2.5,
+          "index": 25471,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -0.5,
+          "before": 2.5,
+          "index": 25487,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": 2.0,
+          "before": -10.0,
+          "index": 25775,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -4.0,
+          "before": 20.0,
+          "index": 25983,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": 2.0,
+          "before": -10.0,
+          "index": 26031,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": 20.0,
+          "before": 100.0,
+          "index": 26367,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -2.0,
+          "before": -10.0,
+          "index": 26751,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": 6.0,
+          "before": 30.0,
+          "index": 26927,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -12.0,
+          "before": -60.0,
+          "index": 27135,
+          "role": "reference_weight_edit"
+        }
+      ],
+      "sha256": "9138c143fe72560bc929b1df3f062cee846d151b2778217ed49ca886f14364ed"
+    },
+    {
+      "seed": 2026111504,
+      "scene": "toy",
+      "arm": "whole-care-narrow",
+      "target_active": true,
+      "x": -0.05101824551820755,
+      "cold_next_step_exact": true,
+      "optimizer_unchanged": true,
+      "candidate_digest": [
+        208,
+        103,
+        9,
+        188,
+        109,
+        166,
+        37,
+        104,
+        152,
+        136,
+        117,
+        241,
+        92,
+        87,
+        135,
+        5,
+        35,
+        77,
+        40,
+        125,
+        11,
+        99,
+        35,
+        140,
+        227,
+        224,
+        99,
+        70,
+        129,
+        111,
+        180,
+        191
+      ],
+      "reference_edits": [
+        {
+          "after": -0.5,
+          "before": 2.5,
+          "index": 25455,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -0.5,
+          "before": 2.5,
+          "index": 25471,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -0.5,
+          "before": 2.5,
+          "index": 25487,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": 20.0,
+          "before": 100.0,
+          "index": 26367,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -2.0,
+          "before": -10.0,
+          "index": 26751,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": 6.0,
+          "before": 30.0,
+          "index": 26927,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -12.0,
+          "before": -60.0,
+          "index": 27135,
+          "role": "reference_weight_edit"
+        }
+      ],
+      "sha256": "cb2c30f4744e51ed6cb963fdf72d33c7f82bc43cc9aa95f6ddd26b88ab98eb60"
+    },
+    {
+      "seed": 2026111504,
+      "scene": "toy",
+      "arm": "whole-care",
+      "target_active": true,
+      "x": -0.30135369300842285,
+      "cold_next_step_exact": true,
+      "optimizer_unchanged": true,
+      "candidate_digest": [
+        104,
+        161,
+        34,
+        251,
+        133,
+        56,
+        73,
+        148,
+        210,
+        207,
+        177,
+        83,
+        111,
+        71,
+        252,
+        1,
+        103,
+        168,
+        99,
+        157,
+        64,
+        254,
+        22,
+        104,
+        191,
+        38,
+        102,
+        160,
+        149,
+        161,
+        215,
+        34
+      ],
+      "reference_edits": [],
+      "sha256": "bdab79c2490e20bad0dd7126e5f224a9d8805664436ca28a56d643b9ba68bba2"
+    },
+    {
+      "seed": 2026111505,
+      "scene": "bitter-food",
+      "arm": "whole-care-balanced",
+      "target_active": false,
+      "x": 0.05045158416032791,
+      "cold_next_step_exact": true,
+      "optimizer_unchanged": true,
+      "candidate_digest": [
+        101,
+        168,
+        185,
+        69,
+        120,
+        164,
+        40,
+        249,
+        248,
+        247,
+        7,
+        132,
+        51,
+        13,
+        218,
+        129,
+        57,
+        119,
+        116,
+        200,
+        140,
+        250,
+        149,
+        112,
+        130,
+        61,
+        45,
+        25,
+        17,
+        213,
+        97,
+        213
+      ],
+      "reference_edits": [
+        {
+          "after": -0.5,
+          "before": 2.5,
+          "index": 25455,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -0.5,
+          "before": 2.5,
+          "index": 25471,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -0.5,
+          "before": 2.5,
+          "index": 25487,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": 2.0,
+          "before": -10.0,
+          "index": 25775,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -4.0,
+          "before": 20.0,
+          "index": 25983,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": 2.0,
+          "before": -10.0,
+          "index": 26031,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": 20.0,
+          "before": 100.0,
+          "index": 26367,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -2.0,
+          "before": -10.0,
+          "index": 26751,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": 6.0,
+          "before": 30.0,
+          "index": 26927,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -12.0,
+          "before": -60.0,
+          "index": 27135,
+          "role": "reference_weight_edit"
+        }
+      ],
+      "sha256": "950932cf2adf1ac6fda287954e7310fe380a1e238035ffd5a5cd3ebeef731b67"
+    },
+    {
+      "seed": 2026111505,
+      "scene": "bitter-food",
+      "arm": "whole-care-narrow",
+      "target_active": false,
+      "x": 0.0,
+      "cold_next_step_exact": true,
+      "optimizer_unchanged": true,
+      "candidate_digest": [
+        208,
+        103,
+        9,
+        188,
+        109,
+        166,
+        37,
+        104,
+        152,
+        136,
+        117,
+        241,
+        92,
+        87,
+        135,
+        5,
+        35,
+        77,
+        40,
+        125,
+        11,
+        99,
+        35,
+        140,
+        227,
+        224,
+        99,
+        70,
+        129,
+        111,
+        180,
+        191
+      ],
+      "reference_edits": [
+        {
+          "after": -0.5,
+          "before": 2.5,
+          "index": 25455,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -0.5,
+          "before": 2.5,
+          "index": 25471,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -0.5,
+          "before": 2.5,
+          "index": 25487,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": 20.0,
+          "before": 100.0,
+          "index": 26367,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -2.0,
+          "before": -10.0,
+          "index": 26751,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": 6.0,
+          "before": 30.0,
+          "index": 26927,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -12.0,
+          "before": -60.0,
+          "index": 27135,
+          "role": "reference_weight_edit"
+        }
+      ],
+      "sha256": "0c3f6f03503e721a13f95fe6f0b8bbdc05c964caff723b0648213972e8ce4a3b"
+    },
+    {
+      "seed": 2026111505,
+      "scene": "bitter-food",
+      "arm": "whole-care",
+      "target_active": true,
+      "x": -1.6038514375686646,
+      "cold_next_step_exact": true,
+      "optimizer_unchanged": true,
+      "candidate_digest": [
+        104,
+        161,
+        34,
+        251,
+        133,
+        56,
+        73,
+        148,
+        210,
+        207,
+        177,
+        83,
+        111,
+        71,
+        252,
+        1,
+        103,
+        168,
+        99,
+        157,
+        64,
+        254,
+        22,
+        104,
+        191,
+        38,
+        102,
+        160,
+        149,
+        161,
+        215,
+        34
+      ],
+      "reference_edits": [],
+      "sha256": "75241f8caa8dc44a2e5a45d52c2df25608da1c5fe68814f8ae6073543d096fbf"
+    },
+    {
+      "seed": 2026111505,
+      "scene": "far-food",
+      "arm": "whole-care-balanced",
+      "target_active": true,
+      "x": 0.3489897549152374,
+      "cold_next_step_exact": true,
+      "optimizer_unchanged": true,
+      "candidate_digest": [
+        101,
+        168,
+        185,
+        69,
+        120,
+        164,
+        40,
+        249,
+        248,
+        247,
+        7,
+        132,
+        51,
+        13,
+        218,
+        129,
+        57,
+        119,
+        116,
+        200,
+        140,
+        250,
+        149,
+        112,
+        130,
+        61,
+        45,
+        25,
+        17,
+        213,
+        97,
+        213
+      ],
+      "reference_edits": [
+        {
+          "after": -0.5,
+          "before": 2.5,
+          "index": 25455,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -0.5,
+          "before": 2.5,
+          "index": 25471,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -0.5,
+          "before": 2.5,
+          "index": 25487,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": 2.0,
+          "before": -10.0,
+          "index": 25775,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -4.0,
+          "before": 20.0,
+          "index": 25983,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": 2.0,
+          "before": -10.0,
+          "index": 26031,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": 20.0,
+          "before": 100.0,
+          "index": 26367,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -2.0,
+          "before": -10.0,
+          "index": 26751,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": 6.0,
+          "before": 30.0,
+          "index": 26927,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -12.0,
+          "before": -60.0,
+          "index": 27135,
+          "role": "reference_weight_edit"
+        }
+      ],
+      "sha256": "66360885d1d876ed159ceb584da353f85fc7931870f2da00a3187bc37130b3ad"
+    },
+    {
+      "seed": 2026111505,
+      "scene": "far-food",
+      "arm": "whole-care-narrow",
+      "target_active": true,
+      "x": 1.6038516759872437,
+      "cold_next_step_exact": true,
+      "optimizer_unchanged": true,
+      "candidate_digest": [
+        208,
+        103,
+        9,
+        188,
+        109,
+        166,
+        37,
+        104,
+        152,
+        136,
+        117,
+        241,
+        92,
+        87,
+        135,
+        5,
+        35,
+        77,
+        40,
+        125,
+        11,
+        99,
+        35,
+        140,
+        227,
+        224,
+        99,
+        70,
+        129,
+        111,
+        180,
+        191
+      ],
+      "reference_edits": [
+        {
+          "after": -0.5,
+          "before": 2.5,
+          "index": 25455,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -0.5,
+          "before": 2.5,
+          "index": 25471,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -0.5,
+          "before": 2.5,
+          "index": 25487,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": 20.0,
+          "before": 100.0,
+          "index": 26367,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -2.0,
+          "before": -10.0,
+          "index": 26751,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": 6.0,
+          "before": 30.0,
+          "index": 26927,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -12.0,
+          "before": -60.0,
+          "index": 27135,
+          "role": "reference_weight_edit"
+        }
+      ],
+      "sha256": "28d3f4eccbe9de40c57f2fe4dda045e283bb5ca4c1e0440a31b799df404a6db4"
+    },
+    {
+      "seed": 2026111505,
+      "scene": "far-food",
+      "arm": "whole-care",
+      "target_active": true,
+      "x": 1.6038516759872437,
+      "cold_next_step_exact": true,
+      "optimizer_unchanged": true,
+      "candidate_digest": [
+        104,
+        161,
+        34,
+        251,
+        133,
+        56,
+        73,
+        148,
+        210,
+        207,
+        177,
+        83,
+        111,
+        71,
+        252,
+        1,
+        103,
+        168,
+        99,
+        157,
+        64,
+        254,
+        22,
+        104,
+        191,
+        38,
+        102,
+        160,
+        149,
+        161,
+        215,
+        34
+      ],
+      "reference_edits": [],
+      "sha256": "4aafdeb44ddc166ff2a26d800dfa0b09c115c479b1e69638e23d8071d89da870"
+    },
+    {
+      "seed": 2026111505,
+      "scene": "food",
+      "arm": "whole-care-balanced",
+      "target_active": false,
+      "x": -0.2017565369606018,
+      "cold_next_step_exact": true,
+      "optimizer_unchanged": true,
+      "candidate_digest": [
+        101,
+        168,
+        185,
+        69,
+        120,
+        164,
+        40,
+        249,
+        248,
+        247,
+        7,
+        132,
+        51,
+        13,
+        218,
+        129,
+        57,
+        119,
+        116,
+        200,
+        140,
+        250,
+        149,
+        112,
+        130,
+        61,
+        45,
+        25,
+        17,
+        213,
+        97,
+        213
+      ],
+      "reference_edits": [
+        {
+          "after": -0.5,
+          "before": 2.5,
+          "index": 25455,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -0.5,
+          "before": 2.5,
+          "index": 25471,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -0.5,
+          "before": 2.5,
+          "index": 25487,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": 2.0,
+          "before": -10.0,
+          "index": 25775,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -4.0,
+          "before": 20.0,
+          "index": 25983,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": 2.0,
+          "before": -10.0,
+          "index": 26031,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": 20.0,
+          "before": 100.0,
+          "index": 26367,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -2.0,
+          "before": -10.0,
+          "index": 26751,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": 6.0,
+          "before": 30.0,
+          "index": 26927,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -12.0,
+          "before": -60.0,
+          "index": 27135,
+          "role": "reference_weight_edit"
+        }
+      ],
+      "sha256": "89dfdcd6b8d9e120ee37ff00e9dc103ea3b5615777b6ca1875659c8c7d1addd3"
+    },
+    {
+      "seed": 2026111505,
+      "scene": "food",
+      "arm": "whole-care-narrow",
+      "target_active": false,
+      "x": 1.049687147140503,
+      "cold_next_step_exact": true,
+      "optimizer_unchanged": true,
+      "candidate_digest": [
+        208,
+        103,
+        9,
+        188,
+        109,
+        166,
+        37,
+        104,
+        152,
+        136,
+        117,
+        241,
+        92,
+        87,
+        135,
+        5,
+        35,
+        77,
+        40,
+        125,
+        11,
+        99,
+        35,
+        140,
+        227,
+        224,
+        99,
+        70,
+        129,
+        111,
+        180,
+        191
+      ],
+      "reference_edits": [
+        {
+          "after": -0.5,
+          "before": 2.5,
+          "index": 25455,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -0.5,
+          "before": 2.5,
+          "index": 25471,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -0.5,
+          "before": 2.5,
+          "index": 25487,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": 20.0,
+          "before": 100.0,
+          "index": 26367,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -2.0,
+          "before": -10.0,
+          "index": 26751,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": 6.0,
+          "before": 30.0,
+          "index": 26927,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -12.0,
+          "before": -60.0,
+          "index": 27135,
+          "role": "reference_weight_edit"
+        }
+      ],
+      "sha256": "19ab7787735da3f7120e16d3c364b786aae05904cbb8f805247a64d045686e68"
+    },
+    {
+      "seed": 2026111505,
+      "scene": "food",
+      "arm": "whole-care",
+      "target_active": false,
+      "x": 0.30035635828971863,
+      "cold_next_step_exact": true,
+      "optimizer_unchanged": true,
+      "candidate_digest": [
+        104,
+        161,
+        34,
+        251,
+        133,
+        56,
+        73,
+        148,
+        210,
+        207,
+        177,
+        83,
+        111,
+        71,
+        252,
+        1,
+        103,
+        168,
+        99,
+        157,
+        64,
+        254,
+        22,
+        104,
+        191,
+        38,
+        102,
+        160,
+        149,
+        161,
+        215,
+        34
+      ],
+      "reference_edits": [],
+      "sha256": "c383816706f7d1bad4da4ddc74f5643f79e3bf3953841e53186e3f14681f9147"
+    },
+    {
+      "seed": 2026111505,
+      "scene": "toy",
+      "arm": "whole-care-balanced",
+      "target_active": true,
+      "x": -0.25224247574806213,
+      "cold_next_step_exact": true,
+      "optimizer_unchanged": true,
+      "candidate_digest": [
+        101,
+        168,
+        185,
+        69,
+        120,
+        164,
+        40,
+        249,
+        248,
+        247,
+        7,
+        132,
+        51,
+        13,
+        218,
+        129,
+        57,
+        119,
+        116,
+        200,
+        140,
+        250,
+        149,
+        112,
+        130,
+        61,
+        45,
+        25,
+        17,
+        213,
+        97,
+        213
+      ],
+      "reference_edits": [
+        {
+          "after": -0.5,
+          "before": 2.5,
+          "index": 25455,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -0.5,
+          "before": 2.5,
+          "index": 25471,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -0.5,
+          "before": 2.5,
+          "index": 25487,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": 2.0,
+          "before": -10.0,
+          "index": 25775,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -4.0,
+          "before": 20.0,
+          "index": 25983,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": 2.0,
+          "before": -10.0,
+          "index": 26031,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": 20.0,
+          "before": 100.0,
+          "index": 26367,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -2.0,
+          "before": -10.0,
+          "index": 26751,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": 6.0,
+          "before": 30.0,
+          "index": 26927,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -12.0,
+          "before": -60.0,
+          "index": 27135,
+          "role": "reference_weight_edit"
+        }
+      ],
+      "sha256": "6a5cf460542936849def98d6d70d2025beeb20f696cf50be7bf481a790814b45"
+    },
+    {
+      "seed": 2026111505,
+      "scene": "toy",
+      "arm": "whole-care-narrow",
+      "target_active": true,
+      "x": -0.20153912901878357,
+      "cold_next_step_exact": true,
+      "optimizer_unchanged": true,
+      "candidate_digest": [
+        208,
+        103,
+        9,
+        188,
+        109,
+        166,
+        37,
+        104,
+        152,
+        136,
+        117,
+        241,
+        92,
+        87,
+        135,
+        5,
+        35,
+        77,
+        40,
+        125,
+        11,
+        99,
+        35,
+        140,
+        227,
+        224,
+        99,
+        70,
+        129,
+        111,
+        180,
+        191
+      ],
+      "reference_edits": [
+        {
+          "after": -0.5,
+          "before": 2.5,
+          "index": 25455,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -0.5,
+          "before": 2.5,
+          "index": 25471,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -0.5,
+          "before": 2.5,
+          "index": 25487,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": 20.0,
+          "before": 100.0,
+          "index": 26367,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -2.0,
+          "before": -10.0,
+          "index": 26751,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": 6.0,
+          "before": 30.0,
+          "index": 26927,
+          "role": "reference_weight_edit"
+        },
+        {
+          "after": -12.0,
+          "before": -60.0,
+          "index": 27135,
+          "role": "reference_weight_edit"
+        }
+      ],
+      "sha256": "790ae906af58b490d5c10dda350b10d0654aa527a7361dc66e97da90dd1a85ce"
+    },
+    {
+      "seed": 2026111505,
+      "scene": "toy",
+      "arm": "whole-care",
+      "target_active": true,
+      "x": -0.6522305011749268,
+      "cold_next_step_exact": true,
+      "optimizer_unchanged": true,
+      "candidate_digest": [
+        104,
+        161,
+        34,
+        251,
+        133,
+        56,
+        73,
+        148,
+        210,
+        207,
+        177,
+        83,
+        111,
+        71,
+        252,
+        1,
+        103,
+        168,
+        99,
+        157,
+        64,
+        254,
+        22,
+        104,
+        191,
+        38,
+        102,
+        160,
+        149,
+        161,
+        215,
+        34
+      ],
+      "reference_edits": [],
+      "sha256": "189f47d8f7a99bdd4e35d824a7b5eb926cc1517e46a5160f2344883b8600b055"
+    }
+  ]
+}
