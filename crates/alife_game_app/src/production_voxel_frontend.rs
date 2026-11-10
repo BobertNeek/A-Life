@@ -1003,7 +1003,8 @@ pub fn run_production_voxel_frontend_preflight(
         }
         ProductionWorldSource::NewGame { seed } => {
             let founder_class = match launch.new_game_founder {
-                crate::NewGameFounderSelection::N2048Candidate { .. } => {
+                crate::NewGameFounderSelection::N2048Candidate { .. }
+                | crate::NewGameFounderSelection::N2048ExperimentalCandidate { .. } => {
                     alife_core::BrainScaleTier::Standard2048
                 }
                 _ => alife_core::BrainScaleTier::Nano512,
