@@ -1,0 +1,62 @@
+{
+  "choice": null,
+  "choice_was_safe_cue": null,
+  "cold_next_exact": true,
+  "exposures": [
+    {
+      "consumed_at": 4,
+      "episode": 0,
+      "is_red": true,
+      "pain_delta": 0.0,
+      "safe": true,
+      "target": 2
+    },
+    {
+      "consumed_at": 2,
+      "episode": 1,
+      "is_red": false,
+      "pain_delta": 0.24000000953674316,
+      "safe": false,
+      "target": 3
+    },
+    {
+      "consumed_at": 2,
+      "episode": 2,
+      "is_red": true,
+      "pain_delta": 0.0,
+      "safe": true,
+      "target": 4
+    },
+    {
+      "consumed_at": 2,
+      "episode": 3,
+      "is_red": false,
+      "pain_delta": 0.2315065562725067,
+      "safe": false,
+      "target": 5
+    }
+  ],
+  "fast_changed": 26040,
+  "founder_optimizer_unchanged": true,
+  "probe_blue_id": 7,
+  "probe_red_id": 6,
+  "probe_steps": 64,
+  "red_left": true,
+  "safe_red": true,
+  "schema": "cue-study-pilot-v1",
+  "seed": 2026111546,
+  "sham": false,
+  "physical_target_contact_counts": [
+    {
+      "target": "6",
+      "contact": "Moved",
+      "count": 31
+    },
+    {
+      "target": "7",
+      "contact": "Moved",
+      "count": 33
+    }
+  ],
+  "full_receipt_sha256": "06a1af19d30163a500fd7d3f3bc3983b892d3056cb83138a10a9e3377e7b7229"
+}
