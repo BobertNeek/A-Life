@@ -1,0 +1,181 @@
+{
+  "normal_complete": true,
+  "sham_complete": true,
+  "pairs": [
+    {
+      "seed": 2026111542,
+      "arm": "whole-care",
+      "normal_consumed": false,
+      "sham_consumed": false,
+      "initial_hunger": 0.0,
+      "normal_fast": 28752,
+      "sham_fast": 0,
+      "differing_choices": [],
+      "cold": [
+        true,
+        true
+      ],
+      "optimizer": [
+        true,
+        true
+      ],
+      "normal_sha256": "bac3de84313a01c5e79fbb084e514169dd8949f0de3a3865bf8a4da259c832d5",
+      "sham_sha256": "f123d880a45c2b6de30300c8ac6c06ead2b5de67abe2fa6b2ed8e9f8d30b43bf"
+    },
+    {
+      "seed": 2026111542,
+      "arm": "whole-care-ingest-boost",
+      "normal_consumed": false,
+      "sham_consumed": false,
+      "initial_hunger": 0.0,
+      "normal_fast": 28752,
+      "sham_fast": 0,
+      "differing_choices": [],
+      "cold": [
+        true,
+        true
+      ],
+      "optimizer": [
+        true,
+        true
+      ],
+      "normal_sha256": "8fb32cad2212b9fec7b41fe182ba8d50d7d1fc7a3324f90bb57ab0fbaca25675",
+      "sham_sha256": "f776b4273c9a6fb9f9404bf3cd79f996043943c0ce1cc756244698391527c105"
+    },
+    {
+      "seed": 2026111543,
+      "arm": "whole-care",
+      "normal_consumed": true,
+      "sham_consumed": true,
+      "initial_hunger": 0.0,
+      "normal_fast": 28432,
+      "sham_fast": 0,
+      "differing_choices": [],
+      "cold": [
+        true,
+        true
+      ],
+      "optimizer": [
+        true,
+        true
+      ],
+      "normal_sha256": "b1bb33fce78b7e1f36a440dacd4d4638243ec27fd2cbe7cd8d0a8f42474c05ee",
+      "sham_sha256": "e00f58e1df79d6023fa8322309a269dcb829e4b9f182c9c1e38c8137f6db6c97"
+    },
+    {
+      "seed": 2026111543,
+      "arm": "whole-care-ingest-boost",
+      "normal_consumed": true,
+      "sham_consumed": true,
+      "initial_hunger": 0.0,
+      "normal_fast": 28432,
+      "sham_fast": 0,
+      "differing_choices": [],
+      "cold": [
+        true,
+        true
+      ],
+      "optimizer": [
+        true,
+        true
+      ],
+      "normal_sha256": "37c131a0b5a2c3f9f88e42695e1ae9e8d9ea2b00415075952c46fa928bc329ec",
+      "sham_sha256": "c63921b6e8b8b7626ce16bd0cf01f3ed9d7b7a4f9b4df8af5dde02b38fbb0bde"
+    },
+    {
+      "seed": 2026111544,
+      "arm": "whole-care",
+      "normal_consumed": false,
+      "sham_consumed": false,
+      "initial_hunger": 0.0,
+      "normal_fast": 28920,
+      "sham_fast": 0,
+      "differing_choices": [],
+      "cold": [
+        true,
+        true
+      ],
+      "optimizer": [
+        true,
+        true
+      ],
+      "normal_sha256": "f6b1992097aeef8b111684934d52717b16b7f690563c3b6fd7f9ceb9c68bda7f",
+      "sham_sha256": "68006f820d25a3a4173aa6b8444db3af134ae5d2cdbd02c56e1663d776deffaf"
+    },
+    {
+      "seed": 2026111544,
+      "arm": "whole-care-ingest-boost",
+      "normal_consumed": false,
+      "sham_consumed": false,
+      "initial_hunger": 0.0,
+      "normal_fast": 28920,
+      "sham_fast": 0,
+      "differing_choices": [],
+      "cold": [
+        true,
+        true
+      ],
+      "optimizer": [
+        true,
+        true
+      ],
+      "normal_sha256": "e7b5fb304dad095395c231455614d1f4fbfebbb52c459df12c142956bc98d1bb",
+      "sham_sha256": "56b8628843b6cb300b8e84062586c3c690a7ebd3ddbaa61385195bae7d594266"
+    },
+    {
+      "seed": 2026111545,
+      "arm": "whole-care",
+      "normal_consumed": false,
+      "sham_consumed": false,
+      "initial_hunger": 0.0,
+      "normal_fast": 28200,
+      "sham_fast": 0,
+      "differing_choices": [],
+      "cold": [
+        true,
+        true
+      ],
+      "optimizer": [
+        true,
+        true
+      ],
+      "normal_sha256": "069b562b456219b96535146d331847751e8111d7db9a003d97dc9a96591c3077",
+      "sham_sha256": "22c7952c20ad93fb858964a8164869fcf235aa18e004c665b885bdaf7757a636"
+    },
+    {
+      "seed": 2026111545,
+      "arm": "whole-care-ingest-boost",
+      "normal_consumed": false,
+      "sham_consumed": false,
+      "initial_hunger": 0.0,
+      "normal_fast": 28200,
+      "sham_fast": 0,
+      "differing_choices": [
+        {
+          "decision": 30,
+          "normal": [
+            "Move",
+            "Avoid",
+            102
+          ],
+          "sham": [
+            "Move",
+            "Approach",
+            101
+          ],
+          "same_candidate_identities": true
+        }
+      ],
+      "cold": [
+        true,
+        true
+      ],
+      "optimizer": [
+        true,
+        true
+      ],
+      "normal_sha256": "489857bfaaf9e5930b32f096dc1a82d3ee8abf54b121287f47248d696cf40784",
+      "sham_sha256": "2e788c913398e0148f44fbb3aa0db2a44eb94268e39e9c0d297f45b469529a64"
+    }
+  ]
+}
