@@ -678,12 +678,19 @@ fn resident_authority_plan_from_record(
             let capacity = BrainCapacityClass::n2048();
             let construction =
                 foundation_construction_development(&genome, &capacity, &development)?;
-            let (phenotype, compiler_inputs) =
+            let (phenotype, compiler_inputs) = if asset.is_n2048_experimental_graph() {
+                PhenotypeCompiler::compile_n2048_experimental_foundation_candidate(
+                    genome.clone(),
+                    construction,
+                    asset.clone(),
+                )?
+            } else {
                 PhenotypeCompiler::compile_n2048_foundation_candidate(
                     genome.clone(),
                     construction,
                     asset.clone(),
-                )?;
+                )?
+            };
             (phenotype, compiler_inputs, None)
         } else if selects_legacy_nano512_compatibility_from_record(&admission)? {
             let foundation = FoundationWeightAsset::builtin_nano512_v1(sensor_profile)?;
