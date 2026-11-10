@@ -104,6 +104,7 @@ mod tests {
                 decisions_per_update: 4,
                 snapshot_every_updates: 1,
                 care_assistance: false,
+                safe_food_imitation_coefficient: 0.0,
                 sampling_temperature: 0.9,
                 collection_cutoff_unix_seconds: 240,
                 finalization_deadline_unix_seconds: 300,

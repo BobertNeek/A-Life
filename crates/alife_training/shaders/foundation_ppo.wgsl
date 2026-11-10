@@ -259,7 +259,11 @@ fn imitation_objective(row:u32, add:bool) {
   let metrics = h(2u) * 41u + 1u + row * 4u;
   for (var i=0u; i<4u; i++) { put(metrics+i, 0.0); }
   if (!add) { for (var i=0u; i<32u; i++) { put(row*32u+i, 0.0); } }
+  // Status 2 identifies a deliberate sparse omission, not a failed objective.
+  // Leave PPO adjoints untouched when adding auxiliary supervision.
+  if (r(row,60u) == 0u) { put(metrics+3u,2.0); return; }
   let count = r(row,0u);
+  if (h(16u) == 0u) { return; }
   if (count == 0u || count > 32u || hf(15u) < 0.0 || !finite(hf(15u))) { return; }
   var distributions: array<MaskedCategorical,7>;
   var accepted: array<MaskedCategorical,6>;
@@ -331,7 +335,7 @@ fn imitation_objective(row:u32, add:bool) {
       if ((r(row,60u)&(2u<<slot)) == 0u) { continue; }
       gradient+=(1.0-forced_mass[slot])*(distributions[slot+1u].probability[candidate]-accepted[slot].probability[candidate]);
     }
-    gradients[candidate]=hf(15u)*gradient/(hf(7u)*f32(h(0u)));
+    gradients[candidate]=hf(15u)*gradient/(hf(7u)*f32(h(16u)));
     if (add) { gradients[candidate]+=output_get(row*32u+candidate); }
     if (!finite(gradients[candidate])) { return; }
   }

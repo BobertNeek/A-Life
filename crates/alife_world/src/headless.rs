@@ -5894,6 +5894,39 @@ impl HeadlessWorld {
                 || self.activity_grip_available(organism_id, target))
     }
 
+    /// Read-only eligibility for opt-in offline safe-food supervision. This
+    /// authorizes a real Eat preparation/meal opportunity, never consumption.
+    /// Perception and production decoder masks must still ground the label.
+    pub fn safe_food_eat_is_available(
+        &self,
+        organism_id: OrganismId,
+        target: WorldEntityId,
+    ) -> bool {
+        let Some(food) = self.objects.get(&target.raw()) else {
+            return false;
+        };
+        let Ok(agent) = self.agent_entity_id(organism_id) else {
+            return false;
+        };
+        let Some(record) = self.organism_registry.get(organism_id) else {
+            return false;
+        };
+        food.kind == WorldObjectKind::Food
+            && !food.consumed
+            && food.nutrition.is_finite()
+            && food.nutrition > 0.0
+            && food.hazard_pain == 0.0
+            && self.player_held_object() != Some(target)
+            && record.lifecycle().is_alive()
+            && record
+                .embodiment()
+                .effector_gain(EffectorCapability::Ingestion)
+                > 0.0
+            && self.grasp_target_is_reachable(organism_id, agent, target)
+            && self.activity_grip_available(organism_id, target)
+            && food.carried_by.is_none_or(|owner| owner == organism_id)
+    }
+
     fn eat_can_pick_up(&self, organism_id: OrganismId, target: WorldEntityId) -> bool {
         let Some(food) = self.objects.get(&target.raw()) else {
             return false;
@@ -11308,7 +11341,62 @@ mod task_6_factorized_motor_tests {
     }
 
     #[test]
-    fn eat_pickup_requires_the_existing_manipulation_effector() {
+    fn safe_food_imitation_eligibility_is_read_only_and_rejects_unsafe_targets() {
+        let (world, _, food, _) = prepared_world();
+        let before = world.canonical_signature_digest().unwrap();
+        assert!(world.safe_food_eat_is_available(ORGANISM_ID, food));
+        assert_eq!(world.canonical_signature_digest().unwrap(), before);
+        for case in 0..7 {
+            let mut trial = world.clone();
+            let target = trial.objects.get_mut(&food.raw()).unwrap();
+            match case {
+                0 => target.kind = WorldObjectKind::Hazard,
+                1 => target.nutrition = 0.0,
+                2 => target.hazard_pain = 0.1,
+                3 => target.consumed = true,
+                4 => target.position = Vec3f::new(0.0, 0.0, 2.0),
+                5 => target.carried_by = Some(OrganismId(999)),
+                6 => target.nutrition = f32::NAN,
+                _ => unreachable!(),
+            }
+            assert!(
+                !trial.safe_food_eat_is_available(ORGANISM_ID, food),
+                "case {case}"
+            );
+        }
+        let mut player_held = world.clone();
+        player_held.begin_player_hold(food).unwrap();
+        assert!(!player_held.safe_food_eat_is_available(ORGANISM_ID, food));
+        let mut blocked = world.clone();
+        blocked.terrain = Some(
+            crate::WorldTerrain::new(
+                crate::TerrainData {
+                    width: 3,
+                    depth: 3,
+                    origin_x: -1.0,
+                    origin_z: -1.0,
+                    spacing: 1.0,
+                    heights: vec![0.0; 9],
+                    obstacles: vec![[0.4, -0.1, 0.6, 0.1, 0.0, 2.0]],
+                    water_level: None,
+                },
+                crate::LocomotionLimits::default(),
+            )
+            .unwrap(),
+        );
+        assert!(!blocked.safe_food_eat_is_available(ORGANISM_ID, food));
+        let mut held = world.clone();
+        held.apply_command(&HeadlessWorldCommand::eat(ORGANISM_ID, food).unwrap())
+            .unwrap();
+        assert!(held.safe_food_eat_is_available(ORGANISM_ID, food));
+        held.advance_tick();
+        held.apply_command(&HeadlessWorldCommand::eat(ORGANISM_ID, food).unwrap())
+            .unwrap();
+        assert!(!held.safe_food_eat_is_available(ORGANISM_ID, food));
+    }
+
+    #[test]
+    fn eat_pickup_and_safe_food_labels_require_the_existing_manipulation_effector() {
         let (mut world, agent, food, _) = prepared_world();
         let mut record = world.organism_registry().get(ORGANISM_ID).unwrap().clone();
         // A valid body fixture without a manipulation port. Retain all other
@@ -11335,6 +11423,7 @@ mod task_6_factorized_motor_tests {
             .unwrap();
         world.replace_organism_record_exact(record).unwrap();
         let eat = HeadlessWorldCommand::eat(ORGANISM_ID, food).unwrap();
+        assert!(!world.safe_food_eat_is_available(ORGANISM_ID, food));
         assert_eq!(
             crate::ActionLegalityChecker::check_action(&world, &eat),
             crate::ActionLegality::BlockedByWorldState

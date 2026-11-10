@@ -157,6 +157,21 @@ pub struct ImitationTarget {
     pub motors: [Option<u32>; PPO_MOTOR_SLOTS],
 }
 
+impl ImitationTarget {
+    /// No supervised factors. Valid only in sparse PPO auxiliary batches;
+    /// standalone demonstrations still require a nonempty label.
+    pub const fn unlabeled() -> Self {
+        Self {
+            representative: None,
+            motors: [None; PPO_MOTOR_SLOTS],
+        }
+    }
+
+    pub fn is_labeled(&self) -> bool {
+        self.representative.is_some() || self.motors.iter().any(Option::is_some)
+    }
+}
+
 /// Demonstrations have no PPO old-policy probability. Context is only the legal
 /// decoder masks/arbitration, never a teacher label inserted into neural features.
 #[derive(Debug, Clone, PartialEq)]
@@ -825,6 +840,7 @@ impl PpoGpuObjective {
         header[..3].copy_from_slice(&[examples.len() as u32, self.feature_count, self.capacity]);
         header[7] = temperature.to_bits();
         header[15] = coefficient.to_bits();
+        header[16] = examples.len() as u32;
         let (_, queue) = session.backend().offline_training_device_queue()?;
         queue.write_buffer(&self.header, 0, bytemuck::cast_slice(&header));
         queue.write_buffer(&self.rows, 0, bytemuck::cast_slice(&rows));
@@ -853,14 +869,16 @@ impl PpoGpuObjective {
         let mut packed = Vec::with_capacity(targets.len());
         for (transition, target) in batch.transitions.iter().zip(targets) {
             let action = &transition.action;
-            ImitationExample {
-                candidate_count: action.candidate_count,
-                representative_mask: action.representative_mask,
-                motor_masks: action.motor_masks,
-                forced_slots: action.forced_slots.clone(),
-                target: target.clone(),
+            if target.is_labeled() {
+                ImitationExample {
+                    candidate_count: action.candidate_count,
+                    representative_mask: action.representative_mask,
+                    motor_masks: action.motor_masks,
+                    forced_slots: action.forced_slots.clone(),
+                    target: target.clone(),
+                }
+                .validate()?;
             }
-            .validate()?;
             let mut row = [0u32; PPO_ROW_WORDS];
             Self::pack_target(&mut row, target);
             packed.push(row);
@@ -874,6 +892,8 @@ impl PpoGpuObjective {
             );
         }
         queue.write_buffer(&self.header, 15 * 4, bytemuck::bytes_of(&coefficient));
+        let labeled = targets.iter().filter(|target| target.is_labeled()).count() as u32;
+        queue.write_buffer(&self.header, 16 * 4, bytemuck::bytes_of(&labeled));
         self.imitation_ready = true;
         Ok(())
     }
@@ -1202,6 +1222,8 @@ pub struct PpoUpdateReceipt {
 pub struct PpoTrainingWindow {
     pub sequence: crate::TrainingSequence,
     pub batch: PpoBatch,
+    /// One target per loss row; all-None targets omit auxiliary supervision.
+    /// The auxiliary term averages over labeled rows only, across each effective batch.
     pub auxiliary: Option<(Vec<ImitationTarget>, f32)>,
     pub speech_targets: Vec<Option<crate::ReplaySpeechTarget>>,
 }
@@ -1231,6 +1253,26 @@ pub fn train_recurrent_ppo(
         config,
         collection_policy_version,
     )
+}
+
+/// Undo the shared sample-weighted gradient accumulation for the auxiliary
+/// term, which has its own labeled-row denominator across the effective batch.
+pub(crate) fn auxiliary_batch_scale(
+    samples: usize,
+    total_samples: usize,
+    labels: usize,
+    total_labels: usize,
+) -> f32 {
+    if labels == 0 || total_labels == 0 {
+        return 0.0;
+    }
+    (labels as f64 * total_samples as f64 / (total_labels as f64 * samples as f64)) as f32
+}
+
+pub(crate) fn auxiliary_label_count(window: &PpoTrainingWindow) -> usize {
+    window.auxiliary.as_ref().map_or(0, |(targets, _)| {
+        targets.iter().filter(|target| target.is_labeled()).count()
+    })
 }
 
 /// Stream a pinned-actor cohort from immutable recorded windows. Validate all
@@ -1296,13 +1338,20 @@ where
         return Err(invalid());
     }
     let mut counts = Vec::with_capacity(window_count);
+    let mut label_counts = Vec::with_capacity(window_count);
     // This separate frozen pass is necessary: checking ratio==1 after the first
     // minibatch would reject valid later windows from this same on-policy cohort.
     for index in 0..window_count {
         let loaded_window = load_window(index)?;
         let window = loaded_window.borrow();
-        let metrics =
-            evaluate_ppo_window(trainer, state, window, config, collection_policy_version)?;
+        let metrics = evaluate_ppo_window(
+            trainer,
+            state,
+            window,
+            config,
+            collection_policy_version,
+            1.0,
+        )?;
         if metrics
             .as_chunks::<PPO_METRIC_WORDS>()
             .0
@@ -1313,6 +1362,7 @@ where
             return Err(invalid());
         }
         counts.push(window.batch.len());
+        label_counts.push(auxiliary_label_count(window));
     }
     let mut receipt = PpoUpdateReceipt {
         collection_policy_version,
@@ -1326,13 +1376,16 @@ where
         for start in (0..window_count).step_by(effective_batch_size) {
             let end = (start + effective_batch_size).min(window_count);
             let samples = counts[start..end].iter().sum::<usize>();
+            let labels = label_counts[start..end].iter().sum::<usize>();
             trainer.begin_gradient_accumulation((end - start) as u32)?;
             let result = (|| -> Result<bool, TrainingError> {
                 let mut mean_kl = 0.0f64;
                 for (index, &sample_count) in counts.iter().enumerate().take(end).skip(start) {
                     let loaded_window = load_window(index)?;
                     let window = loaded_window.borrow();
-                    if window.batch.len() != sample_count {
+                    if window.batch.len() != sample_count
+                        || auxiliary_label_count(window) != label_counts[index]
+                    {
                         return Err(invalid());
                     }
                     let metrics = evaluate_ppo_window(
@@ -1341,6 +1394,7 @@ where
                         window,
                         config,
                         collection_policy_version,
+                        auxiliary_batch_scale(sample_count, samples, label_counts[index], labels),
                     )?;
                     let scale = sample_count as f32 / samples as f32;
                     mean_kl +=
@@ -1508,6 +1562,7 @@ fn evaluate_ppo_window(
     window: &PpoTrainingWindow,
     config: PpoConfig,
     version: u64,
+    auxiliary_scale: f32,
 ) -> Result<Vec<f32>, TrainingError> {
     trainer.prepare_replay(&window.sequence)?;
     trainer.upload_replay_speech_targets(&window.speech_targets)?;
@@ -1531,7 +1586,7 @@ fn evaluate_ppo_window(
             trainer.session(),
             &window.batch,
             targets,
-            *coefficient,
+            *coefficient * auxiliary_scale,
         )?;
     }
     let mut encoder = new_encoder(trainer.session(), "ppo-replay-objective")?;
@@ -1749,9 +1804,22 @@ pub fn imitation_mean_loss(metrics: &[f32]) -> Result<f32, TrainingError> {
     if metrics.is_empty()
         || !metrics.len().is_multiple_of(4)
         || !metrics.iter().all(|x| x.is_finite())
-        || metrics.as_chunks::<4>().0.iter().any(|row| row[3] != 1.0)
+        || metrics
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .any(|row| row[3] != 1.0 && *row != [0.0, 0.0, 0.0, 2.0])
     {
         return Err(TrainingError::MalformedReadback);
+    }
+    let labeled = metrics
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .filter(|row| row[3] == 1.0)
+        .count();
+    if labeled == 0 {
+        return Ok(0.0);
     }
     let loss = metrics
         .as_chunks::<4>()
@@ -1759,7 +1827,7 @@ pub fn imitation_mean_loss(metrics: &[f32]) -> Result<f32, TrainingError> {
         .iter()
         .map(|row| f64::from(row[1]))
         .sum::<f64>()
-        / (metrics.len() / 4) as f64;
+        / labeled as f64;
     if !(loss as f32).is_finite() {
         return Err(TrainingError::MalformedReadback);
     }
@@ -1833,6 +1901,30 @@ fn read_gpu_f32(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sparse_imitation_loss_excludes_omissions_and_rejects_failed_rows() {
+        assert_eq!(imitation_mean_loss(&[0., 0., 0., 2.]).unwrap(), 0.);
+        assert_eq!(
+            imitation_mean_loss(&[0., 6., 0.2, 1., 0., 0., 0., 2.]).unwrap(),
+            6.
+        );
+        assert!(imitation_mean_loss(&[0., 1., 0., 2.]).is_err());
+        assert!(imitation_mean_loss(&[0., 0., 0., 0.]).is_err());
+        assert!(!ImitationTarget::unlabeled().is_labeled());
+    }
+
+    #[test]
+    fn sparse_imitation_batch_denominator_counts_only_labels() {
+        // Shared PPO accumulation scales these windows by 2/10 and 8/10.
+        // Their auxiliary label counts are 1 and 2, so recover 1/3 and 2/3.
+        let a = auxiliary_batch_scale(2, 10, 1, 3) * (2. / 10.);
+        let b = auxiliary_batch_scale(8, 10, 2, 3) * (8. / 10.);
+        assert!((a - 1. / 3.).abs() < 1e-6);
+        assert!((b - 2. / 3.).abs() < 1e-6);
+        assert_eq!(auxiliary_batch_scale(8, 10, 0, 0), 0.);
+        assert_eq!(auxiliary_batch_scale(2, 10, 2, 10), 1.);
+    }
 
     #[test]
     fn imitation_loss_uses_only_the_action_metric_and_rejects_invalid_status() {
@@ -1957,6 +2049,9 @@ mod tests {
             },
         };
         example.validate().unwrap(); // Idle may override posture while Eat stays acceptable.
+        let mut unlabeled_demo = example.clone();
+        unlabeled_demo.target = ImitationTarget::unlabeled();
+        assert!(unlabeled_demo.validate().is_err()); // Sparse omission is auxiliary-only.
         let mut impossible = example.clone();
         impossible.target.representative = Some(1);
         impossible.target.motors[0] = Some(2); // Eat is not a move-slot action.

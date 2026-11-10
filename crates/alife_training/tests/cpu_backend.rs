@@ -302,6 +302,37 @@ fn imitation_marginalizes_representative_overrides() {
 }
 
 #[test]
+fn sparse_eat_label_increases_rare_representative_with_empty_manipulation_mask() {
+    let example = ImitationExample {
+        candidate_count: 2,
+        representative_mask: 3,
+        motor_masks: [0; 6],
+        forced_slots: vec![Some(0), Some(2)],
+        target: ImitationTarget {
+            representative: None,
+            motors: [None, None, Some(2), None, None, None],
+        },
+    };
+    // Same 18-logit gap observed between movement and the real food Eat.
+    let before = [18.0, 0.0];
+    let objective = cpu_imitation_objective(&before, &example, 1.0, 0.1).unwrap();
+    assert!(objective.logit_gradients[0] > 0.0);
+    assert!(objective.logit_gradients[1] < 0.0);
+    let after = [
+        before[0] - objective.logit_gradients[0],
+        before[1] - objective.logit_gradients[1],
+    ];
+    let probability = |logits: [f32; 2]| 1.0 / (1.0 + (logits[0] - logits[1]).exp());
+    let after_loss = cpu_imitation_objective(&after, &example, 1.0, 0.1)
+        .unwrap()
+        .loss;
+    assert!(probability(after) > probability(before));
+    assert!(after_loss < objective.loss);
+    println!("CPU sparse Eat: p_before={:.10e} p_after={:.10e} gradients={:?} loss_before={} loss_after={}",
+        probability(before), probability(after), objective.logit_gradients, objective.loss, after_loss);
+}
+
+#[test]
 fn imitation_rejects_overflowing_loss_even_with_finite_gradients() {
     let e = ImitationExample {
         candidate_count: 2,
@@ -697,7 +728,9 @@ fn cpu_cohort_updates_both_native_optimizers_and_rejects_stale_policy() {
     let mut value = CpuValueHead::from_checkpoint(PpoValueHeadCheckpoint {
         feature_count: p.neuron_count(),
         optimizer_step: 19_800,
-        parameters: vec![0.; (p.neuron_count() as usize + 1) * 3],
+        parameters: (0..(p.neuron_count() as usize + 1) * 3)
+            .map(|i| (i % 7) as f32 * 1e-5)
+            .collect(),
         last_updated_policy_version: Some(7399),
     })
     .unwrap();
@@ -847,6 +880,25 @@ fn native_signed_decoder_adam_keeps_negative_coefficients() {
 
 #[test]
 fn cohort_tapes_follow_each_optimizer_step_with_auxiliary_and_speech_loss() {
+    check_cohort_auxiliary(0);
+}
+
+#[test]
+fn sparse_auxiliary_preserves_full_adam_and_matches_labeled_only_reference() {
+    check_cohort_auxiliary(1);
+}
+
+#[test]
+fn zero_sparse_labels_preserve_ppo_full_adam_without_auxiliary_gradients() {
+    check_cohort_auxiliary(2);
+}
+
+#[test]
+fn sparse_auxiliary_ignores_wholly_unlabeled_windows_in_effective_batch() {
+    check_cohort_auxiliary(3);
+}
+
+fn check_cohort_auxiliary(mode: u8) {
     use alife_training::{PpoBatch, PpoBoundary, PpoTrainingWindow, PpoTransition};
     let (p, source) = fixture();
     let mut actual = trainer(&p, &source);
@@ -928,61 +980,98 @@ fn cohort_tapes_follow_each_optimizer_step_with_auxiliary_and_speech_loss() {
             sequence: q,
             batch: PpoBatch::from_rollout(7400, transitions, config).unwrap(),
             auxiliary: Some((
-                vec![
-                    ImitationTarget {
-                        representative: Some(2),
-                        motors: [None; 6],
-                    };
-                    ticks - 1
-                ],
+                (0..ticks - 1)
+                    .map(|i| {
+                        if mode == 2 || (mode == 3 && ticks == 3) || (mode != 0 && i % 2 == 0) {
+                            ImitationTarget::unlabeled()
+                        } else {
+                            ImitationTarget {
+                                representative: Some(2),
+                                motors: [None; 6],
+                            }
+                        }
+                    })
+                    .collect(),
                 0.2,
             )),
             speech_targets,
         }
     });
-    // Reference keeps the public, independently recomputed forward/BPTT path.
-    // Each batch changes weights, so a tape retained into the next batch or
-    // epoch must disagree with this complete optimizer state.
+    // Independent public forward/BPTT reference, retaining full Adam state.
+    let effective_batch_size = if mode == 3 { 2 } else { 1 };
     for _ in 0..config.epochs {
-        for w in &windows {
-            let replay = expected.evaluate_replay(&w.sequence).unwrap();
-            let mut adjoints = Vec::new();
-            for (row, transition) in w.batch.transitions().iter().enumerate() {
-                let logits = &replay.candidate_logits[row + w.sequence.burn_in_ticks];
-                let objective = cpu_ppo_objective(
-                    logits,
-                    &transition.action,
-                    w.batch.actor_advantage(row).unwrap(),
-                    config,
-                )
-                .unwrap();
-                let (targets, coefficient) = w.auxiliary.as_ref().unwrap();
-                let imitation = cpu_imitation_objective(
-                    logits,
-                    &ImitationExample {
-                        candidate_count: transition.action.candidate_count,
-                        representative_mask: transition.action.representative_mask,
-                        motor_masks: transition.action.motor_masks,
-                        forced_slots: transition.action.forced_slots.clone(),
-                        target: targets[row].clone(),
-                    },
-                    config.temperature,
-                    *coefficient,
-                )
-                .unwrap();
-                adjoints.push(
-                    objective
-                        .logit_gradients
+        for group in windows.chunks(effective_batch_size) {
+            let total = group.iter().map(|w| w.batch.len()).sum::<usize>();
+            let labels = group
+                .iter()
+                .map(|w| {
+                    w.auxiliary
+                        .as_ref()
+                        .unwrap()
+                        .0
                         .iter()
-                        .zip(imitation.logit_gradients)
-                        .map(|(g, extra)| g / w.batch.len() as f32 + extra / w.batch.len() as f32)
-                        .collect(),
-                );
+                        .filter(|target| target.is_labeled())
+                        .count()
+                })
+                .sum::<usize>();
+            let mut gradient = vec![0.; expected.weights().len()];
+            for w in group {
+                let (targets, coefficient) = w.auxiliary.as_ref().unwrap();
+                let labeled = targets.iter().filter(|target| target.is_labeled()).count();
+                let auxiliary_scale = if labeled == 0 {
+                    0.
+                } else {
+                    (labeled as f64 * total as f64 / (labels as f64 * w.batch.len() as f64)) as f32
+                };
+                let replay = expected.evaluate_replay(&w.sequence).unwrap();
+                let mut adjoints = Vec::new();
+                for (row, transition) in w.batch.transitions().iter().enumerate() {
+                    let logits = &replay.candidate_logits[row + w.sequence.burn_in_ticks];
+                    let objective = cpu_ppo_objective(
+                        logits,
+                        &transition.action,
+                        w.batch.actor_advantage(row).unwrap(),
+                        config,
+                    )
+                    .unwrap();
+                    let extra = if targets[row].is_labeled() {
+                        cpu_imitation_objective(
+                            logits,
+                            &ImitationExample {
+                                candidate_count: transition.action.candidate_count,
+                                representative_mask: transition.action.representative_mask,
+                                motor_masks: transition.action.motor_masks,
+                                forced_slots: transition.action.forced_slots.clone(),
+                                target: targets[row].clone(),
+                            },
+                            config.temperature,
+                            *coefficient * auxiliary_scale,
+                        )
+                        .unwrap()
+                        .logit_gradients
+                    } else {
+                        vec![0.; logits.len()]
+                    };
+                    adjoints.push(
+                        objective
+                            .logit_gradients
+                            .iter()
+                            .zip(extra)
+                            .map(|(g, extra)| {
+                                g / w.batch.len() as f32 + extra / labeled.max(1) as f32
+                            })
+                            .collect(),
+                    );
+                }
+                let probe = expected
+                    .probe_replay_gradients_with_speech(&w.sequence, &adjoints, &w.speech_targets)
+                    .unwrap();
+                let scale = w.batch.len() as f32 / total as f32;
+                for (g, part) in gradient.iter_mut().zip(probe.gradients) {
+                    *g += part * scale;
+                }
             }
-            let probe = expected
-                .probe_replay_gradients_with_speech(&w.sequence, &adjoints, &w.speech_targets)
-                .unwrap();
-            expected.apply_gradients(&probe.gradients).unwrap();
+            expected.apply_gradients(&gradient).unwrap();
         }
     }
     let mut value = CpuValueHead::from_checkpoint(PpoValueHeadCheckpoint {
@@ -997,14 +1086,18 @@ fn cohort_tapes_follow_each_optimizer_step_with_auxiliary_and_speech_loss() {
         &mut actual,
         &mut value,
         2,
-        1,
+        effective_batch_size,
         |i| Ok(windows[i].clone()),
         config,
         7400,
     )
     .unwrap();
     assert_eq!(receipt.completed_epochs, 2);
-    assert_eq!(receipt.actor_optimizer_step, initial.optimizer_step + 4);
+    assert_eq!(
+        receipt.actor_optimizer_step,
+        initial.optimizer_step
+            + config.epochs * windows.len().div_ceil(effective_batch_size) as u32
+    );
     assert_eq!(
         serde_json::to_vec(&actual.checkpoint()).unwrap(),
         serde_json::to_vec(&expected.checkpoint()).unwrap()
