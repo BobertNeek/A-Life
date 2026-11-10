@@ -1,0 +1,33 @@
+--- a/crates/alife_training/examples/probe_weight_space_care.rs
++++ b/crates/alife_training/examples/probe_weight_space_care.rs
+@@ -1,4 +1,10 @@
+ //! Disposable exploratory direct-weight probe. CPU only; never reads a life.
++#[allow(dead_code)]
++#[path = "support/motor_operating_point.rs"]
++mod readout;
++#[allow(dead_code)]
++#[path = "support/dedicated_fatigue.rs"]
++mod dedicated;
+ use alife_core::*;
+ use alife_runtime::canonical_preparation::foundation_construction_development;
+ use alife_training::{cpu::*, AdamWConfig, StageTrainableMask, TrainingSequence};
+@@ -297,6 +303,11 @@
+             whole_care(&p)?
+         };
+         weights = whole;
++        if arm == "whole-care-balanced" {
++            let (w, _) = readout::counterbalance(&p, &weights, &circuits, 0., true)?;
++            let (w, _) = dedicated::full_reference_calibration(&p, &w, &circuits, true)?;
++            weights = w;
++        }
+         edits = circuits;
+         if arm == "whole-care-no-need" || arm == "whole-care-no-tonic" {
+             let role = if arm.ends_with("no-need") {
+@@ -737,6 +748,7 @@
+             ("wrong-sign", -gain),
+         ],
+         "validate" => vec![("untouched", 0.), ("whole-care", 0.)],
++        "balanced" => vec![("whole-care", 0.), ("whole-care-balanced", 0.)],
+         "contact" => vec![("whole-care-v5", 0.), ("whole-care", 0.)],
+         "whole" => vec![
+             ("untouched", 0.),
