@@ -1,0 +1,58 @@
+--- a/crates/alife_training/examples/probe_weight_space_care.rs
++++ b/crates/alife_training/examples/probe_weight_space_care.rs
+@@ -1,4 +1,10 @@
+ //! Disposable exploratory direct-weight probe. CPU only; never reads a life.
++#[allow(dead_code)]
++#[path = "support/motor_operating_point.rs"]
++mod readout;
++#[allow(dead_code)]
++#[path = "support/dedicated_fatigue.rs"]
++mod dedicated;
+ use alife_core::*;
+ use alife_runtime::canonical_preparation::foundation_construction_development;
+ use alife_training::{cpu::*, AdamWConfig, StageTrainableMask, TrainingSequence};
+@@ -297,7 +303,35 @@
+             whole_care(&p)?
+         };
+         weights = whole;
++        if matches!(arm, "whole-care-balanced" | "whole-care-narrow") {
++            let (w, _) = readout::counterbalance(&p, &weights, &circuits, 0., true)?;
++            let (w, _) = dedicated::full_reference_calibration(&p, &w, &circuits, true)?;
++            weights = w;
++            if arm == "whole-care-narrow" {
++                let (baseline, _) = whole_care(&p)?;
++                let reference = circuits.iter().find(|c| c["role"] == "reference" && c["family"] == serde_json::to_value(CandidateActionFamily::Approach).unwrap()).and_then(|c| c["reference_motor"].as_u64()).ok_or("missing Approach reference")? as u32;
++                for (i, synapse) in p.synapses().iter().enumerate() {
++                    if synapse.source() == reference && matches!(synapse.kind(), CompiledSynapseKind::Decoder(c) if c.head() == DecoderHeadKind::ActionCandidate && c.family() == CandidateActionFamily::Approach) {
++                        weights[i] = baseline[i];
++                    }
++                }
++            }
++        }
+         edits = circuits;
++        if matches!(arm, "whole-care-balanced" | "whole-care-narrow") {
++            let (baseline, _) = whole_care(&p)?;
++            for (i, (before, after)) in baseline.iter().zip(&weights).enumerate() {
++                if before.to_bits() != after.to_bits() {
++                    if !matches!(p.synapses()[i].kind(), CompiledSynapseKind::Decoder(c) if c.head() == DecoderHeadKind::ActionCandidate) {
++                        return Err("reference calibration changed a non-action decoder weight".into());
++                    }
++                    edits.push(json!({"role":"reference_weight_edit","index":i,"before":before,"after":after}));
++                }
++            }
++            if !edits.iter().any(|e| e["role"] == "reference_weight_edit") {
++                return Err("reference calibration made no changes".into());
++            }
++        }
+         if arm == "whole-care-no-need" || arm == "whole-care-no-tonic" {
+             let role = if arm.ends_with("no-need") {
+                 "need"
+@@ -737,6 +771,8 @@
+             ("wrong-sign", -gain),
+         ],
+         "validate" => vec![("untouched", 0.), ("whole-care", 0.)],
++        "balanced" => vec![("whole-care", 0.), ("whole-care-balanced", 0.)],
++        "narrow" => vec![("whole-care", 0.), ("whole-care-balanced", 0.), ("whole-care-narrow", 0.)],
+         "contact" => vec![("whole-care-v5", 0.), ("whole-care", 0.)],
+         "whole" => vec![
+             ("untouched", 0.),
