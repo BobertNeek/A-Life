@@ -4307,8 +4307,14 @@ fn archive_foundation_asset_bytes(
         asset.validate_against(&resident.phenotype)?;
         return Ok(Some(asset.encode_canonical()?));
     }
-    if let Some(recipe) = resident.phenotype.foundation_abi().n2048_experimental_graph() {
-        let asset = recipe.asset()?.ok_or(ScaffoldContractError::PhenotypeCompile)?;
+    if let Some(recipe) = resident
+        .phenotype
+        .foundation_abi()
+        .n2048_experimental_graph()
+    {
+        let asset = recipe
+            .asset()?
+            .ok_or(ScaffoldContractError::PhenotypeCompile)?;
         asset.validate_against(&resident.phenotype)?;
         return Ok(Some(asset.encode_canonical()?));
     }
