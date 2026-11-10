@@ -1007,12 +1007,24 @@ fn trial(spec: TrialSpec<'_>) -> Result<serde_json::Value> {
         Vec3f::new(distance, 0., 0.)
     };
     let mut world = HeadlessScenarioBuilder::new(seed)
-        .agent("learner", own, Vec3f::ZERO)
+        .agent(
+            "learner",
+            own,
+            if scene == "maze-seen-left" || scene == "maze-cue-left" || scene == "maze-cue-blind" {
+                Vec3f::new(0., 0., 1.8)
+            } else if scene == "maze-seen-right" {
+                Vec3f::new(0., 0., -1.8)
+            } else {
+                Vec3f::ZERO
+            },
+        )
         .build()?;
     if scene.starts_with("maze-") {
         let wall = match scene {
-            "maze-left" => vec![[1.0, -4.0, 1.3, 0.8, 0.0, 2.0]],
-            "maze-right" => vec![[1.0, -0.8, 1.3, 4.0, 0.0, 2.0]],
+            "maze-left" | "maze-seen-left" | "maze-cue-left" | "maze-cue-blind" => {
+                vec![[1.0, -4.0, 1.3, 0.8, 0.0, 2.0]]
+            }
+            "maze-right" | "maze-seen-right" => vec![[1.0, -0.8, 1.3, 4.0, 0.0, 2.0]],
             "maze-clear" | "maze-near" | "maze-neutral" | "maze-bitter" => vec![],
             _ => return Err("unknown maze scene".into()),
         };
@@ -1030,6 +1042,18 @@ fn trial(spec: TrialSpec<'_>) -> Result<serde_json::Value> {
             LocomotionLimits::default(),
         )?;
         world.enable_terrain_for_new_game(terrain, Vec3f::ZERO)?;
+        if scene == "maze-seen-left"
+            || scene == "maze-seen-right"
+            || scene == "maze-cue-left"
+            || scene == "maze-cue-blind"
+        {
+            let z = if scene != "maze-seen-right" {
+                1.8
+            } else {
+                -1.8
+            };
+            world.editor_move_object(world.entity_id("learner").unwrap(), Vec3f::new(0., 0., z))?;
+        }
     }
     if scene == "obstacle-food" {
         world.editor_spawn_object(WorldEditorSpawnSpec {
@@ -1043,6 +1067,22 @@ fn trial(spec: TrialSpec<'_>) -> Result<serde_json::Value> {
             token_id: None,
         })?;
     }
+    let cue_occluder = if scene == "maze-cue-left" || scene == "maze-cue-blind" {
+        let id = world.editor_spawn_object(WorldEditorSpawnSpec {
+            label: "cue_occluder".into(),
+            kind: WorldObjectKind::Obstacle,
+            organism_id: None,
+            position: Vec3f::new(1.1, 0., 1.0),
+            nutrition: 0.,
+            hazard_pain: 0.,
+            radius: 0.5,
+            token_id: None,
+        })?;
+        world.editor_set_optical_opacity(id, if scene == "maze-cue-blind" { 1. } else { 0. })?;
+        Some(id)
+    } else {
+        None
+    };
     let scene_hazard = if scene == "maze-bitter" {
         0.3
     } else {
@@ -1112,6 +1152,11 @@ fn trial(spec: TrialSpec<'_>) -> Result<serde_json::Value> {
         .clone();
     let mut rows = Vec::new();
     for tick in 0..ticks {
+        if tick == 4 {
+            if let Some(id) = cue_occluder {
+                host.world_mut().editor_set_optical_opacity(id, 1.)?;
+            }
+        }
         let step = host.step(&trainer, 1.)?;
         for row in step.decisions {
             let eval = trainer.evaluate_replay(&TrainingSequence {
@@ -1610,6 +1655,10 @@ fn main() -> Result<()> {
                 "maze-clear",
                 "maze-left",
                 "maze-right",
+                "maze-seen-left",
+                "maze-cue-left",
+                "maze-cue-blind",
+                "maze-seen-right",
                 "maze-near",
                 "maze-neutral",
                 "maze-bitter",
