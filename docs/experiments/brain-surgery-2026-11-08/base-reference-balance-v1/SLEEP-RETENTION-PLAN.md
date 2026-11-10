@@ -1,0 +1,5 @@
+# Existing sleep: individual fast-state persistence pilot
+
+Use the genuine existing CPU host's explicit recovery-sleep protocol on a clone of a fresh experimental creature after 16 normal decisions, not a real user's life. Record actual phases, sleep consolidation, resumption of a real decision, per-organism fast/lifetime/eligibility changes across consolidation, and exact cold save/next-step continuation after waking. No live or serialized private state is edited. Forced recovery is a test trigger, not evidence that the creature autonomously chose sleep. A numerical retained weight or consolidation is not proof that a learned behavior survived sleep.
+
+Pilot 1 new seed 2026111540, near-food scenario, original and two-weight boost, 16 prior neural decisions, up to 80 sleep/wake intervals: 2 CPU trials. Preserve failures without changing sleep timing to pass. Current main c3aec16 + `sleep-retention.patch` and pinned example support modules listed in CURRENT-MAIN-PLAN.md. No default-game, GPU, or user-checkpoint changes. The detached fast-offset replay is also computed but does not interfere with the actual sleeper.
