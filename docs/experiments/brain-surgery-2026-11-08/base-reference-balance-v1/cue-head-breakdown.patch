@@ -1,0 +1,34 @@
+--- a/crates/alife_training/examples/probe_cue_learning.rs
++++ b/crates/alife_training/examples/probe_cue_learning.rs
+@@ -118,9 +118,30 @@
+                 }
+                 decompositions.push(json!({"candidate_index":j,"family":candidate.family,"lanes":lanes}));
+             }
++            let mut head_breakdown=Vec::new();
++            for (j,candidate) in d.replay_tick.candidates.iter().enumerate() {
++                if candidate.family != CandidateActionFamily::Ingest { continue; }
++                let mut action=0f32;let mut memory=0f32;let mut cognitive=0f32;
++                for (idx,synapse) in trainer.phenotype().synapses().iter().enumerate() {
++                    if let CompiledSynapseKind::Decoder(c)=synapse.kind() {
++                        if c.family()!=candidate.family { continue; }
++                        let v=candidate.decoder_inputs[c.input_lane() as usize]*(trainer.weights()[idx]+d.replay_tick.effective_weight_offsets[idx]);
++                        match c.head() {
++                            DecoderHeadKind::ActionCandidate => action+=evaluation.final_activations[0][synapse.source() as usize]*v,
++                            DecoderHeadKind::MemoryContext => memory+=v,
++                            DecoderHeadKind::CognitiveContext => cognitive+=v,
++                            _=>{}
++                        }
++                    }
++                }
++                let bias=trainer.phenotype().candidate_decoder().families().iter().find(|f|f.family()==candidate.family).ok_or("missing family")?.bias()+candidate.innate_bias;
++                let gain=seq.memory_candidate_gain;
++                let reconstructed=bias+action+memory.clamp(-gain,gain)+cognitive.clamp(-gain,gain);
++                head_breakdown.push(json!({"candidate_index":j,"bias":bias,"action":action,"memory_raw":memory,"cognitive_raw":cognitive,"gain":gain,"reconstructed":reconstructed,"actual":logits[j],"residual":logits[j]-reconstructed,"decoder_inputs":&candidate.decoder_inputs[..]}));
++            }
+             let actor_id=host.world().organism_registry().get(own).ok_or("missing actor")?.world_entity_id();
+             let actor_position=host.world().entity(actor_id).ok_or("missing actor body")?.position;
+-            trace.push(json!({"tick":i+1,"action":d.action,"contact":o.physical.contact,"target":o.physical.target_entity.map(|x|x.raw()),"outcome":o,"candidates":d.patch.pre_action().perception().candidates(),"logits":logits,"decompositions":decompositions,"actor_position_after":actor_position}));
++            trace.push(json!({"tick":i+1,"action":d.action,"contact":o.physical.contact,"target":o.physical.target_entity.map(|x|x.raw()),"outcome":o,"candidates":d.patch.pre_action().perception().candidates(),"logits":logits,"decompositions":decompositions,"head_breakdown":head_breakdown,"actor_position_after":actor_position}));
+         }
+         let r=host.world().entity(red_id).ok_or("red lost")?.consumed;let b=host.world().entity(blue_id).ok_or("blue lost")?.consumed;
+         if r||b {choice=Some(if r&&b {"both"} else if r {"red"} else {"blue"}); break;}
