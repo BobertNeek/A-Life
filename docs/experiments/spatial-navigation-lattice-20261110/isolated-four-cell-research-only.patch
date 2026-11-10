@@ -1,0 +1,307 @@
+--- a/crates/alife_training/src/cpu/host.rs
++++ b/crates/alife_training/src/cpu/host.rs
+@@ -347,6 +347,27 @@
+     pub fn world_mut(&mut self) -> &mut HeadlessWorld {
+         &mut self.world
+     }
++    /// LOCAL DISPOSABLE RESEARCH ONLY: a controlled causal intervention on
++    /// selected recurrent cells at a completed tick. Reseal all authoritative
++    /// state through the normal path; never use this on an accepted life.
++    pub fn research_intervene_lattice(
++        &mut self, founder: &CpuFoundationTrainer, id: OrganismId, ablate: bool,
++    ) -> Result<(), CpuHostError> {
++        self.validate_founder(founder)?;
++        let resident = self.residents.get_mut(&id.raw())
++            .ok_or(CpuHostError::State("research resident missing"))?;
++        let mut neural = resident.neural.checkpoint()?;
++        if ablate {
++            for i in [908usize, 909, 1612, 1613] {
++                neural.neural.activations[i] = 0.;
++                neural.inactive_activations[i] = 0.;
++            }
++        }
++        resident.neural = CpuOrganismState::from_checkpoint(founder.phenotype(), neural)?;
++        resident.sealed_authority = None;
++        self.seal_all_residents()?;
++        Ok(())
++    }
+     pub fn snapshot(&self) -> Self {
+         self.clone()
+     }
+@@ -931,6 +952,14 @@
+                     })
+                     .collect(),
+             )?;
++            // Disposable research ablation: leave memory storage and receipts intact,
++            // but suppress its direct decoder lanes during the choice probe only.
++            if let Ok(mode) = std::env::var("ALIFE_RESEARCH_ZERO_MEMORY_DECODER") {
++                let end = if mode == "all" { 53 } else { 36 };
++                for candidate in &mut context.candidates {
++                    candidate.decoder_inputs[24..end].fill(0.);
++                }
++            }
+             context.microstep_count = u32::from(activity.microsteps);
+             let output = r.neural.advance(founder, context, &effects)?;
+             r.activity.remaining_atp_q16 = activity.available_atp_q16 - activity.debit_atp_q16;
+--- a/crates/alife_training/src/cpu/input.rs
++++ b/crates/alife_training/src/cpu/input.rs
+@@ -57,6 +57,24 @@
+         encoded[assignment.target_neuron() as usize] +=
+             (source * assignment.scale() + assignment.bias()).clamp(min, max);
+     }
++    // LOCAL RESEARCH ONLY: this temporary port is not a versioned sensor ABI.
++    // It may only be used with fresh, disposable terrain-vision experiments.
++    // The inputs are the nearest currently visible blue-biased object candidate,
++    // never a hidden target, global map, or special food label.
++    if std::env::var_os("ALIFE_RESEARCH_VISIBLE_OBJECT_CUE").is_some() {
++        if let Some(object) = frame.candidates().iter()
++            .filter(|c| c.target.entity.is_some() && c.features.0[8] > c.features.0[6])
++            .min_by(|a, b| a.features.0[2].total_cmp(&b.features.0[2]))
++        {
++            // Temporary split direction port onto the two previously tested
++            // visual-to-turn cells; reverse orientation is a separate trial.
++            let bearing = object.features.0[0];
++            let sign = if std::env::var_os("ALIFE_RESEARCH_REVERSE_OBJECT_CUE").is_some() { -1. } else { 1. };
++            encoded[908] += 8.0 * (bearing * sign).max(0.0);
++            encoded[909] += 8.0 * (-bearing * sign).max(0.0);
++            encoded[910] += 1.0 - object.features.0[2].clamp(0.0, 1.0);
++        }
++    }
+     let gate =
+         (effects.structural_growth_gate + effects.sleep_gate + effects.consolidation_gate) / 3.;
+     for value in &mut encoded {
+--- a/crates/alife_training/examples/probe_spatial_navigation.rs
++++ b/crates/alife_training/examples/probe_spatial_navigation.rs
+@@ -322,6 +322,52 @@
+ /// Exploratory native circuit: feed the lateral sight rays through existing
+ /// recurrent context paths into opposing turn preferences, with a modest
+ /// context recurrence boost. This is NOT a claimed spatial map or solver.
++/// Disposable perceptual goal trace; no target ID or hidden location is fed in.
++fn wire_research_goal_readout(p: &BrainPhenotype, weights: &mut [f32], edits: &mut Vec<serde_json::Value>) -> Result<()> {
++    use std::collections::{BTreeSet, VecDeque};
++    let mut out = vec![Vec::new(); p.neuron_count() as usize];
++    for (i,e) in p.synapses().iter().enumerate() {
++        if e.kind()==CompiledSynapseKind::Recurrent && p.projections()[e.route_index() as usize].projection_type()!=ProjectionType::LateralInhibition {
++            out[e.source() as usize].push(i);
++        }
++    }
++    let motors = p.synapses().iter().filter_map(|e| match e.kind() {
++        CompiledSynapseKind::Decoder(c) if c.head()==DecoderHeadKind::ActionCandidate && c.family()==CandidateActionFamily::Inspect && c.input_lane()==0 => Some(e.source()),
++        _ => None,
++    }).collect::<BTreeSet<_>>();
++    let mut reserved = edits.iter().filter(|e|e["role"]=="spatial_turn_bias").filter_map(|e|e["source"].as_u64().map(|x|x as u32)).collect::<BTreeSet<_>>();
++    for (source, sign) in [(908u32,1.0f32),(909u32,-1.0f32)] {
++        let mut q=VecDeque::from([(source,Vec::<usize>::new())]);
++        let mut visited=BTreeSet::from([source]);
++        let mut found=None;
++        while let Some((node,path))=q.pop_front() {
++            if !path.is_empty() && motors.contains(&node) && !reserved.contains(&node) { found=Some((node,path)); break; }
++            if path.len()>=6 { continue; }
++            for &i in &out[node as usize] {
++                let e=&p.synapses()[i]; let next=e.target();
++                let cells=match(e.route_index(),e.source(),next) {
++                    (7,a @ 896..=911,b @ 1600..=1615)=>Some((a-896,b-1600)),
++                    (8,a @ 1600..=1615,b @ 896..=911)=>Some((a-1600,b-896)),
++                    _=>None,
++                };
++                if let Some((a,b))=cells { if (a/4).abs_diff(b/4)+(a%4).abs_diff(b%4)>1 {continue;} }
++                if reserved.contains(&next) || next==908 || next==909 {continue;}
++                if visited.insert(next) {let mut next_path=path.clone();next_path.push(i);q.push_back((next,next_path));}
++            }
++        }
++        let (motor,path)=found.ok_or("no separate goal readout path")?;
++        reserved.insert(motor);
++        for i in path { let before=weights[i];weights[i]=2.0;edits.push(json!({"role":"goal_trace_relay","index":i,"before":before,"after":weights[i]})); }
++        let mut n=0;
++        for (i,e) in p.synapses().iter().enumerate() {
++            if e.source()==motor && matches!(e.kind(),CompiledSynapseKind::Decoder(c) if c.head()==DecoderHeadKind::ActionCandidate && c.family()==CandidateActionFamily::Inspect && c.input_lane()==0) {
++                let before=weights[i];weights[i]+=sign*120.0;n+=1;edits.push(json!({"role":"goal_trace_turn","index":i,"before":before,"after":weights[i]}));
++            }
++        }
++        if n==0 {return Err("missing goal turn output".into());}
++    }
++    Ok(())
++}
+ fn wire_spatial_trace(
+     p: &BrainPhenotype,
+     weights: &mut [f32],
+@@ -776,7 +822,7 @@
+             }
+         }
+     }
+-    let edit_arm = if arm == "nav-turn10" || arm == "nav-boost" {
++    let edit_arm = if arm == "nav-turn10" || arm == "nav-boost" || arm.starts_with("nav-goalwire") {
+         "nav-map"
+     } else {
+         arm
+@@ -796,7 +842,7 @@
+         edits.extend(wire_spatial_trace(
+             &p,
+             &mut weights,
+-            if arm == "nav-turn10" || arm == "nav-boost" {
++            if arm == "nav-turn10" || arm == "nav-boost" || arm.starts_with("nav-goalwire") {
+                 60.0
+             } else {
+                 6.0
+@@ -809,7 +855,7 @@
+             || edit_arm == "nav-map"
+             || edit_arm == "nav-stable"
+         {
+-            let boosted_relays = if arm == "nav-boost" {
++            let boosted_relays = if arm == "nav-boost" || arm.starts_with("nav-goalwire") {
+                 edits
+                     .iter()
+                     .filter(|e| e["role"] == "spatial_visual_context_relay")
+@@ -821,7 +867,13 @@
+             edits.extend(wire_local_spatial_lattice(
+                 &p,
+                 &mut weights,
+-                if edit_arm == "nav-stable" {
++                if arm == "nav-goalwire8" {
++                    8.0
++                } else if arm == "nav-goalwire4" {
++                    4.0
++                } else if arm.starts_with("nav-goalwire") {
++                    2.0
++                } else if edit_arm == "nav-stable" {
+                     1.3
+                 } else if edit_arm == "nav-map" {
+                     0.85
+@@ -928,6 +980,38 @@
+             return Err("no ingest contact decoder for reference motor".into());
+         }
+     }
++    if arm.starts_with("nav-goalwire") { wire_research_goal_readout(&p, &mut weights, &mut edits)?; }
++    if arm == "nav-goalwireC1" || arm == "nav-goalwireC4" {
++        let inhibition = if arm == "nav-goalwireC1" { -1.0 } else { -4.0 };
++        let mut count=0;
++        for (i,e) in p.synapses().iter().enumerate() {
++            let pair=match(e.route_index(),e.source(),e.target()) {
++                (7,a @ 908..=909,b @ 1612..=1613)=>Some((a-908,b-1612)),
++                (8,a @ 1612..=1613,b @ 908..=909)=>Some((a-1612,b-908)),
++                _=>None,
++            };
++            if pair.is_some_and(|(a,b)|a!=b) && e.kind()==CompiledSynapseKind::Recurrent {
++                let before=weights[i];weights[i]=inhibition;count+=1;
++                edits.push(json!({"role":"goal_trace_competition","index":i,"before":before,"after":inhibition}));
++            }
++        }
++        if count!=4 {return Err("missing expected reciprocal competition edges".into());}
++    }
++    if arm == "nav-goalwireIsolate" {
++        let mut count=0;
++        for (i,e) in p.synapses().iter().enumerate() {
++            if e.kind()!=CompiledSynapseKind::Recurrent || ![908,909,1612,1613].contains(&e.target()) {continue;}
++            let pair=match(e.route_index(),e.source(),e.target()) {
++                (7,a @ 908..=909,b @ 1612..=1613)=>Some((a-908,b-1612)),
++                (8,a @ 1612..=1613,b @ 908..=909)=>Some((a-1612,b-908)),
++                _=>None,
++            };
++            let after=match pair {Some((a,b)) if a==b=>2.0,Some(_)=>-1.0,None=>0.0};
++            let before=weights[i];weights[i]=after;count+=1;
++            if before.to_bits()!=after.to_bits() {edits.push(json!({"role":"isolated_goal_memory_incoming","index":i,"before":before,"after":after}));}
++        }
++        if count<4 {return Err("isolated memory incoming edges absent".into());}
++    }
+     let asset = if arm == "untouched" {
+         source.clone()
+     } else {
+@@ -1075,7 +1159,7 @@
+             position: Vec3f::new(1.1, 0., 1.0),
+             nutrition: 0.,
+             hazard_pain: 0.,
+-            radius: 0.5,
++            radius: 1.0,
+             token_id: None,
+         })?;
+         world.editor_set_optical_opacity(id, if scene == "maze-cue-blind" { 1. } else { 0. })?;
+@@ -1155,6 +1239,11 @@
+         if tick == 4 {
+             if let Some(id) = cue_occluder {
+                 host.world_mut().editor_set_optical_opacity(id, 1.)?;
++                if std::env::var_os("ALIFE_RESEARCH_INTERVENTION").is_some() {
++                    host.research_intervene_lattice(&trainer, own, std::env::var_os("ALIFE_RESEARCH_ABLATE_CONTEXT").is_some())?;
++                    let snapshot=host.checkpoint(&trainer)?;
++                    host=CpuCanonicalHost::from_checkpoint(snapshot,&trainer)?;
++                }
+             }
+         }
+         let step = host.step(&trainer, 1.)?;
+@@ -1234,6 +1323,46 @@
+             } else {
+                 None
+             };
++            // Frozen-frame research probe: one synthetic pulse to the cue cells,
++            // followed by identical ordinary inputs; never used by live policy.
++            let goal_pulse = if tick == 0 && std::env::var_os("ALIFE_RESEARCH_GOAL_PULSE").is_some() {
++                let left = frame.candidates().iter().position(|c|c.action_id==HeadlessActionIds::TURN_LEFT).ok_or("no left turn")?;
++                let right = frame.candidates().iter().position(|c|c.action_id==HeadlessActionIds::TURN_RIGHT).ok_or("no right turn")?;
++                let mut samples=Vec::new();
++                for source in [908usize,909usize] {
++                    for steps in [1usize,2,4,8,16,32,64] {
++                        let run = |pulse:bool| -> Result<(Vec<f32>,Vec<f32>)> {
++                            let mut ticks=vec![row.replay_tick.clone();steps];
++                            if pulse { ticks[0].encoded_inputs[source] += 1.0; }
++                            let out=trainer.evaluate_replay(&TrainingSequence {
++                                phenotype_hash:trainer.phenotype().phenotype_hash(), initial:row.initial.clone(), ticks,
++                                burn_in_ticks:0, memory_candidate_gain:trainer.phenotype().candidate_decoder().memory_channel().map_or(0.,|m|m.max_candidate_gain()),
++                            })?;
++                            Ok((out.candidate_logits.last().ok_or("missing logits")?.clone(), out.final_activations.last().ok_or("missing activations")?.clone()))
++                        };
++                        let (base,base_a)=run(false)?; let (changed,changed_a)=run(true)?;
++                        let delta=(changed[left]-changed[right])-(base[left]-base[right]);
++                        let latent_max=(896..912).chain(1600..1616).map(|i|(changed_a[i]-base_a[i]).abs()).fold(0f32,f32::max);
++                        samples.push(json!({"input_neuron":source,"steps":steps,"turn_logit_difference":delta,"lattice_max_delta":latent_max}));
++                    }
++                }
++                Some(samples)
++            } else { None };
++            // Detached reversal probe: two brief opposite cue impulses under
++            // identical frozen sensory frames. This is not a live-world trial.
++            let goal_reversal = if tick == 0 && std::env::var_os("ALIFE_RESEARCH_GOAL_REVERSAL").is_some() {
++                let left = frame.candidates().iter().position(|c|c.action_id==HeadlessActionIds::TURN_LEFT).ok_or("no left turn")?;
++                let right = frame.candidates().iter().position(|c|c.action_id==HeadlessActionIds::TURN_RIGHT).ok_or("no right turn")?;
++                let run = |first:Option<usize>,second:Option<usize>| -> Result<Vec<f32>> {
++                    let mut ticks=vec![row.replay_tick.clone();64];
++                    if let Some(i)=first { ticks[0].encoded_inputs[i]+=1.0; }
++                    if let Some(i)=second { for frame in &mut ticks[32..40] { frame.encoded_inputs[i]+=1.0; } }
++                    let out=trainer.evaluate_replay(&TrainingSequence {phenotype_hash:trainer.phenotype().phenotype_hash(),initial:row.initial.clone(),ticks,burn_in_ticks:0,memory_candidate_gain:trainer.phenotype().candidate_decoder().memory_channel().map_or(0.,|m|m.max_candidate_gain())})?;
++                    Ok(out.candidate_logits.iter().map(|v|v[left]-v[right]).collect())
++                };
++                let baseline=run(None,None)?; let left_then_right=run(Some(908),Some(909))?; let right_then_left=run(Some(909),Some(908))?;
++                Some([4usize,8,16,31,32,33,40,64].into_iter().map(|step|json!({"steps":step,"baseline_turn":baseline[step-1],"left_then_right":left_then_right[step-1]-baseline[step-1],"right_then_left":right_then_left[step-1]-baseline[step-1]})).collect::<Vec<_>>())
++            } else {None};
+             // Detached impulse/ablation experiment: inputs are edited only in a
+             // copied replay, never in the live world or policy state.
+             let lattice_pulse = if tick == 0
+@@ -1311,7 +1440,7 @@
+             // Probe whether each side-ray actually affects the neural turn
+             // logits in opposite directions; never modifies the live host.
+             let side_pulse = if tick == 0
+-                && (arm == "nav-map" || arm == "nav-turn10" || arm == "nav-boost")
++                && (arm == "nav-map" || arm == "nav-turn10" || arm == "nav-boost" || arm.starts_with("nav-goalwire"))
+                 && std::env::var_os("ALIFE_RESEARCH_SIDE_PULSE").is_some()
+             {
+                 let left = frame
+@@ -1466,7 +1595,7 @@
+                     "activation": &eval.final_activations[0][region.start as usize..(region.start+region.len) as usize],
+                 }))
+             }).collect::<Vec<_>>();
+-            rows.push(json!({"tick":tick,"position":observed_position,"visible_goal":visible_goal,"neural_body":frame.body().neural_projection(frame.sensor_profile()),"vision_ranges":frame.sensory().channels.visual_affordance,"latent_context":latent_context,"lattice_pulse":lattice_pulse,"side_pulse":side_pulse,"counter":row.sampling_counter,"action":row.action,"candidates":frame.candidates(),"logits":eval.candidate_logits[0],"ingest_taste_motors":motors,"encoded_hunger_plus_0_1_logit_delta":hunger_probe,"encoded_hunger_3_frozen_frames_delta":hunger_three_frames,"constructed_neuron_activations":debug_activations,"effective_bridges":effective_bridges,"enabled_routes":row.replay_tick.enabled_routes,"outcome":outcome,"reward":row.biological_reward}));
++            rows.push(json!({"tick":tick,"position":observed_position,"visible_goal":visible_goal,"neural_body":frame.body().neural_projection(frame.sensor_profile()),"vision_ranges":frame.sensory().channels.visual_affordance,"latent_context":latent_context,"lattice_pulse":lattice_pulse,"goal_pulse":goal_pulse,"goal_reversal":goal_reversal,"side_pulse":side_pulse,"counter":row.sampling_counter,"action":row.action,"candidates":frame.candidates(),"logits":eval.candidate_logits[0],"ingest_taste_motors":motors,"encoded_hunger_plus_0_1_logit_delta":hunger_probe,"encoded_hunger_3_frozen_frames_delta":hunger_three_frames,"constructed_neuron_activations":debug_activations,"effective_bridges":effective_bridges,"enabled_routes":row.replay_tick.enabled_routes,"outcome":outcome,"reward":row.biological_reward}));
+         }
+     }
+     assert_eq!(before, serde_json::to_vec(&trainer.checkpoint())?);
+@@ -1704,6 +1833,12 @@
+         "nav-stable-factor" => vec![("nav-map", 0.), ("nav-stable", 0.)],
+         "nav-turn10-factor" => vec![("nav-map", 0.), ("nav-turn10", 0.)],
+         "nav-boost-factor" => vec![("nav-turn10", 0.), ("nav-boost", 0.)],
++        "nav-goalwire-factor" => vec![("nav-boost", 0.), ("nav-goalwire", 0.)],
++        "nav-retention-factor" => vec![("nav-goalwire",0.),("nav-goalwire4",0.),("nav-goalwire8",0.)],
++        "nav-competition-factor" => vec![("nav-goalwire",0.),("nav-goalwireC1",0.),("nav-goalwireC4",0.)],
++        "nav-isolate-factor" => vec![("nav-goalwireC1",0.),("nav-goalwireIsolate",0.)],
++        "nav-isolate-live-factor" => vec![("nav-goalwire",0.),("nav-goalwireC1",0.),("nav-goalwireIsolate",0.)],
++        "nav-isolate-single" => vec![("nav-goalwireIsolate",0.)],
+         "bold-factor" => vec![("whole-care", 0.), ("whole-care-bold", 0.)],
+         "contact" => vec![("whole-care-v5", 0.), ("whole-care", 0.)],
+         "whole" => vec![
