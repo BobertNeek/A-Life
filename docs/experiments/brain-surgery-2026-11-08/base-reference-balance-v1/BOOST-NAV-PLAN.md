@@ -1,0 +1,3 @@
+# Longer-horizon navigation comparison
+
+Freeze the same two-weight boost and original whole-care. Four new paired seeds 2026111526–1529, far-food-left and obstacle-food, 120 neural decisions, two arms: 16 native CPU trials. The earlier 32-step endpoints did not establish obstacle capability. Record physical consumption decision, target outcomes, exact edits, candidate identities, and cold/optimizer checks. Both scenes use newborn physiology and initial body energy 0.4. No claim of learning, high-fatigue arbitration or GPU gameplay follows. The nearby target uses the existing world geometry, not a new navigation policy. No user life or default foundation is overwritten. Source and executable remain identical to the prior boost comparison.
