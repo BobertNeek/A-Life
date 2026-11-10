@@ -1,0 +1,110 @@
+--- a/crates/alife_core/Cargo.toml
++++ b/crates/alife_core/Cargo.toml
+@@ -10,6 +10,7 @@
+ blake3.workspace = true
+ bytemuck.workspace = true
+ serde.workspace = true
++serde_json.workspace = true
+ smallvec.workspace = true
+ thiserror.workspace = true
+ 
+--- a/crates/alife_core/src/phenotype/io_compile.rs
++++ b/crates/alife_core/src/phenotype/io_compile.rs
+@@ -30,6 +30,13 @@
+     layout: &LobeLayout,
+     profile: SensorProfile,
+ ) -> Result<SensorEncoderPlan, ScaffoldContractError> {
++    // Disposable proof-of-concept only: the environment override below is
++    // deliberately not a production ABI or a saved-genome representation.
++    let mut anchored_genome = genome.clone();
++    if let Ok(seed) = std::env::var("ALIFE_RESEARCH_SENSOR_SEED") {
++        anchored_genome.seeds.sensor_layout_seed = seed.parse().map_err(|_| compile_error())?;
++    }
++    let genome = &anchored_genome;
+     let mut assignments = Vec::new();
+     let mut gene_keys = BTreeSet::new();
+     let mut active_genes = genome
+@@ -174,6 +181,49 @@
+             }
+         }
+     }
++    if let Ok(path) = std::env::var("ALIFE_RESEARCH_SENSOR_ANCHOR") {
++        let bytes = std::fs::read(path).map_err(|_| compile_error())?;
++        let anchor: SensorEncoderPlan =
++            serde_json::from_slice(&bytes).map_err(|_| compile_error())?;
++        if anchor.sensor_profile() != profile {
++            return Err(compile_error());
++        }
++        let mut stable = anchor.assignments().to_vec();
++        let keys = stable
++            .iter()
++            .map(|a| (a.source_group().raw(), a.source_index(), a.target_neuron()))
++            .collect::<BTreeSet<_>>();
++        let mut used = stable
++            .iter()
++            .map(|a| a.target_neuron())
++            .collect::<BTreeSet<_>>();
++        for a in assignments {
++            if keys.contains(&(a.source_group().raw(), a.source_index(), a.target_neuron())) {
++                continue;
++            }
++            let mut target = a.target_neuron();
++            if used.contains(&target) {
++                let region = layout
++                    .lobe_by_neuron_index(target)
++                    .ok_or_else(compile_error)?;
++                target = (region.start..region.start + region.len)
++                    .find(|n| !used.contains(n))
++                    .ok_or_else(compile_error)?;
++            }
++            used.insert(target);
++            let (lo, hi) = a.clamp_range();
++            stable.push(SensorEncoderAssignment::new(
++                a.source_group(),
++                a.source_index(),
++                target,
++                a.scale(),
++                a.bias(),
++                lo,
++                hi,
++            ));
++        }
++        assignments = stable;
++    }
+     assignments.sort_by_key(|assignment| {
+         (
+             assignment.target_neuron(),
+--- a/crates/alife_archive/tests/lineage_library.rs
++++ b/crates/alife_archive/tests/lineage_library.rs
+@@ -2684,3 +2684,31 @@
+ }
+ 
+ 
++#[test]
++fn research_anchor_ports_and_rebind_one_offspring_end_to_end() {
++    let source=FoundationWeightAsset::decode_canonical(include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"),"/../../assets/foundations/experimental-whole-care-bold-v1.alife-foundation"))).unwrap();let m=source.manifest();
++    let identity=FoundationGeneticIdentity::new(m.foundation_id().raw(),u16::try_from(m.foundation_version().raw()).unwrap(),m.compatibility_family_id().raw(),BrainCapacityClass::N2048_ID).unwrap();
++    let mother=CreatureGenome::early_mammal_founder(701,identity).unwrap().with_n2048_foundation_candidate(source.clone()).unwrap();let father=CreatureGenome::early_mammal_founder(702,identity).unwrap().with_n2048_foundation_candidate(source.clone()).unwrap();
++    let e=mother.express().unwrap(); let d=e.development_state_at(Tick::new(u64::from(e.development.maturation_duration_ticks))).unwrap();
++    std::env::set_var("ALIFE_RESEARCH_SENSOR_SEED",e.brain_genome.seeds.sensor_layout_seed.to_string());
++    let (parent,_) = PhenotypeCompiler::compile_n2048_experimental_graph(e.brain_genome,d,SensorProfile::GroundedObjectSlotsV1).unwrap();
++    let anchor_path=std::env::temp_dir().join(format!("research-sensor-anchor-{}.json",std::process::id()));
++    fs::write(&anchor_path,serde_json::to_vec(parent.sensor_encoder()).unwrap()).unwrap();
++    std::env::set_var("ALIFE_RESEARCH_SENSOR_ANCHOR",&anchor_path);
++    let mut child=CreatureGenome::reproduce(&mother,&father,703).unwrap();
++    let e=child.express().unwrap(); let d=e.development_state_at(Tick::new(u64::from(e.development.maturation_duration_ticks))).unwrap();
++    let (prototype,_) = PhenotypeCompiler::compile_n2048_experimental_graph(e.brain_genome.clone(),d.clone(),SensorProfile::GroundedObjectSlotsV1).unwrap();
++    let ports=|p:&BrainPhenotype|p.sensor_encoder().assignments().iter().map(|a|(a.source_group().raw(),a.source_index(),a.target_neuron())).collect::<std::collections::BTreeSet<_>>();
++    let anchors=ports(&parent);let child_ports=ports(&prototype);assert!(anchors.is_subset(&child_ports));
++    assert_eq!(parent.synapses().len(),prototype.synapses().len());
++    assert!(parent.synapses().iter().zip(prototype.synapses()).all(|(a,b)|a.source()==b.source() && a.target()==b.target() && a.route_index()==b.route_index() && a.kind()==b.kind()));
++    let rebound=FoundationWeightAsset::from_trained_weights(&prototype,source.weights().to_vec(),source.manifest().training_stage()).unwrap();
++    assert_eq!(source.weights().iter().map(|x|x.to_bits()).collect::<Vec<_>>(),rebound.weights().iter().map(|x|x.to_bits()).collect::<Vec<_>>());
++    child=child.with_n2048_foundation_candidate(rebound.clone()).unwrap();
++    let (bound,_) = PhenotypeCompiler::compile_n2048_experimental_foundation_candidate(e.brain_genome,d,rebound.clone()).unwrap();
++    let root=temp_root("research-anchored-child");let mut lib=LineageLibrary::open(LineageLibraryConfig::profile_default(&root)).unwrap();let bytes=rebound.encode_canonical().unwrap();
++    let digest=lib.archive_composite_birth(CompositeGeneticArchiveInput{source_run_id:"research-anchored",organism_id:OrganismId(703),birth_tick:Tick::new(9),creature_genome:&child,phenotype:&bound,foundation_asset_bytes:&bytes}).unwrap();
++    let manifest=lib.load_manifest(digest).unwrap();assert_eq!(lib.load_creature_genome(&manifest).unwrap(),child);
++    println!("RESEARCH_ONLY parent_ports={} child_ports={} inherited_weight_bits={} archive_roundtrip=true",anchors.len(),child_ports.len(),source.weights().len());
++    drop(lib);fs::remove_dir_all(root).unwrap();fs::remove_file(anchor_path).unwrap();std::env::remove_var("ALIFE_RESEARCH_SENSOR_ANCHOR");std::env::remove_var("ALIFE_RESEARCH_SENSOR_SEED");
++}
