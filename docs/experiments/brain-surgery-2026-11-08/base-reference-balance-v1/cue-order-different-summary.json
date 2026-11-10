@@ -1,0 +1,421 @@
+{
+  "seed": 2026111554,
+  "reports": [
+    {
+      "file": "cue-order-different-1554-blue-first-baseline-normal.json",
+      "red_first": false,
+      "red_id": 7,
+      "blue_id": 6,
+      "gain": 0.0,
+      "sham": false,
+      "exposures": [
+        {
+          "consumed_at": 2,
+          "episode": 0,
+          "is_red": null,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 2,
+          "training_color": "green"
+        },
+        {
+          "consumed_at": 2,
+          "episode": 1,
+          "is_red": null,
+          "pain_delta": 0.24000000953674316,
+          "safe": false,
+          "target": 3,
+          "training_color": "gray-green"
+        },
+        {
+          "consumed_at": 2,
+          "episode": 2,
+          "is_red": null,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 4,
+          "training_color": "green"
+        },
+        {
+          "consumed_at": 2,
+          "episode": 3,
+          "is_red": null,
+          "pain_delta": 0.2315065562725067,
+          "safe": false,
+          "target": 5,
+          "training_color": "gray-green"
+        }
+      ],
+      "choice": "red",
+      "choice_safe": null,
+      "steps": 4,
+      "cold": true,
+      "optimizer": true,
+      "sha256": "7154b48444020621e23e33314cf5b5b372d0eaa721b393dd7fd7947d21524cb2"
+    },
+    {
+      "file": "cue-order-different-1554-blue-first-baseline-sham.json",
+      "red_first": false,
+      "red_id": 7,
+      "blue_id": 6,
+      "gain": 0.0,
+      "sham": true,
+      "exposures": [
+        {
+          "consumed_at": 2,
+          "episode": 0,
+          "is_red": null,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 2,
+          "training_color": "green"
+        },
+        {
+          "consumed_at": 2,
+          "episode": 1,
+          "is_red": null,
+          "pain_delta": 0.24000000953674316,
+          "safe": false,
+          "target": 3,
+          "training_color": "gray-green"
+        },
+        {
+          "consumed_at": 2,
+          "episode": 2,
+          "is_red": null,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 4,
+          "training_color": "green"
+        },
+        {
+          "consumed_at": 2,
+          "episode": 3,
+          "is_red": null,
+          "pain_delta": 0.2315065562725067,
+          "safe": false,
+          "target": 5,
+          "training_color": "gray-green"
+        }
+      ],
+      "choice": "red",
+      "choice_safe": null,
+      "steps": 4,
+      "cold": true,
+      "optimizer": true,
+      "sha256": "a8542c2f195b2e1401c5b75ae87b2875e04558db87bec9588536fc622c05e179"
+    },
+    {
+      "file": "cue-order-different-1554-blue-first-pain4-normal.json",
+      "red_first": false,
+      "red_id": 7,
+      "blue_id": 6,
+      "gain": 4.0,
+      "sham": false,
+      "exposures": [
+        {
+          "consumed_at": 2,
+          "episode": 0,
+          "is_red": null,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 2,
+          "training_color": "green"
+        },
+        {
+          "consumed_at": 2,
+          "episode": 1,
+          "is_red": null,
+          "pain_delta": 0.24000000953674316,
+          "safe": false,
+          "target": 3,
+          "training_color": "gray-green"
+        },
+        {
+          "consumed_at": 2,
+          "episode": 2,
+          "is_red": null,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 4,
+          "training_color": "green"
+        },
+        {
+          "consumed_at": 2,
+          "episode": 3,
+          "is_red": null,
+          "pain_delta": 0.2315065562725067,
+          "safe": false,
+          "target": 5,
+          "training_color": "gray-green"
+        }
+      ],
+      "choice": "red",
+      "choice_safe": null,
+      "steps": 4,
+      "cold": true,
+      "optimizer": true,
+      "sha256": "5fbb09c62ce3e14718e739b13cec34d9cd861fd260bfcf85e5b089446e0e626f"
+    },
+    {
+      "file": "cue-order-different-1554-blue-first-pain4-sham.json",
+      "red_first": false,
+      "red_id": 7,
+      "blue_id": 6,
+      "gain": 4.0,
+      "sham": true,
+      "exposures": [
+        {
+          "consumed_at": 2,
+          "episode": 0,
+          "is_red": null,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 2,
+          "training_color": "green"
+        },
+        {
+          "consumed_at": 2,
+          "episode": 1,
+          "is_red": null,
+          "pain_delta": 0.24000000953674316,
+          "safe": false,
+          "target": 3,
+          "training_color": "gray-green"
+        },
+        {
+          "consumed_at": 2,
+          "episode": 2,
+          "is_red": null,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 4,
+          "training_color": "green"
+        },
+        {
+          "consumed_at": 2,
+          "episode": 3,
+          "is_red": null,
+          "pain_delta": 0.2315065562725067,
+          "safe": false,
+          "target": 5,
+          "training_color": "gray-green"
+        }
+      ],
+      "choice": "red",
+      "choice_safe": null,
+      "steps": 4,
+      "cold": true,
+      "optimizer": true,
+      "sha256": "317eff131a5e5af358e3c6968004944bbdc357968897e13883b1127317bde1e2"
+    },
+    {
+      "file": "cue-order-different-1554-red-first-baseline-normal.json",
+      "red_first": true,
+      "red_id": 6,
+      "blue_id": 7,
+      "gain": 0.0,
+      "sham": false,
+      "exposures": [
+        {
+          "consumed_at": 2,
+          "episode": 0,
+          "is_red": null,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 2,
+          "training_color": "green"
+        },
+        {
+          "consumed_at": 2,
+          "episode": 1,
+          "is_red": null,
+          "pain_delta": 0.24000000953674316,
+          "safe": false,
+          "target": 3,
+          "training_color": "gray-green"
+        },
+        {
+          "consumed_at": 2,
+          "episode": 2,
+          "is_red": null,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 4,
+          "training_color": "green"
+        },
+        {
+          "consumed_at": 2,
+          "episode": 3,
+          "is_red": null,
+          "pain_delta": 0.2315065562725067,
+          "safe": false,
+          "target": 5,
+          "training_color": "gray-green"
+        }
+      ],
+      "choice": "blue",
+      "choice_safe": null,
+      "steps": 4,
+      "cold": true,
+      "optimizer": true,
+      "sha256": "b2e520c3d2e4f1328003ea72ec826a9229184fa771b0126a87ac625d528ccf64"
+    },
+    {
+      "file": "cue-order-different-1554-red-first-baseline-sham.json",
+      "red_first": true,
+      "red_id": 6,
+      "blue_id": 7,
+      "gain": 0.0,
+      "sham": true,
+      "exposures": [
+        {
+          "consumed_at": 2,
+          "episode": 0,
+          "is_red": null,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 2,
+          "training_color": "green"
+        },
+        {
+          "consumed_at": 2,
+          "episode": 1,
+          "is_red": null,
+          "pain_delta": 0.24000000953674316,
+          "safe": false,
+          "target": 3,
+          "training_color": "gray-green"
+        },
+        {
+          "consumed_at": 2,
+          "episode": 2,
+          "is_red": null,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 4,
+          "training_color": "green"
+        },
+        {
+          "consumed_at": 2,
+          "episode": 3,
+          "is_red": null,
+          "pain_delta": 0.2315065562725067,
+          "safe": false,
+          "target": 5,
+          "training_color": "gray-green"
+        }
+      ],
+      "choice": "blue",
+      "choice_safe": null,
+      "steps": 4,
+      "cold": true,
+      "optimizer": true,
+      "sha256": "33bf59d566883957b4a27ea4af4813618fef0958870f9cc027db9a54da7fc9ce"
+    },
+    {
+      "file": "cue-order-different-1554-red-first-pain4-normal.json",
+      "red_first": true,
+      "red_id": 6,
+      "blue_id": 7,
+      "gain": 4.0,
+      "sham": false,
+      "exposures": [
+        {
+          "consumed_at": 2,
+          "episode": 0,
+          "is_red": null,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 2,
+          "training_color": "green"
+        },
+        {
+          "consumed_at": 2,
+          "episode": 1,
+          "is_red": null,
+          "pain_delta": 0.24000000953674316,
+          "safe": false,
+          "target": 3,
+          "training_color": "gray-green"
+        },
+        {
+          "consumed_at": 2,
+          "episode": 2,
+          "is_red": null,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 4,
+          "training_color": "green"
+        },
+        {
+          "consumed_at": 2,
+          "episode": 3,
+          "is_red": null,
+          "pain_delta": 0.2315065562725067,
+          "safe": false,
+          "target": 5,
+          "training_color": "gray-green"
+        }
+      ],
+      "choice": "blue",
+      "choice_safe": null,
+      "steps": 4,
+      "cold": true,
+      "optimizer": true,
+      "sha256": "4e3687a319de14a97923383522745f1c16a418ccc57ed215cda138076967140f"
+    },
+    {
+      "file": "cue-order-different-1554-red-first-pain4-sham.json",
+      "red_first": true,
+      "red_id": 6,
+      "blue_id": 7,
+      "gain": 4.0,
+      "sham": true,
+      "exposures": [
+        {
+          "consumed_at": 2,
+          "episode": 0,
+          "is_red": null,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 2,
+          "training_color": "green"
+        },
+        {
+          "consumed_at": 2,
+          "episode": 1,
+          "is_red": null,
+          "pain_delta": 0.24000000953674316,
+          "safe": false,
+          "target": 3,
+          "training_color": "gray-green"
+        },
+        {
+          "consumed_at": 2,
+          "episode": 2,
+          "is_red": null,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 4,
+          "training_color": "green"
+        },
+        {
+          "consumed_at": 2,
+          "episode": 3,
+          "is_red": null,
+          "pain_delta": 0.2315065562725067,
+          "safe": false,
+          "target": 5,
+          "training_color": "gray-green"
+        }
+      ],
+      "choice": "blue",
+      "choice_safe": null,
+      "steps": 4,
+      "cold": true,
+      "optimizer": true,
+      "sha256": "f7d3e26d04837af26509ac5f027aa2f52cce89adbfc8432c039aa0fc71bb185f"
+    }
+  ]
+}
