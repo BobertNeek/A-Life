@@ -1,0 +1,48 @@
+--- a/crates/alife_training/examples/probe_cue_learning.rs
++++ b/crates/alife_training/examples/probe_cue_learning.rs
+@@ -45,11 +45,13 @@
+         for i in coordinates { let before=weights[i];weights[i]=each;memory_pain_edits.push(json!({"index":i,"before":before,"after":each})); }
+     }
+     let asset=FoundationWeightAsset::from_trained_weights(&p,weights,source.manifest().training_stage())?;
++    let candidate_digest=asset.digest();
+     let mut game=create_canonical_new_game_with_n2048_experimental_candidate(&config,&asset)?;
+     let old=game.world.organism_registry().iter().next().ok_or("missing founder")?.clone();
+     let own=old.organism_id(); let cap=BrainCapacityClass::n2048();
+     let development=foundation_construction_development(&old.phenotype().brain_genome,&cap,&old.phenotype().development_state_at(Tick::ZERO)?)?;
+     let (p,_) = PhenotypeCompiler::compile_n2048_experimental_foundation_candidate(old.phenotype().brain_genome.clone(),development,asset.clone())?;
++    let phenotype_hash=p.phenotype_hash();
+     let mask=StageTrainableMask::recurrent_only(&p)?;
+     let trainer=CpuFoundationTrainer::new(p,asset,mask,AdamWConfig::default())?;
+     let founder_before=serde_json::to_vec(&trainer.checkpoint())?;
+@@ -59,6 +61,9 @@
+     game.world=world;
+     let mut host=CpuCanonicalHost::new_cohort(game,&trainer,(seed^(seed>>32)) as u32)?;
+     let initial=host.checkpoint(&trainer)?.residents[0].neural.clone();
++    let bio=host.world().organism_registry().get(own).ok_or("missing initial biology")?.biochemistry();
++    let initial_biology=json!({"energy":bio.body.energy,"hunger":bio.homeostasis.drives.hunger,"fatigue":bio.homeostasis.drives.fatigue,"pain":bio.homeostasis.drives.pain,"brain_atp":bio.homeostasis.drives.brain_atp});
++    let red_first=match std::env::var("ALIFE_RESEARCH_PROBE_ORDER").as_deref() { Err(std::env::VarError::NotPresent)|Ok("red-first")=>true, Ok("blue-first")=>false, _=>return Err("probe order must be red-first or blue-first".into()) };
+     let red=[0.9,0.1,0.1]; let blue=[0.1,0.1,0.9];
+     let mut exposures:Vec<Value>=Vec::new();
+     let mut credit_trace:Vec<Value>=Vec::new();
+@@ -98,12 +103,11 @@
+         }
+         exposures.push(json!({"episode":episode,"safe":safe,"is_red":is_red,"training_color":color_label,"target":target.raw(),"consumed_at":hit,"pain_delta":pain}));
+         if hit.is_none() {
+-            let report=json!({"schema":"cue-study-pilot-v1","approach_scale":approach_scale,"approach_edits":approach_edits,"memory_pain_gain":memory_pain_gain,"memory_pain_edits":memory_pain_edits,"matched_palette":matched_palette,"credit_trace":credit_trace,"decoder_trace_reset":std::env::var_os("ALIFE_RESEARCH_DECODER_TRACE_RESET").is_some(),"safe_first":safe_first,"seed":seed,"safe_red":safe_red,"red_left":red_left,"sham":std::env::var_os("ALIFE_RESEARCH_FAST_WRITE_SHAM").is_some(),"censored":"exposure_not_consumed","exposures":exposures});
++            let report=json!({"schema":"cue-study-pilot-v1","candidate_digest":candidate_digest,"phenotype_hash":phenotype_hash,"initial_biology":initial_biology,"red_first":red_first,"approach_scale":approach_scale,"approach_edits":approach_edits,"memory_pain_gain":memory_pain_gain,"memory_pain_edits":memory_pain_edits,"matched_palette":matched_palette,"credit_trace":credit_trace,"decoder_trace_reset":std::env::var_os("ALIFE_RESEARCH_DECODER_TRACE_RESET").is_some(),"safe_first":safe_first,"seed":seed,"safe_red":safe_red,"red_left":red_left,"sham":std::env::var_os("ALIFE_RESEARCH_FAST_WRITE_SHAM").is_some(),"censored":"exposure_not_consumed","exposures":exposures});
+             let mut f=std::fs::OpenOptions::new().write(true).create_new(true).open(path)?;f.write_all(&serde_json::to_vec_pretty(&report)?)?;return Ok(());
+         }
+     }
+     let (rz,bz)=if red_left {(-0.3,0.3)} else {(0.3,-0.3)};
+-    let red_first=match std::env::var("ALIFE_RESEARCH_PROBE_ORDER").as_deref() { Err(std::env::VarError::NotPresent)|Ok("red-first")=>true, Ok("blue-first")=>false, _=>return Err("probe order must be red-first or blue-first".into()) };
+     let (red_id,blue_id)=if red_first {
+         let r=spawn(&mut host,own,"probe-red",red,0.25,rz,0.)?;
+         let b=spawn(&mut host,own,"probe-blue",blue,0.25,bz,0.)?;
+@@ -168,6 +172,6 @@
+     let fast_changed=initial.fast.iter().zip(&final_neural.fast).filter(|(a,b)|a.to_bits()!=b.to_bits()).count();
+     let bytes=serde_json::to_vec(&checkpoint)?;let mut cold=CpuCanonicalHost::from_checkpoint(serde_json::from_slice(&bytes)?,&trainer)?;let mut warm=host.snapshot();warm.step(&trainer,1.)?;cold.step(&trainer,1.)?;
+     let exact=serde_json::to_vec(&warm.checkpoint(&trainer)?)? == serde_json::to_vec(&cold.checkpoint(&trainer)?)?;
+-    let report=json!({"schema":"cue-study-pilot-v1","approach_scale":approach_scale,"approach_edits":approach_edits,"memory_pain_gain":memory_pain_gain,"memory_pain_edits":memory_pain_edits,"matched_palette":matched_palette,"credit_trace":credit_trace,"decoder_trace_reset":std::env::var_os("ALIFE_RESEARCH_DECODER_TRACE_RESET").is_some(),"safe_first":safe_first,"seed":seed,"safe_red":safe_red,"red_left":red_left,"sham":std::env::var_os("ALIFE_RESEARCH_FAST_WRITE_SHAM").is_some(),"exposures":exposures,"red_first":red_first,"probe_red_id":red_id.raw(),"probe_blue_id":blue_id.raw(),"choice":choice,"choice_was_safe_cue":if matched_palette {choice.and_then(|c| match c {"red"=>Some(safe_red),"blue"=>Some(!safe_red),_=>None})} else {None},"probe_steps":steps,"fast_changed":fast_changed,"cold_next_exact":exact,"founder_optimizer_unchanged":founder_before==serde_json::to_vec(&trainer.checkpoint())?,"trace":trace});
++    let report=json!({"schema":"cue-study-pilot-v1","candidate_digest":candidate_digest,"phenotype_hash":phenotype_hash,"initial_biology":initial_biology,"red_first":red_first,"approach_scale":approach_scale,"approach_edits":approach_edits,"memory_pain_gain":memory_pain_gain,"memory_pain_edits":memory_pain_edits,"matched_palette":matched_palette,"credit_trace":credit_trace,"decoder_trace_reset":std::env::var_os("ALIFE_RESEARCH_DECODER_TRACE_RESET").is_some(),"safe_first":safe_first,"seed":seed,"safe_red":safe_red,"red_left":red_left,"sham":std::env::var_os("ALIFE_RESEARCH_FAST_WRITE_SHAM").is_some(),"exposures":exposures,"probe_red_id":red_id.raw(),"probe_blue_id":blue_id.raw(),"choice":choice,"choice_was_safe_cue":if matched_palette {choice.and_then(|c| match c {"red"=>Some(safe_red),"blue"=>Some(!safe_red),_=>None})} else {None},"probe_steps":steps,"fast_changed":fast_changed,"cold_next_exact":exact,"founder_optimizer_unchanged":founder_before==serde_json::to_vec(&trainer.checkpoint())?,"trace":trace});
+     let mut f=std::fs::OpenOptions::new().write(true).create_new(true).open(path)?;f.write_all(&serde_json::to_vec_pretty(&report)?)?;Ok(())
+ }
