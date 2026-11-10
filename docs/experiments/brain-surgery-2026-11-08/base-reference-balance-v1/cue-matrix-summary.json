@@ -1,0 +1,1958 @@
+{
+  "completed": 32,
+  "expected": 32,
+  "trials": [
+    {
+      "seed": 2026111551,
+      "safe_red": false,
+      "red_left": true,
+      "safe_first": false,
+      "sham": false,
+      "approach_edits": [
+        {
+          "after": 2.799999952316284,
+          "before": 4.0,
+          "index": 25968
+        },
+        {
+          "after": 14.0,
+          "before": 20.0,
+          "index": 25983
+        }
+      ],
+      "exposures": [
+        {
+          "consumed_at": 2,
+          "episode": 0,
+          "is_red": true,
+          "pain_delta": 0.24000000953674316,
+          "safe": false,
+          "target": 2
+        },
+        {
+          "consumed_at": 2,
+          "episode": 1,
+          "is_red": false,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 3
+        },
+        {
+          "consumed_at": 2,
+          "episode": 2,
+          "is_red": true,
+          "pain_delta": 0.2315065562725067,
+          "safe": false,
+          "target": 4
+        },
+        {
+          "consumed_at": 2,
+          "episode": 3,
+          "is_red": false,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 5
+        }
+      ],
+      "choice": "blue",
+      "choice_was_safe_cue": true,
+      "probe_steps": 3,
+      "fast_changed": 25760,
+      "cold_next_exact": true,
+      "founder_optimizer_unchanged": true,
+      "first_ingest_safe_minus_harm": -0.0002994537353515625,
+      "sha256": "6ea64c9a1ad4fb836092de246506ea0eb0f8f5ff4f5a53e5af1bc1e716e7a4c8"
+    },
+    {
+      "seed": 2026111551,
+      "safe_red": false,
+      "red_left": true,
+      "safe_first": false,
+      "sham": true,
+      "approach_edits": [
+        {
+          "after": 2.799999952316284,
+          "before": 4.0,
+          "index": 25968
+        },
+        {
+          "after": 14.0,
+          "before": 20.0,
+          "index": 25983
+        }
+      ],
+      "exposures": [
+        {
+          "consumed_at": 2,
+          "episode": 0,
+          "is_red": true,
+          "pain_delta": 0.24000000953674316,
+          "safe": false,
+          "target": 2
+        },
+        {
+          "consumed_at": 2,
+          "episode": 1,
+          "is_red": false,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 3
+        },
+        {
+          "consumed_at": 2,
+          "episode": 2,
+          "is_red": true,
+          "pain_delta": 0.2315065562725067,
+          "safe": false,
+          "target": 4
+        },
+        {
+          "consumed_at": 2,
+          "episode": 3,
+          "is_red": false,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 5
+        }
+      ],
+      "choice": "blue",
+      "choice_was_safe_cue": true,
+      "probe_steps": 3,
+      "fast_changed": 0,
+      "cold_next_exact": true,
+      "founder_optimizer_unchanged": true,
+      "first_ingest_safe_minus_harm": 0.0,
+      "sha256": "b270a49b7c40b839ef0c208eebece8d645bfaa42a6625c62416207a232a58f67"
+    },
+    {
+      "seed": 2026111551,
+      "safe_red": false,
+      "red_left": true,
+      "safe_first": true,
+      "sham": false,
+      "approach_edits": [
+        {
+          "after": 2.799999952316284,
+          "before": 4.0,
+          "index": 25968
+        },
+        {
+          "after": 14.0,
+          "before": 20.0,
+          "index": 25983
+        }
+      ],
+      "exposures": [
+        {
+          "consumed_at": 2,
+          "episode": 0,
+          "is_red": false,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 2
+        },
+        {
+          "consumed_at": 2,
+          "episode": 1,
+          "is_red": true,
+          "pain_delta": 0.24000000953674316,
+          "safe": false,
+          "target": 3
+        },
+        {
+          "consumed_at": 2,
+          "episode": 2,
+          "is_red": false,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 4
+        },
+        {
+          "consumed_at": 2,
+          "episode": 3,
+          "is_red": true,
+          "pain_delta": 0.2315065562725067,
+          "safe": false,
+          "target": 5
+        }
+      ],
+      "choice": "red",
+      "choice_was_safe_cue": false,
+      "probe_steps": 3,
+      "fast_changed": 25760,
+      "cold_next_exact": true,
+      "founder_optimizer_unchanged": true,
+      "first_ingest_safe_minus_harm": 0.0016012191772460938,
+      "sha256": "646717d9da805d70bc88936153d1537e27a1fcd476007cd399154673198f01f0"
+    },
+    {
+      "seed": 2026111551,
+      "safe_red": false,
+      "red_left": true,
+      "safe_first": true,
+      "sham": true,
+      "approach_edits": [
+        {
+          "after": 2.799999952316284,
+          "before": 4.0,
+          "index": 25968
+        },
+        {
+          "after": 14.0,
+          "before": 20.0,
+          "index": 25983
+        }
+      ],
+      "exposures": [
+        {
+          "consumed_at": 2,
+          "episode": 0,
+          "is_red": false,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 2
+        },
+        {
+          "consumed_at": 2,
+          "episode": 1,
+          "is_red": true,
+          "pain_delta": 0.24000000953674316,
+          "safe": false,
+          "target": 3
+        },
+        {
+          "consumed_at": 2,
+          "episode": 2,
+          "is_red": false,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 4
+        },
+        {
+          "consumed_at": 2,
+          "episode": 3,
+          "is_red": true,
+          "pain_delta": 0.2315065562725067,
+          "safe": false,
+          "target": 5
+        }
+      ],
+      "choice": "red",
+      "choice_was_safe_cue": false,
+      "probe_steps": 3,
+      "fast_changed": 0,
+      "cold_next_exact": true,
+      "founder_optimizer_unchanged": true,
+      "first_ingest_safe_minus_harm": 0.0,
+      "sha256": "5b04945a4aac7118bbe269e44fbe976f7e618b28e218462fb6f32c00b36e96e2"
+    },
+    {
+      "seed": 2026111551,
+      "safe_red": false,
+      "red_left": false,
+      "safe_first": false,
+      "sham": false,
+      "approach_edits": [
+        {
+          "after": 2.799999952316284,
+          "before": 4.0,
+          "index": 25968
+        },
+        {
+          "after": 14.0,
+          "before": 20.0,
+          "index": 25983
+        }
+      ],
+      "exposures": [
+        {
+          "consumed_at": 2,
+          "episode": 0,
+          "is_red": true,
+          "pain_delta": 0.24000000953674316,
+          "safe": false,
+          "target": 2
+        },
+        {
+          "consumed_at": 2,
+          "episode": 1,
+          "is_red": false,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 3
+        },
+        {
+          "consumed_at": 2,
+          "episode": 2,
+          "is_red": true,
+          "pain_delta": 0.2315065562725067,
+          "safe": false,
+          "target": 4
+        },
+        {
+          "consumed_at": 2,
+          "episode": 3,
+          "is_red": false,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 5
+        }
+      ],
+      "choice": "blue",
+      "choice_was_safe_cue": true,
+      "probe_steps": 3,
+      "fast_changed": 25760,
+      "cold_next_exact": true,
+      "founder_optimizer_unchanged": true,
+      "first_ingest_safe_minus_harm": -0.0002994537353515625,
+      "sha256": "5d0b93d7dfeef52d09a57b7d8902bac9981f27d1aed7532c3cb5a71fe0c3a8b9"
+    },
+    {
+      "seed": 2026111551,
+      "safe_red": false,
+      "red_left": false,
+      "safe_first": false,
+      "sham": true,
+      "approach_edits": [
+        {
+          "after": 2.799999952316284,
+          "before": 4.0,
+          "index": 25968
+        },
+        {
+          "after": 14.0,
+          "before": 20.0,
+          "index": 25983
+        }
+      ],
+      "exposures": [
+        {
+          "consumed_at": 2,
+          "episode": 0,
+          "is_red": true,
+          "pain_delta": 0.24000000953674316,
+          "safe": false,
+          "target": 2
+        },
+        {
+          "consumed_at": 2,
+          "episode": 1,
+          "is_red": false,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 3
+        },
+        {
+          "consumed_at": 2,
+          "episode": 2,
+          "is_red": true,
+          "pain_delta": 0.2315065562725067,
+          "safe": false,
+          "target": 4
+        },
+        {
+          "consumed_at": 2,
+          "episode": 3,
+          "is_red": false,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 5
+        }
+      ],
+      "choice": "blue",
+      "choice_was_safe_cue": true,
+      "probe_steps": 3,
+      "fast_changed": 0,
+      "cold_next_exact": true,
+      "founder_optimizer_unchanged": true,
+      "first_ingest_safe_minus_harm": 0.0,
+      "sha256": "732bb3a7284d570d76ca75e7c5f0e5dc3c3b5fd6db6f97ec3d0abf49b77db4cd"
+    },
+    {
+      "seed": 2026111551,
+      "safe_red": false,
+      "red_left": false,
+      "safe_first": true,
+      "sham": false,
+      "approach_edits": [
+        {
+          "after": 2.799999952316284,
+          "before": 4.0,
+          "index": 25968
+        },
+        {
+          "after": 14.0,
+          "before": 20.0,
+          "index": 25983
+        }
+      ],
+      "exposures": [
+        {
+          "consumed_at": 2,
+          "episode": 0,
+          "is_red": false,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 2
+        },
+        {
+          "consumed_at": 2,
+          "episode": 1,
+          "is_red": true,
+          "pain_delta": 0.24000000953674316,
+          "safe": false,
+          "target": 3
+        },
+        {
+          "consumed_at": 2,
+          "episode": 2,
+          "is_red": false,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 4
+        },
+        {
+          "consumed_at": 2,
+          "episode": 3,
+          "is_red": true,
+          "pain_delta": 0.2315065562725067,
+          "safe": false,
+          "target": 5
+        }
+      ],
+      "choice": "red",
+      "choice_was_safe_cue": false,
+      "probe_steps": 3,
+      "fast_changed": 25760,
+      "cold_next_exact": true,
+      "founder_optimizer_unchanged": true,
+      "first_ingest_safe_minus_harm": 0.0016012191772460938,
+      "sha256": "f9be541cb9864ee51ade4be963f7e5ad7511a82a07fc011f0addcd7cee4dd53e"
+    },
+    {
+      "seed": 2026111551,
+      "safe_red": false,
+      "red_left": false,
+      "safe_first": true,
+      "sham": true,
+      "approach_edits": [
+        {
+          "after": 2.799999952316284,
+          "before": 4.0,
+          "index": 25968
+        },
+        {
+          "after": 14.0,
+          "before": 20.0,
+          "index": 25983
+        }
+      ],
+      "exposures": [
+        {
+          "consumed_at": 2,
+          "episode": 0,
+          "is_red": false,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 2
+        },
+        {
+          "consumed_at": 2,
+          "episode": 1,
+          "is_red": true,
+          "pain_delta": 0.24000000953674316,
+          "safe": false,
+          "target": 3
+        },
+        {
+          "consumed_at": 2,
+          "episode": 2,
+          "is_red": false,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 4
+        },
+        {
+          "consumed_at": 2,
+          "episode": 3,
+          "is_red": true,
+          "pain_delta": 0.2315065562725067,
+          "safe": false,
+          "target": 5
+        }
+      ],
+      "choice": "red",
+      "choice_was_safe_cue": false,
+      "probe_steps": 3,
+      "fast_changed": 0,
+      "cold_next_exact": true,
+      "founder_optimizer_unchanged": true,
+      "first_ingest_safe_minus_harm": 0.0,
+      "sha256": "ef4eb9ab0d7fc6a1d514894c075af695d25a8b1a57413bbd99ed2b48808c1f88"
+    },
+    {
+      "seed": 2026111551,
+      "safe_red": true,
+      "red_left": true,
+      "safe_first": false,
+      "sham": false,
+      "approach_edits": [
+        {
+          "after": 2.799999952316284,
+          "before": 4.0,
+          "index": 25968
+        },
+        {
+          "after": 14.0,
+          "before": 20.0,
+          "index": 25983
+        }
+      ],
+      "exposures": [
+        {
+          "consumed_at": 2,
+          "episode": 0,
+          "is_red": false,
+          "pain_delta": 0.24000000953674316,
+          "safe": false,
+          "target": 2
+        },
+        {
+          "consumed_at": 2,
+          "episode": 1,
+          "is_red": true,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 3
+        },
+        {
+          "consumed_at": 2,
+          "episode": 2,
+          "is_red": false,
+          "pain_delta": 0.2315065562725067,
+          "safe": false,
+          "target": 4
+        },
+        {
+          "consumed_at": 2,
+          "episode": 3,
+          "is_red": true,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 5
+        }
+      ],
+      "choice": "red",
+      "choice_was_safe_cue": true,
+      "probe_steps": 3,
+      "fast_changed": 25760,
+      "cold_next_exact": true,
+      "founder_optimizer_unchanged": true,
+      "first_ingest_safe_minus_harm": -0.0002994537353515625,
+      "sha256": "ca747aa43a45c1363b7cff845ce57d70591852736ce685700a988aaf224071c0"
+    },
+    {
+      "seed": 2026111551,
+      "safe_red": true,
+      "red_left": true,
+      "safe_first": false,
+      "sham": true,
+      "approach_edits": [
+        {
+          "after": 2.799999952316284,
+          "before": 4.0,
+          "index": 25968
+        },
+        {
+          "after": 14.0,
+          "before": 20.0,
+          "index": 25983
+        }
+      ],
+      "exposures": [
+        {
+          "consumed_at": 2,
+          "episode": 0,
+          "is_red": false,
+          "pain_delta": 0.24000000953674316,
+          "safe": false,
+          "target": 2
+        },
+        {
+          "consumed_at": 2,
+          "episode": 1,
+          "is_red": true,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 3
+        },
+        {
+          "consumed_at": 2,
+          "episode": 2,
+          "is_red": false,
+          "pain_delta": 0.2315065562725067,
+          "safe": false,
+          "target": 4
+        },
+        {
+          "consumed_at": 2,
+          "episode": 3,
+          "is_red": true,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 5
+        }
+      ],
+      "choice": "red",
+      "choice_was_safe_cue": true,
+      "probe_steps": 3,
+      "fast_changed": 0,
+      "cold_next_exact": true,
+      "founder_optimizer_unchanged": true,
+      "first_ingest_safe_minus_harm": 0.0,
+      "sha256": "9ffe6bfca11b7fe7edea13c96221255c62e9f5d89430ff8ba33cb31550177b6b"
+    },
+    {
+      "seed": 2026111551,
+      "safe_red": true,
+      "red_left": true,
+      "safe_first": true,
+      "sham": false,
+      "approach_edits": [
+        {
+          "after": 2.799999952316284,
+          "before": 4.0,
+          "index": 25968
+        },
+        {
+          "after": 14.0,
+          "before": 20.0,
+          "index": 25983
+        }
+      ],
+      "exposures": [
+        {
+          "consumed_at": 2,
+          "episode": 0,
+          "is_red": true,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 2
+        },
+        {
+          "consumed_at": 2,
+          "episode": 1,
+          "is_red": false,
+          "pain_delta": 0.24000000953674316,
+          "safe": false,
+          "target": 3
+        },
+        {
+          "consumed_at": 2,
+          "episode": 2,
+          "is_red": true,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 4
+        },
+        {
+          "consumed_at": 2,
+          "episode": 3,
+          "is_red": false,
+          "pain_delta": 0.2315065562725067,
+          "safe": false,
+          "target": 5
+        }
+      ],
+      "choice": "blue",
+      "choice_was_safe_cue": false,
+      "probe_steps": 3,
+      "fast_changed": 25760,
+      "cold_next_exact": true,
+      "founder_optimizer_unchanged": true,
+      "first_ingest_safe_minus_harm": 0.0016012191772460938,
+      "sha256": "bbbf7b2b9660f2421730f5f8c6a0e4047554d9ea6cd95e23f0808e78a1701b9b"
+    },
+    {
+      "seed": 2026111551,
+      "safe_red": true,
+      "red_left": true,
+      "safe_first": true,
+      "sham": true,
+      "approach_edits": [
+        {
+          "after": 2.799999952316284,
+          "before": 4.0,
+          "index": 25968
+        },
+        {
+          "after": 14.0,
+          "before": 20.0,
+          "index": 25983
+        }
+      ],
+      "exposures": [
+        {
+          "consumed_at": 2,
+          "episode": 0,
+          "is_red": true,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 2
+        },
+        {
+          "consumed_at": 2,
+          "episode": 1,
+          "is_red": false,
+          "pain_delta": 0.24000000953674316,
+          "safe": false,
+          "target": 3
+        },
+        {
+          "consumed_at": 2,
+          "episode": 2,
+          "is_red": true,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 4
+        },
+        {
+          "consumed_at": 2,
+          "episode": 3,
+          "is_red": false,
+          "pain_delta": 0.2315065562725067,
+          "safe": false,
+          "target": 5
+        }
+      ],
+      "choice": "blue",
+      "choice_was_safe_cue": false,
+      "probe_steps": 3,
+      "fast_changed": 0,
+      "cold_next_exact": true,
+      "founder_optimizer_unchanged": true,
+      "first_ingest_safe_minus_harm": 0.0,
+      "sha256": "bdc8a5fba085c8887e14b5504b0209d9eb6006bd5417c81485d0b63ddaa0e701"
+    },
+    {
+      "seed": 2026111551,
+      "safe_red": true,
+      "red_left": false,
+      "safe_first": false,
+      "sham": false,
+      "approach_edits": [
+        {
+          "after": 2.799999952316284,
+          "before": 4.0,
+          "index": 25968
+        },
+        {
+          "after": 14.0,
+          "before": 20.0,
+          "index": 25983
+        }
+      ],
+      "exposures": [
+        {
+          "consumed_at": 2,
+          "episode": 0,
+          "is_red": false,
+          "pain_delta": 0.24000000953674316,
+          "safe": false,
+          "target": 2
+        },
+        {
+          "consumed_at": 2,
+          "episode": 1,
+          "is_red": true,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 3
+        },
+        {
+          "consumed_at": 2,
+          "episode": 2,
+          "is_red": false,
+          "pain_delta": 0.2315065562725067,
+          "safe": false,
+          "target": 4
+        },
+        {
+          "consumed_at": 2,
+          "episode": 3,
+          "is_red": true,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 5
+        }
+      ],
+      "choice": "red",
+      "choice_was_safe_cue": true,
+      "probe_steps": 3,
+      "fast_changed": 25760,
+      "cold_next_exact": true,
+      "founder_optimizer_unchanged": true,
+      "first_ingest_safe_minus_harm": -0.0002994537353515625,
+      "sha256": "16f9f2c623d16ff0bf197420bb2e594b90b2a663c3ffb81322cf333d982e6e0a"
+    },
+    {
+      "seed": 2026111551,
+      "safe_red": true,
+      "red_left": false,
+      "safe_first": false,
+      "sham": true,
+      "approach_edits": [
+        {
+          "after": 2.799999952316284,
+          "before": 4.0,
+          "index": 25968
+        },
+        {
+          "after": 14.0,
+          "before": 20.0,
+          "index": 25983
+        }
+      ],
+      "exposures": [
+        {
+          "consumed_at": 2,
+          "episode": 0,
+          "is_red": false,
+          "pain_delta": 0.24000000953674316,
+          "safe": false,
+          "target": 2
+        },
+        {
+          "consumed_at": 2,
+          "episode": 1,
+          "is_red": true,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 3
+        },
+        {
+          "consumed_at": 2,
+          "episode": 2,
+          "is_red": false,
+          "pain_delta": 0.2315065562725067,
+          "safe": false,
+          "target": 4
+        },
+        {
+          "consumed_at": 2,
+          "episode": 3,
+          "is_red": true,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 5
+        }
+      ],
+      "choice": "red",
+      "choice_was_safe_cue": true,
+      "probe_steps": 3,
+      "fast_changed": 0,
+      "cold_next_exact": true,
+      "founder_optimizer_unchanged": true,
+      "first_ingest_safe_minus_harm": 0.0,
+      "sha256": "bb610d35bd0893a7ceff6b3bda42c07017bd8935f16f552a0c38d212e7874ca6"
+    },
+    {
+      "seed": 2026111551,
+      "safe_red": true,
+      "red_left": false,
+      "safe_first": true,
+      "sham": false,
+      "approach_edits": [
+        {
+          "after": 2.799999952316284,
+          "before": 4.0,
+          "index": 25968
+        },
+        {
+          "after": 14.0,
+          "before": 20.0,
+          "index": 25983
+        }
+      ],
+      "exposures": [
+        {
+          "consumed_at": 2,
+          "episode": 0,
+          "is_red": true,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 2
+        },
+        {
+          "consumed_at": 2,
+          "episode": 1,
+          "is_red": false,
+          "pain_delta": 0.24000000953674316,
+          "safe": false,
+          "target": 3
+        },
+        {
+          "consumed_at": 2,
+          "episode": 2,
+          "is_red": true,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 4
+        },
+        {
+          "consumed_at": 2,
+          "episode": 3,
+          "is_red": false,
+          "pain_delta": 0.2315065562725067,
+          "safe": false,
+          "target": 5
+        }
+      ],
+      "choice": "blue",
+      "choice_was_safe_cue": false,
+      "probe_steps": 3,
+      "fast_changed": 25760,
+      "cold_next_exact": true,
+      "founder_optimizer_unchanged": true,
+      "first_ingest_safe_minus_harm": 0.0016012191772460938,
+      "sha256": "f36e9c8b2f0a1a8610fab3c109149a70e3d834e018a26bc14f0bce3203aeff8e"
+    },
+    {
+      "seed": 2026111551,
+      "safe_red": true,
+      "red_left": false,
+      "safe_first": true,
+      "sham": true,
+      "approach_edits": [
+        {
+          "after": 2.799999952316284,
+          "before": 4.0,
+          "index": 25968
+        },
+        {
+          "after": 14.0,
+          "before": 20.0,
+          "index": 25983
+        }
+      ],
+      "exposures": [
+        {
+          "consumed_at": 2,
+          "episode": 0,
+          "is_red": true,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 2
+        },
+        {
+          "consumed_at": 2,
+          "episode": 1,
+          "is_red": false,
+          "pain_delta": 0.24000000953674316,
+          "safe": false,
+          "target": 3
+        },
+        {
+          "consumed_at": 2,
+          "episode": 2,
+          "is_red": true,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 4
+        },
+        {
+          "consumed_at": 2,
+          "episode": 3,
+          "is_red": false,
+          "pain_delta": 0.2315065562725067,
+          "safe": false,
+          "target": 5
+        }
+      ],
+      "choice": "blue",
+      "choice_was_safe_cue": false,
+      "probe_steps": 3,
+      "fast_changed": 0,
+      "cold_next_exact": true,
+      "founder_optimizer_unchanged": true,
+      "first_ingest_safe_minus_harm": 0.0,
+      "sha256": "c0b21578b4c95ee39d522220df68c3d2753789273945e618a034b5969113d2c2"
+    },
+    {
+      "seed": 2026111552,
+      "safe_red": false,
+      "red_left": true,
+      "safe_first": false,
+      "sham": false,
+      "approach_edits": [
+        {
+          "after": 2.799999952316284,
+          "before": 4.0,
+          "index": 25968
+        },
+        {
+          "after": 14.0,
+          "before": 20.0,
+          "index": 25983
+        }
+      ],
+      "exposures": [
+        {
+          "consumed_at": 2,
+          "episode": 0,
+          "is_red": true,
+          "pain_delta": 0.24000000953674316,
+          "safe": false,
+          "target": 2
+        },
+        {
+          "consumed_at": 2,
+          "episode": 1,
+          "is_red": false,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 3
+        },
+        {
+          "consumed_at": 2,
+          "episode": 2,
+          "is_red": true,
+          "pain_delta": 0.2315065562725067,
+          "safe": false,
+          "target": 4
+        },
+        {
+          "consumed_at": 2,
+          "episode": 3,
+          "is_red": false,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 5
+        }
+      ],
+      "choice": "red",
+      "choice_was_safe_cue": false,
+      "probe_steps": 4,
+      "fast_changed": 25880,
+      "cold_next_exact": true,
+      "founder_optimizer_unchanged": true,
+      "first_ingest_safe_minus_harm": -0.000335693359375,
+      "sha256": "773608f458d8fbc18eb32cfd3a80b5860c47dbdeb84b2bab1fa268c80726187b"
+    },
+    {
+      "seed": 2026111552,
+      "safe_red": false,
+      "red_left": true,
+      "safe_first": false,
+      "sham": true,
+      "approach_edits": [
+        {
+          "after": 2.799999952316284,
+          "before": 4.0,
+          "index": 25968
+        },
+        {
+          "after": 14.0,
+          "before": 20.0,
+          "index": 25983
+        }
+      ],
+      "exposures": [
+        {
+          "consumed_at": 2,
+          "episode": 0,
+          "is_red": true,
+          "pain_delta": 0.24000000953674316,
+          "safe": false,
+          "target": 2
+        },
+        {
+          "consumed_at": 2,
+          "episode": 1,
+          "is_red": false,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 3
+        },
+        {
+          "consumed_at": 2,
+          "episode": 2,
+          "is_red": true,
+          "pain_delta": 0.2315065562725067,
+          "safe": false,
+          "target": 4
+        },
+        {
+          "consumed_at": 2,
+          "episode": 3,
+          "is_red": false,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 5
+        }
+      ],
+      "choice": "red",
+      "choice_was_safe_cue": false,
+      "probe_steps": 4,
+      "fast_changed": 0,
+      "cold_next_exact": true,
+      "founder_optimizer_unchanged": true,
+      "first_ingest_safe_minus_harm": 0.0,
+      "sha256": "a728eac67c49cf2bd52679847e8dd06b257991590e19c6fa750d0a06e9df7bbf"
+    },
+    {
+      "seed": 2026111552,
+      "safe_red": false,
+      "red_left": true,
+      "safe_first": true,
+      "sham": false,
+      "approach_edits": [
+        {
+          "after": 2.799999952316284,
+          "before": 4.0,
+          "index": 25968
+        },
+        {
+          "after": 14.0,
+          "before": 20.0,
+          "index": 25983
+        }
+      ],
+      "exposures": [
+        {
+          "consumed_at": 2,
+          "episode": 0,
+          "is_red": false,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 2
+        },
+        {
+          "consumed_at": 2,
+          "episode": 1,
+          "is_red": true,
+          "pain_delta": 0.24000000953674316,
+          "safe": false,
+          "target": 3
+        },
+        {
+          "consumed_at": 2,
+          "episode": 2,
+          "is_red": false,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 4
+        },
+        {
+          "consumed_at": 2,
+          "episode": 3,
+          "is_red": true,
+          "pain_delta": 0.2315065562725067,
+          "safe": false,
+          "target": 5
+        }
+      ],
+      "choice": "red",
+      "choice_was_safe_cue": false,
+      "probe_steps": 4,
+      "fast_changed": 25880,
+      "cold_next_exact": true,
+      "founder_optimizer_unchanged": true,
+      "first_ingest_safe_minus_harm": 0.000621795654296875,
+      "sha256": "0185a2824178025949061e2f57ddbf951748b853aba7f287fd93054311ac28b1"
+    },
+    {
+      "seed": 2026111552,
+      "safe_red": false,
+      "red_left": true,
+      "safe_first": true,
+      "sham": true,
+      "approach_edits": [
+        {
+          "after": 2.799999952316284,
+          "before": 4.0,
+          "index": 25968
+        },
+        {
+          "after": 14.0,
+          "before": 20.0,
+          "index": 25983
+        }
+      ],
+      "exposures": [
+        {
+          "consumed_at": 2,
+          "episode": 0,
+          "is_red": false,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 2
+        },
+        {
+          "consumed_at": 2,
+          "episode": 1,
+          "is_red": true,
+          "pain_delta": 0.24000000953674316,
+          "safe": false,
+          "target": 3
+        },
+        {
+          "consumed_at": 2,
+          "episode": 2,
+          "is_red": false,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 4
+        },
+        {
+          "consumed_at": 2,
+          "episode": 3,
+          "is_red": true,
+          "pain_delta": 0.2315065562725067,
+          "safe": false,
+          "target": 5
+        }
+      ],
+      "choice": "red",
+      "choice_was_safe_cue": false,
+      "probe_steps": 4,
+      "fast_changed": 0,
+      "cold_next_exact": true,
+      "founder_optimizer_unchanged": true,
+      "first_ingest_safe_minus_harm": 0.0,
+      "sha256": "8cccd90a372348186f40a8db87b6e840047bc1bfe865b2b6b116dc6d612648b3"
+    },
+    {
+      "seed": 2026111552,
+      "safe_red": false,
+      "red_left": false,
+      "safe_first": false,
+      "sham": false,
+      "approach_edits": [
+        {
+          "after": 2.799999952316284,
+          "before": 4.0,
+          "index": 25968
+        },
+        {
+          "after": 14.0,
+          "before": 20.0,
+          "index": 25983
+        }
+      ],
+      "exposures": [
+        {
+          "consumed_at": 2,
+          "episode": 0,
+          "is_red": true,
+          "pain_delta": 0.24000000953674316,
+          "safe": false,
+          "target": 2
+        },
+        {
+          "consumed_at": 2,
+          "episode": 1,
+          "is_red": false,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 3
+        },
+        {
+          "consumed_at": 2,
+          "episode": 2,
+          "is_red": true,
+          "pain_delta": 0.2315065562725067,
+          "safe": false,
+          "target": 4
+        },
+        {
+          "consumed_at": 2,
+          "episode": 3,
+          "is_red": false,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 5
+        }
+      ],
+      "choice": "red",
+      "choice_was_safe_cue": false,
+      "probe_steps": 4,
+      "fast_changed": 25880,
+      "cold_next_exact": true,
+      "founder_optimizer_unchanged": true,
+      "first_ingest_safe_minus_harm": -0.000335693359375,
+      "sha256": "356063e846e56d610901c48f3b44ecbff1254adbbb34c89ef226622830c805a4"
+    },
+    {
+      "seed": 2026111552,
+      "safe_red": false,
+      "red_left": false,
+      "safe_first": false,
+      "sham": true,
+      "approach_edits": [
+        {
+          "after": 2.799999952316284,
+          "before": 4.0,
+          "index": 25968
+        },
+        {
+          "after": 14.0,
+          "before": 20.0,
+          "index": 25983
+        }
+      ],
+      "exposures": [
+        {
+          "consumed_at": 2,
+          "episode": 0,
+          "is_red": true,
+          "pain_delta": 0.24000000953674316,
+          "safe": false,
+          "target": 2
+        },
+        {
+          "consumed_at": 2,
+          "episode": 1,
+          "is_red": false,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 3
+        },
+        {
+          "consumed_at": 2,
+          "episode": 2,
+          "is_red": true,
+          "pain_delta": 0.2315065562725067,
+          "safe": false,
+          "target": 4
+        },
+        {
+          "consumed_at": 2,
+          "episode": 3,
+          "is_red": false,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 5
+        }
+      ],
+      "choice": "red",
+      "choice_was_safe_cue": false,
+      "probe_steps": 4,
+      "fast_changed": 0,
+      "cold_next_exact": true,
+      "founder_optimizer_unchanged": true,
+      "first_ingest_safe_minus_harm": 0.0,
+      "sha256": "5ed65b7dfdbb2b76d4ea7a0bd285a0ce9d14c49b7d4dbcb6b229f8ddbca6c72c"
+    },
+    {
+      "seed": 2026111552,
+      "safe_red": false,
+      "red_left": false,
+      "safe_first": true,
+      "sham": false,
+      "approach_edits": [
+        {
+          "after": 2.799999952316284,
+          "before": 4.0,
+          "index": 25968
+        },
+        {
+          "after": 14.0,
+          "before": 20.0,
+          "index": 25983
+        }
+      ],
+      "exposures": [
+        {
+          "consumed_at": 2,
+          "episode": 0,
+          "is_red": false,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 2
+        },
+        {
+          "consumed_at": 2,
+          "episode": 1,
+          "is_red": true,
+          "pain_delta": 0.24000000953674316,
+          "safe": false,
+          "target": 3
+        },
+        {
+          "consumed_at": 2,
+          "episode": 2,
+          "is_red": false,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 4
+        },
+        {
+          "consumed_at": 2,
+          "episode": 3,
+          "is_red": true,
+          "pain_delta": 0.2315065562725067,
+          "safe": false,
+          "target": 5
+        }
+      ],
+      "choice": "red",
+      "choice_was_safe_cue": false,
+      "probe_steps": 4,
+      "fast_changed": 25880,
+      "cold_next_exact": true,
+      "founder_optimizer_unchanged": true,
+      "first_ingest_safe_minus_harm": 0.000621795654296875,
+      "sha256": "4d02a4970177cc1109f78f13780f18bcec010b25ed2a8e45d83dbce9aef1265b"
+    },
+    {
+      "seed": 2026111552,
+      "safe_red": false,
+      "red_left": false,
+      "safe_first": true,
+      "sham": true,
+      "approach_edits": [
+        {
+          "after": 2.799999952316284,
+          "before": 4.0,
+          "index": 25968
+        },
+        {
+          "after": 14.0,
+          "before": 20.0,
+          "index": 25983
+        }
+      ],
+      "exposures": [
+        {
+          "consumed_at": 2,
+          "episode": 0,
+          "is_red": false,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 2
+        },
+        {
+          "consumed_at": 2,
+          "episode": 1,
+          "is_red": true,
+          "pain_delta": 0.24000000953674316,
+          "safe": false,
+          "target": 3
+        },
+        {
+          "consumed_at": 2,
+          "episode": 2,
+          "is_red": false,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 4
+        },
+        {
+          "consumed_at": 2,
+          "episode": 3,
+          "is_red": true,
+          "pain_delta": 0.2315065562725067,
+          "safe": false,
+          "target": 5
+        }
+      ],
+      "choice": "red",
+      "choice_was_safe_cue": false,
+      "probe_steps": 4,
+      "fast_changed": 0,
+      "cold_next_exact": true,
+      "founder_optimizer_unchanged": true,
+      "first_ingest_safe_minus_harm": 0.0,
+      "sha256": "1d9b78e16adab561ee706eae9d68df1c88484168a3f28ee19c6e20369200070b"
+    },
+    {
+      "seed": 2026111552,
+      "safe_red": true,
+      "red_left": true,
+      "safe_first": false,
+      "sham": false,
+      "approach_edits": [
+        {
+          "after": 2.799999952316284,
+          "before": 4.0,
+          "index": 25968
+        },
+        {
+          "after": 14.0,
+          "before": 20.0,
+          "index": 25983
+        }
+      ],
+      "exposures": [
+        {
+          "consumed_at": 2,
+          "episode": 0,
+          "is_red": false,
+          "pain_delta": 0.24000000953674316,
+          "safe": false,
+          "target": 2
+        },
+        {
+          "consumed_at": 2,
+          "episode": 1,
+          "is_red": true,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 3
+        },
+        {
+          "consumed_at": 2,
+          "episode": 2,
+          "is_red": false,
+          "pain_delta": 0.2315065562725067,
+          "safe": false,
+          "target": 4
+        },
+        {
+          "consumed_at": 2,
+          "episode": 3,
+          "is_red": true,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 5
+        }
+      ],
+      "choice": "blue",
+      "choice_was_safe_cue": false,
+      "probe_steps": 4,
+      "fast_changed": 25880,
+      "cold_next_exact": true,
+      "founder_optimizer_unchanged": true,
+      "first_ingest_safe_minus_harm": -0.000335693359375,
+      "sha256": "c5a190ceae59ad83e30c4ef5eac0cc541ba4e557e12d5d038ac681bfbafe9949"
+    },
+    {
+      "seed": 2026111552,
+      "safe_red": true,
+      "red_left": true,
+      "safe_first": false,
+      "sham": true,
+      "approach_edits": [
+        {
+          "after": 2.799999952316284,
+          "before": 4.0,
+          "index": 25968
+        },
+        {
+          "after": 14.0,
+          "before": 20.0,
+          "index": 25983
+        }
+      ],
+      "exposures": [
+        {
+          "consumed_at": 2,
+          "episode": 0,
+          "is_red": false,
+          "pain_delta": 0.24000000953674316,
+          "safe": false,
+          "target": 2
+        },
+        {
+          "consumed_at": 2,
+          "episode": 1,
+          "is_red": true,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 3
+        },
+        {
+          "consumed_at": 2,
+          "episode": 2,
+          "is_red": false,
+          "pain_delta": 0.2315065562725067,
+          "safe": false,
+          "target": 4
+        },
+        {
+          "consumed_at": 2,
+          "episode": 3,
+          "is_red": true,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 5
+        }
+      ],
+      "choice": "blue",
+      "choice_was_safe_cue": false,
+      "probe_steps": 4,
+      "fast_changed": 0,
+      "cold_next_exact": true,
+      "founder_optimizer_unchanged": true,
+      "first_ingest_safe_minus_harm": 0.0,
+      "sha256": "c0a7a8fadc4474775e2ba73e17ff26894e69907ffe8ef48507b63ef44f3aa8aa"
+    },
+    {
+      "seed": 2026111552,
+      "safe_red": true,
+      "red_left": true,
+      "safe_first": true,
+      "sham": false,
+      "approach_edits": [
+        {
+          "after": 2.799999952316284,
+          "before": 4.0,
+          "index": 25968
+        },
+        {
+          "after": 14.0,
+          "before": 20.0,
+          "index": 25983
+        }
+      ],
+      "exposures": [
+        {
+          "consumed_at": 2,
+          "episode": 0,
+          "is_red": true,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 2
+        },
+        {
+          "consumed_at": 2,
+          "episode": 1,
+          "is_red": false,
+          "pain_delta": 0.24000000953674316,
+          "safe": false,
+          "target": 3
+        },
+        {
+          "consumed_at": 2,
+          "episode": 2,
+          "is_red": true,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 4
+        },
+        {
+          "consumed_at": 2,
+          "episode": 3,
+          "is_red": false,
+          "pain_delta": 0.2315065562725067,
+          "safe": false,
+          "target": 5
+        }
+      ],
+      "choice": "blue",
+      "choice_was_safe_cue": false,
+      "probe_steps": 4,
+      "fast_changed": 25880,
+      "cold_next_exact": true,
+      "founder_optimizer_unchanged": true,
+      "first_ingest_safe_minus_harm": 0.000621795654296875,
+      "sha256": "94ed9fd7b6ba0ecff2c2fd49be0ef859d14c26f3b840a43cb9aeaba819571f34"
+    },
+    {
+      "seed": 2026111552,
+      "safe_red": true,
+      "red_left": true,
+      "safe_first": true,
+      "sham": true,
+      "approach_edits": [
+        {
+          "after": 2.799999952316284,
+          "before": 4.0,
+          "index": 25968
+        },
+        {
+          "after": 14.0,
+          "before": 20.0,
+          "index": 25983
+        }
+      ],
+      "exposures": [
+        {
+          "consumed_at": 2,
+          "episode": 0,
+          "is_red": true,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 2
+        },
+        {
+          "consumed_at": 2,
+          "episode": 1,
+          "is_red": false,
+          "pain_delta": 0.24000000953674316,
+          "safe": false,
+          "target": 3
+        },
+        {
+          "consumed_at": 2,
+          "episode": 2,
+          "is_red": true,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 4
+        },
+        {
+          "consumed_at": 2,
+          "episode": 3,
+          "is_red": false,
+          "pain_delta": 0.2315065562725067,
+          "safe": false,
+          "target": 5
+        }
+      ],
+      "choice": "blue",
+      "choice_was_safe_cue": false,
+      "probe_steps": 4,
+      "fast_changed": 0,
+      "cold_next_exact": true,
+      "founder_optimizer_unchanged": true,
+      "first_ingest_safe_minus_harm": 0.0,
+      "sha256": "bb8cb933dfc21b916884b74f12308aa0b3ea93ca4f034a043063734b2f83313d"
+    },
+    {
+      "seed": 2026111552,
+      "safe_red": true,
+      "red_left": false,
+      "safe_first": false,
+      "sham": false,
+      "approach_edits": [
+        {
+          "after": 2.799999952316284,
+          "before": 4.0,
+          "index": 25968
+        },
+        {
+          "after": 14.0,
+          "before": 20.0,
+          "index": 25983
+        }
+      ],
+      "exposures": [
+        {
+          "consumed_at": 2,
+          "episode": 0,
+          "is_red": false,
+          "pain_delta": 0.24000000953674316,
+          "safe": false,
+          "target": 2
+        },
+        {
+          "consumed_at": 2,
+          "episode": 1,
+          "is_red": true,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 3
+        },
+        {
+          "consumed_at": 2,
+          "episode": 2,
+          "is_red": false,
+          "pain_delta": 0.2315065562725067,
+          "safe": false,
+          "target": 4
+        },
+        {
+          "consumed_at": 2,
+          "episode": 3,
+          "is_red": true,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 5
+        }
+      ],
+      "choice": "blue",
+      "choice_was_safe_cue": false,
+      "probe_steps": 4,
+      "fast_changed": 25880,
+      "cold_next_exact": true,
+      "founder_optimizer_unchanged": true,
+      "first_ingest_safe_minus_harm": -0.000335693359375,
+      "sha256": "d4fc1f59ce41b2e0bed70ce65436430483ef3fdf37fddc1d1f644ba325a50f2c"
+    },
+    {
+      "seed": 2026111552,
+      "safe_red": true,
+      "red_left": false,
+      "safe_first": false,
+      "sham": true,
+      "approach_edits": [
+        {
+          "after": 2.799999952316284,
+          "before": 4.0,
+          "index": 25968
+        },
+        {
+          "after": 14.0,
+          "before": 20.0,
+          "index": 25983
+        }
+      ],
+      "exposures": [
+        {
+          "consumed_at": 2,
+          "episode": 0,
+          "is_red": false,
+          "pain_delta": 0.24000000953674316,
+          "safe": false,
+          "target": 2
+        },
+        {
+          "consumed_at": 2,
+          "episode": 1,
+          "is_red": true,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 3
+        },
+        {
+          "consumed_at": 2,
+          "episode": 2,
+          "is_red": false,
+          "pain_delta": 0.2315065562725067,
+          "safe": false,
+          "target": 4
+        },
+        {
+          "consumed_at": 2,
+          "episode": 3,
+          "is_red": true,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 5
+        }
+      ],
+      "choice": "blue",
+      "choice_was_safe_cue": false,
+      "probe_steps": 4,
+      "fast_changed": 0,
+      "cold_next_exact": true,
+      "founder_optimizer_unchanged": true,
+      "first_ingest_safe_minus_harm": 0.0,
+      "sha256": "512577927da98a2d439c9c1f0a3f862eaebfa72d73b5528c8badd453efaf0f90"
+    },
+    {
+      "seed": 2026111552,
+      "safe_red": true,
+      "red_left": false,
+      "safe_first": true,
+      "sham": false,
+      "approach_edits": [
+        {
+          "after": 2.799999952316284,
+          "before": 4.0,
+          "index": 25968
+        },
+        {
+          "after": 14.0,
+          "before": 20.0,
+          "index": 25983
+        }
+      ],
+      "exposures": [
+        {
+          "consumed_at": 2,
+          "episode": 0,
+          "is_red": true,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 2
+        },
+        {
+          "consumed_at": 2,
+          "episode": 1,
+          "is_red": false,
+          "pain_delta": 0.24000000953674316,
+          "safe": false,
+          "target": 3
+        },
+        {
+          "consumed_at": 2,
+          "episode": 2,
+          "is_red": true,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 4
+        },
+        {
+          "consumed_at": 2,
+          "episode": 3,
+          "is_red": false,
+          "pain_delta": 0.2315065562725067,
+          "safe": false,
+          "target": 5
+        }
+      ],
+      "choice": "blue",
+      "choice_was_safe_cue": false,
+      "probe_steps": 4,
+      "fast_changed": 25880,
+      "cold_next_exact": true,
+      "founder_optimizer_unchanged": true,
+      "first_ingest_safe_minus_harm": 0.000621795654296875,
+      "sha256": "67f3eb05c4abde6f3e3bd471115a3457aea943322c818a41fea12585d8e14289"
+    },
+    {
+      "seed": 2026111552,
+      "safe_red": true,
+      "red_left": false,
+      "safe_first": true,
+      "sham": true,
+      "approach_edits": [
+        {
+          "after": 2.799999952316284,
+          "before": 4.0,
+          "index": 25968
+        },
+        {
+          "after": 14.0,
+          "before": 20.0,
+          "index": 25983
+        }
+      ],
+      "exposures": [
+        {
+          "consumed_at": 2,
+          "episode": 0,
+          "is_red": true,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 2
+        },
+        {
+          "consumed_at": 2,
+          "episode": 1,
+          "is_red": false,
+          "pain_delta": 0.24000000953674316,
+          "safe": false,
+          "target": 3
+        },
+        {
+          "consumed_at": 2,
+          "episode": 2,
+          "is_red": true,
+          "pain_delta": 0.0,
+          "safe": true,
+          "target": 4
+        },
+        {
+          "consumed_at": 2,
+          "episode": 3,
+          "is_red": false,
+          "pain_delta": 0.2315065562725067,
+          "safe": false,
+          "target": 5
+        }
+      ],
+      "choice": "blue",
+      "choice_was_safe_cue": false,
+      "probe_steps": 4,
+      "fast_changed": 0,
+      "cold_next_exact": true,
+      "founder_optimizer_unchanged": true,
+      "first_ingest_safe_minus_harm": 0.0,
+      "sha256": "bba1aeea6d79fd70f805fac15538aa29fea4c8d1d02069683288cf7515ebef45"
+    }
+  ]
+}
